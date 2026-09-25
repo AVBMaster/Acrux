@@ -44,6 +44,27 @@ public class RenderingSettings
     private bool _showSettingsButton = true;
     private string _jsEngine = "Jint";
     private bool _useCustomHtmlParser = true;
+    private string _tabMode = "single";
+
+    /// <summary>
+    /// Tab concurrency model, applied at browser startup:
+    /// "single" — one UI thread owns all tabs (legacy);
+    /// "threaded" — each tab has its own render/JS thread, background tabs keep running;
+    /// "process" — reserved for the future multi-process tab host (falls back to "threaded").
+    /// </summary>
+    public string TabMode
+    {
+        get => _tabMode;
+        set
+        {
+            if (_tabMode != value)
+            {
+                _tabMode = value;
+                _preset = PerformancePreset.Custom;
+                NotifyChanged();
+            }
+        }
+    }
 
     public string JsEngine
     {

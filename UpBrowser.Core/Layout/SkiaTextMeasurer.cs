@@ -11,8 +11,9 @@ namespace UpBrowser.Core.Layout;
 /// </summary>
 public class SkiaTextMeasurer : ITextMeasurer
 {
-    private readonly Dictionary<string, float> _widthCache = new();
-    private readonly Dictionary<string, TextMetrics> _metricsCache = new();
+    // Shared by the UI thread and background tab threads in threaded-tab mode.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, float> _widthCache = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, TextMetrics> _metricsCache = new();
     private const int MaxCacheSize = 4096;
 
     public float MeasureText(string text, string fontFamily, float fontSize, FontWeight weight = FontWeight.Normal)
@@ -222,12 +223,15 @@ public class SkiaTextMeasurer : ITextMeasurer
         return typeface.ContainsGlyph(codePoint);
     }
 
-    private void CacheIfNeeded<T>(Dictionary<string, T> cache, string key, T value)
+    private void CacheIfNeeded<T>(System.Collections.Concurrent.ConcurrentDictionary<string, T> cache, string key, T value)
     {
         if (cache.Count >= MaxCacheSize)
         {
-            var oldest = cache.Keys.First();
-            cache.Remove(oldest);
+            foreach (var oldest in cache.Keys)
+            {
+                cache.TryRemove(oldest, out _);
+                break;
+            }
         }
         cache[key] = value;
     }

@@ -12,11 +12,33 @@ using UpBrowser.Rendering;
 namespace UpBrowser.Process;
 
 /// <summary>
+/// Everything the worker thread needs to run a tab while it is in the
+/// background: the parsed document, its dedicated JS engine, the current
+/// display list and scroll position. Ownership transfers atomically between
+/// the UI thread (active tab) and the worker thread (background tab) —
+/// exactly one side holds the object at any moment.
+/// </summary>
+public sealed class TabOwnership
+{
+    public required DocumentManager.DocumentLoadResult LoadResult { get; init; }
+    public required JavaScriptEngine Engine { get; init; }
+    public string Html { get; set; } = "";
+    public string? BaseUrl { get; set; }
+    public DisplayList DisplayList { get; set; } = new();
+    public float ScrollX { get; set; }
+    public float ScrollY { get; set; }
+}
+
+/// <summary>
 /// TabProcess represents a tab running in its own background thread.
 /// Each process has its own DocumentManager, LayoutEngine, JavaScriptEngine,
 /// and caches — enabling true parallel page loading across tabs.
 /// The main thread communicates via a command queue and receives DisplayList
 /// results through lock-protected shared state.
+/// In threaded-tab mode the UI thread hands the tab's ownership to the worker
+/// when the tab goes to background (<see cref="HandOffToWorker"/>) and takes it
+/// back on activation (<see cref="RequestReturnToUi"/>); while backgrounded the
+/// worker keeps JS timers, layout and the display list warm.
 /// </summary>
 public class TabProcess : IDisposable
 {
@@ -25,6 +47,7 @@ public class TabProcess : IDisposable
     private readonly EventLoop _eventLoop;
     private readonly float _dpiScale;
     private readonly float _contentOffset;
+    private readonly float _resolutionScale;
 
     private Thread? _workerThread;
     private CancellationTokenSource _cts = new();
@@ -40,6 +63,15 @@ public class TabProcess : IDisposable
     private JavaScriptEngine? _jsEngine;
     private Dictionary<string, SKTypeface>? _typefaceCache;
     private ImageCache? _imageCache;
+
+    // Background ownership (worker-thread only; handed across via commands)
+    private TabOwnership? _owned;
+    private UpBrowser.Core.Performance.Rendering.IncrementalLayoutEngine? _bgLayout;
+    private long _lastBgRebuildTick;
+    private string _lastPostedTitle = "";
+    private volatile bool _forceBgRebuild;
+
+    public volatile bool OwnershipOnWorker;
 
     private volatile float _viewportWidth = 1024;
     private volatile float _viewportHeight = 768;
@@ -58,13 +90,14 @@ public class TabProcess : IDisposable
     public event Action<TabProcess>? OnUpdated;
 
     public TabProcess(int tabIndex, string initialUrl, string[] fontFamilies,
-        EventLoop eventLoop, float dpiScale = 1f, float contentOffset = 0)
+        EventLoop eventLoop, float dpiScale = 1f, float contentOffset = 0, float resolutionScale = 1f)
     {
         _tabIndex = tabIndex;
         _fontFamilies = fontFamilies;
         _eventLoop = eventLoop;
         _dpiScale = dpiScale;
         _contentOffset = contentOffset;
+        _resolutionScale = resolutionScale;
         _metrics = new TabProcessMetrics { TabIndex = tabIndex, Url = initialUrl };
     }
 
@@ -87,31 +120,48 @@ public class TabProcess : IDisposable
         {
             _docManager = new DocumentManager();
             _layoutEngine = new LayoutEngine();
-            _jsEngine = new JavaScriptEngine(_tabIndex);
             _typefaceCache = new Dictionary<string, SKTypeface>();
             _imageCache = new ImageCache();
 
-            _jsEngine.ShowDialog = (msg, type) =>
-            {
-                _eventLoop.PostTask(() => OnUpdated?.Invoke(this));
-                return null;
-            };
-
             lock (_sync) { _metrics.Status = "Running"; }
 
-            foreach (var cmd in _commandQueue.GetConsumingEnumerable(_cts.Token))
+            long lastTitlePost = 0;
+            while (!_cts.Token.IsCancellationRequested)
             {
-                if (_cts.Token.IsCancellationRequested) break;
-                try { cmd(); }
+                Action? cmd = null;
+                try { _commandQueue.TryTake(out cmd, 16, _cts.Token); }
                 catch (OperationCanceledException) { break; }
-                catch (Exception ex)
+
+                if (cmd != null)
                 {
-                    Console.WriteLine($"[TabProc-{_tabIndex}] Error: {ex.Message}");
+                    try { cmd(); }
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[TabProc-{_tabIndex}] Error: {ex.Message}");
+                    }
+                }
+                else
+                {
+                    PumpBackground();
+
+                    // Surface background title changes to the tab strip.
+                    string? curTitle;
+                    lock (_sync) curTitle = _metrics.Title;
+                    if (!string.IsNullOrEmpty(curTitle) && curTitle != _lastPostedTitle &&
+                        Environment.TickCount64 - lastTitlePost > 500)
+                    {
+                        _lastPostedTitle = curTitle;
+                        lastTitlePost = Environment.TickCount64;
+                        _eventLoop.PostTask(() => OnUpdated?.Invoke(this));
+                    }
                 }
             }
 
             lock (_sync) { _metrics.Status = "Terminated"; }
-            _jsEngine.Dispose();
+            _jsEngine?.Dispose();
+            _owned?.Engine.Dispose();
+            _owned = null;
         }
         catch (OperationCanceledException) { }
         catch (ThreadInterruptedException) { }
@@ -127,6 +177,145 @@ public class TabProcess : IDisposable
             _commandQueue.Add(action);
     }
 
+    // ==================== Threaded-tab ownership ====================
+
+    /// <summary>
+    /// Give the tab's document/JS engine/display list to the worker thread.
+    /// Called on the UI thread when the tab moves to the background. The worker
+    /// keeps timers, layout and painting warm until <see cref="RequestReturnToUi"/>.
+    /// </summary>
+    public void HandOffToWorker(TabOwnership ownership)
+    {
+        OwnershipOnWorker = true;
+        Post(() =>
+        {
+            _owned = ownership;
+            _forceBgRebuild = false;
+            _lastBgRebuildTick = 0;
+            lock (_sync)
+            {
+                _displayList = ownership.DisplayList;
+            }
+        });
+    }
+
+    /// <summary>
+    /// Ask the worker to stop pumping and hand the tab's ownership back.
+    /// <paramref name="onReturned"/> runs on the UI thread (via the event loop)
+    /// once the worker reaches a safe point. If the worker never took ownership
+    /// the callback fires immediately with null.
+    /// </summary>
+    public void RequestReturnToUi(Action<TabOwnership?, DisplayList?> onReturned)
+    {
+        if (!OwnershipOnWorker)
+        {
+            onReturned(null, null);
+            return;
+        }
+        Post(() =>
+        {
+            var owned = _owned;
+            _owned = null;
+            DisplayList? dl;
+            lock (_sync) dl = _displayList;
+            OwnershipOnWorker = false;
+            _eventLoop.PostTask(() => onReturned(owned, dl));
+        });
+    }
+
+    /// <summary>Mark the background tab dirty (e.g. after a viewport resize).</summary>
+    public void InvalidateLayout()
+    {
+        _forceBgRebuild = true;
+    }
+
+    /// <summary>
+    /// Pump JS timers/microtasks and rebuild the display list when the page is
+    /// dirty. Runs on the worker thread between commands while the tab is in the
+    /// background. The rebuilt list replaces the ownership one; the previous list
+    /// is abandoned (never returned to the op pool) so the UI thread can still
+    /// paint a snapshot it grabbed during a tab switch.
+    /// </summary>
+    private void PumpBackground()
+    {
+        var owned = _owned;
+        if (owned == null) return;
+
+        try
+        {
+            var eng = owned.Engine;
+            eng.SetWindowSize((int)_viewportWidth, (int)_viewportHeight);
+
+            var jsInt = eng.IntegrationService;
+            jsInt?.ProcessTimers();
+            jsInt?.MicrotaskQueue.DrainMicrotasks();
+            jsInt?.IdentityMap.CleanupStaleEntries();
+            if (eng.HasTimers)
+                eng.TickTimers();
+
+            bool dirty = eng.NeedsReLayout || _forceBgRebuild;
+            if (!dirty) return;
+
+            long now = Environment.TickCount64;
+            if (now - _lastBgRebuildTick < 60) return; // coalesce bursts; dirty flags persist
+            _lastBgRebuildTick = now;
+            _forceBgRebuild = false;
+            eng.ClearDirty();
+
+            RebuildBackgroundDisplayList(owned);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[TabProc-{_tabIndex}] bg pump: {ex.Message}");
+        }
+    }
+
+    private void RebuildBackgroundDisplayList(TabOwnership owned)
+    {
+        if (_docManager == null || _typefaceCache == null || _imageCache == null) return;
+
+        var doc = owned.LoadResult.Document;
+        var styleComputer = owned.LoadResult.StyleComputer;
+        if (styleComputer == null)
+        {
+            styleComputer = new UpBrowser.Core.Css.StyleComputer();
+            styleComputer.AddStylesheet(_docManager.GetUaStylesheet(), UpBrowser.Core.Css.Resolver.CascadeOrigin.UserAgent);
+        }
+        styleComputer.ComputeStyles(doc, _viewportWidth, _viewportHeight);
+
+        _bgLayout ??= new UpBrowser.Core.Performance.Rendering.IncrementalLayoutEngine(
+            _layoutEngine ??= new LayoutEngine(), new UpBrowser.Core.Performance.Rendering.LayoutCache());
+        _bgLayout.Layout(doc, _viewportWidth, _viewportHeight, _dpiScale, 16f);
+
+        var visitor = new PaintVisitor(_contentOffset, _typefaceCache, _imageCache,
+            _fontFamilies, owned.BaseUrl, _viewportWidth, _viewportHeight);
+        visitor.PhysicalScale = _dpiScale * _resolutionScale;
+        visitor.SetSkipInputTextOverlay(true);
+        // The shared ScrollLayerCache belongs to the UI thread (it clears and
+        // disposes those images); background lists use inline scroller painting.
+        visitor.DisableScrollLayers = true;
+        visitor.VisitDocumentStacking(doc);
+        var newDl = visitor.GetDisplayList();
+        newDl.SortByZIndex();
+        newDl.BuildSpatialGrid();
+
+        // Swap atomically; the old list may still be painted by the UI thread,
+        // so abandon it instead of clearing (its ops never re-enter the pool).
+        lock (_sync)
+        {
+            _displayList = newDl;
+            owned.DisplayList = newDl;
+            _metrics.Title = doc.Title ?? _metrics.Title;
+            _metrics.DomNodeCount = CountDocNodes(doc);
+            _metrics.LayoutBoxCount = CountLayoutBoxes(doc);
+            _metrics.JsHeapSizeKB = owned.Engine.GetHeapSizeKB();
+            _metrics.JsTimerCount = owned.Engine.TimerCount;
+        }
+
+        _hasNewContent = true;
+        _eventLoop.PostTask(() => OnUpdated?.Invoke(this));
+    }
+
     /// <summary>Navigate to HTML content on the worker thread.</summary>
     public void NavigateToHtml(string html, string? baseUrl = null)
     {
@@ -135,7 +324,8 @@ public class TabProcess : IDisposable
 
     private void WorkerNavigate(string html, string? baseUrl)
     {
-        if (_docManager == null || _layoutEngine == null || _jsEngine == null) return;
+        if (_docManager == null || _layoutEngine == null) return;
+        _jsEngine ??= new JavaScriptEngine(_tabIndex);
 
         _isLoading = true;
         _imageCache?.Clear();
@@ -155,6 +345,8 @@ public class TabProcess : IDisposable
 
             var visitor = new PaintVisitor(_contentOffset, _typefaceCache,
                 _imageCache, _fontFamilies, baseUrl, _viewportWidth, _viewportHeight);
+            visitor.PhysicalScale = _dpiScale * _resolutionScale;
+            visitor.DisableScrollLayers = true;
             visitor.VisitDocumentStacking(loadResult.Document);
             var newDl = visitor.GetDisplayList();
             newDl.SortByZIndex();

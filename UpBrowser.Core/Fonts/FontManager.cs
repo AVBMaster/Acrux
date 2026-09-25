@@ -29,12 +29,16 @@ public static class FontManager
         Initialize();
 
         var key = $"{family}:{weight}:{style}";
-        if (_typefaceCache.TryGetValue(key, out var cached))
-            return cached;
+        // UI + tab worker threads resolve fonts concurrently in threaded-tab mode.
+        lock (_lock)
+        {
+            if (_typefaceCache.TryGetValue(key, out var cached))
+                return cached;
 
-        var typeface = _fallbackChain!.Resolve(family, weight, style);
-        _typefaceCache[key] = typeface;
-        return typeface;
+            var typeface = _fallbackChain!.Resolve(family, weight, style);
+            _typefaceCache[key] = typeface;
+            return typeface;
+        }
     }
 
     public static SKTypeface GetDefaultTypeface()

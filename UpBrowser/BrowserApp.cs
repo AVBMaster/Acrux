@@ -60,7 +60,7 @@ namespace UpBrowser;
     private readonly DocumentManager _docManager;
     private readonly InputHandler _input;
     private readonly LayoutEngine _layout = new();
-    private readonly JavaScriptEngine _jsEngine;
+    private JavaScriptEngine _jsEngine;
     private readonly EventLoop _eventLoop;
     private readonly UpBrowser.Core.Performance.Resources.StreamingHttpFetcher _httpFetcher = new();
     private readonly float _dpiScale;
@@ -98,6 +98,16 @@ namespace UpBrowser;
     private readonly RenderingSettingsPage _renderingSettingsPage;
     private readonly TaskManagerPage _taskManagerPage;
     private readonly ProcessManager _processManager;
+
+    // ── Threaded-tab mode (settings: TabMode) ─────────────────────
+    // When true each tab owns a JavaScriptEngine; background tabs are handed
+    // to their TabProcess worker thread (JS keeps running, display list stays
+    // warm) and adopted back by the UI thread on activation.
+    private readonly bool _threadedTabs;
+    private JavaScriptEngine? _parkEngine;
+    private volatile bool _adoptionPending;
+    private int _pendingAdoptTab = -1;
+    private int _adoptionGen;
 
     // Performance optimization layer. Lazily initialized in RunAsync so the
     // existing Chrome/loader flows are not perturbed on cold-start.
@@ -224,6 +234,10 @@ namespace UpBrowser;
         }
         JsEngineConfig.DefaultEngineType = engineType;
 
+        _threadedTabs = _renderingSettings.TabMode is "threaded" or "process";
+        if (_threadedTabs)
+            Console.WriteLine($"[Startup] Threaded-tab mode enabled (TabMode={_renderingSettings.TabMode})");
+
         LogCtor("JavaScriptEngine");
         _jsEngine = new JavaScriptEngine(-1);
         LogCtorDone("JavaScriptEngine");
@@ -254,7 +268,7 @@ namespace UpBrowser;
         LogCtorDone("TaskManagerPage");
 
         LogCtor("ProcessManager");
-        _processManager = new ProcessManager(_fontFamilies!, _eventLoop, _dpiScale, _chrome.GetContentOffset());
+        _processManager = new ProcessManager(_fontFamilies!, _eventLoop, _dpiScale, _chrome.GetContentOffset(), _renderingSettings.ResolutionScale);
         LogCtorDone("ProcessManager");
 
         _contentOffset = _chrome.GetContentOffset();
@@ -277,6 +291,14 @@ namespace UpBrowser;
             {
                 proc.HasNewContent = false;
                 _input.NeedsRedraw = true;
+            }
+            else if (_threadedTabs)
+            {
+                // Background tab: surface its JS-driven title change in the strip.
+                var m = proc.GetMetrics();
+                if (!string.IsNullOrEmpty(m.Title))
+                    _chrome.SetTabTitle(proc.TabIndex, m.Title);
+                proc.HasNewContent = false;
             }
         };
 
@@ -551,44 +573,7 @@ namespace UpBrowser;
         _input.OnCut = PerformCut;
         _input.OnSelectAll = PerformSelectAll;
 
-        _jsEngine.ShowDialog = ShowDialog;
-
-        // Wire LocationHost navigation callback
-        if (_jsEngine.LocationHost != null)
-        {
-            _jsEngine.LocationHost.OnNavigate = (url) =>
-            {
-                Console.WriteLine($"Location navigate to: {url}");
-                _eventLoop.PostTask(() =>
-                {
-                    if (!string.IsNullOrWhiteSpace(url))
-                        _chrome.NavigateToUrl(url);
-                });
-            };
-            _jsEngine.LocationHost.OnReload = () =>
-            {
-                _eventLoop.PostTask(() => _chrome.OnRefresh?.Invoke());
-            };
-        }
-
-        // Wire window property delegates to real values
-        if (_jsEngine.Builtins != null)
-        {
-            _jsEngine.Builtins.GetInnerWidth = () => (int)(_window.GetClientSize().width / _dpiScale);
-            _jsEngine.Builtins.GetInnerHeight = () => (int)(_window.GetClientSize().height / _dpiScale);
-            _jsEngine.Builtins.GetDevicePixelRatio = () => _dpiScale;
-            _jsEngine.Builtins.GetScrollX = () => (int)_scroll.ScrollX;
-            _jsEngine.Builtins.GetScrollY = () => (int)_scroll.ScrollY;
-            _jsEngine.Builtins.OnScrollTo = (x, y) => _scroll.ScrollTo(x, y);
-            _jsEngine.Builtins.OnScrollBy = (x, y) => _scroll.ScrollBy(x, y);
-        }
-
-        // Wire JS engine management callbacks for upbrowser://js page
-        // 设置实例回调（主线程引擎）和全局回调（TabProcess 后台线程引擎）
-        if (_jsEngine.Builtins != null)
-        {
-            _jsEngine.Builtins.EngineAction = (action, engineName) => HandleEngineAction(action, engineName);
-        }
+        WireTabEngine(_jsEngine, -1);
         UpBrowserBuiltins.GlobalEngineAction = (action, engineName) => HandleEngineAction(action, engineName);
 
         // Wire DOM keyboard events
@@ -1055,6 +1040,12 @@ namespace UpBrowser;
             Console.WriteLine($"Tab changed to: {url}");
             _input.NeedsRedraw = true;
 
+            if (_threadedTabs)
+            {
+                OnTabChangedThreaded(url);
+                return;
+            }
+
             int currentTabIndex = _chrome.ActiveTabIndex;
 
             // 保存当前标签页状态
@@ -1194,13 +1185,24 @@ namespace UpBrowser;
                 // 清除标签页状态
                 if (_tabStates.TryRemove(index, out var oldState) && oldState.LoadResult != null)
                 {
-                    try { }
+                    try
+                    {
+                        // Threaded mode: the tab's dedicated engine dies with the tab.
+                        // DestroyProcess above already joined the worker thread, so the
+                        // engine is no longer in use there.
+                        oldState.Engine?.Dispose();
+                    }
                     catch (Exception ex) { Console.WriteLine($"[Dispose] Tab state doc error: {ex.Message}"); }
                 }
 
                 // 如果关闭的是当前活动标签页，清除当前加载
                 _eventLoop.PostTask(() =>
                 {
+                    if (_pendingAdoptTab == index)
+                    {
+                        _pendingAdoptTab = -1;
+                        _adoptionPending = false;
+                    }
                     if (_currentLoad != null && _chrome.ActiveTabIndex == index)
                     {
                         try { }
@@ -1231,6 +1233,327 @@ namespace UpBrowser;
         public float ScrollY { get; set; }
         public int DomNodeCount { get; set; }
         public int LayoutBoxCount { get; set; }
+        public JavaScriptEngine? Engine { get; set; }
+        public string? BaseUrl { get; set; }
+        public string? PendingNavigate { get; set; }
+    }
+
+    /// <summary>
+    /// Wire a JS engine's host callbacks (dialogs, location, window props) for a
+    /// specific tab. In threaded-tab mode the callbacks must route to the owning
+    /// tab — the engine may be pumping on its worker thread while the tab is in
+    /// the background.
+    /// </summary>
+    private void WireTabEngine(JavaScriptEngine eng, int tabIndex)
+    {
+        eng.ShowDialog = (msg, type) =>
+        {
+            if (!_threadedTabs || tabIndex < 0 || _chrome.ActiveTabIndex == tabIndex)
+                return ShowDialog(msg, type);
+            // Background tab: do not steal the modal from the active tab.
+            Console.WriteLine($"[Tab {tabIndex}] {type}: {msg}");
+            return null;
+        };
+
+        if (eng.LocationHost != null)
+        {
+            eng.LocationHost.OnNavigate = (url) =>
+            {
+                Console.WriteLine($"Location navigate to: {url}");
+                _eventLoop.PostTask(() =>
+                {
+                    if (string.IsNullOrWhiteSpace(url)) return;
+                    if (!_threadedTabs || tabIndex < 0 || _chrome.ActiveTabIndex == tabIndex)
+                    {
+                        _chrome.NavigateToUrl(url);
+                    }
+                    else if (_tabStates.TryGetValue(tabIndex, out var st))
+                    {
+                        // Remember it; the tab navigates when the user returns to it.
+                        st.PendingNavigate = url;
+                        _chrome.SetTabUrl(tabIndex, url);
+                        _input.NeedsRedraw = true;
+                    }
+                });
+            };
+            eng.LocationHost.OnReload = () =>
+            {
+                _eventLoop.PostTask(() =>
+                {
+                    if (_chrome.ActiveTabIndex == tabIndex) _chrome.OnRefresh?.Invoke();
+                });
+            };
+        }
+
+        if (eng.Builtins != null)
+        {
+            var b = eng.Builtins;
+            b.GetInnerWidth = () => (int)(_window.GetClientSize().width / _dpiScale);
+            b.GetInnerHeight = () => (int)(_window.GetClientSize().height / _dpiScale);
+            b.GetDevicePixelRatio = () => _dpiScale;
+            b.GetScrollX = () => (!_threadedTabs || tabIndex < 0 || _chrome.ActiveTabIndex == tabIndex)
+                ? (int)_scroll.ScrollX
+                : (_tabStates.TryGetValue(tabIndex, out var s) ? (int)s.ScrollX : 0);
+            b.GetScrollY = () => (!_threadedTabs || tabIndex < 0 || _chrome.ActiveTabIndex == tabIndex)
+                ? (int)_scroll.ScrollY
+                : (_tabStates.TryGetValue(tabIndex, out var s) ? (int)s.ScrollY : 0);
+            b.OnScrollTo = (x, y) =>
+            {
+                if (!_threadedTabs || tabIndex < 0 || _chrome.ActiveTabIndex == tabIndex)
+                    _scroll.ScrollTo(x, y);
+                else if (_tabStates.TryGetValue(tabIndex, out var s))
+                {
+                    s.ScrollX = x; s.ScrollY = y;
+                }
+            };
+            b.OnScrollBy = (x, y) =>
+            {
+                if (!_threadedTabs || tabIndex < 0 || _chrome.ActiveTabIndex == tabIndex)
+                    _scroll.ScrollBy(x, y);
+                else if (_tabStates.TryGetValue(tabIndex, out var s))
+                {
+                    s.ScrollX += x; s.ScrollY += y;
+                }
+            };
+            // Engine management callbacks resolve via UpBrowserBuiltins.GlobalEngineAction.
+        }
+    }
+
+    /// <summary>
+    /// Threaded-tab mode: every tab gets its own JavaScriptEngine so background
+    /// tabs keep running independently on their worker threads.
+    /// </summary>
+    private JavaScriptEngine GetOrCreateTabEngine(int tabIndex)
+    {
+        if (!_threadedTabs || tabIndex < 0)
+            return _jsEngine;
+
+        var state = _tabStates.GetOrAdd(tabIndex, _ => new TabState());
+        if (state.Engine == null)
+        {
+            state.Engine = new JavaScriptEngine(tabIndex);
+            WireTabEngine(state.Engine, tabIndex);
+        }
+        return state.Engine;
+    }
+
+    /// <summary>Drop all UI interaction state bound to the previous tab's document.</summary>
+    private void ClearTabInteractionState()
+    {
+        _focusedElement = null;
+        _hasSelection = false;
+        _isSelecting = false;
+        _hoveredElement = null;
+        _activeSelect = null;
+        _pressedButton = null;
+        _selectOptionRects.Clear();
+        _selectHoverIndex = -1;
+        _inputCursorPos = 0;
+        _inputSelStart = -1;
+        _inputScrollOffset = 0;
+        _textareaUserScroll = false;
+        _textareaScrollY = 0;
+    }
+
+    /// <summary>
+    /// Tab switch in threaded mode: hand the departing tab to its worker thread
+    /// and adopt the target tab's warm display list — no re-parse, no full
+    /// re-layout, no tile-cache-wide invalidation of page content beyond raster.
+    /// </summary>
+    private void OnTabChangedThreaded(string url)
+    {
+        int to = _chrome.ActiveTabIndex;
+        int from = _lastActiveTabIndex;
+
+        if (from == to)
+        {
+            _lastActiveTabIndex = to;
+            return;
+        }
+
+        // 1. Departing tab → its worker thread (JS keeps running in background).
+        if (from >= 0 && from != to && _currentLoad != null && !ReferenceEquals(_jsEngine, _parkEngine))
+        {
+            var st = _tabStates.GetOrAdd(from, _ => new TabState());
+            st.Html = _currentHtml;
+            st.LoadResult = _currentLoad;
+            st.Engine = _jsEngine;
+            st.BaseUrl = _currentBaseUrl;
+            st.ScrollX = _scroll.ScrollX;
+            st.ScrollY = _scroll.ScrollY;
+            st.DomNodeCount = CountDomNodes(_currentLoad.Document);
+            st.LayoutBoxCount = CountLayoutBoxes(_currentLoad.Document);
+
+            var ownedDl = _displayList;
+            _displayList = new DisplayList(); // UI releases the handed-off list
+            _processManager.HandOffToWorker(from, new TabOwnership
+            {
+                LoadResult = _currentLoad,
+                Engine = _jsEngine,
+                Html = _currentHtml,
+                BaseUrl = _currentBaseUrl,
+                DisplayList = ownedDl,
+                ScrollX = _scroll.ScrollX,
+                ScrollY = _scroll.ScrollY
+            });
+
+            _currentLoad = null;
+            _jsEngine = _parkEngine ??= new JavaScriptEngine(NullJsEngineAdapter.Instance);
+            _scrollInteraction.SetDocument(null);
+            _devTools.SetDocument(null, "");
+        }
+
+        ClearTabInteractionState();
+        _lastActiveTabIndex = to;
+
+        // 2. Target tab: adopt its warm state, or navigate it if never loaded.
+        if (_tabStates.TryGetValue(to, out var saved) && saved.LoadResult != null)
+        {
+            _adoptionPending = true;
+            _pendingAdoptTab = to;
+            int gen = ++_adoptionGen;
+            _currentHtml = saved.Html;
+
+            // Instant paint from the worker's published snapshot (immutable once
+            // published; the worker swaps in fresh lists, never mutates these).
+            var snap = _processManager.GetDisplayList(to);
+            if (snap != null && snap.Count > 0)
+            {
+                _displayList = snap;
+                _scroll.ScrollTo(saved.ScrollX, saved.ScrollY);
+            }
+            _input.NeedsRedraw = true;
+
+            _processManager.RequestReturnToUi(to, (own, dl) => AdoptTab(to, own, dl, gen));
+            return;
+        }
+
+        // Never-loaded tab: cancel any pending adoption and navigate.
+        _adoptionPending = false;
+        _pendingAdoptTab = -1;
+        _isNavigating = false;
+        if (url.StartsWith("http://") || url.StartsWith("https://") || url.StartsWith("file://"))
+        {
+            NavigateToHttp(url);
+        }
+        else if (url == "upbrowser://newtab" || url == "upbrowser://local")
+        {
+            _currentHtml = DocumentManager.DefaultHtml;
+            LoadAndRenderHtml(_currentHtml);
+        }
+        else if (url == "upbrowser://js-test")
+        {
+            _currentHtml = DocumentManager.JsTestHtml;
+            LoadAndRenderHtml(_currentHtml);
+        }
+        else if (url == "upbrowser://element-test")
+        {
+            _currentHtml = DocumentManager.ElementTestHtml;
+            LoadAndRenderHtml(_currentHtml);
+        }
+        else if (url == "upbrowser://debug")
+        {
+            _currentHtml = DocumentManager.DebugHtml;
+            LoadAndRenderHtml(_currentHtml);
+        }
+        else if (url == "upbrowser://js")
+        {
+            _currentHtml = DocumentManager.JsEngineHtml;
+            LoadAndRenderHtml(_currentHtml);
+        }
+    }
+
+    /// <summary>
+    /// Runs on the UI thread (via the event loop) once the worker confirmed it
+    /// stopped touching the tab. If the user already switched again, ownership
+    /// is simply re-handed to the worker.
+    /// </summary>
+    private void AdoptTab(int tabIndex, TabOwnership? own, DisplayList? dl, int gen)
+    {
+        // A newer switch/navigation superseded this adoption — hand ownership
+        // back to the worker (if we even got it) so the tab stays warm.
+        if (gen != _adoptionGen)
+        {
+            if (own != null)
+                _processManager.HandOffToWorker(tabIndex, own);
+            return;
+        }
+
+        if (own != null && _chrome.ActiveTabIndex != tabIndex)
+        {
+            _processManager.HandOffToWorker(tabIndex, own);
+            if (_pendingAdoptTab == tabIndex)
+            {
+                _pendingAdoptTab = -1;
+                _adoptionPending = false;
+            }
+            return;
+        }
+
+        if (!_tabStates.TryGetValue(tabIndex, out var state))
+        {
+            _adoptionPending = false;
+            _pendingAdoptTab = -1;
+            return;
+        }
+
+        if (own != null)
+        {
+            state.Html = own.Html;
+            state.LoadResult = own.LoadResult;
+            state.Engine = own.Engine;
+            state.BaseUrl = own.BaseUrl;
+            state.ScrollX = own.ScrollX;
+            state.ScrollY = own.ScrollY;
+        }
+
+        if (state.LoadResult == null)
+        {
+            _adoptionPending = false;
+            _pendingAdoptTab = -1;
+            return;
+        }
+
+        _adoptionPending = false;
+        _pendingAdoptTab = -1;
+
+        _currentHtml = state.Html;
+        _currentBaseUrl = state.BaseUrl;
+        _currentLoad = state.LoadResult;
+        _jsEngine = state.Engine ?? GetOrCreateTabEngine(tabIndex);
+        if (dl != null && dl.Count > 0)
+            _displayList = dl;
+
+        // Scroll extents come from the worker's latest layout boxes.
+        var bodyBox = _currentLoad.Document.Body?.LayoutBox;
+        float contentW = bodyBox?.BorderBox.Width ?? Math.Max(100, _lastWindowWidth);
+        float contentH = bodyBox?.BorderBox.Height ?? 0;
+        float viewportH = Math.Max(100, _lastWindowHeight - _contentOffset - _chrome.GetStatusBarHeight());
+        _scroll.UpdateScroll(contentW, contentH, Math.Max(100, _lastWindowWidth), viewportH);
+        _scroll.ScrollTo(state.ScrollX, state.ScrollY);
+
+        // Degenerate case: nothing warm to show — fall back to one full rebuild.
+        if (_displayList.Count == 0)
+        {
+            _pendingRelayout = true;
+            _lastLayoutWidth = 0;
+        }
+
+        _scrollInteraction.SetDocument(_currentLoad.Document);
+        _devTools.SetDocument(_currentLoad.Document, _currentHtml);
+
+        // Content changed: the raster tiles must be re-generated from the
+        // adopted display list (cheap raster work, no layout/paint-walk).
+        _skiaRenderer.InvalidatePageCache();
+        _input.NeedsRedraw = true;
+
+        if (state.PendingNavigate != null)
+        {
+            var pending = state.PendingNavigate;
+            state.PendingNavigate = null;
+            if (_chrome.ActiveTabIndex == tabIndex)
+                _chrome.NavigateToUrl(pending);
+        }
     }
 
     private void RunPageScripts(string? baseUrl)
@@ -1535,6 +1858,14 @@ namespace UpBrowser;
     {
         int tabIdx = _chrome.ActiveTabIndex;
 
+        if (_threadedTabs && _adoptionPending && _pendingAdoptTab == tabIdx)
+        {
+            // User navigated while the worker still holds this tab — retry once
+            // the in-flight adoption completes.
+            _eventLoop.PostTask(() => ApplyLoadedHtml(loadResult, html));
+            return;
+        }
+
         // Dispose old document safely
         if (_currentLoad != null)
         {
@@ -1553,9 +1884,18 @@ namespace UpBrowser;
         int ww = (int)(pw / _dpiScale);
         int wh = (int)(ph / _dpiScale);
 
+        if (_threadedTabs)
+        {
+            // Fresh navigation always targets the active tab's own engine.
+            _adoptionGen++;
+            _jsEngine = GetOrCreateTabEngine(tabIdx);
+            _adoptionPending = false;
+            _pendingAdoptTab = -1;
+            if (_tabStates.TryGetValue(tabIdx, out var stNav)) stNav.PendingNavigate = null;
+        }
+
         _jsEngine.LoadDocument(_currentLoad.Document);
         _devTools.SetDocument(_currentLoad.Document, html);
-
         BuildDisplayList(ww, wh);
         _scroll.ScrollTo(0, 0);
 
@@ -1587,7 +1927,9 @@ namespace UpBrowser;
             Html = _currentHtml,
             LoadResult = _currentLoad,
             ScrollX = 0,
-            ScrollY = 0
+            ScrollY = 0,
+            Engine = _threadedTabs ? _jsEngine : null,
+            BaseUrl = _currentBaseUrl
         };
 
         // Update process manager for the active tab
@@ -1886,7 +2228,7 @@ namespace UpBrowser;
         if (!sizeChanged && !needsRedraw && !_chrome.IsLoading)
             return;
 
-        if (windowWidth <= 0 || windowHeight <= 0 || _currentLoad == null)
+        if (windowWidth <= 0 || windowHeight <= 0 || (_currentLoad == null && !_adoptionPending))
             return;
 
         if (sizeChanged)
@@ -1902,7 +2244,11 @@ namespace UpBrowser;
 
         float contentViewportHeight = windowHeight - _contentOffset - _chrome.GetStatusBarHeight() - currentDevToolsHeight;
 
-        bool needsFullRebuild = sizeChanged || windowWidth != _lastLayoutWidth || _pendingRelayout || devToolsChanged;
+        if (sizeChanged && _threadedTabs)
+            _processManager.SetViewportAll(windowWidth, Math.Max(100, contentViewportHeight));
+
+        bool needsFullRebuild = (sizeChanged || windowWidth != _lastLayoutWidth || _pendingRelayout || devToolsChanged)
+                                && !_adoptionPending;
 
         // While a resize/move drag is in flight, bypass the tile compositor and
         // draw the whole page directly: every resize tick would otherwise discard
@@ -2230,7 +2576,7 @@ namespace UpBrowser;
                 0, _contentOffset, windowWidth, _contentOffset + contentViewportHeight, seedBg);
         }
 
-        var title = _currentLoad.Document.Title ?? "UpBrowser";
+        var title = _currentLoad?.Document.Title ?? "UpBrowser";
         var currentUrl = _chrome.GetCurrentUrl();
         if (string.IsNullOrEmpty(currentUrl))
             currentUrl = "upbrowser://local";
@@ -5254,6 +5600,12 @@ namespace UpBrowser;
         _skiaRenderer.Dispose();
         _window.Dispose();
         _jsEngine.Dispose();
+        if (_threadedTabs)
+        {
+            foreach (var st in _tabStates.Values)
+                st.Engine?.Dispose();
+            _parkEngine?.Dispose();
+        }
 #if USE_MULTIPLE_JS_ENGINE
         EngineProcessManager.Release(-1);
 #endif

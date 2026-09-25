@@ -1,0 +1,4 @@
+dotnet publish UpBrowser/UpBrowser.csproj -p:PublishProfile=win-x64  -p:UseLocalSkiaSharp=false
+
+ -p:PublishProfile=发布配置文件的名称，如win-x64
+-p:UseLocalSkiaSharp=是否启用本地SkiaSharp，注意，本地的SkiaSharp只支持winxp及以上的win系统，为适配winxp，舍弃了现代GPU加速的功能，所以只建议在针对winxp时启用true，其余时刻请尽量设置为false

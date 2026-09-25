@@ -83,6 +83,14 @@ private readonly ScrollableAreaPainter _scrollableAreaPainter;
     /// </summary>
     public float PhysicalScale { get; set; } = 1f;
 
+    /// <summary>
+    /// When true the visitor never registers/disposes shared scroll layers.
+    /// Background tab workers set this so they don't mutate the UI thread's
+    /// <see cref="ScrollLayerCache"/> (which the UI clears + disposes on its own
+    /// rebuilds). Their scrollers fall back to the inline repaint path.
+    /// </summary>
+    public bool DisableScrollLayers { get; set; }
+
     public string? BaseUrl => _baseUrl;
 
     public PaintVisitor(float contentOffsetY = 0,
@@ -1003,6 +1011,7 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
     /// <summary>Shared eligibility gate for the scroll-layer fast path.</summary>
     private bool ScrollLayerEligible(Element element, LayoutBox box, ComputedStyle style)
     {
+        if (DisableScrollLayers) return false;
         if (element == _currentDocument?.DocumentElement || element == _currentDocument?.Body)
             return false;
         bool explicitScroller = style.OverflowY == OverflowType.Auto || style.OverflowY == OverflowType.Scroll

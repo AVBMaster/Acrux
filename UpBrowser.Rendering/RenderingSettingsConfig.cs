@@ -29,6 +29,7 @@ public static class RenderingSettingsConfig
         public bool ShowFps { get; set; }
         public string JsEngine { get; set; } = "Jint";
         public bool UseCustomHtmlParser { get; set; } = true;
+        public string TabMode { get; set; } = "single";
     }
 
     public static void Save(RenderingSettings settings)
@@ -46,7 +47,8 @@ public static class RenderingSettingsConfig
             ResolutionScale = settings.ResolutionScale,
             ShowFps = settings.ShowFps,
             JsEngine = settings.JsEngine,
-            UseCustomHtmlParser = settings.UseCustomHtmlParser
+            UseCustomHtmlParser = settings.UseCustomHtmlParser,
+            TabMode = settings.TabMode
         };
 
         var ctx = new RenderingSettingsJsonContext(new JsonSerializerOptions { WriteIndented = true });
@@ -79,6 +81,8 @@ public static class RenderingSettingsConfig
             if (!string.IsNullOrEmpty(data.JsEngine))
                 settings.JsEngine = data.JsEngine;
             settings.UseCustomHtmlParser = data.UseCustomHtmlParser;
+            if (!string.IsNullOrEmpty(data.TabMode))
+                settings.TabMode = data.TabMode;
         }
         catch (Exception ex)
         {

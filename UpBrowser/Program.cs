@@ -20,6 +20,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && args[0] == "--tabtest")
+        {
+            Environment.ExitCode = TabConcurrencySelfTest.Run();
+            return;
+        }
+
         Log("[Main] Starting UpBrowser");
         Log($"[Main] OS: {Environment.OSVersion.VersionString}");
         Log($"[Main] Platform: {RuntimeInformation.OSDescription}");

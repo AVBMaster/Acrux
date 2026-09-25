@@ -12,6 +12,7 @@ public class ProcessManager : IDisposable
     private readonly EventLoop _eventLoop;
     private readonly float _dpiScale;
     private readonly float _contentOffset;
+    private readonly float _resolutionScale;
 
     private readonly ConcurrentDictionary<int, TabProcess> _processes = new();
     private readonly object _lock = new();
@@ -21,12 +22,13 @@ public class ProcessManager : IDisposable
     public event Action<TabProcess>? OnProcessUpdated;
 
     public ProcessManager(string[] fontFamilies, EventLoop eventLoop,
-        float dpiScale = 1f, float contentOffset = 0)
+        float dpiScale = 1f, float contentOffset = 0, float resolutionScale = 1f)
     {
         _fontFamilies = fontFamilies;
         _eventLoop = eventLoop;
         _dpiScale = dpiScale;
         _contentOffset = contentOffset;
+        _resolutionScale = resolutionScale;
     }
 
     public TabProcess CreateProcess(int tabIndex, string url = "upbrowser://newtab")
@@ -42,7 +44,7 @@ public class ProcessManager : IDisposable
             }
 
             var proc = new TabProcess(tabIndex, url, _fontFamilies,
-                _eventLoop, _dpiScale, _contentOffset);
+                _eventLoop, _dpiScale, _contentOffset, _resolutionScale);
             proc.OnUpdated += OnProcessUpdated;
             _processes[tabIndex] = proc;
             proc.Start();
@@ -115,6 +117,36 @@ public class ProcessManager : IDisposable
         if (proc == null) return;
         proc.UpdateUrl(baseUrl ?? html);
         proc.NavigateToHtml(html, baseUrl);
+    }
+
+    /// <summary>Hand a tab's ownership to its worker thread (creates the worker if needed).</summary>
+    public void HandOffToWorker(int tabIndex, TabOwnership ownership, string url = "")
+    {
+        var proc = GetOrCreate(tabIndex, url);
+        proc?.HandOffToWorker(ownership);
+    }
+
+    /// <summary>Ask a tab's worker to return ownership; callback runs on the UI thread.</summary>
+    public void RequestReturnToUi(int tabIndex, Action<TabOwnership?, DisplayList?> onReturned)
+    {
+        var proc = GetProcess(tabIndex);
+        if (proc == null || !proc.IsAlive || !proc.OwnershipOnWorker)
+        {
+            onReturned(null, null);
+            return;
+        }
+        proc.RequestReturnToUi(onReturned);
+    }
+
+    /// <summary>Update viewport for all background tabs (active tab is laid out by the UI thread).</summary>
+    public void SetViewportAll(float width, float height)
+    {
+        foreach (var kv in _processes)
+        {
+            kv.Value.SetViewport(width, height);
+            if (kv.Value.OwnershipOnWorker)
+                kv.Value.InvalidateLayout();
+        }
     }
 
     public void Dispose()

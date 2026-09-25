@@ -1,0 +1,27 @@
+前置依赖（一次性）
+若环境已就绪，则无需重复设置：
+- dotnet-cake 全局工具（dotnet tool list -g 有 cake.tool 6.2.0及以上）
+- VS_INSTALL 指向 VS2017，含 v141_xp (14.16) 工具集
+- Windows 7.1A SDK 位于 C:\Program Files (x86)\Microsoft SDKs\Windows\v7.1A
+- skia 子模块依赖已通过 git-sync-deps 同步（自动）
+编译命令
+在 third_party\SkiaSharp 目录下执行：
+dotnet cake native/windows/build.cake --target=libSkiaSharp --arch=x86,x64 --llvm=msvc --supportWindowsXp=true
+关键参数说明：
+参数	作用
+--target=libSkiaSharp	只编 Skia，跳过 HarfBuzz（HarfBuzz 的 vcxproj 硬编码 SDK 10.0.19041.0 本机没有，会报 MSB8036）
+--arch=x86,x64	只编 32 位 + 64 位，跳过 ARM64
+--llvm=msvc	用 MSVC 编译器（不是 clang）
+--supportWindowsXp=true	启用 XP 支持：v141_xp=14.16 工具集 + 7.1A SDK + GDI 字体 + 关 D3D/Vulkan/Graphite
+关于全量 vs 增量
+Skia 用 ninja 增量构建。注意： ninja 用文件时间戳判断"是否最新"，所以首次跑或想强制重编时，必须先清掉旧输出，否则会显示 no work to do 而不真正编译：
+# 强制全量重编（只在需要时用）
+Remove-Item "externals\skia\out\windows" -Recurse -Force
+
+# 然后编译
+dotnet cake native/windows/build.cake --target=libSkiaSharp --arch=x86,x64 --llvm=msvc --supportWindowsXp=true
+之后日常增量编译不要删 out 目录，直接跑 cake 命令即可，ninja 只会重编变更的文件。
+产物位置
+- 生成的临时 DLL：externals\skia\out\windows\{Win32,x64}\libSkiaSharp.dll
+- 复制后的最终产物：output\native\windows\{x86,x64}\libSkiaSharp.dll + .pdb
+只要你改动了 C API（externals/skia/src/c/、include/c/）或 skia 源码，就跑这条命令重新生成原生库。

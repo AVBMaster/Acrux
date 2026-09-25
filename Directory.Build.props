@@ -3,6 +3,15 @@
     <TargetFramework>net10.0</TargetFramework>
     <UseLocalSkiaSharp Condition="'$(UseLocalSkiaSharp)' == ''">false</UseLocalSkiaSharp>
     <_OsVersionMajor>$([System.Environment]::OSVersion.Version.Major)</_OsVersionMajor>
+    <!--
+      UseMultipleJsEngine: multi-process JS engine (JsEngineHost + IPC protocol).
+      false (default): single-process mode, the browser runs the built-in Jint engine in-process;
+                       JsEngineHost / JsEngineProtocol sources are not compiled.
+      true:            build with -p:UseMultipleJsEngine=true to compile JsEngineHost / JsEngineProtocol
+                       and use the out-of-process engine over IPC.
+    -->
+    <UseMultipleJsEngine Condition="'$(UseMultipleJsEngine)' == ''">false</UseMultipleJsEngine>
+    <DefineConstants Condition="'$(UseMultipleJsEngine)' == 'true'">$(DefineConstants);USE_MULTIPLE_JS_ENGINE</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <TargetFramework>net10.0-windows</TargetFramework>

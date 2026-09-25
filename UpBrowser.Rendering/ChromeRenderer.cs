@@ -191,9 +191,32 @@ public class ChromeRenderer : IImeSupport
 
     // ==================== 渲染方法 ====================
 
-    public void RenderChrome(SKCanvas canvas, float width, float height, string url, string title)
+    /// <summary>Update a background tab's title without making it active.</summary>
+    public void SetTabTitle(int index, string title)
     {
         _tabRwLock.EnterWriteLock();
+        try
+        {
+            if (index >= 0 && index < _tabs.Count && !string.IsNullOrEmpty(title))
+                _tabs[index].Title = title;
+        }
+        finally { _tabRwLock.ExitWriteLock(); }
+    }
+
+    /// <summary>Update a background tab's URL without making it active.</summary>
+    public void SetTabUrl(int index, string url)
+    {
+        _tabRwLock.EnterWriteLock();
+        try
+        {
+            if (index >= 0 && index < _tabs.Count)
+                _tabs[index].Url = url;
+        }
+        finally { _tabRwLock.ExitWriteLock(); }
+    }
+
+    public void RenderChrome(SKCanvas canvas, float width, float height, string url, string title)
+    {        _tabRwLock.EnterWriteLock();
         try
         {
             _currentUrl = url;

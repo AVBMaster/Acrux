@@ -217,6 +217,11 @@ public class RenderingSettingsPage
         AddCategory("HTML 解析器", ref idx);
         AddToggle("自定义解析器", _settings.UseCustomHtmlParser, () => _settings.UseCustomHtmlParser = !_settings.UseCustomHtmlParser, ref idx);
 
+        AddCategory("标签页模式 (重启生效)", ref idx);
+        AddOptions("并发模型", new[] { "单线程", "多线程", "多进程(预留)" },
+            _settings.TabMode switch { "threaded" => 1, "process" => 2, _ => 0 },
+            (i) => _settings.TabMode = i switch { 1 => "threaded", 2 => "process", _ => "single" }, ref idx);
+
         AddCategory("JavaScript 引擎", ref idx);
         BuildJsEngineSection(ref idx);
 
