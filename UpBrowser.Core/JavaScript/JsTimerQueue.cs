@@ -118,6 +118,23 @@ public class JsTimerQueue
         }
     }
 
+    /// <summary>
+    /// Milliseconds until the earliest pending timer fires (0 = already due).
+    /// Returns int.MaxValue when no timers exist, so hosts can sleep until
+    /// the next real wake-up instead of polling.
+    /// </summary>
+    public int NextTimerDelayMs()
+    {
+        var now = Environment.TickCount64;
+        long best = long.MaxValue;
+        foreach (var kvp in _timers)
+        {
+            long due = kvp.Value.DueTime - now;
+            if (due < best) best = due;
+        }
+        return best == long.MaxValue ? int.MaxValue : (int)Math.Max(0, best);
+    }
+
     public void ClearAll()
     {
         foreach (var kvp in _timers)

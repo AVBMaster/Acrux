@@ -12,6 +12,9 @@ public class StyleAdjuster
     public void AdjustComputedStyle(ComputedStyle style, Element element, ComputedStyle? parentStyle)
     {
         AdjustDisplayForElement(style, element);
+        DefaultTableBoxSizing(style);
+        DefaultTableCellVerticalAlign(style);
+        BlockifyFloatAndAbsolute(style);
         BlockifyFlexGridItems(style, element, parentStyle);
         AdjustOverflow(style);
         AdjustForTextElements(style, element);
@@ -26,6 +29,50 @@ public class StyleAdjuster
     /// items also honor it with position:static (css-flexbox §4.3, css-grid §6).
     /// Elsewhere it computes to auto so the element cannot escape the paint order.
     /// </summary>
+    /// <summary>
+    /// CSS 2.1 §9.4.1 / §9.4.2 (and CSS Positioned Layout §6.2): a floated or
+    /// absolutely positioned box is blockified, so an inline element that is given
+    /// 'float' or 'position:absolute' honors its width and height instead of
+    /// shrinking to its text.
+    /// </summary>
+    /// <summary>
+    /// A table box's specified 'width' is its border-box width (CSS 2.1 §17.5.2.1),
+    /// which is what 'box-sizing: border-box' means for every other box. That is
+    /// therefore the default for tables, unless the author declared 'box-sizing'.
+    /// </summary>
+    /// <summary>
+    /// CSS 2.1 §17.5.2.6: a table cell that declares nothing aligns its content to
+    /// the middle of the cell, not to the baseline of the line as other boxes do.
+    /// </summary>
+    private static void DefaultTableCellVerticalAlign(ComputedStyle style)
+    {
+        if (style.VerticalAlignIsAuthored) return;
+        if (style.Display == DisplayType.TableCell)
+            style.VerticalAlign = VerticalAlignType.Middle;
+    }
+
+    private static void DefaultTableBoxSizing(ComputedStyle style)
+    {
+        if (style.BoxSizingIsAuthored) return;
+        if (style.Display == DisplayType.Table)
+            style.BoxSizing = BoxSizingType.BorderBox;
+    }
+
+    private static void BlockifyFloatAndAbsolute(ComputedStyle style)
+    {
+        bool isFloat = style.Float != FloatType.None;
+        bool isAbsolute = style.Position is PositionType.Absolute or PositionType.Fixed;
+        if (!isFloat && !isAbsolute)
+            return;
+        style.Display = style.Display switch
+        {
+            DisplayType.Inline or DisplayType.InlineBlock => DisplayType.Block,
+            DisplayType.InlineFlex => DisplayType.Flex,
+            DisplayType.InlineGrid => DisplayType.Grid,
+            _ => style.Display,
+        };
+    }
+
     private static void AdjustZIndex(ComputedStyle style, ComputedStyle? parentStyle)
     {
         if (style.Position == PositionType.Static)

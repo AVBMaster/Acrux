@@ -224,7 +224,9 @@ public sealed class HarfBuzzShaper
         if (advances.Length > 1 && charSum > 0.01f)
         {
             float shapedWidth = TextMeasureProxy.MeasureText(runText, style)
-                + letterSpacing * Math.Max(0, advances.Length - 1);
+                // letter-spacing is added after every character, the last one
+                // included (CSS Text 3 §5.1) - Edge measures "abcde" + 6px as 73.6.
+                + letterSpacing * advances.Length;
             if (!float.IsNaN(shapedWidth) && shapedWidth > 0)
             {
                 float k = shapedWidth / charSum;

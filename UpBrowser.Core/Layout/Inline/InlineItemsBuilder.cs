@@ -443,7 +443,8 @@ public class InlineItemsBuilder
     /// </summary>
     private void AddTextRunSlicingFirstLetter(string slice, int startOffset, ComputedStyle style, LayoutText layoutText)
     {
-        if (slice.Length == 0 || _firstLetterApplied || _block.FirstLetterStyles is not { Count: > 0 })
+        if (slice.Length == 0 || _firstLetterApplied || _block.HasGeneratedFirstLetter
+            || _block.FirstLetterStyles is not { Count: > 0 })
         {
             _data.Items.Add(MakeTextItem(slice, slice.Length, startOffset, style, layoutText));
             return;

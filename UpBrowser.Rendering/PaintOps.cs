@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Globalization;
 using System.Linq;
 using SkiaSharp;
@@ -10,6 +10,12 @@ public abstract class PaintOp
 {
     public SKRect Bounds { get; set; }
     public int ZIndex { get; set; }
+    /// <summary>
+    /// True only for pure draw ops with accurate-enough Bounds to skip when they
+    /// miss the target rect. State-stack ops (clip/layer/transform pushes & pops)
+    /// stay non-cullable so culling can never unbalance the canvas state.
+    /// </summary>
+    public virtual bool Cullable => false;
     public abstract void Execute(SKCanvas canvas);
     public virtual void Reset() { Bounds = default; ZIndex = 0; }
 
@@ -18,11 +24,14 @@ public abstract class PaintOp
         try
         {
             var m = canvas.TotalMatrix;
-            // SKMatrix has ScaleX/ScaleY fields
-            float sx = MathF.Abs(m.ScaleX);
-            float sy = MathF.Abs(m.ScaleY);
-            if (sx <= 0) sx = 1f;
-            if (sy <= 0) sy = 1f;
+            // Device units per user unit along each axis = the length of the
+            // transformed axis vector. The matrix diagonal alone is meaningless
+            // under rotation: rotate(90deg) has ScaleX = cos 90 = ~0, which made
+            // SnapToDevice collapse every rectangle to a point (invisible element).
+            float sx = MathF.Sqrt(m.ScaleX * m.ScaleX + m.SkewY * m.SkewY);
+            float sy = MathF.Sqrt(m.SkewX * m.SkewX + m.ScaleY * m.ScaleY);
+            if (float.IsNaN(sx) || sx < 0.0001f) sx = 1f;
+            if (float.IsNaN(sy) || sy < 0.0001f) sy = 1f;
             return (sx, sy);
         }
         catch
@@ -39,6 +48,14 @@ public abstract class PaintOp
 
     protected static SKRect AlignRectToDevice(SKRect r, SKCanvas canvas)
     {
+        var m = canvas.TotalMatrix;
+        // Snapping a user-space rectangle to the device grid only makes sense while
+        // the CTM is axis-aligned. Under rotation or skew the corners do not map to
+        // the rectangle's own edges, so rounding would move geometry instead of
+        // aligning it - leave such rects untouched.
+        if (MathF.Abs(m.SkewX) + MathF.Abs(m.SkewY) > 0.001f * (MathF.Abs(m.ScaleX) + MathF.Abs(m.ScaleY) + 1f))
+            return r;
+
         var (sx, sy) = GetCanvasScale(canvas);
         var left = SnapToDevice(r.Left, sx);
         var top = SnapToDevice(r.Top, sy);
@@ -58,6 +75,7 @@ public abstract class PaintOp
 
 public class DrawRectOp : PaintOp
 {
+    public override bool Cullable => true;
     public SKRect Rect { get; set; }
     public SKColor FillColor { get; set; }
     public float BorderTopWidth { get; set; }
@@ -277,6 +295,7 @@ public class DrawRectOp : PaintOp
 
 public class DrawTextOp : PaintOp
 {
+    public override bool Cullable => true;
     public string Text { get; set; } = string.Empty;
     public float X { get; set; }
     public float Y { get; set; }
@@ -760,7 +779,7 @@ public class DrawTextOp : PaintOp
         if (run.Length > 256)
         {
             var f = CreateFont(typeface);
-            return f.MeasureText(run) + (run.Length - 1) * LetterSpacing;
+            return f.MeasureText(run) + run.Length * LetterSpacing;
         }
         string key = $"{typeface?.FamilyName}|{FontSize}|{(int)FontWeight}|{(Italic ? 1 : 0)}|{LetterSpacing}|{run}";
         lock (_runWidthCache)
@@ -773,7 +792,7 @@ public class DrawTextOp : PaintOp
             }
         }
         var font = CreateFont(typeface);
-        float w = font.MeasureText(run) + (run.Length - 1) * LetterSpacing;
+        float w = font.MeasureText(run) + run.Length * LetterSpacing;
         lock (_runWidthCache)
         {
             if (_runWidthCache.Count >= MaxRunWidthCacheSize)
@@ -1322,10 +1341,13 @@ public class DrawTextOp : PaintOp
 
 public class DrawImageOp : PaintOp
 {
+    public override bool Cullable => true;
     public SKImage? Image { get; set; }
     public SKRect SourceRect { get; set; }
     public SKRect DestRect { get; set; }
     public ImageFit Fit { get; set; } = ImageFit.Fill;
+    /// <summary>Blend used against the backdrop, e.g. 'background-blend-mode'.</summary>
+    public SKBlendMode BlendMode { get; set; } = SKBlendMode.SrcOver;
 
     public override void Reset()
     {
@@ -1333,6 +1355,7 @@ public class DrawImageOp : PaintOp
         Image = null;
         SourceRect = DestRect = default;
         Fit = ImageFit.Fill;
+        BlendMode = SKBlendMode.SrcOver;
     }
 
     public override void Execute(SKCanvas canvas)
@@ -1361,7 +1384,13 @@ public class DrawImageOp : PaintOp
                 break;
         }
 
-        canvas.DrawImage(Image, SourceRect, dest, new SKSamplingOptions(SKFilterMode.Linear), null);
+        if (BlendMode == SKBlendMode.SrcOver)
+        {
+            canvas.DrawImage(Image, SourceRect, dest, new SKSamplingOptions(SKFilterMode.Linear), null);
+            return;
+        }
+        var paint = new SKPaint { BlendMode = BlendMode };
+        canvas.DrawImage(Image, SourceRect, dest, new SKSamplingOptions(SKFilterMode.Linear), paint);
     }
 
     private SKRect CalculateNoneRect(float srcW, float srcH, SKRect dest)
@@ -1414,6 +1443,7 @@ public class DrawImageOp : PaintOp
 
 public class DrawLineOp : PaintOp
 {
+    public override bool Cullable => true;
     public float X1 { get; set; }
     public float Y1 { get; set; }
     public float X2 { get; set; }
@@ -1444,6 +1474,7 @@ public class DrawLineOp : PaintOp
 
 public class DrawPathOp : PaintOp
 {
+    public override bool Cullable => true;
     public SKPath Path { get; set; } = new();
     public SKPaint? FillPaint { get; set; }
     public SKPaint? StrokePaint { get; set; }
@@ -1622,6 +1653,7 @@ public class PopTransformOp : PaintOp
 
 public class DrawShadowOp : PaintOp
 {
+    public override bool Cullable => true;
     public SKPath Path { get; set; } = new();
     public SKColor Color { get; set; }
     public float BlurRadius { get; set; }
@@ -1717,6 +1749,7 @@ public enum ImageFit { Fill, Contain, Cover, None, ScaleDown }
 /// </summary>
 public sealed class DrawScrollLayerOp : PaintOp
 {
+    public override bool Cullable => true;
     public SKImage? Image;
     public UpBrowser.Core.Dom.LayoutBox Box = null!;
     public SKRect ContentBox;      // page coords
@@ -2007,6 +2040,39 @@ public class DisplayList
         List<PaintOp> snapshot;
         lock (_lock) snapshot = new List<PaintOp>(_ops);
         return snapshot;
+    }
+
+    /// <summary>
+    /// Execute the list under one lock, skipping cullable draw ops whose Bounds
+    /// miss <paramref name="docWindow"/> (document-space rect of what the canvas
+    /// will actually show, padding included). Zero per-op allocation — used by
+    /// the multi-process rasterizer where a full op walk every scroll tick was
+    /// the frame-time bottleneck.
+    /// </summary>
+    public void ExecuteCulled(SKCanvas canvas, SKRect docWindow)
+    {
+        lock (_lock)
+        {
+            for (int i = 0; i < _ops.Count; i++)
+            {
+                var op = _ops[i];
+                if (op.Cullable && !op.Bounds.IsEmpty && !docWindow.IntersectsWith(op.Bounds))
+                    continue;
+                op.Execute(canvas);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Non-copying ordered walk (snapshot copies of a 20k-op list at frame rate
+    /// were pure GC churn).
+    /// </summary>
+    public void ForEachOp(Action<PaintOp> visit)
+    {
+        lock (_lock)
+        {
+            for (int i = 0; i < _ops.Count; i++) visit(_ops[i]);
+        }
     }
 
     public void AddRange(IEnumerable<PaintOp> ops) { lock (_lock) _ops.AddRange(ops); }

@@ -178,6 +178,7 @@ public class LayoutEngine
 
             var dummy = new LayoutBox();
             GeneratePseudoElementContent(element, dummy, element.ComputedStyle, counters, quoteDepth);
+            GenerateFloatedFirstLetter(element, element.ComputedStyle);
 
             if (element.BeforeStyles != null && element.BeforeStyles.TryGetValue("content", out var before))
                 quoteDepth += QuoteDepthDelta(before);
@@ -190,6 +191,98 @@ public class LayoutEngine
             if (child is Element childEl)
                 GeneratePseudoElementsForTree(childEl, counters, quoteDepth);
         }
+    }
+
+    /// <summary>
+    /// A ::first-letter with 'float' becomes its own floating box (CSS Pseudo-Elements
+    /// 4 §3 and CSS 2.1 §9.4.1), so the rest of the block's text wraps around the
+    /// drop cap. Materialize that box as a generated child element and take the
+    /// letter out of the text it belongs to.
+    /// </summary>
+    private void GenerateFloatedFirstLetter(Element element, ComputedStyle style)
+    {
+        if (element.HasGeneratedFirstLetter || element.FirstLetterStyles is not { Count: > 0 } props)
+            return;
+        if (!props.TryGetValue("float", out var floatValue))
+            return;
+        floatValue = floatValue.Trim();
+        bool isLeft = floatValue.Equals("left", StringComparison.OrdinalIgnoreCase);
+        bool isRight = floatValue.Equals("right", StringComparison.OrdinalIgnoreCase);
+        if (!isLeft && !isRight)
+            return;
+
+        // The first letter is the first non-whitespace character of the block's own
+        // text; ::before content (already generated as a child element) comes first.
+        TextNode? host = null;
+        int letterIndex = -1;
+        foreach (var child in element.Children)
+        {
+            if (child is not TextNode text || string.IsNullOrEmpty(text.Data))
+                continue;
+            for (int i = 0; i < text.Data.Length; i++)
+            {
+                if (!char.IsWhiteSpace(text.Data[i]))
+                {
+                    host = text;
+                    letterIndex = i;
+                    break;
+                }
+            }
+            if (host != null)
+                break;
+        }
+        if (host == null || letterIndex < 0)
+            return;
+
+        string letter = host.Data[letterIndex].ToString();
+        host.Data = host.Data.Remove(letterIndex, 1);
+
+        // A floating box is blockified, and the pseudo-element declarations win over
+        // the block's own inherited values.
+        var letterStyle = style.Clone();
+        letterStyle.Float = isLeft ? FloatType.Left : FloatType.Right;
+        letterStyle.Display = DisplayType.Block;
+        ResetNonInheritedBoxProperties(letterStyle);
+        foreach (var kv in props)
+        {
+            if (kv.Key.Equals("float", StringComparison.OrdinalIgnoreCase))
+                continue;
+            ApplyPseudoProperty(letterStyle, kv.Key, kv.Value);
+        }
+
+        var letterElement = new HtmlElement("pseudo-first-letter")
+        {
+            ComputedStyle = letterStyle,
+            Parent = element,
+        };
+        letterElement.Children.Add(new TextNode(letter) { Parent = letterElement });
+
+        int insertAt = 0;
+        for (int i = 0; i < element.Children.Count; i++)
+        {
+            if (element.Children[i] is Element generated
+                && generated.TagName.Equals("pseudo-before", StringComparison.OrdinalIgnoreCase))
+                insertAt = i + 1;
+        }
+        element.Children.Insert(insertAt, letterElement);
+        element.HasGeneratedFirstLetter = true;
+    }
+
+    /// <summary>
+    /// A generated pseudo-element box takes the initial value of the non-inherited
+    /// box properties it does not declare itself (CSS Pseudo-Elements 4 §3.1). The
+    /// style is built by cloning the originating element, so without this reset a
+    /// ::before or a floated ::first-letter would inherit the block's own width and
+    /// stop shrinking to fit its content.
+    /// </summary>
+    private static void ResetNonInheritedBoxProperties(ComputedStyle style)
+    {
+        style.Width = null;
+        style.Height = null;
+        style.MinWidth = null;
+        style.MaxWidth = null;
+        style.MinHeight = null;
+        style.MaxHeight = null;
     }
 
     private static void ApplyCounterProperties(ComputedStyle style, Dictionary<string, int> counters)
@@ -380,6 +473,9 @@ public class LayoutEngine
             _ => DisplayType.Inline,
         };
 
+        // The parent's used box properties are not inherited by the generated box.
+        ResetNonInheritedBoxProperties(pseudoStyle);
+
         // Apply the remaining pseudo-element properties.
         foreach (var kv in props)
         {
@@ -469,6 +565,7 @@ public class LayoutEngine
                 case "overflow": style.Overflow = ParsePseudoOverflow(value); break;
                 case "text-align": style.TextAlign = ParsePseudoTextAlign(value); break;
                 case "font-size": style.FontSize = ParsePseudoFontSize(value); break;
+                case "line-height": UpBrowser.Core.Fonts.LineBoxMetrics.ApplyLineHeight(style, value); break;
                 case "font-family": style.FontFamily = value; break;
                 case "font-weight": style.FontWeight = (FontWeight)(int.TryParse(value, out var fw) ? fw : 400); break;
                 case "border": ParsePseudoBorder(style, value); break;

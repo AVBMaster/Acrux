@@ -148,7 +148,7 @@ public static class CssPropertyApplier
             case "text-emphasis-position": style.TextEmphasisPosition = value; break;
             case "text-shadow": style.TextShadow = ParseTextShadow(value); break;
             case "text-overflow": style.TextOverflow = value.ToLowerInvariant() == "ellipsis" ? TextOverflowType.Ellipsis : TextOverflowType.Clip; break;
-            case "vertical-align": style.VerticalAlign = ParseVerticalAlign(value); break;
+            case "vertical-align": ApplyVerticalAlign(style, value); break;
             case "white-space": style.WhiteSpace = ParseWhiteSpace(value); break;
             case "word-break": style.WordBreak = ParseWordBreak(value); break;
             case "overflow-wrap": case "word-wrap": style.OverflowWrap = ParseOverflowWrap(value); break;
@@ -201,7 +201,7 @@ public static class CssPropertyApplier
             case "border-image-width": style.BorderImageWidth = value; break;
             case "border-image-repeat": style.BorderImageRepeat = value; break;
             case "border-image-outset": style.BorderImageOutset = value; break;
-            case "box-sizing": style.BoxSizing = value.Contains("border") ? BoxSizingType.BorderBox : BoxSizingType.ContentBox; break;
+            case "box-sizing": style.BoxSizing = value.Contains("border") ? BoxSizingType.BorderBox : BoxSizingType.ContentBox; style.BoxSizingIsAuthored = true; break;
             case "opacity": if (float.TryParse(value, out var o)) style.Opacity = Math.Clamp(o, 0, 1); break;
             case "box-shadow": style.BoxShadow = ParseBoxShadow(value); break;
             case "flex-direction": style.FlexDirection = ParseFlexDirection(value); break;
@@ -234,6 +234,12 @@ public static class CssPropertyApplier
             case "row-gap": if (Length.TryParse(value, out var rg)) style.RowGap = rg; break;
             case "column-gap": if (Length.TryParse(value, out var cg)) style.ColumnGap = cg; break;
             case "column-count": if (int.TryParse(value, out var cc)) style.ColumnCount = cc; break;
+            case "column-span":
+                style.ColumnSpanAll = value.Trim().Equals("all", StringComparison.OrdinalIgnoreCase);
+                break;
+            // CSS Multi-Column 1 §3.5: 'columns' is the shorthand of column-width
+            // and column-count; either component may be omitted ('auto' resets it).
+            case "columns": ParseColumns(style, value); break;
             case "column-width": if (Length.TryParse(value, out var cw)) style.ColumnWidth = cw; break;
 
             // A5: column-rule 鈥?the multicol separator line.
@@ -272,7 +278,7 @@ public static class CssPropertyApplier
             case "inset-block-end": style.Bottom = Length.Parse(value); break;
             case "inset-inline-start": style.Left = Length.Parse(value); break;
             case "inset-inline-end": style.Right = Length.Parse(value); break;
-            case "list-style-type": style.ListStyleType = ParseListStyleType(value); break;
+            case "list-style-type": style.ListStyleType = ParseListStyleType(value, style); break;
             case "list-style-position": style.ListStylePosition = value.Contains("inside") ? ListStylePosition.Inside : ListStylePosition.Outside; break;
             case "list-style-image": style.ListStyleImage = value == "none" ? null : ParseUrl(value); break;
             case "list-style": ParseListStyle(value, style); break;
@@ -409,7 +415,7 @@ public static class CssPropertyApplier
             case "content-visibility": style.ContentVisibility = ParseContentVisibility(value); break;
             case "will-change": style.WillChange = value; break;
             case "scroll-behavior": style.ScrollBehavior = value.ToLowerInvariant() == "smooth" ? ScrollBehaviorType.Smooth : ScrollBehaviorType.Auto; break;
-            case "tab-size": if (float.TryParse(value.Replace("px", ""), out var ts)) style.TabSize = ts; break;
+            case "tab-size": ParseTabSize(style, value); break;
             case "hyphens": style.Hyphens = ParseHyphens(value); break;
             case "line-break": style.LineBreak = ParseLineBreak(value); break;
             case "text-justify": style.TextJustify = ParseTextJustify(value); break;
@@ -587,6 +593,40 @@ public static class CssPropertyApplier
         "none" => TextDecorationType.None,
         _ => TextDecorationType.None
     };
+
+    /// <summary>
+    /// 'vertical-align' takes the keyword set or a length/percentage (CSS 2.1
+    /// §10.8.1). A percentage refers to the element's own line-height, which is
+    /// only known at layout time, so it is kept as a fraction and flagged as
+    /// Percentage; a length is resolved to pixels here.
+    /// </summary>
+    public static void ApplyVerticalAlign(ComputedStyle style, string value)
+    {
+        var token = value.Trim();
+        style.VerticalAlignIsAuthored = true;
+        var keyword = ParseVerticalAlign(token);
+        if (keyword != VerticalAlignType.Baseline
+            || token.Equals("baseline", StringComparison.OrdinalIgnoreCase))
+        {
+            style.VerticalAlign = keyword;
+            style.VerticalAlignOffsetPx = null;
+            return;
+        }
+
+        if (Length.TryParse(token, out var length))
+        {
+            if (length is PercentLength percent)
+            {
+                style.VerticalAlign = VerticalAlignType.Percentage;
+                style.VerticalAlignOffsetPx = percent.Value;
+            }
+            else
+            {
+                style.VerticalAlign = VerticalAlignType.Length;
+                style.VerticalAlignOffsetPx = length.ToPixels(style.FontSize, style.FontSize, 0, 0);
+            }
+        }
+    }
 
     public static VerticalAlignType ParseVerticalAlign(string value) => value.ToLowerInvariant() switch
     {
@@ -1189,20 +1229,58 @@ public static class CssPropertyApplier
         _ => AlignSelfType.Auto
     };
 
-    public static ListStyleType ParseListStyleType(string value) => value.ToLowerInvariant() switch
+    /// <summary>'list-style-type' keywords plus the quoted &lt;string&gt; form
+    /// (CSS Lists 3 §5, §11).</summary>
+    public static ListStyleType ParseListStyleType(string value, ComputedStyle? style = null)
     {
-        "disc" => ListStyleType.Disc,
-        "circle" => ListStyleType.Circle,
-        "square" => ListStyleType.Square,
-        "decimal" => ListStyleType.Decimal,
-        "decimal-leading-zero" => ListStyleType.DecimalLeadingZero,
-        "lower-roman" => ListStyleType.LowerRoman,
-        "upper-roman" => ListStyleType.UpperRoman,
-        "lower-alpha" => ListStyleType.LowerAlpha,
-        "upper-alpha" => ListStyleType.UpperAlpha,
-        "none" => ListStyleType.None,
-        _ => ListStyleType.Disc
-    };
+        string text = value.Trim();
+        if (text.Length >= 2 && ((text[0] == '"' && text[^1] == '"') || (text[0] == '\'' && text[^1] == '\'')))
+        {
+            if (style != null)
+                style.ListStyleTypeString = text[1..^1];
+            return ListStyleType.String;
+        }
+        return text.ToLowerInvariant() switch
+        {
+            "disc" => ListStyleType.Disc,
+            "circle" => ListStyleType.Circle,
+            "square" => ListStyleType.Square,
+            "decimal" => ListStyleType.Decimal,
+            "decimal-leading-zero" => ListStyleType.DecimalLeadingZero,
+            "lower-roman" => ListStyleType.LowerRoman,
+            "upper-roman" => ListStyleType.UpperRoman,
+            "lower-alpha" or "lower-latin" => ListStyleType.LowerLatin,
+            "upper-alpha" or "upper-latin" => ListStyleType.UpperLatin,
+            "lower-greek" => ListStyleType.LowerGreek,
+            "upper-greek" => ListStyleType.UpperGreek,
+            "armenian" => ListStyleType.Armenian,
+            "georgian" => ListStyleType.Georgian,
+            "hebrew" => ListStyleType.Hebrew,
+            "hiragana" => ListStyleType.Hiragana,
+            "katakana" => ListStyleType.Katakana,
+            "hiragana-iroha" => ListStyleType.HiraganaIroha,
+            "katakana-iroha" => ListStyleType.KatakanaIroha,
+            "cjk-decimal" => ListStyleType.CjkDecimal,
+            "cjk-ideographic" => ListStyleType.CjkIdeographic,
+            "cjk-earthly-branch" => ListStyleType.CjkEarthlyBranch,
+            "cjk-heavenly-stem" => ListStyleType.CjkHeavenlyStem,
+            "thai" => ListStyleType.Thai,
+            "lao" => ListStyleType.Lao,
+            "khmer" => ListStyleType.Khmer,
+            "myanmar" or "burmese" => ListStyleType.Myanmar,
+            "mongolian" => ListStyleType.Mongolian,
+            "arabic-indic" => ListStyleType.ArabicIndic,
+            "persian" or "urdu" => ListStyleType.Persian,
+            "devanagari" => ListStyleType.Devanagari,
+            "bengali" => ListStyleType.Bengali,
+            "tamil" => ListStyleType.Tamil,
+            "telugu" => ListStyleType.Telugu,
+            "canadian-aboriginal" => ListStyleType.CanadianAboriginal,
+            "symbol" => ListStyleType.Symbol,
+            "none" => ListStyleType.None,
+            _ => ListStyleType.Disc,
+        };
+    }
 
     public static void ParseListStyle(string value, ComputedStyle style)
     {
@@ -1215,7 +1293,7 @@ public static class CssPropertyApplier
             else if (lower == "none")
                 style.ListStyleType = ListStyleType.None;
             else if (lower is "disc" or "circle" or "square" or "decimal" or "lower-roman" or "upper-roman")
-                style.ListStyleType = ParseListStyleType(part);
+                style.ListStyleType = ParseListStyleType(part, style);
             else if (lower.StartsWith("url("))
                 style.ListStyleImage = ParseUrl(part);
         }
@@ -1399,6 +1477,62 @@ public static class CssPropertyApplier
         "scale-down" => ObjectFitType.ScaleDown,
         _ => ObjectFitType.Fill
     };
+
+    /// <summary>CSS Text 3 §3.4: a unitless 'tab-size' counts space advances of the
+    /// element's primary font; a length value is used as-is.</summary>
+    private static void ParseColumns(ComputedStyle style, string value)
+    {
+        style.ColumnCount = 0;
+        style.ColumnWidth = null;
+        foreach (var token in value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string part = token.Trim();
+            if (part.Equals("auto", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (int.TryParse(part, out int count) && count > 0)
+            {
+                style.ColumnCount = count;
+                continue;
+            }
+            var length = Length.Parse(part);
+            if (length != null)
+                style.ColumnWidth = length;
+        }
+    }
+
+    private static void ParseTabSize(ComputedStyle style, string value)
+    {
+        string text = value.Trim();
+        bool isLength = false;
+        if (text.EndsWith("px", StringComparison.OrdinalIgnoreCase))
+        {
+            isLength = true;
+            text = text[..^2];
+        }
+        else if (text.EndsWith("rem", StringComparison.OrdinalIgnoreCase))
+        {
+            isLength = true;
+            text = text[..^3];
+        }
+        else if (text.EndsWith("em", StringComparison.OrdinalIgnoreCase))
+        {
+            isLength = true;
+            text = text[..^2];
+        }
+        if (!float.TryParse(text.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float size) || size < 0)
+            return;
+        if (isLength)
+        {
+            style.TabSizePx = size;
+            style.TabSize = 8;
+        }
+        else
+        {
+            style.TabSize = size;
+            style.TabSizePx = null;
+        }
+    }
 
     public static GridAutoFlowType ParseGridAutoFlow(string value)
     {

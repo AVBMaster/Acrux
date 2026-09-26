@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using DomDocument = UpBrowser.Core.Dom.Document;
 using DomElement = UpBrowser.Core.Dom.Element;
+using DomMutationTracker = UpBrowser.Core.Dom.DomMutationTracker;
 
 namespace UpBrowser.Core.JavaScript;
 
@@ -366,7 +367,7 @@ public class JavaScriptEngine : IDisposable
         Current = this;
         try
         {
-            var targetHost = new ElementHost(element);
+            var targetHost = GetDispatchHost(element);
             var evt = new ScriptEvent(eventType, targetHost);
             return targetHost.DispatchEvent(evt);
         }
@@ -382,13 +383,32 @@ public class JavaScriptEngine : IDisposable
         Current = this;
         try
         {
-            var targetHost = new ElementHost(element);
+            // Must dispatch on the identity-mapped wrapper: addEventListener
+            // stores its callbacks on that instance, a fresh host would drop them.
+            var targetHost = GetDispatchHost(element);
             return targetHost.DispatchEvent(evt);
         }
         finally
         {
             Current = previous;
         }
+    }
+
+    /// <summary>
+    /// The ElementHost that JS sees for this element (identity-mapped), creating
+    /// it on first use. Callers building custom events (relatedTarget, ...) use
+    /// this as the event target so listeners registered via addEventListener fire.
+    /// </summary>
+    public ElementHost GetDispatchHost(DomElement element)
+    {
+        if (_integrationService?.WrapDomNode(element) is ElementHost mapped)
+        {
+            mapped.Engine ??= this;
+            return mapped;
+        }
+        var host = new ElementHost(element);
+        host.Engine = this;
+        return host;
     }
 
     internal int StoreCallbackRef(object callback)
@@ -398,12 +418,16 @@ public class JavaScriptEngine : IDisposable
 
     internal void InvokeCallback(int cbId)
     {
+        var v0 = DomMutationTracker.Version;
         _adapter?.InvokeCallback(cbId);
+        if (DomMutationTracker.Version != v0) MarkDirty();
     }
 
     internal void InvokeCallbackWith(int cbId, object arg)
     {
+        var v0 = DomMutationTracker.Version;
         _adapter?.InvokeCallbackWith(cbId, arg);
+        if (DomMutationTracker.Version != v0) MarkDirty();
     }
 
     internal void RemoveCallback(int cbId)
@@ -452,9 +476,11 @@ public class JavaScriptEngine : IDisposable
         }
         if (cbId == null) return;
         Current = this;
+        var v0 = DomMutationTracker.Version;
         try
         {
             _adapter?.InvokeCallback(cbId.Value);
+            if (DomMutationTracker.Version != v0) MarkDirty();
         }
         catch (Exception ex)
         {
@@ -468,15 +494,22 @@ public class JavaScriptEngine : IDisposable
 
     public bool NeedsReLayout { get; set; }
 
+    // Diagnostics only (UPBROWSER_TAB_STATS=1): who marked the engine dirty.
+    internal static readonly bool TrackDirtySource =
+        Environment.GetEnvironmentVariable("UPBROWSER_TAB_STATS") == "1";
+    public string? DirtyTrace { get; set; }
+
     public void MarkDirty()
     {
         NeedsReLayout = true;
+        if (TrackDirtySource) DirtyTrace ??= Environment.StackTrace;
         OnDomChanged?.Invoke();
     }
 
     public void ClearDirty()
     {
         NeedsReLayout = false;
+        DirtyTrace = null;
     }
 
     public void Dispose()

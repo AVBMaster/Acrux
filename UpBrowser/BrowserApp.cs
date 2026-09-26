@@ -1,5 +1,6 @@
 ﻿using SkiaSharp;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using UpBrowser.Core;
@@ -109,6 +110,19 @@ namespace UpBrowser;
     private int _pendingAdoptTab = -1;
     private int _adoptionGen;
 
+    // ── Multi-process tab mode (settings: TabMode = "process") ─────
+    // Each tab lives in its own `--tab-host` child process; the browser only
+    // composites the child's rendered frames and forwards input + scroll.
+    private readonly bool _processTabs;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, RemoteTabView> _remoteTabs = new();
+    private long _lastRemoteMoveTick;
+    // Wheel arbitration: the child gets first refusal for element scrollers;
+    // accumulated deltas fall back to page scroll on WheelResult/timeout.
+    private double _pendingWheelX, _pendingWheelY;
+    private bool _wheelAwaiting;
+    private long _wheelSentTick;
+    private float _lastRemoteExtentW = -1, _lastRemoteExtentH = -1;
+
     // Performance optimization layer. Lazily initialized in RunAsync so the
     // existing Chrome/loader flows are not perturbed on cold-start.
     private PerformanceHub? _perfHub;
@@ -179,10 +193,19 @@ namespace UpBrowser;
     private SelPoint _selAnchor;
     private SelPoint _selFocus;
     private readonly string? _startupUrl;
+    // Idle diagnostics (see TabHost stats): UPBROWSER_TAB_STATS=1
+    private readonly bool _renderStats = Environment.GetEnvironmentVariable("UPBROWSER_TAB_STATS") == "1";
+    private long _rsNextLog, _rsTotal, _rsRedraw, _rsLoading, _rsScroll, _rsRelayout, _rsInput, _rsDevTools, _rsCursor;
+    private long _rsPreMs, _rsPumpMs, _rsBodyMs, _rsPresentMs, _rsRendered;
 
     public BrowserApp(int logicalWidth, int logicalHeight, string? startupUrl = null)
     {
         _startupUrl = startupUrl;
+        if (_renderStats)
+            InputHandler.RedrawTraceGate = stack =>
+            {
+                try { File.AppendAllText("upbrowser_tabstats_redraw.log", stack + "\n----\n"); } catch { }
+            };
         LogCtor("SkiaTextMeasurer");
         TextMeasurer.Instance = new Core.Layout.SkiaTextMeasurer();
         LogCtorDone("SkiaTextMeasurer");
@@ -222,6 +245,11 @@ namespace UpBrowser;
         LogCtor("LoadSettingsConfig");
         RenderingSettingsConfig.Load(_renderingSettings);
         DocumentManager.UseCustomParser = _renderingSettings.UseCustomHtmlParser;
+        // Apply frame pacing at startup too — previously only OnChanged set it,
+        // so the configured FPS silently differed from the actual loop cadence.
+        _window.TargetFrameTimeMs = _renderingSettings.TargetFps > 0
+            ? 1000f / _renderingSettings.TargetFps
+            : 16.67f; // "unlimited" → vsync-class 60Hz; a 1ms loop burns CPU for nothing
         LogCtorDone("LoadSettingsConfig");
 
         var engineType = JsEngineConfig.GetEngineTypeByName(_renderingSettings.JsEngine) ?? JsEngineType.Jint;
@@ -234,9 +262,12 @@ namespace UpBrowser;
         }
         JsEngineConfig.DefaultEngineType = engineType;
 
-        _threadedTabs = _renderingSettings.TabMode is "threaded" or "process";
-        if (_threadedTabs)
-            Console.WriteLine($"[Startup] Threaded-tab mode enabled (TabMode={_renderingSettings.TabMode})");
+        _processTabs = _renderingSettings.TabMode == "process";
+        _threadedTabs = _renderingSettings.TabMode == "threaded";
+        if (_processTabs)
+            Console.WriteLine("[Startup] Multi-process tab mode enabled");
+        else if (_threadedTabs)
+            Console.WriteLine("[Startup] Threaded-tab mode enabled");
 
         LogCtor("JavaScriptEngine");
         _jsEngine = new JavaScriptEngine(-1);
@@ -481,7 +512,7 @@ namespace UpBrowser;
             DocumentManager.UseCustomParser = _renderingSettings.UseCustomHtmlParser;
             _window.TargetFrameTimeMs = _renderingSettings.TargetFps > 0
                 ? (float)(1000.0 / _renderingSettings.TargetFps)
-                : 1f;
+                : 16.67f;
             // Smooth scrolling toggle: gate the page and element scroll physics so
             // the setting takes effect immediately (OFF = instant wheel/keys).
             _scroll.SmoothEnabled = _renderingSettings.SmoothScrolling;
@@ -758,14 +789,23 @@ namespace UpBrowser;
         _skiaRenderer.Canvas.Clear(SKColors.White);
 
         var title = _currentLoad?.Document.Title ?? "UpBrowser";
+        if (_processTabs)
+        {
+            var rvT = ActiveRemote();
+            if (rvT != null && !string.IsNullOrEmpty(rvT.Proc.Title))
+                title = rvT.Proc.Title;
+        }
         var currentUrl = _chrome.GetCurrentUrl();
         _chrome.RenderChrome(_skiaRenderer.Canvas, windowWidth, windowHeight, currentUrl ?? "upbrowser://local", title);
 
         float devToolsHeight = _devTools.Visible ? _devTools.PanelHeight : 0;
         float contentViewportHeight = windowHeight - _contentOffset - _chrome.GetStatusBarHeight() - devToolsHeight;
-        _skiaRenderer.RenderWithScroll(_displayList, _contentOffset,
-            _scroll.ScrollX, _scroll.ScrollY,
-            windowWidth, contentViewportHeight);
+        if (_processTabs)
+            RenderRemotePage(windowWidth, contentViewportHeight);
+        else
+            _skiaRenderer.RenderWithScroll(_displayList, _contentOffset,
+                _scroll.ScrollX, _scroll.ScrollY,
+                windowWidth, contentViewportHeight);
 
         RenderDialogOverlay(_skiaRenderer.Canvas, windowWidth, windowHeight);
 
@@ -865,6 +905,16 @@ namespace UpBrowser;
 
         //Load test_css_feature.html in UpBrowser.Core.Resources
         LogStart("LoadHtmlAsync");
+        if (_processTabs)
+        {
+            // Multi-process mode: the initial page is owned and rendered by the
+            // tab-host child; the parent only composites its frames.
+            _lastActiveTabIndex = _chrome.ActiveTabIndex;
+            var initialView = EnsureRemoteTab(_lastActiveTabIndex, "upbrowser://test-css");
+            initialView.PendingInitial = "upbrowser://test-css";
+        }
+        else
+        {
         _currentHtml = DocumentManager.TestCssFeatureHtml;
         var initialLoad = await _docManager.LoadHtmlAsync(_currentHtml);
         _currentLoad = initialLoad;
@@ -911,6 +961,7 @@ namespace UpBrowser;
 
         var bodyBox = _currentLoad.Document.Body?.LayoutBox;
         var lastContentHeight = bodyBox?.BorderBox.Height ?? 0;
+        }
 
         LogStart("WireNavigation");
         WireNavigation();
@@ -921,6 +972,8 @@ namespace UpBrowser;
         {
             if (_startupUrl.StartsWith("http://") || _startupUrl.StartsWith("https://"))
                 NavigateToHttp(_startupUrl);
+            else if (_startupUrl.StartsWith("upbrowser://", StringComparison.Ordinal))
+                _chrome.NavigateToUrl(_startupUrl); // routes through OnNavigate per tab mode
             else
                 NavigateToFile(new Uri(Path.GetFullPath(_startupUrl)).AbsoluteUri);
         }
@@ -970,6 +1023,12 @@ namespace UpBrowser;
         {
             Console.WriteLine($"Navigating to: {url}");
             _input.NeedsRedraw = true;
+
+            if (_processTabs)
+            {
+                ProcessNavigateTo(_chrome.ActiveTabIndex, url);
+                return;
+            }
 
             if (url.StartsWith("upbrowser://"))
             {
@@ -1023,6 +1082,11 @@ namespace UpBrowser;
         {
             Console.WriteLine("Refreshing page...");
             _input.NeedsRedraw = true;
+            if (_processTabs)
+            {
+                ProcessNavigateTo(_chrome.ActiveTabIndex, _chrome.GetCurrentUrl());
+                return;
+            }
             if (!string.IsNullOrEmpty(_currentHtml))
             {
                 LoadAndRenderHtml(_currentHtml);
@@ -1039,6 +1103,12 @@ namespace UpBrowser;
         {
             Console.WriteLine($"Tab changed to: {url}");
             _input.NeedsRedraw = true;
+
+            if (_processTabs)
+            {
+                OnTabChangedProcess(url);
+                return;
+            }
 
             if (_threadedTabs)
             {
@@ -1173,6 +1243,11 @@ namespace UpBrowser;
             // 所有重清理操作放到后台线程，绝不阻塞 UI 线程
             _ = Task.Run(() =>
             {
+                if (_processTabs && _remoteTabs.TryRemove(index, out var remoteView))
+                {
+                    try { remoteView.Dispose(); }
+                    catch (Exception ex) { Console.WriteLine($"[CloseTab] remote dispose error: {ex.Message}"); }
+                }
                 try
                 {
                     _processManager.DestroyProcess(index);
@@ -1216,6 +1291,58 @@ namespace UpBrowser;
                 GC.Collect(GC.MaxGeneration, GCCollectionMode.Optimized, blocking: false);
             });
         };
+
+        if (_processTabs)
+        {
+            // The parent holds no DOM: park the shared engine and forward all
+            // page input to the active tab's child process instead.
+            _jsEngine = _parkEngine ??= new JavaScriptEngine(NullJsEngineAdapter.Instance);
+
+            _input.OnDomClick = (x, y) =>
+            {
+                var v = ActiveRemote();
+                v?.Proc.MouseDown(x, y - _contentOffset);
+                v?.Proc.MouseUp(x, y - _contentOffset);
+            };
+            _input.OnDomMouseUp = (x, y, isUp) =>
+            {
+                ActiveRemote()?.Proc.MouseUp(x, y - _contentOffset);
+            };
+            _input.OnDomMouseMove = (x, y) =>
+            {
+                long now = Environment.TickCount64;
+                if (now - _lastRemoteMoveTick < 24) return;
+                _lastRemoteMoveTick = now;
+                ActiveRemote()?.Proc.MouseMove(x, y - _contentOffset);
+            };
+            _input.OnDomKeyDown = (charCode, key, repeat) =>
+                ActiveRemote()?.Proc.KeyDown((ushort)charCode, (ushort)key, repeat);
+            _input.OnDomChar = (charCode) => ActiveRemote()?.Proc.Char((ushort)charCode);
+            // Wheel goes to the child first (element scrollers); page scroll
+            // happens only when the child passes or the reply times out.
+            _input.OnScrollContainerWheel = (dx, dy, mx, my) =>
+            {
+                // Speculative first: the page scrolls with the wheel IMMEDIATELY.
+                // The child still adjudicates element scrollers; if it claims the
+                // wheel, FlushPendingWheel rolls the page scroll back. Waiting for
+                // the child's reply before scrolling added a full pipe round-trip
+                // to every notch — the "white strip lingers" latency users felt.
+                ApplyRemotePageScroll(dx, dy);
+                var v = ActiveRemote();
+                if (v != null && v.Proc.IsConnected)
+                {
+                    _pendingWheelX += dx;
+                    _pendingWheelY += dy;
+                    if (!_wheelAwaiting)
+                    {
+                        _wheelAwaiting = true;
+                        _wheelSentTick = Environment.TickCount64;
+                    }
+                    v.Proc.Wheel((float)dx, (float)dy, mx, my - _contentOffset);
+                }
+                return true;
+            };
+        }
     }
 
     private bool _isNavigating;
@@ -1556,6 +1683,243 @@ namespace UpBrowser;
         }
     }
 
+    // ==================== Multi-process tabs (TabMode = "process") ====================
+
+    private RemoteTabView? ActiveRemote() =>
+        _remoteTabs.TryGetValue(_chrome.ActiveTabIndex, out var v) ? v : null;
+
+    private RemoteTabView EnsureRemoteTab(int tabIndex, string url)
+    {
+        return _remoteTabs.GetOrAdd(tabIndex, idx =>
+        {
+            var view = new RemoteTabView(new RemoteTabProcess(idx, url, _dpiScale, _renderingSettings.ResolutionScale));
+            view.Proc.OnFrameArrived += () => _eventLoop.PostTask(() => _input.NeedsRedraw = true);
+            // The child connects asynchronously: a startup navigation queued while
+            // the pipe was down only goes out from PumpRemoteTabs, which runs on a
+            // redraw pass. Wake one on Ready or PendingInitial could stall forever.
+            view.Proc.OnSignal += (type, _, _) =>
+            {
+                if (type == TabMsg.Ready) _eventLoop.PostTask(() => _input.NeedsRedraw = true);
+            };
+            view.Proc.OnSignal += (type, text, extra) => _eventLoop.PostTask(() => HandleRemoteSignal(idx, type, text, extra));
+            view.Proc.OnScrollChanged += (x, y) => _eventLoop.PostTask(() =>
+            {
+                // Child-initiated scroll (window.scrollTo / anchors): mirror it
+                // onto the parent scrollbar without triggering a send-back.
+                if (_remoteTabs.TryGetValue(idx, out var v))
+                {
+                    v.SentScrollX = x; v.SentScrollY = y;
+                }
+                if (_chrome.ActiveTabIndex == idx)
+                {
+                    _scroll.ScrollTo(x, y);
+                    _input.NeedsRedraw = true;
+                }
+            });
+            view.Proc.OnWheelResult += consumed => _eventLoop.PostTask(() => FlushPendingWheel(consumed));
+            return view;
+        });
+    }
+
+    /// <summary>Page-level scroll from wheel, mirroring InputHandler's axis rules.</summary>
+    private void ApplyRemotePageScroll(double dx, double dy)
+    {
+        if (_input.IsShiftDown) _scroll.ScrollBy((float)dy, 0);
+        else if (Math.Abs(dx) > 0) _scroll.ScrollBy((float)dx, 0);
+        else _scroll.ScrollBy((float)dy);
+        _input.NeedsRedraw = true;
+    }
+
+    private void FlushPendingWheel(bool consumed)
+    {
+        if (!_wheelAwaiting) return;
+        _wheelAwaiting = false;
+        double px = _pendingWheelX, py = _pendingWheelY;
+        _pendingWheelX = _pendingWheelY = 0;
+        if (consumed && (px != 0 || py != 0))
+        {
+            // An element scroller claimed the wheel: undo the speculative page
+            // scroll; the child's own element offset arrives with its next frame.
+            if (_input.IsShiftDown) _scroll.ScrollBy((float)-py, 0);
+            else if (Math.Abs(px) > 0) _scroll.ScrollBy((float)-px, 0);
+            else _scroll.ScrollBy((float)-py);
+            _input.NeedsRedraw = true;
+        }
+    }
+
+    private static string SpecialPageHtml(string url) => url switch
+    {
+        "upbrowser://js-test" => DocumentManager.JsTestHtml,
+        "upbrowser://element-test" => DocumentManager.ElementTestHtml,
+        "upbrowser://debug" => DocumentManager.DebugHtml,
+        "upbrowser://js" => DocumentManager.JsEngineHtml,
+        "upbrowser://test-css" => DocumentManager.TestCssFeatureHtml,
+        _ => DocumentManager.DefaultHtml,
+    };
+
+    private void ProcessNavigateTo(int tab, string url)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        var view = EnsureRemoteTab(tab, url);
+        view.PendingInitial = url;
+        view.InitialSent = false;
+        view.LastUrl = url;
+        _chrome.SetTabUrl(tab, url);
+        _input.NeedsRedraw = true;
+    }
+
+    private void HandleRemoteSignal(int tab, TabMsg type, string text, string extra)
+    {
+        switch (type)
+        {
+            case TabMsg.Title:
+                _chrome.SetTabTitle(tab, text);
+                _input.NeedsRedraw = true;
+                break;
+            case TabMsg.UrlChanged:
+                if (text.StartsWith("upbrowser://", StringComparison.Ordinal))
+                {
+                    // Internal pages are parent-owned: push the mapped content back —
+                    // but only for a genuine navigation request. ApplyHtml finishes by
+                    // echoing the loaded URL, and re-navigating on that echo would loop
+                    // the tab through full reloads forever.
+                    if (!_remoteTabs.TryGetValue(tab, out var rv) ||
+                        !string.Equals(rv.LastUrl, text, StringComparison.OrdinalIgnoreCase))
+                    {
+                        ProcessNavigateTo(tab, text);
+                    }
+                }
+                else
+                {
+                    _chrome.SetTabUrl(tab, text);
+                    if (_remoteTabs.TryGetValue(tab, out var rv2)) rv2.LastUrl = text;
+                    if (_chrome.ActiveTabIndex == tab) _input.NeedsRedraw = true;
+                }
+                break;
+            case TabMsg.Dialog:
+                if (_chrome.ActiveTabIndex == tab)
+                    ShowDialog(text, extra);
+                break;
+        }
+    }
+
+    private void OnTabChangedProcess(string url)
+    {
+        int to = _chrome.ActiveTabIndex;
+        int from = _lastActiveTabIndex;
+        _lastActiveTabIndex = to;
+        ClearTabInteractionState();
+
+        var view = EnsureRemoteTab(to, url);
+        if (!view.HasFrame && !view.InitialSent && view.PendingInitial == null)
+            ProcessNavigateTo(to, string.IsNullOrEmpty(url) ? "upbrowser://newtab" : url);
+
+        view.Proc.SetActive(true);
+        if (from >= 0 && from != to && _remoteTabs.TryGetValue(from, out var old))
+            old.Proc.SetActive(false);
+
+        _scroll.ScrollTo(view.SentScrollX, view.SentScrollY);
+        _input.NeedsRedraw = true;
+    }
+
+    /// <summary>Per-frame pump: deferred initial navigations, scroll sync, loading state.</summary>
+    private void PumpRemoteTabs(int windowWidth, float contentViewportHeight)
+    {
+        foreach (var kv in _remoteTabs)
+        {
+            var v = kv.Value;
+
+            // Crash resilience: a dead child gets relaunched (bounded retries)
+            // and re-navigated to the URL it was showing.
+            if (v.Proc.IsDead && v.InitialSent && !string.IsNullOrEmpty(v.LastUrl) && v.RestartCount < 2)
+            {
+                int restarts = v.RestartCount + 1;
+                string lastUrl = v.LastUrl;
+                Console.WriteLine($"[RemoteTab {kv.Key}] child died; restarting ({restarts}/2) → {lastUrl}");
+                _remoteTabs.TryRemove(kv.Key, out _);
+                try { v.Dispose(); } catch { }
+                var nv = EnsureRemoteTab(kv.Key, lastUrl);
+                nv.RestartCount = restarts;
+                nv.LastUrl = lastUrl;
+                nv.PendingInitial = lastUrl;
+                continue;
+            }
+
+            if (v.Proc.IsDead || v.InitialSent) continue;
+            if (v.PendingInitial != null && v.Proc.IsConnected)
+            {
+                var url = v.PendingInitial;
+                v.PendingInitial = null;
+                v.InitialSent = true;
+                if (url.StartsWith("upbrowser://", StringComparison.Ordinal))
+                    v.Proc.NavigateHtml(SpecialPageHtml(url), url);
+                else
+                    v.Proc.Navigate(url);
+            }
+        }
+
+        var active = ActiveRemote();
+        if (active == null) return;
+
+        // Wheel arbitration safety net: if the child never answers, scroll the page.
+        if (_wheelAwaiting && Environment.TickCount64 - _wheelSentTick > 80)
+            FlushPendingWheel(consumed: false);
+
+        if (Math.Abs(_scroll.ScrollX - active.SentScrollX) > 0.5f ||
+            Math.Abs(_scroll.ScrollY - active.SentScrollY) > 0.5f)
+        {
+            active.SentScrollX = _scroll.ScrollX;
+            active.SentScrollY = _scroll.ScrollY;
+            active.Proc.ScrollTo(_scroll.ScrollX, _scroll.ScrollY);
+            _input.NeedsRedraw = true;
+        }
+
+        if (active.HasFrame && active.ContentH > 0 &&
+            (Math.Abs(active.ContentW - _lastRemoteExtentW) > 1f || Math.Abs(active.ContentH - _lastRemoteExtentH) > 1f))
+        {
+            // Only re-derive scroll extents when the page size actually moved;
+            // calling UpdateScroll every frame fights smooth scrolling.
+            _lastRemoteExtentW = active.ContentW;
+            _lastRemoteExtentH = active.ContentH;
+            _scroll.UpdateScroll(active.ContentW, active.ContentH, windowWidth, contentViewportHeight);
+        }
+        _chrome.SetLoadingState(active.Proc.Loading);
+    }
+
+    private void RenderRemotePage(int windowWidth, float contentViewportHeight)
+    {
+        var canvas = _skiaRenderer.Canvas;
+        canvas.Save();
+        canvas.ClipRect(new SKRect(0, _contentOffset, windowWidth, _contentOffset + contentViewportHeight));
+        canvas.Translate(0, _contentOffset);
+
+        var view = ActiveRemote();
+        if (view != null)
+        {
+            view.UpdateFromFrame();
+            var bmp = view.Bitmap;
+            if (bmp != null)
+            {
+                float inv = 1f / Math.Max(0.01f, _dpiScale * _renderingSettings.ResolutionScale);
+                float lw = bmp.Width * inv, lh = bmp.Height * inv;
+                // Offset the (already-scrolled) frame by the delta between what the
+                // child baked and the parent's current scroll: instant scroll feedback
+                // while the child re-renders at the new offset.
+                float dx = view.FrameScrollX - _scroll.ScrollX;
+                float dy = view.FrameScrollY - _scroll.ScrollY;
+                // Freshly exposed strips take the PAGE background color (like a
+                // compositor outrunning its rasterizer) — never smeared pixels.
+                if (Math.Abs(dy) > 0.5f || Math.Abs(dx) > 0.5f)
+                {
+                    using var bgPaint = new SKPaint { Color = view.PageBg };
+                    canvas.DrawRect(new SKRect(0, 0, windowWidth, contentViewportHeight), bgPaint);
+                }
+                canvas.DrawBitmap(bmp, new SKRect(dx, dy, dx + lw, dy + lh));
+            }
+        }
+        canvas.Restore();
+    }
+
     private void RunPageScripts(string? baseUrl)
     {
         if (_currentLoad == null) return;
@@ -1682,6 +2046,11 @@ namespace UpBrowser;
 
     private void NavigateToHttp(string url)
     {
+        if (_processTabs)
+        {
+            ProcessNavigateTo(_chrome.ActiveTabIndex, url);
+            return;
+        }
         _isNavigating = false; // allow new navigation to interrupt previous one
         int seq = Interlocked.Increment(ref _navigationSeq);
         int tabIdx = _chrome.ActiveTabIndex;
@@ -1753,6 +2122,11 @@ namespace UpBrowser;
 
     private void NavigateToFile(string url)
     {
+        if (_processTabs)
+        {
+            ProcessNavigateTo(_chrome.ActiveTabIndex, url);
+            return;
+        }
         if (_isNavigating)
             _isNavigating = false; // 允许新导航中断之前的请求
 
@@ -1795,6 +2169,12 @@ namespace UpBrowser;
 
     private void LoadAndRenderHtml(string html, string? baseUrl = null)
     {
+        if (_processTabs)
+        {
+            var view = EnsureRemoteTab(_chrome.ActiveTabIndex, baseUrl ?? "upbrowser://local");
+            view.Proc.NavigateHtml(html, baseUrl ?? "upbrowser://local");
+            return;
+        }
         _currentHtml = html;
         _currentBaseUrl = baseUrl;
         _sharedImageCache.Clear();
@@ -2105,11 +2485,23 @@ namespace UpBrowser;
         else
         {
             _skiaRenderer.InvalidatePageCache();
+            // A JS-driven rebuild drops every tile; leaving it to the deferred
+            // rasterizer blanks the viewport mid-scroll for several frames.
+            // Re-raster the visible region synchronously so the next presented
+            // frame is already complete.
+            if (_skiaRenderer.TileCompositorActive && !_window.IsInSizeMove)
+                _skiaRenderer.PrerasterizePageRect(new SKRect(
+                    _scroll.ScrollX, _scroll.ScrollY,
+                    _scroll.ScrollX + windowWidth,
+                    _scroll.ScrollY + windowHeight + _contentOffset));
         }
     }
 
     private void RenderFrame(double dt)
     {
+        long rsMark = 0;
+        if (_renderStats) rsMark = Stopwatch.GetTimestamp();
+
         // Drive the cooperative scheduler for the frame and observe memory pressure.
         RunPerfFrame(dt);
 
@@ -2204,9 +2596,14 @@ namespace UpBrowser;
 
         bool inputRecently = Environment.TickCount64 - _lastInputTimeTick < InputCooldownMs;
 
-        // Accumulate pending relayout flag
+        // Accumulate pending relayout flag. In process mode the child owns page
+        // layout and the parent never runs a layout pass, so the flag must not
+        // latch here — a stuck flag forces a full repaint every frame.
         if (_jsEngine.NeedsReLayout)
-            _pendingRelayout = true;
+        {
+            if (_processTabs) _jsEngine.ClearDirty();
+            else _pendingRelayout = true;
+        }
 
         if (_taskManagerPage.Visible)
         {
@@ -2218,8 +2615,50 @@ namespace UpBrowser;
             }
         }
 
+        bool remoteNavPending = false;
+        if (_processTabs)
+        {
+            // Keep pumping while any deferred initial navigation awaits a
+            // connected child — otherwise the queue could idle-block itself.
+            foreach (var kv in _remoteTabs)
+                if (!kv.Value.InitialSent && kv.Value.PendingInitial != null)
+                {
+                    remoteNavPending = true;
+                    break;
+                }
+        }
+
         bool needsRedraw = _input.NeedsRedraw || _pendingRelayout || devToolsChanged ||
-                           (cursorNeedsRedraw && !inputRecently) || scrollChanged;
+                           (cursorNeedsRedraw && !inputRecently) || scrollChanged || remoteNavPending;
+
+        if (_renderStats)
+        {
+            long nowTs = Stopwatch.GetTimestamp();
+            _rsPreMs += (nowTs - rsMark) * 1000 / Stopwatch.Frequency;
+            rsMark = nowTs;
+            _rsTotal++;
+            if (needsRedraw) _rsRedraw++;
+            if (_chrome.IsLoading) _rsLoading++;
+            if (scrollChanged) _rsScroll++;
+            if (_pendingRelayout) _rsRelayout++;
+            if (_input.NeedsRedraw) _rsInput++;
+            if (devToolsChanged) _rsDevTools++;
+            if (cursorNeedsRedraw && !inputRecently) _rsCursor++;
+
+            if (Environment.TickCount64 >= _rsNextLog)
+            {
+                _rsNextLog = Environment.TickCount64 + 2000;
+                int n = Math.Max(1, (int)_rsRendered);
+                var line = $"[parent stats] frames={_rsTotal} redraw={_rsRedraw} loading={_rsLoading} " +
+                           $"scroll={_rsScroll} relayout={_rsRelayout} input={_rsInput} rendered={_rsRendered} " +
+                           $"ms pre={_rsPreMs / n} pump={_rsPumpMs / n} body={_rsBodyMs / n} present={_rsPresentMs / n} " +
+                           $"heapMB={GC.GetTotalMemory(false) / 1048576} wsMB={Environment.WorkingSet / 1048576}";
+                Console.WriteLine(line);
+                try { File.AppendAllText("upbrowser_tabstats_parent.log", line + "\n"); } catch { }
+                _rsTotal = _rsRedraw = _rsLoading = _rsScroll = _rsRelayout = _rsInput = _rsDevTools = _rsCursor = 0;
+                _rsPreMs = _rsPumpMs = _rsBodyMs = _rsPresentMs = 0; _rsRendered = 0;
+            }
+        }
 
         // 加载中时强制全帧渲染，确保进度条可见
         if (_chrome.IsLoading)
@@ -2228,7 +2667,7 @@ namespace UpBrowser;
         if (!sizeChanged && !needsRedraw && !_chrome.IsLoading)
             return;
 
-        if (windowWidth <= 0 || windowHeight <= 0 || (_currentLoad == null && !_adoptionPending))
+        if (windowWidth <= 0 || windowHeight <= 0 || (_currentLoad == null && !_adoptionPending && !_processTabs))
             return;
 
         if (sizeChanged)
@@ -2244,11 +2683,22 @@ namespace UpBrowser;
 
         float contentViewportHeight = windowHeight - _contentOffset - _chrome.GetStatusBarHeight() - currentDevToolsHeight;
 
-        if (sizeChanged && _threadedTabs)
+        if (_processTabs)
+        {
+            PumpRemoteTabs(windowWidth, contentViewportHeight);
+            if (_renderStats) { long t = Stopwatch.GetTimestamp(); _rsPumpMs += (t - rsMark) * 1000 / Stopwatch.Frequency; rsMark = t; }
+            if (sizeChanged)
+            {
+                foreach (var kv in _remoteTabs)
+                    kv.Value.Proc.Resize(windowWidth, contentViewportHeight);
+            }
+        }
+        else if (sizeChanged && _threadedTabs)
             _processManager.SetViewportAll(windowWidth, Math.Max(100, contentViewportHeight));
 
         bool needsFullRebuild = (sizeChanged || windowWidth != _lastLayoutWidth || _pendingRelayout || devToolsChanged)
-                                && !_adoptionPending;
+                                && !_adoptionPending && !_processTabs;
+        if (_processTabs) _pendingRelayout = false;
 
         // While a resize/move drag is in flight, bypass the tile compositor and
         // draw the whole page directly: every resize tick would otherwise discard
@@ -2269,7 +2719,7 @@ namespace UpBrowser;
         // work; tiles that complete land on the next repaint. Frames with nothing
         // pending clear so overlay/caret changes stay crisp.
         bool tileBacklogRetained =
-            _skiaRenderer.TileCompositorActive && !devToolsChanged && !directDraw &&
+            _skiaRenderer.TileCompositorActive && !devToolsChanged && !directDraw && !_processTabs &&
             (needsFullRebuild || scrollChanged || _scrollDirty || _elementScrollDirty ||
              _compositorBacklogLast || _pendingTileWorkLast);
         if (needsFullRebuild)
@@ -2577,6 +3027,12 @@ namespace UpBrowser;
         }
 
         var title = _currentLoad?.Document.Title ?? "UpBrowser";
+        if (_processTabs)
+        {
+            var rvT = ActiveRemote();
+            if (rvT != null && !string.IsNullOrEmpty(rvT.Proc.Title))
+                title = rvT.Proc.Title;
+        }
         var currentUrl = _chrome.GetCurrentUrl();
         if (string.IsNullOrEmpty(currentUrl))
             currentUrl = "upbrowser://local";
@@ -2592,6 +3048,11 @@ namespace UpBrowser;
                 nDom = CountDomNodes(_currentLoad.Document);
                 nBox = CountLayoutBoxes(_currentLoad.Document);
             }
+            else if (_processTabs && _remoteTabs.TryGetValue(i, out var rv))
+            {
+                nDom = rv.DomCount;
+                nBox = rv.BoxCount;
+            }
             else if (_tabStates.TryGetValue(i, out var st))
             {
                 nDom = st.DomNodeCount;
@@ -2602,12 +3063,15 @@ namespace UpBrowser;
 
         _chrome.RenderChrome(_skiaRenderer.Canvas, windowWidth, windowHeight, currentUrl, title);
 
-        _skiaRenderer.RenderWithScroll(_displayList, _contentOffset,
-            _scroll.ScrollX, _scroll.ScrollY,
-            windowWidth, contentViewportHeight,
-            _cachedPaintVisitor?.OverlayList,
-            _cachedPaintVisitor?.ViewBackgroundColor ?? SKColors.White,
-            interactiveScrollFrame, directDraw);
+        if (_processTabs)
+            RenderRemotePage(windowWidth, contentViewportHeight);
+        else
+            _skiaRenderer.RenderWithScroll(_displayList, _contentOffset,
+                _scroll.ScrollX, _scroll.ScrollY,
+                windowWidth, contentViewportHeight,
+                _cachedPaintVisitor?.OverlayList,
+                _cachedPaintVisitor?.ViewBackgroundColor ?? SKColors.White,
+                interactiveScrollFrame, directDraw);
 
         // Remember whether the deferred tile rasterizer still has backlog, so the
         // next frame knows to retain the page pixels instead of clearing them.
@@ -2732,6 +3196,11 @@ namespace UpBrowser;
                 domNodes = CountDomNodes(_currentLoad.Document);
                 layoutBoxes = CountLayoutBoxes(_currentLoad.Document);
             }
+            else if (_processTabs && _remoteTabs.TryGetValue(i, out var rvTm))
+            {
+                domNodes = rvTm.DomCount;
+                layoutBoxes = rvTm.BoxCount;
+            }
             else if (_tabStates.TryGetValue(i, out var st))
             {
                 domNodes = st.DomNodeCount;
@@ -2791,7 +3260,13 @@ namespace UpBrowser;
         _skiaRenderer.RenderFpsCounter(_skiaRenderer.Canvas, windowWidth, windowHeight);
 
         var pixels = _skiaRenderer.GetPixelData();
+        if (_renderStats) { long t = Stopwatch.GetTimestamp(); _rsBodyMs += (t - rsMark) * 1000 / Stopwatch.Frequency; rsMark = t; }
         _window.Render(pixels, _skiaRenderer.PhysicalWidth, _skiaRenderer.PhysicalHeight);
+        if (_renderStats)
+        {
+            _rsPresentMs += (Stopwatch.GetTimestamp() - rsMark) * 1000 / Stopwatch.Frequency;
+            _rsRendered++;
+        }
 
         _input.NeedsRedraw = false;
         if (_input.IsMouseDown()) _input.NeedsRedraw = true;
@@ -5333,7 +5808,7 @@ namespace UpBrowser;
         }
     }
 
-    private static UpBrowser.Core.Dom.Element? HitTest(UpBrowser.Core.Dom.Document doc, float x, float y)
+    internal static UpBrowser.Core.Dom.Element? HitTest(UpBrowser.Core.Dom.Document doc, float x, float y)
     {
         UpBrowser.Core.Dom.Element? result = null;
         float lastZ = float.MinValue;
@@ -5606,6 +6081,11 @@ namespace UpBrowser;
                 st.Engine?.Dispose();
             _parkEngine?.Dispose();
         }
+        foreach (var kv in _remoteTabs)
+        {
+            try { kv.Value.Dispose(); } catch { }
+        }
+        _remoteTabs.Clear();
 #if USE_MULTIPLE_JS_ENGINE
         EngineProcessManager.Release(-1);
 #endif

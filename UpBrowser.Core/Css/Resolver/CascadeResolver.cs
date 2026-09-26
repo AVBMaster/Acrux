@@ -507,6 +507,21 @@ public class CascadeResolver
         }
     }
 
+    /// <summary>Insert one HTML presentational size attribute (a non-negative
+    /// integer, optionally followed by '%') as the given CSS property.</summary>
+    private void InsertSizeHint(Element element, string attribute, string property,
+        LegacyCascadePriority priority)
+    {
+        var raw = element.GetAttribute(attribute)?.Trim();
+        if (string.IsNullOrEmpty(raw)) return;
+        bool isPercent = raw.EndsWith('%');
+        var number = isPercent ? raw[..^1] : raw;
+        if (!float.TryParse(number.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var value) || value < 0)
+            return;
+        _cascadeMap.Insert(property, isPercent ? $"{value.ToString(System.Globalization.CultureInfo.InvariantCulture)}%" : $"{value}px", priority);
+    }
+
     private void AnalyzePresentationalHints(Element element, int treeOrder)
     {
         string tag = element.TagName.ToUpperInvariant();
@@ -548,6 +563,17 @@ public class CascadeResolver
             }
             if (int.TryParse(cellspacing, out int cs))
                 _cascadeMap.Insert("border-spacing", $"{cs}px", phPriority);
+            // HTML §10.3.3.2.2 presentational hints: width is a used-width hint,
+            // height the minimum height of the table.
+            InsertSizeHint(element, "width", "width", phPriority);
+            InsertSizeHint(element, "height", "min-height", phPriority);
+        }
+
+        if (tag is "TD" or "TH" or "TR" or "COL" or "COLGROUP")
+        {
+            InsertSizeHint(element, "width", "width", phPriority);
+            // A cell's height attribute is its height; a row's is a minimum.
+            InsertSizeHint(element, "height", tag == "TR" ? "min-height" : "height", phPriority);
         }
 
         if (tag == "TD" || tag == "TH")
@@ -949,6 +975,7 @@ public class CascadeResolver
         child.ListStyleType = parent.ListStyleType;
         child.ListStylePosition = parent.ListStylePosition;
         child.TabSize = parent.TabSize;
+        child.TabSizePx = parent.TabSizePx;
         child.BorderSpacing = parent.BorderSpacing;
         child.RubyPosition = parent.RubyPosition;
         child.PointerEvents = parent.PointerEvents;
@@ -1108,7 +1135,7 @@ public class CascadeResolver
         dest.ContentVisibility = src.ContentVisibility;
         dest.WillChange = src.WillChange;
         dest.ScrollBehavior = src.ScrollBehavior;
-        dest.TabSize = src.TabSize;
+        dest.TabSize = src.TabSize; dest.TabSizePx = src.TabSizePx;
         dest.Hyphens = src.Hyphens;
         dest.LineBreak = src.LineBreak;
         dest.TextJustify = src.TextJustify;

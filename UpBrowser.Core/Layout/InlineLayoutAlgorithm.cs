@@ -225,7 +225,26 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         // merged style has to reach the line breaker, not just painting.
         _firstLineStyle = UpBrowser.Core.Css.PseudoStyleMerger.Merge(Style, Node.FirstLineStyles);
         lineBreaker.SetFirstLineStyle(_firstLineStyle);
-        var lines = lineBreaker.BreakLines(data, availInline, Style);
+
+        // Only line boxes avoid floats, block boxes do not (CSS 2.1 §9.5.2), so the
+        // inline range of each line has to be resolved against the formatting
+        // context's exclusion space. That requires breaking the lines one at a time,
+        // because a line's vertical position is only known once the previous lines
+        // have been laid out.
+        var floatContext = CreateFloatLineContext(paddingLeft, paddingTop, availInline, data);
+        List<LineInfo> lines;
+        if (floatContext == null)
+        {
+            lines = lineBreaker.BreakLines(data, availInline, Style);
+        }
+        else
+        {
+            lines = new List<LineInfo>();
+            lineBreaker.BeginBreaking(data, availInline, Style);
+            lineBreaker.SetFloatContext(floatContext);
+        }
+        float contentTopBfc = floatContext?.ContentTop ?? 0;
+        float strutHeight = Fonts.LineBoxMetrics.GetLineHeight(Style);
 
         var stateStack = new InlineLayoutStateStack();
         var builder = new LogicalLineBuilder(inlineNode, Space, null, stateStack);
@@ -236,15 +255,52 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             && Style.Overflow is not OverflowType.Visible;
         var itemsBuilder = new FragmentItemsBuilder();
 
-        foreach (var info in lines)
+        int nextLineIndex = 0;
+        while (true)
         {
-            info.AvailableInlineSize = availInline;
+            LineInfo info;
+            if (floatContext != null)
+            {
+                if (lineBreaker.IsFinishedNow())
+                    break;
+                // Where this line box starts, vertically, relative to the content box.
+                float lineTop = _currentLineBlockOffset - paddingTop;
+                var (inset, width, pushDownTo) = floatContext.LineSpaceAt(contentTopBfc + lineTop, strutHeight);
+                if (!float.IsNaN(pushDownTo) && pushDownTo > lineTop)
+                {
+                    // No inline room left on this line: the line box begins below the
+                    // floats instead.
+                    lineTop = pushDownTo;
+                    _currentLineBlockOffset = lineTop + paddingTop;
+                    (inset, width, _) = floatContext.LineSpaceAt(contentTopBfc + lineTop, strutHeight);
+                }
+                lineBreaker.SetLineSpace(inset, width, contentTopBfc + lineTop);
+                info = lineBreaker.BreakNextLine();
+                // Mirror BreakLines(): a trailing forced break does not open an extra
+                // empty line box.
+                if (info.IsLastLine() && info.IsEmptyLine() && lineBreaker.PreviousLineHadForcedBreak)
+                    break;
+            }
+            else
+            {
+                if (nextLineIndex >= lines.Count)
+                    break;
+                info = lines[nextLineIndex++];
+            }
+
+            float lineWidth = floatContext != null && info.AvailableInlineSize > 0
+                ? info.AvailableInlineSize
+                : availInline;
+            info.AvailableInlineSize = lineWidth;
             var logicalLineItems = new LogicalLineItems();
             // Continuation-line box-state rebuild happens inside CreateLine.
             builder.CreateLine(info, logicalLineItems, this);
 
-            // Truncate overflowing lines and place ellipsis.
-            if (useEllipsis && info.HasOverflow())
+            // Truncate overflowing lines and place ellipsis. 'nowrap' content simply
+            // does not break, so the width comparison - not the breaker's overflow
+            // flag - is what detects it (CSS Overflow 3 §4.5).
+            bool lineOverflows = info.HasOverflow() || info.InlineSize > lineWidth + 0.5f;
+            if (useEllipsis && lineOverflows)
             {
                 var truncator = new LineTruncator(info);
                 truncator.TruncateLine(info.InlineSize, logicalLineItems, stateStack);
@@ -254,7 +310,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             // free inline space into word-spacing expansion opportunities on every
             // line except the last; start/left needs no work.
             if (info.TextAlign() is not TextAlignType.Start)
-                JustificationUtils.ApplyTextAlignment(info, logicalLineItems, availInline);
+                JustificationUtils.ApplyTextAlignment(info, logicalLineItems, lineWidth);
 
             // The line box height is the united strut of the inline boxes on the
             // line; fall back to this container's own strut when the line breaker
@@ -266,8 +322,9 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             var boxLine = new BoxLine
             {
                 // The line breaker already gates 'text-indent' (including the
-                // hanging variant) to the lines it applies to.
-                InlineOffset = paddingLeft + info.TextIndent()
+                // hanging variant) to the lines it applies to. A float on the line's
+                // left moves the whole line box right (info.LeftInset).
+                InlineOffset = paddingLeft + info.LeftInset + info.TextIndent()
                     + (info.IsFirstFormattedLine() ? List.ListMarker.InsideMarkerIndent(Style) : 0),
                 BlockOffset = _currentLineBlockOffset,
                 InlineSize = info.InlineSize,
@@ -279,7 +336,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             // Add a line item + content items to the FragmentItemsBuilder.
             var lineBoxFragment = new PhysicalLineBoxFragment
             {
-                Size = new PhysicalSize(Math.Min(info.InlineSize, availInline), boxLine.BlockSize),
+                Size = new PhysicalSize(Math.Min(info.InlineSize, lineWidth), boxLine.BlockSize),
                 BaselineOffset = boxLine.BaselineOffset,
             };
             itemsBuilder.Add(FragmentItem.CreateLine(lineBoxFragment, logicalLineItems.Count));
@@ -297,7 +354,14 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
                 // start). Add the container padding to get the container-relative
                 // paint offset. Re-accumulating here was what stacked every run at
                 // the same x.
-                float runInline = paddingLeft + item.Rect.InlineStart;
+                // LogicalLineBuilder has already laid the children out left to
+                // right via ComputeInlinePositions, so the child's placed inline
+                // offset is its Rect.InlineStart - relative to the LINE BOX, which
+                // is the frame BoxRun.InlineOffset uses (the converter adds the line
+                // box origin, which already carries padding, indent and float
+                // insets). Re-accumulating here was what stacked every run at the
+                // same x; adding the padding again was what double-indented it.
+                float runInline = item.Rect.InlineStart;
                 float itemInlineSize = item.Rect.InlineSize;
 
                 if (item.InlineItem?.IsAtomicInline == true || item.LayoutResult != null)
@@ -382,13 +446,9 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
 
             _lines.Add(boxLine);
 
-            // Grow the line box to fit any atomic inlines (inline-block, etc.)
-            // taller than the text strut. A baseline-aligned atomic inline sits
-            // with its border-box bottom on the line's baseline, so it contributes
-            // its full height above the baseline. The line's ascent therefore
-            // grows to the tallest such box, and the atomic runs are repositioned
-            // so their bottom rests on the (possibly lowered) baseline.
-            AdjustLineForAtomicInlines(boxLine, lineBlockSize);
+            // Place every box on the line by its 'vertical-align' and grow the line
+            // box to contain them (CSS 2.1 §10.6.3, §10.8.1).
+            AlignLineBoxes(boxLine, lineBlockSize);
 
             // Also feed via LogicalLineContainer.
             var lineContainer = new LogicalLineContainer();
@@ -398,9 +458,195 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             _currentLineBlockOffset += boxLine.BlockSize;
         }
 
+        // Floats that were laid out and positioned while breaking the lines become
+        // child boxes of this block; they took no horizontal space on their line.
+        foreach (var placed in lineBreaker.PlacedFloats)
+            Builder.AddChild(placed.Result.Fragment);
+
         // Attach the flat fragment items list for hit-testing / painting.
         _fragmentItems = itemsBuilder.ToFragmentItems(data.TextContent);
         return true;
+    }
+
+    /// <summary>
+    /// Builds the float machinery for this block's line boxes, or null when nothing
+    /// can shorten a line box: no float of our own and none in the enclosing
+    /// formatting context. Keeping the plain path for that case avoids touching the
+    /// overwhelmingly common float-free layout.
+    /// </summary>
+    private FloatLineContext? CreateFloatLineContext(float paddingLeft, float paddingTop, float availInline,
+        Inline.InlineItemsData data)
+    {
+        bool hasOwnFloat = false;
+        foreach (var item in data.Items)
+        {
+            if (item.Type == InlineItem.InlineItemType.Floating)
+            {
+                hasOwnFloat = true;
+                break;
+            }
+        }
+
+        var owner = _parent as BlockLayoutAlgorithm;
+        var exclusionSpace = owner?.FloatExclusionSpace ?? Space.ExclusionSpace;
+        if (!hasOwnFloat && (exclusionSpace == null || !exclusionSpace.HasExclusions))
+            return null;
+
+        var border = LengthUtils.ComputeBorders(Style);
+        var origin = owner != null ? owner.ContainerBfcOriginForLines() : Space.GetBfcOffset();
+        if (exclusionSpace == null)
+            exclusionSpace = new ExclusionSpace();
+
+        return new FloatLineContext
+        {
+            Space = exclusionSpace,
+            ContentLineStart = origin.LineOffset + border.Left + paddingLeft,
+            ContentTop = origin.BlockOffset + border.Top + paddingTop,
+            ContentWidth = availInline,
+            LineBlockSize = Fonts.LineBoxMetrics.GetLineHeight(Style),
+        };
+    }
+
+    /// <summary>
+    /// Place the boxes on a line by their 'vertical-align' and grow the line box to
+    /// contain them (CSS 2.1 §10.6.3 and §10.8.1). The baseline stays where the
+    /// parent's strut puts it; each box contributes how far it reaches above and
+    /// below that baseline, and the line box becomes the union. A run is raised by
+    /// writing its own baseline offset into BoxRun.BaselineShift, which the painter
+    /// already honours for glyphs, backgrounds and borders.
+    /// </summary>
+    private void AlignLineBoxes(BoxLine boxLine, float strutHeight)
+    {
+        float strutAscent = Fonts.LineBoxMetrics.GetBaselineForLineHeight(Style, strutHeight);
+        float strutDescent = Math.Max(0, strutHeight - strutAscent);
+        var parentMetrics = Fonts.FontMetricsProvider.Get(Style.FontFamily, Style.FontSize,
+            Style.FontWeight, Style.FontStyle);
+        float parentAscent = parentMetrics.FloatAscent;
+        float parentDescent = parentMetrics.FloatDescent;
+        float xHeight = parentMetrics.XHeight > 0
+            ? parentMetrics.XHeight
+            : parentAscent * Fonts.FontMetricsProvider.SynthesizedXHeightRatio;
+
+        float maxAscent = strutAscent;
+        float maxDescent = strutDescent;
+        var reach = new System.Collections.Generic.Dictionary<BoxRun, (float Top, float Bottom)>();
+        // 'top' and 'bottom' align against the final extents of the line box, which
+        // only exist once every other box has been placed, so they are applied in a
+        // second pass.
+        var edgeAligned = new System.Collections.Generic.List<(BoxRun Run, float BoxHeight, float BaselineFromTop, bool ToTop)>();
+
+        foreach (var run in boxLine.Runs)
+        {
+            var runStyle = RunStyle(run);
+
+            // A text box's own height is its line-height; an atomic inline uses its
+            // border box (CSS 2.1 §10.6.3).
+            float boxHeight = run.IsAtomicInline && run.BlockSize > 0
+                ? run.BlockSize
+                : Fonts.LineBoxMetrics.GetLineHeight(runStyle);
+            // Half the leading sits above the baseline, exactly like the strut does,
+            // so a box that needs no shift contributes its own height and never
+            // grows the line box.
+            float baselineFromTop = run.IsAtomicInline
+                ? boxHeight
+                : Fonts.LineBoxMetrics.GetBaselineForLineHeight(runStyle, boxHeight);
+
+            // The box's top, measured above the line's baseline.
+            float top = baselineFromTop;
+            switch (runStyle.VerticalAlign)
+            {
+                case VerticalAlignType.Middle:
+                    top = boxHeight / 2f + xHeight / 2f;
+                    break;
+                case VerticalAlignType.TextTop:
+                    top = parentAscent;
+                    break;
+                case VerticalAlignType.TextBottom:
+                    top = boxHeight - parentDescent;
+                    break;
+                case VerticalAlignType.Sub:
+                    top = baselineFromTop - (Style.FontSize / 5f + 1f);
+                    break;
+                case VerticalAlignType.Super:
+                    top = baselineFromTop + (Style.FontSize / 3f + 1f);
+                    break;
+                case VerticalAlignType.Percentage:
+                case VerticalAlignType.Length:
+                    {
+                        // Percentages resolve against the box's own line-height; a
+                        // positive value raises the box (CSS 2.1 §10.8.1).
+                        float offset = runStyle.VerticalAlign == VerticalAlignType.Percentage
+                            ? (runStyle.VerticalAlignOffsetPx ?? 0) * boxHeight
+                            : runStyle.VerticalAlignOffsetPx ?? 0;
+                        top = baselineFromTop + offset;
+                        break;
+                    }
+                case VerticalAlignType.Top:
+                case VerticalAlignType.Bottom:
+                    // Not part of the "aligned subtree" whose extents they align to,
+                    // so they take no share in computing it.
+                    edgeAligned.Add((run, boxHeight, baselineFromTop,
+                        runStyle.VerticalAlign == VerticalAlignType.Top));
+                    continue;
+            }
+
+            float bottom = Math.Max(0, boxHeight - top);
+            ApplyRunReach(run, reach, top, bottom, baselineFromTop);
+            maxAscent = Math.Max(maxAscent, top);
+            maxDescent = Math.Max(maxDescent, bottom);
+        }
+
+        foreach (var (run, boxHeight, baselineFromTop, toTop) in edgeAligned)
+        {
+            float top = toTop ? maxAscent : boxHeight - maxDescent;
+            float bottom = Math.Max(0, boxHeight - top);
+            ApplyRunReach(run, reach, top, bottom, baselineFromTop);
+            maxAscent = Math.Max(maxAscent, top);
+            maxDescent = Math.Max(maxDescent, bottom);
+        }
+
+        float lineHeight = maxAscent + maxDescent;
+        if (lineHeight <= boxLine.BlockSize + 0.01f)
+            return;
+
+        boxLine.BlockSize = lineHeight;
+        boxLine.BaselineOffset = boxLine.BlockOffset + maxAscent;
+        foreach (var run in boxLine.Runs)
+        {
+            if (!run.IsAtomicInline || !reach.TryGetValue(run, out var r))
+                continue;
+            run.BlockOffset = boxLine.BlockOffset + maxAscent - r.Top;
+        }
+    }
+
+    /// <summary>Record where one box ended up on its line: how far its top and
+    /// bottom reach from the line baseline, and the resulting baseline shift (the
+    /// painter raises the glyphs, background and border by that amount).</summary>
+    private static void ApplyRunReach(BoxRun run,
+        System.Collections.Generic.Dictionary<BoxRun, (float Top, float Bottom)> reach,
+        float top, float bottom, float baselineFromTop)
+    {
+        run.BaselineShift = top - baselineFromTop;
+        reach[run] = (top, bottom);
+    }
+
+    /// <summary>The style a run was laid out with: its own element's, falling back
+    /// to the container's (the per-run font fields already carry the pseudo overrides).</summary>
+    private ComputedStyle RunStyle(BoxRun run)
+    {
+        var element = run.Element ?? (run.Node as Element) ?? (run.Node as TextNode)?.ParentElement;
+        var style = element?.ComputedStyle;
+        if (style == null)
+            return Style;
+        // The ::first-line / ::first-letter merge is not stored on the element, so
+        // rebuild it from the fields the run already carries.
+        if (run.FontSize != null && Math.Abs(style.FontSize - run.FontSize.Value) > 0.01f)
+        {
+            var merged = style.Clone();
+            merged.FontSize = run.FontSize.Value;
+            return merged;
+        }
+        return style;
     }
 
     /// <summary>

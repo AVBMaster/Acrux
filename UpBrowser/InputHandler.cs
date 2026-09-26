@@ -22,7 +22,23 @@ public class InputHandler
     private float _pageThumbDragStartX;
     private float _pageThumbDragStartScrollX;
 
-    public bool NeedsRedraw { get; set; } = true;
+    private bool _needsRedraw = true;
+    public bool NeedsRedraw
+    {
+        get => _needsRedraw;
+        set
+        {
+            _needsRedraw = value;
+            // Diagnostics (UPBROWSER_TAB_STATS=1): who keeps requesting redraws.
+            if (value && RedrawTraceGate != null && Environment.TickCount64 >= _nextTraceTick)
+            {
+                _nextTraceTick = Environment.TickCount64 + 400;
+                RedrawTraceGate(Environment.StackTrace);
+            }
+        }
+    }
+    public static Action<string>? RedrawTraceGate;
+    private long _nextTraceTick;
 
     public Action<float, float>? OnDomClick { get; set; }
     public Action<float, float>? OnDomMouseMove { get; set; }

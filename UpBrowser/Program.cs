@@ -20,6 +20,30 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && args[0] == "--tab-host")
+        {
+            Environment.ExitCode = UpBrowser.Process.TabHostApp.Run(args);
+            return;
+        }
+
+        if (args.Length > 0 && args[0] == "--idletest")
+        {
+            Environment.ExitCode = IdleResourceTest.Run();
+            return;
+        }
+
+        if (args.Length > 0 && args[0] == "--scrollstress")
+        {
+            Environment.ExitCode = ScrollStressTest.Run(args);
+            return;
+        }
+
+        if (args.Length > 0 && args[0] == "--proctest")
+        {
+            Environment.ExitCode = ProcessTabSelfTest.Run();
+            return;
+        }
+
         if (args.Length > 0 && args[0] == "--tabtest")
         {
             Environment.ExitCode = TabConcurrencySelfTest.Run();

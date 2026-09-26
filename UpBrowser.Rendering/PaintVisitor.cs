@@ -5,6 +5,7 @@ using UpBrowser.Core.Layout.Geometry;
 using UpBrowser.Core.Css;
 using UpBrowser.Core.Performance;
 using UpBrowser.Core.Performance.Resources;
+using System.Globalization;
 using System.Text;
 
 namespace UpBrowser.Rendering;
@@ -828,19 +829,64 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
         }
         else
         {
-            // Sort children by z-index for correct stacking (negative → 0 → positive)
+            // Sort children for correct stacking within each parent: CSS 2.1 §E.2
+            // paints the in-flow, non-positioned descendants (step 3), then the
+            // floats (step 4), then the positioned descendants (step 8), with
+            // negative z-index first (step 2).
             var children = element.Children
                 .OfType<Element>()
                 .Where(c => c.ComputedStyle != null && c.ComputedStyle.Display != DisplayType.None)
-                .OrderBy(c => c.ComputedStyle!.ZIndex ?? 0)
                 .ToList();
 
-            foreach (var childElement in children)
+            foreach (var childElement in ChildrenInStackingOrder(children))
                 VisitElement(childElement);
         }
 
             } // end else (inline scroll-container paint path)
 
+    }
+
+    /// <summary>
+    /// Children of one parent in paint order (CSS 2.1 §E.2): negative z-index first,
+    /// then the in-flow non-positioned boxes, then the floats, then the positioned
+    /// boxes; each group keeps its document order (or z-index order where the spec
+    /// sorts by it).
+    /// </summary>
+    private static IEnumerable<Element> ChildrenInStackingOrder(List<Element> children)
+    {
+        List<Element>? negative = null, flow = null, floats = null, positioned = null;
+        foreach (var child in children)
+        {
+            var style = child.ComputedStyle!;
+            int z = style.ZIndex ?? 0;
+            if (z < 0)
+                (negative ??= new List<Element>()).Add(child);
+            else if (style.Position != PositionType.Static)
+                (positioned ??= new List<Element>()).Add(child);
+            else if (style.Float != FloatType.None)
+                (floats ??= new List<Element>()).Add(child);
+            else
+                (flow ??= new List<Element>()).Add(child);
+        }
+
+        return EnumerateGroups(negative, positioned, floats, flow);
+
+        static IEnumerable<Element> EnumerateGroups(List<Element>? negative, List<Element>? positioned,
+            List<Element>? floats, List<Element>? flow)
+        {
+            if (negative != null)
+                foreach (var e in negative.OrderBy(c => c.ComputedStyle!.ZIndex ?? 0))
+                    yield return e;
+            if (flow != null)
+                foreach (var e in flow)
+                    yield return e;
+            if (floats != null)
+                foreach (var e in floats)
+                    yield return e;
+            if (positioned != null)
+                foreach (var e in positioned.OrderBy(c => c.ComputedStyle!.ZIndex ?? 0))
+                    yield return e;
+        }
     }
 
     /// <summary>
@@ -1142,7 +1188,9 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
             return;
         }
 
-        string markerText = style.ListStyleType switch
+        string? counterMarker = Core.Layout.List.ListMarkerFormatter.Format(
+            style.ListStyleType, itemIndex + 1, style.ListStyleTypeString);
+        string markerText = counterMarker ?? style.ListStyleType switch
         {
             ListStyleType.Disc => "\u2022",
             ListStyleType.Circle => "\u25CB",
@@ -1151,8 +1199,10 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
             ListStyleType.DecimalLeadingZero => (itemIndex + 1).ToString().PadLeft(2, '0') + ".",
             ListStyleType.LowerRoman => ToRoman(itemIndex + 1).ToLower() + ".",
             ListStyleType.UpperRoman => ToRoman(itemIndex + 1) + ".",
-            ListStyleType.LowerAlpha => ((char)('a' + (itemIndex % 26))).ToString() + ".",
-            ListStyleType.UpperAlpha => ((char)('A' + (itemIndex % 26))).ToString() + ".",
+            ListStyleType.LowerAlpha => Core.Layout.List.ListMarkerFormatter
+                .Format(ListStyleType.LowerAlpha, itemIndex + 1, null)!,
+            ListStyleType.UpperAlpha => Core.Layout.List.ListMarkerFormatter
+                .Format(ListStyleType.UpperAlpha, itemIndex + 1, null)!,
             _ => "\u2022"
         };
 
@@ -1291,6 +1341,19 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
         bool hasBackgroundColor = style.BackgroundColor.HasValue && style.BackgroundColor.Value.Alpha > 0;
         bool hasBackgroundImage = style.BackgroundImage is { Count: > 0 };
 
+        // 'background-blend-mode' mixes the element's own layers together and only
+        // the result reaches the page, so the group must be isolated
+        // (CSS Backgrounds 4 §6).
+        bool blendedBackground = hasBackgroundImage && style.BackgroundBlendMode != BackgroundBlendModeType.Normal;
+        if (blendedBackground)
+        {
+            var blendLayer = PaintOpPool.GetPushLayerOp();
+            blendLayer.HasClipRect = true;
+            blendLayer.ClipRect = paddingRect;
+            blendLayer.Bounds = borderRect;
+            _displayList.Add(blendLayer);
+        }
+
         if (hasBackgroundColor)
         {
             SKColor bgColor = style.BackgroundColor.Value;
@@ -1315,6 +1378,13 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
                 DrawGradientBackground(style, paddingRect);
             else
                 DrawBackgroundImage(element, style, paddingRect);
+        }
+
+        if (blendedBackground)
+        {
+            var popBlend = PaintOpPool.GetPopLayerOp();
+            popBlend.Bounds = borderRect;
+            _displayList.Add(popBlend);
         }
 
         _boxPainter.PaintInsetBoxShadowWithBorderRect(borderRect, style);
@@ -1578,6 +1648,29 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         _ => SKBlendMode.SrcOver,
     };
 
+    /// <summary>'background-blend-mode' shares the blend list of 'mix-blend-mode'
+    /// (CSS Backgrounds 4 §6); it only differs in what forms the backdrop: the
+    /// element's own lower background layers, never the page.</summary>
+    private static SKBlendMode BackgroundBlendModeToSkBlendMode(BackgroundBlendModeType mode) => mode switch
+    {
+        BackgroundBlendModeType.Multiply => SKBlendMode.Multiply,
+        BackgroundBlendModeType.Screen => SKBlendMode.Screen,
+        BackgroundBlendModeType.Overlay => SKBlendMode.Overlay,
+        BackgroundBlendModeType.Darken => SKBlendMode.Darken,
+        BackgroundBlendModeType.Lighten => SKBlendMode.Lighten,
+        BackgroundBlendModeType.ColorDodge => SKBlendMode.ColorDodge,
+        BackgroundBlendModeType.ColorBurn => SKBlendMode.ColorBurn,
+        BackgroundBlendModeType.HardLight => SKBlendMode.HardLight,
+        BackgroundBlendModeType.SoftLight => SKBlendMode.SoftLight,
+        BackgroundBlendModeType.Difference => SKBlendMode.Difference,
+        BackgroundBlendModeType.Exclusion => SKBlendMode.Exclusion,
+        BackgroundBlendModeType.Hue => SKBlendMode.Hue,
+        BackgroundBlendModeType.Saturation => SKBlendMode.Saturation,
+        BackgroundBlendModeType.Color => SKBlendMode.Color,
+        BackgroundBlendModeType.Luminosity => SKBlendMode.Luminosity,
+        _ => SKBlendMode.SrcOver,
+    };
+
     private static bool IsMixBlendModeRequired(ComputedStyle style) => style.MixBlendMode != MixBlendModeType.Normal;
 
     private void DrawScrollbar(LayoutBox box, ComputedStyle style)
@@ -1592,26 +1685,64 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
             return new SKPoint(box.ContentBox.MidX, box.ContentBox.MidY);
 
         var parts = origin.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        float x = box.ContentBox.MidX;
-        float y = box.ContentBox.MidY;
+        // The origin is resolved against the border box (CSS Transforms 1 §4: the
+        // reference box is the border box unless box-sizing says otherwise).
+        float width = box.BorderBox.Width;
+        float height = box.BorderBox.Height;
+        float left = box.BorderBox.Left;
+        float top = box.BorderBox.Top;
+        float x = left + width / 2f;
+        float y = top + height / 2f;
 
-        if (parts.Length >= 1)
-            x = ParseOriginValue(parts[0], box.ContentBox.Width, box.ContentBox.Left);
-        if (parts.Length >= 2)
-            y = ParseOriginValue(parts[1], box.ContentBox.Height, box.ContentBox.Top);
+        if (parts.Length == 3 && !parts[2].Contains('%')
+            && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float _))
+        {
+            // <keyword> <length-percentage> [ <keyword> | <length-percentage> ]
+            x = ParseOriginValue(parts[0], width, left);
+            y = ParseOriginValue(parts[2], height, top);
+        }
+        else if (parts.Length >= 1)
+        {
+            x = ParseOriginValue(parts[0], width, left);
+            // One value only pins its own axis; the other stays centered.
+            y = parts.Length >= 2 ? ParseOriginValue(parts[1], height, top) : top + height / 2f;
+        }
+        if (parts.Length >= 3)
+            y = ParseOriginValue(parts[2], height, top);
 
         return new SKPoint(x, y);
     }
 
+    /// <summary>
+    /// Resolve one axis of 'transform-origin' to a page coordinate. Keywords name
+    /// the edge (or the middle) of the border box; a length is measured from the
+    /// box's own start edge and a percentage from its size (CSS Transforms 1 §4).
+    /// </summary>
     private float ParseOriginValue(string value, float size, float offset)
     {
-        if (value.EndsWith("%"))
+        string text = value.Trim();
+        switch (text.ToLowerInvariant())
         {
-            if (float.TryParse(value[..^1], out var pct))
+            case "left":
+            case "top":
+                return offset;
+            case "right":
+            case "bottom":
+                return offset + size;
+            case "center":
+                // "center" as the second token means 50% of that axis; as the first
+                // token of a two-value list it is the 50% position too.
+                return offset + size / 2f;
+        }
+
+        if (text.EndsWith("%"))
+        {
+            if (float.TryParse(text[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var pct))
                 return offset + size * pct / 100f;
         }
-        if (float.TryParse(value.Replace("px", ""), out var px))
-            return offset + px;
+        var length = Length.Parse(text);
+        if (length != null)
+            return offset + length.ToPixels(size, size, size, size);
         return offset + size / 2f;
     }
 
@@ -1681,14 +1812,15 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
 
         var geometry = new BackgroundImageGeometry();
         geometry.Calculate(fillLayer, paintContext, rect, style, new SKSize(image.Width, image.Height));
-        DrawBackgroundTiles(image, geometry);
+        DrawBackgroundTiles(image, geometry, BackgroundBlendModeToSkBlendMode(style.BackgroundBlendMode));
     }
 
     /// <summary>
     /// Tile an image over the snapped destination rect using the precomputed
     /// tile size, phase and repeat spacing from <see cref="BackgroundImageGeometry"/>.
     /// </summary>
-    private void DrawBackgroundTiles(SKImage image, BackgroundImageGeometry geometry)
+    private void DrawBackgroundTiles(SKImage image, BackgroundImageGeometry geometry,
+        SKBlendMode blend = SKBlendMode.SrcOver)
     {
         var destRect = geometry.SnappedDestRect;
         if (destRect.Width <= 0 || destRect.Height <= 0) return;
@@ -1722,6 +1854,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                     op.Image = image;
                     op.SourceRect = new SKRect(srcLeft, srcTop, srcRight, srcBottom);
                     op.DestRect = clipRect;
+                    op.BlendMode = blend;
                     // Background tiles are already sized/positioned by the
                     // geometry; stretch the (possibly clipped) source into dest.
                     op.Fit = ImageFit.Fill;
@@ -1774,7 +1907,8 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
             {
                 Style = SKPaintStyle.Fill,
                 Shader = shader,
-                IsAntialias = true
+                IsAntialias = true,
+                BlendMode = BackgroundBlendModeToSkBlendMode(style.BackgroundBlendMode),
             };
             op.Bounds = rect;
             _displayList.Add(op);
@@ -3777,6 +3911,11 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                 float currentX = line.X;
                 foreach (var run in line.Runs)
                 {
+                    // The run carries its own resolved x (the converter computed it from
+                    // the line box origin plus the run's inline offset), which is the only
+                    // position that survives tabs, floated ::first-letter boxes and atomic
+                    // inlines; accumulating widths from line.X dropped those gaps.
+                    float runLeft = run.X + lineOffsetX;
                     if (run.IsText && run.Node is TextNode textNode)
                     {
                         if (textNode != lastTextNode)
@@ -3798,7 +3937,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                         float runY = run.Baseline > 0 ? run.Baseline + TotalOffsetY : baseline;
                         var op = PaintOpPool.GetDrawTextOp();
                         op.Text = runText;
-                        op.X = currentX + lineOffsetX;
+                        op.X = runLeft;
                         op.Y = runY;
                         op.Color = run.Color ?? effectiveStyle?.Color ?? SKColors.Black;
                         op.FontSize = actualFontSize;
@@ -3823,14 +3962,14 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                             else
                                 op.EmphasisColor = ColorParser.Parse(emphasisColorStr);
                         }
-                        op.Bounds = new SKRect(currentX + lineOffsetX, lineY, currentX + run.Width + lineOffsetX, lineY + line.Height);
+                        op.Bounds = new SKRect(runLeft, lineY, runLeft + run.Width, lineY + line.Height);
 
                         // Add selection highlight clipped to the overlapping region
                         _highlightPainter.PaintHighlight(textNode, runText, op.Bounds,
                             op.FontSize, op.FontFamily, op.FontWeight, runStartOffset);
 
                         PaintInlineRunBackground(textNode.ParentElement, parentStyle,
-                            currentX + lineOffsetX, currentX + run.Width + lineOffsetX, runY);
+                            runLeft, runLeft + run.Width, runY);
                         _displayList.Add(op);
                         runStartOffset += runText.Length;
                     }
@@ -3873,7 +4012,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                     float runY = run.Baseline > 0 ? run.Baseline + TotalOffsetY : baseline;
                     var op = PaintOpPool.GetDrawTextOp();
                     op.Text = runText;
-                    op.X = x;
+                    op.X = run.X;
                     op.Y = runY;
                     op.Color = run.Color ?? parentStyle?.Color ?? SKColors.Black;
                     op.FontSize = actualFontSize;

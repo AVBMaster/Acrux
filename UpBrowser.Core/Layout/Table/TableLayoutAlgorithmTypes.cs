@@ -413,11 +413,17 @@ public static class TableTypes
     }
 
     public static CellInlineConstraint CreateCellInlineConstraint(
-        List<Column> columnConstraints, int startColumn, int span, Element cell)
+        List<Column> columnConstraints, int startColumn, int span, Element cell,
+        TableBorders? collapsedEdges = null, int row = 0)
     {
         CellInlineConstraint constraint = new();        // |constraint.is_initial_constraint| is reset by this loop.
         var style = cell.ComputedStyle;
-        var borderPadding = ComputeCellBorderPadding(cell);
+        // Collapsed cells own half of each shared edge, and the specified cell
+        // width is a content width on top of that (CSS 2.1 §17.6.2).
+        var edge = collapsedEdges is { IsCollapsed: true }
+            ? collapsedEdges.CellBorder(row, startColumn, 1, span, collapsedEdges.SectionIndexOf(row))
+            : default(BoxStrut?);
+        var borderPadding = ComputeCellBorderPadding(cell, null, edge);
 
         bool is_constrained = false;
         // If this cell has a colspan, we merge the widths of all the spanned columns.
@@ -503,7 +509,14 @@ public static class TableTypes
 
     /// <summary>Border + padding inline/block of a cell (separated model: cell
     /// own borders; collapsed model: zero borders, padding only).</summary>
-    public static BoxStrut ComputeCellBorderPadding(Element cell, ConstraintSpace? space = null)
+    /// <summary>Border and padding a cell contributes to the grid. In the collapsing
+    /// model a shared edge is split between its two neighbours, so only half of each
+    /// collapsed border belongs to this cell (CSS 2.1 §17.6.2); callers that know the
+    /// edge table pass it as 'collapsedBorders'. Without it the cell keeps no border
+    /// width of its own, which is what made thick collapsed borders vanish from the
+    /// table's used size.</summary>
+    public static BoxStrut ComputeCellBorderPadding(Element cell, ConstraintSpace? space = null,
+        BoxStrut? collapsedBorders = null)
     {
         var style = cell.ComputedStyle;
         if (style == null) return BoxStrut.Zero;
@@ -519,7 +532,7 @@ public static class TableTypes
             style.PaddingBottom.ToPixels(fontSize, rootFont, vw, vh),
             style.PaddingLeft.ToPixels(fontSize, rootFont, vw, vh));
         var borders = style.BorderCollapse
-            ? BoxStrut.Zero
+            ? collapsedBorders ?? BoxStrut.Zero
             : LengthUtils.ComputeBorders(style);
         return new BoxStrut(borders.Top + padding.Top, borders.Right + padding.Right,
             borders.Bottom + padding.Bottom, borders.Left + padding.Left);

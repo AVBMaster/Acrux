@@ -446,6 +446,8 @@ public enum CssPropertyId
     /// <summary>The `all` shorthand (CSS Properties 4 §all): resets every property
     /// except direction/unicode-bidi to a CSS-wide keyword value.</summary>
     All,
+    /// <summary>CSS Text 3 §3.4.</summary>
+    TabSize,
     MaxProperties
 }
 

@@ -190,6 +190,22 @@ public class StyleResolver
                 ApplyBorderHints(props, b);
             if (int.TryParse(element.GetAttribute("cellspacing"), out int cs))
                 props.SetProperty(CssPropertyId.BorderSpacing, CssNumericLiteralValue.Create(cs, CssUnitType.Pixels));
+            // HTML §10.3.3.2.2: a table's width attribute is a used-width hint and
+            // its height attribute a minimum-height hint.
+            if (PresentationalLength(element, "width") is { } tableWidth)
+                props.SetProperty(CssPropertyId.Width, tableWidth);
+            if (PresentationalLength(element, "height") is { } tableHeight)
+                props.SetProperty(CssPropertyId.MinHeight, tableHeight);
+        }
+
+        // Cells, rows and column groups carry the same width hint; a cell's height
+        // attribute is its height, a row's the minimum height of the row.
+        if (tag is "TD" or "TH" or "TR" or "COL" or "COLGROUP")
+        {
+            if (PresentationalLength(element, "width") is { } cellWidth)
+                props.SetProperty(CssPropertyId.Width, cellWidth);
+            if (PresentationalLength(element, "height") is { } cellHeight)
+                props.SetProperty(tag == "TR" ? CssPropertyId.MinHeight : CssPropertyId.Height, cellHeight);
         }
 
         if (tag is "TD" or "TH")
@@ -210,6 +226,22 @@ public class StyleResolver
         {
             state.MatchedRules.Add(new MatchedRuleEntry { Properties = props, Priority = priority });
         }
+    }
+
+    /// <summary>HTML presentational width/height attributes are a non-negative
+    /// number, optionally suffixed with '%' (HTML §10.3.3.2.2). Anything else is
+    /// ignored, exactly as the UA style rules do.</summary>
+    private static CssNumericLiteralValue? PresentationalLength(Element element, string attribute)
+    {
+        var raw = element.GetAttribute(attribute)?.Trim();
+        if (string.IsNullOrEmpty(raw)) return null;
+        bool isPercent = raw.EndsWith('%');
+        var number = isPercent ? raw[..^1] : raw;
+        if (!float.TryParse(number.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var value) || value < 0)
+            return null;
+        return CssNumericLiteralValue.Create(value,
+            isPercent ? CssUnitType.Percentage : CssUnitType.Pixels);
     }
 
     private static void SetPx(CssPropertyValueSet props, string name, float value)
@@ -677,12 +709,18 @@ public class StyleResolver
         style.TextAlignLast = parent.TextAlignLast;
         style.Visibility = parent.Visibility;
         style.WhiteSpace = parent.WhiteSpace;
+        style.TabSize = parent.TabSize;
+        style.TabSizePx = parent.TabSizePx;
         style.Direction = parent.Direction;
         style.TextTransform = parent.TextTransform;
-        // Inherited table properties: caption placement and empty-cell rendering
-        // must flow from the table to rows/cells (CSS 2.1 §17.6).
+        // Inherited table properties: caption placement, empty-cell rendering and
+        // the border model must flow from the table to rows/cells (CSS 2.1 §17.6).
+        // A cell that does not know the table collapses its borders would add its
+        // own full border widths, double-counting every shared edge.
         style.CaptionSide = parent.CaptionSide;
         style.EmptyCells = parent.EmptyCells;
+        style.BorderCollapse = parent.BorderCollapse;
+        style.BorderSpacing = parent.BorderSpacing;
         style.LetterSpacing = parent.LetterSpacing;
         style.WordSpacing = parent.WordSpacing;
         style.TextIndent = parent.TextIndent;
@@ -690,6 +728,7 @@ public class StyleResolver
         style.TextIndentPercent = parent.TextIndentPercent;
         style.Cursor = parent.Cursor;
         style.ListStyleType = parent.ListStyleType;
+        style.ListStyleTypeString = parent.ListStyleTypeString;
         style.ListStylePosition = parent.ListStylePosition;
         style.WordBreak = parent.WordBreak;
         style.OverflowWrap = parent.OverflowWrap;

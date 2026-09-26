@@ -132,6 +132,11 @@ public static class NativeWindow
     [DllImport("user32.dll")]
     public static extern bool PeekMessageW(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax, uint wRemoveMsg);
 
+    public const uint QS_ALLINPUT = 0x000004FF;
+
+    [DllImport("user32.dll")]
+    public static extern uint MsgWaitForMultipleObjects(uint nCount, IntPtr[]? pHandles, bool fWaitAll, uint dwMilliseconds, uint dwWakeMask);
+
     [DllImport("user32.dll")]
     public static extern int TranslateMessage(ref MSG lpMsg);
 

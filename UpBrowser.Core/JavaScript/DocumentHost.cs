@@ -40,7 +40,7 @@ public class DocumentHost
         get
         {
             if (_document.DocumentElement == null) return null;
-            _documentElementHost ??= new ElementHost(_document.DocumentElement);
+            _documentElementHost ??= WrapElement(_document.DocumentElement);
             return _documentElementHost;
         }
     }
@@ -51,7 +51,7 @@ public class DocumentHost
         {
             if (_document.Body == null) return null;
             if (_bodyHost == null || _bodyHost.NativeElement != _document.Body)
-                _bodyHost = new ElementHost(_document.Body);
+                _bodyHost = WrapElement(_document.Body);
             return _bodyHost;
         }
         set
@@ -97,7 +97,7 @@ public class DocumentHost
         {
             var elements = _document.GetElementsByTagName("a")
                 .Where(e => e.HasAttribute("name") || e.HasAttribute("id"))
-                .Select(e => (object)new ElementHost(e)).ToArray();
+                .Select(e => (object)WrapElement(e)!).ToArray();
             return elements;
         }
     }
@@ -107,7 +107,7 @@ public class DocumentHost
         get
         {
             return _document.GetElementsByTagName("form")
-                .Select(e => (object)new ElementHost(e)).ToArray();
+                .Select(e => (object)WrapElement(e)!).ToArray();
         }
     }
 
@@ -116,7 +116,7 @@ public class DocumentHost
         get
         {
             return _document.GetElementsByTagName("img")
-                .Select(e => (object)new ElementHost(e)).ToArray();
+                .Select(e => (object)WrapElement(e)!).ToArray();
         }
     }
 
@@ -126,7 +126,7 @@ public class DocumentHost
         {
             return _document.GetElementsByTagName("a")
                 .Where(e => e.HasAttribute("href"))
-                .Select(e => (object)new ElementHost(e)).ToArray();
+                .Select(e => (object)WrapElement(e)!).ToArray();
         }
     }
 
@@ -135,7 +135,7 @@ public class DocumentHost
         get
         {
             return _document.GetElementsByTagName("script")
-                .Select(e => (object)new ElementHost(e)).ToArray();
+                .Select(e => (object)WrapElement(e)!).ToArray();
         }
     }
 
@@ -144,7 +144,7 @@ public class DocumentHost
         get
         {
             return _document.GetElementsByTagName("embed")
-                .Select(e => (object)new ElementHost(e)).ToArray();
+                .Select(e => (object)WrapElement(e)!).ToArray();
         }
     }
 
@@ -154,14 +154,14 @@ public class DocumentHost
     {
         if (_document.DocumentElement == null) return null;
         var el = FindElementById(_document.DocumentElement, id);
-        return el != null ? new ElementHost(el) : null;
+        return el != null ? WrapElement(el) : null;
     }
 
     public object? querySelector(string selector)
     {
         if (_document.DocumentElement == null) return null;
         var el = QuerySelectorInternal(_document.DocumentElement, selector);
-        return el != null ? new ElementHost(el) : null;
+        return el != null ? WrapElement(el) : null;
     }
 
     public object querySelectorAll(string selector)
@@ -205,7 +205,7 @@ public class DocumentHost
     public ElementHost createElementNS(string? ns, string tagName)
     {
         var el = new HtmlElement(tagName) { NamespaceUri = ns };
-        return new ElementHost(el);
+        return WrapElement(el) ?? new ElementHost(el);
     }
 
     public TextNodeWrapper createTextNode(string text)
@@ -273,8 +273,8 @@ public class DocumentHost
         get
         {
             var active = _document.ActiveElement;
-            if (active != null) return new ElementHost(active);
-            if (_document.Body != null) return new ElementHost(_document.Body);
+            if (active != null) return WrapElement(active);
+            if (_document.Body != null) return WrapElement(_document.Body);
             return null;
         }
     }
@@ -360,7 +360,7 @@ public class DocumentHost
         if (node is ElementHost elHost)
         {
             var cloned = elHost.NativeElement.CloneNode(deep);
-            return new ElementHost((DomElement)cloned);
+            return WrapElement((DomElement)cloned)!;
         }
         return node;
     }

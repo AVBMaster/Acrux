@@ -128,11 +128,21 @@ public struct ConstraintSpace
         _scrollbarInline = scrollbarInline;
         _scrollbarSpaceReserved = scrollbarSpaceReserved;
 
-        _percentageResolutionStorage = (percentageResolutionInline > 0 || percentageResolutionBlock > 0)
+        // A caller can ask for an explicitly indefinite percentage base by passing a
+        // negative size: a percentage that resolves against nothing behaves as auto
+        // (CSS 2.1 §10.5), which is not the same as inheriting the available size.
+        _percentageResolutionStorage = (percentageResolutionInline != 0 || percentageResolutionBlock != 0)
             ? PercentageStorage.Defined
             : PercentageStorage.SameAsAvailable;
-        _percentageResolutionInline = percentageResolutionInline > 0 ? percentageResolutionInline : availableInlineSize;
-        _percentageResolutionBlock = percentageResolutionBlock > 0 ? percentageResolutionBlock : availableBlockSize;
+        _percentageResolutionInline = MapPercentageBase(percentageResolutionInline, availableInlineSize);
+        _percentageResolutionBlock = MapPercentageBase(percentageResolutionBlock, availableBlockSize);
+
+        static float MapPercentageBase(float requested, float available) => requested switch
+        {
+            0 => available,
+            < 0 => float.NaN,
+            _ => requested,
+        };
     }
 
     public float AvailableInlineSize => _availableInlineSize == AvailableSizeType.Definite ? _inlineSizeValue : float.NaN;

@@ -102,6 +102,7 @@ public static class CssPropertyTraits
             case "text-decoration-line": to.TextDecorationLine = from.TextDecorationLine; break;
             case "vertical-align": to.VerticalAlign = from.VerticalAlign; break;
             case "white-space": to.WhiteSpace = from.WhiteSpace; break;
+            case "tab-size": to.TabSize = from.TabSize; to.TabSizePx = from.TabSizePx; break;
             case "visibility": to.Visibility = from.Visibility; break;
             case "overflow": to.Overflow = to.OverflowX = to.OverflowY = from.Overflow; break;
             case "overflow-x": to.OverflowX = from.OverflowX; break;
@@ -156,7 +157,8 @@ public static class CssPropertyTraits
             case "text-transform": to.TextTransform = from.TextTransform; break;
             case "direction": to.Direction = from.Direction; break;
             case "writing-mode": to.WritingMode = from.WritingMode; break;
-            case "list-style": case "list-style-type": to.ListStyleType = from.ListStyleType; break;
+            case "list-style": case "list-style-type": to.ListStyleType = from.ListStyleType;
+                to.ListStyleTypeString = from.ListStyleTypeString; break;
             case "list-style-position": to.ListStylePosition = from.ListStylePosition; break;
             case "list-style-image": to.ListStyleImage = from.ListStyleImage; break;
         }

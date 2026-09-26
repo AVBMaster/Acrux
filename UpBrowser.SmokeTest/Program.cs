@@ -182,16 +182,17 @@ Console.WriteLine("=== 7. clearance (clear:both) ===");
         string name = el == f1 ? "floatL" : el == f2 ? "floatR" : el == cl ? "clearB" : el == c1 ? "c1" : el == c2 ? "c2" : "?";
         Console.WriteLine($"    {name,-7} y={ch.BlockOffset:F0} h={ch.BlockSize:F0}");
     }
-    // Engine model: floats advance the content edge (no side-wrapping), so the
-    // blocks already sit below the tallest float (80) and clear:both is a
-    // no-op here. Expected: float-bottoms left=50/right=130; c1 at 130,
-    // clearB at 150, c2 at 180.
+    // CSS 2.1 §9.5.2: only line boxes avoid floats, so an ordinary block overlaps
+    // them (c1 stays at the content origin) and clear:both is what drops a block
+    // below the floats. Float bottoms: left=50, right=80 -> c1 at 0, clearB at 80
+    // (the tallest float), c2 at 110. Verified against Edge on the same markup
+    // (snapshots/probe-clear.html).
     var c1f = r.Fragment.Children.FirstOrDefault(f => f.Element == c1);
     var clearB = r.Fragment.Children.FirstOrDefault(ch => ch.Element == cl);
     var c2f = r.Fragment.Children.FirstOrDefault(ch => ch.Element == c2);
-    Check(c1f != null && c1f.BlockOffset == 130, $"c1 y={c1f?.BlockOffset:F0} (expect 130, below floatR top+height)");
-    Check(clearB != null && clearB.BlockOffset == 150, $"clearB y={clearB?.BlockOffset:F0} (no-op clearance, already below floats)");
-    Check(c2f != null && c2f.BlockOffset == 180, $"c2 y={c2f?.BlockOffset:F0} (expect 180)");
+    Check(c1f != null && c1f.BlockOffset == 0, $"c1 y={c1f?.BlockOffset:F0} (expect 0, block boxes overlap floats)");
+    Check(clearB != null && clearB.BlockOffset == 80, $"clearB y={clearB?.BlockOffset:F0} (expect 80, cleared below the right float)");
+    Check(c2f != null && c2f.BlockOffset == 110, $"c2 y={c2f?.BlockOffset:F0} (expect 110, below the cleared block)");
 
     // Direct ClearanceUtils checks (the triggurable side of clear).
     Check(BlockLayoutUtils.ClearanceBottom(ClearType.Left, 50, 130) == 50, "ClearanceBottom(Left)");
@@ -599,7 +600,10 @@ Console.WriteLine("=== 21. AuroraFragmentConverter (modern pipeline → Dom.Layo
     {
         var childBox = layoutBox.Children[0];
         Check(Math.Abs(childBox.BorderBox.Left - 12) < 0.01f, $"child border left = {childBox.BorderBox.Left:F1} (expect 12)");
-        Check(Math.Abs(childBox.MarginBox.Top - 12) < 0.01f, $"child margin top = {childBox.MarginBox.Top:F1} (expect 12 = 6+14-8)");
+        // The parent has border+padding, so the child's block-start margin does not
+        // collapse through: its margin box starts at the parent's content edge (6)
+        // and the border box sits 8 lower (14).
+        Check(Math.Abs(childBox.MarginBox.Top - 6) < 0.01f, $"child margin top = {childBox.MarginBox.Top:F1} (expect 6 = parent content top)");
     }
 }
 

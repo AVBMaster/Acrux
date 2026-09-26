@@ -1161,11 +1161,11 @@ if (PipelineTimings.TilesRasterized != null)
         _recordedPicture = null;
 
         _pictureBounds = SKRect.Empty;
-        foreach (var op in _displayList.EnumerateOps())
+        _displayList.ForEachOp(op =>
         {
             if (!op.Bounds.IsEmpty)
                 _pictureBounds = _pictureBounds.IsEmpty ? op.Bounds : SKRect.Union(_pictureBounds, op.Bounds);
-        }
+        });
         // The grid responds to the content bounds (adaptive mode), so it must be
         // settled before any tile-index arithmetic against the new picture bounds.
         ComputeAdaptiveTileSize();

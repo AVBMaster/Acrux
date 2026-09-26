@@ -75,6 +75,12 @@ public class LineInfo
         set => _availableWidth = value;
     }
 
+    /// <summary>
+    /// Inline offset of this line box inside the container's content box. Normally
+    /// zero; a left float pushes the line box right (CSS 2.1 §9.5.2).
+    /// </summary>
+    public float LeftInset { get; set; }
+
     public void Reset()
     {
         _itemsData = null;

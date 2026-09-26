@@ -93,6 +93,12 @@ public abstract class Length
                 return new PixelLength(SafeFloat(value[..^2]) * 37.7953f);
             if (value.EndsWith("mm"))
                 return new PixelLength(SafeFloat(value[..^2]) * 3.77953f);
+            // CSS Values 3 §6.7: 1q = 0.25mm. Checked after the longer units so
+            // it cannot swallow another suffix.
+            if (value.EndsWith("q"))
+                return new PixelLength(SafeFloat(value[..^1]) * 0.9448819f);
+            if (value.EndsWith("ic"))
+                return new ChLength(SafeFloat(value[..^2]));
             if (value == "0")
                 return new PixelLength(0);
 
@@ -135,25 +141,60 @@ public abstract class Length
             return false;
         }
     }
+    /// <summary>'font-size' absolute keywords, expressed as ratios of the user
+    /// default (medium). CSS Fonts 4 §7.1; matches the table every engine ships
+    /// (9 / 10 / 13.33 / 16 / 18 / 24 / 32 / 48 for a 16px medium).</summary>
+    public const float FontSizeMedium = 16f;
+
     public static float ParseFontSize(string value, float parentFontSize)
     {
-        if (value.EndsWith("px") && float.TryParse(value[..^2], out var px)) return px;
-        if (value.EndsWith("rem") && float.TryParse(value[..^2], out var rem)) return rem * 16;
-        if (value.EndsWith("em") && float.TryParse(value[..^2], out var em)) return em * parentFontSize;
-        if (value.EndsWith("%") && float.TryParse(value[..^2], out var pct)) return pct / 100f * parentFontSize;
+        value = value?.Trim() ?? "";
+        // The unit has to be stripped with its own length: slicing two characters
+        // off "2rem" left a stray 'r' behind and made the parse fail silently.
+        if (TryLength(value, "rem", out var rem)) return rem * FontSizeMedium;
+        if (TryLength(value, "px", out var px)) return px;
+        if (TryLength(value, "pt", out var pt)) return pt * 96f / 72f;
+        if (TryLength(value, "pc", out var pc)) return pc * 16f;
+        if (TryLength(value, "in", out var inch)) return inch * 96f;
+        if (TryLength(value, "cm", out var cm)) return cm * 96f / 2.54f;
+        if (TryLength(value, "mm", out var mm)) return mm * 96f / 25.4f;
+        if (TryLength(value, "q", out var q)) return q * 96f / 101.6f;
+        if (TryLength(value, "em", out var em)) return em * parentFontSize;
+        if (TryLength(value, "ex", out var ex)) return ex * parentFontSize * 0.5f;
+        if (TryLength(value, "ch", out var ch)) return ch * parentFontSize * 0.5f;
+        if (TryLength(value, "vh", out var vh)) return vh / 100f * FontSizeMedium;
+        if (TryLength(value, "vw", out var vw)) return vw / 100f * FontSizeMedium;
+        if (value.EndsWith("%") && float.TryParse(value[..^1], System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var pct))
+            return pct / 100f * parentFontSize;
+        if (float.TryParse(value, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var bare))
+            return bare > 0 ? bare : parentFontSize;
+
+        float medium = FontSizeMedium;
         return value.ToLowerInvariant() switch
         {
-            "xx-small" => 10,
-            "x-small" => 12,
-            "small" => 14,
-            "medium" => 16,
-            "large" => 18,
-            "x-large" => 24,
-            "xx-large" => 32,
+            "xx-small" => medium * 9f / 16f,
+            "x-small" => medium * 10f / 16f,
+            "small" => medium * 13.3333f / 16f,
+            "medium" => medium,
+            "large" => medium * 18f / 16f,
+            "x-large" => medium * 24f / 16f,
+            "xx-large" => medium * 32f / 16f,
+            "xxx-large" => medium * 48f / 16f,
             "larger" => parentFontSize * 1.2f,
             "smaller" => parentFontSize / 1.2f,
-            _ => 16
+            _ => parentFontSize,
         };
+    }
+
+    private static bool TryLength(string value, string unit, out float number)
+    {
+        number = 0;
+        if (unit.Length == 0 || !value.EndsWith(unit, StringComparison.OrdinalIgnoreCase))
+            return false;
+        return float.TryParse(value[..^unit.Length].Trim(), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out number) && value.Length > unit.Length;
     }
 
     public static float ToPixelsOrDefault(Length length, float defaultValue = 0, float viewportWidth = 0, float viewportHeight = 0)
@@ -555,6 +596,15 @@ public class ComputedStyle
     public TextAlignLastType TextAlignLast { get; set; } = TextAlignLastType.Auto;
     public TextDecorationType TextDecoration { get; set; } = TextDecorationType.None;
     public VerticalAlignType VerticalAlign { get; set; } = VerticalAlignType.Baseline;
+    /// <summary>'vertical-align' given as a length or percentage: the box's baseline
+    /// is raised by this amount (positive) relative to the parent's (CSS 2.1 §10.8.1).
+    /// A percentage resolves against the element's own computed line-height.</summary>
+    public float? VerticalAlignOffsetPx { get; set; }
+    /// <summary>True when a 'vertical-align' declaration was actually cascaded.
+    /// Table cells default to 'middle', and that default must not override an
+    /// explicit declaration (CSS 2.1 §17.5.2.6).
+    /// </summary>
+    public bool VerticalAlignIsAuthored { get; set; }
     public WhiteSpaceMode WhiteSpace { get; set; } = WhiteSpaceMode.Normal;
     public WordBreakMode WordBreak { get; set; } = WordBreakMode.Normal;
     public OverflowWrapMode OverflowWrap { get; set; } = OverflowWrapMode.Normal;
@@ -596,8 +646,15 @@ public class ComputedStyle
     public Length? MaxHeight { get; set; }
 
     public BoxSizingType BoxSizing { get; set; } = BoxSizingType.ContentBox;
+    /// <summary>True when a 'box-sizing' declaration was actually cascaded. Table
+    /// boxes default to border-box (their specified width is the border-box
+    /// width), and that default must not override an explicit declaration.
+    /// </summary>
+    public bool BoxSizingIsAuthored { get; set; }
     public bool BorderCollapse { get; set; }
     public ListStyleType ListStyleType { get; set; } = ListStyleType.Disc;
+    /// <summary>Marker text used when list-style-type is a &lt;string&gt;.</summary>
+    public string? ListStyleTypeString { get; set; }
     public string? ListStyleImage { get; set; }
     public ListStylePosition ListStylePosition { get; set; } = ListStylePosition.Outside;
 
@@ -754,7 +811,13 @@ public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDec
 
     public WritingModeType WritingMode { get; set; } = WritingModeType.HorizontalTb;
     public HyphensType Hyphens { get; set; } = HyphensType.None;
+    /// <summary>CSS Multi-Column 1 §3: 'column-span: all' makes the box span every
+    /// column of its multicol ancestor.</summary>
+    public bool ColumnSpanAll { get; set; }
     public float TabSize { get; set; } = 8;
+    /// <summary>'tab-size' given in absolute/relative length units (CSS Text 3 §3.4).
+    /// When set it wins over the unitless <see cref="TabSize"/> space count.</summary>
+    public float? TabSizePx { get; set; }
     public ScrollBehaviorType ScrollBehavior { get; set; } = ScrollBehaviorType.Auto;
     public OverscrollBehaviorType OverscrollBehavior { get; set; } = OverscrollBehaviorType.Auto;
     public OverscrollBehaviorType OverscrollBehaviorX { get; set; } = OverscrollBehaviorType.Auto;
@@ -865,7 +928,8 @@ public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDec
             Color = Color, BackgroundColor = BackgroundColor, BackgroundImage = BackgroundImage,
             BackgroundPositionX = BackgroundPositionX, BackgroundPositionY = BackgroundPositionY,
             BackgroundRepeat = BackgroundRepeat, BackgroundAttachment = BackgroundAttachment,
-            TextAlign = TextAlign, TextAlignLast = TextAlignLast, TextDecoration = TextDecoration, VerticalAlign = VerticalAlign,
+            TextAlign = TextAlign, TextAlignLast = TextAlignLast, TextDecoration = TextDecoration, VerticalAlign = VerticalAlign, VerticalAlignOffsetPx = VerticalAlignOffsetPx,
+            VerticalAlignIsAuthored = VerticalAlignIsAuthored,
             WhiteSpace = WhiteSpace, WordBreak = WordBreak, OverflowWrap = OverflowWrap,
             ScrollbarWidth = ScrollbarWidth, ScrollbarThumbColor = ScrollbarThumbColor,
             ScrollbarTrackColor = ScrollbarTrackColor, ScrollbarCustom = ScrollbarCustom,
@@ -877,8 +941,9 @@ public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDec
             FlexShrink = FlexShrink, FlexBasis = FlexBasis, JustifyContent = JustifyContent,
             AlignItems = AlignItems, AlignSelf = AlignSelf,
             MinWidth = MinWidth, MaxWidth = MaxWidth, MinHeight = MinHeight, MaxHeight = MaxHeight,
-            BoxSizing = BoxSizing, BorderCollapse = BorderCollapse,
-            ListStyleType = ListStyleType, ListStyleImage = ListStyleImage, ListStylePosition = ListStylePosition,
+            BoxSizing = BoxSizing, BoxSizingIsAuthored = BoxSizingIsAuthored,
+            BorderCollapse = BorderCollapse,
+            ListStyleType = ListStyleType, ListStyleTypeString = ListStyleTypeString, ListStyleImage = ListStyleImage, ListStylePosition = ListStylePosition,
             Transform = Transform, TransformOrigin = TransformOrigin,
             Translate = Translate, Rotate = Rotate, Scale = Scale,
             Transition = Transition, TransitionDelay = TransitionDelay, TransitionDuration = TransitionDuration,
@@ -914,7 +979,7 @@ public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDec
             GridRowStart = GridRowStart, GridRowEnd = GridRowEnd,
             GridColumn = GridColumn, GridRow = GridRow, GridArea = GridArea, Grid = Grid,
             BackgroundClip = BackgroundClip, BackgroundOrigin = BackgroundOrigin, BackgroundBlendMode = BackgroundBlendMode,
-            WritingMode = WritingMode, Hyphens = Hyphens, TabSize = TabSize,
+            WritingMode = WritingMode, Hyphens = Hyphens, TabSize = TabSize, TabSizePx = TabSizePx, ColumnSpanAll = ColumnSpanAll,
             ScrollBehavior = ScrollBehavior, OverscrollBehavior = OverscrollBehavior,
             OverscrollBehaviorX = OverscrollBehaviorX, OverscrollBehaviorY = OverscrollBehaviorY,
             OverflowAnchor = OverflowAnchor, Contain = Contain, ContentVisibility = ContentVisibility,
@@ -1028,7 +1093,7 @@ public enum TextAlignType { Start, End, Left, Right, Center, Justify }
 
 public enum TextAlignLastType { Auto, Start, End, Left, Right, Center, Justify }
 public enum TextDecorationType { None, Underline, Overline, LineThrough }
-public enum VerticalAlignType { Baseline, Top, Middle, Bottom, Sub, Super, TextTop, TextBottom, Inherit }
+public enum VerticalAlignType { Baseline, Top, Middle, Bottom, Sub, Super, TextTop, TextBottom, Inherit, Percentage, Length }
 public enum WhiteSpaceMode { Normal, Nowrap, Pre, PreWrap, PreLine, BreakSpaces }
 public enum WordBreakMode { Normal, BreakAll, BreakWord }
 public enum OverflowWrapMode { Normal, BreakWord, Anywhere }
@@ -1042,7 +1107,21 @@ public enum AlignSelfType { Auto, Stretch, FlexStart, FlexEnd, Center, Baseline 
 public enum BackgroundRepeat { Repeat, RepeatX, RepeatY, NoRepeat, Round, Space }
 public enum BackgroundAttachment { Scroll, Fixed, Local }
 public enum BoxSizingType { ContentBox, BorderBox }
-public enum ListStyleType { Disc, Circle, Square, Decimal, DecimalLeadingZero, LowerRoman, UpperRoman, LowerAlpha, UpperAlpha, None }
+/// <summary>'list-style-type' values (CSS Lists 3 §5 plus the counter styles of
+/// §A.2). The symbolic ones paint a fixed glyph; the rest are counters.</summary>
+public enum ListStyleType
+{
+    Disc, Circle, Square, Decimal, DecimalLeadingZero, LowerRoman, UpperRoman,
+    LowerAlpha, UpperAlpha,
+    LowerLatin, UpperLatin, LowerGreek, UpperGreek, Armenian, Georgian, Hebrew,
+    Hiragana, Katakana, HiraganaIroha, KatakanaIroha, CjkDecimal, CjkIdeographic,
+    CjkEarthlyBranch, CjkHeavenlyStem, Thai, Lao, Khmer, Myanmar, Mongolian,
+    ArabicIndic, Persian, Devanagari, Bengali, Tamil, Telugu, CanadianAboriginal,
+    Symbol,
+    /// <summary>A quoted string marker, e.g. list-style-type: "--&gt;".</summary>
+    String,
+    None,
+}
 public enum ListStylePosition { Inside, Outside }
 
 public static class LengthExtensions

@@ -43,6 +43,7 @@ public abstract class Element : Node
             _classListCache = null;
 
         DirtyState.AddSelf(this, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
+        DomMutationTracker.Notify();
     }
 
     public void RemoveAttribute(string name)
@@ -55,6 +56,9 @@ public abstract class Element : Node
 
         if (name.Equals("class", StringComparison.OrdinalIgnoreCase))
             _classListCache = null;
+
+        DirtyState.AddSelf(this, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
+        DomMutationTracker.Notify();
     }
 
     public bool HasAttribute(string name) => Attributes.ContainsKey(name);
@@ -128,6 +132,10 @@ public abstract class Element : Node
     public ScrollbarStyles? ScrollbarCustom { get; set; }
     public bool HasGeneratedBefore { get; set; }
     public bool HasGeneratedAfter { get; set; }
+    /// <summary>Set when a floated ::first-letter box was materialized (CSS
+    /// Pseudo-Elements 4 §3): the letter no longer belongs to the text run, so the
+    /// inline ::first-letter slicing must not claim the character after it.</summary>
+    public bool HasGeneratedFirstLetter { get; set; }
     public object? MarkerLayoutObject { get; set; }
 
     // ===== Common Attribute Shortcuts =====

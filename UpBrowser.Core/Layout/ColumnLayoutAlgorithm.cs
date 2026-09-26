@@ -290,6 +290,16 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
         // across balanced column fragmentainers. Each column becomes an anonymous
         // child box positioned side by side. The line-breaker overflow fix makes
         // wrapping at the narrow column width correct.
+        // A spanning element breaks the flow into column sets stacked vertically
+        // (CSS Multi-Column 1 §3): the content before and after it fills its own
+        // set of columns, and the spanner takes the full content width.
+        var columnFlow = CollectColumnFlowChildren();
+        foreach (var flowChild in columnFlow)
+        {
+            if (flowChild.ComputedStyle!.GetColumnSpanAll())
+                return LayoutWithSpanners(columnFlow, bp, borderBoxInlineSize, childAvailableInlineSize);
+        }
+
         float colInlineSize = _columnInlineSize;
         float colProgression = _columnInlineProgression;
         int colCount = Math.Max(1, _usedColumnCount);
@@ -378,6 +388,160 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
         return result;
     }
 
+    /// <summary>In-flow children of the multicol container, in document order.</summary>
+    private List<Element> CollectColumnFlowChildren()
+    {
+        var children = new List<Element>();
+        foreach (var node in Node.Children)
+        {
+            if (node is not Element element || element.ComputedStyle == null
+                || element.ComputedStyle.Display == DisplayType.None)
+                continue;
+            children.Add(element);
+        }
+        return children;
+    }
+
+    /// <summary>Constraint space for content flowing inside one column, or across
+    /// all of them for a spanner.</summary>
+    private ConstraintSpace MakeColumnChildSpace(float inlineSize)
+    {
+        return Space.InheritBuilder(inlineSize, float.NaN)
+            .SetIsNewFormattingContext(true)
+            .SetAvailableSize(inlineSize, float.NaN)
+            .SetIsFixedInlineSize(true)
+            .SetPercentageResolution(inlineSize, ChildAvailableBlockSize)
+            .SetBfcBlockOffset(0)
+            .SetForcedBfcBlockOffset(0)
+            .SetDirection(Style.Direction == "rtl" ? TextDirection.Rtl : TextDirection.Ltr)
+            .ToConstraintSpace();
+    }
+
+    private LayoutResult LayoutColumnChild(Element child, ConstraintSpace space)
+    {
+        var style = child.ComputedStyle!;
+        var display = style.Display;
+        if (display is DisplayType.Flex or DisplayType.InlineFlex)
+            return new FlexLayoutAlgorithm(child, space).Layout();
+        if (display is DisplayType.Grid or DisplayType.InlineGrid)
+            return new GridLayoutAdapter(child, space).Layout();
+        if (display == DisplayType.Table)
+            return new Table.TableLayoutAlgorithm(child, space).Layout();
+        if (child.IsInlineFormattingContextRoot())
+            return new InlineLayoutAlgorithm(child, space, this).Layout();
+        return new BlockLayoutAlgorithm(child, space).Layout();
+    }
+
+    private static float ResolveBlockMargin(Element child, bool blockStart)
+    {
+        var style = child.ComputedStyle!;
+        var length = blockStart ? style.MarginTop : style.MarginBottom;
+        return length?.ToPixels(style.FontSize, 16, 0, 0) ?? 0;
+    }
+
+    /// <summary>
+    /// Lay the flow out as column sets separated by full-width spanners. Each set
+    /// balances its own content across the columns exactly like the spanner-free
+    /// path; the spanner box is placed between the sets at the container's content
+    /// width (CSS Multi-Column 1 §3).
+    /// </summary>
+    private LayoutResult LayoutWithSpanners(List<Element> flowChildren, BoxStrut bp,
+        float borderBoxInlineSize, float childAvailableInlineSize)
+    {
+        float colInlineSize = _columnInlineSize;
+        float colProgression = _columnInlineProgression;
+        int colCount = Math.Max(1, _usedColumnCount);
+        bool definiteHeight = Style.Height is not AutoLength && _columnBlockSize > 0;
+
+        var columnFragments = new List<BoxFragment>();
+        var spannerFragments = new List<BoxFragment>();
+        float currentBlock = 0;
+        int index = 0;
+        while (index < flowChildren.Count)
+        {
+            var child = flowChildren[index];
+            if (child.ComputedStyle!.GetColumnSpanAll())
+            {
+                float marginBefore = ResolveBlockMargin(child, blockStart: true);
+                var spanResult = LayoutColumnChild(child, MakeColumnChildSpace(childAvailableInlineSize));
+                var spanFragment = spanResult.Fragment;
+                float marginAfter = ResolveBlockMargin(child, blockStart: false);
+                spanFragment.InlineOffset = bp.Left;
+                spanFragment.BlockOffset = bp.Top + currentBlock + marginBefore;
+                spannerFragments.Add(spanFragment);
+                currentBlock += marginBefore + spanFragment.BlockSize + marginAfter;
+                index++;
+                continue;
+            }
+
+            // One run of non-spanning children: lay them out at the column width,
+            // stack their line boxes, then balance them across the columns.
+            var lines = new List<BoxLine>();
+            float flowBlock = 0;
+            while (index < flowChildren.Count && !flowChildren[index].ComputedStyle!.GetColumnSpanAll())
+            {
+                var flowChild = flowChildren[index++];
+                flowBlock += ResolveBlockMargin(flowChild, blockStart: true);
+                var childResult = LayoutColumnChild(flowChild, MakeColumnChildSpace(colInlineSize));
+                var childFragment = childResult.Fragment;
+                var childLines = new List<BoxLine>(childFragment.Lines);
+                CollectChildLines(childFragment, childLines);
+                foreach (var line in childLines)
+                {
+                    line.BlockOffset += flowBlock;
+                    line.BaselineOffset += flowBlock;
+                    foreach (var run in line.Runs)
+                        run.BlockOffset += flowBlock;
+                }
+                lines.AddRange(childLines);
+                flowBlock += childFragment.BlockSize + ResolveBlockMargin(flowChild, blockStart: false);
+            }
+
+            float columnBlockSize = definiteHeight
+                ? _columnBlockSize
+                : (lines.Count > 0 ? MathF.Ceiling(flowBlock / colCount) : 0);
+            var columns = DistributeLinesToColumns(lines, columnBlockSize, colInlineSize, colProgression,
+                colCount, bp, currentBlock);
+            float setHeight = 0;
+            foreach (var column in columns)
+            {
+                foreach (var line in column.Lines)
+                {
+                    line.InlineOffset += column.InlineOffset;
+                    Builder.Lines.Add(line);
+                }
+                setHeight = Math.Max(setHeight, column.BlockSize);
+                columnFragments.Add(column);
+            }
+            currentBlock += setHeight;
+        }
+
+        _intrinsicBlockSize = bp.Top + currentBlock + bp.Bottom;
+        float blockSize = LengthUtils.ComputeBlockSizeForFragment(Space, Style, bp, _intrinsicBlockSize,
+            borderBoxInlineSize);
+        if (LengthUtils.IsIndefinite(blockSize))
+            blockSize = _intrinsicBlockSize;
+
+        Builder.InlineSize = borderBoxInlineSize;
+        Builder.BlockSize = blockSize;
+        Builder.IntrinsicBlockSize = _intrinsicBlockSize;
+        Builder.IsMultiColumn = colCount > 1;
+        Builder.UsedColumnCount = colCount;
+        Builder.ColumnInlineSize = colInlineSize;
+        Builder.ColumnProgression = colProgression;
+
+        var fragment = Builder.ToBoxFragment();
+        fragment.Lines.AddRange(Builder.Lines);
+        fragment.Children.AddRange(columnFragments);
+        // BoxFragmentBuilder does not carry children over, so the spanner boxes
+        // (which are real elements and have to paint) are attached explicitly.
+        fragment.Children.AddRange(spannerFragments);
+        var result = LayoutResult.FromFragment(fragment);
+        result.IntrinsicBlockSize = _intrinsicBlockSize;
+        result.BfcBlockOffsetValue = Space.ForcedBfcBlockOffset ?? Space.GetBfcOffset().BlockOffset;
+        return result;
+    }
+
     /// <summary>
     /// Partition the flow's line boxes into column fragmentainers. Each column
     /// keeps lines until it reaches <paramref name="columnBlockSize"/> (the last
@@ -398,7 +562,7 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
     }
 
     private List<BoxFragment> DistributeLinesToColumns(List<BoxLine> allLines, float columnBlockSize,
-        float colInlineSize, float colProgression, int colCount, BoxStrut bp)
+        float colInlineSize, float colProgression, int colCount, BoxStrut bp, float blockOffsetBase = 0)
     {
         var columns = new List<BoxFragment>();
         if (allLines.Count == 0)
@@ -415,7 +579,7 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
                 InlineSize = colInlineSize,
                 BlockSize = columnBlockSize,
                 InlineOffset = bp.Left + c * colProgression,
-                BlockOffset = bp.Top,
+                BlockOffset = bp.Top + blockOffsetBase,
                 Element = null,
             };
 
@@ -427,14 +591,16 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
                 if (!lastColumn && colFragment.Lines.Count > 0 && rel > columnBlockSize + epsilon)
                     break;
 
-                float delta = -colOrigin;
+                float delta = blockOffsetBase - colOrigin;
                 line.BlockOffset += delta;
                 line.BaselineOffset += delta;
                 foreach (var run in line.Runs)
                     run.BlockOffset += delta;
 
                 colFragment.Lines.Add(line);
-                maxBottom = Math.Max(maxBottom, line.BlockEnd);
+                // Measured from the fragmentainer's own top, which sits at
+                // |blockOffsetBase| when a column set follows a spanner.
+                maxBottom = Math.Max(maxBottom, line.BlockEnd - blockOffsetBase);
                 idx++;
             }
 
@@ -1122,12 +1288,7 @@ public static class ColumnLayoutAlgorithmExtensions
 
     public static EColumnFill ColumnFill(this ComputedStyle style) => EColumnFill.Auto;
 
-    public static bool GetColumnSpanAll(this ComputedStyle style)
-    {
-        // Column-span is a CSS property stored in ComputedStyle.
-        // In the simplified model, we check if the style has "column-span: all".
-        return false;
-    }
+    public static bool GetColumnSpanAll(this ComputedStyle style) => style.ColumnSpanAll;
 
     public static bool HasInflowChildBreakInside(this BoxFragmentBuilder builder) => false;
 

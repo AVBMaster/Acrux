@@ -13,13 +13,13 @@ public abstract class CharacterData : Node
     public override string? NodeValue
     {
         get => _data;
-        set => _data = value ?? string.Empty;
+        set { _data = value ?? string.Empty; DomMutationTracker.Notify(); }
     }
 
     public override string? TextContent
     {
         get => _data;
-        set => _data = value ?? string.Empty;
+        set { _data = value ?? string.Empty; DomMutationTracker.Notify(); }
     }
 
     public string Data
@@ -30,6 +30,7 @@ public abstract class CharacterData : Node
             var old = _data;
             _data = value;
             OnDataChanged(old, value);
+            DomMutationTracker.Notify();
         }
     }
 

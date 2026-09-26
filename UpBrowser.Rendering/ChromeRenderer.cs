@@ -1473,6 +1473,11 @@ public class ChromeRenderer : IImeSupport
 
     public void SetLoadingState(bool loading)
     {
+        // Idempotent when already settled: PumpRemoteTabs calls this every frame, and a
+        // no-op 'false' must not re-dirty the progress bar — that re-fires
+        // OnChanged → NeedsRedraw → repaint, a self-sustaining 60Hz redraw loop.
+        if (!loading && !_isLoading)
+            return;
         _isLoading = loading;
         if (loading)
         {

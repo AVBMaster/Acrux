@@ -98,6 +98,25 @@ public static class FilterRenderer
         };
     }
 
+    /// <summary>CSS Filters 1: effect amounts accept a &lt;number&gt; (0..1) or a
+    /// &lt;percentage&gt;; the unitless form is the fraction itself, not a percent.</summary>
+    internal static bool TryFilterAmount(string? value, out float amount)
+    {
+        amount = 0;
+        var text = (value ?? "").Trim();
+        if (text.Length == 0)
+            return false;
+        bool isPercent = text.EndsWith("%", StringComparison.OrdinalIgnoreCase);
+        if (isPercent)
+            text = text[..^1].Trim();
+        if (!float.TryParse(text, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out amount))
+            return false;
+        if (isPercent)
+            amount /= 100f;
+        return true;
+    }
+
     private static SKImageFilter? CreateBlur(string[] args)
     {
         if (args.Length < 1 || !float.TryParse(args[0].Replace("px", ""), out var radius))
@@ -168,43 +187,60 @@ public static class FilterRenderer
 
     private static SKImageFilter? CreateGrayscale(string[] args)
     {
-        float amount = 100f;
-        if (args.Length >= 1)
-        {
-            var valStr = args[0].Trim();
-            bool isPercent = valStr.EndsWith("%");
-            valStr = valStr.Replace("%", "").Trim();
-            float.TryParse(valStr, out amount);
-            if (!isPercent)
-                amount *= 100f;
-        }
-        // grayscale(a%) = saturate(100% - a%)
-        float satAmount = Math.Max(0, 100f - amount);
-        return CreateColorMatrix(new[] { satAmount.ToString() }, SaturateMatrix);
+        float amount = 1f;
+        if (args.Length >= 1 && !TryFilterAmount(args[0], out amount))
+            return null;
+        // grayscale(a) == saturate(1 - a). The round trip through CreateColorMatrix's
+        // string arguments lost the unit, so build the matrix from the fraction.
+        float satPercent = Math.Clamp(1f - amount, 0f, 1f) * 100f;
+        var filter = SKColorFilter.CreateColorMatrix(SaturateMatrix(satPercent));
+        return SKImageFilter.CreateColorFilter(filter);
     }
 
     private static SKImageFilter? CreateSepia(string[] args)
     {
-        float[] m = new float[]
+        float amount = 1f;
+        if (args.Length >= 1 && !TryFilterAmount(args[0], out amount))
+            return null;
+        amount = Math.Clamp(amount, 0f, 1f);
+        // sepia(a) is the linear blend between the identity matrix and the full
+        // sepia matrix (CSS Filter Effects 1 §2.3).
+        float[] full =
         {
             0.393f, 0.769f, 0.189f, 0, 0,
             0.349f, 0.686f, 0.168f, 0, 0,
             0.272f, 0.534f, 0.131f, 0, 0,
-            0, 0, 0, 1, 0
+            0f, 0f, 0f, 1f, 0f
         };
+        var m = new float[20];
+        for (int row = 0; row < 3; row++)
+        {
+            int baseIdx = row * 5;
+            for (int col = 0; col < 5; col++)
+            {
+                float identity = col == row ? 1f : 0f;
+                m[baseIdx + col] = identity + (full[baseIdx + col] - identity) * amount;
+            }
+        }
+        m[15] = 1f; m[16] = 1f; m[17] = 1f; m[18] = 1f; m[19] = 0f;
         var colorMatrix = SKColorFilter.CreateColorMatrix(m);
         return SKImageFilter.CreateColorFilter(colorMatrix);
     }
 
     private static SKImageFilter? CreateInvert(string[] args)
     {
-        float[] m = new float[]
-        {
-            -1, 0, 0, 0, 1,
-            0, -1, 0, 0, 1,
-            0, 0, -1, 0, 1,
-            0, 0, 0, 1, 0
-        };
+        float amount = 1f;
+        if (args.Length >= 1 && !TryFilterAmount(args[0], out amount))
+            return null;
+        amount = Math.Clamp(amount, 0f, 1f);
+        // invert(a) maps c to c*(1-2a) + a, i.e. a blend with the negative matrix.
+        float scale = 1f - 2f * amount;
+        // Row-major 4x5: the diagonal is R,G,B at 0, 6 and 12 (not 5/10, which are
+        // the R coefficients of the next row).
+        var m = new float[20];
+        m[0] = scale; m[6] = scale; m[12] = scale;
+        m[4] = amount; m[9] = amount; m[14] = amount;
+        m[18] = 1f;
         var colorMatrix = SKColorFilter.CreateColorMatrix(m);
         return SKImageFilter.CreateColorFilter(colorMatrix);
     }
@@ -212,8 +248,30 @@ public static class FilterRenderer
     private static SKImageFilter? CreateHueRotate(string[] args)
     {
         if (args.Length < 1) return null;
-        var valStr = args[0].Replace("deg", "").Trim();
-        if (!float.TryParse(valStr, out var degrees)) return null;
+        var valStr = args[0].Trim();
+        float unitScale = 1f;
+        if (valStr.EndsWith("rad", StringComparison.OrdinalIgnoreCase))
+        {
+            unitScale = 180f / MathF.PI;
+            valStr = valStr[..^3];
+        }
+        else if (valStr.EndsWith("grad", StringComparison.OrdinalIgnoreCase))
+        {
+            unitScale = 0.9f;
+            valStr = valStr[..^4];
+        }
+        else if (valStr.EndsWith("turn", StringComparison.OrdinalIgnoreCase))
+        {
+            unitScale = 360f;
+            valStr = valStr[..^4];
+        }
+        else if (valStr.EndsWith("deg", StringComparison.OrdinalIgnoreCase))
+        {
+            valStr = valStr[..^3];
+        }
+        if (!float.TryParse(valStr.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var degrees)) return null;
+        degrees *= unitScale;
 
         float radians = degrees * MathF.PI / 180f;
         float cos = MathF.Cos(radians);
@@ -239,9 +297,10 @@ public static class FilterRenderer
     private static SKImageFilter? CreateOpacity(string[] args)
     {
         if (args.Length < 1) return null;
-        var valStr = args[0].Replace("%", "").Trim();
-        if (!float.TryParse(valStr, out var amount)) return null;
-        amount /= 100f;
+        // opacity(0.5) is 50%; the previous code divided every value by 100, which
+        // made the element almost fully transparent.
+        if (!TryFilterAmount(args[0], out float amount)) return null;
+        amount = Math.Clamp(amount, 0f, 1f);
 
         float[] m = new float[]
         {

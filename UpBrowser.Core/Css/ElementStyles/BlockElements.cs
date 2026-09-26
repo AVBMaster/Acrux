@@ -177,10 +177,10 @@ public static class BlockElements
                 style.BorderRightColor = SKColor.Parse("#808080");
                 break;
             case "caption":
+                // HTML UA stylesheet: a caption is only centered; it carries no
+                // padding of its own.
                 style.Display = DisplayType.TableCaption;
                 style.TextAlign = TextAlignType.Center;
-                style.PaddingTop = new PixelLength(4);
-                style.PaddingBottom = new PixelLength(4);
                 break;
             case "colgroup":
                 style.Display = DisplayType.TableColumnGroup;
@@ -191,24 +191,14 @@ public static class BlockElements
 
             // 格式化文本
             case "pre":
+                // HTML UA stylesheet defaults: monospace, preserved whitespace and a
+                // one-em block margin. No padding, border or background (a page that
+                // wants a code block look styles it).
                 style.Display = DisplayType.Block;
                 style.FontFamily = "monospace";
                 style.WhiteSpace = WhiteSpaceMode.Pre;
-                style.MarginTop = new PixelLength(12);
-                style.MarginBottom = new PixelLength(12);
-                style.PaddingTop = new PixelLength(8);
-                style.PaddingBottom = new PixelLength(8);
-                style.PaddingLeft = new PixelLength(8);
-                style.PaddingRight = new PixelLength(8);
-                style.BackgroundColor = SKColor.Parse("#F5F5F5");
-                style.BorderTopWidth = 1;
-                style.BorderBottomWidth = 1;
-                style.BorderLeftWidth = 1;
-                style.BorderRightWidth = 1;
-                style.BorderTopColor = SKColor.Parse("#E0E0E0");
-                style.BorderBottomColor = SKColor.Parse("#E0E0E0");
-                style.BorderLeftColor = SKColor.Parse("#E0E0E0");
-                style.BorderRightColor = SKColor.Parse("#E0E0E0");
+                style.MarginTop = new PixelLength(16);
+                style.MarginBottom = new PixelLength(16);
                 break;
 
             // 引用和注释

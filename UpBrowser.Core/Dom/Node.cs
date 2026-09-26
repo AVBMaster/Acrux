@@ -228,6 +228,7 @@ public abstract class Node : EventTarget
         _children.Add(child);
         child.OwnerDocument = OwnerDocument;
         OnChildInserted(child);
+        DomMutationTracker.Notify();
         return child;
     }
 
@@ -258,6 +259,7 @@ public abstract class Node : EventTarget
         _children.Insert(index, newChild);
         newChild.OwnerDocument = OwnerDocument;
         OnChildInserted(newChild);
+        DomMutationTracker.Notify();
         return newChild;
     }
 
@@ -267,6 +269,7 @@ public abstract class Node : EventTarget
             throw new DOMException("Node is not a child", "NotFoundError");
         child._parent = null;
         OnChildRemoved(child);
+        DomMutationTracker.Notify();
         return child;
     }
 
@@ -283,6 +286,7 @@ public abstract class Node : EventTarget
         newChild.OwnerDocument = OwnerDocument;
         OnChildInserted(newChild);
         OnChildRemoved(oldChild);
+        DomMutationTracker.Notify();
         return oldChild;
     }
 

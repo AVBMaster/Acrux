@@ -50,7 +50,8 @@ public class RenderingSettings
     /// Tab concurrency model, applied at browser startup:
     /// "single" — one UI thread owns all tabs (legacy);
     /// "threaded" — each tab has its own render/JS thread, background tabs keep running;
-    /// "process" — reserved for the future multi-process tab host (falls back to "threaded").
+    /// "process" — each tab runs in its own child process; the browser composites
+    ///            rendered frames and forwards input (cross-platform via named pipes).
     /// </summary>
     public string TabMode
     {

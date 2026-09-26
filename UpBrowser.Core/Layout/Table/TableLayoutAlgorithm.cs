@@ -88,9 +88,11 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             tableInlineSizeBeforeCollapse = TableLayoutUtils.ComputeTableSizeFromColumns(_columnLocations, _borderPadding, borderSpacing);
         }
 
-        // Captions (their block sizes contribute to the table's height).
+        // Captions (their block sizes contribute to the table's height). A caption
+        // lives in the table's border box: it spans the full border-box inline size
+        // and overlays the table's own border and padding.
         var captions = new List<BoxFragment>();
-        LayoutCaptions(groupedChildren, ClampNeg(tableInlineSizeBeforeCollapse - _borderPadding.HorizontalSum), captions);
+        LayoutCaptions(groupedChildren, ClampNeg(tableInlineSizeBeforeCollapse), captions);
 
         // Rows / sections.
         var data = new TableConstraintSpaceData
@@ -173,15 +175,19 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
     private float ResolveUsedTableInlineSize(float availableInline, MinMaxSizes gridMinMax)
     {
         var style = Style;
+        // With 'box-sizing: border-box' (the default for tables) the specified width
+        // already includes the box's own border and padding.
+        float borderPaddingInline = style.BoxSizing == BoxSizingType.BorderBox
+            ? 0 : _borderPadding.HorizontalSum;
         float used;
         var width = style.Width;
         if (width.IsFixed())
         {
-            used = width.FixedValue() + _borderPadding.HorizontalSum;
+            used = width.FixedValue() + borderPaddingInline;
         }
         else if (width.IsPercent() && TableTypes.IsKnown(availableInline))
         {
-            used = width.PercentValue() / 100f * availableInline + _borderPadding.HorizontalSum;
+            used = width.PercentValue() / 100f * availableInline + borderPaddingInline;
         }
         else
         {
@@ -311,6 +317,10 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
         float gridInline = Math.Max(0, contentInline - borderSpacing * 2);
 
         float blockOffset = 0;
+        // Child offsets are relative to the content box, so a caption that spans the
+        // border box starts at its own negative border/padding inset.
+        float captionInline = -_borderPadding.Left;
+        float captionBlockOffset = -_borderPadding.Top;
 
         // Top captions.
         float topCaptionsEnd = 0;
@@ -318,14 +328,16 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
         {
             if (cap.Element?.ComputedStyle?.CaptionSide != "top")
                 continue;
-            cap.InlineOffset = 0;
-            cap.BlockOffset = blockOffset;
+            cap.InlineOffset = captionInline;
+            cap.BlockOffset = captionBlockOffset;
             Builder.Children.Add(cap);
-            blockOffset += cap.BlockSize;
-            topCaptionsEnd = blockOffset;
+            captionBlockOffset += cap.BlockSize;
+            topCaptionsEnd = captionBlockOffset + _borderPadding.Top;
         }
         if (topCaptionsEnd > 0)
-            blockOffset += borderSpacing;
+        {
+            blockOffset = Math.Max(blockOffset, topCaptionsEnd + borderSpacing);
+        }
 
         // Sections / rows / cells.
         if (!isGridEmpty)
@@ -380,14 +392,16 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
         }
 
         // Bottom captions.
+        float bottomCaptionOffset = blockOffset - _borderPadding.Top;
         foreach (var cap in captions)
         {
             if (cap.Element?.ComputedStyle?.CaptionSide != "bottom")
                 continue;
-            cap.InlineOffset = 0;
-            cap.BlockOffset = blockOffset;
+            cap.InlineOffset = captionInline;
+            cap.BlockOffset = bottomCaptionOffset;
             Builder.Children.Add(cap);
-            blockOffset += cap.BlockSize;
+            bottomCaptionOffset += cap.BlockSize;
+            blockOffset = bottomCaptionOffset + _borderPadding.Top;
         }
 
         Builder.BlockSize = blockOffset;
@@ -455,7 +469,13 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
                     cellBlockSize += borderSpacing;
             }
 
-            var cellBorderPadding = TableTypes.ComputeCellBorderPadding(cell, Space);
+            // Collapsed edges are shared: the cell's border box owns half of each
+            // (CSS 2.1 §17.6.2), which is what the table's used size is built from.
+            var collapsedEdge = hasCollapsedBorders
+                ? tableBorders.CellBorder(rowIndex, startColumn, effectiveRowspan, colspan,
+                    tableBorders.SectionIndexOf(rowIndex))
+                : default(BoxStrut?);
+            var cellBorderPadding = TableTypes.ComputeCellBorderPadding(cell, Space, collapsedEdge);
             var cellSpace = TableLayoutUtils.SetupTableCellConstraintSpaceBuilder(cell, cellBorderPadding, columnLocations,
                 cellBlockSize, gridInlineSize, startColumn,
                 /* isInitialBlockSizeIndefinite */ !TableTypes.IsKnown(cellBlockSize),
@@ -466,14 +486,66 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             cellFragment.InlineOffset = cellInlineOffset;
             cellFragment.BlockOffset = 0;
             cellFragment.InlineSize = cellInlineSize;
+            // The content keeps its own height; the cell grows to the rows it spans.
+            float contentBlockSize = ContentExtentOf(cellFragment);
+            float freeBlockSize = Math.Max(0, cellBlockSize - contentBlockSize);
             if (TableTypes.IsKnown(cellFragment.BlockSize))
                 cellFragment.BlockSize = Math.Max(cellFragment.BlockSize, cellBlockSize);
             else
                 cellFragment.BlockSize = cellBlockSize;
+
+            // 'vertical-align' on a cell moves its content inside the cell box
+            // (CSS 2.1 §17.5.2.6). 'baseline' takes the row's baseline, which for the
+            // first row of a section is the top edge.
+            float contentShift = cellStyle.VerticalAlign switch
+            {
+                VerticalAlignType.Middle => freeBlockSize / 2f,
+                VerticalAlignType.Bottom => freeBlockSize,
+                _ => 0f,
+            };
+            if (contentShift > 0)
+                ShiftFragmentContent(cellFragment, contentShift);
+
             rowFrag.Children.Add(cellFragment);
 
             tabulator.ProcessCell(cell);
         }
         tabulator.EndRow();
+    }
+
+    /// <summary>How far a cell's content actually reaches below the top of its
+    /// content box. The cell's own specified height is not content, so it must not
+    /// take part in the free space that 'vertical-align' distributes.</summary>
+    private static float ContentExtentOf(BoxFragment fragment)
+    {
+        float extent = 0;
+        foreach (var line in fragment.Lines)
+            extent = Math.Max(extent, line.BlockEnd);
+        foreach (var child in fragment.Children)
+        {
+            if (TableTypes.IsKnown(child.BlockSize))
+                extent = Math.Max(extent, child.BlockOffset + child.BlockSize + child.MarginBottom);
+        }
+        return Math.Max(0, extent);
+    }
+
+    /// <summary>Move everything a fragment contains down by 'shift' — its line boxes
+    /// and its child boxes — without touching the fragment's own box, so the
+    /// background and border stay put while the content slides.</summary>
+    private static void ShiftFragmentContent(BoxFragment fragment, float shift)
+    {
+        foreach (var line in fragment.Lines)
+        {
+            line.BlockOffset += shift;
+            line.BaselineOffset += shift;
+        }
+        foreach (var child in fragment.Children)
+        {
+            child.BlockOffset += shift;
+            child.MarginTop += shift;
+        }
+        if (fragment.FragmentItems == null) return;
+        foreach (var item in fragment.FragmentItems.Items)
+            item.Offset = new PhysicalOffset(item.Offset.Left, item.Offset.Top + shift);
     }
 }

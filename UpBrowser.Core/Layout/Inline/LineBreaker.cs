@@ -71,6 +71,25 @@ public class LineBreaker
     private int _currentTextOffset;
     private float _position;
     private float _availableWidth;
+    /// <summary>Full content inline size of the block, used as the basis for a
+    /// percentage 'text-indent' (floats shrink line boxes, not the containing
+    /// block; CSS Text 3 §5.2).</summary>
+    private float _inlineBaseWidth;
+    /// <summary>Where the current line box starts inside the content box. A left
+    /// float moves the line box right (CSS 2.1 §9.5.2).</summary>
+    private float _lineLeftInset;
+    /// <summary>Right margin of the current line box consumed by a right float.</summary>
+    private float _lineRightInset;
+    /// <summary>Float machinery of the formatting context this text flows in.</summary>
+    private FloatLineContext? _floatContext;
+    /// <summary>Block offset (formatting-context coordinates) of the line being broken.</summary>
+    private float _currentLineBlockOffset;
+    /// <summary>Floats laid out and positioned while breaking lines; the owning
+    /// algorithm turns them into child fragments of the block.</summary>
+    public readonly List<PlacedFloat> PlacedFloats = new();
+    /// <summary>Elements already positioned during this pass, so a rewind does not
+    /// register the same float twice.</summary>
+    private readonly List<Element> _placedFloats = new();
     private float _appliedTextIndent;
     private ComputedStyle _currentStyle = new();
     private ComputedStyle _lineStyle = new();
@@ -118,6 +137,32 @@ public class LineBreaker
     public List<LineInfo> BreakLines(InlineItemsData data, float availableInlineSize,
         ComputedStyle? containerLineStyle = null)
     {
+        BeginBreaking(data, availableInlineSize, containerLineStyle);
+
+        var lines = new List<LineInfo>();
+        int guard = 0;
+        while (!IsFinished() && guard++ < 1048576)
+        {
+            var lineInfo = BreakNextLine();
+            // A trailing forced break ("text<br>") does not open an extra empty
+            // line box; only breaks followed by more content do ("a<br><br>").
+            if (lineInfo.IsLastLine() && lineInfo.IsEmptyLine() && _previousLineHadForcedBreak)
+                break;
+            lines.Add(lineInfo);
+            if (lineInfo.IsLastLine()) break;
+        }
+        return lines;
+    }
+
+    /// <summary>
+    /// Prepares the breaker for a line-by-line loop driven by the owning algorithm.
+    /// Splitting the loop out of <see cref="BreakLines"/> is what lets a
+    /// float-aware caller feed each line its own inline range and vertical
+    /// position before that line is broken.
+    /// </summary>
+    public void BeginBreaking(InlineItemsData data, float availableInlineSize,
+        ComputedStyle? containerLineStyle = null)
+    {
         if (data == null) throw new ArgumentNullException(nameof(data));
 
         _itemsData = data;
@@ -136,31 +181,72 @@ public class LineBreaker
         _previousLineHadForcedBreak = false;
         _overrideBreakAnywhere = false;
         _availableWidth = availableInlineSize;
+        _inlineBaseWidth = availableInlineSize;
+        _lineLeftInset = 0;
+        _lineRightInset = 0;
         _state = LineBreakState.Continue;
         _trailingWhitespace = WhitespaceState.Leading;
         _hyphenIndex = null;
         _hasAnyHyphens = false;
+        PlacedFloats.Clear();
+        _placedFloats.Clear();
+        _floatContext = null;
+        _currentLineBlockOffset = 0;
         _lineStyle = containerLineStyle ?? ComputeInitialLineStyle(data);
         _baseLineStyle = _lineStyle;
         if (_firstLineStyle != null && _isFirstFormattedLine)
             _lineStyle = _firstLineStyle;
         SetCurrentStyleForce(_lineStyle);
-
-        var lines = new List<LineInfo>();
-        int guard = 0;
-        while (!IsFinished() && guard++ < 1048576)
-        {
-            var lineInfo = new LineInfo();
-            NextLine(lineInfo);
-            // A trailing forced break ("text<br>") does not open an extra empty
-            // line box; only breaks followed by more content do ("a<br><br>").
-            if (lineInfo.IsLastLine() && lineInfo.IsEmptyLine() && _previousLineHadForcedBreak)
-                break;
-            lines.Add(lineInfo);
-            if (lineInfo.IsLastLine()) break;
-        }
-        return lines;
     }
+
+    /// <summary>Breaks one line. Callers that lay out line-by-line use this instead
+    /// of <see cref="BreakLines"/> so they can update the line geometry between
+    /// lines.</summary>
+    public LineInfo BreakNextLine()
+    {
+        var lineInfo = new LineInfo();
+        NextLine(lineInfo);
+        return lineInfo;
+    }
+
+    /// <summary>
+    /// Gives the line about to be broken its own inline range. |leftInset| and
+    /// |availableWidth| come from the formatting context's exclusion space, and
+    /// |blockOffset| is the line box's block offset in the same coordinates (used
+    /// to position floats that appear on this line).
+    /// </summary>
+    public void SetLineSpace(float leftInset, float availableWidth, float blockOffset)
+    {
+        _lineLeftInset = leftInset;
+        _availableWidth = availableWidth;
+        _lineRightInset = Math.Max(0, _inlineBaseWidth - leftInset - availableWidth);
+        _currentLineBlockOffset = blockOffset;
+    }
+
+    /// <summary>Enables float-aware line breaking for this pass (see
+    /// <see cref="FloatLineContext"/>).</summary>
+    public void SetFloatContext(FloatLineContext? context) => _floatContext = context;
+
+    /// <summary>True while any exclusion (float / initial letter) can affect the
+    /// line boxes of this pass.</summary>
+    public bool HasFloatContext => _floatContext != null;
+
+    /// <summary>Whether the line just broken ended in a forced break; a trailing
+    /// forced break does not open an extra empty line box.</summary>
+    public bool PreviousLineHadForcedBreak => _previousLineHadForcedBreak;
+
+    /// <summary>Inline range available to a line box starting at |blockOffset|
+    /// (formatting-context coordinates) and |blockSize| tall, expressed relative to
+    /// the content box: left inset and available width. Also returns the block
+    /// offset to restart at when the line has no inline room left.</summary>
+    public (float LeftInset, float Width, float PushDownTo) LineSpaceAt(float blockOffset, float blockSize)
+    {
+        if (_floatContext == null)
+            return (0, _inlineBaseWidth, float.NaN);
+        return _floatContext.LineSpaceAt(blockOffset, blockSize);
+    }
+
+    public bool IsFinishedNow() => IsFinished();
 
     /// <summary>
     /// Breaks the next line into |lineInfo|. Mirrors LineBreaker::NextLine().
@@ -458,6 +544,8 @@ public class LineBreaker
         {
             case Character.kTabulationCharacter:
                 {
+                    if (HandleTab(item, lineInfo))
+                        return;
                     var shapeResult = ShapeText(item, _currentTextOffset, item.EndOffset);
                     HandleText(item, shapeResult, lineInfo);
                     return;
@@ -483,6 +571,40 @@ public class LineBreaker
                 HandleEmptyText(item, lineInfo);
                 return;
         }
+    }
+
+    /// <summary>
+    /// Gives a tab character the advance needed to reach the next tab stop
+    /// (CSS Text 3 §3.4): stops sit 'tab-size' apart from the start of the line box,
+    /// and a unitless tab-size counts advances of U+0020 in the element's font.
+    /// Returns false when the tab should fall back to ordinary shaping.
+    /// </summary>
+    private bool HandleTab(InlineItem item, LineInfo lineInfo)
+    {
+        float tabSize = UsedTabSize(_lineStyle);
+        if (float.IsNaN(tabSize) || tabSize <= 0)
+            return false;
+
+        var itemResult = AddItem(item, lineInfo);
+        float x = Math.Max(0, _position);
+        itemResult.InlineSize = (float)Math.Floor(x / tabSize + 1.0) * tabSize - x;
+        // A tab is pure advance: it paints no glyph, and 'pre' never breaks on one.
+        itemResult.ShouldCreateLineBox = false;
+        itemResult.CanBreakAfter = false;
+        _position += itemResult.InlineSize;
+        _trailingWhitespace = WhitespaceState.Preserved;
+        MoveToNextOf(item);
+        return true;
+    }
+
+    private static float UsedTabSize(ComputedStyle style)
+    {
+        if (style.TabSizePx is float px)
+            return px;
+        if (style.TabSize <= 0)
+            return 0;
+        float spaceWidth = TextMeasureProxy.MeasureCharacter(' ', style);
+        return spaceWidth > 0 ? spaceWidth * style.TabSize : float.NaN;
     }
 
     private void HandleBidiControl(InlineItem item, LineInfo lineInfo)
@@ -738,11 +860,106 @@ public class LineBreaker
     {
         // When rewind occurs, an item may be handled multiple times. Since floats
         // are put into a separate list, avoid handling the same floats twice.
-        // This simplified port keeps the result as a plain item without
-        // positioning the float.
         var itemResult = AddItem(item, lineInfo);
         itemResult.CanBreakAfter = _autoWrap;
+        PositionFloatIfNeeded(item, lineInfo);
         MoveToNextOf(item);
+    }
+
+    /// <summary>
+    /// Lays out a float that appears in the inline stream, positions it at the
+    /// current line box (CSS 2.1 §9.5.1), and registers it with the formatting
+    /// context so this and the following line boxes avoid it.
+    /// </summary>
+    private void PositionFloatIfNeeded(InlineItem item, LineInfo lineInfo)
+    {
+        var context = _floatContext;
+        var element = item.Element;
+        if (context == null || element == null || _mode != LineBreakerMode.Content)
+            return;
+        // Positioning a float twice would double-count it in the exclusion space.
+        if (_placedFloats.Contains(element))
+            return;
+
+        var style = item.Style();
+        // A float is sized shrink-to-fit against the containing block's content
+        // width, not against the shortened line box (CSS 2.1 §10.3.5).
+        var space = ConstraintSpace.Builder(context.ContentWidth, float.NaN)
+            .SetIsNewFormattingContext(true)
+            .SetShrinkToFit(true)
+            .SetBfcBlockOffset(0)
+            .SetForcedBfcBlockOffset(0)
+            .SetDirection(item.Direction == TextDirection.Rtl ? TextDirection.Rtl : TextDirection.Ltr)
+            .SetRootFontSize(_rootFontSize)
+            .SetViewportSize(_viewportWidth, _viewportHeight)
+            .ToConstraintSpace();
+
+        LayoutResult result;
+        try
+        {
+            result = BlockLayoutAlgorithm.LayoutAtomicInlineRoot(element, space);
+        }
+        catch
+        {
+            return;
+        }
+        if (result.Status != EStatus.Success)
+            return;
+
+        var fragment = result.Fragment;
+        float fontSize = style.FontSize;
+        float ml = style.MarginLeft.ToPixels(fontSize, _rootFontSize, _viewportWidth, _viewportHeight);
+        float mr = style.MarginRight.ToPixels(fontSize, _rootFontSize, _viewportWidth, _viewportHeight);
+        float mt = style.MarginTop.ToPixels(fontSize, _rootFontSize, _viewportWidth, _viewportHeight);
+        float mb = style.MarginBottom.ToPixels(fontSize, _rootFontSize, _viewportWidth, _viewportHeight);
+        // Negative margins cannot pull a float outside the line box it starts on.
+        ml = Math.Max(0, ml);
+        mr = Math.Max(0, mr);
+        mt = Math.Max(0, mt);
+
+        bool isLeft = style.Float != FloatType.Right;
+        float lineStart = context.ContentLineStart + _lineLeftInset;
+        float lineEnd = context.ContentLineStart + _inlineBaseWidth - _lineRightInset;
+        float marginInlineStart = isLeft
+            ? lineStart
+            : lineEnd - mr - fragment.InlineSize;
+        float marginBlockStart = _currentLineBlockOffset;
+
+        // Offsets recorded on the fragment are border-box positions relative to the
+        // container's content box (BoxFragmentBuilder.AddChild adds the margins).
+        fragment.InlineOffset = marginInlineStart + ml - context.ContentLineStart;
+        fragment.BlockOffset = marginBlockStart + mt - context.ContentTop;
+        fragment.MarginLeft = ml;
+        fragment.MarginRight = mr;
+        fragment.MarginTop = mt;
+        fragment.MarginBottom = mb;
+        fragment.IsFloating = true;
+
+        PlacedFloats.Add(new PlacedFloat(element, result));
+        _placedFloats.Add(element);
+
+        context.Space.Add(ExclusionArea.Create(
+            new BfcRect(
+                new BfcOffset(marginInlineStart, marginBlockStart),
+                new BfcOffset(marginInlineStart + ml + fragment.InlineSize + mr,
+                    marginBlockStart + mt + fragment.BlockSize + mb)),
+            isLeft ? FloatType.Left : FloatType.Right, /* is_hidden_for_paint */ false));
+
+        // The float takes part of this very line: re-read the inline range so the
+        // items after it wrap early instead of running underneath it.
+        RefreshCurrentLineSpace(context.LineBlockSize);
+        lineInfo.LeftInset = _lineLeftInset;
+        lineInfo.AvailableInlineSize = _availableWidth;
+    }
+
+    /// <summary>Re-reads the current line box's inline range from the exclusion
+    /// space (used right after a float is positioned on this line).</summary>
+    private void RefreshCurrentLineSpace(float blockSize)
+    {
+        var (inset, width, _) = LineSpaceAt(_currentLineBlockOffset, blockSize);
+        _lineLeftInset = inset;
+        _availableWidth = width;
+        _lineRightInset = Math.Max(0, _inlineBaseWidth - inset - width);
     }
 
     private void HandleOutOfFlowPositioned(InlineItem item, LineInfo lineInfo)
@@ -1320,6 +1537,8 @@ public class LineBreaker
         lineInfo.SetLineStyleDirect(_lineStyle);
         lineInfo.SetItemsData(_itemsData);
         lineInfo.SetUseFirstLineStyle(_useFirstLineStyle);
+        lineInfo.LeftInset = _lineLeftInset;
+        lineInfo.AvailableInlineSize = _availableWidth;
 
         if (IsFinished())
             return;
@@ -1332,8 +1551,9 @@ public class LineBreaker
         // Use 'text-indent' as the initial position. This lets tab positions to
         // align regardless of 'text-indent'.
         // A percentage 'text-indent' resolves against the containing block's
-        // inline size, which is only known here (CSS Text 3 §5.2).
-        float indentLength = _lineStyle.TextIndent + _lineStyle.TextIndentPercent * _availableWidth;
+        // inline size, which is only known here (CSS Text 3 §5.2). Floats shorten
+        // individual line boxes but not the containing block, hence the base width.
+        float indentLength = _lineStyle.TextIndent + _lineStyle.TextIndentPercent * _inlineBaseWidth;
         float textIndent = _lineStyle.TextIndentHanging
             ? (_isFirstFormattedLine ? 0 : indentLength)
             : (_isFirstFormattedLine ? indentLength : 0);
@@ -1840,3 +2060,41 @@ public class LineBreaker
         }
     }
 }
+
+/// <summary>
+/// The float machinery of the formatting context a run of inline content flows
+/// in. Line boxes are the only things that avoid floats (CSS 2.1 §9.5.2), so the
+/// line breaker needs the exclusion space plus the geometry that maps a line's
+/// vertical position into that space's coordinates.
+/// </summary>
+public sealed class FloatLineContext
+{
+    /// <summary>Floats of the enclosing formatting context (shared, mutable).</summary>
+    public required ExclusionSpace Space;
+
+    /// <summary>Line offset of the content box start, in formatting-context coordinates.</summary>
+    public required float ContentLineStart;
+
+    /// <summary>Block offset of the content box top, in formatting-context coordinates.</summary>
+    public required float ContentTop;
+
+    /// <summary>Content-box inline size of the block whose text is being broken.</summary>
+    public required float ContentWidth;
+
+    /// <summary>Height assumed for a line box when testing it against the floats.</summary>
+    public float LineBlockSize;
+
+    /// <summary>Inline range available to a line box starting at |blockOffset|
+    /// (formatting-context coordinates), as content-box-relative inset and width,
+    /// plus the content-relative block offset to restart at when no room is left.</summary>
+    public (float LeftInset, float Width, float PushDownTo) LineSpaceAt(float blockOffset, float blockSize)
+    {
+        var range = Space.LineSpaceAt(blockOffset, blockSize, ContentLineStart, ContentLineStart + ContentWidth);
+        float pushDown = float.IsNaN(range.PushDownTo) ? float.NaN : range.PushDownTo - ContentTop;
+        return (range.LineStart - ContentLineStart, range.LineEnd - range.LineStart, pushDown);
+    }
+}
+
+/// <summary>A float positioned while breaking lines. The owning algorithm adopts
+/// the layout result as a child fragment of the block.</summary>
+public readonly record struct PlacedFloat(Element Element, LayoutResult Result);

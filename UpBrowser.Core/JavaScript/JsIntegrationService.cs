@@ -42,7 +42,13 @@ namespace UpBrowser.Core.JavaScript;
         InitializeEnvironment();
     }
 
-    public void SetJsEngine(JavaScriptEngine engine) => _jsEngine = engine;
+    public void SetJsEngine(JavaScriptEngine engine)
+    {
+        _jsEngine = engine;
+        // Callbacks (timers/listeners/microtasks) that mutate the DOM must
+        // funnel into the same dirty flag that top-level Execute() uses.
+        _facade.OnCallbacksExecuted = () => engine.MarkDirty();
+    }
 
     private void InitializeEnvironment()
     {
@@ -270,6 +276,9 @@ namespace UpBrowser.Core.JavaScript;
         _timerQueue.ProcessTimers();
         _microtaskQueue.DrainMicrotasks();
     }
+
+    /// <summary>Ms until the next JS timer fires (int.MaxValue = none).</summary>
+    public int NextTimerDelayMs() => _timerQueue.NextTimerDelayMs();
 
     public void CollectGarbage()
     {

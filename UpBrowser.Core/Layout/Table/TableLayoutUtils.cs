@@ -346,7 +346,8 @@ public static class TableLayoutUtils
                     cellInlineConstraints.Add(null);
                 if (!ignoreBecauseOfFixedLayout)
                 {
-                    var constraint = TableTypes.CreateCellInlineConstraint(new List<TableTypes.Column>(), startColumn, colspan, cell);
+                    var constraint = TableTypes.CreateCellInlineConstraint(new List<TableTypes.Column>(), startColumn, colspan, cell,
+                            tableBorders, rowIndex);
                     // Content-based min/max sizes only feed the grid in auto
                     // layout. With table-layout: fixed the column widths come from
                     // the specified widths alone and the rest is shared equally
@@ -354,7 +355,11 @@ public static class TableLayoutUtils
                     if (!isFixedLayout)
                     {
                         var (contentMin, contentMax) = ComputeContentMinMax(cell);
-                        var cellBorderPadding = TableTypes.ComputeCellBorderPadding(cell);
+                        // Collapsed borders contribute only half of each shared edge (CSS 2.1 §17.6.2).
+                        var collapsed = tableBorders.IsCollapsed
+                            ? tableBorders.CellBorder(rowIndex, startColumn, 1, colspan, tableBorders.SectionIndexOf(rowIndex))
+                            : default(BoxStrut?);
+                        var cellBorderPadding = TableTypes.ComputeCellBorderPadding(cell, null, collapsed);
                         float bpSum = cellBorderPadding.HorizontalSum;
                         constraint.min_inline_size = MaxMin(constraint.min_inline_size, contentMin + bpSum);
                         constraint.max_inline_size = MaxMin(constraint.max_inline_size, contentMax + bpSum);
@@ -1340,8 +1345,6 @@ public static class TableLayoutUtils
 
             colspanCellTabulator.FindNextFreeColumn();
             int currentColumn = colspanCellTabulator.CurrentColumn;
-            var cellBorderPadding = TableTypes.ComputeCellBorderPadding(cell);
-
             int rowspan = CellRowspan(cell);
             int effectiveRowspan = rowspan;
             if (effectiveRowspan > 1)
@@ -1351,6 +1354,13 @@ public static class TableLayoutUtils
                 effectiveRowspan = Math.Min(maxRows, effectiveRowspan);
             }
             bool hasEffectiveRowspan = effectiveRowspan > 1;
+            // A collapsed cell owns only half of each shared edge, and that half
+            // belongs to its border box (CSS 2.1 §17.6.2).
+            var collapsedEdge = hasCollapsedBorders
+                ? tableBorders.CellBorder(rowIndex, currentColumn, effectiveRowspan,
+                    CellColspan(cell), sectionIndex)
+                : default(BoxStrut?);
+            var cellBorderPadding = TableTypes.ComputeCellBorderPadding(cell, null, collapsedEdge);
 
             var cellSpace = SetupTableCellConstraintSpaceBuilder(cell, cellBorderPadding, columnLocations,
                 TableTypes.kIndefiniteSize, cellPercentageInlineSize, currentColumn,

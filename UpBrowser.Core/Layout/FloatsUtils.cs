@@ -42,6 +42,17 @@ public struct PositionedFloat
     public LayoutResult? LayoutResult;
 }
 
+/// <summary>Inline range a single line box may use, as reported by
+/// <see cref="ExclusionSpace.LineSpaceAt"/>.</summary>
+public struct FloatLineSpace
+{
+    public float LineStart;
+    public float LineEnd;
+    /// <summary>Block offset to restart the line at when no inline room is left,
+    /// or NaN when the line fits.</summary>
+    public float PushDownTo;
+}
+
 /// <summary>
 /// Manages the exclusion space (floats + initial letter boxes) for a block
 /// formatting context. Mirrors ExclusionSpace / ExclusionSpaceInternal in
@@ -56,6 +67,10 @@ public class ExclusionSpace
     private float _initialLetterRightClearOffset;
 
     public IReadOnlyList<ExclusionArea> AllExclusions => _exclusions;
+
+    /// <summary>True when anything (a float or an initial-letter box) occupies this
+    /// space, i.e. when line boxes may have to step around it.</summary>
+    public bool HasExclusions => _exclusions.Count > 0;
 
     public void Add(ExclusionArea exclusion)
     {
@@ -128,6 +143,78 @@ public class ExclusionSpace
         foreach (var exclusion in _exclusions)
             copy.Add(exclusion);
         return copy;
+    }
+
+    /// <summary>
+    /// Inline range available to a line box that occupies
+    /// [blockOffset, blockOffset + blockSize) inside the content interval
+    /// [contentLineStart, contentLineEnd], after stepping around the floats that
+    /// intersect it. All offsets are in the formatting context's coordinate space.
+    /// CSS 2.1 §9.5.2: only line boxes avoid floats - block boxes do not.
+    /// </summary>
+    public FloatLineSpace LineSpaceAt(float blockOffset, float blockSize, float contentLineStart, float contentLineEnd)
+    {
+        var space = new FloatLineSpace
+        {
+            LineStart = contentLineStart,
+            LineEnd = contentLineEnd,
+            PushDownTo = float.NaN,
+        };
+
+        float lineEnd = blockOffset + Math.Max(0, blockSize);
+        float overlappingBottom = float.MinValue;
+        foreach (var e in _exclusions)
+        {
+            float eStart = e.Rect.BlockStartOffset;
+            float eEnd = e.Rect.BlockEndOffset;
+            if (eEnd <= blockOffset || eStart >= lineEnd)
+                continue;
+            overlappingBottom = Math.Max(overlappingBottom, eEnd);
+            if (e.Type == FloatType.Left)
+                space.LineStart = Math.Max(space.LineStart, e.Rect.LineEndOffset);
+            else
+                space.LineEnd = Math.Min(space.LineEnd, e.Rect.LineStartOffset);
+        }
+
+        if (space.LineEnd < space.LineStart)
+            space.LineEnd = space.LineStart;
+
+        // No room left on this line: the line box has to start below the floats
+        // (CSS 2.1 §9.5.2, "if a line box would be too narrow the block is pushed
+        // below"). Reported so the driver can advance the vertical position.
+        if (space.LineEnd - space.LineStart <= 0.5f && overlappingBottom != float.MinValue)
+            space.PushDownTo = overlappingBottom;
+
+        return space;
+    }
+
+    /// <summary>
+    /// Inline range left on the line at |blockOffset| for a float that wants to sit
+    /// there, plus the block offset of the next line below the floats blocking it.
+    /// This is how floats end up side by side and then stacked below each other
+    /// (CSS 2.1 §9.5.1).
+    /// </summary>
+    public (float LineStart, float LineEnd, float NextBlockOffset) FloatLineAt(
+        float blockOffset, float contentLineStart, float contentLineEnd)
+    {
+        float lineStart = contentLineStart;
+        float lineEnd = contentLineEnd;
+        float next = float.MaxValue;
+        foreach (var e in _exclusions)
+        {
+            float eStart = e.Rect.BlockStartOffset;
+            float eEnd = e.Rect.BlockEndOffset;
+            if (eEnd <= blockOffset || eStart > blockOffset)
+                continue;
+            if (e.Type == FloatType.Left)
+                lineStart = Math.Max(lineStart, e.Rect.LineEndOffset);
+            else
+                lineEnd = Math.Min(lineEnd, e.Rect.LineStartOffset);
+            next = Math.Min(next, eEnd);
+        }
+        if (lineEnd < lineStart)
+            lineEnd = lineStart;
+        return (lineStart, lineEnd, next);
     }
 
     public LayoutOpportunity FindLayoutOpportunity(BfcOffset offset, float availableInlineSize, float minimumInlineSize = 0)

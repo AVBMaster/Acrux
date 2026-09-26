@@ -185,7 +185,8 @@ public static class FontMetricsProvider
     /// Fraction of the ascent used as the x-height when the font does not
     /// report one. Matches the reference implementation's Windows heuristic.
     /// </summary>
-    private const float SynthesizedXHeightRatio = 0.56f;
+    /// <summary>Fallback x-height ratio when the font does not report one.</summary>
+    public const float SynthesizedXHeightRatio = 0.56f;
 
     public static FontMetrics Get(SKTypeface? typeface, float size)
     {

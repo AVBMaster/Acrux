@@ -189,14 +189,18 @@ public class PaintLayer
             .Concat(SortByOrder(PositiveZOrder).OrderBy(l => l.ZIndex));
 
     /// <summary>
-    /// CSS 2.1 §E.2: inside the z:auto group the in-flow, non-positioned boxes
-    /// (steps 4-7) paint before positioned descendants (step 8).
+    /// CSS 2.1 §E.2: inside the z:auto group the in-flow, non-positioned, non-float
+    /// boxes (step 3) paint first, the floats (step 4) on top of them, and the
+    /// positioned descendants (step 8) last.
     /// </summary>
     internal static IEnumerable<PaintLayer> FlowThenPositioned(IEnumerable<PaintLayer> layers)
     {
         var list = layers as IReadOnlyList<PaintLayer> ?? layers.ToList();
         for (int i = 0; i < list.Count; i++)
-            if (!list[i].IsPositioned)
+            if (!list[i].IsPositioned && !list[i].IsFloating)
+                yield return list[i];
+        for (int i = 0; i < list.Count; i++)
+            if (!list[i].IsPositioned && list[i].IsFloating)
                 yield return list[i];
         for (int i = 0; i < list.Count; i++)
             if (list[i].IsPositioned)

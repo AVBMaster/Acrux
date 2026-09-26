@@ -423,10 +423,6 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
     // Current float line (CSS 2.1 §9.5.1): consecutive floats that start at the
     // bottom of the previous float join this line side by side.
-    private float _floatLineBlock = float.NaN;
-    private float _floatLineBottom;
-    private float _floatLineLeftUsed;
-    private float _floatLineRightUsed;
     private bool _subtreeModifiedMarginStrut;
 
     private float? _containerBfcBlockOffset;
@@ -1310,6 +1306,22 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
                 inlineSize = shrinkToFit;
         }
 
+        // Aspect-ratio in the opposite direction: with an auto inline size and a
+        // definite block size, the ratio transfers the size to the inline axis
+        // (CSS Aspect-Ratio 1 §5.2). Only an explicitly specified height counts -
+        // an auto height that merely came out of the content must not widen the box.
+        if (Style.AspectRatio > 0 && Style.Width is AutoLength or null
+            && Style.Height is not (AutoLength or null or IntrinsicLength))
+        {
+            float explicitBlock = LengthUtils.ComputeBlockSizeForFragment(Space, Style, _borderPadding,
+                previouslyConsumedBlockSize + _intrinsicBlockSize, _inlineSize);
+            if (!LengthUtils.IsIndefinite(explicitBlock) && explicitBlock > _borderPadding.VerticalSum)
+            {
+                float contentBlock = explicitBlock - _borderPadding.VerticalSum;
+                inlineSize = contentBlock * Style.AspectRatio + _borderPadding.HorizontalSum;
+            }
+        }
+
         var (minI, maxI) = LengthUtils.ComputeMinMaxInlineSizes(Space, Style, _borderPadding,
             t => new MinMaxSizesResult(new MinMaxSizes(ChildAvailableInlineSize, ChildAvailableInlineSize)));
         _inlineSize = Math.Clamp(inlineSize, minI, maxI);
@@ -1479,6 +1491,16 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
     private BfcOffset ContainerBfcOffset() => new(_containerBfcLineOffset, BfcBlockOffset());
 
+    /// <summary>The float exclusion space of this formatting context. The inline
+    /// algorithm that breaks this block's line boxes shares it, so that line boxes
+    /// step around the floats (CSS 2.1 §9.5.2) and floats positioned inside the
+    /// text are visible to the following content.</summary>
+    internal ExclusionSpace FloatExclusionSpace => _exclusionSpace;
+
+    /// <summary>Formatting-context coordinates of this box's border-box origin,
+    /// needed to map content-box-relative line boxes into the exclusion space.</summary>
+    internal BfcOffset ContainerBfcOriginForLines() => ContainerBfcOffset();
+
     /// <summary>Return the BFC block offset of the next block-start border edge
     /// (for some child) we'd get if we commit pending margins.</summary>
     private float NextBorderEdge(PreviousInflowPosition previousInflowPosition)
@@ -1508,6 +1530,40 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     private LogicalSize ChildAvailableSize() => new(
         Math.Max(0, OwnContentInlineSize()),
         ChildAvailableBlockSize);
+
+    /// <summary>
+    /// Block size this box's children resolve their percentages against. A
+    /// percentage height needs the *containing block's* definite height; a block
+    /// whose own height comes from its content has none, and its children's
+    /// percentages then behave as auto (CSS 2.1 §10.5). The height we happened to be
+    /// laid out in — the initial containing block, i.e. the viewport — is not such a
+    /// height, so it must not be passed down.
+    /// </summary>
+    private float ChildPercentageBlockSize()
+    {
+        var height = Style.Height;
+        if (height != null && height is not AutoLength)
+        {
+            float resolved = LengthUtils.ResolveBlockLength(Space, Style, _borderPadding, height, null);
+            if (!LengthUtils.IsIndefinite(resolved) && resolved >= 0)
+                return Math.Max(0, resolved - _borderPadding.VerticalSum);
+        }
+        // A box whose block size the parent fixed (a stretched flex or grid item, a
+        // table cell, a fragmentainer) is definite as well.
+        if (Space.IsFixedBlockSize && Space.HasDefiniteBlockSize)
+            return Math.Max(0, Space.AvailableBlockSize - _borderPadding.VerticalSum);
+        // The indefinite sentinel for percentage bases is NaN, not infinity.
+        return LengthUtils.IndefiniteSize;
+    }
+
+    /// <summary>
+    /// Inline size the children of this box flow in. This is the box's own resolved
+    /// content width, not the outer constraint space: a fixed-width container must
+    /// not let its children (or its floats) stretch past it, which is what layout
+    /// opportunities for a new formatting context beside a float are measured
+    /// against.
+    /// </summary>
+    private float ChildrenInlineSize => ChildAvailableSize().InlineSize;
 
     /// <summary>
     /// Content inline size of this box as understood by its children: the
@@ -1616,7 +1672,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             float originBfcBlockOffset = (_containerBfcBlockOffset ?? Space.ExpectedBfcBlockOffset) + staticBlockOffset;
 
             staticInlineOffset += CalculateOutOfFlowStaticInlineLevelOffset(
-                Style, new BfcOffset(Space.GetBfcOffset().LineOffset, originBfcBlockOffset), _exclusionSpace, ChildAvailableInlineSize);
+                Style, new BfcOffset(Space.GetBfcOffset().LineOffset, originBfcBlockOffset), _exclusionSpace, ChildrenInlineSize);
         }
 
         var candidate = new OutOfFlowChildCandidate(
@@ -1710,13 +1766,8 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             }
         }
 
-        // Engine model note: floats in this rendering engine stack line-by-line
-        // (each float occupies its own "line"); they do not wrap around one
-        // another. This is equivalent to the .cc positioning a float in the layout
-        // opportunity at the current margin-edge, where the current in-flow
-        // position has already been pushed past all earlier floats. To keep this
-        // position consistent, the block's BFC block-offset is resolved (to its
-        // constraint-space offset) when the first float is encountered.
+        // Floats are positioned against the block's own exclusion space, so the
+        // container's BFC block-offset has to be resolved at the first float.
         if (Space.AdjoiningObjectTypes != AdjoiningObjectTypes.None && !_containerBfcBlockOffset.HasValue)
         {
             _adjoiningObjectTypes |= Space.AdjoiningObjectTypes;
@@ -1725,13 +1776,11 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         if (!_containerBfcBlockOffset.HasValue)
         {
             // Resolve the container's BFC block-offset at the first float, so that
-            // subsequent in-flow content is positioned correctly below the floats.
+            // the floats and the in-flow content share one vertical origin.
             bool ok = ResolveBfcBlockOffset(ref previousInflowPosition);
             if (!ok)
                 return;
         }
-
-        BfcOffset originBfcOffset = new(Space.GetBfcOffset().LineOffset, BfcBlockOffset() + previousInflowPosition.logical_block_offset);
 
         // Layout the float.
         var childSpace = CreateFloatConstraintSpace(child);
@@ -1745,90 +1794,70 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
         float marginTopBlock = style.MarginTop.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
         float marginBottomBlock = style.MarginBottom.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+        float marginLeftBlock = Math.Max(0,
+            style.MarginLeft.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight));
+        float marginRightBlock = Math.Max(0,
+            style.MarginRight.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight));
+        // A float reserves its margin box on the line it starts on.
+        float marginInlineSize = childInlineSize + marginLeftBlock + marginRightBlock;
 
-        // Where the float's border box sits on the line (engine model: left float
-        // at the start of the content box, right float at the end). The end must
-        // be the container's OWN content inline size (a width:400 box does not
-        // right-align at its parent's 684px available width).
-        float borderBoxBlockOffset = (originBfcOffset.BlockOffset - ContainerBfcOffset().BlockOffset) + marginTopBlock;
-
-        // Same-line float placement: consecutive floats whose natural offset lands
-        // exactly at the bottom of the current float line join that line beside
-        // the earlier floats (CSS 2.1 §9.5.1), instead of stacking below them.
-        bool sameFloatLine = !float.IsNaN(_floatLineBlock)
-            && Math.Abs(borderBoxBlockOffset - _floatLineBottom) < 0.5f;
-        if (!sameFloatLine)
-        {
-            _floatLineBlock = borderBoxBlockOffset;
-            _floatLineBottom = borderBoxBlockOffset;
-            _floatLineLeftUsed = 0;
-            _floatLineRightUsed = 0;
-        }
-
+        // CSS 2.1 §9.5.1: a float's block-start edge may not be higher than the
+        // border edges of the blocks that came before it, and it has to clear the
+        // floats that already occupy that line. Start at the natural offset and step
+        // down line by line until the margin box fits; the inline position is the
+        // remaining edge of that line (start for a left float, end for a right one).
         float contentInline = OwnContentInlineSize();
+        float contentLineStart = ContainerBfcOffset().LineOffset + _border.Left + _padding.Left;
+        float contentBlockStart = ContainerBfcOffset().BlockOffset + _border.Top + _padding.Top;
+        // Border-box top of the float, relative to the container's content box.
+        float floatBlockOffset = previousInflowPosition.logical_block_offset + marginTopBlock;
         float floatInlineOffset;
-        bool fitsOnLine = isLeft
-            ? _floatLineLeftUsed + childInlineSize <= contentInline - _floatLineRightUsed
-            : _floatLineRightUsed + childInlineSize <= contentInline - _floatLineLeftUsed;
-        if (!fitsOnLine && sameFloatLine)
+        for (int guard = 0; ; guard++)
         {
-            // Does not fit beside the earlier floats: break below the whole line.
-            _floatLineBlock = borderBoxBlockOffset;
-            _floatLineBottom = borderBoxBlockOffset;
-            _floatLineLeftUsed = 0;
-            _floatLineRightUsed = 0;
-        }
-        float floatBlockOffset = _floatLineBlock;
-        if (isLeft)
-        {
-            floatInlineOffset = _floatLineLeftUsed;
-            _floatLineLeftUsed += childInlineSize;
-        }
-        else
-        {
-            floatInlineOffset = Math.Max(0, contentInline - _floatLineRightUsed - childInlineSize);
-            _floatLineRightUsed += childInlineSize;
+            var (lineStart, lineEnd, nextBlockOffset) = _exclusionSpace.FloatLineAt(
+                contentBlockStart + floatBlockOffset, contentLineStart, contentLineStart + contentInline);
+            bool fitsOnLine = lineEnd - lineStart >= marginInlineSize;
+            if (fitsOnLine || guard >= 64 || nextBlockOffset <= contentBlockStart + floatBlockOffset
+                || nextBlockOffset == float.MaxValue)
+            {
+                floatInlineOffset = isLeft
+                    ? lineStart + marginLeftBlock - contentLineStart
+                    : lineEnd - marginRightBlock - childInlineSize - contentLineStart;
+                break;
+            }
+            floatBlockOffset = nextBlockOffset - contentBlockStart;
         }
         float inlineOffset = floatInlineOffset;
 
-        // Set margins on the fragment, matching the engine's previous behavior
-        // (only the block-start margin participates).
         fragment.BlockOffset = floatBlockOffset;
         fragment.InlineOffset = inlineOffset;
         fragment.MarginTop = marginTopBlock;
         fragment.MarginBottom = marginBottomBlock;
+        fragment.MarginLeft = marginLeftBlock;
+        fragment.MarginRight = marginRightBlock;
         fragment.IsFloating = true;
         Builder.AddChild(fragment);
 
-        // The float advances the in-flow line (engine model: floats push all
-        // following content below them).
-        float floatLogicalBottom = floatBlockOffset + childBlockSize + marginBottomBlock;
-        _floatLineBottom = Math.Max(_floatLineBottom, floatLogicalBottom);
-        previousInflowPosition.logical_block_offset = Math.Max(previousInflowPosition.logical_block_offset, floatLogicalBottom);
-
-        // Record the float in the exclusion space so that clearance and layout
-        // opportunities can take it into account.
-        float bfcLineStart = inlineStartOfFloat(inlineOffset);
-        float bfcLineEnd = bfcLineStart + childInlineSize;
-        float bfcBlockStart = ContainerBfcOffset().BlockOffset + floatBlockOffset;
-        float bfcBlockEnd = bfcBlockStart + childBlockSize;
+        // Record the float in the exclusion space so that clearance, layout
+        // opportunities and the line boxes of this block's text avoid it. The
+        // reserved area is the float's margin box.
+        //
+        // The float does NOT advance the in-flow position: block boxes overlap floats
+        // and only line boxes step around them (CSS 2.1 §9.5.2).
+        float bfcLineStart = contentLineStart + inlineOffset - marginLeftBlock;
+        float bfcLineEnd = bfcLineStart + marginInlineSize;
+        float bfcBlockStart = contentBlockStart + floatBlockOffset - marginTopBlock;
+        float bfcBlockEnd = bfcBlockStart + marginTopBlock + childBlockSize + marginBottomBlock;
         _exclusionSpace.Add(ExclusionArea.Create(
             new BfcRect(new BfcOffset(bfcLineStart, bfcBlockStart), new BfcOffset(bfcLineEnd, bfcBlockEnd)),
             style.Float, /* is_hidden_for_paint */ false));
     }
 
-    private float inlineStartOfFloat(float inlineOffset)
-    {
-        // The float's border box was placed relative to the container's content
-        // box. Convert back to BFC line offsets (LTR).
-        return ContainerBfcOffset().LineOffset + inlineOffset;
-    }
-
     private ConstraintSpace CreateFloatConstraintSpace(Element child)
     {
-        var b = Space.InheritBuilder(ChildAvailableInlineSize, float.PositiveInfinity);
+        var b = Space.InheritBuilder(ChildrenInlineSize, float.PositiveInfinity);
         b.SetIsNewFormattingContext(true);
-        b.SetPercentageResolution(ChildAvailableInlineSize, ChildAvailableBlockSize);
+        b.SetPercentageResolution(ChildrenInlineSize, ChildAvailableBlockSize);
         b.SetDirection(Space.Direction);
         return b.ToConstraintSpace();
     }
@@ -2004,12 +2033,12 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             AdjustToClearance(_exclusionSpace.ClearanceOffsetIncludingInitialLetter(childStyle.Clear), ref originOffset);
         }
 
-        var opportunities = _exclusionSpace.AllLayoutOpportunities(originOffset, ChildAvailableInlineSize);
+        var opportunities = _exclusionSpace.AllLayoutOpportunities(originOffset, ChildrenInlineSize);
 
         // We should always have at least one opportunity.
         if (opportunities.Count == 0)
             opportunities.Add(new LayoutOpportunity(new BfcRect(originOffset,
-                new BfcOffset(originOffset.LineOffset + ChildAvailableInlineSize, float.MaxValue))));
+                new BfcOffset(originOffset.LineOffset + ChildrenInlineSize, float.MaxValue))));
 
         // Now we lay out. This will give us a child fragment and thus its size,
         // which means that we can find out if it's actually going to fit.
@@ -2025,7 +2054,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
             // Determine which sides of the opportunity have floats we should avoid.
             bool hasFloatsOnLineLeft = opportunity.Rect.LineStartOffset != originOffset.LineOffset;
-            bool hasFloatsOnLineRight = opportunity.Rect.LineEndOffset != originOffset.LineOffset + ChildAvailableInlineSize;
+            bool hasFloatsOnLineRight = opportunity.Rect.LineEndOffset != originOffset.LineOffset + ChildrenInlineSize;
             bool canExpandOutsideOpportunity = !hasFloatsOnLineLeft && !hasFloatsOnLineRight;
 
             float lineLeftMargin = LineLeft(childData.margins, direction);
@@ -2048,7 +2077,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
                 // area.
                 lineLeftOffset = Math.Max(lineLeftOffset, originOffset.LineOffset + Math.Max(0, lineLeftMargin));
                 lineRightOffset = Math.Min(lineRightOffset,
-                    originOffset.LineOffset + ChildAvailableInlineSize - Math.Max(0, lineRightMargin));
+                    originOffset.LineOffset + ChildrenInlineSize - Math.Max(0, lineRightMargin));
             }
             float opportunitySize = Math.Max(0, lineRightOffset - lineLeftOffset);
 
@@ -2122,7 +2151,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
                 if (childStyle.MarginLeft is AutoLength)
                     resolvedMargins = new BoxStrut(resolvedMargins.Top, resolvedMargins.Right, resolvedMargins.Bottom, inlineOffsetFromContent);
                 if (childStyle.MarginRight is AutoLength)
-                    resolvedMargins = new BoxStrut(resolvedMargins.Top, ChildAvailableInlineSize - inlineOffsetFromContent - fragmentInlineSize,
+                    resolvedMargins = new BoxStrut(resolvedMargins.Top, ChildrenInlineSize - inlineOffsetFromContent - fragmentInlineSize,
                         resolvedMargins.Bottom, resolvedMargins.Left);
             }
 
@@ -2134,7 +2163,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         // NOTREACHED in the reference algorithm. Fall back to the origin for robustness.
         outChildBfcOffset = new BfcOffset(originOffset.LineOffset, originOffset.BlockOffset);
         var fallbackSpace = CreateConstraintSpaceForChild(child, childBreakToken, childData,
-            new LogicalSize(ChildAvailableInlineSize, ChildAvailableSize().BlockSize),
+            new LogicalSize(ChildrenInlineSize, ChildAvailableSize().BlockSize),
             /* is_new_fc */ true, originOffset.BlockOffset, false, 0);
         return LayoutBlockChild(fallbackSpace, childBreakToken, child);
     }
@@ -2988,7 +3017,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         var builder = Space.InheritBuilder(childAvailInline, childAvailableSize.BlockSize);
         builder.SetIsNewFormattingContext(isNewFc);
         builder.SetAvailableSize(childAvailInline, childAvailableSize.BlockSize);
-        builder.SetPercentageResolution(childAvailInline, childAvailableSize.BlockSize);
+        builder.SetPercentageResolution(childAvailInline, ChildPercentageBlockSize());
         builder.SetDirection(Space.Direction);
 
         bool hasBfcBlockOffset = _containerBfcBlockOffset.HasValue;
@@ -3129,7 +3158,8 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
     private static bool IsListMarker(Element child) => false;
 
-    private static bool IsColumnSpanAll(Element child) => false;
+    private static bool IsColumnSpanAll(Element child) =>
+        child.ComputedStyle?.ColumnSpanAll ?? false;
 
     private static bool IsTextControlPlaceholder(Element child) => false;
 
@@ -3160,6 +3190,16 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         if (s.Float != FloatType.None)
             return true;
         if (s.Position is PositionType.Absolute or PositionType.Fixed)
+            return true;
+        // CSS 2.1 §9.4.1: a box with a computed 'overflow' other than 'visible'
+        // establishes a new block formatting context. That is what lets it sit beside
+        // a float instead of overlapping it, and what makes it contain its own floats.
+        if (s.Overflow != OverflowType.Visible || s.OverflowX != OverflowType.Visible
+            || s.OverflowY != OverflowType.Visible)
+            return true;
+        // CSS Containment 3 §2.5: 'contain: layout' / 'paint' (and the shorthands
+        // that include them) also create a new formatting context.
+        if (s.Contain is ContainType.Strict or ContainType.Content or ContainType.Layout or ContainType.Paint)
             return true;
         return s.Display is DisplayType.Flex or DisplayType.InlineFlex or DisplayType.Grid or DisplayType.InlineGrid
             or DisplayType.Table or DisplayType.InlineBlock or DisplayType.TableCell or DisplayType.TableRow

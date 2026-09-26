@@ -33,6 +33,7 @@ public class CssStyleDeclaration
                 }
             }
             DirtyState.AddSelf(_element, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
+            DomMutationTracker.Notify();
         }
     }
 
@@ -51,6 +52,7 @@ public class CssStyleDeclaration
     {
         _element.Style[propertyName] = value;
         DirtyState.AddSelf(_element, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
+        DomMutationTracker.Notify();
     }
 
     public string removeProperty(string propertyName)
@@ -254,5 +256,6 @@ public class CssStyleDeclaration
         else
             _element.Style[name] = value;
         DirtyState.AddSelf(_element, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
+        DomMutationTracker.Notify();
     }
 }

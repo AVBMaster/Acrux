@@ -1,4 +1,5 @@
 using System.Globalization;
+using UpBrowser.Core.Performance;
 
 namespace UpBrowser.Core.Dom.Html;
 
@@ -12,7 +13,20 @@ public class HTMLInputElement : HtmlElement
     public string? Autocomplete { get => GetAttribute("autocomplete"); set => SetAttribute("autocomplete", value); }
     public bool Autofocus { get => HasAttribute("autofocus"); set => SetBoolAttr("autofocus", value); }
     public bool DefaultChecked { get => HasAttribute("checked"); set => SetBoolAttr("checked", value); }
-    public bool Checked { get; set; }
+    private bool _checked;
+    public bool Checked
+    {
+        get => _checked;
+        set
+        {
+            if (_checked != value)
+            {
+                _checked = value;
+                DirtyState.AddSelf(this, DirtyFlags.Paint);
+                DomMutationTracker.Notify();
+            }
+        }
+    }
     public string? DirName { get => GetAttribute("dirname"); set => SetAttribute("dirname", value); }
     public bool Disabled { get => HasAttribute("disabled"); set => SetBoolAttr("disabled", value); }
     public HTMLFormElement? Form { get; set; }

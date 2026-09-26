@@ -187,22 +187,59 @@ public static class GradientRenderer
     {
         try
         {
+            bool repeating = input.StartsWith("repeating-", StringComparison.OrdinalIgnoreCase);
             var inner = ExtractGradientContent(input, "conic-gradient");
             if (inner == null) return null;
 
             var parts = SplitGradientParts(inner);
+
+            // The preamble carries the start angle and the center:
+            // 'conic-gradient(from 45deg at 30% 70%, …)'. It is only a preamble
+            // when it says so — a first stop like "red 0 25%" must not be eaten.
+            float fromAngle = 0f;
+            var center = new SKPoint(rect.MidX, rect.MidY);
+            if (parts.Count > 0 && ParseColor(parts[0]) == null &&
+                (parts[0].StartsWith("from", StringComparison.OrdinalIgnoreCase) ||
+                 parts[0].Contains(" at ", StringComparison.OrdinalIgnoreCase)))
+            {
+                var preamble = parts[0];
+                int fromIdx = preamble.IndexOf("from ", StringComparison.OrdinalIgnoreCase);
+                if (fromIdx >= 0)
+                {
+                    var angleToken = preamble[(fromIdx + 5)..];
+                    int at = angleToken.IndexOf(" at ", StringComparison.OrdinalIgnoreCase);
+                    if (at >= 0) angleToken = angleToken[..at];
+                    TryParseAngle(angleToken, out fromAngle);
+                }
+                int atIdx = preamble.IndexOf(" at ", StringComparison.OrdinalIgnoreCase);
+                if (atIdx >= 0)
+                {
+                    var posTokens = preamble[(atIdx + 4)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (posTokens.Length >= 2 &&
+                        TryGradientCoord(posTokens[0], rect.Width, out var dx) &&
+                        TryGradientCoord(posTokens[1], rect.Height, out var dy))
+                        center = new SKPoint(rect.Left + dx, rect.Top + dy);
+                }
+                parts.RemoveAt(0);
+            }
+
             var stops = ParseColorStops(parts);
             if (stops.Count == 0) return null;
 
             var colors = stops.Select(s => s.Color).ToArray();
-            var positions = stops.Select(s => s.Position).ToArray();
+            // A conic stop position is a fraction of the full turn; Skia also
+            // requires the positions to be non-decreasing.
+            var positions = stops.Select(s => Math.Clamp(
+                s.Position >= 0 ? s.Position : (s.Px >= 0 ? 0f : 1f), 0f, 1f)).ToArray();
+            for (int i = 1; i < positions.Length; i++)
+                positions[i] = Math.Max(positions[i], positions[i - 1]);
 
-            var center = new SKPoint(rect.MidX, rect.MidY);
-            var sweep = SKShader.CreateSweepGradient(center, colors, positions);
+            var sweep = SKShader.CreateSweepGradient(center, colors, positions,
+                repeating ? SKShaderTileMode.Repeat : SKShaderTileMode.Clamp, 0f, 360f);
 
-            // CSS conic-gradient starts at top (12 o'clock), Skia sweep starts at right (3 o'clock).
-            // Rotate by -90 degrees (270 degrees clockwise) to align.
-            var rotation = SKMatrix.CreateRotationDegrees(-90, center.X, center.Y);
+            // CSS conic angles are measured clockwise from 12 o'clock while Skia's
+            // sweep starts at 3 o'clock.
+            var rotation = SKMatrix.CreateRotationDegrees(-90f + fromAngle, center.X, center.Y);
             return sweep.WithLocalMatrix(rotation);
         }
         catch { return null; }
@@ -307,36 +344,31 @@ public static class GradientRenderer
             float position = -1;
             float px = -1;
             float pxEnd = -1;
-            // A stop may carry two position tokens ("#000 0 10px" — a hard-stop
-            // range); the first is the stop's own position, the second the end
-            // of its flat span.
+            float positionEnd = -1;
+            // A stop may carry two position tokens ("#000 0 10px" or
+            // "red 0 25%" — a hard-stop range); the first is the stop's own
+            // position, the second the end of its flat span.
             var posTokens = posPart.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (posTokens.Length > 0)
+            if (posTokens.Length > 0 && TryStopPosition(posTokens[0], out position, out px)) { }
+            if (posTokens.Length > 1)
             {
-                var tok = posTokens[0];
-                if (tok.EndsWith("%"))
-                {
-                    if (float.TryParse(tok[..^1], System.Globalization.NumberStyles.Float,
-                            System.Globalization.CultureInfo.InvariantCulture, out var pct))
-                        position = pct / 100f;
-                }
-                else if (tok.EndsWith("px"))
-                {
-                    if (float.TryParse(tok[..^2], System.Globalization.NumberStyles.Float,
-                            System.Globalization.CultureInfo.InvariantCulture, out var pxv))
-                        px = pxv;
-                }
-                else if (tok == "0")
-                    px = 0;
-            }
-            if (posTokens.Length > 1 && posTokens[1].EndsWith("px"))
-            {
-                if (float.TryParse(posTokens[1][..^2], System.Globalization.NumberStyles.Float,
+                var endToken = posTokens[1];
+                if (endToken.EndsWith("px", StringComparison.OrdinalIgnoreCase) &&
+                    float.TryParse(endToken[..^2], System.Globalization.NumberStyles.Float,
                         System.Globalization.CultureInfo.InvariantCulture, out var pxev))
                     pxEnd = pxev;
+                else
+                    TryStopPosition(endToken, out positionEnd, out _);
             }
 
-            stops.Add(new ColorStop { Color = color.Value, Position = position, Px = px, PxEnd = pxEnd });
+            stops.Add(new ColorStop
+            {
+                Color = color.Value,
+                Position = position,
+                Px = px,
+                PxEnd = pxEnd,
+                PositionEnd = positionEnd,
+            });
         }
 
         // Expand double-position stops: "red 0 20px" becomes a flat red span
@@ -344,13 +376,25 @@ public static class GradientRenderer
         // the end position, so the next stop starts blending from there).
         for (int i = 0; i < stops.Count; i++)
         {
-            if (stops[i].PxEnd > 0 && stops[i].PxEnd > stops[i].Px)
+            var s = stops[i];
+            if (s.PxEnd > 0 && s.PxEnd > s.Px)
             {
                 stops.Insert(i + 1, new ColorStop
                 {
-                    Color = stops[i].Color,
+                    Color = s.Color,
                     Position = -1,
-                    Px = stops[i].PxEnd,
+                    Px = s.PxEnd,
+                    PxEnd = -1,
+                });
+                i++;
+            }
+            else if (s.PositionEnd > 0 && (s.Position < 0 || s.PositionEnd > s.Position))
+            {
+                stops.Insert(i + 1, new ColorStop
+                {
+                    Color = s.Color,
+                    Position = s.PositionEnd,
+                    Px = -1,
                     PxEnd = -1,
                 });
                 i++;
@@ -456,5 +500,36 @@ public static class GradientRenderer
         public float Px;
         /// <summary>Explicit end pixel of a double-position (hard) stop, or -1.</summary>
         public float PxEnd;
+        /// <summary>Explicit end fraction of a double-position (hard) stop, or -1.</summary>
+        public float PositionEnd;
+    }
+
+    /// <summary>
+    /// One color-stop position token. Percentages and angles are fractions — of the
+    /// gradient line for linear and radial gradients, of a full turn for conic ones —
+    /// while a length stays in pixels. A unitless zero is zero in every unit, so it
+    /// resolves as a fraction (CSS Values 4 §8.6).
+    /// </summary>
+    private static bool TryStopPosition(string token, out float fraction, out float px)
+    {
+        fraction = -1; px = -1;
+        var t = token.Trim().ToLowerInvariant();
+        if (t.Length == 0) return false;
+        bool Number(string s, out float v) => float.TryParse(s,
+            System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out v);
+
+        if (t.EndsWith('%')) { if (Number(t[..^1], out var pct)) { fraction = pct / 100f; return true; } return false; }
+        if (t.EndsWith("deg")) { if (Number(t[..^3], out var deg)) { fraction = deg / 360f; return true; } return false; }
+        if (t.EndsWith("grad")) { if (Number(t[..^4], out var grad)) { fraction = grad / 400f; return true; } return false; }
+        if (t.EndsWith("turn")) { if (Number(t[..^4], out var turn)) { fraction = turn; return true; } return false; }
+        if (t.EndsWith("rad")) { if (Number(t[..^3], out var rad)) { fraction = rad / (2f * MathF.PI); return true; } return false; }
+        if (t.EndsWith("px")) { if (Number(t[..^2], out var pxv)) { px = pxv; return true; } return false; }
+        if (Number(t, out var bare))
+        {
+            if (bare == 0) fraction = 0;
+            else px = bare;
+            return true;
+        }
+        return false;
     }
 }

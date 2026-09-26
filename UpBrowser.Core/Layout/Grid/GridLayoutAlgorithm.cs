@@ -700,6 +700,20 @@ public class GridLayoutAlgorithm
                         tracks[i].GrowLimit = Math.Max(tracks[i].GrowLimit, perTrackSize);
                     }
                 }
+                else if (style.MinWidth is AutoLength or null && end > start)
+                {
+                    // Automatic minimum size (css-grid §6.7): an item whose min-width
+                    // is 'auto' cannot be squeezed below its min-content size, so the
+                    // tracks it spans are floored at that contribution (an unbreakable
+                    // word widens its column instead of overflowing).
+                    float minContent = IntrinsicMeasure.MinContentInlineSize(item.Element);
+                    float perTrackSize = minContent / (end - start);
+                    if (perTrackSize > 0)
+                    {
+                        for (int i = start; i < end && i < tracks.Count; i++)
+                            RaiseAutoMinimum(tracks[i], perTrackSize);
+                    }
+                }
             }
             else
             {
@@ -742,14 +756,15 @@ public class GridLayoutAlgorithm
 
         if (freeSpace > 0)
         {
-            // Distribute to non-fr tracks first
-            int nonFrCount = tracks.Count(t => t.SizeType != TrackSizeType.Fraction);
+            // Distribute to non-flexible tracks first (§12.6 maximizes only tracks
+            // with an intrinsic min sizing function; fr tracks wait for §12.7).
+            int nonFrCount = tracks.Count(t => !IsFlexible(t));
             if (nonFrCount > 0)
             {
                 float perTrack = freeSpace / nonFrCount;
                 foreach (var t in tracks)
                 {
-                    if (t.SizeType != TrackSizeType.Fraction)
+                    if (!IsFlexible(t))
                     {
                         float growLimit = t.GrowLimit > 0 ? t.GrowLimit : float.MaxValue;
                         float add = Math.Min(perTrack, growLimit - t.BaseSize);
@@ -792,30 +807,90 @@ public class GridLayoutAlgorithm
             t.BaseSize = Math.Max(t.BaseSize, 0);
     }
 
-    private void ExpandFlexibleTracks(List<GridTrack> tracks, float containerSize, float freeSpace, float totalGap)
+    /// <summary>
+    /// CSS Grid §12.7 "find the size of an fr". The space to fill is what is left of
+    /// the container once the non-flexible tracks took their share; a flexible track
+    /// never ends up smaller than its base size (which already carries the items'
+    /// automatic minimum sizes), so such a track is frozen at that base size and the
+    /// remaining space is divided again.
+    /// </summary>
+    private static void ExpandFlexibleTracks(List<GridTrack> tracks, float containerSize, float freeSpace, float totalGap)
     {
+        var flexible = new bool[tracks.Count];
         float totalFr = 0;
         float nonFrUsed = 0;
-        foreach (var t in tracks)
+        for (int i = 0; i < tracks.Count; i++)
         {
-            if (t.SizeType == TrackSizeType.Fraction)
-                totalFr += t.Fraction;
+            flexible[i] = IsFlexible(tracks[i]);
+            if (flexible[i])
+                totalFr += FrFactor(tracks[i]);
             else
-                nonFrUsed += t.BaseSize;
+                nonFrUsed += tracks[i].BaseSize;
         }
 
         if (totalFr <= 0) return;
 
-        float availableForFr = containerSize - nonFrUsed - totalGap;
-        if (availableForFr <= 0) return;
-
-        float frUnit = availableForFr / totalFr;
-
-        foreach (var t in tracks)
+        float spaceToFill = containerSize - nonFrUsed - totalGap;
+        for (;;)
         {
-            if (t.SizeType == TrackSizeType.Fraction)
-                t.BaseSize = frUnit * t.Fraction;
+            float hypothetical = spaceToFill > 0 ? spaceToFill / totalFr : 0f;
+
+            int frozen = -1;
+            for (int i = 0; i < tracks.Count; i++)
+            {
+                if (!flexible[i]) continue;
+                if (tracks[i].BaseSize > hypothetical * FrFactor(tracks[i]))
+                {
+                    frozen = i;
+                    break;
+                }
+            }
+            if (frozen < 0)
+            {
+                for (int i = 0; i < tracks.Count; i++)
+                {
+                    if (!flexible[i]) continue;
+                    tracks[i].BaseSize = Math.Max(tracks[i].BaseSize, hypothetical * FrFactor(tracks[i]));
+                }
+                return;
+            }
+
+            // Freeze the offending track at its base size and restart the search.
+            spaceToFill -= tracks[frozen].BaseSize;
+            totalFr -= FrFactor(tracks[frozen]);
+            flexible[frozen] = false;
+            if (totalFr <= 0) return;
         }
+    }
+
+    /// <summary>A track is flexible when its max sizing function is a fr unit, which
+    /// covers both "1fr" and "minmax(auto, 1fr)".</summary>
+    private static bool IsFlexible(GridTrack track) =>
+        track.SizeType == TrackSizeType.Fraction
+        || (track.SizeType == TrackSizeType.MinMax && track.MaxSize?.SizeType == TrackSizeType.Fraction);
+
+    private static float FrFactor(GridTrack track) =>
+        track.SizeType == TrackSizeType.Fraction ? track.Fraction : (track.MaxSize?.Fraction ?? 0f);
+
+    /// <summary>
+    /// Floor a track's base size with an item's automatic minimum size. Only a track
+    /// whose min sizing function is 'auto' takes the floor; a definite min
+    /// (minmax(10px, …)) or a definite track size wins over the item's contribution
+    /// (css-grid §6.7).
+    /// </summary>
+    private static void RaiseAutoMinimum(GridTrack track, float minimum)
+    {
+        bool minIsAuto = track.SizeType switch
+        {
+            TrackSizeType.Auto or TrackSizeType.MinContent or TrackSizeType.MaxContent or TrackSizeType.Fraction => true,
+            TrackSizeType.MinMax => track.MinSize?.SizeType is null or TrackSizeType.Auto,
+            _ => false,
+        };
+        if (!minIsAuto || minimum <= track.BaseSize)
+            return;
+        track.BaseSize = minimum;
+        if (track.GrowLimit < minimum)
+            track.GrowLimit = minimum;
     }
 
     private static float ResolveDefiniteSize(Length? length, float containerSize, float fontSize, float rootFontSize)

@@ -573,24 +573,7 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
     /// <summary>Measures an item's min-content inline size by laying it out in a
     /// 1px-wide constraint space (every break opportunity is then taken).</summary>
     private static float ContentMinInlineSize(Element element)
-    {
-        var style = element.ComputedStyle;
-        if (style == null) return 0;
-        var space = new ConstraintSpace(
-            availableInlineSize: 1f,
-            availableBlockSize: float.PositiveInfinity,
-            isFixedInlineSize: true,
-            isFixedBlockSize: false);
-        var result = BlockLayoutAlgorithm.LayoutAtomicInlineRoot(element, space);
-        var fragment = result.Fragment;
-        if (fragment == null) return 0;
-        float widest = 0;
-        foreach (var line in fragment.Lines)
-            widest = Math.Max(widest, line.InlineSize);
-        if (widest <= 0)
-            widest = fragment.InlineSize;
-        return widest + fragment.BorderLeft + fragment.BorderRight + fragment.PaddingLeft + fragment.PaddingRight;
-    }
+        => IntrinsicMeasure.MinContentInlineSize(element);
 
     private float ClampCrossSize(FlexItemData item, float size, bool isRow)
     {

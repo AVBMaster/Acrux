@@ -1,3 +1,4 @@
+﻿using System.Diagnostics;
 using System.Text;
 using UpBrowser.Core;
 using UpBrowser.Native.Windows;
@@ -13,7 +14,7 @@ public class WindowsWindow : IWindow
     private Action<double, double>? _onMouseWheel;
     private Action<Key>? _onKeyDown;
     private Action<Key>? _onKeyUp;
-    private DateTime _lastFrameTime;
+    private long _lastFrameStamp; // Stopwatch ticks — TickCount64's ~15.6ms granularity halved a 60Hz target
     private int _width;
     private int _height;
     private NativeWindow.WndProc? _wndProc;
@@ -324,7 +325,7 @@ public class WindowsWindow : IWindow
                     // back to the tile path and warms the cache at the final size.
                     if (_onFrame != null && _width > 0 && _height > 0)
                     {
-                        _lastFrameTime = DateTime.Now;
+                        _lastFrameStamp = Stopwatch.GetTimestamp();
                         _onFrame(0.016);
                     }
                     return IntPtr.Zero;
@@ -351,7 +352,7 @@ public class WindowsWindow : IWindow
                     // each resize tick fast instead of re-rasterizing every tile.
                     if (_onFrame != null && _width > 0 && _height > 0)
                     {
-                        _lastFrameTime = DateTime.Now;
+                        _lastFrameStamp = Stopwatch.GetTimestamp();
                         _onFrame(0.016);
                     }
                     return IntPtr.Zero;
@@ -541,7 +542,7 @@ public class WindowsWindow : IWindow
         if (_hwnd == IntPtr.Zero) return;
 
         _onFrame = onFrame;
-        _lastFrameTime = DateTime.Now;
+        _lastFrameStamp = Stopwatch.GetTimestamp();
         _isRunning = true;
 
         NativeWindow.MSG msg;
@@ -562,13 +563,14 @@ public class WindowsWindow : IWindow
 
             if (_onFrame != null)
             {
-                var now = DateTime.Now;
-                var dt = (now - _lastFrameTime).TotalSeconds;
+                long nowTs = Stopwatch.GetTimestamp();
+                double dtMs = (nowTs - _lastFrameStamp) * 1000.0 / Stopwatch.Frequency;
+                double dt = dtMs / 1000.0;
                 double targetDt = _targetFrameTimeMs / 1000.0;
 
                 if (dt >= targetDt)
                 {
-                    _lastFrameTime = now;
+                    _lastFrameStamp = nowTs;
                     try
                     {
                         _onFrame(dt);
@@ -587,10 +589,11 @@ public class WindowsWindow : IWindow
                 }
                 else if (!hasMessage)
                 {
-                    var elapsed = (DateTime.Now - _lastFrameTime).TotalMilliseconds;
-                    int sleepMs = Math.Max(1, (int)(_targetFrameTimeMs + 0.5 - elapsed));
-                    if (sleepMs > 0)
-                        Thread.Sleep(sleepMs);
+                    int sleepMs = Math.Max(1, (int)(_targetFrameTimeMs + 0.5 - dtMs));
+                    // MsgWait wakes the instant a message (input, paint) arrives —
+                    // Thread.Sleep would strand fresh input until the sleep expires,
+                    // which reads as scroll/paint latency multiples of the frame time.
+                    NativeWindow.MsgWaitForMultipleObjects(0, null, false, (uint)sleepMs, NativeWindow.QS_ALLINPUT);
                 }
             }
         }

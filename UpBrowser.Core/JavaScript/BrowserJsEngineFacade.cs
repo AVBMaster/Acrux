@@ -44,6 +44,13 @@ public class BrowserJsEngineFacade : IDisposable
     public event Action<BrowserJsException>? OnScriptError;
     public event Action<string, string>? OnConsoleLog;
 
+    /// <summary>
+    /// Invoked after any JS callback (timer / microtask / event listener) ran,
+    /// so the host can mark the page dirty — DOM mutations from callbacks must
+    /// trigger a re-render, not just from top-level script execution.
+    /// </summary>
+    public Action? OnCallbacksExecuted;
+
     public BrowserJsEngineFacade(IJavaScriptEngineAdapter adapter)
     {
         _adapter = adapter;
@@ -137,6 +144,7 @@ public class BrowserJsEngineFacade : IDisposable
         if (_disposed) return;
         if (JsEngineBridge.IsRemoteNotReady(_adapter)) return;
         Current = _adapter;
+        var mutationBefore = UpBrowser.Core.Dom.DomMutationTracker.Version;
         try
         {
             if (args == null || args.Length == 0)
@@ -149,6 +157,11 @@ public class BrowserJsEngineFacade : IDisposable
                     _adapter.Execute($"__g_invoke({callbackId}, JSON.parse('{EscapeJsString(json)}'))");
                 }
             FlushPostExecution();
+            // Only notify "page may need rebuild" when the callback actually
+            // mutated the DOM — a pure-compute timer must not trigger a full
+            // style/layout/paint cycle and a tile-cache wipe.
+            if (UpBrowser.Core.Dom.DomMutationTracker.Version != mutationBefore)
+                OnCallbacksExecuted?.Invoke();
         }
         catch { }
         finally

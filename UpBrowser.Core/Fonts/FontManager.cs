@@ -233,6 +233,25 @@ public class FontFallbackChain
 
     private void SetupFamilyFallbacks()
     {
+        // CSS Fonts 4 §5.4: the generic font keywords must resolve to the platform
+        // face of that class. Without these entries "monospace" fell through to the
+        // default (proportional) family, so <pre>/<code> text was laid out with the
+        // wrong advances.
+        _familyFallbacks["monospace"] = GetPlatformCandidates("monospace");
+        _familyFallbacks["ui-monospace"] = GetPlatformCandidates("monospace");
+        _familyFallbacks["fixed"] = GetPlatformCandidates("monospace");
+        _familyFallbacks["serif"] = GetPlatformCandidates("serif");
+        _familyFallbacks["ui-serif"] = GetPlatformCandidates("serif");
+        _familyFallbacks["sans-serif"] = GetPlatformCandidates("sans-serif");
+        _familyFallbacks["ui-sans-serif"] = GetPlatformCandidates("sans-serif");
+        _familyFallbacks["system-ui"] = GetPlatformCandidates("sans-serif");
+        _familyFallbacks["rounded"] = GetPlatformCandidates("sans-serif");
+        _familyFallbacks["ui-rounded"] = GetPlatformCandidates("sans-serif");
+        _familyFallbacks["cursive"] = GetPlatformCandidates("comic-sans");
+        _familyFallbacks["fantasy"] = GetPlatformCandidates("impact");
+        _familyFallbacks["math"] = new List<string> { "Cambria Math", "STIX Two Math", "DejaVu Math TeX Gyre" };
+        _familyFallbacks["emoji"] = GetPlatformCandidates("emoji");
+
         _familyFallbacks["arial"] = GetPlatformCandidates("arial");
         _familyFallbacks["helvetica"] = GetPlatformCandidates("helvetica");
         _familyFallbacks["times new roman"] = GetPlatformCandidates("times");

@@ -144,6 +144,17 @@ public class TableBorders
         return Math.Min(rowspan, section.RowCount - (tableRowIndex - section.StartRow));
     }
 
+    /// <summary>Index of the section a table-level row index falls into.</summary>
+    public int SectionIndexOf(int tableRow)
+    {
+        for (int i = 0; i < _sections.Count; i++)
+        {
+            if (tableRow >= _sections[i].StartRow && tableRow < _sections[i].StartRow + _sections[i].RowCount)
+                return i;
+        }
+        return 0;
+    }
+
     public BoxStrut CellBorder(int row, int column, int rowspan, int colspan, int sectionIndex)
     {
         if (_isCollapsed)
