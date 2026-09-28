@@ -209,6 +209,36 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
     }
 
     /// <summary>
+    /// text-wrap: balance. Break at the full width to learn the minimum line count,
+    /// then binary-search the smallest wrap width that still yields that count, so the
+    /// lines are filled as evenly as possible (CSS Text 4 §5.5; mirrors Chrome's
+    /// "fewest lines, then balance" behaviour). Falls back to the natural break if
+    /// balancing would add lines.
+    /// </summary>
+    private static List<LineInfo> ComputeBalancedLines(LineBreaker breaker, InlineItemsData data,
+        float availInline, ComputedStyle style)
+    {
+        var natural = breaker.BreakLines(data, availInline, style);
+        int target = natural.Count;
+        if (target <= 1 || availInline <= 0 || float.IsNaN(availInline))
+            return natural;
+
+        float lo = 0f, hi = availInline;
+        for (int iter = 0; iter < 24 && hi - lo > 0.5f; iter++)
+        {
+            float mid = (lo + hi) * 0.5f;
+            // A narrower width can only keep or increase the line count.
+            if (breaker.BreakLines(data, mid, style).Count <= target)
+                hi = mid;
+            else
+                lo = mid;
+        }
+
+        var balanced = breaker.BreakLines(data, hi, style);
+        return balanced.Count <= target ? balanced : natural;
+    }
+
+    /// <summary>
     /// Modern inline layout path: collect items via InlineNode, break lines
     /// via LineBreaker, build logical line items via LogicalLineBuilder, then
     /// convert to the existing BoxLine/BoxRun output model. Returns false when
@@ -239,7 +269,10 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         List<LineInfo> lines;
         if (floatContext == null)
         {
-            lines = lineBreaker.BreakLines(data, availInline, Style);
+            bool balance = (Style.TextWrap ?? string.Empty).Contains("balance", StringComparison.OrdinalIgnoreCase);
+            lines = balance
+                ? ComputeBalancedLines(lineBreaker, data, availInline, Style)
+                : lineBreaker.BreakLines(data, availInline, Style);
         }
         else
         {

@@ -809,6 +809,8 @@ public class ComputedStyle
     // -webkit-line-clamp / line-clamp: max number of visible lines before the
     // block truncates with an ellipsis. 0 means no clamping.
     public int LineClamp { get; set; }
+    // text-wrap keyword: "normal" | "balance" | "nowrap" | "pretty" (lowercased).
+    public string TextWrap { get; set; } = "normal";
     public List<TextShadowValue> TextShadow { get; set; } = new();
 public TextDecorationLineType TextDecorationLine { get; set; } = TextDecorationLineType.None;
 public TextDecorationStyleType TextDecorationStyle { get; set; } = TextDecorationStyleType.Solid;
@@ -1103,7 +1105,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             TextIndent = TextIndent, TextIndentHanging = TextIndentHanging,
             TextIndentEachLine = TextIndentEachLine,
             TextIndentPercent = TextIndentPercent, TextTransform = TextTransform,
-            TextOverflow = TextOverflow, TextShadow = TextShadow, LineClamp = LineClamp,
+            TextOverflow = TextOverflow, TextShadow = TextShadow, LineClamp = LineClamp, TextWrap = TextWrap,
             TextDecorationLine = TextDecorationLine, TextDecorationStyle = TextDecorationStyle,
             TextDecorationColor = TextDecorationColor, TextDecorationThickness = TextDecorationThickness,
             TextDecorationThicknessFromFont = TextDecorationThicknessFromFont,

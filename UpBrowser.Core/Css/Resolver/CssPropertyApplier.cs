@@ -140,6 +140,11 @@ public static class CssPropertyApplier
             case "text-emphasis-position": style.TextEmphasisPosition = value; break;
             case "text-shadow": style.TextShadow = ParseTextShadow(value); break;
             case "text-overflow": style.TextOverflow = value.ToLowerInvariant() == "ellipsis" ? TextOverflowType.Ellipsis : TextOverflowType.Clip; break;
+            case "text-wrap":
+                // Keep the whole (lowercased) value; 'balance'/'pretty' may combine with a
+                // second keyword (e.g. "balance nowrap") in future, so we substring-match.
+                style.TextWrap = value.Trim().ToLowerInvariant();
+                break;
             case "-webkit-line-clamp":
             case "line-clamp":
                 // 'none' (or a non-positive integer) disables clamping; otherwise the
