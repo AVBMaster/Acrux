@@ -140,6 +140,12 @@ public static class CssPropertyApplier
             case "text-emphasis-position": style.TextEmphasisPosition = value; break;
             case "text-shadow": style.TextShadow = ParseTextShadow(value); break;
             case "text-overflow": style.TextOverflow = value.ToLowerInvariant() == "ellipsis" ? TextOverflowType.Ellipsis : TextOverflowType.Clip; break;
+            case "-webkit-line-clamp":
+            case "line-clamp":
+                // 'none' (or a non-positive integer) disables clamping; otherwise the
+                // value is the maximum number of visible lines.
+                style.LineClamp = int.TryParse(value.Trim(), out var clampLines) && clampLines > 0 ? clampLines : 0;
+                break;
             case "vertical-align": ApplyVerticalAlign(style, value); break;
             case "white-space": style.WhiteSpace = ParseWhiteSpace(value); break;
             case "word-break": style.WordBreak = ParseWordBreak(value); break;

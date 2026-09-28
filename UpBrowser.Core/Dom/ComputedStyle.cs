@@ -806,6 +806,9 @@ public class ComputedStyle
     public float TextIndentPercent { get; set; }
     public string TextTransform { get; set; } = "none";
     public TextOverflowType TextOverflow { get; set; } = TextOverflowType.Clip;
+    // -webkit-line-clamp / line-clamp: max number of visible lines before the
+    // block truncates with an ellipsis. 0 means no clamping.
+    public int LineClamp { get; set; }
     public List<TextShadowValue> TextShadow { get; set; } = new();
 public TextDecorationLineType TextDecorationLine { get; set; } = TextDecorationLineType.None;
 public TextDecorationStyleType TextDecorationStyle { get; set; } = TextDecorationStyleType.Solid;
@@ -1100,7 +1103,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             TextIndent = TextIndent, TextIndentHanging = TextIndentHanging,
             TextIndentEachLine = TextIndentEachLine,
             TextIndentPercent = TextIndentPercent, TextTransform = TextTransform,
-            TextOverflow = TextOverflow, TextShadow = TextShadow,
+            TextOverflow = TextOverflow, TextShadow = TextShadow, LineClamp = LineClamp,
             TextDecorationLine = TextDecorationLine, TextDecorationStyle = TextDecorationStyle,
             TextDecorationColor = TextDecorationColor, TextDecorationThickness = TextDecorationThickness,
             TextDecorationThicknessFromFont = TextDecorationThicknessFromFont,

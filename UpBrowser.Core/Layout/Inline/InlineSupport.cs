@@ -103,8 +103,10 @@ public class LineTruncator
     /// Mirrors LineTruncator::TruncateLine().
     /// Hides items that do not fit and performs character-level truncation on
     /// the first overflowing item so the visible prefix + ellipsis fit.
+    /// When <paramref name="forceEllipsis"/> is set (line-clamp), the ellipsis is
+    /// appended even if the line already fits, signalling truncated content below.
     /// </summary>
-    public float TruncateLine(float lineWidth, LogicalLineItems lineBox, InlineLayoutStateStack boxStates)
+    public float TruncateLine(float lineWidth, LogicalLineItems lineBox, InlineLayoutStateStack boxStates, bool forceEllipsis = false)
     {
         if (lineBox.Count == 0) return lineWidth;
 
@@ -116,7 +118,7 @@ public class LineTruncator
         float available = Math.Max(0, _availableWidth - ellipsis);
 
         // Everything already fits within the available width.
-        if (usedWidth <= available) return lineWidth;
+        if (usedWidth <= available && !forceEllipsis) return lineWidth;
 
         // Find the first item that overflows the remaining space.
         float width = 0;

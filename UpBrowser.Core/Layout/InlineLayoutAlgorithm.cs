@@ -257,6 +257,13 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         // applies when the block clips overflow (overflow != visible).
         bool useEllipsis = Style.TextOverflow is TextOverflowType.Ellipsis
             && Style.Overflow is not OverflowType.Visible;
+        // -webkit-line-clamp: cap the number of visible lines and ellipsize the last
+        // one when content continues below it. Like text-overflow it needs a clipping
+        // overflow (CSS Overflow 4 / the -webkit-line-clamp de-facto contract).
+        int clampLines = Style.LineClamp > 0 && Style.Overflow is not OverflowType.Visible
+            ? Style.LineClamp : 0;
+        int emittedLines = 0;
+        bool clampReached = false;
         var itemsBuilder = new FragmentItemsBuilder();
 
         int nextLineIndex = 0;
@@ -308,6 +315,23 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             {
                 var truncator = new LineTruncator(info);
                 truncator.TruncateLine(info.InlineSize, logicalLineItems, stateStack);
+            }
+
+            // Line clamp: on the last permitted line, append an ellipsis when content
+            // continues below it (more lines pending, or this line itself overflows),
+            // then stop emitting further lines.
+            if (clampLines > 0 && emittedLines == clampLines - 1)
+            {
+                bool hasMore = floatContext != null
+                    ? !lineBreaker.IsFinishedNow()
+                    : nextLineIndex < lines.Count;
+                bool alreadyEllipsized = useEllipsis && lineOverflows;
+                if ((hasMore || lineOverflows) && !alreadyEllipsized)
+                {
+                    var clampTruncator = new LineTruncator(info);
+                    clampTruncator.TruncateLine(info.InlineSize, logicalLineItems, stateStack, forceEllipsis: true);
+                }
+                clampReached = true;
             }
 
             // Apply text-align (end/center/justify). Justify distributes the
@@ -461,6 +485,9 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
                 lineContainer.BaseLine.AddChild(li);
             itemsBuilder.AddLogicalLineContainer(lineContainer, WritingDirectionMode.HorizontalLtr, null);
             _currentLineBlockOffset += boxLine.BlockSize;
+
+            emittedLines++;
+            if (clampReached) break;
         }
 
         // Floats that were laid out and positioned while breaking the lines become
