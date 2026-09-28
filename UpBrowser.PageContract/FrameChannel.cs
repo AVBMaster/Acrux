@@ -28,6 +28,16 @@ public struct FrameMeta
     public int DomCount, BoxCount;
     /// <summary>Device-row shift the host applied for a scroll-only frame (ScrollBlit).</summary>
     public int ScrollDy;
+    /// <summary>
+    /// Caret of the focused editable, in DOCUMENT space (no scroll, no chrome offset):
+    /// the shell scrolls speculatively, so it transforms these with its own live scroll
+    /// when it positions the IME candidate window. Zero when there is no focus.
+    /// </summary>
+    public float CaretX, CaretY, CaretH;
+    /// <summary>True when the page's focused element accepts composed text.</summary>
+    public bool HasEditableFocus;
+    /// <summary>True when that element is a password field — the shell must block IME there.</summary>
+    public bool IsPassword;
 }
 
 /// <summary>
@@ -40,8 +50,9 @@ public struct FrameMeta
 /// Layout, little-endian, offsets fixed at construction:
 /// <code>
 ///   header (32B)  0 magic  4 version  8 slotCount  12 maxRects  16 stride  20 width  24 height
-///   slot (64B)    0 state  4 seq  12 mode  16 scrollX  20 scrollY  24 contentW
+///   slot (80B)    0 state  4 seq  12 mode  16 scrollX  20 scrollY  24 contentW
 ///   descriptor    28 contentH  32 pageBgRgba  36 domCount  40 boxCount  44 scrollDy  48 rectCount
+///                 52 caretX  56 caretY  60 caretH  64 imeFlags
 ///   then rects[maxRects] as {i32 x, i32 y, i32 w, i32 h}
 ///   then stride × height bytes of BGRA8888 premultiplied pixels
 /// </code>
@@ -51,11 +62,16 @@ public struct FrameMeta
 public sealed unsafe class FrameChannel : IDisposable
 {
     public const uint Magic = 0x4642_5055;   // 'UPBF'
-    public const uint LayoutVersion = 1;
+    public const uint LayoutVersion = 2;
     public const int SlotCount = 4;
 
+    /// <summary>imeFlags descriptor bit: the focused element accepts composed text.</summary>
+    public const uint MetaFlagHasEditableFocus = 1u << 0;
+    /// <summary>imeFlags descriptor bit: the focused editable is a password field.</summary>
+    public const uint MetaFlagIsPassword = 1u << 1;
+
     private const int HeaderBytes = 32;
-    private const int SlotDescriptorBytes = 64;
+    private const int SlotDescriptorBytes = 80;
     private const int RectBytes = 16;
 
     private readonly IO.MemoryMappedFiles.MemoryMappedFile _mmf;
@@ -266,6 +282,13 @@ public sealed unsafe class FrameChannel : IDisposable
         *(int*)(s + 36) = meta.DomCount;
         *(int*)(s + 40) = meta.BoxCount;
         *(int*)(s + 44) = meta.ScrollDy;
+        *(float*)(s + 52) = meta.CaretX;
+        *(float*)(s + 56) = meta.CaretY;
+        *(float*)(s + 60) = meta.CaretH;
+        uint imeFlags = 0;
+        if (meta.HasEditableFocus) imeFlags |= MetaFlagHasEditableFocus;
+        if (meta.IsPassword) imeFlags |= MetaFlagIsPassword;
+        *(uint*)(s + 64) = imeFlags;
         int n = Math.Min(rects.Length, _maxRects);
         *(uint*)(s + 48) = (uint)n;
         for (int i = 0; i < n; i++)
@@ -294,6 +317,11 @@ public sealed unsafe class FrameChannel : IDisposable
         DomCount = *(int*)(s + 36),
         BoxCount = *(int*)(s + 40),
         ScrollDy = *(int*)(s + 44),
+        CaretX = *(float*)(s + 52),
+        CaretY = *(float*)(s + 56),
+        CaretH = *(float*)(s + 60),
+        HasEditableFocus = (*(uint*)(s + 64) & MetaFlagHasEditableFocus) != 0,
+        IsPassword = (*(uint*)(s + 64) & MetaFlagIsPassword) != 0,
     };
 
     private DamageRect[] ReadRects(byte* s)

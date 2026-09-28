@@ -97,6 +97,13 @@ public sealed class PageEngine : IDisposable
     private long _blinkTick = Environment.TickCount64;
     private Element? _pressedButton;
 
+    // IME composition state (CJK): the engine owns it exactly like the shell's
+    // in-process fields — an out-of-process tab composes through these, never
+    // through shell-side copies.
+    private bool _imeComposing;
+    private string _imeComposition = "";
+    private int _imeCursorPos;
+
     /// <param name="id">Engine identity, forwarded to the JS engine (logging and, in
     /// multi-engine builds, its host process slot).</param>
     /// <param name="dpiScale">System DPI scale.</param>
@@ -296,6 +303,7 @@ public sealed class PageEngine : IDisposable
             _focused = null;
             _pressedButton = null;
             _selStart = -1;
+            ClearImeComposition();
             // A new document invalidates the old one's text nodes: drop the selection
             // and any in-flight drag with it (the shell clears the same way on load).
             _hasSelection = false;
@@ -600,6 +608,7 @@ public sealed class PageEngine : IDisposable
         _selStart = -1;
         _showCursor = true;
         _blinkTick = Environment.TickCount64;
+        ClearImeComposition();
         try { if (old != null) DispatchSimple(old, "blur"); } catch { }
         try { if (next != null) DispatchSimple(next, "focus"); } catch { }
         MarkPaint();
@@ -624,31 +633,126 @@ public sealed class PageEngine : IDisposable
     {
         var c = (char)charCode;
         if (c < 32 || c == 127) return;
-        if (!TryEditable(out var value, out var readOnly))
+        if (!TryEditable(out _, out _))
         {
             // Not editing: pages may still want keypress events on document.
             try { if (_document?.Body != null) DispatchSimple(_document.Body, "keypress"); } catch { }
             return;
         }
-        if (readOnly || _focused == null) return;
+        InsertAtCaret(c.ToString());
+    }
+
+    /// <summary>
+    /// The single text-insertion path: replace the pending selection at the caret,
+    /// advance it, restart the blink clock, fire the input event and repaint. Typed
+    /// characters and IME commits run through here so the two can never diverge.
+    /// </summary>
+    private void InsertAtCaret(string text)
+    {
+        if (!TryEditable(out var value, out var readOnly) || readOnly || _focused == null) return;
         _caret = Math.Clamp(_caret, 0, value.Length);
         if (_selStart >= 0 && _selStart != _caret)
         {
             int a = Math.Min(_selStart, _caret), b = Math.Max(_selStart, _caret);
-            value = value[..a] + c + value[b..];
-            _caret = a + 1;
+            value = value[..a] + text + value[b..];
+            _caret = a + text.Length;
             _selStart = -1;
         }
         else
         {
-            value = value[.._caret] + c + value[_caret..];
-            _caret++;
+            value = value[.._caret] + text + value[_caret..];
+            _caret += text.Length;
         }
         _focused.Value = value;
         _showCursor = true;
         _blinkTick = Environment.TickCount64;
         try { DispatchSimple(_focused, "input"); } catch { }
         MarkPaint();
+    }
+
+    // ==================== IME composition ====================
+
+    private void ClearImeComposition()
+    {
+        _imeComposing = false;
+        _imeComposition = "";
+        _imeCursorPos = 0;
+    }
+
+    /// <summary>Composition began: the pending string is empty until the first update.</summary>
+    public void ImeCompositionStart()
+    {
+        if (_imeComposing) return;
+        _imeComposing = true;
+        _imeComposition = "";
+        _imeCursorPos = 0;
+        MarkPaint();
+    }
+
+    /// <summary>
+    /// New composition text with the caret offset inside it. Repaints only when the text
+    /// or the offset actually moved — an idle focused field must not burn a frame per tick.
+    /// </summary>
+    public void ImeCompositionUpdate(string? text, int cursor)
+    {
+        text ??= "";
+        if (!_imeComposing) ImeCompositionStart();
+        if (text == _imeComposition && cursor == _imeCursorPos) return;
+        _imeComposition = text;
+        _imeCursorPos = cursor;
+        MarkPaint();
+    }
+
+    /// <summary>
+    /// Ends composition: a non-empty result is inserted through the same editing path as
+    /// typed characters (value, caret, selection-clear, blink clock, input event); a
+    /// null/empty result is a plain dismissal that only drops the pending text.
+    /// </summary>
+    public void ImeCompositionCommit(string? text)
+    {
+        var wasComposing = _imeComposing;
+        var hadPending = _imeComposition.Length > 0;
+        ClearImeComposition();
+        if (!string.IsNullOrEmpty(text))
+            InsertAtCaret(text);
+        else if (wasComposing || hadPending)
+            MarkPaint();
+    }
+
+    /// <summary>Discard the pending composition without inserting anything.</summary>
+    public void ImeCompositionCancel() => ImeCompositionCommit(null);
+
+    /// <summary>
+    /// Caret geometry of the focused editable in DOCUMENT space (no scroll, no chrome
+    /// offset — the shell scrolls speculatively and transforms these itself): same maths
+    /// as the shell's in-process IME host (LayoutBox + measured text before the caret),
+    /// plus the pending composition so the candidate window tracks the drawn caret.
+    /// </summary>
+    public void GetImeCaretState(out float caretX, out float caretY, out float caretH,
+        out bool hasEditableFocus, out bool isPassword)
+    {
+        caretX = caretY = caretH = 0;
+        hasEditableFocus = false;
+        isPassword = false;
+        var el = _focused;
+        if (el == null || !el.IsTextEditable) return;
+        hasEditableFocus = true;
+        isPassword = el.InputType?.ToLowerInvariant() == "password";
+        var box = el.LayoutBox;
+        if (box == null) return;
+
+        float fontSize = el.ComputedStyle?.FontSize > 0 ? el.ComputedStyle.FontSize : 14;
+        string fontFamily = el.ComputedStyle?.FontFamily ?? "Arial";
+        string value = el.Value ?? "";
+        int cursor = Math.Clamp(_caret, 0, value.Length);
+        string before = value[..cursor];
+        if (_imeComposing && _imeComposition.Length > 0)
+            before += _imeComposition[..Math.Clamp(_imeCursorPos, 0, _imeComposition.Length)];
+        float textBeforeWidth = TextMeasurer.Instance?.MeasureText(before, fontFamily, fontSize)
+            ?? before.Length * fontSize * 0.55f;
+        caretX = box.ContentBox.Left + 2 + textBeforeWidth;
+        caretY = box.BorderBox.Top;
+        caretH = box.ContentBox.Height > 0 ? box.ContentBox.Height : fontSize * 1.5f;
     }
 
     public void HandleKey(ushort charCode, ushort key, bool repeat)
@@ -1324,7 +1428,7 @@ public sealed class PageEngine : IDisposable
             visitor.SetFocusedElement(_focused);
             visitor.SetPressedButton(_pressedButton);
             if (_focused != null && _focused.IsTextEditable)
-                visitor.SetInputState(_caret, _selStart, _showCursor, false, "", 0);
+                visitor.SetInputState(_caret, _selStart, _showCursor, _imeComposing, _imeComposition, _imeCursorPos);
             // Page selection is a document-level concept, independent of the input caret
             // state above — the paint walk tints the anchored node/offset range.
             if (_hasSelection && _selAnchor.Node != null && _selFocus.Node != null)

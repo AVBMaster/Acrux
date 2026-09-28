@@ -177,6 +177,9 @@ namespace UpBrowser;
     private bool _inputImeComposing;
     private string _inputImeCompositionStr = "";
     private int _inputImeCursorPos;
+    // Process-mode IME: last target state read from the newest remote frame (change
+    // detector so the IME target is only re-set when the child's focus actually moved).
+    private bool _remoteImeEditable;
 
     // Element scrollbar drag state
     private LayoutBox? _elemScrollDragBox;
@@ -2006,6 +2009,19 @@ namespace UpBrowser;
         var active = ActiveRemote();
         if (active == null) return;
 
+        // IME follows the child without a round trip: the target when its focus moved,
+        // the candidate window when the newest frame published a new caret. All reads
+        // hit the shell's cached frame metadata.
+        bool imeEditable = active.Proc.TryGetImeState(out _, out _, out _, out bool imeFocus, out bool imePassword)
+            && imeFocus && !imePassword;
+        if (imeEditable != _remoteImeEditable)
+        {
+            _remoteImeEditable = imeEditable;
+            UpdateImeTarget();
+        }
+        if (imeEditable)
+            _window.UpdateImeCompositionWindow();
+
         // Wheel arbitration safety net: if the child never answers, scroll the page.
         if (_wheelAwaiting && Environment.TickCount64 - _wheelSentTick > 80)
             FlushPendingWheel(consumed: false);
@@ -3665,6 +3681,20 @@ namespace UpBrowser;
             _focusedElement = null;
             var ime = _devTools.GetActiveImeSupport();
             _window.SetImeTarget(ime);
+        }
+        else if (_processTabs)
+        {
+            _devToolsFocused = false;
+            // Out-of-process page: the child owns the DOM focus, so the IME target follows
+            // the newest frame's metadata instead of _focusedElement (which the shell never
+            // holds in process mode). Password fields block IME here too, and a tab without
+            // a frame yet behaves exactly like a page without an editable focus.
+            var proc = ActiveRemote()?.Proc;
+            if (proc != null && proc.TryGetImeState(out _, out _, out _, out bool hasFocus, out bool password)
+                && hasFocus && !password)
+                _window.SetImeTarget(_pageInputImeHost);
+            else
+                _window.SetImeTarget(null);
         }
         else if (_focusedElement != null && _focusedElement.IsTextEditable)
         {
@@ -6134,6 +6164,19 @@ namespace UpBrowser;
 
         public Point GetImeCaretPosition()
         {
+            if (_app._processTabs)
+            {
+                // Out-of-process page: the newest frame carries the caret in DOCUMENT
+                // space; the shell applies its own (speculative) scroll and the chrome
+                // offset here, so the candidate window stays glued to the caret while
+                // the child is still catching up.
+                var proc = _app.ActiveRemote()?.Proc;
+                if (proc != null && proc.TryGetImeState(out float docX, out float docY, out _, out _, out _))
+                    return new Point(docX - _app._scroll.ScrollX,
+                        docY - _app._scroll.ScrollY + _app._contentOffset);
+                return new Point(0, _app._contentOffset);
+            }
+
             var el = _app._focusedElement;
             if (el?.LayoutBox == null)
                 return new Point(0, _app._contentOffset);
@@ -6151,6 +6194,13 @@ namespace UpBrowser;
 
         public void OnImeCompositionStart()
         {
+            if (_app._processTabs)
+            {
+                // The engine owns composition state out of process: forward and let the
+                // next frame bring back the drawn composition + caret.
+                _app.ActiveRemote()?.Proc.ImeUpdate("", 0, 0);
+                return;
+            }
             _app._inputImeComposing = true;
             _app._inputImeCompositionStr = "";
             _app._inputImeCursorPos = 0;
@@ -6158,6 +6208,12 @@ namespace UpBrowser;
 
         public void OnImeCompositionUpdate(string compositionString, int cursorPosition)
         {
+            if (_app._processTabs)
+            {
+                compositionString ??= "";
+                _app.ActiveRemote()?.Proc.ImeUpdate(compositionString, cursorPosition, compositionString.Length);
+                return;
+            }
             _app._inputImeCompositionStr = compositionString;
             _app._inputImeCursorPos = cursorPosition;
             _app._input.NeedsRedraw = true;
@@ -6165,6 +6221,17 @@ namespace UpBrowser;
 
         public void OnImeCompositionEnd(string? resultString)
         {
+            if (_app._processTabs)
+            {
+                var proc = _app.ActiveRemote()?.Proc;
+                if (proc == null) return;
+                if (string.IsNullOrEmpty(resultString))
+                    proc.ImeCancel();
+                else
+                    proc.ImeCommit(resultString);
+                return;
+            }
+
             _app._inputImeComposing = false;
             _app._inputImeCompositionStr = "";
             _app._inputImeCursorPos = 0;

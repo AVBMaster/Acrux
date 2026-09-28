@@ -455,6 +455,26 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
                 _engine.HandleChar(r.ReadUInt16());
                 break;
             }
+            case TabMsg.ImeUpdate:
+            {
+                // [string text][int selStart][int selLen] — the composition caret offset
+                // is what positions the pending text; selLen is carried for the protocol's
+                // sake (the engine always underlines the whole pending string).
+                using var r = new BinaryReader(new MemoryStream(msg.Payload));
+                var text = TabFraming.ReadString(r);
+                int cursor = r.ReadInt32();
+                _engine.ImeCompositionUpdate(text, cursor);
+                break;
+            }
+            case TabMsg.ImeCommit:
+            {
+                using var r = new BinaryReader(new MemoryStream(msg.Payload));
+                _engine.ImeCompositionCommit(TabFraming.ReadString(r));
+                break;
+            }
+            case TabMsg.ImeCancel:
+                _engine.ImeCompositionCancel();
+                break;
             case TabMsg.Wheel:
             {
                 using var r = new BinaryReader(new MemoryStream(msg.Payload));
@@ -753,6 +773,9 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
         int pktSlot = AcquireFreeSlot();
         if (pktSlot < 0) { _renderDirty = true; return; }
 
+        _engine.GetImeCaretState(out float imeCaretX, out float imeCaretY, out float imeCaretH,
+            out bool imeHasFocus, out bool imePassword);
+
         var meta = new FrameMeta
         {
             Mode = mode,
@@ -767,6 +790,13 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
             DomCount = _engine.DomCount,
             BoxCount = _engine.BoxCount,
             ScrollDy = scrollDy,
+            // IME target state travels with every frame — the shell positions the
+            // candidate window from it without a pipe round trip.
+            CaretX = imeCaretX,
+            CaretY = imeCaretY,
+            CaretH = imeCaretH,
+            HasEditableFocus = imeHasFocus,
+            IsPassword = imePassword,
         };
         ulong seq = ch.Publish(_rasterSlot, in meta, _rectScratch.AsSpan(0, rectCount));
         _holdsLease = false;
@@ -836,7 +866,8 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
         Send(TabMsg.Hello, w =>
         {
             w.Write(PageProtocol.Version);
-            w.Write((ulong)(PageProtocol.Capabilities.ShmFrames | PageProtocol.Capabilities.BlockingDialogs));
+            w.Write((ulong)(PageProtocol.Capabilities.ShmFrames | PageProtocol.Capabilities.BlockingDialogs |
+                            PageProtocol.Capabilities.Ime));
             w.Write(Environment.ProcessId);
             TabFraming.WriteString(w, name);
             w.Write(wPx);

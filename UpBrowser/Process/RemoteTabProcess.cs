@@ -502,6 +502,16 @@ internal sealed class RemoteTabProcess : IDisposable
     public void ScrollTo(float x, float y) => Send(TabMsg.ScrollTo, w => { w.Write(x); w.Write(y); });
     public void KeyDown(ushort charCode, ushort key, bool repeat) => Send(TabMsg.KeyDown, w => { w.Write(charCode); w.Write(key); w.Write((byte)(repeat ? 1 : 0)); });
     public void Char(ushort charCode) => Send(TabMsg.Char, w => w.Write(charCode));
+
+    /// <summary>
+    /// Forward a composition update to the engine. Non-blocking fire-and-forget: the pending
+    /// text is drawn into the page by the child and the updated caret comes back with the
+    /// next frame's metadata — the shell never waits on the pipe for IME.
+    /// </summary>
+    public void ImeUpdate(string text, int cursor, int length) =>
+        Send(TabMsg.ImeUpdate, w => { TabFraming.WriteString(w, text ?? ""); w.Write(cursor); w.Write(length); });
+    public void ImeCommit(string text) => Send(TabMsg.ImeCommit, w => TabFraming.WriteString(w, text ?? ""));
+    public void ImeCancel() => Send(TabMsg.ImeCancel, _ => { });
     /// <summary>Hand the user's answer back so the page's script thread resumes.</summary>
     public void RespondDialog(int requestId, bool accepted, string? text) =>
         Send(TabMsg.DialogResult, w =>
@@ -560,6 +570,28 @@ internal sealed class RemoteTabProcess : IDisposable
             contentW = m.ContentW; contentH = m.ContentH;
             domCount = m.DomCount; boxCount = m.BoxCount;
             damageBytes = _lastDamageBytes;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// IME target state of the newest frame the shell knows about: the focused editable's
+    /// caret in DOCUMENT space plus the focus/password flags. False when no frame has
+    /// arrived yet — callers then behave as "no editable focus", exactly like a page
+    /// without one. No round trip: everything rides the per-frame metadata.
+    /// </summary>
+    public bool TryGetImeState(out float caretX, out float caretY, out float caretH,
+        out bool hasEditableFocus, out bool isPassword)
+    {
+        caretX = caretY = caretH = 0;
+        hasEditableFocus = isPassword = false;
+        lock (_frameLock)
+        {
+            if (_frameChannel == null || _lastCommitSeq == 0) return false;
+            var m = _peekSeq >= _acqSeq ? _peekMeta : _acqMeta;
+            caretX = m.CaretX; caretY = m.CaretY; caretH = m.CaretH;
+            hasEditableFocus = m.HasEditableFocus;
+            isPassword = m.IsPassword;
             return true;
         }
     }

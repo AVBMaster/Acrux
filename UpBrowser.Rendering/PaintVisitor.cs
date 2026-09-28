@@ -1382,7 +1382,7 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
         {
             var blendLayer = PaintOpPool.GetPushLayerOp();
             blendLayer.HasClipRect = true;
-            blendLayer.ClipRect = paddingRect;
+            blendLayer.ClipRect = bgClipRect;
             blendLayer.Bounds = borderRect;
             _displayList.Add(blendLayer);
         }
@@ -1392,10 +1392,10 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
             SKColor bgColor = style.BackgroundColor.Value;
 
             var op = PaintOpPool.GetDrawRectOp();
-            op.Rect = paddingRect;
+            op.Rect = bgClipRect;
             op.FillColor = bgColor;
             op.BorderRadius = Math.Max(style.BorderTopLeftRadius, Math.Max(style.BorderTopRightRadius, Math.Max(style.BorderBottomLeftRadius, style.BorderBottomRightRadius)));
-            op.CornerRadii = ResolveBackgroundCornerRadii(style, borderRect);
+            op.CornerRadii = ResolveBackgroundCornerRadii(style, bgClipRect);
             op.Bounds = borderRect;
             // The BODY background belongs at the very bottom of the page z-order
             // (just above the canvas), so negative-z-index content such as outset
@@ -1583,10 +1583,10 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
             SKColor bgColor = style.BackgroundColor.Value;
 
             var op = PaintOpPool.GetDrawRectOp();
-            op.Rect = paddingRect;
+            op.Rect = bgClipRect;
             op.FillColor = bgColor;
             op.BorderRadius = Math.Max(style.BorderTopLeftRadius, Math.Max(style.BorderTopRightRadius, Math.Max(style.BorderBottomLeftRadius, style.BorderBottomRightRadius)));
-            op.CornerRadii = ResolveBackgroundCornerRadii(style, borderRect);
+            op.CornerRadii = ResolveBackgroundCornerRadii(style, bgClipRect);
             op.Bounds = borderRect;
             _displayList.Add(op);
         }

@@ -76,6 +76,7 @@ internal static class ProcessTabSelfTest
         Console.WriteLine($"[proctest] base features pass={pass}");
         bool features = FeatureTests().GetAwaiter().GetResult();
         bool selection = SelectionTest();
+        bool ime = ImeTest();
         bool dialogs = DialogTest();
         bool watchdog = WatchdogTest();
         bool crashes = CrashTest();
@@ -84,7 +85,7 @@ internal static class ProcessTabSelfTest
         bool nonblocking = SendUnderWedgeTest();
         bool budget = RestartBudgetTest();
         bool perf = PerformanceTests().GetAwaiter().GetResult();
-        pass = pass && features && selection && dialogs && watchdog && crashes && channel && resize && nonblocking && budget && perf;
+        pass = pass && features && selection && ime && dialogs && watchdog && crashes && channel && resize && nonblocking && budget && perf;
         Console.WriteLine(pass ? "[proctest] PASS" : "[proctest] FAIL");
 
         try { Directory.Delete(dir, true); } catch { }
@@ -251,6 +252,8 @@ internal static class ProcessTabSelfTest
                 PageBgRgba = 0x11223344u,
                 DomCount = 11 + slot, BoxCount = 22,
                 ScrollDy = 3,
+                CaretX = 33.5f, CaretY = 44.25f, CaretH = 18f,
+                HasEditableFocus = true, IsPassword = true,
             };
             host.Publish(slot, in meta, rects);
             lastSlot = slot;
@@ -263,6 +266,8 @@ internal static class ProcessTabSelfTest
         bool newest = got && seq == UpBrowser.PageContract.FrameChannel.SlotCount;
         bool metaOk = got && rmeta.ScrollY == 2.5f && rmeta.ContentW >= 1000 && rmeta.PageBgRgba == 0x11223344u
             && rmeta.BoxCount == 22 && rmeta.ScrollDy == 3
+            && rmeta.CaretX == 33.5f && rmeta.CaretY == 44.25f && rmeta.CaretH == 18f
+            && rmeta.HasEditableFocus && rmeta.IsPassword
             && rmeta.Mode == UpBrowser.PageContract.FrameMode.DamageRows;
         bool pixelsOk = got && probe == (byte)(rslot * 16 + 1);
         bool rectsOk = got && rrects.Length == 2 && rrects[1].X == 5 && rrects[1].Height == 8;
@@ -754,6 +759,85 @@ internal static class ProcessTabSelfTest
             Thread.Sleep(20);
         }
         return 0;
+    }
+
+    /// <summary>
+    /// CJK composition works out of process: the shell forwards ImeUpdate/Commit/Cancel,
+    /// the engine owns the composition (drawn into the frame at the caret), and every
+    /// published frame carries the document-space caret + editable/password flags so the
+    /// candidate window follows without a round trip. The commit assertion goes through
+    /// real DOM + JS (the page's input listener writes the title), not an internal getter.
+    /// </summary>
+    private static bool ImeTest()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "upbrowser_proctest_ime");
+        Directory.CreateDirectory(dir);
+        var page = Path.Combine(dir, "ime.html");
+        File.WriteAllText(page, """
+            <!DOCTYPE html><html><head><title>start</title></head>
+            <body style="margin:0">
+            <input id="in" type="text" style="width:200px;height:30px">
+            <div style="height:40px"></div>
+            <input id="pw" type="password" style="width:160px;height:30px">
+            <script>
+              var inp = document.getElementById('in');
+              inp.addEventListener('input', function(){ document.title = 'val:' + inp.value; });
+            </script>
+            </body></html>
+            """);
+        var url = new Uri(page).AbsoluteUri;
+
+        using var remote = new RemoteTabProcess(84, url, 1f, 1f);
+        var sw = Stopwatch.StartNew();
+        while (!remote.IsConnected && sw.ElapsedMilliseconds < 8000) Thread.Sleep(20);
+        remote.NavigateHtml(File.ReadAllText(page), url);
+        bool framed = WaitUntil(() => remote.FrameVersion > 0, 8000) > 0;
+
+        // Focus the text input by click: the frame reports editable focus and no
+        // password flag — exactly what the shell's UpdateImeTarget consults in process mode.
+        remote.MouseDown(10, 15);
+        remote.MouseUp(10, 15);
+        bool textFocus = WaitUntil(() =>
+            remote.TryGetImeState(out _, out _, out _, out bool f, out bool p) && f && !p, 4000) > 0;
+
+        // The composition is laid out, not just stored: the published caret x advances
+        // with the pending composition's measured width.
+        remote.ImeUpdate("nihao", 5, 5);
+        bool caretUp = WaitUntil(() =>
+            remote.TryGetImeState(out float cx, out float _, out float _, out bool f, out _) && f && cx > 10, 4000) > 0;
+        remote.TryGetImeState(out float firstX, out _, out float caretH, out _, out _);
+        remote.ImeUpdate("nihao shijie", 12, 12);
+        bool caretGrew = WaitUntil(() =>
+            remote.TryGetImeState(out float cx2, out _, out _, out bool f, out _) && f && cx2 > firstX + 8, 4000) > 0;
+        bool caretSized = caretH > 8;
+        remote.ImeCancel();
+
+        // Commit inserts through the engine's typed-character path and fires 'input':
+        // the page's own listener writes the title — an end-to-end IPC proof.
+        remote.ImeUpdate("ni hao", 6, 6);
+        remote.ImeCommit("你好");
+        bool committed = WaitUntil(() => remote.Title == "val:你好", 6000) > 0;
+
+        // The password block crosses the boundary: focusing the password input reports
+        // IsPassword, which is what stops the shell from ever offering it as IME target.
+        remote.MouseDown(10, 98);
+        remote.MouseUp(10, 98);
+        bool passwordFlag = WaitUntil(() =>
+            remote.TryGetImeState(out _, out _, out _, out bool f, out bool p) && f && p, 4000) > 0;
+
+        // Update-then-cancel inserts nothing: the value (and thus the title) is untouched.
+        // (The child may batch both commands into one pass, so assert on the settled state,
+        // not on a new frame.)
+        remote.MouseDown(10, 15);
+        remote.MouseUp(10, 15);
+        remote.ImeUpdate("x", 1, 1);
+        remote.ImeCancel();
+        bool cancelSilent = WaitUntil(() => remote.Title != "val:你好", 500) == 0 && remote.Title == "val:你好";
+
+        Console.WriteLine($"[proctest] ime focus={textFocus} caret={caretUp} grew={caretGrew} " +
+            $"h={caretSized} password={passwordFlag} commit={committed} cancel={cancelSilent} framed={framed}");
+        try { Directory.Delete(dir, true); } catch { }
+        return framed && textFocus && caretUp && caretGrew && caretSized && passwordFlag && committed && cancelSilent;
     }
 
     /// <summary>Performance invariants: idle pages send zero frames, small DOM
