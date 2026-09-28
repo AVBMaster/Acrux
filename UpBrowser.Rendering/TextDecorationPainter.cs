@@ -1,4 +1,4 @@
-using SkiaSharp;
+﻿using SkiaSharp;
 using UpBrowser.Core.Dom;
 
 namespace UpBrowser.Rendering;
@@ -12,6 +12,49 @@ namespace UpBrowser.Rendering;
 public static class TextDecorationPainter
 {
     /// <summary>
+    /// Authored per-decoration-line geometry: the parts of
+    /// 'text-decoration-thickness', 'text-underline-offset',
+    /// 'text-underline-position' and 'text-decoration-skip-ink' that change
+    /// where a stripe is drawn, plus the font-supplied values those keywords
+    /// fall back to. <see cref="Auto"/> keeps the historical behaviour
+    /// (font-size / 10 thickness, font-derived underline offset).
+    /// </summary>
+    public struct DecorationGeometry
+    {
+        /// <summary>'text-decoration-thickness' in px; NaN means 'auto'.</summary>
+        public float Thickness;
+
+        /// <summary>True for 'text-decoration-thickness: from-font'.</summary>
+        public bool ThicknessFromFont;
+
+        /// <summary>'text-underline-offset' in px; NaN means 'auto'.</summary>
+        public float UnderlineOffset;
+
+        public TextUnderlinePositionType UnderlinePosition;
+
+        /// <summary>False for 'text-decoration-skip-ink: none'.</summary>
+        public bool SkipInk;
+
+        /// <summary>The used font's underline thickness, for 'from-font'.</summary>
+        public float FontUnderlineThickness;
+
+        /// <summary>The used font's underline position: distance from the
+        /// baseline down to the stripe, always positive.</summary>
+        public float FontUnderlinePosition;
+
+        /// <summary>The used font's descent, for 'text-underline-position: under'.</summary>
+        public float Descent;
+
+        public static DecorationGeometry Auto => new()
+        {
+            Thickness = float.NaN,
+            UnderlineOffset = float.NaN,
+            UnderlinePosition = TextUnderlinePositionType.Auto,
+            SkipInk = true,
+        };
+    }
+
+    /// <summary>
     /// Corresponds to ComputeDecorationThickness(): auto thickness is
     /// font_size / 10, floored at the minimum thickness (1 CSS px).
     /// </summary>
@@ -19,6 +62,53 @@ public static class TextDecorationPainter
     {
         float autoThickness = MathF.Max(minimumThickness, computedFontSize / 10f);
         return autoThickness;
+    }
+
+    /// <summary>
+    /// Resolves the stripe thickness. 'auto' is font_size / 10, 'from-font' takes
+    /// the font's own value, an authored length or percentage (already resolved
+    /// against the font size by the cascade) is rounded to a whole pixel: a
+    /// sub-pixel stripe would otherwise be snapped back up by the painter and
+    /// read as a different thickness. Every branch keeps the minimum thickness.
+    /// </summary>
+    public static float ResolveThickness(float fontSize, in DecorationGeometry? geometry)
+    {
+        const float minimumThickness = 1f;
+        float autoThickness = ComputeDecorationThickness(fontSize, minimumThickness);
+        if (geometry is { } g)
+        {
+            if (g.ThicknessFromFont && g.FontUnderlineThickness > 0)
+                return MathF.Max(minimumThickness, g.FontUnderlineThickness);
+            if (!float.IsNaN(g.Thickness))
+                return MathF.Max(minimumThickness, MathF.Round(g.Thickness));
+        }
+        return autoThickness;
+    }
+
+    /// <summary>
+    /// Distance from the baseline down to the top of the underline stripe
+    /// (ComputeUnderlineOffsetAuto / …FromFont / …ForUnder). 'auto' keeps a small
+    /// gap that grows with the thickness, 'from-font' uses the font's own
+    /// underline position and 'under' pushes the line below the descenders;
+    /// 'alphabetic' is the horizontal-tb default. A fixed
+    /// 'text-underline-offset' replaces the auto gap — the line then starts on
+    /// the baseline and moves by the authored amount.
+    /// </summary>
+    public static float ResolveUnderlineOffset(float thickness, in DecorationGeometry? geometry)
+    {
+        float autoGap = Math.Max(1, (int)MathF.Ceiling(thickness / 2f));
+        if (geometry is not { } g)
+            return autoGap;
+
+        bool offsetIsFixed = !float.IsNaN(g.UnderlineOffset);
+        float authored = offsetIsFixed ? MathF.Round(g.UnderlineOffset) : 0f;
+        float gap = g.UnderlinePosition switch
+        {
+            TextUnderlinePositionType.Under => MathF.Max(0f, g.Descent) + 1f,
+            TextUnderlinePositionType.FromFont => g.FontUnderlinePosition > 0 ? g.FontUnderlinePosition : autoGap,
+            _ => offsetIsFixed ? 0f : autoGap,
+        };
+        return gap + authored;
     }
 
     /// <summary>WavyControlPointDistance(): distance from the wave axis to the bezier control points.</summary>
@@ -101,12 +191,13 @@ public static class TextDecorationPainter
         bool underline, bool overline,
         TextDecorationStyleType style, SKColor color, SKColor underlineColor,
         List<TextShadowValue>? shadows,
-        Func<float, float, List<SKRect>?>? skipInkProvider = null)
+        Func<float, float, List<SKRect>?>? skipInkProvider = null,
+        DecorationGeometry? geometry = null)
     {
         if (width <= 0)
             return;
 
-        float thickness = ComputeDecorationThickness(fontSize);
+        float thickness = ResolveThickness(fontSize, geometry);
         var lineColor = underlineColor.Alpha > 0 ? underlineColor : color;
 
         // text-decoration-skip-ink: auto — punch holes in the decoration line
@@ -115,16 +206,16 @@ public static class TextDecorationPainter
         // band is the decoration bounds inset by 0.5 (to ignore intersects
         // smaller than half a pixel); the provider returns the clip rects for a
         // given band (upper = band top relative to the baseline, stripe = band
-        // height) in canvas coordinates.
-        float dilation = MathF.Min(thickness, 13f);
+        // height) in canvas coordinates. 'skip-ink: none' keeps the line whole.
+        bool skipInk = geometry is not { SkipInk: false };
         List<SKRect>? underlineClips = null;
         List<SKRect>? overlineClips = null;
-        if (skipInkProvider != null)
+        float underlineGap = ResolveUnderlineOffset(thickness, geometry);
+        if (skipInk && skipInkProvider != null)
         {
             if (underline)
             {
-                int gap = Math.Max(1, (int)MathF.Ceiling(thickness / 2f));
-                float lineY = baselineY + gap;
+                float lineY = baselineY + underlineGap;
                 underlineClips = skipInkProvider(lineY - baselineY + 0.5f, StripeHeight(style, thickness));
             }
             if (overline)
@@ -136,12 +227,11 @@ public static class TextDecorationPainter
 
         PaintWithShadowPhases(canvas, shadows, lineColor, (dx, dy, shadowColor) =>
         {
-            // Underline: gap below the baseline grows with thickness.
-            // (ComputeUnderlineOffsetAuto with is_fixed=false.)
+            // Underline: the offset from the baseline comes from the font, from
+            // 'text-underline-position' or from both (see ResolveUnderlineOffset).
             if (underline)
             {
-                int gap = Math.Max(1, (int)MathF.Ceiling(thickness / 2f));
-                float lineY = baselineY + gap;
+                float lineY = baselineY + underlineGap;
                 DrawLineWithSkipInk(canvas, underlineClips, dx, dy, () =>
                 {
                     PaintSingleLine(canvas, startX + dx, width, lineY + dy, thickness, style, shadowColor);
@@ -208,12 +298,13 @@ public static class TextDecorationPainter
     public static void PaintLineThrough(
         SKCanvas canvas, float startX, float width, float baselineY, float ascent, float fontSize,
         bool lineThrough,
-        TextDecorationStyleType style, SKColor color, List<TextShadowValue>? shadows)
+        TextDecorationStyleType style, SKColor color, List<TextShadowValue>? shadows,
+        DecorationGeometry? geometry = null)
     {
         if (width <= 0)
             return;
 
-        float thickness = ComputeDecorationThickness(fontSize);
+        float thickness = ResolveThickness(fontSize, geometry);
 
         PaintWithShadowPhases(canvas, shadows, color, (dx, dy, shadowColor) =>
         {
@@ -312,18 +403,17 @@ public static class TextDecorationPainter
         float step = WavyStep(thickness);
         float controlPointDistance = WavyControlPointDistance(thickness);
 
-        // The wavy path midpoints sit at y=0.5; its stroked bounds span
-        // 0.5 +/- (control_point_distance + thickness/2). The engine floors the
-        // top and paints the tile so nothing lands at y<0, centering the wave a
-        // little below the decoration line.
-        float strokeTop = 0.5f - controlPointDistance - thickness / 2f;
-        float patternTop = MathF.Floor(strokeTop);
-        float ty = lineY - patternTop;
+        // The pattern is authored around the axis y = 0.5. Chrome centres the wave one
+        // thickness below the decoration line's top edge (measured at 24px Arial for
+        // thickness auto/2/4/8), and the clip has to be expressed in the shifted space
+        // as well; clipping around |lineY| after the translate hides the wave.
+        float halfSpan = controlPointDistance + thickness;
+        float ty = lineY - 0.5f + thickness;
 
         using var pattern = PrepareWavyStrokePath(thickness);
 
-        // Tile the three-bezier pattern (span 6*step) across the line, starting
-        // one wave before startX so clipping produces identical phase at both ends.
+        // Tile the three-bezier pattern across the line, starting one wave before
+        // startX so clipping produces identical phase at both ends.
         float left = startX - 2f * step;
         float right = startX + width + 2f * step;
         using var tiled = new SKPath();
@@ -336,7 +426,7 @@ public static class TextDecorationPainter
 
         canvas.Save();
         canvas.Translate(0, ty);
-        canvas.ClipRect(new SKRect(startX, lineY - 40, startX + width, lineY + 40));
+        canvas.ClipRect(new SKRect(startX, 0.5f - halfSpan, startX + width, 0.5f + halfSpan));
         using var paint = new SKPaint
         {
             Color = color,

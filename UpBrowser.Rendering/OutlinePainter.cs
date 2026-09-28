@@ -375,19 +375,24 @@ public sealed class OutlinePainter
             borderRect.Right + outlineOffset + width / 2,
             borderRect.Bottom + outlineOffset + width / 2);
 
-        float maxRadius = Math.Max(style.BorderTopLeftRadius, Math.Max(style.BorderTopRightRadius,
-            Math.Max(style.BorderBottomLeftRadius, style.BorderBottomRightRadius)));
-        float radius = maxRadius > 0 ? maxRadius + outlineOffset : 0;
+        // The outline follows the element's corner shape per corner, not one shared radius.
+        // A square corner stays square: only real radii grow with outline-offset.
+        var (tl, tr, br, bl) = RoundedBorderGeometry.ResolveRadii(style, borderRect);
+        static float Outset(float radius, float offset) => radius > 0 ? radius + offset : 0;
+        var radii = new[]
+        {
+            new SKPoint(Outset(tl.X, outlineOffset), Outset(tl.Y, outlineOffset)),
+            new SKPoint(Outset(tr.X, outlineOffset), Outset(tr.Y, outlineOffset)),
+            new SKPoint(Outset(br.X, outlineOffset), Outset(br.Y, outlineOffset)),
+            new SKPoint(Outset(bl.X, outlineOffset), Outset(bl.Y, outlineOffset)),
+        };
+        bool anyRadius = radii[0].X > 0 || radii[1].X > 0 || radii[2].X > 0 || radii[3].X > 0;
 
         var path = new SKPath();
-        if (radius > 0)
+        if (anyRadius)
         {
             var rrect = new SKRoundRect();
-            rrect.SetRectRadii(outlineRect,
-                new[] {
-                    new SKPoint(radius, radius), new SKPoint(radius, radius),
-                    new SKPoint(radius, radius), new SKPoint(radius, radius)
-                });
+            rrect.SetRectRadii(outlineRect, radii);
             path.AddRoundRect(rrect);
         }
         else
@@ -430,11 +435,31 @@ public sealed class OutlinePainter
             return;
         }
 
+        // Rounded outlines stroke the resolved centerline; the device-aligned rect op
+        // only supports a single scalar radius, so keep it for square corners.
+        if (anyRadius)
+        {
+            var pathOp = PaintOpPool.GetDrawPathOp();
+            pathOp.Path.Dispose();
+            pathOp.Path = path;
+            pathOp.StrokePaint = new SKPaint
+            {
+                Color = style.OutlineColor,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = width,
+                IsAntialias = true,
+            };
+            pathOp.FillPaint = null;
+            pathOp.Bounds = outlineRect;
+            _displayList.Add(pathOp);
+            return;
+        }
+
         var op = PaintOpPool.GetDrawRectOp();
         op.Rect = outlineRect;
         op.BorderTopWidth = op.BorderRightWidth = op.BorderBottomWidth = op.BorderLeftWidth = width;
         op.BorderTopColor = op.BorderRightColor = op.BorderBottomColor = op.BorderLeftColor = style.OutlineColor;
-        op.BorderRadius = radius;
+        op.BorderRadius = 0;
         op.Bounds = outlineRect;
         _displayList.Add(op);
     }

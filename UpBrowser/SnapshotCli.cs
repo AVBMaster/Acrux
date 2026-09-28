@@ -92,6 +92,9 @@ internal static class SnapshotCli
         string inputPath = args[1];
         int width = args.Length > 2 ? int.Parse(args[2]) : 1024;
         int height = args.Length > 3 ? int.Parse(args[3]) : 768;
+        float dpiScale = args.Length > 4
+            ? float.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture)
+            : 1f;
 
         if (!File.Exists(inputPath))
         {
@@ -108,7 +111,7 @@ internal static class SnapshotCli
         var imageCache = new UpBrowser.Rendering.ImageCache();
         PaintVisitor.InstallReplacedIntrinsicSizes(imageCache, baseUrl);
         var dm = new UpBrowser.Core.Dom.DocumentManager();
-        var load = dm.LoadHtmlAsync(html, baseUrl, width, height, 1f).GetAwaiter().GetResult();
+        var load = dm.LoadHtmlAsync(html, baseUrl, width, height, dpiScale).GetAwaiter().GetResult();
 
         DumpBox(load.Document.DocumentElement, 0);
         return 0;
@@ -189,7 +192,25 @@ internal static class SnapshotCli
         {
             Console.WriteLine($"[op] {op.GetType().Name} bounds=[{op.Bounds.Left:F2},{op.Bounds.Top:F2},{op.Bounds.Right:F2},{op.Bounds.Bottom:F2}] z={op.ZIndex}");
             if (op is DrawTextOp t && t.Text.Length > 0 && t.Text.Length <= 12)
-                Console.WriteLine($"[text] '{t.Text}' x={t.X:F1} y={t.Y:F1} size={t.FontSize:F1}");
+            {
+                string decorations = "";
+                if (t.Underline || t.Overline || t.LineThrough)
+                {
+                    var lines = new List<string>();
+                    if (t.Underline) lines.Add("underline");
+                    if (t.Overline) lines.Add("overline");
+                    if (t.LineThrough) lines.Add("line-through");
+                    decorations = $" deco=[{string.Join(' ', lines)} {t.DecorationStyle} " +
+                        $"color=({t.UnderlineColor.Red},{t.UnderlineColor.Green},{t.UnderlineColor.Blue}) " +
+                        $"text=({t.Color.Red},{t.Color.Green},{t.Color.Blue}) " +
+                        $"thick={(t.DecorationThicknessFromFont ? "from-font" : float.IsNaN(t.DecorationThickness) ? "auto" : t.DecorationThickness.ToString("F1"))} " +
+                        $"uoff={(float.IsNaN(t.DecorationUnderlineOffset) ? "auto" : t.DecorationUnderlineOffset.ToString("F1"))} " +
+                        $"upos={t.DecorationUnderlinePosition} skipInk={(t.DecorationSkipInk ? "auto" : "none")}]";
+                }
+                if (t.AncestorDecorations is { Count: > 0 } ancestors)
+                    decorations += $" propagated={ancestors.Count} {string.Join(",", ancestors)}";
+                Console.WriteLine($"[text] '{t.Text}' x={t.X:F1} y={t.Y:F1} size={t.FontSize:F1}{decorations}");
+            }
             else if (op is DrawRectOp r && r.FillColor.Alpha > 0)
                 Console.WriteLine($"[rect] fill=({r.FillColor.Red},{r.FillColor.Green},{r.FillColor.Blue}) [{r.Rect.Left:F2},{r.Rect.Top:F2} - {r.Rect.Right:F2},{r.Rect.Bottom:F2}]");
         }

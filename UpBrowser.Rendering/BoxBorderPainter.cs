@@ -368,10 +368,12 @@ public sealed class BoxBorderPainter
     {
         if (!rr.IsRounded)
             return true;
+        // Each axis is bounded by the box extent in that direction: the horizontal
+        // radii by the width and the vertical ones by the height.
         return rr.TopLeftRadius + rr.TopRightRadius <= rr.Rect.Width &&
                rr.BottomLeftRadius + rr.BottomRightRadius <= rr.Rect.Width &&
-               rr.TopLeftRadius + rr.BottomLeftRadius <= rr.Rect.Height &&
-               rr.TopRightRadius + rr.BottomRightRadius <= rr.Rect.Height;
+               rr.TopLeftRadiusY + rr.BottomLeftRadiusY <= rr.Rect.Height &&
+               rr.TopRightRadiusY + rr.BottomRightRadiusY <= rr.Rect.Height;
     }
 
     // ─── op emission ──────────────────────────────────────────────────────────
@@ -429,21 +431,18 @@ public sealed class BoxBorderPainter
     {
         var path = new SKPath();
         path.FillType = SKPathFillType.Winding;
+        var direction = counterClockwise ? SKPathDirection.CounterClockwise : SKPathDirection.Clockwise;
         if (rr.IsRounded)
         {
+            rr.ConstrainRadii();
             var rrect = new SKRoundRect();
             rrect.SetRectRadii(rr.Rect,
-                new[] {
-                    new SKPoint(rr.TopLeftRadius, rr.TopLeftRadius),
-                    new SKPoint(rr.TopRightRadius, rr.TopRightRadius),
-                    new SKPoint(rr.BottomRightRadius, rr.BottomRightRadius),
-                    new SKPoint(rr.BottomLeftRadius, rr.BottomLeftRadius)
-                });
-            path.AddRoundRect(rrect, counterClockwise ? SKPathDirection.CounterClockwise : SKPathDirection.Clockwise);
+                new[] { rr.CornerRadius(0), rr.CornerRadius(1), rr.CornerRadius(2), rr.CornerRadius(3) });
+            path.AddRoundRect(rrect, direction);
         }
         else
         {
-            path.AddRect(rr.Rect, counterClockwise ? SKPathDirection.CounterClockwise : SKPathDirection.Clockwise);
+            path.AddRect(rr.Rect, direction);
         }
         return path;
     }
@@ -941,6 +940,9 @@ public sealed class BoxBorderPainter
         if (PaintBorderFastPath())
             return;
 
+        if (PaintRoundedSolidBorders())
+            return;
+
         // Solid, rectangular, possibly-partial borders (single side or several
         // sides with independent colours) are handled directly; the complex
         // mitre path below is reserved for rounded corners and non-solid styles.
@@ -986,7 +988,7 @@ public sealed class BoxBorderPainter
                 }
                 else
                 {
-                    EmitFillDRRect(_outer, _inner, FirstEdge().GetColor);
+                                EmitFillDRRect(_outer, _inner, FirstEdge().GetColor);
                 }
             }
             else
@@ -1056,8 +1058,115 @@ public sealed class BoxBorderPainter
         return true;
     }
 
-    private void DrawDoubleBorder()
+    /// <summary>
+    /// Paint a rounded border whose four solid edges carry different colours.
+    /// Each side owns the wedge of the ring cut out by the 45 degree mitre rays that
+    /// leave the border-box corners, which is what a browser seams adjacent coloured
+    /// arcs with. Filling the ring per side keeps the arcs covered, which the
+    /// axis-aligned side rectangles of the general path cannot do.
+    /// </summary>
+    private bool PaintRoundedSolidBorders()
     {
+        if (!_outer.IsRounded || _visibleEdgeSet != AllBorderEdges)
+            return false;
+
+        for (int i = 0; i < 4; i++)
+        {
+            ref BorderEdge edge = ref _edges[i];
+            if (!edge.ShouldRender || edge.BorderStyleValue != BorderStyle.Solid)
+                return false;
+        }
+
+        using var ring = BuildRoundRectPath(_outer, false);
+        if (IsRenderable(_inner) && !_inner.IsEmpty)
+            ring.AddPath(BuildRoundRectPath(_inner, true));
+
+        foreach (BoxSide side in new[] { BoxSide.Top, BoxSide.Right, BoxSide.Bottom, BoxSide.Left })
+        {
+            using var region = BuildSideMiterPath(side);
+            EmitPushClipPath(ring, true);
+            EmitPushClipPath(region, false);
+            EmitFillRect(_outer.Rect, Edge(side).GetColor);
+            EmitPopClip();
+            EmitPopClip();
+        }
+        return true;
+    }
+
+    /// <summary>The 45 degree miter wedge of <paramref name="side"/> over the border box.</summary>
+    private SKPath BuildSideMiterPath(BoxSide side)
+    {
+        var rect = _outer.Rect;
+        float l = rect.Left, t = rect.Top, r = rect.Right, b = rect.Bottom;
+        float ext = Math.Max(rect.Width, rect.Height) + 1f;
+        var polygon = new List<SKPoint>
+        {
+            new(l - ext, t - ext), new(r + ext, t - ext), new(r + ext, b + ext), new(l - ext, b + ext)
+        };
+
+        // A side is bounded by the two rays through its corners: keep the half-plane
+        // that faces that side (see CSS 2.1 8.5.3 mitre joins).
+        switch (side)
+        {
+            case BoxSide.Top:
+                ClipHalfPlane(polygon, 1, -1, l - t, keepGreater: true);
+                ClipHalfPlane(polygon, 1, 1, r + t, keepGreater: false);
+                break;
+            case BoxSide.Right:
+                ClipHalfPlane(polygon, 1, 1, r + t, keepGreater: true);
+                ClipHalfPlane(polygon, 1, -1, r - b, keepGreater: true);
+                break;
+            case BoxSide.Bottom:
+                ClipHalfPlane(polygon, 1, -1, r - b, keepGreater: false);
+                ClipHalfPlane(polygon, 1, 1, l + b, keepGreater: true);
+                break;
+            default:
+                ClipHalfPlane(polygon, 1, 1, l + b, keepGreater: false);
+                ClipHalfPlane(polygon, 1, -1, l - t, keepGreater: false);
+                break;
+        }
+
+        var path = new SKPath();
+        if (polygon.Count > 2)
+        {
+            path.MoveTo(polygon[0]);
+            for (int i = 1; i < polygon.Count; i++)
+                path.LineTo(polygon[i]);
+            path.Close();
+        }
+        return path;
+    }
+
+    private static void ClipHalfPlane(List<SKPoint> polygon, float a, float b, float c, bool keepGreater)
+    {
+        if (polygon.Count == 0)
+            return;
+
+        float Signed(SKPoint p) => a * p.X + b * p.Y - c;
+        bool Inside(SKPoint p) => keepGreater ? Signed(p) >= 0 : Signed(p) <= 0;
+
+        var clipped = new List<SKPoint>(polygon.Count + 2);
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            var current = polygon[i];
+            var next = polygon[(i + 1) % polygon.Count];
+            bool currentInside = Inside(current);
+            bool nextInside = Inside(next);
+            if (currentInside)
+                clipped.Add(current);
+            if (currentInside != nextInside)
+            {
+                float fc = Signed(current), fn = Signed(next);
+                float scale = fc / (fc - fn);
+                clipped.Add(new SKPoint(current.X + (next.X - current.X) * scale,
+                                        current.Y + (next.Y - current.Y) * scale));
+            }
+        }
+        polygon.Clear();
+        polygon.AddRange(clipped);
+    }
+
+    private void DrawDoubleBorder()    {
         var color = FirstEdge().GetColor;
         bool forceRectangular = !_outer.IsRounded && !_inner.IsRounded;
 
@@ -1204,13 +1313,8 @@ public sealed class BoxBorderPainter
     /// <summary>Corner radius as an SKSize for one corner of a rounded rect.</summary>
     private static SKSize CornerRadius(FloatRoundedRect rr, int corner)
     {
-        return corner switch
-        {
-            0 => new SKSize(rr.TopLeftRadius, rr.TopLeftRadius),
-            1 => new SKSize(rr.TopRightRadius, rr.TopRightRadius),
-            2 => new SKSize(rr.BottomRightRadius, rr.BottomRightRadius),
-            _ => new SKSize(rr.BottomLeftRadius, rr.BottomLeftRadius)
-        };
+        var radius = rr.CornerRadius(corner);
+        return new SKSize(radius.X, radius.Y);
     }
 
     private MiterType ComputeMiter(BoxSide side, BoxSide adjacentSide, int completedEdges)

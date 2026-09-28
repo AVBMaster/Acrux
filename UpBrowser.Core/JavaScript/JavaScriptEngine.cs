@@ -870,8 +870,9 @@ public class WindowHost
         var def = defaultValue?.ToString() ?? "";
         if (_engine.ShowDialog != null)
         {
-            var result = _engine.ShowDialog(msg, "prompt:" + def);
-            return result ?? def;
+            // The default is display input for the dialog, not a fallback answer: a
+            // dismissed prompt must reach script as null.
+            return _engine.ShowDialog(msg, "prompt:" + def);
         }
         else
         {

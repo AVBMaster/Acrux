@@ -39,6 +39,15 @@ internal static class ClipPathClipper
             rect = AdjustRectForGeometryBox(remainder.ToLowerInvariant(), box);
         }
 
+        // A shape function that received tokens it cannot use makes the whole
+        // declaration invalid (CSS Shapes 1 4): the geometry box belongs after the
+        // closing paren, never inside it.
+        if (HasStrayToken(inner))
+        {
+            path.Dispose();
+            return null;
+        }
+
         switch (shapeFunc)
         {
             case "circle":
@@ -64,8 +73,49 @@ internal static class ClipPathClipper
         return path;
     }
 
-    private static int FindMatchingParen(string s, int openIndex)
+    private static readonly string[] ShapeKeywords = { "at", "round", "fill", "nonzero", "evenodd" };
+    private static readonly string[] GeometryBoxes =
     {
+        "border-box", "padding-box", "content-box", "margin-box", "fill-box", "stroke-box", "view-box",
+    };
+
+    /// <summary>
+    /// True when the shape's argument list holds a token no shape can consume: a
+    /// geometry-box keyword (which is only legal after the closing paren) or a bare
+    /// word that is neither a grammar keyword nor a number with a known unit.
+    /// </summary>
+    private static bool HasStrayToken(string inner)
+    {
+        foreach (var raw in inner.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            string token = raw.Trim();
+            if (token.Length == 0) continue;
+            if (Array.Exists(ShapeKeywords, k => token.Equals(k, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            if (token.Contains("calc", StringComparison.OrdinalIgnoreCase)) continue;
+            if (Array.Exists(GeometryBoxes, b => token.Equals(b, StringComparison.OrdinalIgnoreCase)))
+                return true;
+            if (!LooksLikeLength(token))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool LooksLikeLength(string token)
+    {
+        int end = 0;
+        while (end < token.Length && (char.IsDigit(token[end]) || token[end] is '.' or '-' or '+'))
+            end++;
+        if (end == 0) return false;
+        string unit = token[end..].ToLowerInvariant();
+        if (unit.Length == 0 || unit == "%")
+            return float.TryParse(token[..end], System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out _);
+        return unit is "px" or "em" or "rem" or "vw" or "vh" or "vmin" or "vmax" or "pt" or "pc" or "in"
+            or "cm" or "mm" or "q" or "ex" or "ch" or "deg" or "rad" or "grad" or "turn";
+    }
+
+    private static int FindMatchingParen(string s, int openIndex)    {
         int depth = 0;
         for (int i = openIndex; i < s.Length; i++)
         {

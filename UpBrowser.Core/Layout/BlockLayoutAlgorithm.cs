@@ -147,7 +147,7 @@ public class BlockLineClampData
             MarginStrut collapsedStrut = previousInflowPosition.margin_strut;
             collapsedStrut.positive_margin = Math.Max(collapsedStrut.positive_margin, end_margin_strut.positive_margin);
             collapsedStrut.quirky_positive_margin = Math.Max(collapsedStrut.quirky_positive_margin, end_margin_strut.quirky_positive_margin);
-            collapsedStrut.negative_margin = Math.Max(collapsedStrut.negative_margin, end_margin_strut.negative_margin);
+            collapsedStrut.negative_margin = Math.Min(collapsedStrut.negative_margin, end_margin_strut.negative_margin);
 
             float paddingAnnotationOverflow = 0;
             if (previousInflowPosition.block_end_annotation_space < 0)
@@ -461,7 +461,12 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     public BlockLayoutAlgorithm(Element node, in ConstraintSpace space, BreakToken? breakToken)
         : base(node, space)
     {
-        _border = LengthUtils.ComputeBorders(Style);
+        // A collapsing table splits every grid line between its two cells, so the
+        // cell's box is built from half-borders that only the table algorithm can
+        // resolve (CSS 2.1 §17.6.2); it passes them down through the space.
+        // A collapsing table splits every grid line between its two cells, so the
+        // cell's box is built from the half-borders the table algorithm resolved.
+        _border = OwnBorders;
         _padding = ComputePadding();
         _borderPadding = new BoxStrut(_border.Top + _padding.Top, _border.Right + _padding.Right,
             _border.Bottom + _padding.Bottom, _border.Left + _padding.Left);
@@ -490,6 +495,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     private BoxStrut ComputePadding()
     {
         float font = Style.FontSize;
+        using var _scope = FontUnitContext.Use(Style);
         return new BoxStrut(
             Style.PaddingTop.ToPixels(font, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight),
             Style.PaddingRight.ToPixels(font, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight),
@@ -589,9 +595,8 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         var r = LayoutMain();
         r = MaybeRelayoutForScrollbarSpace(r);
         if (r.Status != EStatus.Success)
-        if (r.Status == EStatus.Success)
-            return r;
-        return HandleNonsuccessfulLayoutResult(r);
+            return HandleNonsuccessfulLayoutResult(r);
+        return r;
     }
 
     /// <summary>
@@ -1135,7 +1140,28 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
                     ComputedStyle = node.ComputedStyle != null ? node.ComputedStyle.Clone() : null,
                 };
                 if (anon.ComputedStyle != null)
+                {
                     anon.ComputedStyle.Display = DisplayType.Block;
+                    // Anonymous blocks are not elements: the parent's box-model
+                    // offsets already wrap their content, so their own margins,
+                    // padding and borders are zero (CSS 2.1 §9.2.1.1). Inheriting
+                    // the parent's margin-top here made it collapse a second time
+                    // through the same cursor and inflated the parent's height.
+                    anon.ComputedStyle.MarginTop = new PixelLength(0);
+                    anon.ComputedStyle.MarginRight = new PixelLength(0);
+                    anon.ComputedStyle.MarginBottom = new PixelLength(0);
+                    anon.ComputedStyle.MarginLeft = new PixelLength(0);
+                    anon.ComputedStyle.PaddingTop = new PixelLength(0);
+                    anon.ComputedStyle.PaddingRight = new PixelLength(0);
+                    anon.ComputedStyle.PaddingBottom = new PixelLength(0);
+                    anon.ComputedStyle.PaddingLeft = new PixelLength(0);
+                    anon.ComputedStyle.BorderTopWidth = 0;
+                    anon.ComputedStyle.BorderRightWidth = 0;
+                    anon.ComputedStyle.BorderBottomWidth = 0;
+                    anon.ComputedStyle.BorderLeftWidth = 0;
+                    anon.ComputedStyle.Width = AutoLength.Instance;
+                    anon.ComputedStyle.Height = AutoLength.Instance;
+                }
                 foreach (var n in run)
                     anon.AddChildReferenceForLayout(n);
                 result.Add(anon);
@@ -1590,6 +1616,9 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         float maxW = Style.MaxWidth is PixelLength mw && mw.Value > 0 ? mw.Value : float.MaxValue;
         if (Style.MaxWidth is PercentLength pctMax && pctMax.Value > 0 && Space.HasDefiniteInlineSize)
             maxW = Math.Min(maxW, pctMax.Value * Space.AvailableInlineSize);
+        // CSS 2.1 §10.4: when min-width exceeds max-width, max-width is ignored.
+        if (Style.MinWidth is PixelLength conflictMin && conflictMin.Value > maxW)
+            maxW = float.MaxValue;
 
         if (!float.IsNaN(own))
             return Math.Max(0, Math.Min(own, maxW) - _borderPadding.HorizontalSum - Space.ScrollbarInline);
@@ -1792,12 +1821,17 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
         bool isLeft = style.Float == FloatType.Left;
 
-        float marginTopBlock = style.MarginTop.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
-        float marginBottomBlock = style.MarginBottom.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
-        float marginLeftBlock = Math.Max(0,
-            style.MarginLeft.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight));
-        float marginRightBlock = Math.Max(0,
-            style.MarginRight.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight));
+        // A float's auto margins are treated as zero (CSS 2.1 §10.3.3), so they can
+        // never poison the margin box it reserves on the line.
+        using var _marginFontScope = FontUnitContext.Use(style);
+        float MarginPx(Length l) => l is AutoLength ? 0 : Math.Max(0,
+            l.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight));
+        float BlockMarginPx(Length l) => l is AutoLength ? 0 :
+            l.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+        float marginTopBlock = BlockMarginPx(style.MarginTop);
+        float marginBottomBlock = BlockMarginPx(style.MarginBottom);
+        float marginLeftBlock = MarginPx(style.MarginLeft);
+        float marginRightBlock = MarginPx(style.MarginRight);
         // A float reserves its margin box on the line it starts on.
         float marginInlineSize = childInlineSize + marginLeftBlock + marginRightBlock;
 
@@ -1851,6 +1885,11 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         _exclusionSpace.Add(ExclusionArea.Create(
             new BfcRect(new BfcOffset(bfcLineStart, bfcBlockStart), new BfcOffset(bfcLineEnd, bfcBlockEnd)),
             style.Float, /* is_hidden_for_paint */ false));
+
+        // Later in-flow children with 'clear' only get clearance when they know an
+        // adjoining float exists; without this registration the clear property is
+        // silently ignored (CSS 2.1 §9.5.2).
+        _adjoiningObjectTypes |= isLeft ? AdjoiningObjectTypes.FloatLeft : AdjoiningObjectTypes.FloatRight;
     }
 
     private ConstraintSpace CreateFloatConstraintSpace(Element child)
@@ -2183,7 +2222,10 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     {
         var childStyle = child.ComputedStyle!;
 
-        bool hasClearancePastAdjoiningFloats = !IsContainerBfcResolved() && IsBlockChild(child)
+        // In this port a float resolves the container BFC block-offset at placement
+        // time (see HandleFloat), so unlike the reference algorithm we must apply
+        // clearance even after that offset is resolved.
+        bool hasClearancePastAdjoiningFloats = IsBlockChild(child)
             && HasClearancePastAdjoiningFloats(_adjoiningObjectTypes, childStyle, Style);
 
         float? forcedBfcBlockOffset = null;
@@ -2578,6 +2620,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
         return new PreviousInflowPosition(logicalBlockOffset, marginStrut, annotationSpace,
             selfOrSiblingSelfCollapsingChildHadClearance);
+
     }
 
     // ==========================================================================
@@ -2609,8 +2652,9 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
         if (childBfcBlockOffset.HasValue && IsContainerBfcResolved())
         {
-            return LogicalFromBfcOffsets(new BfcOffset(childBfcLineOffset, childBfcBlockOffset.Value), ContainerBfcOffset(),
+            var lo = LogicalFromBfcOffsets(new BfcOffset(childBfcLineOffset, childBfcBlockOffset.Value), ContainerBfcOffset(),
                 fragmentInlineSize, containerInlineSize, direction);
+            return lo;
         }
 
         float inlineOffset = LogicalFromBfcLineOffset(childBfcLineOffset, _containerBfcLineOffset, fragmentInlineSize,
@@ -2769,8 +2813,8 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         if (Space.IsNewFormattingContext)
             return null;
 
+        using var _scope = FontUnitContext.Use(Style);
         float blockEndMargin = Style.MarginBottom.ToPixels(Style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
-
         // The |endMarginStrut| is the block-start margin if the body doesn't have
         // a resolved BFC block-offset.
         if (!_containerBfcBlockOffset.HasValue)
@@ -2955,10 +2999,12 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     private BoxStrut ComputeMarginsFor(ComputedStyle childStyle)
     {
         float font = childStyle.FontSize;
+        using var _scope = FontUnitContext.Use(childStyle);
         // Percentage margins resolve against the containing block's inline size.
         float pctBase = LengthUtils.IsIndefinite(Space.PercentageResolutionInlineSize) ? 0 : Space.PercentageResolutionInlineSize;
         static float M(Length l, float font, float pctBase, ConstraintSpace sp) =>
-            l is PercentLength p ? p.Value * pctBase : l.ToPixels(font, sp.RootFontSize, sp.ViewportWidth, sp.ViewportHeight);
+            l is AutoLength ? 0
+            : l is PercentLength p ? p.Value * pctBase : l.ToPixels(font, sp.RootFontSize, sp.ViewportWidth, sp.ViewportHeight);
         return new BoxStrut(
             M(childStyle.MarginTop, font, pctBase, Space),
             M(childStyle.MarginRight, font, pctBase, Space),
@@ -2969,11 +3015,17 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     private float ComputeChildInlineSize(Element child, ComputedStyle childStyle)
     {
         var childBp = CombineStruts(BorderPaddingFor(child), PaddingFor(child));
-        var childSpace = Space.InheritBuilder(ChildAvailableInlineSize, float.PositiveInfinity).ToConstraintSpace();
+        // Keep in sync with CreateConstraintSpaceForChild: an auto-width block's
+        // margin box fills the containing block (CSS 2.1 §10.3.3), so the margins
+        // are subtracted from the available inline size here as well.
+        float availableInline = ChildAvailableInlineSize;
+        if (childStyle.Width is AutoLength && IsBlockChild(child))
+            availableInline = Math.Max(0, availableInline - ComputeMarginsFor(childStyle).HorizontalSum);
+        var childSpace = Space.InheritBuilder(availableInline, float.PositiveInfinity).ToConstraintSpace();
         float inlineSize = LengthUtils.ComputeInlineSizeForFragment(childSpace, childStyle, childBp,
-            t => new MinMaxSizesResult(new MinMaxSizes(ChildAvailableInlineSize, ChildAvailableInlineSize)));
+            t => new MinMaxSizesResult(new MinMaxSizes(availableInline, availableInline)));
         if (LengthUtils.IsIndefinite(inlineSize))
-            return ChildAvailableInlineSize;
+            return availableInline;
         return inlineSize;
     }
 
@@ -2981,6 +3033,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     {
         var s = child.ComputedStyle!;
         float font = s.FontSize;
+        using var _scope = FontUnitContext.Use(s);
         float pctBase = LengthUtils.IsIndefinite(Space.PercentageResolutionInlineSize) ? 0 : Space.PercentageResolutionInlineSize;
         static float P(Length l, float font, float pctBase, ConstraintSpace sp) =>
             l is PercentLength p ? p.Value * pctBase : l.ToPixels(font, sp.RootFontSize, sp.ViewportWidth, sp.ViewportHeight);
@@ -3012,12 +3065,21 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
                 float limit = cmw.Value - (cbp.HorizontalSum + LengthUtils.ComputePadding(Space, childStyle).HorizontalSum);
                 childAvailInline = Math.Min(childAvailInline, Math.Max(0, limit));
             }
+            // CSS 2.1 §10.3.3: an in-flow block with 'width: auto' gets a margin
+            // box exactly as wide as the containing block — the horizontal margins
+            // come out of the auto width instead of overflowing beside it. Floats
+            // and BFC roots (new formatting contexts) resolve their width from the
+            // layout opportunity instead, so they're excluded here.
+            if (!isNewFc)
+                childAvailInline = Math.Max(0, childAvailInline - (childData.margins.Left + childData.margins.Right));
         }
 
         var builder = Space.InheritBuilder(childAvailInline, childAvailableSize.BlockSize);
         builder.SetIsNewFormattingContext(isNewFc);
         builder.SetAvailableSize(childAvailInline, childAvailableSize.BlockSize);
-        builder.SetPercentageResolution(childAvailInline, ChildPercentageBlockSize());
+        // Percentages resolve against the containing block's content width, not the
+        // margin-reduced auto width.
+        builder.SetPercentageResolution(childAvailableSize.InlineSize, ChildPercentageBlockSize());
         builder.SetDirection(Space.Direction);
 
         bool hasBfcBlockOffset = _containerBfcBlockOffset.HasValue;

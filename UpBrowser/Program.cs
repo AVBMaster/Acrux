@@ -20,6 +20,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && args[0] == "--frameshot")
+        {
+            Environment.ExitCode = FrameSnapshotCli.Run(args);
+            return;
+        }
+
         if (args.Length > 0 && args[0] == "--tab-host")
         {
             Environment.ExitCode = UpBrowser.Process.TabHostApp.Run(args);

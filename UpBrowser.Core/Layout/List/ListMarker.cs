@@ -137,14 +137,14 @@ public class ListMarker
         if (fontSize <= 0) return LayoutUnit.Zero;
         if (listStyle is "disclosure-open" or "disclosure-closed")
             return new LayoutUnit(fontSize * style.Zoom * 0.66f);
-        float ascent = Fonts.LineBoxMetrics.GetFontMetrics(style).IntAscent;
+        float ascent = Fonts.LineBoxMetrics.GetFontMetrics(style).LayoutAscent;
         return new LayoutUnit((ascent * 2 / 3 + 1) / 2 + 2);
     }
 
     public static PhysicalRect RelativeSymbolMarkerRect(ComputedStyle style, string listStyle, LayoutUnit width)
     {
         float fontSize = style.FontSize;
-        float ascent = Fonts.LineBoxMetrics.GetFontMetrics(style).IntAscent;
+        float ascent = Fonts.LineBoxMetrics.GetFontMetrics(style).LayoutAscent;
 
         if (listStyle is "disclosure-open" or "disclosure-closed")
         {
@@ -224,7 +224,7 @@ public class ListMarker
                     break;
                 case ListStyleCategory.Symbol:
                 {
-                    float ascent = Fonts.LineBoxMetrics.GetFontMetrics(markerStyle).IntAscent;
+                    float ascent = Fonts.LineBoxMetrics.GetFontMetrics(markerStyle).LayoutAscent;
                     string name = ListStyleName(listItemStyle.ListStyleType);
                     LayoutUnit offset = (name is "disclosure-open" or "disclosure-closed")
                         ? new LayoutUnit(markerStyle.FontSize * markerStyle.Zoom * 0.66f)

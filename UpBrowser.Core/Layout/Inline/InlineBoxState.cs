@@ -79,6 +79,13 @@ public class LogicalLineItem
     public bool HasInFlowOrFloatingFragment => HasInFlowFragment() || IsFloating;
     public bool IsControl => InlineItem?.Type == InlineItem.InlineItemType.Control;
     public bool IsRubyLinePlaceholder => InlineItem?.Type == InlineItem.InlineItemType.RubyLinePlaceholder;
+    /// <summary>
+    /// A fragment-less child that only carries an inline box's start or end
+    /// margin/border/padding, so that the pen advances past decoration the box
+    /// occupies but paints nowhere. Mirrors the inline offset that the source
+    /// keeps in <c>BoxData::margin_border_padding_line_left/right</c>.
+    /// </summary>
+    public bool IsBoxDecorationSpacer { get; set; }
     public bool CanCreateFragmentItem => HasInFlowFragment();
     public bool IsPlaceholder => !HasFragment() && !HasBidiLevel;
     public bool IsOpaqueToBidiReordering => IsPlaceholder;
@@ -128,6 +135,23 @@ public class LogicalLineItems
     public void AddChild(int bidiLevel)
     {
         _children.Add(new LogicalLineItem { BidiLevel = bidiLevel, BidiLevelDirection = FromLevel(bidiLevel), HasBidiLevel = true });
+    }
+
+    /// <summary>
+    /// Reserve <paramref name="inlineSize"/> of inline space for an inline box's
+    /// own margin/border/padding without creating a fragment for it. The line
+    /// breaker already counted this space, so placement has to as well, or the
+    /// decoration would be painted over the neighbouring text.
+    /// </summary>
+    public void AddBoxDecorationSpacer(float inlineSize, int bidiLevel)
+    {
+        _children.Add(new LogicalLineItem
+        {
+            Rect = new LogicalRect(0, 0, inlineSize, 0),
+            BidiLevel = bidiLevel,
+            BidiLevelDirection = FromLevel(bidiLevel),
+            IsBoxDecorationSpacer = true,
+        });
     }
 
     public void AddChild(LayoutObject layoutObject, int bidiLevel, TextDirection direction)
@@ -519,9 +543,9 @@ public class InlineLayoutStateStack
     /// child's pre-shift offset in <see cref="LogicalLineItem.MarginLineLeft"/>
     /// and advancing the running position by the child's inline size. The
     /// advance only happens for children that actually occupy inline space (text,
-    /// atomic inlines, ruby placeholders); open/close-tag and bidi-control
-    /// placeholders are shifted but do not advance the pen, exactly as the source
-    /// does. Returns the line's inline size.
+    /// atomic inlines, ruby placeholders, box-decoration spacers); open/close-tag
+    /// and bidi-control placeholders are shifted but do not advance the pen,
+    /// exactly as the source does. Returns the line's inline size.
     /// </summary>
     public float ComputeInlinePositions(LogicalLineItems lineBox, float position, bool ignoreBoxMarginBorderPadding)
     {
@@ -533,9 +557,9 @@ public class InlineLayoutStateStack
             child.MarginLineLeft = child.Rect.InlineStart;
             child.MoveInInlineDirection(position);
 
-            // Box margins/borders/paddings are processed separately; placeholders
-            // and out-of-flow items do not advance the inline pen.
-            if (!child.HasFragment() && !child.IsRubyLinePlaceholder)
+            // An open or close tag carries no fragment of its own; only the spacer
+            // that stands in for its margin/border/padding advances the pen.
+            if (!child.HasFragment() && !child.IsRubyLinePlaceholder && !child.IsBoxDecorationSpacer)
                 continue;
 
             position += child.Rect.InlineSize;

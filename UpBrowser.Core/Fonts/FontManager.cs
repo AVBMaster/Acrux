@@ -220,10 +220,17 @@ public class FontFallbackChain
         return SKTypeface.Default;
     }
 
-    private static SKFontStyleWeight ConvertWeight(FontWeight weight) => weight switch
+    public static SKFontStyleWeight ConvertWeight(FontWeight weight) => weight switch
     {
+        FontWeight.Thin => SKFontStyleWeight.Thin,
+        FontWeight.ExtraLight => SKFontStyleWeight.ExtraLight,
+        FontWeight.Light => SKFontStyleWeight.Light,
+        FontWeight.Medium => SKFontStyleWeight.Medium,
+        FontWeight.SemiBold => SKFontStyleWeight.SemiBold,
         FontWeight.Bold => SKFontStyleWeight.Bold,
-        _ => SKFontStyleWeight.Normal
+        FontWeight.ExtraBold => SKFontStyleWeight.ExtraBold,
+        FontWeight.Black => SKFontStyleWeight.Black,
+        _ => SKFontStyleWeight.Normal,
     };
 
     private void SetupGenericFallbacks()

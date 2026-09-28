@@ -168,6 +168,10 @@ public static class CssFunctionEvaluator
 
     private static string EvaluateCalcAndMath(string value, float parentFontSize, float rootFontSize, float viewportWidth, float viewportHeight)
     {
+        // A color value owns its own calc(): a relative color syntax slot such as
+        // 'calc(l + 20)' refers to channel keywords this evaluator cannot resolve.
+        if (ColorParser.IsFunctionalColor(value)) return value;
+
         int maxIter = 20;
         while (maxIter-- > 0)
         {
@@ -175,6 +179,15 @@ public static class CssFunctionEvaluator
             if (match == null) break;
 
             var (funcName, innerExpr, _, _) = match.Value;
+            if (HasUnresolvableIdentifier(innerExpr))
+            {
+                // The expression carries a bare identifier that is neither a unit nor
+                // a nested call — a relative color channel keyword inside calc(), for
+                // instance. Folding it to a number here would silently lose meaning,
+                // so leave the expression for the parser that owns it.
+                break;
+            }
+
             float result;
             try
             {
@@ -189,6 +202,53 @@ public static class CssFunctionEvaluator
         return value;
     }
 
+    /// <summary>True when the text contains an identifier that this evaluator cannot
+    /// resolve: not a unit glued to a number, and not one of the math functions.</summary>
+    private static bool HasUnresolvableIdentifier(string expr)
+    {
+        for (int i = 0; i < expr.Length; i++)
+        {
+            char c = expr[i];
+            if (!(char.IsLetter(c) || c == '_')) continue;
+
+            int start = i;
+            while (i < expr.Length && (char.IsLetterOrDigit(expr[i]) || expr[i] == '-' || expr[i] == '_')) i++;
+            string word = expr[start..i];
+
+            if (i < expr.Length && expr[i] == '(') continue; // nested call: resolvable
+            char before = start > 0 ? expr[start - 1] : ' ';
+            if (char.IsDigit(before) || before == '.') continue; // unit suffix: resolvable
+
+            bool known = false;
+            foreach (var name in MathFunctions)
+            {
+                if (string.Equals(word, name, StringComparison.OrdinalIgnoreCase)) { known = true; break; }
+            }
+            if (!known)
+            {
+                foreach (var name in MathKeywordArguments)
+                {
+                    if (string.Equals(word, name, StringComparison.OrdinalIgnoreCase)) { known = true; break; }
+                }
+            }
+            if (!known) return true;
+            i--;
+        }
+        return false;
+    }
+
+    /// <summary>Identifiers that are arguments rather than unknown names: the
+    /// rounding strategies of round(), plus the special values it accepts.</summary>
+    private static readonly string[] MathKeywordArguments =
+        { "nearest", "up", "down", "to-zero", "inf", "-inf", "nan" };
+
+    /// <summary>
+    /// CSS Values 4 &amp;10.3 math functions. Order only matters for readability: the
+    /// match requires a '(' right after the name, so 'min' cannot shadow 'minmax'.
+    /// </summary>
+    private static readonly string[] MathFunctions =
+        { "calc", "clamp", "round", "sign", "min", "max", "mod", "rem", "abs" };
+
     private static (string funcName, string innerExpr, int StartIndex, int Length)? FindOuterMathFunction(string value)
     {
         int i = 0;
@@ -198,14 +258,19 @@ public static class CssFunctionEvaluator
             // A function name must start at a token boundary: 'max(' inside
             // 'minmax(' is not a call to max().
             bool boundary = i == 0 || !(char.IsLetterOrDigit(value[i - 1]) || value[i - 1] == '-' || value[i - 1] == '_');
-            if (boundary && i + 4 < value.Length && value[i..(i + 5)].Equals("calc(", StringComparison.OrdinalIgnoreCase))
-                func = "calc";
-            else if (boundary && i + 3 < value.Length && value[i..(i + 4)].Equals("min(", StringComparison.OrdinalIgnoreCase))
-                func = "min";
-            else if (boundary && i + 3 < value.Length && value[i..(i + 4)].Equals("max(", StringComparison.OrdinalIgnoreCase))
-                func = "max";
-            else if (boundary && i + 5 < value.Length && value[i..(i + 6)].Equals("clamp(", StringComparison.OrdinalIgnoreCase))
-                func = "clamp";
+            if (boundary)
+            {
+                foreach (var name in MathFunctions)
+                {
+                    if (i + name.Length < value.Length &&
+                        value[i + name.Length] == '(' &&
+                        value[i..(i + name.Length)].Equals(name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        func = name;
+                        break;
+                    }
+                }
+            }
 
             if (func != null)
             {
@@ -270,10 +335,80 @@ public static class CssFunctionEvaluator
             float min = EvalArithmetic(parts[0].Trim(), parentFontSize, rootFontSize, viewportWidth, viewportHeight);
             float mid = EvalArithmetic(parts[1].Trim(), parentFontSize, rootFontSize, viewportWidth, viewportHeight);
             float max = EvalArithmetic(parts[2].Trim(), parentFontSize, rootFontSize, viewportWidth, viewportHeight);
-            return Math.Clamp(mid, min, max);
+            // clamp(MIN, VAL, MAX) is max(MIN, min(VAL, MAX)), so a MIN above the MAX
+            // still yields MIN (CSS Values 4 §10.3.3) rather than an invalid range.
+            return MathF.Max(min, MathF.Min(mid, max));
+        }
+
+        if (funcName == "round")
+        {
+            var parts = SplitArgs(expr);
+            int first = 0;
+            RoundStrategy strategy = RoundStrategy.Nearest;
+            if (parts.Count >= 3 && TryRoundStrategy(parts[0], out strategy))
+                first = 1;
+            if (parts.Count - first < 2) return 0;
+            float dividend = EvalArithmetic(parts[first].Trim(), parentFontSize, rootFontSize, viewportWidth, viewportHeight);
+            float divisor = EvalArithmetic(parts[first + 1].Trim(), parentFontSize, rootFontSize, viewportWidth, viewportHeight);
+            return RoundToMultiple(dividend, divisor, strategy);
+        }
+
+        if (funcName is "mod" or "rem" or "abs" or "sign")
+        {
+            var parts = SplitArgs(expr);
+            if (funcName == "abs" || funcName == "sign")
+            {
+                if (parts.Count < 1) return 0;
+                float v = EvalArithmetic(parts[0].Trim(), parentFontSize, rootFontSize, viewportWidth, viewportHeight);
+                return funcName == "abs" ? MathF.Abs(v) : MathF.Sign(v);
+            }
+            if (parts.Count < 2) return 0;
+            float a = EvalArithmetic(parts[0].Trim(), parentFontSize, rootFontSize, viewportWidth, viewportHeight);
+            float b = EvalArithmetic(parts[1].Trim(), parentFontSize, rootFontSize, viewportWidth, viewportHeight);
+            if (b == 0) return 0;
+            float quotient = a / b;
+            // mod() takes the sign of the divisor, rem() that of the dividend
+            // (CSS Values 4 §10.3.7, matching Euclidean vs truncated division).
+            return funcName == "mod"
+                ? a - b * MathF.Floor(quotient)
+                : a - b * MathF.Truncate(quotient);
         }
 
         return EvalArithmetic(expr, parentFontSize, rootFontSize, viewportWidth, viewportHeight);
+    }
+
+    private enum RoundStrategy { Nearest, Up, Down, ToZero }
+
+    private static bool TryRoundStrategy(string token, out RoundStrategy strategy)
+    {
+        switch (token.Trim().ToLowerInvariant())
+        {
+            case "nearest": strategy = RoundStrategy.Nearest; return true;
+            case "up": strategy = RoundStrategy.Up; return true;
+            case "down": strategy = RoundStrategy.Down; return true;
+            case "to-zero": strategy = RoundStrategy.ToZero; return true;
+            default: strategy = RoundStrategy.Nearest; return false;
+        }
+    }
+
+    /// <summary>
+    /// Round |dividend| to a multiple of |divisor|. 'up' rounds toward positive
+    /// infinity and 'down' toward negative infinity (not away from / toward zero),
+    /// which is observable only for negative dividends; verified against the
+    /// reference engine with negative margins.
+    /// </summary>
+    private static float RoundToMultiple(float dividend, float divisor, RoundStrategy strategy)
+    {
+        if (divisor == 0) return 0;
+        float quotient = dividend / divisor;
+        float rounded = strategy switch
+        {
+            RoundStrategy.Up => MathF.Ceiling(quotient),
+            RoundStrategy.Down => MathF.Floor(quotient),
+            RoundStrategy.ToZero => MathF.Truncate(quotient),
+            _ => MathF.Round(quotient, MidpointRounding.AwayFromZero),
+        };
+        return rounded * divisor;
     }
 
     private static List<string> SplitArgs(string args)
@@ -449,14 +584,52 @@ public static class CssFunctionEvaluator
         return tokens;
     }
 
+    /// <summary>
+    /// Percentage base of the math expression being evaluated. A percentage inside
+    /// calc() depends on the containing block, which only layout knows, so the
+    /// layout-time caller publishes it here instead of overloading the font size
+    /// argument (CSS Values 4 10.7).
+    /// </summary>
+    [ThreadStatic] private static float _percentageBase;
+
+    public sealed class PercentageBaseScope : IDisposable
+    {
+        private readonly float _previous;
+        internal PercentageBaseScope(float value) { _previous = _percentageBase; _percentageBase = value; }
+        public void Dispose() => _percentageBase = _previous;
+    }
+
+    public static IDisposable UsePercentageBase(float value) => new PercentageBaseScope(value);
+
     private static float ConvertUnit(float value, string unit, float parentFontSize, float rootFontSize, float viewportWidth, float viewportHeight)
     {
+        // Font-relative units inside math functions use the element's real
+        // glyph metrics when a style context is active (CSS Values 4 §6.3);
+        // the ratios below are only the no-context fallback.
+        var fontStyle = UpBrowser.Core.Dom.FontUnitContext.Current;
+        if (fontStyle != null && fontStyle.FontSize > 0)
+        {
+            var fm = UpBrowser.Core.Fonts.FontMetricsProvider.GetForStyle(fontStyle);
+            float? resolved = unit switch
+            {
+                "ex" or "rex" => fm.XHeight,
+                "ch" => fm.ZeroWidth,
+                "ic" or "ric" => fm.IdeographicWidth > 0 ? fm.IdeographicWidth : fontStyle.FontSize,
+                "cap" or "rcap" => fm.CapHeight,
+                "lh" or "rlh" => UpBrowser.Core.Fonts.LineBoxMetrics.GetLineHeight(fontStyle),
+                _ => null
+            };
+            if (resolved is float r) return value * r;
+            // 'em' is the element's own font size. A deferred calc() may have been
+            // handed the percentage base as parentFontSize, so the context wins.
+            if (unit == "em") return value * fontStyle.FontSize;
+        }
         return unit switch
         {
             "px" => value,
             "em" => value * parentFontSize,
             "rem" => value * rootFontSize,
-            "%" => value / 100f * parentFontSize,
+            "%" => value / 100f * (_percentageBase > 0 ? _percentageBase : parentFontSize),
             "vw" => value * viewportWidth / 100f,
             "vh" => value * viewportHeight / 100f,
             "vmin" => value * Math.Min(viewportWidth, viewportHeight) / 100f,
@@ -482,8 +655,9 @@ public static class CssFunctionEvaluator
             "mm" => value * 3.77953f,
             "ex" => value * parentFontSize * 0.5f,
             "ch" => value * parentFontSize * 0.5f,
+            "ic" => value * parentFontSize,
             "rex" => value * rootFontSize * 0.5f,
-            "ric" => value * rootFontSize * 0.5f,
+            "ric" => value * rootFontSize,
             "lh" => value * parentFontSize,
             "rlh" => value * rootFontSize,
             "cap" => value * parentFontSize * 0.7f,
@@ -526,6 +700,11 @@ public static class CssFunctionEvaluator
         if (value.EndsWith("vh") && float.TryParse(value[..^2], out var vh)) return vh * viewportHeight / 100f;
 
         if (float.TryParse(value, out var num)) return num;
+        // Remaining units (pt/pc/in/cm/mm/q/ch/ex/cap/lh/vmin/vmax/container
+        // units…) go through the shared Length conversion, which also picks up
+        // the ambient font context for the glyph-based units.
+        if (UpBrowser.Core.Dom.Length.TryParse(value, out var length) && length is not UpBrowser.Core.Dom.AutoLength)
+            return length.ToPixels(parentFontSize, rootFontSize, viewportWidth, viewportHeight);
         return 0;
     }
 

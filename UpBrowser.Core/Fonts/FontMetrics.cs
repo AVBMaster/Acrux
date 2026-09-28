@@ -21,11 +21,14 @@ public enum FontBaseline
 /// <summary>
 /// Resolved metrics of one font at one size. Mirrors FontMetrics in
 /// font_metrics.h, including the distinction between the float metrics (used by
-/// SVG text and canvas) and the integer metrics (used by HTML line boxes).
+/// SVG text and canvas) and the device-grid metrics (used by HTML line boxes).
 ///
-/// The integer variants matter for output fidelity: line box struts are built
-/// from the rounded ascent/descent, so reproducing the rounding is what makes a
-/// line box land on the same device pixel as the reference implementation.
+/// The device-grid variants matter for output fidelity: a line box strut is
+/// built from an ascent/descent/leading that each land on a whole device pixel,
+/// so 'line-height: normal' becomes a whole number of *device* pixels. At a
+/// device scale above 1 that is a fractional CSS-pixel value — reproducing the
+/// quantization is what makes a line box land on the same device pixel as the
+/// reference implementation.
 /// </summary>
 public readonly struct FontMetrics
 {
@@ -35,11 +38,11 @@ public readonly struct FontMetrics
     /// <summary>Distance from the baseline to the bottom of the em box, unrounded.</summary>
     public float FloatDescent { get; }
 
-    /// <summary>Rounded ascent. Line box layout uses this, not <see cref="FloatAscent"/>.</summary>
-    public int IntAscent { get; }
+    /// <summary>Ascent quantized to the device pixel grid. Line box layout uses this.</summary>
+    public float LayoutAscent => DevAscent / DeviceScale;
 
-    /// <summary>Rounded descent. Line box layout uses this, not <see cref="FloatDescent"/>.</summary>
-    public int IntDescent { get; }
+    /// <summary>Descent quantized to the device pixel grid. Line box layout uses this.</summary>
+    public float LayoutDescent => DevDescent / DeviceScale;
 
     public float CapHeight { get; }
     public float XHeight { get; }
@@ -47,14 +50,14 @@ public readonly struct FontMetrics
     /// <summary>False when the font supplied no x-height and it had to be synthesized.</summary>
     public bool HasXHeight { get; }
 
-    /// <summary>Rounded line gap ('leading') reported by the font.</summary>
-    public int LineGap { get; }
+    /// <summary>Line gap ('leading') reported by the font, quantized to the device grid.</summary>
+    public float LineGap => DevLineGap / DeviceScale;
 
     /// <summary>
-    /// Rounded sum of ascent, descent and line gap. This is the used value of
-    /// 'line-height: normal'.
+    /// Sum of the device-quantized ascent, descent and line gap. This is the used
+    /// value of 'line-height: normal'.
     /// </summary>
-    public int LineSpacing { get; }
+    public float LineSpacing => (DevAscent + DevDescent + DevLineGap) / DeviceScale;
 
     public float UnderlinePosition { get; }
     public float UnderlineThickness { get; }
@@ -62,38 +65,62 @@ public readonly struct FontMetrics
     /// <summary>Advance of the '0' glyph, i.e. the CSS 'ch' unit.</summary>
     public float ZeroWidth { get; }
 
+    /// <summary>Advance of the '水' glyph, i.e. the CSS 'ic' unit.</summary>
+    public float IdeographicWidth { get; }
+
     /// <summary>Advance of the 'x' glyph, used for text field sizing heuristics.</summary>
     public float AverageCharWidth { get; }
 
     public float FloatHeight => FloatAscent + FloatDescent;
 
-    /// <summary>Rounded ascent + rounded descent.</summary>
-    public int Height => IntAscent + IntDescent;
+    /// <summary>Device-quantized ascent + descent, in CSS pixels.</summary>
+    public float Height => (DevAscent + DevDescent) / DeviceScale;
 
+    /// <summary>Scale these metrics were quantized at; 1 means CSS pixels are device pixels.</summary>
+    private readonly float DeviceScale;
+
+    // Ascent / descent / leading as whole device pixels. The platform rasterizer
+    // resolves font metrics on the device grid, so every line-box decision is
+    // taken here and converted back to CSS pixels on read. At a scale of 1 this
+    // is exactly the historic whole-CSS-pixel rounding.
+    private readonly int DevAscent;
+    private readonly int DevDescent;
+    private readonly int DevLineGap;
+
+    /// <param name="rawAscent">Unrounded ascent in CSS pixels, before device quantization.</param>
+    /// <param name="rawDescent">Unrounded descent in CSS pixels.</param>
+    /// <param name="rawLineGap">Unrounded leading in CSS pixels.</param>
+    /// <param name="deviceScale">Device pixels per CSS pixel these metrics are resolved at.</param>
     public FontMetrics(
         float floatAscent,
         float floatDescent,
         float capHeight,
         float xHeight,
         bool hasXHeight,
-        float lineGap,
         float underlinePosition,
         float underlineThickness,
         float zeroWidth,
-        float averageCharWidth)
+        float ideographicWidth,
+        float averageCharWidth,
+        float rawAscent,
+        float rawDescent,
+        float rawLineGap,
+        float deviceScale)
     {
+        DeviceScale = deviceScale > 0 ? deviceScale : 1f;
+        DevAscent = LRound(rawAscent * DeviceScale);
+        DevDescent = LRound(rawDescent * DeviceScale);
+        DevLineGap = LRound(rawLineGap * DeviceScale);
+
         FloatAscent = floatAscent;
         FloatDescent = floatDescent;
-        IntAscent = LRound(floatAscent);
-        IntDescent = LRound(floatDescent);
         CapHeight = capHeight;
         XHeight = xHeight;
         HasXHeight = hasXHeight;
-        LineGap = LRound(lineGap);
-        LineSpacing = LRound(floatAscent) + LRound(floatDescent) + LRound(lineGap);
         UnderlinePosition = underlinePosition;
         UnderlineThickness = underlineThickness;
         ZeroWidth = zeroWidth;
+        IdeographicWidth = ideographicWidth;
         AverageCharWidth = averageCharWidth;
     }
 
@@ -115,23 +142,34 @@ public readonly struct FontMetrics
     public float GetFloatDescent(FontBaseline baseline = FontBaseline.Alphabetic) =>
         baseline == FontBaseline.Alphabetic ? FloatDescent : FloatHeight - GetFloatAscent(baseline);
 
-    /// <summary>Rounded ascent for a given baseline. Line box layout uses this.</summary>
-    public int GetAscent(FontBaseline baseline = FontBaseline.Alphabetic) => baseline switch
+    /// <summary>
+    /// Ascent for a given baseline, on the device pixel grid. Line box layout
+    /// uses this. The per-baseline arithmetic is done in whole device pixels so
+    /// that a fractional CSS-pixel value never breaks the integer relationships
+    /// the reference grid guarantees.
+    /// </summary>
+    public float GetAscent(FontBaseline baseline = FontBaseline.Alphabetic)
     {
-        FontBaseline.Alphabetic => IntAscent,
-        FontBaseline.Central => Height - Height / 2,
-        FontBaseline.TextUnder => Height,
-        FontBaseline.IdeographicUnder => Height,
-        FontBaseline.XMiddle => IntAscent - (int)(XHeight / 2f),
-        FontBaseline.Math => IntAscent / 2,
-        FontBaseline.Hanging => IntAscent * 2 / 10,
-        FontBaseline.TextOver => 0,
-        _ => IntAscent,
-    };
+        int dev = baseline switch
+        {
+            FontBaseline.Alphabetic => DevAscent,
+            FontBaseline.Central => DevHeight - DevHeight / 2,
+            FontBaseline.TextUnder => DevHeight,
+            FontBaseline.IdeographicUnder => DevHeight,
+            FontBaseline.XMiddle => DevAscent - (int)(XHeight * DeviceScale / 2f),
+            FontBaseline.Math => DevAscent / 2,
+            FontBaseline.Hanging => DevAscent * 2 / 10,
+            FontBaseline.TextOver => 0,
+            _ => DevAscent,
+        };
+        return dev / DeviceScale;
+    }
 
-    /// <summary>Rounded descent for a given baseline.</summary>
-    public int GetDescent(FontBaseline baseline = FontBaseline.Alphabetic) =>
-        baseline == FontBaseline.Alphabetic ? IntDescent : Height - GetAscent(baseline);
+    private int DevHeight => DevAscent + DevDescent;
+
+    /// <summary>Descent for a given baseline, on the device pixel grid.</summary>
+    public float GetDescent(FontBaseline baseline = FontBaseline.Alphabetic) =>
+        baseline == FontBaseline.Alphabetic ? LayoutDescent : Height - GetAscent(baseline);
 
     /// <summary>Shift a value expressed against the alphabetic baseline to another baseline.</summary>
     public float ConvertBaseline(float value, FontBaseline to, FontBaseline from = FontBaseline.Alphabetic) =>
@@ -169,9 +207,16 @@ public readonly struct FontMetrics
 /// </summary>
 public static class FontMetricsProvider
 {
-    private static readonly Dictionary<(SKTypeface, float), FontMetrics> Cache = new();
+    private static readonly Dictionary<(SKTypeface, float, float), FontMetrics> Cache = new();
     private static readonly object CacheLock = new();
     private const int MaxCacheEntries = 4096;
+
+    /// <summary>
+    /// Device pixels per CSS pixel that line-box metrics are quantized at. Layout
+    /// sets this from the viewport DPI before measuring; it changes only when the
+    /// window moves to a display with a different scale.
+    /// </summary>
+    public static float DeviceScale = 1f;
 
     /// <summary>
     /// Below this ascent (in pixels) the ascent/descent are kept unrounded so
@@ -190,17 +235,18 @@ public static class FontMetricsProvider
 
     public static FontMetrics Get(SKTypeface? typeface, float size)
     {
+        float scale = DeviceScale > 0 ? DeviceScale : 1f;
         if (typeface == null || size <= 0)
-            return CreateFallback(size);
+            return CreateFallback(size, scale);
 
-        var key = (typeface, size);
+        var key = (typeface, size, scale);
         lock (CacheLock)
         {
             if (Cache.TryGetValue(key, out var hit))
                 return hit;
         }
 
-        var computed = Compute(typeface, size);
+        var computed = Compute(typeface, size, scale);
 
         lock (CacheLock)
         {
@@ -216,10 +262,14 @@ public static class FontMetricsProvider
     public static FontMetrics Get(string fontFamily, float size, Dom.FontWeight weight = Dom.FontWeight.Normal,
         Dom.FontStyleType style = Dom.FontStyleType.Normal)
     {
-        if (size <= 0) return CreateFallback(size);
+        if (size <= 0) return CreateFallback(size, DeviceScale > 0 ? DeviceScale : 1f);
         var typeface = FontManager.GetOrCreateTypeface(PrimaryFamily(fontFamily), weight, style);
         return Get(typeface, size);
     }
+
+    /// <summary>Metrics of a computed style's own font (family × weight × style at its size).</summary>
+    public static FontMetrics GetForStyle(Dom.ComputedStyle style) =>
+        Get(style.FontFamily, style.FontSize, style.FontWeight, style.FontStyle);
 
     /// <summary>
     /// Take the first entry of a CSS font-family list. Full fallback-chain
@@ -236,7 +286,7 @@ public static class FontMetricsProvider
         return first.Length == 0 ? "sans-serif" : first;
     }
 
-    private static FontMetrics Compute(SKTypeface typeface, float size)
+    private static FontMetrics Compute(SKTypeface typeface, float size, float deviceScale)
     {
         using var font = new SKFont(typeface, size);
         var raw = font.Metrics;
@@ -269,6 +319,10 @@ public static class FontMetricsProvider
         float zeroWidth = font.MeasureText("0");
         if (zeroWidth <= 0) zeroWidth = size * 0.5f;
 
+        // CSS 'ic' is the advance of U+6C34 (水). Fonts without the glyph fall
+        // back through the platform chain; an ideographic advance is 1em there.
+        float ideographicWidth = MeasureIdeographicAdvance(typeface, size);
+
         float averageCharWidth = raw.AverageCharacterWidth;
         if (averageCharWidth <= 0)
         {
@@ -282,11 +336,28 @@ public static class FontMetricsProvider
             capHeight: capHeight,
             xHeight: xHeight,
             hasXHeight: hasXHeight,
-            lineGap: raw.Leading,
             underlinePosition: underlinePosition,
             underlineThickness: underlineThickness,
             zeroWidth: zeroWidth,
-            averageCharWidth: averageCharWidth);
+            ideographicWidth: ideographicWidth,
+            averageCharWidth: averageCharWidth,
+            rawAscent: rawAscent,
+            rawDescent: rawDescent,
+            rawLineGap: raw.Leading,
+            deviceScale: deviceScale);
+    }
+
+    /// <summary>Advance of U+6C34 (水) used by the CSS 'ic' unit; 1em when unavailable.</summary>
+    private static float MeasureIdeographicAdvance(SKTypeface typeface, float size)
+    {
+        const int IdeographicCodePoint = 0x6C34;
+        var used = typeface;
+        if (typeface.GetGlyph(IdeographicCodePoint) == 0)
+            used = FontManager.GetFallbackTypeface(IdeographicCodePoint) ?? typeface;
+
+        using var font = new SKFont(used, size);
+        float width = font.MeasureText("\u6C34");
+        return width > 0 ? width : size;
     }
 
     /// <summary>
@@ -294,7 +365,7 @@ public static class FontMetricsProvider
     /// deliberately close to a typical sans-serif so that a missing font does
     /// not shift layout dramatically.
     /// </summary>
-    private static FontMetrics CreateFallback(float size)
+    private static FontMetrics CreateFallback(float size, float deviceScale)
     {
         float s = size > 0 ? size : 16f;
         float ascent = FontMetrics.RoundToScalar(s * 0.905f);
@@ -305,11 +376,15 @@ public static class FontMetricsProvider
             capHeight: s * 0.716f,
             xHeight: s * 0.519f,
             hasXHeight: false,
-            lineGap: 0f,
             underlinePosition: s * 0.1f,
             underlineThickness: MathF.Max(1f, s / 16f),
             zeroWidth: s * 0.556f,
-            averageCharWidth: s * 0.5f);
+            ideographicWidth: s,
+            averageCharWidth: s * 0.5f,
+            rawAscent: s * 0.905f,
+            rawDescent: s * 0.212f,
+            rawLineGap: 0f,
+            deviceScale: deviceScale);
     }
 
     public static void ClearCache()

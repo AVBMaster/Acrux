@@ -62,8 +62,22 @@ internal sealed class PaintLayerClipper
                 continue;
 
             var op = PaintOpPool.GetPushClipOp();
-            op.ClipRect = clip;
-            op.Bounds = clip;
+            // Descendant layers are clipped by the same rounded padding box the
+            // ancestor clips its own content with.
+            SKPath? rounded = RoundedBorderGeometry.OverflowClipPath(style,
+                new SKRect(box.BorderBox.Left - ax, box.BorderBox.Top + contentOffsetY - ay,
+                    box.BorderBox.Right - ax, box.BorderBox.Bottom + contentOffsetY - ay), clip);
+            if (rounded != null)
+            {
+                op.ClipPath = rounded;
+                op.AntiAlias = true;
+                op.Bounds = clip;
+            }
+            else
+            {
+                op.ClipRect = clip;
+                op.Bounds = clip;
+            }
             _displayList.Add(op);
             pushed.Add(false);
 

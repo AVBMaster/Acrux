@@ -310,9 +310,24 @@ public class DrawTextOp : PaintOp
     public bool Overline { get; set; }
     public SKColor UnderlineColor { get; set; }
     public TextDecorationStyleType DecorationStyle { get; set; } = TextDecorationStyleType.Solid;
+    /// <summary>Authored 'text-decoration-thickness' of this run's own box; NaN is 'auto'.</summary>
+    public float DecorationThickness { get; set; } = float.NaN;
+    public bool DecorationThicknessFromFont { get; set; }
+    /// <summary>Authored 'text-underline-offset'; NaN is 'auto'.</summary>
+    public float DecorationUnderlineOffset { get; set; } = float.NaN;
+    public TextUnderlinePositionType DecorationUnderlinePosition { get; set; } = TextUnderlinePositionType.Auto;
+    public bool DecorationSkipInk { get; set; } = true;
+    /// <summary>Decorations inherited by propagation from the ancestors of the text
+    /// run (CSS Text Decoration 4 §5.1), ordered outermost first. Each layer keeps the
+    /// originating box's own line list, style, color and metrics.</summary>
+    public List<AppliedTextDecoration>? AncestorDecorations { get; set; }
     public List<TextShadowValue>? TextShadows { get; set; }
     public float LetterSpacing { get; set; }
     public bool Italic { get; set; }
+    /// <summary>Horizontal shear (tan of the angle) applied to the glyphs only.
+    /// 'font-style: oblique &lt;angle&gt;' names the slant to synthesize, and the advance
+    /// widths stay the upright ones (CSS Fonts 4 §3.2.2).</summary>
+    public float ObliqueSkewX { get; set; }
     public string EmphasisMark { get; set; } = string.Empty;
     public bool EmphasisOver { get; set; } = true;
     public SKColor EmphasisColor { get; set; }
@@ -355,9 +370,16 @@ public class DrawTextOp : PaintOp
         Underline = LineThrough = Overline = false;
         UnderlineColor = default;
         DecorationStyle = TextDecorationStyleType.Solid;
+        DecorationThickness = float.NaN;
+        DecorationThicknessFromFont = false;
+        DecorationUnderlineOffset = float.NaN;
+        DecorationUnderlinePosition = TextUnderlinePositionType.Auto;
+        DecorationSkipInk = true;
+        AncestorDecorations = null;
         TextShadows = null;
         LetterSpacing = 0;
         Italic = false;
+        ObliqueSkewX = 0;
         EmphasisMark = string.Empty;
         EmphasisOver = true;
         EmphasisColor = default;
@@ -402,6 +424,13 @@ public class DrawTextOp : PaintOp
         // 1. underline/overline (with shadow passes) before the text,
         // 2. text shadows + text,
         // 3. line-through (with shadow passes) after the text.
+        // A propagated line belongs to an ancestor box but is drawn per text
+        // fragment, outermost first, so nested underlines stack instead of
+        // being replaced (CSS Text Decoration 4 §5.1).
+        Func<float, float, List<SKRect>?> skipInk = (upper, stripe) => ComputeSkipInkClips(upper, stripe, drawX, drawY);
+        var ownGeometry = BuildDecorationGeometry(DecorationThickness, DecorationThicknessFromFont,
+            DecorationUnderlineOffset, DecorationUnderlinePosition, DecorationSkipInk, FontSize);
+        PaintUnderOrOver(AncestorDecorations, canvas, drawX, actualWidth, drawY, ascent, skipInk);
         if (Underline || Overline)
         {
             TextDecorationPainter.PaintUnderOrOverLines(
@@ -411,7 +440,8 @@ public class DrawTextOp : PaintOp
                 Color,
                 UnderlineColor.Alpha > 0 ? UnderlineColor : Color,
                 TextShadows,
-                (upper, stripe) => ComputeSkipInkClips(upper, stripe, drawX, drawY));
+                skipInk,
+                ownGeometry);
         }
 
         // Draw text shadows before main text
@@ -429,7 +459,9 @@ public class DrawTextOp : PaintOp
                 float shadowX = SnapToDevice(drawX + shadow.OffsetX, sx);
                 float shadowY = SnapToDevice(drawY + shadow.OffsetY, sy);
                 var shadowFont = CreateFont(GetTypeface());
+                int shadowSlant = PushGlyphSlant(canvas, shadowX, shadowY);
                 canvas.DrawText(Text, shadowX, shadowY, SKTextAlign.Left, shadowFont, shadowPaint);
+                PopGlyphSlant(canvas, shadowSlant);
             }
         }
 
@@ -441,28 +473,118 @@ public class DrawTextOp : PaintOp
                 canvas, drawX, actualWidth, drawY, ascent, FontSize,
                 true,
                 DecorationStyle,
-                Color,
-                TextShadows);
+                UnderlineColor.Alpha > 0 ? UnderlineColor : Color,
+                TextShadows,
+                ownGeometry);
         }
+        PaintLineThrough(AncestorDecorations, canvas, drawX, actualWidth, drawY, ascent);
 
         if (!string.IsNullOrEmpty(EmphasisMark))
         {
-            DrawEmphasisMarks(canvas, drawX, drawY);
+            DrawEmphasisMarks(canvas, drawX, drawY, ascent);
         }
     }
 
-    private void DrawEmphasisMarks(SKCanvas canvas, float x, float y)
+    private TextDecorationPainter.DecorationGeometry BuildDecorationGeometry(
+        float thickness, bool thicknessFromFont, float underlineOffset,
+        TextUnderlinePositionType underlinePosition, bool skipInk, float fontSize)
+    {
+        var metrics = FontMetricsFor(fontSize);
+        return new TextDecorationPainter.DecorationGeometry
+        {
+            Thickness = thickness,
+            ThicknessFromFont = thicknessFromFont,
+            UnderlineOffset = underlineOffset,
+            UnderlinePosition = underlinePosition,
+            SkipInk = skipInk,
+            FontUnderlineThickness = metrics.UnderlineThickness,
+            FontUnderlinePosition = MathF.Abs(metrics.UnderlinePosition),
+            Descent = metrics.FloatDescent,
+        };
+    }
+
+    /// <summary>Metrics of the run's own typeface at an arbitrary size — a
+    /// propagated decoration keeps the metrics of the box that originated it.</summary>
+    private Core.Fonts.FontMetrics FontMetricsFor(float fontSize)
+    {
+        try
+        {
+            return Core.Fonts.FontMetricsProvider.Get(GetTypeface(), fontSize);
+        }
+        catch
+        {
+            return Core.Fonts.FontMetricsProvider.Get((SKTypeface?)null, fontSize);
+        }
+    }
+
+    private void PaintUnderOrOver(List<AppliedTextDecoration>? decorations, SKCanvas canvas,
+        float drawX, float width, float baseline, float ascent,
+        Func<float, float, List<SKRect>?> skipInk)
+    {
+        if (decorations == null)
+            return;
+        foreach (var decoration in decorations)
+        {
+            if (!decoration.HasUnderline && !decoration.HasOverline)
+                continue;
+            float originSize = decoration.OriginFontSize > 0 ? decoration.OriginFontSize : 16f;
+            TextDecorationPainter.PaintUnderOrOverLines(
+                canvas, drawX, width, baseline, ascent, originSize,
+                decoration.HasUnderline, decoration.HasOverline,
+                decoration.Style, decoration.Color, decoration.Color,
+                null, skipInk, BuildGeometryFor(decoration, originSize));
+        }
+    }
+
+    private void PaintLineThrough(List<AppliedTextDecoration>? decorations, SKCanvas canvas,
+        float drawX, float width, float baseline, float ascent)
+    {
+        if (decorations == null)
+            return;
+        foreach (var decoration in decorations)
+        {
+            if (!decoration.HasLineThrough)
+                continue;
+            float originSize = decoration.OriginFontSize > 0 ? decoration.OriginFontSize : 16f;
+            TextDecorationPainter.PaintLineThrough(
+                canvas, drawX, width, baseline, ascent, originSize,
+                true, decoration.Style, decoration.Color, null,
+                BuildGeometryFor(decoration, originSize));
+        }
+    }
+
+    private TextDecorationPainter.DecorationGeometry BuildGeometryFor(AppliedTextDecoration decoration, float originSize) =>
+        BuildDecorationGeometry(decoration.Thickness, decoration.ThicknessFromFont,
+            decoration.UnderlineOffsetIsAuto ? float.NaN : decoration.UnderlineOffset,
+            decoration.UnderlinePosition, decoration.SkipInk, originSize);
+
+    private void DrawEmphasisMarks(SKCanvas canvas, float x, float y, float textAscent)
     {
         var mark = EmphasisMark;
         var text = Text;
         if (string.IsNullOrEmpty(mark) || string.IsNullOrEmpty(text)) return;
 
-        var markFont = CreateFont(GetTypefaceForChar(mark[0]));
+        // The marks are punctuation-sized: drawn from a CJK emphasis font at half the
+        // text size, which is also what the line box reserves room for (TextEmphasisMarks).
+        float markSize = FontSize * UpBrowser.Core.Css.TextEmphasisMarks.FontSizeFactor;
+        var markTypeface = UpBrowser.Core.Css.TextEmphasisMarks.ResolveMarkTypeface(mark[0])
+            ?? GetTypefaceForChar(mark[0]);
+        var markFont = CreateFont(markTypeface, markSize);
         float glyphCenterX = markFont.MeasureText(mark) / 2;
         var mm = markFont.Metrics;
-        float ascent = -mm.Ascent;
-        float descent = Math.Max(0, mm.Descent);
-        float offset = EmphasisOver ? -(ascent + descent) : (descent + ascent);
+        float markAscent = -mm.Ascent;
+        float markDescent = Math.Max(0, mm.Descent);
+
+        // The mark sits outside the text's own ascent/descent box, separated by a
+        // small distance that grows with the font size (CSS Text 4 4.2.1). Using
+        // the text metrics (not the mark's) is what keeps an 'over' mark directly
+        // above the glyphs instead of landing on the previous line.
+        var tm = FontMetricsFor(FontSize);
+        float textDescent = Math.Max(0, tm.FloatDescent);
+        float separation = UpBrowser.Core.Css.TextEmphasisMarks.Separation(FontSize);
+        float offset = EmphasisOver
+            ? -(textAscent + separation + markDescent)
+            : textDescent + separation + markAscent;
 
         var markPaint = GetTextPaint(EmphasisColor.Alpha > 0 ? EmphasisColor : Color);
 
@@ -585,9 +707,11 @@ public class DrawTextOp : PaintOp
     /// </summary>
     private void DrawRunWithSpacing(SKCanvas canvas, SKPaint paint, SKFont font, string run, float x, float y)
     {
+        int slant = PushGlyphSlant(canvas, x, y);
         if (LetterSpacing == 0 || run.Length <= 1)
         {
             canvas.DrawText(run, x, y, SKTextAlign.Left, font, paint);
+            PopGlyphSlant(canvas, slant);
             return;
         }
         float cx = x;
@@ -597,6 +721,24 @@ public class DrawTextOp : PaintOp
             canvas.DrawText(ch, cx, y, SKTextAlign.Left, font, paint);
             cx += font.MeasureText(ch) + (i < run.Length - 1 ? LetterSpacing : 0);
         }
+        PopGlyphSlant(canvas, slant);
+    }
+
+    /// <summary>Shear the glyphs about their baseline. The pivot's inline position is
+    /// irrelevant for a horizontal shear, so each run can use its own origin.</summary>
+    private int PushGlyphSlant(SKCanvas canvas, float x, float y)
+    {
+        if (ObliqueSkewX == 0) return -1;
+        int save = canvas.Save();
+        canvas.Translate(x, y);
+        canvas.Skew(ObliqueSkewX, 0f);
+        canvas.Translate(-x, -y);
+        return save;
+    }
+
+    private static void PopGlyphSlant(SKCanvas canvas, int save)
+    {
+        if (save >= 0) canvas.RestoreToCount(save);
     }
 
     /// <summary>
@@ -617,7 +759,10 @@ public class DrawTextOp : PaintOp
             return null;
 
         var clips = new List<SKRect>();
-        float dilation = MathF.Min(TextDecorationPainter.ComputeDecorationThickness(FontSize), 13f);
+        // 'stripe' is the band height after the 0.5px inset on each side, so
+        // stripe + 1 is the resolved thickness of the line being skipped — an
+        // authored 'text-decoration-thickness' has to widen the dilation too.
+        float dilation = MathF.Min(stripe + 1f, 13f);
 
         using var interceptPaint = new SKPaint
         {
@@ -813,7 +958,7 @@ public class DrawTextOp : PaintOp
 
     private SKTypeface GetCachedFamilyTypeface()
     {
-        int styleIdx = FontWeight == FontWeight.Bold ? 1 : 0;
+        int styleIdx = FontWeight >= FontWeight.Bold ? 1 : 0;
         // Walk the FULL CSS font-family list and return the first family that is
         // installed. Generic names (sans-serif / serif / monospace / ...) map to
         // system defaults. Glyph presence is checked per-character by the caller,
@@ -974,10 +1119,11 @@ public class DrawTextOp : PaintOp
         return $"{typeface?.FamilyName ?? "?"}|{size}|{(int)weight}|{(italic ? 1 : 0)}|{letterSpacing}|{(LayerBakeGrayscale ? 1 : 0)}|{aa}";
     }
 
-    private SKFont CreateFont(SKTypeface typeface)
+    private SKFont CreateFont(SKTypeface typeface, float? overrideSize = null)
     {
+        float useSize = overrideSize ?? FontSize;
         var actualTypeface = typeface;
-        if (typeface != null && (Italic || FontWeight == FontWeight.Bold))
+        if (typeface != null && (Italic || FontWeight != FontWeight.Normal))
         {
             var families = GetFontFamilies();
             var familyName = typeface.FamilyName;
@@ -986,16 +1132,14 @@ public class DrawTextOp : PaintOp
             {
                 var styles = SKFontManager.Default.GetFontStyles(index);
                 SKFontStyleSlant slant = Italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
-                SKFontStyleWeight weight = FontWeight == FontWeight.Bold
-                    ? SKFontStyleWeight.Bold
-                    : SKFontStyleWeight.Normal;
+                SKFontStyleWeight weight = UpBrowser.Core.Fonts.FontFallbackChain.ConvertWeight(FontWeight);
                 var targetStyle = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
                 var tf = styles.CreateTypeface(targetStyle);
                 if (tf != null) actualTypeface = tf;
             }
         }
 
-        string key = FontIdentityKey(actualTypeface, FontSize, FontWeight, Italic, LetterSpacing);
+        string key = FontIdentityKey(actualTypeface, useSize, FontWeight, Italic, LetterSpacing);
         lock (_textResourceLock)
         {
             if (_fontCache.TryGetValue(key, out var cached))
@@ -1006,7 +1150,7 @@ public class DrawTextOp : PaintOp
             }
         }
 
-        var font = new SKFont(actualTypeface, FontSize);
+        var font = new SKFont(actualTypeface, useSize);
         // NOTE: no #if SUPPORT_WINXP guard here. This project defines SUPPORT_WINXP,
         // so anything inside `#if !SUPPORT_WINXP` is silently excluded from the
         // build — which is how every glyph in the browser spent its whole life
@@ -1035,7 +1179,9 @@ public class DrawTextOp : PaintOp
             // outline reads as shimmer (see FontHelper.CrispHinting).
             font.Hinting = AntiAlias switch
             {
-                AntiAliasMode.High => Italic
+                // A slanted outline - real italic or a synthesized oblique - must not
+                // get stem snapping: it shimmers (see FontHelper.CrispHinting).
+                AntiAliasMode.High => Italic || ObliqueSkewX != 0
                     ? SKFontHinting.Normal
                     : FontHelper.CrispHinting(actualTypeface),
                 AntiAliasMode.None => FontHelper.CrispHinting(actualTypeface),

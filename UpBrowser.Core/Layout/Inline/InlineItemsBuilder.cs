@@ -252,16 +252,140 @@ public class InlineItemsBuilder
     // Text processing: mirrors AppendText() / ProcessTextItem().
     // ------------------------------------------------------------------
 
-    private static string ApplyTextTransform(string text, string? transform)
+    /// <summary>
+    /// Shared text-transform implementation. Idempotent, so the painter may
+    /// re-apply it to already-transformed run text without corrupting it.
+    /// </summary>
+    public static string ApplyTextTransform(string text, string? transform)
     {
         if (string.IsNullOrEmpty(transform) || transform == "none") return text;
         return transform.ToLowerInvariant() switch
         {
-            "uppercase" => text.ToUpperInvariant(),
+            "uppercase" => FullUpperCase(text),
             "lowercase" => text.ToLowerInvariant(),
-            "capitalize" => System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(text),
+            "capitalize" => Capitalize(text),
+            "full-width" => FullWidth(text),
             _ => text,
         };
+    }
+
+    /// <summary>
+    /// Unicode full case mapping for the characters .NET maps 1:1 but the spec
+    /// expands (ß→SS, ligatures, digraphs); CSS Text 3 §5.4.
+    /// </summary>
+    private static readonly Dictionary<char, string> FullUpperSpecials = new()
+    {
+        ['ß'] = "SS",
+        ['ŉ'] = "ʼN",
+        ['ǅ'] = "DŽ", ['ǆ'] = "DŽ",
+        ['ǈ'] = "LJ", ['ǉ'] = "LJ",
+        ['ǋ'] = "NJ", ['ǌ'] = "NJ",
+        ['ȷ'] = "J",
+        ['ⅎ'] = "C",
+        ['ﬀ'] = "FF", ['ﬁ'] = "FI", ['ﬂ'] = "FL", ['ﬃ'] = "FFI", ['ﬄ'] = "FFL", ['ﬅ'] = "ST", ['ﬆ'] = "ST",
+        ['ﬗ'] = "MB",
+    };
+
+    private static string UpperChar(char c) =>
+        FullUpperSpecials.TryGetValue(c, out var full) ? full : char.ToUpperInvariant(c).ToString();
+
+    private static string FullUpperCase(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        foreach (var c in text)
+            sb.Append(FullUpperSpecials.TryGetValue(c, out var full) ? full : char.ToUpperInvariant(c));
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// capitalize per CSS Text 3 §5.4.3: only the first cased character of each
+    /// word changes; word boundaries approximate UAX#29 (ExtendNumLet like ' or _
+    /// joins, MidLetter/MidNumLet like . , : ; join between letters, dashes and
+    /// whitespace split). "o'clock" → "O'clock", "hot-dog" → "Hot-Dog".
+    /// </summary>
+    private static string Capitalize(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (char.IsLetter(c) && (i == 0 || StartsNewWord(text[i - 1], c)))
+                sb.Append(UpperChar(c));
+            else
+                sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
+    private static bool StartsNewWord(char prev, char next)
+    {
+        if (char.IsWhiteSpace(prev)) return true;
+        if (prev is '\'' or '’' or 'ʼ' or '_') return false;
+        if (prev is '.' or ',' or ':' or ';' or '·' or '‧' or '״') return !char.IsLetter(next);
+        if (char.IsLetter(prev) && char.IsLetter(next)) return false;
+        if (char.IsDigit(prev) && char.IsDigit(next)) return false;
+        return true;
+    }
+
+    private static string FullWidth(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        foreach (var c in text)
+            sb.Append(c == ' ' ? '　' : c is >= '!' and <= '~' ? (char)(c + 0xFEE0) : c);
+        return sb.ToString();
+    }
+
+    // ------------------------------------------------------------------
+    // font-variant-caps synthesis (CSS Fonts 4 §3.5.1): lower-case letters
+    // are upper-cased and painted at a reduced size so the synthesized
+    // capitals match the font's x-height, like Chromium's
+    // GetSmallCapsFontData: scale = clamp(xHeight / capHeight, 0.65, 0.8).
+    // all-small-caps also scales upper-case letters. Runs are split so each
+    // segment carries its own resolved style, which flows through measuring,
+    // breaking and painting alike.
+    // ------------------------------------------------------------------
+
+    private readonly Dictionary<ComputedStyle, ComputedStyle> _smallCapsStyles = new();
+
+    /// <summary>
+    /// Effective caps mode. The applier normalizes any caps keyword from
+    /// font-variant onto font-variant-caps, so the longhand is the single
+    /// source of truth and cascade order (e.g. a child's
+    /// 'font-variant-caps: normal') wins over an inherited 'font-variant'.
+    /// </summary>
+    internal static string EffectiveCapsMode(ComputedStyle style)
+    {
+        var caps = style.FontVariantCaps;
+        return string.IsNullOrEmpty(caps) ? "normal" : caps;
+    }
+
+    private static bool CapsIsSmallChar(char c, string mode) => mode switch
+    {
+        "small-caps" or "petite-caps" or "unicase" => char.IsLower(c),
+        "all-small-caps" or "all-petite-caps" => char.IsLower(c) || char.IsUpper(c),
+        _ => false,
+    };
+
+    private ComputedStyle SmallCapsStyle(ComputedStyle style)
+    {
+        if (!_smallCapsStyles.TryGetValue(style, out var small))
+        {
+            small = style.Clone();
+            var metrics = UpBrowser.Core.Fonts.LineBoxMetrics.GetFontMetrics(style);
+            float ratio = metrics.CapHeight > 0 ? metrics.XHeight / metrics.CapHeight : 0f;
+            small.FontSize = style.FontSize * (ratio > 0 ? Math.Clamp(ratio, 0.65f, 0.8f) : 0.7f);
+            _smallCapsStyles[style] = small;
+        }
+        return small;
+    }
+
+    /// <summary>Append one caps-mapped character, starting a new run when the
+    /// synthesis size class changes mid-text.</summary>
+    private void AppendCapsCharToRun(char c, ComputedStyle charStyle, LayoutText layoutText)
+    {
+        if (_startIndexText >= 0 && !ReferenceEquals(_pendingRunStyle, charStyle))
+            FlushTextRun();
+        AppendToRun(c, layoutText, charStyle);
     }
 
     private void AppendText(string text, ComputedStyle style, Element? element, LayoutText layoutText, bool isFirstLine)
@@ -290,6 +414,13 @@ public class InlineItemsBuilder
         bool shouldCollapse = WhiteSpaceStyle.ShouldCollapseWhiteSpaces(style);
         bool shouldPreserveNewline = WhiteSpaceStyle.ShouldPreserveNewline(style);
         bool preserve = !shouldCollapse;
+
+        // font-variant-caps synthesis operates on the post-transform text
+        // (CSS Text 3: text-transform capitalizes first, the variant then
+        // synthesizes on the result).
+        string capsMode = EffectiveCapsMode(style);
+        bool capsActive = capsMode is not ("normal" or "titling-caps");
+        ComputedStyle? smallStyle = null;
 
         for (int i = 0; i < length; i++)
         {
@@ -338,7 +469,10 @@ public class InlineItemsBuilder
                         // Preserved space or NBSP: part of the text run. Commit any
                         // pending collapsible space first so it is not lost.
                         CommitPendingSpace();
-                        AppendToRun(c, layoutText, style);
+                        if (capsActive)
+                            AppendCapsCharToRun(c, style, layoutText);
+                        else
+                            AppendToRun(c, layoutText, style);
                     }
                     break;
                 default:
@@ -346,7 +480,17 @@ public class InlineItemsBuilder
                     // emitted, not discarded, or adjacent words / inline elements
                     // run together (e.g. "10 14 20" painting as "101420").
                     CommitPendingSpace();
-                    AppendCharacterToRun(c, layoutText, style);
+                    if (capsActive && CapsIsSmallChar(c, capsMode))
+                    {
+                        smallStyle ??= SmallCapsStyle(style);
+                        string mapped = char.IsLower(c) ? UpperChar(c) : c.ToString();
+                        foreach (char mc in mapped)
+                            AppendCapsCharToRun(mc, smallStyle, layoutText);
+                    }
+                    else if (capsActive)
+                        AppendCapsCharToRun(c, style, layoutText);
+                    else
+                        AppendCharacterToRun(c, layoutText, style);
                     break;
             }
         }

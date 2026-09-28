@@ -22,6 +22,7 @@ public class LogicalLineBuilder
     private bool _hasOutOfFlowPositionedItems;
     private bool _hasFloatingItems;
     private bool _hasRelativePositionedItems;
+    private bool _ignoreBoxMarginBorderPadding;
     private InlineItemResult? _initialLetterItemResult;
 
     public bool HasOutOfFlowPositionedItems => _hasOutOfFlowPositionedItems;
@@ -47,6 +48,10 @@ public class LogicalLineBuilder
         if (lineInfo == null) return;
 
         List<InlineItemResult> lineItems = lineInfo.MutableResults();
+
+        // A block-in-inline is laid out as a block of its own; its inline box does
+        // not add margin/border/padding to the surrounding line.
+        _ignoreBoxMarginBorderPadding = lineInfo.IsBlockInInline();
 
         // Compute heights of all inline items by placing the dominant baseline at 0.
         var lineStyle = lineInfo.HasLineStyle ? lineInfo.LineStyle() : _node.Style;
@@ -82,7 +87,11 @@ public class LogicalLineBuilder
         // every child keeps its origin at inline offset 0 and runs paint on top of
         // one another. Children are placed relative to the line's content start
         // (position 0); the caller adds the container padding/text-align offset.
-        _boxStates.ComputeInlinePositions(lineBox, 0f, lineInfo.IsBlockInInline());
+        // A line that continues a 'box-decoration-break: clone' box starts after the
+        // decoration that box repeats on this line; the line breaker counted it into
+        // the position, and no item of this line carries it, so seed the pen with it.
+        float startInset = lineInfo.IsBlockInInline() ? 0f : lineInfo.BoxDecorationStartInset;
+        _boxStates.ComputeInlinePositions(lineBox, startInset, lineInfo.IsBlockInInline());
     }
 
     internal InlineBoxState? HandleItemResults(LineInfo lineInfo, List<InlineItemResult> lineItems,
@@ -204,22 +213,40 @@ public class LogicalLineBuilder
         return box;
     }
 
-    private InlineBoxState? HandleOpenTag(InlineItem item, InlineItemResult itemResult, LogicalLineItems lineBox)
+    private InlineBoxState? HandleOpenTag(InlineItem item, InlineItemResult itemResult, LogicalLineItems lineBox,
+        bool addBoxDecorationSpacer = true)
     {
         var box = _boxStates.OnOpenTag(_constraintSpace, item, itemResult, _baselineType, lineBox);
         if (!_quirksMode || !item.IsEmptyItem())
         {
             box!.ComputeTextMetrics(item.Style(), FontHelper.GetFont(item.Style()), _baselineType);
         }
+        // The line breaker advanced its pen over the box's start
+        // margin/border/padding, so placement has to reserve the same space;
+        // without it the decoration is painted on top of the preceding text.
+        if (addBoxDecorationSpacer && !_ignoreBoxMarginBorderPadding)
+            AddBoxDecorationSpacer(lineBox, itemResult.InlineSize, item.BidiLevel);
         return box;
     }
 
-    private InlineBoxState? HandleCloseTag(InlineItem item, InlineItemResult itemResult, LogicalLineItems lineBox, InlineBoxState? box)
+    private InlineBoxState? HandleCloseTag(InlineItem item, InlineItemResult itemResult, LogicalLineItems lineBox,
+        InlineBoxState? box)
     {
         if (_quirksMode && !item.IsEmptyItem())
             box!.EnsureTextMetrics(item.Style(), FontHelper.GetFont(item.Style()), _baselineType);
+        // Symmetric to the open tag: the box's end margin/border/padding pushes
+        // whatever follows it, and is counted by the line breaker too.
+        if (!_ignoreBoxMarginBorderPadding)
+            AddBoxDecorationSpacer(lineBox, itemResult.InlineSize, item.BidiLevel);
         box = _boxStates.OnCloseTag(_constraintSpace, lineBox, box, _baselineType);
         return box;
+    }
+
+    private static void AddBoxDecorationSpacer(LogicalLineItems lineBox, float inlineSize, int bidiLevel)
+    {
+        if (inlineSize == 0)
+            return;
+        lineBox.AddBoxDecorationSpacer(inlineSize, bidiLevel);
     }
 
     private void PlaceControlItem(InlineItem item, string textContent, InlineItemResult itemResult, LogicalLineItems lineBox, InlineBoxState? box)
@@ -329,7 +356,9 @@ public class LogicalLineBuilder
         int baseDirectionLevel = baseDirection == TextDirection.Ltr ? 0 : 1;
 
         // Create a list of chunk indices in the visual order, per UAX#9 L2.
+        const int kNeutralBidiLevel = -1;
         var levels = new int[lineBox.Count];
+        var reverseForDisplay = new bool[lineBox.Count];
         bool hasOpaqueItems = false;
         for (int i = 0; i < lineBox.Count; i++)
         {
@@ -346,7 +375,29 @@ public class LogicalLineBuilder
                 levels[i] = baseDirectionLevel;
                 continue;
             }
-            levels[i] = item.BidiLevel;
+            // Levels set by explicit bidi controls are already resolved.
+            if (item.BidiLevel != 0)
+            {
+                levels[i] = item.BidiLevel;
+                continue;
+            }
+            // Word-level UAX#9 P2/P3: strong RTL content takes the lowest odd
+            // level, strong LTR content the lowest even level at or above the
+            // base; neutrals are resolved from their neighbors below.
+            var strong = FirstStrongDirection(item.TextContent);
+            if (strong == TextDirection.Rtl)
+            {
+                levels[i] = 1;
+                reverseForDisplay[i] = true;
+            }
+            else if (strong == TextDirection.Ltr)
+            {
+                levels[i] = baseDirectionLevel == 0 ? 0 : 2;
+            }
+            else
+            {
+                levels[i] = kNeutralBidiLevel;
+            }
         }
 
         // For opaque items, copy bidi levels from adjacent items.
@@ -357,9 +408,33 @@ public class LogicalLineBuilder
             {
                 if (levels[i] == kOpaqueBidiLevel)
                     levels[i] = lastLevel;
-                else
+                else if (levels[i] != kNeutralBidiLevel)
                     lastLevel = levels[i];
             }
+        }
+
+        // UAX#9 N1/N2 (simplified): a neutral run takes the level shared by
+        // its strong neighbors, otherwise the paragraph level.
+        for (int i = 0; i < levels.Length; i++)
+        {
+            if (levels[i] != kNeutralBidiLevel)
+                continue;
+            int prev = i - 1;
+            while (prev >= 0 && levels[prev] == kNeutralBidiLevel) prev--;
+            int next = i + 1;
+            while (next < levels.Length && levels[next] == kNeutralBidiLevel) next++;
+            int prevLevel = prev >= 0 ? levels[prev] : baseDirectionLevel;
+            int nextLevel = next < levels.Length ? levels[next] : baseDirectionLevel;
+            levels[i] = prevLevel == nextLevel ? prevLevel : baseDirectionLevel;
+        }
+
+        // Runs are painted as atomic left-to-right strings, so an RTL run also
+        // needs its character order flipped; the reordering below only moves
+        // whole runs around.
+        for (int i = 0; i < lineBox.Count; i++)
+        {
+            if (reverseForDisplay[i])
+                lineBox[i].TextContent = ReverseCharsForDisplay(lineBox[i].TextContent);
         }
 
         // Compute visual indices from resolved levels.
@@ -409,6 +484,23 @@ public class LogicalLineBuilder
         }
     }
 
+    private static TextDirection? FirstStrongDirection(string text)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (BidiParagraph.IsStrongRtl(text[i])) return TextDirection.Rtl;
+            if (BidiParagraph.IsStrongLtr(text[i])) return TextDirection.Ltr;
+        }
+        return null;
+    }
+
+    private static string ReverseCharsForDisplay(string text)
+    {
+        var chars = text.ToCharArray();
+        Array.Reverse(chars);
+        return new string(chars);
+    }
+
     public void RebuildBoxStates(LineInfo lineInfo, int startItemIndex, int endItemIndex)
     {
         LogicalLineItems lineBox = _context.AcquireTempLogicalLineItems();
@@ -418,7 +510,9 @@ public class LogicalLineBuilder
             if (item.Type != InlineItem.InlineItemType.OpenTag) continue;
             var itemResult = new InlineItemResult(item, i);
             LineBreaker.ComputeOpenTagResult(item, _constraintSpace, _node.IsSvgText(), itemResult);
-            HandleOpenTag(item, itemResult, lineBox);
+            // The line's own children start at the first item of this line, so the
+            // decoration of the reopened boxes above it must not be reserved here.
+            HandleOpenTag(item, itemResult, lineBox, addBoxDecorationSpacer: false);
         }
         _context.ReleaseTempLogicalLineItems(lineBox);
     }

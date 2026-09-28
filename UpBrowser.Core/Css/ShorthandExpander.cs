@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using UpBrowser.Core.Css.ElementStyles;
+using UpBrowser.Core.Css.Resolver;
 using UpBrowser.Core.Css.Properties;
 
 namespace UpBrowser.Core.Css;
@@ -72,7 +74,8 @@ public static class ShorthandExpander
             "margin" => new[] { "margin-top", "margin-right", "margin-bottom", "margin-left" },
             "padding" => new[] { "padding-top", "padding-right", "padding-bottom", "padding-left" },
             "border" => new[] { "border-top-width", "border-top-style", "border-top-color", "border-right-width", "border-right-style", "border-right-color", "border-bottom-width", "border-bottom-style", "border-bottom-color", "border-left-width", "border-left-style", "border-left-color" },
-            "font" => new[] { "font-style", "font-variant", "font-weight", "font-size", "line-height", "font-family" },
+            "font" => new[] { "font-style", "font-variant", "font-variant-caps", "font-weight", "font-size", "line-height", "font-family" },
+            "font-variant" => new[] { "font-variant-caps" },
             "flex" => new[] { "flex-grow", "flex-shrink", "flex-basis" },
             "outline" => new[] { "outline-color", "outline-style", "outline-width" },
             _ => System.Array.Empty<string>(),
@@ -119,8 +122,8 @@ public static class ShorthandExpander
 
         result["border-top-left-radius"] = $"{hTopLeft} {vTopLeft}";
         result["border-top-right-radius"] = $"{hTopRight} {vTopRight}";
-        result["border-bottom-right-radius"] = $"{vBottomRight} {hBottomRight}";
-        result["border-bottom-left-radius"] = $"{vBottomLeft} {hBottomLeft}";
+        result["border-bottom-right-radius"] = $"{hBottomRight} {vBottomRight}";
+        result["border-bottom-left-radius"] = $"{hBottomLeft} {vBottomLeft}";
     }
 
     private static void ExpandFourSides(Dictionary<string, string> result, string prefix, string value, string? suffix = null)
@@ -228,7 +231,13 @@ public static class ShorthandExpander
                 if (string.IsNullOrEmpty(p)) continue;
 
                 if (p.StartsWith("url(") || p.StartsWith("linear-gradient") || p.StartsWith("radial-gradient") || p.StartsWith("conic-gradient") || p.StartsWith("repeating-linear-gradient") || p.StartsWith("repeating-radial-gradient") || p.StartsWith("repeating-conic-gradient"))
+                {
+                    // An empty url() has no address and is invalid at computed-value
+                    // time, so the layer contributes no image.
+                    if (CssPropertyApplier.IsUrlWithoutAddress(p))
+                        continue;
                     images.Add(p);
+                }
                 else if (ColorParser.LooksLikeColor(p))
                     result["background-color"] = p;
                 else if (p == "repeat" || p == "no-repeat" || p == "repeat-x" || p == "repeat-y" || p == "round" || p == "space")
@@ -262,43 +271,107 @@ public static class ShorthandExpander
 
     private static void ExpandFont(Dictionary<string, string> result, string value)
     {
-        var parts = SplitShorthand(value);
-        string fontSize = "16px", lineHeight = "normal", fontFamily = "serif";
+        // CSS Fonts 4 §5.3: [ style || variant || weight || stretch ]? size [ / line-height ]? family
+        // Once the size is seen, every remaining token belongs to the font-family
+        // list — unquoted family names must not be dropped or re-interpreted.
+        string fontSize = "16px", lineHeight = "normal";
         bool foundSize = false;
+        int normalSlot = 0;
+        var family = new List<string>();
 
-        foreach (var part in parts)
+        foreach (var part in SplitFontShorthand(value))
         {
             var p = part.Trim().ToLowerInvariant();
-            if (p == "normal" || p == "italic" || p == "oblique")
+            if (foundSize)
+            {
+                family.Add(p);
+                continue;
+            }
+
+            if (p == "normal")
+            {
+                // Successive 'normal' fill the style, variant, weight, stretch slots in order.
+                switch (normalSlot++)
+                {
+                    case 0: result["font-style"] = "normal"; break;
+                    case 1: result["font-variant"] = "normal"; break;
+                    case 2: result["font-weight"] = "normal"; break;
+                }
+            }
+            else if (p == "italic" || p == "oblique")
                 result["font-style"] = p;
-            else if (p == "bold" || p == "bolder" || p == "lighter" || int.TryParse(p, out _))
-                result["font-weight"] = p;
             else if (p == "small-caps")
                 result["font-variant"] = p;
-            else if (p.Contains('/') || p.Contains(' '))
+            else if (p == "bold" || p == "bolder" || p == "lighter" || int.TryParse(p, out _))
+                result["font-weight"] = p;
+            else if (IsFontStretch(p))
+            {
+                // font-stretch is parsed but not applied by the engine yet.
+            }
+            else if (p.Contains('/'))
             {
                 var sizeLine = p.Split('/');
                 fontSize = sizeLine[0].Trim();
-                if (sizeLine.Length > 1) lineHeight = sizeLine[1].Trim();
+                lineHeight = sizeLine[1].Trim();
                 foundSize = true;
             }
-            else if (IsFontSize(p) || (!foundSize && (p.EndsWith("px") || p.EndsWith("em") || p.EndsWith("rem") || p.EndsWith("%"))))
+            else if (IsFontSize(p) || IsFontSizeLength(p))
             {
                 fontSize = p;
                 foundSize = true;
             }
-            else if (p.StartsWith('"') || p.StartsWith('\'') || p.Contains(' '))
-                fontFamily = part.Trim();
-            else if (!foundSize)
-                fontFamily = part.Trim();
+            else
+                family.Add(p);
         }
 
         result["font-size"] = fontSize;
         result["line-height"] = lineHeight;
-        result["font-family"] = fontFamily;
+        if (family.Count > 0)
+            result["font-family"] = string.Join(" ", family);
         result.TryAdd("font-style", "normal");
         result.TryAdd("font-weight", "normal");
         result.TryAdd("font-variant", "normal");
+    }
+
+    /// <summary>
+    /// Split a font shorthand value on whitespace outside of quoted strings, so
+    /// that quoted family names like "Times New Roman" stay a single token.
+    /// </summary>
+    private static List<string> SplitFontShorthand(string value)
+    {
+        var parts = new List<string>();
+        int start = 0;
+        char quote = '\0';
+        for (int i = 0; i < value.Length; i++)
+        {
+            char c = value[i];
+            if (quote != '\0')
+            {
+                if (c == quote) quote = '\0';
+            }
+            else if (c is '"' or '\'')
+                quote = c;
+            else if (c == ' ')
+            {
+                if (i > start) parts.Add(value[start..i]);
+                start = i + 1;
+            }
+        }
+        if (start < value.Length) parts.Add(value[start..]);
+        return parts;
+    }
+
+    private static bool IsFontStretch(string p) => p is "ultra-condensed" or "extra-condensed" or "semi-condensed"
+        or "condensed" or "semi-expanded" or "expanded" or "extra-expanded" or "ultra-expanded" or "wider" or "narrower";
+
+    private static bool IsFontSizeLength(string p)
+    {
+        foreach (var unit in new[] { "px", "em", "rem", "pt", "pc", "in", "cm", "mm", "ex", "ch" })
+            if (p.EndsWith(unit) && float.TryParse(p[..^unit.Length], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out _))
+                return true;
+        return p.EndsWith("%") && float.TryParse(p[..^1], System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out _);
     }
 
     private static void ExpandFlex(Dictionary<string, string> result, string value)
@@ -496,21 +569,35 @@ public static class ShorthandExpander
     private static void ExpandTextDecoration(Dictionary<string, string> result, string value)
     {
         var parts = SplitShorthand(value);
+        // The shorthand resets every longhand it does not carry.
         result["text-decoration-line"] = "none";
         result["text-decoration-style"] = "solid";
         result["text-decoration-color"] = "currentcolor";
+        result["text-decoration-thickness"] = "auto";
 
+        var lines = new List<string>();
         foreach (var part in parts)
         {
             var p = part.Trim().ToLowerInvariant();
             if (p is "underline" or "overline" or "line-through")
-                result["text-decoration-line"] = p;
+            {
+                // 'text-decoration-line' is a list, so several keywords may appear.
+                if (!lines.Contains(p)) lines.Add(p);
+            }
             else if (p is "solid" or "double" or "dotted" or "dashed" or "wavy")
                 result["text-decoration-style"] = p;
+            else if (p is "auto" or "from-font" || IsThickness(p))
+                result["text-decoration-thickness"] = p;
             else if (IsColor(p))
                 result["text-decoration-color"] = p;
         }
+        if (lines.Count > 0)
+            result["text-decoration-line"] = string.Join(' ', lines);
     }
+
+    /// <summary>A bare length or percentage in the 'text-decoration' shorthand is the
+    /// thickness (CSS Text Decoration 4 adds it to the shorthand grammar).</summary>
+    private static bool IsThickness(string token) => Dom.Length.IsLength(token);
 
     private static void ExpandTextEmphasis(Dictionary<string, string> result, string value)
     {

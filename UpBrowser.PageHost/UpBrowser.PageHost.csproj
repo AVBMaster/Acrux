@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsTrimmable>false</IsTrimmable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="VC-LTL" Version="5.3.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UpBrowser.Core\UpBrowser.Core.csproj" />
+    <ProjectReference Include="..\UpBrowser.PageContract\UpBrowser.PageContract.csproj" />
+    <!-- The pipeline paints through the shared display-list types, and key input is
+         described by the platform key enum; both live below the shell, not in it. -->
+    <ProjectReference Include="..\UpBrowser.Rendering\UpBrowser.Rendering.csproj" />
+  </ItemGroup>
+
+</Project>

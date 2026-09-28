@@ -18,6 +18,7 @@ using UpBrowser.Core.Performance.Memory;
 using UpBrowser.Core.Performance.Rendering;
 using UpBrowser.Core.Performance.Resources;
 using UpBrowser.Core.Performance.Scheduling;
+using UpBrowser.PageHost;
 using UpBrowser.Platform;
 using UpBrowser.Rendering;
 using UpBrowser.Rendering.DevTools;
@@ -141,6 +142,23 @@ namespace UpBrowser;
     private SKRect _dialogOkRect;
     private SKRect _dialogCancelRect;
     private SKRect _dialogInputRect;
+    // A page-host dialog is the same overlay, but answered over the pipe instead of a
+    // blocking loop: the shell's own thread must never stall waiting for a click.
+    // One modal shows at a time; the rest wait per tab, still blocking their page.
+    private int _remoteDialogId = -1;
+    private int _remoteDialogTab = -1;
+    private readonly Dictionary<int, (int RequestId, string Message, string Type)> _pendingDialogs = new();
+
+    // ---- page-unresponsive watchdog ----
+    // The child proves liveness with heartbeats; this side only decides what to do about
+    // their absence. The timer runs off the frame loop on purpose: a wedged page stops
+    // requesting repaints, so a frame-loop check alone could never notice the change.
+    private System.Threading.Timer? _watchdog;
+    private volatile int _watchdogTarget = -1;
+    private PageResponsiveness _reportedResp = PageResponsiveness.Healthy;
+    private bool _bubbleMuted;
+    private SKRect _bubbleReloadRect, _bubbleWaitRect, _bubbleKillRect;
+    private SKRect _crashReloadRect;
 
     // IME support: track focused input element
     private UpBrowser.Core.Dom.Element? _focusedElement;
@@ -207,11 +225,11 @@ namespace UpBrowser;
                 try { File.AppendAllText("upbrowser_tabstats_redraw.log", stack + "\n----\n"); } catch { }
             };
         LogCtor("SkiaTextMeasurer");
-        TextMeasurer.Instance = new Core.Layout.SkiaTextMeasurer();
+        PageEnvironment.Initialize();
         LogCtorDone("SkiaTextMeasurer");
 
         LogCtor("SKFontManager");
-        _fontFamilies ??= SkiaSharp.SKFontManager.Default.FontFamilies.ToArray();
+        _fontFamilies = PageEnvironment.FontFamilies;
         LogCtorDone("SKFontManager");
 
         LogCtor("GetDpiScale");
@@ -685,24 +703,41 @@ namespace UpBrowser;
         {
             if (!_dialogActive) return false;
 
+            bool isPrompt = _dialogType.StartsWith("prompt:");
+
             if (_dialogOkRect.Contains(x, y))
             {
-                _dialogResult = _dialogType.StartsWith("prompt:") ? _dialogInput : _dialogType == "confirm" ? "true" : "";
-                _dialogActive = false;
+                CompleteDialog(accepted: true, isPrompt ? _dialogInput : null);
                 return true;
             }
 
-            if (_dialogCancelRect.Contains(x, y) && (_dialogType.StartsWith("prompt:") || _dialogType == "confirm"))
+            if (_dialogCancelRect.Contains(x, y) && (isPrompt || _dialogType == "confirm"))
             {
-                _dialogResult = _dialogType.StartsWith("prompt:") ? null : "false";
-                _dialogActive = false;
+                CompleteDialog(accepted: false, null);
                 return true;
             }
 
-            if (_dialogInputRect.Contains(x, y) && _dialogType.StartsWith("prompt:"))
+            if (_dialogInputRect.Contains(x, y) && isPrompt)
                 return true;
 
             return true;
+        };
+
+        _input.OnPageBubbleClick = (x, y) =>
+        {
+            // Only the buttons are claimed; the rest of the page area stays usable
+            // (a wedged page simply will not answer, which is the bubble's whole point).
+            if (!_crashReloadRect.IsEmpty && _crashReloadRect.Contains(x, y))
+            {
+                ReloadRemoteTab(_chrome.ActiveTabIndex);
+                return true;
+            }
+            if (_bubbleWaitRect.Contains(x, y) || _bubbleReloadRect.Contains(x, y) || _bubbleKillRect.Contains(x, y))
+            {
+                HandlePageBubbleClick(x, y);
+                return true;
+            }
+            return false;
         };
 
         Initialize();
@@ -730,6 +765,7 @@ namespace UpBrowser;
         InitializePerformanceHub();
 
         _chrome.Initialize();
+        StartWatchdog();
 
         _skiaRenderer.Initialize(1024, 768, enableDirtyRegions: true);
         _skiaRenderer.DpiScale = _dpiScale;
@@ -782,6 +818,83 @@ namespace UpBrowser;
 
         _dialogActive = false;
         return _dialogResult;
+    }
+
+    /// <summary>
+    /// Resolve the modal the user just answered. An in-process page is waiting on
+    /// <see cref="ShowDialog"/>'s loop; a page-host page is blocked in its own process,
+    /// so its answer travels back over the pipe and the shell keeps painting.
+    /// </summary>
+    private void CompleteDialog(bool accepted, string? text)
+    {
+        if (_remoteDialogId >= 0)
+        {
+            if (_remoteTabs.TryGetValue(_remoteDialogTab, out var view) && !view.Proc.IsDead)
+                view.Proc.RespondDialog(_remoteDialogId, accepted, accepted ? text : null);
+            _remoteDialogId = -1;
+            _remoteDialogTab = -1;
+            _dialogActive = false;
+            _input.NeedsRedraw = true;
+            PresentRemoteDialog();   // another tab may have been waiting behind this one
+            return;
+        }
+
+        _dialogResult = _dialogType switch
+        {
+            "confirm" => accepted ? "true" : "false",
+            _ when _dialogType.StartsWith("prompt:") => accepted ? (text ?? "") : null,
+            _ => "",
+        };
+        _dialogActive = false;
+    }
+
+    /// <summary>A page-host modal arrived. It shows only while its tab is frontmost;
+    /// otherwise it waits — the page's script thread is blocked either way, like any
+    /// browser handling a dialog on a background tab.</summary>
+    private void ShowRemoteDialog(int tab, int requestId, string message, string type)
+    {
+        _pendingDialogs[tab] = (requestId, message, type);
+        PresentRemoteDialog();
+    }
+
+    private void PresentRemoteDialog()
+    {
+        if (_remoteDialogId >= 0) return;   // one modal on screen at a time
+        if (!_pendingDialogs.TryGetValue(_chrome.ActiveTabIndex, out var pending)) return;
+
+        _pendingDialogs.Remove(_chrome.ActiveTabIndex);
+        _remoteDialogId = pending.RequestId;
+        _remoteDialogTab = _chrome.ActiveTabIndex;
+
+        _dialogMessage = pending.Message;
+        _dialogType = pending.Type;
+        _dialogInput = pending.Type.StartsWith("prompt:") ? pending.Type[7..] : "";
+        _dialogResult = null;
+        _dialogActive = true;
+        _input.NeedsRedraw = true;
+    }
+
+    /// <summary>Put the on-screen modal back to waiting, because another tab came to the
+    /// front. The page stays blocked on it until its tab is shown again.</summary>
+    private void ParkRemoteDialog()
+    {
+        if (_remoteDialogId < 0) return;
+        _pendingDialogs[_remoteDialogTab] = (_remoteDialogId, _dialogMessage, _dialogType);
+        _remoteDialogId = -1;
+        _remoteDialogTab = -1;
+        _dialogActive = false;
+        _input.NeedsRedraw = true;
+    }
+
+    /// <summary>Forget a modal that can never be answered — its tab died or closed.</summary>
+    private void DropRemoteDialogs(int tab)
+    {
+        _pendingDialogs.Remove(tab);
+        if (_remoteDialogTab != tab) return;
+        _remoteDialogId = -1;
+        _remoteDialogTab = -1;
+        _dialogActive = false;
+        _input.NeedsRedraw = true;
     }
 
     private void RenderDialogFrame(int windowWidth, int windowHeight)
@@ -1240,6 +1353,9 @@ namespace UpBrowser;
         {
             Console.WriteLine($"Close tab {index} requested");
 
+            // A modal of a closing tab is unanswerable; drop it on the UI thread.
+            _eventLoop.PostTask(() => DropRemoteDialogs(index));
+
             // 所有重清理操作放到后台线程，绝不阻塞 UI 线程
             _ = Task.Run(() =>
             {
@@ -1301,8 +1417,10 @@ namespace UpBrowser;
             _input.OnDomClick = (x, y) =>
             {
                 var v = ActiveRemote();
+                // Press only: the release arrives through OnDomMouseUp. The child needs
+                // the gap between them — page-text selection extends while the button is
+                // held, so a synthetic down+up pair per click would kill every drag.
                 v?.Proc.MouseDown(x, y - _contentOffset);
-                v?.Proc.MouseUp(x, y - _contentOffset);
             };
             _input.OnDomMouseUp = (x, y, isUp) =>
             {
@@ -1717,6 +1835,8 @@ namespace UpBrowser;
                 }
             });
             view.Proc.OnWheelResult += consumed => _eventLoop.PostTask(() => FlushPendingWheel(consumed));
+            view.Proc.OnDialogRequest += (id, message, type) =>
+                _eventLoop.PostTask(() => ShowRemoteDialog(idx, id, message, type));
             return view;
         });
     }
@@ -1796,10 +1916,6 @@ namespace UpBrowser;
                     if (_chrome.ActiveTabIndex == tab) _input.NeedsRedraw = true;
                 }
                 break;
-            case TabMsg.Dialog:
-                if (_chrome.ActiveTabIndex == tab)
-                    ShowDialog(text, extra);
-                break;
         }
     }
 
@@ -1811,6 +1927,12 @@ namespace UpBrowser;
         ClearTabInteractionState();
 
         var view = EnsureRemoteTab(to, url);
+        // A tab that crashed while it was in the background comes back now that it is seen.
+        if (view.Proc.IsDead && view.NeedsRelaunch && Environment.TickCount64 >= view.RelaunchAtTick)
+        {
+            RelaunchRemoteTab(to, view.LastUrl, view.Restart);
+            return;
+        }
         if (!view.HasFrame && !view.InitialSent && view.PendingInitial == null)
             ProcessNavigateTo(to, string.IsNullOrEmpty(url) ? "upbrowser://newtab" : url);
 
@@ -1819,6 +1941,10 @@ namespace UpBrowser;
             old.Proc.SetActive(false);
 
         _scroll.ScrollTo(view.SentScrollX, view.SentScrollY);
+        // A modal belongs to its tab: park the one on screen if we are leaving it, and
+        // surface whatever the new tab was blocked on.
+        if (_remoteDialogTab >= 0 && _remoteDialogTab != to) ParkRemoteDialog();
+        PresentRemoteDialog();
         _input.NeedsRedraw = true;
     }
 
@@ -1829,19 +1955,38 @@ namespace UpBrowser;
         {
             var v = kv.Value;
 
-            // Crash resilience: a dead child gets relaunched (bounded retries)
-            // and re-navigated to the URL it was showing.
-            if (v.Proc.IsDead && v.InitialSent && !string.IsNullOrEmpty(v.LastUrl) && v.RestartCount < 2)
+            if (v.Proc.IsDead)
             {
-                int restarts = v.RestartCount + 1;
-                string lastUrl = v.LastUrl;
-                Console.WriteLine($"[RemoteTab {kv.Key}] child died; restarting ({restarts}/2) → {lastUrl}");
-                _remoteTabs.TryRemove(kv.Key, out _);
-                try { v.Dispose(); } catch { }
-                var nv = EnsureRemoteTab(kv.Key, lastUrl);
-                nv.RestartCount = restarts;
-                nv.LastUrl = lastUrl;
-                nv.PendingInitial = lastUrl;
+                // Classify each death exactly once; the budget then decides. Distinguishing
+                // who ended the host matters: a watchdog kill is our doing, a page fault is
+                // the page's, and a clean close is neither.
+                if (!v.DeathHandled && v.InitialSent)
+                {
+                    v.DeathHandled = true;
+                    DropRemoteDialogs(kv.Key);
+                    var verdict = v.Restart.OnDeath(v.Proc.DeathKind, Environment.TickCount64);
+                    if (verdict.Exhausted)
+                    {
+                        v.Crashed = true;
+                        v.CrashDetail = v.Proc.DeathDetail;
+                        Console.WriteLine($"[RemoteTab {kv.Key}] restart budget spent; showing crash card");
+                        _input.NeedsRedraw = true;
+                    }
+                    else
+                    {
+                        v.NeedsRelaunch = verdict.ShouldRestart;
+                        v.RelaunchAtTick = Environment.TickCount64 + verdict.DelayMs;
+                        Console.WriteLine($"[RemoteTab {kv.Key}] {v.Proc.DeathKind}; " +
+                            $"relaunch in {verdict.DelayMs}ms ({v.Restart.FaultCount} fault(s) in window)");
+                    }
+                }
+
+                // A background tab's crash is nobody's emergency. Relaunching it eagerly would
+                // spend a process and its whole working set on a page the user is not looking at,
+                // so it waits until the tab is shown again.
+                if (v.NeedsRelaunch && kv.Key == _chrome.ActiveTabIndex &&
+                    Environment.TickCount64 >= v.RelaunchAtTick)
+                    RelaunchRemoteTab(kv.Key, v.LastUrl, carry: v.Restart);
                 continue;
             }
 
@@ -1884,6 +2029,209 @@ namespace UpBrowser;
             _scroll.UpdateScroll(active.ContentW, active.ContentH, windowWidth, contentViewportHeight);
         }
         _chrome.SetLoadingState(active.Proc.Loading);
+
+        // Follow the tab we are asked to keep an eye on, and let a recovered page show a
+        // fresh bubble the next time it wedges.
+        _watchdogTarget = _chrome.ActiveTabIndex;
+        if (active.Proc.Responsiveness == PageResponsiveness.Healthy) _bubbleMuted = false;
+    }
+
+    /// <summary>Starts the liveness probe. Only page-host tabs can be unresponsive —
+    /// in-process tabs wedge the shell itself, which is the thing this whole split removes.</summary>
+    private void StartWatchdog()
+    {
+        if (!_processTabs) return;
+        _watchdog = new System.Threading.Timer(_ =>
+        {
+            // A pending relaunch has to be woken by the timer: once the host is dead nothing
+            // comes back over its pipe, so Responsiveness stops changing and the frame loop
+            // would never run again to fire the delayed relaunch. Only for the tab on screen
+            // and only once its backoff is due — otherwise a crashed background tab would
+            // force repaints forever.
+            long nowTick = Environment.TickCount64;
+            int target = _watchdogTarget;
+            bool wakeForRelaunch = target >= 0 &&
+                _remoteTabs.TryGetValue(target, out var pending) &&
+                pending.NeedsRelaunch && nowTick >= pending.RelaunchAtTick;
+            if (wakeForRelaunch)
+            {
+                _input.NeedsRedraw = true;
+                return;
+            }
+
+            int idx = target;
+            if (idx < 0 || !_remoteTabs.TryGetValue(idx, out var view)) return;
+            var now = view.Proc.Responsiveness;
+            // Wake the frame loop only on a transition: an idle, healthy browser must keep
+            // painting nothing at all.
+            if (now != _reportedResp)
+            {
+                _reportedResp = now;
+                _input.NeedsRedraw = true;
+            }
+        }, null, TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
+    }
+
+    private void HandlePageBubbleClick(float x, float y)
+    {
+        var view = ActiveRemote();
+        if (view == null) return;
+        int tab = _chrome.ActiveTabIndex;
+
+        if (_bubbleWaitRect.Contains(x, y))
+        {
+            _bubbleMuted = true;
+            return;
+        }
+        if (_bubbleReloadRect.Contains(x, y))
+        {
+            ReloadRemoteTab(tab);
+            return;
+        }
+        if (_bubbleKillRect.Contains(x, y))
+            _chrome.CloseTab(tab);
+    }
+
+    /// <summary>Tear a host down and load its page again in a fresh one.</summary>
+    private void RelaunchRemoteTab(int tabIndex, string url, RestartPolicy carry)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        if (_remoteTabs.TryGetValue(tabIndex, out var old))
+        {
+            _remoteTabs.TryRemove(tabIndex, out _);
+            try { old.Dispose(); } catch { }
+        }
+        var nv = EnsureRemoteTab(tabIndex, url);
+        nv.Restart = carry;
+        nv.LastUrl = url;
+        nv.PendingInitial = url;
+        nv.InitialSent = false;
+        _input.NeedsRedraw = true;
+    }
+
+    /// <summary>Tear a wedged host down and load its page again in a new one. A user asking
+    /// for this resets the crash budget — they are not watching an automated restart loop.</summary>
+    private void ReloadRemoteTab(int tabIndex)
+    {
+        if (!_remoteTabs.TryGetValue(tabIndex, out var view)) return;
+        string url = !string.IsNullOrEmpty(view.LastUrl) ? view.LastUrl : view.PendingInitial ?? "";
+        var policy = view.Restart;
+        policy.Reset();
+        // A wedged host does not answer a polite Close; killing it first keeps Dispose from
+        // spending its exit-wait on the UI thread.
+        if (!view.Proc.IsDead) view.Proc.KillForHang();
+        _bubbleMuted = false;
+        _reportedResp = PageResponsiveness.Healthy;
+        RelaunchRemoteTab(tabIndex, url, policy);
+    }
+
+    /// <summary>
+    /// The shell's answer to a page host that stopped beating: a small card over the page
+    /// area offering wait / reload / close. It is chrome, not page content, so it draws and
+    /// takes clicks while the page host is completely stuck.
+    /// </summary>
+    private void RenderUnresponsiveBubble(SKCanvas canvas, float windowWidth, float contentOffset)
+    {
+        float w = Math.Min(420, windowWidth - 32), h = 96;
+        float x = (windowWidth - w) / 2;
+        float y = contentOffset + 16;
+
+        using var shadow = new SKPaint { Color = new SKColor(0, 0, 0, 40), Style = SKPaintStyle.Fill, IsAntialias = true };
+        canvas.DrawRoundRect(x + 2, y + 3, w, h, 8, 8, shadow);
+        using var bg = new SKPaint { Color = SKColors.White, Style = SKPaintStyle.Fill, IsAntialias = true };
+        canvas.DrawRoundRect(x, y, w, h, 8, 8, bg);
+        using var border = new SKPaint
+        {
+            Color = new SKColor(210, 210, 210),
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 1,
+            IsAntialias = true
+        };
+        canvas.DrawRoundRect(x, y, w, h, 8, 8, border);
+
+        using var titleFont = FontHelper.CreateFont(14);
+        using var titlePaint = FontHelper.CreatePaint(14);
+        titlePaint.Color = SKColor.Parse("#333333");
+        canvas.DrawText("页面没有响应", x + 16, y + 26, SKTextAlign.Left, titleFont, titlePaint);
+
+        using var msgFont = FontHelper.CreateFont(12);
+        using var msgPaint = FontHelper.CreatePaint(12);
+        msgPaint.Color = SKColor.Parse("#666666");
+        canvas.DrawText("该标签的程序仍在运行，但已停止响应输入。", x + 16, y + 45, SKTextAlign.Left, msgFont, msgPaint);
+
+        const float btnW = 92, btnH = 28, gap = 8;
+        float by = y + h - btnH - 14;
+        float bx = x + w - btnW * 3 - gap * 2 - 16;
+
+        _bubbleWaitRect = new SKRect(bx, by, bx + btnW, by + btnH);
+        _bubbleReloadRect = new SKRect(bx + btnW + gap, by, bx + btnW * 2 + gap, by + btnH);
+        _bubbleKillRect = new SKRect(bx + (btnW + gap) * 2, by, bx + btnW * 3 + gap * 2, by + btnH);
+
+        using var font = FontHelper.CreateFont(13);
+        DrawBubbleButton(canvas, font, _bubbleWaitRect, "等待", new SKColor(240, 240, 240), SKColor.Parse("#333333"));
+        DrawBubbleButton(canvas, font, _bubbleReloadRect, "重新加载", new SKColor(225, 236, 250), SKColor.Parse("#1a5fb4"));
+        DrawBubbleButton(canvas, font, _bubbleKillRect, "关闭页面", new SKColor(250, 228, 228), SKColor.Parse("#a51d1d"));
+    }
+
+    /// <summary>
+    /// Shown once a tab has spent its restart budget: the shell stops relaunching a page that
+    /// only crashes again, says so, and leaves one button that refills the budget.
+    /// </summary>
+    private void RenderCrashCard(SKCanvas canvas, float windowWidth, float contentOffset, string detail)
+    {
+        float w = Math.Min(460, windowWidth - 48), h = 132;
+        float x = (windowWidth - w) / 2;
+        float y = contentOffset + 48;
+
+        using var bg = new SKPaint { Color = SKColors.White, Style = SKPaintStyle.Fill, IsAntialias = true };
+        canvas.DrawRoundRect(x, y, w, h, 8, 8, bg);
+        using var border = new SKPaint
+        {
+            Color = new SKColor(210, 210, 210),
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 1,
+            IsAntialias = true
+        };
+        canvas.DrawRoundRect(x, y, w, h, 8, 8, border);
+
+        using var titleFont = FontHelper.CreateFont(15);
+        using var titlePaint = FontHelper.CreatePaint(15);
+        titlePaint.Color = SKColor.Parse("#333333");
+        canvas.DrawText("此标签的页面已停止工作", x + 16, y + 28, SKTextAlign.Left, titleFont, titlePaint);
+
+        using var msgFont = FontHelper.CreateFont(12);
+        using var msgPaint = FontHelper.CreatePaint(12);
+        msgPaint.Color = SKColor.Parse("#777777");
+        canvas.DrawText("它连续崩溃太多次，浏览器已停止自动重新加载。", x + 16, y + 50, SKTextAlign.Left, msgFont, msgPaint);
+        if (!string.IsNullOrEmpty(detail))
+            canvas.DrawText(Truncate(detail, msgFont, w - 32), x + 16, y + 68, SKTextAlign.Left, msgFont, msgPaint);
+
+        const float btnW = 104, btnH = 30;
+        _crashReloadRect = new SKRect(x + w - btnW - 16, y + h - btnH - 14, x + w - 16, y + h - 14);
+        using var font = FontHelper.CreateFont(13);
+        DrawBubbleButton(canvas, font, _crashReloadRect, "重新加载", new SKColor(225, 236, 250), SKColor.Parse("#1a5fb4"));
+    }
+
+    private static string Truncate(string text, SKFont font, float maxWidth)
+    {
+        if (font.MeasureText(text) <= maxWidth) return text;
+        int lo = 0, hi = text.Length;
+        while (lo < hi)
+        {
+            int mid = (lo + hi + 1) / 2;
+            if (font.MeasureText(text[..mid] + "…") <= maxWidth) lo = mid; else hi = mid - 1;
+        }
+        return text[..lo] + "…";
+    }
+
+    private static void DrawBubbleButton(SKCanvas canvas, SKFont font, SKRect rect, string text,
+        SKColor fill, SKColor textColor)
+    {
+        using var bg = new SKPaint { Color = fill, Style = SKPaintStyle.Fill, IsAntialias = true };
+        canvas.DrawRoundRect(rect, 6, 6, bg);
+        using var paint = FontHelper.CreatePaint(13);
+        paint.Color = textColor;
+        canvas.DrawText(text, rect.MidX, rect.Top + rect.Height * 0.68f, SKTextAlign.Center, font, paint);
     }
 
     private void RenderRemotePage(int windowWidth, float contentViewportHeight)
@@ -2412,7 +2760,7 @@ namespace UpBrowser;
         }
         else
         {
-            _layout.Layout(_currentLoad.Document, windowWidth, windowHeight);
+            _layout.Layout(_currentLoad.Document, windowWidth, windowHeight, _dpiScale);
         }
 
         // Refresh the shared scroll state so the painter and the click->caret mapping
@@ -3256,6 +3604,25 @@ namespace UpBrowser;
 
         _taskManagerPage.Render(_skiaRenderer.Canvas, windowWidth, windowHeight, _contentOffset, tmRows);
 
+        // A page-host modal is drawn by the ordinary frame loop — the shell keeps
+        // painting and animating while the page's script thread waits for the answer.
+        if (_dialogActive)
+            RenderDialogOverlay(_skiaRenderer.Canvas, windowWidth, windowHeight);
+
+        var activeView = ActiveRemote();
+        if (activeView != null && activeView.Crashed)
+        {
+            RenderCrashCard(_skiaRenderer.Canvas, windowWidth, _contentOffset, activeView.CrashDetail);
+        }
+        else
+        {
+            _crashReloadRect = SKRect.Empty;
+            if (activeView != null && activeView.Proc.Responsiveness == PageResponsiveness.Unresponsive && !_bubbleMuted)
+                RenderUnresponsiveBubble(_skiaRenderer.Canvas, windowWidth, _contentOffset);
+            else
+                _bubbleKillRect = _bubbleReloadRect = _bubbleWaitRect = SKRect.Empty;
+        }
+
         _skiaRenderer.TickFrame();
         _skiaRenderer.RenderFpsCounter(_skiaRenderer.Canvas, windowWidth, windowHeight);
 
@@ -3380,7 +3747,7 @@ namespace UpBrowser;
         float docY = y - _contentOffset + _scroll.ScrollY;
 
         // Find the deepest element at this point, then walk up to find a scroll container
-        var element = HitTest(_currentLoad.Document, docX, docY);
+        var element = PageHitTest.HitTest(_currentLoad.Document, docX, docY);
         if (element == null) return false;
         var el = element;
         while (el != null)
@@ -3604,7 +3971,7 @@ namespace UpBrowser;
 
         float docX = x + _scroll.ScrollX;
         float adjustedY = y - _contentOffset + _scroll.ScrollY;
-        var element = HitTest(_currentLoad.Document, docX, adjustedY);
+        var element = PageHitTest.HitTest(_currentLoad.Document, docX, adjustedY);
         Console.WriteLine($"[Click] HitTest found: {element?.TagName} at ({docX:F1},{adjustedY:F1})");
         if (element != null)
         {
@@ -4501,7 +4868,7 @@ namespace UpBrowser;
         }
 
         // Find deepest element at cursor position
-        var element = HitTest(_currentLoad.Document, docX, docY);
+        var element = PageHitTest.HitTest(_currentLoad.Document, docX, docY);
 
         // Walk up from hit element to find nearest scroll container with overflow
         var el = element;
@@ -4901,7 +5268,7 @@ namespace UpBrowser;
 
         float docX = x + _scroll.ScrollX;
         float adjustedY = y - _contentOffset + _scroll.ScrollY;
-        var element = HitTest(_currentLoad.Document, docX, adjustedY);
+        var element = PageHitTest.HitTest(_currentLoad.Document, docX, adjustedY);
 
         // Textarea resize drag: grow/shrink the element via its inline style.
         if (_textareaResizeElement != null)
@@ -5603,6 +5970,17 @@ namespace UpBrowser;
         }
         else
         {
+            if (_processTabs)
+            {
+                // Remote page: the child owns the selection. Ask it, then land the text
+                // on the clipboard on the UI thread — this callback is on the pipe reader.
+                ActiveRemote()?.Proc.RequestSelectedText(sel => _eventLoop.PostTask(() =>
+                {
+                    if (!string.IsNullOrEmpty(sel))
+                        Clipboard.SetText(sel);
+                }));
+                return;
+            }
             string sel = GetSelectedText();
             if (!string.IsNullOrEmpty(sel))
                 Clipboard.SetText(sel);
@@ -5806,36 +6184,6 @@ namespace UpBrowser;
             _app._jsEngine.DispatchEvent(_app._focusedElement, "input");
             _app._input.NeedsRedraw = true;
         }
-    }
-
-    internal static UpBrowser.Core.Dom.Element? HitTest(UpBrowser.Core.Dom.Document doc, float x, float y)
-    {
-        UpBrowser.Core.Dom.Element? result = null;
-        float lastZ = float.MinValue;
-
-        HitTestElement(doc.DocumentElement, x, y, ref result, ref lastZ);
-        if (result == null) HitTestElement(doc.Body, x, y, ref result, ref lastZ);
-        return result;
-    }
-
-    private static void HitTestElement(UpBrowser.Core.Dom.Element? element, float x, float y,
-        ref UpBrowser.Core.Dom.Element? result, ref float lastZ)
-    {
-        if (element == null) return;
-
-        var box = element.LayoutBox;
-        if (box != null && box.BorderBox.Contains(x, y))
-        {
-            float z = element.ComputedStyle?.ZIndex ?? 0;
-            if (result == null || z >= lastZ)
-            {
-                result = element;
-                lastZ = z;
-            }
-        }
-
-        foreach (var child in element.Children.OfType<UpBrowser.Core.Dom.Element>())
-            HitTestElement(child, x, y, ref result, ref lastZ);
     }
 
     private SelPoint HitTestTextPosition(Core.Dom.Document doc, float dlX, float dlY)
@@ -6065,6 +6413,8 @@ namespace UpBrowser;
 
     public void Dispose()
     {
+        _watchdog?.Dispose();
+        _watchdog = null;
         ShutdownPerformanceHub();
         _processManager.Dispose();
         if (_currentLoad != null)

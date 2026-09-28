@@ -1,4 +1,4 @@
-using SkiaSharp;
+﻿using SkiaSharp;
 using UpBrowser.Core.Css;
 
 namespace UpBrowser.Core.Dom;
@@ -6,6 +6,20 @@ namespace UpBrowser.Core.Dom;
 public abstract class Length
 {
     public abstract float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight);
+
+    /// <summary>
+    /// Metrics of the element currently being resolved, when a font-relative
+    /// unit (ch/ex/cap/ic/lh…) needs real glyph dimensions. Null outside a
+    /// <see cref="FontUnitContext.Scope"/>, where callers fall back to the
+    /// size-based approximation.
+    /// </summary>
+    protected static UpBrowser.Core.Fonts.FontMetrics? CurrentFontMetrics()
+    {
+        var style = FontUnitContext.Current;
+        return style != null && style.FontSize > 0
+            ? UpBrowser.Core.Fonts.FontMetricsProvider.GetForStyle(style)
+            : null;
+    }
 
     public static Length Parse(string value)
     {
@@ -98,7 +112,7 @@ public abstract class Length
             if (value.EndsWith("q"))
                 return new PixelLength(SafeFloat(value[..^1]) * 0.9448819f);
             if (value.EndsWith("ic"))
-                return new ChLength(SafeFloat(value[..^2]));
+                return new IcLength(SafeFloat(value[..^2]));
             if (value == "0")
                 return new PixelLength(0);
 
@@ -130,16 +144,47 @@ public abstract class Length
 
     public static bool TryParse(string value, out Length length)
     {
-        try
-        {
-            length = Parse(value);
-            return true;
-        }
-        catch
+        var parsed = Parse(value);
+        if (!IsLengthValue(value, parsed))
         {
             length = AutoLength.Instance;
             return false;
         }
+        length = parsed;
+        return true;
+    }
+
+    /// <summary>True when the token really carries a length value, which is what
+    /// shorthand grammars need to tell a &lt;length&gt; apart from a keyword or a
+    /// &lt;color&gt; (CSS Values 3 §6). <see cref="Parse"/> is deliberately lenient
+    /// — anything unrecognised degrades to 'auto' and 'fiftyem' becomes 0em — so
+    /// neither Parse nor the (historically always-true) TryParse can classify.</summary>
+    public static bool IsLength(string? value)
+        => !string.IsNullOrWhiteSpace(value) && IsLengthValue(value, Parse(value));
+
+    private static bool IsLengthValue(string? value, Length parsed)
+    {
+        switch (parsed)
+        {
+            // 'max-content', 'calc()' and friends are legitimate length values.
+            case IntrinsicLength:
+            case MathLength:
+                return true;
+            case AutoLength:
+                var keyword = value?.Trim() ?? string.Empty;
+                return keyword is "auto" or "inherit" or "initial";
+        }
+
+        // A concrete length unit was matched; make sure the leading numeric
+        // component actually parses, otherwise 'red' / 'fiftyem' look like lengths.
+        var s = value!.Trim();
+        int i = 0;
+        if (s[i] is '+' or '-') i++;
+        int start = i;
+        while (i < s.Length && (char.IsAsciiDigit(s[i]) || s[i] == '.')) i++;
+        return i > start
+            && float.TryParse(s[..i], System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out _);
     }
     /// <summary>'font-size' absolute keywords, expressed as ratios of the user
     /// default (medium). CSS Fonts 4 §7.1; matches the table every engine ships
@@ -317,7 +362,11 @@ public class ExLength : Length
 {
     public float Value { get; }
     public ExLength(float value) => Value = value;
-    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight) => Value * reference * 0.5f;
+    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight)
+    {
+        var m = CurrentFontMetrics();
+        return Value * (m?.XHeight ?? reference * 0.5f);
+    }
     public override string ToString() => $"{Value}ex";
 }
 
@@ -325,8 +374,28 @@ public class ChLength : Length
 {
     public float Value { get; }
     public ChLength(float value) => Value = value;
-    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight) => Value * reference * 0.5f;
+    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight)
+    {
+        // 'ch' is the advance of the '0' glyph (CSS Values 4 §6.3).
+        var m = CurrentFontMetrics();
+        return Value * (m?.ZeroWidth ?? reference * 0.5f);
+    }
     public override string ToString() => $"{Value}ch";
+}
+
+public class IcLength : Length
+{
+    public float Value { get; }
+    public IcLength(float value) => Value = value;
+    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight)
+    {
+        // 'ic' is the advance of '水' in the element's font; 1em is the
+        // fallback for fonts without the metric (CSS Values 4 §6.3).
+        var m = CurrentFontMetrics();
+        float ic = m?.IdeographicWidth ?? 0f;
+        return Value * (ic > 0 ? ic : reference);
+    }
+    public override string ToString() => $"{Value}ic";
 }
 
 // Container query units (temporarily mapped to viewport until container support)
@@ -451,7 +520,11 @@ public class RexLength : Length
 {
     public float Value { get; }
     public RexLength(float value) => Value = value;
-    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight) => Value * rootFontSize * 0.5f;
+    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight)
+    {
+        var m = CurrentFontMetrics();
+        return Value * (m?.XHeight ?? rootFontSize * 0.5f);
+    }
     public override string ToString() => $"{Value}rex";
 }
 
@@ -459,7 +532,12 @@ public class RicLength : Length
 {
     public float Value { get; }
     public RicLength(float value) => Value = value;
-    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight) => Value * rootFontSize * 0.5f;
+    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight)
+    {
+        // 'ric' is the root font's ideographic advance; the root font family is
+        // not reachable from here and CJK fonts use an exactly-1em advance.
+        return Value * rootFontSize;
+    }
     public override string ToString() => $"{Value}ric";
 }
 
@@ -467,7 +545,13 @@ public class LhLength : Length
 {
     public float Value { get; }
     public LhLength(float value) => Value = value;
-    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight) => Value * reference;
+    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight)
+    {
+        var style = FontUnitContext.Current;
+        return Value * (style != null && style.FontSize > 0
+            ? UpBrowser.Core.Fonts.LineBoxMetrics.GetLineHeight(style)
+            : reference);
+    }
     public override string ToString() => $"{Value}lh";
 }
 
@@ -475,7 +559,13 @@ public class RlhLength : Length
 {
     public float Value { get; }
     public RlhLength(float value) => Value = value;
-    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight) => Value * rootFontSize;
+    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight)
+    {
+        var style = FontUnitContext.Current;
+        return Value * (style != null && style.FontSize > 0
+            ? UpBrowser.Core.Fonts.LineBoxMetrics.GetLineHeight(style)
+            : rootFontSize);
+    }
     public override string ToString() => $"{Value}rlh";
 }
 
@@ -483,7 +573,11 @@ public class CapLength : Length
 {
     public float Value { get; }
     public CapLength(float value) => Value = value;
-    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight) => Value * reference * 0.7f;
+    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight)
+    {
+        var m = CurrentFontMetrics();
+        return Value * (m?.CapHeight ?? reference * 0.7f);
+    }
     public override string ToString() => $"{Value}cap";
 }
 
@@ -491,7 +585,11 @@ public class RcapLength : Length
 {
     public float Value { get; }
     public RcapLength(float value) => Value = value;
-    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight) => Value * rootFontSize * 0.7f;
+    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight)
+    {
+        var m = CurrentFontMetrics();
+        return Value * (m?.CapHeight ?? rootFontSize * 0.7f);
+    }
     public override string ToString() => $"{Value}rcap";
 }
 
@@ -501,6 +599,9 @@ public class MathLength : Length
     public MathLength(string expression) => Expression = expression;
     public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight)
     {
+        // 'reference' is the percentage base here; font-relative units come from the
+        // ambient FontUnitContext, and percentages from the base published below.
+        using var _pct = CssFunctionEvaluator.UsePercentageBase(reference);
         var evaluated = CssFunctionEvaluator.Evaluate(Expression, null, reference, rootFontSize, viewportWidth, viewportHeight, forceMath: true);
         if (evaluated.EndsWith("px") && float.TryParse(evaluated[..^2], System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var epx))
@@ -556,6 +657,12 @@ public class ComputedStyle
     public float BorderTopRightRadius { get; set; }
     public float BorderBottomLeftRadius { get; set; }
     public float BorderBottomRightRadius { get; set; }
+    // Elliptical radii keep the vertical radius separately; both halves share the
+    // same encoding (percentages stored negated, resolved against the box at paint).
+    public float BorderTopLeftRadiusY { get; set; }
+    public float BorderTopRightRadiusY { get; set; }
+    public float BorderBottomLeftRadiusY { get; set; }
+    public float BorderBottomRightRadiusY { get; set; }
 
     public DisplayType Display { get; set; } = DisplayType.Block;
     public PositionType Position { get; set; } = PositionType.Static;
@@ -566,6 +673,9 @@ public class ComputedStyle
     public float FontSize { get; set; } = 16;
     public FontWeight FontWeight { get; set; } = FontWeight.Normal;
     public FontStyleType FontStyle { get; set; } = FontStyleType.Normal;
+    /// <summary>Authored angle of 'font-style: oblique &lt;angle&gt;' (CSS Fonts 4 §3.2.2).
+    /// Null means the style asked for the font family's own oblique/italic face.</summary>
+    public float? FontStyleObliqueDegrees { get; set; }
     public float LineHeight { get; set; } = 1.5f;
 
     /// <summary>
@@ -688,6 +798,9 @@ public class ComputedStyle
     /// <summary>'text-indent: hanging' inverts the indent: the first line stays at
     /// the start edge and the remaining lines are indented (CSS Text 3 §5.2).</summary>
     public bool TextIndentHanging { get; set; }
+    /// <summary>'text-indent: each-line' also indents the lines that follow a forced
+    /// break, not just the first line of the block (CSS Text 3 §5.2).</summary>
+    public bool TextIndentEachLine { get; set; }
     /// <summary>Percentage part of 'text-indent', resolved against the containing
     /// block's inline size at line-break time (CSS Text 3 §5.2).</summary>
     public float TextIndentPercent { get; set; }
@@ -696,9 +809,24 @@ public class ComputedStyle
     public List<TextShadowValue> TextShadow { get; set; } = new();
 public TextDecorationLineType TextDecorationLine { get; set; } = TextDecorationLineType.None;
 public TextDecorationStyleType TextDecorationStyle { get; set; } = TextDecorationStyleType.Solid;
-public SKColor TextDecorationColor { get; set; } = SKColors.Black;
-public float TextDecorationThickness { get; set; }
+/// <summary>'text-decoration-color'. The initial value is 'auto', which paints with
+/// the element's 'color'; that is modelled as a fully transparent SKColor so no
+/// authored color can be confused with it.</summary>
+public SKColor TextDecorationColor { get; set; }
+/// <summary>Resolved 'text-decoration-thickness' in px; NaN means 'auto'.</summary>
+public float TextDecorationThickness { get; set; } = float.NaN;
+/// <summary>'text-decoration-thickness: from-font' (CSS Text Decoration 4 §3.4).</summary>
+public bool TextDecorationThicknessFromFont { get; set; }
+/// <summary>Authored 'auto' keyword of 'text-underline-offset'.</summary>
+public bool TextUnderlineOffsetIsAuto { get; set; } = true;
 public float TextUnderlineOffset { get; set; }
+/// <summary>'text-underline-position' (CSS Text Decoration 4 §3.2).</summary>
+public TextUnderlinePositionType TextUnderlinePosition { get; set; } = TextUnderlinePositionType.Auto;
+/// <summary>'text-decoration-skip-ink: none' asks for an unbroken line.</summary>
+public bool TextDecorationSkipInk { get; set; } = true;
+/// <summary>'box-decoration-break' (CSS Fragmentation 3 §4.2): whether a box that
+/// is split across lines/columns repeats its decoration on each fragment.</summary>
+public BoxDecorationBreakType BoxDecorationBreak { get; set; } = BoxDecorationBreakType.Slice;
 
 private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDecorations;
 
@@ -710,24 +838,31 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
 /// pipeline uses identity to detect decoration propagation across a parent
 /// chain, see inline_paint_context.cc).
 /// </summary>
-public System.Collections.Generic.List<AppliedTextDecoration> AppliedTextDecorations()
-{
-    if (_appliedTextDecorations != null)
-        return _appliedTextDecorations;
-
-    var list = new System.Collections.Generic.List<AppliedTextDecoration>();
-    if (TextDecorationLine != TextDecorationLineType.None)
+    public System.Collections.Generic.List<AppliedTextDecoration> AppliedTextDecorations()
     {
-        list.Add(new AppliedTextDecoration(
-            TextDecorationLine, TextDecorationStyle, TextDecorationColor,
-            TextDecorationThickness, TextUnderlineOffset));
-    }
-    _appliedTextDecorations = list;
-    return list;
-}
+        if (_appliedTextDecorations != null)
+            return _appliedTextDecorations;
 
-/// <summary>The text decorations before applying ::first-line overrides.</summary>
-public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDecorations() => AppliedTextDecorations();
+        var list = new System.Collections.Generic.List<AppliedTextDecoration>();
+        if (TextDecorationLine != TextDecorationLineType.None)
+        {
+            // 'text-decoration-color' has the initial value 'auto', which paints
+            // with the originating box's own text color. That is modelled as a
+            // fully transparent color, so fall back here — the box keeps its own
+            // color even after the decoration propagates into a child.
+            var decorationColor = TextDecorationColor.Alpha > 0 ? TextDecorationColor : Color;
+            list.Add(new AppliedTextDecoration(
+                TextDecorationLine, TextDecorationStyle, decorationColor,
+                TextDecorationThickness, TextDecorationThicknessFromFont,
+                TextUnderlineOffset, TextUnderlineOffsetIsAuto, TextUnderlinePosition,
+                TextDecorationSkipInk, FontSize));
+        }
+        _appliedTextDecorations = list;
+        return list;
+    }
+
+    /// <summary>The text decorations before applying ::first-line overrides.</summary>
+    public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDecorations() => AppliedTextDecorations();
     public string TextEmphasis { get; set; } = "none";
     public string TextEmphasisColor { get; set; } = "currentcolor";
     public string TextEmphasisStyle { get; set; } = "none";
@@ -853,6 +988,11 @@ public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDec
     public string? RubyAlign { get; set; } = "space-around";
     public string RubyPosition { get; set; } = "over";
     public float BorderSpacing { get; set; }
+    /// <summary>Row (block-axis) border-spacing. 'border-spacing' takes one or two
+    /// lengths; the second one only applies between rows (CSS 2.1 §17.5). Unset means
+    /// "same as the column spacing", which is what a single value declares.</summary>
+    public float? BorderRowSpacing { get; set; }
+    public float UsedBorderRowSpacing => BorderRowSpacing ?? BorderSpacing;
     public string? BorderImageSource { get; set; }
     public string BorderImageSlice { get; set; } = "100%";
     public string BorderImageWidth { get; set; } = "1";
@@ -862,6 +1002,7 @@ public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDec
     public int Orphans { get; set; } = 2;
     public int Widows { get; set; } = 2;
     public string FontVariant { get; set; } = "normal";
+    public string FontVariantCaps { get; set; } = "normal";
     public string FontKerning { get; set; } = "auto";
     public string FontStretch { get; set; } = "normal";
     public string FontSynthesis { get; set; } = "weight style";
@@ -921,9 +1062,11 @@ public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDec
             BorderBottomStyle = BorderBottomStyle, BorderLeftStyle = BorderLeftStyle,
             BorderTopLeftRadius = BorderTopLeftRadius, BorderTopRightRadius = BorderTopRightRadius,
             BorderBottomRightRadius = BorderBottomRightRadius, BorderBottomLeftRadius = BorderBottomLeftRadius,
+            BorderTopLeftRadiusY = BorderTopLeftRadiusY, BorderTopRightRadiusY = BorderTopRightRadiusY,
+            BorderBottomRightRadiusY = BorderBottomRightRadiusY, BorderBottomLeftRadiusY = BorderBottomLeftRadiusY,
             Display = Display, Position = Position, Float = Float, Clear = Clear,
             FontFamily = FontFamily, FontSize = FontSize, FontWeight = FontWeight,
-            FontStyle = FontStyle, LineHeight = LineHeight,
+            FontStyle = FontStyle, FontStyleObliqueDegrees = FontStyleObliqueDegrees, LineHeight = LineHeight,
             LineHeightIsNormal = LineHeightIsNormal, LineHeightPx = LineHeightPx,
             Color = Color, BackgroundColor = BackgroundColor, BackgroundImage = BackgroundImage,
             BackgroundPositionX = BackgroundPositionX, BackgroundPositionY = BackgroundPositionY,
@@ -955,11 +1098,15 @@ public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDec
             PointerEvents = PointerEvents, UserSelect = UserSelect,
             Direction = Direction, LetterSpacing = LetterSpacing, WordSpacing = WordSpacing,
             TextIndent = TextIndent, TextIndentHanging = TextIndentHanging,
+            TextIndentEachLine = TextIndentEachLine,
             TextIndentPercent = TextIndentPercent, TextTransform = TextTransform,
             TextOverflow = TextOverflow, TextShadow = TextShadow,
             TextDecorationLine = TextDecorationLine, TextDecorationStyle = TextDecorationStyle,
             TextDecorationColor = TextDecorationColor, TextDecorationThickness = TextDecorationThickness,
-            TextUnderlineOffset = TextUnderlineOffset,
+            TextDecorationThicknessFromFont = TextDecorationThicknessFromFont,
+            TextUnderlineOffset = TextUnderlineOffset, TextUnderlineOffsetIsAuto = TextUnderlineOffsetIsAuto,
+            TextUnderlinePosition = TextUnderlinePosition, TextDecorationSkipInk = TextDecorationSkipInk,
+            BoxDecorationBreak = BoxDecorationBreak,
             TextEmphasis = TextEmphasis, TextEmphasisColor = TextEmphasisColor, TextEmphasisStyle = TextEmphasisStyle,
             TextEmphasisPosition = TextEmphasisPosition,
             RowGap = RowGap, ColumnGap = ColumnGap,
@@ -992,10 +1139,12 @@ public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDec
             MaskRepeat = MaskRepeat, MaskSize = MaskSize,
             LineBreak = LineBreak, TextJustify = TextJustify, Resize = Resize,
             HangingPunctuation = HangingPunctuation, RubyAlign = RubyAlign, RubyPosition = RubyPosition,
-            BorderSpacing = BorderSpacing, Zoom = Zoom, Orphans = Orphans, Widows = Widows,
+            BorderSpacing = BorderSpacing, BorderRowSpacing = BorderRowSpacing,
+            Zoom = Zoom, Orphans = Orphans, Widows = Widows,
             BorderImageSource = BorderImageSource, BorderImageSlice = BorderImageSlice,
             BorderImageWidth = BorderImageWidth, BorderImageRepeat = BorderImageRepeat, BorderImageOutset = BorderImageOutset,
-            FontVariant = FontVariant, FontKerning = FontKerning, FontStretch = FontStretch,
+            FontVariant = FontVariant, FontVariantCaps = FontVariantCaps,
+            FontKerning = FontKerning, FontStretch = FontStretch,
             FontSynthesis = FontSynthesis, FontOpticalSizing = FontOpticalSizing,
             FontVariationSettings = FontVariationSettings, FontFeatureSettings = FontFeatureSettings,
             FontSizeAdjust = FontSizeAdjust, TextRendering = TextRendering, UnicodeBidi = UnicodeBidi
@@ -1029,13 +1178,26 @@ public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDec
 
         if (IsTransformPropertySet(Rotate))
         {
-            // The axis form (rotate: x 45deg) is flattened onto the 2D rotation
-            // this engine supports.
-            var value = Rotate!.Trim();
-            int space = value.IndexOf(' ');
-            if (space > 0 && value[..space] is "x" or "y" or "z")
-                value = value[(space + 1)..].Trim();
-            parts.Add($"rotate({value})");
+            // rotate: <angle> | [ x | y | z | <number>{3} ] <angle>
+            var tokens = Rotate!.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            string angle = tokens[^1];
+            if (tokens.Length == 2)
+            {
+                parts.Add(tokens[0].ToLowerInvariant() switch
+                {
+                    "x" => $"rotateX({angle})",
+                    "y" => $"rotateY({angle})",
+                    _ => $"rotate({angle})",
+                });
+            }
+            else if (tokens.Length == 4)
+            {
+                parts.Add($"rotate3d({tokens[0]},{tokens[1]},{tokens[2]},{angle})");
+            }
+            else
+            {
+                parts.Add($"rotate({angle})");
+            }
         }
 
         if (IsTransformPropertySet(Scale))
@@ -1087,7 +1249,11 @@ public enum PositionType { Static, Relative, Absolute, Fixed, Sticky }
 public enum FloatType { None, Left, Right }
 public enum ClearType { None, Left, Right, Both }
 public enum BorderStyle { None, Solid, Dashed, Dotted, Double, Groove, Ridge, Inset, Outset }
-public enum FontWeight { Normal = 400, Bold = 700 }
+public enum FontWeight
+{
+    Thin = 100, ExtraLight = 200, Light = 300, Normal = 400, Medium = 500,
+    SemiBold = 600, Bold = 700, ExtraBold = 800, Black = 900,
+}
 public enum FontStyleType { Normal, Italic, Oblique }
 public enum TextAlignType { Start, End, Left, Right, Center, Justify }
 
@@ -1095,7 +1261,7 @@ public enum TextAlignLastType { Auto, Start, End, Left, Right, Center, Justify }
 public enum TextDecorationType { None, Underline, Overline, LineThrough }
 public enum VerticalAlignType { Baseline, Top, Middle, Bottom, Sub, Super, TextTop, TextBottom, Inherit, Percentage, Length }
 public enum WhiteSpaceMode { Normal, Nowrap, Pre, PreWrap, PreLine, BreakSpaces }
-public enum WordBreakMode { Normal, BreakAll, BreakWord }
+public enum WordBreakMode { Normal, BreakAll, BreakWord, KeepAll }
 public enum OverflowWrapMode { Normal, BreakWord, Anywhere }
 public enum OverflowType { Visible, Hidden, Scroll, Auto }
 public enum VisibilityType { Visible, Hidden, Collapse }
@@ -1161,8 +1327,27 @@ public enum ColorSchemeType { Normal, Light, Dark, Only }
 public enum BackgroundClipType { BorderBox, PaddingBox, ContentBox, Text }
 public enum BackgroundOriginType { PaddingBox, BorderBox, ContentBox }
 public enum BackgroundBlendModeType { Normal, Multiply, Screen, Overlay, Darken, Lighten, ColorDodge, ColorBurn, HardLight, SoftLight, Difference, Exclusion, Hue, Saturation, Color, Luminosity }
-public enum TextDecorationLineType { None, Underline, Overline, LineThrough }
+/// <summary>'text-decoration-line' (CSS Text Decoration 4 §2.1). The property accepts a
+/// space-separated list, so the values are flags: 'underline overline' carries both bits.</summary>
+[Flags]
+public enum TextDecorationLineType { None = 0, Underline = 1 << 0, Overline = 1 << 1, LineThrough = 1 << 2 }
+
+public static class TextDecorationLineExtensions
+{
+    public static bool HasUnderline(this TextDecorationLineType line) => (line & TextDecorationLineType.Underline) != 0;
+    public static bool HasOverline(this TextDecorationLineType line) => (line & TextDecorationLineType.Overline) != 0;
+    public static bool HasLineThrough(this TextDecorationLineType line) => (line & TextDecorationLineType.LineThrough) != 0;
+}
+
 public enum TextDecorationStyleType { Solid, Double, Dotted, Dashed, Wavy }
+
+/// <summary>'text-underline-position' (CSS Text Decoration 4 §3.2). 'auto' resolves to
+/// 'alphabetic' in horizontal writing modes; 'under' puts the line below the
+/// descender instead of at the font's underline position.</summary>
+public enum TextUnderlinePositionType { Auto, Alphabetic, Under, Left, Right, FromFont }
+
+/// <summary>'box-decoration-break' values (CSS Fragmentation 3 §4.2).</summary>
+public enum BoxDecorationBreakType { Slice, Clone }
 
 /// <summary>
 /// A single applied text decoration, as derived from a style's text-decoration
@@ -1173,19 +1358,36 @@ public sealed class AppliedTextDecoration
     public TextDecorationLineType Line { get; }
     public TextDecorationStyleType Style { get; set; }
     public SKColor Color { get; set; }
+    /// <summary>Resolved thickness in px; NaN means 'auto'.</summary>
     public float Thickness { get; }
+    public bool ThicknessFromFont { get; }
     public float UnderlineOffset { get; }
+    public bool UnderlineOffsetIsAuto { get; }
+    public TextUnderlinePositionType UnderlinePosition { get; }
+    public bool SkipInk { get; }
+    /// <summary>Font size of the box that originated the decoration: a propagated
+    /// line keeps the originating box's metrics (CSS Text Decoration 4 §5.1).</summary>
+    public float OriginFontSize { get; }
 
-    public AppliedTextDecoration(TextDecorationLineType line, TextDecorationStyleType style, SKColor color, float thickness, float underlineOffset)
+    public AppliedTextDecoration(TextDecorationLineType line, TextDecorationStyleType style, SKColor color,
+        float thickness, bool thicknessFromFont, float underlineOffset, bool underlineOffsetIsAuto,
+        TextUnderlinePositionType underlinePosition, bool skipInk, float originFontSize)
     {
         Line = line;
         Style = style;
         Color = color;
         Thickness = thickness;
+        ThicknessFromFont = thicknessFromFont;
         UnderlineOffset = underlineOffset;
+        UnderlineOffsetIsAuto = underlineOffsetIsAuto;
+        UnderlinePosition = underlinePosition;
+        SkipInk = skipInk;
+        OriginFontSize = originFontSize;
     }
 
-    public bool HasUnderline => Line == TextDecorationLineType.Underline;
+    public bool HasUnderline => Line.HasUnderline();
+    public bool HasOverline => Line.HasOverline();
+    public bool HasLineThrough => Line.HasLineThrough();
 
     public override string ToString() => $"{Line} ({Style}) R={Color.Red} G={Color.Green} B={Color.Blue}";
 }

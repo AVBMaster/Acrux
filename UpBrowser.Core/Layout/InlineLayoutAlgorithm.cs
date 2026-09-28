@@ -31,7 +31,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
 
     public override LayoutResult Layout()
     {
-        var border = LengthUtils.ComputeBorders(Style);
+        var border = OwnBorders;
         var padding = LengthUtils.ComputePadding(Space, Style);
         var bp = new BoxStrut(border.Top + padding.Top, border.Right + padding.Right,
             border.Bottom + padding.Bottom, border.Left + padding.Left);
@@ -42,8 +42,10 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         Builder.PaddingRight = padding.Right; Builder.PaddingBottom = padding.Bottom;
         Builder.Element = Node;
 
-        _currentLineInlineOffset = padding.Left;
-        _currentLineBlockOffset = padding.Top;
+        // Line boxes are recorded in this box's border-box coordinates, so the
+        // content origin carries the border as well as the padding.
+        _currentLineInlineOffset = border.Left + padding.Left;
+        _currentLineBlockOffset = border.Top + padding.Top;
         _lines.Clear();
 
         float availInline = ChildAvailableInlineSize;
@@ -80,13 +82,13 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
 
         float curInlineSize = 0, curBlockSize = 0, curBaseline = 0, maxBlockSize = 0;
 
-        if (TryLayoutLinesWithNgPipeline(availInline, padding.Left, padding.Top))
+        if (TryLayoutLinesWithNgPipeline(availInline, _currentLineInlineOffset, _currentLineBlockOffset))
         {
             // Modern pipeline produced lines; skip legacy path.
         }
         else
         {
-            var curLine = new BoxLine { InlineOffset = padding.Left, BlockOffset = padding.Top };
+            var curLine = new BoxLine { InlineOffset = _currentLineInlineOffset, BlockOffset = _currentLineBlockOffset };
 
             foreach (var child in Node.Children)
             {
@@ -104,7 +106,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         }
 
         float intrinsicBlock = 0;
-        foreach (var l in _lines) intrinsicBlock = Math.Max(intrinsicBlock, l.BlockEnd + padding.Bottom);
+        foreach (var l in _lines) intrinsicBlock = Math.Max(intrinsicBlock, l.BlockEnd + bp.Bottom);
         Builder.IntrinsicBlockSize = intrinsicBlock;
 
         float blockSize = LengthUtils.ComputeBlockSizeForFragment(Space, Style, bp, intrinsicBlock, availInline);
@@ -212,15 +214,17 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
     /// convert to the existing BoxLine/BoxRun output model. Returns false when
     /// there is nothing to lay out (so callers can fall back).
     /// </summary>
-    private bool TryLayoutLinesWithNgPipeline(float availInline, float paddingLeft, float paddingTop)
+    private bool TryLayoutLinesWithNgPipeline(float availInline, float contentInlineOrigin, float contentBlockOrigin)
     {
         var inlineNode = new InlineNode(Node, Style);
         inlineNode.CollectInlineItems();
+        inlineNode.ComputeBidiFlags();
         var data = inlineNode.ItemsData;
         if (data.Items.Count == 0) return false;
 
         var lineBreaker = new LineBreaker();
-        lineBreaker.SetUnitContext(Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+        lineBreaker.SetUnitContext(Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight, Space.DpiScale);
+        lineBreaker.SetIntrinsicMinContent(_sMinContentProbe);
         // ::first-line changes measurement (font-size/weight/letter-spacing), so the
         // merged style has to reach the line breaker, not just painting.
         _firstLineStyle = UpBrowser.Core.Css.PseudoStyleMerger.Merge(Style, Node.FirstLineStyles);
@@ -231,7 +235,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         // context's exclusion space. That requires breaking the lines one at a time,
         // because a line's vertical position is only known once the previous lines
         // have been laid out.
-        var floatContext = CreateFloatLineContext(paddingLeft, paddingTop, availInline, data);
+        var floatContext = CreateFloatLineContext(contentInlineOrigin, contentBlockOrigin, availInline, data);
         List<LineInfo> lines;
         if (floatContext == null)
         {
@@ -264,14 +268,14 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
                 if (lineBreaker.IsFinishedNow())
                     break;
                 // Where this line box starts, vertically, relative to the content box.
-                float lineTop = _currentLineBlockOffset - paddingTop;
+                float lineTop = _currentLineBlockOffset - contentBlockOrigin;
                 var (inset, width, pushDownTo) = floatContext.LineSpaceAt(contentTopBfc + lineTop, strutHeight);
                 if (!float.IsNaN(pushDownTo) && pushDownTo > lineTop)
                 {
                     // No inline room left on this line: the line box begins below the
                     // floats instead.
                     lineTop = pushDownTo;
-                    _currentLineBlockOffset = lineTop + paddingTop;
+                    _currentLineBlockOffset = lineTop + contentBlockOrigin;
                     (inset, width, _) = floatContext.LineSpaceAt(contentTopBfc + lineTop, strutHeight);
                 }
                 lineBreaker.SetLineSpace(inset, width, contentTopBfc + lineTop);
@@ -308,8 +312,9 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
 
             // Apply text-align (end/center/justify). Justify distributes the
             // free inline space into word-spacing expansion opportunities on every
-            // line except the last; start/left needs no work.
-            if (info.TextAlign() is not TextAlignType.Start)
+            // line except the last. LTR 'start' needs no work, but RTL 'start' is
+            // the right edge, so it goes through the same shift path.
+            if (info.TextAlign() is not TextAlignType.Start || info.BaseDirection() == TextDirection.Rtl)
                 JustificationUtils.ApplyTextAlignment(info, logicalLineItems, lineWidth);
 
             // The line box height is the united strut of the inline boxes on the
@@ -324,7 +329,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
                 // The line breaker already gates 'text-indent' (including the
                 // hanging variant) to the lines it applies to. A float on the line's
                 // left moves the whole line box right (info.LeftInset).
-                InlineOffset = paddingLeft + info.LeftInset + info.TextIndent()
+                InlineOffset = contentInlineOrigin + info.LeftInset + info.TextIndent()
                     + (info.IsFirstFormattedLine() ? List.ListMarker.InsideMarkerIndent(Style) : 0),
                 BlockOffset = _currentLineBlockOffset,
                 InlineSize = info.InlineSize,
@@ -474,8 +479,8 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
     /// formatting context. Keeping the plain path for that case avoids touching the
     /// overwhelmingly common float-free layout.
     /// </summary>
-    private FloatLineContext? CreateFloatLineContext(float paddingLeft, float paddingTop, float availInline,
-        Inline.InlineItemsData data)
+    private FloatLineContext? CreateFloatLineContext(float contentInlineOrigin, float contentBlockOrigin,
+        float availInline, Inline.InlineItemsData data)
     {
         bool hasOwnFloat = false;
         foreach (var item in data.Items)
@@ -492,7 +497,6 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         if (!hasOwnFloat && (exclusionSpace == null || !exclusionSpace.HasExclusions))
             return null;
 
-        var border = LengthUtils.ComputeBorders(Style);
         var origin = owner != null ? owner.ContainerBfcOriginForLines() : Space.GetBfcOffset();
         if (exclusionSpace == null)
             exclusionSpace = new ExclusionSpace();
@@ -500,8 +504,9 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         return new FloatLineContext
         {
             Space = exclusionSpace,
-            ContentLineStart = origin.LineOffset + border.Left + paddingLeft,
-            ContentTop = origin.BlockOffset + border.Top + paddingTop,
+            // The caller's origin already carries this box's border and padding.
+            ContentLineStart = origin.LineOffset + contentInlineOrigin,
+            ContentTop = origin.BlockOffset + contentBlockOrigin,
             ContentWidth = availInline,
             LineBlockSize = Fonts.LineBoxMetrics.GetLineHeight(Style),
         };
@@ -702,6 +707,14 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
     }
 
     private static bool _measuringIntrinsics;
+    [ThreadStatic] private static bool _sMinContentProbe;
+
+    /// <summary>True while a min-content intrinsic measurement is in flight.</summary>
+    public static bool InMinContentProbe => _sMinContentProbe;
+
+    /// <summary>Enters/leaves the min-content probe state for measurement passes
+    /// that do not go through <see cref="MeasureIntrinsicInlineSize"/>.</summary>
+    public static void SetMinContentProbe(bool value) => _sMinContentProbe = value;
 
     /// <summary>Runs a throwaway inline pass to measure the content's intrinsic
     /// inline size: unconstrained (max-content) or squeezed to 1px (min-content,
@@ -712,6 +725,8 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         float probe = minContent ? 1f : 100000f;
         var space = Space.InheritBuilder(probe, float.PositiveInfinity).ToConstraintSpace();
         _measuringIntrinsics = true;
+        bool previousProbe = _sMinContentProbe;
+        _sMinContentProbe = minContent;
         try
         {
             var measure = new InlineLayoutAlgorithm(Node, space, _parent);
@@ -723,6 +738,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         }
         finally
         {
+            _sMinContentProbe = previousProbe;
             _measuringIntrinsics = false;
         }
     }
@@ -773,7 +789,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
                 }
                 curInlineSize = 0; curBlockSize = 0; curBaseline = 0;
                 _currentLineBlockOffset += Math.Max(fontSize, maxBlockSize);
-                currentLine = new BoxLine { InlineOffset = 0, BlockOffset = _currentLineBlockOffset };
+                currentLine = new BoxLine { InlineOffset = _currentLineInlineOffset, BlockOffset = _currentLineBlockOffset };
                 maxBlockSize = 0;
                 if (c == '\n') continue;
             }
@@ -785,7 +801,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
                 currentLine.BaselineOffset = curBaseline; _lines.Add(currentLine);
                 curInlineSize = 0; curBlockSize = 0; curBaseline = 0;
                 _currentLineBlockOffset += Math.Max(fontSize, maxBlockSize);
-                currentLine = new BoxLine { InlineOffset = 0, BlockOffset = _currentLineBlockOffset };
+                currentLine = new BoxLine { InlineOffset = _currentLineInlineOffset, BlockOffset = _currentLineBlockOffset };
                 maxBlockSize = 0;
             }
 
@@ -824,7 +840,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             currentLine.BaselineOffset = curBaseline; _lines.Add(currentLine);
             curInlineSize = 0; curBlockSize = 0; curBaseline = 0;
             _currentLineBlockOffset += Math.Max(fs, maxBlockSize);
-            currentLine = new BoxLine { InlineOffset = 0, BlockOffset = _currentLineBlockOffset };
+            currentLine = new BoxLine { InlineOffset = _currentLineInlineOffset, BlockOffset = _currentLineBlockOffset };
             maxBlockSize = 0;
         }
 

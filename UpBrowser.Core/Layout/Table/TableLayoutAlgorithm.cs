@@ -37,6 +37,8 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
         // border-spacing is ignored only by border-collapse: collapse; the
         // table-layout algorithm choice does not affect it (CSS 2.1 §17.5).
         float borderSpacing = hasCollapsedBorders ? 0 : Math.Max(0, style.BorderSpacing);
+        // The second value of 'border-spacing' only applies to the row gaps.
+        float borderRowSpacing = hasCollapsedBorders ? 0 : Math.Max(0, style.UsedBorderRowSpacing);
 
         var groupedChildren = new TableGroupedChildren(Node);
         var tableBorders = TableBorders.ComputeTableBorders(Node);
@@ -101,6 +103,7 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             is_table_block_size_specified = !(style.Height is AutoLength),
             has_collapsed_borders = hasCollapsedBorders,
             table_border_spacing = borderSpacing,
+            table_border_row_spacing = borderRowSpacing,
             table_inline_size_before_collapse = tableInlineSizeBeforeCollapse,
             table_column_count = _columnLocations.Count,
             table_available_inline_size = assignableTableInlineSize,
@@ -128,7 +131,8 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
         }
         Builder.InlineSize = tableInlineSize;
 
-        return GenerateFragment(tableInlineSize, minimalTableGridBlockSize, data, captions, tableBorders, isGridEmpty, borderSpacing);
+        return GenerateFragment(tableInlineSize, minimalTableGridBlockSize, data, captions, tableBorders, isGridEmpty,
+            borderSpacing, borderRowSpacing);
     }
 
     // ==========================================================================
@@ -246,7 +250,7 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
                 continue;
             }
             TableLayoutUtils.ComputeSectionMinimumRowBlockSizes(section, tableGridInlineSize, isTableBlockSizeSpecified,
-                columnLocations, tableBorders, data.table_border_spacing, sectionIndex++, data);
+                columnLocations, tableBorders, data.table_border_row_spacing, sectionIndex++, data);
         }
 
         float totalTableMinBlockSize = 0;
@@ -270,7 +274,7 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             minimalTableGridBlockSize = cssTableBlockSize;
             float distributable = Math.Max(0, cssTableBlockSize - _borderPadding.VerticalSum);
             if (distributable > totalTableMinBlockSize)
-                TableLayoutUtils.DistributeTableBlockSizeToSections(data.table_border_spacing, distributable, data.sections, data.rows);
+                TableLayoutUtils.DistributeTableBlockSizeToSections(data.table_border_row_spacing, distributable, data.sections, data.rows);
         }
         else
         {
@@ -287,7 +291,7 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             {
                 minimalTableGridBlockSize -= K(row.block_size);
                 if (data.rows.Count > 1)
-                    minimalTableGridBlockSize -= data.table_border_spacing;
+                    minimalTableGridBlockSize -= data.table_border_row_spacing;
             }
             row.block_size = 0;
         }
@@ -300,7 +304,8 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
     // ==========================================================================
 
     private LayoutResult GenerateFragment(float tableInlineSize, float minimalTableGridBlockSize,
-        TableConstraintSpaceData data, List<BoxFragment> captions, TableBorders tableBorders, bool isGridEmpty, float borderSpacing)
+        TableConstraintSpaceData data, List<BoxFragment> captions, TableBorders tableBorders, bool isGridEmpty,
+        float borderSpacing, float borderRowSpacing)
     {
         Builder.BorderLeft = _borders.Left;
         Builder.BorderTop = _borders.Top;
@@ -332,16 +337,20 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             cap.BlockOffset = captionBlockOffset;
             Builder.Children.Add(cap);
             captionBlockOffset += cap.BlockSize;
-            topCaptionsEnd = captionBlockOffset + _borderPadding.Top;
+            topCaptionsEnd = captionBlockOffset;
         }
         if (topCaptionsEnd > 0)
         {
-            blockOffset = Math.Max(blockOffset, topCaptionsEnd + borderSpacing);
+            blockOffset = Math.Max(blockOffset, topCaptionsEnd + borderRowSpacing);
         }
 
         // Sections / rows / cells.
         if (!isGridEmpty)
         {
+            // The outer border-spacing separates the first row from the table's top
+            // edge just like two rows from each other (CSS 2.1 §17.5.2).
+            if (topCaptionsEnd <= 0)
+                blockOffset = borderRowSpacing;
             float sectionAvailableInlineSize = gridInline;
             foreach (var section in data.sections)
             {
@@ -370,18 +379,17 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
                     };
                     if (row.node != null)
                         PlaceCells(rowFrag, row.node, tableBorders, _columnLocations, data.rows,
-                            section, rowIndex, tabulator, gridInline, borderSpacing, data.is_table_block_size_specified);
+                            section, rowIndex, tabulator, gridInline, borderRowSpacing, data.is_table_block_size_specified);
                     sectionFrag.Children.Add(rowFrag);
                     rowBlockOffset += K(row.block_size);
                     if (r != section.row_count - 1)
-                        rowBlockOffset += borderSpacing;
+                        rowBlockOffset += borderRowSpacing;
                 }
                 sectionFrag.BlockSize = rowBlockOffset;
                 Builder.Children.Add(sectionFrag);
                 blockOffset += sectionFrag.BlockSize;
-                blockOffset += borderSpacing;
+                blockOffset += borderRowSpacing;
             }
-            blockOffset -= borderSpacing;
         }
 
         // The css table block size may force a minimum grid height.
@@ -391,8 +399,10 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             blockOffset = Math.Max(blockOffset, minimalContent);
         }
 
-        // Bottom captions.
-        float bottomCaptionOffset = blockOffset - _borderPadding.Top;
+        // Bottom captions. They extend the content box, and the stack is flush with
+        // the table's bottom edge the same way a top caption starts at its top edge.
+        float bottomCaptionsHeight = 0;
+        float bottomCaptionOffset = blockOffset + _borderPadding.Bottom;
         foreach (var cap in captions)
         {
             if (cap.Element?.ComputedStyle?.CaptionSide != "bottom")
@@ -401,25 +411,30 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             cap.BlockOffset = bottomCaptionOffset;
             Builder.Children.Add(cap);
             bottomCaptionOffset += cap.BlockSize;
-            blockOffset = bottomCaptionOffset + _borderPadding.Top;
+            bottomCaptionsHeight += cap.BlockSize;
         }
+        blockOffset += bottomCaptionsHeight;
 
-        Builder.BlockSize = blockOffset;
-        Builder.IntrinsicBlockSize = blockOffset;
+        // Everything above accumulates in content-box coordinates, so the table's own
+        // borders and the outer border-spacing still have to be added - exactly like
+        // the used inline size does.
+        float tableBlockSize = blockOffset + _borderPadding.VerticalSum;
+        Builder.BlockSize = tableBlockSize;
+        Builder.IntrinsicBlockSize = tableBlockSize;
         Builder.HasSeenAllChildren = true;
 
         var frag = Builder.ToBoxFragment();
         frag.Children.AddRange(Builder.Children);
 
         var result = LayoutResult.FromFragment(frag);
-        result.IntrinsicBlockSize = blockOffset;
+        result.IntrinsicBlockSize = tableBlockSize;
         return result;
     }
 
     private void PlaceCells(BoxFragment rowFrag, Element row, TableBorders tableBorders,
         List<TableLayoutUtils.TableColumnLocation> columnLocations, List<TableTypes.Row> rows,
         TableTypes.Section section, int rowIndex, TableBorders.ColspanCellTabulator tabulator,
-        float gridInlineSize, float borderSpacing, bool isTableBlockSizeSpecified)
+        float gridInlineSize, float borderRowSpacing, bool isTableBlockSizeSpecified)
     {
         if (columnLocations.Count == 0)
             return;
@@ -466,7 +481,7 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             {
                 cellBlockSize += K(rows[i].block_size);
                 if (i != rowIndex)
-                    cellBlockSize += borderSpacing;
+                    cellBlockSize += borderRowSpacing;
             }
 
             // Collapsed edges are shared: the cell's border box owns half of each
@@ -479,7 +494,7 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             var cellSpace = TableLayoutUtils.SetupTableCellConstraintSpaceBuilder(cell, cellBorderPadding, columnLocations,
                 cellBlockSize, gridInlineSize, startColumn,
                 /* isInitialBlockSizeIndefinite */ !TableTypes.IsKnown(cellBlockSize),
-                isTableBlockSizeSpecified, hasCollapsedBorders, Space);
+                isTableBlockSizeSpecified, hasCollapsedBorders, Space, collapsedEdge);
 
             var layoutResult = new BlockLayoutAlgorithm(cell, cellSpace).Layout();
             var cellFragment = layoutResult.Fragment;

@@ -361,27 +361,25 @@ public sealed class BackgroundImageGeometry
         bool disallowBorderDerivedAdjustment)
     {
         SnappedAndUnsnappedOutsets boxOutset;
+        // The painters hand in the padding box, which already *is* the default
+        // positioning area (CSS Backgrounds 3 4.7), so 'padding' needs no adjustment.
+        // Contracting it by the border again shrank the area by twice the border width
+        // and made 'background-repeat: space' drop its last tile.
         switch (fillLayer.Origin)
         {
             case FillBoxOrigin.Padding:
-                boxOutset = SnappedAndUnsnappedOutsets.From(paintContext.BorderOutsets);
-                if (disallowBorderDerivedAdjustment)
-                {
-                    boxOutset.Snapped = boxOutset.Unsnapped;
-                }
-                else
-                {
-                    // Force the snapped positioning area to fill to the borders.
-                    boxOutset.Snapped = paintContext.InnerBorderOutsets(UnsnappedDestRect, UnsnappedDestRect);
-                }
-                break;
-            case FillBoxOrigin.Border:
-                // All adjustments remain 0.
                 boxOutset = default;
                 break;
+            case FillBoxOrigin.Border:
+            {
+                var border = paintContext.BorderOutsets;
+                boxOutset = SnappedAndUnsnappedOutsets.From(
+                    new PhysicalBoxStrut(-border.Top, -border.Right, -border.Bottom, -border.Left));
+                break;
+            }
             case FillBoxOrigin.Content:
-                // The positioning area is the content box: inset by border + padding.
-                boxOutset = SnappedAndUnsnappedOutsets.From(paintContext.BorderPaddingOutsets);
+                // The positioning area is the content box: inset by the padding.
+                boxOutset = SnappedAndUnsnappedOutsets.From(paintContext.PaddingOutsets);
                 break;
             default:
                 boxOutset = default;

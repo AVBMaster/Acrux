@@ -18,12 +18,12 @@ public static class CssPropertyTraits
         "accent-color", "border-collapse", "border-spacing", "caption-side", "caret-color",
         "color", "cursor", "direction", "empty-cells", "font", "font-family", "font-feature-settings",
         "font-kerning", "font-optical-sizing", "font-size", "font-size-adjust", "font-stretch",
-        "font-style", "font-synthesis", "font-variant", "font-variation-settings", "font-weight",
+        "font-style", "font-synthesis", "font-variant", "font-variant-caps", "font-variation-settings", "font-weight",
         "hyphens", "image-rendering", "letter-spacing", "line-break", "line-height", "list-style",
         "list-style-image", "list-style-position", "list-style-type", "orphans", "pointer-events",
         "quotes", "tab-size", "text-align", "text-align-last", "text-indent", "text-justify",
-        "text-rendering", "text-shadow", "text-transform", "text-underline-offset",
-        "text-underline-position", "visibility", "white-space", "widows", "word-break",
+        "text-rendering", "text-shadow", "text-transform",
+        "visibility", "white-space", "widows", "word-break",
         "word-spacing", "writing-mode", "overflow-wrap", "color-scheme", "ruby-position",
         "text-emphasis", "text-emphasis-color", "text-emphasis-style", "text-emphasis-position",
     };
@@ -42,7 +42,10 @@ public static class CssPropertyTraits
         "margin-bottom", "margin-left", "padding", "padding-top", "padding-right",
         "padding-bottom", "padding-left", "color", "background", "background-color",
         "font-family", "font-size", "font-weight", "font-style", "line-height",
-        "text-align", "text-decoration", "vertical-align", "white-space", "visibility",
+        "text-align", "text-decoration", "text-decoration-color", "text-decoration-line",
+        "text-decoration-skip-ink", "text-decoration-style", "text-decoration-thickness",
+        "text-underline-offset", "text-underline-position",
+        "vertical-align", "white-space", "visibility",
         "overflow", "z-index", "opacity", "border", "border-top", "border-right",
         "border-bottom", "border-left", "border-width", "border-style", "border-color",
         "border-radius", "box-sizing", "outline", "top", "right", "bottom", "left",
@@ -52,6 +55,7 @@ public static class CssPropertyTraits
         "content", "word-break", "overflow-wrap", "letter-spacing", "word-spacing",
         "text-indent", "text-transform", "direction", "writing-mode", "list-style",
         "list-style-type", "list-style-position", "list-style-image",
+        "box-decoration-break",
     };
 
     /// <summary>Handles `all: <keyword>` — every property the cascade knows about
@@ -98,8 +102,31 @@ public static class CssPropertyTraits
                 to.LineHeightPx = from.LineHeightPx;
                 break;
             case "text-align": to.TextAlign = from.TextAlign; break;
-            case "text-decoration": to.TextDecoration = from.TextDecoration; break;
-            case "text-decoration-line": to.TextDecorationLine = from.TextDecorationLine; break;
+            case "text-decoration":
+                to.TextDecoration = from.TextDecoration;
+                to.TextDecorationLine = from.TextDecorationLine;
+                to.TextDecorationStyle = from.TextDecorationStyle;
+                to.TextDecorationColor = from.TextDecorationColor;
+                to.TextDecorationThickness = from.TextDecorationThickness;
+                to.TextDecorationThicknessFromFont = from.TextDecorationThicknessFromFont;
+                to.TextDecorationSkipInk = from.TextDecorationSkipInk;
+                to.TextUnderlineOffset = from.TextUnderlineOffset;
+                to.TextUnderlineOffsetIsAuto = from.TextUnderlineOffsetIsAuto;
+                to.TextUnderlinePosition = from.TextUnderlinePosition;
+                break;
+            case "text-decoration-line": to.TextDecorationLine = from.TextDecorationLine;
+                // Keep the legacy single-line enum in sync with the line list.
+                to.TextDecoration = CssPropertyApplier.LegacyTextDecorationOf(to.TextDecorationLine);
+                break;
+            case "text-decoration-style": to.TextDecorationStyle = from.TextDecorationStyle; break;
+            case "text-decoration-color": to.TextDecorationColor = from.TextDecorationColor; break;
+            case "text-decoration-thickness": to.TextDecorationThickness = from.TextDecorationThickness;
+                to.TextDecorationThicknessFromFont = from.TextDecorationThicknessFromFont; break;
+            case "text-decoration-skip-ink": to.TextDecorationSkipInk = from.TextDecorationSkipInk; break;
+            case "text-underline-offset": to.TextUnderlineOffset = from.TextUnderlineOffset;
+                to.TextUnderlineOffsetIsAuto = from.TextUnderlineOffsetIsAuto; break;
+            case "text-underline-position": to.TextUnderlinePosition = from.TextUnderlinePosition; break;
+            case "box-decoration-break": to.BoxDecorationBreak = from.BoxDecorationBreak; break;
             case "vertical-align": to.VerticalAlign = from.VerticalAlign; break;
             case "white-space": to.WhiteSpace = from.WhiteSpace; break;
             case "tab-size": to.TabSize = from.TabSize; to.TabSizePx = from.TabSizePx; break;
@@ -153,6 +180,7 @@ public static class CssPropertyTraits
             case "letter-spacing": to.LetterSpacing = from.LetterSpacing; break;
             case "word-spacing": to.WordSpacing = from.WordSpacing; break;
             case "text-indent": to.TextIndent = from.TextIndent; to.TextIndentHanging = from.TextIndentHanging;
+                to.TextIndentEachLine = from.TextIndentEachLine;
                 to.TextIndentPercent = from.TextIndentPercent; break;
             case "text-transform": to.TextTransform = from.TextTransform; break;
             case "direction": to.Direction = from.Direction; break;

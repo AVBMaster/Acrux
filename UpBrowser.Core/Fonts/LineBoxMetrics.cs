@@ -123,7 +123,7 @@ public static class LineBoxMetrics
     {
         if (fontSize <= 0) fontSize = DefaultFontSize;
         var metrics = FontMetricsProvider.Get(fontFamily ?? "sans-serif", fontSize, weight, fontStyle);
-        var textHeight = new FontHeight(metrics.IntAscent, metrics.IntDescent);
+        var textHeight = new FontHeight(metrics.LayoutAscent, metrics.LayoutDescent);
         var leading = FontHeight.CalculateLeadingSpace(metrics.LineSpacing, textHeight);
         return textHeight.AddLeading(leading).Ascent;
     }
@@ -148,7 +148,7 @@ public static class LineBoxMetrics
     public static float GetBaselineForLineHeight(ComputedStyle? style, float lineHeight)
     {
         var metrics = GetFontMetrics(style);
-        var textHeight = new FontHeight(metrics.IntAscent, metrics.IntDescent);
+        var textHeight = new FontHeight(metrics.LayoutAscent, metrics.LayoutDescent);
         if (lineHeight <= 0)
             lineHeight = metrics.LineSpacing;
         var leading = FontHeight.CalculateLeadingSpace(lineHeight, textHeight);
@@ -191,7 +191,8 @@ public static class LineBoxMetrics
         if (text.EndsWith("%", StringComparison.Ordinal) &&
             float.TryParse(text[..^1], numberStyles, invariant, out var percent))
         {
-            SetMultiplier(style, percent / 100f);
+            float refSize = style.FontSize > 0 ? style.FontSize : DefaultFontSize;
+            SetPixels(style, percent / 100f * refSize);
             return;
         }
 

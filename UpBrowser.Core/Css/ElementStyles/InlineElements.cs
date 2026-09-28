@@ -19,7 +19,9 @@ public static class InlineElements
                 style.Display = DisplayType.Inline;
                 style.Color = SKColor.Parse("#0000EE");
                 style.TextDecoration = TextDecorationType.Underline;
-                style.TextDecorationColor = SKColor.Parse("#0000EE");
+                style.TextDecorationLine = TextDecorationLineType.Underline;
+                // The underline is 'auto' colored, i.e. the link's own text color, so
+                // author 'color' moves it (CSS 2.1 §16.3.1).
                 style.Cursor = "pointer";
                 break;
 
@@ -42,6 +44,7 @@ public static class InlineElements
             case "ins":
                 style.Display = DisplayType.Inline;
                 style.TextDecoration = TextDecorationType.Underline;
+                style.TextDecorationLine = TextDecorationLineType.Underline;
                 break;
 
             // 文本格式化 - 删除线
@@ -125,6 +128,7 @@ public static class InlineElements
             case "abbr":
                 style.Display = DisplayType.Inline;
                 style.TextDecoration = TextDecorationType.Underline;
+                style.TextDecorationLine = TextDecorationLineType.Underline;
                 style.Cursor = "help";
                 break;
 
@@ -209,6 +213,7 @@ public static class InlineElements
             case "strike":
                 style.Display = DisplayType.Inline;
                 style.TextDecoration = TextDecorationType.LineThrough;
+                style.TextDecorationLine = TextDecorationLineType.LineThrough;
                 break;
         }
     }

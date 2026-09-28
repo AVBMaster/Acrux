@@ -57,6 +57,19 @@ public struct ConstraintSpace
     private readonly float _scrollbarInline;
     private readonly bool _scrollbarSpaceReserved;
 
+    // A table cell in a border-collapse: collapse table owns only half of every
+    // shared grid line (CSS 2.1 §17.6.2), and that half - not the cell's own
+    // border-width - is what its box is built from. The table algorithm knows
+    // the resolved edges, so it hands the strut down for this box only.
+    private readonly BoxStrut? _collapsedCellBorders;
+
+    /// <summary>
+    /// Device pixels per CSS pixel. Layout stays in CSS pixels; this only feeds
+    /// the half-device-pixel tolerance used when testing whether inline content
+    /// fits a line, so wrap points match what the snapped paint will show.
+    /// </summary>
+    private readonly float _dpiScale = 1f;
+
     public const float DefaultRootFontSize = 16f;
 
     public ConstraintSpace(
@@ -92,7 +105,9 @@ public struct ConstraintSpace
         float viewportWidth = 0,
         float viewportHeight = 0,
         float scrollbarInline = 0,
-        bool scrollbarSpaceReserved = false)
+        bool scrollbarSpaceReserved = false,
+        BoxStrut? collapsedCellBorders = null,
+        float dpiScale = 1f)
     {
         _availableInlineSize = float.IsNaN(availableInlineSize) ? AvailableSizeType.Auto : AvailableSizeType.Definite;
         _availableBlockSize = float.IsNaN(availableBlockSize) ? AvailableSizeType.Auto : AvailableSizeType.Definite;
@@ -127,6 +142,8 @@ public struct ConstraintSpace
         _viewportHeight = viewportHeight;
         _scrollbarInline = scrollbarInline;
         _scrollbarSpaceReserved = scrollbarSpaceReserved;
+        _collapsedCellBorders = collapsedCellBorders;
+        _dpiScale = dpiScale > 0 ? dpiScale : 1f;
 
         // A caller can ask for an explicitly indefinite percentage base by passing a
         // negative size: a percentage that resolves against nothing behaves as auto
@@ -187,6 +204,8 @@ public struct ConstraintSpace
 
     /// <summary>Root element computed font-size; the rem basis.</summary>
     public float RootFontSize => _rootFontSize;
+    /// <summary>Device pixels per CSS pixel (line-fit tolerance basis).</summary>
+    public float DpiScale => _dpiScale;
     /// <summary>Initial containing block width; the vw/vmin/vmax basis.</summary>
     public float ViewportWidth => _viewportWidth;
     /// <summary>Initial containing block height; the vh/vmin/vmax basis.</summary>
@@ -196,6 +215,10 @@ public struct ConstraintSpace
     public float ScrollbarInline => _scrollbarInline;
     /// <summary>True once a layout pass already reserved scrollbar space (guards relayout recursion).</summary>
     public bool HasScrollbarSpaceReserved => _scrollbarSpaceReserved;
+
+    /// <summary>Border strut a table cell must use instead of its own computed
+    /// borders, set only by the collapsing table algorithm (CSS 2.1 §17.6.2).</summary>
+    public BoxStrut? CollapsedCellBorders => _collapsedCellBorders;
 
     public BfcOffset GetBfcOffset() => new(BfcLineOffset, BfcBlockOffset);
     public WritingDirectionMode GetWritingDirection() => new(WritingMode, Direction);
@@ -219,7 +242,8 @@ public struct ConstraintSpace
         expectedBfcBlockOffset ?? _expectedBfcBlockOffset, clearanceOffset ?? _clearanceOffset,
         isPushedByFloats ?? _isPushedByFloats, ancestorHasClearancePastAdjoiningFloats ?? _ancestorHasClearancePastAdjoiningFloats,
         _rootFontSize, _viewportWidth, _viewportHeight,
-        scrollbarInline ?? _scrollbarInline, scrollbarSpaceReserved ?? _scrollbarSpaceReserved);
+        scrollbarInline ?? _scrollbarInline, scrollbarSpaceReserved ?? _scrollbarSpaceReserved,
+        _collapsedCellBorders, _dpiScale);
 
     /// <summary>
     /// Reserve inline space for this box's own vertical scrollbar and mark the
@@ -251,6 +275,14 @@ public struct ConstraintSpace
         _percentageResolutionInline, _percentageResolutionBlock, _isNewFormattingContext, _isHiddenForPaint, _isTableCell,
         type, _bfcBlockOffset, _blockOffset, _baselineAlgorithmType);
 
+    /// <summary>Copy with the inline/base text direction replaced (CSS writing-mode §3,
+    /// the element's own 'direction' wins over the space inherited from its parent).</summary>
+    public ConstraintSpace WithDirection(TextDirection direction) => Rebuild(
+        _inlineSizeValue, _blockSizeValue, _isFixedInlineSize, _isFixedBlockSize, _inlineAutoBehavior, _blockAutoBehavior, _isShrinkToFit,
+        _percentageResolutionInline, _percentageResolutionBlock, _isNewFormattingContext, _isHiddenForPaint, _isTableCell,
+        _fragmentationType, _bfcBlockOffset, _blockOffset, _baselineAlgorithmType,
+        direction: direction);
+
     public ConstraintSpace WithBfcBlockOffset(float offset) => Rebuild(
         _inlineSizeValue, _blockSizeValue, _isFixedInlineSize, _isFixedBlockSize, _inlineAutoBehavior, _blockAutoBehavior, _isShrinkToFit,
         _percentageResolutionInline, _percentageResolutionBlock, _isNewFormattingContext, _isHiddenForPaint, _isTableCell,
@@ -278,6 +310,7 @@ public struct ConstraintSpace
     public ConstraintSpaceBuilder InheritBuilder(float inlineSize, float blockSize) =>
         new ConstraintSpaceBuilder(inlineSize, blockSize)
             .SetRootFontSize(_rootFontSize)
+            .SetDpiScale(_dpiScale)
             .SetViewportSize(_viewportWidth, _viewportHeight);
 
     public override string ToString() =>
@@ -315,8 +348,10 @@ public class ConstraintSpaceBuilder
     private bool _isPushedByFloats;
     private bool _ancestorHasClearancePastAdjoiningFloats;
     private float _rootFontSize = ConstraintSpace.DefaultRootFontSize;
+    private float _dpiScale = 1f;
     private float _viewportWidth;
     private float _viewportHeight;
+    private BoxStrut? _collapsedCellBorders;
 
     public ConstraintSpaceBuilder(float inlineSize, float blockSize)
     {
@@ -349,14 +384,16 @@ public class ConstraintSpaceBuilder
     public ConstraintSpaceBuilder SetIsPushedByFloats(bool v) { _isPushedByFloats = v; return this; }
     public ConstraintSpaceBuilder SetAncestorHasClearancePastAdjoiningFloats() { _ancestorHasClearancePastAdjoiningFloats = true; return this; }
     public ConstraintSpaceBuilder SetRootFontSize(float v) { _rootFontSize = v > 0 ? v : ConstraintSpace.DefaultRootFontSize; return this; }
+    public ConstraintSpaceBuilder SetDpiScale(float v) { _dpiScale = v > 0 ? v : 1f; return this; }
     public ConstraintSpaceBuilder SetViewportSize(float width, float height) { _viewportWidth = width; _viewportHeight = height; return this; }
+    public ConstraintSpaceBuilder SetCollapsedCellBorders(BoxStrut? borders) { _collapsedCellBorders = borders; return this; }
 
     public ConstraintSpace ToConstraintSpace() => new(
         _inlineSize, _blockSize, _isFixedInline, _isFixedBlock, _inlineAuto, _blockAuto, _shrinkToFit, _writingMode,
         _pctInline, _pctBlock, _isNewFc, _hiddenForPaint, _isTableCell, _fragType, _bfcBlockOffset, _blockOffset, _baselineType,
         _bfcLineOffset, _direction, _marginStrut, _exclusionSpace, _adjoiningObjectTypes, _forcedBfcBlockOffset,
         _optimisticBfcBlockOffset, _expectedBfcBlockOffset, _clearanceOffset, _isPushedByFloats, _ancestorHasClearancePastAdjoiningFloats,
-        _rootFontSize, _viewportWidth, _viewportHeight);
+        _rootFontSize, _viewportWidth, _viewportHeight, collapsedCellBorders: _collapsedCellBorders, dpiScale: _dpiScale);
 }
 
 public enum AvailableSizeType { Auto, Definite, MinContent, MaxContent, FitContent }

@@ -1,4 +1,4 @@
-using UpBrowser.Platform;
+﻿using UpBrowser.Platform;
 using UpBrowser.Rendering;
 
 namespace UpBrowser;
@@ -53,6 +53,8 @@ public class InputHandler
     public Func<float, float, bool, bool>? OnDevToolsClick { get; set; }
     public Func<double, float, float, bool>? OnDevToolsWheel { get; set; }
     public Func<float, float, bool>? OnDialogClick { get; set; }
+    /// <summary>Clicks on the "page unresponsive" bubble, consulted before page input.</summary>
+    public Func<float, float, bool>? OnPageBubbleClick { get; set; }
     public Func<float, float, bool, bool>? OnSettingsPageClick { get; set; }
     public Func<float, float, bool>? OnSettingsPageMove { get; set; }
     public Func<float, bool>? OnSettingsPageWheel { get; set; }
@@ -124,6 +126,11 @@ public class InputHandler
             _mouseDown = true;
             OnDomMouseDown?.Invoke(logicalX, logicalY, false);
             if (OnDialogClick?.Invoke(logicalX, logicalY) == true)
+            {
+                NeedsRedraw = true;
+                return;
+            }
+            if (OnPageBubbleClick?.Invoke(logicalX, logicalY) == true)
             {
                 NeedsRedraw = true;
                 return;

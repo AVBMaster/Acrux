@@ -1,4 +1,5 @@
 using SkiaSharp;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using UpBrowser.Core.Dom;
 
@@ -9,19 +10,21 @@ namespace UpBrowser.Core.Css;
 /// </summary>
 public static class ColorParser
 {
-    private static readonly Regex RgbFuncRegex = new(@"rgba?\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex HslFuncRegex = new(@"hsla?\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex HwbRegex = new(@"hwb\s*\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*(?:\s*/\s*([\d.]+%?))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex LabRegex = new(@"lab\s*\(\s*([\d.]+)%?\s*([+-]?\s*[\d.]+)\s*([+-]?\s*[\d.]+)\s*(?:\s*/\s*([\d.]+%?))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex LchRegex = new(@"lch\s*\(\s*([\d.]+)%?\s*([\d.]+)\s*([\d.]+)\s*(?:\s*/\s*([\d.]+))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex OklabRegex = new(@"oklab\s*\(\s*([\d.]+)\s*([+-]\s*[\d.]+)\s*([+-]\s*[\d.]+)\s*(?:\s*/\s*([\d.]+))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex OklchRegex = new(@"oklch\s*\(\s*([\d.]+)\s*([\d.]+)\s*([\d.]+)\s*(?:\s*/\s*([\d.]+))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex RgbFuncRegex = new(@"^\s*rgba?\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex HslFuncRegex = new(@"^\s*hsla?\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex HwbRegex = new(@"^\s*hwb\s*\(\s*([\d.]+)(?:deg|turn|rad|grad)?\s*[,\s]\s*([\d.]+)%\s*[,\s]\s*([\d.]+)%\s*(?:[/,]\s*([\d.]+%?))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex LabRegex = new(@"^\s*lab\s*\(\s*([\d.]+)%?\s*([+-]?\s*[\d.]+)\s*([+-]?\s*[\d.]+)\s*(?:\s*/\s*([\d.]+%?))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex LchRegex = new(@"^\s*lch\s*\(\s*([\d.]+)%?\s*([\d.]+)\s*([\d.]+)\s*(?:\s*/\s*([\d.]+))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex OklabRegex = new(@"^\s*oklab\s*\(\s*([\d.]+%?)\s*([+-]?\s*[\d.]+)\s*([+-]?\s*[\d.]+)\s*(?:\s*/\s*([\d.]+))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex OklchRegex = new(@"^\s*oklch\s*\(\s*([\d.]+%?)\s*([\d.]+)\s*([\d.]+)\s*(?:\s*/\s*([\d.]+))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex Hex8Regex = new(@"^#([0-9a-f]{8})$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex Hex6Regex = new(@"^#([0-9a-f]{6})$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex Hex4Regex = new(@"^#([0-9a-f]{4})$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex Hex3Regex = new(@"^#([0-9a-f]{3})$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    public static SKColor Parse(string value)
+    /// <param name="context">The style the color is being resolved for; needed by
+    /// light-dark(), which depends on the element's used color scheme.</param>
+    public static SKColor Parse(string value, ComputedStyle? context = null)
     {
         if (string.IsNullOrEmpty(value) || value == "transparent" || value == "inherit")
             return SKColors.Transparent;
@@ -30,6 +33,11 @@ public static class ColorParser
 
         var hex = ParseHex(value);
         if (hex.HasValue) return hex.Value;
+
+        // Before the plain function parsers: 'rgb(from …)' would otherwise be read as
+        // an rgb() call with a garbage channel list.
+        var relative = ParseRelativeColor(value, context);
+        if (relative.HasValue) return relative.Value;
 
         var rgb = ParseRgb(value);
         if (rgb.HasValue) return rgb.Value;
@@ -52,10 +60,10 @@ public static class ColorParser
         var oklch = ParseOklch(value);
         if (oklch.HasValue) return oklch.Value;
 
-        var lightDark = ParseLightDark(value);
+        var lightDark = ParseLightDark(value, context);
         if (lightDark.HasValue) return lightDark.Value;
 
-        var colorMix = ParseColorMix(value);
+        var colorMix = ParseColorMix(value, context);
         if (colorMix.HasValue) return colorMix.Value;
 
         var colorFn = ParseColorFunction(value);
@@ -430,116 +438,353 @@ public static class ColorParser
             (byte)Math.Clamp(MathF.Round(alpha * 255), 0, 255));
     }
 
-    private static SKColor? ParseLightDark(string value)
+    /// <summary>
+    /// light-dark(&lt;light&gt;, &lt;dark&gt;) resolves against the element's used color scheme.
+    /// The engine presents a light UI, so 'light dark' (both available) stays light
+    /// and only a dark-only scheme picks the second value (CSS Color 5 §6).
+    /// </summary>
+    private static SKColor? ParseLightDark(string value, ComputedStyle? context)
     {
-        var match = Regex.Match(value, @"light-dark\s*\(\s*([^,]+)\s*,\s*(.+)\s*\)", RegexOptions.IgnoreCase);
+        var match = Regex.Match(value, @"^\s*light-dark\s*\(\s*([^,]+)\s*,\s*(.+)\s*\)$", RegexOptions.IgnoreCase);
         if (!match.Success) return null;
 
-        // Return the light color value (default to light theme)
-        return Parse(match.Groups[1].Value.Trim());
+        string scheme = context?.ColorScheme ?? "normal";
+        bool dark = scheme.Contains("dark", StringComparison.OrdinalIgnoreCase) &&
+                    !scheme.Contains("light", StringComparison.OrdinalIgnoreCase);
+        return Parse((dark ? match.Groups[2] : match.Groups[1]).Value.Trim(), context);
     }
 
-    private static SKColor? ParseColorMix(string value)
+    /// <summary>
+    /// color-mix([in &lt;space&gt; [&lt;hue-method&gt;],]? &lt;color&gt; [&lt;pct&gt;], &lt;color&gt; [&lt;pct&gt;]).
+    /// Interpolation happens in the named space with premultiplied alpha, and the
+    /// default space is oklab (CSS Color 5 §3).
+    /// </summary>
+    private static SKColor? ParseColorMix(string value, ComputedStyle? context)
     {
-        var match = Regex.Match(value, @"color-mix\s*\((.*)\)", RegexOptions.IgnoreCase);
+        var match = Regex.Match(value, @"^\s*color-mix\s*\(", RegexOptions.IgnoreCase);
         if (!match.Success) return null;
 
-        var inner = match.Groups[1].Value.Trim();
+        var inner = ExtractFunctionInner(value, match.Index);
+        if (inner == null) return null;
 
-        string colorspace = "srgb";
-        if (inner.StartsWith("in ", StringComparison.OrdinalIgnoreCase))
+        string space = "oklab";
+        string hueMethod = "shorter";
+
+        var tokens = inner.Trim();
+        if (tokens.StartsWith("in ", StringComparison.OrdinalIgnoreCase))
         {
-            int spaceEnd = inner.IndexOf(',');
-            if (spaceEnd > 0)
+            int comma = IndexTopLevel(tokens, ',');
+            string spec = (comma > 0 ? tokens[..comma] : tokens).Trim();
+            tokens = comma > 0 ? tokens[(comma + 1)..].Trim() : "";
+
+            var words = spec[3..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length > 0) space = ColorInterpolation.Normalize(words[0]);
+            if (words.Length > 1) hueMethod = ColorInterpolation.Normalize(words[1]);
+        }
+
+        int split = IndexTopLevel(tokens, ',');
+        if (split < 0) return null;
+        var (c1, p1) = ParseColorMixArg(tokens[..split], context);
+        var (c2, p2) = ParseColorMixArg(tokens[(split + 1)..], context);
+
+        // A missing percentage is whatever makes the pair sum to 100%.
+        if (p1 < 0 && p2 < 0) { p1 = p2 = 0.5f; }
+        else if (p1 < 0) p1 = 1f - p2;
+        else if (p2 < 0) p2 = 1f - p1;
+
+        var x = ColorInterpolation.FromSrgb(c1, space);
+        var y = ColorInterpolation.FromSrgb(c2, space);
+        return ColorInterpolation.ToSrgb(ColorInterpolation.Mix(x, p1, y, p2, hueMethod));
+    }
+
+    private static int IndexTopLevel(string text, char target)
+    {
+        int depth = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            else if (c == target && depth == 0) return i;
+        }
+        return -1;
+    }
+
+    private static (SKColor color, float pct) ParseColorMixArg(string arg, ComputedStyle? context)
+    {
+        arg = arg.Trim();
+        // The weight is the last whitespace-separated token, and only when it is a
+        // percentage — the color itself may contain spaces inside its own function.
+        int split = LastTopLevelSpace(arg);
+        if (split > 0)
+        {
+            string tail = arg[(split + 1)..].Trim();
+            if (tail.EndsWith('%') && float.TryParse(tail[..^1], NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var pct))
+                return (Parse(arg[..split].Trim(), context), Math.Clamp(pct / 100f, 0f, 1f));
+        }
+        return (Parse(arg, context), -1f);
+    }
+
+    private static int LastTopLevelSpace(string text)
+    {
+        int depth = 0;
+        for (int i = text.Length - 1; i >= 0; i--)
+        {
+            char c = text[i];
+            if (c == ')') depth++;
+            else if (c == '(') depth--;
+            else if (char.IsWhiteSpace(c) && depth == 0) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Relative color syntax: &lt;func&gt;(from &lt;color&gt; c0 c1 c2 [/ alpha]) where each
+    /// channel is a number, a percentage, 'none', a channel keyword of the target
+    /// space, or a calc() over those (CSS Color 5 §5). The origin color is converted
+    /// into the target space before its channels are substituted.
+    /// </summary>
+    private static SKColor? ParseRelativeColor(string value, ComputedStyle? context)
+    {
+        var match = Regex.Match(value,
+            @"^\s*(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\s*\(\s*from\s+",
+            RegexOptions.IgnoreCase);
+        if (!match.Success) return null;
+
+        var inner = ExtractFunctionInner(value, match.Index);
+        if (inner == null) return null;
+
+        int fromIdx = inner.IndexOf("from", StringComparison.OrdinalIgnoreCase);
+        if (fromIdx < 0) return null;
+        string body = inner[(fromIdx + 4)..].Trim();
+
+        int originEnd = EndOfColorToken(body);
+        if (originEnd <= 0) return null;
+        SKColor origin = Parse(body[..originEnd], context);
+        string rest = body[originEnd..].Trim();
+
+        string func = match.Groups[1].Value.ToLowerInvariant();
+        string space = func switch
+        {
+            "hsl" or "hsla" => "hsl",
+            "hwb" => "hwb",
+            "lab" => "lab",
+            "lch" => "lch",
+            "oklab" => "oklab",
+            "oklch" => "oklch",
+            _ => "srgb",
+        };
+
+        var ch = ColorInterpolation.FromSrgb(origin, space);
+
+        string mainPart = rest;
+        string? alphaPart = null;
+        int slash = IndexTopLevel(rest, '/');
+        if (slash >= 0)
+        {
+            mainPart = rest[..slash];
+            alphaPart = rest[(slash + 1)..];
+        }
+
+        // Whitespace only separates channels outside of nested functions, so a
+        // 'calc(l + 20)' slot stays one token.
+        var toks = SplitTopLevelWhitespace(mainPart);
+        if (toks.Count < 3) return null;
+
+        float c0 = ResolveRelativeChannel(toks[0], space, 0, ch);
+        float c1 = ResolveRelativeChannel(toks[1], space, 1, ch);
+        float c2 = ResolveRelativeChannel(toks[2], space, 2, ch);
+        float alpha = alphaPart is null ? ch.Alpha : ResolveRelativeAlpha(alphaPart.Trim(), ch);
+
+        return ColorInterpolation.ToSrgb(new ColorChannels(space, c0, c1, c2, alpha));
+    }
+
+    private static List<string> SplitTopLevelWhitespace(string text)
+    {
+        var result = new List<string>();
+        int depth = 0;
+        int start = -1;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            else if (char.IsWhiteSpace(c) && depth == 0)
             {
-                colorspace = inner[3..spaceEnd].Trim();
-                inner = inner[(spaceEnd + 1)..].Trim();
+                if (start >= 0) { result.Add(text[start..i]); start = -1; }
+                continue;
+            }
+            if (start < 0 && !char.IsWhiteSpace(c)) start = i;
+        }
+        if (start >= 0) result.Add(text[start..]);
+        return result;
+    }
+
+    /// <summary>Length of the leading color token: a balanced function call, or
+    /// everything up to the first whitespace.</summary>
+    private static int EndOfColorToken(string text)
+    {
+        int paren = text.IndexOf('(');
+        int space = text.IndexOf(' ');
+        if (paren > 0 && (space < 0 || paren < space))
+        {
+            int depth = 0;
+            for (int i = paren; i < text.Length; i++)
+            {
+                if (text[i] == '(') depth++;
+                else if (text[i] == ')')
+                {
+                    depth--;
+                    if (depth == 0) return i + 1;
+                }
+            }
+            return -1;
+        }
+        return space < 0 ? text.Length : space;
+    }
+
+    private static float ResolveRelativeChannel(string token, string space, int index, in ColorChannels ch)
+    {
+        token = token.Trim();
+        if (token.Equals("none", StringComparison.OrdinalIgnoreCase)) return float.NaN;
+
+        float divisor = SpecifiedDivisor(space, index);
+        float specified = EvaluateChannelExpr(token, space, index, ch);
+        return specified / divisor;
+    }
+
+    /// <summary>Evaluate a channel slot in that channel's specified units, so that
+    /// 'calc(l + 20)' adds twenty the way the author wrote it.</summary>
+    private static float EvaluateChannelExpr(string token, string space, int index, in ColorChannels ch)
+    {
+        string text = token.Trim();
+        var calc = Regex.Match(text, @"^calc\s*\((.*)\)$", RegexOptions.IgnoreCase);
+        if (calc.Success) text = calc.Groups[1].Value;
+
+        float total = 0;
+        int sign = 1;
+        int start = 0;
+        for (int i = 0; i <= text.Length; i++)
+        {
+            bool boundary = i == text.Length || text[i] == '+' || text[i] == '-';
+            if (!boundary) continue;
+            if (i > start)
+            {
+                string term = text[start..i].Trim();
+                if (term.Length > 0) total += sign * ParseChannelTerm(term, space, index, ch);
+            }
+            if (i < text.Length)
+            {
+                sign = text[i] == '-' ? -1 : 1;
+                start = i + 1;
             }
         }
-
-        var args = inner.Split(',', StringSplitOptions.RemoveEmptyEntries);
-        if (args.Length < 2) return null;
-
-        var (color1, pct1) = ParseColorMixArg(args[0].Trim());
-        var (color2, pct2) = ParseColorMixArg(args[1].Trim());
-
-        // A missing percentage means "the value that makes the two sum to 100%"
-        // (CSS Color 5 §1). Only when neither side specifies one do both default
-        // to 50%.
-        if (pct1 < 0 && pct2 >= 0) pct1 = 1f - pct2;
-        else if (pct2 < 0 && pct1 >= 0) pct2 = 1f - pct1;
-        else if (pct1 < 0 && pct2 < 0) { pct1 = 0.5f; pct2 = 0.5f; }
-
-        float total = pct1 + pct2;
-        if (total == 0) { pct1 = 0.5f; pct2 = 0.5f; }
-        else { pct1 /= total; pct2 /= total; }
-
-        byte r = (byte)Math.Clamp(MathF.Round(color1.Red * pct1 + color2.Red * pct2), 0, 255);
-        byte g = (byte)Math.Clamp(MathF.Round(color1.Green * pct1 + color2.Green * pct2), 0, 255);
-        byte b = (byte)Math.Clamp(MathF.Round(color1.Blue * pct1 + color2.Blue * pct2), 0, 255);
-        byte a = (byte)Math.Clamp(MathF.Round(color1.Alpha * pct1 + color2.Alpha * pct2), 0, 255);
-        return new SKColor(r, g, b, a);
+        return total;
     }
 
-    private static (SKColor color, float pct) ParseColorMixArg(string arg)
+    private static float ParseChannelTerm(string term, string space, int index, in ColorChannels ch)
     {
-        var pctMatch = Regex.Match(arg, @"([\d.]+%)");
-        if (pctMatch.Success)
+        float keyword = KeywordChannel(space, index, term, ch);
+        if (!float.IsNaN(keyword)) return keyword * SpecifiedDivisor(space, index);
+
+        if (term.EndsWith("%"))
         {
-            float pct = float.Parse(pctMatch.Value[..^1]) / 100f;
-            var colorStr = arg.Replace(pctMatch.Value, "").Trim();
-            return (Parse(colorStr), pct);
+            if (float.TryParse(term[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var pct))
+                return pct / 100f * PercentMultiplier(space, index);
+            return 0;
         }
-        return (Parse(arg), -1f);
+        return float.TryParse(term, NumberStyles.Float, CultureInfo.InvariantCulture, out var num) ? num : 0;
     }
 
+    /// <summary>The target space's keyword for this channel slot, in internal units,
+    /// or NaN when the token is not that keyword.</summary>
+    private static float KeywordChannel(string space, int index, string token, in ColorChannels ch)
+    {
+        token = token.Trim().ToLowerInvariant();
+        string expected = (space, index) switch
+        {
+            ("srgb", 0) => "r", ("srgb", 1) => "g", ("srgb", 2) => "b",
+            ("hsl", 0) => "h", ("hsl", 1) => "s", ("hsl", 2) => "l",
+            ("hwb", 0) => "h", ("hwb", 1) => "w", ("hwb", 2) => "b",
+            ("lab", 0) => "l", ("lab", 1) => "a", ("lab", 2) => "b",
+            ("lch", 0) => "l", ("lch", 1) => "c", ("lch", 2) => "h",
+            ("oklab", 0) => "l", ("oklab", 1) => "a", ("oklab", 2) => "b",
+            ("oklch", 0) => "l", ("oklch", 1) => "c", ("oklch", 2) => "h",
+            _ => "",
+        };
+        bool isHueAlias = token == "hue" && index == HueIndexInSpace(space);
+        if (token != expected && !isHueAlias) return float.NaN;
+        return index switch { 0 => ch.C0, 1 => ch.C1, _ => ch.C2 };
+    }
+
+    private static int HueIndexInSpace(string space) => space switch
+    {
+        "hsl" or "hwb" => 0,
+        "lch" or "oklch" => 2,
+        _ => -1,
+    };
+
+    /// <summary>Divisor from a channel's specified units to the internal units
+    /// ColorInterpolation works in (sRGB 0..1, HSL saturation 0..1, Lab L 0..100, …).</summary>
+    private static float SpecifiedDivisor(string space, int index) => (space, index) switch
+    {
+        ("srgb", _) => 255f,
+        ("hsl", 1) or ("hsl", 2) or ("hwb", 1) or ("hwb", 2) => 100f,
+        ("lab", 0) or ("lch", 0) => 100f,
+        _ => 1f,
+    };
+
+    /// <summary>What 100% means for this channel (CSS Color 5 §5.2).</summary>
+    private static float PercentMultiplier(string space, int index) => (space, index) switch
+    {
+        ("srgb", _) => 255f,
+        ("hsl", 0) or ("hwb", 0) or ("lch", 2) or ("oklch", 2) => 3.6f,
+        ("hsl", 1) or ("hsl", 2) or ("hwb", 1) or ("hwb", 2) => 100f,
+        ("lab", 0) or ("lch", 0) => 100f,
+        ("lab", 1) or ("lab", 2) or ("lch", 1) => 125f,
+        ("oklab", 1) or ("oklab", 2) or ("oklch", 1) => 0.4f,
+        _ => 1f,
+    };
+
+    private static float ResolveRelativeAlpha(string token, in ColorChannels ch)
+    {
+        token = token.Trim();
+        if (token.Equals("none", StringComparison.OrdinalIgnoreCase)) return float.NaN;
+        if (token.Equals("a", StringComparison.OrdinalIgnoreCase) ||
+            token.Equals("alpha", StringComparison.OrdinalIgnoreCase)) return ch.Alpha;
+        if (token.EndsWith("%") &&
+            float.TryParse(token[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var pct))
+            return Math.Clamp(pct / 100f, 0f, 1f);
+        return float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out var a)
+            ? Math.Clamp(a, 0f, 1f) : 1f;
+    }
+
+    /// <summary>
+    /// color(&lt;space&gt; c1 c2 c3 [/ alpha]) for the named coordinate spaces of
+    /// CSS Color 4 §11 (srgb, srgb-linear, display-p3, a98-rgb, prophoto-rgb,
+    /// rec2020, xyz, xyz-d50, xyz-d65).
+    /// </summary>
     private static SKColor? ParseColorFunction(string value)
     {
-        var match = Regex.Match(value, @"color\s*\(\s*([\w-]+)\s+(.+?)\s*\)", RegexOptions.IgnoreCase);
+        var match = Regex.Match(value, @"^\s*color\s*\(\s*([\w-]+)(.*)\)\s*$", RegexOptions.IgnoreCase);
         if (!match.Success) return null;
 
-        // Color function: color(colorspace c1 c2 c3 / a)
-        // For now, parse as raw sRGB values if in srgb colorspace
-        var space = match.Groups[1].Value.ToLowerInvariant();
-        var channels = match.Groups[2].Value.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var vals = channels[0].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        string space = match.Groups[1].Value.ToLowerInvariant();
+        var parts = ParseColorFunctionArgs(match.Groups[2].Value);
+        if (parts.Count < 3) return null;
 
-        if (space == "srgb" && vals.Length >= 3)
-        {
-            float r = float.Parse(vals[0]);
-            float g = float.Parse(vals[1]);
-            float b = float.Parse(vals[2]);
-            float alpha = 1f;
-            if (channels.Length > 1 && float.TryParse(channels[1].Trim(), out var a))
-                alpha = a;
-            return new SKColor(
-                (byte)Math.Clamp(MathF.Round(r * 255), 0, 255),
-                (byte)Math.Clamp(MathF.Round(g * 255), 0, 255),
-                (byte)Math.Clamp(MathF.Round(b * 255), 0, 255),
-                (byte)Math.Clamp(MathF.Round(alpha * 255), 0, 255));
-        }
+        // 'none' stands for the space's neutral/zero value.
+        float Channel(string token, float noneValue) => token.Equals("none", StringComparison.OrdinalIgnoreCase)
+            ? noneValue
+            : ParsePercent(token);
 
-        // srgb-linear, display-p3, a98-rgb, prophoto-rgb, rec2020, xyz, xyz-d50, xyz-d65
-        // Fallback: treat as sRGB if possible from xyz or display-p3
-        if (vals.Length >= 3)
-        {
-            float x = float.Parse(vals[0]);
-            float y = float.Parse(vals[1]);
-            float z = vals.Length > 2 ? float.Parse(vals[2]) : 0;
-            float alpha = 1f;
-            if (channels.Length > 1 && float.TryParse(channels[1].Trim(), out var a))
-                alpha = a;
+        float c0 = Channel(parts[0], 0f);
+        float c1 = Channel(parts[1], 0f);
+        float c2 = Channel(parts[2], 0f);
+        float alpha = parts.Count > 3 ? ParseAlpha(parts[3]) : 1f;
 
-            if (space == "xyz" || space == "xyz-d65")
-                return XyzToSrgb(x, y, z, alpha);
-            if (space == "display-p3")
-            {
-                var rgb = DisplayP3ToSrgb(x, y, z);
-                return new SKColor(rgb.r, rgb.g, rgb.b, (byte)Math.Clamp(MathF.Round(alpha * 255), 0, 255));
-            }
-        }
-
-        return null;
+        return ColorInterpolation.FromColorSpace(space, c0, c1, c2, alpha);
     }
 
     private static float LabLinearComponent(float t)
@@ -609,6 +854,17 @@ public static class ColorParser
         if (v.Length == 0) return false;
         if (v[0] == '#') return true;
         if (IsColorName(v)) return true;
+        foreach (var fn in FunctionalColorPrefixes)
+            if (v.StartsWith(fn, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>True when the value is itself a functional color notation. The math
+    /// evaluator must not fold calc() inside such a value: a relative color syntax
+    /// slot like 'calc(l + 20)' only means something to this parser.</summary>
+    public static bool IsFunctionalColor(string value)
+    {
+        var v = value.TrimStart();
         foreach (var fn in FunctionalColorPrefixes)
             if (v.StartsWith(fn, StringComparison.OrdinalIgnoreCase)) return true;
         return false;

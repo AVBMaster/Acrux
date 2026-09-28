@@ -83,9 +83,23 @@ internal sealed class PaintLayerPainter
                     layoutBox.PaddingBox.Right, layoutBox.PaddingBox.Bottom + contentOffsetY);
             if (selfClip.Width > 0 && selfClip.Height > 0)
             {
+                // overflow clips to the rounded padding box when the element has a
+                // border-radius (CSS Backgrounds 3 4).
+                SKPath? rounded = RoundedBorderGeometry.OverflowClipPath(
+                    style, new SKRect(layoutBox.BorderBox.Left, layoutBox.BorderBox.Top + contentOffsetY,
+                        layoutBox.BorderBox.Right, layoutBox.BorderBox.Bottom + contentOffsetY), selfClip);
                 var clipOp = PaintOpPool.GetPushClipOp();
-                clipOp.ClipRect = selfClip;
-                clipOp.Bounds = selfClip;
+                if (rounded != null)
+                {
+                    clipOp.ClipPath = rounded;
+                    clipOp.AntiAlias = true;
+                    clipOp.Bounds = selfClip;
+                }
+                else
+                {
+                    clipOp.ClipRect = selfClip;
+                    clipOp.Bounds = selfClip;
+                }
                 _displayList.Add(clipOp);
             }
             else selfClips = false;

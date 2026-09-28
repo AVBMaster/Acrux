@@ -21,15 +21,18 @@ public static class CssPropertyApplier
 
         style.ScrollbarThumbColor = parts[0].Trim() == "auto"
             ? null
-            : ColorParser.Parse(parts[0].Trim());
+            : ColorParser.Parse(parts[0].Trim(), style);
 
         style.ScrollbarTrackColor = parts.Count >= 2
-            ? (parts[1].Trim() == "auto" ? null : ColorParser.Parse(parts[1].Trim()))
+            ? (parts[1].Trim() == "auto" ? null : ColorParser.Parse(parts[1].Trim(), style))
             : style.ScrollbarThumbColor;
     }
 
     public static void Apply(ComputedStyle style, string name, string value)
     {
+    // Font-relative units inside these values resolve against this element's
+    // own font (CSS Values 4 §6.3); the style argument carries it.
+    using var _fontUnitScope = FontUnitContext.Use(style);
     try
     {
         switch (name)
@@ -80,9 +83,9 @@ public static class CssPropertyApplier
             case "padding-block-end": style.PaddingBottom = Length.Parse(value); break;
             case "padding-inline-start": style.PaddingLeft = Length.Parse(value); break;
             case "padding-inline-end": style.PaddingRight = Length.Parse(value); break;
-            case "color": style.Color = ColorParser.Parse(value); break;
-            case "accent-color": style.AccentColor = value == "auto" ? null : ColorParser.Parse(value); break;
-            case "caret-color": style.CaretColor = value == "auto" ? null : ColorParser.Parse(value); MarkCurrentColor(style, CurrentColorSlot.Caret, value); break;
+            case "color": style.Color = ColorParser.Parse(value, style); break;
+            case "accent-color": style.AccentColor = value == "auto" ? null : ColorParser.Parse(value, style); break;
+            case "caret-color": style.CaretColor = value == "auto" ? null : ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.Caret, value); break;
 
             // Standard scrollbar properties.
             case "scrollbar-width":
@@ -103,12 +106,9 @@ public static class CssPropertyApplier
             case "appearance": case "-webkit-appearance": style.Appearance = value.ToLowerInvariant(); break;
             case "forced-color-adjust": style.ForcedColorAdjust = value.ToLowerInvariant() == "none" ? ForcedColorAdjustType.None : ForcedColorAdjustType.Auto; break;
             case "background": ParseBackgroundShorthand(value, style); break;
-            case "background-color": style.BackgroundColor = ColorParser.Parse(value); break;
+            case "background-color": style.BackgroundColor = ColorParser.Parse(value, style); break;
             case "background-image":
-                if (value == "none")
-                    style.BackgroundImage = null;
-                else
-                    style.BackgroundImage = SplitCommaOutsideParens(value).Select(s => s.Trim()).ToList();
+                style.BackgroundImage = ParseImageLayerList(value);
                 break;
             case "background-repeat": style.BackgroundRepeat = ParseBackgroundRepeat(value); break;
             case "background-position": ParseBackgroundPosition(value, style); break;
@@ -124,23 +124,15 @@ public static class CssPropertyApplier
             case "text-decoration": ParseTextDecorationShorthand(value, style); break;
             case "text-decoration-line":
                 style.TextDecorationLine = ParseTextDecorationLine(value);
-                style.TextDecoration = style.TextDecorationLine switch
-                {
-                    TextDecorationLineType.Underline => TextDecorationType.Underline,
-                    TextDecorationLineType.LineThrough => TextDecorationType.LineThrough,
-                    TextDecorationLineType.Overline => TextDecorationType.Overline,
-                    _ => TextDecorationType.None
-                };
+                style.TextDecoration = LegacyTextDecorationOf(style.TextDecorationLine);
                 break;
             case "text-decoration-style": style.TextDecorationStyle = ParseTextDecorationStyle(value); break;
-            case "text-decoration-color": style.TextDecorationColor = ColorParser.Parse(value); MarkCurrentColor(style, CurrentColorSlot.TextDecoration, value); break;
-            case "text-decoration-thickness":
-                if (value == "auto") style.TextDecorationThickness = 0;
-                else if (Length.TryParse(value, out var tdt)) style.TextDecorationThickness = tdt.ToPixels(0, 0, 0, 0);
-                break;
-            case "text-underline-offset":
-                if (value == "auto") style.TextUnderlineOffset = 0;
-                else if (Length.TryParse(value, out var tuo)) style.TextUnderlineOffset = tuo.ToPixels(0, 0, 0, 0);
+            case "text-decoration-color": style.TextDecorationColor = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.TextDecoration, value); break;
+            case "text-decoration-thickness": ApplyTextDecorationThickness(style, value); break;
+            case "text-underline-offset": ApplyTextUnderlineOffset(style, value); break;
+            case "text-underline-position": style.TextUnderlinePosition = ParseTextUnderlinePosition(value); break;
+            case "text-decoration-skip-ink":
+                style.TextDecorationSkipInk = !value.Trim().Equals("none", StringComparison.OrdinalIgnoreCase);
                 break;
             case "text-emphasis": style.TextEmphasis = value; break;
             case "text-emphasis-color": style.TextEmphasisColor = value; break;
@@ -184,19 +176,19 @@ public static class CssPropertyApplier
             case "border-right-style": style.BorderRightStyle = ParseBorderStyleValue(value); break;
             case "border-bottom-style": style.BorderBottomStyle = ParseBorderStyleValue(value); break;
             case "border-left-style": style.BorderLeftStyle = ParseBorderStyleValue(value); break;
-            case "border-top-color": style.BorderTopColor = ColorParser.Parse(value); MarkCurrentColor(style, CurrentColorSlot.BorderTop, value); break;
-            case "border-right-color": style.BorderRightColor = ColorParser.Parse(value); MarkCurrentColor(style, CurrentColorSlot.BorderRight, value); break;
-            case "border-bottom-color": style.BorderBottomColor = ColorParser.Parse(value); MarkCurrentColor(style, CurrentColorSlot.BorderBottom, value); break;
-            case "border-left-color": style.BorderLeftColor = ColorParser.Parse(value); MarkCurrentColor(style, CurrentColorSlot.BorderLeft, value); break;
+            case "border-top-color": style.BorderTopColor = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.BorderTop, value); break;
+            case "border-right-color": style.BorderRightColor = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.BorderRight, value); break;
+            case "border-bottom-color": style.BorderBottomColor = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.BorderBottom, value); break;
+            case "border-left-color": style.BorderLeftColor = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.BorderLeft, value); break;
             case "border-radius": ParseBorderRadius(value, style); break;
-            case "border-top-left-radius": style.BorderTopLeftRadius = ParseRadiusValue(value) ?? 0; break;
-            case "border-top-right-radius": style.BorderTopRightRadius = ParseRadiusValue(value) ?? 0; break;
-            case "border-bottom-left-radius": style.BorderBottomLeftRadius = ParseRadiusValue(value) ?? 0; break;
-            case "border-bottom-right-radius": style.BorderBottomRightRadius = ParseRadiusValue(value) ?? 0; break;
+            case "border-top-left-radius": ApplyRadiusPair(style, value, 0); break;
+            case "border-top-right-radius": ApplyRadiusPair(style, value, 1); break;
+            case "border-bottom-right-radius": ApplyRadiusPair(style, value, 2); break;
+            case "border-bottom-left-radius": ApplyRadiusPair(style, value, 3); break;
             case "border-collapse": style.BorderCollapse = value.ToLowerInvariant() == "collapse"; break;
-            case "border-spacing": style.BorderSpacing = ParseSize(value) ?? 0; break;
+            case "border-spacing": ApplyBorderSpacing(style, value); break;
             case "border-image": ParseBorderImageShorthand(value, style); break;
-            case "border-image-source": style.BorderImageSource = ParseUrl(value); break;
+            case "border-image-source": style.BorderImageSource = NormalizeImageSource(value); break;
             case "border-image-slice": style.BorderImageSlice = value; break;
             case "border-image-width": style.BorderImageWidth = value; break;
             case "border-image-repeat": style.BorderImageRepeat = value; break;
@@ -251,7 +243,7 @@ public static class CssPropertyApplier
                 else style.ColumnRuleWidth = ParseSize(value) ?? 3f;
                 break;
             case "column-rule-style": style.ColumnRuleStyle = ParseBorderStyleValue(value); break;
-            case "column-rule-color": style.ColumnRuleColor = ColorParser.Parse(value); MarkCurrentColor(style, CurrentColorSlot.ColumnRule, value); break;
+            case "column-rule-color": style.ColumnRuleColor = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.ColumnRule, value); break;
             case "grid": style.Grid = value; break;
             case "grid-template": ParseGridTemplateShorthand(value, style); break;
             case "grid-template-columns": style.GridTemplateColumns = value == "none" ? null : value; break;
@@ -273,14 +265,14 @@ public static class CssPropertyApplier
             case "right": style.Right = Length.Parse(value); break;
             case "inset": ParseInsetShorthand(value, style); break;
             case "inset-block": ParseShorthand2(value, out var ibt, out var ibb); style.Top = ibt; style.Bottom = ibb; break;
-            case "inset-inline": ParseShorthand2(value, out var iil, out var iir); style.Left = iil; style.Right = iir; break;
+            case "inset-inline": ParseShorthand2(value, out var iis, out var iie); ApplyInlineInset(style, iis, iie); break;
             case "inset-block-start": style.Top = Length.Parse(value); break;
             case "inset-block-end": style.Bottom = Length.Parse(value); break;
-            case "inset-inline-start": style.Left = Length.Parse(value); break;
-            case "inset-inline-end": style.Right = Length.Parse(value); break;
+            case "inset-inline-start": ApplyInlineInset(style, Length.Parse(value), null); break;
+            case "inset-inline-end": ApplyInlineInset(style, null, Length.Parse(value)); break;
             case "list-style-type": style.ListStyleType = ParseListStyleType(value, style); break;
             case "list-style-position": style.ListStylePosition = value.Contains("inside") ? ListStylePosition.Inside : ListStylePosition.Outside; break;
-            case "list-style-image": style.ListStyleImage = value == "none" ? null : ParseUrl(value); break;
+            case "list-style-image": style.ListStyleImage = NormalizeUrlValue(value); break;
             case "list-style": ParseListStyle(value, style); break;
             case "cursor": style.Cursor = value; break;
             case "transform": style.Transform = value; break;
@@ -311,13 +303,14 @@ public static class CssPropertyApplier
                     // [ each-line || hanging ] <length>  (CSS Text 3 §5.2)
                     var indentTokens = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
                     style.TextIndentHanging = false;
+                    style.TextIndentEachLine = false;
                     var rest = new List<string>();
                     foreach (var token in indentTokens)
                     {
                         if (token.Equals("hanging", StringComparison.OrdinalIgnoreCase))
                             style.TextIndentHanging = true;
                         else if (token.Equals("each-line", StringComparison.OrdinalIgnoreCase))
-                            continue;
+                            style.TextIndentEachLine = true;
                         else
                             rest.Add(token);
                     }
@@ -330,7 +323,9 @@ public static class CssPropertyApplier
                         }
                         else
                         {
-                            style.TextIndent = ti.ToPixels(0, 0, 0, 0);
+                            // em/ex/ch/lh resolve against this element's own font, which is only
+                            // known once the font properties have been applied.
+                            style.TextIndent = ti.ToPixels(style.FontSize, style.FontSize, 0, 0);
                             style.TextIndentPercent = 0;
                         }
                     }
@@ -360,7 +355,26 @@ public static class CssPropertyApplier
             case "font-weight": break; // handled in high-priority
             case "font-style": break; // handled in high-priority
             case "line-height": break; // handled in high-priority
-            case "font-variant": style.FontVariant = value.ToLowerInvariant(); break;
+            case "font-variant":
+                style.FontVariant = value.ToLowerInvariant();
+                // Normalize the caps keyword onto the same cascade slot as
+                // font-variant-caps (CSS Fonts 4 §3.5): 'font-variant: x' is
+                // 'font-variant-caps: x' plus resetting the other variant
+                // longhands, so a later 'font-variant-caps: normal' must be
+                // able to override it.
+                {
+                    var tokens = value.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var token in tokens)
+                        if (token is "small-caps" or "all-small-caps" or "petite-caps" or "all-petite-caps" or "unicase" or "titling-caps")
+                        {
+                            style.FontVariantCaps = token;
+                            break;
+                        }
+                    if (Array.Exists(tokens, static t => t == "normal"))
+                        style.FontVariantCaps = "normal";
+                }
+                break;
+            case "font-variant-caps": style.FontVariantCaps = value.ToLowerInvariant(); break;
             case "font-stretch": style.FontStretch = value.ToLowerInvariant(); break;
             case "font-kerning": style.FontKerning = value.ToLowerInvariant(); break;
             case "font-synthesis": style.FontSynthesis = value.ToLowerInvariant(); break;
@@ -373,7 +387,7 @@ public static class CssPropertyApplier
                 if (float.TryParse(value.Replace("px", ""), out var ow))
                     style.OutlineWidth = ow;
                 break;
-            case "outline-color": style.OutlineColor = ColorParser.Parse(value); MarkCurrentColor(style, CurrentColorSlot.Outline, value); break;
+            case "outline-color": style.OutlineColor = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.Outline, value); break;
             case "outline-style": style.OutlineStyle = ParseBorderStyleValue(value); break;
             case "outline-offset": style.OutlineOffset = ParseSize(value) ?? 0; break;
             case "table-layout": style.TableLayout = value.ToLowerInvariant() == "fixed" ? "fixed" : "auto"; break;
@@ -424,7 +438,10 @@ public static class CssPropertyApplier
             case "zoom": style.Zoom = ParseZoom(value); break;
             case "all": break; // all shorthand - handled via reset cascade
             case "initial-letter": break; // recognized, minimal handling
-            case "box-decoration-break": break; // recognized, minimal handling
+            case "box-decoration-break":
+                style.BoxDecorationBreak = value.Trim().StartsWith("clone", StringComparison.OrdinalIgnoreCase)
+                    ? BoxDecorationBreakType.Clone : BoxDecorationBreakType.Slice;
+                break;
             case "page-break-after": break;
             case "page-break-before": break;
             case "page-break-inside": break;
@@ -475,7 +492,7 @@ public static class CssPropertyApplier
             if (p.StartsWith('#') || p.StartsWith("rgb") || p.StartsWith("hsl")
                 || ColorParser.IsColorName(p))
             {
-                style.ColumnRuleColor = ColorParser.Parse(p);
+                style.ColumnRuleColor = ColorParser.Parse(p, style);
                 MarkCurrentColor(style, CurrentColorSlot.ColumnRule, p);
                 continue;
             }
@@ -493,17 +510,75 @@ public static class CssPropertyApplier
         return Length.ParseFontSize(value, parentFontSize);
     }
 
-    public static FontWeight ParseFontWeight(string value) => value.ToLowerInvariant() switch
+    public static FontWeight ParseFontWeight(string value)
     {
-        "bold" or "bolder" or "500" or "600" or "700" or "800" or "900" => FontWeight.Bold,
-        _ => FontWeight.Normal
-    };
+        var v = value.ToLowerInvariant().Trim();
+        switch (v)
+        {
+            case "normal": return FontWeight.Normal;
+            case "bold": return FontWeight.Bold;
+            // Relative keywords need the parent's used weight for the CSS Fonts 4
+            // table; with our face set they land on the nearest concrete step.
+            case "bolder": return FontWeight.Bold;
+            case "lighter": return FontWeight.Normal;
+        }
+        if (int.TryParse(v, out var n) && n >= 1 && n <= 1000)
+        {
+            // Snap to the nearest 100-step the enum can carry (1..1000 are valid).
+            int step = (int)Math.Clamp((long)Math.Round(n / 100.0) * 100, 100, 900);
+            return (FontWeight)step;
+        }
+        return FontWeight.Normal;
+    }
 
-    public static FontStyleType ParseFontStyle(string value) => value.ToLowerInvariant() switch
+    public static FontStyleType ParseFontStyle(string value) => ParseFontStyle(value, null);
+
+    /// <summary>
+    /// 'font-style' is either a keyword or 'oblique' with an angle (CSS Fonts 4 §3.2.2).
+    /// The angle is kept so the renderer can synthesize that exact slant; plain 'oblique'
+    /// leaves it unset, which means "use the family's own slanted face".
+    /// </summary>
+    public static FontStyleType ParseFontStyle(string value, ComputedStyle? style)
     {
-        "italic" or "oblique" => FontStyleType.Italic,
-        _ => FontStyleType.Normal
-    };
+        var token = value.Trim();
+        if (token.Equals("italic", StringComparison.OrdinalIgnoreCase))
+        {
+            if (style != null) style.FontStyleObliqueDegrees = null;
+            return FontStyleType.Italic;
+        }
+        if (token.Equals("oblique", StringComparison.OrdinalIgnoreCase))
+        {
+            if (style != null) style.FontStyleObliqueDegrees = null;
+            return FontStyleType.Oblique;
+        }
+        if (token.StartsWith("oblique", StringComparison.OrdinalIgnoreCase) &&
+            TryParseAngleDegrees(token["oblique".Length..].Trim(), out float degrees))
+        {
+            if (style != null) style.FontStyleObliqueDegrees = Math.Clamp(degrees, -90f, 90f);
+            return FontStyleType.Oblique;
+        }
+        if (style != null) style.FontStyleObliqueDegrees = null;
+        return FontStyleType.Normal;
+    }
+
+    private static bool TryParseAngleDegrees(string token, out float degrees)
+    {
+        degrees = 0;
+        token = token.Trim().ToLowerInvariant();
+        float number;
+        try
+        {
+            if (token.EndsWith("grad")) number = float.Parse(token[..^4], System.Globalization.CultureInfo.InvariantCulture) * 0.9f;
+            else if (token.EndsWith("turn")) number = float.Parse(token[..^4], System.Globalization.CultureInfo.InvariantCulture) * 360f;
+            else if (token.EndsWith("rad")) number = float.Parse(token[..^3], System.Globalization.CultureInfo.InvariantCulture) * (180f / MathF.PI);
+            else if (token.EndsWith("deg")) number = float.Parse(token[..^3], System.Globalization.CultureInfo.InvariantCulture);
+            else return false;
+        }
+        catch (FormatException) { return false; }
+        if (float.IsNaN(number) || float.IsInfinity(number)) return false;
+        degrees = number;
+        return true;
+    }
 
     public static string ParseFontFamily(string value)
     {
@@ -654,6 +729,7 @@ public static class CssPropertyApplier
     {
         "break-all" => WordBreakMode.BreakAll,
         "break-word" => WordBreakMode.BreakWord,
+        "keep-all" => WordBreakMode.KeepAll,
         _ => WordBreakMode.Normal
     };
 
@@ -745,6 +821,37 @@ public static class CssPropertyApplier
         style.BackgroundSize = BackgroundSizeType.Length;
     }
 
+    /// <summary>
+    /// Split a comma-separated image layer list, normalizing each layer. An
+    /// empty url() / url("") is invalid at computed-value time, so the layer
+    /// becomes 'none' (CSS Values 3 §10.8).
+    /// </summary>
+    private static List<string>? ParseImageLayerList(string value)
+    {
+        if (value.Trim().Equals("none", StringComparison.OrdinalIgnoreCase))
+            return null;
+        var layers = SplitCommaOutsideParens(value).Select(s => s.Trim()).ToList();
+        for (int i = 0; i < layers.Count; i++)
+        {
+            if (IsUrlWithoutAddress(layers[i]))
+                layers[i] = "none";
+        }
+        return layers;
+    }
+
+    /// <summary>True for 'url()', 'url("")', "url(' ')" — a url token with no address.</summary>
+    public static bool IsUrlWithoutAddress(string value)
+    {
+        var trimmed = value.Trim();
+        if (!trimmed.StartsWith("url(", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var close = trimmed.IndexOf(')');
+        if (close < 0)
+            return false;
+        var inner = trimmed[4..close].Trim().Trim('"', '\'').Trim();
+        return inner.Length == 0;
+    }
+
     public static void ParseBackgroundShorthand(string value, ComputedStyle style)
     {
         // Split by commas outside parentheses to get individual layers.
@@ -779,6 +886,10 @@ public static class CssPropertyApplier
                     if (end > urlIdx)
                     {
                         image = ParseUrl(trimmed[urlIdx..(end + 1)]);
+                        // Empty address: the layer is invalid at computed-value
+                        // time, so it contributes no image.
+                        if (string.IsNullOrEmpty(image))
+                            image = null;
                         remaining = (trimmed[..urlIdx] + " " + trimmed[(end + 1)..]).Trim();
                     }
                 }
@@ -800,7 +911,7 @@ public static class CssPropertyApplier
                 }
                 else if (ColorParser.LooksLikeColor(part))
                 {
-                    style.BackgroundColor = ColorParser.Parse(part);
+                    style.BackgroundColor = ColorParser.Parse(part, style);
                 }
                 else if (lower is "repeat" or "repeat-x" or "repeat-y" or "no-repeat" or "round" or "space")
                 {
@@ -859,6 +970,37 @@ public static class CssPropertyApplier
         return null;
     }
 
+    /// <summary>Image values that are generated by the engine rather than referenced by url.</summary>
+    public static bool IsGeneratedImage(string value)
+    {
+        var v = value.TrimStart();
+        return v.StartsWith("linear-gradient(", StringComparison.OrdinalIgnoreCase)
+            || v.StartsWith("repeating-linear-gradient(", StringComparison.OrdinalIgnoreCase)
+            || v.StartsWith("radial-gradient(", StringComparison.OrdinalIgnoreCase)
+            || v.StartsWith("repeating-radial-gradient(", StringComparison.OrdinalIgnoreCase)
+            || v.StartsWith("conic-gradient(", StringComparison.OrdinalIgnoreCase)
+            || v.StartsWith("repeating-conic-gradient(", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Normalise an &lt;image&gt; longhand: url(), a generated gradient, or none.</summary>
+    public static string? NormalizeImageSource(string value)
+    {
+        if (IsGeneratedImage(value)) return value.Trim();
+        return NormalizeUrlValue(value);
+    }
+
+    /// <summary>
+    /// Parse a single image value into a URL, or null for 'none' and for an
+    /// empty url() (invalid at computed-value time).
+    /// </summary>
+    public static string? NormalizeUrlValue(string value)
+    {
+        if (value.Trim().Equals("none", StringComparison.OrdinalIgnoreCase))
+            return null;
+        var url = ParseUrl(value);
+        return string.IsNullOrEmpty(url) ? null : url;
+    }
+
     public static void ParseBorderShorthand(string value, ComputedStyle style)
     {
         var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -882,7 +1024,7 @@ public static class CssPropertyApplier
             }
             else
             {
-                var color = ColorParser.Parse(part);
+                var color = ColorParser.Parse(part, style);
                 style.BorderTopColor = color; style.BorderRightColor = color;
                 style.BorderBottomColor = color; style.BorderLeftColor = color;
                 MarkCurrentColor(style, CurrentColorSlot.AllBorders, part);
@@ -963,6 +1105,11 @@ public static class CssPropertyApplier
                 style.BorderImageSource = source;
                 continue;
             }
+            if (IsGeneratedImage(token))
+            {
+                style.BorderImageSource = token;
+                continue;
+            }
             if (boxGroup == 0) slice.Add(token);
             else if (boxGroup == 1) width.Add(token);
             else outset.Add(token);
@@ -1035,7 +1182,7 @@ public static class CssPropertyApplier
             }
             else
             {
-                var color = ColorParser.Parse(part);
+                var color = ColorParser.Parse(part, style);
                 var slot = side switch
                 {
                     "top" => CurrentColorSlot.BorderTop,
@@ -1050,6 +1197,18 @@ public static class CssPropertyApplier
                 else if (side == "right") style.BorderRightColor = color;
             }
         }
+    }
+
+    /// <summary>
+    /// 'border-spacing' takes one or two lengths: the first is the column (inline-axis)
+    /// gap, the second - when present - the row (block-axis) gap (CSS 2.1 §17.5).
+    /// </summary>
+    public static void ApplyBorderSpacing(ComputedStyle style, string value)
+    {
+        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        float inlineSpacing = ParseSize(parts.Length > 0 ? parts[0] : value) ?? 0;
+        style.BorderSpacing = Math.Max(0, inlineSpacing);
+        style.BorderRowSpacing = parts.Length > 1 ? Math.Max(0, ParseSize(parts[1]) ?? inlineSpacing) : null;
     }
 
     public static void ParseBorderWidth(string value, ComputedStyle style)
@@ -1072,7 +1231,7 @@ public static class CssPropertyApplier
     public static void ParseBorderColor(string value, ComputedStyle style)
     {
         var colors = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var c = colors.Select(ColorParser.Parse).ToList();
+        var c = colors.Select(v => ColorParser.Parse(v, style)).ToList();
         for (int ci = 0; ci < colors.Length && ci < 4; ci++)
         {
             var slot = ci switch
@@ -1102,16 +1261,43 @@ public static class CssPropertyApplier
 
     public static void ParseBorderRadius(string value, ComputedStyle style)
     {
-        // Elliptical radii use "horizontal / vertical"; only the horizontal set
-        // is kept (percentages are encoded by ParseRadiusValue).
+        // 'border-radius: <horizontal-1..4> / <vertical-1..4>' (CSS Backgrounds 3 5.3).
+        // A missing vertical half repeats the horizontal one; percentages stay
+        // encoded by ParseRadiusValue and resolve against the box at paint time.
         int slash = value.IndexOf('/');
-        if (slash >= 0) value = value[..slash];
-        var radii = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var r = radii.Select(v => ParseRadiusValue(v) ?? 0).ToList();
-        style.BorderTopLeftRadius = r.Count > 0 ? r[0] : 0;
-        style.BorderTopRightRadius = r.Count > 1 ? r[1] : r[0];
-        style.BorderBottomRightRadius = r.Count > 2 ? r[2] : r[0];
-        style.BorderBottomLeftRadius = r.Count > 3 ? r[3] : (r.Count > 0 ? r[0] : 0);
+        var horizontal = slash >= 0 ? value[..slash] : value;
+        var vertical = slash >= 0 ? value[(slash + 1)..] : horizontal;
+
+        var rx = ToFourRadii(horizontal, style.BorderTopLeftRadius, style.BorderTopRightRadius,
+            style.BorderBottomRightRadius, style.BorderBottomLeftRadius);
+        var ry = ToFourRadii(vertical, rx[0], rx[1], rx[2], rx[3]);
+
+        style.BorderTopLeftRadius = rx[0];
+        style.BorderTopRightRadius = rx[1];
+        style.BorderBottomRightRadius = rx[2];
+        style.BorderBottomLeftRadius = rx[3];
+        style.BorderTopLeftRadiusY = ry[0];
+        style.BorderTopRightRadiusY = ry[1];
+        style.BorderBottomRightRadiusY = ry[2];
+        style.BorderBottomLeftRadiusY = ry[3];
+    }
+
+    /// <summary>Expand a 1-to-4 radius list into top-left, top-right, bottom-right,
+    /// bottom-left, following the CSS corner repetition rules.</summary>
+    private static float[] ToFourRadii(string value, float tl, float tr, float br, float bl)
+    {
+        var tokens = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parsed = new List<float>(4);
+        foreach (var token in tokens)
+            parsed.Add(ParseRadiusValue(token) ?? 0);
+        return parsed.Count switch
+        {
+            0 => new[] { tl, tr, br, bl },
+            1 => new[] { parsed[0], parsed[0], parsed[0], parsed[0] },
+            2 => new[] { parsed[0], parsed[1], parsed[0], parsed[1] },
+            3 => new[] { parsed[0], parsed[1], parsed[2], parsed[1] },
+            _ => new[] { parsed[0], parsed[1], parsed[2], parsed[3] },
+        };
     }
 
     public static BorderStyle ParseBorderStyleValue(string value) => value.ToLowerInvariant() switch
@@ -1153,6 +1339,27 @@ public static class CssPropertyApplier
                 System.Globalization.CultureInfo.InvariantCulture, out var pct))
             return -pct;
         return ParseSize(value);
+    }
+
+    /// <summary>'border-*-radius: &lt;horizontal&gt; [&lt;vertical&gt;]' for one corner
+    /// (0 = top-left, 1 = top-right, 2 = bottom-right, 3 = bottom-left).</summary>
+    private static void ApplyRadiusPair(ComputedStyle style, string value, int corner)
+    {
+        var tokens = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        float horizontal = ParseRadiusValue(tokens.Length > 0 ? tokens[0] : "0") ?? 0;
+        // A single value makes the corner circular: the vertical radius mirrors it.
+        float vertical = tokens.Length > 1 ? (ParseRadiusValue(tokens[1]) ?? 0) : horizontal;
+        switch (corner)
+        {
+            case 0:
+                style.BorderTopLeftRadius = horizontal; style.BorderTopLeftRadiusY = vertical; break;
+            case 1:
+                style.BorderTopRightRadius = horizontal; style.BorderTopRightRadiusY = vertical; break;
+            case 2:
+                style.BorderBottomRightRadius = horizontal; style.BorderBottomRightRadiusY = vertical; break;
+            default:
+                style.BorderBottomLeftRadius = horizontal; style.BorderBottomLeftRadiusY = vertical; break;
+        }
     }
 
     public static void ParseFlexShorthand(string value, ComputedStyle style)
@@ -1295,12 +1502,16 @@ public static class CssPropertyApplier
             else if (lower is "disc" or "circle" or "square" or "decimal" or "lower-roman" or "upper-roman")
                 style.ListStyleType = ParseListStyleType(part, style);
             else if (lower.StartsWith("url("))
-                style.ListStyleImage = ParseUrl(part);
+                style.ListStyleImage = NormalizeUrlValue(part);
         }
     }
 
     public static void ParseFontShorthand(string value, ComputedStyle style)
     {
+        // CSS Fonts 4 §5.3: the shorthand resets the variant slots it does not
+        // carry, otherwise a previous font-variant(-caps) would leak through.
+        style.FontVariant = "normal";
+        style.FontVariantCaps = "normal";
         var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         int i = 0;
 
@@ -1310,6 +1521,12 @@ public static class CssPropertyApplier
             if (lower is "normal" or "italic" or "oblique")
             {
                 if (lower == "italic" || lower == "oblique") style.FontStyle = FontStyleType.Italic;
+                i++;
+            }
+            else if (lower == "small-caps")
+            {
+                style.FontVariant = "small-caps";
+                style.FontVariantCaps = "small-caps";
                 i++;
             }
             else if (lower is "bold" or "bolder" or "lighter" ||
@@ -1360,7 +1577,7 @@ public static class CssPropertyApplier
             }
             else
             {
-                style.OutlineColor = ColorParser.Parse(part);
+                style.OutlineColor = ColorParser.Parse(part, style);
                 MarkCurrentColor(style, CurrentColorSlot.Outline, part);
             }
         }
@@ -1401,16 +1618,50 @@ public static class CssPropertyApplier
         style.Left = Length.Parse(parts.Length > 3 ? parts[3] : (parts.Length > 1 ? parts[1] : parts[0]));
     }
 
+    /// <summary>
+    /// Maps inline-axis insets (from inset-inline[-start|-end]) onto the
+    /// physical left/right properties. With 'direction: rtl' the start and end
+    /// edges flip (CSS Logical 1 §4.3). A null argument means "not specified".
+    /// </summary>
+    private static void ApplyInlineInset(ComputedStyle style, Length? start, Length? end)
+    {
+        bool rtl = style.Direction == "rtl";
+        if (start != null)
+        {
+            if (rtl) style.Right = start; else style.Left = start;
+        }
+        if (end != null)
+        {
+            if (rtl) style.Left = end; else style.Right = end;
+        }
+    }
+
+    /// <summary>'text-decoration-line' takes a space-separated list of keywords
+    /// (CSS Text Decoration 4 §2.1), so 'underline overline' asks for two lines.</summary>
     public static TextDecorationLineType ParseTextDecorationLine(string value)
     {
-        var lower = value.ToLowerInvariant();
-        if (lower == "none") return TextDecorationLineType.None;
         var result = TextDecorationLineType.None;
-        if (lower.Contains("underline")) result |= TextDecorationLineType.Underline;
-        if (lower.Contains("overline")) result |= TextDecorationLineType.Overline;
-        if (lower.Contains("line-through")) result |= TextDecorationLineType.LineThrough;
+        foreach (var token in value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            switch (token.ToLowerInvariant())
+            {
+                case "none": return TextDecorationLineType.None;
+                case "underline": result |= TextDecorationLineType.Underline; break;
+                case "overline": result |= TextDecorationLineType.Overline; break;
+                case "line-through": result |= TextDecorationLineType.LineThrough; break;
+            }
+        }
         return result;
     }
+
+    /// <summary>The engine keeps a pre-flags copy of the line list in the legacy
+    /// 'text-decoration' enum; it can only name one line, so it follows the first
+    /// one the modern property asks for.</summary>
+    public static TextDecorationType LegacyTextDecorationOf(TextDecorationLineType line) =>
+        line.HasUnderline() ? TextDecorationType.Underline
+        : line.HasOverline() ? TextDecorationType.Overline
+        : line.HasLineThrough() ? TextDecorationType.LineThrough
+        : TextDecorationType.None;
 
     public static TextDecorationStyleType ParseTextDecorationStyle(string value) => value.ToLowerInvariant() switch
     {
@@ -1421,28 +1672,105 @@ public static class CssPropertyApplier
         _ => TextDecorationStyleType.Solid
     };
 
+    /// <summary>'text-decoration-thickness: auto | from-font | &lt;length&gt; | &lt;percentage&gt;'
+    /// (CSS Text Decoration 4 §3.4). Percentages resolve against the font size.</summary>
+    private static void ApplyTextDecorationThickness(ComputedStyle style, string value)
+    {
+        var token = value.Trim().ToLowerInvariant();
+        if (token == "from-font")
+        {
+            style.TextDecorationThicknessFromFont = true;
+            style.TextDecorationThickness = float.NaN;
+            return;
+        }
+        style.TextDecorationThicknessFromFont = false;
+        if (token == "auto" || !Length.TryParse(token, out var length))
+        {
+            style.TextDecorationThickness = float.NaN;
+            return;
+        }
+        style.TextDecorationThickness = Math.Max(0, length.ToPixels(style.FontSize, style.FontSize, 0, 0));
+    }
+
+    /// <summary>'text-underline-offset: auto | &lt;length&gt; | &lt;percentage&gt;'
+    /// (CSS Text Decoration 4 §3.2); percentages resolve against the font size.</summary>
+    private static void ApplyTextUnderlineOffset(ComputedStyle style, string value)
+    {
+        var token = value.Trim().ToLowerInvariant();
+        if (token == "auto" || !Length.TryParse(token, out var length))
+        {
+            style.TextUnderlineOffsetIsAuto = true;
+            style.TextUnderlineOffset = 0;
+            return;
+        }
+        style.TextUnderlineOffsetIsAuto = false;
+        style.TextUnderlineOffset = length.ToPixels(style.FontSize, style.FontSize, 0, 0);
+    }
+
+    /// <summary>'text-underline-position: auto | from-font | alphabetic | under | left | right'.</summary>
+    private static TextUnderlinePositionType ParseTextUnderlinePosition(string value)
+    {
+        var token = value.Trim().ToLowerInvariant();
+        // 'from-font' asks for the font's own underline position; 'auto' and
+        // 'alphabetic' keep the line near the alphabetic baseline.
+        if (token == "auto") return TextUnderlinePositionType.Auto;
+        if (token.Contains("from-font")) return TextUnderlinePositionType.FromFont;
+        if (token.Contains("left")) return TextUnderlinePositionType.Left;
+        if (token.Contains("right")) return TextUnderlinePositionType.Right;
+        if (token.Contains("under")) return TextUnderlinePositionType.Under;
+        if (token.Contains("alphabetic")) return TextUnderlinePositionType.Alphabetic;
+        return TextUnderlinePositionType.Auto;
+    }
+
+    /// <summary>'text-decoration' = &lt;line&gt;* || &lt;style&gt; || &lt;color&gt; || &lt;thickness&gt;.
+    /// Tokens are classified rather than consumed positionally, and any longhand the
+    /// shorthand leaves out returns to its initial value.</summary>
     public static void ParseTextDecorationShorthand(string value, ComputedStyle style)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var part in parts)
+        style.TextDecorationLine = TextDecorationLineType.None;
+        style.TextDecorationStyle = TextDecorationStyleType.Solid;
+        style.TextDecorationColor = default;
+        style.TextDecorationThickness = float.NaN;
+        style.TextDecorationThicknessFromFont = false;
+
+        foreach (var part in ShorthandExpander.SplitShorthand(value))
         {
             var lower = part.ToLowerInvariant();
-            if (lower == "none" || lower == "underline" || lower == "overline" || lower == "line-through")
+            switch (lower)
             {
-                style.TextDecorationLine = ParseTextDecorationLine(part);
-                style.TextDecoration = style.TextDecorationLine switch
-                {
-                    TextDecorationLineType.Underline => TextDecorationType.Underline,
-                    TextDecorationLineType.Overline => TextDecorationType.Overline,
-                    TextDecorationLineType.LineThrough => TextDecorationType.LineThrough,
-                    _ => TextDecorationType.None
-                };
+                case "none":
+                    style.TextDecoration = TextDecorationType.None;
+                    return;
+                case "underline":
+                    style.TextDecorationLine |= TextDecorationLineType.Underline;
+                    continue;
+                case "overline":
+                    style.TextDecorationLine |= TextDecorationLineType.Overline;
+                    continue;
+                case "line-through":
+                    style.TextDecorationLine |= TextDecorationLineType.LineThrough;
+                    continue;
+                case "solid":
+                case "double":
+                case "dotted":
+                case "dashed":
+                case "wavy":
+                    style.TextDecorationStyle = ParseTextDecorationStyle(lower);
+                    continue;
+                case "auto":
+                case "from-font":
+                    ApplyTextDecorationThickness(style, lower);
+                    continue;
             }
-            else if (lower == "solid" || lower == "double" || lower == "dotted" || lower == "dashed" || lower == "wavy")
-                style.TextDecorationStyle = ParseTextDecorationStyle(part);
-            else
-                style.TextDecorationColor = ColorParser.Parse(part);
+            if (Length.TryParse(lower, out _))
+            {
+                ApplyTextDecorationThickness(style, lower);
+                continue;
+            }
+            style.TextDecorationColor = ColorParser.Parse(part, style);
+            MarkCurrentColor(style, CurrentColorSlot.TextDecoration, part);
         }
+        style.TextDecoration = LegacyTextDecorationOf(style.TextDecorationLine);
     }
 
     public static List<TextShadowValue> ParseTextShadow(string value)

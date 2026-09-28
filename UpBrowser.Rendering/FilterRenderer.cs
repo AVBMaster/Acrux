@@ -10,21 +10,25 @@ public static class FilterRenderer
             return null;
 
         var filters = ParseFilters(filterString);
-        if (filters.Count == 0) return null;
+        if (filters == null || filters.Count == 0) return null;
 
         SKImageFilter? result = null;
         foreach (var filter in filters)
         {
             var f = CreateFilter(filter);
-            if (f != null)
-            {
-                result = result != null ? SKImageFilter.CreateCompose(result, f) : f;
-            }
+            if (f == null)
+                return null;
+
+            // CreateCompose(outer, inner) evaluates inner first, so the next function in
+            // the list has to become the outer one. Each stage renders through an 8-bit
+            // image, which is what clamps the channels between functions.
+            result = result != null ? SKImageFilter.CreateCompose(f, result) : f;
         }
         return result;
     }
 
-    private static List<FilterEntry> ParseFilters(string input)
+    /// <summary>Split the filter list; returns null when the value is invalid.</summary>
+    private static List<FilterEntry>? ParseFilters(string input)
     {
         var filters = new List<FilterEntry>();
         int depth = 0;
@@ -37,28 +41,36 @@ public static class FilterRenderer
             {
                 var part = input[start..i].Trim();
                 if (!string.IsNullOrEmpty(part))
-                    filters.Add(ParseFilterEntry(part));
+                {
+                    var entry = ParseFilterEntry(part);
+                    if (entry == null) return null;
+                    filters.Add(entry);
+                }
                 start = i + 1;
             }
         }
         var last = input[start..].Trim();
         if (!string.IsNullOrEmpty(last))
-            filters.Add(ParseFilterEntry(last));
+        {
+            var entry = ParseFilterEntry(last);
+            if (entry == null) return null;
+            filters.Add(entry);
+        }
         return filters;
     }
 
-    private static FilterEntry ParseFilterEntry(string s)
+    private static FilterEntry? ParseFilterEntry(string s)
     {
         var parenIdx = s.IndexOf('(');
-        if (parenIdx > 0 && s.EndsWith(')'))
-        {
-            var name = s[..parenIdx].Trim().ToLowerInvariant();
-            var argStr = s[(parenIdx + 1)..^1].Trim();
-            // Split by commas at depth 0 (respect nested parens)
-            var args = SplitFilterArgs(argStr);
-            return new FilterEntry { Name = name, Args = args };
-        }
-        return new FilterEntry { Name = s.Trim().ToLowerInvariant(), Args = Array.Empty<string>() };
+        // Every filter function is written name(...) : a bare keyword such as
+        // `grayscale` is not a valid <filter-function> and voids the declaration.
+        if (parenIdx <= 0 || !s.EndsWith(')'))
+            return null;
+        var name = s[..parenIdx].Trim().ToLowerInvariant();
+        var argStr = s[(parenIdx + 1)..^1].Trim();
+        // Split by commas at depth 0 (respect nested parens)
+        var args = SplitFilterArgs(argStr);
+        return new FilterEntry { Name = name, Args = args };
     }
 
     private static string[] SplitFilterArgs(string argStr)
@@ -119,24 +131,46 @@ public static class FilterRenderer
 
     private static SKImageFilter? CreateBlur(string[] args)
     {
-        if (args.Length < 1 || !float.TryParse(args[0].Replace("px", ""), out var radius))
+        // blur() with no argument is a zero-radius blur, not an invalid function.
+        float radius = 0;
+        if (args.Length >= 1 && !TryFilterLength(args[0], out radius))
             return null;
         radius = Math.Max(0, radius);
         return SKImageFilter.CreateBlur(radius, radius);
     }
 
-    private static SKImageFilter? CreateColorMatrix(string[] args, Func<float, float[]> matrixFunc)
+    private static bool TryFilterLength(string text, out float value)
     {
-        if (args.Length < 1) return null;
-        var valStr = args[0].Trim();
-        bool isPercent = valStr.EndsWith("%");
-        valStr = valStr.Replace("%", "").Trim();
-        if (!float.TryParse(valStr, out var amount)) return null;
+        text = text.Trim();
+        foreach (var unit in new[] { "px", "em", "rem", "%" })
+        {
+            if (text.EndsWith(unit, StringComparison.OrdinalIgnoreCase))
+            {
+                text = text[..^unit.Length];
+                break;
+            }
+        }
+        return float.TryParse(text.Trim(), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out value);
+    }
 
-        // CSS: brightness(2) = 200% brightness, brightness(50%) = 50% brightness
-        // If no % sign, treat as multiplier (e.g., 2 → 200%)
-        if (!isPercent)
-            amount *= 100f;
+    private static SKImageFilter? CreateColorMatrix(string[] args, Func<float, float[]> matrixFunc, float defaultAmount = 100f)
+    {
+        float amount = defaultAmount;
+        if (args.Length >= 1)
+        {
+            var valStr = args[0].Trim();
+            bool isPercent = valStr.EndsWith("%");
+            valStr = valStr.Replace("%", "").Trim();
+            if (!float.TryParse(valStr, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out amount))
+                return null;
+
+            // CSS: brightness(2) = 200% brightness, brightness(50%) = 50% brightness
+            // If no % sign, treat as multiplier (e.g., 2 → 200%)
+            if (!isPercent)
+                amount *= 100f;
+        }
 
         var matrix = matrixFunc(amount);
         var colorMatrix = SKColorFilter.CreateColorMatrix(matrix);
@@ -247,8 +281,7 @@ public static class FilterRenderer
 
     private static SKImageFilter? CreateHueRotate(string[] args)
     {
-        if (args.Length < 1) return null;
-        var valStr = args[0].Trim();
+        var valStr = args.Length >= 1 ? args[0].Trim() : "0";
         float unitScale = 1f;
         if (valStr.EndsWith("rad", StringComparison.OrdinalIgnoreCase))
         {
@@ -296,10 +329,10 @@ public static class FilterRenderer
 
     private static SKImageFilter? CreateOpacity(string[] args)
     {
-        if (args.Length < 1) return null;
         // opacity(0.5) is 50%; the previous code divided every value by 100, which
-        // made the element almost fully transparent.
-        if (!TryFilterAmount(args[0], out float amount)) return null;
+        // made the element almost fully transparent. Bare opacity() is fully opaque.
+        float amount = 1f;
+        if (args.Length >= 1 && !TryFilterAmount(args[0], out amount)) return null;
         amount = Math.Clamp(amount, 0f, 1f);
 
         float[] m = new float[]
@@ -326,6 +359,8 @@ public static class FilterRenderer
             tokens.AddRange(parts);
         }
 
+        // drop-shadow() requires at least the two offsets.
+        if (tokens.Count < 2) return null;
         int idx = 0;
         if (tokens.Count > idx) float.TryParse(tokens[idx].Replace("px", "").Trim(), out offsetX); idx++;
         if (tokens.Count > idx) float.TryParse(tokens[idx].Replace("px", "").Trim(), out offsetY); idx++;

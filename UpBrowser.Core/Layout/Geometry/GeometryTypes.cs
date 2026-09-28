@@ -301,7 +301,9 @@ public struct MarginStrut
     {
         if (value < 0)
         {
-            negative_margin += value;
+            // CSS 2.1 §8.3.1: adjoining negative margins collapse to the most
+            // negative one, they do not add up.
+            negative_margin = Math.Min(negative_margin, value);
         }
         else if (is_quirky && is_quirky_container_start)
         {

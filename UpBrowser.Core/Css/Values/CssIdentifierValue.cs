@@ -422,6 +422,8 @@ public sealed class CssIdentifierValue : CssValue
         CssValueId.Capitalize => "capitalize",
         CssValueId.Uppercase => "uppercase",
         CssValueId.Lowercase => "lowercase",
+        CssValueId.FullWidth => "full-width",
+        CssValueId.FullSizeKana => "full-size-kana",
         CssValueId.Justify => "justify",
         CssValueId.Paused => "paused",
         CssValueId.Running => "running",

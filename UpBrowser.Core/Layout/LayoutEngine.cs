@@ -66,6 +66,7 @@ public class LayoutEngine
         _viewportHeight = viewportHeight;
         _dpiScale = dpiScale > 0 ? dpiScale : 1.0f;
         _rootFontSize = rootFontSize > 0 ? rootFontSize : 16f;
+        Fonts.FontMetricsProvider.DeviceScale = _dpiScale;
     }
 
     /// <summary>
@@ -89,6 +90,10 @@ public class LayoutEngine
         _viewportHeight = height;
         _dpiScale = dpiScale;
         _contentHeight = 0;
+
+        // Font metrics resolve their line-box rounding on the device grid, so the
+        // scale must be current before anything measures text.
+        Fonts.FontMetricsProvider.DeviceScale = dpiScale > 0 ? dpiScale : 1.0f;
 
         var root = document.DocumentElement ?? document.Body;
         if (root == null)
@@ -120,6 +125,7 @@ public class LayoutEngine
             .SetBfcBlockOffset(0)
             .SetForcedBfcBlockOffset(0)
             .SetRootFontSize(rootFontSize)
+            .SetDpiScale(_dpiScale)
             .SetViewportSize(_viewportWidth, _viewportHeight)
             .ToConstraintSpace();
         var result = new BlockLayoutAlgorithm(root, space).Layout();

@@ -1,4 +1,4 @@
-using UpBrowser.Core.Dom;
+﻿using UpBrowser.Core.Dom;
 
 namespace UpBrowser.Core.Css;
 
@@ -33,7 +33,7 @@ public static class PseudoStyleMerger
                     style.FontWeight = Css.Resolver.CssPropertyApplier.ParseFontWeight(value);
                     continue;
                 case "font-style":
-                    style.FontStyle = Css.Resolver.CssPropertyApplier.ParseFontStyle(value);
+                    style.FontStyle = Css.Resolver.CssPropertyApplier.ParseFontStyle(value, style);
                     continue;
                 case "line-height":
                     UpBrowser.Core.Fonts.LineBoxMetrics.ApplyLineHeight(style, value);

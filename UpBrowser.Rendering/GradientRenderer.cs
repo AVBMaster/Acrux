@@ -5,6 +5,25 @@ namespace UpBrowser.Rendering;
 
 public static class GradientRenderer
 {
+    /// <summary>
+    /// Rasterize an image value (gradient) into a bitmap of |area|. Generated images
+    /// have no intrinsic size, so the target box defines their natural dimensions.
+    /// </summary>
+    public static SKImage? RasterizeToImage(string value, SKRect area)
+    {
+        float width = MathF.Max(1, MathF.Round(area.Width));
+        float height = MathF.Max(1, MathF.Round(area.Height));
+        var shader = CreateGradient(value, new SKRect(0, 0, width, height));
+        if (shader == null) return null;
+        var info = new SKImageInfo((int)width, (int)height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var surface = SKSurface.Create(info);
+        if (surface == null) return null;
+        using var paint = new SKPaint { Shader = shader };
+        surface.Canvas.Clear(SKColors.Transparent);
+        surface.Canvas.DrawRect(0, 0, width, height, paint);
+        return surface.Snapshot();
+    }
+
     public static SKShader? CreateGradient(string gradientString, SKRect rect)
     {
         if (string.IsNullOrEmpty(gradientString)) return null;
@@ -30,8 +49,13 @@ public static class GradientRenderer
             float angle = 180f;
             var parts = SplitGradientParts(inner);
 
-            if (parts.Count > 0 && TryParseAngle(parts[0], out angle))
+            // A failed parse must not clobber the default: TryParseAngle assigns 0 to its
+            // out parameter, which would silently flip 'linear-gradient(red, blue)'.
+            if (parts.Count > 0 && TryParseAngle(parts[0], out var directionAngle))
+            {
+                angle = directionAngle;
                 parts.RemoveAt(0);
+            }
 
             var stops = ParseColorStops(parts);
             if (stops.Count == 0) return null;
@@ -318,7 +342,13 @@ public static class GradientRenderer
         float rad = (angle - 90) * MathF.PI / 180f;
         float cx = rect.MidX, cy = rect.MidY;
         float halfW = rect.Width / 2f, halfH = rect.Height / 2f;
-        float length = MathF.Sqrt(halfW * halfW + halfH * halfH);
+
+        // CSS Images 3 2.2: the gradient line has to be long enough that the two corners
+        // perpendicular to it are covered by 0% and 100%, i.e. half its length is
+        // |W*sin(a)|/2 + |H*cos(a)|/2 measured from the centre. Using the diagonal here
+        // compresses every gradient whose box is not square.
+        float theta = angle * MathF.PI / 180f;
+        float length = (MathF.Abs(rect.Width * MathF.Sin(theta)) + MathF.Abs(rect.Height * MathF.Cos(theta))) / 2f;
 
         float dx = MathF.Cos(rad) * length;
         float dy = MathF.Sin(rad) * length;

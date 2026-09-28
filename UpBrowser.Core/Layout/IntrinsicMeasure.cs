@@ -20,7 +20,19 @@ public static class IntrinsicMeasure
             availableBlockSize: float.PositiveInfinity,
             isFixedInlineSize: true,
             isFixedBlockSize: false);
-        var result = BlockLayoutAlgorithm.LayoutAtomicInlineRoot(element, space);
+        // Same rule as the block path: 'break-word' must not break during
+        // min-content measurement (CSS Text 3 §4.3).
+        bool previousProbe = InlineLayoutAlgorithm.InMinContentProbe;
+        InlineLayoutAlgorithm.SetMinContentProbe(true);
+        LayoutResult result;
+        try
+        {
+            result = BlockLayoutAlgorithm.LayoutAtomicInlineRoot(element, space);
+        }
+        finally
+        {
+            InlineLayoutAlgorithm.SetMinContentProbe(previousProbe);
+        }
         var fragment = result.Fragment;
         if (fragment == null)
             return 0;

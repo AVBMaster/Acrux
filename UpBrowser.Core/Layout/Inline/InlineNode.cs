@@ -48,13 +48,7 @@ public class InlineNode
         builder.CollectInlines(maxItems);
     }
 
-    public bool IsBidiEnabled()
-    {
-        // Conservative: bidi is considered enabled when the text has any strong
-        // RTL characters; BaseDirection is recomputed per line when
-        // 'unicode-bidi: plaintext' (unsupported here, so block direction).
-        return ItemsData.IsBidiEnabled;
-    }
+    public bool IsBidiEnabled() => ItemsData.IsBidiEnabled;
 
     public bool IsScoreLineBreakDisabled() => true;
 
@@ -92,18 +86,22 @@ public class InlineNode
 
     public bool IsInlineFormattingContextRoot() => true;
 
-    /// <summary>Compute base direction and bidi flag from collected text (P2/P3).</summary>
+    /// <summary>Compute base direction and bidi flag (CSS 2.1 §8.2, UAX#9 P2/P3).</summary>
     public void ComputeBidiFlags()
     {
         bool hasStrongRtl = false;
-        bool hasStrongLtr = false;
         foreach (char c in ItemsData.TextContent)
         {
-            if (BidiParagraph.IsStrongRtl(c)) hasStrongRtl = true;
-            else if (BidiParagraph.IsStrongLtr(c)) hasStrongLtr = true;
-            if (hasStrongRtl && hasStrongLtr) break;
+            if (BidiParagraph.IsStrongRtl(c)) { hasStrongRtl = true; break; }
         }
-        ItemsData.IsBidiEnabled = hasStrongRtl;
-        ItemsData.BaseDirection = hasStrongRtl && !hasStrongLtr ? TextDirection.Rtl : TextDirection.Ltr;
+        // The paragraph base direction comes from the computed 'direction',
+        // not from a content heuristic.
+        ItemsData.BaseDirection = string.Equals(Style.Direction, "rtl", StringComparison.OrdinalIgnoreCase)
+            ? TextDirection.Rtl
+            : TextDirection.Ltr;
+        // Reordering matters when content fights the base (strong RTL inside
+        // an LTR paragraph) and in every RTL paragraph, where even pure LTR
+        // runs sit at level 2 and RTL text needs the whole-line reversal.
+        ItemsData.IsBidiEnabled = hasStrongRtl || ItemsData.BaseDirection == TextDirection.Rtl;
     }
 }

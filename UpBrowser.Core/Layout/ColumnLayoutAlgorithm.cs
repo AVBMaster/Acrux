@@ -1245,10 +1245,10 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
 
     private static BoxStrut ComputeMarginsFor(ComputedStyle style, float availableInlineSize, ConstraintSpace space)
     {
-        return new BoxStrut(style.MarginTop.ToPixels(style.FontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight),
-            style.MarginRight.ToPixels(style.FontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight),
-            style.MarginBottom.ToPixels(style.FontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight),
-            style.MarginLeft.ToPixels(style.FontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight));
+        // 'auto' contributes zero; the auto-margin rules distribute the leftover.
+        float M(Length l) => l is AutoLength ? 0
+            : l.ToPixels(style.FontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
+        return new BoxStrut(M(style.MarginTop), M(style.MarginRight), M(style.MarginBottom), M(style.MarginLeft));
     }
 
     private static void AdjustMarginsForFragmentation(BlockBreakToken? breakToken, ref BoxStrut margins)

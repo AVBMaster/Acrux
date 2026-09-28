@@ -13,8 +13,10 @@ public static class FloatsUtils
     {
         var style = node.ComputedStyle;
         if (style == null) return 0;
-        return style.MarginLeft.ToPixels(style.FontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight)
-            + style.MarginRight.ToPixels(style.FontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
+        // Auto margins resolve to zero while the float's margin box is being measured.
+        static float Margin(Length l, float font, ConstraintSpace sp) => l is AutoLength ? 0
+            : l.ToPixels(font, sp.RootFontSize, sp.ViewportWidth, sp.ViewportHeight);
+        return Margin(style.MarginLeft, style.FontSize, space) + Margin(style.MarginRight, style.FontSize, space);
     }
 
     public static PositionedFloat PositionFloat(float origin_inline_offset, UnpositionedFloat unpositioned_float)

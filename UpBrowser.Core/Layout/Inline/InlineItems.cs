@@ -239,14 +239,35 @@ public class InlineItemsData
             Console.WriteLine($"[InlineItems] {message}");
     }
 
-    /// <summary>Mirrors InlineItemsData::GetOpenTagItems().</summary>
+    /// <summary>
+    /// The open-tag items in <c>[startItemIndex, startItemIndex + itemCount)</c>
+    /// that are still open at the end of that range, i.e. the inline boxes a line
+    /// starting there continues. Mirrors InlineItemsData::GetOpenTagItems().
+    /// </summary>
     public List<InlineItem> GetOpenTagItems(int startItemIndex, int itemCount, List<InlineItem> openItems)
     {
         openItems.Clear();
         for (int i = Math.Max(0, startItemIndex); i < Math.Min(Items.Count, startItemIndex + itemCount); i++)
         {
-            if (Items[i].Type == InlineItem.InlineItemType.OpenTag)
-                openItems.Add(Items[i]);
+            var item = Items[i];
+            switch (item.Type)
+            {
+                case InlineItem.InlineItemType.OpenTag:
+                    openItems.Add(item);
+                    break;
+                case InlineItem.InlineItemType.CloseTag:
+                    // Generated content does not always pair an open tag with a close
+                    // tag, so search for the matching one.
+                    for (int j = openItems.Count - 1; j >= 0; j--)
+                    {
+                        if (ReferenceEquals(openItems[j].Element, item.Element))
+                        {
+                            openItems.RemoveAt(j);
+                            break;
+                        }
+                    }
+                    break;
+            }
         }
         return openItems;
     }

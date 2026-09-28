@@ -1,4 +1,4 @@
-using UpBrowser.Core.Css.ElementStyles;
+﻿using UpBrowser.Core.Css.ElementStyles;
 using UpBrowser.Core.Css.Matcher;
 using UpBrowser.Core.Css.Properties;
 using UpBrowser.Core.Css.Resolver;
@@ -588,7 +588,7 @@ public class StyleResolver
         "margin" or "padding" or "border-width" or "border-style" or "border-color" or "border-radius" or
         "border-top" or "border-right" or "border-bottom" or "border-left" or "border" or "margin-block" or
         "margin-inline" or "padding-block" or "padding-inline" or "inset" or "gap" or "background" or
-        "font" or "flex" or "flex-flow" or "outline" or "text-decoration" or "text-emphasis" or "columns" or
+        "font" or "font-variant" or "flex" or "flex-flow" or "outline" or "text-decoration" or "text-emphasis" or "columns" or
         "column-rule" or "animation" or "transition" or "grid-area" or "grid-column" or "grid-row" or "mask" => true,
         _ => false
     };
@@ -685,10 +685,15 @@ public class StyleResolver
 
         if (props.PropertyCount > 0)
         {
+            // CSS Cascading 4 6.4: a style attribute is a separate cascade origin that
+            // beats every normal declaration, so it must win on specificity rather than
+            // source order (otherwise any class selector would override it). It still
+            // loses to '!important' author declarations, which Compare() decides earlier.
             state.MatchedRules.Add(new MatchedRuleEntry
             {
                 Properties = ExpandShorthands(props),
-                Priority = new CascadePriority(CascadeOrigin.Author, 0, int.MaxValue, 0, false)
+                Priority = new CascadePriority(CascadeOrigin.Author, 0, int.MaxValue, 0, false,
+                    specificityA: int.MaxValue, specificityB: int.MaxValue, specificityC: int.MaxValue)
             });
         }
     }
@@ -721,10 +726,12 @@ public class StyleResolver
         style.EmptyCells = parent.EmptyCells;
         style.BorderCollapse = parent.BorderCollapse;
         style.BorderSpacing = parent.BorderSpacing;
+        style.BorderRowSpacing = parent.BorderRowSpacing;
         style.LetterSpacing = parent.LetterSpacing;
         style.WordSpacing = parent.WordSpacing;
         style.TextIndent = parent.TextIndent;
         style.TextIndentHanging = parent.TextIndentHanging;
+        style.TextIndentEachLine = parent.TextIndentEachLine;
         style.TextIndentPercent = parent.TextIndentPercent;
         style.Cursor = parent.Cursor;
         style.ListStyleType = parent.ListStyleType;
@@ -733,6 +740,7 @@ public class StyleResolver
         style.WordBreak = parent.WordBreak;
         style.OverflowWrap = parent.OverflowWrap;
         style.FontVariant = parent.FontVariant;
+        style.FontVariantCaps = parent.FontVariantCaps;
         style.FontKerning = parent.FontKerning;
         style.FontStretch = parent.FontStretch;
         // 'quotes' is inherited so descendants' open-quote/close-quote resolve
@@ -749,7 +757,7 @@ public class StyleResolver
         DumpColorIfDiff(CssPropertyId.Color, source.Color, def.Color, target);
         DumpFloatIfDiff(CssPropertyId.FontSize, source.FontSize, def.FontSize, target);
         if (source.FontWeight != def.FontWeight)
-            target.SetProperty(CssPropertyId.FontWeight, CssIdentifierValue.Create(source.FontWeight == Dom.FontWeight.Bold ? CssValueId.Bold : CssValueId.Normal));
+            target.SetProperty(CssPropertyId.FontWeight, new CssStringValue(((int)source.FontWeight).ToString(System.Globalization.CultureInfo.InvariantCulture)));
         if (source.FontFamily != def.FontFamily)
             target.SetProperty(CssPropertyId.FontFamily, new CssStringValue(source.FontFamily));
         if (source.FontStyle != def.FontStyle)

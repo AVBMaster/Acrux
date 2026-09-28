@@ -66,6 +66,9 @@ public static class LengthUtils
         // path above uses (ToPixels maps the reference onto '%' conversion).
         if (length is MathLength mathLen && mathLen.Expression.Contains('%') && !IsIndefinite(percentageBase))
         {
+            // The reference handed to the expression is the percentage base, so the
+            // font-relative units inside it must come from the element's own style.
+            using var _fontScope = FontUnitContext.Use(style);
             float mvalue = mathLen.ToPixels(percentageBase, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
             if (!float.IsNaN(mvalue) && !float.IsInfinity(mvalue))
             {
@@ -124,6 +127,7 @@ public static class LengthUtils
         // with the real root-font-size & viewport carried by the constraint space.
         if (length is MathLength mathLenB && mathLenB.Expression.Contains('%') && !IsIndefinite(percentageBase))
         {
+            using var _fontScope = FontUnitContext.Use(style);
             float mvalue = mathLenB.ToPixels(percentageBase, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
             if (!float.IsNaN(mvalue) && !float.IsInfinity(mvalue))
             {
@@ -155,7 +159,9 @@ public static class LengthUtils
         if (length is AutoLength or PercentLength)
             return null;
 
-        float value = length.ToPixels(style.FontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
+        float value;
+        using (FontUnitContext.Use(style))
+            value = length.ToPixels(style.FontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
         if (float.IsNaN(value) || float.IsInfinity(value))
             return null;
 
@@ -216,7 +222,8 @@ public static class LengthUtils
     {
         float min = ResolveMinBlockLength(space, style, borderPadding, blockSizeFunc, style.MinHeight, autoMinLength, overrideAvailableSize);
         float max = ResolveMaxBlockLength(space, style, borderPadding, style.MaxHeight, blockSizeFunc, overrideAvailableSize);
-        return (min, max);
+        // See ComputeMinMaxInlineSizes: min-height > max-height ignores the max.
+        return (min, Math.Max(min, max));
     }
 
     public static float ComputeBlockSizeForFragment(ConstraintSpace space, ComputedStyle style, BoxStrut borderPadding,
@@ -244,6 +251,7 @@ public static class LengthUtils
     public static BoxStrut ComputePadding(ConstraintSpace space, ComputedStyle style)
     {
         float fontSize = style.FontSize;
+        using var _scope = FontUnitContext.Use(style);
         return new BoxStrut(
             ResolveInsetLength(style.PaddingTop, fontSize, space),
             ResolveInsetLength(style.PaddingRight, fontSize, space),
@@ -254,6 +262,7 @@ public static class LengthUtils
     public static BoxStrut ComputeMargins(ConstraintSpace space, ComputedStyle style)
     {
         float fontSize = style.FontSize;
+        using var _scope = FontUnitContext.Use(style);
         return new BoxStrut(
             ResolveInsetLength(style.MarginTop, fontSize, space),
             ResolveInsetLength(style.MarginRight, fontSize, space),
@@ -267,10 +276,22 @@ public static class LengthUtils
     /// </summary>
     private static float ResolveInsetLength(Length length, float fontSize, ConstraintSpace space)
     {
+        // 'auto' is not a length: it contributes zero while the side is being
+        // resolved, and the leftover space is handed back later by the
+        // auto-margin rules (CSS 2.1 §10.3.3).
+        if (length is AutoLength)
+            return 0;
         if (length is PercentLength pct)
         {
             float baseInline = float.IsNaN(space.PercentageResolutionInlineSize) ? 0 : space.PercentageResolutionInlineSize;
             return pct.Value * baseInline;
+        }
+        // Math expressions re-enter the evaluator here, and font-relative units
+        // inside them need the element's style as the ambient context.
+        if (FontUnitContext.Current is { } style)
+        {
+            using var _scope = FontUnitContext.Use(style);
+            return length.ToPixels(fontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
         }
         return length.ToPixels(fontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
     }
@@ -280,7 +301,10 @@ public static class LengthUtils
     {
         float min = ResolveMinInlineLength(space, style, borderPadding, minMaxSizesFunc, style.MinWidth, autoMinLength, overrideAvailableSize);
         float max = ResolveMaxInlineLength(space, style, borderPadding, minMaxSizesFunc, style.MaxWidth, overrideAvailableSize);
-        return (min, max);
+        // CSS 2.1 §10.4: when min-width > max-width the max is ignored, so the
+        // pair must stay ordered — otherwise downstream clamps (Math.Clamp with
+        // min > max) throw and the box silently disappears.
+        return (min, Math.Max(min, max));
     }
 
     /// <summary>Compute the concrete size for a replaced element given its intrinsic info and the available space.</summary>
@@ -320,6 +344,10 @@ public static class LengthUtils
             ? Math.Max(0, availableBlock * maxPctH.Value - borderPadding.VerticalSum)
             : ResolveMaxBlockLength(space, style, borderPadding, style.MaxHeight, _ => h);
 
+        // CSS 2.1 §10.4/§10.6.5: min wins when it exceeds max; keep the pair
+        // ordered so Math.Clamp below cannot throw.
+        maxW = Math.Max(maxW, minW);
+        maxH = Math.Max(maxH, minH);
         w = Math.Clamp(w, minW, maxW);
         h = Math.Clamp(h, minH, maxH);
         return new PhysicalSize(w, h);

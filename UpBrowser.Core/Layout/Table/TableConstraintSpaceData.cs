@@ -23,6 +23,9 @@ public class TableConstraintSpaceData
     public float table_inline_size_before_collapse;
     public float table_block_size = TableTypes.kIndefiniteSize;
     public float table_border_spacing;
+    /// <summary>Row (block-axis) border-spacing; differs from the column spacing only
+    /// for the two-value 'border-spacing' syntax.</summary>
+    public float table_border_row_spacing;
     public List<TableTypes.RowspanCell> rowspan_cells = new();
     public List<TableTypes.Section> sections = new();
     public List<TableTypes.Row> rows = new();

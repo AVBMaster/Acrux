@@ -1277,11 +1277,13 @@ public static class TableLayoutUtils
     // ==========================================================================
 
     /// <summary>Creates the constraint space for laying out a table cell.
-    /// Mirrors SetupTableCellConstraintSpaceBuilder.</summary>
-    public static ConstraintSpace SetupTableCellConstraintSpaceBuilder(Element cell, BoxStrut cellBorders,
+    /// Mirrors SetupTableCellConstraintSpaceBuilder. 'cellCollapsedBorders' is the
+    /// half of each shared grid line that belongs to this cell; the cell's box is
+    /// built from it instead of its own border-widths (CSS 2.1 §17.6.2).</summary>
+    public static ConstraintSpace SetupTableCellConstraintSpaceBuilder(Element cell, BoxStrut cellBorderPadding,
         List<TableColumnLocation> columnLocations, float cellBlockSize, float percentageInlineSize, int startColumn,
         bool isInitialBlockSizeIndefinite, bool isTableBlockSizeSpecified, bool hasCollapsedBorders,
-        ConstraintSpace? space = null)
+        ConstraintSpace? space = null, BoxStrut? cellCollapsedBorders = null)
     {
         if (columnLocations.Count == 0)
         {
@@ -1289,6 +1291,7 @@ public static class TableLayoutUtils
                          ?? ConstraintSpace.Builder(0, TableTypes.IsIndefinite(cellBlockSize) ? float.NaN : cellBlockSize));
             empty.SetIsNewFormattingContext(true);
             empty.SetIsTableCell(true);
+            empty.SetCollapsedCellBorders(cellCollapsedBorders);
             if (!TableTypes.IsIndefinite(cellBlockSize))
                 empty.SetIsFixedBlockSize(true);
             return empty.ToConstraintSpace();
@@ -1304,6 +1307,7 @@ public static class TableLayoutUtils
         builder.SetIsFixedInlineSize(true);
         builder.SetIsNewFormattingContext(true);
         builder.SetIsTableCell(true);
+        builder.SetCollapsedCellBorders(cellCollapsedBorders);
         if (!TableTypes.IsIndefinite(cellBlockSize))
             builder.SetIsFixedBlockSize(true);
         // Percentage resolution inline size comes from the table grid; block sizes
@@ -1364,7 +1368,8 @@ public static class TableLayoutUtils
 
             var cellSpace = SetupTableCellConstraintSpaceBuilder(cell, cellBorderPadding, columnLocations,
                 TableTypes.kIndefiniteSize, cellPercentageInlineSize, currentColumn,
-                /* isInitialBlockSizeIndefinite */ true, isTableBlockSizeSpecified, hasCollapsedBorders);
+                /* isInitialBlockSizeIndefinite */ true, isTableBlockSizeSpecified, hasCollapsedBorders,
+                cellCollapsedBorders: collapsedEdge);
 
             var layoutResult = new BlockLayoutAlgorithm(cell, cellSpace).Layout();
             float fragmentBlockSize = K(layoutResult.Fragment.BlockSize);

@@ -5,53 +5,12 @@ using System.IO.Pipes;
 namespace UpBrowser.Process;
 
 /// <summary>
-/// Wire messages between the browser (parent) and a tab-host child process.
-/// Framing: [int32 payloadLength][byte msgType][payload]. Strings are UTF-8
-/// with an int32 length prefix; frame pixels ride in the payload of Frame.
-/// Transport is a duplex named pipe — System.IO.Pipes maps this to AF_UNIX
+/// Duplex transport for the shell &lt;-&gt; page-host control channel. Framing is
+/// [int32 payloadLength][byte msgType][payload]; strings are UTF-8 with an int32
+/// length prefix. Transport is a named pipe — System.IO.Pipes maps this to AF_UNIX
 /// sockets on Linux/macOS and \\.\pipe on Windows, so it is cross-platform.
+/// Message ids and payload layouts live in <see cref="UpBrowser.PageContract.TabMsg"/>.
 /// </summary>
-internal enum TabMsg : byte
-{
-    // Parent → child
-    Navigate = 1,       // [string url]
-    NavigateHtml = 2,   // [string html][string baseUrl]
-    MouseDown = 3,      // [float x][float y]
-    MouseUp = 4,        // [float x][float y]
-    MouseMove = 5,      // [float x][float y]
-    Wheel = 6,          // [float dx][float dy][float x][float y]
-    Resize = 7,         // [float w][float h]
-    SetActive = 8,      // [byte active]
-    Close = 9,          // []
-    ScrollTo = 10,      // [float x][float y]
-    KeyDown = 11,       // [uint16 charCode][uint16 key][byte repeat]
-    Char = 12,          // [uint16 charCode]
-
-    // Child → parent
-    Ready = 20,         // []
-    Frame = 21,         // [int w][int h][float scrollX][float scrollY][float contentW][float contentH]
-                        // [int domCount][int boxCount][byte mode][int x][int y][int rw][int rh][int pixelLen][pixels BGRA8888]
-    Title = 22,         // [string]
-    UrlChanged = 23,    // [string]
-    Loading = 24,       // [byte loading]
-    Dialog = 25,        // [string message][string type]
-    Dead = 26,          // [string reason]
-    ScrollChanged = 27, // [float x][float y] — child-initiated scroll (scrollTo/anchor/scrollIntoView)
-    WheelResult = 28,   // [byte consumed] — reply to Wheel: element scroller ate it or not
-}
-
-/// <summary>Frame payload modes (byte at the mode field of TabMsg.Frame).</summary>
-internal enum FrameMode : byte
-{
-    /// <summary>Full viewport pixels in [0..w)×[0..h).</summary>
-    Full = 0,
-    /// <summary>Row band [y..y+rh) × full width — pixel-diffed damage.</summary>
-    DamageRows = 1,
-    /// <summary>Scroll-only frame: parent shifts its cached bitmap by the delta
-    /// between the new and previous frame scroll, then overlays rows [y..y+rh).</summary>
-    ScrollBlit = 2,
-}
-
 internal readonly struct TabMessage
 {
     public TabMsg Type { get; }

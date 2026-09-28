@@ -123,11 +123,13 @@ public static class RenderSnapshot
         }
 
         // The shell always re-runs layout after loading (BuildDisplayListImpl),
-        // so boxes reflect any script-driven DOM changes. A fresh engine with
-        // default parameters mirrors that non-incremental pass exactly.
+        // so boxes reflect any script-driven DOM changes. A fresh engine mirrors
+        // that non-incremental pass, including the device scale the raster canvas
+        // is drawn at — line-box rounding happens on the device grid, so leaving
+        // the scale out would lay the page out for a different display.
         try
         {
-            new LayoutEngine().Layout(load.Document, width, height);
+            new LayoutEngine().Layout(load.Document, width, height, dpiScale);
         }
         catch (Exception ex)
         {

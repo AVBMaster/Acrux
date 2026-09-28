@@ -32,10 +32,10 @@ internal static class ScrollStressTest
         remote.OnFrameArrived += () =>
         {
             view.UpdateFromFrame();
-            if (remote.TryGetFrame(out _, out _, out int pixLen, out _, out _,
-                    out _, out _, out _, out _, out _, out _, out var mode, out _, out _, out _))
+            if (remote.TryGetFrame(out var mode, out _, out _, out _, out _,
+                    out _, out _, out _, out _, out long damageBytes, out _))
             {
-                totalFrames++; pixBytes += pixLen;
+                totalFrames++; pixBytes += damageBytes;
                 switch (mode)
                 {
                     case FrameMode.Full: full++; break;

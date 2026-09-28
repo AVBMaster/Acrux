@@ -10,4 +10,6 @@
   <Project Path="UpBrowser\UpBrowser.csproj" />
   <Project Path="UpBrowser.JsEngineProtocol\UpBrowser.JsEngineProtocol.csproj" />
   <Project Path="UpBrowser.JsEngineHost\UpBrowser.JsEngineHost.csproj" />
+  <Project Path="UpBrowser.PageContract/UpBrowser.PageContract.csproj" />
+  <Project Path="UpBrowser.PageHost/UpBrowser.PageHost.csproj" />
 </Solution>

@@ -183,16 +183,32 @@ public class LineTruncator
             }
         }
 
-        // Place ellipsis at the end of the truncated line.
+        // Place ellipsis at the truncated end of the line. The items in
+        // |lineBox| are already in visual order (bidi reorder ran in CreateLine),
+        // so for an RTL paragraph the ellipsis goes to the visual left edge —
+        // that is where the clipped overflow was (CSS Overflow 3 §4.5).
+        bool rtlVisual = _lineInfo.BaseDirection() == TextDirection.Rtl;
         var ellipsisItem = new LogicalLineItem
         {
             TextContent = _ellipsisText,
             InlineSize = ellipsis,
-            Rect = new LogicalRect(width, 0, ellipsis, 16),
+            Rect = new LogicalRect(rtlVisual ? 0 : width, 0, ellipsis, 16),
             HasBidiLevel = true,
             InlineItem = ellipsisInlineItem,
         };
-        lineBox.AddChild(ellipsisItem);
+        if (rtlVisual)
+        {
+            for (int i = 0; i < lineBox.Count; i++)
+            {
+                var it = lineBox[i];
+                it.Rect = new LogicalRect(it.Rect.InlineStart + ellipsis, it.Rect.BlockStart, it.Rect.InlineSize, it.Rect.BlockSize);
+            }
+            lineBox.InsertChild(0, ellipsisItem);
+        }
+        else
+        {
+            lineBox.AddChild(ellipsisItem);
+        }
 
         return width + ellipsis;
     }

@@ -608,7 +608,7 @@ public class CascadeResolver
         var def = new ComputedStyle();
         if (style.Display != def.Display) props["display"] = style.Display.ToCssString();
         if (style.FontSize != def.FontSize) props["font-size"] = $"{style.FontSize}px";
-        if (style.FontWeight != def.FontWeight) props["font-weight"] = style.FontWeight == FontWeight.Bold ? "700" : "400";
+        if (style.FontWeight != def.FontWeight) props["font-weight"] = ((int)style.FontWeight).ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (style.FontStyle != def.FontStyle) props["font-style"] = style.FontStyle == FontStyleType.Italic ? "italic" : "normal";
         if (style.FontFamily != def.FontFamily) props["font-family"] = style.FontFamily;
         if (style.LineHeight != def.LineHeight) props["line-height"] = style.LineHeight.ToString("0.000");
@@ -627,13 +627,22 @@ public class CascadeResolver
         if (style.BorderCollapse != def.BorderCollapse) props["border-collapse"] = style.BorderCollapse ? "collapse" : "separate";
         if (style.BackgroundImage is { Count: > 0 }) props["background-image"] = string.Join(", ", style.BackgroundImage);
         if (style.TextAlign != def.TextAlign) props["text-align"] = style.TextAlign.ToString().ToLowerInvariant();
-        if (style.TextDecoration != def.TextDecoration) props["text-decoration"] = style.TextDecoration switch
-            {
-                TextDecorationType.LineThrough => "line-through",
-                TextDecorationType.Underline => "underline",
-                TextDecorationType.Overline => "overline",
-                _ => "none"
-            };
+        if (style.TextDecorationLine != TextDecorationLineType.None || def.TextDecorationLine != TextDecorationLineType.None)
+        {
+            // 'text-decoration-line' is a list, so the flags are written back out in
+            // their canonical order.
+            var lines = new List<string>();
+            if (style.TextDecorationLine.HasUnderline()) lines.Add("underline");
+            if (style.TextDecorationLine.HasOverline()) lines.Add("overline");
+            if (style.TextDecorationLine.HasLineThrough()) lines.Add("line-through");
+            props["text-decoration"] = lines.Count > 0 ? string.Join(' ', lines) : "none";
+            if (style.TextDecorationStyle != def.TextDecorationStyle)
+                props["text-decoration-style"] = style.TextDecorationStyle.ToString().ToLowerInvariant();
+            if (!float.IsNaN(style.TextDecorationThickness))
+                props["text-decoration-thickness"] = style.TextDecorationThickness + "px";
+            if (!style.TextUnderlineOffsetIsAuto)
+                props["text-underline-offset"] = style.TextUnderlineOffset + "px";
+        }
         if (style.VerticalAlign != def.VerticalAlign) props["vertical-align"] = style.VerticalAlign.ToString().ToLowerInvariant();
         if (style.Overflow != def.Overflow) props["overflow"] = style.Overflow.ToString().ToLowerInvariant();
         if (style.Position != def.Position) props["position"] = style.Position.ToString().ToLowerInvariant();
@@ -667,7 +676,9 @@ public class CascadeResolver
         if (style.BorderBottomLeftRadius != def.BorderBottomLeftRadius) props["border-bottom-left-radius"] = $"{style.BorderBottomLeftRadius}px";
         if (style.BorderBottomRightRadius != def.BorderBottomRightRadius) props["border-bottom-right-radius"] = $"{style.BorderBottomRightRadius}px";
 
-        if (style.BorderSpacing != def.BorderSpacing) props["border-spacing"] = $"{style.BorderSpacing}px";
+        if (style.BorderRowSpacing is { } rowSpacing && rowSpacing != style.BorderSpacing)
+            props["border-spacing"] = $"{style.BorderSpacing}px {rowSpacing}px";
+        else if (style.BorderSpacing != def.BorderSpacing) props["border-spacing"] = $"{style.BorderSpacing}px";
 
         if (style.Visibility != def.Visibility) props["visibility"] = style.Visibility.ToString().ToLowerInvariant();
         if (style.ZIndex != def.ZIndex) props["z-index"] = style.ZIndex?.ToString() ?? "auto";
@@ -784,7 +795,7 @@ public class CascadeResolver
         {
             var v = CssFunctionEvaluator.Evaluate(fontStyleVal, element, style.FontSize, RootFontSize(), _viewportWidth, _viewportHeight);
             if (!TryApplyCssWideKeyword(style, "font-style", v, parentStyle))
-                style.FontStyle = ParseFontStyle(v);
+                style.FontStyle = ParseFontStyle(v, style);
         }
 
         if (_cascadeMap.TryGetValue("font-family", out var fontFamilyVal))
@@ -848,6 +859,9 @@ public class CascadeResolver
     private void ApplyMatchResult(ComputedStyle style, Element element, ComputedStyle? parentStyle)
     {
         // Apply regular properties, resolving var() references.
+        // The element's own style is the context for font-relative units
+        // (ch/ex/cap/lh) inside calc()/min()/max() during evaluation.
+        using var _fontUnitScope = FontUnitContext.Use(style);
         foreach (var (name, value) in _cascadeMap.GetAll())
         {
             if (name.StartsWith("--")) continue;
@@ -951,14 +965,18 @@ public class CascadeResolver
         child.TextJustify = parent.TextJustify;
         child.TextRendering = parent.TextRendering;
         child.TextShadow = new List<TextShadowValue>(parent.TextShadow);
-        child.TextDecorationLine = parent.TextDecorationLine;
-        child.TextDecorationStyle = parent.TextDecorationStyle;
-        child.TextDecorationColor = parent.TextDecorationColor;
+        // 'text-decoration-*' is NOT inherited (CSS Text Decoration 4 §5.1): a
+        // decoration on an ancestor still reaches its text, but by propagation at
+        // paint time, where every originating box keeps its own line list, style,
+        // color and metrics. Inheriting it here would merge nested decorations
+        // into a single line and let an inner 'text-decoration: none' erase the
+        // outer one.
         child.TextEmphasis = parent.TextEmphasis;
         child.TextEmphasisColor = parent.TextEmphasisColor;
         child.TextEmphasisStyle = parent.TextEmphasisStyle;
         child.TextEmphasisPosition = parent.TextEmphasisPosition;
         child.FontVariant = parent.FontVariant;
+        child.FontVariantCaps = parent.FontVariantCaps;
         child.FontKerning = parent.FontKerning;
         child.FontStretch = parent.FontStretch;
         child.FontSynthesis = parent.FontSynthesis;
@@ -977,6 +995,7 @@ public class CascadeResolver
         child.TabSize = parent.TabSize;
         child.TabSizePx = parent.TabSizePx;
         child.BorderSpacing = parent.BorderSpacing;
+        child.BorderRowSpacing = parent.BorderRowSpacing;
         child.RubyPosition = parent.RubyPosition;
         child.PointerEvents = parent.PointerEvents;
         child.UserSelect = parent.UserSelect;
@@ -1024,7 +1043,12 @@ public class CascadeResolver
         dest.TextDecorationStyle = src.TextDecorationStyle;
         dest.TextDecorationColor = src.TextDecorationColor;
         dest.TextDecorationThickness = src.TextDecorationThickness;
+        dest.TextDecorationThicknessFromFont = src.TextDecorationThicknessFromFont;
         dest.TextUnderlineOffset = src.TextUnderlineOffset;
+        dest.TextUnderlineOffsetIsAuto = src.TextUnderlineOffsetIsAuto;
+        dest.TextUnderlinePosition = src.TextUnderlinePosition;
+        dest.TextDecorationSkipInk = src.TextDecorationSkipInk;
+        dest.BoxDecorationBreak = src.BoxDecorationBreak;
         dest.VerticalAlign = src.VerticalAlign;
         dest.WhiteSpace = src.WhiteSpace;
         dest.WordBreak = src.WordBreak;
@@ -1055,6 +1079,7 @@ public class CascadeResolver
         dest.BorderBottomLeftRadius = src.BorderBottomLeftRadius;
         dest.BorderCollapse = src.BorderCollapse;
         dest.BorderSpacing = src.BorderSpacing;
+        dest.BorderRowSpacing = src.BorderRowSpacing;
         dest.BoxSizing = src.BoxSizing;
         dest.Opacity = src.Opacity;
         dest.BoxShadow = src.BoxShadow;
@@ -1143,6 +1168,7 @@ public class CascadeResolver
         dest.Resize = src.Resize;
         dest.Zoom = src.Zoom;
         dest.FontVariant = src.FontVariant;
+        dest.FontVariantCaps = src.FontVariantCaps;
         dest.FontKerning = src.FontKerning;
         dest.FontStretch = src.FontStretch;
         dest.FontSynthesis = src.FontSynthesis;
@@ -1196,8 +1222,8 @@ public class CascadeResolver
         => CssPropertyApplier.ParseWritingMode(value);
     private FontWeight ParseFontWeight(string value)
         => CssPropertyApplier.ParseFontWeight(value);
-    private FontStyleType ParseFontStyle(string value)
-        => CssPropertyApplier.ParseFontStyle(value);
+    private FontStyleType ParseFontStyle(string value, ComputedStyle style)
+        => CssPropertyApplier.ParseFontStyle(value, style);
     private float ParseFontSize(string value, ComputedStyle? parentStyle)
         => CssPropertyApplier.ParseFontSize(value, parentStyle);
     private string ParseFontFamily(string value)

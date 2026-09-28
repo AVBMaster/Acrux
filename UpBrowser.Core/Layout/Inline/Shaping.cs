@@ -308,16 +308,90 @@ public static class Character
 
     public static bool IsLineFeed(char c) => c == '\n';
 
+    /// <summary>CJK ideographs, kana and full-width forms (UAX #14 classes ID/CJ/BA territory).</summary>
+    public static bool IsCJKIdeographOrSymbol(char c) =>
+        (c >= 0x2E80 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0xAC00 && c <= 0xD7AF)
+        || (c >= 0x3400 && c <= 0x4DBF) || (c >= 0x20000 && c <= 0x2A6DF)
+        || (c >= 0xFF00 && c <= 0xFF6F) || (c >= 0xFF9F && c <= 0xFFDC);
+
     /// <summary>Approximate line-break boundary used for greedy wrapping (CJK + punctuation).</summary>
     public static bool IsLineBreakBoundary(char c)
     {
-        bool cjk = (c >= 0x2E80 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0xAC00 && c <= 0xD7AF)
-            || (c >= 0x3040 && c <= 0x30FF) || (c >= 0x3400 && c <= 0x4DBF) || (c >= 0x20000 && c <= 0x2A6DF);
-        if (cjk) return true;
+        if (IsCJKIdeographOrSymbol(c)) return true;
         return c == '-' || c == '/' || c == '\\' || c == '.' || c == '_' || c == '@' || c == '#' || c == '?' || c == '!' || c == ';' || c == ':';
     }
 
-    public static bool IsCJKIdeographOrSymbol(char c) => IsLineBreakBoundary(c);
+    /// <summary>
+    /// UAX #14 LB13/LB19/LB21: a line may not start with these. The set mirrors Chrome
+    /// measurements for both CJK and Latin context: closing brackets and quotation marks,
+    /// full-width and ASCII stops/separators, iteration marks, combining marks, word
+    /// joiners and the hyphen/dashes that glue to what precedes them. Notably Chrome does
+    /// allow a line to start with ー, 〆, 〜 or small kana (ぁ).
+    /// </summary>
+    public static bool IsProhibitedLineStart(char c)
+    {
+        switch (c)
+        {
+            case '\u00A0': // NBSP
+            case '\u2060': // word joiner
+            case '\u2011': // non-breaking hyphen
+            case '\u2010': // hyphen
+            case '\u2013': // en dash
+            case '\u2019': case '\u201D': // closing quotes
+            case '\u2044': // fraction slash
+            case '\u3000': // ideographic space
+            case '\u3001': case '\u3002': case '\u3005': case '\u303B': // 、 。 々 〻
+            case '\u309D': case '\u309E': case '\u30FD': case '\u30FE': // ゝ ゞ ヽ ヾ
+            case '\u3099': case '\u309A': case '\u309B': case '\u309C': // combining/marks
+            case '\u30FB': // ・
+            case '\uFF01': case '\uFF05': case '\uFF09': case '\uFF0C': // ！ ％ ） ，
+            case '\uFF0E': case '\uFF1A': case '\uFF1B': case '\uFF1F': // ． ： ； ？
+            case '\uFF3D': case '\uFF5D': case '\uFF60': case '\uFF61': // ］ ｝ ｠ ｡
+            case '\uFF63': case '\uFF9F': // ｣ ﾟ
+            case '\u0027': case '\u0022': // ' "
+            case '-': case ';': case ':': case '!': case '?': case ',': case '.':
+            case ')': case ']': case '}': case '/': case '%':
+                return true;
+        }
+        if (c >= 0x300 && c <= 0x036F) return true; // combining diacritical marks
+        return false;
+    }
+
+    /// <summary>
+    /// UAX #14 LB16/LB21/LB25: a line may not end with these (opening brackets and
+    /// quotation marks, backslash, non-breaking separators, prefixes such as « and −).
+    /// </summary>
+    public static bool IsProhibitedLineEnd(char c)
+    {
+        switch (c)
+        {
+            case '\u00A0': case '\u2060': case '\u2011': case '\u2044':
+            case '\u00AB': case '\u00BF': // « ¿
+            case '\u2018': case '\u201C': // opening quotes
+            case '\u2212': // minus sign
+            case '\u3008': case '\u300A': case '\u300C': case '\u300E': // 〈 《 「 『
+            case '\u3010': case '\u3014': case '\uFF08': case '\uFF3B': // 【 〔 （ ［
+            case '\uFF5B': case '\uFF5F': case '\uFF62': // ｛ ｟ ｢
+            case '(': case '[': case '{': case '\\': case '\'': case '"':
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// True when a break between |previous| and |next| is allowed. Mirrors the pair rules
+    /// the single-character table cannot express.
+    /// </summary>
+    public static bool IsBreakAllowed(char previous, char next)
+    {
+        if (previous == '\u200B' || next == '\u200B') return true; // ZWSP is an explicit opportunity
+        if (IsProhibitedLineStart(next)) return false;
+        if (IsProhibitedLineEnd(previous)) return false;
+        if (previous == '\u00A0' || next == '\u00A0') return false; // nothing breaks across NBSP
+        if (previous == '\u2011' || next == '\u2011') return false;
+        if (previous == '\u2060' || next == '\u2060') return false;
+        return true;
+    }
 }
 
 public enum TextItemType
@@ -361,6 +435,14 @@ public static class WhiteSpaceStyle
         style.WhiteSpace is WhiteSpaceMode.Pre or WhiteSpaceMode.PreWrap or WhiteSpaceMode.BreakSpaces;
 
     public static bool ShouldBreakSpaces(ComputedStyle style) => style.WhiteSpace == WhiteSpaceMode.Pre;
+
+    /// <summary>
+    /// 'pre-wrap' keeps a line's trailing spaces but lets them hang past the end of
+    /// the line box, while 'break-spaces' preserves them and therefore counts them
+    /// against the available width. CSS Text 3 4.1.2.7.
+    /// </summary>
+    public static bool HangsTrailingSpaces(ComputedStyle style) =>
+        style.WhiteSpace == WhiteSpaceMode.PreWrap;
 
     public static bool ShouldWrapLine(ComputedStyle style) => style.WhiteSpace is WhiteSpaceMode.Normal or WhiteSpaceMode.PreWrap or WhiteSpaceMode.PreLine or WhiteSpaceMode.BreakSpaces;
 
@@ -418,9 +500,17 @@ public sealed class LazyLineBreakIterator
     {
         if (offset <= 0 || offset > _text.Length) return false;
         char c = _text[offset - 1];
-        if (c == '\u200B') return true; // ZWSP
         if (c == '\n') return false; // newlines are handled as forced breaks
+        char next = offset < _text.Length ? _text[offset] : '\0';
+        if (c == '\u200B' || next == '\u200B') return true; // ZWSP
         if (c == '\u00AD') return _softHyphenEnabled;
+
+        // LB13/LB16/LB19: the pair decides whether this position may break at all.
+        // Chrome keeps these restrictions under 'word-break: break-all' but
+        // 'overflow-wrap: anywhere' breaks through them.
+        if (next != '\0' && _breakType != LineBreakType.kBreakCharacter &&
+            !Character.IsBreakAllowed(c, next))
+            return false;
 
         if (IsBreakableSpaceStyle(c)) return true;
 
@@ -429,7 +519,11 @@ public sealed class LazyLineBreakIterator
             case LineBreakType.kBreakCharacter:
                 return true;
             case LineBreakType.kKeepAll:
-                return false;
+                // 'word-break: keep-all' only removes the opportunities CJK would
+                // create; Latin rules (hyphen, slash, space) still apply, so a
+                // boundary is dropped only when a CJK character touches it.
+                if (Character.IsCJKIdeographOrSymbol(c) || Character.IsCJKIdeographOrSymbol(next)) return false;
+                break;
         }
         return Character.IsLineBreakBoundary(c);
     }
@@ -439,6 +533,17 @@ public sealed class LazyLineBreakIterator
         if (_breakSpace == BreakSpaceType.kAfterEverySpace)
             return Character.IsBreakableSpace(c) || Character.IsOtherSpaceSeparator(c);
         return Character.IsBreakableSpace(c) || Character.IsOtherSpaceSeparator(c);
+    }
+
+    /// <summary>
+    /// True when the UAX #14 pair restrictions allow a break between offset-1 and offset,
+    /// independent of which characters carry an opportunity by themselves. Used by
+    /// 'word-break: break-all', where any pair is breakable except these.
+    /// </summary>
+    public bool IsPairBreakAllowed(int offset)
+    {
+        if (offset <= 0 || offset >= _text.Length) return true;
+        return Character.IsBreakAllowed(_text[offset - 1], _text[offset]);
     }
 
     /// <summary>Next break opportunity at or after |fromOffset| but before |limit|.</summary>
@@ -533,8 +638,11 @@ public static class BidiParagraph
         int maxLevel = 0;
         foreach (int l in levels) maxLevel = Math.Max(maxLevel, l);
 
-        // L2: for each odd level from max down to 1, reverse contiguous runs at or above it.
-        for (int level = maxLevel % 2 == 0 ? maxLevel - 1 : maxLevel; level >= 1; level -= 2)
+        // L2: from the highest level down to 1 (including intermediate levels
+        // not present in the text), reverse contiguous runs at or above each
+        // level. Stepping by one is required once runs carry levels above
+        // base+1, e.g. LTR words at level 2 inside an RTL paragraph.
+        for (int level = maxLevel; level >= 1; level--)
         {
             int i = 0;
             while (i < n)
@@ -653,8 +761,34 @@ public sealed class ShapingLineBreaker
 
         if (foundSpaceFit && !breakCharacter)
         {
-            // Find the last safe-to-break at or before breakAt.
-            int safe = _result.PreviousSafeToBreakOffset(breakAt);
+            // 'pre-wrap' lets a run of spaces that starts at the point of overflow
+            // hang past the end of the line box, so the word in front of them stays
+            // on this line. 'break-spaces' preserves those spaces instead and must
+            // wrap them (CSS Text 3 4.1.2.7).
+            if (breakAt < end && WhiteSpaceStyle.HangsTrailingSpaces(_style) &&
+                Character.IsBreakableSpace(_result.Text[breakAt]))
+            {
+                int afterSpaces = breakAt;
+                while (afterSpaces < end && Character.IsBreakableSpace(_result.Text[afterSpaces]))
+                    afterSpaces++;
+                result.BreakOffset = afterSpaces;
+                result.IsOverflow = false;
+                result.HasTrailingSpaces = true;
+                return ShapeResultView.Create(_result, start, afterSpaces);
+            }
+
+            // Find the last safe-to-break at or before breakAt. The shaped run only
+            // knows the character classes, so 'word-break: keep-all' and the pair rules
+            // (LB13/LB16/LB19) have to be resolved through the break iterator.
+            int safe = breakType == LineBreakType.kKeepAll
+                ? _breakIterator.PreviousBreakOpportunity(breakAt, start)
+                : _result.PreviousSafeToBreakOffset(breakAt);
+            while (safe > start && !_breakIterator.IsBreakable(safe))
+            {
+                safe = breakType == LineBreakType.kKeepAll
+                    ? _breakIterator.PreviousBreakOpportunity(safe - 1, start)
+                    : _result.PreviousSafeToBreakOffset(safe - 1);
+            }
             if (safe > start)
             {
                 result.BreakOffset = safe;
@@ -686,9 +820,17 @@ public sealed class ShapingLineBreaker
 
         if (breakCharacter)
         {
-            result.BreakOffset = Math.Max(start + 1, breakAt);
+            int at = Math.Max(start + 1, breakAt);
+            // 'word-break: break-all' splits between any two characters but Chrome still
+            // refuses a line that starts with (or ends with) restricted punctuation, so
+            // slide forward to the first allowed position.
+            if (breakType == LineBreakType.kBreakAll)
+            {
+                while (at < end && !_breakIterator.IsPairBreakAllowed(at)) at++;
+            }
+            result.BreakOffset = at;
             result.IsOverflow = false;
-            return ShapeResultView.Create(_result, start, result.BreakOffset);
+            return ShapeResultView.Create(_result, start, at);
         }
 
         result.BreakOffset = breakAt;
@@ -766,15 +908,17 @@ public sealed class HyphenResult
 /// </summary>
 public static class FontHelper
 {
-    private static readonly Dictionary<(float, string, int, int), FontHeightMetrics> Cache = new();
+    private static readonly Dictionary<(float, string, int, int, float), FontHeightMetrics> Cache = new();
 
     public static FontHeightMetrics GetFontMetrics(ComputedStyle style)
     {
-        var key = (style.FontSize, style.FontFamily, (int)style.FontWeight, (int)style.FontStyle);
+        // The strut depends on the device pixel grid, so the scale is part of the key.
+        var key = (style.FontSize, style.FontFamily, (int)style.FontWeight, (int)style.FontStyle,
+            Fonts.FontMetricsProvider.DeviceScale);
         if (Cache.TryGetValue(key, out var cached)) return cached;
 
         var metrics = Fonts.LineBoxMetrics.GetFontMetrics(style);
-        cached = new FontHeightMetrics(metrics.IntAscent, metrics.IntDescent, metrics.CapHeight);
+        cached = new FontHeightMetrics(metrics.LayoutAscent, metrics.LayoutDescent, metrics.CapHeight);
 
         if (Cache.Count > 10000) Cache.Clear();
         Cache[key] = cached;

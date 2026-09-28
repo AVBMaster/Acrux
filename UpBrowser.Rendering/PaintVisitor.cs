@@ -1,4 +1,4 @@
-using SkiaSharp;
+﻿using SkiaSharp;
 using UpBrowser.Core.Dom;
 using UpBrowser.Core.Layout;
 using UpBrowser.Core.Layout.Geometry;
@@ -745,7 +745,8 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
                 // Scroll containers reserve scrollbar space (the content box was
                 // shrunken by the bar thickness during layout), so clip contents
                 // to the content box — content must never paint underneath the
-                // scrollbar strip. Plain overflow:hidden clips at the padding box.
+                // scrollbar strip. Plain overflow:hidden clips at the padding box,
+                // and that box is rounded by border-radius (CSS Backgrounds 3 4).
                 var clipRect = isScrollContainer
                     ? new SKRect(
                         layoutBox.ContentBox.Left,
@@ -757,7 +758,33 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
                         layoutBox.PaddingBox.Top + TotalOffsetY,
                         layoutBox.PaddingBox.Right,
                         layoutBox.PaddingBox.Bottom + TotalOffsetY);
-                contentsPaintState.PushClip(clipRect);
+                bool clippedToRadius = false;
+                bool clipShapeIsRounded = false;
+                PhysicalBoxStrut clipOutsets = default;
+                {
+                    // The clip box's own corner radii: the border radii inset by whatever
+                    // lies between the border box and this box. The deltas come from the
+                    // laid-out boxes so resolved paddings are used as-is.
+                    var clipBorderRect = new SKRect(
+                        layoutBox.BorderBox.Left, layoutBox.BorderBox.Top + TotalOffsetY,
+                        layoutBox.BorderBox.Right, layoutBox.BorderBox.Bottom + TotalOffsetY);
+                    SKRect target = isScrollContainer ? layoutBox.ContentBox : layoutBox.PaddingBox;
+                    clipOutsets = new PhysicalBoxStrut(
+                        target.Top - layoutBox.BorderBox.Top,
+                        layoutBox.BorderBox.Right - target.Right,
+                        layoutBox.BorderBox.Bottom - target.Bottom,
+                        target.Left - layoutBox.BorderBox.Left);
+                    var clipShape = RoundedBorderGeometry.PixelSnappedRoundedBorderWithOutsets(
+                        style, clipBorderRect, clipOutsets);
+                    clipShapeIsRounded = clipShape.IsRounded;
+                    if (clipShape.IsRounded && !clipShape.IsEmpty)
+                    {
+                        using var clipPath = clipShape.ToPath(true);
+                        clippedToRadius = contentsPaintState.PushClipPath(clipPath);
+                    }
+                }
+                if (!clippedToRadius)
+                    contentsPaintState.PushClip(clipRect);
             }
 
             if (isScrollContainer && !_skipScrollBake)
@@ -1289,8 +1316,14 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
                 if (bgClipRect.Width <= 0) bgClipRect.Right = bgClipRect.Left;
                 if (bgClipRect.Height <= 0) bgClipRect.Bottom = bgClipRect.Top;
                 break;
-            default: // padding-box
+            case "padding-box":
                 bgClipRect = paddingRect;
+                break;
+            default:
+                // The initial value of background-clip is border-box, so the fill has to
+                // reach the outer rounded rect; clipping it to the padding box leaves
+                // white slivers between the fill and a rounded border.
+                bgClipRect = borderRect;
                 break;
         }
 
@@ -1429,7 +1462,7 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
                         var runStyle = textNode.ParentElement?.ComputedStyle;
                         if (runStyle != null && runStyle.Visibility != VisibilityType.Hidden)
                         {
-                            string text = ApplyTextTransform(run.Text, runStyle.TextTransform);
+                            string text = UpBrowser.Core.Layout.Inline.InlineItemsBuilder.ApplyTextTransform(run.Text, runStyle.TextTransform);
                             float size = run.FontSize ?? runStyle.FontSize;
                             float baselineY = (run.Baseline > 0 ? run.Baseline : line.Baseline) + TotalOffsetY;
                             AppendRunGlyphPath(ref path, text, currentX + line.TextAlignOffsetX, baselineY,
@@ -1452,7 +1485,7 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
                     var runStyle = textNode.ParentElement?.ComputedStyle;
                     if (runStyle != null && runStyle.Visibility != VisibilityType.Hidden)
                     {
-                        string text = ApplyTextTransform(run.Text, runStyle.TextTransform);
+                        string text = UpBrowser.Core.Layout.Inline.InlineItemsBuilder.ApplyTextTransform(run.Text, runStyle.TextTransform);
                         float size = run.FontSize ?? runStyle.FontSize;
                         float baselineY = run.Baseline > 0 ? run.Baseline + TotalOffsetY : fallbackBaseline;
                         AppendRunGlyphPath(ref path, text, x, baselineY, size,
@@ -1520,8 +1553,14 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
                 if (bgClipRect.Width <= 0) bgClipRect.Right = bgClipRect.Left;
                 if (bgClipRect.Height <= 0) bgClipRect.Bottom = bgClipRect.Top;
                 break;
-            default: // padding-box
+            case "padding-box":
                 bgClipRect = paddingRect;
+                break;
+            default:
+                // The initial value of background-clip is border-box, so the fill has to
+                // reach the outer rounded rect; clipping it to the padding box leaves
+                // white slivers between the fill and a rounded border.
+                bgClipRect = borderRect;
                 break;
         }
 
@@ -1577,14 +1616,9 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
         {
             if (shadow.Inset)
             {
-                float radius = Math.Max(style.BorderTopLeftRadius, Math.Max(style.BorderTopRightRadius,
-                    Math.Max(style.BorderBottomLeftRadius, style.BorderBottomRightRadius)));
                 float blur = Math.Max(1, shadow.BlurRadius);
                 using var innerPath = new SKPath();
-                if (radius > 0)
-                    innerPath.AddRoundRect(rect, radius, radius);
-                else
-                    innerPath.AddRect(rect);
+                AddCornerRadiiToPath(innerPath, rect, ResolveBackgroundCornerRadii(style, rect));
                 var clipOp = PaintOpPool.GetPushClipOp();
                 clipOp.ClipPath = new SKPath(innerPath);
                 clipOp.AntiAlias = true;
@@ -1608,12 +1642,7 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
             }
 
             var path = new SKPath();
-            float borderradius = Math.Max(style.BorderTopLeftRadius, Math.Max(style.BorderTopRightRadius,
-                Math.Max(style.BorderBottomLeftRadius, style.BorderBottomRightRadius)));
-            if (borderradius > 0)
-                path.AddRoundRect(rect, borderradius, borderradius);
-            else
-                path.AddRect(rect);
+            AddCornerRadiiToPath(path, rect, ResolveBackgroundCornerRadii(style, rect));
             var shadowOutsetOp = PaintOpPool.GetDrawShadowOp();
             shadowOutsetOp.Path.Dispose();
             shadowOutsetOp.Path = path;
@@ -1651,6 +1680,75 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
     /// <summary>'background-blend-mode' shares the blend list of 'mix-blend-mode'
     /// (CSS Backgrounds 4 §6); it only differs in what forms the backdrop: the
     /// element's own lower background layers, never the page.</summary>
+    /// <summary>
+    /// Map 'font-style' onto a text run. A plain 'oblique' asks the family for its own
+    /// slanted face; 'oblique &lt;angle&gt;' names the slant, which is synthesized by
+    /// shearing the upright glyphs - asking for the italic face as well would double
+    /// the slant (CSS Fonts 4 §3.2.2).
+    /// </summary>
+    private static void SetFontSlant(DrawTextOp op, ComputedStyle? style)
+    {
+        float? degrees = style != null && style.FontStyle == FontStyleType.Oblique
+            ? style.FontStyleObliqueDegrees
+            : null;
+        bool slanted = style?.FontStyle is FontStyleType.Italic or FontStyleType.Oblique;
+        op.Italic = degrees == null && slanted;
+        op.ObliqueSkewX = degrees is { } d ? -MathF.Tan(d * MathF.PI / 180f) : 0f;
+    }
+
+    /// <summary>
+    /// Fills the decoration fields of a text op. The style passed in is the one
+    /// of the box that originated the run's own line (its element, or that
+    /// element's ::first-line override); everything above that box reaches the
+    /// text by <i>propagation</i>, not inheritance, so the ancestors are walked
+    /// and recorded as extra layers, each keeping the originating box's own line
+    /// list, style, color and metrics (CSS Text Decoration 4 §5.1).
+    /// </summary>
+    private static void SetDecorations(DrawTextOp op, ComputedStyle? style, Element? origin)
+    {
+        op.Underline = style?.TextDecorationLine.HasUnderline() == true || style?.TextDecoration == TextDecorationType.Underline;
+        op.LineThrough = style?.TextDecorationLine.HasLineThrough() == true || style?.TextDecoration == TextDecorationType.LineThrough;
+        op.Overline = style?.TextDecorationLine.HasOverline() == true || style?.TextDecoration == TextDecorationType.Overline;
+        // 'auto' decoration color means the originating box's own text color.
+        op.UnderlineColor = style == null ? default
+            : style.TextDecorationColor.Alpha > 0 ? style.TextDecorationColor : style.Color;
+        op.DecorationStyle = style?.TextDecorationStyle ?? TextDecorationStyleType.Solid;
+        op.DecorationThickness = style?.TextDecorationThickness ?? float.NaN;
+        op.DecorationThicknessFromFont = style?.TextDecorationThicknessFromFont ?? false;
+        op.DecorationUnderlineOffset = style == null || style.TextUnderlineOffsetIsAuto ? float.NaN : style.TextUnderlineOffset;
+        op.DecorationUnderlinePosition = style?.TextUnderlinePosition ?? TextUnderlinePositionType.Auto;
+        op.DecorationSkipInk = style?.TextDecorationSkipInk ?? true;
+        op.AncestorDecorations = CollectPropagatedDecorations(origin);
+    }
+
+    /// <summary>
+    /// The decorations of <paramref name="origin"/>'s ancestors, ordered
+    /// outermost first, or null when the text carries no propagated line.
+    /// An out-of-flow box is a propagation barrier: the decorations above it
+    /// never reach its content, while its own decorations do.
+    /// </summary>
+    private static List<AppliedTextDecoration>? CollectPropagatedDecorations(Element? origin)
+    {
+        List<AppliedTextDecoration>? list = null;
+        for (var current = origin; current != null; current = current.ParentElement)
+        {
+            var style = current.ComputedStyle;
+            if (style == null)
+                continue;
+            if (style.Position is PositionType.Absolute or PositionType.Fixed)
+                break;
+
+            var ancestor = current.ParentElement;
+            var ancestorStyle = ancestor?.ComputedStyle;
+            if (ancestorStyle == null || ancestorStyle.TextDecorationLine == TextDecorationLineType.None)
+                continue;
+
+            list ??= new List<AppliedTextDecoration>();
+            list.Insert(0, ancestorStyle.AppliedTextDecorations()[0]);
+        }
+        return list;
+    }
+
     private static SKBlendMode BackgroundBlendModeToSkBlendMode(BackgroundBlendModeType mode) => mode switch
     {
         BackgroundBlendModeType.Multiply => SKBlendMode.Multiply,
@@ -1681,36 +1779,68 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
 
     private SKPoint ParseTransformOrigin(string? origin, LayoutBox box)
     {
-        if (string.IsNullOrEmpty(origin))
-            return new SKPoint(box.ContentBox.MidX, box.ContentBox.MidY);
-
-        var parts = origin.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         // The origin is resolved against the border box (CSS Transforms 1 §4: the
         // reference box is the border box unless box-sizing says otherwise).
         float width = box.BorderBox.Width;
         float height = box.BorderBox.Height;
         float left = box.BorderBox.Left;
         float top = box.BorderBox.Top;
-        float x = left + width / 2f;
-        float y = top + height / 2f;
+        if (string.IsNullOrEmpty(origin))
+            return new SKPoint(left + width / 2f, top + height / 2f);
 
-        if (parts.Length == 3 && !parts[2].Contains('%')
-            && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float _))
-        {
-            // <keyword> <length-percentage> [ <keyword> | <length-percentage> ]
-            x = ParseOriginValue(parts[0], width, left);
-            y = ParseOriginValue(parts[2], height, top);
-        }
-        else if (parts.Length >= 1)
-        {
-            x = ParseOriginValue(parts[0], width, left);
-            // One value only pins its own axis; the other stays centered.
-            y = parts.Length >= 2 ? ParseOriginValue(parts[1], height, top) : top + height / 2f;
-        }
-        if (parts.Length >= 3)
-            y = ParseOriginValue(parts[2], height, top);
+        var parts = origin.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        // The grammar is [<x>&<y>?] <length>?, where the trailing bare <length> is the
+        // z-offset that a flat engine ignores. Keywords may appear in either order, so
+        // each token is filed into the axis it names rather than by position.
+        if (parts.Length >= 3 && IsLengthToken(parts[^1]))
+            parts = parts[..^1];
 
-        return new SKPoint(x, y);
+        string? xToken = null, yToken = null;
+        foreach (var part in parts)
+        {
+            string token = part.Trim().ToLowerInvariant();
+            switch (token)
+            {
+                case "left":
+                case "right":
+                    xToken ??= token;
+                    continue;
+                case "top":
+                case "bottom":
+                    yToken ??= token;
+                    continue;
+            }
+            if (token == "center")
+            {
+                if (xToken == null) xToken = token;
+                else yToken ??= token;
+            }
+            else if (xToken == null)
+            {
+                xToken = token;
+            }
+            else
+            {
+                yToken ??= token;
+            }
+        }
+
+        return new SKPoint(
+            xToken == null ? left + width / 2f : ParseOriginValue(xToken, width, left),
+            yToken == null ? top + height / 2f : ParseOriginValue(yToken, height, top));
+    }
+
+    /// <summary>True for a bare or unit-bearing <length>, as opposed to a keyword or percentage.</summary>
+    private static bool IsLengthToken(string token)
+    {
+        string text = token.Trim();
+        if (text.Length == 0 || text.EndsWith('%')) return false;
+        int unit = 0;
+        while (unit < text.Length && (char.IsDigit(text[unit]) || text[unit] is '.' or '-' or '+'))
+            unit++;
+        if (unit == 0) return false;
+        if (unit == text.Length) return true;   // unitless number
+        return Length.TryParse(text, out _);
     }
 
     /// <summary>
@@ -1822,6 +1952,38 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
     private void DrawBackgroundTiles(SKImage image, BackgroundImageGeometry geometry,
         SKBlendMode blend = SKBlendMode.SrcOver)
     {
+        float imgW = image.Width, imgH = image.Height;
+
+        ForEachBackgroundTile(geometry, (tileRect, clipRect) =>
+        {
+            float srcLeft = (clipRect.Left - tileRect.Left) / tileRect.Width * imgW;
+            float srcTop = (clipRect.Top - tileRect.Top) / tileRect.Height * imgH;
+            float srcRight = srcLeft + (clipRect.Width / tileRect.Width * imgW);
+            float srcBottom = srcTop + (clipRect.Height / tileRect.Height * imgH);
+
+            var op = PaintOpPool.GetDrawImageOp();
+            op.Image = image;
+            op.SourceRect = new SKRect(srcLeft, srcTop, srcRight, srcBottom);
+            op.DestRect = clipRect;
+            op.BlendMode = blend;
+            // Background tiles are already sized/positioned by the
+            // geometry; stretch the (possibly clipped) source into dest.
+            op.Fit = ImageFit.Fill;
+            op.Bounds = geometry.SnappedDestRect;
+            _displayList.Add(op);
+        });
+    }
+
+    /// <summary>
+    /// Walk the tile grid of a computed background geometry and hand each visible
+    /// tile to <paramref name="paintTile"/> as its full tile rect plus the part of
+    /// it that falls inside the destination rect. Shared by image and gradient
+    /// backgrounds so that 'repeat', 'space', 'round' and 'no-repeat' behave the
+    /// same for both.
+    /// </summary>
+    private static void ForEachBackgroundTile(BackgroundImageGeometry geometry,
+        Action<SKRect, SKRect> paintTile)
+    {
         var destRect = geometry.SnappedDestRect;
         if (destRect.Width <= 0 || destRect.Height <= 0) return;
         var tileSize = geometry.TileSize;
@@ -1831,8 +1993,6 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         float stepX = tileSize.Width + geometry.SpaceSize.Width;
         float stepY = tileSize.Height + geometry.SpaceSize.Height;
         if (stepX <= 0 || stepY <= 0) return;
-
-        float imgW = image.Width, imgH = image.Height;
 
         for (float y = destRect.Top + phase.Y; y < destRect.Bottom; y += stepY)
         {
@@ -1845,23 +2005,83 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                 clipRect.Right = Math.Min(clipRect.Right, destRect.Right);
                 clipRect.Bottom = Math.Min(clipRect.Bottom, destRect.Bottom);
                 if (clipRect.Width > 0 && clipRect.Height > 0)
-                {
-                    float srcLeft = (clipRect.Left - x) / tileSize.Width * imgW;
-                    float srcTop = (clipRect.Top - y) / tileSize.Height * imgH;
-                    float srcRight = srcLeft + (clipRect.Width / tileSize.Width * imgW);
-                    float srcBottom = srcTop + (clipRect.Height / tileSize.Height * imgH);
-                    var op = PaintOpPool.GetDrawImageOp();
-                    op.Image = image;
-                    op.SourceRect = new SKRect(srcLeft, srcTop, srcRight, srcBottom);
-                    op.DestRect = clipRect;
-                    op.BlendMode = blend;
-                    // Background tiles are already sized/positioned by the
-                    // geometry; stretch the (possibly clipped) source into dest.
-                    op.Fit = ImageFit.Fill;
-                    op.Bounds = destRect;
-                    _displayList.Add(op);
-                }
+                    paintTile(tileRect, clipRect);
             }
+        }
+    }
+
+    /// <summary>
+    /// Paint a background-size'd gradient as a grid of tiles. A gradient has no
+    /// intrinsic size, so each tile gets its own shader spanning that tile; this is
+    /// what makes background-repeat: space / round / no-repeat visible at all.
+    /// </summary>
+    private void DrawSizedGradientTiles(ComputedStyle style, SKRect rect, SKPoint[]? cornerRadii)
+    {
+        var fillLayer = BackgroundImageGeometry.FromStyle(style);
+        if (fillLayer == null) return;
+
+        float padL = style.PaddingLeft is PixelLength pl ? pl.Value : 0;
+        float padT = style.PaddingTop is PixelLength pt ? pt.Value : 0;
+        float padR = style.PaddingRight is PixelLength pr ? pr.Value : 0;
+        float padB = style.PaddingBottom is PixelLength pb ? pb.Value : 0;
+
+        var paintContext = new BoxBackgroundPaintContext(
+            new SKSize(rect.Width, rect.Height),
+            style.BorderTopWidth, style.BorderRightWidth, style.BorderBottomWidth, style.BorderLeftWidth,
+            padT, padR, padB, padL);
+
+        var blend = BackgroundBlendModeToSkBlendMode(style.BackgroundBlendMode);
+
+        for (var layer = fillLayer; layer != null; layer = layer.Next)
+        {
+            string? imageCss = layer.Image;
+            if (string.IsNullOrEmpty(imageCss)) continue;
+
+            var geometry = new BackgroundImageGeometry();
+            geometry.Calculate(layer, paintContext, rect, style, intrinsicSize: SKSize.Empty);
+
+            ForEachBackgroundTile(geometry, (tileRect, clipRect) =>
+            {
+                var shader = GradientRenderer.CreateGradient(imageCss, tileRect);
+                if (shader == null) return;
+
+                SKPath path = new();
+                if (cornerRadii != null)
+                {
+                    // The corner rounding belongs to the element, not to a tile,
+                    // so clip each tile against the rounded outline.
+                    using var rounded = new SKPath();
+                    AddCornerRadiiToPath(rounded, rect, cornerRadii);
+                    using var tile = new SKPath();
+                    tile.AddRect(clipRect);
+                    var clipped = new SKPath();
+                    if (!rounded.Op(tile, SKPathOp.Intersect, clipped))
+                    {
+                        clipped.Dispose();
+                        clipped = new SKPath();
+                        clipped.AddRect(clipRect);
+                    }
+                    path.Dispose();
+                    path = clipped;
+                }
+                else
+                {
+                    path.AddRect(clipRect);
+                }
+
+                var op = PaintOpPool.GetDrawPathOp();
+                op.Path.Dispose();
+                op.Path = path;
+                op.FillPaint = new SKPaint
+                {
+                    Style = SKPaintStyle.Fill,
+                    Shader = shader,
+                    IsAntialias = true,
+                    BlendMode = blend,
+                };
+                op.Bounds = clipRect;
+                _displayList.Add(op);
+            });
         }
     }
 
@@ -1870,8 +2090,9 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         var images = style.BackgroundImage;
         if (images == null || images.Count == 0) return;
 
-        float maxRadius = Math.Max(style.BorderTopLeftRadius, Math.Max(style.BorderTopRightRadius,
-            Math.Max(style.BorderBottomLeftRadius, style.BorderBottomRightRadius)));
+        // Percentages and the two halves of an elliptical corner are decoded against the
+        // clip box, so the gradient outline matches the element's rounded corner shape.
+        var cornerRadii = ResolveBackgroundCornerRadii(style, rect);
 
         // Resolve background-size into a concrete image size, then background-position
         // into an offset within the element box. The gradient is painted into that
@@ -1880,25 +2101,22 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         var (gw, gh) = ResolveBackgroundImageSize(style, rect.Width, rect.Height, fs);
         bool sized = style.BackgroundSize != BackgroundSizeType.Auto || gw < rect.Width || gh < rect.Height;
 
+        // A sized gradient repeats (or is spaced/rounded/positioned), so it needs the
+        // same tile geometry an image background gets.
+        if (sized)
+        {
+            DrawSizedGradientTiles(style, rect, cornerRadii);
+            return;
+        }
+
         // CSS paints background layers from last (bottom) to first (top).
         for (int i = images.Count - 1; i >= 0; i--)
         {
-            SKRect gradRect = rect;
-            if (sized)
-            {
-                float ox = ResolveBackgroundOffset(style.BackgroundPositionX, rect.Width, gw, fs);
-                float oy = ResolveBackgroundOffset(style.BackgroundPositionY, rect.Height, gh, fs);
-                gradRect = new SKRect(rect.Left + ox, rect.Top + oy, rect.Left + ox + gw, rect.Top + oy + gh);
-            }
-
-            var shader = GradientRenderer.CreateGradient(images[i], gradRect);
+            var shader = GradientRenderer.CreateGradient(images[i], rect);
             if (shader == null) continue;
 
             var path = new SKPath();
-            if (maxRadius > 0)
-                path.AddRoundRect(rect, maxRadius, maxRadius);
-            else
-                path.AddRect(rect);
+            AddCornerRadiiToPath(path, rect, cornerRadii);
 
             var op = PaintOpPool.GetDrawPathOp();
             op.Path.Dispose();
@@ -1946,34 +2164,30 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         return (Math.Max(1, w), Math.Max(1, h));
     }
 
-    // Resolve a background-position length/keyword into a pixel offset within the
-    // box, given the image size. Percentages resolve against (box - image).
-    private static float ResolveBackgroundOffset(Length? pos, float boxSize, float imageSize, float fs)
-    {
-        if (pos is null or AutoLength) return 0;
-        // Parser encodes keywords: 0=left/top, 0.5=center, 1=right/bottom as fractions
-        // via percentage; a plain pixel length is an absolute offset.
-        float px = pos.ToPixels(fs, fs, boxSize - imageSize, boxSize - imageSize);
-        return Math.Max(0, px);
-    }
-
     /// <summary>
-    /// Resolve the four corner radii for a background fill. Percentages are
-    /// stored negated by the style parser (50% -> -50) and resolve against the
-    /// border-box dimensions here (horizontal vs width, vertical vs height);
-    /// plain pixel radii pass through as circular corners.
+    /// Resolve the four corner radii for a background fill. Percentages are stored
+    /// negated by the style parser (50% -&gt; -50) and resolve against the border-box
+    /// dimensions; the shared helper also applies the over-constrained corner scaling
+    /// of CSS Backgrounds 3 5.3.
     /// </summary>
     internal static SKPoint[]? ResolveBackgroundCornerRadii(ComputedStyle style, SKRect borderRect)
     {
-        static SKPoint P(float v, SKRect r) => v < 0
-            ? new SKPoint(-v / 100f * r.Width, -v / 100f * r.Height)
-            : new SKPoint(v, v);
-        var tl = P(style.BorderTopLeftRadius, borderRect);
-        var tr = P(style.BorderTopRightRadius, borderRect);
-        var br = P(style.BorderBottomRightRadius, borderRect);
-        var bl = P(style.BorderBottomLeftRadius, borderRect);
+        var (tl, tr, br, bl) = RoundedBorderGeometry.ResolveRadii(style, borderRect);
         if (tl.X <= 0 && tr.X <= 0 && br.X <= 0 && bl.X <= 0) return null;
         return new[] { tl, tr, br, bl };
+    }
+
+    /// <summary>Add <paramref name="rect"/> to <paramref name="path"/>, rounded by the resolved corner radii.</summary>
+    private static void AddCornerRadiiToPath(SKPath path, SKRect rect, SKPoint[]? radii)
+    {
+        if (radii == null)
+        {
+            path.AddRect(rect);
+            return;
+        }
+        var rrect = new SKRoundRect();
+        rrect.SetRectRadii(rect, radii);
+        path.AddRoundRect(rrect);
     }
 
     internal void DrawElementBorder(Element element, LayoutBox box, ComputedStyle style, SKRect borderRect)
@@ -1989,11 +2203,9 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
             return;
         }
 
-        if (NinePieceImagePainter.HasBorderImage(style))
-        {
-            NinePieceImagePainter.Paint(_displayList, _imageCache, style, borderRect, _baseUrl);
+        if (NinePieceImagePainter.HasBorderImage(style) &&
+            NinePieceImagePainter.Paint(_displayList, _imageCache, style, borderRect, _baseUrl))
             return;
-        }
 
         // border-collapse: collapse — the cell's borders are resolved against the
         // facing borders of its neighbours and centered on the shared grid line.
@@ -2442,7 +2654,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         textOp.FontSize = btnFontSize;
         textOp.FontFamily = style.FontFamily ?? "Segoe UI, Arial, sans-serif";
         textOp.FontWeight = style.FontWeight;
-        textOp.Italic = style.FontStyle == FontStyleType.Italic || style.FontStyle == FontStyleType.Oblique;
+        SetFontSlant(textOp, style);
         textOp.TextAlign = TextAlignType.Left;
         textOp.Bounds = new SKRect(textX, textY, textX + textWidth, textY + btnFontSize);
         _displayList.Add(textOp);
@@ -2683,7 +2895,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
             op.FontSize = fontSize;
             op.FontFamily = style.FontFamily ?? "Arial";
             op.FontWeight = style.FontWeight;
-            op.Italic = style.FontStyle == FontStyleType.Italic || style.FontStyle == FontStyleType.Oblique;
+            SetFontSlant(op, style);
             op.Bounds = new SKRect(segX, lineY + TotalOffsetY, segX + MeasureTextWidth(seg, fontSize, style.FontFamily), lineY + TotalOffsetY + fontSize);
             targetList.Add(op);
         }
@@ -3136,7 +3348,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         op.FontSize = fontSize;
         op.FontFamily = style.FontFamily ?? "Arial";
         op.FontWeight = style.FontWeight;
-        op.Italic = style.FontStyle == FontStyleType.Italic || style.FontStyle == FontStyleType.Oblique;
+        SetFontSlant(op, style);
         op.Bounds = new SKRect(contentBox.Left, contentBox.Top + yOffset,
             contentBox.Right, contentBox.Bottom + yOffset);
         (targetList ?? _displayList).Add(op);
@@ -3665,7 +3877,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         // box at the start of block containers.
         if (string.IsNullOrWhiteSpace(rawText)) return;
         var text = NormalizeFallbackText(rawText);
-        text = ApplyTextTransform(text, parentStyle?.TextTransform);
+        text = UpBrowser.Core.Layout.Inline.InlineItemsBuilder.ApplyTextTransform(text, parentStyle?.TextTransform);
         var contentBox = box.ContentBox;
         float y = contentBox.Top + (parentStyle?.FontSize ?? 16) + TotalOffsetY;
         var textColor = parentStyle?.Color ?? SKColors.Black;
@@ -3686,13 +3898,9 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         op.FontFamily = parentStyle?.FontFamily ?? "Arial";
         op.FontWeight = parentStyle?.FontWeight ?? FontWeight.Normal;
         op.TextAlign = parentStyle?.TextAlign ?? TextAlignType.Start;
-        op.Underline = parentStyle?.TextDecorationLine == TextDecorationLineType.Underline || parentStyle?.TextDecoration == TextDecorationType.Underline;
-        op.LineThrough = parentStyle?.TextDecorationLine == TextDecorationLineType.LineThrough || parentStyle?.TextDecoration == TextDecorationType.LineThrough;
-        op.Overline = parentStyle?.TextDecorationLine == TextDecorationLineType.Overline || parentStyle?.TextDecoration == TextDecorationType.Overline;
-        if (parentStyle != null) op.UnderlineColor = parentStyle.TextDecorationColor;
-        op.DecorationStyle = parentStyle?.TextDecorationStyle ?? TextDecorationStyleType.Solid;
+        SetDecorations(op, parentStyle, textNode.ParentElement);
         op.LetterSpacing = parentStyle?.LetterSpacing ?? 0;
-        op.Italic = parentStyle?.FontStyle == FontStyleType.Italic || parentStyle?.FontStyle == FontStyleType.Oblique;
+        SetFontSlant(op, parentStyle);
         if (parentStyle?.TextShadow != null && parentStyle.TextShadow.Count > 0)
             op.TextShadows = parentStyle.TextShadow;
         float boundTop = y - (parentStyle?.FontSize ?? 16);
@@ -3709,18 +3917,6 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
     private float GetPixelLengthFromStyle(Length length, float defaultValue)
     {
         return length is PixelLength pixelLength ? pixelLength.Value : defaultValue;
-    }
-
-    private static string ApplyTextTransform(string text, string? transform)
-    {
-        if (string.IsNullOrEmpty(transform) || transform == "none") return text;
-        return transform.ToLowerInvariant() switch
-        {
-            "uppercase" => text.ToUpperInvariant(),
-            "lowercase" => text.ToLowerInvariant(),
-            "capitalize" => System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(text.ToLowerInvariant()),
-            _ => text
-        };
     }
 
     /// <summary>
@@ -3766,32 +3962,21 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         return path;
     }
 
-    private static string GetTextEmphasisMarkString(ComputedStyle? style)
-    {
-        if (style == null) return string.Empty;
-        var s = style.TextEmphasisStyle;
-        if (string.IsNullOrEmpty(s) || s == "none") return string.Empty;
-        var lower = s.ToLowerInvariant();
-        bool open = lower.Contains("open");
-        if (lower.Contains("double-circle")) return open ? "\u25CE" : "\u25C9";
-        if (lower.Contains("circle")) return open ? "\u25CB" : "\u25CF";
-        if (lower.Contains("triangle")) return open ? "\u25B3" : "\u25B2";
-        if (lower.Contains("sesame")) return open ? "\uFE46" : "\uFE45";
-        if (lower.Contains("dot")) return open ? "\u25E6" : "\u2022";
-        if (lower == "auto" || lower == "filled" || lower == "open") return "\u2022";
-        return s.Trim();
-    }
+    private static string GetTextEmphasisMarkString(ComputedStyle? style) =>
+        UpBrowser.Core.Css.TextEmphasisMarks.GetMarkGlyph(style);
 
     /// <summary>
-    /// Paint the background of an inline box behind one of its text runs. Inline
-    /// elements have no box of their own in this engine, so the decoration is
-    /// drawn per run over the font content area (CSS 2.1 §10.6.1: the background
-    /// of an inline box covers its content area plus padding).
+    /// Paint the box decoration of one fragment of an inline box behind the
+    /// glyphs of its line. Inline elements have no box of their own in this
+    /// engine, so the decoration is drawn over the font content area plus
+    /// padding (CSS 2.1 §10.6.1), and a wrapped element paints one fragment per
+    /// line. <paramref name="sides"/> carries the box-decoration-break rule: the
+    /// sides facing a break are not decorated (CSS Fragmentation 3 §4.2).
     /// </summary>
     private void PaintInlineRunBackground(Element? owner, ComputedStyle? style,
-        float left, float right, float baselineY)
+        float left, float right, float baselineY, PhysicalBoxSides sides = PhysicalBoxSides.All)
     {
-        // Only inline boxes are decorated per run: a block's own background and
+        // Only inline boxes are decorated per fragment: a block's own background and
         // borders already come from its box painting phase, and inline-level
         // boxes with their own layout box (inline-block) paint through that path.
         if (owner == null || style == null || style.Display != DisplayType.Inline)
@@ -3806,72 +3991,84 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         if (!hasColor && !hasImage && !hasBorder)
             return;
 
+        bool includeLeft = (sides & PhysicalBoxSides.Left) != 0;
+        bool includeRight = (sides & PhysicalBoxSides.Right) != 0;
+
         float fs = style.FontSize;
         float padL = ResolveInlinePadding(style.PaddingLeft, fs);
         float padR = ResolveInlinePadding(style.PaddingRight, fs);
         float padT = ResolveInlinePadding(style.PaddingTop, fs);
         float padB = ResolveInlinePadding(style.PaddingBottom, fs);
+        float bt = style.BorderTopWidth, br = style.BorderRightWidth;
+        float bb = style.BorderBottomWidth, bl = style.BorderLeftWidth;
 
         var metrics = Core.Fonts.LineBoxMetrics.GetFontMetrics(style);
-        var rect = new SKRect(
-            left - padL,
-            baselineY - metrics.FloatAscent - padT,
-            right + padR,
-            baselineY + metrics.FloatDescent + padB);
-        if (rect.Width <= 0 || rect.Height <= 0)
+        // A sliced fragment is a cut through a box that would have been continuous,
+        // so the side facing the break has neither a border line nor the padding area
+        // behind it: the fragment box ends at the content edge there (CSS
+        // Fragmentation 3 §4.2). 'clone' keeps the full box on every fragment.
+        var borderBox = new SKRect(
+            includeLeft ? left - padL - bl : left,
+            baselineY - metrics.FloatAscent - padT - bt,
+            includeRight ? right + padR + br : right,
+            baselineY + metrics.FloatDescent + padB + bb);
+        if (borderBox.Width <= 0 || borderBox.Height <= 0)
             return;
+        var fillRect = new SKRect(
+            includeLeft ? borderBox.Left + bl : borderBox.Left,
+            borderBox.Top + bt,
+            includeRight ? borderBox.Right - br : borderBox.Right,
+            borderBox.Bottom - bb);
 
         if (hasColor)
         {
             var op = PaintOpPool.GetDrawRectOp();
-            op.Rect = rect;
-            op.FillColor = style.BackgroundColor!.Value;
-            op.Bounds = rect;
+            op.Rect = fillRect;
+            op.FillColor = style.BackgroundColor.Value;
+            op.Bounds = borderBox;
+            var radii = InlineFragmentCornerRadii(style, borderBox, includeLeft, includeRight);
+            if (radii != null)
+                op.CornerRadii = radii;
             _displayList.Add(op);
         }
         if (hasImage)
-            DrawBackgroundImage(owner, style, rect);
+            DrawBackgroundImage(owner, style, fillRect);
 
-        if (hasBorder)
-            PaintInlineRunBorder(style, rect);
+        if (hasBorder && sides != PhysicalBoxSides.None)
+        {
+            // The shared border painter squares off the corners facing an omitted
+            // side, which is exactly what a sliced fragment needs.
+            var borderPainter = new BoxBorderPainter(_displayList, borderBox, style, sides);
+            borderPainter.Paint();
+        }
     }
 
     /// <summary>
-    /// Draw the inline box's borders around one fragment. Vertical borders do not
-    /// affect the line box (CSS 2.1 §10.6.1), so they only paint.
+    /// The fill (padding-box) corner radii of an inline fragment. A corner is only
+    /// round where both of its sides are decorated, and it shrinks by the border it
+    /// sits behind.
     /// </summary>
-    private void PaintInlineRunBorder(ComputedStyle style, SKRect paddingRect)
+    private SKPoint[]? InlineFragmentCornerRadii(ComputedStyle style, SKRect borderBox,
+        bool includeLeft, bool includeRight)
     {
-        float bt = style.BorderTopWidth, br = style.BorderRightWidth;
-        float bb = style.BorderBottomWidth, bl = style.BorderLeftWidth;
-        if (bt <= 0 && br <= 0 && bb <= 0 && bl <= 0)
-            return;
-        if (style.BorderTopStyle == BorderStyle.None && style.BorderRightStyle == BorderStyle.None &&
-            style.BorderBottomStyle == BorderStyle.None && style.BorderLeftStyle == BorderStyle.None)
-            return;
+        var radii = ResolveBackgroundCornerRadii(style, borderBox);
+        if (radii == null)
+            return null;
 
-        var outer = new SKRect(paddingRect.Left - bl, paddingRect.Top - bt,
-            paddingRect.Right + br, paddingRect.Bottom + bb);
+        static SKPoint Corner(SKPoint r, bool painted, float borderTop, float borderSide) =>
+            painted ? new SKPoint(MathF.Max(0, r.X - borderSide), MathF.Max(0, r.Y - borderTop)) : SKPoint.Empty;
 
-        void Edge(SKRect rect, SKColor color, BorderStyle borderStyle)
+        var corners = new[]
         {
-            if (rect.Width <= 0 || rect.Height <= 0)
-                return;
-            var op = PaintOpPool.GetDrawRectOp();
-            op.Rect = rect;
-            op.FillColor = color;
-            op.Bounds = rect;
-            _displayList.Add(op);
-        }
-
-        if (bt > 0)
-            Edge(new SKRect(outer.Left, outer.Top, outer.Right, paddingRect.Top), style.BorderTopColor, style.BorderTopStyle);
-        if (bb > 0)
-            Edge(new SKRect(outer.Left, paddingRect.Bottom, outer.Right, outer.Bottom), style.BorderBottomColor, style.BorderBottomStyle);
-        if (bl > 0)
-            Edge(new SKRect(outer.Left, outer.Top, paddingRect.Left, outer.Bottom), style.BorderLeftColor, style.BorderLeftStyle);
-        if (br > 0)
-            Edge(new SKRect(paddingRect.Right, outer.Top, outer.Right, outer.Bottom), style.BorderRightColor, style.BorderRightStyle);
+            Corner(radii[0], includeLeft, style.BorderTopWidth, style.BorderLeftWidth),
+            Corner(radii[1], includeRight, style.BorderTopWidth, style.BorderRightWidth),
+            Corner(radii[2], includeRight, style.BorderBottomWidth, style.BorderRightWidth),
+            Corner(radii[3], includeLeft, style.BorderBottomWidth, style.BorderLeftWidth),
+        };
+        if (corners[0] == SKPoint.Empty && corners[1] == SKPoint.Empty &&
+            corners[2] == SKPoint.Empty && corners[3] == SKPoint.Empty)
+            return null;
+        return corners;
     }
 
     private static float ResolveInlinePadding(Length? length, float fontSize)
@@ -3880,6 +4077,95 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
             return 0;
         float px = length.ToPixels(fontSize, fontSize, 0, 0);
         return float.IsNaN(px) || px < 0 ? 0 : px;
+    }
+
+    /// <summary>One continuation box of an inline element on a single line.</summary>
+    private struct InlineFragment
+    {
+        public Element? Owner;
+        public ComputedStyle? Style;
+        public float Left;
+        public float Right;
+        public float BaselineY;
+    }
+
+    private readonly List<InlineFragment> _inlineFragments = new();
+
+    // The elements the lines around the one being painted carry. box-decoration-break:
+    // slice needs to know whether an element continues across a fragment's side, and a
+    // fragment's background has to be emitted before that line's glyphs, so the next
+    // line's owners are gathered with a one-line lookahead.
+    private readonly List<Element> _inlineOwnersA = new();
+    private readonly List<Element> _inlineOwnersB = new();
+    private readonly List<Element> _inlineNextOwners = new();
+
+    /// <summary>
+    /// Grow the line's fragment list with one more run of <paramref name="owner"/>.
+    /// A wrapped inline box is split into one box per line (CSS 2.1 §10.6.1), and
+    /// its background/border belongs to that whole fragment — including the
+    /// inter-word spaces — not to each text run inside it.
+    /// </summary>
+    private static void AppendInlineFragment(List<InlineFragment> fragments, Element? owner,
+        ComputedStyle? style, float left, float right, float baselineY)
+    {
+        if (owner == null || style == null) return;
+        for (int i = 0; i < fragments.Count; i++)
+        {
+            if (!ReferenceEquals(fragments[i].Owner, owner)) continue;
+            if (MathF.Abs(fragments[i].BaselineY - baselineY) > 0.5f) continue;
+            var f = fragments[i];
+            f.Left = MathF.Min(f.Left, left);
+            f.Right = MathF.Max(f.Right, right);
+            fragments[i] = f;
+            return;
+        }
+        fragments.Add(new InlineFragment { Owner = owner, Style = style, Left = left, Right = right, BaselineY = baselineY });
+    }
+
+    /// <summary>Paint every fragment box collected for the current line, then forget them.</summary>
+    private void FlushInlineFragments(List<Element>? prevOwners = null, List<Element>? nextOwners = null)
+    {
+        foreach (var f in _inlineFragments)
+        {
+            // An element whose text carries on across one of this fragment's sides
+            // faces a break there: box-decoration-break: slice drops the decoration
+            // on those sides, clone keeps it on every fragment.
+            var sides = PhysicalBoxSides.All;
+            if (f.Style!.BoxDecorationBreak == BoxDecorationBreakType.Slice)
+            {
+                if (HasOwner(prevOwners, f.Owner)) sides &= ~PhysicalBoxSides.Left;
+                if (HasOwner(nextOwners, f.Owner)) sides &= ~PhysicalBoxSides.Right;
+            }
+            PaintInlineRunBackground(f.Owner, f.Style, f.Left, f.Right, f.BaselineY, sides);
+        }
+        _inlineFragments.Clear();
+    }
+
+    private static bool HasOwner(List<Element>? owners, Element? owner)
+    {
+        if (owners == null) return false;
+        for (int i = 0; i < owners.Count; i++)
+            if (ReferenceEquals(owners[i], owner)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// The elements a line carries that break their decoration by slicing. Only
+    /// those matter for the break-edge rule, so the lists stay empty for ordinary text.
+    /// </summary>
+    private static void CollectInlineOwners(LineBox? line, List<Element> owners)
+    {
+        if (line == null) return;
+        foreach (var run in line.Runs)
+        {
+            if (!run.IsText || run.Node is not TextNode runNode) continue;
+            var owner = runNode.ParentElement;
+            var ownerStyle = owner?.ComputedStyle;
+            if (owner == null || ownerStyle == null) continue;
+            if (ownerStyle.BoxDecorationBreak != BoxDecorationBreakType.Slice) continue;
+            if (HasOwner(owners, owner)) continue;
+            owners.Add(owner);
+        }
     }
 
     private void DrawInlineRuns(LayoutBox box)
@@ -3901,6 +4187,12 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
             TextNode? lastTextNode = null;
             int runStartOffset = 0;
             int lineIndex = -1;
+            // Only elements with box-decoration-break: slice look at their neighbours'
+            // lines, so these owner lists stay empty for ordinary content.
+            var prevOwners = _inlineOwnersA;
+            var curOwners = _inlineOwnersB;
+            prevOwners.Clear();
+            curOwners.Clear();
             foreach (var line in box.Lines)
             {
                 lineIndex++;
@@ -3909,6 +4201,38 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                 float baseline = line.Baseline + TotalOffsetY;
                 float lineOffsetX = line.TextAlignOffsetX;
                 float currentX = line.X;
+                bool slicedOnLine = false;
+
+                // Pass 1: the inline boxes this line carries. Painting their
+                // backgrounds before any of the line's glyphs keeps a parent's
+                // box behind its child's text, and merges the runs of one
+                // element into a single continuation box.
+                foreach (var run in line.Runs)
+                {
+                    if (!run.IsText || run.Node is not TextNode runNode) continue;
+                    var owner = runNode.ParentElement;
+                    var ownerStyle = owner?.ComputedStyle;
+                    if (owner == null || ownerStyle == null) continue;
+                    if (ownerStyle.Visibility == VisibilityType.Hidden) continue;
+                    float runLeft = run.X + lineOffsetX;
+                    float runBaseline = run.Baseline > 0 ? run.Baseline + TotalOffsetY : baseline;
+                    AppendInlineFragment(_inlineFragments, owner, ownerStyle, runLeft, runLeft + run.Width, runBaseline);
+                    if (ownerStyle.BoxDecorationBreak == BoxDecorationBreakType.Slice && !HasOwner(curOwners, owner))
+                    {
+                        slicedOnLine = true;
+                        curOwners.Add(owner);
+                    }
+                }
+                // Whether the element carries on past this line decides the fragment's
+                // right side, and that is only known after the next line — hence the
+                // lookahead, needed because a background must precede its own glyphs.
+                _inlineNextOwners.Clear();
+                if (slicedOnLine && lineIndex + 1 < box.Lines.Count)
+                    CollectInlineOwners(box.Lines[lineIndex + 1], _inlineNextOwners);
+                FlushInlineFragments(prevOwners, _inlineNextOwners);
+                (prevOwners, curOwners) = (curOwners, prevOwners);
+                curOwners.Clear();
+
                 foreach (var run in line.Runs)
                 {
                     // The run carries its own resolved x (the converter computed it from
@@ -3933,7 +4257,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                         }
                         var effectiveStyle = lineOverride ?? parentStyle;
                         var actualFontSize = run.FontSize ?? effectiveStyle?.FontSize ?? 16;
-                        var runText = ApplyTextTransform(run.Text, effectiveStyle?.TextTransform);
+                        var runText = UpBrowser.Core.Layout.Inline.InlineItemsBuilder.ApplyTextTransform(run.Text, effectiveStyle?.TextTransform);
                         float runY = run.Baseline > 0 ? run.Baseline + TotalOffsetY : baseline;
                         var op = PaintOpPool.GetDrawTextOp();
                         op.Text = runText;
@@ -3943,13 +4267,9 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                         op.FontSize = actualFontSize;
                         op.FontFamily = run.FontFamily ?? effectiveStyle?.FontFamily ?? "Arial";
                         op.FontWeight = run.FontWeight;
-                        op.Underline = effectiveStyle?.TextDecorationLine == TextDecorationLineType.Underline || effectiveStyle?.TextDecoration == TextDecorationType.Underline;
-                        op.LineThrough = effectiveStyle?.TextDecorationLine == TextDecorationLineType.LineThrough || effectiveStyle?.TextDecoration == TextDecorationType.LineThrough;
-                        op.Overline = effectiveStyle?.TextDecorationLine == TextDecorationLineType.Overline || effectiveStyle?.TextDecoration == TextDecorationType.Overline;
-                        if (effectiveStyle != null) op.UnderlineColor = effectiveStyle.TextDecorationColor;
-                        op.DecorationStyle = effectiveStyle?.TextDecorationStyle ?? TextDecorationStyleType.Solid;
+                        SetDecorations(op, effectiveStyle, textNode.ParentElement);
                         op.LetterSpacing = effectiveStyle?.LetterSpacing ?? 0;
-                        op.Italic = effectiveStyle?.FontStyle == FontStyleType.Italic || effectiveStyle?.FontStyle == FontStyleType.Oblique;
+                        SetFontSlant(op, effectiveStyle);
                         if (effectiveStyle?.TextShadow != null && effectiveStyle.TextShadow.Count > 0)
                             op.TextShadows = effectiveStyle.TextShadow;
                         op.EmphasisMark = GetTextEmphasisMarkString(parentStyle);
@@ -3968,8 +4288,6 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                         _highlightPainter.PaintHighlight(textNode, runText, op.Bounds,
                             op.FontSize, op.FontFamily, op.FontWeight, runStartOffset);
 
-                        PaintInlineRunBackground(textNode.ParentElement, parentStyle,
-                            runLeft, runLeft + run.Width, runY);
                         _displayList.Add(op);
                         runStartOffset += runText.Length;
                     }
@@ -3992,6 +4310,22 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
             float baseline = boxTop + Core.Fonts.LineBoxMetrics.GetBaselineForLineHeight(box.Dimensions?.Style, box.LineHeight);
             foreach (var run in box.LineRuns)
             {
+                if (run.IsText && run.Node is TextNode runNode)
+                {
+                    var owner = runNode.ParentElement;
+                    var ownerStyle = owner?.ComputedStyle;
+                    float runBaseline = run.Baseline > 0 ? run.Baseline + TotalOffsetY : baseline;
+                    if (owner != null && ownerStyle != null && ownerStyle.Visibility != VisibilityType.Hidden)
+                        AppendInlineFragment(_inlineFragments, owner, ownerStyle, x, x + run.Width, runBaseline);
+                }
+                // Keep pace with the painting pass: every run occupies its advance,
+                // hidden and atomic ones too.
+                x += run.Width;
+            }
+            FlushInlineFragments();
+
+            foreach (var run in box.LineRuns)
+            {
                 if (run.IsText && run.Node is TextNode textNode)
                 {
                     if (textNode != lastTextNode)
@@ -4008,7 +4342,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                         continue;
                     }
                     var actualFontSize = run.FontSize ?? parentStyle?.FontSize ?? 16;
-                    var runText = ApplyTextTransform(run.Text, parentStyle?.TextTransform);
+                    var runText = UpBrowser.Core.Layout.Inline.InlineItemsBuilder.ApplyTextTransform(run.Text, parentStyle?.TextTransform);
                     float runY = run.Baseline > 0 ? run.Baseline + TotalOffsetY : baseline;
                     var op = PaintOpPool.GetDrawTextOp();
                     op.Text = runText;
@@ -4018,13 +4352,9 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                     op.FontSize = actualFontSize;
                     op.FontFamily = run.FontFamily ?? parentStyle?.FontFamily ?? "Arial";
                     op.FontWeight = run.FontWeight;
-                    op.Underline = parentStyle?.TextDecorationLine == TextDecorationLineType.Underline || parentStyle?.TextDecoration == TextDecorationType.Underline;
-                    op.LineThrough = parentStyle?.TextDecorationLine == TextDecorationLineType.LineThrough || parentStyle?.TextDecoration == TextDecorationType.LineThrough;
-                    op.Overline = parentStyle?.TextDecorationLine == TextDecorationLineType.Overline || parentStyle?.TextDecoration == TextDecorationType.Overline;
-                    if (parentStyle != null) op.UnderlineColor = parentStyle.TextDecorationColor;
-                    op.DecorationStyle = parentStyle?.TextDecorationStyle ?? TextDecorationStyleType.Solid;
+                    SetDecorations(op, parentStyle, textNode.ParentElement);
                     op.LetterSpacing = parentStyle?.LetterSpacing ?? 0;
-                    op.Italic = parentStyle?.FontStyle == FontStyleType.Italic || parentStyle?.FontStyle == FontStyleType.Oblique;
+                    SetFontSlant(op, parentStyle);
                     if (parentStyle?.TextShadow != null && parentStyle.TextShadow.Count > 0)
                         op.TextShadows = parentStyle.TextShadow;
                     op.EmphasisMark = GetTextEmphasisMarkString(parentStyle);
@@ -4042,9 +4372,6 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                     // Add selection highlight clipped to the overlapping region
                     _highlightPainter.PaintHighlight(textNode, runText, op.Bounds,
                         op.FontSize, op.FontFamily, op.FontWeight, runStartOffset);
-
-                    PaintInlineRunBackground(textNode.ParentElement, parentStyle,
-                        x, x + run.Width, runY);
 
                     _displayList.Add(op);
                     runStartOffset += runText.Length;

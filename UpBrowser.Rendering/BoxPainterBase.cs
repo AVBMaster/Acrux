@@ -126,8 +126,17 @@ public struct FloatRoundedRect
     public float TopRightRadius;
     public float BottomLeftRadius;
     public float BottomRightRadius;
+    // Vertical radii of the elliptical corners; they stay 0 for the common circular
+    // case and fall back to the horizontal radius when a consumer builds a path.
+    public float TopLeftRadiusY;
+    public float TopRightRadiusY;
+    public float BottomLeftRadiusY;
+    public float BottomRightRadiusY;
 
     public bool IsRounded => TopLeftRadius > 0 || TopRightRadius > 0 || BottomLeftRadius > 0 || BottomRightRadius > 0;
+
+    public bool HasEllipticalCorners =>
+        TopLeftRadiusY > 0 || TopRightRadiusY > 0 || BottomLeftRadiusY > 0 || BottomRightRadiusY > 0;
 
     public bool IsEmpty => Rect.Width <= 0 || Rect.Height <= 0;
 
@@ -144,10 +153,15 @@ public struct FloatRoundedRect
         if (TopRightRadius > maxX) TopRightRadius = maxX;
         if (BottomLeftRadius > maxX) BottomLeftRadius = maxX;
         if (BottomRightRadius > maxX) BottomRightRadius = maxX;
-        if (TopLeftRadius > maxY) TopLeftRadius = maxY;
-        if (TopRightRadius > maxY) TopRightRadius = maxY;
-        if (BottomLeftRadius > maxY) BottomLeftRadius = maxY;
-        if (BottomRightRadius > maxY) BottomRightRadius = maxY;
+        if (TopLeftRadiusY > maxY) TopLeftRadiusY = maxY;
+        if (TopRightRadiusY > maxY) TopRightRadiusY = maxY;
+        if (BottomLeftRadiusY > maxY) BottomLeftRadiusY = maxY;
+        if (BottomRightRadiusY > maxY) BottomRightRadiusY = maxY;
+        // A circular corner keeps following its horizontal radius.
+        if (TopLeftRadiusY == 0) TopLeftRadiusY = MathF.Min(TopLeftRadius, maxY);
+        if (TopRightRadiusY == 0) TopRightRadiusY = MathF.Min(TopRightRadius, maxY);
+        if (BottomLeftRadiusY == 0) BottomLeftRadiusY = MathF.Min(BottomLeftRadius, maxY);
+        if (BottomRightRadiusY == 0) BottomRightRadiusY = MathF.Min(BottomRightRadius, maxY);
     }
 
     public void OutsetForMarginOrShadow(float spread)
@@ -157,22 +171,33 @@ public struct FloatRoundedRect
         if (TopRightRadius > 0) TopRightRadius += spread;
         if (BottomLeftRadius > 0) BottomLeftRadius += spread;
         if (BottomRightRadius > 0) BottomRightRadius += spread;
+        if (TopLeftRadiusY > 0) TopLeftRadiusY += spread;
+        if (TopRightRadiusY > 0) TopRightRadiusY += spread;
+        if (BottomLeftRadiusY > 0) BottomLeftRadiusY += spread;
+        if (BottomRightRadiusY > 0) BottomRightRadiusY += spread;
         ConstrainRadii();
     }
+
+    /// <summary>
+    /// Ellipse radii of one corner, in the order top-left, top-right, bottom-right, bottom-left.
+    /// A zero vertical radius means the corner was declared circular and follows the horizontal radius.
+    /// </summary>
+    public SKPoint CornerRadius(int corner) => corner switch
+    {
+        0 => new SKPoint(TopLeftRadius, TopLeftRadiusY > 0 ? TopLeftRadiusY : TopLeftRadius),
+        1 => new SKPoint(TopRightRadius, TopRightRadiusY > 0 ? TopRightRadiusY : TopRightRadius),
+        2 => new SKPoint(BottomRightRadius, BottomRightRadiusY > 0 ? BottomRightRadiusY : BottomRightRadius),
+        _ => new SKPoint(BottomLeftRadius, BottomLeftRadiusY > 0 ? BottomLeftRadiusY : BottomLeftRadius)
+    };
 
     public SKPath ToPath(bool useRadii)
     {
         var path = new SKPath();
         if (useRadii && IsRounded)
         {
+            ConstrainRadii();
             var rrect = new SKRoundRect();
-            rrect.SetRectRadii(Rect,
-                new[] {
-                    new SKPoint(TopLeftRadius, TopLeftRadius),
-                    new SKPoint(TopRightRadius, TopRightRadius),
-                    new SKPoint(BottomRightRadius, BottomRightRadius),
-                    new SKPoint(BottomLeftRadius, BottomLeftRadius)
-                });
+            rrect.SetRectRadii(Rect, new[] { CornerRadius(0), CornerRadius(1), CornerRadius(2), CornerRadius(3) });
             path.AddRoundRect(rrect);
         }
         else
@@ -912,52 +937,142 @@ public sealed class FillLayerInfo
 /// <summary>Border-radius geometry helpers.</summary>
 public static class RoundedBorderGeometry
 {
+    /// <summary>
+    /// Resolve the authored corner radii against |rect|: percentages (stored negated by
+    /// the parser) become a fraction of the box, and an over-constrained set is scaled
+    /// down as a whole per CSS Backgrounds 3 5.3 - f is the smallest ratio of a side to
+    /// the sum of the two radii that meet it, applied to every corner.
+    /// </summary>
+    public static (SKPoint TopLeft, SKPoint TopRight, SKPoint BottomRight, SKPoint BottomLeft)
+        ResolveRadii(ComputedStyle style, SKRect rect)
+    {
+        float w = MathF.Max(0, rect.Width), h = MathF.Max(0, rect.Height);
+        static float Axis(float value, float extent) =>
+            value < 0 ? -value / 100f * extent : value;
+
+        var tl = new SKPoint(Axis(style.BorderTopLeftRadius, w), Axis(style.BorderTopLeftRadiusY, h));
+        var tr = new SKPoint(Axis(style.BorderTopRightRadius, w), Axis(style.BorderTopRightRadiusY, h));
+        var br = new SKPoint(Axis(style.BorderBottomRightRadius, w), Axis(style.BorderBottomRightRadiusY, h));
+        var bl = new SKPoint(Axis(style.BorderBottomLeftRadius, w), Axis(style.BorderBottomLeftRadiusY, h));
+
+        // A corner authored with a single radius is circular.
+        if (tl.Y == 0) tl.Y = tl.X;
+        if (tr.Y == 0) tr.Y = tr.X;
+        if (br.Y == 0) br.Y = br.X;
+        if (bl.Y == 0) bl.Y = bl.X;
+
+        float f = FitFactor(tl, tr, br, bl, w, h);
+        if (f < 1f)
+        {
+            tl = new SKPoint(tl.X * f, tl.Y * f);
+            tr = new SKPoint(tr.X * f, tr.Y * f);
+            br = new SKPoint(br.X * f, br.Y * f);
+            bl = new SKPoint(bl.X * f, bl.Y * f);
+        }
+        return (tl, tr, br, bl);
+    }
+
+    /// <summary>
+    /// The over-constrained scale of CSS Backgrounds 3 5.3 for an explicit set of radii:
+    /// the smallest ratio of a side to the sum of the two radii that meet it.
+    /// </summary>
+    private static float FitFactor(SKPoint tl, SKPoint tr, SKPoint br, SKPoint bl, float w, float h)
+    {
+        float f = 1f;
+        void Shrink(float sum, float extent)
+        {
+            if (sum > 0 && sum > extent) f = MathF.Min(f, extent / sum);
+        }
+        Shrink(tl.X + tr.X, w);
+        Shrink(bl.X + br.X, w);
+        Shrink(tl.Y + bl.Y, h);
+        Shrink(tr.Y + br.Y, h);
+        return f;
+    }
+
     public static FloatRoundedRect PixelSnappedRoundedBorder(ComputedStyle style, SKRect rect, PhysicalBoxSides sidesToInclude = PhysicalBoxSides.All)
     {
+        var (tl, tr, br, bl) = ResolveRadii(style, rect);
         return new FloatRoundedRect
         {
             Rect = rect,
-            TopLeftRadius = (sidesToInclude & PhysicalBoxSides.Left) != 0 && (sidesToInclude & PhysicalBoxSides.Top) != 0 ? style.BorderTopLeftRadius : 0,
-            TopRightRadius = (sidesToInclude & PhysicalBoxSides.Right) != 0 && (sidesToInclude & PhysicalBoxSides.Top) != 0 ? style.BorderTopRightRadius : 0,
-            BottomRightRadius = (sidesToInclude & PhysicalBoxSides.Right) != 0 && (sidesToInclude & PhysicalBoxSides.Bottom) != 0 ? style.BorderBottomRightRadius : 0,
-            BottomLeftRadius = (sidesToInclude & PhysicalBoxSides.Left) != 0 && (sidesToInclude & PhysicalBoxSides.Bottom) != 0 ? style.BorderBottomLeftRadius : 0
+            TopLeftRadius = (sidesToInclude & PhysicalBoxSides.Left) != 0 && (sidesToInclude & PhysicalBoxSides.Top) != 0 ? tl.X : 0,
+            TopRightRadius = (sidesToInclude & PhysicalBoxSides.Right) != 0 && (sidesToInclude & PhysicalBoxSides.Top) != 0 ? tr.X : 0,
+            BottomRightRadius = (sidesToInclude & PhysicalBoxSides.Right) != 0 && (sidesToInclude & PhysicalBoxSides.Bottom) != 0 ? br.X : 0,
+            BottomLeftRadius = (sidesToInclude & PhysicalBoxSides.Left) != 0 && (sidesToInclude & PhysicalBoxSides.Bottom) != 0 ? bl.X : 0,
+            TopLeftRadiusY = (sidesToInclude & PhysicalBoxSides.Left) != 0 && (sidesToInclude & PhysicalBoxSides.Top) != 0 ? tl.Y : 0,
+            TopRightRadiusY = (sidesToInclude & PhysicalBoxSides.Right) != 0 && (sidesToInclude & PhysicalBoxSides.Top) != 0 ? tr.Y : 0,
+            BottomRightRadiusY = (sidesToInclude & PhysicalBoxSides.Right) != 0 && (sidesToInclude & PhysicalBoxSides.Bottom) != 0 ? br.Y : 0,
+            BottomLeftRadiusY = (sidesToInclude & PhysicalBoxSides.Left) != 0 && (sidesToInclude & PhysicalBoxSides.Bottom) != 0 ? bl.Y : 0
         };
     }
 
     public static FloatRoundedRect PixelSnappedRoundedInnerBorder(ComputedStyle style, SKRect rect, PhysicalBoxSides sidesToInclude = PhysicalBoxSides.All)
     {
-        float insetL = style.BorderLeftWidth, insetT = style.BorderTopWidth, insetR = style.BorderRightWidth, insetB = style.BorderBottomWidth;
+        // A side that is not decorated has no border to inset the inner rect by,
+        // so its edge stays on the border box.
+        float insetL = (sidesToInclude & PhysicalBoxSides.Left) != 0 ? style.BorderLeftWidth : 0;
+        float insetT = (sidesToInclude & PhysicalBoxSides.Top) != 0 ? style.BorderTopWidth : 0;
+        float insetR = (sidesToInclude & PhysicalBoxSides.Right) != 0 ? style.BorderRightWidth : 0;
+        float insetB = (sidesToInclude & PhysicalBoxSides.Bottom) != 0 ? style.BorderBottomWidth : 0;
         return PixelSnappedRoundedBorderWithOutsets(style, rect, new PhysicalBoxStrut(insetT, insetR, insetB, insetL), sidesToInclude);
     }
 
     public static FloatRoundedRect PixelSnappedRoundedBorderWithOutsets(ComputedStyle style, SKRect rect, PhysicalBoxStrut outsets, PhysicalBoxSides sidesToInclude = PhysicalBoxSides.All)
     {
         var border = PixelSnappedRoundedBorder(style, rect, sidesToInclude);
-        border.Inset(outsets.Left, outsets.Top);
-        border.Rect = new SKRect(rect.Left + outsets.Left, rect.Top + outsets.Top, rect.Right - outsets.Right, rect.Bottom - outsets.Bottom);
-        float scaleX = border.Rect.Width <= 0 ? 0 : (border.Rect.Width + 2 * outsets.Left) <= 0 ? 0 : border.Rect.Width / (border.Rect.Width + 2 * outsets.Left);
-        float scaleY = border.Rect.Height <= 0 ? 0 : (border.Rect.Height + 2 * outsets.Top) <= 0 ? 0 : border.Rect.Height / (border.Rect.Height + 2 * outsets.Top);
-        border.TopLeftRadius = ReduceRadius(style.BorderTopLeftRadius, outsets.Left, outsets.Top, scaleX, scaleY);
-        border.TopRightRadius = ReduceRadius(style.BorderTopRightRadius, outsets.Right, outsets.Top, scaleX, scaleY);
-        border.BottomRightRadius = ReduceRadius(style.BorderBottomRightRadius, outsets.Right, outsets.Bottom, scaleX, scaleY);
-        border.BottomLeftRadius = ReduceRadius(style.BorderBottomLeftRadius, outsets.Left, outsets.Bottom, scaleX, scaleY);
+        border.Rect = new SKRect(rect.Left + outsets.Left, rect.Top + outsets.Top,
+                                 rect.Right - outsets.Right, rect.Bottom - outsets.Bottom);
+
+        // A ring's inner corner is concentric with its outer one: each axis loses only the
+        // inset taken from that side (CSS Backgrounds 3 4 - the padding box radius is the
+        // border radius minus the border width). Shrinking proportionally instead makes the
+        // band visibly thinner around the corner than along the straight edges.
+        var (tl, tr, br, bl) = ResolveRadii(style, rect);
+        float innerW = MathF.Max(0, border.Rect.Width), innerH = MathF.Max(0, border.Rect.Height);
+        static float Concentric(float radius, float inset) => radius <= 0 ? 0 : MathF.Max(0, radius - inset);
+        tl = new SKPoint(Concentric(tl.X, outsets.Left), Concentric(tl.Y, outsets.Top));
+        tr = new SKPoint(Concentric(tr.X, outsets.Right), Concentric(tr.Y, outsets.Top));
+        br = new SKPoint(Concentric(br.X, outsets.Right), Concentric(br.Y, outsets.Bottom));
+        bl = new SKPoint(Concentric(bl.X, outsets.Left), Concentric(bl.Y, outsets.Bottom));
+        float fit = FitFactor(tl, tr, br, bl, innerW, innerH);
+        if (fit < 1f)
+        {
+            tl = new SKPoint(tl.X * fit, tl.Y * fit);
+            tr = new SKPoint(tr.X * fit, tr.Y * fit);
+            br = new SKPoint(br.X * fit, br.Y * fit);
+            bl = new SKPoint(bl.X * fit, bl.Y * fit);
+        }
+
+        bool left = (sidesToInclude & PhysicalBoxSides.Left) != 0;
+        bool top = (sidesToInclude & PhysicalBoxSides.Top) != 0;
+        bool right = (sidesToInclude & PhysicalBoxSides.Right) != 0;
+        bool bottom = (sidesToInclude & PhysicalBoxSides.Bottom) != 0;
+        border.TopLeftRadius = left && top ? tl.X : 0;
+        border.TopRightRadius = right && top ? tr.X : 0;
+        border.BottomRightRadius = right && bottom ? br.X : 0;
+        border.BottomLeftRadius = left && bottom ? bl.X : 0;
+        border.TopLeftRadiusY = left && top ? tl.Y : 0;
+        border.TopRightRadiusY = right && top ? tr.Y : 0;
+        border.BottomRightRadiusY = right && bottom ? br.Y : 0;
+        border.BottomLeftRadiusY = left && bottom ? bl.Y : 0;
         return border;
     }
 
-    private static float ReduceRadius(float radius, float insetX, float insetY, float scaleX, float scaleY)
+    /// <summary>
+    /// The overflow clip of a scroll / 'overflow: hidden' container: its padding box
+    /// (or the content box when a scrollbar reserves space) with the border radii
+    /// carried over concentrically. Returns null for a square box so callers keep the
+    /// cheaper device-aligned rectangle clip.
+    /// </summary>
+    public static SKPath? OverflowClipPath(ComputedStyle style, SKRect borderRect, SKRect clipRect)
     {
-        if (radius <= 0) return 0;
-        float r = radius;
-        if (insetX > 0)
-        {
-            r = Math.Max(0, r - insetX);
-            r = r * scaleX;
-        }
-        if (insetY > 0)
-        {
-            r = Math.Max(0, r - insetY);
-            r = r * scaleY;
-        }
-        return r;
+        var outsets = new PhysicalBoxStrut(
+            MathF.Max(0, clipRect.Top - borderRect.Top),
+            MathF.Max(0, borderRect.Right - clipRect.Right),
+            MathF.Max(0, borderRect.Bottom - clipRect.Bottom),
+            MathF.Max(0, clipRect.Left - borderRect.Left));
+        var shape = PixelSnappedRoundedBorderWithOutsets(style, borderRect, outsets);
+        return shape.IsRounded && !shape.IsEmpty ? shape.ToPath(true) : null;
     }
 }

@@ -74,7 +74,7 @@ public class StyleCascade
     private static readonly CssPropertyId[] HighPriorityProperties =
     {
         CssPropertyId.FontSize, CssPropertyId.FontWeight, CssPropertyId.FontStyle,
-        CssPropertyId.FontFamily, CssPropertyId.FontVariant, CssPropertyId.FontStretch,
+        CssPropertyId.FontFamily, CssPropertyId.FontVariant, CssPropertyId.FontVariantCaps, CssPropertyId.FontStretch,
         CssPropertyId.FontKerning, CssPropertyId.FontSizeAdjust, CssPropertyId.Font,
         CssPropertyId.LineHeight, CssPropertyId.Color, CssPropertyId.Visibility,
         CssPropertyId.TextAlign, CssPropertyId.TextTransform, CssPropertyId.TextIndent,
@@ -189,6 +189,9 @@ public class CascadeResolverState
     {
         var style = Element?.ComputedStyle;
         if (style == null) return;
+        // Font-relative units inside the raw value (calc/min/max) resolve
+        // against this element's own font.
+        using var _fontUnitScope = FontUnitContext.Use(style);
         // Delegate to the shared Prism engine property applier so every
         // property supported by the string cascade is available here too.
         var name = CssPropertyIdExtensions.ToString(id);
@@ -210,7 +213,7 @@ public class CascadeResolverState
                 style.FontWeight = CssPropertyApplier.ParseFontWeight(text);
                 return;
             case CssPropertyId.FontStyle:
-                style.FontStyle = CssPropertyApplier.ParseFontStyle(text);
+                style.FontStyle = CssPropertyApplier.ParseFontStyle(text, style);
                 return;
             case CssPropertyId.FontFamily:
                 style.FontFamily = CssPropertyApplier.ParseFontFamily(text);
@@ -244,14 +247,7 @@ public class CascadeResolverState
         try { return ColorParser.Parse(value); } catch { return SkiaSharp.SKColors.Transparent; }
     }
 
-    private static Dom.FontWeight ParseFontWeight(string value)
-    {
-        return ParseFloat(value, 400) switch
-        {
-            700 => Dom.FontWeight.Bold,
-            _ => Dom.FontWeight.Normal
-        };
-    }
+    private static Dom.FontWeight ParseFontWeight(string value) => CssPropertyApplier.ParseFontWeight(value);
 
     private static Dom.FontStyleType ParseFontStyle(string value) => value.ToLowerInvariant() switch
     {
@@ -375,13 +371,10 @@ public class CascadeResolverState
     private static Dom.TextOverflowType ParseTextOverflow(string value) =>
         value.Equals("ellipsis", StringComparison.OrdinalIgnoreCase) ? Dom.TextOverflowType.Ellipsis : Dom.TextOverflowType.Clip;
 
-    private static Dom.TextDecorationLineType ParseTextDecorationLine(string value) => value.ToLowerInvariant() switch
-    {
-        "underline" => Dom.TextDecorationLineType.Underline,
-        "overline" => Dom.TextDecorationLineType.Overline,
-        "line-through" => Dom.TextDecorationLineType.LineThrough,
-        _ => Dom.TextDecorationLineType.None
-    };
+    /// <summary>'text-decoration-line' is a list; the shared parser in
+    /// <see cref="Resolver.CssPropertyApplier"/> produces the flag set.</summary>
+    private static Dom.TextDecorationLineType ParseTextDecorationLine(string value) =>
+        Resolver.CssPropertyApplier.ParseTextDecorationLine(value);
 
     private static Dom.TextDecorationStyleType ParseTextDecorationStyle(string value) => value.ToLowerInvariant() switch
     {
@@ -543,7 +536,8 @@ public class CascadeResolverState
     private static Dom.WordBreakMode ParseWordBreak(string text) => text.ToLowerInvariant() switch
     {
         "break-all" => Dom.WordBreakMode.BreakAll,
-        "break-word" => Dom.WordBreakMode.BreakWord, _ => Dom.WordBreakMode.Normal
+        "break-word" => Dom.WordBreakMode.BreakWord,
+        "keep-all" => Dom.WordBreakMode.KeepAll, _ => Dom.WordBreakMode.Normal
     };
 
     private static Dom.OverflowWrapMode ParseOverflowWrap(string text) => text.ToLowerInvariant() switch

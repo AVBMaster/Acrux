@@ -24,10 +24,23 @@ public static class JustificationUtils
             return;
 
         var align = ResolveEffectiveAlign(info);
+        var source = info.ItemsData()?.TextContent ?? string.Empty;
+
+        // A whitespace-only run at the end of a wrapped line hangs off the edge: it is
+        // neither part of the line's content extent nor a justification opportunity
+        // (CSS Text 3 4.3, verified against Chrome).
+        int lastMeaningful = -1;
+        var spaceRun = new bool[items.Count];
+        for (int i = 0; i < items.Count; i++)
+        {
+            spaceRun[i] = IsSpaceRun(items[i], source);
+            if (!spaceRun[i])
+                lastMeaningful = i;
+        }
 
         // Natural content extent = right edge of the right-most item.
         float naturalExtent = 0;
-        for (int i = 0; i < items.Count; i++)
+        for (int i = 0; i <= lastMeaningful; i++)
         {
             var it = items[i];
             if (!ParticipatesInAlignment(it))
@@ -39,8 +52,12 @@ public static class JustificationUtils
 
         switch (align)
         {
-            case TextAlignType.End:
-            case TextAlignType.Right when IsLtr(info.BaseDirection()):
+            // The line breaker stacks items from the left in either direction,
+            // so the edge that needs the free-space shift depends on the base
+            // direction: in LTR it is 'end' (right), in RTL it is 'start'
+            // (right) while 'end' stays at the left edge.
+            case TextAlignType.End when IsLtr(info.BaseDirection()):
+            case TextAlignType.Start when IsRtl(info.BaseDirection()):
                 ShiftAll(items, free);
                 break;
 
@@ -48,11 +65,21 @@ public static class JustificationUtils
                 ShiftAll(items, free / 2f);
                 break;
 
-            case TextAlignType.Justify when !info.IsLastLine() ||
-                info.LineStyle().TextAlignLast == TextAlignLastType.Justify:
-                ApplyJustifyExpansion(info, items, contentBoxInlineSize, naturalExtent);
+            case TextAlignType.Justify when ShouldJustifyLine(info):
+                ApplyJustifyExpansion(items, contentBoxInlineSize - info.TextIndent(), naturalExtent, spaceRun, lastMeaningful);
                 break;
         }
+    }
+
+    /// <summary>
+    /// A line that ends in a forced break is the last line of its inline block, so it
+    /// is not justified unless 'text-align-last' says otherwise (CSS Text 4 4.3).
+    /// </summary>
+    private static bool ShouldJustifyLine(LineInfo info)
+    {
+        if (info.LineStyle().TextAlignLast == TextAlignLastType.Justify)
+            return true;
+        return !info.IsLastLine() && !info.HasForcedBreak();
     }
 
     private static TextAlignType ResolveEffectiveAlign(LineInfo info)
@@ -85,22 +112,19 @@ public static class JustificationUtils
     /// shift cumulatively. Trailing (hanging) spaces never expand.
     /// </span>
     /// </summary>
-    private static void ApplyJustifyExpansion(LineInfo info, LogicalLineItems items,
-        float contentBoxInlineSize, float naturalExtent)
+    private static void ApplyJustifyExpansion(LogicalLineItems items,
+        float contentBoxInlineSize, float naturalExtent, bool[] spaceRun, int lastMeaningful)
     {
         float free = contentBoxInlineSize - naturalExtent;
-        if (free <= 0)
+        if (free <= 0 || lastMeaningful < 0)
             return;
 
-        var source = info.ItemsData()?.TextContent ?? string.Empty;
-
-        // Collect expansion opportunities (index 鈫?share). A text item composed
-        // entirely of breakable spaces is one opportunity regardless of how many
-        // collapsed spaces it represents.
+        // Every collapsible space run between words counts as ONE opportunity
+        // regardless of how many collapsed spaces it represents.
         List<int> opportunities = new();
-        for (int i = 0; i < items.Count; i++)
+        for (int i = 0; i < lastMeaningful; i++)
         {
-            if (IsExpansionOpportunity(items[i], source))
+            if (spaceRun[i])
                 opportunities.Add(i);
         }
 
@@ -125,7 +149,7 @@ public static class JustificationUtils
         }
     }
 
-    private static bool IsExpansionOpportunity(LogicalLineItem item, string source)
+    private static bool IsSpaceRun(LogicalLineItem item, string source)
     {
         if (item.InlineItem is not { Type: InlineItem.InlineItemType.Text })
             return false;

@@ -81,6 +81,20 @@ public class LineInfo
     /// </summary>
     public float LeftInset { get; set; }
 
+    /// <summary>
+    /// Margin/border/padding that an inline box with
+    /// <c>box-decoration-break: clone</c> reserves at the line start, on a line
+    /// that continues such a box (CSS Fragmentation 3 §4.2). It is part of the
+    /// line's inline size but belongs to no item of this line.
+    /// </summary>
+    public float BoxDecorationStartInset { get; set; }
+
+    /// <summary>
+    /// The clone counterpart of <see cref="BoxDecorationStartInset"/> at the line
+    /// end: the decoration of the boxes still open when the line broke.
+    /// </summary>
+    public float BoxDecorationEndInset { get; set; }
+
     public void Reset()
     {
         _itemsData = null;
@@ -98,6 +112,8 @@ public class LineInfo
         _width = 0;
         _hangWidth = 0;
         _textIndent = 0;
+        BoxDecorationStartInset = 0;
+        BoxDecorationEndInset = 0;
 
         _annotationBlockStartAdjustment = 0;
         _initialLetterBoxBlockStartAdjustment = 0;

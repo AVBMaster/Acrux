@@ -49,12 +49,17 @@ internal static class TablePainter
     }
 
     /// <summary>True when the element is a cell of a border-collapse: collapse table.</summary>
-    public static bool InCollapsedTable(Element element)
+    public static bool InCollapsedTable(Element element) => OwningCollapsedTable(element) != null;
+
+    /// <summary>The collapse table a cell belongs to, or null. The table element's own
+    /// border takes part in resolving the outer grid lines (CSS 2.1 §17.6.2.1), so the
+    /// painter has to be able to reach it from a cell.</summary>
+    public static Element? OwningCollapsedTable(Element element)
     {
         var row = element.ParentElement;
         var table = row == null ? null : (row.ParentElement?.TagName is "TBODY" or "THEAD" or "TFOOT"
             ? row.ParentElement?.ParentElement : row);
-        return table != null && IsTable(table) && table.ComputedStyle?.BorderCollapse == true;
+        return table != null && IsTable(table) && table.ComputedStyle?.BorderCollapse == true ? table : null;
     }
 
     /// <summary>
@@ -70,19 +75,49 @@ internal static class TablePainter
         var above = FacingCell(cell, above: true);
         var below = FacingCell(cell, above: false);
         var (prev, next) = HorizontalNeighbors(cell);
+        // With no cell facing an edge, the table element's own border is the other
+        // candidate for that grid line (CSS 2.1 §17.6.2.1).
+        var tableStyle = OwningCollapsedTable(cell)?.ComputedStyle;
 
         PaintCollapsedSide(displayList, rect, Side.Top,
             (style.BorderTopWidth, style.BorderTopColor),
-            FacingEdge(above, Side.Top, contentOffsetY), neighborWinsTies: true);
+            FacingEdge(above, Side.Top, contentOffsetY), neighborWinsTies: true,
+            outer: above == null ? OuterEdge(tableStyle, Side.Top) : null);
         PaintCollapsedSide(displayList, rect, Side.Bottom,
             (style.BorderBottomWidth, style.BorderBottomColor),
-            FacingEdge(below, Side.Bottom, contentOffsetY), neighborWinsTies: false);
+            FacingEdge(below, Side.Bottom, contentOffsetY), neighborWinsTies: false,
+            outer: below == null ? OuterEdge(tableStyle, Side.Bottom) : null);
         PaintCollapsedSide(displayList, rect, Side.Left,
             (style.BorderLeftWidth, style.BorderLeftColor),
-            FacingEdge(prev, Side.Left, contentOffsetY), neighborWinsTies: true);
+            FacingEdge(prev, Side.Left, contentOffsetY), neighborWinsTies: true,
+            outer: prev == null ? OuterEdge(tableStyle, Side.Left) : null);
         PaintCollapsedSide(displayList, rect, Side.Right,
             (style.BorderRightWidth, style.BorderRightColor),
-            FacingEdge(next, Side.Right, contentOffsetY), neighborWinsTies: false);
+            FacingEdge(next, Side.Right, contentOffsetY), neighborWinsTies: false,
+            outer: next == null ? OuterEdge(tableStyle, Side.Right) : null);
+    }
+
+    /// <summary>The table's own border for an outer grid line. It only wins when it is
+    /// wider than the cell's: the table is the last candidate in the border-priority
+    /// order, so ties go to the cell.</summary>
+    private static (float width, SKColor color, float line)? OuterEdge(ComputedStyle? tableStyle, Side side)
+    {
+        if (tableStyle == null) return null;
+        float width = side switch
+        {
+            Side.Top => tableStyle.BorderTopWidth,
+            Side.Bottom => tableStyle.BorderBottomWidth,
+            Side.Left => tableStyle.BorderLeftWidth,
+            _ => tableStyle.BorderRightWidth,
+        };
+        var color = side switch
+        {
+            Side.Top => tableStyle.BorderTopColor,
+            Side.Bottom => tableStyle.BorderBottomColor,
+            Side.Left => tableStyle.BorderLeftColor,
+            _ => tableStyle.BorderRightColor,
+        };
+        return width > 0 ? (width, color, float.NaN) : null;
     }
 
     private enum Side { Top, Bottom, Left, Right }
@@ -119,13 +154,18 @@ internal static class TablePainter
     }
 
     private static void PaintCollapsedSide(DisplayList displayList, SKRect rect, Side side,
-        (float width, SKColor color) own, (float width, SKColor color, float line)? neighbor, bool neighborWinsTies)
+        (float width, SKColor color) own, (float width, SKColor color, float line)? neighbor, bool neighborWinsTies,
+        (float width, SKColor color, float line)? outer = null)
     {
+        // A facing cell shares the grid line; with none, the table's own border is the
+        // other candidate for that outer line and ties go to the cell (§17.6.2.1).
+        var candidate = neighbor ?? outer;
+        bool candidateWinsTies = neighbor != null ? neighborWinsTies : false;
         var winner = own;
-        if (neighbor != null &&
-            (neighbor.Value.width > own.width ||
-             (neighbor.Value.width == own.width && neighborWinsTies)))
-            winner = (neighbor.Value.width, neighbor.Value.color);
+        if (candidate != null &&
+            (candidate.Value.width > own.width ||
+             (candidate.Value.width == own.width && candidateWinsTies)))
+            winner = (candidate.Value.width, candidate.Value.color);
         if (winner.width <= 0 || winner.color.Alpha == 0)
             return;
 

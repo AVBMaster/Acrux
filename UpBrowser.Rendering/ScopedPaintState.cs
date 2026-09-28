@@ -69,6 +69,22 @@ internal sealed class ScopedPaintState : IDisposable
         return true;
     }
 
+    public bool PushClipPath(SKPath clipPath)
+    {
+        var bounds = clipPath.Bounds;
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            return false;
+
+        var op = PaintOpPool.GetPushClipOp();
+        op.ClipPath = new SKPath(clipPath);
+        op.AntiAlias = true;
+        op.Bounds = bounds;
+        _displayList.Add(op);
+        _states.Add(new LayerState(StateType.Clip, null, bounds));
+        CullRect.Intersect(bounds);
+        return true;
+    }
+
     public void Dispose()
     {
         if (_disposed)

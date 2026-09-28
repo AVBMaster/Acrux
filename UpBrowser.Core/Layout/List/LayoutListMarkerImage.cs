@@ -27,7 +27,7 @@ public class LayoutListMarkerImage : LayoutImage
         var style = Style;
         if (style == null) return new PhysicalSize(16, 16);
 
-        float ascent = Fonts.LineBoxMetrics.GetFontMetrics(style).IntAscent;
+        float ascent = Fonts.LineBoxMetrics.GetFontMetrics(style).LayoutAscent;
         float bulletWidth = ascent / 2f;
         return new PhysicalSize(bulletWidth, bulletWidth);
     }

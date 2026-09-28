@@ -35,13 +35,31 @@ public abstract class LayoutAlgorithm
     {
         Node = node;
         Space = space;
+        // An element's own computed 'direction' steers its inline formatting; the
+        // space handed down from the parent only carries the ancestor's value.
+        if (node.ComputedStyle is { } cs)
+        {
+            var styleDir = string.Equals(cs.Direction, "rtl", StringComparison.OrdinalIgnoreCase)
+                ? TextDirection.Rtl : TextDirection.Ltr;
+            if (styleDir != space.Direction)
+                Space = space.WithDirection(styleDir);
+        }
         Builder = new BoxFragmentBuilder();
     }
 
-    public float BorderLeft => Style.BorderLeftWidth;
-    public float BorderRight => Style.BorderRightWidth;
-    public float BorderTop => Style.BorderTopWidth;
-    public float BorderBottom => Style.BorderBottomWidth;
+    /// <summary>
+    /// Border widths this box's own geometry is built from. A table cell inside a
+    /// border-collapse: collapse table owns only half of every shared grid line
+    /// (CSS 2.1 §17.6.2); the table algorithm resolves those halves and hands them
+    /// down through the constraint space, so they - not the style's border-widths -
+    /// size the box.
+    /// </summary>
+    protected BoxStrut OwnBorders => Space.CollapsedCellBorders ?? LengthUtils.ComputeBorders(Style);
+
+    public float BorderLeft => OwnBorders.Left;
+    public float BorderRight => OwnBorders.Right;
+    public float BorderTop => OwnBorders.Top;
+    public float BorderBottom => OwnBorders.Bottom;
 
     public float PaddingLeft => Style.PaddingLeft.ToPixels(Style.FontSize, RootFontSize, ViewportWidth, ViewportHeight);
     public float PaddingRight => Style.PaddingRight.ToPixels(Style.FontSize, RootFontSize, ViewportWidth, ViewportHeight);

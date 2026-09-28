@@ -1,4 +1,4 @@
-using SkiaSharp;
+﻿using SkiaSharp;
 using UpBrowser.Core.Dom;
 
 namespace UpBrowser.Core.Css.ElementStyles;
@@ -101,22 +101,10 @@ public static class BlockElements
             // 表格元素
             case "table":
                 style.Display = DisplayType.Table;
-                style.BorderCollapse = true;
+                // The UA stylesheet owns border-collapse/-spacing and the table's
+                // margins; a phantom 1px gray border here used to inflate every
+                // table box by 2px on both axes.
                 style.BorderSpacing = 2;
-                style.MarginTop = new PixelLength(12);
-                style.MarginBottom = new PixelLength(12);
-                style.BorderTopWidth = 1;
-                style.BorderRightWidth = 1;
-                style.BorderBottomWidth = 1;
-                style.BorderLeftWidth = 1;
-                style.BorderTopStyle = BorderStyle.Solid;
-                style.BorderRightStyle = BorderStyle.Solid;
-                style.BorderBottomStyle = BorderStyle.Solid;
-                style.BorderLeftStyle = BorderStyle.Solid;
-                style.BorderTopColor = SKColor.Parse("#808080");
-                style.BorderRightColor = SKColor.Parse("#808080");
-                style.BorderBottomColor = SKColor.Parse("#808080");
-                style.BorderLeftColor = SKColor.Parse("#808080");
                 break;
             case "thead":
                 style.Display = DisplayType.TableHeaderGroup;
@@ -141,40 +129,19 @@ public static class BlockElements
                 style.VerticalAlign = VerticalAlignType.Middle;
                 style.PaddingTop = new PixelLength(1);
                 style.PaddingBottom = new PixelLength(1);
-                style.PaddingLeft = new PixelLength(6);
-                style.PaddingRight = new PixelLength(6);
-                style.BorderTopStyle = BorderStyle.Solid;
-                style.BorderTopWidth = 1;
-                style.BorderTopColor = SKColor.Parse("#808080");
-                style.BorderBottomStyle = BorderStyle.Solid;
-                style.BorderBottomWidth = 1;
-                style.BorderBottomColor = SKColor.Parse("#808080");
-                style.BorderLeftStyle = BorderStyle.Solid;
-                style.BorderLeftWidth = 1;
-                style.BorderLeftColor = SKColor.Parse("#808080");
-                style.BorderRightStyle = BorderStyle.Solid;
-                style.BorderRightWidth = 1;
-                style.BorderRightColor = SKColor.Parse("#808080");
+                style.PaddingLeft = new PixelLength(1);
+                style.PaddingRight = new PixelLength(1);
+                // No border: HTML tables render without cell borders unless the page
+                // asks for them, and a phantom 1px border inflates every cell box by
+                // 2px on each axis (see the table layout tests in docs/).
                 break;
             case "td":
                 style.Display = DisplayType.TableCell;
                 style.VerticalAlign = VerticalAlignType.Middle;
                 style.PaddingTop = new PixelLength(1);
                 style.PaddingBottom = new PixelLength(1);
-                style.PaddingLeft = new PixelLength(6);
-                style.PaddingRight = new PixelLength(6);
-                style.BorderTopStyle = BorderStyle.Solid;
-                style.BorderTopWidth = 1;
-                style.BorderTopColor = SKColor.Parse("#808080");
-                style.BorderBottomStyle = BorderStyle.Solid;
-                style.BorderBottomWidth = 1;
-                style.BorderBottomColor = SKColor.Parse("#808080");
-                style.BorderLeftStyle = BorderStyle.Solid;
-                style.BorderLeftWidth = 1;
-                style.BorderLeftColor = SKColor.Parse("#808080");
-                style.BorderRightStyle = BorderStyle.Solid;
-                style.BorderRightWidth = 1;
-                style.BorderRightColor = SKColor.Parse("#808080");
+                style.PaddingLeft = new PixelLength(1);
+                style.PaddingRight = new PixelLength(1);
                 break;
             case "caption":
                 // HTML UA stylesheet: a caption is only centered; it carries no

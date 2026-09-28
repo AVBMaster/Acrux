@@ -59,6 +59,13 @@ public class LineBreaker
     private LazyLineBreakIterator _breakIterator = new("");
     private HarfBuzzShaper _shaper = new("");
     private LineBreakerMode _mode = LineBreakerMode.Content;
+    private bool _intrinsicMinContent;
+
+    /// <summary>
+    /// Set while measuring the min-content intrinsic width: 'break-word' style
+    /// overflow breaks must not create break opportunities there (CSS Text 3 §4.3).
+    /// </summary>
+    public void SetIntrinsicMinContent(bool value) => _intrinsicMinContent = value;
     private bool _disallowAutoWrap;
     private bool _autoWrap = true;
     private bool _breakAnywhereIfOverflow;
@@ -91,6 +98,14 @@ public class LineBreaker
     /// register the same float twice.</summary>
     private readonly List<Element> _placedFloats = new();
     private float _appliedTextIndent;
+    /// <summary>Inline boxes with <c>box-decoration-break: clone</c> that are open
+    /// at the current position of the line being broken.</summary>
+    private int _clonedBoxDecorationsCount;
+    /// <summary>Start margin/border/padding those boxes reserve on this line.</summary>
+    private float _clonedBoxStartSize;
+    /// <summary>End margin/border/padding of the ones still open at the current
+    /// position; it has to be kept in the line so the next line can start after it.</summary>
+    private float _clonedBoxEndSize;
     private ComputedStyle _currentStyle = new();
     private ComputedStyle _lineStyle = new();
     /// <summary>Style of the box without ::first-line, restored on later lines.</summary>
@@ -108,14 +123,16 @@ public class LineBreaker
     // Unit-resolution context, pushed by the owning algorithm so atomic
     // inlines (inline-block/replaceables) resolve rem/vw/vh against the document.
     private float _rootFontSize = ConstraintSpace.DefaultRootFontSize;
+    private float _dpiScale = 1f;
     private float _viewportWidth;
     private float _viewportHeight;
 
-    public void SetUnitContext(float rootFontSize, float viewportWidth, float viewportHeight)
+    public void SetUnitContext(float rootFontSize, float viewportWidth, float viewportHeight, float dpiScale = 1f)
     {
         _rootFontSize = rootFontSize > 0 ? rootFontSize : ConstraintSpace.DefaultRootFontSize;
         _viewportWidth = viewportWidth;
         _viewportHeight = viewportHeight;
+        _dpiScale = dpiScale > 0 ? dpiScale : 1f;
     }
 
     public LineBreaker()
@@ -175,6 +192,9 @@ public class LineBreaker
         _currentTextOffset = 0;
         _position = 0;
         _appliedTextIndent = 0;
+        _clonedBoxDecorationsCount = 0;
+        _clonedBoxStartSize = 0;
+        _clonedBoxEndSize = 0;
         _isFirstFormattedLine = true;
         _useFirstLineStyle = false;
         _isForcedBreak = false;
@@ -269,6 +289,12 @@ public class LineBreaker
         // applied text indent, or the style.
         _appliedTextIndent = 0;
 
+        // A line that starts inside a 'box-decoration-break: clone' box repeats that
+        // box's decoration, so it has to reserve the same start margin/border/padding
+        // the line that opened the box did (CSS Fragmentation 3 §4.2).
+        if (_clonedBoxDecorationsCount > 0)
+            RecalcClonedBoxDecorations(lineInfo);
+
         BreakLine(lineInfo);
 
         if (_hyphenIndex.HasValue)
@@ -278,6 +304,11 @@ public class LineBreaker
         lineInfo.SetEndItemIndex(_currentItemIndex);
         lineInfo.SetBfcOffset(in BfcOffset.Zero);
         lineInfo.ComputeWidth();
+        lineInfo.BoxDecorationStartInset = _clonedBoxStartSize;
+        lineInfo.BoxDecorationEndInset = _clonedBoxEndSize;
+        // The clone decoration that sticks out at both ends of the line is part of
+        // the line's inline size, even though no item of this line carries it.
+        float decoratedWidth = lineInfo.ComputeWidth() + _clonedBoxStartSize + _clonedBoxEndSize;
 
         if (_mode == LineBreakerMode.Content)
         {
@@ -285,14 +316,14 @@ public class LineBreaker
             if (!_overrideBreakAnywhere && _breakAnywhereIfOverflow && _isForcedBreak)
             {
                 // Force to break the line.
-                availableWidth = _position;
+                availableWidth = decoratedWidth;
             }
             // Floats can be removed by the float rewind, which makes the line
             // shorter than the available width.
             if (lineInfo.HasOverflow())
-                availableWidth = _position;
+                availableWidth = decoratedWidth;
 
-            lineInfo.SetWidth(availableWidth, lineInfo.ComputeWidth());
+            lineInfo.SetWidth(availableWidth, decoratedWidth);
             // Unit-resolution context: update for EVERY alignment. The old guard skipped justify,
             // which left _textAlign at Start so justify/center/right never ran.
             // UpdateTextAlign also computes the hang width + justify end offset
@@ -303,7 +334,7 @@ public class LineBreaker
         else
         {
             // Intrinsic size modes don't have text indent.
-            lineInfo.SetWidth(_position, _position);
+            lineInfo.SetWidth(decoratedWidth, decoratedWidth);
         }
 
         if (IsFinished() && !_isForcedBreak)
@@ -677,6 +708,14 @@ public class LineBreaker
                 itemResult.ShouldCreateLineBox = true;
         }
 
+        // A clone box repeats its decoration on every line it spans, so its end
+        // margin/border/padding must stay reserved until the box closes.
+        if (IsClonedBoxDecoration(item))
+        {
+            _clonedBoxDecorationsCount++;
+            _clonedBoxEndSize += InlineLengthUtils.ComputeInlineEndSize(LineConstraintSpace(), style);
+        }
+
         bool wasAutoWrap = _autoWrap;
         SetCurrentStyle(style);
         MoveToNextOf(item);
@@ -703,6 +742,12 @@ public class LineBreaker
 
         if (!itemResult.ShouldCreateLineBox && !item.IsEmptyItem())
             itemResult.ShouldCreateLineBox = true;
+
+        if (IsClonedBoxDecoration(item) && _clonedBoxDecorationsCount > 0)
+        {
+            _clonedBoxDecorationsCount--;
+            _clonedBoxEndSize -= itemResult.InlineSize;
+        }
 
         bool wasAutoWrap = _autoWrap;
         SetCurrentStyle(style);
@@ -819,6 +864,7 @@ public class LineBreaker
             .SetForcedBfcBlockOffset(0)
             .SetDirection(style.Direction == "rtl" ? TextDirection.Rtl : TextDirection.Ltr)
             .SetRootFontSize(_rootFontSize)
+            .SetDpiScale(_dpiScale)
             .SetViewportSize(_viewportWidth, _viewportHeight)
             .ToConstraintSpace();
 
@@ -891,6 +937,7 @@ public class LineBreaker
             .SetForcedBfcBlockOffset(0)
             .SetDirection(item.Direction == TextDirection.Rtl ? TextDirection.Rtl : TextDirection.Ltr)
             .SetRootFontSize(_rootFontSize)
+            .SetDpiScale(_dpiScale)
             .SetViewportSize(_viewportWidth, _viewportHeight)
             .ToConstraintSpace();
 
@@ -972,6 +1019,96 @@ public class LineBreaker
 
         MoveToNextOf(item);
     }
+
+    /// <summary>
+    /// Recomputes the decoration a <c>box-decoration-break: clone</c> box repeats on
+    /// the line being broken (CSS Fragmentation 3 §4.2): the boxes already open when
+    /// the line starts reserve their start margin/border/padding, and the ones still
+    /// open at the current position reserve their end margin/border/padding, so that
+    /// neither the content nor the decoration of the next line can overlap it.
+    /// Mirrors RecalcClonedBoxDecorations().
+    /// </summary>
+    private void RecalcClonedBoxDecorations(LineInfo lineInfo)
+    {
+        _clonedBoxDecorationsCount = 0;
+        _clonedBoxStartSize = 0;
+        _clonedBoxEndSize = 0;
+
+        if (_itemsData == null)
+            return;
+
+        // A line that continues a box has no open-tag item for it, so the decoration
+        // that box repeats has to be derived from the items before the line.
+        var space = LineConstraintSpace();
+        var openItems = new List<InlineItem>();
+        _itemsData.GetOpenTagItems(0, lineInfo.StartItemIndex, openItems);
+        foreach (var item in openItems)
+        {
+            if (!IsClonedBoxDecoration(item))
+                continue;
+            _clonedBoxDecorationsCount++;
+            var itemResult = new InlineItemResult(item);
+            ComputeOpenTagResult(item, space, false, itemResult);
+            AddClonedBoxStartSize(itemResult);
+            AddClonedBoxEndSize(itemResult);
+        }
+
+        // Items of this line itself, as far as they are still on the line: a rewind
+        // truncates them before this runs, which is what makes the totals below
+        // independent of how far the breaker had got.
+        foreach (var itemResult in lineInfo.Results())
+        {
+            if (!IsClonedBoxDecoration(itemResult.Item))
+                continue;
+            if (itemResult.Item.Type == InlineItem.InlineItemType.OpenTag)
+            {
+                _clonedBoxDecorationsCount++;
+                // Only the end decoration: this line opened the box, so its start
+                // margin/border/padding is already carried by the open-tag item.
+                AddClonedBoxEndSize(itemResult);
+            }
+            else
+                RemoveClonedBoxDecoration(itemResult);
+        }
+
+        // The content of the line starts after the repeated decoration.
+        _position += _clonedBoxStartSize;
+        // A line box narrower than the decoration it repeats still has to fit that
+        // decoration, so the available width grows rather than the content shrinking.
+        if (_availableWidth < _clonedBoxStartSize)
+            _availableWidth = _clonedBoxStartSize;
+    }
+
+    private void AddClonedBoxStartSize(InlineItemResult itemResult) =>
+        _clonedBoxStartSize += itemResult.Margins.Left + itemResult.Borders.Left + itemResult.Padding.Left;
+
+    private void AddClonedBoxEndSize(InlineItemResult itemResult) =>
+        _clonedBoxEndSize += itemResult.Margins.Right + itemResult.Borders.Right + itemResult.Padding.Right;
+
+    private void RemoveClonedBoxDecoration(InlineItemResult itemResult)
+    {
+        if (_clonedBoxDecorationsCount > 0)
+            _clonedBoxDecorationsCount--;
+        // A close tag carries the box's whole end margin/border/padding as its inline
+        // size, which is exactly what the matching open tag reserved.
+        _clonedBoxEndSize = Math.Max(0, _clonedBoxEndSize - itemResult.InlineSize);
+    }
+
+    /// <summary>Restores the pen position from the items kept on the line, and with
+    /// it the decoration a clone box reserves at the start of the line.</summary>
+    private void RestorePositionFromResults(LineInfo lineInfo)
+    {
+        _position = lineInfo.ComputeWidth();
+        if (_clonedBoxDecorationsCount > 0)
+            RecalcClonedBoxDecorations(lineInfo);
+    }
+
+    /// <summary>Whether an item opens or closes an inline box that repeats its
+    /// decoration on every line it spans.</summary>
+    private static bool IsClonedBoxDecoration(InlineItem item) =>
+        item.Type is InlineItem.InlineItemType.OpenTag or InlineItem.InlineItemType.CloseTag
+        && item.ShouldCreateBoxFragment()
+        && item.Style().BoxDecorationBreak == BoxDecorationBreakType.Clone;
 
     /// <summary>
     /// Computes the border/padding/margin of an open tag. Returns true if the
@@ -1357,7 +1494,7 @@ public class LineBreaker
         {
             // All items are trailable. Done without rewinding.
             _trailingWhitespace = WhitespaceState.Unknown;
-            _position = lineInfo.ComputeWidth();
+            RestorePositionFromResults(lineInfo);
             _state = LineBreakState.Done;
             if (IsAtEnd())
                 lineInfo.SetIsLastLine(true);
@@ -1443,7 +1580,7 @@ public class LineBreaker
 
         // All items are trailable. Done without rewinding.
         _trailingWhitespace = WhitespaceState.Unknown;
-        _position = lineInfo.ComputeWidth();
+        RestorePositionFromResults(lineInfo);
         _state = LineBreakState.Done;
         if (IsAtEnd())
             lineInfo.SetIsLastLine(true);
@@ -1461,7 +1598,7 @@ public class LineBreaker
             ++newEnd;
             if (newEnd == itemResults.Count)
             {
-                _position = lineInfo.ComputeWidth();
+                RestorePositionFromResults(lineInfo);
                 return;
             }
         }
@@ -1497,7 +1634,7 @@ public class LineBreaker
         if (!_hyphenIndex.HasValue && _hasAnyHyphens)
             RestoreLastHyphen(itemResults);
 
-        _position = lineInfo.ComputeWidth();
+        RestorePositionFromResults(lineInfo);
     }
 
     private bool HandleOverflowIfNeeded(LineInfo lineInfo)
@@ -1554,9 +1691,13 @@ public class LineBreaker
         // inline size, which is only known here (CSS Text 3 §5.2). Floats shorten
         // individual line boxes but not the containing block, hence the base width.
         float indentLength = _lineStyle.TextIndent + _lineStyle.TextIndentPercent * _inlineBaseWidth;
+        // 'each-line' extends the "first line" to the lines that follow a forced
+        // break (CSS Text 3 5.2).
+        bool indentsLikeFirst = _isFirstFormattedLine ||
+            (_lineStyle.TextIndentEachLine && _previousLineHadForcedBreak);
         float textIndent = _lineStyle.TextIndentHanging
-            ? (_isFirstFormattedLine ? 0 : indentLength)
-            : (_isFirstFormattedLine ? indentLength : 0);
+            ? (indentsLikeFirst ? 0 : indentLength)
+            : (indentsLikeFirst ? indentLength : 0);
         _appliedTextIndent = textIndent;
         lineInfo.SetTextIndent(textIndent);
         _position += textIndent;
@@ -1805,7 +1946,11 @@ public class LineBreaker
                     break;
                 case WordBreakMode.BreakWord:
                     lineBreakType = LineBreakType.kNormal;
-                    _breakAnywhereIfOverflow = true;
+                    _breakAnywhereIfOverflow = !_intrinsicMinContent;
+                    break;
+                case WordBreakMode.KeepAll:
+                    lineBreakType = LineBreakType.kKeepAll;
+                    _breakAnywhereIfOverflow = false;
                     break;
             }
             if (!_breakAnywhereIfOverflow)
@@ -1814,7 +1959,7 @@ public class LineBreaker
                 // while 'break-word' affects layout but not min-content.
                 var overflowWrap = style.OverflowWrap;
                 _breakAnywhereIfOverflow = overflowWrap == OverflowWrapMode.Anywhere
-                    || (overflowWrap == OverflowWrapMode.BreakWord && _mode == LineBreakerMode.Content);
+                    || (overflowWrap == OverflowWrapMode.BreakWord && !_intrinsicMinContent);
             }
             if (_breakAnywhereIfOverflow)
             {
@@ -1888,7 +2033,11 @@ public class LineBreaker
 
     private float AvailableWidthToFit()
     {
-        return _availableWidth + 0.0001f;
+        // Content whose right edge lands within half a device pixel of the line
+        // end still fits: the snapped paint shows no overflow, and browsers wrap
+        // on the snapped edge, not on the exact float sum (a 0.06px float tail
+        // must not push the last word to the next line).
+        return _availableWidth + Math.Max(0.0001f, 0.5f / _dpiScale);
     }
 
     private float RemainingAvailableWidth()

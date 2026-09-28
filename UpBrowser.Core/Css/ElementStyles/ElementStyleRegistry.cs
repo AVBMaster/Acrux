@@ -63,6 +63,15 @@ public static class ElementStyleRegistry
         Register("summary", (s, t, _) => BlockElements.Apply(s, t));
         Register("dialog", (s, t, _) => BlockElements.Apply(s, t));
         Register("hr", (s, t, _) => BlockElements.Apply(s, t));
+        Register("center", (s, t, _) => BlockElements.Apply(s, t));
+        Register("dir", (s, t, _) => BlockElements.Apply(s, t));
+        Register("listing", (s, t, _) => BlockElements.Apply(s, t));
+        Register("menu", (s, t, _) => BlockElements.Apply(s, t));
+        Register("plaintext", (s, t, _) => BlockElements.Apply(s, t));
+        Register("xmp", (s, t, _) => BlockElements.Apply(s, t));
+        Register("form", (s, t, _) => BlockElements.Apply(s, t));
+        Register("colgroup", (s, t, _) => BlockElements.Apply(s, t));
+        Register("col", (s, t, _) => BlockElements.Apply(s, t));
         Register("search", (s, t, _) => BlockElements.Apply(s, t));
         Register("hgroup", (s, t, _) => BlockElements.Apply(s, t));
 
@@ -135,7 +144,12 @@ public static class ElementStyleRegistry
         if (_elementStyles.TryGetValue(key, out var applyStyle))
         {
             applyStyle(style, key, element);
+            return;
         }
+        // HTML: unknown (custom) elements have no UA rules at all, so they are
+        // inline by default — the ComputedStyle default is only for the tags the
+        // registry explicitly restyles.
+        style.Display = DisplayType.Inline;
     }
 
     public static bool IsRegistered(string tagName)

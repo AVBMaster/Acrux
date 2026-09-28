@@ -20,7 +20,9 @@ public class SkiaTextMeasurer : ITextMeasurer
     {
         if (string.IsNullOrEmpty(text)) return 0;
 
-        var key = $"{text}:{fontSize}:{fontFamily}:{weight}";
+        // Glyph advances are resolved on the device pixel grid, so the scale is
+        // part of the identity of a measured run.
+        var key = $"{text}:{fontSize}:{fontFamily}:{weight}:{Fonts.FontMetricsProvider.DeviceScale}";
         if (_widthCache.TryGetValue(key, out var cached))
             return cached;
 
@@ -123,7 +125,9 @@ public class SkiaTextMeasurer : ITextMeasurer
             };
         }
 
-        var key = $"{text}:{fontSize}:{fontFamily}:{weight}";
+        // Line spacing comes out of the device-grid quantization, so the scale is
+        // part of the identity of a measured run.
+        var key = $"{text}:{fontSize}:{fontFamily}:{weight}:{Fonts.FontMetricsProvider.DeviceScale}";
         if (_metricsCache.TryGetValue(key, out var cached))
             return cached;
 

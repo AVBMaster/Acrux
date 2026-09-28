@@ -380,7 +380,9 @@ class Program
         Run("TiledCompositor overscan pre-rasterises surrounding tiles", () =>
         {
             var dl = new DisplayList();
-            var op = new DrawRectOp { Rect = new SKRect(0, 0, 64, 64), FillColor = SKColors.Green };
+            // The tile grid only rasterises tiles that have content, so the picture
+            // has to reach into the ring area for the ring work to be observable.
+            var op = new DrawRectOp { Rect = new SKRect(0, 0, 320, 320), FillColor = SKColors.Green };
             op.Bounds = op.Rect;
             dl.Add(op);
             dl.SortByZIndex();
