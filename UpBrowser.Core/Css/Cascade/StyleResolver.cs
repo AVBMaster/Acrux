@@ -90,10 +90,11 @@ public class StyleResolver
         // 6. Apply the cascade
         cascade.Apply();
 
-        // 7. Apply @keyframes final state for animated elements (Animation origin)
-        ApplyKeyframes(element, state, cascade);
-
-        // 8. Adjust the computed style
+        // 7. Adjust the computed style
+        // @keyframes are NOT folded in here: the cascade must yield the
+        // element's *underlying* value so the animation engine has a clean base to
+        // sample over, and so a transition's after-change style is the declared
+        // value rather than an animated one.
         _adjuster.AdjustComputedStyle(style, element, parentStyle);
 
         return style;
@@ -300,54 +301,6 @@ public class StyleResolver
                 Properties = props,
                 Priority = new CascadePriority(CascadeOrigin.JsModified, 0, _treeOrderCounter++, 0, false)
             });
-        }
-    }
-
-    private void ApplyKeyframes(Element element, CascadeResolverState state, StyleCascade cascade)
-    {
-        var style = element.ComputedStyle;
-        if (style == null) return;
-        var name = style.AnimationName;
-        if (string.IsNullOrEmpty(name) || name == "none") return;
-
-        foreach (var sheet in _authorSheets)
-        {
-            StyleRuleKeyframes? found = null;
-            foreach (var rule in sheet.ChildRules)
-            {
-                if (rule is StyleRuleKeyframes kf &&
-                    string.Equals(kf.Name, name, StringComparison.OrdinalIgnoreCase))
-                {
-                    found = kf;
-                    break;
-                }
-            }
-            if (found == null) continue;
-
-            StyleRuleKeyframe? finalBlock = null;
-            float maxPct = -1;
-            foreach (var block in found.Keyframes)
-            {
-                if (float.TryParse(block.Key.TrimEnd('%'), out float pct) && pct >= maxPct)
-                {
-                    maxPct = pct;
-                    finalBlock = block;
-                }
-            }
-
-            if (finalBlock != null)
-            {
-                state.MatchedRules.Add(new MatchedRuleEntry
-                {
-                    Properties = ExpandShorthands(finalBlock.Properties),
-                    Priority = new CascadePriority(CascadeOrigin.Animation, 0, int.MaxValue, 0, false)
-                });
-                // The cascade analyzed once during the first Apply; reset the lazy
-                // analysis flag so re-applying picks up the animation declarations.
-                cascade.Reset();
-                cascade.Apply();
-            }
-            break;
         }
     }
 

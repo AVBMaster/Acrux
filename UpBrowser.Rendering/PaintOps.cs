@@ -454,7 +454,11 @@ public class DrawTextOp : PaintOp
                     Color = shadow.Color,
                     Style = SKPaintStyle.Fill,
                     IsAntialias = true,
-                    ImageFilter = shadow.BlurRadius > 0 ? SKImageFilter.CreateBlur(shadow.BlurRadius, shadow.BlurRadius) : null
+                    // The CSS blur length is a blur radius, i.e. half the Gaussian
+                    // standard deviation that Skia's blur filter expects.
+                    ImageFilter = shadow.BlurRadius > 0
+                        ? SKImageFilter.CreateBlur(shadow.BlurRadius / 2f, shadow.BlurRadius / 2f)
+                        : null
                 };
                 float shadowX = SnapToDevice(drawX + shadow.OffsetX, sx);
                 float shadowY = SnapToDevice(drawY + shadow.OffsetY, sy);
@@ -1673,7 +1677,10 @@ public class PushLayerOp : PaintOp
         var paint = new SKPaint();
         paint.Color = SKColors.Black;
         if (Opacity < 1.0f)
-            paint.Color = paint.Color.WithAlpha((byte)(Opacity * 255));
+            // Round rather than truncate: a layer alpha of 0.5 is exactly 128/255,
+            // and truncating to 127 makes the composited result one level lighter
+            // than every other engine's.
+            paint.Color = paint.Color.WithAlpha((byte)Math.Clamp((int)(Opacity * 255f + 0.5f), 0, 255));
         if (ImageFilter != null)
             paint.ImageFilter = ImageFilter;
         if (BlendMode != SKBlendMode.SrcOver)

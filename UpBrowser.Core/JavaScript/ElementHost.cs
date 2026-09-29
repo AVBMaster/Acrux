@@ -1582,6 +1582,17 @@ public class ScriptEvent
     public double deltaZ { get; set; }
     public int deltaMode { get; set; }
 
+    // Animation event properties (CSS Animations 1 §4.1)
+    public string animationName { get; set; } = "";
+    public double elapsedTime { get; set; }
+    public string pseudoElement { get; set; } = "";
+
+    // Transition event properties (CSS Transitions 1 §6)
+    public string propertyName { get; set; } = "";
+
+    // TimeEvent.currentTime, shared by both families (Web Animations §4.7)
+    public double currentTime { get; set; }
+
     public ScriptEvent(string type, ElementHost? target)
     {
         this.type = type;

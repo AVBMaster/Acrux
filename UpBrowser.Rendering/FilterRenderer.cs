@@ -379,7 +379,8 @@ public static class FilterRenderer
             }
         }
 
-        return SKImageFilter.CreateDropShadow(offsetX, offsetY, blur, blur, color);
+        // drop-shadow() takes a blur radius; the Gaussian standard deviation is half of it.
+        return SKImageFilter.CreateDropShadow(offsetX, offsetY, blur / 2f, blur / 2f, color);
     }
 
     private static SKColor? ParseFilterColor(string s)

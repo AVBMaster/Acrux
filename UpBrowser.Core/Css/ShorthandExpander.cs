@@ -78,6 +78,8 @@ public static class ShorthandExpander
             "font-variant" => new[] { "font-variant-caps" },
             "flex" => new[] { "flex-grow", "flex-shrink", "flex-basis" },
             "outline" => new[] { "outline-color", "outline-style", "outline-width" },
+            "animation" => new[] { "animation-name", "animation-duration", "animation-timing-function", "animation-delay", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state" },
+            "transition" => new[] { "transition-property", "transition-duration", "transition-timing-function", "transition-delay" },
             _ => System.Array.Empty<string>(),
         };
         return keys.Select(CssPropertyIdExtensions.FromString).Where(id => id != CssPropertyId.Invalid);
@@ -486,66 +488,169 @@ public static class ShorthandExpander
         if (parts.Length >= 2) result[$"{prop}-end"] = parts[1].Trim();
     }
 
+    /// <summary>
+    /// Expand the <c>animation</c> shorthand (CSS Animations 1 §2).
+    ///
+    /// The shorthand is a comma-separated list, and every list is expanded per
+    /// entry so the longhands stay aligned. Order within one entry is free, the
+    /// first &lt;time&gt; is the duration and the second is the delay, and a
+    /// negative time is unambiguously a delay (a duration may not be negative).
+    /// </summary>
     private static void ExpandAnimation(Dictionary<string, string> result, string value)
     {
-        var parts = SplitShorthand(value);
-        result["animation-name"] = "none";
-        result["animation-duration"] = "0s";
-        result["animation-timing-function"] = "ease";
-        result["animation-delay"] = "0s";
-        result["animation-iteration-count"] = "1";
-        result["animation-direction"] = "normal";
-        result["animation-fill-mode"] = "none";
-        result["animation-play-state"] = "running";
+        var entries = SplitTopLevel(value, ',');
+        if (entries.Count == 0) entries.Add("");
 
-        foreach (var part in parts)
+        var names = new List<string>(entries.Count);
+        var durations = new List<string>(entries.Count);
+        var easings = new List<string>(entries.Count);
+        var delays = new List<string>(entries.Count);
+        var iterations = new List<string>(entries.Count);
+        var directions = new List<string>(entries.Count);
+        var fills = new List<string>(entries.Count);
+        var plays = new List<string>(entries.Count);
+
+        foreach (var entry in entries)
         {
-            var p = part.Trim().ToLowerInvariant();
-            if (p.EndsWith("s") || p.EndsWith("ms"))
+            string name = "none", duration = "0s", easing = "ease", delay = "0s";
+            string iteration = "1", direction = "normal", fill = "none", play = "running";
+            bool haveTime = false;
+            bool nameSeen = false;
+
+            foreach (var token in SplitShorthand(entry))
             {
-                if (result["animation-duration"] == "0s" && result["animation-delay"] == "0s")
-                    result["animation-duration"] = p;
-                else
-                    result["animation-delay"] = p;
+                var p = token.Trim().ToLowerInvariant();
+                if (p.Length == 0) continue;
+
+                if (IsTimeToken(p))
+                {
+                    if (!haveTime) { duration = p; haveTime = true; }
+                    else delay = p;
+                }
+                else if (IsEasingToken(p)) easing = p;
+                else if (p == "infinite" || IsNumberToken(p)) iteration = p;
+                else if (p is "normal" or "reverse" or "alternate" or "alternate-reverse") direction = p;
+                else if (p is "running" or "paused") play = p;
+                // 'none' is both a fill-mode and the initial animation-name, so it
+                // is resolved by position: it is the name until a name is present,
+                // and the fill-mode afterwards. `animation: f 1s none` therefore
+                // means name=f fill=none, while `animation: none` means no
+                // animation at all (CSS Animations 1 §2.11).
+                else if (p == "none" && !nameSeen) { name = "none"; nameSeen = true; }
+                else if (p is "none" or "forwards" or "backwards" or "both")
+                {
+                    fill = p;
+                    nameSeen = true;
+                }
+                else { name = p; nameSeen = true; }
             }
-            else if (p is "ease" or "linear" or "ease-in" or "ease-out" or "ease-in-out" or "step-start" or "step-end" || p.StartsWith("cubic-bezier") || p.StartsWith("steps"))
-                result["animation-timing-function"] = p;
-            else if (p is "infinite" || float.TryParse(p, out _))
-                result["animation-iteration-count"] = p;
-            else if (p is "normal" or "reverse" or "alternate" or "alternate-reverse")
-                result["animation-direction"] = p;
-            else if (p is "none" or "forwards" or "backwards" or "both")
-                result["animation-fill-mode"] = p;
-            else if (p is "running" or "paused")
-                result["animation-play-state"] = p;
-            else
-                result["animation-name"] = p;
+
+            names.Add(name);
+            durations.Add(duration);
+            easings.Add(easing);
+            delays.Add(delay);
+            iterations.Add(iteration);
+            directions.Add(direction);
+            fills.Add(fill);
+            plays.Add(play);
         }
+
+        result["animation-name"] = string.Join(", ", names);
+        result["animation-duration"] = string.Join(", ", durations);
+        result["animation-timing-function"] = string.Join(", ", easings);
+        result["animation-delay"] = string.Join(", ", delays);
+        result["animation-iteration-count"] = string.Join(", ", iterations);
+        result["animation-direction"] = string.Join(", ", directions);
+        result["animation-fill-mode"] = string.Join(", ", fills);
+        result["animation-play-state"] = string.Join(", ", plays);
     }
 
+    /// <summary>
+    /// Expand the <c>transition</c> shorthand (CSS Transitions 1 §2.2).
+    /// A comma-separated list where every longhand is itself a list; the first
+    /// &lt;time&gt; is the duration and the second is the delay.
+    /// </summary>
     private static void ExpandTransition(Dictionary<string, string> result, string value)
     {
-        var parts = SplitShorthand(value);
-        result["transition-property"] = "all";
-        result["transition-duration"] = "0s";
-        result["transition-timing-function"] = "ease";
-        result["transition-delay"] = "0s";
+        var entries = SplitTopLevel(value, ',');
+        if (entries.Count == 0) entries.Add("");
 
-        foreach (var part in parts)
+        var properties = new List<string>(entries.Count);
+        var durations = new List<string>(entries.Count);
+        var easings = new List<string>(entries.Count);
+        var delays = new List<string>(entries.Count);
+
+        foreach (var entry in entries)
         {
-            var p = part.Trim().ToLowerInvariant();
-            if (p.EndsWith("s") || p.EndsWith("ms"))
+            string property = "all", duration = "0s", easing = "ease", delay = "0s";
+            bool haveTime = false;
+
+            foreach (var token in SplitShorthand(entry))
             {
-                if (result["transition-duration"] == "0s" && result["transition-delay"] == "0s")
-                    result["transition-duration"] = p;
-                else
-                    result["transition-delay"] = p;
+                var p = token.Trim().ToLowerInvariant();
+                if (p.Length == 0) continue;
+
+                if (IsTimeToken(p))
+                {
+                    if (!haveTime) { duration = p; haveTime = true; }
+                    else delay = p;
+                }
+                else if (IsEasingToken(p)) easing = p;
+                else property = p;
             }
-            else if (p is "ease" or "linear" or "ease-in" or "ease-out" or "ease-in-out" || p.StartsWith("cubic-bezier") || p.StartsWith("steps"))
-                result["transition-timing-function"] = p;
-            else
-                result["transition-property"] = p;
+
+            properties.Add(property);
+            durations.Add(duration);
+            easings.Add(easing);
+            delays.Add(delay);
         }
+
+        result["transition-property"] = string.Join(", ", properties);
+        result["transition-duration"] = string.Join(", ", durations);
+        result["transition-timing-function"] = string.Join(", ", easings);
+        result["transition-delay"] = string.Join(", ", delays);
+    }
+
+    /// <summary>True for a &lt;time&gt; token: an optional sign, digits, and a s/ms unit.</summary>
+    private static bool IsTimeToken(string token)
+    {
+        var t = token.Trim().ToLowerInvariant();
+        if (t.Length < 2) return false;
+        if (t.EndsWith("ms", StringComparison.Ordinal))
+            return IsNumberToken(t[..^2]);
+        if (t.EndsWith("s", StringComparison.Ordinal))
+            return IsNumberToken(t[..^1]);
+        return false;
+    }
+
+    private static bool IsNumberToken(string token)
+    {
+        var t = token.Trim();
+        if (t.Length == 0) return false;
+        int i = t[0] == '+' || t[0] == '-' ? 1 : 0;
+        if (i >= t.Length) return false;
+        bool digits = false, dot = false;
+        for (; i < t.Length; i++)
+        {
+            if (t[i] >= '0' && t[i] <= '9') { digits = true; continue; }
+            if (t[i] == '.' && !dot) { dot = true; continue; }
+            return false;
+        }
+        return digits;
+    }
+
+    /// <summary>True for a keyword easing or a <c>cubic-bezier()</c>/<c>steps()</c>/<c>linear()</c> call.</summary>
+    private static bool IsEasingToken(string token)
+    {
+        var p = token.Trim().ToLowerInvariant();
+        if (p is "linear" or "ease" or "ease-in" or "ease-out" or "ease-in-out"
+            or "step-start" or "step-end")
+        {
+            return true;
+        }
+        return p.StartsWith("cubic-bezier(", StringComparison.Ordinal)
+            || p.StartsWith("steps(", StringComparison.Ordinal)
+            || p.StartsWith("linear(", StringComparison.Ordinal);
     }
 
     private static void ExpandOutline(Dictionary<string, string> result, string value)

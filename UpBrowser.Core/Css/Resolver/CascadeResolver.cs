@@ -138,59 +138,15 @@ public class CascadeResolver
         // Expose collected ::-webkit-scrollbar-* side-car to painting.
         style.ScrollbarCustom = element.ScrollbarCustom;
 
-        // Apply @keyframes final state for animated elements
-        if (!string.IsNullOrEmpty(style.AnimationName) && style.AnimationName != "none")
-        {
-            ApplyKeyframeAnimation(element, style, parentStyle);
-        }
+        // @keyframes are deliberately NOT applied here. Style resolution produces
+        // the *underlying* value; the animation engine samples the keyframes each
+        // frame and writes the result on top, which is what lets an animation be
+        // paused, seeked or reversed without corrupting the base style.
 
         _cache.Set(cacheKey, style.Clone());
 
         element.ComputedStyle = style;
         ResolveChildren(element, style);
-    }
-
-    private void ApplyKeyframeAnimation(Element element, ComputedStyle style, ComputedStyle? parentStyle = null)
-    {
-        var name = style.AnimationName;
-        foreach (var stylesheet in _stylesheets)
-        {
-            foreach (var kfRule in stylesheet.KeyframesRules)
-            {
-                if (!string.Equals(kfRule.Name, name, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                // Find the 100% keyframe (or the last keyframe)
-                KeyframeBlock? finalBlock = null;
-                float maxPct = -1;
-                foreach (var block in kfRule.Keyframes)
-                {
-                    if (float.TryParse(block.Selector.TrimEnd('%'), out var pct) && pct >= maxPct)
-                    {
-                        maxPct = pct;
-                        finalBlock = block;
-                    }
-                }
-
-                if (finalBlock != null)
-                {
-                    var expanded = ShorthandExpander.Expand(finalBlock.Properties);
-                    foreach (var prop in expanded)
-                    {
-                        var animPriority = new LegacyCascadePriority(
-                            importance: false,
-                            origin: CascadeOrigin.Animation,
-                            treeOrder: int.MaxValue
-                        );
-                        _cascadeMap.Insert(prop.Key, prop.Value, animPriority);
-                    }
-                    ApplyCascadeAffecting(style, element);
-                    ApplyHighPriority(style, parentStyle ?? style, element);
-                    ApplyMatchResult(style, element, parentStyle);
-                }
-                break;
-            }
-        }
     }
 
     private void ResolveChildren(Element element, ComputedStyle parentStyle)

@@ -82,6 +82,14 @@ namespace UpBrowser;
     // LayoutCache + DirtyFlags so clean subtrees can skip work).
     private IncrementalLayoutEngine? _incrementalLayout;
 
+    /// <summary>
+    /// CSS animations and transitions. Advanced once per frame between style
+    /// resolution and layout, exactly as the headless capture path does, so the
+    /// on-screen result and a snapshot of the same markup agree.
+    /// </summary>
+    private readonly UpBrowser.Core.Dom.Animations.CssAnimationEngine _animations = new();
+    private bool _animationsRunning;
+
     private int _lastWindowWidth;
     private int _lastWindowHeight;
     private float _lastScrollX;
@@ -2624,6 +2632,12 @@ namespace UpBrowser;
         _currentHtml = html;
         _scrollInteraction.SetDocument(_currentLoad.Document);
 
+        // A new document gets a new document timeline: the animation clock
+        // restarts at zero so the page's delays and negative delays are measured
+        // from this navigation, not from the previous page's lifetime.
+        _animations.Reset();
+        _animationsRunning = false;
+
         var (pw, ph) = _window.GetClientSize();
         int ww = (int)(pw / _dpiScale);
         int wh = (int)(ph / _dpiScale);
@@ -2640,9 +2654,12 @@ namespace UpBrowser;
 
         _jsEngine.LoadDocument(_currentLoad.Document);
         _devTools.SetDocument(_currentLoad.Document, html);
+        // Events flow out of the engine through this forwarder, which is why the
+        // sink is re-installed on every navigation: the script engine changes with
+        // the tab, and a stale sink would deliver to a dead engine.
+        _animations.EventSink = DispatchAnimationEvents;
         BuildDisplayList(ww, wh);
         _scroll.ScrollTo(0, 0);
-
         // P3-2: W3C paint-timing semantics — FP is the first rendered frame of
         // any kind; FCP is the first frame carrying real content (a non-empty
         // page display list). Both are recorded exactly once by the metrics API.
@@ -2755,8 +2772,87 @@ namespace UpBrowser;
         }
     }
 
+    /// <summary>
+    /// Sample every CSS animation and transition for this frame and write the
+    /// results into the elements' computed styles.
+    ///
+    /// Must be called after style resolution and before layout. Returns true when
+    /// something is animating, which the frame loop uses to keep repainting: a
+    /// running animation is the only reason a page repaints with nothing else
+    /// having changed.
+    /// </summary>
+    private bool AdvanceAnimations()
+    {
+        if (_currentLoad == null) return false;
+        var root = _currentLoad.Document.DocumentElement ?? _currentLoad.Document.Body;
+        if (root == null) return false;
+
+        try
+        {
+            var result = _animations.Update(root, _currentLoad.StyleComputer?.CollectKeyframeRules());
+            _animationsRunning = result.HasActiveAnimations;
+            return result.HasActiveAnimations;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[anim] update failed: {ex.Message}");
+            _animationsRunning = false;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Deliver animation and transition events to script. The engine queues
+    /// them so a listener that mutates the DOM cannot perturb the sampling that
+    /// produced them; the bridge converts them into the objects listeners see.
+    /// </summary>
+    private void DispatchAnimationEvents(UpBrowser.Core.Dom.Element element, UpBrowser.Core.Dom.Event evt)
+    {
+        try
+        {
+            var engine = _jsEngine;
+            if (engine?.Adapter == null) return;
+
+            var host = engine.GetDispatchHost(element);
+            if (evt is UpBrowser.Core.Dom.AnimationEvent anim)
+            {
+                engine.DispatchEvent(element, new ScriptEvent(anim.Type, host)
+                {
+                    bubbles = false,
+                    cancelable = false,
+                    animationName = anim.AnimationName,
+                    elapsedTime = anim.ElapsedTime,
+                    pseudoElement = anim.PseudoElement ?? "",
+                    currentTime = anim.CurrentTime,
+                });
+            }
+            else if (evt is UpBrowser.Core.Dom.TransitionEvent trans)
+            {
+                engine.DispatchEvent(element, new ScriptEvent(trans.Type, host)
+                {
+                    bubbles = false,
+                    cancelable = false,
+                    propertyName = trans.PropertyName,
+                    elapsedTime = trans.ElapsedTime,
+                    pseudoElement = trans.PseudoElement ?? "",
+                    currentTime = trans.CurrentTime,
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[anim] event dispatch failed: {ex.Message}");
+        }
+    }
+
     private void BuildDisplayListImpl(float windowWidth, float windowHeight)
     {
+        // "Update animations and send events" runs here, between style resolution
+        // and layout, so animated values are in the styles layout reads. The
+        // engine compares the cascaded values to find transition start
+        // conditions, which is why ComputeStyles has to have just run.
+        AdvanceAnimations();
+
         // Route layout through the incremental engine when available.
         // It consults LayoutCache + DirtyFlags and skips clean subtrees,
         // which is the main win on small JS-driven DOM updates and typing.
@@ -2993,7 +3089,11 @@ namespace UpBrowser;
         }
 
         bool needsRedraw = _input.NeedsRedraw || _pendingRelayout || devToolsChanged ||
-                           (cursorNeedsRedraw && !inputRecently) || scrollChanged || remoteNavPending;
+                           (cursorNeedsRedraw && !inputRecently) || scrollChanged || remoteNavPending ||
+                           // A running animation or transition is itself a reason
+                           // to produce a frame: nothing else about the page has
+                           // changed, but its style has.
+                           _animationsRunning;
 
         if (_renderStats)
         {
@@ -3060,7 +3160,8 @@ namespace UpBrowser;
         else if (sizeChanged && _threadedTabs)
             _processManager.SetViewportAll(windowWidth, Math.Max(100, contentViewportHeight));
 
-        bool needsFullRebuild = (sizeChanged || windowWidth != _lastLayoutWidth || _pendingRelayout || devToolsChanged)
+        bool needsFullRebuild = (sizeChanged || windowWidth != _lastLayoutWidth || _pendingRelayout || devToolsChanged
+                                 || _animationsRunning)
                                 && !_adoptionPending && !_processTabs;
         if (_processTabs) _pendingRelayout = false;
 
@@ -3103,7 +3204,7 @@ namespace UpBrowser;
                 && !sizeChanged && !devToolsChanged && !_jsEngine.NeedsReLayout;
             _hoverRelayoutPending = false;
 
-            if (_pendingRelayout)
+            if (_pendingRelayout || _animationsRunning)
             {
                 var styleComputer = _currentLoad.StyleComputer;
                 if (styleComputer == null)

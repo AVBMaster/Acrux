@@ -19,6 +19,21 @@ public class RenderingPipeline
 
     public double CurrentTimeMs { get; set; }
 
+    /// <summary>
+    /// Run the CSS animation + transition update for the whole tree. The caller
+    /// is responsible for having run style resolution first: the engine compares
+    /// the cascaded computed values to detect transition start conditions, so
+    /// feeding it its own previous output would suppress every transition.
+    /// </summary>
+    public AnimationUpdateResult UpdateAnimations(Element root)
+    {
+        if (root == null) return AnimationUpdateResult.Idle;
+        var result = AnimationEngine.Update(root, KeyframeRules);
+        if (result.HasActiveAnimations && root.ComputedStyle != null)
+            InvalidateDirtyElements(root);
+        return result;
+    }
+
     /// <summary>Run the full rendering pipeline for a document.</summary>
     public void ProcessDocument(Document document, float viewportWidth, float viewportHeight, float dpiScale = 1.0f)
     {
@@ -32,13 +47,7 @@ public class RenderingPipeline
             PrePaintWalk.Walk(root);
 
         // 4. Apply CSS Animations & Transitions
-        AnimationEngine.SetCurrentTime(CurrentTimeMs);
-        if (root != null)
-            AnimationEngine.ProcessAnimations(root, KeyframeRules);
-
-        // 5. Invalidate paint for elements that need it
-        if (root != null)
-            InvalidateDirtyElements(root);
+        UpdateAnimations(root);
     }
 
     private void InvalidateDirtyElements(Element element)
@@ -73,4 +82,3 @@ public class RenderingPipeline
         }
     }
 }
-

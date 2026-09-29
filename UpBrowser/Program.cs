@@ -14,7 +14,7 @@ class Program
         };
 
         if (args.Length > 0 && (args[0] == "--snapshot" || args[0] == "--diff" || args[0] == "--dumplayout"
-            || args[0] == "--textops" || args[0] == "--pixels"))
+            || args[0] == "--textops" || args[0] == "--pixels" || args[0] == "--anim" || args[0] == "--rows"))
         {
             Environment.ExitCode = SnapshotCli.Run(args);
             return;

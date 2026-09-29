@@ -352,6 +352,15 @@ public sealed class BoxPainterBase
     private bool ShadowIsFullyObscured(in ShadowData shadow) =>
         shadow.IsZeroOffset && shadow.Blur == 0 && shadow.Spread == 0;
 
+    /// <summary>
+    /// Builds the blur image filter for a shadow. The CSS <c>blur()</c> length is
+    /// a <em>blur radius</em>: the underlying Gaussian has a standard deviation of
+    /// half the radius. Skia's blur filter takes the standard deviation directly,
+    /// so the radius must be halved or every shadow comes out twice as wide.
+    /// </summary>
+    private static SKImageFilter? ShadowBlurFilter(float blurRadius) =>
+        blurRadius > 0 ? SKImageFilter.CreateBlur(blurRadius / 2f, blurRadius / 2f) : null;
+
     private static List<ShadowData>? GetShadowList(ComputedStyle style)
     {
         var s = style.BoxShadow;
@@ -428,7 +437,7 @@ public sealed class BoxPainterBase
                 Color = shadowColor,
                 Style = SKPaintStyle.Fill,
                 IsAntialias = true,
-                ImageFilter = shadow.Blur > 0 ? SKImageFilter.CreateBlur(shadow.Blur, shadow.Blur) : null
+                ImageFilter = ShadowBlurFilter(shadow.Blur)
             };
             shadowOp.StrokePaint = null;
             shadowOp.ZIndex = -1;
@@ -552,7 +561,7 @@ public sealed class BoxPainterBase
                 Color = fillColor,
                 Style = SKPaintStyle.Fill,
                 IsAntialias = true,
-                ImageFilter = shadow.Blur > 0 ? SKImageFilter.CreateBlur(shadow.Blur, shadow.Blur) : null
+                ImageFilter = ShadowBlurFilter(shadow.Blur)
             };
             fillPath.StrokePaint = null;
             fillPath.Bounds = outerRect;

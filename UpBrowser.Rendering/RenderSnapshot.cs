@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using SkiaSharp;
 using UpBrowser.Core.Dom;
 using UpBrowser.Core.Fonts;
@@ -72,19 +72,51 @@ public static class RenderSnapshot
     }
 
     /// <summary>
-    /// Render <paramref name="html"/> at the given viewport size and return the
-    /// rasterized bitmap. The caller owns the returned bitmap.
+    /// A document that has been taken all the way to "ready to paint" at a pinned
+    /// animation instant: scripts run, style is resolved, animations and
+    /// transitions are sampled, and layout reflects the sampled values.
     /// </summary>
-    public static SKBitmap Capture(
+    public sealed class PreparedPage
+    {
+        public required DocumentManager.DocumentLoadResult Load { get; init; }
+        public required ImageCache ImageCache { get; init; }
+        public required Element Root { get; init; }
+        public required UpBrowser.Core.Dom.Animations.CssAnimationEngine? Animations { get; init; }
+        /// <summary>What the last <c>Update</c> reported for the captured frame.</summary>
+        public required UpBrowser.Core.Dom.Animations.AnimationUpdateResult UpdateResult { get; init; }
+        public required double TimeMs { get; init; }
+        public required bool HasScripts { get; init; }
+    }
+
+    /// <summary>
+    /// Load <paramref name="html"/> and run it forward to the point where a frame
+    /// could be painted, pinned to <paramref name="animationTimeMs"/> on the
+    /// document timeline.
+    ///
+    /// The order matters and is the whole point of this helper: style resolution
+    /// produces the cascaded values, the animation engine samples every effect and
+    /// writes the result into those same styles, and only then does layout run.
+    /// A page's animation state is therefore a pure function of the markup, so the
+    /// PNG, the layout dump and the display-list dump all describe the same frame.
+    /// </summary>
+    public static PreparedPage Prepare(
         string html,
         int width,
         int height,
-        string? baseUrl = null,
-        float dpiScale = 1f,
-        SKColor? background = null,
-        bool runScripts = true)
+        string? baseUrl,
+        float dpiScale,
+        bool runScripts,
+        double animationTimeMs,
+        Action<Element, UpBrowser.Core.Dom.Event>? eventSink = null)
     {
         EnsureInitialized();
+
+        // The whole preparation runs under one pinned clock. The document
+        // timeline is created inside that scope, so its origin is the pinned
+        // instant and a capture is reproducible; freezing for the whole body
+        // rather than per-phase also means a timeline can never be built against
+        // wall-clock time by accident.
+        using var clock = UpBrowser.Core.Dom.Animations.AnimationClock.Scope(animationTimeMs);
 
         // Layout runs inside LoadHtmlAsync, so the intrinsic-size seam for
         // replaced elements must be wired before the document is laid out.
@@ -98,23 +130,20 @@ public static class RenderSnapshot
             .GetAwaiter()
             .GetResult();
 
-        // Execute the page's scripts like ApplyLoadedHtml/RunPageScripts does:
-        // inline + external scripts against a fresh engine, DOMContentLoaded,
-        // then a bounded event-loop settle so JS-driven DOM mutations are on
-        // screen just as they are in the live browser before its first paint.
-        // Pages without <script> skip the engine entirely - starting the JS
-        // host costs a process spawn we don't need for static markup.
-        bool hasScripts = runScripts && CollectScriptElements(load.Document).Count > 0;
-        if (hasScripts)
-        {
-            RunPageScripts(load.Document, baseUrl, width, height, dpiScale);
+        var styleComputer = load.StyleComputer;
+        var root = load.Document.DocumentElement ?? load.Document.Body;
+        var keyframes = styleComputer?.CollectKeyframeRules();
 
+        // Style resolution and layout are two separate halves of a frame.
+        void ResolveStyles()
+        {
+            if (styleComputer == null) return;
             // Script execution marks the page dirty (MarkDirty -> NeedsReLayout),
             // which makes the shell recompute styles over the mutated DOM before
             // laying out again (RenderFrame's _pendingRelayout branch).
             try
             {
-                load.StyleComputer?.ComputeStyles(load.Document, width, height);
+                styleComputer.ComputeStyles(load.Document, width, height);
             }
             catch (Exception ex)
             {
@@ -122,24 +151,128 @@ public static class RenderSnapshot
             }
         }
 
-        // The shell always re-runs layout after loading (BuildDisplayListImpl),
-        // so boxes reflect any script-driven DOM changes. A fresh engine mirrors
-        // that non-incremental pass, including the device scale the raster canvas
-        // is drawn at — line-box rounding happens on the device grid, so leaving
-        // the scale out would lay the page out for a different display.
-        try
+        void RunLayout()
         {
-            new LayoutEngine().Layout(load.Document, width, height, dpiScale);
+            // The shell always re-runs layout after loading (BuildDisplayListImpl),
+            // so boxes reflect any script-driven DOM changes. A fresh engine mirrors
+            // that non-incremental pass, including the device scale the raster canvas
+            // is drawn at - line-box rounding happens on the device grid, so leaving
+            // the scale out would lay the page out for a different display.
+            try
+            {
+                new LayoutEngine().Layout(load.Document, width, height, dpiScale);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[snapshot] Layout error: {ex.Message}");
+            }
         }
-        catch (Exception ex)
+
+        // Prime the animation engine on the pre-script style. A transition may
+        // not start on an element's very first style, so this tick records the
+        // before-change style that a later change is measured against.
+        var animations = root != null
+            ? new UpBrowser.Core.Dom.Animations.CssAnimationEngine { EventSink = eventSink }
+            : null;
+        Action<Element, UpBrowser.Core.Dom.Event>? record = eventSink;
+
+        if (animations != null)
         {
-            Console.WriteLine($"[snapshot] Layout error: {ex.Message}");
+            animations.Update(root, keyframes, suppressEvents: true);
         }
+
+        // Execute the page's scripts like ApplyLoadedHtml/RunPageScripts does:
+        // inline + external scripts against a fresh engine, DOMContentLoaded,
+        // then a bounded event-loop settle so JS-driven DOM mutations are on
+        // screen just as they are in the live browser before its first paint.
+        // Pages without <script> skip the engine entirely - starting the JS
+        // host costs a process spawn we don't need for static markup.
+        bool hasScripts = runScripts && CollectScriptElements(load.Document).Count > 0;
+        var jsEngine = hasScripts
+            ? RunPageScripts(load.Document, baseUrl, width, height, dpiScale)
+            : null;
+
+        // Once a page has a script engine, animation events also reach its
+        // listeners, exactly as they do in the interactive shell. A caller
+        // supplied sink keeps receiving them, so a debug capture can watch the
+        // same stream the page's own listeners see.
+        if (animations != null && jsEngine != null)
+        {
+            var captured = record;
+            animations.EventSink = (el, evt) =>
+            {
+                captured?.Invoke(el, evt);
+                DispatchAnimationEvent(jsEngine, el, evt);
+            };
+        }
+
+        ResolveStyles();
+        RunLayout();
+
+        // Animations and transitions are part of the frame, not an afterthought.
+        var updateResult = default(UpBrowser.Core.Dom.Animations.AnimationUpdateResult);
+        if (animations != null && root != null)
+        {
+            animations.Timeline.SetCurrentTime(0);
+            updateResult = animations.Update(root, keyframes);
+
+            // Fast-forward in frame-sized steps, re-resolving style between
+            // each so a live transition observes a real before/after sequence
+            // rather than one instantaneous jump.
+            for (double t = AnimationPipeline.FrameIntervalMs; t < animationTimeMs; t += AnimationPipeline.FrameIntervalMs)
+            {
+                ResolveStyles();
+                animations.Timeline.SetCurrentTime(t);
+                updateResult = animations.Update(root, keyframes);
+                RunLayout();
+            }
+
+            // The frame that gets consumed: style, then animation, then layout.
+            ResolveStyles();
+            animations.Timeline.SetCurrentTime(animationTimeMs);
+            updateResult = animations.Update(root, keyframes);
+            RunLayout();
+        }
+
+        return new PreparedPage
+        {
+            Load = load,
+            ImageCache = imageCache,
+            Root = root!,
+            Animations = animations,
+            UpdateResult = updateResult,
+            TimeMs = animationTimeMs,
+            HasScripts = hasScripts,
+        };
+    }
+
+    /// <summary>
+    /// Render <paramref name="html"/> at the given viewport size and return the
+    /// rasterized bitmap. The caller owns the returned bitmap.
+    ///
+    /// <paramref name="animationTimeMs"/> is the instant the document timeline
+    /// is evaluated at. It defaults to 0 and the shared clock is frozen for the
+    /// duration of the capture, so a page's animation and transition state is a
+    /// pure function of the markup: the same file always produces the same
+    /// pixels no matter how long the process took to get there.
+    /// </summary>
+    public static SKBitmap Capture(
+        string html,
+        int width,
+        int height,
+        string? baseUrl = null,
+        float dpiScale = 1f,
+        SKColor? background = null,
+        bool runScripts = true,
+        double animationTimeMs = 0)
+    {
+        var page = Prepare(html, width, height, baseUrl, dpiScale, runScripts, animationTimeMs);
+        var load = page.Load;
 
         var visitor = new PaintVisitor(
             contentOffsetY: 0,
             sharedTypefaceCache: null,
-            sharedImageCache: imageCache,
+            sharedImageCache: page.ImageCache,
             fontFamilies: SKFontManager.Default.FontFamilies.ToArray(),
             baseUrl: baseUrl,
             viewportWidth: width,
@@ -183,7 +316,7 @@ public static class RenderSnapshot
     /// adapter is started synchronously here; on any failure we fall back to the
     /// null adapter, matching how the shell degrades when no host is available.
     /// </remarks>
-    private static void RunPageScripts(Document document, string? baseUrl, int width, int height, float dpiScale)
+    private static JavaScriptEngine? RunPageScripts(Document document, string? baseUrl, int width, int height, float dpiScale)
     {
         JavaScriptEngine jsEngine;
         try
@@ -193,7 +326,7 @@ public static class RenderSnapshot
         catch (Exception ex)
         {
             Console.WriteLine($"[snapshot] JS engine unavailable, skipping scripts: {ex.Message}");
-            return;
+            return null;
         }
 
         jsEngine.SetWindowSize(width, height);
@@ -256,6 +389,51 @@ public static class RenderSnapshot
         jsEngine.IntegrationService?.FireDOMContentLoaded();
 
         SettleEventLoop(jsEngine);
+
+        return jsEngine;
+    }
+
+    /// <summary>
+    /// Deliver an animation or transition event to the page's script listeners,
+    /// using the same <c>ScriptEvent</c> shape the interactive shell dispatches so
+    /// a handler written against <c>animationend</c> behaves identically in a
+    /// snapshot and on screen.
+    /// </summary>
+    private static void DispatchAnimationEvent(JavaScriptEngine jsEngine, Element element, UpBrowser.Core.Dom.Event evt)
+    {
+        try
+        {
+            var host = jsEngine.GetDispatchHost(element);
+            switch (evt)
+            {
+                case UpBrowser.Core.Dom.AnimationEvent anim:
+                    jsEngine.DispatchEvent(element, new ScriptEvent(anim.Type, host)
+                    {
+                        bubbles = false,
+                        cancelable = false,
+                        animationName = anim.AnimationName,
+                        elapsedTime = anim.ElapsedTime,
+                        pseudoElement = anim.PseudoElement ?? "",
+                        currentTime = anim.CurrentTime,
+                    });
+                    break;
+                case UpBrowser.Core.Dom.TransitionEvent trans:
+                    jsEngine.DispatchEvent(element, new ScriptEvent(trans.Type, host)
+                    {
+                        bubbles = false,
+                        cancelable = false,
+                        propertyName = trans.PropertyName,
+                        elapsedTime = trans.ElapsedTime,
+                        pseudoElement = trans.PseudoElement ?? "",
+                        currentTime = trans.CurrentTime,
+                    });
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[snapshot] animation event dispatch failed: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -401,9 +579,10 @@ public static class RenderSnapshot
         int width,
         int height,
         string? baseUrl = null,
-        float dpiScale = 1f)
+        float dpiScale = 1f,
+        double animationTimeMs = 0)
     {
-        using var bitmap = Capture(html, width, height, baseUrl, dpiScale);
+        using var bitmap = Capture(html, width, height, baseUrl, dpiScale, animationTimeMs: animationTimeMs);
         WritePng(bitmap, outputPath);
     }
 
@@ -416,12 +595,13 @@ public static class RenderSnapshot
         string outputPath,
         int width,
         int height,
-        float dpiScale = 1f)
+        float dpiScale = 1f,
+        double animationTimeMs = 0)
     {
         var full = Path.GetFullPath(htmlPath);
         var html = File.ReadAllText(full);
         var baseUrl = new Uri(full).AbsoluteUri;
-        CaptureToFile(html, outputPath, width, height, baseUrl, dpiScale);
+        CaptureToFile(html, outputPath, width, height, baseUrl, dpiScale, animationTimeMs);
     }
 
     public static void WritePng(SKBitmap bitmap, string outputPath)

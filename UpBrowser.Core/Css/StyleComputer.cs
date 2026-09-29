@@ -42,6 +42,37 @@ public class StyleComputer
     }
 
     /// <summary>
+    /// Every <c>@keyframes</c> rule registered on this computer, in cascade
+    /// order. The animation engine samples these; style resolution deliberately
+    /// does not, so an animation always has a clean underlying value to blend
+    /// from.
+    /// </summary>
+    public List<StyleRuleKeyframes> CollectKeyframeRules()
+    {
+        var rules = new List<StyleRuleKeyframes>();
+        if (_uaSheet != null) CollectKeyframes(_uaSheet.ChildRules, rules);
+        foreach (var sheet in _authorSheets)
+            CollectKeyframes(sheet.ChildRules, rules);
+        return rules;
+    }
+
+    private static void CollectKeyframes(List<StyleRuleBase> rules, List<StyleRuleKeyframes> into)
+    {
+        foreach (var rule in rules)
+        {
+            switch (rule)
+            {
+                case StyleRuleKeyframes keyframes:
+                    into.Add(keyframes);
+                    break;
+                case StyleRuleGroup group:
+                    CollectKeyframes(group.ChildRules, into);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
     /// True when any registered stylesheet contains a <c>:hover</c> selector.
     /// Cheap string scan (selector text); the host uses it to decide whether a
     /// mouse hover change can affect computed styles at all — when no :hover rule
