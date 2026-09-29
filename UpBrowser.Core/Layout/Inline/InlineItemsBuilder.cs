@@ -309,7 +309,9 @@ public class InlineItemsBuilder
         for (int i = 0; i < text.Length; i++)
         {
             char c = text[i];
-            if (char.IsLetter(c) && (i == 0 || StartsNewWord(text[i - 1], c)))
+            char prev = i > 0 ? text[i - 1] : '\0';
+            char prevPrev = i > 1 ? text[i - 2] : '\0';
+            if (char.IsLetter(c) && (i == 0 || StartsNewWord(prevPrev, prev, c)))
                 sb.Append(UpperChar(c));
             else
                 sb.Append(c);
@@ -317,12 +319,18 @@ public class InlineItemsBuilder
         return sb.ToString();
     }
 
-    private static bool StartsNewWord(char prev, char next)
+    private static bool StartsNewWord(char prevPrev, char prev, char next)
     {
         if (char.IsWhiteSpace(prev)) return true;
-        if (prev is '\'' or '’' or 'ʼ' or '_') return false;
+        // Underscore is ExtendNumLet and always joins. A straight/curly apostrophe
+        // joins only between letters ("o'clock" → "O'clock"); a leading quote is a
+        // separator, so the letter after it starts a word ("'quick" → "'Quick").
+        if (prev is '_' or 'ʼ') return false;
+        if (prev is '\'' or '’') return !char.IsLetter(prevPrev);
         if (prev is '.' or ',' or ':' or ';' or '·' or '‧' or '״') return !char.IsLetter(next);
-        if (char.IsLetter(prev) && char.IsLetter(next)) return false;
+        // A letter or digit continues the current word, so a letter right after a
+        // digit is not word-initial ("2fast" → "2fast", matching Chrome).
+        if ((char.IsLetter(prev) || char.IsDigit(prev)) && char.IsLetter(next)) return false;
         if (char.IsDigit(prev) && char.IsDigit(next)) return false;
         return true;
     }
