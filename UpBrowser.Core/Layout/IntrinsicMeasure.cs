@@ -46,4 +46,79 @@ public static class IntrinsicMeasure
         return widest + fragment.BorderLeft + fragment.BorderRight
             + fragment.PaddingLeft + fragment.PaddingRight;
     }
+
+    /// <summary>Measures an element's max-content inline size by laying it out in a
+    /// very wide constraint space (so nothing wraps) and taking the widest line across
+    /// the whole fragment tree. Nested block/inline children are included, unlike a
+    /// shallow child scan.</summary>
+    public static float MaxContentInlineSize(Element element)
+    {
+        if (element.ComputedStyle == null)
+            return 0;
+
+        var space = new ConstraintSpace(
+            availableInlineSize: 100000f,
+            availableBlockSize: float.PositiveInfinity,
+            isFixedInlineSize: false,
+            isFixedBlockSize: false);
+        LayoutResult result;
+        try
+        {
+            result = BlockLayoutAlgorithm.LayoutAtomicInlineRoot(element, space);
+        }
+        catch
+        {
+            return 0;
+        }
+        var fragment = result.Fragment;
+        if (fragment == null)
+            return 0;
+
+        float widest = WidestLineInlineSize(fragment);
+        if (widest <= 0)
+            widest = fragment.InlineSize;
+        return widest + fragment.BorderLeft + fragment.BorderRight
+            + fragment.PaddingLeft + fragment.PaddingRight;
+    }
+
+    private static float WidestLineInlineSize(BoxFragment fragment)
+    {
+        float widest = 0;
+        foreach (var line in fragment.Lines)
+            widest = Math.Max(widest, line.InlineSize);
+        foreach (var child in fragment.Children)
+            widest = Math.Max(widest, WidestLineInlineSize(child));
+        return widest;
+    }
+
+    /// <summary>Measures an element's content block size (height) when laid out at a
+    /// wide inline size (so nothing wraps). Returns the content-box height; the caller
+    /// adds border/padding. Used for a flex item's auto cross size when its text lives
+    /// inside a nested element.</summary>
+    public static float MaxContentBlockSize(Element element)
+    {
+        if (element.ComputedStyle == null)
+            return 0;
+
+        var space = new ConstraintSpace(
+            availableInlineSize: 100000f,
+            availableBlockSize: float.PositiveInfinity,
+            isFixedInlineSize: false,
+            isFixedBlockSize: false);
+        LayoutResult result;
+        try
+        {
+            result = BlockLayoutAlgorithm.LayoutAtomicInlineRoot(element, space);
+        }
+        catch
+        {
+            return 0;
+        }
+        var fragment = result.Fragment;
+        if (fragment == null)
+            return 0;
+        // fragment.BlockSize is the content-box height (border/padding are separate
+        // fields), matching how the flex cross axis adds CrossAxisBorderPadding later.
+        return fragment.BlockSize;
+    }
 }

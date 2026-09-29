@@ -608,9 +608,15 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
 
     private static float EstimateContentSize(Element element, float availableMain)
     {
-        // Estimate content-based size. Text is measured with the real text
-        // measurer when available so content-sized flex bases (and therefore
-        // justify-content centering) use the actual glyph advance width.
+        // A flex item with an auto main size is content-sized. Measure its real
+        // max-content inline size (a full layout pass that recurses into nested
+        // block/inline children); the earlier shallow child scan returned 0 for an
+        // item whose text lived inside a nested element, collapsing the item.
+        float max = IntrinsicMeasure.MaxContentInlineSize(element);
+        if (max > 0)
+            return max;
+
+        // Fallback: shallow scan for text/children with explicit pixel widths.
         float size = 0;
         var style = element.ComputedStyle;
         foreach (var child in element.Children)
@@ -653,6 +659,13 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
 
     private static float EstimateContentCrossSize(Element element)
     {
+        // Content-sized cross axis: measure the element's real stacked height so a
+        // nested block/inline child (no explicit height) is counted. The shallow scan
+        // below only handled direct text and explicitly-sized children.
+        float block = IntrinsicMeasure.MaxContentBlockSize(element);
+        if (block > 0)
+            return block;
+
         float size = 0;
         var style = element.ComputedStyle;
         if (style != null)
