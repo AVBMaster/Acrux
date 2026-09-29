@@ -1898,6 +1898,12 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         b.SetIsNewFormattingContext(true);
         b.SetPercentageResolution(ChildrenInlineSize, ChildAvailableBlockSize);
         b.SetDirection(Space.Direction);
+        // A float with an auto width is shrink-to-fit (CSS 2.1 §10.3.5): it takes its
+        // content's preferred width, capped by the available line, so it neither fills
+        // the container nor blocks a sibling float from sitting beside it. The
+        // shrink-to-fit path only fires when width is auto, so explicit-width floats
+        // are unaffected.
+        b.SetShrinkToFit(true);
         return b.ToConstraintSpace();
     }
 
