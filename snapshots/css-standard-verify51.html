@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 51 — aspect-ratio min-height, vertical margin %, grid align-content, text-decoration thickness</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+.wrap { width: 460px; border: 1px dashed #999; padding: 4px; margin: 8px 0; }
+
+/* 1. aspect-ratio raised by min-height (width should grow to keep ratio) */
+.ar { aspect-ratio: 2 / 1; background: #dfa; border: 1px solid #393; margin: 4px 0; }
+.ar-minh { min-height: 100px; }
+
+/* 2. vertical margins in % resolve against containing block WIDTH (inline size) */
+.mb { width: 200px; border: 1px solid #69c; background: #cef; }
+.mb-child { margin-top: 10%; margin-bottom: 10%; background: #fdd; height: 20px; }
+
+/* 3. grid align-content with sparse fixed rows */
+.g { display: grid; grid-template-rows: 30px 30px; grid-template-columns: 1fr 1fr; height: 180px; gap: 6px; border: 2px solid #639; }
+.g > div { background: #cf9; border: 1px solid #393; }
+.g-start { align-content: start; }
+.g-end { align-content: end; }
+.g-center { align-content: center; }
+.g-space { align-content: space-between; }
+
+/* 4. text-decoration-thickness percentage + underline-offset */
+.td { font-size: 24px; text-decoration-line: underline; text-decoration-thickness: 20%; text-underline-offset: 6px; }
+.td-from { text-decoration-thickness: from-font; }
+</style>
+</head>
+<body>
+
+<h2>1. aspect-ratio 2/1 with min-height:100 (width grows to keep ratio)</h2>
+<div class="wrap"><div class="ar ar-minh">ratio box</div></div>
+
+<h2>2. vertical margin % (10%) resolves against containing-block width (200px → 20px)</h2>
+<div class="mb"><div class="mb-child">child</div></div>
+
+<h2>3. grid align-content distribution (start / end / center / space-between)</h2>
+<div class="g g-start"><div>a</div><div>b</div><div>c</div><div>d</div></div>
+<div class="g g-end"><div>a</div><div>b</div><div>c</div><div>d</div></div>
+<div class="g g-center"><div>a</div><div>b</div><div>c</div><div>d</div></div>
+<div class="g g-space"><div>a</div><div>b</div><div>c</div><div>d</div></div>
+
+<h2>4. text-decoration-thickness: 20% + underline-offset:6px vs from-font</h2>
+<div class="wrap"><span class="td">underlined thick text</span></div>
+<div class="wrap"><span class="td td-from">underlined from-font text</span></div>
+
+</body>
+</html>

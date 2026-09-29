@@ -3024,7 +3024,12 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         float font = childStyle.FontSize;
         using var _scope = FontUnitContext.Use(childStyle);
         // Percentage margins resolve against the containing block's inline size.
-        float pctBase = LengthUtils.IsIndefinite(Space.PercentageResolutionInlineSize) ? 0 : Space.PercentageResolutionInlineSize;
+        // For a child laid out here, that containing block is THIS box, so the
+        // base is our own content inline size (ChildrenInlineSize) — the same
+        // value we hand the child as its percentage base — NOT the base this box
+        // was itself resolved against (Space.PercentageResolutionInlineSize),
+        // which is one level too high and breaks nested narrow containers.
+        float pctBase = LengthUtils.IsIndefinite(ChildrenInlineSize) ? 0 : ChildrenInlineSize;
         static float M(Length l, float font, float pctBase, ConstraintSpace sp) =>
             l is AutoLength ? 0
             : l is PercentLength p ? p.Value * pctBase : l.ToPixels(font, sp.RootFontSize, sp.ViewportWidth, sp.ViewportHeight);
@@ -3057,7 +3062,9 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         var s = child.ComputedStyle!;
         float font = s.FontSize;
         using var _scope = FontUnitContext.Use(s);
-        float pctBase = LengthUtils.IsIndefinite(Space.PercentageResolutionInlineSize) ? 0 : Space.PercentageResolutionInlineSize;
+        // Child percentage padding resolves against its containing block inline
+        // size = this box's content inline size (see ComputeMarginsFor).
+        float pctBase = LengthUtils.IsIndefinite(ChildrenInlineSize) ? 0 : ChildrenInlineSize;
         static float P(Length l, float font, float pctBase, ConstraintSpace sp) =>
             l is PercentLength p ? p.Value * pctBase : l.ToPixels(font, sp.RootFontSize, sp.ViewportWidth, sp.ViewportHeight);
         return new BoxStrut(
