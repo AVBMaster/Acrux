@@ -1369,6 +1369,23 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         var (minB, maxB) = LengthUtils.ComputeMinMaxBlockSizes(Space, Style, _borderPadding, null, _ => _intrinsicBlockSize);
         _blockSize = Math.Clamp(blockSize, minB, maxB);
 
+        // When min/max-height constrains an aspect-ratio box whose inline size is
+        // auto, the used block size no longer equals the ratio-derived one, so the
+        // preferred ratio would be broken. Transfer the constrained block size back
+        // to the inline axis so the box keeps its ratio (CSS Aspect-Ratio 1 §5.2).
+        // Only fires when a block-axis constraint actually took effect.
+        if (Style.AspectRatio > 0 && Style.Width is AutoLength or null
+            && Style.Height is AutoLength or null
+            && Math.Abs(blockSize - _blockSize) > 0.5f)
+        {
+            float constrainedBlock = _blockSize - _borderPadding.VerticalSum;
+            if (constrainedBlock > 0)
+            {
+                float transferredInline = constrainedBlock * Style.AspectRatio + _borderPadding.HorizontalSum;
+                _inlineSize = Math.Clamp(transferredInline, minI, maxI);
+            }
+        }
+
         // If our BFC block-offset is still unknown, we check:
         //  - If we have a non-zero block-size (margins don't collapse through us).
         //  - If we have a break token.

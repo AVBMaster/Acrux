@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 50 — clear+floats, overflow-wrap min-content, aspect-ratio max-height</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+.wrap { width: 460px; border: 1px dashed #999; padding: 4px; margin: 8px 0; }
+
+/* 1. clear with left+right floats of different heights */
+.fL { float: left; width: 100px; height: 80px; background: #9cf; }
+.fR { float: right; width: 120px; height: 40px; background: #fc9; }
+.after { background: #cfc; height: 24px; }
+.after-clear { clear: both; }
+
+/* 2. overflow-wrap: anywhere vs break-word on min-content width */
+.mc { width: min-content; border: 1px solid #669; background: #eef; margin: 4px 0; padding: 2px; }
+.owb { overflow-wrap: break-word; }
+.owa { overflow-wrap: anywhere; }
+.wba { word-break: break-all; }
+
+/* 3. aspect-ratio constrained by max-height (should reduce width) */
+.ar { aspect-ratio: 2 / 1; background: #dfa; border: 1px solid #393; margin: 4px 0; }
+.ar-maxh { max-height: 40px; }
+.ar-auto { width: auto; height: auto; }
+.arblk { aspect-ratio: 2 / 1; max-height: 40px; background: #fad; border: 1px solid #639; }
+.arblk p { margin: 0; }
+</style>
+</head>
+<body>
+
+<h2>1a. no clear: content flows beside floats (tallest wins)</h2>
+<div class="wrap"><div class="fL"></div><div class="fR"></div><div class="after">beside</div></div>
+
+<h2>1b. clear:both after left+right floats</h2>
+<div class="wrap"><div class="fL"></div><div class="fR"></div><div class="after after-clear">cleared</div></div>
+
+<h2>2. min-content width: normal vs break-word vs anywhere vs break-all</h2>
+<div class="wrap">
+  <div class="mc">Supercalifragilisticexpialidocious</div>
+  <div class="mc owb">Supercalifragilisticexpialidocious</div>
+  <div class="mc owa">Supercalifragilisticexpialidocious</div>
+  <div class="mc wba">Supercalifragilisticexpialidocious</div>
+</div>
+
+<h2>3a. aspect-ratio 2/1 with auto width in 460px wrap (width fills, height=width/2)</h2>
+<div class="wrap"><div class="ar ar-auto">ratio box</div></div>
+
+<h2>3b. aspect-ratio 2/1 with max-height:40 (width must shrink to 80)</h2>
+<div class="wrap"><div class="ar ar-maxh">ratio box</div></div>
+
+<h2>3c. aspect-ratio 2/1 + max-height:40 on a block with block children</h2>
+<div class="wrap"><div class="arblk"><p>line one</p><p>line two</p></div></div>
+
+</body>
+</html>

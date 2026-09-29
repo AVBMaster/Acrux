@@ -157,8 +157,22 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         {
             float contentInline = Math.Max(0, Builder.InlineSize - bp.HorizontalSum);
             float arBlock = contentInline / Style.AspectRatio + bp.VerticalSum;
-            Builder.BlockSize = Math.Clamp(arBlock, minB, maxB);
+            float clampedBlock = Math.Clamp(arBlock, minB, maxB);
+            Builder.BlockSize = clampedBlock;
             Builder.IntrinsicBlockSize = arBlock;
+
+            // When min/max-height constrains the block size of a box whose inline
+            // size is auto, the ratio would be broken. Transfer the constrained
+            // block size back to the inline axis (CSS Aspect-Ratio 1 §5.2).
+            if (Style.Width is AutoLength or null && Math.Abs(clampedBlock - arBlock) > 0.5f)
+            {
+                float constrainedContent = Math.Max(0, clampedBlock - bp.VerticalSum);
+                if (constrainedContent > 0)
+                {
+                    float transferredInline = constrainedContent * Style.AspectRatio + bp.HorizontalSum;
+                    Builder.InlineSize = Math.Clamp(transferredInline, minI, maxI);
+                }
+            }
         }
 
         // Absolutely/fixed-positioned children of an inline formatting context
