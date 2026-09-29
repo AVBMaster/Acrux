@@ -700,19 +700,31 @@ public class GridLayoutAlgorithm
                         tracks[i].GrowLimit = Math.Max(tracks[i].GrowLimit, perTrackSize);
                     }
                 }
-                else if (style.MinWidth is AutoLength or null && end > start)
+                else if (end > start)
                 {
                     // Automatic minimum size (css-grid §6.7): an item whose min-width
                     // is 'auto' cannot be squeezed below its min-content size, so the
                     // tracks it spans are floored at that contribution (an unbreakable
                     // word widens its column instead of overflowing).
-                    float minContent = IntrinsicMeasure.MinContentInlineSize(item.Element);
-                    float perTrackSize = minContent / (end - start);
-                    if (perTrackSize > 0)
+                    float span = end - start;
+                    if (style.MinWidth is AutoLength or null)
                     {
-                        for (int i = start; i < end && i < tracks.Count; i++)
-                            RaiseAutoMinimum(tracks[i], perTrackSize);
+                        float minContent = IntrinsicMeasure.MinContentInlineSize(item.Element);
+                        float perTrackSize = minContent / span;
+                        if (perTrackSize > 0)
+                            for (int i = start; i < end && i < tracks.Count; i++)
+                                RaiseAutoMinimum(tracks[i], perTrackSize);
                     }
+                    // The max side of an auto / max-content track is the item's
+                    // max-content size (§12.5). Without this an auto track's growth
+                    // limit stays 0 (treated as unbounded), so it greedily absorbs all
+                    // free space and starves sibling fr tracks; a max-content track
+                    // never reaches its content width at all.
+                    float maxContent = IntrinsicMeasure.MaxContentInlineSize(item.Element);
+                    float perMax = maxContent / span;
+                    if (perMax > 0)
+                        for (int i = start; i < end && i < tracks.Count; i++)
+                            RaiseGrowLimit(tracks[i], perMax);
                 }
             }
             else
@@ -778,8 +790,10 @@ public class GridLayoutAlgorithm
             }
         }
 
-        // Step 4: Stretch auto tracks
-        if (freeSpace > 0)
+        // Step 4: Stretch auto tracks. Only when there is no flexible (fr) track to
+        // compete for the leftover space; otherwise fr must resolve first (§12.7), or
+        // an auto track would absorb all free space and starve the fr track.
+        if (freeSpace > 0 && !tracks.Any(IsFlexible))
         {
             int autoCount = tracks.Count(t => t.SizeType == TrackSizeType.Auto);
             if (autoCount > 0)
@@ -891,6 +905,29 @@ public class GridLayoutAlgorithm
         track.BaseSize = minimum;
         if (track.GrowLimit < minimum)
             track.GrowLimit = minimum;
+    }
+
+    /// <summary>
+    /// Raise a track's growth limit to an item's max-content contribution. Only a
+    /// track whose max sizing function is intrinsic (auto / max-content, or a
+    /// minmax with an auto/max-content max) takes it; a definite max or a fixed
+    /// track keeps its declared size (css-grid §12.5). A max-content track's base
+    /// size also equals the contribution.
+    /// </summary>
+    private static void RaiseGrowLimit(GridTrack track, float value)
+    {
+        bool maxIsIntrinsic = track.SizeType switch
+        {
+            TrackSizeType.Auto or TrackSizeType.MaxContent => true,
+            TrackSizeType.MinMax => track.MaxSize?.SizeType is null or TrackSizeType.Auto or TrackSizeType.MaxContent,
+            _ => false,
+        };
+        if (!maxIsIntrinsic)
+            return;
+        if (value > track.GrowLimit)
+            track.GrowLimit = value;
+        if (track.SizeType == TrackSizeType.MaxContent && value > track.BaseSize)
+            track.BaseSize = value;
     }
 
     private static float ResolveDefiniteSize(Length? length, float containerSize, float fontSize, float rootFontSize)
