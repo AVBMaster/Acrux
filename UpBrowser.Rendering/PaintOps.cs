@@ -444,11 +444,14 @@ public class DrawTextOp : PaintOp
                 ownGeometry);
         }
 
-        // Draw text shadows before main text
+        // Draw text shadows before main text. CSS Backgrounds §text-shadow paints the
+        // FIRST-listed shadow on top, so iterate the list in reverse (last drawn first,
+        // i.e. furthest back) to get the correct stacking.
         if (TextShadows != null && TextShadows.Count > 0)
         {
-            foreach (var shadow in TextShadows)
+            for (int si = TextShadows.Count - 1; si >= 0; si--)
             {
+                var shadow = TextShadows[si];
                 using var shadowPaint = new SKPaint
                 {
                     Color = shadow.Color,

@@ -1612,8 +1612,11 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
     {
         if (style.BoxShadow == null || style.BoxShadow.Count == 0) return;
 
-        foreach (var shadow in style.BoxShadow)
+        // CSS Backgrounds §box-shadow paints the FIRST-listed shadow on top, so
+        // iterate in reverse (last drawn first, i.e. furthest back).
+        for (int si = style.BoxShadow.Count - 1; si >= 0; si--)
         {
+            var shadow = style.BoxShadow[si];
             if (shadow.Inset)
             {
                 float blur = Math.Max(1, shadow.BlurRadius);

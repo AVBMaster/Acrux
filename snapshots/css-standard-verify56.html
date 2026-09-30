@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 56 — text-shadow multiple, outline on radius, box-shadow spread</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 24px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 12px; }
+.wrap { border: 1px dashed #999; padding: 20px; margin: 12px 0; }
+
+/* 1. multiple text-shadows */
+.ts1 { font-size: 40px; color: #fff; text-shadow: 3px 3px 0 #e33; }
+.ts2 { font-size: 40px; color: #333; text-shadow: 2px 2px 0 #e33, 4px 4px 0 #33e, 6px 6px 0 #3a3; }
+.ts3 { font-size: 40px; color: #222; text-shadow: 0 0 6px #06c; }
+
+/* 2. outline on rounded box */
+.rbox { width: 120px; height: 80px; background: #cfe; border-radius: 20px; outline: 4px solid #c33; display: inline-block; margin: 10px; }
+.rbox-off { outline-offset: 6px; }
+.rbox-neg { outline-offset: -8px; }
+
+/* 3. box-shadow spread + inset */
+.bs1 { width: 120px; height: 60px; background: #fff; box-shadow: 0 0 0 10px #e33; display: inline-block; margin: 20px; }
+.bs2 { width: 120px; height: 60px; background: #fff; box-shadow: inset 0 0 0 8px #36c; display: inline-block; margin: 20px; }
+.bs3 { width: 120px; height: 60px; background: #fff; box-shadow: 5px 5px 0 4px #393, -5px -5px 0 4px #939; display: inline-block; margin: 24px; }
+</style>
+</head>
+<body>
+
+<h2>1. text-shadow: single offset / three stacked / blur</h2>
+<div class="wrap"><span class="ts1">Shadow</span></div>
+<div class="wrap"><span class="ts2">Shadow</span></div>
+<div class="wrap"><span class="ts3">Shadow</span></div>
+
+<h2>2. outline on border-radius box: default / offset +6 / offset -8</h2>
+<div class="wrap"><div class="rbox">a</div><div class="rbox rbox-off">b</div><div class="rbox rbox-neg">c</div></div>
+
+<h2>3. box-shadow: spread 10 / inset spread 8 / two opposite spread</h2>
+<div class="wrap"><div class="bs1"></div><div class="bs2"></div><div class="bs3"></div></div>
+
+</body>
+</html>
