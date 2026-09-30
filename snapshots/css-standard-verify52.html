@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 52 — flex justify-content, text-underline-position, nested BFC clear, aspect-ratio min-height raise</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+.wrap { width: 460px; border: 1px dashed #999; padding: 4px; margin: 8px 0; }
+
+/* 1. flex justify-content variants with 3 fixed 60px items in 300px row */
+.f { display: flex; width: 300px; height: 40px; border: 1px solid #939; margin: 6px 0; }
+.f > div { width: 60px; background: #cfe; border: 1px solid #369; }
+.jb { justify-content: space-between; }
+.ja { justify-content: space-around; }
+.je { justify-content: space-evenly; }
+
+/* 2. text-underline-position */
+.u { font-size: 28px; text-decoration: underline; }
+.u-auto { text-underline-position: auto; }
+.u-under { text-underline-position: under; }
+
+/* 3. nested BFC clear: inner float must be cleared inside inner BFC only */
+.outer { border: 1px solid #639; padding: 4px; width: 300px; }
+.inner { overflow: hidden; border: 1px solid #c69; margin: 4px 0; }
+.fl { float: left; width: 80px; height: 50px; background: #fc9; }
+.after { background: #cfc; height: 20px; }
+
+/* 4. aspect-ratio min-height RAISE (min-height > natural width-derived height) */
+.ar { aspect-ratio: 2 / 1; background: #dfa; border: 1px solid #393; }
+.ar-big-minh { min-height: 200px; width: 100px; }
+</style>
+</head>
+<body>
+
+<h2>1. flex justify-content: space-between / space-around / space-evenly</h2>
+<div class="f jb"><div>1</div><div>2</div><div>3</div></div>
+<div class="f ja"><div>1</div><div>2</div><div>3</div></div>
+<div class="f je"><div>1</div><div>2</div><div>3</div></div>
+
+<h2>2. text-underline-position: auto vs under</h2>
+<div class="wrap"><span class="u u-auto">underline auto</span></div>
+<div class="wrap"><span class="u u-under">underline under</span></div>
+
+<h2>3. nested BFC clear (float inside overflow:hidden inner)</h2>
+<div class="outer">
+  <div class="inner"><div class="fl"></div>text beside inner float</div>
+  <div class="after">after inner BFC</div>
+</div>
+
+<h2>4. aspect-ratio 2/1, width:100 + min-height:200 (min-height wins, width grows to 400)</h2>
+<div class="wrap"><div class="ar ar-big-minh">tall</div></div>
+
+</body>
+</html>

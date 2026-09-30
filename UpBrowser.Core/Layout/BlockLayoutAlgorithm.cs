@@ -3374,6 +3374,21 @@ internal static class BlockLayoutAlgorithmNodeExtensions
         bool hasInflowBlockChild = false;
         if (node.Children == null)
             return false;
+        // A box that establishes a new formatting context must contain its floats
+        // (CSS 2.1 §9.4.1 / §9.5.1); only the block path folds the float bottoms
+        // into the box's block size. Treat a floating child as block-level here so
+        // such a box is routed through BlockLayoutAlgorithm instead of the inline
+        // path, which sizes only to its line boxes and lets the float overflow.
+        // For a block-flow box the BFC triggers are a non-visible overflow or
+        // layout/paint containment (float/abspos/flex/grid are not IFC roots).
+        bool selfIsBfc = false;
+        {
+            var ns = node.ComputedStyle;
+            if (ns != null)
+                selfIsBfc = ns.Overflow != OverflowType.Visible || ns.OverflowX != OverflowType.Visible
+                    || ns.OverflowY != OverflowType.Visible
+                    || ns.Contain is ContainType.Strict or ContainType.Content or ContainType.Layout or ContainType.Paint;
+        }
         foreach (var child in node.Children)
         {
             if (child is TextNode textNode)
@@ -3393,8 +3408,14 @@ internal static class BlockLayoutAlgorithmNodeExtensions
             var s = el.ComputedStyle;
             if (s == null || s.Display == DisplayType.None)
                 continue;
-            if (s.Position is PositionType.Absolute or PositionType.Fixed || s.Float != FloatType.None)
+            if (s.Position is PositionType.Absolute or PositionType.Fixed)
                 continue;
+            if (s.Float != FloatType.None)
+            {
+                if (selfIsBfc)
+                    hasInflowBlockChild = true;
+                continue;
+            }
             if (s.Display is DisplayType.Inline or DisplayType.InlineBlock or DisplayType.InlineFlex or DisplayType.InlineGrid or DisplayType.Ruby || s.Display == DisplayType.Inline)
             {
                 hasInlineChild = true;
