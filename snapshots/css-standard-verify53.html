@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 53 — float stacking, float+inline-block, negative-margin float, overflow:clip BFC</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+.wrap { width: 460px; border: 1px dashed #999; padding: 4px; margin: 8px 0; }
+.clear { clear: both; }
+
+/* 1. three right floats stack right-to-left in source order */
+.r1,.r2,.r3 { float: right; width: 60px; height: 30px; border: 1px solid #369; }
+.r1 { background: #f88; } .r2 { background: #8f8; } .r3 { background: #88f; }
+
+/* 2. float + inline-block on same line (baseline) */
+.ib { display: inline-block; width: 100px; height: 40px; background: #ff9; border: 1px solid #cc3; vertical-align: baseline; }
+.f2 { float: left; width: 80px; height: 50px; background: #cfe; border: 1px solid #369; }
+
+/* 3. negative left margin on a float pulls it outside */
+.nf { float: left; width: 120px; height: 40px; margin-left: -40px; background: #f9f; border: 1px solid #939; }
+
+/* 4. overflow:clip should establish a BFC like hidden (contain float) */
+.clip { overflow: clip; border: 1px solid #639; padding: 4px; margin: 4px 0; }
+.float-in { float: left; width: 80px; height: 50px; background: #fc9; }
+
+/* 5. clear:both then content below both floats */
+.lf { float: left; width: 100px; height: 60px; background: #9cf; }
+.rf { float: right; width: 100px; height: 40px; background: #fc9; }
+.after { clear: both; height: 20px; background: #cfc; }
+</style>
+</head>
+<body>
+
+<h2>1. three right floats (r1,r2,r3) stack right-to-left</h2>
+<div class="wrap"><div class="r1">r1</div><div class="r2">r2</div><div class="r3">r3</div><div class="clear"></div></div>
+
+<h2>2. float + inline-block same line</h2>
+<div class="wrap"><div class="f2"></div><div class="ib">inline-block</div>trailing text that flows around the float</div>
+
+<h2>3. negative-margin float (margin-left:-40)</h2>
+<div class="wrap"><div class="nf"></div><div class="clear"></div></div>
+
+<h2>4. overflow:clip contains float (BFC like hidden)</h2>
+<div class="clip"><div class="float-in"></div>text beside clipped float</div>
+
+<h2>5. clear:both after left+right floats</h2>
+<div class="wrap"><div class="lf"></div><div class="rf"></div><div class="after">cleared row</div></div>
+
+</body>
+</html>

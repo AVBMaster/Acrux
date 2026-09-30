@@ -1838,11 +1838,12 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
         bool isLeft = style.Float == FloatType.Left;
 
-        // A float's auto margins are treated as zero (CSS 2.1 §10.3.3), so they can
-        // never poison the margin box it reserves on the line.
+        // A float's auto margins are treated as zero (CSS 2.1 §10.3.3). Negative
+        // margins are legal and shift the float / shrink the line box it reserves,
+        // so they must not be clamped to zero here.
         using var _marginFontScope = FontUnitContext.Use(style);
-        float MarginPx(Length l) => l is AutoLength ? 0 : Math.Max(0,
-            l.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight));
+        float MarginPx(Length l) => l is AutoLength ? 0
+            : l.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
         float BlockMarginPx(Length l) => l is AutoLength ? 0 :
             l.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
         float marginTopBlock = BlockMarginPx(style.MarginTop);
