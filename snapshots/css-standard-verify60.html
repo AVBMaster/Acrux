@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 60 — overflow-wrap/word-break min-content forcing flex/grid shrink</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 24px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 12px; }
+
+/* Container 200px, item with long word + sibling flex:1. Item min-width:auto=min-content.
+   normal/breakword: min-content = whole word (235) -> item can't shrink, overflows.
+   anywhere/breakall: min-content = 1 char -> item shrinks, sibling grows. */
+.row { display: flex; width: 200px; border: 1px solid #939; margin: 8px 0; }
+.row > div { background: #cfe; border: 1px solid #369; padding: 2px; }
+.anywhere { overflow-wrap: anywhere; }
+.breakall { word-break: break-all; }
+.breakword { overflow-wrap: break-word; }
+.sibling { background: #fec; flex: 1; }
+</style>
+</head>
+<body>
+
+<h2>1. flex item min-content forcing shrink (row 200px, word 235px)</h2>
+<div class="row"><div>Supercalifragilisticexpialidocious</div><div class="sibling">sib</div></div>
+<div class="row"><div class="breakword">Supercalifragilisticexpialidocious</div><div class="sibling">sib</div></div>
+<div class="row"><div class="anywhere">Supercalifragilisticexpialidocious</div><div class="sibling">sib</div></div>
+<div class="row"><div class="breakall">Supercalifragilisticexpialidocious</div><div class="sibling">sib</div></div>
+
+</body>
+</html>
