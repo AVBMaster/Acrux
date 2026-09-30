@@ -259,6 +259,18 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
         if (!LengthUtils.IsIndefinite(specifiedInline))
             borderBoxInlineSize = Math.Max(0, specifiedInline);
 
+        // Mirror the inline axis for the block axis: honour an explicit height on
+        // the multicol box itself. Without this the column height fell back to the
+        // viewport's available block size, so a short fixed-height multicol put all
+        // content in the first column instead of filling/balancing the fragmentainer.
+        if (Style.Height is not AutoLength)
+        {
+            float specifiedBlock = LengthUtils.ComputeBlockSizeForFragment(Space, Style, bp,
+                borderBoxBlockSize, borderBoxInlineSize);
+            if (!LengthUtils.IsIndefinite(specifiedBlock))
+                borderBoxBlockSize = Math.Max(0, specifiedBlock);
+        }
+
         // |columnBlockSize_| isn't the content-box size, as |BorderScrollbarPadding()|
         // has been adjusted for fragmentation. Preserve the original semantics: the
         // column block size is the content-box block size.
@@ -340,11 +352,12 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
         // a definite *available* block size (from the viewport) must not disable
         // balancing 鈥?only an explicit height on the multicol box itself fixes
         // the column height.
-        bool definiteHeight = Style.Height is not AutoLength && _columnBlockSize > 0;
+        bool definiteHeight = Style.ColumnFill() == EColumnFill.Auto && Style.Height is not AutoLength && _columnBlockSize > 0;
         float totalContentHeight = allLines.Count > 0 ? allLines[^1].BlockEnd : 0;
         float columnBlockSize = definiteHeight
             ? _columnBlockSize
             : (allLines.Count > 0 ? MathF.Ceiling(totalContentHeight / colCount) : 0);
+
 
         var columnFragments = DistributeLinesToColumns(allLines, columnBlockSize, colInlineSize, colProgression, colCount, bp);
 
@@ -451,7 +464,7 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
         float colInlineSize = _columnInlineSize;
         float colProgression = _columnInlineProgression;
         int colCount = Math.Max(1, _usedColumnCount);
-        bool definiteHeight = Style.Height is not AutoLength && _columnBlockSize > 0;
+        bool definiteHeight = Style.ColumnFill() == EColumnFill.Auto && Style.Height is not AutoLength && _columnBlockSize > 0;
 
         var columnFragments = new List<BoxFragment>();
         var spannerFragments = new List<BoxFragment>();
@@ -554,7 +567,18 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
         {
             foreach (var line in child.Lines)
             {
+                // Child lines are in the child's local coordinates; shift every
+                // vertical field by the child's block offset so the column
+                // distributor sees one consistent absolute flow. Shifting only
+                // |line.BlockOffset| left the runs/baseline behind, so the first
+                // column (whose rebasing delta is 0) rendered overlapping lines.
                 line.BlockOffset += child.BlockOffset;
+                line.BaselineOffset += child.BlockOffset;
+                foreach (var run in line.Runs)
+                {
+                    run.BlockOffset += child.BlockOffset;
+                    run.BaselineOffset += child.BlockOffset;
+                }
                 into.Add(line);
             }
             CollectChildLines(child, into);
@@ -1286,7 +1310,8 @@ public static class ColumnLayoutAlgorithmExtensions
         return !(style.ColumnWidth is PixelLength);
     }
 
-    public static EColumnFill ColumnFill(this ComputedStyle style) => EColumnFill.Auto;
+    public static EColumnFill ColumnFill(this ComputedStyle style) =>
+        style.ColumnFill == "auto" ? EColumnFill.Auto : EColumnFill.Balance;
 
     public static bool GetColumnSpanAll(this ComputedStyle style) => style.ColumnSpanAll;
 

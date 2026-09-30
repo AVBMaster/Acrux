@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 55 — multicol column-fill, column-rule, break-inside</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+.wrap { border: 1px dashed #999; padding: 4px; margin: 8px 0; }
+
+/* 1. column-fill: balance (default) vs auto with fixed height */
+.cols { column-count: 3; column-gap: 12px; height: 120px; border: 1px solid #939; padding: 4px; margin: 8px 0; }
+.bal { column-fill: balance; }
+.aut { column-fill: auto; }
+.cols p { margin: 0 0 6px; }
+
+/* 2. column-rule */
+.rule { column-count: 3; column-gap: 12px; column-rule: 3px solid #c33; border: 1px solid #939; padding: 4px; margin: 8px 0; }
+.rule2 { column-count: 3; column-gap: 12px; column-rule: 4px dashed #36c; border: 1px solid #939; padding: 4px; margin: 8px 0; }
+
+/* 3. break-inside: avoid on a block inside multicol */
+.bi { column-count: 2; column-gap: 12px; border: 1px solid #939; padding: 4px; margin: 8px 0; }
+.bi .item { break-inside: avoid; background: #cfe; margin: 0 0 4px; padding: 2px; }
+</style>
+</head>
+<body>
+
+<h2>1. column-fill: balance vs auto (fixed height 120px)</h2>
+<div class="wrap">balance:</div>
+<div class="cols bal"><p>one</p><p>two</p><p>three</p><p>four</p><p>five</p><p>six</p><p>seven</p><p>eight</p></div>
+<div class="wrap">auto (fills col1 to height then col2):</div>
+<div class="cols aut"><p>one</p><p>two</p><p>three</p><p>four</p><p>five</p><p>six</p><p>seven</p><p>eight</p></div>
+
+<h2>2. column-rule: 3px solid red / 4px dashed blue</h2>
+<div class="rule"><p>alpha</p><p>beta</p><p>gamma</p><p>delta</p></div>
+<div class="rule2"><p>alpha</p><p>beta</p><p>gamma</p><p>delta</p></div>
+
+<h2>3. break-inside: avoid in multicol</h2>
+<div class="bi"><div class="item">A block that should not split across columns</div><div class="item">B another unbreakable block here</div><div class="item">C third block content</div></div>
+
+</body>
+</html>

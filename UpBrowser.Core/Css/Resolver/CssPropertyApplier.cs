@@ -237,6 +237,7 @@ public static class CssPropertyApplier
             case "row-gap": if (Length.TryParse(value, out var rg)) style.RowGap = rg; break;
             case "column-gap": if (Length.TryParse(value, out var cg)) style.ColumnGap = cg; break;
             case "column-count": if (int.TryParse(value, out var cc)) style.ColumnCount = cc; break;
+            case "column-fill": { var cf = value.Trim().ToLowerInvariant(); if (cf == "auto" || cf == "balance") style.ColumnFill = cf; break; }
             case "column-span":
                 style.ColumnSpanAll = value.Trim().Equals("all", StringComparison.OrdinalIgnoreCase);
                 break;

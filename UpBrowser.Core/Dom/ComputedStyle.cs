@@ -877,6 +877,9 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public Length ColumnGap { get; set; } = new PixelLength(0);
     public int ColumnCount { get; set; }
     public Length? ColumnWidth { get; set; }
+    // 'column-fill: balance | auto'. Balance (the initial value) equalises column
+    // heights; auto fills each column to the fragmentainer height before the next.
+    public string ColumnFill { get; set; } = "balance";
 
     // A5: column-rule (multicol separator line). Default 'medium none currentcolor'.
     public float ColumnRuleWidth { get; set; } = 3f;
@@ -1115,7 +1118,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             TextEmphasis = TextEmphasis, TextEmphasisColor = TextEmphasisColor, TextEmphasisStyle = TextEmphasisStyle,
             TextEmphasisPosition = TextEmphasisPosition,
             RowGap = RowGap, ColumnGap = ColumnGap,
-            ColumnCount = ColumnCount, ColumnWidth = ColumnWidth,
+            ColumnCount = ColumnCount, ColumnWidth = ColumnWidth, ColumnFill = ColumnFill,
             ColumnRuleWidth = ColumnRuleWidth, ColumnRuleStyle = ColumnRuleStyle,
             ColumnRuleColor = ColumnRuleColor,
             OutlineWidth = OutlineWidth, OutlineColor = OutlineColor, OutlineStyle = OutlineStyle, OutlineOffset = OutlineOffset,
