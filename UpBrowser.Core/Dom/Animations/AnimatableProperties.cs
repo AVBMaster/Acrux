@@ -83,6 +83,17 @@ public static class AnimatableProperties
         "table-layout", "caption-side", "empty-cells", "border-collapse", "hyphenate-character",
     };
 
+    /// <summary>
+    /// Properties whose painted pixels leave the box by an amount the box geometry
+    /// cannot express: a shadow spread, an outline offset, a blur. A host culling by
+    /// geometry cannot locate their damage at all.
+    /// </summary>
+    private static readonly HashSet<string> _bleedsOutsideBox = new(StringComparer.Ordinal)
+    {
+        "box-shadow", "text-shadow", "outline", "outline-width", "outline-offset",
+        "outline-color", "filter", "backdrop-filter", "drop-shadow",
+    };
+
     /// <summary>Properties that only change in discrete steps at the 50% mark.</summary>
     private static readonly HashSet<string> _discrete = new(StringComparer.Ordinal)
     {
@@ -111,6 +122,9 @@ public static class AnimatableProperties
     }
 
     public static bool IsLayoutAffecting(string property) => _layoutAffecting.Contains(property);
+
+    /// <summary>True when the animated value can paint pixels outside the box entirely.</summary>
+    public static bool BleedsOutsideBox(string property) => _bleedsOutsideBox.Contains(property);
 
     /// <summary>True when the property is animated as a discrete 50% flip.</summary>
     public static bool IsDiscrete(string property) => _discrete.Contains(property);

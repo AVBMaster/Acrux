@@ -1,5 +1,8 @@
 ﻿using System.Diagnostics;
+using UpBrowser.PageContract;
+using UpBrowser.PageHost.Inspection;
 using UpBrowser.Process;
+using UpBrowser.Rendering.DevTools;
 
 namespace UpBrowser;
 
@@ -84,8 +87,14 @@ internal static class ProcessTabSelfTest
         bool resize = ResizeRenegotiationTest();
         bool nonblocking = SendUnderWedgeTest();
         bool budget = RestartBudgetTest();
+        bool devtools = DevToolsTest();
+        bool find = FindTest();
+        bool blockStack = BlockReplacedStackTest();
+        bool animPark = AnimationParkTest();
+        bool interact = InteractionParityTest();
         bool perf = PerformanceTests().GetAwaiter().GetResult();
-        pass = pass && features && selection && ime && dialogs && watchdog && crashes && channel && resize && nonblocking && budget && perf;
+        pass = pass && features && selection && ime && dialogs && watchdog && crashes && channel && resize
+            && nonblocking && budget && devtools && find && blockStack && animPark && interact && perf;
         Console.WriteLine(pass ? "[proctest] PASS" : "[proctest] FAIL");
 
         try { Directory.Delete(dir, true); } catch { }
@@ -750,6 +759,268 @@ internal static class ProcessTabSelfTest
         return noSelEmpty && dragOk && clickClears && wordOk && lineOk && staleSafe;
     }
 
+    /// <summary>
+    /// Block-flow stacking of sibling replaced elements, asserted straight through
+    /// the in-process layout path (the one <c>--snapshot</c> rasterizes from, so no
+    /// child process is involved). Two <c>display:block</c> INPUTs separated by the
+    /// usual source whitespace must stack by exactly one border-box height each, the
+    /// body must cover both and stay at y=0; a pure-whitespace run between sibling
+    /// blocks must add no line box, while a run with real text must add exactly one.
+    /// Guards the bug where a replaced child handed back an unresolved BFC
+    /// block-offset: the parent then never resolved its own offset during the child
+    /// loop, so every replaced sibling landed at block-offset 0 (only the last one
+    /// stayed visible) and derived its own offset from the in-flow cursor, which
+    /// displaced the parent by one child height and collapsed it to the same height.
+    /// </summary>
+    private static bool BlockReplacedStackTest()
+    {
+        // Measure a body's boxed element children through a real page layout.
+        (float BodyTop, float BodyH, float LineH, float[] Tops, float[] Heights) Measure(string bodyHtml)
+        {
+            var doc = UpBrowser.Rendering.RenderSnapshot.Prepare(
+                "<!DOCTYPE html><html><body style=\"margin:0\">" + bodyHtml + "</body></html>",
+                400, 200, "about:blank", 1f, false, 0).Load.Document;
+            var body = doc.Body!;
+            var kids = body.Children.OfType<UpBrowser.Core.Dom.Element>()
+                .Where(e => e.LayoutBox != null).ToArray();
+            return (body.LayoutBox!.BorderBox.Top, body.LayoutBox!.BorderBox.Height, body.LayoutBox!.LineHeight,
+                kids.Select(k => k.LayoutBox!.BorderBox.Top).ToArray(),
+                kids.Select(k => k.LayoutBox!.BorderBox.Height).ToArray());
+        }
+
+        // Convergence guard: a block whose BFC block-offset is resolved only after
+        // its children were laid out must have *that child* re-laid-out in place, not
+        // restart the run it belongs to. Any offset-resolution restart on a page this
+        // simple means the block flow no longer settles in one whole-tree pass, and a
+        // pass that never settles costs a full re-layout (and a full raster) per tick.
+        UpBrowser.Core.Layout.LayoutDiagnostics.Reset();
+        var inputs = Measure(
+            "<input type=text style=\"display:block;width:200px;height:30px;background:#f00\" value=\"A\">\n" +
+            "<input type=text style=\"display:block;width:200px;height:30px;background:#00f\" value=\"B\">");
+        var ws = Measure("<div style=\"height:30px\"></div>\n<div style=\"height:30px\"></div>");
+        var text = Measure("<div style=\"height:30px\"></div>TXT<div style=\"height:30px\"></div>");
+        bool converged = UpBrowser.Core.Layout.LayoutDiagnostics.BfcOffsetAborts == 0
+            && UpBrowser.Core.Layout.LayoutDiagnostics.BfcOffsetChildRetries == 0;
+
+        // The two inputs: distinct, adjacent, and the body spans both without being
+        // pushed down by them.
+        bool stacked = inputs.Tops.Length == 2
+            && Math.Abs(inputs.Tops[0] - inputs.BodyTop) < 0.5f
+            && Math.Abs(inputs.Tops[1] - (inputs.Tops[0] + inputs.Heights[0])) < 0.5f
+            && Math.Abs(inputs.BodyH - (inputs.Heights[0] + inputs.Heights[1])) < 0.5f
+            && inputs.BodyTop < 0.5f;
+        // Whitespace between blocks is collapsed away: no line box between them.
+        bool wsClean = ws.Tops.Length == 2
+            && Math.Abs(ws.Tops[1] - 30f) < 0.5f && Math.Abs(ws.BodyH - 60f) < 0.5f;
+        // Real text between blocks still forms exactly one line box, at the right
+        // offset — the whitespace rule above must not swallow it.
+        bool textLineBox = text.Tops.Length == 2
+            && Math.Abs(text.Tops[1] - (30f + text.LineH)) < 0.5f
+            && Math.Abs(text.BodyH - (60f + text.LineH)) < 0.5f;
+
+        bool pass = stacked && wsClean && textLineBox && converged;
+        Console.WriteLine($"[proctest] blockStack={pass} stack={stacked} wsClean={wsClean} textLine={textLineBox} " +
+                          $"converged={converged} restarts={UpBrowser.Core.Layout.LayoutDiagnostics.BfcOffsetAborts}" +
+                          $"/{UpBrowser.Core.Layout.LayoutDiagnostics.BfcOffsetChildRetries} " +
+                          $"rootPasses={UpBrowser.Core.Layout.LayoutDiagnostics.RootPasses} " +
+                          $"inputs={inputs.Tops.Length}@{inputs.Tops[0]:F1}/{(inputs.Tops.Length > 1 ? inputs.Tops[1] : 0f):F1} " +
+                          $"h={inputs.Heights[0]:F1} body={inputs.BodyTop:F1}+{inputs.BodyH:F1} " +
+                          $"wsBodyH={ws.BodyH:F1} textBodyH={text.BodyH:F1} lineH={text.LineH:F1}");
+        return pass;
+    }
+
+    /// <summary>
+    /// What an animation may and may not cost. An off-screen effect must not repaint
+    /// (its sample advances, its pixels cannot be seen), an on-screen effect must keep
+    /// repainting, and the display list must not be left holding the values a finished
+    /// animation wrote into it. The last case is the one a parked tick could get wrong in
+    /// both directions: too little work freezes a visible animation, too much restores
+    /// nothing when the effect ends.
+    /// </summary>
+    private static bool AnimationParkTest()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "upbrowser_proctest_anim");
+        Directory.CreateDirectory(dir);
+        string Page() =>
+            """
+            <!DOCTYPE html><html><head><title>an</title><style>
+            @keyframes fade { from { background-color: #00ff00 } to { background-color: #ff0000 } }
+            .bar { width: 60px; height: 40px; }
+            .run { animation: fade 1s linear; }
+            </style></head><body style="margin:0">
+            """;
+
+        // #near is at the top of the viewport, #far sits 1240px down: outside a 768px
+        // viewport, so its whole animation happens unseen.
+        var both = Path.Combine(dir, "both.html");
+        File.WriteAllText(both, Page() +
+            "<div class=\"bar\" style=\"background:#0000ff\"></div>" +
+            "<div style=\"height:1200px\"></div>" +
+            "<div id=\"far\" class=\"bar run\" style=\"background:#00ff00\"></div>" +
+            "</body></html>");
+        var near = Path.Combine(dir, "near.html");
+        File.WriteAllText(near, Page() +
+            "<div id=\"near\" class=\"bar run\" style=\"background:#00ff00\"></div>" +
+            "</body></html>");
+
+        string urlBoth = new Uri(both).AbsoluteUri, urlNear = new Uri(near).AbsoluteUri;
+
+        bool parked = false, quiet = false, restored = false, onScreenPaints = false;
+        bool onScreenRestored = false;
+        string farColor = "", nearColor = "";
+        using (var p = new RemoteTabProcess(78, urlBoth, 1f, 1f))
+        using (var view = new RemoteTabView(p))
+        {
+            var sw = Stopwatch.StartNew();
+            while (!p.IsConnected && sw.ElapsedMilliseconds < 8000) Thread.Sleep(20);
+            p.Resize(1024, 768);
+            p.Navigate(urlBoth);
+            if (!WaitForFrame(p, 0)) { Console.WriteLine("[proctest] anim no-frame"); return false; }
+
+            // The effect is over a second long and ends while nothing else happens:
+            // after settling, the tab must produce no further frames at all.
+            Thread.Sleep(2500);
+            long settled = p.FrameVersion;
+            Thread.Sleep(1500);
+            parked = p.FrameVersion == settled;
+
+            // Scrolling it in has to repaint with the value the cascade owns now —
+            // the animation finished with fill:none, so the base lime, not the red the
+            // last keyframe wrote.
+            long beforeScroll = p.FrameVersion;
+            p.ScrollTo(0, 600);
+            bool repainted = WaitUntil(() =>
+                p.TryGetFrame(out _, out _, out _, out _, out float sy, out _, out _, out _, out _, out _, out long ver)
+                && ver != beforeScroll && Math.Abs(sy - 600) < 1, 6000) > 0;
+            if (repainted)
+            {
+                var bmp = FoldFrame(view);
+                if (bmp != null)
+                {
+                    // #far's box is 1240..1280 in the document → 640..680 on screen.
+                    var c = bmp.GetPixel(30, 660);
+                    farColor = $"{c.Red},{c.Green},{c.Blue}";
+                    restored = c.Green > 150 && c.Red < 110;
+                }
+            }
+            quiet = repainted;
+        }
+        using (var p = new RemoteTabProcess(77, urlNear, 1f, 1f))
+        using (var view = new RemoteTabView(p))
+        {
+            var sw = Stopwatch.StartNew();
+            while (!p.IsConnected && sw.ElapsedMilliseconds < 8000) Thread.Sleep(20);
+            p.Resize(1024, 768);
+            p.Navigate(urlNear);
+            if (!WaitForFrame(p, 0)) { Console.WriteLine("[proctest] anim near no-frame"); return false; }
+            // On screen, the same effect must keep producing frames while it runs.
+            long start = p.FrameVersion;
+            Thread.Sleep(700);
+            onScreenPaints = p.FrameVersion > start + 2;
+
+            // And once it is over, a visible element must snap back to its base value in
+            // a live tab too — this is the same restore the headless snapshot path takes,
+            // without a parked tick in between, so the two cases stay distinguishable.
+            Thread.Sleep(2500);
+            var bmp = FoldFrame(view);
+            if (bmp != null)
+            {
+                var c = bmp.GetPixel(30, 20);
+                onScreenRestored = c.Green > 150 && c.Red < 110;
+                nearColor = $"{c.Red},{c.Green},{c.Blue}";
+            }
+        }
+
+        bool pass = parked && quiet && restored && onScreenPaints && onScreenRestored;
+        Console.WriteLine($"[proctest] animPark={pass} offscreenQuiet={parked} scrollRepaint={quiet} " +
+                          $"baseRestored={restored} onScreenPaints={onScreenPaints} " +
+                          $"onScreenRestored={onScreenRestored} far={farColor} near={nearColor}");
+        try { Directory.Delete(dir, true); } catch { }
+        return pass;
+    }
+
+    /// <summary>Fold frames until the view has a bitmap (it needs a commit to build one).</summary>
+    private static SkiaSharp.SKBitmap? FoldFrame(RemoteTabView view)
+    {
+        long until = Environment.TickCount64 + 500;
+        while (Environment.TickCount64 < until)
+        {
+            view.UpdateFromFrame();
+            if (view.Bitmap != null) return view.Bitmap;
+            Thread.Sleep(20);
+        }
+        view.UpdateFromFrame();
+        return view.Bitmap;
+    }
+
+    /// <summary>
+    /// The in-process engine host and the child process run the same script and must
+    /// answer identically — scroll offsets, navigation and selection included. Static
+    /// pixel gates cannot see any of that, and the shell's own interaction code is what
+    /// Phase 1b replaces, so this is the only thing that locks it.
+    /// </summary>
+    private static bool InteractionParityTest()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "upbrowser_proctest_interact");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "page1.html"), """
+            <!DOCTYPE html><html><head><style>
+            body { margin: 0; font-family: Arial; font-size: 18px; }
+            @keyframes spin { from { opacity: .2 } to { opacity: 1 } }
+            .fade { animation: spin 2s infinite alternate; }
+            </style></head><body>
+            <div><a href="page2.html">go second</a></div>
+            <div style="width:200px;height:80px;background:#cfc">Alpha bravo charlie</div>
+            <div>The quick brown fox jumps over the lazy dog</div>
+            <div style="height:1600px"></div>
+            <div class="fade" style="width:200px;height:80px;background:#fc0">fading box far below</div>
+            </body></html>
+            """);
+        File.WriteAllText(Path.Combine(dir, "page2.html"),
+            """<!DOCTYPE html><html><head><title>second</title></head><body style="margin:0">second page</body></html>""");
+        // An inline anchor is the case worth scripting: it has no box of its own, so a hit
+        // test that only knows block boxes navigates nothing (and the page still renders).
+        // The script ends on the animation-free page, because the frame the two drivers are
+        // compared on must be one an running effect cannot put out of phase with itself.
+        File.WriteAllText(Path.Combine(dir, "script.txt"), """
+            resize 800 600
+            settle 1500
+            mark load
+            click 30 15
+            settle 900
+            mark afterLinkClick
+            goto page1.html
+            settle 900
+            mark backToFirst
+            wheel 0 400 400 300
+            settle 500
+            mark wheelDown
+            scrollto 0 1500
+            settle 700
+            mark fadedInView
+            goto page2.html
+            settle 900
+            mark staticEnd
+            """);
+
+        string page = Path.Combine(dir, "page1.html").Replace('\\', '/');
+        string script = Path.Combine(dir, "script.txt").Replace('\\', '/');
+        int rc = InteractionScript.Run(new[] { "--interact", page, script,
+            Path.Combine(dir, "run").Replace('\\', '/') });
+        string trace = "";
+        try { trace = File.ReadAllText(Path.Combine(dir, "run.local.trace.txt")); } catch { }
+        string FirstWith(string prefix) => trace.Split('\n').FirstOrDefault(l => l.StartsWith(prefix)) ?? "";
+        bool navigated = FirstWith("afterLinkClick").Contains("page2.html")
+            && !FirstWith("load").Contains("page2.html");
+        bool wheelScrolled = FirstWith("wheelDown").Contains("0.0,400.0");
+        bool parked = FirstWith("fadedInView").Contains("0.0,1500.0");
+        bool pass = rc == 0 && navigated && wheelScrolled && parked;
+        Console.WriteLine($"[proctest] interact rc={rc} pass={pass} inlineLinkNav={navigated} " +
+                          $"rootWheel={wheelScrolled} animScrolledIn={parked}");
+        try { Directory.Delete(dir, true); } catch { }
+        return pass;
+    }
+
     private static long WaitUntil(Func<bool> cond, int timeoutMs)
     {
         var sw = Stopwatch.StartNew();
@@ -760,6 +1031,431 @@ internal static class ProcessTabSelfTest
         }
         return 0;
     }
+
+    // ==================== DevTools over RPC ====================
+
+    /// <summary>The engine host side needs nothing for a headless inspection test.</summary>
+    private sealed class NullEngineSink : UpBrowser.PageHost.IPageEngineSink
+    {
+        public void RequestNavigate(string url) { }
+        public void RequestLoadHtml(string html, string baseUrl) { }
+        public void ReportTitle(string title) { }
+        public void ReportUrl(string url) { }
+        public void ReportLoading(bool loading) { }
+        public string? RequestDialog(string message, string type) => null;
+        public void ReportScrollChanged(float x, float y) { }
+        public void ReportWheelConsumed(bool consumed) { }
+        public void RequestFrame() { }
+        public void InvalidateFrameBaseline() { }
+        public void ReportDirtyTrace(string trace) { }
+    }
+
+    private sealed record TreePull(List<DtNode> Nodes, int Chunks, long MaxBatchBytes, bool Failed);
+
+    /// <summary>Pull a whole tree through an IDevToolsChannel: chunk after chunk until the
+    /// stream completes. Shared by the in-process and over-IPC sides so the parity test
+    /// compares equal pipelines with only the transport different.</summary>
+    private static TreePull PullTree(IDevToolsChannel ch, int timeoutMs = 8000)
+    {
+        var all = new List<DtNode>();
+        long version = -1;
+        int next = 0, chunks = 0, restarts = 0;
+        long maxBytes = 0;
+        bool failed = false;
+        while (true)
+        {
+            DtNodeBatch? got = null;
+            using var done = new ManualResetEventSlim(false);
+            int ask = next; long askVersion = version;
+            ch.RequestChildren(ask, askVersion, 0, DevToolsWire.MaxNodesPerBatch, b => { got = b; done.Set(); });
+            if (!done.Wait(timeoutMs)) { failed = true; break; }
+            var b = got!;
+            chunks++;
+            maxBytes = Math.Max(maxBytes, BatchBytes(b));
+            if (b.VersionMoved)
+            {
+                // Only legitimate as the very first answer of a re-pull; a move mid-stream
+                // means the server changed under a consistent read — retry, but bounded.
+                if (++restarts > 3) { failed = true; break; }
+                version = b.MutationVersion;
+                next = 0;
+                all.Clear();
+                continue;
+            }
+            version = b.MutationVersion;
+            if (b.Nodes.Count > DevToolsWire.MaxNodesPerBatch) { failed = true; break; }
+            all.AddRange(b.Nodes);
+            if (!b.Truncated || b.Nodes.Count == 0) break;
+            next = b.Nodes[^1].Id + 1;
+        }
+        return new TreePull(all, chunks, maxBytes, failed);
+    }
+
+    private static long BatchBytes(DtNodeBatch b)
+    {
+        using var ms = new MemoryStream();
+        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+            DevToolsWire.Write(w, b);
+        return ms.Length;
+    }
+
+    /// <summary>Canonical serialization of a walked tree — the parity comparison between
+    /// the in-process walk and the over-IPC walk. Every field the DTO carries shows up,
+    /// so a serialization drift changes the string and fails loudly.</summary>
+    private static string SerializeTree(List<DtNode> nodes)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var n in nodes)
+        {
+            sb.Append(n.Depth).Append('|').Append(n.NodeType).Append('|').Append(n.NodeName).Append('|')
+              .Append(n.LocalName).Append('|').Append(n.ChildCount).Append('|').Append(n.HasElementChildren ? 1 : 0)
+              .Append('|');
+            for (int i = 0; i + 1 < n.Attributes.Count; i += 2)
+                sb.Append(n.Attributes[i]).Append('=').Append(n.Attributes[i + 1]).Append(';');
+            sb.Append('|').Append(n.TextPreview).Append('\n');
+        }
+        return sb.ToString();
+    }
+
+    private static DtNodeBatch AskNodeChunk(RemoteTabProcess proc, long knownVersion, int nodeId, int timeoutMs = 8000)
+    {
+        DtNodeBatch? got = null;
+        using var done = new ManualResetEventSlim(false);
+        proc.RequestNodeChunk(knownVersion, nodeId, 0, DevToolsWire.MaxNodesPerBatch,
+            b => { got = b; done.Set(); });
+        done.Wait(timeoutMs);
+        return got ?? DtNodeBatch.Failed(-1);
+    }
+
+    /// <summary>
+    /// DevTools inspection over the pipe: tree parity (in-process walk vs over-IPC walk of
+    /// the same page), chunked streaming of a 1600-div page within budget, stale-id
+    /// rejection after a JS mutation, styles for a node, a wedged page's console timeout,
+    /// and a click that must still navigate while a large tree dump is streaming.
+    /// </summary>
+    private static bool DevToolsTest()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "upbrowser_proctest_dt");
+        Directory.CreateDirectory(dir);
+        var page = Path.Combine(dir, "dt.html");
+        File.WriteAllText(page, """
+            <!DOCTYPE html><html><head><title>dt</title><style>.a{color:green}</style><style>.b{font-weight: bold !important}</style></head>
+            <body style="margin:0"><!--open--><div id="root" class="a b" style="color: red; font-weight: bold"><p data-x="1">Hello <b>world</b> tail</p><ul><li>one</li><li>two</li></ul><span>z</span></div><!--close--></body></html>
+            """);
+        var url = new Uri(page).AbsoluteUri;
+
+        // In-process side: a real PageEngine driven directly, walked through the
+        // in-process channel — the same DTO builder and id scheme the child serves.
+        var engine = new UpBrowser.PageHost.PageEngine(77, 1f, 1f, new NullEngineSink());
+        engine.LoadHtml(File.ReadAllText(page), url);
+        var inWalk = PullTree(new UpBrowser.PageHost.Inspection.InProcessDevToolsChannel(engine.Document, null, null));
+
+        // Out-of-process side over RPC.
+        using var remote = new RemoteTabProcess(79, url, 1f, 1f);
+        var sw0 = Stopwatch.StartNew();
+        while (!remote.IsConnected && sw0.ElapsedMilliseconds < 8000) Thread.Sleep(20);
+        remote.NavigateHtml(File.ReadAllText(page), url);
+        bool framed = WaitUntil(() => remote.FrameVersion > 0, 8000) > 0;
+        var remoteCh = new RemoteDevToolsChannel(remote, act => act());
+        var remoteWalk = PullTree(remoteCh);
+
+        bool parity = framed && !inWalk.Failed && !remoteWalk.Failed &&
+            inWalk.Nodes.Count > 10 &&
+            SerializeTree(inWalk.Nodes) == SerializeTree(remoteWalk.Nodes);
+
+        // Style DTO for div#root on the live version (before any mutation): matched rules,
+        // inline declarations, and the exact computed subset the info bar draws.
+        int rootId = -1;
+        foreach (var n in remoteWalk.Nodes)
+        {
+            bool isRoot = false;
+            for (int i = 0; i + 1 < n.Attributes.Count; i += 2)
+                if (n.Attributes[i].Equals("id", StringComparison.OrdinalIgnoreCase) && n.Attributes[i + 1] == "root")
+                    isRoot = true;
+            if (n.NodeType == 1 && n.LocalName == "div" && isRoot) { rootId = n.Id; break; }
+        }
+        DtStyleBatch? styles = null;
+        if (rootId >= 0)
+        {
+            // knownVersion -1 = "against the live version, no cached-id promise".
+            using var done = new ManualResetEventSlim(false);
+            remote.RequestNodeStyles(-1, rootId, b => { styles = b; done.Set(); });
+            done.Wait(6000);
+        }
+        var rootRules = styles?.MatchedRules ?? Array.Empty<DtStyleRule>();
+        bool stylesOk = styles != null && !styles.VersionMoved &&
+            rootRules.Count >= 1 &&
+            styles.InlineStyle.Any(d => d.Name == "color" && d.Value == "red") &&
+            styles.InlineStyle.Any(d => d.Name == "font-weight" && d.Value == "bold" && !d.Important) &&
+            // .a's color: green loses to the inline color — flagged overridden:
+            rootRules.Any(r => r.SelectorText.Contains(".a", StringComparison.Ordinal) &&
+                r.Declarations.Any(d => d.Name == "color" && d.Value == "green" && d.Overridden)) &&
+            // .b's font-weight is !important — it wins, so it must NOT be overridden:
+            rootRules.Any(r => r.SelectorText.Contains(".b", StringComparison.Ordinal) &&
+                r.Declarations.Any(d => d.Name == "font-weight" && d.Important && !d.Overridden)) &&
+            styles.ComputedStyle.Count == 4 &&
+            styles.ComputedStyle.Any(d => d.Name == "display" && d.Value == "Block") &&
+            styles.ComputedStyle.Any(d => d.Name == "position" && d.Value == "Static");
+
+        // Stale ids after a DOM mutation must be refused, not misread.
+        long seenVersion = remoteWalk.Nodes.Count > 0 ? PullVersion(remoteCh) : -1;
+        bool mutated = false;
+        {
+            EvalResult? r = null;
+            using var done = new ManualResetEventSlim(false);
+            remote.RequestEval("document.body.appendChild(document.createElement('footer')); 'ok'",
+                v => { r = v; done.Set(); });
+            done.Wait(6000);
+            mutated = r != null && !r.IsError;
+        }
+        bool staleRefused = mutated && AskNodeChunk(remote, seenVersion, 1).VersionMoved;
+
+        // Chunk budget on a ~1600 element page (>1500 nodes counting text nodes).
+        var bigSb = new System.Text.StringBuilder(
+            "<!DOCTYPE html><html><head><title>big</title></head><body style='margin:0'>");
+        for (int i = 0; i < 1600; i++)
+            bigSb.Append("<div class='d").Append(i).Append("'>text").Append(i).Append("</div>");
+        bigSb.Append("</body></html>");
+        var bigHtml = bigSb.ToString();
+        var engine2 = new UpBrowser.PageHost.PageEngine(78, 1f, 1f, new NullEngineSink());
+        engine2.LoadHtml(bigHtml, "about:big");
+        var bigIn = PullTree(new UpBrowser.PageHost.Inspection.InProcessDevToolsChannel(engine2.Document, null, null));
+
+        var bigPage = Path.Combine(dir, "big.html");
+        File.WriteAllText(bigPage, bigHtml);
+        using var remoteBig = new RemoteTabProcess(74, new Uri(bigPage).AbsoluteUri, 1f, 1f);
+        var sw1 = Stopwatch.StartNew();
+        while (!remoteBig.IsConnected && sw1.ElapsedMilliseconds < 8000) Thread.Sleep(20);
+        remoteBig.NavigateHtml(bigHtml, new Uri(bigPage).AbsoluteUri);
+        WaitUntil(() => remoteBig.FrameVersion > 0, 8000);
+        var bigOut = PullTree(new RemoteDevToolsChannel(remoteBig, act => act()));
+        bool chunked = !bigOut.Failed && !bigIn.Failed &&
+            bigOut.Chunks >= 2 && bigOut.MaxBatchBytes <= 256 * 1024 &&
+            bigIn.Nodes.Count >= 1500 && bigOut.Nodes.Count == bigIn.Nodes.Count &&
+            SerializeTree(bigIn.Nodes) == SerializeTree(bigOut.Nodes);
+
+        // A wedged host's console must time out, not freeze: exactly one callback, an
+        // error mentioning the timeout, and the shell's sends stay bounded meanwhile.
+        bool wedgedTimeout = false;
+        {
+            using var wedged = new RemoteTabProcess(75, url, 1f, 1f, hang: true);
+            var sw2 = Stopwatch.StartNew();
+            while (!wedged.IsConnected && sw2.ElapsedMilliseconds < 8000) Thread.Sleep(20);
+            wedged.Navigate(url);
+            int calls = 0;
+            string text = "";
+            bool isError = false;
+            using var done = new ManualResetEventSlim(false);
+            var evalSw = Stopwatch.StartNew();
+            wedged.RequestEval("1+1", r =>
+            {
+                Interlocked.Increment(ref calls);
+                isError = r.IsError;
+                text = r.Text;
+                done.Set();
+            }, 2500);
+            long worstMs = 0;
+            for (int i = 0; i < 500; i++)
+            {
+                var one = Stopwatch.StartNew();
+                wedged.MouseMove(i % 200 + 1f, 5f);
+                one.Stop();
+                worstMs = Math.Max(worstMs, one.ElapsedMilliseconds);
+            }
+            bool answered = done.Wait(8000);
+            wedgedTimeout = answered && Volatile.Read(ref calls) == 1 && isError &&
+                text.Contains("Timeout") && evalSw.ElapsedMilliseconds < 8000 && worstMs <= 50;
+            Console.WriteLine($"[proctest] devtools wedgedEval calls={calls} err={isError} text='{text}' sendsWorst={worstMs}ms");
+        }
+
+        // Input priority: click a link WHILE the big tree streams; the navigation must
+        // land fast even though the dump keeps the pipe busy chunk after chunk.
+        var linkPage = Path.Combine(dir, "dt2.html");
+        File.WriteAllText(linkPage, "<!DOCTYPE html><html><head><title>p2</title></head><body>p2</body></html>");
+        var linkUrl = new Uri(linkPage).AbsoluteUri;
+        var dumpSb = new System.Text.StringBuilder(
+            "<!DOCTYPE html><html><head><title>dt</title></head><body style='margin:0'>" +
+            $"<a id=lnk href=\"{linkUrl}\" style=\"display:block;width:300px;height:40px\">go</a>");
+        for (int i = 0; i < 1600; i++)
+            dumpSb.Append("<div class='d").Append(i).Append("'>text").Append(i).Append("</div>");
+        dumpSb.Append("</body></html>");
+        var dumpHtml = dumpSb.ToString();
+        var dumpPage = Path.Combine(dir, "dump.html");
+        File.WriteAllText(dumpPage, dumpHtml);
+        bool inputUnderDump = false;
+        {
+            using var dumper = new RemoteTabProcess(73, new Uri(dumpPage).AbsoluteUri, 1f, 1f);
+            var sw3 = Stopwatch.StartNew();
+            while (!dumper.IsConnected && sw3.ElapsedMilliseconds < 8000) Thread.Sleep(20);
+            dumper.NavigateHtml(dumpHtml, new Uri(dumpPage).AbsoluteUri);
+            WaitUntil(() => dumper.FrameVersion > 0, 8000);
+            // Pull the first chunk synchronously, click the link, then keep pulling
+            // chunk after chunk and watch for the click's effect BETWEEN the chunks —
+            // each chunk costs the child one loop pass, so the queued click must slip
+            // through the dump, not behind it.
+            var first = AskNodeChunk(dumper, -1, 0);
+            dumper.MouseDown(10, 10);
+            dumper.MouseUp(10, 10);
+            long clickTick = Environment.TickCount64;
+            long ver = first.MutationVersion;
+            int nextId = first.Nodes.Count > 0 ? first.Nodes[^1].Id + 1 : 0;
+            int extraChunks = 0;
+            bool truncated = first.Truncated, navSeenDuring = false;
+            while (truncated && extraChunks < 200)
+            {
+                if (dumper.Url == linkUrl) { navSeenDuring = true; break; }
+                var b = AskNodeChunk(dumper, ver, nextId);
+                extraChunks++;
+                if (b.VersionMoved) { truncated = false; break; }  // navigated under us
+                ver = b.MutationVersion;
+                truncated = b.Truncated;
+                if (b.Nodes.Count > 0) nextId = b.Nodes[^1].Id + 1;
+            }
+            long navMs = navSeenDuring ? Environment.TickCount64 - clickTick
+                : WaitUntil(() => dumper.Url == linkUrl, 4000);
+            inputUnderDump = navMs > 0 && first.Truncated && extraChunks >= 1;
+            Console.WriteLine($"[proctest] devtools inputUnderDump navMs={navMs} duringDump={navSeenDuring} extraChunks={extraChunks}");
+        }
+
+        Console.WriteLine($"[proctest] devtools parity={parity} inNodes={inWalk.Nodes.Count} outNodes={remoteWalk.Nodes.Count} " +
+            $"styles={stylesOk} stale={staleRefused} chunked={chunked} bigChunks={bigOut.Chunks} " +
+            $"bigMaxKB={bigOut.MaxBatchBytes / 1024} bigNodes={bigOut.Nodes.Count} " +
+            $"wedged={wedgedTimeout} input={inputUnderDump}");
+        try { Directory.Delete(dir, true); } catch { }
+        return parity && stylesOk && staleRefused && chunked && wedgedTimeout && inputUnderDump;
+    }
+
+    private static long PullVersion(IDevToolsChannel ch)
+    {
+        long v = -1;
+        using var done = new ManualResetEventSlim(false);
+        ch.RequestChildren(0, -1, 1, 4, b => { v = b.MutationVersion; done.Set(); });
+        done.Wait(6000);
+        return v;
+    }
+
+    // ==================== find-in-page over RPC ====================
+
+    /// <summary>
+    /// Find lives in the child: match counts, and per-match document-space rects whose
+    /// x is asserted against the engine's own per-character measurement (an off-by-one
+    /// character shifts the expected centre by several px and fails loudly — the same
+    /// trick as SelectionTest). Activating a match must move the page scroll through the
+    /// existing ScrollChanged sync and leave the found text selected.
+    /// </summary>
+    private static bool FindTest()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "upbrowser_proctest_find");
+        Directory.CreateDirectory(dir);
+        var page = Path.Combine(dir, "find.html");
+        File.WriteAllText(page, """
+            <!DOCTYPE html><html><head><title>find</title></head>
+            <body style="margin:0">
+            <div style="font-family:Arial;font-size:20px">The quick brown fox</div>
+            <div style="font-family:Arial;font-size:20px">The lazy dog sleeps</div>
+            <div style="height:1200px">filler</div>
+            <div style="font-family:Arial;font-size:20px">the fox again</div>
+            </body></html>
+            """);
+        var url = new Uri(page).AbsoluteUri;
+
+        UpBrowser.PageHost.PageEnvironment.Initialize();
+        var measurer = UpBrowser.Core.Layout.TextMeasurer.Instance;
+        if (measurer == null)
+        {
+            Console.WriteLine("[proctest] find measurer=missing");
+            return false;
+        }
+        // Centre x of the word "fox" inside a line, measured exactly like layout does.
+        float WordCentreX(string line, int idx)
+        {
+            float acc = 0, before = 0, after = 0;
+            for (int i = 0; i < line.Length; i++)
+            {
+                if (i == idx) before = acc;
+                acc += measurer.MeasureText(line[i].ToString(), "Arial", 20f, UpBrowser.Core.Dom.FontWeight.Normal);
+                if (i == idx + 2) after = acc;   // "fox" is 3 chars: centre after consuming them
+            }
+            if (idx + 2 >= line.Length) after = acc;
+            return (before + after) / 2f;
+        }
+        const string line1 = "The quick brown fox";
+        const string line3 = "the fox again";
+        float wantFox1 = WordCentreX(line1, 16);
+        float wantFox3 = WordCentreX(line3, 4);
+        float foBefore = 0, foAfter = 0, acc2 = 0;
+        for (int i = 0; i < line1.Length; i++)
+        {
+            if (i == 16) foBefore = acc2;
+            acc2 += measurer.MeasureText(line1[i].ToString(), "Arial", 20f, UpBrowser.Core.Dom.FontWeight.Normal);
+            if (i == 17) foAfter = acc2;
+        }
+        float wantFo = (foBefore + foAfter) / 2f;
+        if (Math.Abs(wantFo - wantFox1) < 0.5f)
+        {
+            Console.WriteLine("[proctest] find fixture words indistinguishable — abort");
+            return false;
+        }
+
+        var scrolls = new System.Collections.Concurrent.ConcurrentQueue<float>();
+        using var remote = new RemoteTabProcess(72, url, 1f, 1f);
+        remote.OnScrollChanged += (_, y) => scrolls.Enqueue(y);
+        var sw0 = Stopwatch.StartNew();
+        while (!remote.IsConnected && sw0.ElapsedMilliseconds < 8000) Thread.Sleep(20);
+        remote.NavigateHtml(File.ReadAllText(page), url);
+        bool framed = WaitUntil(() => remote.FrameVersion > 0, 8000) > 0;
+
+        FindResult Ask(string query, bool caseSensitive, int activate = -1)
+        {
+            FindResult? got = null;
+            using var done = new ManualResetEventSlim(false);
+            remote.RequestFind(new FindOptions(query) { CaseSensitive = caseSensitive }, activate,
+                r => { got = r; done.Set(); });
+            done.Wait(6000);
+            return got ?? new FindResult { TotalCount = -1 };
+        }
+
+        var fox = Ask("fox", caseSensitive: true);
+        bool counts = fox.TotalCount == 2 && fox.Rects.Count == 2 &&
+            Ask("The", caseSensitive: true).TotalCount == 2 &&
+            Ask("The", caseSensitive: false).TotalCount == 3 &&
+            Ask("the", caseSensitive: true).TotalCount == 1 &&
+            Ask("zzz", caseSensitive: false).TotalCount == 0;
+        bool rectsHit = fox.Rects.Count == 2 &&
+            Math.Abs(fox.Rects[0].X + fox.Rects[0].Width / 2 - wantFox1) < 1f &&
+            Math.Abs(fox.Rects[1].X + fox.Rects[1].Width / 2 - wantFox3) < 1f &&
+            fox.Rects[0].Y < 60 && fox.Rects[1].Y > 1200;
+
+        // An off-by-one must fail: "fo" has its own centre, distinct from "fox"'s.
+        var fo = Ask("fo", caseSensitive: true);
+        bool foHits = fo.TotalCount == 2 &&
+            Math.Abs(fo.Rects[0].X + fo.Rects[0].Width / 2 - wantFo) < 1f;
+
+        // Activate the far-down match: the scroll must move via ScrollChanged (no new
+        // path), and the found text becomes the page selection.
+        var act = Ask("fox", caseSensitive: true, activate: 1);
+        bool activeIndex = act.ActiveIndex == 1;
+        bool scrolled = WaitUntil(() =>
+        {
+            while (scrolls.TryDequeue(out float y)) if (y > 300) return true;
+            return false;
+        }, 4000) > 0;
+        string selected = "<<none>>";
+        {
+            using var done = new ManualResetEventSlim(false);
+            remote.RequestSelectedText(t => { selected = t; done.Set(); });
+            done.Wait(4000);
+        }
+        bool selectedFound = selected == "fox";
+
+        Console.WriteLine($"[proctest] find counts={counts} rects={rectsHit} fo={foHits} active={activeIndex} " +
+            $"scrollSync={scrolled} selected={selectedFound} framed={framed} total={fox.TotalCount} " +
+            $"want1={wantFox1:F1} got1={(fox.Rects.Count > 0 ? fox.Rects[0].X + fox.Rects[0].Width / 2 : -1):F1} " +
+            $"want3={wantFox3:F1} got3={(fox.Rects.Count > 1 ? fox.Rects[1].X + fox.Rects[1].Width / 2 : -1):F1}");
+        try { Directory.Delete(dir, true); } catch { }
+        return framed && counts && rectsHit && foHits && activeIndex && scrolled && selectedFound;
+    }
+
 
     /// <summary>
     /// CJK composition works out of process: the shell forwards ImeUpdate/Commit/Cancel,

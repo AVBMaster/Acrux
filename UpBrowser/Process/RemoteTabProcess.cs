@@ -121,6 +121,11 @@ internal sealed class RemoteTabProcess : IDisposable
             ? "host exited without reporting a fault" : kind.ToString());
         Console.WriteLine($"[RemoteTab {TabIndex}] died: {kind} — {DeathDetail}");
         OnDied?.Invoke(kind, DeathDetail);
+        // An in-flight inspection/find request will never be answered; fail its callback
+        // instead of leaving DevTools waiting on a host that is gone.
+        foreach (var id in _rpcCallbacks.Keys)
+            if (_rpcCallbacks.TryRemove(id, out var pending))
+                try { pending.OnFailed(); } catch { }
     }
 
     /// <summary>End a wedged host. Deliberate, so it costs the tab nothing from its budget.</summary>
@@ -156,6 +161,13 @@ internal sealed class RemoteTabProcess : IDisposable
     // answered ids are dropped, so a stale reply can never fire (or wedge) a later request.
     private int _selectedTextSeq;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, Action<string>> _selectedTextCallbacks = new();
+
+    // DevTools/find RPC: same correlated-callback pattern as RequestSelectedText, one
+    // monotonic id space. Each entry owns its response parse plus a failure answer for
+    // a host that dies (or times out) mid-request — callbacks fire exactly once.
+    private int _rpcSeq;
+    private sealed record RpcPending(Action<BinaryReader> OnResponse, Action OnFailed);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, RpcPending> _rpcCallbacks = new();
 
     public RemoteTabProcess(int tabIndex, string initialUrl, float dpiScale, float resolutionScale,
         bool hang = false, bool fault = false)
@@ -393,6 +405,20 @@ internal sealed class RemoteTabProcess : IDisposable
                 if (_selectedTextCallbacks.TryRemove(id, out var cb)) cb(text);
                 break;
             }
+            case TabMsg.DtNodesResponse:
+            case TabMsg.DtStylesResponse:
+            case TabMsg.DtEvalResponse:
+            case TabMsg.FindResponse:
+            {
+                // [int rpcId] + the codec's body. Parse inline on the reader thread (the
+                // buffer is reused after this returns); unknown ids are dropped exactly
+                // like the selected-text RPC's, so an answered timeout is harmless.
+                using var ms = new MemoryStream(buf, off, len, writable: false);
+                using var r = new BinaryReader(ms, System.Text.Encoding.UTF8, leaveOpen: false);
+                int id = r.ReadInt32();
+                if (_rpcCallbacks.TryRemove(id, out var pending)) pending.OnResponse(r);
+                break;
+            }
             case TabMsg.Heartbeat:
             {
                 int p = off;
@@ -421,7 +447,8 @@ internal sealed class RemoteTabProcess : IDisposable
     private static bool IsPageProgress(TabMsg kind) => kind switch
     {
         TabMsg.FrameCommit or TabMsg.Title or TabMsg.UrlChanged or TabMsg.Loading or TabMsg.ScrollChanged
-            or TabMsg.WheelResult or TabMsg.DialogRequest or TabMsg.MetricsReport or TabMsg.SelectedTextResponse => true,
+            or TabMsg.WheelResult or TabMsg.DialogRequest or TabMsg.MetricsReport or TabMsg.SelectedTextResponse
+            or TabMsg.DtNodesResponse or TabMsg.DtStylesResponse or TabMsg.DtEvalResponse or TabMsg.FindResponse => true,
         _ => false,
     };
 
@@ -470,7 +497,8 @@ internal sealed class RemoteTabProcess : IDisposable
         {
             case TabMsg.Navigate or TabMsg.NavigateHtml or TabMsg.MouseDown or TabMsg.MouseUp
                 or TabMsg.MouseMove or TabMsg.Wheel or TabMsg.Resize or TabMsg.KeyDown
-                or TabMsg.Char or TabMsg.DialogResult:
+                or TabMsg.Char or TabMsg.DialogResult
+                or TabMsg.FindRequest or TabMsg.DtNodesRequest or TabMsg.DtStylesRequest or TabMsg.DtEvalRequest:
                 Volatile.Write(ref _lastOutboundTick, Environment.TickCount64);
                 break;
         }
@@ -502,6 +530,9 @@ internal sealed class RemoteTabProcess : IDisposable
     public void ScrollTo(float x, float y) => Send(TabMsg.ScrollTo, w => { w.Write(x); w.Write(y); });
     public void KeyDown(ushort charCode, ushort key, bool repeat) => Send(TabMsg.KeyDown, w => { w.Write(charCode); w.Write(key); w.Write((byte)(repeat ? 1 : 0)); });
     public void Char(ushort charCode) => Send(TabMsg.Char, w => w.Write(charCode));
+    /// <summary>Ctrl+A on a remote page: the selection lives with the document, so the
+    /// shell cannot build it itself — it asks, then reads the text back.</summary>
+    public void SelectAll() => Send(TabMsg.SelectAll, _ => { });
 
     /// <summary>
     /// Forward a composition update to the engine. Non-blocking fire-and-forget: the pending
@@ -532,6 +563,65 @@ internal sealed class RemoteTabProcess : IDisposable
         int id = Interlocked.Increment(ref _selectedTextSeq);
         _selectedTextCallbacks[id] = callback;
         Send(TabMsg.SelectedTextRequest, w => w.Write(id));
+    }
+
+    // ==================== DevTools / find RPC ====================
+
+    private int NextRpcId() => Interlocked.Increment(ref _rpcSeq);
+
+    /// <summary>Ask the host for one chunk of the DevTools node stream (preorder ids,
+    /// <paramref name="knownVersion"/> = the version the caller's ids were minted under,
+    /// -1 for fresh). The callback fires on the pipe reader thread, or with a failed
+    /// batch when the host dies mid-request.</summary>
+    public void RequestNodeChunk(long knownVersion, int nodeId, int maxDepth, int limit, Action<DtNodeBatch> done)
+    {
+        int id = NextRpcId();
+        _rpcCallbacks[id] = new RpcPending(
+            r => done(DevToolsWire.ReadNodeBatch(r)),
+            () => done(DtNodeBatch.Failed(0)));
+        Send(TabMsg.DtNodesRequest, w => DevToolsWire.WriteNodesRequest(w, id, knownVersion, nodeId, maxDepth, limit));
+    }
+
+    public void RequestNodeStyles(long knownVersion, int nodeId, Action<DtStyleBatch?> done)
+    {
+        int id = NextRpcId();
+        _rpcCallbacks[id] = new RpcPending(
+            r => done(DevToolsWire.ReadStyles(r)),
+            () => done(null));
+        Send(TabMsg.DtStylesRequest, w => DevToolsWire.WriteStylesRequest(w, id, knownVersion, nodeId));
+    }
+
+    /// <summary>Evaluate console script against the page. A host wedged by its own script
+    /// never answers, so after <paramref name="timeoutMs"/> the callback fires with a
+    /// timeout error instead of leaving DevTools blocked — exactly once either way.</summary>
+    public void RequestEval(string script, Action<EvalResult> done, int timeoutMs = 5000)
+    {
+        int id = NextRpcId();
+        _rpcCallbacks[id] = new RpcPending(
+            r => done(DevToolsWire.ReadEval(r)),
+            () => done(new EvalResult(true, "Page host is gone")));
+        Send(TabMsg.DtEvalRequest, w => DevToolsWire.WriteEvalRequest(w, id, script));
+        // One-shot timer: whoever removes the entry owns the single callback — a response
+        // that won means this fires as a no-op, and a timeout that won leaves the late
+        // response dropped by the id. The timer is left to expire on its own; a bounded
+        // one-shot arm is cheaper than tracking and disposing it across the race.
+        new Timer(_ =>
+        {
+            if (_rpcCallbacks.TryRemove(id, out RpcPending? _))
+                done(new EvalResult(true, $"Timeout: the page did not answer within {timeoutMs}ms"));
+        }, null, timeoutMs, Timeout.Infinite);
+    }
+
+    /// <summary>Run a find-in-page search in the engine; rects come back in document
+    /// space (CSS px). Activating a match scrolls the page, which arrives through the
+    /// existing ScrollChanged sync — this callback only answers the search.</summary>
+    public void RequestFind(FindOptions options, int activateIndex, Action<FindResult> done)
+    {
+        int id = NextRpcId();
+        _rpcCallbacks[id] = new RpcPending(
+            r => done(DevToolsWire.ReadFind(r)),
+            () => done(new FindResult { TotalCount = 0, ActiveIndex = -1, Rects = Array.Empty<PageRect>() }));
+        Send(TabMsg.FindRequest, w => DevToolsWire.WriteFindRequest(w, id, options, activateIndex));
     }
 
     /// <summary>Test hook: send a SelectedTextRequest with an arbitrary correlation id and

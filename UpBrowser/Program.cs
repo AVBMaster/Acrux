@@ -20,9 +20,17 @@ class Program
             return;
         }
 
-        if (args.Length > 0 && args[0] == "--frameshot")
+        if (args.Length > 0 && args[0] is "--frameshot" or "--localshot")
         {
-            Environment.ExitCode = FrameSnapshotCli.Run(args);
+            Environment.ExitCode = args[0] == "--frameshot"
+                ? FrameSnapshotCli.Run(args)
+                : FrameSnapshotCli.RunLocal(args);
+            return;
+        }
+
+        if (args.Length > 0 && args[0] == "--interact")
+        {
+            Environment.ExitCode = InteractionScript.Run(args);
             return;
         }
 

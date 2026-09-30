@@ -1,4 +1,5 @@
-using SkiaSharp;
+﻿using SkiaSharp;
+using System.Diagnostics;
 using UpBrowser.Core;
 using UpBrowser.Core.Css;
 using UpBrowser.Core.Dom;
@@ -36,6 +37,38 @@ public sealed class PageEngine : IDisposable
     private readonly ImageCache _imageCache = new();
     private StyleComputer? _styleComputer;
 
+    /// <summary>
+    /// CSS animations and transitions for this page. Sampled once per pipeline
+    /// pass, between style resolution and layout, exactly as the in-process shell
+    /// does, so a tab renders the same frame here as it does there.
+    /// </summary>
+    private readonly UpBrowser.Core.Dom.Animations.CssAnimationEngine _animations = new();
+    /// <summary>True while the last sample left a live effect behind.</summary>
+    private bool _animationsRunning;
+    // Whether the last animation sample changed something layout consumes, as opposed
+    // to something only paint consumes. Decides the dirt level of the next stage.
+    private bool _animNeedsLayout;
+    // Whether the last animation sample changed a painted value, and which boxes it
+    // touched — an animation entirely outside the visible area still needs its display
+    // list refreshed (the list is scroll-invariant) but must not cost a viewport raster.
+    private bool _animNeedsRepaint;
+    private IReadOnlyList<Element>? _animTargets;
+    // True when this tick's animated boxes are all outside the rasterized area: the
+    // sample still advances (effects must complete, fill states and events still fire)
+    // but neither the paint walk nor the viewport raster can show it, so both are
+    // skipped and the sampling drops to a slow keep-alive rate until the boxes scroll
+    // back in.
+    private bool _animOffscreen;
+    // A shadow, outline or blur paints outside the box by an amount the geometry does
+    // not carry, so the estimate below has nothing to test against.
+    private bool _animBleeds;
+    // Set by the sample that observed the last effect retire, which is what asks the
+    // pipeline for its extra style round (see RunPipeline).
+    private bool _animEffectsEnded;
+    private bool _paintVisible = true;
+    /// <summary>Per-pass animation diagnostics (UPBROWSER_ANIM_LIVE=1).</summary>
+    private readonly bool _animTrace = Environment.GetEnvironmentVariable("UPBROWSER_ANIM_LIVE") == "1";
+
     private Document? _document;
     private string _baseUrl = "";
     private string _title = "";
@@ -43,6 +76,10 @@ public sealed class PageEngine : IDisposable
     private float _scrollX, _scrollY;
     private float _contentW, _contentH;
     // Three-level dirty chain: layout ⇒ dl ⇒ raster; scroll/hover-free changes take cheaper paths.
+    // Style is tracked separately from layout because an animation that only moves paint
+    // properties still needs the cascade re-resolved (the engine compares cascaded values
+    // to find transition start conditions) but does not need layout re-run.
+    private bool _styleDirty = true;
     private bool _layoutDirty = true;
     private bool _dlDirty = true;
     private DisplayList? _cachedDl;
@@ -58,6 +95,13 @@ public sealed class PageEngine : IDisposable
 
     // Idle diagnostics counters (the host prints them; reading them is free).
     private long _stRelayout, _stLayout, _stDl;
+    // Diagnostics: how many animation samples were parked as off-screen and how many
+    // were taken as visible (see AnimDamageVisible).
+    private long _stAnimPark, _stAnimVisible;
+    private long _stStylePass;
+    private long _stSampleMs, _stSampleN;
+    private List<UpBrowser.Core.Css.Rules.StyleRuleKeyframes>? _keyframeRules;
+    private double _stStyleMs, _stAnimMs, _stDlMs;
 
     private bool _docHasHoverRules;
     private Document? _hoverRulesDoc;
@@ -119,6 +163,7 @@ public sealed class PageEngine : IDisposable
         PageEnvironment.Initialize();
         _js = new JavaScriptEngine(id);
         _js.ShowDialog = (msg, type) => _sink.RequestDialog(msg ?? "", type ?? "");
+        _animations.EventSink = DispatchAnimationEvent;
 
         // Page-compat: window metrics + JS-driven scrolling live with the document.
         if (_js.Builtins != null)
@@ -193,7 +238,56 @@ public sealed class PageEngine : IDisposable
     }
 
     /// <summary>True when <see cref="UpdatePipeline"/> has work queued.</summary>
-    public bool PipelineWanted => _layoutDirty || _dlDirty;
+    public bool PipelineWanted => _styleDirty || _layoutDirty || _dlDirty || _animationsRunning;
+
+    /// <summary>
+    /// Nominal interval between animation frames. The host sleeps until the next
+    /// frame boundary rather than polling on its idle cadence, which is what keeps
+    /// a running animation at the display's rate instead of at the loop's poll rate.
+    /// </summary>
+    public double AnimationFrameIntervalMs { get; set; } = 1000.0 / 60.0;
+
+    /// <summary>Timeline time the last animation sample was taken at.</summary>
+    private double _lastSampleTimelineMs;
+
+    /// <summary>
+    /// How long the host may sleep before calling <see cref="UpdatePipeline"/>
+    /// again: the sooner of the next JS timer and the next animation frame.
+    ///
+    /// This is the difference between an animation that runs at the display rate
+    /// and one that runs at whatever the host's idle poll happens to be. An idle
+    /// page with no timers and no effects waits the full idle interval; a page
+    /// with a live effect waits only until its next frame boundary.
+    /// </summary>
+    public int NextWorkDelayMs
+    {
+        get
+        {
+            int due = NextTimerDelayMs;
+            int waitMs = due == int.MaxValue ? IdleWaitMs : Math.Clamp(due, 1, IdleWaitMs);
+
+            if (!_animationsRunning) return waitMs;
+
+            // An animation nothing can see still has to be sampled — effects have to
+            // reach their end state, fill modes have to apply, animation events have to
+            // fire — but it does not have to be sampled at the display rate. A quarter
+            // of a second keeps all of that correct and costs a fraction of the CPU.
+            if (_animOffscreen)
+                return due == int.MaxValue ? OffscreenAnimSampleMs : Math.Min(due, OffscreenAnimSampleMs);
+
+            double next = _lastSampleTimelineMs + AnimationFrameIntervalMs;
+            double ahead = next - _animations.Timeline.CurrentTimeMs;
+            int animWait = (int)Math.Ceiling(ahead);
+            if (animWait < 1) animWait = 1;
+            return animWait < waitMs ? animWait : waitMs;
+        }
+    }
+
+    /// <summary>Sampling interval for an animation parked as off-screen.</summary>
+    private const int OffscreenAnimSampleMs = 250;
+
+    /// <summary>Idle poll interval when nothing is scheduled (see the host loop).</summary>
+    private const int IdleWaitMs = 60;
 
     /// <summary>Milliseconds until the next JS timer is due, or <see cref="int.MaxValue"/>.</summary>
     public int NextTimerDelayMs => _js.IntegrationService?.NextTimerDelayMs() ?? int.MaxValue;
@@ -202,6 +296,13 @@ public sealed class PageEngine : IDisposable
     public long RelayoutRequestCount => _stRelayout;
     public long LayoutPassCount => _stLayout;
     public long DisplayListCount => _stDl;
+    public long AnimParkCount => _stAnimPark;
+    public long AnimPaintCount => _stAnimVisible;
+    public long AnimSampleMs => _stSampleMs;
+    public long AnimSampleCount => _stSampleN;
+    public long StylePassCount => _stStylePass;
+    public bool AnimationsRunning => _animationsRunning;
+    public bool AnimationsParked => _animOffscreen;
 
     // ==================== lifecycle ====================
 
@@ -297,6 +398,10 @@ public sealed class PageEngine : IDisposable
             _styleComputer = load.StyleComputer;
             _incremental = null; // fresh node tree — drop the layout cache
             _layoutCache.Clear();
+            // A new document gets a new document timeline, so this page's delays
+            // and negative delays are measured from this navigation.
+            _animations.Reset();
+            _animationsRunning = false;
             _scrollX = _scrollY = 0;
             _hoveredElement = null;
             _hoverRulesDoc = null;
@@ -398,6 +503,46 @@ public sealed class PageEngine : IDisposable
     private void DispatchSimple(Element? el, string type)
     {
         try { DispatchDomEvent(el, h => new ScriptEvent(type, h)); } catch { }
+    }
+
+    /// <summary>
+    /// Deliver an animation or transition event to script. Wired once at
+    /// construction so a page's own <c>animationstart</c> listeners fire in this
+    /// host exactly as they do in the in-process shell.
+    /// </summary>
+    private void DispatchAnimationEvent(Element element, UpBrowser.Core.Dom.Event evt)
+    {
+        try
+        {
+            if (evt is UpBrowser.Core.Dom.AnimationEvent anim)
+            {
+                DispatchDomEvent(element, h => new ScriptEvent(anim.Type, h)
+                {
+                    bubbles = false,
+                    cancelable = false,
+                    animationName = anim.AnimationName,
+                    elapsedTime = anim.ElapsedTime,
+                    pseudoElement = anim.PseudoElement ?? "",
+                    currentTime = anim.CurrentTime,
+                });
+            }
+            else if (evt is UpBrowser.Core.Dom.TransitionEvent trans)
+            {
+                DispatchDomEvent(element, h => new ScriptEvent(trans.Type, h)
+                {
+                    bubbles = false,
+                    cancelable = false,
+                    propertyName = trans.PropertyName,
+                    elapsedTime = trans.ElapsedTime,
+                    pseudoElement = trans.PseudoElement ?? "",
+                    currentTime = trans.CurrentTime,
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[PageEngine {_id}] anim event: {ex.Message}");
+        }
     }
 
     private ElementHost WrapHost(Element el) => _js.GetDispatchHost(el);
@@ -880,6 +1025,16 @@ public sealed class PageEngine : IDisposable
     {
         _lastScrollMoveTick = Environment.TickCount64;
         if (_mouseVX >= 0) _hoverScrollPending = true;
+
+        // Scrolling is the only way an animation parked as off-screen becomes visible
+        // without anything else changing, so it is also where the park has to be lifted:
+        // the paint walk runs again with the current animated values and the sampling
+        // returns to frame rate.
+        if (_animOffscreen && AnimDamageVisible())
+        {
+            _animOffscreen = false;
+            MarkPaint();
+        }
     }
 
     private void HandleMove(float x, float y)
@@ -1374,10 +1529,327 @@ public sealed class PageEngine : IDisposable
         return aPath.Count.CompareTo(bPath.Count);
     }
 
+    // ==================== DevTools inspection & find (host-facing, transport-agnostic) ====================
+
+    // DevTools node-id space: preorder indexes over the current document, valid only
+    // while DomMutationTracker.Version holds. The cache is rebuilt on demand at the
+    // first request after a version move — never polled, never copied per request.
+    private readonly UpBrowser.PageHost.Inspection.DevToolsTree _dtTree = new();
+    private List<(UpBrowser.Core.Dom.TextNode Node, int Start, int Length)> _findSpans = new();
+
+    /// <summary>DOM version DevTools ids are minted under; moves invalidate every cached id.</summary>
+    public static long DevToolsVersion => UpBrowser.PageHost.Inspection.DevToolsInspector.CurrentVersion;
+
+    /// <summary>Stream a preorder chunk of the node tree starting at <paramref name="nodeId"/>
+    /// (0 = document root). <paramref name="knownVersion"/> is the version the client's ids
+    /// were minted under (-1 = fresh); a moved version answers
+    /// <see cref="UpBrowser.PageContract.DtNodeBatch.VersionMoved"/> instead of wrong data.</summary>
+    public UpBrowser.PageContract.DtNodeBatch CollectNodeTree(int nodeId, long knownVersion, int maxDepth, int limit)
+    {
+        var doc = _document;
+        long current = UpBrowser.PageHost.Inspection.DevToolsInspector.CurrentVersion;
+        if (doc == null) return UpBrowser.PageContract.DtNodeBatch.Failed(current);
+        if (knownVersion >= 0 && knownVersion != current)
+            return UpBrowser.PageContract.DtNodeBatch.Moved(current);
+        if (!_dtTree.IsCurrent(doc, current)) _dtTree.Rebuild(doc, current);
+        return UpBrowser.PageHost.Inspection.DevToolsInspector.CollectChunk(_dtTree, current, nodeId, maxDepth, limit);
+    }
+
+    /// <summary>Matched rules + inline style + computed subset for one preorder node id.
+    /// Null when the id is unknown; VersionMoved when the id is stale.</summary>
+    public UpBrowser.PageContract.DtStyleBatch? StylesForNode(int nodeId, long knownVersion)
+    {
+        var doc = _document;
+        long current = UpBrowser.PageHost.Inspection.DevToolsInspector.CurrentVersion;
+        if (doc == null) return null;
+        if (knownVersion >= 0 && knownVersion != current)
+            return new UpBrowser.PageContract.DtStyleBatch(nodeId, current,
+                Array.Empty<UpBrowser.PageContract.DtStyleRule>(),
+                Array.Empty<UpBrowser.PageContract.DtDeclaration>(),
+                Array.Empty<UpBrowser.PageContract.DtDeclaration>(), true);
+        if (!_dtTree.IsCurrent(doc, current)) _dtTree.Rebuild(doc, current);
+        return UpBrowser.PageHost.Inspection.DevToolsInspector.BuildStyles(_dtTree, current, nodeId, _styleComputer);
+    }
+
+    /// <summary>Console evaluation: same formatting the in-process console used, errors
+    /// folded into the result so a throwing script is data, not a fault.</summary>
+    public UpBrowser.PageContract.EvalResult EvaluateScript(string script)
+    {
+        try
+        {
+            return new UpBrowser.PageContract.EvalResult(false,
+                UpBrowser.PageHost.Inspection.DevToolsInspector.FormatEvalValue(_js.Evaluate(script)));
+        }
+        catch (Exception ex)
+        {
+            return new UpBrowser.PageContract.EvalResult(true, ex.Message);
+        }
+    }
+
+    /// <summary>Find-in-page: walks text nodes for <paramref name="query"/>, returns
+    /// match count + document-space (CSS px) rects, and when
+    /// <paramref name="activateIndex"/> names a match, highlights it through the engine's
+    /// existing selection overlay and scrolls it into view (echoed by
+    /// <see cref="IPageEngineSink.ReportScrollChanged"/> like any other engine scroll).
+    /// <paramref name="forward"/> shapes the wrap-around of the active index.</summary>
+    public UpBrowser.PageContract.FindResult FindMatches(string query, bool caseSensitive, bool forward, int activateIndex)
+    {
+        var doc = _document;
+        if (doc == null || string.IsNullOrEmpty(query))
+        {
+            _findSpans = new List<(UpBrowser.Core.Dom.TextNode, int, int)>();
+            return new UpBrowser.PageContract.FindResult
+            {
+                TotalCount = 0,
+                ActiveIndex = -1,
+                Rects = Array.Empty<UpBrowser.PageContract.PageRect>(),
+            };
+        }
+
+        _findSpans = UpBrowser.PageHost.Inspection.DevToolsInspector.FindSpans(doc, query, caseSensitive);
+        var rects = new UpBrowser.PageContract.PageRect[_findSpans.Count];
+        for (int i = 0; i < _findSpans.Count; i++)
+            rects[i] = UpBrowser.PageHost.Inspection.DevToolsInspector.SpanRect(_findSpans[i].Node, _findSpans[i].Start, _findSpans[i].Length);
+
+        int active = -1;
+        if (activateIndex >= 0 && _findSpans.Count > 0)
+        {
+            // Wrap so "next past the end" restarts at the first match, backwards wraps up.
+            int n = _findSpans.Count;
+            active = ((activateIndex % n) + n) % n;
+            ActivateFindMatch(active);
+        }
+        return new UpBrowser.PageContract.FindResult { TotalCount = _findSpans.Count, ActiveIndex = active, Rects = rects };
+    }
+
+    private void ActivateFindMatch(int index)
+    {
+        var (node, start, length) = _findSpans[index];
+        // The existing selection overlay is the page highlight: reuse it rather than
+        // painting a second one — the paint walk already tints exactly this node/offset
+        // range, and copy/context keep working against the found text.
+        _selAnchor = new SelPoint { Node = node, Offset = start };
+        _selFocus = new SelPoint { Node = node, Offset = Math.Min(start + length, (node.TextContent ?? "").Length) };
+        _hasSelection = true;
+        _isSelecting = false;
+        MarkPaint();
+
+        var rect = UpBrowser.PageHost.Inspection.DevToolsInspector.SpanRect(node, start, length);
+        ScrollToShow(rect);
+    }
+
+    /// <summary>Scroll the window so the rect is visible — via <see cref="SetScroll"/>,
+    /// so an engine-initiated find scroll surfaces through the same ScrollChanged sync
+    /// as scrollTo and the host's scrollbar stays correct.</summary>
+    private void ScrollToShow(UpBrowser.PageContract.PageRect r)
+    {
+        if (r.Width <= 0 && r.Height <= 0) return;
+        float x = _scrollX, y = _scrollY;
+        if (r.Y < y) y = r.Y;
+        else if (r.Y + r.Height > y + _viewportH) y = r.Y + r.Height - _viewportH;
+        if (r.X < x) x = r.X;
+        else if (r.X + r.Width > x + _viewportW) x = r.X + r.Width - _viewportW;
+        SetScroll(x, y);
+    }
+
     // ==================== render ====================
 
-    private void MarkPaint() { _dlDirty = true; _sink.RequestFrame(); }
-    private void MarkLayout() { _layoutDirty = true; _dlDirty = true; _sink.RequestFrame(); }
+    private void MarkPaint() { _dlDirty = true; _paintVisible = true; _animOffscreen = false; _sink.RequestFrame(); }
+    private void MarkLayout() { _styleDirty = true; _layoutDirty = true; _dlDirty = true; _paintVisible = true; _animOffscreen = false; _sink.RequestFrame(); }
+
+    /// <summary>
+    /// Sample every CSS animation and transition for this pass and write the
+    /// results into the elements' computed styles.
+    ///
+    /// Runs between style resolution and layout, because both halves depend on the
+    /// order: the engine compares cascaded values against their before-change
+    /// style to find transition start conditions (so it must not be fed its own
+    /// previous output), and layout has to read the values the frame will paint.
+    /// </summary>
+    private bool AdvanceAnimations(bool styleRecomputed = true)
+    {
+        if (_document == null || _styleComputer == null) return false;
+        var root = _document.DocumentElement ?? _document.Body;
+        if (root == null) return false;
+
+        try
+        {
+            // Keyframe rules come from the cascade, so they can only change on a pass
+            // whose styles were re-resolved; collecting them walks every rule group.
+            if (styleRecomputed || _keyframeRules == null)
+                _keyframeRules = _styleComputer.CollectKeyframeRules();
+
+            long sT = Stopwatch.GetTimestamp();
+            var result = _animations.Update(root, _keyframeRules, styleRecomputed: styleRecomputed);
+            _stSampleMs += (Stopwatch.GetTimestamp() - sT) * 1000 / Stopwatch.Frequency;
+            _stSampleN++;
+
+            bool wasRunning = _animationsRunning;
+            _animationsRunning = result.HasActiveAnimations;
+            if (wasRunning && !_animationsRunning)
+            {
+                // The last effect just ended, and it leaves its final values written into
+                // the computed styles. Only the cascade can take them back away, so an
+                // animation ending is a style change: without this an element that
+                // animated away and back would stay where the animation left it.
+                _styleDirty = true;
+                _dlDirty = true;
+                _paintVisible = true;
+                _animOffscreen = false;
+                _animEffectsEnded = true;
+            }
+            _animNeedsLayout = result.NeedsLayout;
+            _animNeedsRepaint = result.NeedsRepaint;
+            _animTargets = result.RepaintTargets;
+            _animBleeds = result.RepaintBleeds;
+            _lastSampleTimelineMs = _animations.Timeline.CurrentTimeMs;
+            if (_animTrace)
+            {
+                try
+                {
+                    File.AppendAllText("upbrowser_anim_live.log",
+                        $"tab{_id} t={_animations.Timeline.CurrentTimeMs:F1}ms " +
+                        $"kf={_styleComputer.CollectKeyframeRules().Count} " +
+                        $"active={result.HasActiveAnimations} effects={_animations.ActiveEffectCount} " +
+                        $"animated={result.AnimatedElements} layout={result.NeedsLayout}\n");
+                }
+                catch { }
+            }
+            return result.HasActiveAnimations;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[PageEngine {_id}] anim: {ex.Message}");
+            _animationsRunning = false;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Can this tick's animated pixels reach the area the host rasterizes?
+    ///
+    /// The painted area of an animated element is its own box plus everything laid out
+    /// inside it (a child that overflows the parent still paints with the parent's
+    /// animated values), mapped through the transforms along that path: an animated
+    /// <c>translate</c> can carry an off-screen box on screen, so testing the untransformed
+    /// box would cull a visible animation. Anything the walk cannot bound — a fixed or
+    /// sticky box, a scroll container whose descendants' coordinates it cannot trust, a
+    /// subtree over budget — counts as visible, because the answer only ever skips work and
+    /// must never be wrong in the direction that drops pixels.
+    /// </summary>
+    private bool AnimDamageVisible()
+    {
+        // Shadow spread, outline offset and blur put pixels outside the box by an amount
+        // the geometry does not carry, so there is nothing to test against.
+        if (_animBleeds) return true;
+
+        var targets = _animTargets;
+        if (targets == null || targets.Count == 0) return true;
+
+        float x0 = _scrollX, y0 = _scrollY, x1 = _scrollX + _viewportW, y1 = _scrollY + _viewportH;
+        for (int i = 0; i < targets.Count; i++)
+        {
+            var el = targets[i];
+            if (el == null) return true;
+
+            var walk = new DamageWalk { Budget = DamageBoxBudget };
+            if (!PaintedArea(el, ref walk)) return true;
+            if (!walk.Any) return true;
+
+            walk.Area.Inflate(DamageBleed, DamageBleed);
+            var r = walk.Area;
+            if (r.Right > x0 && r.Left < x1 && r.Bottom > y0 && r.Top < y1) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Accumulates one animated element's painted area (see AnimDamageVisible).</summary>
+    private struct DamageWalk
+    {
+        public SKRect Area;
+        public bool Any;
+        public int Budget;
+    }
+
+    private bool PaintedArea(Element el, ref DamageWalk walk)
+    {
+        var style = el.ComputedStyle;
+        var box = el.LayoutBox;
+        if (style == null || box == null) return false;
+        if (style.Position is PositionType.Fixed or PositionType.Sticky) return false;
+        if (box.IsSticky || box.IsScrollContainer) return false;
+        if (--walk.Budget <= 0) return false;
+
+        var self = box.BorderBox;
+        if (!walk.Any) { walk.Area = self; walk.Any = true; }
+        else walk.Area = SKRect.Union(walk.Area, self);
+
+        foreach (var node in el.Children)
+        {
+            if (node is not Element child) continue;
+            var inner = new DamageWalk { Budget = walk.Budget };
+            if (!PaintedArea(child, ref inner)) return false;
+            walk.Budget = inner.Budget;
+            if (!inner.Any) continue;
+            walk.Area = walk.Any ? SKRect.Union(walk.Area, inner.Area) : inner.Area;
+            walk.Any = true;
+        }
+
+        walk.Area = Transformed(walk.Area, style, box);
+        if (walk.Area.Left > walk.Area.Right) return false;   // a transform the parser rejected
+
+        // The boxes are laid out untransformed, so an ancestor transform moves this
+        // subtree's pixels without moving its box. Walk up and apply each one.
+        for (var ancestor = el.ParentElement; ancestor != null; ancestor = ancestor.ParentElement)
+        {
+            var astyle = ancestor.ComputedStyle;
+            var abox = ancestor.LayoutBox;
+            if (astyle == null || abox == null) return false;
+            if (astyle.Position is PositionType.Fixed or PositionType.Sticky ||
+                abox.IsSticky || abox.IsScrollContainer)
+                return false;   // its painted position is not the box's laid-out one
+            if (!astyle.HasAnyTransform) continue;
+            walk.Area = Transformed(walk.Area, astyle, abox);
+            if (walk.Area.Left > walk.Area.Right) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// <paramref name="area"/> as this box paints it: the union of the area and the area
+    /// mapped through the box's own transform. The matrix turns about the origin in the
+    /// box's own space, so the rect travels to local coordinates and back; an origin
+    /// other than the default is not modelled and is absorbed by growing the result by
+    /// the box's own size, which is where the error can reach at most.
+    /// </summary>
+    private static SKRect Transformed(SKRect area, ComputedStyle style, LayoutBox box)
+    {
+        var border = box.BorderBox;
+        if (!style.HasAnyTransform) return area;
+
+        var ops = UpBrowser.Core.Css.TransformParser.Parse(
+            style.EffectiveTransform(border.Width, border.Height));
+        if (ops.Count == 0) return new SKRect(float.MaxValue, float.MaxValue, 0, 0);
+
+        var m = UpBrowser.Core.Css.TransformParser.ToMatrix(ops, border.Width / 2f, border.Height / 2f);
+        var local = area;
+        local.Offset(-border.Left, -border.Top);
+        var mapped = m.MapRect(local);
+        mapped.Offset(border.Left, border.Top);
+        if (!IsDefaultTransformOrigin(style.TransformOrigin))
+            mapped.Inflate(border.Width, border.Height);
+        return SKRect.Union(area, mapped);
+    }
+
+    private static bool IsDefaultTransformOrigin(string? origin) =>
+        string.IsNullOrEmpty(origin) ||
+        origin.Trim() is "50% 50% 0" or "50% 50%" or "center center";
+
+    /// <summary>Boxes one damage estimate may walk before it gives up and paints.</summary>
+    private const int DamageBoxBudget = 256;
+
+    /// <summary>CSS px grown around the estimate for borders, decoration lines and rounding.</summary>
+    private const float DamageBleed = 8f;
 
     /// <summary>
     /// Run the layout and display-list stages once. Returns true when either rebuilt,
@@ -1388,16 +1860,93 @@ public sealed class PageEngine : IDisposable
     {
         if (_document == null) return false;
         bool rebuilt = false;
+        long t0 = _animTrace ? Stopwatch.GetTimestamp() : 0;
+        long t1 = t0;
+        long tStyle = t0;
+
+        // A live effect is itself a reason to run the pipeline again: nothing else
+        // about the page has changed, but its style has. Asking for the next pass
+        // is what keeps an animation running after the first frame. An effect that
+        // is entirely off-screen is the exception — its sample advances, but its
+        // output cannot be seen, so neither the paint walk nor the raster runs for
+        // it (see AnimDamageVisible).
+        if (_animationsRunning && !_animOffscreen)
+        {
+            _dlDirty = true;
+        }
+
+        // Style is re-resolved when the document changed. It is NOT re-resolved for
+        // an animation frame where nothing else is dirty: the animation overwrites
+        // the same properties every frame and the cascade cannot have changed
+        // underneath it, so a full style pass per frame is pure cost — and on a
+        // real page it is the single most expensive thing in the frame. The engine
+        // is told which case this is, so it knows a transition may not start.
+        //
+        // The two stages may need one extra round together, for exactly one case: the
+        // last effect ending. That re-dirties style, because restoring the values the
+        // animation had overridden is something only the cascade can do — and the paint
+        // walk must not run before that restore, or it bakes in the animated value and
+        // the element keeps the look of a frame that no longer exists.
+        for (int round = 0; ; round++)
+        {
+            bool styleRecomputed = _styleDirty;
+            if (styleRecomputed)
+            {
+                if (_styleComputer == null)
+                {
+                    _styleComputer = new StyleComputer();
+                    _styleComputer.AddStylesheet(_docManager.GetUaStylesheet(), UpBrowser.Core.Css.Resolver.CascadeOrigin.UserAgent);
+                }
+                _styleComputer.ComputeStyles(_document, _viewportW, _viewportH);
+                _stStylePass++;
+                _styleDirty = false;
+                tStyle = _animTrace ? Stopwatch.GetTimestamp() : t0;
+            }
+
+            // "Update animations and send events" sits here, between style and layout.
+            // When style did run, the engine compares the cascaded values to find
+            // transition start conditions.
+            _animEffectsEnded = false;
+            if (AdvanceAnimations(styleRecomputed))
+            {
+                // Only animations that move something layout consumes may re-run the whole
+                // tree; an opacity or colour pulse is a paint change, and a full relayout
+                // per animation frame costs more than everything else in that frame.
+                if (_animNeedsLayout)
+                {
+                    _layoutDirty = true;
+                    _paintVisible = true;
+                    _animOffscreen = false;
+                }
+                else if (_animNeedsRepaint)
+                {
+                    // The display list bakes the animated values in, so a tick whose damage
+                    // is on screen has to rebuild it and then raster. When every animated box
+                    // is outside the rasterized area neither helps: the list keeps the last
+                    // values it was walked with, and NoteScrollMoved invalidates it again the
+                    // moment one of those boxes comes back into view.
+                    if (AnimDamageVisible())
+                    {
+                        _stAnimVisible++;
+                        _dlDirty = true;
+                        _paintVisible = true;
+                        _animOffscreen = false;
+                    }
+                    else
+                    {
+                        _stAnimPark++;
+                        _animOffscreen = true;
+                    }
+                }
+            }
+
+            if (round == 0 && _animEffectsEnded && _styleDirty) continue;
+            break;
+        }
 
         if (_layoutDirty)
         {
             _stLayout++;
-            if (_styleComputer == null)
-            {
-                _styleComputer = new StyleComputer();
-                _styleComputer.AddStylesheet(_docManager.GetUaStylesheet(), UpBrowser.Core.Css.Resolver.CascadeOrigin.UserAgent);
-            }
-            _styleComputer.ComputeStyles(_document, _viewportW, _viewportH);
             _incremental ??= new IncrementalLayoutEngine(_layoutEngine, _layoutCache);
             _incremental.Layout(_document, _viewportW, _viewportH, _dpi, 16f);
             _layoutDirty = false;
@@ -1414,7 +1963,16 @@ public sealed class PageEngine : IDisposable
                 _cachedBoxCount = CountLayoutBoxes(_document);
             }
             _dlDirty = true;
+            // A relayout can always move pixels, whatever the animation sample said.
+            _paintVisible = true;
             rebuilt = true;
+        }
+
+        if (_animTrace)
+        {
+            t1 = Stopwatch.GetTimestamp();
+            _stStyleMs = 0.875 * _stStyleMs + 0.125 * ((tStyle - t0) * 1000.0 / Stopwatch.Frequency);
+            _stAnimMs = 0.875 * _stAnimMs + 0.125 * ((t1 - tStyle) * 1000.0 / Stopwatch.Frequency);
         }
 
         if (_dlDirty)
@@ -1440,7 +1998,24 @@ public sealed class PageEngine : IDisposable
             _cachedBg = visitor.ViewBackgroundColor;
             _dlSerial++;
             _dlDirty = false;
-            _sink.RequestFrame();
+            bool visible = _paintVisible;
+            _paintVisible = false;
+            if (visible) _sink.RequestFrame();
+            if (_animTrace)
+            {
+                long t2 = Stopwatch.GetTimestamp();
+                _stDlMs = 0.875 * _stDlMs + 0.125 * ((t2 - t1) * 1000.0 / Stopwatch.Frequency);
+                try
+                {
+                    // Per-stage frame cost, so a slow animation can be attributed to
+                    // style, to sampling, to the paint walk or to the raster instead
+                    // of guessed at. style reads 0 on an animation frame, which is the
+                    // point: the host skips it when only an animation changed.
+                    File.AppendAllText("upbrowser_anim_live.log",
+                        $"tab{_id} PIPE style={_stStyleMs:F1} anim={_stAnimMs:F1} dl={_stDlMs:F1}ms\n");
+                }
+                catch { }
+            }
             rebuilt = true;
         }
 

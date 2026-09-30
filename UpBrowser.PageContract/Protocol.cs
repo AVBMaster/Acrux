@@ -100,6 +100,7 @@ public enum TabMsg : byte
     DtStylesResponse = 64,// C->S [see DtStyleBatch]
     DtEvalRequest = 65,   // S->C [string script]
     DtEvalResponse = 66,  // C->S [byte isError][string text]
+    SelectAll = 67,       // S->C - select every run of the page, as Ctrl+A does
 }
 
 /// <summary>How a published frame describes its pixel delta.</summary>

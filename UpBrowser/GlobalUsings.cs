@@ -9,3 +9,4 @@ global using FrameChannel = UpBrowser.PageContract.FrameChannel;
 global using FrameMeta = UpBrowser.PageContract.FrameMeta;
 global using DamageRect = UpBrowser.PageContract.DamageRect;
 global using PageProtocol = UpBrowser.PageContract.PageProtocol;
+global using DevToolsWire = UpBrowser.PageContract.DevToolsWire;

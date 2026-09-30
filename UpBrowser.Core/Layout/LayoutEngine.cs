@@ -102,6 +102,8 @@ public class LayoutEngine
             return;
         }
 
+        LayoutDiagnostics.CountRootPass();
+
         // Save scroll state BEFORE ClearLayoutBoxes destroys the boxes.
         // Without this, every relayout resets ScrollY to 0 and inner scroll
         // containers can never hold a position.

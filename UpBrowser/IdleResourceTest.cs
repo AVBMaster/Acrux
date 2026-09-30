@@ -12,6 +12,9 @@ namespace UpBrowser;
 /// </summary>
 internal static class IdleResourceTest
 {
+    // Frames the child published: a callback can only capture a field, not a local.
+    private static int _frames;
+
     public static int Run()
     {
         using var remote = new RemoteTabProcess(95, "", 1f, 1f);
@@ -21,8 +24,8 @@ internal static class IdleResourceTest
         while (!remote.IsConnected && sw0.ElapsedMilliseconds < 8000) Thread.Sleep(20);
         if (!remote.IsConnected) { Console.WriteLine("[idletest] connect failed"); return 1; }
 
-        int frameCount = 0;
-        remote.OnFrameArrived += () => Interlocked.Increment(ref frameCount);
+        _frames = 0;
+        remote.OnFrameArrived += () => Interlocked.Increment(ref _frames);
 
         remote.NavigateHtml(DocumentManager.TestCssFeatureHtml, "upbrowser://test-css");
         bool gotFirst = WaitUntil(() => remote.FrameVersion > 0, 8000) > 0;
@@ -30,25 +33,20 @@ internal static class IdleResourceTest
 
         var self = System.Diagnostics.Process.GetCurrentProcess();
         var child = childPid > 0 ? System.Diagnostics.Process.GetProcessById(childPid) : null;
-        child?.Refresh();
-        var cpuBefore = child?.TotalProcessorTime ?? TimeSpan.Zero;
-        long vBefore = remote.FrameVersion;
-        int framesBefore = frameCount;
 
-        Thread.Sleep(3000);
+        // Two windows, because the first one is not idle yet: loading a page leaves the
+        // runtime settling (tiered compilation promoting the methods the first frame just
+        // ran, GC growing its heaps), and that CPU belongs to startup, not to an idle
+        // tick. The gate is on the steady window; the first is still printed so a startup
+        // tail cannot hide a regression.
+        double cpuA = SampleWindow(child, 3000, ref _frames, out int idleFramesA);
+        double cpuB = SampleWindow(child, 3000, ref _frames, out int idleFramesB);
 
         child?.Refresh();
-        var cpuDelta = (child?.TotalProcessorTime ?? TimeSpan.Zero) - cpuBefore;
         double memMB = (child?.PrivateMemorySize64 ?? 0) / 1048576.0;
-        int idleFrames = frameCount - framesBefore;
-        long selfIdleMs = 0;
-        var selfBefore = self.TotalProcessorTime;
-        Thread.Sleep(0);
-        selfIdleMs = (long)(self.TotalProcessorTime - selfBefore).TotalMilliseconds;
 
-        double childCpuPct = cpuDelta.TotalMilliseconds / 30.0; // % of one core over 3s
-        Console.WriteLine($"[idletest] first={gotFirst} idleFrames={idleFrames} " +
-                          $"childCPU={childCpuPct:F1}%ofcore childPrivateMB={memMB:F0} " +
+        Console.WriteLine($"[idletest] first={gotFirst} idleFrames={idleFramesA}/{idleFramesB} " +
+                          $"childCPU={cpuA:F1}%->{cpuB:F1}%ofcore childPrivateMB={memMB:F0} " +
                           $"parentSelfMB={(self.PrivateMemorySize64 / 1048576.0):F0}");
         child?.Dispose();
         remote.Dispose();
@@ -60,9 +58,24 @@ internal static class IdleResourceTest
             Console.WriteLine($"[idletest] UpBrowser processes after dispose (incl. this one): {leftover}");
         }
         catch { }
-        bool pass = gotFirst && idleFrames <= 1 && childCpuPct < 3.0;
+        bool pass = gotFirst && idleFramesB <= 1 && cpuB < 3.0;
         Console.WriteLine(pass ? "[idletest] PASS" : "[idletest] WARN — idle not quiet");
         return 0;
+    }
+
+    /// <summary>CPU the child used during one window, as a percentage of one core, plus
+    /// how many frames arrived in it.</summary>
+    private static double SampleWindow(System.Diagnostics.Process? child, int windowMs,
+        ref int frameCount, out int idleFrames)
+    {
+        child?.Refresh();
+        var cpuBefore = child?.TotalProcessorTime ?? TimeSpan.Zero;
+        int framesAt = frameCount;
+        Thread.Sleep(windowMs);
+        child?.Refresh();
+        var cpuDelta = (child?.TotalProcessorTime ?? TimeSpan.Zero) - cpuBefore;
+        idleFrames = frameCount - framesAt;
+        return cpuDelta.TotalMilliseconds / (windowMs / 10.0);
     }
 
     private static long WaitUntil(Func<bool> cond, int timeoutMs)

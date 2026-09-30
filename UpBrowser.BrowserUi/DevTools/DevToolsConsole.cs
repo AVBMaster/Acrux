@@ -1,6 +1,6 @@
 using SkiaSharp;
 using UpBrowser.Core;
-using UpBrowser.Core.JavaScript;
+using UpBrowser.PageContract;
 using UpBrowser.Platform;
 using System.Text;
 
@@ -16,7 +16,13 @@ public class DevToolsConsole : IImeSupport
     private int _selectionStart = -1;
     private bool _showCursor = true;
     private DateTime _lastBlink = DateTime.Now;
-    private JavaScriptEngine? _jsEngine;
+    private IDevToolsChannel? _channel;
+    // Console evaluation is asynchronous over the channel now. Commands run strictly in
+    // order — one outstanding at a time, the rest queued — so output lines keep the
+    // sequence the synchronous pre-IPC console produced.
+    private readonly Queue<string> _evalQueue = new();
+    private bool _evalBusy;
+    private int _evalGen;
     private float _scrollOffset;
     private float _contentHeight;
     private float _viewHeight;
@@ -64,7 +70,13 @@ public class DevToolsConsole : IImeSupport
         _outputLines.Add("");
     }
 
-    public void SetJavaScriptEngine(JavaScriptEngine? engine) { _jsEngine = engine; }
+    public void SetChannel(IDevToolsChannel? channel)
+    {
+        _channel = channel;
+        _evalGen++;
+        _evalBusy = false;
+        _evalQueue.Clear();
+    }
 
     public void AppendOutput(string text)
     {
@@ -482,25 +494,54 @@ public class DevToolsConsole : IImeSupport
             return;
         }
 
-        if (_jsEngine != null)
+        // The channel answers even when its page is gone (it returns an error result),
+        // so only a missing channel itself means "no engine".
+        var ch = _channel;
+        if (ch == null)
         {
-            try
-            {
-                var result = _jsEngine.Evaluate(cmd);
-                _outputLines.Add(result switch
-                {
-                    null => "undefined",
-                    string s => $"\"{s}\"",
-                    _ => result.ToString() ?? "undefined"
-                });
-            }
-            catch (Exception ex) { _outputLines.Add($"Error: {ex.Message}"); }
+            _outputLines.Add("Error: JS engine not available");
+            _inputText = ""; _cursorPos = 0;
+            _scrollOffset = float.MaxValue;
+            OnInputChanged?.Invoke();
+            return;
         }
-        else _outputLines.Add("Error: JS engine not available");
 
+        // Enqueue and pump: results land as they answer, never on the input stack, and
+        // a wedged page reports the channel's timeout error instead of freezing the panel.
+        _evalQueue.Enqueue(cmd);
         _inputText = ""; _cursorPos = 0;
         _scrollOffset = float.MaxValue;
         OnInputChanged?.Invoke();
+        PumpEval();
+    }
+
+    private void PumpEval()
+    {
+        if (_evalBusy || _evalQueue.Count == 0) return;
+        var ch = _channel;
+        if (ch == null)
+        {
+            while (_evalQueue.Count > 0)
+            {
+                _evalQueue.Dequeue();
+                _outputLines.Add("Error: JS engine not available");
+            }
+            _scrollOffset = float.MaxValue;
+            OnInputChanged?.Invoke();
+            return;
+        }
+        _evalBusy = true;
+        int gen = _evalGen;
+        var script = _evalQueue.Dequeue();
+        ch.Evaluate(script, result =>
+        {
+            if (gen != _evalGen || !ReferenceEquals(ch, _channel)) return; // channel swapped mid-flight
+            _evalBusy = false;
+            _outputLines.Add(result.IsError ? $"Error: {result.Text}" : result.Text);
+            _scrollOffset = float.MaxValue;
+            OnInputChanged?.Invoke();
+            PumpEval();
+        });
     }
 
     private void DrawColored(SKCanvas canvas, string text, float x, ref float y, float maxW, DevToolsTheme theme)

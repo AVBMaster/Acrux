@@ -44,6 +44,7 @@
 		<ProjectReference Include="..\UpBrowser.Input\UpBrowser.Input.csproj" />
 		<ProjectReference Include="..\UpBrowser.PageContract\UpBrowser.PageContract.csproj" />
 		<ProjectReference Include="..\UpBrowser.PageHost\UpBrowser.PageHost.csproj" />
+		<ProjectReference Include="..\UpBrowser.BrowserUi\UpBrowser.BrowserUi.csproj" />
 		<!-- JsEngineHost 以独立进程运行，不作为程序集引用，也不加 ProjectReference（避免 AOT/SelfContained 冲突） -->
 	</ItemGroup>
 

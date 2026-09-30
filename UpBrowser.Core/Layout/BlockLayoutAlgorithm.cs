@@ -840,6 +840,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
     private LayoutResult LayoutMain()
     {
+        LayoutDiagnostics.CountBlockPass();
         _containerBfcLineOffset = Space.GetBfcOffset().LineOffset;
 
         var adjoiningObjectTypes = Space.AdjoiningObjectTypes;
@@ -906,7 +907,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         {
             bool discardSubsequentMargins = previousInflowPosition.margin_strut.discard_margins && contentEdge == 0;
             if (!ResolveBfcBlockOffset(ref previousInflowPosition))
-                return LayoutResult.Abort(EStatus.BfcBlockOffsetResolved);
+                return AbortBfcBlockOffsetResolved();
 
             // Move to the content edge. This is where the first child should be
             // placed. The in-flow cursor is content-box-relative: the container's
@@ -1001,6 +1002,8 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
                 if (status != EStatus.Success)
                 {
                     // We need to abort the layout. No fragment will be generated.
+                    if (status == EStatus.BfcBlockOffsetResolved)
+                        return AbortBfcBlockOffsetResolved();
                     return LayoutResult.Abort(status);
                 }
                 if (Space.HasBlockFragmentation && HasInflowChildBreakInside())
@@ -1261,7 +1264,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
                 // If we have collapsed through the block start and all children (if
                 // any), now is the time to determine the BFC block offset.
                 if (!ResolveBfcBlockOffset(ref previousInflowPosition))
-                    return LayoutResult.Abort(EStatus.BfcBlockOffsetResolved);
+                    return AbortBfcBlockOffsetResolved();
             }
             else
             {
@@ -1392,7 +1395,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         if (!IsContainerBfcResolved() && (_blockSize != 0 || _breakToken != null))
         {
             if (!ResolveBfcBlockOffset(ref previousInflowPosition))
-                return LayoutResult.Abort(EStatus.BfcBlockOffsetResolved);
+                return AbortBfcBlockOffsetResolved();
         }
 
         if (IsContainerBfcResolved())
@@ -1990,7 +1993,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
                 // If we need to abort here, it means that we had preceding
                 // unpositioned floats.
                 if (!bfcOffsetAlreadyResolved)
-                    return EStatus.BfcBlockOffsetResolved;
+                    return AbortBfcBlockOffsetResolvedStatus();
             }
 
             // We reset the block offset here as it may have been affected by
@@ -2028,7 +2031,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
                     // The first BFC block offset resolution turned out to be wrong, and
                     // we positioned preceding adjacent floats based on that. Now we have
                     // to roll back and position them at the correct offset.
-                    return EStatus.BfcBlockOffsetResolved;
+                    return AbortBfcBlockOffsetResolvedStatus();
                 }
             }
 
@@ -2051,7 +2054,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             _inlineSize, direction);
 
         if (!PositionOrPropagateListMarker(layoutResult, ref logicalOffset, ref previousInflowPosition))
-            return EStatus.BfcBlockOffsetResolved;
+            return AbortBfcBlockOffsetResolvedStatus();
 
         PropagateBaselineFromBlockChild(fragment, resolvedMargins, logicalOffset.BlockOffset);
 
@@ -2263,7 +2266,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         if (hasClearancePastAdjoiningFloats)
         {
             if (!ResolveBfcBlockOffset(ref previousInflowPosition))
-                return EStatus.BfcBlockOffsetResolved;
+                return AbortBfcBlockOffsetResolvedStatus();
 
             // If we had clearance past any adjoining floats, we already know where
             // the child is going to be (the child's margins won't have any effect).
@@ -2329,7 +2332,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             }
 
             if (!ResolveBfcBlockOffset(ref previousInflowPosition, bfcBlockOffset, /* forced_bfc_block_offset */ null))
-                return EStatus.BfcBlockOffsetResolved;
+                return AbortBfcBlockOffsetResolvedStatus();
         }
 
         // We have special behavior for a self-collapsing child which gets pushed
@@ -2359,7 +2362,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             // The child has clearance. Clearance inhibits margin collapsing and acts
             // as spacing before the block-start margin of the child.
             if (!ResolveBfcBlockOffset(ref previousInflowPosition))
-                return EStatus.BfcBlockOffsetResolved;
+                return AbortBfcBlockOffsetResolvedStatus();
         }
         else if (layoutResult.SubtreeModifiedMarginStrut)
         {
@@ -2394,7 +2397,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             // this container will get the same offset, unless it has already been
             // resolved.
             if (!ResolveBfcBlockOffset(ref previousInflowPosition, childBfcBlockOffset.Value))
-                return EStatus.BfcBlockOffsetResolved;
+                return AbortBfcBlockOffsetResolvedStatus();
         }
 
         // We need to re-layout a self-collapsing child if it was affected by
@@ -2419,6 +2422,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         //  - It was affected by clearance.
         if ((layoutResult.Status == EStatus.BfcBlockOffsetResolved || selfCollapsingChildNeedsRelayout) && childBfcBlockOffset.HasValue)
         {
+            LayoutDiagnostics.CountBfcChildRetry();
             // If the child got pushed down by floats (normally because of clearance),
             // we need to carry over this state to the next layout pass.
             childData.is_pushed_by_floats = layoutResult.IsPushedByFloats;
@@ -2477,7 +2481,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         LogicalOffset logicalOffset = CalculateLogicalOffset(fragment, layoutResult.BfcLineOffset, childBfcBlockOffset);
 
         if (!PositionOrPropagateListMarker(layoutResult, ref logicalOffset, ref previousInflowPosition))
-            return EStatus.BfcBlockOffsetResolved;
+            return AbortBfcBlockOffsetResolvedStatus();
 
         if (fragment.Lines.Count > 0 || IsInlineLevelChild(child))
         {
@@ -2764,6 +2768,37 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     // ==========================================================================
     // ResolveBfcBlockOffset.
     // ==========================================================================
+
+    /// <summary>
+    /// Abort this block's layout: its BFC block-offset has just been resolved, but
+    /// content was already placed against another offset, so the fragment cannot be
+    /// trusted. The aborted result carries no fragment, yet it must still report the
+    /// offset that was resolved, because that is what lets the parent re-lay-out
+    /// *this child* on its own (see <see cref="FinishInflow"/>) instead of
+    /// propagating the abort to its own parent. Mirrors the reference engine's
+    /// layout result falling back to the node's container BFC block offset when
+    /// there is no fragment.
+    /// </summary>
+    private LayoutResult AbortBfcBlockOffsetResolved()
+    {
+        LayoutDiagnostics.CountBfcAbort();
+        var result = LayoutResult.Abort(EStatus.BfcBlockOffsetResolved);
+        result.BfcBlockOffsetValue = _containerBfcBlockOffset;
+        result.BfcBlockOffset = BfcBlockOffset();
+        result.BfcLineOffset = _containerBfcLineOffset;
+        // A block that has resolved its BFC block-offset is by definition not
+        // self-collapsing; clearance state carries over the same way as it does in
+        // the successful result.
+        result.IsSelfCollapsing = !_containerBfcBlockOffset.HasValue;
+        result.IsPushedByFloats = _isPushedByFloats;
+        return result;
+    }
+
+    private static EStatus AbortBfcBlockOffsetResolvedStatus()
+    {
+        LayoutDiagnostics.CountBfcAbort();
+        return EStatus.BfcBlockOffsetResolved;
+    }
 
     private bool NeedsAbortOnBfcBlockOffsetChange()
     {

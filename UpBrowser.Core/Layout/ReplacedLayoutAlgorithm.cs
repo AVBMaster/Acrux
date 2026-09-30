@@ -37,8 +37,32 @@ public class ReplacedLayoutAlgorithm : LayoutAlgorithm
         Builder.BlockSize = concrete.Height + bp.VerticalSum;
         Builder.IntrinsicBlockSize = concrete.Height;
 
+        // A replaced box has a resolved, non-zero block size, so it is never
+        // self-collapsing and margins never collapse through it: where it sits in
+        // the parent's block flow is fully decided at layout time by the
+        // block-offset the parent estimated for it, plus the margin strut that is
+        // committed to reach its border edge (the same value a block child derives
+        // in FinishLayout()). Report it here, as the reference engine's
+        // LayoutReplacedChild() does through builder->SetBfcBlockOffset().
+        // Without a resolved offset the parent can only read the result as
+        // "unpositioned": it never resolves its own BFC block-offset while laying
+        // out children, so every replaced sibling is placed at block-offset 0 (they
+        // overlap) and the container sizes to a single child's height.
+        float bfcBlockOffset = Space.ForcedBfcBlockOffset
+            ?? (Space.GetBfcOffset().BlockOffset + Space.MarginStrut.Sum);
+        if (Space.HasClearanceOffset && bfcBlockOffset < Space.ClearanceOffset)
+            bfcBlockOffset = Space.ClearanceOffset;
+
+        Builder.BfcLineOffset = Space.GetBfcOffset().LineOffset;
+        Builder.BfcBlockOffset = bfcBlockOffset;
+
         var frag = Builder.ToBoxFragment();
-        return LayoutResult.FromFragment(frag);
+        var result = LayoutResult.FromFragment(frag);
+        result.BfcLineOffset = Builder.BfcLineOffset;
+        result.BfcBlockOffset = bfcBlockOffset;
+        // Non-null: the child's position in its parent's block flow is resolved.
+        result.BfcBlockOffsetValue = bfcBlockOffset;
+        return result;
     }
 
     /// <summary>

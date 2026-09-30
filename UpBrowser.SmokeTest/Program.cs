@@ -687,6 +687,43 @@ Console.WriteLine("=== 23. BlockLayoutAlgorithm dispatches flex/grid/table ===")
         Check(flexItem.LayoutBox.BorderBox.Width > 0, $"flex item width = {flexItem.LayoutBox.BorderBox.Width:F1} (expect > 0)");
 }
 
+Console.WriteLine("=== 23b. Block-level sibling replaced elements stack ===");
+{
+    // Regression for the block-flow bug where a replaced child (display:block
+    // INPUT / TEXTAREA / IMG) handed back an unresolved BFC block-offset: siblings
+    // all landed at block-offset 0 (only the last stayed visible) and their parent
+    // was displaced by one child height while collapsing to that same height.
+    var doc23b = HtmlDocumentParserIntegration.ParseHtml(
+        "<!DOCTYPE html><html><body style='margin:0'>" +
+        "<input type='text' style='display:block;width:200px;height:30px;background:#ff0000'>" +
+        "<textarea style='display:block;width:200px;height:30px;background:#00ff00'></textarea>" +
+        "<img style='display:block;width:200px;height:30px' src='missing.png'>" +
+        "</body></html>");
+    new StyleComputer().ComputeStyles(doc23b, 400, 600);
+    new LayoutEngine().LayoutAurora(doc23b, 400, 600);
+
+    var body23b = doc23b.Body!;
+    var siblings = body23b.Children.OfType<Element>()
+        .Where(e => e.LayoutBox != null && e.TagName is "INPUT" or "TEXTAREA" or "IMG")
+        .ToList();
+    Check(siblings.Count == 3, $"three block-level siblings boxed (got {siblings.Count})");
+
+    bool stacked = siblings.Count == 3;
+    float cursor = 0;
+    foreach (var s in siblings)
+    {
+        var bb = s.LayoutBox!.BorderBox;
+        if (Math.Abs(bb.Top - cursor) > 0.5f || bb.Height <= 0) stacked = false;
+        cursor = bb.Top + bb.Height;
+    }
+    Check(stacked, $"block-level siblings stack without sharing a rect (contentEnd={cursor:F1})");
+
+    var bodyBox23b = body23b.LayoutBox!;
+    Check(Math.Abs(bodyBox23b.BorderBox.Top) < 0.5f && bodyBox23b.BorderBox.Height >= cursor - 0.5f,
+        $"body covers every sibling and stays at y=0: top={bodyBox23b.BorderBox.Top:F1} " +
+        $"height={bodyBox23b.BorderBox.Height:F1} contentEnd={cursor:F1}");
+}
+
 Console.WriteLine("=== 24. AbsoluteUtils IMCB + OOF dimensions ===");
 {
     var doc24 = new Document();

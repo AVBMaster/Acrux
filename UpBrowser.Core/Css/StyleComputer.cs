@@ -18,6 +18,13 @@ public class StyleComputer
     private StyleSheetContents? _uaSheet;
     private readonly List<StyleSheetContents> _authorSheets = new();
 
+    /// <summary>The UA sheet as token rules, for read-only inspection (DevTools matched
+    /// rules). Same object the cascade resolved from; callers must not mutate it.</summary>
+    public StyleSheetContents? UaSheet => _uaSheet;
+
+    /// <summary>Author sheets in insertion order — the order the cascade applied them.</summary>
+    public IReadOnlyList<StyleSheetContents> AuthorSheets => _authorSheets;
+
     public void AddStylesheet(Stylesheet stylesheet, CascadeOrigin origin = CascadeOrigin.Author)
     {
         _stylesheets.Add(stylesheet);

@@ -18,8 +18,65 @@ public static class PageHitTest
 
         HitTestElement(doc.DocumentElement, x, y, ref result, ref lastZ);
         if (result == null) HitTestElement(doc.Body, x, y, ref result, ref lastZ);
-        return result;
+
+        // Inline elements have no box of their own — their geometry lives in the lines of
+        // the block that lays them out — so a pointer over a link resolves to that link's
+        // container unless the run underneath it is consulted. Inline <a> is the common
+        // shape of the web, and a click that never reaches it navigates nothing.
+        return InlineOwner(result, x, y) ?? result;
     }
+
+    /// <summary>The element owning the inline fragment under the point, searching the
+    /// subtree of the block the point landed in. Deepest wins, as for boxes.</summary>
+    private static Element? InlineOwner(Element? block, float x, float y)
+    {
+        if (block == null) return null;
+
+        Element? found = null;
+        foreach (var child in block.Children.OfType<Element>())
+            found = InlineOwner(child, x, y) ?? found;
+
+        if (found == null && block.LayoutBox is { } box)
+        {
+            var owner = RunOwnerAt(box, x, y);
+            // A run's text node belongs to the element that holds it; an atomic inline
+            // (image, replaced element) names its own element.
+            var inline = owner as Element ?? owner?.ParentElement;
+            if (inline != null && !ReferenceEquals(inline, block)) found = inline;
+        }
+        return found;
+    }
+
+    private static Node? RunOwnerAt(LayoutBox box, float x, float y)
+    {
+        if (box.Lines is { Count: > 0 })
+        {
+            foreach (var line in box.Lines)
+            {
+                if (y < line.Y || y > line.Y + line.Height) continue;
+                float runX = box.ContentBox.Left + line.TextAlignOffsetX;
+                foreach (var run in line.Runs)
+                {
+                    if (run.Node != null && x >= runX && x <= runX + run.Width) return run.Node;
+                    runX += run.Width;
+                }
+            }
+        }
+        if (box.LineRuns is { Count: > 0 })
+        {
+            float runX = box.ContentBox.Left, height = 0;
+            foreach (var run in box.LineRuns) height = Math.Max(height, run.Height);
+            if (height <= 0) height = box.ContentBox.Height;
+            if (y >= box.ContentBox.Top && y <= box.ContentBox.Top + height)
+                foreach (var run in box.LineRuns)
+                {
+                    if (run.Node != null && x >= runX && x <= runX + run.Width) return run.Node;
+                    runX += run.Width;
+                }
+        }
+        return null;
+    }
+
 
     private static void HitTestElement(Element? element, float x, float y,
         ref Element? result, ref float lastZ)

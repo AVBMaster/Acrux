@@ -137,6 +137,8 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
     private readonly bool _stats = Environment.GetEnvironmentVariable("UPBROWSER_TAB_STATS") == "1";
     private long _stCmds, _stRaster, _stFull, _stRows, _stBlit, _stSilent, _stBytes, _stNextLog;
     private long _stReplayMs, _stDiffMs, _stRepBand, _stNBand, _stRepFull, _stNFull;
+    // Where the idle CPU goes: per-wake JS pump time, pipeline time and wake count.
+    private long _stPump, _stPipe, _stWakes, _stPipeN;
     private readonly long[] _stCmdHist = new long[32];
 
     public TabHost(int tab, string channelName, Stream pipe, float dpi, float res, bool hang = false, bool fault = false)
@@ -337,19 +339,34 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
         while (!_cts.IsCancellationRequested)
         {
             Beat();
-            while (_commands.TryDequeue(out var msg))
+            // Drain this pass's commands, but serve at most ONE DevTools chunk per pass:
+            // a large tree dump arrives as many small requests, and re-queuing the extras
+            // keeps input, JS and frames turning between chunks instead of starving them.
+            int passBudget = _commands.Count;
+            bool dtChunkServed = false;
+            for (int i = 0; i < passBudget; i++)
             {
+                if (!_commands.TryDequeue(out var msg)) break;
+                bool dtChunkRequest = msg.Type is TabMsg.DtNodesRequest or TabMsg.DtStylesRequest;
+                if (dtChunkRequest && dtChunkServed)
+                {
+                    _commands.Enqueue(msg);
+                    continue;
+                }
                 if (_stats)
                 {
                     _stCmds++;
                     _stCmdHist[(int)msg.Type % 32]++;
                 }
                 if (!Handle(msg)) return 0;
+                if (dtChunkRequest) dtChunkServed = true;
             }
 
             _engine.SettleDeferredHover(_commands.Count == 0);
 
+            long wkT = _stats ? Stopwatch.GetTimestamp() : 0;
             _engine.PumpJs();
+            if (_stats) _stPump += (Stopwatch.GetTimestamp() - wkT) * 1000 / Stopwatch.Frequency;
             Beat();
 
             bool wantRender = _engine.PipelineWanted || _renderDirty;
@@ -358,16 +375,28 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
             long minInterval = _engine.IsActive ? 8 : 500;
             if (wantRender && Environment.TickCount64 - _lastRenderTick >= minInterval)
             {
+                wkT = _stats ? Stopwatch.GetTimestamp() : 0;
                 RenderPass();
+                if (_stats)
+                {
+                    _stPipe += (Stopwatch.GetTimestamp() - wkT) * 1000 / Stopwatch.Frequency;
+                    _stPipeN++;
+                }
                 Beat();
             }
+            if (_stats) _stWakes++;
 
             if (_stats && Environment.TickCount64 >= _stNextLog)
             {
                 _stNextLog = Environment.TickCount64 + 2000;
                 var line = $"[TabHost {_tab} stats] cmds={_stCmds} relayout={_engine.RelayoutRequestCount} " +
-                    $"layout={_engine.LayoutPassCount} dl={_engine.DisplayListCount} raster={_stRaster} " +
+                    $"style={_engine.StylePassCount} layout={_engine.LayoutPassCount} dl={_engine.DisplayListCount} " +
+                    $"animRun={_engine.AnimationsRunning} parked={_engine.AnimationsParked} " +
+                    $"animPark={_engine.AnimParkCount} animPaint={_engine.AnimPaintCount} " +
+                    $"raster={_stRaster} " +
                     $"full={_stFull} rows={_stRows} blit={_stBlit} silent={_stSilent} KB={_stBytes / 1024} " +
+                    $"wakes={_stWakes} pumpMs={_stPump} pipeMs={_stPipe} pipeN={_stPipeN} " +
+                    $"sampleMs={_engine.AnimSampleMs / Math.Max(1, _engine.AnimSampleCount)} " +
                     $"rep={_stReplayMs / Math.Max(1, _stRaster)}ms bandRep={_stRepBand / Math.Max(1, _stNBand)}ms(n={_stNBand}) fullRep={_stRepFull / Math.Max(1, _stNFull)}ms(n={_stNFull}) diff={_stDiffMs / Math.Max(1, _stRaster)}ms " +
                     $"heapMB={GC.GetTotalMemory(false) / 1048576} wsMB={Environment.WorkingSet / 1048576}";
                 for (int i = 0; i < _stCmdHist.Length; i++)
@@ -376,17 +405,24 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
                 try { File.AppendAllText($"upbrowser_tabstats_{_tab}.log", line + "\n"); } catch { }
             }
 
-            // Event-driven idle: sleep until the next JS timer is due instead of
-            // polling — an idle tab wakes a handful of times per minute.
+            // Event-driven idle: sleep until the next scheduled deadline instead of
+            // polling — an idle tab wakes a handful of times per minute. The engine
+            // folds JS timers and animation frames into one deadline: a running
+            // animation has to wake at the frame boundary, not on the idle poll, or
+            // it plays at whatever the poll happens to be instead of at display rate.
             int waitMs;
             if (_commands.Count > 0) waitMs = 0;
             else
             {
-                int due = _engine.NextTimerDelayMs;
+                int due = _engine.NextWorkDelayMs;
+                // The engine folds JS timers, animation frames and the idle poll into one
+                // deadline (IdleWaitMs when nothing is scheduled), so its answer is trusted
+                // rather than clamped back down to the idle poll — that is what lets a
+                // parked off-screen animation sleep between samples.
                 if (_engine.IsActive)
-                    waitMs = Math.Clamp(due == int.MaxValue ? 60 : due, 2, 60);
+                    waitMs = Math.Clamp(due, 1, 500);
                 else
-                    waitMs = Math.Clamp(due == int.MaxValue ? 500 : due, 50, 500);
+                    waitMs = Math.Clamp(due, 50, 500);
             }
             if (waitMs > 0) _cmdSignal.WaitOne(waitMs);
         }
@@ -475,6 +511,9 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
             case TabMsg.ImeCancel:
                 _engine.ImeCompositionCancel();
                 break;
+            case TabMsg.SelectAll:
+                _engine.SelectAllText();
+                break;
             case TabMsg.Wheel:
             {
                 using var r = new BinaryReader(new MemoryStream(msg.Payload));
@@ -493,6 +532,42 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
                     w.Write(id);
                     TabFraming.WriteString(w, text);
                 });
+                break;
+            }
+            case TabMsg.DtNodesRequest:
+            {
+                // DevTools tree chunk: everything the walk touches is engine state read on
+                // this thread; the budget (≤2000 nodes / ≤240 KB) is enforced in the engine.
+                using var r = new BinaryReader(new MemoryStream(msg.Payload));
+                var (rpcId, knownVersion, nodeId, maxDepth, limit) = DevToolsWire.ReadNodesRequest(r);
+                var batch = _engine.CollectNodeTree(nodeId, knownVersion, maxDepth, limit);
+                Send(TabMsg.DtNodesResponse, w => { w.Write(rpcId); DevToolsWire.Write(w, batch); });
+                break;
+            }
+            case TabMsg.DtStylesRequest:
+            {
+                using var r = new BinaryReader(new MemoryStream(msg.Payload));
+                var (rpcId, knownVersion, nodeId) = DevToolsWire.ReadStylesRequest(r);
+                var styles = _engine.StylesForNode(nodeId, knownVersion);
+                Send(TabMsg.DtStylesResponse, w => { w.Write(rpcId); DevToolsWire.Write(w, styles); });
+                break;
+            }
+            case TabMsg.DtEvalRequest:
+            {
+                using var r = new BinaryReader(new MemoryStream(msg.Payload));
+                var (rpcId, script) = DevToolsWire.ReadEvalRequest(r);
+                // Eval is synchronous page script: a wedged script wedges this loop exactly
+                // like any other long task, and the shell's eval timeout + watchdog own it.
+                var result = _engine.EvaluateScript(script);
+                Send(TabMsg.DtEvalResponse, w => { w.Write(rpcId); DevToolsWire.Write(w, result); });
+                break;
+            }
+            case TabMsg.FindRequest:
+            {
+                using var r = new BinaryReader(new MemoryStream(msg.Payload));
+                var (rpcId, options, activateIndex) = DevToolsWire.ReadFindRequest(r);
+                var result = _engine.FindMatches(options.Query, options.CaseSensitive, options.Forward, activateIndex);
+                Send(TabMsg.FindResponse, w => { w.Write(rpcId); DevToolsWire.Write(w, result); });
                 break;
             }
             case TabMsg.SetActive:
@@ -867,7 +942,8 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
         {
             w.Write(PageProtocol.Version);
             w.Write((ulong)(PageProtocol.Capabilities.ShmFrames | PageProtocol.Capabilities.BlockingDialogs |
-                            PageProtocol.Capabilities.Ime));
+                            PageProtocol.Capabilities.Ime | PageProtocol.Capabilities.NodeRpc |
+                            PageProtocol.Capabilities.DevToolsRpc | PageProtocol.Capabilities.FindText));
             w.Write(Environment.ProcessId);
             TabFraming.WriteString(w, name);
             w.Write(wPx);

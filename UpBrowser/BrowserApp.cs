@@ -90,6 +90,16 @@ namespace UpBrowser;
     private readonly UpBrowser.Core.Dom.Animations.CssAnimationEngine _animations = new();
     private bool _animationsRunning;
 
+    /// <summary>
+    /// Wall-clock instant the document timeline was last re-based. The timeline's
+    /// own time is the distance from the engine's construction, so this is what
+    /// keeps a page's animations measured from its navigation instead.
+    /// </summary>
+    private double _animationTimelineBaseMs = UpBrowser.Core.Dom.Animations.AnimationClock.WallClockMs;
+
+    /// <summary>Per-frame animation diagnostics (UPBROWSER_ANIM_LIVE=1).</summary>
+    private readonly bool _animTrace = Environment.GetEnvironmentVariable("UPBROWSER_ANIM_LIVE") == "1";
+
     private int _lastWindowWidth;
     private int _lastWindowHeight;
     private float _lastScrollX;
@@ -561,7 +571,6 @@ namespace UpBrowser;
         };
 
         _chrome.OnChanged += () => _input.NeedsRedraw = true;
-        _devTools.SetJavaScriptEngine(_jsEngine);
         _devTools.SetSourceChangeHandler(async (html) =>
         {
             _currentHtml = html;
@@ -575,7 +584,7 @@ namespace UpBrowser;
             var (pw, ph) = _window.GetClientSize();
             _scrollInteraction.SetDocument(_currentLoad.Document);
             _jsEngine.LoadDocument(_currentLoad.Document);
-            _devTools.SetDocument(_currentLoad.Document, html);
+            SetDevToolsDocument(_currentLoad.Document, html);
             _input.NeedsRedraw = true;
         });
         _devTools.OnChanged += () =>
@@ -1056,7 +1065,7 @@ namespace UpBrowser;
         LogDone("LoadDocument");
 
         LogStart("DevTools.SetDocument");
-        _devTools.SetDocument(_currentLoad.Document, _currentHtml);
+        SetDevToolsDocument(_currentLoad.Document, _currentHtml);
         LogDone("DevTools.SetDocument");
 
         LogStart("RunPageScripts");
@@ -1096,6 +1105,12 @@ namespace UpBrowser;
         {
             if (_startupUrl.StartsWith("http://") || _startupUrl.StartsWith("https://"))
                 NavigateToHttp(_startupUrl);
+            // A file:// URL is already absolute. Running it through Path.GetFullPath
+            // would treat "file:///C:/x" as a relative path and produce a path that
+            // does not exist, so the URL form has to be recognised before the
+            // local-path form.
+            else if (_startupUrl.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                NavigateToFile(_startupUrl);
             else if (_startupUrl.StartsWith("upbrowser://", StringComparison.Ordinal))
                 _chrome.NavigateToUrl(_startupUrl); // routes through OnNavigate per tab mode
             else
@@ -1293,7 +1308,7 @@ namespace UpBrowser;
                             _jsEngine.LoadDocument(_currentLoad.Document);
                             _eventLoop.PostTask(() =>
                             {
-                                _devTools.SetDocument(_currentLoad?.Document, _currentHtml);
+                                SetDevToolsDocument(_currentLoad?.Document, _currentHtml);
                             });
                         }
                         catch (Exception ex)
@@ -1656,7 +1671,7 @@ namespace UpBrowser;
             _currentLoad = null;
             _jsEngine = _parkEngine ??= new JavaScriptEngine(NullJsEngineAdapter.Instance);
             _scrollInteraction.SetDocument(null);
-            _devTools.SetDocument(null, "");
+            SetDevToolsDocument(null, "");
         }
 
         ClearTabInteractionState();
@@ -1796,7 +1811,7 @@ namespace UpBrowser;
         }
 
         _scrollInteraction.SetDocument(_currentLoad.Document);
-        _devTools.SetDocument(_currentLoad.Document, _currentHtml);
+        SetDevToolsDocument(_currentLoad.Document, _currentHtml);
 
         // Content changed: the raster tiles must be re-generated from the
         // adopted display list (cheap raster work, no layout/paint-walk).
@@ -1816,6 +1831,34 @@ namespace UpBrowser;
 
     private RemoteTabView? ActiveRemote() =>
         _remoteTabs.TryGetValue(_chrome.ActiveTabIndex, out var v) ? v : null;
+
+    // DevTools/find over the pipe: the panel talks to one IDevToolsChannel, rebuilt when
+    // the active tab's host process changes (launch, relaunch after a crash, tab switch).
+    private RemoteTabProcess? _dtChannelProc;
+    private RemoteDevToolsChannel? _remoteDtChannel;
+
+    private void SyncRemoteDevTools()
+    {
+        var proc = ActiveRemote()?.Proc;
+        if (ReferenceEquals(proc, _dtChannelProc)) return;   // per-frame cheap identity check
+        _dtChannelProc = proc;
+        _remoteDtChannel = proc == null
+            ? null
+            : new RemoteDevToolsChannel(proc, act => _eventLoop.PostTask(act));
+        _devTools.SetInspection(_remoteDtChannel, "");
+    }
+
+    /// <summary>Point DevTools at the page the shell itself owns (single/threaded modes).
+    /// The in-process channel answers the same DTOs the page host streams, so the panel
+    /// code is identical in both modes; null document keeps the console's engine alive
+    /// while the Elements tab shows "(no document loaded)" exactly as before.</summary>
+    private void SetDevToolsDocument(Core.Dom.Document? doc, string htmlSource)
+    {
+        UpBrowser.PageContract.IDevToolsChannel? channel = _processTabs
+            ? _remoteDtChannel
+            : new UpBrowser.PageHost.Inspection.InProcessDevToolsChannel(doc, _jsEngine, _currentLoad?.StyleComputer);
+        _devTools.SetInspection(channel, htmlSource);
+    }
 
     private RemoteTabView EnsureRemoteTab(int tabIndex, string url)
     {
@@ -1962,6 +2005,10 @@ namespace UpBrowser;
     /// <summary>Per-frame pump: deferred initial navigations, scroll sync, loading state.</summary>
     private void PumpRemoteTabs(int windowWidth, float contentViewportHeight)
     {
+        // DevTools follows the active host without a round trip: swap the inspection
+        // channel when a new child takes over the tab, keep it while one is running.
+        SyncRemoteDevTools();
+
         foreach (var kv in _remoteTabs)
         {
             var v = kv.Value;
@@ -2636,6 +2683,7 @@ namespace UpBrowser;
         // restarts at zero so the page's delays and negative delays are measured
         // from this navigation, not from the previous page's lifetime.
         _animations.Reset();
+        _animationTimelineBaseMs = UpBrowser.Core.Dom.Animations.AnimationClock.WallClockMs;
         _animationsRunning = false;
 
         var (pw, ph) = _window.GetClientSize();
@@ -2653,7 +2701,7 @@ namespace UpBrowser;
         }
 
         _jsEngine.LoadDocument(_currentLoad.Document);
-        _devTools.SetDocument(_currentLoad.Document, html);
+        SetDevToolsDocument(_currentLoad.Document, html);
         // Events flow out of the engine through this forwarder, which is why the
         // sink is re-installed on every navigation: the script engine changes with
         // the tab, and a stale sink would deliver to a dead engine.
@@ -2753,7 +2801,7 @@ namespace UpBrowser;
         LoadAndRenderHtml(searchHtml);
     }
 
-    private void BuildDisplayList(float windowWidth, float windowHeight)
+    private void BuildDisplayList(float windowWidth, float windowHeight, bool styleRecomputed = true)
     {
         if (_currentLoad == null) return;
 
@@ -2763,12 +2811,12 @@ namespace UpBrowser;
         {
             _perfHub.LongTasks.Observe("BuildDisplayList", TaskPriority.High, () =>
             {
-                BuildDisplayListImpl(windowWidth, windowHeight);
+                BuildDisplayListImpl(windowWidth, windowHeight, styleRecomputed);
             });
         }
         else
         {
-            BuildDisplayListImpl(windowWidth, windowHeight);
+            BuildDisplayListImpl(windowWidth, windowHeight, styleRecomputed);
         }
     }
 
@@ -2781,7 +2829,7 @@ namespace UpBrowser;
     /// running animation is the only reason a page repaints with nothing else
     /// having changed.
     /// </summary>
-    private bool AdvanceAnimations()
+    private bool AdvanceAnimations(bool styleRecomputed = true)
     {
         if (_currentLoad == null) return false;
         var root = _currentLoad.Document.DocumentElement ?? _currentLoad.Document.Body;
@@ -2789,8 +2837,28 @@ namespace UpBrowser;
 
         try
         {
-            var result = _animations.Update(root, _currentLoad.StyleComputer?.CollectKeyframeRules());
+            // Keep the timeline pinned to this document's lifetime. The engine's
+            // timeline counts from the moment the engine was constructed, so a
+            // page loaded a minute into the session would sample its animations at
+            // t=60000ms - long past every one of them - and nothing would ever
+            // move. The navigation in ApplyLoadedHtml calls Reset, which re-bases
+            // the origin; assert it here too, since one missed reset is
+            // indistinguishable from "animations do not work".
+            double now = UpBrowser.Core.Dom.Animations.AnimationClock.WallClockMs;
+            if (now - _animationTimelineBaseMs > 1000)
+            {
+                _animations.Timeline.SetCurrentTime(0);
+                _animationTimelineBaseMs = now;
+            }
+
+            var result = _animations.Update(root, _currentLoad.StyleComputer?.CollectKeyframeRules(),
+                styleRecomputed: styleRecomputed);
             _animationsRunning = result.HasActiveAnimations;
+            if (_animTrace)
+                Console.WriteLine($"[anim] t={_animations.Timeline.CurrentTimeMs:F1}ms " +
+                                  $"kf={_currentLoad.StyleComputer?.CollectKeyframeRules().Count ?? -1} " +
+                                  $"active={result.HasActiveAnimations} effects={_animations.ActiveEffectCount} " +
+                                  $"animated={result.AnimatedElements}");
             return result.HasActiveAnimations;
         }
         catch (Exception ex)
@@ -2845,14 +2913,13 @@ namespace UpBrowser;
         }
     }
 
-    private void BuildDisplayListImpl(float windowWidth, float windowHeight)
+    private void BuildDisplayListImpl(float windowWidth, float windowHeight, bool styleRecomputed = true)
     {
         // "Update animations and send events" runs here, between style resolution
-        // and layout, so animated values are in the styles layout reads. The
-        // engine compares the cascaded values to find transition start
-        // conditions, which is why ComputeStyles has to have just run.
-        AdvanceAnimations();
-
+        // and layout, so animated values are in the styles layout reads. When style
+        // resolution has just run, the engine compares the cascaded values to find
+        // transition start conditions, which is why it needs that ordering.
+        AdvanceAnimations(styleRecomputed);
         // Route layout through the incremental engine when available.
         // It consults LayoutCache + DirtyFlags and skips clean subtrees,
         // which is the main win on small JS-driven DOM updates and typing.
@@ -3204,7 +3271,14 @@ namespace UpBrowser;
                 && !sizeChanged && !devToolsChanged && !_jsEngine.NeedsReLayout;
             _hoverRelayoutPending = false;
 
-            if (_pendingRelayout || _animationsRunning)
+            // Style re-resolves when the document changed. It is NOT re-resolved for
+            // an animation frame where nothing else is dirty: the animation rewrites
+            // the same properties every frame, so a full style pass per frame is pure
+            // cost, and on a real page it dominates the frame. AdvanceAnimations is
+            // told which case this is, so a transition cannot start off the engine's
+            // own output.
+            bool styleRecomputed = _pendingRelayout;
+            if (styleRecomputed)
             {
                 var styleComputer = _currentLoad.StyleComputer;
                 if (styleComputer == null)
@@ -3232,7 +3306,7 @@ namespace UpBrowser;
             // text doesn't go under the scrollbar.
             float sbWidth = _scroll.CanScrollY ? 12f : 0f;
             float layoutWidth = Math.Max(100, windowWidth - sbWidth);
-            BuildDisplayList(layoutWidth, Math.Max(100, (int)contentViewportHeight));
+            BuildDisplayList(layoutWidth, Math.Max(100, (int)contentViewportHeight), styleRecomputed);
             UpdateInputScrollOffset(_focusedElement);
 
             var bodyBox = _currentLoad.Document.Body?.LayoutBox;
@@ -6222,6 +6296,12 @@ namespace UpBrowser;
             _inputShowCursor = true;
             _inputLastCursorBlinkTick = Environment.TickCount64;
             _input.NeedsRedraw = true;
+        }
+        else if (_processTabs)
+        {
+            // The selection lives with the document in the child process, so the parent
+            // cannot build it: ask, and the next frame arrives already highlighted.
+            ActiveRemote()?.Proc.SelectAll();
         }
         else if (_currentLoad?.Document != null)
         {

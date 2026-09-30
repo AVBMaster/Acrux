@@ -1,7 +1,6 @@
 using SkiaSharp;
 using UpBrowser.Core;
-using UpBrowser.Core.Dom;
-using UpBrowser.Core.JavaScript;
+using UpBrowser.PageContract;
 using UpBrowser.Platform;
 
 namespace UpBrowser.Rendering.DevTools;
@@ -40,6 +39,9 @@ public class DevToolsPanel
         Console.WriteLine("[DevToolsPanel] DevToolsConsole OK");
         Console.WriteLine("[DevToolsPanel] Creating DevToolsElements...");
         _elements = new DevToolsElements();
+        // Streamed chunks mutate the tree cache off the input path: repaint through the
+        // panel's own change notification.
+        _elements.OnRowsChanged = () => OnChanged?.Invoke();
         Console.WriteLine("[DevToolsPanel] DevToolsElements OK");
         Console.WriteLine("[DevToolsPanel] Creating DevToolsSource...");
         _source = new DevToolsSource();
@@ -54,8 +56,18 @@ public class DevToolsPanel
     public void Show() { _visible = true; OnChanged?.Invoke(); }
     public void Hide() { _visible = false; _dragging = false; _thumbDragTab = -1; _hoveredTab = -1; _hoveredClose = false; _hoveredThemeBtn = false; OnChanged?.Invoke(); }
 
-    public void SetJavaScriptEngine(JavaScriptEngine engine) { _console.SetJavaScriptEngine(engine); }
     public void SetSourceChangeHandler(Action<string> handler) { _source.OnHtmlChanged = handler; }
+
+    /// <summary>Point the Elements/Console panels at an inspectable page. The channel
+    /// answers with DTOs — the in-process one over the live document, the remote one over
+    /// the pipe — so both modes drive the same panel code. <paramref name="htmlSource"/>
+    /// feeds the Source tab, which still shows page text directly.</summary>
+    public void SetInspection(IDevToolsChannel? channel, string htmlSource)
+    {
+        _elements.SetChannel(channel);
+        _console.SetChannel(channel);
+        _source.SetHtml(htmlSource);
+    }
 
     public IImeSupport? GetActiveImeSupport()
     {
@@ -85,12 +97,6 @@ public class DevToolsPanel
             case 0: _console.HandleMouseUp(); break;
             case 2: _source.HandleMouseUp(); break;
         }
-    }
-
-    public void SetDocument(Document? document, string htmlSource)
-    {
-        _elements.SetDocument(document);
-        _source.SetHtml(htmlSource);
     }
 
     public bool TickCursorBlink()

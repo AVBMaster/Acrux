@@ -1,4 +1,4 @@
-using UpBrowser.Core.Css.Resolver;
+﻿using UpBrowser.Core.Css.Resolver;
 using UpBrowser.Core.Css.Rules;
 
 namespace UpBrowser.Core.Dom.Animations;
@@ -18,12 +18,21 @@ public readonly struct AnimationUpdateResult
     /// <summary>Number of elements with at least one running effect.</summary>
     public int AnimatedElements { get; init; }
 
+    /// <summary>Boxes whose animated values were written back this tick. Empty when
+    /// nothing was applied. Lets the caller decide whether a repaint can be seen.</summary>
+    public IReadOnlyList<Element>? RepaintTargets { get; init; }
+
+    /// <summary>One of this tick's animated properties paints outside the box by an amount
+    /// the geometry cannot express (shadow spread, outline offset, blur), so no
+    /// box-based culling of the repaint is safe at all.</summary>
+    public bool RepaintBleeds { get; init; }
+
     public static readonly AnimationUpdateResult Idle = new();
 }
 
 /// <summary>
 /// The CSS animation and transition engine: the "update animations and send
-/// events" step of the rendering pipeline (Web Animations 搂4.8).
+/// events" step of the rendering pipeline (Web Animations �?.8).
 ///
 /// It runs once per frame, after style resolution and before layout, and writes
 /// the sampled animated values into each element's
@@ -49,6 +58,8 @@ public sealed class CssAnimationEngine
     private readonly List<StyleRuleKeyframes> _rulesScratch = new();
 
     private double _lastTimeMs = double.NaN;
+    private List<Element>? _repaintTargets;
+    private bool _repaintBleeds;
     private bool _suppressEvents;
 
     /// <summary>Receives events queued this tick, after the whole tree is sampled.</summary>
@@ -61,6 +72,9 @@ public sealed class CssAnimationEngine
 
     /// <summary>Timeline time of the last completed tick.</summary>
     public double CurrentTimeMs => _lastTimeMs;
+
+    /// <summary>Whether the host re-resolved the cascade for the tick in flight.</summary>
+    private bool _styleRecomputed = true;
 
     /// <summary>Number of elements with at least one live effect.</summary>
     public int ActiveElementCount
@@ -101,15 +115,31 @@ public sealed class CssAnimationEngine
     /// their events in the same frame as the paint, by which time a listener
     /// registered by a script exists.
     /// </param>
+    /// <param name="styleRecomputed">
+    /// Whether the host re-resolved the cascade for this frame.
+    ///
+    /// It decides whether a transition may <em>start</em>. A transition begins
+    /// when a computed value differs from the before-change style, so it can only
+    /// be discovered on a frame whose styles came from the cascade; comparing
+    /// against the previous frame's styles would compare this engine's own output
+    /// and invent transitions out of its own animation values. Running effects
+    /// are time-driven and advance either way.
+    ///
+    /// Passing false lets a host skip style resolution on frames where the only
+    /// thing that changed is an animation, which on a real page is the single
+    /// most expensive thing in the frame.
+    /// </param>
     public AnimationUpdateResult Update(
         Element root,
         IReadOnlyList<StyleRuleKeyframes>? keyframeRules,
-        bool suppressEvents = false)
+        bool suppressEvents = false,
+        bool styleRecomputed = true)
     {
         if (root == null) return AnimationUpdateResult.Idle;
 
         double time = _timeline.CurrentTimeMs;
         _lastTimeMs = time;
+        _styleRecomputed = styleRecomputed;
         _keyframesCache.Clear();
         _valueCache.Clear();
         _pendingEvents.Clear();
@@ -120,6 +150,8 @@ public sealed class CssAnimationEngine
         bool needsLayout = false;
         bool needsRepaint = false;
         int animatedElements = 0;
+        _repaintTargets = null;
+        _repaintBleeds = false;
 
         Walk(root, keyframeRules, ref anyActive, ref needsLayout, ref needsRepaint, ref animatedElements, time);
 
@@ -133,6 +165,8 @@ public sealed class CssAnimationEngine
             NeedsLayout = needsLayout,
             NeedsRepaint = needsRepaint,
             AnimatedElements = animatedElements,
+            RepaintTargets = _repaintTargets ?? (IReadOnlyList<Element>)Array.Empty<Element>(),
+            RepaintBleeds = _repaintBleeds,
         };
     }
 
@@ -160,8 +194,14 @@ public sealed class CssAnimationEngine
             //    any animated value is written back.
             ProcessTransitions(element, style, state, time, ref needsLayout, ref needsRepaint);
 
-            // 2. Reconcile the CSS animation list against what is running.
-            ProcessAnimations(element, style, state, rules, time);
+            // 2. Reconcile the CSS animation list against what is running. That list is
+            //    read from the cascade, so it can only have changed on a pass whose styles
+            //    came from the cascade; on any other pass an element with nothing running
+            //    has nothing to reconcile. Without the gate every element re-parses seven
+            //    animation longhands per frame, which costs more than everything else in
+            //    an animation frame put together.
+            if (_styleRecomputed || state.Animations.Count > 0 || state.SeenAnimations.Count > 0)
+                ProcessAnimations(element, style, state, rules, time);
 
             // 3. Apply, animations first so transitions win on shared properties.
             if (state.LiveEffectCount > 0)
@@ -169,6 +209,9 @@ public sealed class CssAnimationEngine
                 animatedElements++;
                 anyActive = true;
                 needsRepaint = true;
+                // Which boxes this tick actually touched, so a host can decide whether
+                // the change can reach its visible area at all.
+                (_repaintTargets ??= new List<Element>()).Add(element);
                 ApplyEffects(element, style, state, time, ref needsLayout);
             }
         }
@@ -459,8 +502,12 @@ public sealed class CssAnimationEngine
         double time, ref bool needsLayout, ref bool needsRepaint)
     {
         // 1. Track the properties this element could transition, and detect the
-        //    value changes that start new transitions.
-        var candidates = TransitionCandidates(style);
+        //    value changes that start new transitions. Skipped when the host did
+        //    not re-resolve the cascade: the styles on hand are then this engine's
+        //    own output from last frame, and a "change" against them is not a
+        //    change in the document. Transitions already running still advance
+        //    below, because their progress is a function of time alone.
+        var candidates = _styleRecomputed ? TransitionCandidates(style) : null;
         if (candidates != null && (candidates.Count > 0 || state.HasSnapshot))
         {
             if (state.HasSnapshot)
@@ -507,7 +554,7 @@ public sealed class CssAnimationEngine
             else if (candidates.Count > 0)
             {
                 // First style for this element: record the before-change style.
-                // No transition may start on the initial value (Transitions 1 搂2).
+                // No transition may start on the initial value (Transitions 1 �?).
                 TrackNewCandidates(style, state, candidates, time);
                 state.HasSnapshot = true;
             }
@@ -606,7 +653,7 @@ public sealed class CssAnimationEngine
     /// <summary>
     /// Pick the duration / delay / easing for <paramref name="property"/> by
     /// cycling the comma lists and indexing by the property's position in
-    /// <c>transition-property</c> (CSS Transitions 1 搂2.2).
+    /// <c>transition-property</c> (CSS Transitions 1 �?.2).
     /// </summary>
     private static TransitionSpec? GetTransitionSpec(ComputedStyle style, string property)
     {
@@ -660,7 +707,7 @@ public sealed class CssAnimationEngine
         // CSS animations first, in list order, so a later animation overrides an
         // earlier one for any property they share. A transition on the same
         // property still wins, because it is later in the effect composite order
-        // (Transitions 1 搂2.3).
+        // (Transitions 1 �?.3).
         for (int i = 0; i < state.Animations.Count; i++)
         {
             var animation = state.Animations[i];
@@ -729,10 +776,10 @@ public sealed class CssAnimationEngine
                 transition.Property, transition.FromValue, transition.ToValue, progress)
                 ?? (progress < 0.5 ? transition.FromValue : transition.ToValue);
 
-            if (ApplyAnimatedValue(style, transition.Property, value) &&
-                AnimatableProperties.IsLayoutAffecting(transition.Property))
+            if (ApplyAnimatedValue(style, transition.Property, value))
             {
-                needsLayout = true;
+                if (AnimatableProperties.IsLayoutAffecting(transition.Property)) needsLayout = true;
+                if (AnimatableProperties.BleedsOutsideBox(transition.Property)) _repaintBleeds = true;
             }
         }
     }
@@ -748,10 +795,10 @@ public sealed class CssAnimationEngine
         foreach (var (property, value) in values)
         {
             if (string.IsNullOrEmpty(value)) continue;
-            if (ApplyAnimatedValue(style, property, value) &&
-                AnimatableProperties.IsLayoutAffecting(property))
+            if (ApplyAnimatedValue(style, property, value))
             {
-                needsLayout = true;
+                if (AnimatableProperties.IsLayoutAffecting(property)) needsLayout = true;
+                if (AnimatableProperties.BleedsOutsideBox(property)) _repaintBleeds = true;
             }
         }
     }
@@ -776,7 +823,7 @@ public sealed class CssAnimationEngine
 
     /// <summary>
     /// The element's own cascaded value for a property the keyframes do not
-    /// mention 鈥?the "underlying value" the implicit 0% / 100% endpoints use.
+    /// mention �?the "underlying value" the implicit 0% / 100% endpoints use.
     /// </summary>
     private string? UnderlyingValue(string property)
     {
@@ -798,7 +845,7 @@ public sealed class CssAnimationEngine
     /// the same code as the declaration that authored it.
     ///
     /// A handful of properties are deferred by the applier because they need
-    /// context the plain (style, name, value) signature does not carry 鈥?the
+    /// context the plain (style, name, value) signature does not carry �?the
     /// parent's font size for <c>font-size</c>, and the shared line-box slot
     /// bookkeeping for <c>line-height</c>. They are handled here so an animated
     /// value is never silently dropped.
@@ -944,6 +991,12 @@ public sealed class CssAnimationEngine
         _keyframesCache.Clear();
         _valueCache.Clear();
         _lastTimeMs = double.NaN;
+
+        // A new document gets a new document timeline. Without this the timeline
+        // keeps counting from whenever the engine was constructed, so a page
+        // loaded a second into the session samples its animations at t=1000ms and
+        // anything longer is already over before the first frame is drawn.
+        _timeline.SetCurrentTime(0);
     }
 
     /// <summary>Per-element animation state.</summary>
