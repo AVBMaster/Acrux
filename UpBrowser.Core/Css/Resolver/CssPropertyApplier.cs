@@ -157,8 +157,19 @@ public static class CssPropertyApplier
             case "overflow-wrap": case "word-wrap": style.OverflowWrap = ParseOverflowWrap(value); break;
             case "visibility": style.Visibility = ParseVisibility(value); break;
             case "overflow":
-                var overflow = ParseOverflow(value);
-                style.Overflow = overflow; style.OverflowX = overflow; style.OverflowY = overflow;
+                // Two-value shorthand: overflow: <x> <y>. Per CSS Overflow 3, if one
+                // axis is 'visible' and the other is not, the 'visible' computes to
+                // 'auto' (a box cannot be a scroll container on one axis only).
+                {
+                    var oparts = value.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    OverflowType oxs, oys;
+                    if (oparts.Length >= 2) { oxs = ParseOverflow(oparts[0]); oys = ParseOverflow(oparts[1]); }
+                    else { oxs = oys = ParseOverflow(value); }
+                    if (oxs == OverflowType.Visible && oys != OverflowType.Visible) oxs = OverflowType.Auto;
+                    else if (oys == OverflowType.Visible && oxs != OverflowType.Visible) oys = OverflowType.Auto;
+                    style.OverflowX = oxs; style.OverflowY = oys;
+                    style.Overflow = oxs == oys ? oxs : OverflowType.Auto;
+                }
                 break;
             case "overflow-x": style.OverflowX = ParseOverflow(value); break;
             case "overflow-y": style.OverflowY = ParseOverflow(value); break;
@@ -346,12 +357,12 @@ public static class CssPropertyApplier
             case "letter-spacing":
                 if (value == "normal") style.LetterSpacing = 0;
                 else if (Length.TryParse(value, out var ls))
-                    style.LetterSpacing = ls.ToPixels(0, 0, 0, 0);
+                    style.LetterSpacing = ls.ToPixels(style.FontSize, style.FontSize, 0, 0);
                 break;
             case "word-spacing":
                 if (value == "normal") style.WordSpacing = 0;
                 else if (Length.TryParse(value, out var ws))
-                    style.WordSpacing = ws.ToPixels(0, 0, 0, 0);
+                    style.WordSpacing = ws.ToPixels(style.FontSize, style.FontSize, 0, 0);
                 break;
             case "direction": style.Direction = value.ToLowerInvariant() == "rtl" ? "rtl" : "ltr"; break;
             case "unicode-bidi": style.UnicodeBidi = value.ToLowerInvariant(); break;

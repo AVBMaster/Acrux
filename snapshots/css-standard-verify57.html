@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 57 — overflow two-value, border-spacing/caption, word-spacing, text-indent %</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 24px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 12px; }
+.wrap { border: 1px dashed #999; padding: 8px; margin: 12px 0; }
+
+/* 1. overflow two-value shorthand: x hidden, y visible (and vice versa) */
+.ov { width: 120px; height: 60px; border: 1px solid #369; background: #cef; margin: 8px; display: inline-block; vertical-align: top; }
+.ov-hv { overflow: hidden visible; }
+.ov-vh { overflow: visible hidden; }
+.ov-scroll { overflow: auto; }
+
+/* 2. table border-spacing two-value + caption-side */
+table { border-collapse: separate; border-spacing: 12px 6px; }
+table td { border: 1px solid #c33; background: #fee; width: 40px; height: 20px; }
+caption { caption-side: bottom; background: #cfc; }
+
+/* 3. word-spacing normal vs 10px vs 100% */
+.ws { font-size: 18px; background: #ff9; }
+.ws-n { word-spacing: normal; }
+.ws-px { word-spacing: 10px; }
+.ws-pc { word-spacing: 100%; }
+
+/* 4. text-indent % with center align */
+.ti { width: 300px; background: #eef; border: 1px solid #99c; text-align: center; }
+.ti-pct { text-indent: 20%; }
+</style>
+</head>
+<body>
+
+<h2>1. overflow two-value: hidden visible / visible hidden / auto</h2>
+<div class="ov ov-hv">AAAAAA BBBBBB CCCCCC DDDDDD EEEEEE FFFFFF GGGGGG</div>
+<div class="ov ov-vh">AAAAAA BBBBBB CCCCCC DDDDDD EEEEEE FFFFFF GGGGGG</div>
+<div class="ov ov-scroll">AAAAAA BBBBBB CCCCCC DDDDDD EEEEEE FFFFFF GGGGGG</div>
+
+<h2>2. border-spacing 12px 6px + caption-side bottom</h2>
+<table><caption>caption below</caption><tr><td>1</td><td>2</td><td>3</td></tr><tr><td>4</td><td>5</td><td>6</td></tr></table>
+
+<h2>3. word-spacing: normal / 10px / 100%</h2>
+<div class="wrap"><span class="ws ws-n">one two three four</span></div>
+<div class="wrap"><span class="ws ws-px">one two three four</span></div>
+<div class="wrap"><span class="ws ws-pc">one two three four</span></div>
+
+<h2>4. text-indent: 20% with text-align: center</h2>
+<div class="ti ti-pct">First line indented, second line centered normally here</div>
+
+</body>
+</html>
