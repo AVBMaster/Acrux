@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 59 — text-decoration on vertically-shifted text, overline/line-through thickness</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 24px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 12px; }
+.wrap { border: 1px dashed #999; padding: 14px; margin: 12px 0; line-height: 2.4; }
+
+/* 1. underline on superscript/subscript text — decoration should follow raised baseline */
+.u { text-decoration: underline; }
+.sup { vertical-align: super; font-size: 0.7em; }
+.sub { vertical-align: sub; font-size: 0.7em; }
+.tb { vertical-align: text-bottom; }
+.tt { vertical-align: text-top; }
+
+/* 2. overline and line-through with thickness */
+.ov { text-decoration: overline; text-decoration-thickness: 4px; font-size: 28px; }
+.lt { text-decoration: line-through; text-decoration-thickness: 5px; font-size: 28px; }
+.both { text-decoration: underline overline line-through; text-decoration-thickness: 3px; font-size: 28px; }
+
+/* 3. decoration color per line */
+.multi { text-decoration-line: underline overline; text-decoration-color: #c33; text-decoration-thickness: 3px; font-size: 26px; }
+</style>
+</head>
+<body>
+
+<h2>1. underline on super/sub/text-top/text-bottom (follows shifted baseline)</h2>
+<div class="wrap">base <span class="u sup">raised</span> <span class="u sub">lowered</span> <span class="u tt">texttop</span> <span class="u tb">textbottom</span> end</div>
+
+<h2>2. overline / line-through with explicit thickness</h2>
+<div class="wrap"><span class="ov">Overline</span></div>
+<div class="wrap"><span class="lt">LineThrough</span></div>
+<div class="wrap"><span class="both">AllThree</span></div>
+
+<h2>3. underline + overline in red</h2>
+<div class="wrap"><span class="multi">TwoLines</span></div>
+
+</body>
+</html>
