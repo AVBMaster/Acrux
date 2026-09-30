@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 54 — text-underline-position under, vertical-align variants</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+.wrap { border: 1px dashed #999; padding: 6px; margin: 8px 0; }
+
+/* 1. underline position with descenders */
+.u { font-size: 32px; text-decoration: underline; text-decoration-thickness: 2px; }
+.u-auto { text-underline-position: auto; }
+.u-under { text-underline-position: under; }
+.u-off { text-underline-offset: 8px; }
+
+/* 2. vertical-align variants against a tall inline-block reference */
+.ref { display: inline-block; width: 6px; height: 60px; background: #333; vertical-align: baseline; }
+.va { font-size: 20px; background: #cef; }
+.v-base { vertical-align: baseline; }
+.v-top { vertical-align: top; }
+.v-bottom { vertical-align: bottom; }
+.v-ttop { vertical-align: text-top; }
+.v-tbot { vertical-align: text-bottom; }
+.v-super { vertical-align: super; }
+.v-sub { vertical-align: sub; }
+.v-mid { vertical-align: middle; }
+.row { line-height: 60px; border: 1px solid #ccc; margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<h2>1. underline: auto vs under vs offset on descenders (gpy)</h2>
+<div class="wrap"><span class="u u-auto">typing gpy</span></div>
+<div class="wrap"><span class="u u-under">typing gpy</span></div>
+<div class="wrap"><span class="u u-auto u-off">typing gpy</span></div>
+
+<h2>2. vertical-align variants against 60px reference bar</h2>
+<div class="row"><span class="ref"></span><span class="va v-base">base</span></div>
+<div class="row"><span class="ref"></span><span class="va v-top">top</span></div>
+<div class="row"><span class="ref"></span><span class="va v-bottom">bottom</span></div>
+<div class="row"><span class="ref"></span><span class="va v-ttop">text-top</span></div>
+<div class="row"><span class="ref"></span><span class="va v-tbot">text-bottom</span></div>
+<div class="row"><span class="ref"></span><span class="va v-super">super</span></div>
+<div class="row"><span class="ref"></span><span class="va v-sub">sub</span></div>
+<div class="row"><span class="ref"></span><span class="va v-mid">middle</span></div>
+
+</body>
+</html>
