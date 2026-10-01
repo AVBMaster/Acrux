@@ -24,6 +24,7 @@ internal interface ITabDriver : IDisposable
     void SetScroll(float x, float y);
     void SelectAll();
     string SelectedText();
+    bool SelectOpen { get; }
     float ScrollX { get; }
     float ScrollY { get; }
     float ContentHeight { get; }
@@ -50,6 +51,7 @@ internal sealed class LocalTabDriver : ITabDriver
     public void SetScroll(float x, float y) => _host.SetScroll(x, y);
     public void SelectAll() => _host.SelectAll();
     public string SelectedText() => _host.Query(e => e.SelectedText);
+    public bool SelectOpen => _host.Query(e => e.HasOpenSelect);
     public float ScrollX => _host.ScrollX;
     public float ScrollY => _host.ScrollY;
     public float ContentHeight => _host.Query(e => e.ContentHeight);
@@ -101,6 +103,7 @@ internal sealed class RemoteTabDriver : ITabDriver
     public void Key(ushort c, ushort k, bool r) => _proc.KeyDown(c, k, r);
     public void Char(ushort c) => _proc.Char(c);
     public void SetScroll(float x, float y) => _proc.ScrollTo(x, y);
+    public bool SelectOpen { get { _view.UpdateFromFrame(); return _view.FrameSelectOpen; } }
     public void SelectAll() => _proc.SelectAll();
 
     public string SelectedText()
@@ -229,6 +232,7 @@ internal static class InteractionScript
                             .Append(Num(d.ScrollX)).Append(',').Append(Num(d.ScrollY))
                             .Append("/h").Append(Num(d.ContentHeight)).Append('|')
                             .Append(d.Title).Append('|').Append(d.Url.Split('/').Last()).Append('|')
+                            .Append("open=").Append(d.SelectOpen ? '1' : '0').Append('|')
                             .Append(Sanitize(d.SelectedText())).Append('\n');
                         continue;
                     default:

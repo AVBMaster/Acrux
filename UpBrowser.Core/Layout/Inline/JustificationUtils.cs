@@ -167,6 +167,21 @@ public static class JustificationUtils
         return true;
     }
 
+    /// <summary>
+    /// Whether this item receives part of the free space a justified line distributes.
+    ///
+    /// It is a separate predicate from <see cref="IsSpaceRun"/> on purpose: the two answer
+    /// different questions and are about to diverge. Breaking and trailing-space trimming ask
+    /// "is this collapsible whitespace"; justification asks "is this an expansion
+    /// opportunity", and the two differ on characters that occupy space without being
+    /// collapsible (no-break space and the other Zs separators) — those must never stretch,
+    /// and a line ending in one must still count its last glyph as content. Today both sides
+    /// select the same items, because the line items only split at breakable spaces; the
+    /// remaining difference needs the item builder to cut a run at the space/non-space
+    /// boundary, which is what makes a space inside a mixed item an opportunity of its own.
+    /// </summary>
+    private static bool IsExpansionRun(LogicalLineItem item, string source) => IsSpaceRun(item, source);
+
     private static bool ParticipatesInAlignment(LogicalLineItem item) =>
         item.HasInFlowFragment() && !item.IsHiddenForPaint;
 

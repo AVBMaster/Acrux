@@ -204,7 +204,25 @@ public class OutOfFlowLayoutPart
         float x, y;
 
         if (style.Left is not AutoLength)
+        {
             x = ResolveInset(style.Left, paddingBoxSize.InlineSize, style.FontSize) - padL;
+            // CSS 2.1 §10.3.7: with a definite width and both left & right resolved,
+            // auto margins absorb the leftover inline space (e.g. 'margin:0 auto'
+            // horizontally centers a fixed-width abspos box).
+            if (style.Width is not AutoLength && style.Right is not AutoLength)
+            {
+                float leftInset = ResolveInset(style.Left, paddingBoxSize.InlineSize, style.FontSize);
+                float rightInset = ResolveInset(style.Right, paddingBoxSize.InlineSize, style.FontSize);
+                float surplus = paddingBoxSize.InlineSize - leftInset - rightInset - inlineSize;
+                if (surplus > 0)
+                {
+                    bool mlAuto = style.MarginLeft is AutoLength;
+                    bool mrAuto = style.MarginRight is AutoLength;
+                    if (mlAuto && mrAuto) x += surplus / 2f;
+                    else if (mlAuto) x += surplus;
+                }
+            }
+        }
         else if (style.Right is not AutoLength)
             x = paddingBoxSize.InlineSize - ResolveInset(style.Right, paddingBoxSize.InlineSize, style.FontSize) - inlineSize - padL;
         else
@@ -220,10 +238,14 @@ public class OutOfFlowLayoutPart
         return (x, y);
     }
 
+    // For a calc() inset, MathLength.ToPixels treats its first argument as the
+    // percentage base, so it must be the containing-block size — not the font
+    // size, which would resolve 'calc(50% - 10px)' against the glyph metrics.
+    // Font-relative units inside the calc come from the ambient FontUnitContext.
     private static float ResolveInset(Length length, float basis, float fontSize) =>
         length is PercentLength pct
             ? pct.Value * basis
-            : length.ToPixels(fontSize, fontSize, basis, basis);
+            : length.ToPixels(basis, fontSize, basis, basis);
 
     private static ComputedStyle? GetStyleOf(LayoutBox box) => box.Dimensions?.Style ?? null;
     private static Element? GetElementOf(LayoutBox box) => box.Dimensions?.Element ?? null;

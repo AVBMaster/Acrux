@@ -92,9 +92,11 @@ internal static class ProcessTabSelfTest
         bool blockStack = BlockReplacedStackTest();
         bool animPark = AnimationParkTest();
         bool interact = InteractionParityTest();
+        bool multiEngine = MultiEngineIsolationTest();
+        bool selectPick = SelectPickTest();
         bool perf = PerformanceTests().GetAwaiter().GetResult();
         pass = pass && features && selection && ime && dialogs && watchdog && crashes && channel && resize
-            && nonblocking && budget && devtools && find && blockStack && animPark && interact && perf;
+            && nonblocking && budget && devtools && find && blockStack && animPark && interact && multiEngine && selectPick && perf;
         Console.WriteLine(pass ? "[proctest] PASS" : "[proctest] FAIL");
 
         try { Directory.Delete(dir, true); } catch { }
@@ -970,6 +972,7 @@ internal static class ProcessTabSelfTest
             .fade { animation: spin 2s infinite alternate; }
             </style></head><body>
             <div><a href="page2.html">go second</a></div>
+            <details><summary>more</summary><div style="height:200px">hidden content</div></details>
             <div style="width:200px;height:80px;background:#cfc">Alpha bravo charlie</div>
             <div>The quick brown fox jumps over the lazy dog</div>
             <div style="height:1600px"></div>
@@ -986,6 +989,12 @@ internal static class ProcessTabSelfTest
             resize 800 600
             settle 1500
             mark load
+            click 30 32
+            settle 600
+            mark detailsOpened
+            click 30 32
+            settle 600
+            mark detailsClosed
             click 30 15
             settle 900
             mark afterLinkClick
@@ -995,6 +1004,9 @@ internal static class ProcessTabSelfTest
             wheel 0 400 400 300
             settle 500
             mark wheelDown
+            selectall
+            settle 500
+            mark selected
             scrollto 0 1500
             settle 700
             mark fadedInView
@@ -1014,9 +1026,137 @@ internal static class ProcessTabSelfTest
             && !FirstWith("load").Contains("page2.html");
         bool wheelScrolled = FirstWith("wheelDown").Contains("0.0,400.0");
         bool parked = FirstWith("fadedInView").Contains("0.0,1500.0");
-        bool pass = rc == 0 && navigated && wheelScrolled && parked;
+        // Ctrl+A selects what the page renders, not what it carries: the stylesheet and the
+        // scripts sit in a display:none subtree, and copying a paragraph must not hand back
+        // the CSS that styled it.
+        string selection = FirstWith("selected");
+        // A summary toggles its details: the closed content is 200px tall, so the document
+        // height is the observable — and nothing else in this fixture changes height.
+        string opened = FirstWith("detailsOpened"), closed = FirstWith("detailsClosed");
+        bool detailsToggle = opened.Contains("/h2032.0") && closed.Contains("/h1832.0");
+        bool onlyRendered = selection.Contains("quick brown fox")
+            && !selection.Contains("@keyframes") && !selection.Contains("body {");
+        bool pass = rc == 0 && navigated && wheelScrolled && parked && onlyRendered && detailsToggle;
         Console.WriteLine($"[proctest] interact rc={rc} pass={pass} inlineLinkNav={navigated} " +
-                          $"rootWheel={wheelScrolled} animScrolledIn={parked}");
+                          $"rootWheel={wheelScrolled} animScrolledIn={parked} " +
+                          $"selectionIsRenderedText={onlyRendered} detailsToggle={detailsToggle}");
+        try { Directory.Delete(dir, true); } catch { }
+        return pass;
+    }
+
+    /// <summary>
+    /// Two engines in one process must not answer for each other's documents. The seam that
+    /// hands layout a replaced element's intrinsic size is process-wide, and each page decodes
+    /// images through its own cache against its own base URL — so a second tab loading last
+    /// would otherwise make the first measure its <c>&lt;img&gt;</c> with the wrong file. The
+    /// second tab is loaded <em>between</em> the first one's passes, which is when the shared
+    /// slot gets stolen.
+    /// </summary>
+    private static bool MultiEngineIsolationTest()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "upbrowser_proctest_multi");
+        Directory.CreateDirectory(dir);
+        string Page(string sub) =>
+            """<!DOCTYPE html><html><body style="margin:0"><img src="x.png" style="display:block"></body></html>"""
+                .Replace("x.png", Path.Combine(dir, sub, "x.png").Replace('\\', '/'));
+
+        (int W, int H)[] sizes = [(120, 40), (40, 120)];
+        for (int i = 0; i < sizes.Length; i++)
+        {
+            var sub = "t" + i;
+            Directory.CreateDirectory(Path.Combine(dir, sub));
+            using var bmp = new SkiaSharp.SKBitmap(sizes[i].W, sizes[i].H);
+            bmp.Erase(SkiaSharp.SKColors.Red);
+            using var img = SkiaSharp.SKImage.FromBitmap(bmp);
+            using var data = img.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+            using var fs = File.Create(Path.Combine(dir, sub, "x.png"));
+            data.SaveTo(fs);
+            File.WriteAllText(Path.Combine(dir, sub, "index.html"), Page(sub));
+        }
+
+        float[] width = new float[sizes.Length];
+        var hosts = new InProcessTabHost[sizes.Length];
+        try
+        {
+            for (int i = 0; i < sizes.Length; i++)
+            {
+                hosts[i] = new InProcessTabHost(100 + i, 1f, 1f);
+                hosts[i].Resize(400, 300);
+                hosts[i].LoadHtml(File.ReadAllText(Path.Combine(dir, "t" + i, "index.html")),
+                    new Uri(Path.Combine(dir, "t" + i, "index.html")).AbsoluteUri);
+                WaitUntil(() => hosts[i].FrameVersion > 0, 6000);
+            }
+            // Now every page has installed its own seam; the first one gets a fresh layout
+            // pass and must still measure its own image.
+            hosts[0].Resize(360, 300);
+            Thread.Sleep(400);
+            for (int i = 0; i < sizes.Length; i++)
+                width[i] = hosts[i].Query(e => e.Document?.Body?.LayoutBox?.Children.Count > 0
+                    ? e.Document.Body.LayoutBox.Children[0].BorderBox.Width : -1f);
+        }
+        finally
+        {
+            foreach (var h in hosts) h?.Dispose();
+        }
+
+        bool pass = Math.Abs(width[0] - sizes[0].W) < 0.6f && Math.Abs(width[1] - sizes[1].W) < 0.6f;
+        Console.WriteLine($"[proctest] multiEngine={pass} imgWidth={width[0]:F1}/{width[1]:F1} " +
+                          $"want={sizes[0].W}/{sizes[1].W}");
+        try { Directory.Delete(dir, true); } catch { }
+        return pass;
+    }
+
+    /// <summary>
+    /// A &lt;select&gt; is the interactive widget the parent process cannot fake: its options
+    /// are not laid out as boxes, so opening the list, picking a row and rewriting which option
+    /// is selected all have to happen where the document lives. The pick is observed through
+    /// the page's own change handler, which proves the event reached the script and the DOM
+    /// updated — the click alone would pass even if nothing had changed.
+    /// </summary>
+    private static bool SelectPickTest()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "upbrowser_proctest_select");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "page.html"), """
+            <!DOCTYPE html><html><head><style>
+            body { margin: 0; font-family: Arial; font-size: 18px; }
+            </style></head><body>
+            <select id="s" style="font-size:18px"><option>one</option><option>two</option><option>three</option></select>
+            <div id="out">untouched</div>
+            <script>
+              document.getElementById('s').addEventListener('change', function () {
+                document.getElementById('out').textContent = 'PICKED';
+              });
+            </script>
+            </body></html>
+            """);
+        // Options are laid out as rows inside the control (600x22.6 each, at y=2/24.6/47.2),
+        // so (40,58) is the third row and must be picked where it is drawn.
+        File.WriteAllText(Path.Combine(dir, "script.txt"), """
+            resize 600 500
+            settle 1200
+            selectall
+            mark before
+            click 40 58
+            settle 600
+            selectall
+            mark after
+            """);
+
+        int rc = InteractionScript.Run(new[] { "--interact",
+            Path.Combine(dir, "page.html").Replace('\\', '/'),
+            Path.Combine(dir, "script.txt").Replace('\\', '/'),
+            Path.Combine(dir, "run").Replace('\\', '/') });
+        string trace = "";
+        try { trace = File.ReadAllText(Path.Combine(dir, "run.local.trace.txt")); } catch { }
+        string FirstWith(string prefix) => trace.Split('\n').FirstOrDefault(l => l.StartsWith(prefix)) ?? "";
+        bool picked = FirstWith("after").Contains("PICKED") && !FirstWith("before").Contains("PICKED");
+        // A single select paints one line, so its rows are not page text: Ctrl+A must hand
+        // back what the reader can see, never the option list hiding inside the control.
+        bool optionsExcluded = !FirstWith("before").Contains("two") && !FirstWith("after").Contains("three");
+        picked = picked && optionsExcluded;
+        bool pass = rc == 0 && picked;
+        Console.WriteLine($"[proctest] selectPick rc={rc} pass={pass} changeFired={picked} optionsOutOfSelection={optionsExcluded}");
         try { Directory.Delete(dir, true); } catch { }
         return pass;
     }
@@ -1263,8 +1403,13 @@ internal static class ProcessTabSelfTest
                 worstMs = Math.Max(worstMs, one.ElapsedMilliseconds);
             }
             bool answered = done.Wait(8000);
+            // The bound here is deliberately generous: what this guards is a console command
+            // blocking the shell for seconds because a wedged page stopped draining the pipe.
+            // Whether a single write is fast is SendUnderWedgeTest's job — it measures 4000
+            // sends and their worst case, where a tight number is meaningful. Here a stray
+            // 50ms GC or scheduler pause was failing the gate with nothing broken.
             wedgedTimeout = answered && Volatile.Read(ref calls) == 1 && isError &&
-                text.Contains("Timeout") && evalSw.ElapsedMilliseconds < 8000 && worstMs <= 50;
+                text.Contains("Timeout") && evalSw.ElapsedMilliseconds < 8000 && worstMs <= 250;
             Console.WriteLine($"[proctest] devtools wedgedEval calls={calls} err={isError} text='{text}' sendsWorst={worstMs}ms");
         }
 

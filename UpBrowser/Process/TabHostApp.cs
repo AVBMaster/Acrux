@@ -872,6 +872,7 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
             CaretH = imeCaretH,
             HasEditableFocus = imeHasFocus,
             IsPassword = imePassword,
+            SelectOpen = _engine.HasOpenSelect,
         };
         ulong seq = ch.Publish(_rasterSlot, in meta, _rectScratch.AsSpan(0, rectCount));
         _holdsLease = false;

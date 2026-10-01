@@ -23,6 +23,8 @@ internal sealed class RemoteTabView : IDisposable
     public float SentScrollX, SentScrollY;
     // Offset + page extents of the currently applied frame.
     public float FrameScrollX, FrameScrollY;
+    /// <summary>True while the page renders a select list over its content.</summary>
+    public bool FrameSelectOpen;
     public float ContentW, ContentH;
     public int DomCount, BoxCount;
     // Initial navigation deferred until the pipe connects.
@@ -147,6 +149,7 @@ internal sealed class RemoteTabView : IDisposable
         _bitmap.NotifyPixelsChanged();
 
         FrameScrollX = meta.ScrollX; FrameScrollY = meta.ScrollY;
+        FrameSelectOpen = meta.SelectOpen;
         ContentW = meta.ContentW; ContentH = meta.ContentH;
         DomCount = meta.DomCount; BoxCount = meta.BoxCount;
         PageBg = new SKColor(meta.PageBgRgba);

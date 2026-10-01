@@ -3207,8 +3207,9 @@ namespace UpBrowser;
             _lastWindowWidth = windowWidth;
             _lastWindowHeight = windowHeight;
             _skiaRenderer.InvalidatePageCache();
-            // 清除文本测量缓存，确保重新测量所有文本宽度，支持动态换行
-            (TextMeasurer.Instance as SkiaTextMeasurer)?.ClearCache();
+            // The measurer's cache is keyed by text, font, size, weight and device scale, so
+            // a window resize cannot invalidate an entry — and clearing it here threw away the
+            // cache every other tab in the process shares, once per resize event.
             _pendingRelayout = true;
         }
 
@@ -6308,7 +6309,8 @@ namespace UpBrowser;
             // Select all text on the page: find first and last text nodes
             Core.Dom.TextNode? firstText = null;
             Core.Dom.TextNode? lastText = null;
-            FindFirstLastTextNodes(_currentLoad.Document.DocumentElement ?? _currentLoad.Document.Body, ref firstText, ref lastText);
+            UpBrowser.PageHost.PageEngine.FindFirstLastTextNodes(
+                _currentLoad.Document.DocumentElement ?? _currentLoad.Document.Body, ref firstText, ref lastText);
             if (firstText != null && lastText != null)
             {
                 _selAnchor = new SelPoint { Node = firstText, Offset = 0 };
@@ -6318,18 +6320,6 @@ namespace UpBrowser;
                 _input.NeedsRedraw = true;
             }
         }
-    }
-
-    private static void FindFirstLastTextNodes(Core.Dom.Node? node, ref Core.Dom.TextNode? first, ref Core.Dom.TextNode? last)
-    {
-        if (node == null) return;
-        if (node is Core.Dom.TextNode tn)
-        {
-            first ??= tn;
-            last = tn;
-        }
-        foreach (var child in node.Children)
-            FindFirstLastTextNodes(child, ref first, ref last);
     }
 
     public void InjectImeChar(char c)

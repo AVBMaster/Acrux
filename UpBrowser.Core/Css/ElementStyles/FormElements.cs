@@ -5,6 +5,29 @@ namespace UpBrowser.Core.Css.ElementStyles;
 
 public static class FormElements
 {
+    /// <summary>
+    /// Whether this option or optgroup belongs to a select that renders a single line.
+    ///
+    /// Such a control paints its selected text and nothing else, so its options are not page
+    /// text: they must not answer Ctrl+A or end up in the clipboard. They stay laid out
+    /// though, because the control's own width is the widest options and an inline-block
+    /// measures itself from its children — which is why this is a question for the consumers
+    /// of text, not for layout. A multiple or sized select is a list box, and there the
+    /// options really are rows of content.
+    /// </summary>
+    public static bool BelongsToClosedSelect(Element? element)
+    {
+        for (var p = element?.ParentElement; p != null; p = p.ParentElement)
+        {
+            var tag = p.TagName?.ToUpperInvariant();
+            if (tag == "OPTGROUP") continue;
+            if (tag != "SELECT") return false;
+            if (p.HasAttribute("multiple")) return false;
+            return !(int.TryParse(p.GetAttribute("size"), out var rows) && rows > 1);
+        }
+        return false;
+    }
+
     public static void Apply(ComputedStyle style, string tagName, Element? element = null)
     {
         string inputType = "";

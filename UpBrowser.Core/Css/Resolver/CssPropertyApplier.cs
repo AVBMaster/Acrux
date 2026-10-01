@@ -190,10 +190,10 @@ public static class CssPropertyApplier
             case "border-width": ParseBorderWidth(value, style); break;
             case "border-color": ParseBorderColor(value, style); break;
             case "border-style": ParseBorderStyle(value, style); break;
-            case "border-top-width": style.BorderTopWidth = ParseSize(value) ?? 0; break;
-            case "border-right-width": style.BorderRightWidth = ParseSize(value) ?? 0; break;
-            case "border-bottom-width": style.BorderBottomWidth = ParseSize(value) ?? 0; break;
-            case "border-left-width": style.BorderLeftWidth = ParseSize(value) ?? 0; break;
+            case "border-top-width": style.BorderTopWidth = BorderWidthPx(value); break;
+            case "border-right-width": style.BorderRightWidth = BorderWidthPx(value); break;
+            case "border-bottom-width": style.BorderBottomWidth = BorderWidthPx(value); break;
+            case "border-left-width": style.BorderLeftWidth = BorderWidthPx(value); break;
             case "border-top-style": style.BorderTopStyle = ParseBorderStyleValue(value); break;
             case "border-right-style": style.BorderRightStyle = ParseBorderStyleValue(value); break;
             case "border-bottom-style": style.BorderBottomStyle = ParseBorderStyleValue(value); break;
@@ -275,10 +275,18 @@ public static class CssPropertyApplier
             case "grid-auto-columns": style.GridAutoColumns = value; break;
             case "grid-auto-rows": style.GridAutoRows = value; break;
             case "grid-auto-flow": style.GridAutoFlow = ParseGridAutoFlow(value); break;
-            case "grid-column": style.GridColumn = value; if (value.Contains("/")) { var parts = value.Split('/'); style.GridColumnStart = parts[0].Trim(); style.GridColumnEnd = parts.Length > 1 ? parts[1].Trim() : null; } break;
+            case "grid-column":
+                style.GridColumn = value;
+                if (value.Contains('/')) { var parts = value.Split('/'); style.GridColumnStart = parts[0].Trim(); style.GridColumnEnd = parts.Length > 1 ? parts[1].Trim() : null; }
+                else { style.GridColumnStart = value.Trim(); style.GridColumnEnd = null; }
+                break;
             case "grid-column-start": style.GridColumnStart = value; break;
             case "grid-column-end": style.GridColumnEnd = value; break;
-            case "grid-row": style.GridRow = value; if (value.Contains("/")) { var parts = value.Split('/'); style.GridRowStart = parts[0].Trim(); style.GridRowEnd = parts.Length > 1 ? parts[1].Trim() : null; } break;
+            case "grid-row":
+                style.GridRow = value;
+                if (value.Contains('/')) { var parts = value.Split('/'); style.GridRowStart = parts[0].Trim(); style.GridRowEnd = parts.Length > 1 ? parts[1].Trim() : null; }
+                else { style.GridRowStart = value.Trim(); style.GridRowEnd = null; }
+                break;
             case "grid-row-start": style.GridRowStart = value; break;
             case "grid-row-end": style.GridRowEnd = value; break;
             case "grid-area": style.GridArea = value; break;
@@ -407,8 +415,7 @@ public static class CssPropertyApplier
             case "font-size-adjust": if (value != "none" && float.TryParse(value, out var fsa)) style.FontSizeAdjust = fsa; break;
             case "outline": ParseOutlineShorthand(value, style); break;
             case "outline-width":
-                if (float.TryParse(value.Replace("px", ""), out var ow))
-                    style.OutlineWidth = ow;
+                style.OutlineWidth = BorderWidthPx(value);
                 break;
             case "outline-color": style.OutlineColor = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.Outline, value); break;
             case "outline-style": style.OutlineStyle = ParseBorderStyleValue(value); break;
@@ -816,8 +823,10 @@ public static class CssPropertyApplier
 
     public static void ParseBackgroundPosition(string value, ComputedStyle style)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length > 0)
+        // Split respecting parentheses: a naive Split(' ') shreds 'calc(100% - 10px)'
+        // into fragments that fail Length.Parse, silently dropping the offset.
+        var parts = ShorthandExpander.SplitShorthand(value);
+        if (parts.Count > 0)
         {
             style.BackgroundPositionX = parts[0].ToLowerInvariant() switch
             {
@@ -826,7 +835,7 @@ public static class CssPropertyApplier
                 "right" => new PercentLength(1),
                 _ => Length.Parse(parts[0])
             };
-            style.BackgroundPositionY = parts.Length > 1 ? Length.Parse(parts[1]) : new PixelLength(0);
+            style.BackgroundPositionY = parts.Count > 1 ? Length.Parse(parts[1]) : new PixelLength(0);
         }
     }
 
@@ -1027,6 +1036,7 @@ public static class CssPropertyApplier
     public static void ParseBorderShorthand(string value, ComputedStyle style)
     {
         var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        bool hasWidth = false;
         foreach (var part in parts)
         {
             if (part is "solid" or "dashed" or "dotted" or "double" or "groove" or "ridge"
@@ -1036,14 +1046,13 @@ public static class CssPropertyApplier
                 style.BorderTopStyle = bs; style.BorderRightStyle = bs;
                 style.BorderBottomStyle = bs; style.BorderLeftStyle = bs;
             }
-            else if (part.EndsWith("px"))
+            else if (IsBorderWidthToken(part))
             {
-                var width = ParseSize(part);
-                if (width.HasValue)
-                {
-                    style.BorderTopWidth = width.Value; style.BorderRightWidth = width.Value;
-                    style.BorderBottomWidth = width.Value; style.BorderLeftWidth = width.Value;
-                }
+                // thin/medium/thick keywords and any length (px/em/rem) resolve to px.
+                var width = BorderWidthPx(part);
+                style.BorderTopWidth = width; style.BorderRightWidth = width;
+                style.BorderBottomWidth = width; style.BorderLeftWidth = width;
+                hasWidth = true;
             }
             else
             {
@@ -1053,7 +1062,21 @@ public static class CssPropertyApplier
                 MarkCurrentColor(style, CurrentColorSlot.AllBorders, part);
             }
         }
+
+        // The border shorthand resets border-width to its initial value (medium) when
+        // no width token is present, so 'border: solid' paints a 3px border.
+        if (!hasWidth)
+        {
+            style.BorderTopWidth = style.BorderRightWidth =
+                style.BorderBottomWidth = style.BorderLeftWidth = 3f;
+        }
     }
+
+    /// <summary>A border-width token is one of the keywords or a length unit the
+    /// width parser understands (not a bare percentage, which border-width rejects).</summary>
+    private static bool IsBorderWidthToken(string part) =>
+        part is "thin" or "medium" or "thick"
+        || (part.Length > 2 && (part.EndsWith("px") || part.EndsWith("em") || part.EndsWith("rem")));
 
     /// <summary>
     /// Parses the <c>border-image</c> shorthand. The value is
@@ -1344,6 +1367,18 @@ public static class CssPropertyApplier
         return null;
     }
 
+    /// <summary>Resolve a border-width token: the CSS keywords thin/medium/thick map
+    /// to 1/3/5px (CSS Backgrounds 3 §4), otherwise a length via <see cref="ParseSize"/>.
+    /// The border shorthand emits per-side width longhands, so this must understand
+    /// the keywords, not just lengths.</summary>
+    public static float BorderWidthPx(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "thin" => 1f,
+        "medium" => 3f,
+        "thick" => 5f,
+        _ => ParseSize(value) ?? 0f,
+    };
+
     /// <summary>
     /// Parses one corner radius value, which may be a single length or the
     /// 'horizontal vertical' pair produced for elliptical border-radius.
@@ -1400,12 +1435,20 @@ public static class CssPropertyApplier
         int i = 0;
         if (float.TryParse(parts[0], out var g))
         {
-            style.FlexGrow = g; i++;
+            style.FlexGrow = g; style.FlexShrink = 1; i++;
             if (i < parts.Length && float.TryParse(parts[i], out var s))
             { style.FlexShrink = s; i++; }
-            // Per CSS spec, when flex-grow is specified as a number and no third value,
-            // flex-basis defaults to 0%
-            style.FlexBasis = new PercentLength(0);
+            // A trailing non-number token is the explicit flex-basis; only when no
+            // basis is given does a numeric 'flex' shorthand default it to 0%.
+            if (i < parts.Length)
+            {
+                var b = parts[i].Trim().ToLowerInvariant();
+                style.FlexBasis = b == "auto" ? AutoLength.Instance : Length.Parse(parts[i]);
+            }
+            else
+            {
+                style.FlexBasis = new PercentLength(0);
+            }
         }
         else
         {

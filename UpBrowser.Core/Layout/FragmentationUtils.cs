@@ -11,12 +11,24 @@ public static class AbsoluteUtils
     public static (float left, float top, float right, float bottom) ComputeOutOfFlowInsets(
         ComputedStyle style, LogicalSize availableSize)
     {
-        float left = style.Left is PixelLength pl ? pl.Value : 0;
-        float right = style.Right is PixelLength pr ? pr.Value : 0;
-        float top = style.Top is PixelLength pt ? pt.Value : 0;
-        float bottom = style.Bottom is PixelLength pb ? pb.Value : 0;
-        return (left, top, right, bottom);
+        // Resolve pixel, percentage, em and calc() insets. Percentages resolve
+        // against the containing block's inline (left/right) or block (top/bottom)
+        // size; auto and anything else contribute 0 (the caller gates on specified).
+        return (
+            ResolveInsetLength(style.Left, availableSize.InlineSize, style),
+            ResolveInsetLength(style.Top, availableSize.BlockSize, style),
+            ResolveInsetLength(style.Right, availableSize.InlineSize, style),
+            ResolveInsetLength(style.Bottom, availableSize.BlockSize, style));
     }
+
+    private static float ResolveInsetLength(Length? length, float basis, ComputedStyle style) => length switch
+    {
+        PixelLength px => px.Value,
+        PercentLength pct => pct.Value * basis,
+        EmLength em => em.Value * style.FontSize,
+        MathLength m => m.ToPixels(basis, style.FontSize, 0, 0),
+        _ => 0,
+    };
 
     /// <summary>Resolve insets from the style, returning nullopt for auto values.</summary>
     public static LogicalOofInsets ResolveOutOfFlowInsets(ComputedStyle style, LogicalSize availableSize)

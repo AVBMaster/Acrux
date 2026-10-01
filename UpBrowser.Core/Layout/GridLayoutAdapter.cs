@@ -40,6 +40,13 @@ public class GridLayoutAdapter : LayoutAlgorithm
         // span their containing block); auto height seeds 0 so rows size to
         // their content and nothing stretches.
         float contentWidth = ResolveOwnContentSize(Style.Width, horizontal: true, autoValue: availableWidth);
+        // 'width: max-content' / 'min-content' / 'fit-content': size the tracks
+        // against an indefinite inline so auto/max-content columns reach their
+        // content width and fr columns keep their content base, then shrink the
+        // container to the resolved track total (read back after Layout below).
+        bool intrinsicWidth = Style.Width is IntrinsicLength;
+        if (intrinsicWidth)
+            contentWidth = float.PositiveInfinity;
         float contentHeight = ResolveOwnContentSize(Style.Height, horizontal: false, autoValue: 0f);
         var containerBox = new LayoutBox
         {
@@ -60,7 +67,9 @@ public class GridLayoutAdapter : LayoutAlgorithm
 
         var box = new BoxFragment
         {
-            InlineSize = ComputeInlineSize(),
+            InlineSize = intrinsicWidth
+                ? grid.ResolvedContentInlineSize + BorderPaddingInline
+                : ComputeInlineSize(),
             BlockSize = ComputeBlockSize(containerBox),
             InlineOffset = 0,
             BlockOffset = 0,

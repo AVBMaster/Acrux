@@ -26,6 +26,11 @@ public class GridLayoutAlgorithm
     private float _containerHeight;
     private bool _containerHeightAuto;
 
+    /// <summary>Sum of resolved column base sizes + inter-column gaps, set by
+    /// <see cref="Layout"/>. Used by the adapter to size a 'width: max-content'
+    /// grid container to its tracks.</summary>
+    public float ResolvedContentInlineSize { get; private set; }
+
     public GridLayoutAlgorithm(
         ITextMeasurer? textMeasurer,
         in ConstraintSpace space)
@@ -57,8 +62,23 @@ public class GridLayoutAlgorithm
 
         ExpandImplicitTracks(items, ref explicitColumns, ref explicitRows);
 
-        // Track sizing algorithm
-        ResolveTracks(explicitColumns, items, _containerWidth, columnGap, isColumn: true);
+        IntrinsicSizeKind? inlineKind = _containerStyle.Width is IntrinsicLength il
+            ? (il.Kind == IntrinsicSizeKind.FitContent ? IntrinsicSizeKind.MaxContent : il.Kind)
+            : null;
+
+        // Track sizing algorithm. For an intrinsic inline container
+        // (`width: min-content|max-content`) resolve the column tracks from the
+        // items' contributions directly, without the free-space distribution the
+        // definite-container path does — an indefinite container has no free space
+        // to stretch auto tracks into (that stretch made them +∞ → NaN).
+        if (inlineKind is { } kk)
+            SolveIntrinsicTracks(explicitColumns, items, columnGap, isColumn: true, kk);
+        else
+            ResolveTracks(explicitColumns, items, _containerWidth, columnGap, isColumn: true);
+
+        // The grid's content inline size (non-collapsed column bases + gaps). The
+        // adapter reads this back to shrink a 'width: min/max-content' container.
+        ResolvedContentInlineSize = TrackGroupSize(explicitColumns, columnGap);
 
         // Lay every item out once at its resolved column width BEFORE row track
         // sizing: an auto row must be the max content height of its items, and
@@ -135,7 +155,8 @@ public class GridLayoutAlgorithm
                 var countStr = repeatContent[..commaIdx].Trim().ToLowerInvariant();
                 var trackStr = repeatContent[(commaIdx + 1)..].Trim();
                 int repeatCount = 0;
-                bool autoFill = countStr == "auto-fill" || countStr == "auto-fit";
+                bool autoFit = countStr == "auto-fit";
+                bool autoFill = countStr == "auto-fill" || autoFit;
 
                 if (!autoFill)
                 {
@@ -158,14 +179,27 @@ public class GridLayoutAlgorithm
                     foreach (var t in repeatTracks)
                         totalTrackSize += t.BaseSize;
                     float gapTotal = totalGap * (repeatTracks.Count - 1);
-                    float availableForTracks = Math.Max(0, containerSize - gapTotal);
-                    int fits = totalTrackSize > 0 ? (int)(availableForTracks / totalTrackSize) : 0;
+                    // One repeat block is its tracks plus the gaps inside it; blocks
+                    // are separated by another gap. N blocks fit when
+                    // N*blockWidth + (N-1)*totalGap <= containerSize, i.e.
+                    // N = (containerSize + totalGap) / (blockWidth + totalGap). The
+                    // old formula dropped the between-block gap and over-counted the
+                    // repeats (minmax(60px,1fr) in 300px produced 5 tracks, not 4).
+                    float blockWidth = totalTrackSize + gapTotal;
+                    int fits = blockWidth > 0 ? (int)((containerSize + totalGap) / (blockWidth + totalGap)) : 0;
                     if (fits <= 0 && repeatTracks.Count > 0) fits = 1;
                     repeatCount = Math.Max(1, fits);
                 }
 
                 for (int r = 0; r < repeatCount; r++)
-                    tracks.AddRange(repeatTracks.Select(t => t.Clone()));
+                {
+                    foreach (var t in repeatTracks)
+                    {
+                        var clone = t.Clone();
+                        clone.AutoFit = autoFit;
+                        tracks.Add(clone);
+                    }
+                }
                 continue;
             }
 
@@ -225,6 +259,23 @@ public class GridLayoutAlgorithm
         else if (value.EndsWith("vw") && TryParseFloat(value[..^2], out var vw)) { track.SizeType = TrackSizeType.Fixed; track.FixedSize = vw * _viewportWidth / 100f; }
         else if (value.EndsWith("vh") && TryParseFloat(value[..^2], out var vh)) { track.SizeType = TrackSizeType.Fixed; track.FixedSize = vh * _viewportHeight / 100f; }
         else if (value == "0") { track.SizeType = TrackSizeType.Fixed; track.FixedSize = 0; }
+        else if (value.StartsWith("calc(") || value.StartsWith("min(") || value.StartsWith("max(")
+                 || value.StartsWith("clamp("))
+        {
+            // A math-function track size (CSS Values 3 §4 / css-grid §7.2.1) resolves
+            // against the container's content box; treat the result as a fixed track.
+            // Percentages inside the expression use containerSize as their base.
+            float mathPx = Length.Parse(value).ToPixels(containerSize, _containerStyle?.FontSize ?? 16, _viewportWidth, _viewportHeight);
+            if (!float.IsNaN(mathPx) && !float.IsInfinity(mathPx))
+            {
+                track.SizeType = TrackSizeType.Fixed;
+                track.FixedSize = Math.Max(0, mathPx);
+            }
+            else
+            {
+                track.SizeType = TrackSizeType.Auto;
+            }
+        }
 
         track.BaseSize = track.ResolveSize(containerSize, _containerStyle?.FontSize ?? 16, _viewportWidth, _viewportHeight);
         return track;
@@ -368,7 +419,9 @@ public class GridLayoutAlgorithm
             else if (colSpecified)
             {
                 item.ColumnSpan = item.ColumnEnd - item.ColumnStart;
-                item.RowSpan = 1;
+                // The row axis is auto-placed, but an explicit 'grid-row: span N'
+                // still sets a row span — keep it rather than forcing 1.
+                item.RowSpan = Math.Max(1, item.RowSpan);
                 columnLockedItems.Add(item);
             }
             else if (rowSpecified)
@@ -671,6 +724,160 @@ public class GridLayoutAlgorithm
         return new List<GridTrack> { fallback };
     }
 
+    /// <summary>
+    /// Intrinsic inline/block track sizing (CSS Grid §12.6, container
+    /// `width: min-content|max-content`). Because the container is indefinite there
+    /// is no free space to distribute, so — unlike the definite-container
+    /// <see cref="ResolveTracks"/> — the auto-track stretch and fr expansion steps
+    /// are skipped and each track resolves straight to its content contribution:
+    /// min-content takes the min sizing function, max-content takes the growth
+    /// limit, and a flexible track is sized by the largest per-factor contribution
+    /// (`frUnit = max(contributionᵢ / factorᵢ)`, then `factorᵢ × frUnit`).
+    /// </summary>
+    private void SolveIntrinsicTracks(
+        List<GridTrack> tracks, List<GridItem> items, float gap, bool isColumn, IntrinsicSizeKind kind)
+    {
+        int n = tracks.Count;
+        if (n == 0) return;
+
+        var minC = new float[n];   // largest item min-content contribution per track
+        var maxC = new float[n];   // largest item max-content contribution per track
+        var used = new bool[n];
+
+        foreach (var item in items)
+        {
+            var style = item.Element.ComputedStyle;
+            if (style == null) continue;
+            int start = isColumn ? item.ColumnStart - 1 : item.RowStart - 1;
+            int end = isColumn ? item.ColumnEnd - 1 : item.RowEnd - 1;
+            int span = end - start;
+            if (span <= 0) continue;
+
+            float outerDef = isColumn
+                ? ResolveDefiniteSize(style.Width, float.NaN, style.FontSize, _rootFontSize)
+                : ResolveDefiniteSize(style.Height, float.NaN, style.FontSize, _rootFontSize);
+
+            float itemMin, itemMax;
+            if (outerDef > 0)
+            {
+                itemMin = itemMax = outerDef;
+            }
+            else if (isColumn)
+            {
+                itemMax = IntrinsicMeasure.MaxContentInlineSize(item.Element);
+                itemMin = IntrinsicMeasure.MinContentInlineSize(item.Element);
+                if (float.IsNaN(itemMin) || itemMin < 0) itemMin = 0;
+                if (float.IsNaN(itemMax) || itemMax < 0) itemMax = 0;
+                if (itemMin <= 0) itemMin = itemMax;
+                if (itemMax <= 0) itemMax = itemMin;
+            }
+            else
+            {
+                itemMin = itemMax = item.MeasuredBox?.BorderBox.Height ?? 0;
+            }
+
+            float pm = itemMin / span, pM = itemMax / span;
+            for (int i = start; i < end && i < n; i++)
+            {
+                if (i < 0) continue;
+                used[i] = true;
+                if (pm > minC[i]) minC[i] = pm;
+                if (pM > maxC[i]) maxC[i] = pM;
+            }
+        }
+
+        // Collapse empty auto-fit tracks (CSS Grid §7.2.3): no item spans them, so
+        // they and their gaps vanish.
+        if (isColumn)
+            for (int i = 0; i < n; i++)
+                if (tracks[i].AutoFit && !used[i]) tracks[i].Collapsed = true;
+
+        // Pass 1: base size from the min sizing function (raised by the item's
+        // min-content contribution only when that min side is auto/intrinsic), and
+        // find the flexible-track unit for max-content sizing.
+        float frUnit = 0;
+        for (int i = 0; i < n; i++)
+        {
+            var t = tracks[i];
+            if (t.Collapsed) { t.BaseSize = 0; t.GrowLimit = 0; continue; }
+
+            float baseMin = IntrinsicMinFnValue(t);
+            if (IntrinsicMinFnIsItemDriven(t)) baseMin = Math.Max(baseMin, minC[i]);
+            t.BaseSize = baseMin;
+
+            if (IsFlexible(t))
+            {
+                float f = FrFactor(t);
+                if (f > 0)
+                    frUnit = Math.Max(frUnit, Math.Max(baseMin, maxC[i]) / f);
+                t.GrowLimit = float.MaxValue;
+            }
+            else
+            {
+                t.GrowLimit = IntrinsicMaxFnSize(t, baseMin, maxC[i]);
+            }
+        }
+
+        // Pass 2: commit each track's size for the requested intrinsic kind.
+        for (int i = 0; i < n; i++)
+        {
+            var t = tracks[i];
+            if (t.Collapsed) { t.BaseSize = 0; t.GrowLimit = 0; continue; }
+
+            float size;
+            if (IsFlexible(t))
+                size = kind == IntrinsicSizeKind.MaxContent
+                    ? Math.Max(t.BaseSize, FrFactor(t) * frUnit)
+                    : t.BaseSize;
+            else if (kind == IntrinsicSizeKind.MaxContent)
+                size = t.GrowLimit == float.MaxValue ? t.BaseSize : Math.Max(t.BaseSize, t.GrowLimit);
+            else
+                size = t.BaseSize;
+
+            t.BaseSize = Math.Max(0, size);
+            t.GrowLimit = t.BaseSize;
+        }
+    }
+
+    /// <summary>Value of a track's min sizing function when it is a definite length
+    /// (a fixed track, or a minmax with a fixed min). Returns 0 otherwise so the
+    /// item's contribution can fill it.</summary>
+    private static float IntrinsicMinFnValue(GridTrack t) => t.SizeType switch
+    {
+        TrackSizeType.Fixed => t.FixedSize,
+        TrackSizeType.MinMax => t.MinSize?.SizeType == TrackSizeType.Fixed ? t.MinSize!.FixedSize : 0f,
+        _ => 0f,
+    };
+
+    /// <summary>Whether the track's min side is auto/intrinsic (so an item's
+    /// min-content contribution can raise it). A definite min (px or a percentage
+    /// resolved as definite) and a minmax(50px, …) keep their declared floor instead.
+    /// Percentage is treated as auto under an indefinite container.</summary>
+    private static bool IntrinsicMinFnIsItemDriven(GridTrack t) => t.SizeType switch
+    {
+        TrackSizeType.Auto or TrackSizeType.MinContent or TrackSizeType.MaxContent
+            or TrackSizeType.Fraction or TrackSizeType.Percentage => true,
+        TrackSizeType.MinMax => t.MinSize?.SizeType is null or TrackSizeType.Auto or TrackSizeType.Percentage,
+        _ => false,
+    };
+
+    /// <summary>Max sizing function resolved against an intrinsic contribution:
+    /// min-content → the base; auto / max-content / percentage → the item's
+    /// max-content; a fixed or minmax-with-fixed-max keeps its declared ceiling.</summary>
+    private static float IntrinsicMaxFnSize(GridTrack t, float baseMin, float maxContrib) => t.SizeType switch
+    {
+        TrackSizeType.Fixed => t.FixedSize,
+        TrackSizeType.MinContent => baseMin,
+        TrackSizeType.Auto or TrackSizeType.MaxContent or TrackSizeType.Percentage => Math.Max(baseMin, maxContrib),
+        TrackSizeType.MinMax => t.MaxSize?.SizeType switch
+        {
+            TrackSizeType.Fixed => t.MaxSize!.FixedSize,
+            TrackSizeType.MinContent => baseMin,
+            _ => Math.Max(baseMin, maxContrib),
+        },
+        _ => Math.Max(baseMin, maxContrib),
+    };
+
     private void ResolveTracks(List<GridTrack> tracks, List<GridItem> items, float containerSize, float gap, bool isColumn)
     {
         if (tracks.Count == 0) return;
@@ -758,25 +965,61 @@ public class GridLayoutAlgorithm
             }
         }
 
+        // Step 2b: Collapse empty auto-fit tracks (CSS Grid §7.2.3). A repeat
+        // (auto-fit, …) track that no item spans shrinks to zero and its adjacent
+        // gaps vanish, so the remaining tracks (and their fr share) fill the whole
+        // container; auto-fill keeps its empty tracks. Only the column axis carries
+        // auto-fit here, and the collapse runs after item contributions so the
+        // used/empty state is known.
+        if (isColumn && tracks.Any(t => t.AutoFit))
+        {
+            var used = new bool[tracks.Count];
+            foreach (var item in items)
+            {
+                int s = item.ColumnStart - 1, e = item.ColumnEnd - 1;
+                for (int i = s; i < e && i < used.Length; i++)
+                    if (i >= 0) used[i] = true;
+            }
+            for (int i = 0; i < tracks.Count; i++)
+            {
+                var t = tracks[i];
+                if (t.AutoFit && !used[i])
+                {
+                    t.Collapsed = true;
+                    t.SizeType = TrackSizeType.Fixed;
+                    t.Fraction = 0;
+                    t.MinSize = null;
+                    t.MaxSize = null;
+                    t.BaseSize = 0;
+                    t.GrowLimit = 0;
+                }
+            }
+        }
+
         // Step 3: Maximize tracks (distribute positive free space)
         float totalUsed = 0;
         foreach (var t in tracks)
             totalUsed += t.BaseSize;
 
-        float totalGap = gap * (tracks.Count - 1);
+        // Gaps only separate non-collapsed tracks, so an auto-fit collapse also
+        // removes the space those tracks' gaps would have taken.
+        int liveTracks = tracks.Count(t => !t.Collapsed);
+        float totalGap = gap * Math.Max(0, liveTracks - 1);
         float freeSpace = containerSize - totalUsed - totalGap;
 
         if (freeSpace > 0)
         {
             // Distribute to non-flexible tracks first (§12.6 maximizes only tracks
             // with an intrinsic min sizing function; fr tracks wait for §12.7).
-            int nonFrCount = tracks.Count(t => !IsFlexible(t));
+            // Collapsed auto-fit tracks stay frozen at zero and must not absorb any
+            // of this space, or the fr tracks would never expand.
+            int nonFrCount = tracks.Count(t => !IsFlexible(t) && !t.Collapsed);
             if (nonFrCount > 0)
             {
                 float perTrack = freeSpace / nonFrCount;
                 foreach (var t in tracks)
                 {
-                    if (!IsFlexible(t))
+                    if (!IsFlexible(t) && !t.Collapsed)
                     {
                         float growLimit = t.GrowLimit > 0 ? t.GrowLimit : float.MaxValue;
                         float add = Math.Min(perTrack, growLimit - t.BaseSize);
@@ -830,6 +1073,10 @@ public class GridLayoutAlgorithm
     /// </summary>
     private static void ExpandFlexibleTracks(List<GridTrack> tracks, float containerSize, float freeSpace, float totalGap)
     {
+        // Under an indefinite (max-content) container there is no free space to
+        // distribute, so flexible tracks keep their base size (their content
+        // contribution) rather than expanding to infinity.
+        if (float.IsInfinity(containerSize)) return;
         var flexible = new bool[tracks.Count];
         float totalFr = 0;
         float nonFrUsed = 0;
@@ -975,9 +1222,15 @@ public class GridLayoutAlgorithm
             if (col < 0 || col >= colOffsets.Length || colEnd < col) continue;
 
             float cellW = GetTrackSpanSize(columns, col, colEnd, columnGap);
-            var childSpace = _space.InheritBuilder(cellW, float.PositiveInfinity)
+            var mStyle = item.Element.ComputedStyle;
+            float marginInline = mStyle != null
+                ? LengthUtils.ComputeMargins(_space.WithPercentageResolution(cellW, 0), mStyle).HorizontalSum
+                : 0f;
+            float fillW = Math.Max(0, cellW - marginInline);
+            var childSpace = _space.InheritBuilder(fillW, float.PositiveInfinity)
                 .SetIsFixedInlineSize(true)
                 .SetIsNewFormattingContext(true)
+                .SetPercentageResolution(cellW, float.NaN)
                 .ToConstraintSpace();
             var itemResult = new BlockLayoutAlgorithm(item.Element, childSpace).Layout();
             item.MeasuredBox = AuroraFragmentConverter.ToLayoutBox(itemResult.Fragment, item.Element, containerBox);
@@ -995,7 +1248,12 @@ public class GridLayoutAlgorithm
         for (int i = 0; i < tracks.Count; i++)
         {
             offsets[i] = offset;
-            offset += tracks[i].BaseSize + gap + extraGap;
+            offset += tracks[i].BaseSize + extraGap;
+            // A gap only separates two live tracks; collapsed (auto-fit empty)
+            // tracks and the gaps beside them vanish, so skip the gap when either
+            // neighbour is collapsed.
+            if (!tracks[i].Collapsed && i + 1 < tracks.Count && !tracks[i + 1].Collapsed)
+                offset += gap;
         }
         offsets[tracks.Count] = offset;
         return offsets;
@@ -1030,20 +1288,25 @@ public class GridLayoutAlgorithm
     private static (float extraGap, float leading) ContentAlignment(string mode, float free, int trackCount)
     {
         if (free <= 0 || trackCount == 0) return (0f, 0f);
-        return (mode ?? "normal").Trim().ToLowerInvariant() switch
+        // Callers pass either a raw CSS string ('space-around', from align-content) or
+        // an enum name ('SpaceAround', from justify-content.ToString()); normalise both
+        // to a de-hyphenated lowercase key so the switch can never silently miss.
+        string key = (mode ?? "normal").Trim().ToLowerInvariant().Replace("-", "");
+        return key switch
         {
             "center" => (0f, free / 2f),
-            "end" or "flex-end" or "right" => (0f, free),
-            "space-between" => trackCount > 1 ? (free / (trackCount - 1), 0f) : (0f, 0f),
-            "space-around" => (free / trackCount, free / trackCount / 2f),
-            "space-evenly" => (free / (trackCount + 1), free / (trackCount + 1)),
+            "end" or "flexend" or "right" => (0f, free),
+            "spacebetween" => trackCount > 1 ? (free / (trackCount - 1), 0f) : (0f, 0f),
+            "spacearound" => (free / trackCount, free / trackCount / 2f),
+            "spaceevenly" => (free / (trackCount + 1), free / (trackCount + 1)),
             _ => (0f, 0f),
         };
     }
 
     private static float TrackGroupSize(List<GridTrack> tracks, float gap)
     {
-        float size = gap * Math.Max(0, tracks.Count - 1);
+        // Collapsed auto-fit tracks contribute neither size nor gap.
+        float size = gap * Math.Max(0, tracks.Count(t => !t.Collapsed) - 1);
         foreach (var t in tracks) size += t.BaseSize;
         return size;
     }
@@ -1060,11 +1323,14 @@ public class GridLayoutAlgorithm
         return size;
     }
 
-    private Dom.LayoutBox LayoutItem(GridItem item, float cellW, LayoutBox containerBox)
+    private Dom.LayoutBox LayoutItem(GridItem item, float fillW, float pctInline, LayoutBox containerBox)
     {
-        var childSpace = _space.InheritBuilder(cellW, float.PositiveInfinity)
+        // The item's border box fills the margin-adjusted area (fillW), but its
+        // percentage padding resolves against the full grid area (pctInline).
+        var childSpace = _space.InheritBuilder(fillW, float.PositiveInfinity)
             .SetIsFixedInlineSize(true)
             .SetIsNewFormattingContext(true)
+            .SetPercentageResolution(pctInline, float.NaN)
             .ToConstraintSpace();
         var itemResult = new BlockLayoutAlgorithm(item.Element, childSpace).Layout();
         return AuroraFragmentConverter.ToLayoutBox(itemResult.Fragment, item.Element, containerBox);
@@ -1107,15 +1373,24 @@ public class GridLayoutAlgorithm
             float cellW = GetTrackSpanSize(columns, col, colEnd, columnGap);
             float cellH = GetTrackSpanSize(rows, row, rowEnd, rowGap);
 
-            // Reuse the box measured during row track sizing (same cell width,
-            // same child space), falling back to a fresh layout only if the
+            // A grid item's margin-box occupies the grid area; the border box is the
+            // area minus the margins and starts at the start margin. Percentage
+            // margins resolve against the area (track-span) size (CSS Grid §6.5).
+            var style = item.Element.ComputedStyle!;
+            var itemMargins = LengthUtils.ComputeMargins(_space.WithPercentageResolution(cellW, cellH), style);
+            float marginInline = itemMargins.Left + itemMargins.Right;
+            float marginBlock = itemMargins.Top + itemMargins.Bottom;
+            float availW = Math.Max(0, cellW - marginInline);
+            float availH = Math.Max(0, cellH - marginBlock);
+
+            // Reuse the box measured during row track sizing (same margin-adjusted
+            // width, same child space), falling back to a fresh layout only if the
             // measure pass skipped this item. The box carries the real fragment
             // data (text runs, line boxes, nested children), so a grid item's
             // nested formatting contexts (flex/grid/table/replaced) are covered.
-            var childBox = item.MeasuredBox ?? LayoutItem(item, cellW, containerBox);
+            var childBox = item.MeasuredBox ?? LayoutItem(item, availW, cellW, containerBox);
 
             // Apply alignment
-            var style = item.Element.ComputedStyle!;
             var justifySelf = ParseJustifySelf(style.JustifySelf ?? "auto", justifyItems);
             var alignSelf = ParseAlignSelfEnum(style.AlignSelf, alignItems);
 
@@ -1130,14 +1405,18 @@ public class GridLayoutAlgorithm
             if (!stretchInline && style.Width is AutoLength or null)
                 ShrinkBoxToNaturalInline(childBox);
 
-            float itemW = childBox.ContentBox.Width;
-            float itemH = childBox.ContentBox.Height;
+            // The alignment below positions the item's BORDER box (TranslateBox sets
+            // BorderBox.Left/Top = finalX/finalY), so the extent it is aligned by has
+            // to be the border-box size too; using the content size under-counts an
+            // item's own border+padding and pushes it past the track edge.
+            float itemW = childBox.BorderBox.Width;
+            float itemH = childBox.BorderBox.Height;
 
-            float alignW = stretchInline ? cellW : itemW;
-            float alignH = stretchBlock ? cellH : itemH;
+            float alignW = stretchInline ? availW : itemW;
+            float alignH = stretchBlock ? availH : itemH;
 
-            float finalX = cellX + GetAlignmentOffset(cellW, alignW, justifySelf);
-            float finalY = cellY + GetAlignmentOffset(cellH, alignH, alignSelf);
+            float finalX = cellX + itemMargins.Left + GetAlignmentOffset(availW, alignW, justifySelf);
+            float finalY = cellY + itemMargins.Top + GetAlignmentOffset(availH, alignH, alignSelf);
 
             // Translate the child box and its subtree (lines, runs, children)
             // to the aligned position within the grid content box.
@@ -1145,8 +1424,8 @@ public class GridLayoutAlgorithm
 
             if (stretchInline || stretchBlock)
                 ExpandBoxToCell(childBox,
-                    stretchInline ? cellW : childBox.BorderBox.Width,
-                    stretchBlock ? cellH : childBox.BorderBox.Height);
+                    stretchInline ? availW : childBox.BorderBox.Width,
+                    stretchBlock ? availH : childBox.BorderBox.Height);
 
             childBox.Float = FloatType.None;
 
@@ -1339,6 +1618,11 @@ public class GridTrack
     public float GrowLimit { get; set; } = float.MaxValue;
     public GridTrack? MinSize { get; set; }
     public GridTrack? MaxSize { get; set; }
+    /// <summary>True for tracks produced by a repeat(auto-fit, …): when no item
+    /// spans them they collapse to zero (CSS Grid §7.2.3), unlike auto-fill.</summary>
+    public bool AutoFit { get; set; }
+    /// <summary>Set during column sizing when an auto-fit track holds no item.</summary>
+    public bool Collapsed { get; set; }
 
     public float ResolveSize(float containerSize, float fontSize, float viewportWidth, float viewportHeight) => SizeType switch
     {
@@ -1385,7 +1669,8 @@ public class GridTrack
     public GridTrack Clone() => new()
     {
         SizeType = SizeType, FixedSize = FixedSize, Percentage = Percentage,
-        Fraction = Fraction, BaseSize = BaseSize, MinSize = MinSize, MaxSize = MaxSize
+        Fraction = Fraction, BaseSize = BaseSize, GrowLimit = GrowLimit,
+        MinSize = MinSize, MaxSize = MaxSize, AutoFit = AutoFit
     };
 }
 

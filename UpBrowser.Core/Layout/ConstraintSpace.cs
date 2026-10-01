@@ -270,6 +270,13 @@ public struct ConstraintSpace
         _percentageResolutionInline, _percentageResolutionBlock, value, _isHiddenForPaint, _isTableCell,
         _fragmentationType, _bfcBlockOffset, _blockOffset, _baselineAlgorithmType);
 
+    /// <summary>Copy with the percentage-resolution base replaced. A child's
+    /// percentage padding/margin resolves against the formatting context's own
+    /// content box, which differs from the space the context itself received.</summary>
+    public ConstraintSpace WithPercentageResolution(float inlineSize, float blockSize) => Rebuild(
+        _inlineSizeValue, _blockSizeValue, _isFixedInlineSize, _isFixedBlockSize, _inlineAutoBehavior, _blockAutoBehavior, _isShrinkToFit,
+        inlineSize, blockSize, _isNewFormattingContext, _isHiddenForPaint, _isTableCell,
+        _fragmentationType, _bfcBlockOffset, _blockOffset, _baselineAlgorithmType);
     public ConstraintSpace WithFragmentationType(FragmentationType type) => Rebuild(
         _inlineSizeValue, _blockSizeValue, _isFixedInlineSize, _isFixedBlockSize, _inlineAutoBehavior, _blockAutoBehavior, _isShrinkToFit,
         _percentageResolutionInline, _percentageResolutionBlock, _isNewFormattingContext, _isHiddenForPaint, _isTableCell,

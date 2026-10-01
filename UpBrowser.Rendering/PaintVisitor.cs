@@ -131,19 +131,27 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
     /// intrinsic size. Layout runs before painting, so the host must install this
     /// before the first layout pass of a document.
     /// </summary>
-    public static void InstallReplacedIntrinsicSizes(ImageCache imageCache, string? baseUrl)
+    public static void InstallReplacedIntrinsicSizes(ImageCache imageCache, string? baseUrl) =>
+        Core.Layout.ReplacedIntrinsicSizes.Resolver = BuildReplacedIntrinsicResolver(imageCache, baseUrl);
+
+    /// <summary>
+    /// The layout seam for one document: sources resolve against <paramref name="baseUrl"/>
+    /// and decode through <paramref name="imageCache"/>. Hosts that own more than one engine
+    /// in a process keep one of these per engine and bracket their layout pass with
+    /// <see cref="UpBrowser.Core.Layout.ReplacedIntrinsicSizes.Use"/> so a tab never measures an
+    /// image with another tab's cache.
+    /// </summary>
+    public static Func<string?, Core.Layout.Geometry.PhysicalSize?> BuildReplacedIntrinsicResolver(
+        ImageCache imageCache, string? baseUrl) => source =>
     {
-        Core.Layout.ReplacedIntrinsicSizes.Resolver = source =>
-        {
-            var resolved = UrlResolver.Resolve(source, baseUrl);
-            if (resolved == null)
-                return null;
-            var task = imageCache.GetImageAsync(resolved);
-            if (!task.Wait(TimeSpan.FromSeconds(2)) || task.Result == null)
-                return null;
-            return new Core.Layout.Geometry.PhysicalSize(task.Result.Width, task.Result.Height);
-        };
-    }
+        var resolved = UrlResolver.Resolve(source, baseUrl);
+        if (resolved == null)
+            return null;
+        var task = imageCache.GetImageAsync(resolved);
+        if (!task.Wait(TimeSpan.FromSeconds(2)) || task.Result == null)
+            return null;
+        return new Core.Layout.Geometry.PhysicalSize(task.Result.Width, task.Result.Height);
+    };
 
     /// <summary>
     /// Opt-in link tap-flash overlay. NOT invoked by the default paint pipeline;

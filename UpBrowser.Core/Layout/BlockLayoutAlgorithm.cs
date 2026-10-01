@@ -940,6 +940,12 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         bool isClosedDetails = Node.TagName == "DETAILS" && !Node.HasAttribute("open");
         bool detailsSummaryFound = false;
 
+        // A single select paints one line and its list only exists while it is open, but its
+        // options stay laid out: the control's own width is the widest option's, and an
+        // inline-block measures itself from its children. Hiding them collapses the control to
+        // zero width and it stops taking clicks. What a closed select must not do is paint or
+        // select those rows — see PaintVisitor, which draws the control and returns.
+
         _placeholderChild = null;
 
         BlockChildEntry entry;

@@ -198,6 +198,12 @@ public static class ShorthandExpander
         result.TryAdd("border-right-style", "none");
         result.TryAdd("border-bottom-style", "none");
         result.TryAdd("border-left-style", "none");
+        // The border shorthand resets border-width to its initial value (medium)
+        // when no width is given, so 'border: solid' paints a 3px border.
+        result.TryAdd("border-top-width", "medium");
+        result.TryAdd("border-right-width", "medium");
+        result.TryAdd("border-bottom-width", "medium");
+        result.TryAdd("border-left-width", "medium");
     }
 
     private static void ExpandBorderSide(Dictionary<string, string> result, string side, string value)
@@ -433,7 +439,9 @@ public static class ShorthandExpander
         if (p.EndsWith("%", StringComparison.OrdinalIgnoreCase)) return true;
         if (p.EndsWith("vh", StringComparison.OrdinalIgnoreCase)) return true;
         if (p.EndsWith("vw", StringComparison.OrdinalIgnoreCase)) return true;
-        if (p == "0") return true;
+        // A bare "0" is NOT a flex-basis here: in the 'flex' shorthand the leading
+        // numbers are grow/shrink, so "0" must fall through to the number branch
+        // (treating it as a unitless basis would swallow grow and default it to 1).
         return false;
     }
 
@@ -663,7 +671,7 @@ public static class ShorthandExpander
                 result["outline-style"] = p;
             else if (IsBorderStyle(p))
                 result["outline-style"] = p;
-            else if (p.EndsWith("px") || p.EndsWith("em"))
+            else if (p == "thin" || p == "medium" || p == "thick" || p.EndsWith("px") || p.EndsWith("em"))
                 result["outline-width"] = p;
             else if (IsColor(p))
                 result["outline-color"] = p;

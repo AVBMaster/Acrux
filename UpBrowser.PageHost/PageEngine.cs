@@ -65,6 +65,9 @@ public sealed class PageEngine : IDisposable
     // Set by the sample that observed the last effect retire, which is what asks the
     // pipeline for its extra style round (see RunPipeline).
     private bool _animEffectsEnded;
+    /// <summary>Resolves replaced-element intrinsic sizes against this document's own image
+    /// cache and base URL. Installed for the duration of every pipeline pass.</summary>
+    private Func<string?, UpBrowser.Core.Layout.Geometry.PhysicalSize?>? _replacedResolver;
     private bool _paintVisible = true;
     /// <summary>Per-pass animation diagnostics (UPBROWSER_ANIM_LIVE=1).</summary>
     private readonly bool _animTrace = Environment.GetEnvironmentVariable("UPBROWSER_ANIM_LIVE") == "1";
@@ -140,6 +143,13 @@ public sealed class PageEngine : IDisposable
     private bool _showCursor = true;
     private long _blinkTick = Environment.TickCount64;
     private Element? _pressedButton;
+    /// <summary>The open <c>&lt;select&gt;</c> and its list. Options are not laid out as boxes
+    /// of their own, so the dropdown is drawn from rects the engine computes and hands to the
+    /// paint walk — in document space, like every other box.</summary>
+    private Element? _activeSelect;
+    private SKRect _dropdownRect;
+    private readonly List<(Element Option, SKRect Rect)> _optionRects = new();
+    private int _hoverOption = -1;
 
     // IME composition state (CJK): the engine owns it exactly like the shell's
     // in-process fields — an out-of-process tab composes through these, never
@@ -223,6 +233,10 @@ public sealed class PageEngine : IDisposable
     /// <summary>True while page text is selected — the host needs this to decide whether
     /// a copy/context action has anything to act on.</summary>
     public bool HasTextSelection => _hasSelection;
+
+    /// <summary>True while a select's list is open: the host paints no scrollbar affordance
+    /// for it, but it needs to know so a click is not read as a page click.</summary>
+    public bool HasOpenSelect => _activeSelect != null;
 
     /// <summary>Plain text of the current page selection in DOM order; empty when none.
     /// Reads live state, so the host must call it on the engine-loop thread.</summary>
@@ -388,7 +402,10 @@ public sealed class PageEngine : IDisposable
             _imageCache.Clear();
             _typefaceCache.Clear();
             PaintOpPool.Clear(); // recycle the previous page's pooled ops
-            PaintVisitor.InstallReplacedIntrinsicSizes(_imageCache, baseUrl);
+            // This document's images decode through this engine's cache, not whichever
+            // engine installed last into the shared seam (see RunPipeline's scope).
+            _replacedResolver = UpBrowser.Rendering.PaintVisitor.BuildReplacedIntrinsicResolver(_imageCache, baseUrl);
+            UpBrowser.Core.Layout.ReplacedIntrinsicSizes.Resolver = _replacedResolver;
 
             var load = _docManager.LoadHtmlAsync(html, baseUrl, _viewportW, _viewportH, _dpi)
                 .GetAwaiter().GetResult();
@@ -407,6 +424,10 @@ public sealed class PageEngine : IDisposable
             _hoverRulesDoc = null;
             _focused = null;
             _pressedButton = null;
+            _activeSelect = null;
+            _optionRects.Clear();
+            _hoverOption = -1;
+            _dropdownRect = default;
             _selStart = -1;
             ClearImeComposition();
             // A new document invalidates the old one's text nodes: drop the selection
@@ -563,6 +584,9 @@ public sealed class PageEngine : IDisposable
 
         if (down)
         {
+            // An open dropdown owns the next click: it picks an option or closes itself.
+            if (_activeSelect != null && HandleDropdownClick(x + _scrollX, y + _scrollY)) return;
+
             try { DispatchSimple(el, "click"); } catch { }
 
             if (el != null && el.IsTextEditable)
@@ -574,6 +598,47 @@ public sealed class PageEngine : IDisposable
             else if (el != null && !isControl)
             {
                 SetFocus(null);
+            }
+
+            // <summary> toggles the <details> it belongs to. Layout and paint already hide a
+            // closed one; this is the whole of the interaction, and it changes the content's
+            // height, so it is a layout change rather than a repaint.
+            for (var a = el; a != null; a = a.ParentElement)
+            {
+                if (!string.Equals(a.TagName, "SUMMARY", StringComparison.OrdinalIgnoreCase)) continue;
+                for (var d = a.ParentElement; d != null; d = d.ParentElement)
+                {
+                    if (!string.Equals(d.TagName, "DETAILS", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (d.HasAttribute("open")) d.RemoveAttribute("open");
+                    else d.SetAttribute("open", "");
+                    try { DispatchSimple(d, "toggle"); } catch { }
+                    MarkLayout();
+                    break;
+                }
+                break;
+            }
+
+            // A <select> toggles its dropdown ahead of the generic form handling — but a row
+            // the page actually placed is picked where it is drawn: this engine still lays a
+            // single select's options out as rows (its width is the widest one of them), so
+            // those rows are where the pointer lands. Not page text, but still clickable.
+            var option = OptionAncestor(el);
+            if (option?.LayoutBox != null)
+            {
+                var owner = option.ParentElement;
+                if (owner != null && !owner.HasAttribute("disabled"))
+                {
+                    ChooseOption(owner, option);
+                    return;
+                }
+            }
+
+            var select = SelectAncestor(el);
+            if (select != null && !select.HasAttribute("disabled"))
+            {
+                if (ReferenceEquals(_activeSelect, select)) CloseDropdown();
+                else { SetFocus(select); OpenDropdown(select); }
+                return;
             }
 
             if (el != null && (itype == "checkbox" || itype == "radio"))
@@ -1037,9 +1102,170 @@ public sealed class PageEngine : IDisposable
         }
     }
 
+    // ==================== <select> dropdown ====================
+
+    /// <summary>The SELECT an element belongs to: a click lands on the control or on its text.</summary>
+    private static Element? SelectAncestor(Element? el)
+    {
+        for (var p = el; p != null; p = p.ParentElement)
+            if (string.Equals(p.TagName, "SELECT", StringComparison.OrdinalIgnoreCase)) return p;
+        return null;
+    }
+
+    private static bool IsOption(Node? node) => node is Element e &&
+        string.Equals(e.TagName, "OPTION", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The OPTION an element sits in, when that option is a child of a SELECT.</summary>
+    private static Element? OptionAncestor(Element? el)
+    {
+        for (var p = el; p != null; p = p.ParentElement)
+        {
+            if (!IsOption(p)) continue;
+            var select = p.ParentElement;
+            while (select != null && !string.Equals(select.TagName, "SELECT", StringComparison.OrdinalIgnoreCase))
+                select = string.Equals(select.TagName, "OPTGROUP", StringComparison.OrdinalIgnoreCase) ? select.ParentElement : null;
+            return select != null ? p : null;
+        }
+        return null;
+    }
+
+    /// <summary>Make one option the selected one. A single-valued select has exactly one
+    /// option carrying the attribute, so picking rewrites all of them, and both the option and
+    /// the control announce the change the way a browser does.</summary>
+    private void ChooseOption(Element select, Element chosen)
+    {
+        foreach (var child in select.Children)
+        {
+            if (child is not Element opt || !IsOption(opt)) continue;
+            if (ReferenceEquals(opt, chosen)) opt.SetAttribute("selected", "");
+            else opt.RemoveAttribute("selected");
+        }
+        try
+        {
+            DispatchSimple(chosen, "change");
+            DispatchSimple(select, "change");
+            DispatchSimple(select, "input");
+        }
+        catch { }
+        if (ReferenceEquals(_activeSelect, select)) CloseDropdown();
+        // The control's own text is the selected option's, so the choice changes pixels
+        // whether or not a list was open.
+        else MarkLayout();
+    }
+
+    private void OpenDropdown(Element select)
+    {
+        _activeSelect = select;
+        ComputeDropdownGeometry(select);
+        MarkLayout();
+    }
+
+    private void CloseDropdown()
+    {
+        if (_activeSelect == null) return;
+        _activeSelect = null;
+        _optionRects.Clear();
+        _hoverOption = -1;
+        _dropdownRect = default;
+        MarkLayout();
+    }
+
+    /// <summary>
+    /// Lay the list out by hand. A closed select renders only its selected option, so the
+    /// options have no boxes for layout to place: the list is as wide as its widest option
+    /// (never narrower than the control), one row per option, and it flips above the control
+    /// when the space below runs out of the viewport.
+    /// </summary>
+    private void ComputeDropdownGeometry(Element select)
+    {
+        _optionRects.Clear();
+        _dropdownRect = default;
+        _hoverOption = -1;
+
+        var cb = select.LayoutBox?.ContentBox ?? default;
+        float fontSize = select.ComputedStyle?.FontSize > 0 ? select.ComputedStyle.FontSize : 14f;
+        float rowHeight = Math.Max(22f, fontSize + 8f);
+        var measurer = UpBrowser.Core.Layout.TextMeasurer.Instance;
+
+        float widest = cb.Width - 8f;
+        foreach (var child in select.Children)
+        {
+            if (!IsOption(child)) continue;
+            string text = child.TextContent?.Trim() ?? "";
+            float w = measurer != null
+                ? measurer.MeasureText(text, "Segoe UI, Arial, sans-serif", fontSize)
+                : text.Length * fontSize * 0.55f;
+            _optionRects.Add(((Element)child, default));
+            if (w > widest) widest = w;
+        }
+        if (widest <= 0f || _optionRects.Count == 0) { _optionRects.Clear(); return; }
+
+        float dropW = widest + 24f;
+        float dropH = _optionRects.Count * rowHeight;
+        float dropX = cb.Left, dropY = cb.Bottom;
+        float viewportRight = _scrollX + _viewportW, viewportBottom = _scrollY + _viewportH;
+        if (dropY + dropH > viewportBottom) dropY = Math.Max(cb.Top - dropH, _scrollY);
+        if (dropX + dropW > viewportRight) dropX = Math.Max(_scrollX, viewportRight - dropW);
+
+        _dropdownRect = new SKRect(dropX, dropY, dropX + dropW, dropY + dropH);
+        for (int i = 0; i < _optionRects.Count; i++)
+        {
+            float rowTop = dropY + i * rowHeight;
+            _optionRects[i] = (_optionRects[i].Option,
+                new SKRect(dropX, rowTop, dropX + dropW, rowTop + rowHeight));
+        }
+    }
+
+    /// <summary>Consumes a click that belongs to the open list. Returns false when the click
+    /// landed outside, in which case the list closes and the click is the page's again.</summary>
+    private bool HandleDropdownClick(float docX, float docY)
+    {
+        var select = _activeSelect;
+        if (select == null) return false;
+
+        // Pressing the control again closes the list it opened.
+        var sb = select.LayoutBox?.BorderBox ?? default;
+        if (docX >= sb.Left && docX <= sb.Right && docY >= sb.Top && docY <= sb.Bottom)
+        {
+            CloseDropdown();
+            return true;
+        }
+
+        var dr = _dropdownRect;
+        if (docX < dr.Left || docX > dr.Right || docY < dr.Top || docY > dr.Bottom)
+        {
+            CloseDropdown();
+            return false;
+        }
+
+        foreach (var (chosen, rect) in _optionRects)
+        {
+            if (docX < rect.Left || docX > rect.Right || docY < rect.Top || docY > rect.Bottom) continue;
+            ChooseOption(select, chosen);
+            return true;
+        }
+        return true;   // padding inside the list: the page must not see this click
+    }
+
+    private void UpdateDropdownHover(float docX, float docY)
+    {
+        int hover = -1;
+        for (int i = 0; i < _optionRects.Count; i++)
+        {
+            var r = _optionRects[i].Rect;
+            if (docX >= r.Left && docX <= r.Right && docY >= r.Top && docY <= r.Bottom) { hover = i; break; }
+        }
+        if (hover == _hoverOption) return;
+        _hoverOption = hover;
+        MarkPaint();
+    }
+
     private void HandleMove(float x, float y)
     {
         if (_document == null) return;
+
+        // The highlighted option follows the pointer while the list is open.
+        if (_activeSelect != null) UpdateDropdownHover(x + _scrollX, y + _scrollY);
 
         // Selection drag: extend the focus to the caret under the pointer, but only when
         // the position actually changed — a repaint per unchanged move would defeat the
@@ -1151,16 +1377,29 @@ public sealed class PageEngine : IDisposable
         }
     }
 
-    private static void FindFirstLastTextNodes(Node? node, ref TextNode? first, ref TextNode? last)
+    /// <summary>First and last <em>rendered</em> text nodes of a subtree. Nothing below a
+    /// <c>display:none</c> box is selectable, which is what keeps a page's own stylesheet and
+    /// scripts out of Ctrl+A and the clipboard. Shared with the shell so both answer
+    /// identically whichever side owns the document.</summary>
+    public static void FindFirstLastTextNodes(Node? node, ref TextNode? first, ref TextNode? last,
+        bool rendered = true)
     {
         if (node == null) return;
-        if (node is TextNode tn)
+        if (node is Element element)
+        {
+            if (!rendered) return;
+            if (element.ComputedStyle?.Display == DisplayType.None ||
+                element is { TagName: "OPTION" or "OPTGROUP" } &&
+                UpBrowser.Core.Css.ElementStyles.FormElements.BelongsToClosedSelect(element))
+                rendered = false;
+        }
+        else if (node is TextNode tn && rendered)
         {
             first ??= tn;
             last = tn;
         }
         foreach (var child in node.Children)
-            FindFirstLastTextNodes(child, ref first, ref last);
+            FindFirstLastTextNodes(child, ref first, ref last, rendered);
     }
 
     /// <summary>Resolve a document-space point to the (text node, character offset) caret
@@ -1460,6 +1699,18 @@ public sealed class PageEngine : IDisposable
         CollectTextBetweenRecursive(commonAncestor, startNode, endNode, ref collecting, sb);
     }
 
+    /// <summary>True when nothing above this element hides it: a display:none subtree is not
+    /// rendered, so its text is neither a selection anchor nor part of the selected text.</summary>
+    private static bool IsRendered(Element? element)
+    {
+        // The options of a single select are not page text: the control paints one line and
+        // the rows only exist while it is open, so selecting the page must not copy them.
+        if (UpBrowser.Core.Css.ElementStyles.FormElements.BelongsToClosedSelect(element)) return false;
+        for (var el = element; el != null; el = el.ParentElement)
+            if (el.ComputedStyle?.Display == DisplayType.None) return false;
+        return true;
+    }
+
     private static bool CollectTextBetweenRecursive(Node current, Node startNode, Node endNode,
         ref bool collecting, System.Text.StringBuilder sb)
     {
@@ -1477,6 +1728,7 @@ public sealed class PageEngine : IDisposable
                 }
                 if (child is Element el)
                 {
+                    if (!IsRendered(el)) continue;
                     if (CollectTextBetweenRecursive(el, startNode, endNode, ref collecting, sb))
                         return true;
                 }
@@ -1485,12 +1737,17 @@ public sealed class PageEngine : IDisposable
 
             if (child is TextNode tn)
             {
+                // The nodes between the anchors are walked in DOM order, which passes through
+                // subtrees the page does not render at all; selecting what is on screen is the
+                // whole point of the extraction, so those contribute nothing.
+                if (!IsRendered(tn.ParentElement)) continue;
                 var text = tn.TextContent;
                 if (!string.IsNullOrEmpty(text))
                     sb.Append(text);
             }
             else if (child is Element el)
             {
+                if (!IsRendered(el)) continue;
                 if (CollectTextBetweenRecursive(el, startNode, endNode, ref collecting, sb))
                     return true;
             }
@@ -1859,6 +2116,10 @@ public sealed class PageEngine : IDisposable
     public bool UpdatePipeline()
     {
         if (_document == null) return false;
+        // Layout and paint below ask the seam for replaced-element sizes; claim it for this
+        // document, so a second engine in the same process cannot answer with its own cache.
+        using IDisposable? replacedScope = _replacedResolver == null
+            ? null : UpBrowser.Core.Layout.ReplacedIntrinsicSizes.Use(_replacedResolver);
         bool rebuilt = false;
         long t0 = _animTrace ? Stopwatch.GetTimestamp() : 0;
         long t1 = t0;
@@ -1985,6 +2246,7 @@ public sealed class PageEngine : IDisposable
             // scroll frames skip the paint walk entirely (raster only).
             visitor.SetFocusedElement(_focused);
             visitor.SetPressedButton(_pressedButton);
+            visitor.SetSelectDropdown(_activeSelect, _dropdownRect, _optionRects, _hoverOption);
             if (_focused != null && _focused.IsTextEditable)
                 visitor.SetInputState(_caret, _selStart, _showCursor, _imeComposing, _imeComposition, _imeCursorPos);
             // Page selection is a document-level concept, independent of the input caret

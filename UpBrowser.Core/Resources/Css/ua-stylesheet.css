@@ -277,6 +277,13 @@ rp {
   display: none;
 }
 
+/* Document metadata: never rendered. Saying so in the cascade (as html.css does) is what
+   makes "is this text selectable" answerable from the computed style instead of by
+   guessing from tags — Ctrl+A must not put a page's stylesheet into the clipboard. */
+head:not(body), title, style, script, template, link, meta {
+  display: none;
+}
+
 /* Forms */
 form {
   display: block;

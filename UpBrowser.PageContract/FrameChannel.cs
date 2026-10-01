@@ -38,6 +38,9 @@ public struct FrameMeta
     public bool HasEditableFocus;
     /// <summary>True when that element is a password field — the shell must block IME there.</summary>
     public bool IsPassword;
+    /// <summary>True while a select renders its list over the page. The shell must not read a
+    /// click inside that area as a page click, so the state travels with every frame.</summary>
+    public bool SelectOpen;
 }
 
 /// <summary>
@@ -62,13 +65,15 @@ public struct FrameMeta
 public sealed unsafe class FrameChannel : IDisposable
 {
     public const uint Magic = 0x4642_5055;   // 'UPBF'
-    public const uint LayoutVersion = 2;
+    public const uint LayoutVersion = 3;
     public const int SlotCount = 4;
 
     /// <summary>imeFlags descriptor bit: the focused element accepts composed text.</summary>
     public const uint MetaFlagHasEditableFocus = 1u << 0;
     /// <summary>imeFlags descriptor bit: the focused editable is a password field.</summary>
     public const uint MetaFlagIsPassword = 1u << 1;
+    /// <summary>imeFlags descriptor bit: a select list is open over the page.</summary>
+    public const uint MetaFlagSelectOpen = 1u << 2;
 
     private const int HeaderBytes = 32;
     private const int SlotDescriptorBytes = 80;
@@ -288,6 +293,7 @@ public sealed unsafe class FrameChannel : IDisposable
         uint imeFlags = 0;
         if (meta.HasEditableFocus) imeFlags |= MetaFlagHasEditableFocus;
         if (meta.IsPassword) imeFlags |= MetaFlagIsPassword;
+        if (meta.SelectOpen) imeFlags |= MetaFlagSelectOpen;
         *(uint*)(s + 64) = imeFlags;
         int n = Math.Min(rects.Length, _maxRects);
         *(uint*)(s + 48) = (uint)n;
@@ -322,6 +328,7 @@ public sealed unsafe class FrameChannel : IDisposable
         CaretH = *(float*)(s + 60),
         HasEditableFocus = (*(uint*)(s + 64) & MetaFlagHasEditableFocus) != 0,
         IsPassword = (*(uint*)(s + 64) & MetaFlagIsPassword) != 0,
+        SelectOpen = (*(uint*)(s + 64) & MetaFlagSelectOpen) != 0,
     };
 
     private DamageRect[] ReadRects(byte* s)

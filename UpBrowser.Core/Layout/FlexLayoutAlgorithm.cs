@@ -14,6 +14,12 @@ namespace UpBrowser.Core.Layout;
 public class FlexLayoutAlgorithm : LayoutAlgorithm
 {
     private readonly List<FlexItemData> _items = new();
+
+    // The flex container's own content box, used as the percentage base for item
+    // width/height/min/max (percentages resolve against the container, not the
+    // container's containing block). Set in Layout() before item base sizing.
+    private float _itemPctInline;
+    private float _itemPctBlock;
     public List<FlexLine> Lines { get; } = new();
 
     public FlexLayoutAlgorithm(Element node, in ConstraintSpace space) : base(node, space) { }
@@ -119,6 +125,17 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
             ? definiteCross
             : (isRow ? ChildAvailableBlockSize : ChildAvailableInlineSize);
 
+        // A flex item's percentage padding/margin (and its children's percentage
+        // sizes) resolve against the flex container's OWN content box, not the
+        // space the container itself received from its containing block.
+        float containerContentInline = isRow
+            ? (float.IsNaN(definiteMain) ? availableMain : definiteMain)
+            : (float.IsNaN(definiteCross) ? availableCross : definiteCross);
+        float containerContentBlock = isRow ? definiteCross : definiteMain;
+        var itemPercentSpace = Space.WithPercentageResolution(containerContentInline, containerContentBlock);
+        _itemPctInline = containerContentInline;
+        _itemPctBlock = containerContentBlock;
+
         // Collect items in DOM order. Absolutely/fixed-positioned children are NOT
         // flex items; they are collected as out-of-flow candidates and positioned
         // against this container (its padding box) after the in-flow pass.
@@ -174,7 +191,7 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         foreach (var item in _items)
         {
             var itemBorder = LengthUtils.ComputeBorders(item.Style);
-            var itemPadding = LengthUtils.ComputePadding(Space, item.Style);
+            var itemPadding = LengthUtils.ComputePadding(itemPercentSpace, item.Style);
             item.MainAxisBorderPadding = isRow
                 ? itemBorder.HorizontalSum + itemPadding.HorizontalSum
                 : itemBorder.VerticalSum + itemPadding.VerticalSum;
@@ -255,8 +272,8 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
             {
                 var alignSelf = ResolveAlignSelf(item.Style, style);
                 bool hasDefiniteCross = isRow
-                    ? item.Style.Height is PixelLength or PercentLength
-                    : item.Style.Width is PixelLength or PercentLength;
+                    ? item.Style.Height is PixelLength or PercentLength or MathLength
+                    : item.Style.Width is PixelLength or PercentLength or MathLength;
 
                 item.Stretched = alignSelf == Dom.AlignSelfType.Stretch && !hasDefiniteCross;
                 item.UsedCrossSize = item.Stretched
@@ -286,17 +303,19 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         }
 
         // ---- Build fragments (pass 1: lay out items so baselines are measurable) ----
+        // Items lay out against the container's content-box percentage basis
+        // (itemPercentSpace / containerContentInline computed above), not their own
+        // circularly content-derived main size.
         var laidOut = new List<(FlexLineData Line, FlexItemData Item, BoxFragment Fragment)>();
         foreach (var line in lines)
         {
             foreach (var item in line.Items)
             {
-                var childSpace = new ConstraintSpace(
-                    availableInlineSize: item.UsedMainSize,
-                    availableBlockSize: float.PositiveInfinity,
-                    isFixedInlineSize: true,
-                    isFixedBlockSize: false
-                );
+                var childSpace = ConstraintSpace.Builder(item.UsedMainSize, float.PositiveInfinity)
+                    .SetIsFixedInlineSize(true)
+                    .SetIsFixedBlockSize(false)
+                    .SetPercentageResolution(containerContentInline, containerContentBlock)
+                    .ToConstraintSpace();
                 // Pick the child's layout algorithm by its own display type (e.g. a
                 // nested flex/grid item lays out with its flex/grid algorithm rather
                 // than as an opaque block).
@@ -308,7 +327,7 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                 {
                     var firstLine = fragment.Lines[0];
                     var itemBorder0 = LengthUtils.ComputeBorders(item.Style);
-                    var itemPadding0 = LengthUtils.ComputePadding(Space, item.Style);
+                    var itemPadding0 = LengthUtils.ComputePadding(itemPercentSpace, item.Style);
                     item.FirstBaseline = firstLine.BlockOffset + firstLine.BaselineOffset
                         + itemBorder0.Top + itemPadding0.Top;
                 }
@@ -487,7 +506,12 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
     /// </summary>
     private float ResolveOwnContentSize(Length? length, bool isInlineAxis, BoxStrut bp)
     {
-        float borderPadding = isInlineAxis ? bp.HorizontalSum : bp.VerticalSum;
+        // A content-box length already names the content extent, so nothing is
+        // removed; only 'box-sizing: border-box' folds border+padding into the
+        // declared value and has to give them back here.
+        float borderPadding = Style.BoxSizing == BoxSizingType.BorderBox
+            ? (isInlineAxis ? bp.HorizontalSum : bp.VerticalSum)
+            : 0f;
         if (length is PixelLength px)
             return Math.Max(0, px.Value - borderPadding);
         if (length is PercentLength pct)
@@ -499,53 +523,114 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                 return float.NaN;
             return Math.Max(0, basis * pct.Value - borderPadding);
         }
+        if (length is MathLength math)
+        {
+            float basis = isInlineAxis
+                ? Space.PercentageResolutionInlineSize
+                : Space.PercentageResolutionBlockSize;
+            if (float.IsNaN(basis) || float.IsInfinity(basis))
+                return float.NaN;
+            float v = math.ToPixels(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+            return float.IsNaN(v) ? float.NaN : Math.Max(0, v - borderPadding);
+        }
         return float.NaN;
     }
 
     private void ComputeFlexBaseSize(FlexItemData item, float availableMain, bool isRow)
     {
         var style = item.Style;
+        // The sizes below are stored as content-box values: the algorithm adds
+        // MainAxisBorderPadding back when it materializes the border-box fragment.
+        // Under 'box-sizing: border-box' the specified length already includes
+        // border+padding, so it has to be converted to content-box here first,
+        // otherwise a 'width: 100px' item lays out as 100px + padding + border.
+        float borderBox = style.BoxSizing == BoxSizingType.BorderBox ? item.MainAxisBorderPadding : 0;
+        float ContentBox(float specified) => Math.Max(0, specified - borderBox);
+
         if (style.FlexBasis is PixelLength px)
         {
-            item.FlexBaseSize = px.Value;
+            item.FlexBaseSize = ContentBox(px.Value);
         }
         else if (style.FlexBasis is PercentLength pb)
         {
-            item.FlexBaseSize = ResolvePercent(pb, isRow);
+            item.FlexBaseSize = ContentBox(ResolvePercent(pb, isRow));
+        }
+        else if (style.FlexBasis is MathLength fbm)
+        {
+            item.FlexBaseSize = ContentBox(MathMainPx(fbm, isRow));
         }
         else if (isRow && style.Width is PixelLength widthPx)
         {
-            item.FlexBaseSize = widthPx.Value;
+            item.FlexBaseSize = ContentBox(widthPx.Value);
         }
         else if (isRow && style.Width is PercentLength widthPct)
         {
-            item.FlexBaseSize = ResolvePercent(widthPct, isRow);
+            item.FlexBaseSize = ContentBox(ResolvePercent(widthPct, isRow));
+        }
+        else if (isRow && style.Width is MathLength widthMath)
+        {
+            item.FlexBaseSize = ContentBox(MathMainPx(widthMath, isRow));
         }
         else if (!isRow && style.Height is PixelLength heightPx)
         {
-            item.FlexBaseSize = heightPx.Value;
+            item.FlexBaseSize = ContentBox(heightPx.Value);
         }
         else if (!isRow && style.Height is PercentLength heightPct)
         {
-            item.FlexBaseSize = ResolvePercent(heightPct, isRow);
+            item.FlexBaseSize = ContentBox(ResolvePercent(heightPct, isRow));
+        }
+        else if (!isRow && style.Height is MathLength heightMath)
+        {
+            item.FlexBaseSize = ContentBox(MathMainPx(heightMath, isRow));
         }
         else
         {
-            // Auto: use content size
-            item.FlexBaseSize = EstimateContentSize(item.Element, availableMain);
+            // Auto main size: with 'aspect-ratio' and a definite cross size the
+            // main size is derived from the ratio (CSS aspect-ratio §5.2), not the
+            // content; otherwise fall back to content sizing.
+            float arMain = AspectRatioMainSize(item, style, isRow);
+            item.FlexBaseSize = !float.IsNaN(arMain)
+                ? arMain
+                : EstimateContentSize(item.Element, availableMain);
         }
 
         item.ClampedMainSize = item.FlexBaseSize;
     }
 
+    /// <summary>
+    /// The main size implied by 'aspect-ratio' when the cross axis has a definite
+    /// length and the main axis is auto. Returns NaN when it does not apply.
+    /// AspectRatio is width/height, so a row item's width = height × ratio and a
+    /// column item's height = width ÷ ratio.
+    /// </summary>
+    private float AspectRatioMainSize(FlexItemData item, ComputedStyle style, bool isRow)
+    {
+        if (style.AspectRatio <= 0) return float.NaN;
+        Length? crossLen = isRow ? style.Height : style.Width;
+        if (crossLen is not PixelLength crossPx) return float.NaN;
+        float crossBorderBox = style.BoxSizing == BoxSizingType.BorderBox ? item.CrossAxisBorderPadding : 0;
+        float crossContent = Math.Max(0, crossPx.Value - crossBorderBox);
+        return isRow ? crossContent * style.AspectRatio : crossContent / style.AspectRatio;
+    }
+
     private float ResolvePercent(PercentLength pct, bool isRow)
     {
-        float basis = isRow
-            ? Space.PercentageResolutionInlineSize
-            : Space.PercentageResolutionBlockSize;
+        float basis = isRow ? _itemPctInline : _itemPctBlock;
         if (float.IsNaN(basis) || float.IsInfinity(basis))
             basis = isRow ? ChildAvailableInlineSize : 0;
         return pct.Value * basis;
+    }
+
+    /// <summary>Evaluate a <c>calc()/min()/max()/clamp()</c> length on the main axis,
+    /// resolving its percentages against the flex container's content box (inline for
+    /// a row, block for a column). Falls back to the available inline when that basis
+    /// is indeterminate, mirroring <see cref="ResolvePercent"/>.</summary>
+    private float MathMainPx(MathLength math, bool isRow)
+    {
+        float basis = isRow ? _itemPctInline : _itemPctBlock;
+        if (float.IsNaN(basis) || float.IsInfinity(basis))
+            basis = isRow ? ChildAvailableInlineSize : 0;
+        return math.ToPixels(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
     }
 
     /// <summary>Clamp a content-box main size by the item's min/max on the main axis.</summary>
@@ -595,11 +680,16 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                 return px.Value;
             case PercentLength pct:
             {
-                float basis = inlineAxis
-                    ? Space.PercentageResolutionInlineSize
-                    : Space.PercentageResolutionBlockSize;
+                float basis = inlineAxis ? _itemPctInline : _itemPctBlock;
                 if (float.IsNaN(basis) || float.IsInfinity(basis)) return float.NaN;
                 return pct.Value * basis;
+            }
+            case MathLength math:
+            {
+                float basis = inlineAxis ? _itemPctInline : _itemPctBlock;
+                if (float.IsNaN(basis) || float.IsInfinity(basis)) return float.NaN;
+                float v = math.ToPixels(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+                return float.IsNaN(v) ? float.NaN : v;
             }
             default:
                 return float.NaN;
@@ -636,22 +726,40 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
     private float ComputeCrossSize(FlexItemData item, float availableCross, bool isRow)
     {
         var style = item.Style;
+        // See ComputeFlexBaseSize: stored cross sizes are content-box, so a
+        // 'box-sizing: border-box' length has to drop border+padding first.
+        float borderBox = style.BoxSizing == BoxSizingType.BorderBox ? item.CrossAxisBorderPadding : 0;
+        float ContentBox(float specified) => Math.Max(0, specified - borderBox);
         if (isRow)
         {
-            if (style.Height is PixelLength h) return h.Value;
+            if (style.Height is PixelLength h) return ContentBox(h.Value);
             if (style.Height is PercentLength hp)
             {
-                float basis = Space.PercentageResolutionBlockSize;
-                if (!float.IsNaN(basis) && !float.IsInfinity(basis)) return hp.Value * basis;
+                float basis = _itemPctBlock;
+                if (!float.IsNaN(basis) && !float.IsInfinity(basis)) return ContentBox(hp.Value * basis);
+            }
+            if (style.Height is MathLength hm)
+            {
+                float basis = _itemPctBlock;
+                if (float.IsNaN(basis) || float.IsInfinity(basis)) basis = 0;
+                float v = hm.ToPixels(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+                if (!float.IsNaN(v)) return ContentBox(v);
             }
         }
         else
         {
-            if (style.Width is PixelLength w) return w.Value;
+            if (style.Width is PixelLength w) return ContentBox(w.Value);
             if (style.Width is PercentLength wp)
             {
-                float basis = Space.PercentageResolutionInlineSize;
-                if (!float.IsNaN(basis) && !float.IsInfinity(basis)) return wp.Value * basis;
+                float basis = _itemPctInline;
+                if (!float.IsNaN(basis) && !float.IsInfinity(basis)) return ContentBox(wp.Value * basis);
+            }
+            if (style.Width is MathLength wm)
+            {
+                float basis = _itemPctInline;
+                if (float.IsNaN(basis) || float.IsInfinity(basis)) basis = ChildAvailableInlineSize;
+                float v = wm.ToPixels(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+                if (!float.IsNaN(v)) return ContentBox(v);
             }
         }
         return EstimateContentCrossSize(item.Element);
@@ -745,9 +853,14 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         }
 
         bool finite = !float.IsNaN(availableMain) && !float.IsInfinity(availableMain);
+        // The space distributed below is CONTENT space: each item's used main size
+        // is a content-box size and its border+padding is added back when the
+        // border-box fragment is materialized. So the item borders/padding, margins
+        // and inter-item gaps all have to come out of the container's content width
+        // first, or a growing item absorbs space that its own padding then overflows.
         float marginSum = 0;
         foreach (var item in items)
-            marginSum += item.MarginMainStart + item.MarginMainEnd;
+            marginSum += item.MarginMainStart + item.MarginMainEnd + item.MainAxisBorderPadding;
         availableMain -= marginSum;
         if (items.Count > 1)
             availableMain -= mainGap * (items.Count - 1);

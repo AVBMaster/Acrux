@@ -19,7 +19,8 @@ public static class IntrinsicMeasure
             availableInlineSize: 1f,
             availableBlockSize: float.PositiveInfinity,
             isFixedInlineSize: true,
-            isFixedBlockSize: false);
+            isFixedBlockSize: false,
+            percentageResolutionInline: float.NaN);
         // Same rule as the block path: 'break-word' must not break during
         // min-content measurement (CSS Text 3 §4.3).
         bool previousProbe = InlineLayoutAlgorithm.InMinContentProbe;
@@ -60,7 +61,8 @@ public static class IntrinsicMeasure
             availableInlineSize: 100000f,
             availableBlockSize: float.PositiveInfinity,
             isFixedInlineSize: false,
-            isFixedBlockSize: false);
+            isFixedBlockSize: false,
+            percentageResolutionInline: float.NaN);
         LayoutResult result;
         try
         {
@@ -87,7 +89,18 @@ public static class IntrinsicMeasure
         foreach (var line in fragment.Lines)
             widest = Math.Max(widest, line.InlineSize);
         foreach (var child in fragment.Children)
-            widest = Math.Max(widest, WidestLineInlineSize(child));
+        {
+            float childWidest = WidestLineInlineSize(child);
+            // An atomic child (a replaced element such as <img>, or an empty box)
+            // carries its inline size on the fragment itself, not in a text line.
+            // Fold it in so a definite-width <img> widens its ancestor's max-content
+            // instead of collapsing the ancestor to a sibling's text width.
+            if (child.Lines.Count == 0 && child.Children.Count == 0)
+                childWidest = Math.Max(childWidest, child.InlineSize
+                    + child.BorderLeft + child.BorderRight
+                    + child.PaddingLeft + child.PaddingRight);
+            widest = Math.Max(widest, childWidest);
+        }
         return widest;
     }
 
@@ -104,7 +117,8 @@ public static class IntrinsicMeasure
             availableInlineSize: 100000f,
             availableBlockSize: float.PositiveInfinity,
             isFixedInlineSize: false,
-            isFixedBlockSize: false);
+            isFixedBlockSize: false,
+            percentageResolutionInline: float.NaN);
         LayoutResult result;
         try
         {
