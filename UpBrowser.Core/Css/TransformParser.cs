@@ -30,6 +30,49 @@ public static class TransformParser
         return result;
     }
 
+    private static readonly Regex TranslateRegex = new(
+        @"(translate3d|translateX|translateY|translate)\s*\(([^)]*)\)",
+        RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Rewrite percentage arguments of translate()/translateX()/translateY()/translate3d()
+    /// into absolute pixels against the element's own border box (CSS Transforms §4:
+    /// X% is a fraction of the border-box width, Y% of the height). ParseFloat cannot do
+    /// this on its own because it has no geometry, so callers that only have the transform
+    /// string would otherwise silently drop translate percentages. translate3d's Z% has no
+    /// 2D reference, so it flattens to 0 like the Z length does.
+    /// </summary>
+    public static string ResolveTranslatePercentages(string? transform, float borderWidth, float borderHeight)
+    {
+        if (string.IsNullOrEmpty(transform) || !transform.Contains('%'))
+            return transform ?? string.Empty;
+
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        return TranslateRegex.Replace(transform, m =>
+        {
+            string fn = m.Groups[1].Value.ToLowerInvariant();
+            var args = m.Groups[2].Value
+                .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (!args[i].EndsWith("%", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (!float.TryParse(args[i][..^1], System.Globalization.NumberStyles.Float, ci, out float pct))
+                    continue;
+                // translateX's lone argument is horizontal; translateY's is vertical.
+                float reference = fn switch
+                {
+                    "translatex" => borderWidth,
+                    "translatey" => borderHeight,
+                    _ => i == 0 ? borderWidth : borderHeight,
+                };
+                if (fn == "translate3d" && i == 2) reference = 0f; // Z% has no 2D reference
+                args[i] = (pct / 100f * reference).ToString(ci) + "px";
+            }
+            return $"{m.Groups[1].Value}({string.Join(",", args)})";
+        });
+    }
+
     public static SKMatrix ToMatrix(List<TransformOperation> operations, float originX, float originY)
     {
         // CSS multiplies the functions in list order: 'transform: A B' is the matrix A·B,
@@ -172,7 +215,8 @@ public static class TransformParser
         }
         if (s.EndsWith("%", StringComparison.OrdinalIgnoreCase))
         {
-            return 0; // percent handled by caller via other transforms; net zero is safe
+            return 0; // translate percentages are rewritten to px before parsing; any
+                      // remaining percentage has no geometry here, so contribute nothing.
         }
         if (float.TryParse(s, out var val)) return val;
         return 0;

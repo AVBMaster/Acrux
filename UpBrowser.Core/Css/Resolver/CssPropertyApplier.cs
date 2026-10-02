@@ -537,7 +537,26 @@ public static class CssPropertyApplier
     public static float ParseFontSize(string value, ComputedStyle? parentStyle)
     {
         float parentFontSize = parentStyle?.FontSize ?? 16;
-        return Length.ParseFontSize(value, parentFontSize);
+        string v = value?.Trim() ?? "";
+        // Font-relative units (cap/ex/ch/ic/lh and their root variants) resolve
+        // against the parent font's real metrics, not a fixed ratio. The element's
+        // own font-size is not known yet, so the unit context is the parent style.
+        if (parentStyle != null && IsFontRelativeLength(v))
+        {
+            using var _scope = FontUnitContext.Use(parentStyle);
+            float px = Length.Parse(v).ToPixels(parentFontSize, 16f, 0f, 0f);
+            if (!float.IsNaN(px) && px > 0)
+                return px;
+        }
+        return Length.ParseFontSize(v, parentFontSize);
+    }
+
+    private static bool IsFontRelativeLength(string v)
+    {
+        foreach (var u in new[] { "cap", "ex", "ch", "ic", "lh", "rcap", "rex", "rch", "ric", "rlh" })
+            if (v.EndsWith(u, StringComparison.OrdinalIgnoreCase) && v.Length > u.Length)
+                return true;
+        return false;
     }
 
     public static FontWeight ParseFontWeight(string value)

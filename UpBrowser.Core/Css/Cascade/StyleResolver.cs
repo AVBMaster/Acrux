@@ -185,6 +185,34 @@ public class StyleResolver
                 SetPx(props, "height", h);
         }
 
+        // <ol type="1|A|a|I|i"> is a presentational hint that maps to
+        // list-style-type. The UA stylesheet carries 'ol{list-style-type:decimal}'
+        // at element specificity (0,0,1), so this hint is given (0,1,0) to beat it
+        // while staying in the UA origin — any author rule (higher origin) still
+        // overrides it, matching how browsers treat the type attribute.
+        if (tag == "OL")
+        {
+            var listType = element.GetAttribute("type") switch
+            {
+                "A" => CssValueId.UpperAlpha,
+                "a" => CssValueId.LowerAlpha,
+                "I" => CssValueId.UpperRoman,
+                "i" => CssValueId.LowerRoman,
+                "1" => CssValueId.Decimal,
+                _ => CssValueId.Invalid,
+            };
+            if (listType != CssValueId.Invalid)
+            {
+                var typeProps = new CssPropertyValueSet();
+                typeProps.SetProperty(CssPropertyId.ListStyleType, CssIdentifierValue.Create(listType));
+                state.MatchedRules.Add(new MatchedRuleEntry
+                {
+                    Properties = typeProps,
+                    Priority = new CascadePriority(CascadeOrigin.UserAgent, 0, _treeOrderCounter++, 0, false, 0, 0, 1, 0)
+                });
+            }
+        }
+
         if (tag == "TABLE")
         {
             if (int.TryParse(element.GetAttribute("border"), out int b) && b > 0)

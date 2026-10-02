@@ -1217,7 +1217,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
         }
 
         if (IsTransformPropertySet(Transform))
-            parts.Add(Transform!.Trim());
+            parts.Add(UpBrowser.Core.Css.TransformParser.ResolveTranslatePercentages(Transform!.Trim(), borderBoxWidth, borderBoxHeight));
 
         return parts.Count > 0 ? string.Join(" ", parts) : null;
     }

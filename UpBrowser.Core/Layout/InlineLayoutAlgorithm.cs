@@ -627,7 +627,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             // so a box that needs no shift contributes its own height and never
             // grows the line box.
             float baselineFromTop = run.IsAtomicInline
-                ? boxHeight
+                ? AtomicBaselineFromTop(run, boxHeight)
                 : Fonts.LineBoxMetrics.GetBaselineForLineHeight(runStyle, boxHeight);
 
             // The box's top, measured above the line's baseline.
@@ -707,6 +707,34 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
     {
         run.BaselineShift = top - baselineFromTop;
         reach[run] = (top, bottom);
+    }
+
+    /// <summary>
+    /// Baseline of an atomic inline (inline-block / table) measured from its
+    /// border-box top, per CSS 2.1 §10.8: the baseline of its last line box, but
+    /// only when its overflow is 'visible' and it actually has line boxes;
+    /// otherwise the bottom margin edge (i.e. the full box height). Images and
+    /// other replaced boxes have no line boxes, so they fall back to the bottom.
+    /// </summary>
+    private static float AtomicBaselineFromTop(BoxRun run, float boxHeight)
+    {
+        var frag = run.AtomicInlineBox;
+        if (frag == null || frag.Lines.Count == 0)
+            return boxHeight;
+        var style = (run.Element ?? frag.Element)?.ComputedStyle;
+        bool overflowVisible = style == null
+            || (style.OverflowX == OverflowType.Visible && style.OverflowY == OverflowType.Visible);
+        if (!overflowVisible)
+            return boxHeight;
+        var lastLine = frag.Lines[^1];
+        // Lines carry block coordinates in the fragment's own space; the baseline
+        // measured from the border-box top is the line baseline minus the fragment
+        // top. Guard against the fragment being positioned absolutely so a bad
+        // difference cannot push the box off the line.
+        float fromTop = lastLine.BaselineOffset - frag.BlockOffset;
+        if (fromTop <= 0 || fromTop > boxHeight)
+            return boxHeight;
+        return fromTop;
     }
 
     /// <summary>The style a run was laid out with: its own element's, falling back

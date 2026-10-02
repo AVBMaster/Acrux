@@ -218,8 +218,16 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         }
 
         // ---- Line breaking (flex-wrap) ----
-        float mainGap = ResolveGap(isRow ? style.ColumnGap : style.RowGap, style.FontSize);
-        float crossGap = ResolveGap(isRow ? style.RowGap : style.ColumnGap, style.FontSize);
+        // Gap percentages resolve against the container's own content box on that
+        // axis (CSS Box Alignment): column-gap against the inline size, row-gap
+        // against the block size. Use the container's DEFINITE size, not the space
+        // offered by the parent -- an auto (indefinite) axis makes the percentage 0.
+        float contentInline = isRow ? definiteMain : definiteCross;
+        float contentBlock = isRow ? definiteCross : definiteMain;
+        float columnGapPx = ResolveGap(style.ColumnGap, contentInline);
+        float rowGapPx = ResolveGap(style.RowGap, contentBlock);
+        float mainGap = isRow ? columnGapPx : rowGapPx;
+        float crossGap = isRow ? rowGapPx : columnGapPx;
 
         var lines = new List<FlexLineData>();
         bool canBreak = isMultiline && !float.IsNaN(availableMain) && !float.IsInfinity(availableMain);
@@ -1027,6 +1035,11 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
 
         switch (mode)
         {
+            case "flex-start":
+            case "start":
+                // Lines keep their natural cross size and stay packed at the
+                // start edge; the leftover space is left at the end (CSS Flexbox §8.3).
+                break;
             case "center":
                 ShiftLines(lines, extra / 2);
                 break;
@@ -1170,6 +1183,13 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         return length.ToPixels(fontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
     }
 
-    private float ResolveGap(Length gap, float fontSize) =>
-        gap is AutoLength ? 0 : gap.ToPixels(fontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+    private float ResolveGap(Length gap, float reference)
+    {
+        if (gap is AutoLength) return 0;
+        // A percentage gap resolves against the container's content box on that
+        // axis; when the axis is indefinite (auto height) the percentage is 0.
+        if (gap is PercentLength && !float.IsFinite(reference))
+            return 0;
+        return gap.ToPixels(reference, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+    }
 }

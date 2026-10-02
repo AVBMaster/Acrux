@@ -1194,12 +1194,15 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
     private static float ResolveUsedColumnInlineSize(float availableInlineSize, ComputedStyle style)
     {
         float columnWidth = style.ColumnWidth is PixelLength pl ? pl.Value : 0;
+        // Use the real column-gap (not a fixed 16) when distributing the container
+        // width across N columns: W = (available − (N−1)·gap) / N (CSS Multi-column §5).
+        float gap = ResolveUsedColumnGap(availableInlineSize, style);
         if (columnWidth > 0 && style.ColumnCount > 0)
-            return Math.Min(columnWidth, Math.Max(0, (availableInlineSize - (style.ColumnCount - 1) * 16) / style.ColumnCount));
+            return Math.Min(columnWidth, Math.Max(0, (availableInlineSize - (style.ColumnCount - 1) * gap) / style.ColumnCount));
         if (columnWidth > 0)
             return Math.Min(columnWidth, availableInlineSize);
         if (style.ColumnCount > 0)
-            return Math.Max(0, (availableInlineSize - (style.ColumnCount - 1) * 16) / style.ColumnCount);
+            return Math.Max(0, (availableInlineSize - (style.ColumnCount - 1) * gap) / style.ColumnCount);
         return availableInlineSize;
     }
 
@@ -1218,7 +1221,12 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
             return style.ColumnCount;
         float columnWidth = style.ColumnWidth is PixelLength pl ? pl.Value : 0;
         if (columnWidth > 0)
-            return Math.Max(1, (int)((availableInlineSize + 16) / (columnWidth + 16)));
+        {
+            // N = floor((available + gap) / (columnWidth + gap)) — the standard
+            // column-width packing, using the real gap rather than a fixed 16.
+            float gap = ResolveUsedColumnGap(availableInlineSize, style);
+            return Math.Max(1, (int)((availableInlineSize + gap) / (columnWidth + gap)));
+        }
         return 1;
     }
 

@@ -141,6 +141,9 @@ public sealed class PageEngine : IDisposable
     private int _caret;
     private int _selStart = -1;
     private bool _showCursor = true;
+    /// <summary>Whether the focused password field shows its text instead of dots. The eye
+    /// that toggles it belongs to the control, so it is page state, not chrome state.</summary>
+    private bool _passwordRevealed;
     private long _blinkTick = Environment.TickCount64;
     private Element? _pressedButton;
     /// <summary>The open <c>&lt;select&gt;</c> and its list. Options are not laid out as boxes
@@ -424,6 +427,7 @@ public sealed class PageEngine : IDisposable
             _hoverRulesDoc = null;
             _focused = null;
             _pressedButton = null;
+            _passwordRevealed = false;
             _activeSelect = null;
             _optionRects.Clear();
             _hoverOption = -1;
@@ -589,6 +593,20 @@ public sealed class PageEngine : IDisposable
 
             try { DispatchSimple(el, "click"); } catch { }
 
+            // A password field's reveal eye sits inside its own padding: it toggles the mask
+            // and takes the click for itself, so the caret must not jump there.
+            if (itype == "password" && el is { LayoutBox: not null } && !el.HasAttribute("disabled"))
+            {
+                var pcb = el.LayoutBox.ContentBox;
+                float eyeX = pcb.Right - 14f, eyeY = pcb.Top + pcb.Height / 2f;
+                if (Math.Abs(x + _scrollX - eyeX) <= 10f && Math.Abs(y + _scrollY - eyeY) <= 10f)
+                {
+                    _passwordRevealed = !_passwordRevealed;
+                    MarkLayout();
+                    return;
+                }
+            }
+
             if (el != null && el.IsTextEditable)
             {
                 SetFocus(el);
@@ -618,16 +636,26 @@ public sealed class PageEngine : IDisposable
                 break;
             }
 
-            // A <select> toggles its dropdown ahead of the generic form handling — but a row
-            // the page actually placed is picked where it is drawn: this engine still lays a
-            // single select's options out as rows (its width is the widest one of them), so
-            // those rows are where the pointer lands. Not page text, but still clickable.
+            // Rows of a list box (multiple / sized) are page content: pick the one under the
+            // pointer. A single select's options are laid out only to give the control its
+            // width — anything below its painted line is not on screen, so a click there must
+            // do nothing rather than silently choose an invisible row.
             var option = OptionAncestor(el);
             if (option?.LayoutBox != null)
             {
                 var owner = option.ParentElement;
                 if (owner != null && !owner.HasAttribute("disabled"))
                 {
+                    if (UpBrowser.Core.Css.ElementStyles.FormElements.BelongsToClosedSelect(option))
+                    {
+                        var box = owner.LayoutBox!.BorderBox;
+                        bool onControl = x + _scrollX >= box.Left && x + _scrollX <= box.Right &&
+                                         y + _scrollY >= box.Top && y + _scrollY <= box.Bottom;
+                        if (!onControl) return;
+                        if (ReferenceEquals(_activeSelect, owner)) CloseDropdown();
+                        else { SetFocus(owner); OpenDropdown(owner); }
+                        return;
+                    }
                     ChooseOption(owner, option);
                     return;
                 }
@@ -2247,6 +2275,7 @@ public sealed class PageEngine : IDisposable
             visitor.SetFocusedElement(_focused);
             visitor.SetPressedButton(_pressedButton);
             visitor.SetSelectDropdown(_activeSelect, _dropdownRect, _optionRects, _hoverOption);
+            visitor.SetPasswordRevealed(_passwordRevealed);
             if (_focused != null && _focused.IsTextEditable)
                 visitor.SetInputState(_caret, _selStart, _showCursor, _imeComposing, _imeComposition, _imeCursorPos);
             // Page selection is a document-level concept, independent of the input caret

@@ -31,6 +31,7 @@ internal interface ITabDriver : IDisposable
     string Title { get; }
     string Url { get; }
     SKBitmap? Bitmap { get; }
+    long FrameVersion { get; }
     /// <summary>Let the tab settle: commands are queued, and a remote one round-trips.</summary>
     void Settle(int ms);
 }
@@ -55,6 +56,7 @@ internal sealed class LocalTabDriver : ITabDriver
     public float ScrollX => _host.ScrollX;
     public float ScrollY => _host.ScrollY;
     public float ContentHeight => _host.Query(e => e.ContentHeight);
+    public long FrameVersion => _host.FrameVersion;
     public string Title => _host.Title;
     public string Url => _host.Url;
     public SKBitmap? Bitmap => _host.Bitmap;
@@ -117,6 +119,7 @@ internal sealed class RemoteTabDriver : ITabDriver
     public float ScrollX { get { _view.UpdateFromFrame(); return _view.FrameScrollX; } }
     public float ScrollY { get { _view.UpdateFromFrame(); return _view.FrameScrollY; } }
     public float ContentHeight { get { _view.UpdateFromFrame(); return _view.ContentH; } }
+    public long FrameVersion => _proc.FrameVersion;
     public string Title => _proc.Title;
     public string Url => _proc.Url;
     public SKBitmap? Bitmap { get { _view.UpdateFromFrame(); return _view.Bitmap; } }
@@ -228,6 +231,12 @@ internal static class InteractionScript
                     case "selectall": d.SelectAll(); break;
                     case "mark":
                         steps++;
+                        // "mark name shot" also writes the frame, so a test can compare two
+                        // states of the same page instead of only its last one.
+                        if (p.Length > 2 && p[2] == "shot" && pngPrefix.Length > 0)
+                            SaveFrame(d, pngPrefix + "." + (p.Length > 1 ? p[1] : "m") + ".png");
+                        else if (p.Length > 2 && p[2] == "shot" && pngPrefix.Length == 0)
+                            Console.Error.WriteLine("[interact] mark shot needs an out prefix");
                         trace.Append(p.Length > 1 ? p[1] : $"m{mark++}").Append('|')
                             .Append(Num(d.ScrollX)).Append(',').Append(Num(d.ScrollY))
                             .Append("/h").Append(Num(d.ContentHeight)).Append('|')
@@ -241,7 +250,15 @@ internal static class InteractionScript
                 }
                 d.Settle(120);
             }
-            d.Settle(400);
+            // Wait for both sides to stop producing frames before the screenshot: the
+            // in-process host settles a beat ahead of a child that has to carry the commit
+            // over a pipe, and comparing mid-flight looked like a 1% rendering divergence.
+            for (int wait = 0; wait < 4000; wait += 100)
+            {
+                long v0 = d.FrameVersion;
+                d.Settle(300);
+                if (d.FrameVersion == v0) break;
+            }
             if (pngPrefix.Length > 0 && d.Bitmap is { } bmp)
             {
                 using var image = SKImage.FromBitmap(bmp);
@@ -256,6 +273,15 @@ internal static class InteractionScript
         }
         finally { d.Dispose(); }
         return (trace.ToString().TrimEnd('\n'), steps);
+    }
+
+    private static void SaveFrame(ITabDriver d, string path)
+    {
+        if (d.Bitmap is not { } bmp) return;
+        using var image = SKImage.FromBitmap(bmp);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        using var fs = File.Create(path);
+        data.SaveTo(fs);
     }
 
     private static float F(string s) => float.Parse(s, CultureInfo.InvariantCulture);

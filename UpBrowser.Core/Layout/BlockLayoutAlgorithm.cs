@@ -262,7 +262,40 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             return new ColumnLayoutAlgorithm(child, space).Layout();
         if (child.TagName == "FIELDSET")
             return new FieldsetLayoutAlgorithm(child, space).Layout();
-        return new BlockLayoutAlgorithm(child, space).Layout();
+        var blockResult = new BlockLayoutAlgorithm(child, space).Layout();
+        SizeSingleSelectAsOneRow(child, blockResult);
+        return blockResult;
+    }
+
+    /// <summary>
+    /// A single select is one row tall no matter how many options it carries.
+    ///
+    /// The options stay laid out, because the control's width is the widest one of them and an
+    /// inline-block measures itself from its children — hiding them would collapse the control
+    /// to nothing. What must not grow is the box: the closed control paints one line (and the
+    /// list only exists while it is open, drawn by the host from rects of its own), so the
+    /// border box is clamped to the first laid-out row. An author height wins over this, and a
+    /// multiple or sized select is a real list box, so it is left at the height of its rows.
+    /// </summary>
+    private static void SizeSingleSelectAsOneRow(Element child, LayoutResult result)
+    {
+        if (!string.Equals(child.TagName, "SELECT", StringComparison.OrdinalIgnoreCase)) return;
+        var s = child.ComputedStyle;
+        if (s == null || s.MaxHeight != null || s.Height is not AutoLength) return;
+        if (child.HasAttribute("multiple") ||
+            (int.TryParse(child.GetAttribute("size"), out var rows) && rows > 1)) return;
+
+        var fragment = result.Fragment;
+        if (fragment.Children.Count == 0) return;
+        float row = fragment.Children[0].BlockSize;
+        if (row <= 0f) return;
+
+        float chrome = fragment.BlockSize - fragment.ContentBlockSize;   // borders + padding
+        float oneRow = row + chrome;
+        if (fragment.BlockSize <= oneRow) return;
+
+        fragment.BlockSize = oneRow;
+        result.IntrinsicBlockSize = oneRow;
     }
 
     private LayoutResult LayoutInflowChild(ConstraintSpace space, BreakToken? breakToken, Element child)

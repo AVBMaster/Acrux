@@ -57,17 +57,37 @@ public class ListItemOrdinal
             return;
         }
 
-        int index = 1;
-        var parent = (node as Element)?.ParentElement;
+        var self = node as Element;
+        var parent = self?.ParentElement;
         if (parent == null) { _cachedValue = 1; return; }
 
-        bool foundSelf = false;
+        // Collect the list-item siblings in document order.
+        var items = new System.Collections.Generic.List<Element>();
         foreach (var child in parent.Children)
-        {
-            if (child == node) { foundSelf = true; break; }
             if (child is Element el && el.ComputedStyle?.Display == DisplayType.ListItem)
-                index++;
+                items.Add(el);
+
+        int selfIndex = items.IndexOf(self!);
+        if (selfIndex < 0) { _cachedValue = 1; return; }
+
+        // HTML list numbering: <ol start> sets the first ordinal, <ol reversed>
+        // counts down (default start = number of items), and a per-item 'value'
+        // attribute overrides that item's ordinal and reseeds the running count.
+        bool reversed = parent.HasAttribute("reversed");
+        int increment = reversed ? -1 : 1;
+        int running = ParseInt(parent.GetAttribute("start"))
+                      ?? (reversed ? items.Count : 1);
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            int v = ParseInt(items[i].GetAttribute("value")) ?? running;
+            if (i == selfIndex) { _cachedValue = v; return; }
+            running = v + increment;
         }
-        _cachedValue = foundSelf ? index : 1;
+        _cachedValue = 1;
     }
+
+    private static int? ParseInt(string? s) =>
+        int.TryParse(s?.Trim(), System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
 }

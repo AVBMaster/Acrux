@@ -94,9 +94,10 @@ internal static class ProcessTabSelfTest
         bool interact = InteractionParityTest();
         bool multiEngine = MultiEngineIsolationTest();
         bool selectPick = SelectPickTest();
+        bool passwordReveal = PasswordRevealTest();
         bool perf = PerformanceTests().GetAwaiter().GetResult();
         pass = pass && features && selection && ime && dialogs && watchdog && crashes && channel && resize
-            && nonblocking && budget && devtools && find && blockStack && animPark && interact && multiEngine && selectPick && perf;
+            && nonblocking && budget && devtools && find && blockStack && animPark && interact && multiEngine && selectPick && passwordReveal && perf;
         Console.WriteLine(pass ? "[proctest] PASS" : "[proctest] FAIL");
 
         try { Directory.Delete(dir, true); } catch { }
@@ -1130,20 +1131,23 @@ internal static class ProcessTabSelfTest
             </script>
             </body></html>
             """);
-        // Options are laid out as rows inside the control (600x22.6 each, at y=2/24.6/47.2),
-        // so (40,58) is the third row and must be picked where it is drawn.
+        // The control is one row tall (26.6) and the list drops from its content bottom
+        // (24.6) in 26px rows, so (40,63) is the second row of the open list.
         File.WriteAllText(Path.Combine(dir, "script.txt"), """
             resize 600 500
             settle 1200
             selectall
             mark before
-            click 40 58
-            settle 600
+            click 40 12
+            settle 800
+            mark opened
+            click 40 63
+            settle 800
             selectall
             mark after
             """);
 
-        int rc = InteractionScript.Run(new[] { "--interact",
+int rc = InteractionScript.Run(new[] { "--interact",
             Path.Combine(dir, "page.html").Replace('\\', '/'),
             Path.Combine(dir, "script.txt").Replace('\\', '/'),
             Path.Combine(dir, "run").Replace('\\', '/') });
@@ -1151,12 +1155,66 @@ internal static class ProcessTabSelfTest
         try { trace = File.ReadAllText(Path.Combine(dir, "run.local.trace.txt")); } catch { }
         string FirstWith(string prefix) => trace.Split('\n').FirstOrDefault(l => l.StartsWith(prefix)) ?? "";
         bool picked = FirstWith("after").Contains("PICKED") && !FirstWith("before").Contains("PICKED");
+        bool openedAndClosed = FirstWith("opened").Contains("open=1") && FirstWith("after").Contains("open=0");
         // A single select paints one line, so its rows are not page text: Ctrl+A must hand
         // back what the reader can see, never the option list hiding inside the control.
         bool optionsExcluded = !FirstWith("before").Contains("two") && !FirstWith("after").Contains("three");
         picked = picked && optionsExcluded;
-        bool pass = rc == 0 && picked;
-        Console.WriteLine($"[proctest] selectPick rc={rc} pass={pass} changeFired={picked} optionsOutOfSelection={optionsExcluded}");
+        bool pass = rc == 0 && picked && openedAndClosed;
+        Console.WriteLine($"[proctest] selectPick rc={rc} pass={pass} changeFired={picked} " +
+                          $"listToggle={openedAndClosed} optionsOutOfSelection={optionsExcluded}");
+        try { Directory.Delete(dir, true); } catch { }
+        return pass;
+    }
+
+    /// <summary>
+    /// A password field's reveal eye is drawn inside the control, so clicking it belongs to the
+    /// page: the mask flips and the caret does not move. Verified in pixels — the frames before
+    /// and after must differ, both hosts must agree with each other in each state, and a run
+    /// that never clicks must prove the difference is not a capture artifact.
+    /// </summary>
+    private static bool PasswordRevealTest()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "upbrowser_proctest_pw");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "p.html"), """
+            <!DOCTYPE html><html><body style="margin:0;font-family:Arial">
+            <input type="password" value="secret99" style="font-size:18px;width:200px">
+            </body></html>
+            """);
+        File.WriteAllText(Path.Combine(dir, "click.txt"), """
+            resize 600 400
+            settle 1200
+            mark idle shot
+            click 192 46
+            settle 800
+            mark revealed shot
+            """);
+        File.WriteAllText(Path.Combine(dir, "quiet.txt"), """
+            resize 600 400
+            settle 2000
+            mark idle shot
+            settle 800
+            mark again shot
+            """);
+
+        string Page(string script) => Path.Combine(dir, script).Replace(Path.DirectorySeparatorChar, '/');
+        string Pref(string tag) => Path.Combine(dir, tag).Replace(Path.DirectorySeparatorChar, '/');
+        int rc1 = InteractionScript.Run(new[] { "--interact", Page("p.html"), Page("click.txt"), Pref("c") });
+        int rc2 = InteractionScript.Run(new[] { "--interact", Page("p.html"), Page("quiet.txt"), Pref("n") });
+
+        bool Changed(string a, string b) => !FrameSnapshotCli.SamePixels(Path.Combine(dir, a), Path.Combine(dir, b), out _);
+        bool Same(string a, string b) => FrameSnapshotCli.SamePixels(Path.Combine(dir, a), Path.Combine(dir, b), out _);
+
+        bool toggles = Changed("c.local.idle.png", "c.local.revealed.png")
+            && Changed("c.remote.idle.png", "c.remote.revealed.png");
+        bool hostsAgree = Same("c.local.idle.png", "c.remote.idle.png")
+            && Same("c.local.revealed.png", "c.remote.revealed.png");
+        bool stableWhenUntouched = Same("n.local.idle.png", "n.local.again.png");
+
+        bool pass = rc1 == 0 && rc2 == 0 && toggles && hostsAgree && stableWhenUntouched;
+        Console.WriteLine($"[proctest] passwordRc rc={rc1}/{rc2} pass={pass} toggles={toggles} " +
+                          $"hostsAgree={hostsAgree} stableWhenUntouched={stableWhenUntouched}");
         try { Directory.Delete(dir, true); } catch { }
         return pass;
     }

@@ -42,6 +42,16 @@ public class GridLayoutAlgorithm
         _viewportHeight = space.ViewportHeight;
     }
 
+    private float ResolveGap(Length gap, float reference)
+    {
+        if (gap is AutoLength) return 0;
+        // A percentage gap resolves against the container's content box on that
+        // axis; an indefinite (auto) axis makes it 0.
+        if (gap is PercentLength && !float.IsFinite(reference))
+            return 0;
+        return gap.ToPixels(reference, _rootFontSize, _viewportWidth, _viewportHeight);
+    }
+
     public void Layout(Element gridContainer, LayoutBox containerBox, float availableWidth)
     {
         _containerStyle = gridContainer.ComputedStyle;
@@ -51,8 +61,12 @@ public class GridLayoutAlgorithm
         _containerHeight = containerBox.ContentBox.Height;
         _containerHeightAuto = _containerStyle.Height is not PixelLength;
 
-        float rowGap = _containerStyle.RowGap.ToPixels(_containerStyle.FontSize, _rootFontSize, _viewportWidth, _viewportHeight);
-        float columnGap = _containerStyle.ColumnGap.ToPixels(_containerStyle.FontSize, _rootFontSize, _viewportWidth, _viewportHeight);
+
+        // Gap percentages resolve against the container's own content box (CSS Box
+        // Alignment): column-gap against the inline size, row-gap against the block
+        // size. An indefinite axis (NaN) makes the percentage 0.
+        float rowGap = ResolveGap(_containerStyle.RowGap, _containerHeight);
+        float columnGap = ResolveGap(_containerStyle.ColumnGap, _containerWidth);
 
         var explicitColumns = ParseTrackList("grid-template-columns", _containerWidth);
         var explicitRows = ParseTrackList("grid-template-rows", _containerHeight);
