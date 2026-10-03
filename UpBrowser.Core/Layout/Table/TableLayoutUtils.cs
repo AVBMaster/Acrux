@@ -51,16 +51,18 @@ public static class TableLayoutUtils
 
     public static bool IsEmptyTableSection(Element section) => GetSectionRows(section).Count == 0;
 
-    /// <summary>Rows of a section. A &lt;tr&gt; that appears directly under the table
-    /// (no surrounding tbody) is treated as a section of one row. Rows with
-    /// display:none are excluded so hidden rows take no space at all.</summary>
+    /// <summary>Rows of a section. A row that appears directly under the table (no
+    /// surrounding tbody) is treated as a section of one row. Membership is decided
+    /// by the COMPUTED display, not the tag: CSS-created tables put
+    /// 'display: table-row' on arbitrary elements, and a 'tr' restyled to
+    /// 'display: block' is no longer a row. Rows with display:none are excluded so
+    /// hidden rows take no space at all.</summary>
     public static List<Element> GetSectionRows(Element section)
     {
         var rows = new List<Element>();
         foreach (var child in section.Children)
         {
-            if (child is Element el && el.TagName == "TR"
-                && el.ComputedStyle?.Display != DisplayType.None)
+            if (child is Element el && el.ComputedStyle?.Display == DisplayType.TableRow)
             {
                 rows.Add(el);
             }
@@ -77,6 +79,7 @@ public static class TableLayoutUtils
     public static (float min, float max) ComputeContentMinMax(Element node)
     {
         float min = 0, max = 0;
+        bool hasUnmeasurableChild = false;
         var style = node.ComputedStyle;
         foreach (var child in node.Children)
         {
@@ -84,6 +87,12 @@ public static class TableLayoutUtils
             {
                 case TextNode tn:
                     string text = tn.Data ?? string.Empty;
+                    // Collapsible whitespace claims no width: '<td> </td>' is an empty
+                    // cell, and the spaces around a word are not part of its content
+                    // size either (CSS Text 3 §4.1.1). A non-breaking space is not
+                    // collapsible, so it still counts.
+                    if (TextNode.IsCollapsibleWhitespace(text)) continue;
+                    text = text.Trim(' ', '\t', '\n', '\r', '\f');
                     min = Math.Max(min, LongestWordWidth(text, style));
                     max += MeasureTextWidth(text, style);
                     break;
@@ -92,6 +101,23 @@ public static class TableLayoutUtils
                     var childStyle = el.ComputedStyle;
                     if (childStyle == null || childStyle.Display == DisplayType.None)
                         continue;
+                    // Only content this walk cannot size at all (an image) may claim a
+                    // placeholder width: a line break or an empty span must not stop an
+                    // otherwise empty cell from collapsing to zero.
+                    hasUnmeasurableChild |= BlockLayoutAlgorithm.IsReplacedElement(el);
+                    // A replaced child is sized by its own box, not by its (absent)
+                    // children: the specified width wins, then the 'width' content
+                    // attribute, which is what the layout box of an <img width=40> gets.
+                    if (BlockLayoutAlgorithm.IsReplacedElement(el))
+                    {
+                        float replaced = ReplacedInlineSize(el, childStyle);
+                        if (replaced > 0)
+                        {
+                            min = Math.Max(min, replaced);
+                            max += replaced;
+                            continue;
+                        }
+                    }
                     var (cmin, cmax) = ComputeContentMinMax(el);
                     min = Math.Max(min, cmin);
                     switch (childStyle.Display)
@@ -111,15 +137,36 @@ public static class TableLayoutUtils
                 }
             }
         }
-        if (min == 0 && max == 0 && style != null)
+        if (min == 0 && max == 0 && style != null && hasUnmeasurableChild)
         {
-            // Replaced/inline content with no measured children keeps at least a
-            // single character width so empty cells/captions don't fully collapse.
+            // A replaced child still has to claim some width or the cell collapses
+            // right onto it; an empty cell has nothing to claim and stays 0, which is what
+            // Chrome gives it.
             float fallback = MeasureTextWidth(" ", style);
             min = Math.Max(min, fallback);
             max = Math.Max(max, fallback);
         }
         return (min, max);
+    }
+
+    /// <summary>The inline size a replaced child claims: CSS 'width' when it is a fixed
+    /// length, otherwise the 'width' content attribute. Zero means "unknown here", which
+    /// leaves the caller's placeholder fallback in charge.</summary>
+    private static float ReplacedInlineSize(Element el, ComputedStyle childStyle)
+    {
+        var width = childStyle.Width;
+        if (width != null && width.IsFixed())
+        {
+            float fixedWidth = width.FixedValue();
+            if (fixedWidth > 0) return fixedWidth;
+        }
+        string? attribute = el.GetAttribute("width");
+        if (!string.IsNullOrEmpty(attribute)
+            && float.TryParse(attribute.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float fromAttribute)
+            && fromAttribute > 0)
+            return fromAttribute;
+        return 0;
     }
 
     private static float MeasureTextWidth(string text, ComputedStyle? style)
@@ -1372,10 +1419,10 @@ public static class TableLayoutUtils
                 cellCollapsedBorders: collapsedEdge);
 
             var layoutResult = new BlockLayoutAlgorithm(cell, cellSpace).Layout();
+            // A cell is a block, so an empty one has no line boxes and contributes no
+            // height: a table whose only cell is empty collapses to 0x0 (measured against
+            // Chrome). Keeping a strut here inflated every empty row by one line-height.
             float fragmentBlockSize = K(layoutResult.Fragment.BlockSize);
-            // Empty cells keep at least one line box so that empty rows don't collapse.
-            float minEmptyCellHeight = EmptyCellBlockSize(cellStyle);
-            fragmentBlockSize = Math.Max(fragmentBlockSize, minEmptyCellHeight);
 
             bool hasDescendantDependingOnPercentage = false;
             bool heightIsFixed = cellStyle.Height.IsFixed();
@@ -1456,13 +1503,6 @@ public static class TableLayoutUtils
         for (int i = startCellIndex; i < cellBlockConstraints.Count; i++)
             result.AddCell(cellBlockConstraints[i]);
         return result;
-    }
-
-    private static float EmptyCellBlockSize(ComputedStyle? style)
-    {
-        if (style == null) return 0;
-        float lineHeight = Fonts.LineBoxMetrics.GetLineHeight(style);
-        return Math.Max(lineHeight, 0);
     }
 
     /// <summary>Computes minimum block sizes for all rows of a section.

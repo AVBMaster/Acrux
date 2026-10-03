@@ -9,7 +9,23 @@ public class TextNode : CharacterData
     public override NodeType NodeType => NodeType.Text;
     public override string NodeName => "#text";
 
-    public bool IsWhitespaceOnly => string.IsNullOrWhiteSpace(Data);
+    /// <summary>Collapsible whitespace only (CSS Text 3 §4.1.1): the HTML space characters
+    /// tab, LF, form feed, CR and space. A node holding just those never opens a line box,
+    /// which is what lets the whitespace between block tags disappear. U+00A0 and the other
+    /// space separators are non-collapsible, so <c>&amp;nbsp;</c> on its own still makes a
+    /// line — <see cref="string.IsNullOrWhiteSpace"/> counts it as whitespace and swallowed
+    /// the whole line box.</summary>
+    public bool IsWhitespaceOnly => IsCollapsibleWhitespace(Data);
+
+    public static bool IsCollapsibleWhitespace(string? data)
+    {
+        if (string.IsNullOrEmpty(data)) return true;
+        foreach (char c in data)
+        {
+            if (c is not (' ' or '\t' or '\n' or '\r' or '\f')) return false;
+        }
+        return true;
+    }
 
     public string WholeText
     {

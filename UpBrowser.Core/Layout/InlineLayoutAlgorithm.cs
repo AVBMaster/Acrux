@@ -401,7 +401,9 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
                 // hanging variant) to the lines it applies to. A float on the line's
                 // left moves the whole line box right (info.LeftInset).
                 InlineOffset = contentInlineOrigin + info.LeftInset + info.TextIndent()
-                    + (info.IsFirstFormattedLine() ? List.ListMarker.InsideMarkerIndent(Style) : 0),
+                    + (info.IsFirstFormattedLine()
+                        ? List.ListMarker.InsideMarkerIndent(Style, List.ListItemNumbering.Ordinal(Node),
+                            List.ListMarker.MarkerContentOf(Node), Node) : 0),
                 BlockOffset = _currentLineBlockOffset,
                 InlineSize = info.InlineSize,
                 BlockSize = lineBlockSize,
@@ -597,7 +599,11 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
     private void AlignLineBoxes(BoxLine boxLine, float strutHeight)
     {
         float strutAscent = Fonts.LineBoxMetrics.GetBaselineForLineHeight(Style, strutHeight);
-        float strutDescent = Math.Max(0, strutHeight - strutAscent);
+        // A line-height smaller than the font's own box makes the half-leading negative,
+        // so the strut's descent is negative: the line box is still exactly 'line-height'
+        // tall and the glyphs simply overflow it. Clamping this to zero turned every tight
+        // line-height into the font's ascent (10px on a 16px font became 11.6px).
+        float strutDescent = strutHeight - strutAscent;
         var parentMetrics = Fonts.FontMetricsProvider.Get(Style.FontFamily, Style.FontSize,
             Style.FontWeight, Style.FontStyle);
         float parentAscent = parentMetrics.FloatAscent;
@@ -632,7 +638,13 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
 
             // The box's top, measured above the line's baseline.
             float top = baselineFromTop;
-            switch (runStyle.VerticalAlign)
+            // 'vertical-align' applies to inline boxes only. A table cell's own text is
+            // not an inline box: the cell's 'vertical-align: middle' positions the
+            // cell's content inside the cell (see the table code), and re-applying it
+            // here made every cell's line box grow to the font's ascent+descent.
+            var runElement = run.Element ?? (run.Node as Element) ?? (run.Node as TextNode)?.ParentElement;
+            bool isOwnText = !run.IsAtomicInline && ReferenceEquals(runElement, Node);
+            switch (isOwnText ? VerticalAlignType.Baseline : runStyle.VerticalAlign)
             {
                 case VerticalAlignType.Middle:
                     top = boxHeight / 2f + xHeight / 2f;
@@ -669,7 +681,10 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
                     continue;
             }
 
-            float bottom = Math.Max(0, boxHeight - top);
+            // Same negative-leading rule for the boxes on the line: a box whose baseline
+            // sits below its own bottom edge reaches negatively, which is what keeps the
+            // union at the requested line-height.
+            float bottom = boxHeight - top;
             ApplyRunReach(run, reach, top, bottom, baselineFromTop);
             maxAscent = Math.Max(maxAscent, top);
             maxDescent = Math.Max(maxDescent, bottom);
@@ -678,17 +693,20 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         foreach (var (run, boxHeight, baselineFromTop, toTop) in edgeAligned)
         {
             float top = toTop ? maxAscent : boxHeight - maxDescent;
-            float bottom = Math.Max(0, boxHeight - top);
+            float bottom = boxHeight - top;
             ApplyRunReach(run, reach, top, bottom, baselineFromTop);
             maxAscent = Math.Max(maxAscent, top);
             maxDescent = Math.Max(maxDescent, bottom);
         }
 
         float lineHeight = maxAscent + maxDescent;
-        if (lineHeight <= boxLine.BlockSize + 0.01f)
-            return;
+        if (lineHeight > boxLine.BlockSize + 0.01f)
+            boxLine.BlockSize = lineHeight;
 
-        boxLine.BlockSize = lineHeight;
+        // The baseline sits where the tallest reach above it puts it, whether or not the
+        // line box itself had to grow, and the atomic boxes are placed against it in both
+        // cases. Returning early when the height was already big enough left every image
+        // sitting at the top of the line instead of on its baseline.
         boxLine.BaselineOffset = boxLine.BlockOffset + maxAscent;
         foreach (var run in boxLine.Runs)
         {
@@ -718,6 +736,14 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
     /// </summary>
     private static float AtomicBaselineFromTop(BoxRun run, float boxHeight)
     {
+        // A replaced box has no line boxes of its own, so its baseline is its bottom
+        // margin edge (CSS 2.1 §10.8). Its fragment can still carry an internal strut
+        // line, and treating that as the baseline source sat every image 4px too high
+        // and stopped the line box from growing around it.
+        var replacedElement = run.Element ?? (run.Node as Element);
+        if (replacedElement != null && BlockLayoutAlgorithm.IsReplacedElement(replacedElement))
+            return boxHeight;
+
         var frag = run.AtomicInlineBox;
         if (frag == null || frag.Lines.Count == 0)
             return boxHeight;

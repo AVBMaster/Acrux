@@ -645,6 +645,11 @@ public class ComputedStyle
     public float BorderBottomWidth { get; set; }
     public float BorderLeftWidth { get; set; }
     public float BorderRightWidth { get; set; }
+    /// <summary>Which of the four border widths and the outline width a declaration
+    /// actually wrote. Their initial value is 'medium', but a box that never mentions
+    /// borders must take no space for them, so the widths start at zero and StyleAdjuster
+    /// substitutes medium once a visible border style is known (CSS Backgrounds 3 §4).</summary>
+    public uint AuthoredWidthSlots { get; set; }
     public SKColor BorderTopColor { get; set; } = SKColors.Black;
     public SKColor BorderBottomColor { get; set; } = SKColors.Black;
     public SKColor BorderLeftColor { get; set; } = SKColors.Black;
@@ -804,8 +809,16 @@ public class ComputedStyle
     /// <summary>Percentage part of 'text-indent', resolved against the containing
     /// block's inline size at line-break time (CSS Text 3 §5.2).</summary>
     public float TextIndentPercent { get; set; }
+    /// <summary>A calc()/min()/max()/clamp() text-indent whose percentage must
+    /// resolve against the containing block inline size, deferred to line-break
+    /// time. Stores the raw math expression; null when text-indent is not math.</summary>
+    public string? TextIndentMath { get; set; }
     public string TextTransform { get; set; } = "none";
     public TextOverflowType TextOverflow { get; set; } = TextOverflowType.Clip;
+    /// <summary>The &lt;string&gt; form of 'text-overflow' (CSS UI 4 §4.4). When set it
+    /// replaces the ellipsis glyph, and the truncation reserves the string's own
+    /// measured width instead.</summary>
+    public string? TextOverflowString { get; set; }
     // -webkit-line-clamp / line-clamp: max number of visible lines before the
     // block truncates with an ellipsis. 0 means no clamping.
     public int LineClamp { get; set; }
@@ -904,8 +917,12 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     /// <summary>Bit set of color properties whose declared value was the keyword
     /// `currentcolor`. The used value can only be known after inheritance, so the
     /// cascade records the slots here and StyleAdjuster resolves them against the
-    /// computed `color` (CSS Color 3 §4.4).</summary>
-    public uint CurrentColorSlots { get; set; }
+    /// computed `color` (CSS Color 3 §4.4).
+    /// The border and outline colours start out as currentcolor because that is their
+    /// initial value (CSS Backgrounds 3 §4, CSS UI 4 §5), so an undeclared border paints
+    /// the element's text colour; an explicit value clears the bit as it is applied.</summary>
+    public uint CurrentColorSlots { get; set; } =
+        (uint)(ComputedStyle.CurrentColorSlot.AllBorders | ComputedStyle.CurrentColorSlot.Outline);
 
     [Flags]
     public enum CurrentColorSlot : uint
@@ -1064,6 +1081,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             PaddingTop = PaddingTop, PaddingRight = PaddingRight, PaddingBottom = PaddingBottom, PaddingLeft = PaddingLeft,
             BorderTopWidth = BorderTopWidth, BorderRightWidth = BorderRightWidth,
             BorderBottomWidth = BorderBottomWidth, BorderLeftWidth = BorderLeftWidth,
+            AuthoredWidthSlots = AuthoredWidthSlots,
             BorderTopColor = BorderTopColor, BorderRightColor = BorderRightColor,
             BorderBottomColor = BorderBottomColor, BorderLeftColor = BorderLeftColor,
             BorderTopStyle = BorderTopStyle, BorderRightStyle = BorderRightStyle,
@@ -1107,8 +1125,9 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             Direction = Direction, LetterSpacing = LetterSpacing, WordSpacing = WordSpacing,
             TextIndent = TextIndent, TextIndentHanging = TextIndentHanging,
             TextIndentEachLine = TextIndentEachLine,
-            TextIndentPercent = TextIndentPercent, TextTransform = TextTransform,
-            TextOverflow = TextOverflow, TextShadow = TextShadow, LineClamp = LineClamp, TextWrap = TextWrap,
+            TextIndentPercent = TextIndentPercent, TextIndentMath = TextIndentMath, TextTransform = TextTransform,
+            TextOverflow = TextOverflow, TextOverflowString = TextOverflowString,
+            TextShadow = TextShadow, LineClamp = LineClamp, TextWrap = TextWrap,
             TextDecorationLine = TextDecorationLine, TextDecorationStyle = TextDecorationStyle,
             TextDecorationColor = TextDecorationColor, TextDecorationThickness = TextDecorationThickness,
             TextDecorationThicknessFromFont = TextDecorationThicknessFromFont,
@@ -1287,9 +1306,14 @@ public enum ListStyleType
 {
     Disc, Circle, Square, Decimal, DecimalLeadingZero, LowerRoman, UpperRoman,
     LowerAlpha, UpperAlpha,
-    LowerLatin, UpperLatin, LowerGreek, UpperGreek, Armenian, Georgian, Hebrew,
+    LowerLatin, UpperLatin, LowerGreek, UpperGreek, Armenian, UpperArmenian, LowerArmenian,
+    Georgian, Hebrew, EthiopicNumeric, DisclosureOpen, DisclosureClosed,
     Hiragana, Katakana, HiraganaIroha, KatakanaIroha, CjkDecimal, CjkIdeographic,
-    CjkEarthlyBranch, CjkHeavenlyStem, Thai, Lao, Khmer, Myanmar, Mongolian,
+    CjkEarthlyBranch, CjkHeavenlyStem, SimpChineseInformal, SimpChineseFormal,
+    TradChineseInformal, TradChineseFormal, JapaneseInformal, JapaneseFormal,
+    KoreanHangulFormal, KoreanHanjaInformal, KoreanHanjaFormal,
+    Thai, Lao, Khmer, Myanmar, Mongolian, Gujarati, Gurmukhi, Kannada, Malayalam,
+    Oriya, Tibetan,
     ArabicIndic, Persian, Devanagari, Bengali, Tamil, Telugu, CanadianAboriginal,
     Symbol,
     /// <summary>A quoted string marker, e.g. list-style-type: "--&gt;".</summary>

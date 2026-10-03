@@ -68,36 +68,140 @@ public class ListMarker
         return null;
     }
 
-    /// <summary>Generate the marker text for a list item at the given index (1-based).</summary>
-    public static string MarkerText(ListStyleType type, int itemIndex)
+    /// <summary>Generate the marker text for a list item with the given ordinal.</summary>
+    public static string MarkerText(ListStyleType type, int ordinal) =>
+        ListMarkerFormatter.MarkerLabel(type, ordinal, null);
+
+    /// <summary>
+    /// The marker's inline box: the label with its separator, plus the
+    /// 'normal space' CSS Counter Styles puts after every suffix except the
+    /// ideographic ones (U+3001 already is the whole suffix). The space belongs
+    /// to the box, which is what makes an outside marker's glyph end one space
+    /// before the item's content edge instead of sitting right on it.
+    /// A custom '::marker { content }' replaces the label verbatim and never
+    /// gets that space - the author's string carries its own spacing.
+    /// </summary>
+    public static string MarkerBoxText(ListStyleType type, int ordinal, string? typeString, string? markerContent)
     {
-        switch (type)
-        {
-            case ListStyleType.None:
-                return "";
-            case ListStyleType.Decimal:
-                return itemIndex.ToString() + ".";
-            case ListStyleType.DecimalLeadingZero:
-                return itemIndex.ToString("D2") + ".";
-            case ListStyleType.LowerRoman:
-                return ToRoman(itemIndex) + ".";
-            case ListStyleType.UpperRoman:
-                return ToRoman(itemIndex).ToUpperInvariant() + ".";
-            case ListStyleType.LowerAlpha:
-                return ToAlpha(itemIndex) + ".";
-            case ListStyleType.UpperAlpha:
-                return ToAlpha(itemIndex).ToUpperInvariant() + ".";
-            case ListStyleType.Disc:
-            case ListStyleType.Circle:
-            case ListStyleType.Square:
-                return "\u2022";
-            default:
-                return "\u2022";
-        }
+        string? custom = ResolveMarkerContent(markerContent, ordinal);
+        if (custom is not null) return custom;
+
+        string label = ListMarkerFormatter.MarkerLabel(type, ordinal, typeString);
+        // A quoted <string> type IS the whole marker, same as custom content.
+        if (!string.IsNullOrEmpty(typeString)) return label;
+        if (label.Length == 0) return label;
+        char last = label[label.Length - 1];
+        if (char.IsWhiteSpace(last) || last == '、') return label;
+        return label + " ";
     }
 
-    /// <summary>Space between the marker glyph and the item's content.</summary>
-    public const float MarkerGap = 8f;
+    public static string MarkerBoxText(ListStyleType type, int ordinal, string? typeString) =>
+        MarkerBoxText(type, ordinal, typeString, null);
+
+    /// <summary>
+    /// Resolve a '::marker { content }' declaration to the marker's text.
+    /// Returns null when the declaration leaves the preset counter label alone
+    /// ('normal', absent, or a construct we cannot evaluate here); returns an
+    /// empty string for 'content: none' and 'content: ""', which suppress the box.
+    /// </summary>
+    public static string? ResolveMarkerContent(string? raw, int ordinal)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        string value = raw.Trim();
+        if (value.Equals("normal", StringComparison.OrdinalIgnoreCase)) return null;
+        if (value.Equals("none", StringComparison.OrdinalIgnoreCase)) return string.Empty;
+
+        var text = new StringBuilder();
+        int i = 0;
+        while (i < value.Length)
+        {
+            char c = value[i];
+            if (char.IsWhiteSpace(c)) { i++; continue; }
+
+            if (c is '"' or '\'')
+            {
+                i++;
+                while (i < value.Length && value[i] != c)
+                {
+                    if (value[i] == '\\' && i + 1 < value.Length)
+                    {
+                        char escaped = value[++i];
+                        text.Append(escaped switch
+                        {
+                            'n' => '\n',
+                            't' => '\t',
+                            _ => escaped,
+                        });
+                        i++;
+                        continue;
+                    }
+                    text.Append(value[i]);
+                    i++;
+                }
+                i++;
+                continue;
+            }
+
+            if (!System.MemoryExtensions.StartsWith(value.AsSpan(i), "counter(".AsSpan(),
+                    StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            int close = value.IndexOf(')', i);
+            if (close < 0) return null;
+            string name = value[(i + "counter(".Length)..close].Trim();
+            // Inside a marker, 'list-item' is the only counter with a guaranteed
+            // value; anything else would need the document's counter scope.
+            if (!name.Equals("list-item", StringComparison.OrdinalIgnoreCase)) return null;
+            text.Append(ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            i = close + 1;
+        }
+        return text.ToString();
+    }
+
+    /// <summary>The raw '::marker { content }' declaration of an item, if any.</summary>
+    public static string? MarkerContentOf(Element? item) =>
+        item?.MarkerStyles is { } styles && styles.TryGetValue("content", out string? value) ? value : null;
+
+    /// <summary>
+    /// A symbolic marker (disc/circle/square) reserves a box of 1.4 times the
+    /// MARKER font size rather than the width of its glyph: measured, all three
+    /// share one width, and changing '::marker { font-size }' moves it while the
+    /// item's font size does not.
+    /// </summary>
+    public const float SymbolicMarkerBoxFontSizeFactor = 1.4f;
+
+    public static bool IsSymbolicMarker(ListStyleType type) =>
+        type is ListStyleType.Disc or ListStyleType.Circle or ListStyleType.Square;
+
+    /// <summary>The font size '::marker' asks the marker to use, else the item's.</summary>
+    public static float MarkerFontSize(ComputedStyle style, Element? item)
+    {
+        if (item?.MarkerStyles is { } styles && styles.TryGetValue("font-size", out string? text))
+        {
+            float resolved = Length.Parse(text.Trim()).ToPixels(style.FontSize, style.FontSize, 0, 0);
+            if (!float.IsNaN(resolved) && resolved > 0) return resolved;
+        }
+        return style.FontSize;
+    }
+
+    /// <summary>Measured inline box width of a marker (see <see cref="MarkerBoxText"/>).
+    /// Falls back to the type-based estimate only when shaping yields nothing
+    /// (no measurer installed), because an estimate that ignores the label makes
+    /// long markers overlap the item text. An empty box reserves nothing.</summary>
+    public static float MarkerBoxWidth(ComputedStyle style, int ordinal, string? markerContent, Element? item)
+    {
+        string text = MarkerBoxText(style.ListStyleType, ordinal, style.ListStyleTypeString, markerContent);
+        if (text.Length == 0) return 0;
+        if (style.ListStyleType == ListStyleType.None) return 0;
+        // Only the preset symbols get the wide box; custom content is verbatim.
+        if (IsSymbolicMarker(style.ListStyleType) && ResolveMarkerContent(markerContent, ordinal) is null)
+            return SymbolicMarkerBoxFontSizeFactor * MarkerFontSize(style, item);
+        float measured = Inline.TextMeasureProxy.MeasureText(text, style);
+        return measured > 0 ? measured : MarkerWidth(style.ListStyleType, style.ListStylePosition, style.FontSize);
+    }
+
+    public static float MarkerBoxWidth(ComputedStyle style, int ordinal) =>
+        MarkerBoxWidth(style, ordinal, null, null);
 
     /// <summary>
     /// list-style-position: inside puts the marker in the first line box, so the
@@ -108,10 +212,8 @@ public class ListMarker
         style.ListStylePosition == ListStylePosition.Inside &&
         style.ListStyleType != ListStyleType.None;
 
-    public static float InsideMarkerIndent(ComputedStyle style) =>
-        GeneratesInsideMarker(style)
-            ? MarkerWidth(style.ListStyleType, ListStylePosition.Inside, style.FontSize) + MarkerGap
-            : 0;
+    public static float InsideMarkerIndent(ComputedStyle style, int ordinal, string? markerContent, Element? item) =>
+        GeneratesInsideMarker(style) ? MarkerBoxWidth(style, ordinal, markerContent, item) : 0;
 
     /// <summary>Estimate the marker width in pixels based on list-style-type and font size.</summary>
     public static float MarkerWidth(ListStyleType type, ListStylePosition position, float fontSize)
@@ -471,75 +573,24 @@ public class ListMarker
 
     private static string GenerateSymbolRepresentation(ListStyleType type, MarkerTextFormat format)
     {
-        string symbol = type switch
-        {
-            ListStyleType.Disc => "\u2022",
-            ListStyleType.Circle => "\u25E6",
-            ListStyleType.Square => "\u25AA",
-            _ => "\u2022",
-        };
+        string symbol = ListMarkerFormatter.MarkerLabel(type, 1, null);
 
         return format switch
         {
             MarkerTextFormat.WithPrefixSuffix => symbol + " ",
-            MarkerTextFormat.WithoutPrefixSuffix => symbol,
-            MarkerTextFormat.AlternativeText => symbol,
             _ => symbol,
         };
     }
 
     private static string GenerateLanguageRepresentation(int value, ListStyleType type, MarkerTextFormat format)
     {
-        string text = type switch
-        {
-            ListStyleType.Decimal => value.ToString(),
-            ListStyleType.DecimalLeadingZero => value.ToString("D2"),
-            ListStyleType.LowerRoman => ToRoman(value),
-            ListStyleType.UpperRoman => ToRoman(value).ToUpperInvariant(),
-            ListStyleType.LowerAlpha => ToAlpha(value),
-            ListStyleType.UpperAlpha => ToAlpha(value).ToUpperInvariant(),
-            _ => value.ToString(),
-        };
+        string text = ListMarkerFormatter.MarkerLabel(type, value, null);
 
         return format switch
         {
-            MarkerTextFormat.WithPrefixSuffix => text + ".",
             MarkerTextFormat.WithoutPrefixSuffix => text,
-            MarkerTextFormat.AlternativeText => text + ".",
-            _ => text,
+            _ => text + " ",
         };
-    }
-
-    // ============ Roman/AIpha helpers ============
-
-    public static string ToAlpha(int value)
-    {
-        if (value <= 0) return "";
-        var sb = new StringBuilder();
-        while (value > 0)
-        {
-            value--;
-            sb.Insert(0, (char)('a' + (value % 26)));
-            value /= 26;
-        }
-        return sb.ToString();
-    }
-
-    public static string ToRoman(int value)
-    {
-        if (value <= 0 || value >= 4000) return value.ToString();
-        var sb = new StringBuilder();
-        var values = new[] { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
-        var numerals = new[] { "m", "cm", "d", "cd", "c", "xc", "l", "xl", "x", "ix", "v", "iv", "i" };
-        for (int i = 0; i < values.Length; i++)
-        {
-            while (value >= values[i])
-            {
-                sb.Append(numerals[i]);
-                value -= values[i];
-            }
-        }
-        return sb.ToString();
     }
 
     private static float DisclosureSymbolSize(ComputedStyle style)

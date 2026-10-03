@@ -620,11 +620,12 @@ track {
 /* Media */
 img {
   display: inline-block;
-  vertical-align: bottom;
+/* Chrome keeps the initial 'baseline' alignment for replaced inline boxes: an image sits
+   on the text baseline (leaving the descender gap below it) and the line box grows above
+   the baseline to contain it. Overriding this hid both behaviours. */
 }
 canvas {
   display: inline-block;
-  vertical-align: bottom;
 }
 video {
   display: inline-block;

@@ -15,9 +15,9 @@ public struct BorderEdge
     public SKColor Color;
     public bool IsPresent;
     public BorderStyle Style;
-    public int Width;
+    public float Width;
 
-    public BorderEdge(int edgeWidth, SKColor edgeColor, BorderStyle edgeStyle, bool edgeIsPresent = true)
+    public BorderEdge(float edgeWidth, SKColor edgeColor, BorderStyle edgeStyle, bool edgeIsPresent = true)
     {
         Color = edgeColor;
         IsPresent = edgeIsPresent;
@@ -25,7 +25,7 @@ public struct BorderEdge
         Width = edgeWidth;
     }
 
-    public static BorderStyle EffectiveStyle(BorderStyle style, int width)
+    public static BorderStyle EffectiveStyle(BorderStyle style, float width)
     {
         if ((style == BorderStyle.Double && width < 3) ||
             ((style == BorderStyle.Ridge || style == BorderStyle.Groove) && width <= 1))
@@ -39,22 +39,22 @@ public struct BorderEdge
 
     public bool PresentButInvisible => UsedWidth != 0 && !HasVisibleColorAndStyle;
 
-    public int UsedWidth => IsPresent ? Width : 0;
+    public float UsedWidth => IsPresent ? Width : 0;
 
     public BorderStyle BorderStyleValue => Style;
 
-    public int WidthValue => Width;
+    public float WidthValue => Width;
 
     public SKColor GetColor => Color;
 
     public enum DoubleBorderStripe { Outer, Inner }
 
-    public int GetDoubleBorderStripeWidth(DoubleBorderStripe stripe) =>
-        (int)MathF.Round(stripe == DoubleBorderStripe.Outer ? UsedWidth / 3.0f : UsedWidth * 2.0f / 3.0f);
+    public float GetDoubleBorderStripeWidth(DoubleBorderStripe stripe) =>
+        stripe == DoubleBorderStripe.Outer ? UsedWidth / 3.0f : UsedWidth * 2.0f / 3.0f;
 
     public bool SharesColorWith(BorderEdge other) => Color == other.Color;
 
-    public void ClampWidth(int maxWidth)
+    public void ClampWidth(float maxWidth)
     {
         if (Width > maxWidth)
         {
@@ -117,10 +117,10 @@ public sealed class BoxBorderPainter
         // smaller) border box.
         float maxWidth = _outer.Rect.Width;
         float maxHeight = _outer.Rect.Height;
-        _edges[(int)BoxSide.Top].ClampWidth((int)maxHeight);
-        _edges[(int)BoxSide.Right].ClampWidth((int)maxWidth);
-        _edges[(int)BoxSide.Bottom].ClampWidth((int)maxHeight);
-        _edges[(int)BoxSide.Left].ClampWidth((int)maxWidth);
+        _edges[(int)BoxSide.Top].ClampWidth(maxHeight);
+        _edges[(int)BoxSide.Right].ClampWidth(maxWidth);
+        _edges[(int)BoxSide.Bottom].ClampWidth(maxHeight);
+        _edges[(int)BoxSide.Left].ClampWidth(maxWidth);
 
         _isRounded = _outer.IsRounded;
     }
@@ -129,10 +129,10 @@ public sealed class BoxBorderPainter
 
     private void GetBorderEdgeInfo()
     {
-        _edges[(int)BoxSide.Top] = new BorderEdge((int)_style.BorderTopWidth, _style.BorderTopColor, _style.BorderTopStyle, HasSide(PhysicalBoxSides.Top));
-        _edges[(int)BoxSide.Right] = new BorderEdge((int)_style.BorderRightWidth, _style.BorderRightColor, _style.BorderRightStyle, HasSide(PhysicalBoxSides.Right));
-        _edges[(int)BoxSide.Bottom] = new BorderEdge((int)_style.BorderBottomWidth, _style.BorderBottomColor, _style.BorderBottomStyle, HasSide(PhysicalBoxSides.Bottom));
-        _edges[(int)BoxSide.Left] = new BorderEdge((int)_style.BorderLeftWidth, _style.BorderLeftColor, _style.BorderLeftStyle, HasSide(PhysicalBoxSides.Left));
+        _edges[(int)BoxSide.Top] = new BorderEdge(_style.BorderTopWidth, _style.BorderTopColor, _style.BorderTopStyle, HasSide(PhysicalBoxSides.Top));
+        _edges[(int)BoxSide.Right] = new BorderEdge(_style.BorderRightWidth, _style.BorderRightColor, _style.BorderRightStyle, HasSide(PhysicalBoxSides.Right));
+        _edges[(int)BoxSide.Bottom] = new BorderEdge(_style.BorderBottomWidth, _style.BorderBottomColor, _style.BorderBottomStyle, HasSide(PhysicalBoxSides.Bottom));
+        _edges[(int)BoxSide.Left] = new BorderEdge(_style.BorderLeftWidth, _style.BorderLeftColor, _style.BorderLeftStyle, HasSide(PhysicalBoxSides.Left));
     }
 
     private bool HasSide(PhysicalBoxSides side) => (_sidesToInclude & side) != 0;
@@ -491,7 +491,7 @@ public sealed class BoxBorderPainter
 
     // ─── side drawing ─────────────────────────────────────────────────────────
 
-    private void DrawSolidBorderRect(SKRect borderRect, int borderWidth, SKColor color)
+    private void DrawSolidBorderRect(SKRect borderRect, float borderWidth, SKColor color)
     {
         var strokeRect = borderRect;
         strokeRect = new SKRect(
@@ -1373,8 +1373,11 @@ public sealed class BoxBorderPainter
                 }
             }
 
-            int strokeThickness = Math.Max(Math.Max(edgeToRender.Width, adjacentEdge1.Width), adjacentEdge2.Width);
-            DrawBoxSideFromPath(path, edgeToRender.Width, strokeThickness, side, color, edgeToRender.BorderStyleValue);
+            // The path-based sides still work on an integer grid, so a fractional
+            // (device-quantised) width is rounded rather than truncated.
+            int edgeThickness = (int)MathF.Round(edgeToRender.Width);
+            int strokeThickness = (int)MathF.Round(Math.Max(Math.Max(edgeToRender.Width, adjacentEdge1.Width), adjacentEdge2.Width));
+            DrawBoxSideFromPath(path, edgeThickness, strokeThickness, side, color, edgeToRender.BorderStyleValue);
 
             if (pushedOut) EmitPopClip();
             if (pushedPolygon) EmitPopClip();
@@ -1393,8 +1396,8 @@ public sealed class BoxBorderPainter
             }
 
             DrawLineForBoxSide((int)sideRect.Left, (int)sideRect.Top, (int)sideRect.Right, (int)sideRect.Bottom, side, color,
-                edgeToRender.BorderStyleValue, miter1 != MiterType.NoMiter ? adjacentEdge1.Width : 0,
-                miter2 != MiterType.NoMiter ? adjacentEdge2.Width : 0);
+                edgeToRender.BorderStyleValue, miter1 != MiterType.NoMiter ? (int)MathF.Round(adjacentEdge1.Width) : 0,
+                miter2 != MiterType.NoMiter ? (int)MathF.Round(adjacentEdge2.Width) : 0);
 
             if (pushedPolygon) EmitPopClip();
         }

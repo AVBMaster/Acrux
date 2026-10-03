@@ -219,6 +219,13 @@ public static class ShorthandExpander
             else if (IsColor(p))
                 result[$"{side}-color"] = p;
         }
+
+        // A side shorthand resets the components it does not carry (CSS Backgrounds 3 §4):
+        // the width falls back to medium, the style to none and the colour to currentcolor,
+        // which then paints the element's own text colour instead of a stale value.
+        result.TryAdd($"{side}-style", "none");
+        result.TryAdd($"{side}-width", "medium");
+        result.TryAdd($"{side}-color", "currentcolor");
     }
 
     private static void ExpandBackground(Dictionary<string, string> result, string value)
@@ -671,7 +678,7 @@ public static class ShorthandExpander
                 result["outline-style"] = p;
             else if (IsBorderStyle(p))
                 result["outline-style"] = p;
-            else if (p == "thin" || p == "medium" || p == "thick" || p.EndsWith("px") || p.EndsWith("em"))
+            else if (IsBorderWidth(p))
                 result["outline-width"] = p;
             else if (IsColor(p))
                 result["outline-color"] = p;
@@ -810,7 +817,10 @@ public static class ShorthandExpander
         {
             if (value[i] == '(') depth++;
             else if (value[i] == ')') depth--;
-            else if (value[i] == ' ' && depth == 0)
+            // Only top-level whitespace separates tokens: 'rgb(10, 20, 30)' and
+            // 'calc(100% - 10px)' must stay in one piece or the caller mis-reads
+            // their fragments as extra widths and loses the real values.
+            else if (char.IsWhiteSpace(value[i]) && depth == 0)
             {
                 if (i > start) parts.Add(value[start..i]);
                 start = i + 1;
@@ -842,7 +852,7 @@ public static class ShorthandExpander
     }
 
     private static bool IsBorderStyle(string p) => p is "none" or "hidden" or "dotted" or "dashed" or "solid" or "double" or "groove" or "ridge" or "inset" or "outset";
-    private static bool IsBorderWidth(string p) => p == "thin" || p == "medium" || p == "thick" || p.EndsWith("px") || p.EndsWith("em");
+    private static bool IsBorderWidth(string p) => CssPropertyApplier.IsBorderWidthToken(p);
     private static bool IsColor(string p) => p.StartsWith("#") || p.StartsWith("rgb") || p == "transparent" || p == "currentcolor" || IsNamedColor(p);
     private static bool IsFontSize(string p) => p is "xx-small" or "x-small" or "small" or "medium" or "large" or "x-large" or "xx-large" or "larger" or "smaller";
     private static bool IsNamedColor(string p) => KnownColors.Get(p).HasValue;

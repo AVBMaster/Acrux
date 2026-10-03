@@ -21,14 +21,28 @@ public static class AbsoluteUtils
             ResolveInsetLength(style.Bottom, availableSize.BlockSize, style));
     }
 
-    private static float ResolveInsetLength(Length? length, float basis, ComputedStyle style) => length switch
+    private static float ResolveInsetLength(Length? length, float basis, ComputedStyle style) =>
+        ResolveInset(length, basis, style, style.FontSize, 0, 0) ?? 0;
+
+    /// <summary>Resolve one inset to pixels, or null when it is 'auto'. The axis basis is
+    /// the containing block's size for that axis, and it is only the base for percentages:
+    /// font-relative units keep their own base, because Length.ToPixels uses its first
+    /// argument for both em and percentage.</summary>
+    public static float? ResolveInset(Length? length, float axisBasis, ComputedStyle style,
+        float rootFontSize, float viewportWidth, float viewportHeight)
     {
-        PixelLength px => px.Value,
-        PercentLength pct => pct.Value * basis,
-        EmLength em => em.Value * style.FontSize,
-        MathLength m => m.ToPixels(basis, style.FontSize, 0, 0),
-        _ => 0,
-    };
+        if (length is null or AutoLength or IntrinsicLength)
+            return null;
+
+        using var _fontUnitScope = FontUnitContext.Use(style);
+        float pixels = length switch
+        {
+            PercentLength pct => pct.Value * axisBasis,
+            MathLength math => math.ToPixels(axisBasis, rootFontSize, viewportWidth, viewportHeight),
+            _ => length.ToPixels(style.FontSize, rootFontSize, viewportWidth, viewportHeight),
+        };
+        return float.IsNaN(pixels) ? null : pixels;
+    }
 
     /// <summary>Resolve insets from the style, returning nullopt for auto values.</summary>
     public static LogicalOofInsets ResolveOutOfFlowInsets(ComputedStyle style, LogicalSize availableSize)

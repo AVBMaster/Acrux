@@ -1,3 +1,4 @@
+using UpBrowser.Core.Css.Resolver;
 using UpBrowser.Core.Dom;
 
 namespace UpBrowser.Core.Css.Cascade;
@@ -22,6 +23,34 @@ public class StyleAdjuster
         AdjustTouchAction(style, element);
         AdjustZIndex(style, parentStyle);
         ResolveCurrentColors(style);
+        ApplyInitialBorderWidths(style);
+    }
+
+    /// <summary>
+    /// The initial value of every border width and of 'outline-width' is medium
+    /// (CSS Backgrounds 3 §4, CSS UI 4 §5). Those widths still start at zero in the style
+    /// object so a box that never mentions borders takes no space, so once the cascade is
+    /// done a box that *did* ask for a visible border style gets the medium width it was
+    /// promised. An authored 'border-width: 0' keeps its zero because it is recorded as
+    /// authored.
+    /// </summary>
+    private static void ApplyInitialBorderWidths(ComputedStyle style)
+    {
+        uint authored = style.AuthoredWidthSlots;
+        float medium = CssPropertyApplier.MediumBorderWidth;
+        if ((authored & (uint)ComputedStyle.CurrentColorSlot.BorderTop) == 0 && style.BorderTopStyle != BorderStyle.None)
+            style.BorderTopWidth = medium;
+        if ((authored & (uint)ComputedStyle.CurrentColorSlot.BorderRight) == 0 && style.BorderRightStyle != BorderStyle.None)
+            style.BorderRightWidth = medium;
+        if ((authored & (uint)ComputedStyle.CurrentColorSlot.BorderBottom) == 0 && style.BorderBottomStyle != BorderStyle.None)
+            style.BorderBottomWidth = medium;
+        if ((authored & (uint)ComputedStyle.CurrentColorSlot.BorderLeft) == 0 && style.BorderLeftStyle != BorderStyle.None)
+            style.BorderLeftWidth = medium;
+        // 'outline-width' keeps its initial medium even while 'outline-style: none', because
+        // that is what its computed value reports. A border width reads back as zero once its
+        // style is none, which is why the four sides above are conditional and this is not.
+        if ((authored & (uint)ComputedStyle.CurrentColorSlot.Outline) == 0)
+            style.OutlineWidth = medium;
     }
 
     /// <summary>

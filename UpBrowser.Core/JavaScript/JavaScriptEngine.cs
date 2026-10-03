@@ -723,16 +723,29 @@ public class JavaScriptEngine : IDisposable
             window.requestIdleCallback = function(cb, opts) { return setTimeout(cb, 50); };
             window.cancelIdleCallback = function(id) { clearTimeout(id); };
 
+            // Descriptor factory for the handful of window attributes that are plain
+            // writable strings (HTML: name, status, defaultStatus). The setter has to
+            // keep the value: 'var name' at global scope does not create a variable,
+            // it binds to window.name, so a no-op setter silently loses the value.
+            function __domStringAttr(initial) {
+                var stored = String(initial);
+                return {
+                    configurable: true,
+                    get: function() { return stored; },
+                    set: function(v) { stored = String(v); }
+                };
+            }
+
             Object.defineProperty(window, 'closed', { configurable: true, get: function() { return false; } });
-            Object.defineProperty(window, 'name', { configurable: true, get: function() { return ''; }, set: function(v) {} });
+            Object.defineProperty(window, 'name', __domStringAttr(''));
             Object.defineProperty(window, 'opener', { configurable: true, get: function() { return null; } });
             Object.defineProperty(window, 'parent', { configurable: true, get: function() { return window; } });
             window.self = window;
             Object.defineProperty(window, 'top', { configurable: true, get: function() { return window; } });
             Object.defineProperty(window, 'frames', { configurable: true, get: function() { return window; } });
             Object.defineProperty(window, 'length', { configurable: true, get: function() { return 0; } });
-            Object.defineProperty(window, 'status', { configurable: true, get: function() { return ''; }, set: function(v) {} });
-            Object.defineProperty(window, 'defaultStatus', { configurable: true, get: function() { return ''; }, set: function(v) {} });
+            Object.defineProperty(window, 'status', __domStringAttr(''));
+            Object.defineProperty(window, 'defaultStatus', __domStringAttr(''));
             Object.defineProperty(window, 'screenLeft', { configurable: true, get: function() { return 0; } });
             Object.defineProperty(window, 'screenTop', { configurable: true, get: function() { return 0; } });
             Object.defineProperty(window, 'screenX', { configurable: true, get: function() { return 0; } });

@@ -1150,24 +1150,15 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
 
         bool markerInside = style.ListStylePosition == ListStylePosition.Inside;
         LayoutBox? parentBox = null;
-        int itemIndex = 0;
+        // The ordinal comes from the HTML numbering model, not from a plain
+        // sibling count: <ol start>/<ol reversed>/<li value> all move it.
+        int ordinal = Core.Layout.List.ListItemNumbering.Ordinal(element);
         if (element.Parent is Element parent)
-        {
             parentBox = parent.LayoutBox;
-            foreach (var child in parent.Children)
-            {
-                if (child is Element childElement && childElement.ComputedStyle?.Display == DisplayType.ListItem)
-                {
-                    if (childElement == element) break;
-                    itemIndex++;
-                }
-            }
-        }
         // Outside markers hang into the parent's padding area, so they need the
         // parent's content edge; inside markers flow with the item's own content.
         if (!markerInside && parentBox == null) return;
 
-        float markerGap = UpBrowser.Core.Layout.List.ListMarker.MarkerGap;
         float markerWidth = UpBrowser.Core.Layout.List.ListMarker.MarkerWidth(
             style.ListStyleType, style.ListStylePosition, style.FontSize);
         float markerHeight = style.FontSize;
@@ -1192,9 +1183,12 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
             }
         }
 
+        // An outside marker's box is right-aligned with the item's content edge.
+        // The text branch below re-places it using the measured box width (which
+        // includes the suffix space); this is the image/estimate position.
         float markerX = markerInside
             ? box.ContentBox.Left
-            : parentBox!.ContentBox.Left - markerWidth - markerGap;
+            : parentBox!.ContentBox.Left - markerWidth;
 
         float markerY;
         if (box.Lines != null && box.Lines.Count > 0 && box.Lines[0].Baseline > 0)
@@ -1223,26 +1217,10 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
             return;
         }
 
-        string? counterMarker = Core.Layout.List.ListMarkerFormatter.Format(
-            style.ListStyleType, itemIndex + 1, style.ListStyleTypeString);
-        string markerText = counterMarker ?? style.ListStyleType switch
-        {
-            ListStyleType.Disc => "\u2022",
-            ListStyleType.Circle => "\u25CB",
-            ListStyleType.Square => "\u25A0",
-            ListStyleType.Decimal => (itemIndex + 1).ToString() + ".",
-            ListStyleType.DecimalLeadingZero => (itemIndex + 1).ToString().PadLeft(2, '0') + ".",
-            ListStyleType.LowerRoman => ToRoman(itemIndex + 1).ToLower() + ".",
-            ListStyleType.UpperRoman => ToRoman(itemIndex + 1) + ".",
-            ListStyleType.LowerAlpha => Core.Layout.List.ListMarkerFormatter
-                .Format(ListStyleType.LowerAlpha, itemIndex + 1, null)!,
-            ListStyleType.UpperAlpha => Core.Layout.List.ListMarkerFormatter
-                .Format(ListStyleType.UpperAlpha, itemIndex + 1, null)!,
-            _ => "\u2022"
-        };
-
         // ::marker may restyle the generated marker (CSS Lists 3 §7.1); only a
-        // small set of properties apply, so they are read from the side-car.
+        // small set of properties apply, so they are read from the side-car. This
+        // runs before the label is measured, because the label's advance is taken
+        // in the marker's own font.
         SKColor markerColor = style.Color;
         float markerFontSize = style.FontSize;
         string markerFamily = style.FontFamily ?? "Arial";
@@ -1258,6 +1236,31 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
             }
             if (element.MarkerStyles.TryGetValue("font-family", out var familyText))
                 markerFamily = familyText.Trim();
+        }
+
+        // '::marker { content }' replaces the counter label verbatim; 'none' and
+        // '""' take the marker away altogether (CSS Lists 3 §5).
+        string? markerContent = Core.Layout.List.ListMarker.MarkerContentOf(element);
+        string markerText = Core.Layout.List.ListMarker.ResolveMarkerContent(markerContent, ordinal)
+            ?? Core.Layout.List.ListMarkerFormatter.MarkerLabel(
+                style.ListStyleType, ordinal, style.ListStyleTypeString);
+        if (markerText.Length == 0) return;
+
+        // The advance the marker reserves is its real box: the label measured in
+        // the marker's own font (::marker may restyle it), plus the suffix space
+        // CSS Counter Styles puts after non-ideographic separators. The estimate
+        // alone lets long labels ("MMMCMXCVIII.") overlap the item text.
+        float measuredMarkerWidth = MeasureTextWidth(markerText, markerFontSize, markerFamily, style.FontWeight);
+        if (measuredMarkerWidth > 0)
+        {
+            markerWidth = measuredMarkerWidth;
+            if (!markerInside)
+            {
+                string boxText = Core.Layout.List.ListMarker.MarkerBoxText(
+                    style.ListStyleType, ordinal, style.ListStyleTypeString, markerContent);
+                float boxWidth = MeasureTextWidth(boxText, markerFontSize, markerFamily, style.FontWeight);
+                markerX = parentBox!.ContentBox.Left - (boxWidth > 0 ? boxWidth : measuredMarkerWidth);
+            }
         }
 
         var op = PaintOpPool.GetDrawTextOp();
@@ -1282,23 +1285,6 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
         if (open < 0 || close <= open)
             return trimmed;
         return trimmed[(open + 1)..close].Trim().Trim('"', '\'');
-    }
-
-    private string ToRoman(int number)
-    {
-        if (number <= 0) return "";
-        var result = "";
-        var values = new[] { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
-        var symbols = new[] { "M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I" };
-        for (int i = 0; i < values.Length; i++)
-        {
-            while (number >= values[i])
-            {
-                result += symbols[i];
-                number -= values[i];
-            }
-        }
-        return result;
     }
 
     private void DrawElementBackground(Element element, LayoutBox box, ComputedStyle style, SKRect borderRect, bool skipBackgroundLayers = false)
@@ -3984,7 +3970,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
     /// line. <paramref name="sides"/> carries the box-decoration-break rule: the
     /// sides facing a break are not decorated (CSS Fragmentation 3 §4.2).
     /// </summary>
-    private void PaintInlineRunBackground(Element? owner, ComputedStyle? style,
+    private void PaintInlineRunDecorations(Element? owner, ComputedStyle? style,
         float left, float right, float baselineY, PhysicalBoxSides sides = PhysicalBoxSides.All)
     {
         // Only inline boxes are decorated per fragment: a block's own background and
@@ -3999,7 +3985,8 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                          (style.BorderRightWidth > 0 && style.BorderRightStyle != BorderStyle.None) ||
                          (style.BorderBottomWidth > 0 && style.BorderBottomStyle != BorderStyle.None) ||
                          (style.BorderLeftWidth > 0 && style.BorderLeftStyle != BorderStyle.None);
-        if (!hasColor && !hasImage && !hasBorder)
+        bool hasOutline = style.OutlineWidth > 0 && style.OutlineStyle != BorderStyle.None;
+        if (!hasColor && !hasImage && !hasBorder && !hasOutline)
             return;
 
         bool includeLeft = (sides & PhysicalBoxSides.Left) != 0;
@@ -4051,6 +4038,13 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
             // side, which is exactly what a sliced fragment needs.
             var borderPainter = new BoxBorderPainter(_displayList, borderBox, style, sides);
             borderPainter.Paint();
+        }
+        if (hasOutline)
+        {
+            // An outline is drawn around every fragment of the inline box, and unlike a
+            // border it lives outside the border box, so a sliced break edge still gets
+            // a closed ring on each line (CSS UI 3 §4).
+            _outlinePainter.PaintOutline(borderBox, style, style.OutlineOffset);
         }
     }
 
@@ -4147,7 +4141,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                 if (HasOwner(prevOwners, f.Owner)) sides &= ~PhysicalBoxSides.Left;
                 if (HasOwner(nextOwners, f.Owner)) sides &= ~PhysicalBoxSides.Right;
             }
-            PaintInlineRunBackground(f.Owner, f.Style, f.Left, f.Right, f.BaselineY, sides);
+            PaintInlineRunDecorations(f.Owner, f.Style, f.Left, f.Right, f.BaselineY, sides);
         }
         _inlineFragments.Clear();
     }

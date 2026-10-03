@@ -1033,8 +1033,21 @@ internal static class ProcessTabSelfTest
         string selection = FirstWith("selected");
         // A summary toggles its details: the closed content is 200px tall, so the document
         // height is the observable — and nothing else in this fixture changes height.
-        string opened = FirstWith("detailsOpened"), closed = FirstWith("detailsClosed");
-        bool detailsToggle = opened.Contains("/h2032.0") && closed.Contains("/h1832.0");
+        // Compare heights instead of matching literals: the point is that opening the
+        // details adds its 200px of content and closing it takes exactly that back, and an
+        // absolute value here would break on a single device pixel of line-height rounding.
+        static float HeightOf(string line)
+        {
+            int at = line.IndexOf("/h", StringComparison.Ordinal);
+            if (at < 0) return -1f;
+            var rest = line[(at + 2)..];
+            int end = 0;
+            while (end < rest.Length && (char.IsDigit(rest[end]) || rest[end] == '.')) end++;
+            return float.TryParse(rest[..end], System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : -1f;
+        }
+        float hClosed = HeightOf(FirstWith("detailsClosed")), hOpen = HeightOf(FirstWith("detailsOpened"));
+        bool detailsToggle = hOpen - hClosed > 199f && hOpen - HeightOf(FirstWith("load")) > 199f;
         bool onlyRendered = selection.Contains("quick brown fox")
             && !selection.Contains("@keyframes") && !selection.Contains("body {");
         bool pass = rc == 0 && navigated && wheelScrolled && parked && onlyRendered && detailsToggle;

@@ -1,5 +1,6 @@
 ﻿using SkiaSharp;
 using UpBrowser.Core.Dom;
+using UpBrowser.Core.Layout.Geometry;
 
 namespace UpBrowser.Core.Layout;
 
@@ -11,7 +12,8 @@ namespace UpBrowser.Core.Layout;
 /// </summary>
 public static class AuroraFragmentConverter
 {
-    public static Dom.LayoutBox ToLayoutBox(BoxFragment fragment, Element? element, Dom.LayoutBox? parent = null)
+    public static Dom.LayoutBox ToLayoutBox(BoxFragment fragment, Element? element, Dom.LayoutBox? parent = null,
+        bool applyRelativeOffset = true)
     {
         var box = new Dom.LayoutBox
         {
@@ -92,13 +94,14 @@ public static class AuroraFragmentConverter
                 };
                 foreach (var run in boxLine.Runs)
                 {
+                    var shift = InlineRelativeShift(run, box);
                     line.Runs.Add(new InlineRun
                     {
                         Text = run.Text ?? "",
-                        X = lineLeft + run.InlineOffset,
+                        X = lineLeft + run.InlineOffset + shift.Left,
                         Width = run.InlineSize,
                         Height = run.BlockSize,
-                        Baseline = run.Text != null ? line.Baseline - run.BaselineShift : run.BaselineOffset,
+                        Baseline = (run.Text != null ? line.Baseline - run.BaselineShift : run.BaselineOffset) + shift.Top,
                         IsText = run.Text != null,
                         Node = run.Node ?? run.Element,
                         FontSize = run.FontSize,
@@ -112,15 +115,17 @@ public static class AuroraFragmentConverter
                     // element paint path draws its background, border and content.
                     // Its block offset was resolved for vertical-align in
                     // AdjustLineForAtomicInlines and is relative to the container's
-                    // border box.
+                    // border box. It is converted with the line's block as its parent so
+                    // that a relative offset on the atomic box finds a containing block.
                     if (run.IsAtomicInline && run.AtomicInlineBox != null && run.Element != null)
                     {
                         float atomicAbsX = lineLeft + run.InlineOffset;
                         float atomicAbsY = box.BorderBox.Top + run.BlockOffset;
-                        var atomicBox = ToLayoutBox(run.AtomicInlineBox, run.Element, null);
+                        var atomicBox = ToLayoutBox(run.AtomicInlineBox, run.Element, box, applyRelativeOffset: false);
+                        var atomicShift = InlineRelativeShift(run, box);
                         TranslateBox(atomicBox,
-                            atomicAbsX - atomicBox.BorderBox.Left,
-                            atomicAbsY - atomicBox.BorderBox.Top);
+                            atomicAbsX - atomicBox.BorderBox.Left + atomicShift.Left,
+                            atomicAbsY - atomicBox.BorderBox.Top + atomicShift.Top);
                         atomicBox.Parent = box;
                         box.Children.Add(atomicBox);
                     }
@@ -130,13 +135,14 @@ public static class AuroraFragmentConverter
                 foreach (var run in boxLine.Runs)
                 {
                     if (run.Text == null) continue;
+                    var shift = InlineRelativeShift(run, box);
                     runs.Add(new InlineRun
                     {
                         Text = run.Text,
-                        X = lineLeft + run.InlineOffset,
+                        X = lineLeft + run.InlineOffset + shift.Left,
                         Width = run.InlineSize,
                         Height = run.BlockSize,
-                        Baseline = run.Text != null ? line.Baseline - run.BaselineShift : run.BaselineOffset,
+                        Baseline = line.Baseline - run.BaselineShift + shift.Top,
                         IsText = true,
                         Node = run.Node ?? run.Element,
                     });
@@ -213,13 +219,70 @@ public static class AuroraFragmentConverter
             box.ColumnWidth = fragment.ColumnInlineSize;
             box.ColumnGapSize = fragment.ColumnProgression - fragment.ColumnInlineSize;
         }
+        // Relative positioning displaces the finished box and everything anchored to it
+        // from the static position the flow gave it; the flow itself is untouched, so the
+        // parent's line box and the following siblings keep their geometry (CSS 2.1 §9.4).
+        if (applyRelativeOffset)
+            ApplyRelativeOffset(box, fragment.Element?.ComputedStyle, parent);
         return box;
+    }
+
+    private static void ApplyRelativeOffset(Dom.LayoutBox box, ComputedStyle? style, Dom.LayoutBox? parent)
+    {
+        if (style is null || style.Position != PositionType.Relative)
+            return;
+
+        var (inlineBasis, blockBasis, rootFontSize, viewport) = RelativeContainingBlock(parent, box);
+        var offset = RelativeUtils.Offset(style, inlineBasis, blockBasis, rootFontSize, viewport.Width, viewport.Height);
+        if (offset.Left != 0 || offset.Top != 0)
+            TranslateBox(box, offset.Left, offset.Top);
+    }
+
+    /// <summary>The box whose padding block sizes the percentage insets of a relative
+    /// offset: the nearest positioned ancestor, or the initial containing block when the
+    /// chain has none (CSS 2.1 §10.5).</summary>
+    private static (float InlineBasis, float BlockBasis, float RootFontSize, PhysicalSize Viewport)
+        RelativeContainingBlock(Dom.LayoutBox? parent, Dom.LayoutBox? self)
+    {
+        Dom.LayoutBox? root = parent ?? self;
+        while (root?.Parent != null)
+            root = root.Parent;
+
+        for (var node = parent; node != null; node = node.Parent)
+        {
+            var nodeStyle = node.Dimensions?.Style;
+            if (nodeStyle is { Position: PositionType.Relative or PositionType.Absolute or PositionType.Fixed })
+                return (node.PaddingBox.Width, node.PaddingBox.Height,
+                    root?.Dimensions?.Style?.FontSize ?? 16,
+                    new PhysicalSize(root?.BorderBox.Width ?? 0, root?.BorderBox.Height ?? 0));
+        }
+
+        // No positioned ancestor: the initial containing block, proxied by the root box.
+        float width = root?.BorderBox.Width ?? self?.BorderBox.Width ?? 0;
+        float height = root?.BorderBox.Height ?? self?.BorderBox.Height ?? 0;
+        return (width, height, root?.Dimensions?.Style?.FontSize ?? 16, new PhysicalSize(width, height));
     }
 
     private static bool IsScrollableOverflow(ComputedStyle style) =>
         style.OverflowY is OverflowType.Auto or OverflowType.Scroll
         || style.OverflowX is OverflowType.Auto or OverflowType.Scroll
         || style.Overflow is OverflowType.Auto or OverflowType.Scroll;
+
+    /// <summary>Relative displacement of an inline element's own fragments. Only the run
+    /// moves: the line box and its neighbours keep their static geometry (CSS 2.1 §9.4),
+    /// and a shifted run can no longer borrow the line's baseline.</summary>
+    private static PhysicalOffset InlineRelativeShift(BoxRun run, Dom.LayoutBox containerBox)
+    {
+        var element = run.Element ?? (run.Node as Element) ?? (run.Node as TextNode)?.ParentElement;
+        var style = element?.ComputedStyle;
+        if (style is null || style.Position != PositionType.Relative)
+            return PhysicalOffset.Zero;
+
+        // An inline box contributes no containing block of its own, so its percentages
+        // resolve against the containing block of its parent block chain.
+        var (inlineBasis, blockBasis, rootFontSize, viewport) = RelativeContainingBlock(containerBox.Parent, containerBox);
+        return RelativeUtils.Offset(style, inlineBasis, blockBasis, rootFontSize, viewport.Width, viewport.Height);
+    }
 
     /// <summary>
     /// Shift a box subtree by (dx, dy). Atomic inline fragments are laid out at

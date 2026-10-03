@@ -22,6 +22,7 @@ internal static class SnapshotCli
                 "--snapshot" => RunSnapshot(args),
                 "--diff" => RunDiff(args),
                 "--dumplayout" => RunDumpLayout(args),
+                "--computed" => RunComputed(args),
                 "--textops" => RunTextOps(args),
                 "--pixels" => RunPixels(args),
                 "--rows" => RunRows(args),
@@ -261,6 +262,107 @@ internal static class SnapshotCli
         return result.SizeMismatch || result.DifferingPixels > 0 ? 1 : 0;
     }
 
+    private static int RunComputed(string[] args)
+    {
+        if (args.Length < 2) return Usage();
+
+        string inputPath = args[1];
+        int width = args.Length > 2 ? int.Parse(args[2]) : 1024;
+        int height = args.Length > 3 ? int.Parse(args[3]) : 768;
+        float dpiScale = args.Length > 4
+            ? float.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture)
+            : 1f;
+
+        if (!File.Exists(inputPath))
+        {
+            Console.Error.WriteLine($"[computed] input not found: {inputPath}");
+            return 1;
+        }
+
+        var full = Path.GetFullPath(inputPath);
+        var html = File.ReadAllText(full);
+        var baseUrl = new Uri(full).AbsoluteUri;
+        var page = RenderSnapshot.Prepare(html, width, height, baseUrl, dpiScale, true, 0);
+
+        // Quoted CSS values ('list-style: "«"') must survive the pipe into the
+        // comparison script, so the console cannot stay on the OEM code page.
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        DumpComputed(page.Load.Document.DocumentElement);
+        return 0;
+    }
+
+    // A computed-style channel exists so shorthand parsing (order, omission,
+    // initial-value resets) can be diffed against a browser's getComputedStyle
+    // without a screenshot - the same values, one line per element.
+    private static void DumpComputed(UpBrowser.Core.Dom.Element? element)
+    {
+        if (element == null) return;
+
+        var style = element.ComputedStyle;
+        var id = element.GetAttribute("id");
+        if (style != null && !string.IsNullOrEmpty(id))
+        {
+            Console.WriteLine($"{id} display={style.Display} boxSizing={style.BoxSizing} position={style.Position}");
+            Console.WriteLine($"{id} border={Fmt(style.BorderTopWidth)}/{style.BorderTopStyle}/{Color(style.BorderTopColor)} " +
+                $"{Fmt(style.BorderRightWidth)}/{style.BorderRightStyle}/{Color(style.BorderRightColor)} " +
+                $"{Fmt(style.BorderBottomWidth)}/{style.BorderBottomStyle}/{Color(style.BorderBottomColor)} " +
+                $"{Fmt(style.BorderLeftWidth)}/{style.BorderLeftStyle}/{Color(style.BorderLeftColor)}");
+            Console.WriteLine($"{id} radius={Fmt(style.BorderTopLeftRadius)},{Fmt(style.BorderTopRightRadius)},{Fmt(style.BorderBottomRightRadius)},{Fmt(style.BorderBottomLeftRadius)}" +
+                $"/{Fmt(style.BorderTopLeftRadiusY)},{Fmt(style.BorderTopRightRadiusY)},{Fmt(style.BorderBottomRightRadiusY)},{Fmt(style.BorderBottomLeftRadiusY)}");
+            Console.WriteLine($"{id} outline={Fmt(style.OutlineWidth)}/{style.OutlineStyle}/{Color(style.OutlineColor)} offset={Fmt(style.OutlineOffset)}");
+            Console.WriteLine($"{id} textDecoration={style.TextDecorationLine}/{style.TextDecorationStyle}/{Color(style.TextDecorationColor)}/{Fmt(style.TextDecorationThickness)} fromFont={style.TextDecorationThicknessFromFont} uOffset={(style.TextUnderlineOffsetIsAuto ? "auto" : Fmt(style.TextUnderlineOffset))} uPos={style.TextUnderlinePosition}");
+            Console.WriteLine($"{id} margin={Fmt(style.MarginTop)} {Fmt(style.MarginRight)} {Fmt(style.MarginBottom)} {Fmt(style.MarginLeft)}");
+            Console.WriteLine($"{id} padding={Fmt(style.PaddingTop)} {Fmt(style.PaddingRight)} {Fmt(style.PaddingBottom)} {Fmt(style.PaddingLeft)}");
+            Console.WriteLine($"{id} inset={Fmt(style.Top)}/{Fmt(style.Right)}/{Fmt(style.Bottom)}/{Fmt(style.Left)} z={style.ZIndex?.ToString() ?? "auto"} opacity={Fmt(style.Opacity)}");
+            Console.WriteLine($"{id} font={Fmt(style.FontSize)}/{style.FontWeight}/{style.FontStyle}/{style.FontFamily} lh={Fmt(style.LineHeight)}({style.LineHeightIsNormal}) variant={style.FontVariant} transform={style.TextTransform}");
+            Console.WriteLine($"{id} color={Color(style.Color)} bg={Color(style.BackgroundColor)} bgImg={style.BackgroundImage?.Count ?? 0} bgSize={style.BackgroundSize} bgRepeat={style.BackgroundRepeat} bgPos={style.BackgroundPositionX}|{style.BackgroundPositionY} bgClip={style.BackgroundClip} bgOrigin={style.BackgroundOrigin}");
+            Console.WriteLine($"{id} boxShadow={ShadowList(style.BoxShadow)} textShadow={ShadowList(style.TextShadow)}");
+            Console.WriteLine($"{id} flex={Fmt(style.FlexGrow)}/{Fmt(style.FlexShrink)}/{Fmt(style.FlexBasis)} dir={style.FlexDirection} wrap={style.FlexWrap} jc={style.JustifyContent} ai={style.AlignItems} ac={style.AlignContent} gap={Fmt(style.RowGap)}/{Fmt(style.ColumnGap)}");
+            Console.WriteLine($"{id} listStyle={style.ListStyleType}/{style.ListStylePosition}/{style.ListStyleImage} custom='{style.ListStyleTypeString}'");
+            Console.WriteLine($"{id} spacing={Fmt(style.LetterSpacing)}/{Fmt(style.WordSpacing)} indent={Fmt(style.TextIndent)}({style.TextIndentPercent}%) hang={style.TextIndentHanging} ws={style.WhiteSpace} overflow={style.OverflowX}/{style.OverflowY}");
+            Console.WriteLine($"{id} textOverflow={style.TextOverflow}/'{style.TextOverflowString}' wrap={style.OverflowWrap}/{style.WordBreak} lineBreak={style.LineBreak} hyphens={style.Hyphens} textWrap={style.TextWrap}");
+            Console.WriteLine($"{id} columns={style.ColumnCount}/{Fmt(style.ColumnWidth)}/{Fmt(style.ColumnGap)} rule={Fmt(style.ColumnRuleWidth)}/{style.ColumnRuleStyle}");
+            Console.WriteLine($"{id} transition={Or(style.TransitionProperty, "all")}/{Or(style.TransitionDuration, "0s")}/{Or(style.TransitionDelay, "0s")}/{Or(style.TransitionTimingFunction, "ease")}");
+            Console.WriteLine($"{id} animation={Or(style.AnimationName, "none")}/{Or(style.AnimationDuration, "0s")}/{Or(style.AnimationIterationCount, "1")}/{Or(style.AnimationFillMode, "none")}");
+            Console.WriteLine($"{id} misc=caret:{Color(style.CaretColor)} accent:{Color(style.AccentColor)} imgRendering:{style.ImageRendering} scroll:{style.ScrollBehavior} tab:{Fmt(style.TabSizePx)} contain:{style.Contain} cv:{style.ContentVisibility} filter:{style.Filter}");
+        }
+
+        foreach (var child in element.Children)
+            if (child is UpBrowser.Core.Dom.Element el)
+                DumpComputed(el);
+    }
+
+    // A missing value is printed as "auto" so a numeric column never hides the
+    // difference between "0" and "not specified".
+    // A null time/keyword field means "never declared", so the initial value is
+    // printed instead of an empty column - the whole point of the channel is that a
+    // line can be read straight against a browser's getComputedStyle output.
+    private static string Or(string? value, string initial) =>
+        string.IsNullOrEmpty(value) ? initial : value;
+
+    private static string Fmt(float? value) =>
+        value == null || float.IsNaN(value.Value) ? "auto"
+            : value.Value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string Fmt(UpBrowser.Core.Dom.Length? length) =>
+        length == null ? "none" : length.ToString() ?? "none";
+
+    private static string Color(SkiaSharp.SKColor? color) =>
+        color == null ? "none"
+            : color.Value.Alpha == 255
+                ? $"rgb({color.Value.Red},{color.Value.Green},{color.Value.Blue})"
+                : $"rgba({color.Value.Red},{color.Value.Green},{color.Value.Blue},{color.Value.Alpha / 255f:0.###})";
+
+    private static string ShadowList(System.Collections.Generic.List<UpBrowser.Core.Dom.BoxShadowValue>? shadows) =>
+        shadows is not { Count: > 0 } ? "none"
+            : string.Join(", ", shadows.Select(s =>
+                $"{Color(s.Color)} {Fmt(s.OffsetX)} {Fmt(s.OffsetY)} {Fmt(s.BlurRadius)} {Fmt(s.Spread)}{(s.Inset ? " inset" : "")}"));
+
+    private static string ShadowList(System.Collections.Generic.List<UpBrowser.Core.Dom.TextShadowValue>? shadows) =>
+        shadows is not { Count: > 0 } ? "none"
+            : string.Join(", ", shadows.Select(s =>
+                $"{Color(s.Color)} {Fmt(s.OffsetX)} {Fmt(s.OffsetY)} {Fmt(s.BlurRadius)}"));
+
     private static int RunDumpLayout(string[] args)
     {
         if (args.Length < 2) return Usage();
@@ -298,10 +400,14 @@ internal static class SnapshotCli
         if (element == null) return;
         var box = element.LayoutBox;
         var indent = new string(' ', depth * 2);
+        // The id is part of the line so a static probe page can be matched against
+        // the same engine's getBoundingClientRect numbers case by case.
+        var id = element.GetAttribute("id");
+        var label = string.IsNullOrEmpty(id) ? $"<{element.TagName}>" : $"<{element.TagName}#{id}>";
         if (box != null)
         {
             var b = box.BorderBox;
-            Console.WriteLine($"{indent}<{element.TagName}> fontSize={element.ComputedStyle?.FontSize} display={element.ComputedStyle?.Display} lst={element.ComputedStyle?.ListStyleType} bgImg={(element.ComputedStyle?.BackgroundImage is { } bi && bi.Count > 0 ? bi[0] : "null")} border=({b.Left:F1},{b.Top:F1} {b.Width:F1}x{b.Height:F1}) lineH={box.LineHeight:F1} lines={box.Lines?.Count ?? 0} lineRuns={box.LineRuns?.Count ?? 0}");
+            Console.WriteLine($"{indent}{label} fontSize={element.ComputedStyle?.FontSize} display={element.ComputedStyle?.Display} lst={element.ComputedStyle?.ListStyleType} bgImg={(element.ComputedStyle?.BackgroundImage is { } bi && bi.Count > 0 ? bi[0] : "null")} border=({b.Left:F1},{b.Top:F1} {b.Width:F1}x{b.Height:F1}) lineH={box.LineHeight:F1} lines={box.Lines?.Count ?? 0} lineRuns={box.LineRuns?.Count ?? 0}");
             if (box.Lines != null)
             {
                 foreach (var line in box.Lines)
@@ -314,7 +420,7 @@ internal static class SnapshotCli
         }
         else
         {
-            Console.WriteLine($"{indent}<{element.TagName}> fontSize={element.ComputedStyle?.FontSize} (no box)");
+            Console.WriteLine($"{indent}{label} fontSize={element.ComputedStyle?.FontSize} (no box)");
         }
         foreach (var child in element.Children)
             if (child is UpBrowser.Core.Dom.Element ce)
@@ -366,8 +472,11 @@ internal static class SnapshotCli
         foreach (var op in displayList.EnumerateOps())
         {
             Console.WriteLine($"[op] {op.GetType().Name} bounds=[{op.Bounds.Left:F2},{op.Bounds.Top:F2},{op.Bounds.Right:F2},{op.Bounds.Bottom:F2}] z={op.ZIndex}");
-            if (op is DrawTextOp t && t.Text.Length > 0 && t.Text.Length <= 12)
+            if (op is DrawTextOp t && t.Text.Length > 0)
             {
+                // Long runs used to be dropped from the dump entirely, which made the
+                // tool look like the text was missing from the display list.
+                string shown = t.Text.Length <= 60 ? t.Text : t.Text[..60] + $"…(+{t.Text.Length - 60})";
                 string decorations = "";
                 if (t.Underline || t.Overline || t.LineThrough)
                 {
@@ -384,7 +493,7 @@ internal static class SnapshotCli
                 }
                 if (t.AncestorDecorations is { Count: > 0 } ancestors)
                     decorations += $" propagated={ancestors.Count} {string.Join(",", ancestors)}";
-                Console.WriteLine($"[text] '{t.Text}' x={t.X:F1} y={t.Y:F1} size={t.FontSize:F1}{decorations}");
+                Console.WriteLine($"[text] '{shown}' x={t.X:F1} y={t.Y:F1} w={t.Bounds.Width:F1} size={t.FontSize:F1}{decorations}");
             }
             else if (op is DrawRectOp r && r.FillColor.Alpha > 0)
                 Console.WriteLine($"[rect] fill=({r.FillColor.Red},{r.FillColor.Green},{r.FillColor.Blue}) [{r.Rect.Left:F2},{r.Rect.Top:F2} - {r.Rect.Right:F2},{r.Rect.Bottom:F2}]");
@@ -474,6 +583,7 @@ internal static class SnapshotCli
         Console.Error.WriteLine("  UpBrowser --snapshot <input.html> <output.png> [width] [height] [dpiScale] [timeMs]");
         Console.Error.WriteLine("  UpBrowser --diff <expected.png> <actual.png> [diff.png] [tolerance]");
         Console.Error.WriteLine("  UpBrowser --dumplayout <input.html> [width] [height]");
+        Console.Error.WriteLine("  UpBrowser --computed <input.html> [width] [height] [dpiScale]");
         Console.Error.WriteLine("  UpBrowser --anim <input.html> [width] [height] [timeMs]");
         Console.Error.WriteLine("  UpBrowser --rows <image.png> <x0> <x1> <y0> <y1>");
         return 64;

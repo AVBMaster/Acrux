@@ -840,7 +840,17 @@ public class DrawTextOp : PaintOp
                      (c >= 0x20000 && c <= 0x2A6DF) || (c >= 0x2B740 && c <= 0x2B81F) ||
                      (c >= 0x2B820 && c <= 0x2CEAF) || (c >= 0x3000 && c <= 0x303F) ||
                      (c >= 0xFF00 && c <= 0xFFEF);
-        bool isEmoji = c >= 0x2600;
+        // Hangul and kana are not Han, and they are above U+2600, so the open-ended
+        // emoji test below used to claim them and drew them from an emoji face that
+        // has no such glyphs (tofu). They go through the same fallback chain the
+        // measurer uses, so painting agrees with the advance that was laid out.
+        bool isKorean = (c >= 0x1100 && c <= 0x11FF) || (c >= 0x302E && c <= 0x302F) ||
+                        (c >= 0x3130 && c <= 0x318F) || (c >= 0xA960 && c <= 0xA97F) ||
+                        (c >= 0xAC00 && c <= 0xD7A3) || (c >= 0xD7B0 && c <= 0xD7FF);
+        bool isKana = (c >= 0x3040 && c <= 0x30FF) || (c >= 0x31F0 && c <= 0x31FF);
+        // Emoji live in the astral planes, so in UTF-16 they arrive as a surrogate
+        // PAIR: the individual code units are 0xD800-0xDFFF, below any astral value.
+        bool isEmoji = char.IsSurrogate(c) || c >= 0x1F000;
         bool isSpecialSymbol = (c >= 0x2000 && c <= 0x206F) || (c >= 0x2100 && c <= 0x27BF) ||
                                (c >= 0x2800 && c <= 0x28FF) || c == 0x00
                                || c == 0x00A9 ||
@@ -857,6 +867,13 @@ public class DrawTextOp : PaintOp
 
         if (isCjk)
             return GetCachedChineseTypeface();
+        if (isKorean || isKana)
+        {
+            var scriptTypeface = Core.Fonts.FontManager.GetFallbackTypeface(codePoint);
+            if (scriptTypeface != null && GlyphPresentCached(scriptTypeface, codePoint))
+                return scriptTypeface;
+            return GetCachedChineseTypeface();
+        }
         if (isEmoji)
             return GetCachedEmojiTypeface() ?? GetCachedChineseTypeface();
         if (isSpecialSymbol)
@@ -867,12 +884,19 @@ public class DrawTextOp : PaintOp
             var fallback = Core.Fonts.FontManager.GetFallbackTypeface(codePoint);
             if (fallback != null)
                 return fallback;
-            return GetCachedDefaultTypeface();
+            return GetCachedChineseTypeface();
         }
 
         var defaultTf = GetCachedDefaultTypeface();
         if (GlyphPresentCached(defaultTf, codePoint))
             return defaultTf;
+
+        // Anything else the requested and default faces cannot draw goes through the
+        // same chain the measurer uses (Arabic, Thai, Cyrillic-ext, …); falling back
+        // to the Chinese face here produced tofu with a Han advance instead.
+        var tailTypeface = Core.Fonts.FontManager.GetFallbackTypeface(codePoint);
+        if (tailTypeface != null && GlyphPresentCached(tailTypeface, codePoint))
+            return tailTypeface;
 
         return GetCachedChineseTypeface();
     }

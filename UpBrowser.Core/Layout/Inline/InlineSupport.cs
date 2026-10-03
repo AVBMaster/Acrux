@@ -94,6 +94,10 @@ public class LineTruncator
         _availableWidth = lineInfo.AvailableInlineSize;
         _lineDirection = TextDirection.Ltr;
         var style = _lineStyle ?? new ComputedStyle();
+        // A custom 'text-overflow' string replaces the ellipsis glyph, and the
+        // reservation below is measured from it (CSS UI 4 &#167;4.4).
+        if (!string.IsNullOrEmpty(style.TextOverflowString))
+            _ellipsisText = style.TextOverflowString!;
         float measured = TextMeasureProxy.MeasureText(_ellipsisText, style);
         _ellipsisWidth = measured > 0 ? measured : _ellipsisText.Length * Math.Max(1, style.FontSize) * 0.5f;
     }
@@ -190,11 +194,15 @@ public class LineTruncator
         // so for an RTL paragraph the ellipsis goes to the visual left edge —
         // that is where the clipped overflow was (CSS Overflow 3 §4.5).
         bool rtlVisual = _lineInfo.BaseDirection() == TextDirection.Rtl;
+        // The kept prefix is accumulated from the line's own item widths while the
+        // marker width is measured on its own, so the two can disagree by a fraction of
+        // a pixel. Clamping keeps the marker inside the clip edge it is supposed to fit.
+        float markerStart = Math.Max(0, Math.Min(width, _availableWidth - ellipsis));
         var ellipsisItem = new LogicalLineItem
         {
             TextContent = _ellipsisText,
             InlineSize = ellipsis,
-            Rect = new LogicalRect(rtlVisual ? 0 : width, 0, ellipsis, 16),
+            Rect = new LogicalRect(rtlVisual ? 0 : markerStart, 0, ellipsis, 16),
             HasBidiLevel = true,
             InlineItem = ellipsisInlineItem,
         };
@@ -212,7 +220,7 @@ public class LineTruncator
             lineBox.AddChild(ellipsisItem);
         }
 
-        return width + ellipsis;
+        return markerStart + ellipsis;
     }
 
     /// <summary>

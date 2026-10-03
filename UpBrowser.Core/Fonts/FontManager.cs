@@ -235,7 +235,39 @@ public class FontFallbackChain
 
     private void SetupGenericFallbacks()
     {
-        _genericFallbacks.AddRange(GetPlatformCandidates("generic-fallback"));
+        // Symbol and emoji faces must come LAST in the per-code-point chain: they
+        // carry legacy coverage of Thai, Indic and other scripts, and matching them
+        // first silently replaced the script's own face (Segoe UI Symbol's Thai is
+        // ~9% narrower than Leelawadee UI's, its Devanagari ~13% wider).
+        string[] lastResort = { "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji",
+                                "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne" };
+
+        foreach (var family in GetPlatformCandidates("generic-fallback"))
+        {
+            if (!lastResort.Contains(family) && !_genericFallbacks.Contains(family))
+                _genericFallbacks.Add(family);
+        }
+
+        // The generic chain has to reach a script-specific face for every script the
+        // preset counter styles and CJK text use, or the code point falls through to
+        // SKTypeface.Default, whose Hangul advance is proportional (~0.58em) instead
+        // of the full 1em a Korean face gives. Appended after the Latin faces so
+        // Latin text keeps resolving to Segoe UI exactly as before; only glyphs none
+        // of the Latin faces own reach these.
+        foreach (var script in new[] { "korean", "japanese", "thai", "indic" })
+        {
+            foreach (var candidate in GetPlatformCandidates(script))
+            {
+                if (!_genericFallbacks.Contains(candidate))
+                    _genericFallbacks.Add(candidate);
+            }
+        }
+
+        foreach (var family in lastResort)
+        {
+            if (!_genericFallbacks.Contains(family))
+                _genericFallbacks.Add(family);
+        }
     }
 
     private void SetupFamilyFallbacks()
@@ -304,6 +336,10 @@ public class FontFallbackChain
                 "chinese" => new() { "Microsoft YaHei", "Microsoft YaHei UI", "SimHei", "SimSun", "NSimSun", "FangSong", "KaiTi" },
                 "japanese" => new() { "Meiryo", "Yu Gothic", "MS Gothic", "MS Mincho" },
                 "korean" => new() { "Malgun Gothic", "Gulim", "Dotum" },
+                // Neither Segoe UI nor YaHei covers Thai or the Indic scripts, so these
+                // fell through to the default face and painted .notdef boxes.
+                "thai" => new() { "Leelawadee UI", "Tahoma", "Thonburi" },
+                "indic" => new() { "Nirmala UI", "Mangal", "Kohinoor Devanagari" },
                 "arial" => new() { "Arial", "Arial Unicode MS", "Microsoft Sans Serif" },
                 "helvetica" => new() { "Arial", "Microsoft Sans Serif" },
                 "times" => new() { "Times New Roman", "Times" },
@@ -332,6 +368,8 @@ public class FontFallbackChain
                 "chinese" => new() { "PingFang SC", "PingFang TC", "Heiti SC", "STHeiti", "Songti SC" },
                 "japanese" => new() { "Hiragino Kaku Gothic Pro", "Hiragino Sans", "YuGothic" },
                 "korean" => new() { "AppleGothic", "Apple SD Gothic Neo" },
+                "thai" => new() { "Thonburi", "Noto Sans Thai" },
+                "indic" => new() { "Kohinoor Devanagari", "Devanagari MT", "Noto Sans Devanagari" },
                 "arial" => new() { "Arial", "Arial Unicode MS" },
                 "helvetica" => new() { "Helvetica Neue", "Helvetica", "Arial" },
                 "times" => new() { "Times New Roman", "Times" },
@@ -360,6 +398,8 @@ public class FontFallbackChain
                 "chinese" => new() { "Noto Sans CJK SC", "Noto Sans SC", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", "AR PL UMing CN" },
                 "japanese" => new() { "Noto Sans CJK JP", "Noto Sans JP" },
                 "korean" => new() { "Noto Sans CJK KR", "Noto Sans KR" },
+                "thai" => new() { "Noto Sans Thai", "Loma", "Garuda" },
+                "indic" => new() { "Noto Sans Devanagari", "Mangal", "Lohit Devanagari" },
                 "arial" => new() { "Noto Sans", "DejaVu Sans", "Liberation Sans" },
                 "helvetica" => new() { "Noto Sans", "DejaVu Sans" },
                 "times" => new() { "Noto Serif", "DejaVu Serif", "Liberation Serif" },

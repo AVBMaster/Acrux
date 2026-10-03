@@ -1,4 +1,5 @@
-﻿using SkiaSharp;
+﻿using System.Text;
+using SkiaSharp;
 using UpBrowser.Core.Dom;
 using UpBrowser.Core.Css.ElementStyles;
 using CurrentColorSlot = UpBrowser.Core.Dom.ComputedStyle.CurrentColorSlot;
@@ -139,7 +140,7 @@ public static class CssPropertyApplier
             case "text-emphasis-style": style.TextEmphasisStyle = value; break;
             case "text-emphasis-position": style.TextEmphasisPosition = value; break;
             case "text-shadow": style.TextShadow = ParseTextShadow(value); break;
-            case "text-overflow": style.TextOverflow = value.ToLowerInvariant() == "ellipsis" ? TextOverflowType.Ellipsis : TextOverflowType.Clip; break;
+            case "text-overflow": ParseTextOverflow(value, style); break;
             case "text-wrap":
                 // Keep the whole (lowercased) value; 'balance'/'pretty' may combine with a
                 // second keyword (e.g. "balance nowrap") in future, so we substring-match.
@@ -190,10 +191,10 @@ public static class CssPropertyApplier
             case "border-width": ParseBorderWidth(value, style); break;
             case "border-color": ParseBorderColor(value, style); break;
             case "border-style": ParseBorderStyle(value, style); break;
-            case "border-top-width": style.BorderTopWidth = BorderWidthPx(value); break;
-            case "border-right-width": style.BorderRightWidth = BorderWidthPx(value); break;
-            case "border-bottom-width": style.BorderBottomWidth = BorderWidthPx(value); break;
-            case "border-left-width": style.BorderLeftWidth = BorderWidthPx(value); break;
+            case "border-top-width": style.BorderTopWidth = BorderWidthPx(value); style.AuthoredWidthSlots |= (uint)CurrentColorSlot.BorderTop; break;
+            case "border-right-width": style.BorderRightWidth = BorderWidthPx(value); style.AuthoredWidthSlots |= (uint)CurrentColorSlot.BorderRight; break;
+            case "border-bottom-width": style.BorderBottomWidth = BorderWidthPx(value); style.AuthoredWidthSlots |= (uint)CurrentColorSlot.BorderBottom; break;
+            case "border-left-width": style.BorderLeftWidth = BorderWidthPx(value); style.AuthoredWidthSlots |= (uint)CurrentColorSlot.BorderLeft; break;
             case "border-top-style": style.BorderTopStyle = ParseBorderStyleValue(value); break;
             case "border-right-style": style.BorderRightStyle = ParseBorderStyleValue(value); break;
             case "border-bottom-style": style.BorderBottomStyle = ParseBorderStyleValue(value); break;
@@ -332,7 +333,7 @@ public static class CssPropertyApplier
             case "text-indent":
                 {
                     // [ each-line || hanging ] <length>  (CSS Text 3 §5.2)
-                    var indentTokens = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    var indentTokens = ShorthandExpander.SplitShorthand(value);
                     style.TextIndentHanging = false;
                     style.TextIndentEachLine = false;
                     var rest = new List<string>();
@@ -347,10 +348,20 @@ public static class CssPropertyApplier
                     }
                     if (Length.TryParse(string.Join(" ", rest), out var ti))
                     {
+                        style.TextIndentMath = null;
                         if (ti is PercentLength tip)
                         {
                             style.TextIndent = 0;
                             style.TextIndentPercent = tip.Value;
+                        }
+                        else if (ti is MathLength mathLen)
+                        {
+                            // A calc() with a percentage must resolve against the
+                            // containing block inline size, which is unknown here;
+                            // defer the whole expression to line-break time.
+                            style.TextIndent = 0;
+                            style.TextIndentPercent = 0;
+                            style.TextIndentMath = string.Join(" ", rest);
                         }
                         else
                         {
@@ -416,6 +427,7 @@ public static class CssPropertyApplier
             case "outline": ParseOutlineShorthand(value, style); break;
             case "outline-width":
                 style.OutlineWidth = BorderWidthPx(value);
+                style.AuthoredWidthSlots |= (uint)CurrentColorSlot.Outline;
                 break;
             case "outline-color": style.OutlineColor = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.Outline, value); break;
             case "outline-style": style.OutlineStyle = ParseBorderStyleValue(value); break;
@@ -487,11 +499,11 @@ public static class CssPropertyApplier
 
     public static void ParseShorthand4(string value, out Length top, out Length right, out Length bottom, out Length left)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        top = Length.Parse(parts.Length > 0 ? parts[0] : "0");
-        right = Length.Parse(parts.Length > 1 ? parts[1] : parts[0]);
-        bottom = Length.Parse(parts.Length > 2 ? parts[2] : parts[0]);
-        left = Length.Parse(parts.Length > 3 ? parts[3] : (parts.Length > 1 ? parts[1] : parts[0]));
+        var parts = ShorthandExpander.SplitShorthand(value);
+        top = Length.Parse(parts.Count > 0 ? parts[0] : "0");
+        right = Length.Parse(parts.Count > 1 ? parts[1] : parts[0]);
+        bottom = Length.Parse(parts.Count > 2 ? parts[2] : parts[0]);
+        left = Length.Parse(parts.Count > 3 ? parts[3] : (parts.Count > 1 ? parts[1] : parts[0]));
     }
 
     /// <summary>
@@ -534,27 +546,35 @@ public static class CssPropertyApplier
     }
 
 
-    public static float ParseFontSize(string value, ComputedStyle? parentStyle)
+    public static float ParseFontSize(string value, ComputedStyle? parentStyle,
+        float rootFontSize = 16f, float viewportWidth = 0f, float viewportHeight = 0f)
     {
         float parentFontSize = parentStyle?.FontSize ?? 16;
         string v = value?.Trim() ?? "";
-        // Font-relative units (cap/ex/ch/ic/lh and their root variants) resolve
-        // against the parent font's real metrics, not a fixed ratio. The element's
-        // own font-size is not known yet, so the unit context is the parent style.
-        if (parentStyle != null && IsFontRelativeLength(v))
+        // Font-relative units (cap/ex/ch/ic/lh and root variants) resolve against
+        // the parent font's real metrics; viewport units (vw/vh/svh/lvh/dvh/…)
+        // against the viewport. Both go through the general Length path, which the
+        // string-slicing ParseFontSize does not cover. The element's own font-size
+        // is not known yet, so the unit context is the parent style.
+        if (parentStyle != null && IsMetricOrViewportLength(v))
         {
             using var _scope = FontUnitContext.Use(parentStyle);
-            float px = Length.Parse(v).ToPixels(parentFontSize, 16f, 0f, 0f);
+            float px = Length.Parse(v).ToPixels(parentFontSize, rootFontSize, viewportWidth, viewportHeight);
             if (!float.IsNaN(px) && px > 0)
                 return px;
         }
         return Length.ParseFontSize(v, parentFontSize);
     }
 
-    private static bool IsFontRelativeLength(string v)
+    private static bool IsMetricOrViewportLength(string v)
     {
-        foreach (var u in new[] { "cap", "ex", "ch", "ic", "lh", "rcap", "rex", "rch", "ric", "rlh" })
-            if (v.EndsWith(u, StringComparison.OrdinalIgnoreCase) && v.Length > u.Length)
+        foreach (var u in new[]
+                 {
+                     "cap", "ex", "ch", "ic", "lh", "rcap", "rex", "rch", "ric", "rlh",
+                     "svw", "svh", "lvw", "lvh", "dvw", "dvh", "vi", "vb", "vmin", "vmax", "vw", "vh",
+                 })
+            if (v.EndsWith(u, StringComparison.OrdinalIgnoreCase) && v.Length > u.Length
+                && (char.IsDigit(v[0]) || v[0] == '.' || v[0] == '+' || v[0] == '-'))
                 return true;
         return false;
     }
@@ -864,7 +884,7 @@ public static class CssPropertyApplier
         if (value == "contain") { style.BackgroundSize = BackgroundSizeType.Contain; return; }
         if (value == "auto") { style.BackgroundSize = BackgroundSizeType.Auto; return; }
 
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
         if (parts.Length > 0 && parts[0] != "auto")
             style.BackgroundSizeWidth = Length.Parse(parts[0]);
         if (parts.Length > 1 && parts[1] != "auto")
@@ -1054,8 +1074,9 @@ public static class CssPropertyApplier
 
     public static void ParseBorderShorthand(string value, ComputedStyle style)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = ShorthandExpander.SplitShorthand(value);
         bool hasWidth = false;
+        bool hasColor = false;
         foreach (var part in parts)
         {
             if (part is "solid" or "dashed" or "dotted" or "double" or "groove" or "ridge"
@@ -1071,6 +1092,7 @@ public static class CssPropertyApplier
                 var width = BorderWidthPx(part);
                 style.BorderTopWidth = width; style.BorderRightWidth = width;
                 style.BorderBottomWidth = width; style.BorderLeftWidth = width;
+                style.AuthoredWidthSlots |= (uint)CurrentColorSlot.AllBorders;
                 hasWidth = true;
             }
             else
@@ -1079,6 +1101,7 @@ public static class CssPropertyApplier
                 style.BorderTopColor = color; style.BorderRightColor = color;
                 style.BorderBottomColor = color; style.BorderLeftColor = color;
                 MarkCurrentColor(style, CurrentColorSlot.AllBorders, part);
+                hasColor = true;
             }
         }
 
@@ -1087,15 +1110,47 @@ public static class CssPropertyApplier
         if (!hasWidth)
         {
             style.BorderTopWidth = style.BorderRightWidth =
-                style.BorderBottomWidth = style.BorderLeftWidth = 3f;
+                style.BorderBottomWidth = style.BorderLeftWidth = MediumBorderWidth;
+            style.AuthoredWidthSlots |= (uint)CurrentColorSlot.AllBorders;
         }
+
+        // The initial border-color is currentcolor, so a shorthand that carries no
+        // colour paints the element's text colour rather than a stored black.
+        if (!hasColor)
+            MarkCurrentColor(style, CurrentColorSlot.AllBorders, "currentcolor");
     }
 
-    /// <summary>A border-width token is one of the keywords or a length unit the
-    /// width parser understands (not a bare percentage, which border-width rejects).</summary>
-    private static bool IsBorderWidthToken(string part) =>
+    /// <summary>A border-width token is one of the keywords or a length the width
+    /// parser understands. A leading sign or digit covers the unitless and bare
+    /// numbers ('0', '.5', '2px') that 'border: 0' relies on; treating '0' as
+    /// neither a width nor a style let the shorthand's medium reset re-inflate it.
+    /// A math function is a length as well, so 'border: calc(2px + 1px) solid' is
+    /// not mistaken for a colour.</summary>
+    internal static bool IsBorderWidthToken(string part) =>
         part is "thin" or "medium" or "thick"
-        || (part.Length > 2 && (part.EndsWith("px") || part.EndsWith("em") || part.EndsWith("rem")));
+        || (part.Length > 0 && (char.IsAsciiDigit(part[0]) || part[0] is '.' or '+' or '-'))
+        || IsLengthFunction(part);
+
+    /// <summary>The width slot a per-side border property addresses. The same bit set
+    /// records both currentcolour and authored widths because both are per side.</summary>
+    private static CurrentColorSlot SideWidthSlot(string side) => side switch
+    {
+        "top" => CurrentColorSlot.BorderTop,
+        "bottom" => CurrentColorSlot.BorderBottom,
+        "left" => CurrentColorSlot.BorderLeft,
+        _ => CurrentColorSlot.BorderRight,
+    };
+
+    private static bool IsLengthFunction(string part)
+    {
+        int open = part.IndexOf('(');
+        if (open <= 0) return false;
+        var name = part.AsSpan(0, open);
+        return name.Equals("calc", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("min", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("max", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("clamp", StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Parses the <c>border-image</c> shorthand. The value is
@@ -1211,7 +1266,7 @@ public static class CssPropertyApplier
     /// inline-axis value defaulting to the block-axis one (CSS Box Alignment §6).</summary>
     private static void ApplyPlace(string value, Action<string> setBlockAxis, Action<string> setInlineAxis)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
         if (parts.Length == 0) return;
         var block = parts[0].ToLowerInvariant();
         var inlineAxis = (parts.Length > 1 ? parts[1] : parts[0]).ToLowerInvariant();
@@ -1222,8 +1277,12 @@ public static class CssPropertyApplier
 
     public static void ParseBorderSide(ComputedStyle style, string side, string value)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var part in parts)
+        // A per-side shorthand resets the components it leaves out, so it classifies
+        // its tokens exactly like the 'border' shorthand does and writes all three
+        // aspects onto the side the property name selected.
+        bool hasWidth = false;
+        bool hasColor = false;
+        foreach (var part in ShorthandExpander.SplitShorthand(value))
         {
             if (part is "solid" or "dashed" or "dotted" or "double" or "groove" or "ridge"
                 or "inset" or "outset" or "none" or "hidden")
@@ -1232,18 +1291,19 @@ public static class CssPropertyApplier
                 if (side == "top") style.BorderTopStyle = bs;
                 else if (side == "bottom") style.BorderBottomStyle = bs;
                 else if (side == "left") style.BorderLeftStyle = bs;
-                else if (side == "right") style.BorderRightStyle = bs;
+                else style.BorderRightStyle = bs;
             }
-            else if (part.EndsWith("px"))
+            else if (IsBorderWidthToken(part))
             {
-                var width = ParseSize(part);
-                if (width.HasValue)
-                {
-                    if (side == "top") style.BorderTopWidth = width.Value;
-                    else if (side == "bottom") style.BorderBottomWidth = width.Value;
-                    else if (side == "left") style.BorderLeftWidth = width.Value;
-                    else if (side == "right") style.BorderRightWidth = width.Value;
-                }
+                // Any length unit (em, %, calc) and the thin/medium/thick keywords are
+                // widths; 'EndsWith("px")' used to drop all but pixel widths.
+                var width = BorderWidthPx(part);
+                if (side == "top") style.BorderTopWidth = width;
+                else if (side == "bottom") style.BorderBottomWidth = width;
+                else if (side == "left") style.BorderLeftWidth = width;
+                else style.BorderRightWidth = width;
+                style.AuthoredWidthSlots |= (uint)SideWidthSlot(side);
+                hasWidth = true;
             }
             else
             {
@@ -1259,8 +1319,30 @@ public static class CssPropertyApplier
                 if (side == "top") style.BorderTopColor = color;
                 else if (side == "bottom") style.BorderBottomColor = color;
                 else if (side == "left") style.BorderLeftColor = color;
-                else if (side == "right") style.BorderRightColor = color;
+                else style.BorderRightColor = color;
+                hasColor = true;
             }
+        }
+
+        if (!hasWidth)
+        {
+            if (side == "top") style.BorderTopWidth = MediumBorderWidth;
+            else if (side == "bottom") style.BorderBottomWidth = MediumBorderWidth;
+            else if (side == "left") style.BorderLeftWidth = MediumBorderWidth;
+            else style.BorderRightWidth = MediumBorderWidth;
+            style.AuthoredWidthSlots |= (uint)SideWidthSlot(side);
+        }
+
+        if (!hasColor)
+        {
+            var resetSlot = side switch
+            {
+                "top" => CurrentColorSlot.BorderTop,
+                "bottom" => CurrentColorSlot.BorderBottom,
+                "left" => CurrentColorSlot.BorderLeft,
+                _ => CurrentColorSlot.BorderRight,
+            };
+            MarkCurrentColor(style, resetSlot, "currentcolor");
         }
     }
 
@@ -1270,15 +1352,15 @@ public static class CssPropertyApplier
     /// </summary>
     public static void ApplyBorderSpacing(ComputedStyle style, string value)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        float inlineSpacing = ParseSize(parts.Length > 0 ? parts[0] : value) ?? 0;
+        var parts = ShorthandExpander.SplitShorthand(value);
+        float inlineSpacing = ParseSize(parts.Count > 0 ? parts[0] : value) ?? 0;
         style.BorderSpacing = Math.Max(0, inlineSpacing);
-        style.BorderRowSpacing = parts.Length > 1 ? Math.Max(0, ParseSize(parts[1]) ?? inlineSpacing) : null;
+        style.BorderRowSpacing = parts.Count > 1 ? Math.Max(0, ParseSize(parts[1]) ?? inlineSpacing) : null;
     }
 
     public static void ParseBorderWidth(string value, ComputedStyle style)
     {
-        var widths = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var widths = ShorthandExpander.SplitShorthand(value);
         var w = widths.Select(v => v switch
         {
             "thin" => 1f,
@@ -1291,11 +1373,12 @@ public static class CssPropertyApplier
         style.BorderRightWidth = w.Count > 1 ? w[1] : w[0];
         style.BorderBottomWidth = w.Count > 2 ? w[2] : w[0];
         style.BorderLeftWidth = w.Count > 3 ? w[3] : (w.Count > 1 ? w[1] : w[0]);
+        style.AuthoredWidthSlots |= (uint)CurrentColorSlot.AllBorders;
     }
 
     public static void ParseBorderColor(string value, ComputedStyle style)
     {
-        var colors = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var colors = ShorthandExpander.SplitShorthand(value).ToArray();
         var c = colors.Select(v => ColorParser.Parse(v, style)).ToList();
         for (int ci = 0; ci < colors.Length && ci < 4; ci++)
         {
@@ -1351,7 +1434,7 @@ public static class CssPropertyApplier
     /// bottom-left, following the CSS corner repetition rules.</summary>
     private static float[] ToFourRadii(string value, float tl, float tr, float br, float bl)
     {
-        var tokens = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var tokens = ShorthandExpander.SplitShorthand(value);
         var parsed = new List<float>(4);
         foreach (var token in tokens)
             parsed.Add(ParseRadiusValue(token) ?? 0);
@@ -1378,25 +1461,62 @@ public static class CssPropertyApplier
         _ => BorderStyle.None
     };
 
+    /// <summary>
+    /// Resolve a &lt;length&gt; that a consumer stores in pixels. Every unit the length
+    /// parser understands works (calc, viewport, ch/ex/...), and font-relative units
+    /// take the element's own font through the ambient FontUnitContext that
+    /// <see cref="Apply"/> installs. Percentages are not lengths, so they stay
+    /// unresolved and the caller keeps its fallback.
+    /// </summary>
     public static float? ParseSize(string value)
-    {        if (value.EndsWith("px") && float.TryParse(value[..^2], out var px)) return px;
-        if (value.EndsWith("em") && float.TryParse(value[..^2], out var em)) return em * 16;
-        if (value.EndsWith("rem") && float.TryParse(value[..^2], out var rem)) return rem * 16;
-        if (value == "0") return 0;
+    {
+        string text = value.Trim();
+        if (text.Length == 0) return null;
+        if (text.EndsWith('%')) return null;
+
+        if (Length.TryParse(text, out var length) && length != null)
+        {
+            float font = FontUnitContext.Current?.FontSize ?? 16f;
+            float px = length.ToPixels(font, font, 0, 0);
+            if (!float.IsNaN(px)) return px;
+        }
         return null;
     }
 
     /// <summary>Resolve a border-width token: the CSS keywords thin/medium/thick map
     /// to 1/3/5px (CSS Backgrounds 3 §4), otherwise a length via <see cref="ParseSize"/>.
     /// The border shorthand emits per-side width longhands, so this must understand
-    /// the keywords, not just lengths.</summary>
-    public static float BorderWidthPx(string value) => value.Trim().ToLowerInvariant() switch
+    /// the keywords, not just lengths.
+    /// The result is quantised on the device pixel grid because that is the width both
+    /// layout and painting use: 2px at a scale of 1.25 becomes 1.6 CSS px (two device
+    /// pixels), while a non-zero width never collapses below one device pixel.</summary>
+    public static float BorderWidthPx(string value)
     {
-        "thin" => 1f,
-        "medium" => 3f,
-        "thick" => 5f,
-        _ => ParseSize(value) ?? 0f,
-    };
+        float width = value.Trim().ToLowerInvariant() switch
+        {
+            "thin" => 1f,
+            "medium" => 3f,
+            "thick" => 5f,
+            _ => ParseSize(value) ?? 0f,
+        };
+        return QuantizeToDevices(width);
+    }
+
+    /// <summary>'medium' is both a keyword and the border/outline shorthand's initial
+    /// width, so the reset paths take the quantised value too.</summary>
+    public static float MediumBorderWidth => QuantizeToDevices(3f);
+
+    /// <summary>A width of zero stays zero; anything else takes at least one device
+    /// pixel, floored on the grid (Chrome's border computation).</summary>
+    private static float QuantizeToDevices(float width)
+    {
+        if (width <= 0f) return 0f;
+        float scale = Fonts.FontMetricsProvider.DeviceScale;
+        if (scale <= 0f || float.IsNaN(scale)) return width;
+        float device = MathF.Floor(width * scale);
+        if (device < 1f) device = 1f;
+        return device / scale;
+    }
 
     /// <summary>
     /// Parses one corner radius value, which may be a single length or the
@@ -1408,21 +1528,23 @@ public static class CssPropertyApplier
     /// </summary>
     public static float? ParseRadiusValue(string value)
     {
-        value = value.Trim();
-        int sp = value.IndexOf(' ');
-        if (sp > 0) value = value[..sp].Trim();
-        if (value.EndsWith('%') && value.Length > 1 &&
-            float.TryParse(value[..^1], System.Globalization.NumberStyles.Float,
+        // The pair is 'horizontal vertical'; only a top-level space separates them,
+        // so 'calc(10px + 2px)' survives as one token.
+        var tokens = ShorthandExpander.SplitShorthand(value.Trim());
+        if (tokens.Count == 0) return null;
+        string first = tokens[0];
+        if (first.EndsWith('%') && first.Length > 1 &&
+            float.TryParse(first[..^1], System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var pct))
             return -pct;
-        return ParseSize(value);
+        return ParseSize(first);
     }
 
     /// <summary>'border-*-radius: &lt;horizontal&gt; [&lt;vertical&gt;]' for one corner
     /// (0 = top-left, 1 = top-right, 2 = bottom-right, 3 = bottom-left).</summary>
     private static void ApplyRadiusPair(ComputedStyle style, string value, int corner)
     {
-        var tokens = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var tokens = ShorthandExpander.SplitShorthand(value).ToArray();
         float horizontal = ParseRadiusValue(tokens.Length > 0 ? tokens[0] : "0") ?? 0;
         // A single value makes the corner circular: the vertical radius mirrors it.
         float vertical = tokens.Length > 1 ? (ParseRadiusValue(tokens[1]) ?? 0) : horizontal;
@@ -1441,7 +1563,7 @@ public static class CssPropertyApplier
 
     public static void ParseFlexShorthand(string value, ComputedStyle style)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
         if (parts.Length == 0) return;
 
         if (parts[0] == "none" || parts[0] == "auto")
@@ -1532,63 +1654,199 @@ public static class CssPropertyApplier
                 style.ListStyleTypeString = text[1..^1];
             return ListStyleType.String;
         }
-        return text.ToLowerInvariant() switch
-        {
-            "disc" => ListStyleType.Disc,
-            "circle" => ListStyleType.Circle,
-            "square" => ListStyleType.Square,
-            "decimal" => ListStyleType.Decimal,
-            "decimal-leading-zero" => ListStyleType.DecimalLeadingZero,
-            "lower-roman" => ListStyleType.LowerRoman,
-            "upper-roman" => ListStyleType.UpperRoman,
-            "lower-alpha" or "lower-latin" => ListStyleType.LowerLatin,
-            "upper-alpha" or "upper-latin" => ListStyleType.UpperLatin,
-            "lower-greek" => ListStyleType.LowerGreek,
-            "upper-greek" => ListStyleType.UpperGreek,
-            "armenian" => ListStyleType.Armenian,
-            "georgian" => ListStyleType.Georgian,
-            "hebrew" => ListStyleType.Hebrew,
-            "hiragana" => ListStyleType.Hiragana,
-            "katakana" => ListStyleType.Katakana,
-            "hiragana-iroha" => ListStyleType.HiraganaIroha,
-            "katakana-iroha" => ListStyleType.KatakanaIroha,
-            "cjk-decimal" => ListStyleType.CjkDecimal,
-            "cjk-ideographic" => ListStyleType.CjkIdeographic,
-            "cjk-earthly-branch" => ListStyleType.CjkEarthlyBranch,
-            "cjk-heavenly-stem" => ListStyleType.CjkHeavenlyStem,
-            "thai" => ListStyleType.Thai,
-            "lao" => ListStyleType.Lao,
-            "khmer" => ListStyleType.Khmer,
-            "myanmar" or "burmese" => ListStyleType.Myanmar,
-            "mongolian" => ListStyleType.Mongolian,
-            "arabic-indic" => ListStyleType.ArabicIndic,
-            "persian" or "urdu" => ListStyleType.Persian,
-            "devanagari" => ListStyleType.Devanagari,
-            "bengali" => ListStyleType.Bengali,
-            "tamil" => ListStyleType.Tamil,
-            "telugu" => ListStyleType.Telugu,
-            "canadian-aboriginal" => ListStyleType.CanadianAboriginal,
-            "symbol" => ListStyleType.Symbol,
-            "none" => ListStyleType.None,
-            _ => ListStyleType.Disc,
-        };
+        // A keyword form supersedes a string the element picked up earlier; the
+        // marker generator reads the string whenever it is set, so it has to go.
+        if (style != null)
+            style.ListStyleTypeString = null;
+        return MatchListStyleType(text.ToLowerInvariant()) ?? ListStyleType.Disc;
     }
 
+    /// <summary>The 'list-style-type' keyword table (CSS Lists 3 §5, §A). Null for a
+    /// token that is not a type at all, which lets the 'list-style' shorthand tell a
+    /// missing part from an unsupported keyword.</summary>
+    private static ListStyleType? MatchListStyleType(string keyword) => keyword switch
+    {
+        "disc" => ListStyleType.Disc,
+        "circle" => ListStyleType.Circle,
+        "square" => ListStyleType.Square,
+        "decimal" => ListStyleType.Decimal,
+        "decimal-leading-zero" => ListStyleType.DecimalLeadingZero,
+        "lower-roman" => ListStyleType.LowerRoman,
+        "upper-roman" => ListStyleType.UpperRoman,
+        "lower-alpha" or "lower-latin" => ListStyleType.LowerLatin,
+        "upper-alpha" or "upper-latin" => ListStyleType.UpperLatin,
+        "lower-greek" => ListStyleType.LowerGreek,
+        "upper-greek" => ListStyleType.UpperGreek,
+        "armenian" or "upper-armenian" => ListStyleType.Armenian,
+        "lower-armenian" => ListStyleType.LowerArmenian,
+        "georgian" => ListStyleType.Georgian,
+        "hebrew" => ListStyleType.Hebrew,
+        "ethiopic-numeric" => ListStyleType.EthiopicNumeric,
+        "disclosure-open" => ListStyleType.DisclosureOpen,
+        "disclosure-closed" => ListStyleType.DisclosureClosed,
+        "hiragana" => ListStyleType.Hiragana,
+        "katakana" => ListStyleType.Katakana,
+        "hiragana-iroha" => ListStyleType.HiraganaIroha,
+        "katakana-iroha" => ListStyleType.KatakanaIroha,
+        "cjk-decimal" => ListStyleType.CjkDecimal,
+        "cjk-ideographic" or "trad-chinese-informal" => ListStyleType.TradChineseInformal,
+        "trad-chinese-formal" => ListStyleType.TradChineseFormal,
+        "simp-chinese-informal" => ListStyleType.SimpChineseInformal,
+        "simp-chinese-formal" => ListStyleType.SimpChineseFormal,
+        "japanese-informal" => ListStyleType.JapaneseInformal,
+        "japanese-formal" => ListStyleType.JapaneseFormal,
+        "korean-hangul-formal" => ListStyleType.KoreanHangulFormal,
+        "korean-hanja-informal" => ListStyleType.KoreanHanjaInformal,
+        "korean-hanja-formal" => ListStyleType.KoreanHanjaFormal,
+        "cjk-earthly-branch" => ListStyleType.CjkEarthlyBranch,
+        "cjk-heavenly-stem" => ListStyleType.CjkHeavenlyStem,
+        "thai" => ListStyleType.Thai,
+        "lao" => ListStyleType.Lao,
+        "khmer" or "cambodian" => ListStyleType.Khmer,
+        "myanmar" or "burmese" => ListStyleType.Myanmar,
+        "mongolian" => ListStyleType.Mongolian,
+        "arabic-indic" => ListStyleType.ArabicIndic,
+        "persian" or "urdu" => ListStyleType.Persian,
+        "devanagari" => ListStyleType.Devanagari,
+        "bengali" => ListStyleType.Bengali,
+        "tamil" => ListStyleType.Tamil,
+        "telugu" => ListStyleType.Telugu,
+        "gujarati" => ListStyleType.Gujarati,
+        "gurmukhi" => ListStyleType.Gurmukhi,
+        "kannada" => ListStyleType.Kannada,
+        "malayalam" => ListStyleType.Malayalam,
+        "oriya" => ListStyleType.Oriya,
+        "tibetan" => ListStyleType.Tibetan,
+        "canadian-aboriginal" => ListStyleType.CanadianAboriginal,
+        "symbol" => ListStyleType.Symbol,
+        "none" => ListStyleType.None,
+        _ => null,
+    };
+
+    /// <summary>'list-style' is a shorthand for position, image and type
+    /// (CSS Lists 3 §4.5); parts it does not carry are reset to their initial value.</summary>
     public static void ParseListStyle(string value, ComputedStyle style)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = ShorthandExpander.SplitShorthand(value);
+        bool sawType = false;
+        style.ListStylePosition = ListStylePosition.Outside;
+        style.ListStyleImage = "none";
         foreach (var part in parts)
         {
             var lower = part.ToLowerInvariant();
             if (lower is "inside" or "outside")
                 style.ListStylePosition = lower == "inside" ? ListStylePosition.Inside : ListStylePosition.Outside;
-            else if (lower == "none")
-                style.ListStyleType = ListStyleType.None;
-            else if (lower is "disc" or "circle" or "square" or "decimal" or "lower-roman" or "upper-roman")
-                style.ListStyleType = ParseListStyleType(part, style);
             else if (lower.StartsWith("url("))
                 style.ListStyleImage = NormalizeUrlValue(part);
+            else if (!sawType && (MatchListStyleType(lower) is { } type || IsQuotedString(part)))
+            {
+                style.ListStyleType = ParseListStyleType(part, style);
+                sawType = true;
+            }
         }
+
+        // The shorthand resets every component it does not carry, so 'list-style: inside'
+        // computes the marker type back to its initial 'disc' and forgets a custom string.
+        if (!sawType)
+        {
+            style.ListStyleType = ListStyleType.Disc;
+            style.ListStyleTypeString = null;
+        }
+    }
+
+    /// <summary>'text-overflow' accepts the two keywords plus a &lt;string&gt; that replaces
+    /// the ellipsis (CSS UI 4 &#167;4.4). The two-value form addresses the block axis with
+    /// its second value, which this engine does not clip separately, so the first value
+    /// wins. 'no-ellipsis' asks for plain clipping.</summary>
+    public static void ParseTextOverflow(string value, ComputedStyle style)
+    {
+        style.TextOverflowString = null;
+        style.TextOverflow = TextOverflowType.Clip;
+
+        string text = value.Trim();
+        if (text.Length == 0) return;
+
+        if (text[0] == '"' || text[0] == '\'')
+        {
+            int close = IndexOfClosingQuote(text, text[0]);
+            if (close < 0) return;
+            string marker = UnescapeCssString(text[1..close]);
+            if (marker.Length == 0)
+                return; // An empty replacement asks for plain clipping.
+            style.TextOverflowString = marker;
+            style.TextOverflow = TextOverflowType.Ellipsis;
+            return;
+        }
+
+        string[] parts = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length > 0 && parts[0].Equals("ellipsis", StringComparison.OrdinalIgnoreCase))
+            style.TextOverflow = TextOverflowType.Ellipsis;
+        // 'clip' and 'no-ellipsis' both clip without a marker.
+    }
+
+    private static int IndexOfClosingQuote(string text, char quote)
+    {
+        for (int i = 1; i < text.Length; i++)
+        {
+            if (text[i] == '\\') i++;
+            else if (text[i] == quote) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>Resolve the escapes a quoted CSS &lt;string&gt; may carry: a backslash
+    /// before a literal character, and up to six hex digits for a codepoint optionally
+    /// followed by one space that belongs to the escape rather than to the text.</summary>
+    private static string UnescapeCssString(string text)
+    {
+        if (text.IndexOf('\\') < 0) return text;
+        var outText = new StringBuilder(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c != '\\' || i + 1 >= text.Length)
+            {
+                outText.Append(c);
+                continue;
+            }
+            i++;
+            char next = text[i];
+            if (!IsHexDigit(next))
+            {
+                outText.Append(next switch
+                {
+                    'n' => '\n',
+                    't' => '\t',
+                    _ => next,
+                });
+                continue;
+            }
+            int code = 0, taken = 0;
+            while (i < text.Length && taken < 6 && IsHexDigit(text[i]))
+            {
+                code = code * 16 + HexValue(text[i]);
+                i++;
+                taken++;
+            }
+            // A space right after the digits terminates the escape; it is not content.
+            if (taken == 6 && i < text.Length && text[i] == ' ') i++;
+            if (code is > 0 and <= 0x10FFFF)
+                outText.Append(char.ConvertFromUtf32(code));
+        }
+        return outText.ToString();
+    }
+
+    private static bool IsHexDigit(char c) =>
+        (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+
+    private static int HexValue(char c) =>
+        c <= '9' ? c - '0' : char.ToLowerInvariant(c) - 'a' + 10;
+
+    private static bool IsQuotedString(string text)
+    {
+        string trimmed = text.Trim();
+        return trimmed.Length >= 2 && ((trimmed[0] == '"' && trimmed[^1] == '"')
+            || (trimmed[0] == '\'' && trimmed[^1] == '\''));
     }
 
     public static void ParseFontShorthand(string value, ComputedStyle style)
@@ -1648,17 +1906,22 @@ public static class CssPropertyApplier
 
     public static void ParseOutlineShorthand(string value, ComputedStyle style)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var part in parts)
+        bool hasWidth = false;
+        bool hasStyle = false;
+        foreach (var part in ShorthandExpander.SplitShorthand(value))
         {
-            if (part.EndsWith("px"))
-            {
-                if (float.TryParse(part.Replace("px", ""), out var w))
-                    style.OutlineWidth = w;
-            }
-            else if (part is "solid" or "dashed" or "dotted" or "double" or "none")
+            if (part is "solid" or "dashed" or "dotted" or "double" or "groove" or "ridge"
+                or "inset" or "outset" or "none" or "hidden")
             {
                 style.OutlineStyle = ParseBorderStyleValue(part);
+                hasStyle = true;
+            }
+            else if (IsBorderWidthToken(part))
+            {
+                // Keywords, any length unit and calc() are all widths.
+                style.OutlineWidth = BorderWidthPx(part);
+                style.AuthoredWidthSlots |= (uint)CurrentColorSlot.Outline;
+                hasWidth = true;
             }
             else
             {
@@ -1666,11 +1929,20 @@ public static class CssPropertyApplier
                 MarkCurrentColor(style, CurrentColorSlot.Outline, part);
             }
         }
+
+        // 'outline' resets the components it does not carry: width back to medium and
+        // style back to none (CSS UI 4 §5), so 'outline: 3px' draws nothing.
+        if (!hasWidth)
+        {
+            style.OutlineWidth = MediumBorderWidth;
+            style.AuthoredWidthSlots |= (uint)CurrentColorSlot.Outline;
+        }
+        if (!hasStyle) style.OutlineStyle = BorderStyle.None;
     }
 
     public static void ParseShorthand2(string value, out Length a, out Length b)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
         a = Length.Parse(parts.Length > 0 ? parts[0] : "0");
         b = Length.Parse(parts.Length > 1 ? parts[1] : parts[0]);
     }
@@ -1688,14 +1960,14 @@ public static class CssPropertyApplier
 
     public static void ParsePosition(string value, out Length? x, out Length? y)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
         x = parts.Length > 0 ? ParsePositionKeywordOrLength(parts[0]) : null;
         y = parts.Length > 1 ? ParsePositionKeywordOrLength(parts[1]) : null;
     }
 
     public static void ParseInsetShorthand(string value, ComputedStyle style)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
         if (parts.Length == 0) return;
         style.Top = Length.Parse(parts[0]);
         style.Right = Length.Parse(parts.Length > 1 ? parts[1] : parts[0]);
@@ -1863,7 +2135,7 @@ public static class CssPropertyApplier
         var shadows = new List<TextShadowValue>();
         if (string.IsNullOrEmpty(value) || value == "none") return shadows;
 
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
         if (parts.Length < 2) return shadows;
 
         float offsetX = float.TryParse(parts[0].TrimEnd('p', 'x'), out var ox) ? ox : 0;
@@ -1897,7 +2169,7 @@ public static class CssPropertyApplier
     {
         style.ColumnCount = 0;
         style.ColumnWidth = null;
-        foreach (var token in value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var token in ShorthandExpander.SplitShorthand(value))
         {
             string part = token.Trim();
             if (part.Equals("auto", StringComparison.OrdinalIgnoreCase))
@@ -2167,7 +2439,7 @@ public static class CssPropertyApplier
 
     public static void ParseGap(string value, ComputedStyle style)
     {
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
         if (parts.Length > 0 && Length.TryParse(parts[0], out var gap))
         {
             style.RowGap = gap;
@@ -2217,7 +2489,7 @@ public static class CssPropertyApplier
 
     public static BoxShadowValue? ParseBoxShadowComponent(string component)
     {
-        var parts = component.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = ShorthandExpander.SplitShorthand(component.Trim()).ToArray();
         if (parts.Length < 2)
             return null;
 

@@ -13,8 +13,8 @@ class Program
             Log(ex.StackTrace ?? "[Main] No stack trace");
         };
 
-        if (args.Length > 0 && (args[0] == "--snapshot" || args[0] == "--diff" || args[0] == "--dumplayout"
-            || args[0] == "--textops" || args[0] == "--pixels" || args[0] == "--anim" || args[0] == "--rows"))
+        if (args.Length > 0 && args[0] is "--snapshot" or "--diff" or "--dumplayout" or "--computed"
+            or "--textops" or "--pixels" or "--anim" or "--rows")
         {
             Environment.ExitCode = SnapshotCli.Run(args);
             return;

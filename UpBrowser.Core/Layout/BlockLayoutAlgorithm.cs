@@ -1663,14 +1663,17 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         if (Style.Width is PixelLength px && px.Value > 0)
         {
             own = px.Value;
+            // 'width' names the content box under content-box sizing, so the content the
+            // children flow in is that width plus the box's own border and padding before
+            // the shared subtraction below takes them back off.
             if (Style.BoxSizing == BoxSizingType.ContentBox)
-                own += _border.Left + _border.Right;
+                own += _borderPadding.HorizontalSum;
         }
         else if (Style.Width is PercentLength pct && Space.HasDefiniteInlineSize)
         {
             own = pct.Value * Space.AvailableInlineSize;
             if (Style.BoxSizing == BoxSizingType.ContentBox)
-                own += _border.Left + _border.Right;
+                own += _borderPadding.HorizontalSum;
         }
         float maxW = Style.MaxWidth is PixelLength mw && mw.Value > 0 ? mw.Value : float.MaxValue;
         if (Style.MaxWidth is PercentLength pctMax && pctMax.Value > 0 && Space.HasDefiniteInlineSize)
@@ -2957,12 +2960,14 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         if (Builder.Lines.Any(l => l.Runs.Any(r => r.Text != null && IsMarkerRun(r))))
             return true;
 
-        var markerText = ListMarker.MarkerText(Style.ListStyleType, ListItemIndex(Node));
+        int markerOrdinal = List.ListItemNumbering.Ordinal(Node);
+        string? markerContent = List.ListMarker.MarkerContentOf(Node);
+        var markerText = List.ListMarker.ResolveMarkerContent(markerContent, markerOrdinal)
+            ?? ListMarker.MarkerText(Style.ListStyleType, markerOrdinal);
         if (string.IsNullOrEmpty(markerText))
             return true;
 
-        float fontSize = Style.FontSize;
-        float markerWidth = ListMarker.MarkerWidth(Style.ListStyleType, Style.ListStylePosition, fontSize);
+        float markerWidth = List.ListMarker.MarkerBoxWidth(Style, markerOrdinal, markerContent, Node);
 
         // The marker shares the list item's first line box, so it uses the same
         // strut: line height from the resolved 'line-height', baseline from the
@@ -2991,21 +2996,6 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     }
 
     private bool IsMarkerRun(BoxRun run) => run.Element == null && run.IsLineBreak == false && run.AtomicInlineBox == null;
-
-    private static int ListItemIndex(Element element)
-    {
-        int index = 1;
-        var parent = element.ParentElement;
-        if (parent == null) return index;
-        foreach (var sibling in parent.Children)
-        {
-            if (ReferenceEquals(sibling, element))
-                return index;
-            if (sibling is Element el && el.ComputedStyle?.Display == DisplayType.ListItem)
-                index++;
-        }
-        return index;
-    }
 
     // ==========================================================================
     // HandleTextControlPlaceholder.
@@ -3374,7 +3364,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             or DisplayType.TableCaption or DisplayType.TableColumn or DisplayType.TableColumnGroup;
     }
 
-    private static bool IsReplacedElement(Element element)
+    internal static bool IsReplacedElement(Element element)
     {
         var tag = element.TagName;
         return tag == "IMG" || tag == "VIDEO" || tag == "CANVAS" || tag == "INPUT" || tag == "SVG";

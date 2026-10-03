@@ -1,8 +1,11 @@
 using UpBrowser.Core.Dom;
+using UpBrowser.Core.Dom.Html;
 using AngleSharp;
 
 namespace UpBrowser.Core.JavaScript;
 
+/// <summary>Parses a markup string into engine nodes for the DOM-mutating JS APIs
+/// ('innerHTML', 'insertAdjacentHTML', 'DOMParser').</summary>
 public static class HtmlParser
 {
     public static List<Node> ParseFragment(string html, string parentTagName)
@@ -19,7 +22,11 @@ public static class HtmlParser
             if (doc.Body == null) return result;
 
             foreach (var child in doc.Body.ChildNodes)
-                ConvertFromAngleSharp(child, result);
+            {
+                var converted = Convert(child);
+                if (converted != null)
+                    result.Add(converted);
+            }
         }
         catch
         {
@@ -29,21 +36,26 @@ public static class HtmlParser
         return result;
     }
 
-    private static void ConvertFromAngleSharp(AngleSharp.Dom.INode node, List<Node> result)
+    private static Node? Convert(AngleSharp.Dom.INode node)
     {
         if (node is AngleSharp.Dom.IText textNode)
+            return new TextNode(textNode.TextContent ?? "");
+        if (node is not AngleSharp.Dom.IElement element)
+            return null;
+
+        // The same factory the document parser uses, so a fragment gets the element
+        // class its tag names for.
+        var el = HtmlElementFactory.Create(element.LocalName);
+        foreach (var attr in element.Attributes)
+            el.Attributes[attr.Name] = attr.Value;
+        // AppendChild rather than the child list: the parent link is part of the
+        // tree, and numbering, style inheritance and 'closest()' all walk it.
+        foreach (var child in element.ChildNodes)
         {
-            var text = textNode.TextContent ?? "";
-            result.Add(new TextNode(text));
+            var converted = Convert(child);
+            if (converted != null)
+                el.AppendChild(converted);
         }
-        else if (node is AngleSharp.Dom.IElement element)
-        {
-            var el = new HtmlElement(element.LocalName);
-            foreach (var attr in element.Attributes)
-                el.Attributes[attr.Name] = attr.Value;
-            result.Add(el);
-            foreach (var child in element.ChildNodes)
-                ConvertFromAngleSharp(child, el.Children);
-        }
+        return el;
     }
 }

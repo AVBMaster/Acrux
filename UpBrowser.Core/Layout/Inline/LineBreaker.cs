@@ -276,6 +276,9 @@ public class LineBreaker
         _position = 0;
         _state = LineBreakState.Continue;
         _trailingWhitespace = WhitespaceState.Leading;
+        // Cleared before |PrepareNextLine()|, which assigns the line's own indent
+        // (and returns early on a finished line, leaving this at zero).
+        _appliedTextIndent = 0;
 
         PrepareNextLine(lineInfo);
 
@@ -284,10 +287,6 @@ public class LineBreaker
             lineInfo.SetIsLastLine(true);
             return;
         }
-
-        // To compute the text indent for the next line, if any, compute from the
-        // applied text indent, or the style.
-        _appliedTextIndent = 0;
 
         // A line that starts inside a 'box-decoration-break: clone' box repeats that
         // box's decoration, so it has to reserve the same start margin/border/padding
@@ -1691,6 +1690,15 @@ public class LineBreaker
         // inline size, which is only known here (CSS Text 3 §5.2). Floats shorten
         // individual line boxes but not the containing block, hence the base width.
         float indentLength = _lineStyle.TextIndent + _lineStyle.TextIndentPercent * _inlineBaseWidth;
+        if (!string.IsNullOrEmpty(_lineStyle.TextIndentMath))
+        {
+            // A deferred calc()/min()/max()/clamp(): resolve now that the
+            // containing block inline size is known (percentages use it as base).
+            using var _fu = Dom.FontUnitContext.Use(_lineStyle);
+            float mathPx = Length.Parse(_lineStyle.TextIndentMath!)
+                .ToPixels(_inlineBaseWidth, _rootFontSize, _viewportWidth, _viewportHeight);
+            if (!float.IsNaN(mathPx)) indentLength += mathPx;
+        }
         // 'each-line' extends the "first line" to the lines that follow a forced
         // break (CSS Text 3 5.2).
         bool indentsLikeFirst = _isFirstFormattedLine ||
