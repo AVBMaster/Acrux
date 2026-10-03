@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 44 — underline-position / skip-ink / kerning / emphasis / vertical-align / font-size keywords</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+.cell { background: #f7f7f7; padding: 10px; border: 1px solid #ccc; margin: 8px 0; }
+.lbl { font-size: 12px; color: #555; margin-bottom: 4px; }
+
+/* 1. text-underline-position */
+.u { text-decoration: underline; font-size: 30px; }
+.u-auto { text-underline-position: auto; }
+.u-under { text-underline-position: under; }
+
+/* 2. text-decoration-skip-ink */
+.s { text-decoration: underline; font-size: 30px; background: #ffe; }
+.s-auto { text-decoration-skip-ink: auto; }
+.s-none { text-decoration-skip-ink: none; }
+
+/* 3. font-kerning */
+.k { font-size: 30px; }
+.k-none { font-kerning: none; }
+.k-norm { font-kerning: normal; }
+
+/* 4. text-emphasis position */
+.e { font-size: 24px; text-emphasis: filled dot #e24a4a; }
+.e-under { text-emphasis-position: under; }
+.e-over { text-emphasis-position: over; }
+
+/* 5. vertical-align length / percentage */
+.vwrap { font-size: 30px; border: 1px solid #999; line-height: 40px; }
+.v-len { vertical-align: 10px; font-size: 16px; background:#cfc; }
+.v-pct { vertical-align: 50%; font-size: 16px; background:#fcc; }
+
+/* 6. font-size relative keywords */
+.fs-parent { font-size: 20px; }
+.fs-larger { font-size: larger; }   /* 1.2x -> 24px */
+.fs-smaller { font-size: smaller; } /* ~0.833x -> ~16.66px */
+</style>
+</head>
+<body>
+
+<h2>1. text-underline-position: auto vs under</h2>
+<div class="cell"><div class="lbl">auto</div><span class="u u-auto">Hgjjyp descenders</span></div>
+<div class="cell"><div class="lbl">under</div><span class="u u-under">Hgjjyp descenders</span></div>
+
+<h2>2. text-decoration-skip-ink: auto vs none</h2>
+<div class="cell"><div class="lbl">auto</div><span class="s s-auto">ink skip gg pp</span></div>
+<div class="cell"><div class="lbl">none</div><span class="s s-none">ink skip gg pp</span></div>
+
+<h2>3. font-kerning: none vs normal ("WAV To Ta")</h2>
+<div class="cell"><div class="lbl">none</div><span class="k k-none">WAV To Ta</span></div>
+<div class="cell"><div class="lbl">normal</div><span class="k k-norm">WAV To Ta</span></div>
+
+<h2>4. text-emphasis-position: over vs under</h2>
+<div class="cell"><div class="lbl">over</div><span class="e e-over">emphasis</span></div>
+<div class="cell"><div class="lbl">under</div><span class="e e-under">emphasis</span></div>
+
+<h2>5. vertical-align: 10px vs 50%</h2>
+<div class="vwrap">base<span class="v-len">len10</span><span class="v-pct">pct50</span>base</div>
+
+<h2>6. font-size: larger / smaller (parent 20px)</h2>
+<div class="fs-parent">parent20 <span class="fs-larger">larger</span> <span class="fs-smaller">smaller</span></div>
+
+</body>
+</html>

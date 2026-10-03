@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 45 — grid auto-track intrinsic sizing</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+.g { display: grid; gap: 8px; margin: 10px 0; }
+.cell { background: #cfe; border: 1px solid #369; padding: 6px; }
+.lbl { font-size: 12px; color: #333; }
+
+/* 1. auto columns sized by content (nested block+inline) */
+.g1 { grid-template-columns: auto auto auto; width: 600px; }
+
+/* 2. max-content vs auto */
+.g2 { grid-template-columns: max-content auto; width: 600px; }
+
+/* 3. 1fr vs auto */
+.g3 { grid-template-columns: auto 1fr; width: 600px; }
+
+/* 4. auto rows with wrapped text */
+.g4 { grid-template-columns: 200px 200px; grid-auto-rows: auto; }
+</style>
+</head>
+<body>
+
+<h2>1. grid-template-columns: auto auto auto (content-sized, nested label+text)</h2>
+<div class="g g1">
+  <div class="cell"><div class="lbl">col A</div>Widespread</div>
+  <div class="cell"><div class="lbl">col B</div>Extraordinarily long word here</div>
+  <div class="cell"><div class="lbl">col C</div>hi</div>
+</div>
+
+<h2>2. max-content auto</h2>
+<div class="g g2">
+  <div class="cell"><div class="lbl">mc</div>UnbreakableSupercalifragilistic</div>
+  <div class="cell"><div class="lbl">auto</div>fills remaining</div>
+</div>
+
+<h2>3. auto 1fr</h2>
+<div class="g g3">
+  <div class="cell"><div class="lbl">auto</div>ContentDriven</div>
+  <div class="cell"><div class="lbl">1fr</div>stretches</div>
+</div>
+
+<h2>4. auto rows (200px cols) with multi-line content</h2>
+<div class="g g4">
+  <div class="cell"><div class="lbl">r1c1</div>line one content here that is long enough to wrap within two hundred pixels</div>
+  <div class="cell"><div class="lbl">r1c2</div>short</div>
+  <div class="cell"><div class="lbl">r2c1</div>row two first</div>
+  <div class="cell"><div class="lbl">r2c2</div>row two second cell with more text to force height</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Font metrics / baseline reference</title>
+<style>
+  /* Deterministic page: fixed sizes, no images, no scripts, no web fonts. */
+  html { background: #fff; }
+  body { margin: 0; padding: 0; background: #fff; color: #000;
+         font: 16px/normal Arial, sans-serif; }
+
+  h2 { margin: 0; padding: 6px 8px; font: bold 13px/16px Arial, sans-serif;
+       background: #e8e8e8; border-top: 1px solid #999; color: #222; }
+
+  section { padding: 8px; }
+
+  /* A row with a hairline sitting exactly on the box bottom. Any baseline
+     error shows up as a change in the gap between glyph bottoms and the rule. */
+  .rule { border-bottom: 1px solid #d00; margin-bottom: 6px; }
+
+  /* Solid background behind a line box: reveals the line box extent, which is
+     ascent + descent + leading. Line-height bugs change this block's height. */
+  .lb { background: #cfe8ff; display: block; margin-bottom: 2px; }
+  .lb-inline { background: #ffe08a; }
+
+  table.m { border-collapse: collapse; font: 12px/16px Arial, sans-serif; }
+  table.m td, table.m th { border: 1px solid #bbb; padding: 2px 6px; text-align: left; }
+
+  .swatch { display: inline-block; width: 24px; height: 24px;
+            background: #4a90d9; vertical-align: baseline; }
+  .swatch-mid { vertical-align: middle; }
+  .swatch-top { vertical-align: top; }
+  .swatch-tt  { vertical-align: text-top; }
+  .swatch-tb  { vertical-align: text-bottom; }
+  .swatch-sub { vertical-align: sub; }
+  .swatch-sup { vertical-align: super; }
+
+  ul.markers, ol.markers { margin: 0 0 0 0; padding-left: 32px; }
+</style>
+</head>
+<body>
+
+<h2>1. Per-family ascent/descent at 32px (line-height: normal)</h2>
+<section>
+  <div class="rule lb" style="font: 32px/normal Arial, sans-serif;">Hxpgjy &mdash; Arial 32</div>
+  <div class="rule lb" style="font: 32px/normal 'Times New Roman', serif;">Hxpgjy &mdash; Times 32</div>
+  <div class="rule lb" style="font: 32px/normal 'Courier New', monospace;">Hxpgjy &mdash; Courier 32</div>
+  <div class="rule lb" style="font: 32px/normal Verdana, sans-serif;">Hxpgjy &mdash; Verdana 32</div>
+  <div class="rule lb" style="font: 32px/normal Georgia, serif;">Hxpgjy &mdash; Georgia 32</div>
+  <div class="rule lb" style="font: 32px/normal 'Segoe UI', sans-serif;">Hxpgjy &mdash; Segoe UI 32</div>
+  <div class="rule lb" style="font: 32px/normal 'Microsoft YaHei', sans-serif;">Hxpgjy &#27721;&#23383;&#22522;&#32447; &mdash; YaHei 32</div>
+</section>
+
+<h2>2. Size ramp, line-height: normal (line box height must track font metrics)</h2>
+<section>
+  <div class="lb" style="font: 8px/normal Arial;">Hxpgjy 8px</div>
+  <div class="lb" style="font: 9px/normal Arial;">Hxpgjy 9px</div>
+  <div class="lb" style="font: 10px/normal Arial;">Hxpgjy 10px</div>
+  <div class="lb" style="font: 11px/normal Arial;">Hxpgjy 11px</div>
+  <div class="lb" style="font: 12px/normal Arial;">Hxpgjy 12px</div>
+  <div class="lb" style="font: 13px/normal Arial;">Hxpgjy 13px</div>
+  <div class="lb" style="font: 14px/normal Arial;">Hxpgjy 14px</div>
+  <div class="lb" style="font: 16px/normal Arial;">Hxpgjy 16px</div>
+  <div class="lb" style="font: 19px/normal Arial;">Hxpgjy 19px</div>
+  <div class="lb" style="font: 24px/normal Arial;">Hxpgjy 24px</div>
+  <div class="lb" style="font: 31px/normal Arial;">Hxpgjy 31px</div>
+  <div class="lb" style="font: 48px/normal Arial;">Hxpgjy 48px</div>
+</section>
+
+<h2>3. line-height variants at 20px Arial (leading distribution)</h2>
+<section>
+  <div class="lb" style="font: 20px/normal Arial;">line-height: normal</div>
+  <div class="lb" style="font: 20px Arial; line-height: 1;">line-height: 1</div>
+  <div class="lb" style="font: 20px Arial; line-height: 1.5;">line-height: 1.5</div>
+  <div class="lb" style="font: 20px Arial; line-height: 2;">line-height: 2</div>
+  <div class="lb" style="font: 20px Arial; line-height: 13px;">line-height: 13px (shorter than font)</div>
+  <div class="lb" style="font: 20px Arial; line-height: 24px;">line-height: 24px</div>
+  <div class="lb" style="font: 20px Arial; line-height: 25px;">line-height: 25px (odd leading, floor split)</div>
+  <div class="lb" style="font: 20px Arial; line-height: 40px;">line-height: 40px</div>
+  <div class="lb" style="font: 20px Arial; line-height: 120%;">line-height: 120%</div>
+  <div class="lb" style="font: 20px Arial; line-height: 175%;">line-height: 175% (odd leading)</div>
+</section>
+
+<h2>4. Mixed font sizes on one line (line box = union of inline box metrics)</h2>
+<section>
+  <div class="rule lb">
+    <span style="font-size: 10px;">10</span>
+    <span style="font-size: 14px;">14</span>
+    <span style="font-size: 20px;">20</span>
+    <span style="font-size: 28px;">28</span>
+    <span style="font-size: 40px;">40</span>
+    <span style="font-size: 14px;">back to 14</span>
+  </div>
+  <div class="rule lb">
+    <span style="font-family: 'Times New Roman', serif; font-size: 28px;">Times 28</span>
+    <span style="font-family: 'Courier New', monospace; font-size: 18px;">Courier 18</span>
+    <span style="font-family: Verdana, sans-serif; font-size: 22px;">Verdana 22</span>
+    <span style="font-family: 'Microsoft YaHei', sans-serif; font-size: 22px;">&#28450;&#23383; 22</span>
+  </div>
+  <div class="rule lb" style="font-size: 24px;">
+    Latin <span class="lb-inline">&#20013;&#25991;&#28151;&#25490;</span> mixed <span class="lb-inline">&#12363;&#12394;</span> tail
+  </div>
+</section>
+
+<h2>5. vertical-align against the baseline</h2>
+<section>
+  <div class="rule lb" style="font: 20px/normal Arial;">
+    base<span class="swatch"></span>
+    mid<span class="swatch swatch-mid"></span>
+    top<span class="swatch swatch-top"></span>
+    ttop<span class="swatch swatch-tt"></span>
+    tbot<span class="swatch swatch-tb"></span>
+  </div>
+  <div class="rule lb" style="font: 20px/normal Arial;">
+    x<span style="vertical-align: sub; font-size: 12px;">sub</span>
+    x<span style="vertical-align: super; font-size: 12px;">super</span>
+    x<span style="vertical-align: 6px;">+6px</span>
+    x<span style="vertical-align: -6px;">-6px</span>
+    x<span style="vertical-align: 30%;">+30%</span>
+  </div>
+  <div class="rule lb" style="font: 20px/normal Arial;">
+    inline-block baseline:
+    <span style="display: inline-block; width: 60px; height: 40px; background: #b6e2b6;">in</span>
+    <span style="display: inline-block; width: 60px; height: 40px; background: #e2b6b6; overflow: hidden;">clip</span>
+    <span style="display: inline-block; width: 40px; height: 40px; background: #d9d9d9;"></span>
+  </div>
+</section>
+
+<h2>6. Decoration positions (derived from font metrics)</h2>
+<section>
+  <div class="lb" style="font: 28px/normal Arial;">
+    <span style="text-decoration: underline;">underline</span>
+    <span style="text-decoration: overline;">overline</span>
+    <span style="text-decoration: line-through;">line-through</span>
+  </div>
+  <div class="lb" style="font: 28px/normal 'Times New Roman', serif;">
+    <span style="text-decoration: underline;">underline</span>
+    <span style="text-decoration: line-through;">line-through gjpqy</span>
+  </div>
+  <div class="lb" style="font: 12px/normal Arial;">
+    <span style="text-decoration: underline;">small underline gjpqy</span>
+  </div>
+</section>
+
+<h2>7. List markers (marker baseline follows the item's first line)</h2>
+<section>
+  <ul class="markers" style="font: 20px/normal Arial;">
+    <li>disc marker, 20px</li>
+    <li style="font-size: 32px;">disc marker, 32px</li>
+  </ul>
+  <ol class="markers" style="font: 20px/normal Arial;">
+    <li>decimal marker</li>
+    <li style="font-size: 12px;">decimal marker, 12px</li>
+  </ol>
+  <ul class="markers" style="font: 20px/normal Arial; list-style-position: inside;">
+    <li>inside marker</li>
+  </ul>
+</section>
+
+<h2>8. Multi-line wrapping (line advance = strut line height)</h2>
+<section>
+  <div class="lb" style="width: 320px; font: 16px/normal Arial;">
+    Wrapping paragraph used to verify the line advance. Each successive line must
+    advance by exactly the strut line height, so an accumulated error becomes
+    obvious by the fourth or fifth line of text.
+  </div>
+  <div class="lb" style="width: 320px; font: 16px Arial; line-height: 21px; margin-top: 6px;">
+    Same paragraph with an explicit odd line-height of twenty one pixels, which
+    forces an asymmetric leading split above and below the text.
+  </div>
+  <div class="lb" style="width: 320px; font: 16px/normal 'Microsoft YaHei', sans-serif; margin-top: 6px;">
+    &#28151;&#25490;&#27573;&#33853;&#65306;&#20013;&#25991;&#19982; Latin text &#20132;&#26367;&#65292;&#29992;&#20110;&#26657;&#39564;&#22522;&#32447;&#19982;&#34892;&#39640;&#22312;&#22383;&#25991;&#23383;&#20307;&#22238;&#36864;&#26102;&#26159;&#21542;&#20445;&#25345;&#19968;&#33268;&#12290;
+  </div>
+</section>
+
+<h2>9. Form control text baselines</h2>
+<section>
+  <div class="rule lb" style="font: 16px/normal Arial;">
+    <input type="text" value="input text" size="14">
+    <button>button</button>
+    <select><option>select</option></select>
+    trailing text
+  </div>
+  <div class="rule lb" style="font: 24px/normal Arial;">
+    <input type="text" value="24px" size="8">
+    <button>24px</button>
+    trailing
+  </div>
+</section>
+
+<h2>10. Table cell vertical alignment</h2>
+<section>
+  <table class="m">
+    <tr>
+      <th>align</th><th>10px</th><th>16px</th><th>28px</th>
+    </tr>
+    <tr style="vertical-align: baseline;">
+      <td>baseline</td>
+      <td style="font-size: 10px;">Hxpgjy</td>
+      <td style="font-size: 16px;">Hxpgjy</td>
+      <td style="font-size: 28px;">Hxpgjy</td>
+    </tr>
+    <tr style="vertical-align: top;">
+      <td>top</td>
+      <td style="font-size: 10px;">Hxpgjy</td>
+      <td style="font-size: 16px;">Hxpgjy</td>
+      <td style="font-size: 28px;">Hxpgjy</td>
+    </tr>
+    <tr style="vertical-align: middle;">
+      <td>middle</td>
+      <td style="font-size: 10px;">Hxpgjy</td>
+      <td style="font-size: 16px;">Hxpgjy</td>
+      <td style="font-size: 28px;">Hxpgjy</td>
+    </tr>
+    <tr style="vertical-align: bottom;">
+      <td>bottom</td>
+      <td style="font-size: 10px;">Hxpgjy</td>
+      <td style="font-size: 16px;">Hxpgjy</td>
+      <td style="font-size: 28px;">Hxpgjy</td>
+    </tr>
+  </table>
+</section>
+
+</body>
+</html>

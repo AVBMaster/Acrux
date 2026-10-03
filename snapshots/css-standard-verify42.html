@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 42 — absolute containing block (ICB)</title>
+<style>
+html { margin: 0; }
+body { font-family: Arial, sans-serif; margin: 40px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+
+/* body has a large margin; an abspos box with no positioned ancestor must anchor to
+   the initial containing block (viewport / html), NOT to body's padding box. */
+.abs-top-left {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 120px;
+  height: 60px;
+  background: #4a90e2;
+  color: white;
+}
+.abs-bottom-right {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 120px;
+  height: 60px;
+  background: #e24a4a;
+  color: white;
+}
+/* a positioned ancestor should still capture its abspos descendants */
+.relative-wrap {
+  position: relative;
+  width: 300px;
+  height: 120px;
+  background: #eee;
+  border: 2px solid #999;
+  margin: 20px 0;
+}
+.abs-in-wrap {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 80px;
+  height: 40px;
+  background: #4ae24a;
+}
+</style>
+</head>
+<body>
+
+<h2>1. abspos top:0 left:0 with no positioned ancestor → must sit at viewport 0,0 (not offset by body margin)</h2>
+<div class="abs-top-left">ICB TL</div>
+
+<h2>2. abspos bottom:0 right:0 with no positioned ancestor → viewport bottom-right</h2>
+<div class="abs-bottom-right">ICB BR</div>
+
+<h2>3. abspos inside a relative ancestor → anchored to that ancestor</h2>
+<div class="relative-wrap">
+  <div class="abs-in-wrap">in wrap</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { font-family: Arial; font-size: 16px; margin: 8px; }
+  h2 { font-size: 14px; background: #eee; margin: 10px 0 4px; }
+  .j { width: 200px; font-size: 16px; line-height: 20px; border: 1px solid #999; margin-bottom: 6px;
+       text-align: justify; }
+  .r { width: 60px; height: 40px; border: 6px solid #36c; background: #fd8; margin-bottom: 14px; }
+  .m { width: 120px; height: 40px; background: #36c; margin-bottom: 6px; }
+  .u { font-size: 24px; text-decoration: underline #e33; text-underline-offset: 4px; }
+  .v { font-size: 16px; line-height: 20px; border: 1px solid #999; margin-bottom: 6px; }
+</style></head><body>
+<h2>1. text-align: justify</h2>
+<div class="j">aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp</div>
+<div class="j" style="text-align-last:justify">one two three four five</div>
+<div class="j" style="text-align-last:left">alpha beta gamma delta epsilon zeta</div>
+<div class="j" style="letter-spacing:2px">aa bb cc dd ee ff gg hh ii jj</div>
+<div class="j">short x Supercalifragilisticexpialidocious y z</div>
+<div class="j" style="word-spacing:8px">aa bb cc dd ee ff gg hh</div>
+<h2>2. border-radius over-constrained reduction</h2>
+<div class="r" style="border-radius: 40px 0 40px 0"></div>
+<div class="r" style="border-radius: 0 60px 0 60px"></div>
+<div class="r" style="border-radius: 30px 30px 0 0 / 40px 10px 0 0"></div>
+<div class="r" style="border-radius: 100%"></div>
+<h2>3. mask-mode luminance vs alpha</h2>
+<div class="m" style="mask-image: linear-gradient(90deg,#f00,#00f); mask-mode: luminance"></div>
+<div class="m" style="mask-image: linear-gradient(90deg,#f00,#00f); mask-mode: alpha"></div>
+<div class="m" style="mask-image: linear-gradient(90deg,#fff,#000); mask-mode: luminance"></div>
+<div class="m" style="mask-image: linear-gradient(90deg,#fff,#000)"></div>
+<h2>4. text-decoration offset and thickness</h2>
+<p class="u" style="text-underline-offset: 0px">OffsetZero</p>
+<p class="u" style="text-underline-offset: 0.25em">OffsetQuarterEm</p>
+<p class="u" style="text-decoration-thickness: 6px">Thick6</p>
+<p class="u" style="text-decoration-thickness: from-font">FromFont</p>
+<h2>5. vertical-align sub / super</h2>
+<div class="v">base <sub>sub</sub> text</div>
+<div class="v">base <sup>sup</sup> text</div>
+<div class="v">base <span style="vertical-align:sub">vs</span> text</div>
+<div class="v">base <span style="vertical-align:super">vp</span> text</div>
+</body></html>

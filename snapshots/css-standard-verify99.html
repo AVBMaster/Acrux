@@ -1,0 +1,12 @@
+<!DOCTYPE html><head><style>
+body{margin:20px;font:14px Arial}
+/* grid item with aspect-ratio: definite width 100, ratio 2/1 → height 50 */
+.g1{display:grid;grid-template-columns:100px;grid-auto-rows:auto;width:100px;border:1px solid #939}
+.g1 .ar{aspect-ratio:2/1;background:#cfe}
+/* grid item min-height:auto with tall content in a fixed 40px row → item min-content height wins (overflow) */
+.g2{display:grid;grid-template-columns:100px;grid-template-rows:40px;width:100px;border:1px solid #090;margin-top:12px}
+.g2 .tall{background:#fec}
+</style><body>
+<div class="g1"><div class="ar">AR</div></div>
+<div class="g2"><div class="tall">a b c d e f g h i j k l m n o p text that wraps to multiple lines in 100px</div></div>
+</body></html>

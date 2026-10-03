@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 12 — animation and transition events</title>
+<style>
+/* The event stream is the script-facing half of the animation system, so it is
+   verified numerically rather than by pixel: --anim prints every event the
+   engine queued, in order, with its timing. The swatches below make the same
+   state visible, and the log at the bottom of the page is written by the page's
+   own listeners.
+
+   This page is captured at t = 2500 ms so a 1s two-iteration animation has
+   passed through its whole lifetime, which is what makes start / iteration /
+   end observable.
+
+   The swatch grid of this page is informational. Unlike the other pages, its
+   animations run on a live clock, so what a grid cell shows depends on the
+   instant the frame was taken; a reference captured under a virtual time
+   budget stops the timeline wherever its budget ran out. The assertion for
+   this page is the event log below, read from the page's own listeners. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 170px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 90px; height: 60px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  outline: 1px solid #000;
+  text-align: center; line-height: 60px; font-size: 13px;
+}
+#e1 { left: 10px;  top: 10px; }  #e2 { left: 120px; top: 10px; }
+#e3 { left: 230px; top: 10px; }  #e4 { left: 340px; top: 10px; }
+#e5 { left: 10px;  top: 90px; }  #e6 { left: 120px; top: 90px; }
+#e7 { left: 230px; top: 90px; }  #e8 { left: 340px; top: 90px; }
+
+@keyframes f  { from { opacity: 1; } to { opacity: 0; } }
+@keyframes g  { from { opacity: 0.2; } to { opacity: 0.8; } }
+@keyframes h  { from { background-color: rgb(255,0,0); } to { background-color: rgb(0,0,255); } }
+
+/* two iterations of 1s: at t=2500 the animation is over */
+#e1 { animation: f 1s 2 linear; }
+#e2 { animation: f 1s linear; }
+/* paused mid-flight: start fires, end does not */
+#e3 { animation: f 4s -1s linear paused; }
+/* negative delay: already active when the effect starts, so the start event's
+   elapsedTime is positive */
+#e4 { animation: f 1s -0.5s linear; }
+/* no fill: after finishing, the underlying value shows again */
+#e5 { animation: f 1s linear; }
+/* fill forwards: the last keyframe is retained */
+#e6 { animation: f 1s linear forwards; }
+/* a transition on the class the script adds */
+#e7 { opacity: 1; transition: opacity 1s linear; }
+#e7.on { opacity: 0; }
+/* no transition declared: no transition events */
+#e8 { opacity: 1; }
+#e8.on { opacity: 0; }
+
+#log { padding: 6px 10px; font: 11px/1.45 Consolas, monospace; white-space: pre-wrap; color: #333; }
+#legend { padding: 4px 10px; }
+#legend p { margin: 2px 0; color: #444; }
+#legend code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="e1">1</i>
+  <i class="sw" id="e2">2</i>
+  <i class="sw" id="e3">3</i>
+  <i class="sw" id="e4">4</i>
+  <i class="sw" id="e5">5</i>
+  <i class="sw" id="e6">6</i>
+  <i class="sw" id="e7">7</i>
+  <i class="sw" id="e8">8</i>
+</div>
+
+<div id="log">(no events yet)</div>
+
+<div id="legend">
+  <p>captured at <b>t = 2500 ms</b>; the event log is written by this page's own listeners</p>
+  <p><b>1</b> <code>f 1s 2 linear</code> &rarr; start, iteration (at 1000 ms), end (at 2000 ms)</p>
+  <p><b>2</b> <code>f 1s linear</code> &rarr; start, end</p>
+  <p><b>3</b> <code>f 4s -1s linear paused</code> &rarr; start only, elapsedTime 1000</p>
+  <p><b>4</b> <code>f 1s -0.5s linear</code> &rarr; start with elapsedTime 500, end with elapsedTime 500 (the effect began at t = 500, so it ends at t = 1000)</p>
+  <p><b>5</b> finished with no fill &rarr; opacity back to 1</p>
+  <p><b>6</b> finished with <code>forwards</code> &rarr; opacity held at 0</p>
+  <p><b>7</b> a real transition &rarr; transitionrun, transitionstart, transitionend</p>
+  <p><b>8</b> no transition &rarr; no transition events</p>
+</div>
+
+<script>
+  var lines = [];
+
+  function record(e) {
+    var extra = '';
+    if (e.animationName !== undefined) extra = ' name=' + e.animationName + ' elapsedTime=' + e.elapsedTime;
+    if (e.propertyName !== undefined) extra = ' property=' + e.propertyName + ' elapsedTime=' + e.elapsedTime;
+    lines.push((e.target ? e.target.id : '?') + '  ' + e.type + extra);
+    document.getElementById('log').textContent = lines.join('\n');
+  }
+
+  var names = ['animationstart', 'animationiteration', 'animationend', 'animationcancel',
+               'transitionrun', 'transitionstart', 'transitionend', 'transitioncancel'];
+
+  // Listeners go on the elements themselves. Animation and transition events do
+  // not bubble, so a page that wants the whole document's events has to attach
+  // per element (or use a capturing listener, which this engine's event bridge
+  // does not yet walk).
+  for (var i = 1; i <= 8; i++) {
+    var el = document.getElementById('e' + i);
+    for (var n = 0; n < names.length; n++) el.addEventListener(names[n], record, false);
+  }
+
+  function apply() {
+    // Force a style flush so the transitions below have a before-change style.
+    var warm = getComputedStyle(document.getElementById('e7')).opacity;
+    document.getElementById('e7').className = 'sw on';
+    document.getElementById('e8').className = 'sw on';
+  }
+  setTimeout(apply, 0);
+  if (document.addEventListener) document.addEventListener('DOMContentLoaded', apply);
+  if (window.addEventListener) window.addEventListener('load', apply);
+</script>
+
+</body>
+</html>

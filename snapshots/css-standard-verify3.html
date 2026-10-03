@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Batch 3</title>
+<style>
+html, body { margin: 0; padding: 0; background: white; font-family: Arial, sans-serif; font-size: 16px; }
+body { padding: 4px; }
+h2 { margin: 8px 0 4px 0; font-size: 14px; color: #333; }
+
+/* ====== GROUP 1: box-sizing ====== */
+#bs-content { box-sizing: content-box; width: 100px; padding: 10px; border: 5px solid rgb(255,0,0); height: 40px; }
+#bs-border { box-sizing: border-box; width: 100px; padding: 10px; border: 5px solid rgb(0,255,0); height: 40px; }
+
+/* ====== GROUP 2: min/max constraints ====== */
+#minw { min-width: 200px; width: 50px; height: 20px; background: rgb(255,128,0); }
+#maxw { max-width: 80px; width: 300px; height: 20px; background: rgb(0,128,255); }
+
+/* ====== GROUP 3: negative margins ====== */
+#neg-parent { width: 200px; height: 60px; background: #eee; position: relative; }
+#neg-child { width: 100px; height: 40px; background: rgb(255,0,255); margin-left: -20px; margin-top: 10px; }
+
+/* ====== GROUP 4: position absolute containing block ====== */
+#abs-outer { position: relative; width: 200px; height: 100px; background: #ddd; }
+#abs-inner { position: absolute; top: 10px; left: 20px; width: 80px; height: 40px; background: rgb(0,0,255); }
+
+/* ====== GROUP 5: radial-gradient ====== */
+#radial { width: 100px; height: 100px; background: radial-gradient(circle, rgb(255,0,0) 0%, rgb(0,0,255) 100%); }
+
+/* ====== GROUP 6: multiple backgrounds ====== */
+#multibg { width: 120px; height: 60px; background: linear-gradient(rgb(255,0,0) 50%, transparent 50%), linear-gradient(90deg, rgb(0,255,0) 50%, transparent 50%); background-color: rgb(0,0,255); }
+
+/* ====== GROUP 7: aspect-ratio ====== */
+#aspect { width: 200px; aspect-ratio: 2/1; background: rgb(128,0,255); }
+
+/* ====== GROUP 8: overflow scroll ====== */
+#ofl-scroll { width: 100px; height: 50px; overflow: scroll; background: #eee; }
+#ofl-scroll-inner { width: 200px; height: 100px; background: rgb(255,0,0); }
+
+/* ====== GROUP 9: text-transform ====== */
+#tt-upper { text-transform: uppercase; }
+#tt-cap { text-transform: capitalize; }
+#tt-lower { text-transform: lowercase; }
+
+/* ====== GROUP 10: word-break / overflow-wrap ====== */
+#wb { width: 80px; overflow-wrap: break-word; background: #ffe; }
+#ba { width: 80px; word-break: break-all; background: #eef; }
+
+/* ====== GROUP 11: nested flex ====== */
+#nf-outer { display: flex; width: 300px; height: 60px; background: #eee; }
+#nf-inner { display: flex; width: 150px; background: rgb(255,255,0); }
+#nf-inner .a { width: 50px; background: rgb(255,0,0); }
+#nf-inner .b { flex: 1; background: rgb(0,255,0); }
+
+/* ====== GROUP 12: flex-basis ====== */
+#fb { display: flex; width: 300px; height: 30px; }
+#fb .one { flex-basis: 100px; flex-grow: 0; background: rgb(255,0,0); height: 30px; }
+#fb .two { flex-basis: 0; flex-grow: 1; background: rgb(0,255,0); height: 30px; }
+
+/* ====== GROUP 13: grid auto-flow column ====== */
+#afc { display: grid; grid-template-rows: 30px 30px; grid-auto-flow: column; gap: 4px; width: 200px; }
+#afc > div { background: rgb(0,200,200); }
+
+/* ====== GROUP 14: grid span ====== */
+#gs { display: grid; grid-template-columns: 50px 50px 50px; grid-template-rows: 30px 30px; gap: 2px; }
+#gs .wide { grid-column: 1 / 3; background: rgb(255,128,0); }
+#gs .tall { grid-row: 1 / 3; background: rgb(0,128,0); }
+
+/* ====== GROUP 15: border-radius complex ====== */
+#br1 { width: 80px; height: 80px; background: rgb(255,0,0); border-radius: 40px 0 40px 0; }
+#br2 { width: 80px; height: 80px; background: rgb(0,0,255); border-radius: 0 40px 0 40px; }
+
+/* ====== GROUP 16: first-child / last-child ====== */
+#fc div:first-child { background: rgb(255,0,0); }
+#fc div:last-child { background: rgb(0,0,255); }
+#fc div { width: 100px; height: 20px; background: rgb(0,255,0); }
+
+/* ====== GROUP 17: :nth-child odd/even ====== */
+#nce div:nth-child(odd) { background: rgb(255,255,0); }
+#nce div:nth-child(even) { background: rgb(0,255,255); }
+#nce div { width: 100px; height: 16px; }
+
+/* ====== GROUP 18: z-index stacking ====== */
+#zstack { position: relative; width: 200px; height: 80px; background: #eee; }
+#zstack .z1 { position: absolute; top: 0; left: 0; width: 80px; height: 60px; background: rgb(255,0,0); z-index: 1; }
+#zstack .z2 { position: absolute; top: 10px; left: 20px; width: 80px; height: 60px; background: rgb(0,255,0); z-index: 2; }
+#zstack .z3 { position: absolute; top: 20px; left: 40px; width: 80px; height: 60px; background: rgb(0,0,255); z-index: 3; }
+
+/* ====== GROUP 19: object-position ====== */
+#obj-pos { width: 100px; height: 60px; background: linear-gradient(180deg, rgb(255,0,0) 50%, rgb(0,0,255) 50%); background-size: 100px 120px; background-position: center top; background-repeat: no-repeat; }
+
+/* ====== GROUP 20: white-space pre-wrap ====== */
+#ws-pre { white-space: pre-wrap; width: 150px; background: #ffe; }
+#ws-nw { white-space: nowrap; width: 80px; background: #eef; overflow: hidden; }
+</style>
+</head>
+<body>
+
+<h2>1. box-sizing content vs border</h2>
+<div id="bs-content">content-box</div>
+<div id="bs-border">border-box</div>
+
+<h2>2. min/max width</h2>
+<div id="minw">min-width 200</div>
+<div id="maxw">max-width 80</div>
+
+<h2>3. Negative margins</h2>
+<div id="neg-parent"><div id="neg-child">neg margin</div></div>
+
+<h2>4. Absolute positioning</h2>
+<div id="abs-outer"><div id="abs-inner">abs</div></div>
+
+<h2>5. Radial gradient</h2>
+<div id="radial"></div>
+
+<h2>6. Multiple backgrounds</h2>
+<div id="multibg"></div>
+
+<h2>7. Aspect ratio</h2>
+<div id="aspect">2:1 ratio</div>
+
+<h2>8. Overflow scroll</h2>
+<div id="ofl-scroll"><div id="ofl-scroll-inner">scrollable</div></div>
+
+<h2>9. text-transform</h2>
+<div><span id="tt-upper">hello world</span></div>
+<div><span id="tt-cap">hello world</span></div>
+<div><span id="tt-lower">HELLO WORLD</span></div>
+
+<h2>10. word-break / overflow-wrap</h2>
+<div id="wb">Supercalifragilisticexpialidocious</div>
+<div id="ba">Supercalifragilisticexpialidocious</div>
+
+<h2>11. Nested flex</h2>
+<div id="nf-outer"><div id="nf-inner"><div class="a">A</div><div class="b">B</div></div><div style="flex:1;background:#aaa">X</div></div>
+
+<h2>12. flex-basis</h2>
+<div id="fb"><div class="one">100</div><div class="two">grow</div></div>
+
+<h2>13. Grid auto-flow column</h2>
+<div id="afc"><div>1</div><div>2</div><div>3</div><div>4</div></div>
+
+<h2>14. Grid span</h2>
+<div id="gs"><div class="wide">wide</div><div class="tall">tall</div><div>n1</div><div>n2</div></div>
+
+<h2>15. Border-radius complex</h2>
+<div style="display:flex;gap:10px;">
+<div id="br1"></div>
+<div id="br2"></div>
+</div>
+
+<h2>16. first-child / last-child</h2>
+<div id="fc"><div>first</div><div>middle</div><div>last</div></div>
+
+<h2>17. nth-child odd/even</h2>
+<div id="nce"><div>1</div><div>2</div><div>3</div><div>4</div></div>
+
+<h2>18. z-index stacking</h2>
+<div id="zstack"><div class="z1">z1</div><div class="z2">z2</div><div class="z3">z3</div></div>
+
+<h2>19. object-position (background)</h2>
+<div id="obj-pos"></div>
+
+<h2>20. white-space pre-wrap / nowrap</h2>
+<div id="ws-pre">line1
+line2   with    spaces</div>
+<div id="ws-nw">This text should not wrap at all</div>
+
+</body>
+</html>

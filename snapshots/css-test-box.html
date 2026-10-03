@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{margin:0;font:14px sans-serif;color:#222}
+h4{margin:10px 8px 4px;color:#222}
+.row{margin:8px;padding:0;background:#fafafa}
+.box{background:#cfe2ff;border:2px solid #3b6cb7;width:120px;height:40px}
+/* margin collapse: two adjacent 20px vertical margins => 20px between borders */
+.mc-a{margin:20px 0 20px;background:#fbd;padding:0;height:20px}
+.mc-b{margin:30px 0 0;background:#dbf;padding:0;height:20px}
+/* border styles */
+.b1{border:4px solid #d33}.b2{border:4px dashed #3a3}.b3{border:4px dotted #33a}
+.b4{border:4px double #a3a}.b5{border:4px groove #aa3}.b6{border:4px ridge #3aa}
+.b7{border:4px inset #a63}.b8{border:4px outset #63a}
+.bs{width:100px;height:24px;background:#eee;margin:2px 0}
+/* mixed widths */
+.mix{border-top:6px solid red;border-right:4px solid green;border-bottom:2px solid blue;border-left:8px solid black;width:120px;height:24px;background:#fff}
+/* radius */
+.r1{width:80px;height:60px;background:#f9a;border-radius:20px;display:inline-block;margin:4px}
+.r2{width:80px;height:60px;background:#9f9;border-radius:50%;display:inline-block;margin:4px}
+.r3{width:80px;height:60px;background:#99f;border-radius:30px 5px 30px 5px;display:inline-block;margin:4px}
+/* box-sizing */
+.bb{box-sizing:border-box;width:100px;height:30px;padding:10px;border:5px solid #069;background:#cef}
+.cb{box-sizing:content-box;width:100px;height:30px;padding:10px;border:5px solid #069;background:#fec}
+/* min/max */
+.mn{width:50px;min-width:120px;height:24px;background:#7b7}
+.mx{width:300px;max-width:120px;height:24px;background:#b77}
+/* negative margin */
+.neg{margin-left:-20px;width:100px;height:24px;background:#bb7}
+/* padding % */
+.pct{width:200px;padding:10% 5%;background:#dde;height:10px}
+/* auto width fills */
+.auto{background:#eef;border:1px solid #999}
+</style></head>
+<body>
+<h4>1. box model: 120x40 + 2px border</h4>
+<div class="box"></div>
+<h4>2. margin collapse (expect 30px gap, not 50)</h4>
+<div class="mc-a"></div><div class="mc-b"></div>
+<h4>3. border styles</h4>
+<div class="bs b1"></div><div class="bs b2"></div><div class="bs b3"></div><div class="bs b4"></div>
+<div class="bs b5"></div><div class="bs b6"></div><div class="bs b7"></div><div class="bs b8"></div>
+<h4>4. mixed border widths (6R/4G/2B/8K)</h4>
+<div class="mix"></div>
+<h4>5. border-radius: 20px / 50% / mixed</h4>
+<div class="r1"></div><div class="r2"></div><div class="r3"></div>
+<h4>6. box-sizing: border-box vs content-box (same declared size)</h4>
+<div class="bb"></div><div class="cb"></div>
+<h4>7. min-width / max-width (both end at 120 wide)</h4>
+<div class="mn"></div><div class="mx"></div>
+<h4>8. negative margin-left -20</h4>
+<div class="neg"></div>
+<h4>9. padding 10% 5% of 200px (10px/20px sides... top/bottom 20px)</h4>
+<div class="pct"></div>
+<h4>10. auto-width block fills container</h4>
+<div class="auto">auto</div>
+</body></html>

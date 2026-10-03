@@ -1,0 +1,17 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{margin:20px;font:14px Arial}
+.cb{position:relative;width:300px;height:200px;border:1px solid #939;margin-bottom:14px}
+/* abspos with % insets: left 10% right 20% top 25% → width = 300-30-60=210, height auto */
+.p1{position:absolute;left:10%;right:20%;top:25%;height:40px;background:#cfe}
+/* abspos with calc inset + auto width (shrink to content) */
+.p2{position:absolute;right:calc(50% - 30px);top:10px;background:#fec}
+/* abspos all four set → width/height resolved */
+.p3{position:absolute;left:20px;right:40px;top:10px;bottom:30px;background:#cef}
+/* abspos auto left/right, margin auto → centered */
+.p4{position:absolute;left:0;right:0;margin:0 auto;width:80px;height:20px;background:#eef}
+</style></head><body>
+<div class="cb"><div class="p1">p1</div></div>
+<div class="cb"><div class="p2">p2wide</div></div>
+<div class="cb"><div class="p3">p3</div></div>
+<div class="cb"><div class="p4">p4</div></div>
+</body></html>

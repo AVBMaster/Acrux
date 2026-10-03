@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { font-family: sans-serif; font-size: 13px; margin: 10px; color: #222; }
+h3 { margin: 8px 0 4px; }
+.outer { width: 200px; height: 60px; background: #eee; border: 1px solid #bbb; }
+.neg-r { margin-right: -30px; background: #cde; height: 20px; }
+.neg-l { margin-left: -30px; background: #edc; height: 20px; width: 100px; }
+.neg-t { margin-top: -10px; background: #dce; height: 20px; }
+.neg-b { margin-bottom: -10px; background: #ecd; height: 20px; }
+.pct-m { margin-left: 25%; background: #dee; height: 20px; }
+.auto-m { width: 100px; margin: 0 auto; background: #ccd; height: 20px; }
+.neg-both { margin: -5px; background: #fdc; height: 25px; }
+.ib { display: inline-block; width: 40px; height: 25px; background: #9cf; margin-left: -10px; }
+.grid-neg { display: grid; grid-template-columns: 50px 50px; width: 100px; background: #eee; }
+.grid-neg div { background: #cde; height: 20px; margin: -5px; }
+.flex-neg { display: flex; width: 150px; background: #eee; }
+.flex-neg div { background: #dcd; width: 60px; height: 20px; margin-left: -20px; }
+</style>
+</head>
+<body>
+<h3>1. negative right margin (next wider)</h3>
+<div class="outer"><div class="neg-r">A mr-30</div><div>B normal width</div></div>
+<h3>2. negative top pulls up</h3>
+<div class="outer" style="height:80px"><div style="height:30px;background:#cde">row1</div><div class="neg-t">pulled-up</div></div>
+<h3>3. negative bottom shrinks following</h3>
+<div style="background:#eee;border:1px solid #b"><div class="neg-b">mb-10</div><div style="background:#cde;height:20px">next-up</div></div>
+<h3>4. percent margin 25% of 200</h3>
+<div class="outer"><div class="pct-m">ml25%</div></div>
+<h3>5. auto margin centering</h3>
+<div class="outer"><div class="auto-m">centered</div></div>
+<h3>6. negative margins on inline-blocks overlap</h3>
+<div style="background:#eee"><span class="ib"></span><span class="ib"></span><span class="ib"></span></div>
+<h3>7. negative margin in grid/flex</h3>
+<div class="grid-neg"><div>g1</div><div>g2</div></div>
+<div class="flex-neg"><div>f1</div><div>f2</div></div>
+</body>
+</html>

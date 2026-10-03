@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 74 — float auto width, clear both, float margin, outline-offset negative</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.c { background:#cfe; border:1px solid #369; }
+
+/* 1. float left auto width (shrink to content), text wraps around */
+.f1 { width:300px; border:2px solid #939; padding:4px; overflow:hidden; }
+.f1 .fl { float:left; width:auto; margin-right:10px; background:#fec; }
+
+/* 2. two floats then clear:both */
+.f2 { width:300px; border:2px solid #939; padding:4px; }
+.f2 .l { float:left; width:100px; height:40px; background:#cfe; }
+.f2 .r { float:right; width:120px; height:40px; background:#fcf; }
+.f2 .clr { clear:both; height:20px; background:#eee; }
+
+/* 3. float right with negative margin-left (pull over) */
+.f3 { width:300px; border:2px solid #939; padding:4px; overflow:hidden; }
+.f3 .fr { float:right; width:80px; height:30px; margin-left:-20px; background:#fec; }
+
+/* 4. outline-offset negative on inline */
+.ol { outline:2px solid red; outline-offset:-4px; background:#eef; }
+</style>
+</head>
+<body>
+
+<h2>1. float:left auto width + margin-right 10, text wraps</h2>
+<div class="f1"><span class="fl">FLOAT</span>Some text that should wrap around the floated element on the right side of it and continue below as needed to fill the box width.</div>
+
+<h2>2. float left(100) + right(120), then clear:both bar</h2>
+<div class="f2"><div class="l">L</div><div class="r">R</div><div class="clr">cleared</div></div>
+
+<h2>3. float:right width 80 margin-left -20</h2>
+<div class="f3"><span class="fr">FR</span>text text text text text text text text text text text text text text text text</div>
+
+<h2>4. outline 2px red offset -4px on inline text</h2>
+<p>before <span class="ol">outlined inline text</span> after</p>
+
+</body>
+</html>

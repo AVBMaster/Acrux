@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b153 table intrinsic sizes</title>
+<style>
+body { font: 16px "Segoe UI", Arial, sans-serif; margin: 0; padding: 4px; }
+table { border-collapse: separate; border-spacing: 0; margin-bottom: 10px; }
+td, th { padding: 0; border: 1px solid #777; }
+.fixed { table-layout: fixed; width: 240px; }
+.img td { padding: 0; }
+.w { width: 60px; }
+</style></head><body>
+
+<!-- A replaced child must still claim its own width, an empty cell must not. -->
+<table id="t1" class="img">
+  <tr><td id="a1"><img id="i1" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFklEQVR4nGP4z8DwnxjMMKrwP10VAgCSw8c5SFqOKgAAAABJRU5ErkJggg==" width="40" height="20"></td><td id="a2"></td></tr>
+</table>
+
+<!-- Whitespace-only and br-only cells next to real content. -->
+<table id="t2">
+  <tr><td id="b1"> </td><td id="b2"><br></td><td id="b3">&nbsp;</td><td id="b4">word</td></tr>
+</table>
+
+<!-- colspan/rowspan distribution with a fixed layout. -->
+<table id="t3" class="fixed">
+  <tr><td id="c1" colspan="2">ab</td><td id="c2" class="w">cd</td></tr>
+  <tr><td id="c3">ef</td><td id="c4">gh</td><td id="c5">ij</td></tr>
+</table>
+
+<!-- Collapsing borders with mixed widths and an empty cell in the grid. -->
+<table id="t4" style="border-collapse:collapse">
+  <tr><td id="d1" style="border-width:3px">x</td><td id="d2" style="border-width:1px"></td></tr>
+  <tr><td id="d3" style="border-width:5px">y</td><td id="d4" style="border-width:2px">z</td></tr>
+</table>
+
+<!-- Nested table: the inner table is the outer cell's only content. -->
+<table id="t5"><tr><td id="e1"><table id="t6"><tr><td id="e2">deep</td></tr></table></td><td id="e3">out</td></tr></table>
+
+<!-- A caption and a cell whose content is only an inline element. -->
+<table id="t7">
+  <caption id="g1">cap</caption>
+  <tr><td id="g2"><span id="g3"></span></td><td id="g4"><span id="g5">s</span></td></tr>
+</table>
+
+</body></html>

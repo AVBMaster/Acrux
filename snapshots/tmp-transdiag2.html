@@ -1,0 +1,21 @@
+<!DOCTYPE html><html><head><style>
+body{margin:0;font:14px monospace}
+.sw{position:absolute;width:90px;height:60px;background:#c0c0c0;box-sizing:border-box;outline:1px solid #000}
+#p1{left:10px;top:10px}
+#p1,#p2{opacity:1}
+#p1.on{opacity:0}
+#p1{transition:opacity 2000s linear -800s}
+#p2{left:120px;top:10px;transition:opacity 2000s linear -800s}
+#p2.on{opacity:0}
+#out{position:absolute;left:0;top:90px;white-space:pre}
+</style></head><body>
+<i class="sw" id="p1"></i><i class="sw" id="p2"></i>
+<div id="out">pending</div>
+<script>
+function apply(){ var warm = getComputedStyle(p1).opacity + getComputedStyle(p2).opacity; out.textContent='before: '+warm; p1.className='sw on'; p2.className='sw on';
+  setTimeout(function(){ out.textContent='op: '+getComputedStyle(p1).opacity+' / '+getComputedStyle(p2).opacity; },50); }
+setTimeout(apply,0);
+if(document.addEventListener) document.addEventListener('DOMContentLoaded', apply);
+if(window.addEventListener) window.addEventListener('load', apply);
+</script>
+</body></html>

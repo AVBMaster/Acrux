@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { font-family: sans-serif; font-size: 13px; margin: 10px; color: #222; }
+h3 { margin: 8px 0 4px; }
+.g1 { display: grid; grid-template-columns: 1fr 2fr 1fr; grid-template-rows: auto auto; gap: 6px; width: 300px; background: #eee; padding: 4px; }
+.g1 div { background: #cde; border: 1px solid #89a; }
+.area { grid-area: head; }
+.side { grid-area: side; }
+.main { grid-area: main; }
+.g2 { display: grid; grid-template: "head head" 20px
+                            "side main" 1fr / 60px 1fr; gap: 4px; width: 260px; height: 80px; background: #fee; padding: 4px; }
+.g2 div { border: 1px solid #a88; }
+.head { grid-area: head; background: #fdd; }
+.g3 { display: grid; grid-template-columns: repeat(3, 40px); grid-auto-flow: dense; grid-auto-rows: 20px; gap: 2px; width: 132px; background: #efe; }
+.g3 div { background: #cec; border: 1px solid #8a8; }
+.skip2 { grid-column: 3; grid-row: 1; }
+.back1 { grid-column: 1; grid-row: 1; }
+.g4 { display: grid; grid-template-columns: minmax(30px, 80px) 100px; width: 150px; gap: 3px; background: #ddf; }
+.g4 div { background: #bbd; }
+.rowgap { display: grid; grid-template-columns: 50px 50px; row-gap: 10px; column-gap: 20px; width: 120px; background: #fed; }
+.rowgap div { background: #fc9; height: 15px; }
+</style>
+</head>
+<body>
+<h3>1. fr units 1:2:1</h3>
+<div class="g1"><div>1fr</div><div>2fr</div><div>1fr</div><div class="area">a</div><div>b</div><div>c</div></div>
+<h3>2. named template areas</h3>
+<div class="g2"><div class="head">head spans both</div><div class="side">s</div><div class="main">m</div></div>
+<h3>3. dense: item placed col3row1 then back to col1row1</h3>
+<div class="g3"><div class="skip2">X</div><div class="back1">Y</div><div>z1</div><div>z2</div></div>
+<h3>4. minmax column</h3>
+<div class="g4"><div>minmax</div><div>100px</div></div>
+<h3>5. asymmetric gaps</h3>
+<div class="rowgap"><div>1</div><div>2</div><div>3</div><div>4</div></div>
+</body>
+</html>

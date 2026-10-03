@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body { font: 16px sans-serif; margin: 8px; }
+h2 { font-size: 16px; margin: 14px 0 6px; background: rgb(240,240,240); }
+p { margin: 4px 0; }
+
+/* ====== GROUP 1: font-variant-caps family ====== */
+#g1 .sc { font-variant: small-caps; }
+#g1 .asc { font-variant-caps: all-small-caps; }
+#g1 .pc { font-variant-caps: petite-caps; }
+#g1 .uni { font-variant-caps: unicase; }
+#g1 .tc { font-variant-caps: titling-caps; }
+
+/* ====== GROUP 2: small-caps sizing / inheritance ====== */
+#g2 { font-variant: small-caps; font-size: 24px; }
+#g2 .normal { font-variant-caps: normal; }
+#g2 .big { font-size: 32px; }
+
+/* ====== GROUP 3: text-transform edge cases ====== */
+#g3 .cap { text-transform: capitalize; }
+#g3 .up { text-transform: uppercase; }
+#g3 .low { text-transform: lowercase; }
+#g3 .fw { text-transform: full-width; }
+
+/* ====== GROUP 4: box-decoration-break on a wrapped inline ====== */
+#g4 { width: 170px; }
+#g4 .clone { background: rgb(255,255,0); border: 2px solid rgb(255,0,0);
+             padding: 2px 6px; border-radius: 8px; box-decoration-break: clone; }
+#g4 .slice { background: rgb(255,255,0); border: 2px solid rgb(255,0,0);
+             padding: 2px 6px; border-radius: 8px; box-decoration-break: slice; }
+
+/* ====== GROUP 5: decoration propagation into inline-block / absolute ====== */
+#g5 { text-decoration: underline rgb(255,0,0); }
+#g5 .ib { display: inline-block; background: rgb(230,230,230); }
+#g5 .abs { position: absolute; left: 250px; top: 640px; }
+
+/* ====== GROUP 6: letter-spacing / word-spacing with underline ====== */
+#g6 .ls { letter-spacing: 6px; text-decoration: underline rgb(0,0,255); }
+#g6 .ws { word-spacing: 12px; text-decoration: underline rgb(0,128,0); }
+
+/* ====== GROUP 7: text-shadow paints decoration shadows too ====== */
+#g7 { font-size: 24px; text-decoration: underline rgb(0,0,0); text-decoration-thickness: 3px;
+      text-shadow: 3px 3px 0 rgb(255,128,0); }
+
+/* ====== GROUP 8: white-space handling around decorations ====== */
+#g8 .pre { white-space: pre; text-decoration: underline rgb(128,0,128); }
+#g8 .brk { white-space: break-spaces; text-decoration: underline rgb(0,128,128); }
+#g8 .hid { visibility: hidden; text-decoration: underline rgb(0,0,0); }
+</style></head><body>
+<h2>1. font-variant-caps: small / all-small / petite / unicase / titling</h2>
+<p id="g1"><span class="sc">Hello World abc</span> <span class="asc">Hello World abc</span> <span class="pc">Hello World abc</span> <span class="uni">Hello World abc</span> <span class="tc">Hello World</span></p>
+
+<h2>2. small-caps at 24px, child reset, larger font</h2>
+<p id="g2">Abc <span class="normal">def</span> <span class="big">Ghi</span></p>
+
+<h2>3. text-transform: capitalize / uppercase (ß→SS) / lowercase / full-width</h2>
+<p id="g3"><span class="cap">o'clock hot-dog mcDonald v2</span></p>
+<p id="g3"><span class="up">straße</span> <span class="low">ABCß</span> <span class="fw">ab</span></p>
+
+<h2>4. box-decoration-break: clone vs slice on wrapped inline</h2>
+<p id="g4"><span class="clone">aaaa bbbb cccc dddd eeee ffff</span></p>
+<p id="g4"><span class="slice">aaaa bbbb cccc dddd eeee ffff</span></p>
+
+<h2>5. decoration propagation: inline-block child, absolute child</h2>
+<div id="g5">underlined <span class="ib">block child</span> tail<span class="abs">abs no line</span></div>
+
+<h2>6. letter-spacing / word-spacing with underline</h2>
+<p id="g6"><span class="ls">abcd</span> <span class="ws">ab cd</span></p>
+
+<h2>7. text-shadow with thick underline</h2>
+<p id="g7">Shadowed</p>
+
+<h2>8. white-space: pre / break-spaces / hidden inline with underline</h2>
+<p id="g8"><span class="pre">a  b   c</span></p>
+<p id="g8"><span class="brk">x  y   z
+next</span></p>
+<p id="g8">visible <span class="hid">hidden underlined</span> tail</p>
+</body></html>

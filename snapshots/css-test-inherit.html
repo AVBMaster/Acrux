@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { font-family: sans-serif; font-size: 13px; margin: 10px; color: #222; }
+h3 { margin: 8px 0 4px; }
+.parent { color: #b00; letter-spacing: 1px; line-height: 1.6; font-weight: bold; text-transform: capitalize; }
+.child { color: initial; }
+.grand { color: inherit; }
+.inh-border { border: initial; }
+.unset-block { display: unset; color: unset; }
+.allinit { all: initial; color: green; }
+.allunset { all: unset; }
+.allinherit { all: inherit; font-size: 13px; }
+.pct { height: 40px; background: #eee; }
+.hidden-inherit { visibility: hidden; }
+.show-again { visibility: visible; }
+.cursor-i { cursor: pointer; }
+.white-space-inherit { white-space: pre; }
+.ws-child { white-space: normal; }
+</style>
+</head>
+<body>
+<h3>1. inheritance chain (parent bold-red-cap)</h3>
+<div class="parent">hello world
+  <div class="child">child-initial-color</div>
+  <div class="grand">grand-inherit-color</div>
+</div>
+<h3>2. border initial (no border expected)</h3>
+<div style="border:2px solid #000" class="inh-border">reset-border</div>
+<h3>3. display unset on div (should stay block)</h3>
+<div class="unset-block">unset-block-div</div>
+<h3>4. all:initial / unset / inherit</h3>
+<div class="allinit">all-initial-green</div>
+<div class="allunset">all-unset</div>
+<div class="allinherit">all-inherit</div>
+<h3>5. visibility inherit + override</h3>
+<div class="hidden-inherit">hidden <span class="show-again">shown</span> rest-hidden</div>
+<h3>6. white-space pre inherits then normal</h3>
+<div class="white-space-inherit">line1   preserved
+line2   preserved</div>
+<div class="white-space-inherit"><div class="ws-child">line1   collapsed
+line2   collapsed</div></div>
+</body>
+</html>

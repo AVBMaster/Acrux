@@ -1,0 +1,19 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { margin: 8px; }
+  div { height: 6px; border: 0; }
+</style></head><body>
+<div id="a" style="width: round(up, -53.5px, 10px)"></div>
+<div id="b" style="width: round(down, -53.5px, 10px)"></div>
+<div id="c" style="width: round(nearest, 55px, 10px)"></div>
+<div id="d" style="width: round(nearest, -55px, 10px)"></div>
+<div id="e" style="width: round(55px, 10px)"></div>
+<div id="f" style="width: calc(1px * mod(-23, 7))"></div>
+<div id="g" style="width: calc(1px * rem(-23, 7))"></div>
+<div id="h" style="width: calc(1px * mod(23, -7))"></div>
+<div id="i" style="width: calc(1px * abs(-37))"></div>
+<div id="j" style="width: calc(40px + 1px * sign(-3))"></div>
+<div id="k" style="width: calc(40px + 1px * sign(0))"></div>
+<div id="l" style="width: clamp(100px, 10px, 50px)"></div>
+<div id="m" style="width: calc(2em + 10%)"></div>
+<div id="n" style="width: round(up, 53.5px, 10px)"></div>
+</body></html>

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Advanced Features (Batch 2)</title>
+<style>
+/* Baseline: 800x600 viewport, dpiScale 1 */
+html, body { margin: 0; padding: 0; background: white; font-family: Arial, sans-serif; font-size: 16px; }
+body { padding: 4px; }
+h2 { margin: 8px 0; font-size: 14px; color: #333; }
+
+/* ====== GROUP 1: Position sticky ====== */
+#sticky-scroll { height: 100px; overflow-y: auto; background: #eee; width: 200px; position: relative; }
+#sticky-head { position: sticky; top: 0; background: rgb(255,0,0); color: white; padding: 4px; }
+#sticky-body { height: 200px; padding: 4px; }
+
+/* ====== GROUP 2: CSS Variables (custom properties) ====== */
+:root { --brand: rgb(0,128,255); --pad: 10px; }
+#var-el { background: var(--brand); padding: var(--pad); width: 100px; height: 30px; color: white; }
+
+/* ====== GROUP 3: Logical properties ====== */
+#logical-block { width: 200px; margin-inline-start: 50px; padding-inline-end: 20px; border: 1px solid black; }
+
+/* ====== GROUP 4: Grid auto-fit / minmax ====== */
+#grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 4px; width: 400px; }
+#grid-auto > div { background: rgb(128,255,128); height: 30px; }
+
+/* ====== GROUP 5: Multi-column ====== */
+#multicol { columns: 3; column-gap: 10px; width: 300px; }
+#multicol p { margin: 0 0 6px 0; }
+
+/* ====== GROUP 6: Text-shadow ====== */
+#tshadow { text-shadow: 2px 2px 3px rgba(0,0,255,0.7); font-size: 20px; padding: 4px; }
+
+/* ====== GROUP 7: Line-height variations ====== */
+#lh-normal { line-height: normal; font-size: 16px; height: 60px; background: #ffe; }
+#lh-1 { line-height: 1; font-size: 16px; height: 60px; background: #eef; }
+#lh-pct { line-height: 200%; font-size: 16px; height: 60px; background: #fee; }
+
+/* ====== GROUP 8: letter-spacing / word-spacing ====== */
+#lspace { letter-spacing: 5px; word-spacing: 10px; font-size: 16px; }
+
+/* ====== GROUP 9: background-repeat ====== */
+#bg-repeat { width: 200px; height: 80px; background-color: white; background-image: linear-gradient(90deg, rgb(255,0,0) 0%, rgb(255,0,0) 25%, white 25%, white 100%); background-size: 40px 100%; background-repeat: repeat-x; }
+
+/* ====== GROUP 10: CSS filters ====== */
+#filter-blur { width: 60px; height: 60px; background: rgb(255,0,0); filter: blur(4px); }
+#filter-bright { width: 60px; height: 60px; background: rgb(128,128,128); filter: brightness(2); }
+
+/* ====== GROUP 11: Advanced selectors ====== */
+#seltest .row:not(.skip):nth-child(2) { background: rgb(255,255,0); }
+#seltest .row { height: 20px; width: 100px; background: #eee; }
+#seltest .skip { height: 20px; width: 100px; }
+
+/* ====== GROUP 12: Inline-block baseline ====== */
+#inline-base { font-size: 16px; line-height: 30px; }
+#inline-base .ib1 { display: inline-block; width: 40px; height: 20px; background: rgb(255,0,0); vertical-align: baseline; }
+#inline-base .ib2 { display: inline-block; width: 40px; height: 20px; background: rgb(0,255,0); vertical-align: top; }
+#inline-base .ib3 { display: inline-block; width: 40px; height: 20px; background: rgb(0,0,255); vertical-align: bottom; }
+#inline-base .ib4 { display: inline-block; width: 40px; height: 20px; background: rgb(255,255,0); vertical-align: middle; }
+
+/* ====== GROUP 13: border shorthand with direction ====== */
+#bdir { border-block-start: 4px solid rgb(255,0,0); border-inline-end: 6px solid rgb(0,255,0); border-block-end: 2px solid rgb(0,0,255); border-inline-start: 3px solid rgb(255,0,255); padding: 5px; width: 100px; height: 40px; }
+
+/* ====== GROUP 14: Font shorthand ====== */
+#fshort { font: italic bold 20px/1.4 Arial, sans-serif; }
+
+/* ====== GROUP 15: calc() complex ====== */
+#calc2 { width: calc(100px + 50%); height: 30px; background: rgb(0,255,255); }
+#calc2-wrap { width: 400px; }
+
+/* ====== GROUP 16: Grid area / template-areas ====== */
+#grid-area { display: grid; grid-template-areas: "header header" "sidebar content"; grid-template-columns: 100px 200px; grid-template-rows: 40px 80px; width: 300px; }
+#grid-area .h { grid-area: header; background: rgb(255,200,0); }
+#grid-area .s { grid-area: sidebar; background: rgb(0,200,255); }
+#grid-area .c { grid-area: content; background: rgb(200,0,255); }
+
+/* ====== GROUP 17: Flex align-self & order ====== */
+#flex-order { display: flex; width: 300px; height: 100px; background: #eee; }
+#flex-order .a { order: 2; background: rgb(255,0,0); width: 50px; }
+#flex-order .b { order: 1; background: rgb(0,255,0); width: 50px; align-self: flex-end; }
+#flex-order .c { order: 3; background: rgb(0,0,255); width: 50px; align-self: center; }
+
+/* ====== GROUP 18: overflow: hidden + border-radius clip ====== */
+#ofl-r { width: 100px; height: 100px; border-radius: 50%; background: red; overflow: hidden; }
+#ofl-r-inner { width: 100px; height: 100px; background: rgb(0,255,0); transform: translate(30px, 30px); }
+
+/* ====== GROUP 19: visibility & display none vs. transparent ====== */
+#vis-parent { width: 200px; height: 60px; background: #ccc; }
+#vis-hidden { visibility: hidden; width: 100px; height: 30px; background: red; }
+#vis-none { display: none; width: 100px; height: 30px; background: blue; }
+#vis-visible { visibility: visible; width: 100px; height: 30px; background: green; }
+
+/* ====== GROUP 20: Nested pseudo-element with content ====== */
+.nested-1::before { content: "A-"; color: red; font-weight: bold; }
+.nested-2::after { content: "-Z"; color: blue; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h2>1. Sticky (in scroll container)</h2>
+<div id="sticky-scroll"><div id="sticky-head">Sticky</div><div id="sticky-body">Body content scrolled down</div></div>
+
+<h2>2. CSS Variables</h2>
+<div id="var-el">Variable</div>
+
+<h2>3. Logical properties</h2>
+<div id="logical-block">margin-inline-start 50</div>
+
+<h2>4. Grid auto-fit minmax</h2>
+<div id="grid-auto"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div></div>
+
+<h2>5. Multi-column</h2>
+<div id="multicol"><p>Line1</p><p>Line2</p><p>Line3</p><p>Line4</p><p>Line5</p><p>Line6</p></div>
+
+<h2>6. Text-shadow</h2>
+<div id="tshadow">Shadow text</div>
+
+<h2>7. Line-height variations</h2>
+<div id="lh-normal">normal</div>
+<div id="lh-1">1</div>
+<div id="lh-pct">200%</div>
+
+<h2>8. letter/word-spacing</h2>
+<div id="lspace">ABC DEF GHI</div>
+
+<h2>9. background-repeat</h2>
+<div id="bg-repeat"></div>
+
+<h2>10. CSS filters</h2>
+<div style="display:flex;gap:5px;">
+<div id="filter-blur"></div>
+<div id="filter-bright"></div>
+</div>
+
+<h2>11. Advanced selectors</h2>
+<div id="seltest"><div class="row">r1</div><div class="row">r2 yellow</div><div class="row skip">r3 skip</div><div class="row">r4</div></div>
+
+<h2>12. Inline-block vertical-align</h2>
+<div id="inline-base"><span class="ib1">a</span><span class="ib2">b</span><span class="ib3">c</span><span class="ib4">d</span></div>
+
+<h2>13. Border logical shorthand</h2>
+<div id="bdir">borders</div>
+
+<h2>14. Font shorthand</h2>
+<div id="fshort">Italic Bold 20px</div>
+
+<h2>15. calc() complex</h2>
+<div id="calc2-wrap"><div id="calc2">calc(100px+50%)</div></div>
+
+<h2>16. Grid template-areas</h2>
+<div id="grid-area"><div class="h">H</div><div class="s">S</div><div class="c">C</div></div>
+
+<h2>17. Flex order & align-self</h2>
+<div id="flex-order"><div class="a">A</div><div class="b">B</div><div class="c">C</div></div>
+
+<h2>18. Overflow clip with border-radius</h2>
+<div id="ofl-r"><div id="ofl-r-inner"></div></div>
+
+<h2>19. Visibility vs display</h2>
+<div id="vis-parent">
+<div id="vis-hidden">hidden</div>
+<div id="vis-none">none</div>
+<div id="vis-visible">visible</div>
+</div>
+
+<h2>20. Nested pseudo-element</h2>
+<div><span class="nested-1 nested-2">Middle</span></div>
+
+</body>
+</html>

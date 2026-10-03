@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 65 — box-sizing consistency (flex stretch/grow, grid item, block)</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.bb { box-sizing: border-box; }
+.cell { border:2px solid #369; background:#cfe; padding:8px; }
+
+/* 1. flex row, item width:120px border-box, grow to fill 300px container */
+.f1 { display:flex; width:300px; height:60px; border:2px solid #939; }
+.f1 .a { width:120px; }
+.f1 .b { flex:1; }
+
+/* 2. align-items:stretch, border-box item with fixed height -> should NOT stretch */
+.f2 { display:flex; width:300px; height:100px; border:2px solid #939; align-items:stretch; }
+.f2 .s { width:80px; }
+.f2 .sh { width:80px; height:40px; }
+
+/* 3. grid item border-box width/height */
+.g1 { display:grid; grid-template-columns:100px 100px; gap:6px; width:212px; border:2px solid #939; }
+.g1 .cell { width:100px; height:50px; }
+
+/* 4. block: border-box width:200 with padding, child content area should be 200-2*8-2*2 */
+.blk { box-sizing:border-box; width:200px; padding:8px; border:2px solid #369; background:#cfe; }
+.blk .inner { background:#fec; height:20px; }
+</style>
+</head>
+<body>
+
+<h2>1. flex grow: a=120bb, b=flex:1 in 300 (b should be 180bb)</h2>
+<div class="f1"><div class="cell bb a">A</div><div class="cell bb b">B</div></div>
+
+<h2>2. align-items:stretch: s stretches to 100, sh keeps 40 (both border-box)</h2>
+<div class="f2"><div class="cell bb s">S</div><div class="cell bb sh">SH</div></div>
+
+<h2>3. grid cell 100x50 border-box (content 82x34)</h2>
+<div class="g1"><div class="cell bb">1</div><div class="cell bb">2</div></div>
+
+<h2>4. block border-box 200 wide, inner should be 180</h2>
+<div class="blk bb"><div class="inner">inner</div></div>
+
+</body>
+</html>

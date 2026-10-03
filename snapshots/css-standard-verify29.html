@@ -1,0 +1,31 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { font-family: Arial; font-size: 24px; margin: 8px; }
+  h2 { font-size: 14px; background: #eee; margin: 8px 0 4px; color: #000; }
+  /* The text is transparent, so the only painted pixels inside each paragraph are the
+     decoration lines themselves - their offset and thickness become directly
+     measurable from the snapshot. */
+  p { margin: 4px 0; color: transparent; text-decoration-line: underline;
+      text-decoration-color: #e33; text-decoration-style: solid; }
+</style></head><body>
+<h2>1. text-decoration-thickness</h2>
+<p>Auto</p>
+<p style="text-decoration-thickness: 2px">T2px</p>
+<p style="text-decoration-thickness: 6px">T6px</p>
+<p style="text-decoration-thickness: 50%">T50pct</p>
+<p style="text-decoration-thickness: from-font">TFromFont</p>
+<h2>2. thickness combined with text-underline-offset</h2>
+<p style="text-underline-offset: 4px">O4</p>
+<p style="text-underline-offset: 4px; text-decoration-thickness: 6px">O4T6</p>
+<p style="text-underline-offset: -4px">ONeg4</p>
+<p style="text-underline-offset: 0.25em">OQuarterEm</p>
+<h2>3. text-underline-position</h2>
+<p style="text-underline-position: under">PosUnder</p>
+<p style="text-underline-position: alphabetic">PosAlphabetic</p>
+<h2>4. decoration style with thickness</h2>
+<p style="text-decoration-style: dashed; text-decoration-thickness: 4px">Dashed4</p>
+<p style="text-decoration-style: wavy; text-decoration-thickness: 4px">Wavy4</p>
+<p style="text-decoration-style: double">Double</p>
+<h2>5. text-decoration-skip-ink</h2>
+<p style="text-decoration-skip-ink: auto">SkipAuto ghpq</p>
+<p style="text-decoration-skip-ink: none">SkipNone ghpq</p>
+</body></html>

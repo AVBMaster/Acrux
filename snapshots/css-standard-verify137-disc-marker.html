@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b137 disc marker advance vs bullet in text</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+ul { margin: 0; padding: 0 0 0 80px; list-style-position: inside; }
+.d { list-style-type: disc; }
+.c { list-style-type: circle; }
+.s { list-style-type: square; }
+.b32 { font-size: 32px; }
+p { margin: 0; }
+span { background: rgb(255,200,200); }
+</style>
+</head>
+<body>
+<p id="t1">bullet in text: •X</p>
+<p id="t2" class="b32">bullet 32px: •X</p>
+<ul>
+  <li class="d" id="d1"><span>Alpha</span></li>
+  <li class="c" id="d2"><span>Alpha</span></li>
+  <li class="s" id="d3"><span>Alpha</span></li>
+  <li class="d b32" id="d4"><span>Alpha</span></li>
+</ul>
+</body>
+</html>

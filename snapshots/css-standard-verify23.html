@@ -1,0 +1,60 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body { font-family: Arial; font-size: 16px; margin: 8px; }
+h2 { font-size: 14px; background: #eee; margin: 10px 0 4px; }
+.box { border: 1px solid black; }
+.w-ch { width: 10ch; background: #fbb; }
+.w-ex { width: 10ex; background: #bfb; }
+.w-cap { width: 10cap; background: #bbf; }
+.w-ic { width: 5ic; background: #fbf; }
+.h-lh { height: 3lh; width: 40px; background: #ffc; }
+.big { font-size: 32px; }
+.mono { font-family: 'Courier New', monospace; }
+.c1 { width: calc(10ch + 20px); background: #fcb; }
+.c2 { width: calc(5ex * 2); background: #cbf; }
+.c3 { height: calc(2lh + 10px); width: 60px; background: #bfc; }
+.pad { padding-left: 4ch; background: #eee; }
+.indent { text-indent: 5ch; background: #fed; }
+.mt { margin-top: 2lh; width: 80px; height: 8px; background: #888; }
+.rel { position: relative; width: 200px; height: 60px; background: #eee; margin-bottom: 4px; }
+.i1 { position: absolute; inset-inline-start: 10px; inset-block-start: 5px; width: 30px; height: 20px; background: #f88; }
+.i2 { position: absolute; inset-inline-end: 10px; inset-block-end: 5px; width: 30px; height: 20px; background: #8f8; }
+.rtl { direction: rtl; }
+.tall { height: 90px; background: #ddf; }
+.stick { position: sticky; top: 8px; width: 100px; height: 20px; background: #88f; }
+.tt1 { text-transform: uppercase; } .tt2 { text-transform: lowercase; }
+.tt3 { text-transform: capitalize; } .tt4 { text-transform: full-width; }
+.par { text-decoration: underline; background: #efe; }
+.par .kid { text-decoration: underline overline; }
+.thick { text-decoration: underline; text-decoration-thickness: 4px; text-underline-offset: 4px; }
+</style></head><body>
+<h2>1. font-relative units: ch / ex / cap / ic / lh</h2>
+<div class="w-ch box">10ch</div>
+<div class="w-ex box">10ex</div>
+<div class="w-cap box">10cap</div>
+<div class="w-ic box">5ic</div>
+<div class="h-lh box">3lh</div>
+<h2>2. same units at 32px and monospace</h2>
+<div class="big"><div class="w-ch box">10ch</div><div class="w-ex box">10ex</div><div class="h-lh box">3lh</div></div>
+<div class="mono"><div class="w-ch box">10ch</div><div class="w-cap box">10cap</div></div>
+<h2>3. calc() with font units</h2>
+<div class="c1 box">calc 10ch+20</div>
+<div class="c2 box">calc 5ex*2</div>
+<div class="c3 box">calc 2lh+10</div>
+<h2>4. ch in padding / text-indent / lh in margin</h2>
+<div class="pad box">pad-left 4ch</div>
+<div class="indent box">indent 5ch</div>
+<div class="mt"></div>
+<h2>5. inset logical properties (ltr then rtl)</h2>
+<div class="rel"><div class="i1"></div><div class="i2"></div></div>
+<div class="rel rtl"><div class="i1"></div><div class="i2"></div></div>
+<h2>6. position: sticky (unscrolled = static)</h2>
+<div class="tall"><div class="stick box">sticky</div></div>
+<h2>7. text-transform keywords</h2>
+<div class="tt1 box">hELLO wORLD</div>
+<div class="tt2 box">hELLO wORLD</div>
+<div class="tt3 box">hELLO wORLD</div>
+<div class="tt4 box">Hello world</div>
+<h2>8. decoration stacking &amp; offset</h2>
+<div class="par box">parent <span class="kid">kid u+o</span> tail</div>
+<div class="thick box">thick4 offset4 underline</div>
+</body></html>

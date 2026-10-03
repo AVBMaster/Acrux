@@ -1,0 +1,31 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { font-family: Arial; font-size: 14px; margin: 8px; }
+  h2 { font-size: 14px; background: #eee; margin: 8px 0 4px; }
+  .c { width: 90px; height: 60px; background: #36c; display: inline-block; margin: 0 8px 10px 0;
+       vertical-align: top; }
+  .g { width: 90px; height: 60px; display: inline-block; margin: 0 8px 10px 0; vertical-align: top;
+       background: linear-gradient(90deg,#e33,#fd8); }
+  .box { width: 120px; height: 60px; background: #fd8; overflow: hidden; margin-bottom: 10px; }
+  .box .in { width: 200px; height: 100px; background: #36c; }
+</style></head><body>
+<h2>1. clip-path basic shapes</h2>
+<div class="c" id="k1" style="clip-path: circle(50%)"></div>
+<div class="c" id="k2" style="clip-path: circle(20px at 15px 15px)"></div>
+<div class="c" id="k3" style="clip-path: ellipse(30% 60%)"></div>
+<div class="c" id="k4" style="clip-path: inset(10px)"></div>
+<div class="c" id="k5" style="clip-path: inset(5px 15px round 10px)"></div>
+<div class="c" id="k6" style="clip-path: polygon(0 0, 100% 0, 50% 100%)"></div>
+<div class="c" id="k7" style="clip-path: polygon(0 0, 100% 0, 100% 100%, 30% 100%, 0 70%)"></div>
+<div class="c" id="k8" style="clip-path: circle(40% at 100% 0)"></div>
+<h2>2. clip-path geometry box and text</h2>
+<div class="c" id="k9" style="padding: 10px; border: 6px solid #e33; background-clip: content-box; clip-path: circle(50% content-box)"></div>
+<p id="t1" style="width: 200px; font-size: 20px; clip-path: polygon(0 0, 100% 0, 100% 55%, 0 100%)">ClipText Abcd efgh</p>
+<div class="g" id="k10" style="clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%)"></div>
+<div class="c" id="k11" style="clip-path: none"></div>
+<div class="c" id="k12" style="clip-path: circle(50%, bogus)"></div>
+<h2>3. overflow hidden with border-radius</h2>
+<div class="box" id="o1" style="border-radius: 20px"><div class="in"></div></div>
+<div class="box" id="o2" style="border-radius: 50% 0"><div class="in"></div></div>
+<div class="box" id="o3" style="border-radius: 30px 30px 0 0 / 10px 10px 0 0"><div class="in"></div></div>
+<div class="box" id="o4" style="border: 6px solid #e33; border-radius: 24px"><div class="in"></div></div>
+</body></html>

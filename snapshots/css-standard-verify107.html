@@ -1,0 +1,16 @@
+<!DOCTYPE html><head><style>
+body{margin:20px;font:16px Arial}
+/* number: child inherits the NUMBER, resolves against child font-size */
+.num{line-height:1.5;font-size:20px}
+.num .kid{font-size:40px}   /* expect lh 60 (1.5*40) */
+/* percentage: resolves at parent, child inherits computed px */
+.pct{line-height:150%;font-size:20px}
+.pct .kid{font-size:40px}   /* expect lh 30 (150% of 20, inherited) */
+/* length: inherited as-is */
+.len{line-height:24px;font-size:20px}
+.len .kid{font-size:40px}   /* expect lh 24 */
+</style><body>
+<div class="num"><div class="kid">num child</div></div>
+<div class="pct"><div class="kid">pct child</div></div>
+<div class="len"><div class="kid">len child</div></div>
+</body></html>

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html, body { margin: 0; padding: 0; background: rgb(255,255,255); }
+div { position: absolute; width: 60px; height: 60px; padding: 10px; border: 2px solid rgb(255,0,255); }
+/* background-origin: padding-box (default): image starts at border edge +0 */
+#pad { left: 0; top: 0; background: url("quad40.png") no-repeat; }
+/* background-origin: content-box: image starts 12px in from the border box */
+#con { left: 100px; top: 0; background: url("quad40.png") no-repeat; background-origin: content-box; }
+/* background-origin: border-box: image starts at the outer border edge */
+#bor { left: 200px; top: 0; background: url("quad40.png") no-repeat; background-origin: border-box; }
+</style>
+</head>
+<body>
+<div id="pad"></div>
+<div id="con"></div>
+<div id="bor"></div>
+</body>
+</html>

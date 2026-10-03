@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 46 — table intrinsic sizing & misc</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+table { border-collapse: collapse; margin: 10px 0; }
+td, th { border: 1px solid #333; padding: 4px 8px; }
+
+/* 1. auto table sized by content, nested block+inline in a cell */
+.nested-cell { display: block; }
+.nested-cell .lbl { font-size: 11px; color: #666; }
+
+/* 2. unbreakable long word forces column width */
+.longword { white-space: normal; }
+
+/* 3. table with explicit small width + overflowing content */
+.fixed-small { width: 120px; table-layout: auto; }
+
+/* 4. colspan cell content sizing */
+
+/* 5. inline-block min/max content in cell */
+.ib { display: inline-block; background: #cfc; }
+</style>
+</head>
+<body>
+
+<h2>1. auto table, cell with nested block(label)+inline text</h2>
+<table>
+  <tr>
+    <td><div class="nested-cell"><span class="lbl">Name</span><br>Christopher Walken</span></div></td>
+    <td><div class="nested-cell"><span class="lbl">Note</span><br>hi</div></td>
+  </tr>
+</table>
+
+<h2>2. unbreakable long word widens its column</h2>
+<table>
+  <tr><td>a</td><td class="longword">Pneumonoultramicroscopicsilicovolcanoconiosis</td><td>b</td></tr>
+</table>
+
+<h2>3. table width:120px with content wider than that</h2>
+<table class="fixed-small">
+  <tr><td>short</td><td>This content is much wider than the specified table width</td></tr>
+</table>
+
+<h2>4. colspan cell content sizing</h2>
+<table>
+  <tr><td>x</td><td>y</td></tr>
+  <tr><td colspan="2">A very long spanning cell content that affects column widths</td></tr>
+</table>
+
+<h2>5. inline-block elements in a cell</h2>
+<table>
+  <tr><td><span class="ib">AAA</span> <span class="ib">BBBBBB</span> <span class="ib">C</span></td></tr>
+</table>
+
+</body>
+</html>

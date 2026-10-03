@@ -1,0 +1,19 @@
+<!DOCTYPE html><head><style>
+body{margin:20px;font:16px Arial}
+/* font shorthand must RESET line-height to normal (not keep 40px) */
+.a{line-height:40px;font:16px Arial}
+/* font shorthand with explicit line-height */
+.b{line-height:40px;font:16px/1.5 Arial}
+/* font shorthand must reset font-weight to normal */
+.c{font-weight:900;font:16px Arial}
+/* font shorthand must reset font-style to normal */
+.d{font-style:italic;font:16px Arial}
+/* control: no reset expected */
+.e{line-height:40px}
+</style><body>
+<div class="a">font resets line-height (expect normal ~18)</div>
+<div class="b">font with /1.5 (expect 24)</div>
+<div class="c">font resets weight</div>
+<div class="d">font resets style</div>
+<div class="e">control lh40</div>
+</body></html>

@@ -1,0 +1,29 @@
+<!DOCTYPE html><head><style>
+body{margin:20px;font:12px Arial}
+.f{display:flex;flex-wrap:wrap;width:200px;height:150px;border:2px solid #939;margin:0 16px 16px 0;float:left}
+.i{width:60px;background:#cfe;border:1px solid #080}
+/* align-content matrix (cross axis = vertical, wrapped lines) */
+.a1{align-content:flex-start}
+.a2{align-content:flex-end}
+.a3{align-content:center}
+.a4{align-content:space-between}
+.a5{align-content:space-around}
+.a6{align-content:space-evenly}
+.a7{align-content:stretch}
+/* items with explicit heights should not stretch */
+.h .i{height:20px}
+/* align-items matrix (single line) */
+.g{display:flex;width:200px;height:120px;border:2px solid #39c;margin:0 16px 16px 0;float:left}
+.ai1{align-items:flex-start}
+.ai2{align-items:flex-end}
+.ai3{align-items:center}
+.ai4{align-items:stretch}
+.g .tall{height:30px}
+</style><body>
+<div class="f a1"><div class="i">1</div><div class="i">2</div><div class="i">3</div><div class="i">4</div><div class="i">5</div><div class="i">6</div><div class="i">7</div></div>
+<div class="f a4"><div class="i">1</div><div class="i">2</div><div class="i">3</div><div class="i">4</div><div class="i">5</div><div class="i">6</div><div class="i">7</div></div>
+<div class="f a7 h"><div class="i">1</div><div class="i">2</div><div class="i">3</div><div class="i">4</div><div class="i">5</div><div class="i">6</div><div class="i">7</div></div>
+<div class="f a3 h"><div class="i">1</div><div class="i">2</div><div class="i">3</div><div class="i">4</div><div class="i">5</div><div class="i">6</div><div class="i">7</div></div>
+<div class="g ai4"><div class="tall">a</div><div class="i">b</div></div>
+<div class="g ai3"><div class="tall">a</div><div class="i">b</div></div>
+</body></html>

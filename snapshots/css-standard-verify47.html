@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 47 — intrinsic width keywords</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+.box { background: #cfe; border: 1px solid #369; margin: 8px 0; padding: 4px; }
+.wrap { width: 400px; border: 1px dashed #999; padding: 4px; }
+
+.mc { width: max-content; }
+.mnc { width: min-content; }
+.fc { width: fit-content; }
+.fcarg { width: fit-content(150px); }
+
+/* nested content inside intrinsic-width box */
+.inner { }
+.inner .lbl { font-size: 11px; color:#666; }
+
+/* inline-block intrinsic */
+.ib-mc { display: inline-block; width: max-content; background:#fec; }
+</style>
+</head>
+<body>
+
+<h2>1. width: max-content (single line, no wrap)</h2>
+<div class="wrap"><div class="box mc">This text should stay on one line because max-content never wraps</div></div>
+
+<h2>2. width: min-content (narrowest, wraps every word)</h2>
+<div class="wrap"><div class="box mnc">This text wraps to the narrowest possible width</div></div>
+
+<h2>3. width: fit-content (shrinks to content, capped by container)</h2>
+<div class="wrap"><div class="box fc">short</div></div>
+<div class="wrap"><div class="box fc">This is a fairly long line of text that exceeds the four hundred pixel container so it should wrap at the container edge</div></div>
+
+<h2>4. width: fit-content(150px) argument form</h2>
+<div class="wrap"><div class="box fcarg">This content is long and should be capped at 150 pixels by the fit-content argument</div></div>
+
+<h2>5. intrinsic width on box with nested block+inline content</h2>
+<div class="wrap"><div class="box mc"><div class="inner"><span class="lbl">label</span><br>ExtraordinarilyLongUnbreakableToken</div></div></div>
+
+<h2>6. inline-block width: max-content</h2>
+<div class="wrap"><span class="ib-mc">Inline block staying on one line without wrapping at all here</span></div>
+
+</body>
+</html>

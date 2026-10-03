@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 14 — per-keyframe timing functions</title>
+<style>
+/* There are two independent shaping steps, applied in this order (Web Animations
+   §5.9):
+
+     1. animation-timing-function on the element shapes the iteration progress;
+     2. animation-timing-function on the *starting* keyframe shapes the progress
+        within the interval that keyframe begins.
+
+   The second one is why `0% { animation-timing-function: ... }` reshapes the
+   whole first segment. A keyframe's easing shapes the interval *after* it, so
+   the one on the last keyframe has no visible effect on the animation.
+
+   Rows 1 and 2 isolate each step with the other set to linear. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 300px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 90px; height: 60px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  outline: 1px solid #000;
+  text-align: center; line-height: 60px; font-size: 13px;
+}
+#k1 { left: 10px;  top: 10px; }  #k2 { left: 120px; top: 10px; }
+#k3 { left: 230px; top: 10px; }  #k4 { left: 340px; top: 10px; }
+#k5 { left: 10px;  top: 90px; }  #k6 { left: 120px; top: 90px; }
+#k7 { left: 230px; top: 90px; }  #k8 { left: 340px; top: 90px; }
+#k9 { left: 10px;  top: 170px; }  #k10{ left: 120px; top: 170px; }
+#k11{ left: 230px; top: 170px; }  #k12{ left: 340px; top: 170px; }
+
+/* 1: only the keyframe's easing is active. The 0% keyframe shapes 0..100, and at
+   iteration progress 0.4 that is steps(4, jump-end) = floor(1.6)/4 = 0.25. */
+#k1 { animation: kf 1s linear -400ms paused; }
+@keyframes kf {
+  0%   { animation-timing-function: steps(4, jump-end); opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 2: only the element's easing is active (the keyframe's is linear). The element
+   uses steps(2, jump-start), which at 0.4 gives (floor(0.8)+1)/2 = 0.5. */
+#k2 { animation-timing-function: steps(2, jump-start); animation-name: kf2;
+      animation-duration: 1s; animation-delay: -400ms; animation-play-state: paused; }
+@keyframes kf2 {
+  0%   { animation-timing-function: linear; opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 3: both active, and they compose. steps(2, jump-start) gives 0.5, then the
+   keyframe's steps(2, jump-end) maps 0.5 to floor(1.0)/2 = 0. */
+#k3 { animation-timing-function: steps(2, jump-start); animation-name: kf3;
+      animation-duration: 1s; animation-delay: -400ms; animation-play-state: paused; }
+@keyframes kf3 {
+  0%   { animation-timing-function: steps(2, jump-end); opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 4: three keyframes, each interval shaped by its own starting keyframe. At 40%
+   we are inside 25%..75%, whose easing is jump-none over 3 steps. */
+#k4 { animation: kf4 1s linear -400ms paused; }
+@keyframes kf4 {
+  0%   { animation-timing-function: linear; opacity: 1; }
+  25%  { animation-timing-function: steps(3, jump-end); opacity: 0.8; }
+  75%  { animation-timing-function: steps(2, jump-start); opacity: 0.4; }
+  100% { animation-timing-function: ease-in; opacity: 0; }
+}
+
+/* 5: the last keyframe's easing shapes the interval *after* it, which does not
+   exist, so it has no effect: 0.4 stays 0.4. */
+#k5 { animation: kf5 1s linear -400ms paused; }
+@keyframes kf5 {
+  0%   { opacity: 1; }
+  100% { animation-timing-function: steps(4, jump-end); opacity: 0; }
+}
+
+/* 6: `ease` on the first keyframe, 0.6823 at 0.4. */
+#k6 { animation: kf6 1s linear -400ms paused; }
+@keyframes kf6 {
+  from { animation-timing-function: ease; opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* 7: the same easing on both keyframes of a two-keyframe rule. The 0% one shapes
+   the only interval, so this is identical to row 6. */
+#k7 { animation: kf7 1s linear -400ms paused; }
+@keyframes kf7 {
+  from { animation-timing-function: ease; opacity: 1; }
+  to   { animation-timing-function: steps(4, jump-end); opacity: 0; }
+}
+
+/* 8: step-start on the first keyframe: the value jumps to the end immediately,
+   so opacity is 0 even at iteration progress 0. */
+#k8 { animation: kf8 1s linear -400ms paused; }
+@keyframes kf8 {
+  from { animation-timing-function: step-start; opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* 9-12: a positive negative-delay variant of each mechanism, so the same rows
+   are also observable at a second pinned instant. */
+#k9  { animation-timing-function: steps(4, jump-end); animation-name: kf2;
+       animation-duration: 1s; animation-delay: -700ms; animation-play-state: paused; }
+#k10 { animation: kf 1s linear -400ms infinite paused; }
+#k11 { animation: kf6 1s linear -400ms paused alternate; }
+#k12 { animation: kf2 1s ease -400ms paused; }
+
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+#legend code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="k1">1</i>
+  <i class="sw" id="k2">2</i>
+  <i class="sw" id="k3">3</i>
+  <i class="sw" id="k4">4</i>
+  <i class="sw" id="k5">5</i>
+  <i class="sw" id="k6">6</i>
+  <i class="sw" id="k7">7</i>
+  <i class="sw" id="k8">8</i>
+  <i class="sw" id="k9">9</i>
+  <i class="sw" id="k10">10</i>
+  <i class="sw" id="k11">11</i>
+  <i class="sw" id="k12">12</i>
+</div>
+
+<div id="legend">
+  <p>fill = 192 + 63 &times; eased; every row is pinned 40% into a 1s iteration</p>
+  <p><b>1</b> keyframe easing only, <code>steps(4, jump-end)</code> on <code>0%</code> &rarr; 0.25 &rarr; fill <b>208</b></p>
+  <p><b>2</b> element easing only, <code>steps(2, jump-start)</code> &rarr; 0.5 &rarr; fill <b>224</b></p>
+  <p><b>3</b> both: 0.5 through the element's, then floor(1.0)/2 = 0 &rarr; fill <b>192</b></p>
+  <p><b>4</b> three intervals: 40% is inside 25..75, eased by <code>steps(3, jump-end)</code> at (0.4-0.25)/0.5 = 0.3 &rarr; floor(0.9)/3 = 0.3 &rarr; opacity 0.8 - 0.8*0.3 = 0.56 &rarr; fill <b>210</b></p>
+  <p><b>5</b> easing on the <em>last</em> keyframe has no effect &rarr; 0.4 &rarr; fill <b>217</b></p>
+  <p><b>6</b> <code>ease</code> on <code>from</code> &rarr; 0.6823 &rarr; fill <b>235</b></p>
+  <p><b>7</b> <code>ease</code> on <code>from</code> shapes the only interval &rarr; same as 6, fill <b>235</b></p>
+  <p><b>8</b> <code>step-start</code> on <code>from</code> &rarr; output 1 &rarr; fill <b>255</b></p>
+  <p><b>9</b> the element's <code>steps(4, jump-end)</code> at 70% &rarr; floor(2.8)/4 = 0.5 &rarr; fill <b>224</b></p>
+  <p><b>10</b> <code>infinite</code> at 40% of the first iteration &rarr; fill <b>208</b></p>
+  <p><b>11</b> <code>alternate</code> iteration 0 &rarr; fill <b>235</b></p>
+  <p><b>12</b> the element's <code>ease</code> then the keyframe's <code>linear</code> &rarr; 0.6823 &rarr; fill <b>235</b></p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 08 — length and layout properties</title>
+<style>
+/* Lengths interpolate component-wise in their own units; two lengths with
+   different relative units, or a length against a percentage, are not
+   interpolable and flip at 50% instead. Every row here is pinned 40% into a 1s
+   animation, so a 40 -> 100 length lands on 64px and a 0 -> 40 margin on 16px.
+
+   These are the properties that change box geometry, so the engine must run
+   layout after sampling them: the swatch widths and offsets below are read back
+   with --dumplayout, not just with --pixels. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 300px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 100px; height: 40px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  outline: 1px solid #000;
+  font-size: 12px; line-height: 40px; text-align: center;
+  color: #000;
+}
+#l1 { left: 10px;  top: 10px; }
+#l2 { left: 150px; top: 10px; }
+#l3 { left: 290px; top: 10px; }
+#l4 { left: 10px;  top: 80px; }
+#l5 { left: 150px; top: 80px; }
+#l6 { left: 290px; top: 80px; }
+#l7 { left: 10px;  top: 150px; }
+#l8 { left: 150px; top: 150px; }
+#l9 { left: 290px; top: 150px; }
+#l10{ left: 10px;  top: 220px; }
+#l11{ left: 150px; top: 220px; }
+#l12{ left: 290px; top: 220px; }
+
+@keyframes w  { from { width: 40px; }  to { width: 100px; } }
+@keyframes h  { from { height: 20px; } to { height: 60px; } }
+@keyframes m  { from { margin-left: 0px; } to { margin-left: 40px; } }
+@keyframes p  { from { padding-top: 0px; } to { padding-top: 20px; } }
+@keyframes o  { from { top: 0px; } to { top: 20px; } }
+@keyframes fs { from { font-size: 10px; } to { font-size: 30px; } }
+@keyframes ls { from { letter-spacing: 0px; } to { letter-spacing: 10px; } }
+@keyframes bw { from { border-top-width: 0px; } to { border-top-width: 10px; } }
+@keyframes br { from { border-top-left-radius: 0px; } to { border-top-left-radius: 20px; } }
+@keyframes lh { from { line-height: 1; } to { line-height: 2; } }
+@keyframes g  { from { column-gap: 0px; } to { column-gap: 20px; } }
+/* A percentage cannot blend with a length: the spec's discrete 50% flip. */
+@keyframes pct { from { left: 0%; } to { left: 40px; } }
+
+#l1  { animation: w  1s linear -400ms paused; }
+#l2  { animation: h  1s linear -400ms paused; }
+#l3  { animation: m  1s linear -400ms paused; }
+#l4  { animation: p  1s linear -400ms paused; }
+#l5  { position: relative; animation: o 1s linear -400ms paused; }
+#l6  { animation: fs 1s linear -400ms paused; }
+#l7  { animation: ls 1s linear -400ms paused; }
+#l8  { border-top-style: solid; border-right-style: solid; border-bottom-style: solid; border-left-style: solid;
+       animation: bw 1s linear -400ms paused; }
+#l9  { animation: br 1s linear -400ms paused; }
+#l10 { animation: lh 1s linear -400ms paused; }
+#l11 { animation: g  1s linear -400ms paused; display: flex; }
+#l12 { animation: pct 1s linear -400ms paused; }
+
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+#legend code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="l1">1</i>
+  <i class="sw" id="l2">2</i>
+  <i class="sw" id="l3">3</i>
+  <i class="sw" id="l4">4</i>
+  <i class="sw" id="l5">5</i>
+  <i class="sw" id="l6">Hg</i>
+  <i class="sw" id="l7">7</i>
+  <i class="sw" id="l8">8</i>
+  <i class="sw" id="l9">9</i>
+  <i class="sw" id="l10">10</i>
+  <i class="sw" id="l11">11</i>
+  <i class="sw" id="l12">12</i>
+</div>
+
+<div id="legend">
+  <p>all rows at <b>40%</b> of a 1s linear animation</p>
+  <p><b>1</b> <code>width 40 -&gt; 100px</code> = <b>64px</b></p>
+  <p><b>2</b> <code>height 20 -&gt; 60px</code> = <b>36px</b> (swatch overflows its row)</p>
+  <p><b>3</b> <code>margin-left 0 -&gt; 40px</code> = <b>16px</b>, so the painted box starts at x=166</p>
+  <p><b>4</b> <code>padding-top 0 -&gt; 20px</code> = <b>8px</b>, box stays 40px tall</p>
+  <p><b>5</b> <code>top 0 -&gt; 20px</code> on a relative box = <b>8px</b> down</p>
+  <p><b>6</b> <code>font-size 10 -&gt; 30px</code> = <b>18px</b></p>
+  <p><b>7</b> <code>letter-spacing 0 -&gt; 10px</code> = <b>4px</b></p>
+  <p><b>8</b> <code>border-*-width 0 -&gt; 10px</code> = <b>4px</b> (box-sizing: border-box keeps 100x40)</p>
+  <p><b>9</b> <code>border-radius 0 -&gt; 20px</code> = <b>8px</b></p>
+  <p><b>10</b> <code>line-height 1 -&gt; 2</code> = <b>1.4</b></p>
+  <p><b>11</b> <code>column-gap 0 -&gt; 20px</code> = <b>8px</b></p>
+  <p><b>12</b> <code>left 0% -&gt; 40px</code> is <b>not interpolable</b>: discrete 50% flip, so at 40% the <code>0%</code> value stands</p>
+</div>
+
+</body>
+</html>

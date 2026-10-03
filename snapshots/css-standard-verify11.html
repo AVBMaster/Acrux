@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Batch 11 (Float Line-Box Avoidance / BFC Beside Float / Block Overlap / Clear)</title>
+<style>
+html, body { margin: 0; padding: 4px; background: rgb(255,255,255); font-family: Arial, sans-serif; font-size: 16px; line-height: 20px; }
+h2 { margin: 10px 0 4px 0; font-size: 13px; color: rgb(51,51,51); }
+.box { width: 240px; background: rgb(238,238,238); }
+.box p { margin: 0; }
+.f { float: left; width: 60px; height: 40px; background: rgb(0,0,255); }
+.fr { float: right; width: 80px; height: 40px; background: rgb(0,0,255); }
+.bfc { overflow: hidden; height: 30px; background: rgb(255,0,0); }
+.plain { height: 30px; background: rgb(255,0,0); }
+.after { height: 20px; background: rgb(0,255,0); }
+.clr { clear: both; height: 20px; background: rgb(0,255,0); }
+.word { background: rgb(255,255,0); }
+</style>
+</head>
+<body>
+
+<h2>1. left float: line boxes avoid the float (2 lines of 180px, then full width)</h2>
+<div class="box" id="g1"><div class="f"></div><p>aaaaaa bbbbbb cccccc dddddd eeeeee fffffff</p></div>
+
+<h2>2. right float: line boxes stop 80px early</h2>
+<div class="box" id="g2"><div class="fr"></div><p>aaaaaa bbbbbb cccccc dddddd eeeeee fffffff</p></div>
+
+<h2>3. left + right float: text squeezed to 100px beside both</h2>
+<div class="box" id="g3"><div class="f"></div><div class="fr"></div><p>aaaaaa bbbbbb cccccc dddddd eeeeee fffffff</p></div>
+
+<h2>4. overflow:hidden sibling establishes a BFC and sits beside the float</h2>
+<div class="box" id="g4"><div class="f"></div><div class="bfc"></div></div>
+
+<h2>5. plain block sibling overlaps the float (control)</h2>
+<div class="box" id="g5"><div class="f"></div><div class="plain"></div><div class="after"></div></div>
+
+<h2>6. clear:both drops below the float</h2>
+<div class="box" id="g6"><div class="f"></div><div class="plain"></div><div class="clr"></div></div>
+
+<h2>7. float inside a paragraph (IFC root) beside its own text</h2>
+<div class="box" id="g7"><p><span class="f word">FL</span>aaaaaa bbbbbb cccccc dddddd eeeeee fffffff</p></div>
+
+<h2>8. float height counts toward the containing block (green after must start below it)</h2>
+<div class="box" id="g8"><div class="f"></div></div>
+<div class="box" id="g8b"><div class="after"></div></div>
+
+<h2>9. float only shortens the first line when it is one line tall</h2>
+<div class="box" id="g9"><div class="f" style="height:20px"></div><p>aaaaaa bbbbbb cccccc dddddd eeeeee fffffff</p></div>
+
+<h2>10. overflow:hidden on the float's own parent contains it (clearfix, height 40)</h2>
+<div class="box" id="g10" style="overflow:hidden"><div class="f"></div></div>
+<div class="box" id="g10b"><div class="after"></div></div>
+
+<h2>11. float margin is reserved: text starts 20px right of the float's edge</h2>
+<div class="box" id="g11"><div class="f" style="margin-right:20px"></div><p>aaaaaa bbbbbb cccccc dddddd eeeeee fffffff</p></div>
+
+<h2>12. float with margins inside a padded box stays inside the padding</h2>
+<div class="box" id="g12" style="padding:12px;overflow:hidden"><div class="f" style="margin:6px"></div></div>
+
+<h2>13. float taller than the paragraph: the following block overlaps it</h2>
+<div class="box" id="g13"><div class="f" style="height:60px"></div><p>aaaaaa</p></div>
+<div class="box" id="g13b"><div class="after"></div></div>
+
+</body>
+</html>

@@ -1,0 +1,21 @@
+﻿<!DOCTYPE html><html><head><style>
+body{margin:0;font:14px monospace}
+.sw{width:100px;height:40px;background:#c0c0c0;margin:4px}
+#a{transition:opacity 2000s linear -800s}
+#b{transition:opacity 1s linear}
+#c{transition:opacity 2000s linear}
+#out{white-space:pre}
+</style></head><body>
+<div class="sw" id="a"></div><div class="sw" id="b"></div><div class="sw" id="c"></div>
+<div id="out">pending</div>
+<script>
+setTimeout(function(){
+  a.className='sw on'; b.className='sw on'; c.className='sw on';
+  setTimeout(function(){
+    out.textContent = 'inline: ' + getComputedStyle(a).opacity + ' / ' +
+      getComputedStyle(b).opacity + ' / ' + getComputedStyle(c).opacity;
+  }, 300);
+}, 50);
+</script>
+<style>.on{opacity:0}</style>
+</body></html>

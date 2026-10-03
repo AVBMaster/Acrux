@@ -1,0 +1,16 @@
+<!DOCTYPE html><html><head><style>
+body{margin:20px;font:16px Arial;background:#fff}
+.clearfix::after{content:"";display:block;clear:both;height:0}
+.floated{float:left;width:80px;height:50px;background:#4a90d9;color:#fff;margin:5px;text-align:center;line-height:50px}
+.before-demo::before{content:"BEFORE¡ú";color:#c00;font-weight:bold}
+.after-demo::after{content:"¡ûAFTER";color:#090}
+.block-before::before{content:"Block!",display:block;background:#f5a623;padding:4px;margin-bottom:4px;color:#fff}
+</style></head><body>
+<div class="before-demo">Text with before</div>
+<div class="after-demo">Text with after</div>
+<div class="clearfix">
+<div class="floated">A</div><div class="floated">B</div><div class="floated">C</div>
+</div>
+<p>After clearfix ¡ª should be below the floats</p>
+<div class="block-before">Main content</div>
+</body></html>

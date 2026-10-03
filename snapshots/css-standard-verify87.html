@@ -1,0 +1,24 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{margin:20px;font:16px Arial}
+/* line-height: 150% → 24; calc(1em+8px)→24; calc(200%)→32 */
+.lh1{line-height:150%}
+.lh2{line-height:calc(1em + 8px)}
+.lh3{line-height:calc(200%)}
+/* flex-basis calc: container 300, basis calc(50% - 10px)=140 */
+.f{display:flex;width:300px;border:1px solid #939}
+.f .i{height:20px;background:#cfe;flex:0 0 auto}
+.f .b1{flex-basis:calc(50% - 10px)}
+/* min-width/max-width clamp on block: container 200, width 50% (=100) but min-width 120 → 120 */
+.m{width:200px;border:1px solid #090}
+.m .inner{width:50%;min-width:120px;max-width:150px;height:20px;background:#fec}
+/* max-width clamp(50px, 30%, 80px): container 200, 30%=60 → clamp→60; child width 100 capped to 60 */
+.mx{width:200px;border:1px solid #009}
+.mx .inner{width:100px;max-width:clamp(50px,30%,80px);height:20px;background:#cef}
+</style></head><body>
+<div class="lh1">line height 150% (exp 24)</div>
+<div class="lh2">line height calc(1em+8px) (exp 24)</div>
+<div class="lh3">line height calc(200%) (exp 32)</div>
+<div class="f"><div class="i b1">basis</div><div class="i">rest</div></div>
+<div class="m"><div class="inner">min120</div></div>
+<div class="mx"><div class="inner">maxclamp60</div></div>
+</body></html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 09 — multiple animations</title>
+<style>
+/* animation-name is a comma-separated list and every other animation longhand is
+   a list too, zipped by position and cycled when it is shorter. So
+   `a 1s, b 2s` runs both, and `a 1s, b 1s, c 1s` with a two-entry duration
+   list cycles the duration back to the first entry for c.
+
+   A later animation in the list wins for a property both of them touch. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 300px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 90px; height: 60px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  outline: 1px solid #000;
+  text-align: center; line-height: 60px; font-size: 12px;
+}
+#m1 { left: 10px;  top: 10px; }  #m2 { left: 120px; top: 10px; }
+#m3 { left: 230px; top: 10px; }  #m4 { left: 340px; top: 10px; }
+#m5 { left: 10px;  top: 90px; }  #m6 { left: 120px; top: 90px; }
+#m7 { left: 230px; top: 90px; }  #m8 { left: 340px; top: 90px; }
+#m9 { left: 10px;  top: 170px; }  #m10{ left: 120px; top: 170px; }
+#m11{ left: 230px; top: 170px; }  #m12{ left: 340px; top: 170px; }
+
+@keyframes a { from { opacity: 1; } to { opacity: 0; } }
+@keyframes b { from { opacity: 0.2; } to { opacity: 0.8; } }
+@keyframes c { from { background-color: rgb(255,0,0); } to { background-color: rgb(0,0,255); } }
+@keyframes d { from { background-color: rgb(0,128,0); } to { background-color: rgb(255,255,0); } }
+@keyframes e { from { transform: translateX(0px); } to { transform: translateX(40px); } }
+@keyframes f { from { transform: scale(1); } to { transform: scale(2); } }
+
+/* two animations, both on opacity: the later one wins, so we see b's value */
+#m1 { animation: a 1s linear -400ms paused, b 1s linear -400ms paused; }
+
+/* different durations in the list: a is at 40%, b at 20% */
+#m2 { animation: a 1s linear -400ms paused, b 2s linear -400ms paused; }
+
+/* different delays: a at 40%, b at 80% */
+#m3 { animation: a 1s -400ms linear paused, b 1s -800ms linear paused; }
+
+/* the same name twice: three distinct effects, composite order preserved, so
+   the third entry (c) is what shows */
+#m4 { animation: c 1s linear -400ms paused, d 1s linear -400ms paused, c 1s linear -400ms paused; }
+
+/* distinct properties compose rather than conflict */
+#m5 { animation: a 1s linear -400ms paused, c 1s linear -400ms paused; }
+
+/* two transforms on the same element: the later list wins outright */
+#m6 { animation: e 1s linear -400ms paused, f 1s linear -400ms paused; }
+
+/* an explicit "none" entry still consumes a slot in every list */
+#m7 { animation: none 1s linear -400ms paused, a 1s linear -400ms paused; }
+
+/* a name with no matching @keyframes is skipped, the rest still run */
+#m8 { animation: nosuch 1s linear -400ms paused, a 1s linear -400ms paused; }
+
+/* per-entry direction and fill lists; the same name twice, so the composite
+   order decides which one shows */
+#m9  { animation: a 1s -400ms normal forwards  linear paused,
+                   a 1s -400ms reverse backwards linear paused; }
+#m10 { animation: a 1s -400ms alternate linear paused,
+                   a 1s -400ms normal  linear paused; }
+/* per-entry iteration counts */
+#m11 { animation: a 1s -400ms 2 normal linear paused, a 1s -400ms 1 normal linear paused; }
+/* two entries with different durations, delays, easings and directions, in one
+   comma list — the per-entry fields must not leak into each other */
+#m12 { animation: a 1s -400ms normal  linear paused,
+                   a 2s -800ms reverse ease-out paused; }
+
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+#legend code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="m1">1</i>
+  <i class="sw" id="m2">2</i>
+  <i class="sw" id="m3">3</i>
+  <i class="sw" id="m4">4</i>
+  <i class="sw" id="m5">5</i>
+  <i class="sw" id="m6">6</i>
+  <i class="sw" id="m7">7</i>
+  <i class="sw" id="m8">8</i>
+  <i class="sw" id="m9">9</i>
+  <i class="sw" id="m10">10</i>
+  <i class="sw" id="m11">11</i>
+  <i class="sw" id="m12">12</i>
+</div>
+
+<div id="legend">
+  <p>fill = 255 - 63 &times; opacity unless a background is named</p>
+  <p><b>1</b> two animations on one property: the <em>later</em> one wins &rarr; b at 40% = 0.44 &rarr; <b>227</b></p>
+  <p><b>2</b> durations <code>1s, 2s</code>: a at 40%, b at 20% &rarr; a = 0.6 &rarr; <b>217</b></p>
+  <p><b>3</b> delays <code>-400ms, -800ms</code>: a at 40%, b at 80% &rarr; a = 0.6 &rarr; <b>217</b></p>
+  <p><b>4</b> the same name twice: <code>c, d, c</code> &rarr; three effects, the last one wins &rarr; c at 40% = <b>rgb(153, 0, 102)</b></p>
+  <p><b>5</b> different properties compose &rarr; a = 0.6 over c = <b>rgb(153, 0, 102)</b></p>
+  <p><b>6</b> two transforms: later wins &rarr; scale(1.4), so a 90px box paints 126px</p>
+  <p><b>7</b> a <code>none</code> entry consumes its slot; the second entry still runs &rarr; <b>217</b></p>
+  <p><b>8</b> an unknown name is skipped, the second entry still runs &rarr; <b>217</b></p>
+  <p><b>9</b> the same name with two direction/fill pairs: the second (<code>reverse backwards</code>) wins &rarr; progress 0.6, opacity 0.4 &rarr; <b>230</b></p>
+  <p><b>10</b> the same name with two directions: the second (<code>normal</code>) wins &rarr; <b>217</b></p>
+  <p><b>11</b> the same name with two iteration counts: the second wins &rarr; <b>217</b></p>
+  <p><b>12</b> per-entry duration/delay/direction/easing: <code>a 1s -400ms normal linear</code> then <code>a 2s -800ms reverse ease-out</code>; the second wins, progress 0.6 reversed = 0.4, ease-out(0.4) = 0.9301, opacity 0.0699 &rarr; <b>251</b></p>
+</div>
+
+</body>
+</html>

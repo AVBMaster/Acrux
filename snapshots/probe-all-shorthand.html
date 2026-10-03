@@ -1,0 +1,14 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;padding:0;background:#fff;font-family:Arial;font-size:16px;}
+.styled { color: rgb(255,0,0); background: rgb(0,255,0); border: 5px solid rgb(0,0,255); padding: 10px; display:block; }
+#plain { position:absolute; left:0; top:0; }
+#unset { position:absolute; left:0; top:60px; all: unset; }
+#initial { position:absolute; left:0; top:120px; all: initial; }
+#inherit { position:absolute; left:0; top:180px; color: rgb(0,0,255); }
+#inherit span { all: inherit; }
+</style></head><body>
+<div id="plain" class="styled">plain</div>
+<div id="unset" class="styled">unset</div>
+<div id="initial" class="styled">initial</div>
+<div id="inherit" class="styled">x<span id="si">inherit</span></div>
+</body></html>

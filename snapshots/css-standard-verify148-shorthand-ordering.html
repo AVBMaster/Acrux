@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b148 shorthand order, omission and reset</title>
+<style>
+body { margin: 0; padding: 8px; font: 16px/1.4 "Segoe UI", Arial, sans-serif; color: #111; background: #fff; }
+p { margin: 0 0 2px; }
+
+/* The later declaration of a shorthand must reset the longhands the
+   shorthand leaves out, so the source order below is the whole test. */
+#c1 { border-width: 5px; border-style: solid; border-color: green; border: 2px solid red; }
+#c2 { border: solid; }
+#c3 { border: 2px; }
+#c4 { border: 3px dotted rgb(10, 20, 30); border-color: blue; }
+#c5 { border-color: blue; border: 3px dotted; }
+#c6 { border-top: 4px double #f00; border-right: thin; border-bottom: 1px; border-left: 7px solid; }
+
+#c7 { background-color: yellow; background-image: none; background: red; }
+#c8 { background: url(nope.png) green; }
+
+#c9 { line-height: 3; font-size: 20px; font: 12px/1.5 Arial; }
+#c10 { font: bold italic 14px/1 Georgia, serif; }
+#c11 { font: caption; }
+
+#c12 { list-style-type: circle; list-style-position: outside; list-style: inside; }
+#c13 { list-style: "«" ; }
+#c14 { list-style: square url(nope.png); }
+
+#c15 { display: flex; flex: 1; }
+#c16 { display: flex; flex: auto; }
+#c17 { display: flex; flex: none; }
+#c18 { display: flex; flex: 2 30px; }
+
+#c19 { outline: 3px; }
+#c20 { outline: 3px solid invert; }
+
+#c21 { text-decoration: underline; }
+#c22 { text-decoration-color: red; text-decoration-thickness: 5px; text-decoration: overline; }
+
+#c23 { margin: 1px 2px; }
+#c24 { padding: 1px 2px 3px; }
+#c25 { padding: 1px 2px 3px 4px; }
+
+#c26 { inset: 1px 2px; }
+#c27 { gap: 10px; }
+#c28 { gap: 4px 8px; }
+
+#c29 { border-radius: 10px / 20px; }
+#c30 { border-radius: 1px 3px; }
+
+#c31 { transition: all; }
+#c32 { transition: 2s; }
+#c33 { transition: opacity 3s ease 1s; }
+
+#c34 { text-indent: 10px; text-indent: 3em; }
+#c35 { text-indent: 2ch; }
+
+/* Tokens whose function call contains spaces must stay one token, otherwise the
+   fragments are re-classified as widths and the real value is lost. */
+#c36 { border-top: 2em solid; border-bottom: 4px solid rgb(1, 2, 3); }
+#c37 { box-shadow: 1px 2px 3px 4px rgb(255, 0, 0), inset 2px 2px blue; }
+#c38 { margin: calc(10px + 1em) 5%; }
+#c39 { padding: calc(4px * 2) 3px; }
+#c40 { outline: calc(2px + 1px) dashed rgb(1, 2, 3); }
+#c41 { text-shadow: 1px 2px rgb(10, 20, 30); }
+#c42 { gap: calc(2px + 4px) calc(1px + 1px); }
+#c43 { border: 3px solid rgb(10, 20, 30); }
+
+/* border-color's initial value is currentcolor, so a shorthand that carries no
+   colour has to paint the element's own text colour. */
+#c44 { color: rgb(200, 30, 30); border: 3px solid; }
+#c45 { color: rgb(200, 30, 30); border-top: 2px; }
+#c46 { color: rgb(200, 30, 30); border-left: 4px solid; border-right-color: green; }
+
+/* Widths are lengths: 'em' takes the element's own font size, calc() must resolve. */
+#c47 { font-size: 20px; border-top: 2em solid; }
+#c48 { border-width: calc(2px + 3px); border-style: solid; }
+#c49 { border-radius: calc(8px + 2px) 4px; }
+#c50 { outline-width: calc(2px + 1px); outline-style: dashed; }
+
+/* A style with no width anywhere keeps the initial medium; a shorthand reset must
+   not leave a stale width behind. */
+#c51 { border-style: solid; }
+#c52 { border-top-style: solid; }
+#c53 { border-width: 4px; border-top-style: solid; }
+#c54 { outline-style: solid; }
+#c55 { border: none; border-style: solid; }
+</style>
+</head>
+<body>
+<p id="c1">c1 width/style/color then shorthand</p>
+<p id="c2">c2 border solid only</p>
+<p id="c3">c3 border 2px only</p>
+<p id="c4">c4 shorthand then color</p>
+<p id="c5">c5 color then shorthand</p>
+<p id="c6">c6 per-side mixed omission</p>
+<p id="c7">c7 background resets image</p>
+<p id="c8">c8 background image plus color</p>
+<p id="c9">c9 font resets line-height</p>
+<p id="c10">c10 font style weight size</p>
+<p id="c11">c11 font caption</p>
+<ul><li id="c12">c12 list-style position only</li></ul>
+<ul><li id="c13">c13 list-style string</li></ul>
+<ul><li id="c14">c14 list-style square url</li></ul>
+<div id="c15">c15 flex 1</div>
+<div id="c16">c16 flex auto</div>
+<div id="c17">c17 flex none</div>
+<div id="c18">c18 flex 2 30px</div>
+<p id="c19">c19 outline width only</p>
+<p id="c20">c20 outline invert</p>
+<p id="c21">c21 underline</p>
+<p id="c22">c22 shorthand after longhands</p>
+<p id="c23">c23 margin two values</p>
+<p id="c24">c24 padding three values</p>
+<p id="c25">c25 padding four values</p>
+<p id="c26">c26 inset two values</p>
+<div id="c27">c27 gap one value</div>
+<div id="c28">c28 gap two values</div>
+<p id="c29">c29 radius slash</p>
+<p id="c30">c30 radius two values</p>
+<p id="c31">c31 transition all</p>
+<p id="c32">c32 transition duration only</p>
+<p id="c33">c33 transition full</p>
+<p id="c34">c34 indent em</p>
+<p id="c35">c35 indent ch</p>
+<p id="c36">c36 side em width</p>
+<p id="c37">c37 two box shadows</p>
+<p id="c38">c38 margin calc</p>
+<p id="c39">c39 padding calc</p>
+<p id="c40">c40 outline calc</p>
+<p id="c41">c41 text shadow rgb</p>
+<div id="c42">c42 gap calc</div>
+<p id="c43">c43 border rgb color</p>
+<p id="c44">c44 currentcolor border</p>
+<p id="c45">c45 currentcolor side</p>
+<p id="c46">c46 side color override</p>
+<p id="c47">c47 side em width</p>
+<p id="c48">c48 border-width calc</p>
+<p id="c49">c49 radius calc pair</p>
+<p id="c50">c50 outline-width calc</p>
+<p id="c51">c51 style only</p>
+<p id="c52">c52 side style only</p>
+<p id="c53">c53 width then side style</p>
+<p id="c54">c54 outline style only</p>
+<p id="c55">c55 none then solid</p>
+</body>
+</html>

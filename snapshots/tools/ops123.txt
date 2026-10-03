@@ -1,0 +1,2824 @@
+[op] DrawRectOp bounds=[0.00,0.00,1024.00,4380.00] z=-2147483648
+[rect] fill=(255,255,255) [0.00,0.00 - 1024.00,4380.00]
+[op] PushClipOp bounds=[0.00,0.00,1024.00,4380.00] z=0
+[op] PopClipOp bounds=[0.00,0.00,0.00,0.00] z=0
+[op] PushClipOp bounds=[0.00,0.00,1024.00,4380.00] z=0
+[op] PopClipOp bounds=[0.00,0.00,1024.00,4380.00] z=0
+[op] PushClipOp bounds=[0.00,0.00,300.00,422.00] z=0
+[op] PopClipOp bounds=[0.00,0.00,300.00,422.00] z=0
+[op] PushClipOp bounds=[0.00,0.00,300.00,14.00] z=0
+[op] PopClipOp bounds=[0.00,0.00,300.00,14.00] z=0
+[op] DrawTextOp bounds=[0.00,0.00,112.71,14.00] z=0
+[text] 'trad-chinese-informal' x=0.0 y=11.0 size=12.0
+[op] PushClipOp bounds=[0.00,14.00,300.00,422.00] z=0
+[op] PopClipOp bounds=[0.00,14.00,300.00,422.00] z=0
+[op] PushClipOp bounds=[0.00,14.00,300.00,38.00] z=0
+[op] PopClipOp bounds=[0.00,14.00,300.00,38.00] z=0
+[op] DrawTextOp bounds=[0.00,33.00,36.00,51.00] z=0
+[text] '零、' x=0.0 y=33.0 size=18.0
+[op] DrawTextOp bounds=[29.60,14.00,34.61,38.00] z=0
+[text] '0' x=29.6 y=33.0 size=9.0
+[op] PushClipOp bounds=[0.00,38.00,300.00,62.00] z=0
+[op] PopClipOp bounds=[0.00,38.00,300.00,62.00] z=0
+[op] DrawTextOp bounds=[0.00,57.00,36.00,75.00] z=0
+[text] '一、' x=0.0 y=57.0 size=18.0
+[op] DrawTextOp bounds=[29.60,38.00,34.61,62.00] z=0
+[text] '1' x=29.6 y=57.0 size=9.0
+[op] PushClipOp bounds=[0.00,62.00,300.00,86.00] z=0
+[op] PopClipOp bounds=[0.00,62.00,300.00,86.00] z=0
+[op] DrawTextOp bounds=[0.00,81.00,36.00,99.00] z=0
+[text] '四、' x=0.0 y=81.0 size=18.0
+[op] DrawTextOp bounds=[29.60,62.00,34.61,86.00] z=0
+[text] '4' x=29.6 y=81.0 size=9.0
+[op] PushClipOp bounds=[0.00,86.00,300.00,110.00] z=0
+[op] PopClipOp bounds=[0.00,86.00,300.00,110.00] z=0
+[op] DrawTextOp bounds=[0.00,105.00,36.00,123.00] z=0
+[text] '十、' x=0.0 y=105.0 size=18.0
+[op] DrawTextOp bounds=[29.60,86.00,39.61,110.00] z=0
+[text] '10' x=29.6 y=105.0 size=9.0
+[op] PushClipOp bounds=[0.00,110.00,300.00,134.00] z=0
+[op] PopClipOp bounds=[0.00,110.00,300.00,134.00] z=0
+[op] DrawTextOp bounds=[0.00,129.00,54.00,147.00] z=0
+[text] '十一、' x=0.0 y=129.0 size=18.0
+[op] DrawTextOp bounds=[29.60,110.00,39.61,134.00] z=0
+[text] '11' x=29.6 y=129.0 size=9.0
+[op] PushClipOp bounds=[0.00,134.00,300.00,158.00] z=0
+[op] PopClipOp bounds=[0.00,134.00,300.00,158.00] z=0
+[op] DrawTextOp bounds=[0.00,153.00,54.00,171.00] z=0
+[text] '二十、' x=0.0 y=153.0 size=18.0
+[op] DrawTextOp bounds=[29.60,134.00,39.61,158.00] z=0
+[text] '20' x=29.6 y=153.0 size=9.0
+[op] PushClipOp bounds=[0.00,158.00,300.00,182.00] z=0
+[op] PopClipOp bounds=[0.00,158.00,300.00,182.00] z=0
+[op] DrawTextOp bounds=[0.00,177.00,72.00,195.00] z=0
+[text] '九十九、' x=0.0 y=177.0 size=18.0
+[op] DrawTextOp bounds=[29.60,158.00,39.61,182.00] z=0
+[text] '99' x=29.6 y=177.0 size=9.0
+[op] PushClipOp bounds=[0.00,182.00,300.00,206.00] z=0
+[op] PopClipOp bounds=[0.00,182.00,300.00,206.00] z=0
+[op] DrawTextOp bounds=[0.00,201.00,90.00,219.00] z=0
+[text] '一百零一、' x=0.0 y=201.0 size=18.0
+[op] DrawTextOp bounds=[29.60,182.00,44.62,206.00] z=0
+[text] '101' x=29.6 y=201.0 size=9.0
+[op] PushClipOp bounds=[0.00,206.00,300.00,230.00] z=0
+[op] PopClipOp bounds=[0.00,206.00,300.00,230.00] z=0
+[op] DrawTextOp bounds=[0.00,225.00,54.00,243.00] z=0
+[text] '二百、' x=0.0 y=225.0 size=18.0
+[op] DrawTextOp bounds=[29.60,206.00,44.62,230.00] z=0
+[text] '200' x=29.6 y=225.0 size=9.0
+[op] PushClipOp bounds=[0.00,230.00,300.00,254.00] z=0
+[op] PopClipOp bounds=[0.00,230.00,300.00,254.00] z=0
+[op] DrawTextOp bounds=[0.00,249.00,90.00,267.00] z=0
+[text] '一千零一、' x=0.0 y=249.0 size=18.0
+[op] DrawTextOp bounds=[29.60,230.00,49.62,254.00] z=0
+[text] '1001' x=29.6 y=249.0 size=9.0
+[op] PushClipOp bounds=[0.00,254.00,300.00,278.00] z=0
+[op] PopClipOp bounds=[0.00,254.00,300.00,278.00] z=0
+[op] DrawTextOp bounds=[0.00,273.00,54.00,291.00] z=0
+[text] '一萬、' x=0.0 y=273.0 size=18.0
+[op] DrawTextOp bounds=[29.60,254.00,54.63,278.00] z=0
+[text] '10000' x=29.6 y=273.0 size=9.0
+[op] PushClipOp bounds=[0.00,278.00,300.00,302.00] z=0
+[op] PopClipOp bounds=[0.00,278.00,300.00,302.00] z=0
+[op] DrawTextOp bounds=[0.00,297.00,90.00,315.00] z=0
+[text] '一萬零十、' x=0.0 y=297.0 size=18.0
+[op] DrawTextOp bounds=[29.60,278.00,54.63,302.00] z=0
+[text] '10010' x=29.6 y=297.0 size=9.0
+[op] PushClipOp bounds=[0.00,302.00,300.00,326.00] z=0
+[op] PopClipOp bounds=[0.00,302.00,300.00,326.00] z=0
+[op] DrawTextOp bounds=[0.00,321.00,54.00,339.00] z=0
+[text] '十萬、' x=0.0 y=321.0 size=18.0
+[op] DrawTextOp bounds=[29.60,302.00,59.63,326.00] z=0
+[text] '100000' x=29.6 y=321.0 size=9.0
+[op] PushClipOp bounds=[0.00,326.00,300.00,350.00] z=0
+[op] PopClipOp bounds=[0.00,326.00,300.00,350.00] z=0
+[op] DrawTextOp bounds=[0.00,345.00,72.00,363.00] z=0
+[text] '一百萬、' x=0.0 y=345.0 size=18.0
+[op] DrawTextOp bounds=[29.60,326.00,64.64,350.00] z=0
+[text] '1000000' x=29.6 y=345.0 size=9.0
+[op] PushClipOp bounds=[0.00,350.00,300.00,374.00] z=0
+[op] PopClipOp bounds=[0.00,350.00,300.00,374.00] z=0
+[op] DrawTextOp bounds=[0.00,369.00,72.00,387.00] z=0
+[text] '一千萬、' x=0.0 y=369.0 size=18.0
+[op] DrawTextOp bounds=[29.60,350.00,69.64,374.00] z=0
+[text] '10000000' x=29.6 y=369.0 size=9.0
+[op] PushClipOp bounds=[0.00,374.00,300.00,398.00] z=0
+[op] PopClipOp bounds=[0.00,374.00,300.00,398.00] z=0
+[op] DrawTextOp bounds=[0.00,393.00,54.00,411.00] z=0
+[text] '一億、' x=0.0 y=393.0 size=18.0
+[op] DrawTextOp bounds=[29.60,374.00,74.65,398.00] z=0
+[text] '100000000' x=29.6 y=393.0 size=9.0
+[op] PushClipOp bounds=[0.00,398.00,300.00,422.00] z=0
+[op] PopClipOp bounds=[0.00,398.00,300.00,422.00] z=0
+[op] DrawTextOp bounds=[0.00,417.00,360.00,435.00] z=0
+[text] '二十一億四千七百四十八萬三千六百四十七、' x=0.0 y=417.0 size=18.0
+[op] DrawTextOp bounds=[29.60,398.00,79.65,422.00] z=0
+[text] '2147483647' x=29.6 y=417.0 size=9.0
+[op] PushClipOp bounds=[300.00,0.00,600.00,422.00] z=0
+[op] PopClipOp bounds=[300.00,0.00,600.00,422.00] z=0
+[op] PushClipOp bounds=[300.00,0.00,600.00,14.00] z=0
+[op] PopClipOp bounds=[300.00,0.00,600.00,14.00] z=0
+[op] DrawTextOp bounds=[300.00,0.00,403.37,14.00] z=0
+[text] 'trad-chinese-formal' x=300.0 y=11.0 size=12.0
+[op] PushClipOp bounds=[300.00,14.00,600.00,422.00] z=0
+[op] PopClipOp bounds=[300.00,14.00,600.00,422.00] z=0
+[op] PushClipOp bounds=[300.00,14.00,600.00,38.00] z=0
+[op] PopClipOp bounds=[300.00,14.00,600.00,38.00] z=0
+[op] DrawTextOp bounds=[300.00,33.00,336.00,51.00] z=0
+[text] '零、' x=300.0 y=33.0 size=18.0
+[op] DrawTextOp bounds=[329.60,14.00,334.61,38.00] z=0
+[text] '0' x=329.6 y=33.0 size=9.0
+[op] PushClipOp bounds=[300.00,38.00,600.00,62.00] z=0
+[op] PopClipOp bounds=[300.00,38.00,600.00,62.00] z=0
+[op] DrawTextOp bounds=[300.00,57.00,336.00,75.00] z=0
+[text] '壹、' x=300.0 y=57.0 size=18.0
+[op] DrawTextOp bounds=[329.60,38.00,334.61,62.00] z=0
+[text] '1' x=329.6 y=57.0 size=9.0
+[op] PushClipOp bounds=[300.00,62.00,600.00,86.00] z=0
+[op] PopClipOp bounds=[300.00,62.00,600.00,86.00] z=0
+[op] DrawTextOp bounds=[300.00,81.00,336.00,99.00] z=0
+[text] '肆、' x=300.0 y=81.0 size=18.0
+[op] DrawTextOp bounds=[329.60,62.00,334.61,86.00] z=0
+[text] '4' x=329.6 y=81.0 size=9.0
+[op] PushClipOp bounds=[300.00,86.00,600.00,110.00] z=0
+[op] PopClipOp bounds=[300.00,86.00,600.00,110.00] z=0
+[op] DrawTextOp bounds=[300.00,105.00,354.00,123.00] z=0
+[text] '壹拾、' x=300.0 y=105.0 size=18.0
+[op] DrawTextOp bounds=[329.60,86.00,339.61,110.00] z=0
+[text] '10' x=329.6 y=105.0 size=9.0
+[op] PushClipOp bounds=[300.00,110.00,600.00,134.00] z=0
+[op] PopClipOp bounds=[300.00,110.00,600.00,134.00] z=0
+[op] DrawTextOp bounds=[300.00,129.00,372.00,147.00] z=0
+[text] '壹拾壹、' x=300.0 y=129.0 size=18.0
+[op] DrawTextOp bounds=[329.60,110.00,339.61,134.00] z=0
+[text] '11' x=329.6 y=129.0 size=9.0
+[op] PushClipOp bounds=[300.00,134.00,600.00,158.00] z=0
+[op] PopClipOp bounds=[300.00,134.00,600.00,158.00] z=0
+[op] DrawTextOp bounds=[300.00,153.00,354.00,171.00] z=0
+[text] '貳拾、' x=300.0 y=153.0 size=18.0
+[op] DrawTextOp bounds=[329.60,134.00,339.61,158.00] z=0
+[text] '20' x=329.6 y=153.0 size=9.0
+[op] PushClipOp bounds=[300.00,158.00,600.00,182.00] z=0
+[op] PopClipOp bounds=[300.00,158.00,600.00,182.00] z=0
+[op] DrawTextOp bounds=[300.00,177.00,372.00,195.00] z=0
+[text] '玖拾玖、' x=300.0 y=177.0 size=18.0
+[op] DrawTextOp bounds=[329.60,158.00,339.61,182.00] z=0
+[text] '99' x=329.6 y=177.0 size=9.0
+[op] PushClipOp bounds=[300.00,182.00,600.00,206.00] z=0
+[op] PopClipOp bounds=[300.00,182.00,600.00,206.00] z=0
+[op] DrawTextOp bounds=[300.00,201.00,390.00,219.00] z=0
+[text] '壹佰零壹、' x=300.0 y=201.0 size=18.0
+[op] DrawTextOp bounds=[329.60,182.00,344.62,206.00] z=0
+[text] '101' x=329.6 y=201.0 size=9.0
+[op] PushClipOp bounds=[300.00,206.00,600.00,230.00] z=0
+[op] PopClipOp bounds=[300.00,206.00,600.00,230.00] z=0
+[op] DrawTextOp bounds=[300.00,225.00,354.00,243.00] z=0
+[text] '貳佰、' x=300.0 y=225.0 size=18.0
+[op] DrawTextOp bounds=[329.60,206.00,344.62,230.00] z=0
+[text] '200' x=329.6 y=225.0 size=9.0
+[op] PushClipOp bounds=[300.00,230.00,600.00,254.00] z=0
+[op] PopClipOp bounds=[300.00,230.00,600.00,254.00] z=0
+[op] DrawTextOp bounds=[300.00,249.00,390.00,267.00] z=0
+[text] '壹仟零壹、' x=300.0 y=249.0 size=18.0
+[op] DrawTextOp bounds=[329.60,230.00,349.62,254.00] z=0
+[text] '1001' x=329.6 y=249.0 size=9.0
+[op] PushClipOp bounds=[300.00,254.00,600.00,278.00] z=0
+[op] PopClipOp bounds=[300.00,254.00,600.00,278.00] z=0
+[op] DrawTextOp bounds=[300.00,273.00,354.00,291.00] z=0
+[text] '壹萬、' x=300.0 y=273.0 size=18.0
+[op] DrawTextOp bounds=[329.60,254.00,354.63,278.00] z=0
+[text] '10000' x=329.6 y=273.0 size=9.0
+[op] PushClipOp bounds=[300.00,278.00,600.00,302.00] z=0
+[op] PopClipOp bounds=[300.00,278.00,600.00,302.00] z=0
+[op] DrawTextOp bounds=[300.00,297.00,408.00,315.00] z=0
+[text] '壹萬零壹拾、' x=300.0 y=297.0 size=18.0
+[op] DrawTextOp bounds=[329.60,278.00,354.63,302.00] z=0
+[text] '10010' x=329.6 y=297.0 size=9.0
+[op] PushClipOp bounds=[300.00,302.00,600.00,326.00] z=0
+[op] PopClipOp bounds=[300.00,302.00,600.00,326.00] z=0
+[op] DrawTextOp bounds=[300.00,321.00,372.00,339.00] z=0
+[text] '壹拾萬、' x=300.0 y=321.0 size=18.0
+[op] DrawTextOp bounds=[329.60,302.00,359.63,326.00] z=0
+[text] '100000' x=329.6 y=321.0 size=9.0
+[op] PushClipOp bounds=[300.00,326.00,600.00,350.00] z=0
+[op] PopClipOp bounds=[300.00,326.00,600.00,350.00] z=0
+[op] DrawTextOp bounds=[300.00,345.00,372.00,363.00] z=0
+[text] '壹佰萬、' x=300.0 y=345.0 size=18.0
+[op] DrawTextOp bounds=[329.60,326.00,364.64,350.00] z=0
+[text] '1000000' x=329.6 y=345.0 size=9.0
+[op] PushClipOp bounds=[300.00,350.00,600.00,374.00] z=0
+[op] PopClipOp bounds=[300.00,350.00,600.00,374.00] z=0
+[op] DrawTextOp bounds=[300.00,369.00,372.00,387.00] z=0
+[text] '壹仟萬、' x=300.0 y=369.0 size=18.0
+[op] DrawTextOp bounds=[329.60,350.00,369.64,374.00] z=0
+[text] '10000000' x=329.6 y=369.0 size=9.0
+[op] PushClipOp bounds=[300.00,374.00,600.00,398.00] z=0
+[op] PopClipOp bounds=[300.00,374.00,600.00,398.00] z=0
+[op] DrawTextOp bounds=[300.00,393.00,354.00,411.00] z=0
+[text] '壹億、' x=300.0 y=393.0 size=18.0
+[op] DrawTextOp bounds=[329.60,374.00,374.65,398.00] z=0
+[text] '100000000' x=329.6 y=393.0 size=9.0
+[op] PushClipOp bounds=[300.00,398.00,600.00,422.00] z=0
+[op] PopClipOp bounds=[300.00,398.00,600.00,422.00] z=0
+[op] DrawTextOp bounds=[300.00,417.00,660.00,435.00] z=0
+[text] '貳拾壹億肆仟柒佰肆拾捌萬參仟陸佰肆拾柒、' x=300.0 y=417.0 size=18.0
+[op] DrawTextOp bounds=[329.60,398.00,379.65,422.00] z=0
+[text] '2147483647' x=329.6 y=417.0 size=9.0
+[op] PushClipOp bounds=[600.00,0.00,900.00,422.00] z=0
+[op] PopClipOp bounds=[600.00,0.00,900.00,422.00] z=0
+[op] PushClipOp bounds=[600.00,0.00,900.00,14.00] z=0
+[op] PopClipOp bounds=[600.00,0.00,900.00,14.00] z=0
+[op] DrawTextOp bounds=[600.00,0.00,717.37,14.00] z=0
+[text] 'simp-chinese-informal' x=600.0 y=11.0 size=12.0
+[op] PushClipOp bounds=[600.00,14.00,900.00,422.00] z=0
+[op] PopClipOp bounds=[600.00,14.00,900.00,422.00] z=0
+[op] PushClipOp bounds=[600.00,14.00,900.00,38.00] z=0
+[op] PopClipOp bounds=[600.00,14.00,900.00,38.00] z=0
+[op] DrawTextOp bounds=[600.00,33.00,636.00,51.00] z=0
+[text] '零、' x=600.0 y=33.0 size=18.0
+[op] DrawTextOp bounds=[629.60,14.00,634.61,38.00] z=0
+[text] '0' x=629.6 y=33.0 size=9.0
+[op] PushClipOp bounds=[600.00,38.00,900.00,62.00] z=0
+[op] PopClipOp bounds=[600.00,38.00,900.00,62.00] z=0
+[op] DrawTextOp bounds=[600.00,57.00,636.00,75.00] z=0
+[text] '一、' x=600.0 y=57.0 size=18.0
+[op] DrawTextOp bounds=[629.60,38.00,634.61,62.00] z=0
+[text] '1' x=629.6 y=57.0 size=9.0
+[op] PushClipOp bounds=[600.00,62.00,900.00,86.00] z=0
+[op] PopClipOp bounds=[600.00,62.00,900.00,86.00] z=0
+[op] DrawTextOp bounds=[600.00,81.00,636.00,99.00] z=0
+[text] '四、' x=600.0 y=81.0 size=18.0
+[op] DrawTextOp bounds=[629.60,62.00,634.61,86.00] z=0
+[text] '4' x=629.6 y=81.0 size=9.0
+[op] PushClipOp bounds=[600.00,86.00,900.00,110.00] z=0
+[op] PopClipOp bounds=[600.00,86.00,900.00,110.00] z=0
+[op] DrawTextOp bounds=[600.00,105.00,636.00,123.00] z=0
+[text] '十、' x=600.0 y=105.0 size=18.0
+[op] DrawTextOp bounds=[629.60,86.00,639.61,110.00] z=0
+[text] '10' x=629.6 y=105.0 size=9.0
+[op] PushClipOp bounds=[600.00,110.00,900.00,134.00] z=0
+[op] PopClipOp bounds=[600.00,110.00,900.00,134.00] z=0
+[op] DrawTextOp bounds=[600.00,129.00,654.00,147.00] z=0
+[text] '十一、' x=600.0 y=129.0 size=18.0
+[op] DrawTextOp bounds=[629.60,110.00,639.61,134.00] z=0
+[text] '11' x=629.6 y=129.0 size=9.0
+[op] PushClipOp bounds=[600.00,134.00,900.00,158.00] z=0
+[op] PopClipOp bounds=[600.00,134.00,900.00,158.00] z=0
+[op] DrawTextOp bounds=[600.00,153.00,654.00,171.00] z=0
+[text] '二十、' x=600.0 y=153.0 size=18.0
+[op] DrawTextOp bounds=[629.60,134.00,639.61,158.00] z=0
+[text] '20' x=629.6 y=153.0 size=9.0
+[op] PushClipOp bounds=[600.00,158.00,900.00,182.00] z=0
+[op] PopClipOp bounds=[600.00,158.00,900.00,182.00] z=0
+[op] DrawTextOp bounds=[600.00,177.00,672.00,195.00] z=0
+[text] '九十九、' x=600.0 y=177.0 size=18.0
+[op] DrawTextOp bounds=[629.60,158.00,639.61,182.00] z=0
+[text] '99' x=629.6 y=177.0 size=9.0
+[op] PushClipOp bounds=[600.00,182.00,900.00,206.00] z=0
+[op] PopClipOp bounds=[600.00,182.00,900.00,206.00] z=0
+[op] DrawTextOp bounds=[600.00,201.00,690.00,219.00] z=0
+[text] '一百零一、' x=600.0 y=201.0 size=18.0
+[op] DrawTextOp bounds=[629.60,182.00,644.62,206.00] z=0
+[text] '101' x=629.6 y=201.0 size=9.0
+[op] PushClipOp bounds=[600.00,206.00,900.00,230.00] z=0
+[op] PopClipOp bounds=[600.00,206.00,900.00,230.00] z=0
+[op] DrawTextOp bounds=[600.00,225.00,654.00,243.00] z=0
+[text] '二百、' x=600.0 y=225.0 size=18.0
+[op] DrawTextOp bounds=[629.60,206.00,644.62,230.00] z=0
+[text] '200' x=629.6 y=225.0 size=9.0
+[op] PushClipOp bounds=[600.00,230.00,900.00,254.00] z=0
+[op] PopClipOp bounds=[600.00,230.00,900.00,254.00] z=0
+[op] DrawTextOp bounds=[600.00,249.00,690.00,267.00] z=0
+[text] '一千零一、' x=600.0 y=249.0 size=18.0
+[op] DrawTextOp bounds=[629.60,230.00,649.62,254.00] z=0
+[text] '1001' x=629.6 y=249.0 size=9.0
+[op] PushClipOp bounds=[600.00,254.00,900.00,278.00] z=0
+[op] PopClipOp bounds=[600.00,254.00,900.00,278.00] z=0
+[op] DrawTextOp bounds=[600.00,273.00,654.00,291.00] z=0
+[text] '一万、' x=600.0 y=273.0 size=18.0
+[op] DrawTextOp bounds=[629.60,254.00,654.63,278.00] z=0
+[text] '10000' x=629.6 y=273.0 size=9.0
+[op] PushClipOp bounds=[600.00,278.00,900.00,302.00] z=0
+[op] PopClipOp bounds=[600.00,278.00,900.00,302.00] z=0
+[op] DrawTextOp bounds=[600.00,297.00,690.00,315.00] z=0
+[text] '一万零十、' x=600.0 y=297.0 size=18.0
+[op] DrawTextOp bounds=[629.60,278.00,654.63,302.00] z=0
+[text] '10010' x=629.6 y=297.0 size=9.0
+[op] PushClipOp bounds=[600.00,302.00,900.00,326.00] z=0
+[op] PopClipOp bounds=[600.00,302.00,900.00,326.00] z=0
+[op] DrawTextOp bounds=[600.00,321.00,654.00,339.00] z=0
+[text] '十万、' x=600.0 y=321.0 size=18.0
+[op] DrawTextOp bounds=[629.60,302.00,659.63,326.00] z=0
+[text] '100000' x=629.6 y=321.0 size=9.0
+[op] PushClipOp bounds=[600.00,326.00,900.00,350.00] z=0
+[op] PopClipOp bounds=[600.00,326.00,900.00,350.00] z=0
+[op] DrawTextOp bounds=[600.00,345.00,672.00,363.00] z=0
+[text] '一百万、' x=600.0 y=345.0 size=18.0
+[op] DrawTextOp bounds=[629.60,326.00,664.64,350.00] z=0
+[text] '1000000' x=629.6 y=345.0 size=9.0
+[op] PushClipOp bounds=[600.00,350.00,900.00,374.00] z=0
+[op] PopClipOp bounds=[600.00,350.00,900.00,374.00] z=0
+[op] DrawTextOp bounds=[600.00,369.00,672.00,387.00] z=0
+[text] '一千万、' x=600.0 y=369.0 size=18.0
+[op] DrawTextOp bounds=[629.60,350.00,669.64,374.00] z=0
+[text] '10000000' x=629.6 y=369.0 size=9.0
+[op] PushClipOp bounds=[600.00,374.00,900.00,398.00] z=0
+[op] PopClipOp bounds=[600.00,374.00,900.00,398.00] z=0
+[op] DrawTextOp bounds=[600.00,393.00,654.00,411.00] z=0
+[text] '一亿、' x=600.0 y=393.0 size=18.0
+[op] DrawTextOp bounds=[629.60,374.00,674.65,398.00] z=0
+[text] '100000000' x=629.6 y=393.0 size=9.0
+[op] PushClipOp bounds=[600.00,398.00,900.00,422.00] z=0
+[op] PopClipOp bounds=[600.00,398.00,900.00,422.00] z=0
+[op] DrawTextOp bounds=[600.00,417.00,960.00,435.00] z=0
+[text] '二十一亿四千七百四十八万三千六百四十七、' x=600.0 y=417.0 size=18.0
+[op] DrawTextOp bounds=[629.60,398.00,679.65,422.00] z=0
+[text] '2147483647' x=629.6 y=417.0 size=9.0
+[op] PushClipOp bounds=[0.00,422.00,300.00,844.00] z=0
+[op] PopClipOp bounds=[0.00,422.00,300.00,844.00] z=0
+[op] PushClipOp bounds=[0.00,422.00,300.00,436.00] z=0
+[op] PopClipOp bounds=[0.00,422.00,300.00,436.00] z=0
+[op] DrawTextOp bounds=[0.00,422.00,108.03,436.00] z=0
+[text] 'simp-chinese-formal' x=0.0 y=433.0 size=12.0
+[op] PushClipOp bounds=[0.00,436.00,300.00,844.00] z=0
+[op] PopClipOp bounds=[0.00,436.00,300.00,844.00] z=0
+[op] PushClipOp bounds=[0.00,436.00,300.00,460.00] z=0
+[op] PopClipOp bounds=[0.00,436.00,300.00,460.00] z=0
+[op] DrawTextOp bounds=[0.00,455.00,36.00,473.00] z=0
+[text] '零、' x=0.0 y=455.0 size=18.0
+[op] DrawTextOp bounds=[29.60,436.00,34.61,460.00] z=0
+[text] '0' x=29.6 y=455.0 size=9.0
+[op] PushClipOp bounds=[0.00,460.00,300.00,484.00] z=0
+[op] PopClipOp bounds=[0.00,460.00,300.00,484.00] z=0
+[op] DrawTextOp bounds=[0.00,479.00,36.00,497.00] z=0
+[text] '壹、' x=0.0 y=479.0 size=18.0
+[op] DrawTextOp bounds=[29.60,460.00,34.61,484.00] z=0
+[text] '1' x=29.6 y=479.0 size=9.0
+[op] PushClipOp bounds=[0.00,484.00,300.00,508.00] z=0
+[op] PopClipOp bounds=[0.00,484.00,300.00,508.00] z=0
+[op] DrawTextOp bounds=[0.00,503.00,36.00,521.00] z=0
+[text] '肆、' x=0.0 y=503.0 size=18.0
+[op] DrawTextOp bounds=[29.60,484.00,34.61,508.00] z=0
+[text] '4' x=29.6 y=503.0 size=9.0
+[op] PushClipOp bounds=[0.00,508.00,300.00,532.00] z=0
+[op] PopClipOp bounds=[0.00,508.00,300.00,532.00] z=0
+[op] DrawTextOp bounds=[0.00,527.00,54.00,545.00] z=0
+[text] '壹拾、' x=0.0 y=527.0 size=18.0
+[op] DrawTextOp bounds=[29.60,508.00,39.61,532.00] z=0
+[text] '10' x=29.6 y=527.0 size=9.0
+[op] PushClipOp bounds=[0.00,532.00,300.00,556.00] z=0
+[op] PopClipOp bounds=[0.00,532.00,300.00,556.00] z=0
+[op] DrawTextOp bounds=[0.00,551.00,72.00,569.00] z=0
+[text] '壹拾壹、' x=0.0 y=551.0 size=18.0
+[op] DrawTextOp bounds=[29.60,532.00,39.61,556.00] z=0
+[text] '11' x=29.6 y=551.0 size=9.0
+[op] PushClipOp bounds=[0.00,556.00,300.00,580.00] z=0
+[op] PopClipOp bounds=[0.00,556.00,300.00,580.00] z=0
+[op] DrawTextOp bounds=[0.00,575.00,54.00,593.00] z=0
+[text] '贰拾、' x=0.0 y=575.0 size=18.0
+[op] DrawTextOp bounds=[29.60,556.00,39.61,580.00] z=0
+[text] '20' x=29.6 y=575.0 size=9.0
+[op] PushClipOp bounds=[0.00,580.00,300.00,604.00] z=0
+[op] PopClipOp bounds=[0.00,580.00,300.00,604.00] z=0
+[op] DrawTextOp bounds=[0.00,599.00,72.00,617.00] z=0
+[text] '玖拾玖、' x=0.0 y=599.0 size=18.0
+[op] DrawTextOp bounds=[29.60,580.00,39.61,604.00] z=0
+[text] '99' x=29.6 y=599.0 size=9.0
+[op] PushClipOp bounds=[0.00,604.00,300.00,628.00] z=0
+[op] PopClipOp bounds=[0.00,604.00,300.00,628.00] z=0
+[op] DrawTextOp bounds=[0.00,623.00,90.00,641.00] z=0
+[text] '壹佰零壹、' x=0.0 y=623.0 size=18.0
+[op] DrawTextOp bounds=[29.60,604.00,44.62,628.00] z=0
+[text] '101' x=29.6 y=623.0 size=9.0
+[op] PushClipOp bounds=[0.00,628.00,300.00,652.00] z=0
+[op] PopClipOp bounds=[0.00,628.00,300.00,652.00] z=0
+[op] DrawTextOp bounds=[0.00,647.00,54.00,665.00] z=0
+[text] '贰佰、' x=0.0 y=647.0 size=18.0
+[op] DrawTextOp bounds=[29.60,628.00,44.62,652.00] z=0
+[text] '200' x=29.6 y=647.0 size=9.0
+[op] PushClipOp bounds=[0.00,652.00,300.00,676.00] z=0
+[op] PopClipOp bounds=[0.00,652.00,300.00,676.00] z=0
+[op] DrawTextOp bounds=[0.00,671.00,90.00,689.00] z=0
+[text] '壹仟零壹、' x=0.0 y=671.0 size=18.0
+[op] DrawTextOp bounds=[29.60,652.00,49.62,676.00] z=0
+[text] '1001' x=29.6 y=671.0 size=9.0
+[op] PushClipOp bounds=[0.00,676.00,300.00,700.00] z=0
+[op] PopClipOp bounds=[0.00,676.00,300.00,700.00] z=0
+[op] DrawTextOp bounds=[0.00,695.00,54.00,713.00] z=0
+[text] '壹万、' x=0.0 y=695.0 size=18.0
+[op] DrawTextOp bounds=[29.60,676.00,54.63,700.00] z=0
+[text] '10000' x=29.6 y=695.0 size=9.0
+[op] PushClipOp bounds=[0.00,700.00,300.00,724.00] z=0
+[op] PopClipOp bounds=[0.00,700.00,300.00,724.00] z=0
+[op] DrawTextOp bounds=[0.00,719.00,108.00,737.00] z=0
+[text] '壹万零壹拾、' x=0.0 y=719.0 size=18.0
+[op] DrawTextOp bounds=[29.60,700.00,54.63,724.00] z=0
+[text] '10010' x=29.6 y=719.0 size=9.0
+[op] PushClipOp bounds=[0.00,724.00,300.00,748.00] z=0
+[op] PopClipOp bounds=[0.00,724.00,300.00,748.00] z=0
+[op] DrawTextOp bounds=[0.00,743.00,72.00,761.00] z=0
+[text] '壹拾万、' x=0.0 y=743.0 size=18.0
+[op] DrawTextOp bounds=[29.60,724.00,59.63,748.00] z=0
+[text] '100000' x=29.6 y=743.0 size=9.0
+[op] PushClipOp bounds=[0.00,748.00,300.00,772.00] z=0
+[op] PopClipOp bounds=[0.00,748.00,300.00,772.00] z=0
+[op] DrawTextOp bounds=[0.00,767.00,72.00,785.00] z=0
+[text] '壹佰万、' x=0.0 y=767.0 size=18.0
+[op] DrawTextOp bounds=[29.60,748.00,64.64,772.00] z=0
+[text] '1000000' x=29.6 y=767.0 size=9.0
+[op] PushClipOp bounds=[0.00,772.00,300.00,796.00] z=0
+[op] PopClipOp bounds=[0.00,772.00,300.00,796.00] z=0
+[op] DrawTextOp bounds=[0.00,791.00,72.00,809.00] z=0
+[text] '壹仟万、' x=0.0 y=791.0 size=18.0
+[op] DrawTextOp bounds=[29.60,772.00,69.64,796.00] z=0
+[text] '10000000' x=29.6 y=791.0 size=9.0
+[op] PushClipOp bounds=[0.00,796.00,300.00,820.00] z=0
+[op] PopClipOp bounds=[0.00,796.00,300.00,820.00] z=0
+[op] DrawTextOp bounds=[0.00,815.00,54.00,833.00] z=0
+[text] '壹亿、' x=0.0 y=815.0 size=18.0
+[op] DrawTextOp bounds=[29.60,796.00,74.65,820.00] z=0
+[text] '100000000' x=29.6 y=815.0 size=9.0
+[op] PushClipOp bounds=[0.00,820.00,300.00,844.00] z=0
+[op] PopClipOp bounds=[0.00,820.00,300.00,844.00] z=0
+[op] DrawTextOp bounds=[0.00,839.00,360.00,857.00] z=0
+[text] '贰拾壹亿肆仟柒佰肆拾捌万叁仟陆佰肆拾柒、' x=0.0 y=839.0 size=18.0
+[op] DrawTextOp bounds=[29.60,820.00,79.65,844.00] z=0
+[text] '2147483647' x=29.6 y=839.0 size=9.0
+[op] PushClipOp bounds=[300.00,422.00,600.00,844.00] z=0
+[op] PopClipOp bounds=[300.00,422.00,600.00,844.00] z=0
+[op] PushClipOp bounds=[300.00,422.00,600.00,436.00] z=0
+[op] PopClipOp bounds=[300.00,422.00,600.00,436.00] z=0
+[op] DrawTextOp bounds=[300.00,422.00,380.71,436.00] z=0
+[text] 'cjk-ideographic' x=300.0 y=433.0 size=12.0
+[op] PushClipOp bounds=[300.00,436.00,600.00,796.00] z=0
+[op] PopClipOp bounds=[300.00,436.00,600.00,796.00] z=0
+[op] PushClipOp bounds=[300.00,436.00,600.00,460.00] z=0
+[op] PopClipOp bounds=[300.00,436.00,600.00,460.00] z=0
+[op] DrawTextOp bounds=[300.00,455.00,336.00,473.00] z=0
+[text] '零、' x=300.0 y=455.0 size=18.0
+[op] DrawTextOp bounds=[329.60,436.00,334.61,460.00] z=0
+[text] '0' x=329.6 y=455.0 size=9.0
+[op] PushClipOp bounds=[300.00,460.00,600.00,484.00] z=0
+[op] PopClipOp bounds=[300.00,460.00,600.00,484.00] z=0
+[op] DrawTextOp bounds=[300.00,479.00,336.00,497.00] z=0
+[text] '一、' x=300.0 y=479.0 size=18.0
+[op] DrawTextOp bounds=[329.60,460.00,334.61,484.00] z=0
+[text] '1' x=329.6 y=479.0 size=9.0
+[op] PushClipOp bounds=[300.00,484.00,600.00,508.00] z=0
+[op] PopClipOp bounds=[300.00,484.00,600.00,508.00] z=0
+[op] DrawTextOp bounds=[300.00,503.00,336.00,521.00] z=0
+[text] '四、' x=300.0 y=503.0 size=18.0
+[op] DrawTextOp bounds=[329.60,484.00,334.61,508.00] z=0
+[text] '4' x=329.6 y=503.0 size=9.0
+[op] PushClipOp bounds=[300.00,508.00,600.00,532.00] z=0
+[op] PopClipOp bounds=[300.00,508.00,600.00,532.00] z=0
+[op] DrawTextOp bounds=[300.00,527.00,336.00,545.00] z=0
+[text] '十、' x=300.0 y=527.0 size=18.0
+[op] DrawTextOp bounds=[329.60,508.00,339.61,532.00] z=0
+[text] '10' x=329.6 y=527.0 size=9.0
+[op] PushClipOp bounds=[300.00,532.00,600.00,556.00] z=0
+[op] PopClipOp bounds=[300.00,532.00,600.00,556.00] z=0
+[op] DrawTextOp bounds=[300.00,551.00,354.00,569.00] z=0
+[text] '十一、' x=300.0 y=551.0 size=18.0
+[op] DrawTextOp bounds=[329.60,532.00,339.61,556.00] z=0
+[text] '11' x=329.6 y=551.0 size=9.0
+[op] PushClipOp bounds=[300.00,556.00,600.00,580.00] z=0
+[op] PopClipOp bounds=[300.00,556.00,600.00,580.00] z=0
+[op] DrawTextOp bounds=[300.00,575.00,354.00,593.00] z=0
+[text] '二十、' x=300.0 y=575.0 size=18.0
+[op] DrawTextOp bounds=[329.60,556.00,339.61,580.00] z=0
+[text] '20' x=329.6 y=575.0 size=9.0
+[op] PushClipOp bounds=[300.00,580.00,600.00,604.00] z=0
+[op] PopClipOp bounds=[300.00,580.00,600.00,604.00] z=0
+[op] DrawTextOp bounds=[300.00,599.00,372.00,617.00] z=0
+[text] '九十九、' x=300.0 y=599.0 size=18.0
+[op] DrawTextOp bounds=[329.60,580.00,339.61,604.00] z=0
+[text] '99' x=329.6 y=599.0 size=9.0
+[op] PushClipOp bounds=[300.00,604.00,600.00,628.00] z=0
+[op] PopClipOp bounds=[300.00,604.00,600.00,628.00] z=0
+[op] DrawTextOp bounds=[300.00,623.00,390.00,641.00] z=0
+[text] '一百零一、' x=300.0 y=623.0 size=18.0
+[op] DrawTextOp bounds=[329.60,604.00,344.62,628.00] z=0
+[text] '101' x=329.6 y=623.0 size=9.0
+[op] PushClipOp bounds=[300.00,628.00,600.00,652.00] z=0
+[op] PopClipOp bounds=[300.00,628.00,600.00,652.00] z=0
+[op] DrawTextOp bounds=[300.00,647.00,390.00,665.00] z=0
+[text] '一千零一、' x=300.0 y=647.0 size=18.0
+[op] DrawTextOp bounds=[329.60,628.00,349.62,652.00] z=0
+[text] '1001' x=329.6 y=647.0 size=9.0
+[op] PushClipOp bounds=[300.00,652.00,600.00,676.00] z=0
+[op] PopClipOp bounds=[300.00,652.00,600.00,676.00] z=0
+[op] DrawTextOp bounds=[300.00,671.00,354.00,689.00] z=0
+[text] '一萬、' x=300.0 y=671.0 size=18.0
+[op] DrawTextOp bounds=[329.60,652.00,354.63,676.00] z=0
+[text] '10000' x=329.6 y=671.0 size=9.0
+[op] PushClipOp bounds=[300.00,676.00,600.00,700.00] z=0
+[op] PopClipOp bounds=[300.00,676.00,600.00,700.00] z=0
+[op] DrawTextOp bounds=[300.00,695.00,390.00,713.00] z=0
+[text] '一萬零十、' x=300.0 y=695.0 size=18.0
+[op] DrawTextOp bounds=[329.60,676.00,354.63,700.00] z=0
+[text] '10010' x=329.6 y=695.0 size=9.0
+[op] PushClipOp bounds=[300.00,700.00,600.00,724.00] z=0
+[op] PopClipOp bounds=[300.00,700.00,600.00,724.00] z=0
+[op] DrawTextOp bounds=[300.00,719.00,354.00,737.00] z=0
+[text] '十萬、' x=300.0 y=719.0 size=18.0
+[op] DrawTextOp bounds=[329.60,700.00,359.63,724.00] z=0
+[text] '100000' x=329.6 y=719.0 size=9.0
+[op] PushClipOp bounds=[300.00,724.00,600.00,748.00] z=0
+[op] PopClipOp bounds=[300.00,724.00,600.00,748.00] z=0
+[op] DrawTextOp bounds=[300.00,743.00,372.00,761.00] z=0
+[text] '一百萬、' x=300.0 y=743.0 size=18.0
+[op] DrawTextOp bounds=[329.60,724.00,364.64,748.00] z=0
+[text] '1000000' x=329.6 y=743.0 size=9.0
+[op] PushClipOp bounds=[300.00,748.00,600.00,772.00] z=0
+[op] PopClipOp bounds=[300.00,748.00,600.00,772.00] z=0
+[op] DrawTextOp bounds=[300.00,767.00,372.00,785.00] z=0
+[text] '一千萬、' x=300.0 y=767.0 size=18.0
+[op] DrawTextOp bounds=[329.60,748.00,369.64,772.00] z=0
+[text] '10000000' x=329.6 y=767.0 size=9.0
+[op] PushClipOp bounds=[300.00,772.00,600.00,796.00] z=0
+[op] PopClipOp bounds=[300.00,772.00,600.00,796.00] z=0
+[op] DrawTextOp bounds=[300.00,791.00,354.00,809.00] z=0
+[text] '一億、' x=300.0 y=791.0 size=18.0
+[op] DrawTextOp bounds=[329.60,772.00,374.65,796.00] z=0
+[text] '100000000' x=329.6 y=791.0 size=9.0
+[op] PushClipOp bounds=[600.00,422.00,900.00,844.00] z=0
+[op] PopClipOp bounds=[600.00,422.00,900.00,844.00] z=0
+[op] PushClipOp bounds=[600.00,422.00,900.00,436.00] z=0
+[op] PopClipOp bounds=[600.00,422.00,900.00,436.00] z=0
+[op] DrawTextOp bounds=[600.00,422.00,660.01,436.00] z=0
+[text] 'cjk-decimal' x=600.0 y=433.0 size=12.0
+[op] PushClipOp bounds=[600.00,436.00,900.00,676.00] z=0
+[op] PopClipOp bounds=[600.00,436.00,900.00,676.00] z=0
+[op] PushClipOp bounds=[600.00,436.00,900.00,460.00] z=0
+[op] PopClipOp bounds=[600.00,436.00,900.00,460.00] z=0
+[op] DrawTextOp bounds=[600.00,455.00,636.00,473.00] z=0
+[text] '〇、' x=600.0 y=455.0 size=18.0
+[op] DrawTextOp bounds=[629.60,436.00,634.61,460.00] z=0
+[text] '0' x=629.6 y=455.0 size=9.0
+[op] PushClipOp bounds=[600.00,460.00,900.00,484.00] z=0
+[op] PopClipOp bounds=[600.00,460.00,900.00,484.00] z=0
+[op] DrawTextOp bounds=[600.00,479.00,636.00,497.00] z=0
+[text] '一、' x=600.0 y=479.0 size=18.0
+[op] DrawTextOp bounds=[629.60,460.00,634.61,484.00] z=0
+[text] '1' x=629.6 y=479.0 size=9.0
+[op] PushClipOp bounds=[600.00,484.00,900.00,508.00] z=0
+[op] PopClipOp bounds=[600.00,484.00,900.00,508.00] z=0
+[op] DrawTextOp bounds=[600.00,503.00,636.00,521.00] z=0
+[text] '九、' x=600.0 y=503.0 size=18.0
+[op] DrawTextOp bounds=[629.60,484.00,634.61,508.00] z=0
+[text] '9' x=629.6 y=503.0 size=9.0
+[op] PushClipOp bounds=[600.00,508.00,900.00,532.00] z=0
+[op] PopClipOp bounds=[600.00,508.00,900.00,532.00] z=0
+[op] DrawTextOp bounds=[600.00,527.00,654.00,545.00] z=0
+[text] '一〇、' x=600.0 y=527.0 size=18.0
+[op] DrawTextOp bounds=[629.60,508.00,639.61,532.00] z=0
+[text] '10' x=629.6 y=527.0 size=9.0
+[op] PushClipOp bounds=[600.00,532.00,900.00,556.00] z=0
+[op] PopClipOp bounds=[600.00,532.00,900.00,556.00] z=0
+[op] DrawTextOp bounds=[600.00,551.00,654.00,569.00] z=0
+[text] '一一、' x=600.0 y=551.0 size=18.0
+[op] DrawTextOp bounds=[629.60,532.00,639.61,556.00] z=0
+[text] '11' x=629.6 y=551.0 size=9.0
+[op] PushClipOp bounds=[600.00,556.00,900.00,580.00] z=0
+[op] PopClipOp bounds=[600.00,556.00,900.00,580.00] z=0
+[op] DrawTextOp bounds=[600.00,575.00,654.00,593.00] z=0
+[text] '二〇、' x=600.0 y=575.0 size=18.0
+[op] DrawTextOp bounds=[629.60,556.00,639.61,580.00] z=0
+[text] '20' x=629.6 y=575.0 size=9.0
+[op] PushClipOp bounds=[600.00,580.00,900.00,604.00] z=0
+[op] PopClipOp bounds=[600.00,580.00,900.00,604.00] z=0
+[op] DrawTextOp bounds=[600.00,599.00,672.00,617.00] z=0
+[text] '一〇〇、' x=600.0 y=599.0 size=18.0
+[op] DrawTextOp bounds=[629.60,580.00,644.62,604.00] z=0
+[text] '100' x=629.6 y=599.0 size=9.0
+[op] PushClipOp bounds=[600.00,604.00,900.00,628.00] z=0
+[op] PopClipOp bounds=[600.00,604.00,900.00,628.00] z=0
+[op] DrawTextOp bounds=[600.00,623.00,672.00,641.00] z=0
+[text] '一〇一、' x=600.0 y=623.0 size=18.0
+[op] DrawTextOp bounds=[629.60,604.00,644.62,628.00] z=0
+[text] '101' x=629.6 y=623.0 size=9.0
+[op] PushClipOp bounds=[600.00,628.00,900.00,652.00] z=0
+[op] PopClipOp bounds=[600.00,628.00,900.00,652.00] z=0
+[op] DrawTextOp bounds=[600.00,647.00,690.00,665.00] z=0
+[text] '一〇〇〇、' x=600.0 y=647.0 size=18.0
+[op] DrawTextOp bounds=[629.60,628.00,649.62,652.00] z=0
+[text] '1000' x=629.6 y=647.0 size=9.0
+[op] PushClipOp bounds=[600.00,652.00,900.00,676.00] z=0
+[op] PopClipOp bounds=[600.00,652.00,900.00,676.00] z=0
+[op] DrawTextOp bounds=[600.00,671.00,708.00,689.00] z=0
+[text] '一〇〇〇〇、' x=600.0 y=671.0 size=18.0
+[op] DrawTextOp bounds=[629.60,652.00,654.63,676.00] z=0
+[text] '10000' x=629.6 y=671.0 size=9.0
+[op] PushClipOp bounds=[0.00,844.00,300.00,1146.00] z=0
+[op] PopClipOp bounds=[0.00,844.00,300.00,1146.00] z=0
+[op] PushClipOp bounds=[0.00,844.00,300.00,858.00] z=0
+[op] PopClipOp bounds=[0.00,844.00,300.00,858.00] z=0
+[op] DrawTextOp bounds=[0.00,844.00,95.38,858.00] z=0
+[text] 'japanese-informal' x=0.0 y=855.0 size=12.0
+[op] PushClipOp bounds=[0.00,858.00,300.00,1146.00] z=0
+[op] PopClipOp bounds=[0.00,858.00,300.00,1146.00] z=0
+[op] PushClipOp bounds=[0.00,858.00,300.00,882.00] z=0
+[op] PopClipOp bounds=[0.00,858.00,300.00,882.00] z=0
+[op] DrawTextOp bounds=[0.00,877.00,36.00,895.00] z=0
+[text] '〇、' x=0.0 y=877.0 size=18.0
+[op] DrawTextOp bounds=[29.60,858.00,34.61,882.00] z=0
+[text] '0' x=29.6 y=877.0 size=9.0
+[op] PushClipOp bounds=[0.00,882.00,300.00,906.00] z=0
+[op] PopClipOp bounds=[0.00,882.00,300.00,906.00] z=0
+[op] DrawTextOp bounds=[0.00,901.00,36.00,919.00] z=0
+[text] '一、' x=0.0 y=901.0 size=18.0
+[op] DrawTextOp bounds=[29.60,882.00,34.61,906.00] z=0
+[text] '1' x=29.6 y=901.0 size=9.0
+[op] PushClipOp bounds=[0.00,906.00,300.00,930.00] z=0
+[op] PopClipOp bounds=[0.00,906.00,300.00,930.00] z=0
+[op] DrawTextOp bounds=[0.00,925.00,36.00,943.00] z=0
+[text] '四、' x=0.0 y=925.0 size=18.0
+[op] DrawTextOp bounds=[29.60,906.00,34.61,930.00] z=0
+[text] '4' x=29.6 y=925.0 size=9.0
+[op] PushClipOp bounds=[0.00,930.00,300.00,954.00] z=0
+[op] PopClipOp bounds=[0.00,930.00,300.00,954.00] z=0
+[op] DrawTextOp bounds=[0.00,949.00,36.00,967.00] z=0
+[text] '十、' x=0.0 y=949.0 size=18.0
+[op] DrawTextOp bounds=[29.60,930.00,39.61,954.00] z=0
+[text] '10' x=29.6 y=949.0 size=9.0
+[op] PushClipOp bounds=[0.00,954.00,300.00,978.00] z=0
+[op] PopClipOp bounds=[0.00,954.00,300.00,978.00] z=0
+[op] DrawTextOp bounds=[0.00,973.00,54.00,991.00] z=0
+[text] '十一、' x=0.0 y=973.0 size=18.0
+[op] DrawTextOp bounds=[29.60,954.00,39.61,978.00] z=0
+[text] '11' x=29.6 y=973.0 size=9.0
+[op] PushClipOp bounds=[0.00,978.00,300.00,1002.00] z=0
+[op] PopClipOp bounds=[0.00,978.00,300.00,1002.00] z=0
+[op] DrawTextOp bounds=[0.00,997.00,54.00,1015.00] z=0
+[text] '二十、' x=0.0 y=997.0 size=18.0
+[op] DrawTextOp bounds=[29.60,978.00,39.61,1002.00] z=0
+[text] '20' x=29.6 y=997.0 size=9.0
+[op] PushClipOp bounds=[0.00,1002.00,300.00,1026.00] z=0
+[op] PopClipOp bounds=[0.00,1002.00,300.00,1026.00] z=0
+[op] DrawTextOp bounds=[0.00,1021.00,72.00,1039.00] z=0
+[text] '九十九、' x=0.0 y=1021.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1002.00,39.61,1026.00] z=0
+[text] '99' x=29.6 y=1021.0 size=9.0
+[op] PushClipOp bounds=[0.00,1026.00,300.00,1050.00] z=0
+[op] PopClipOp bounds=[0.00,1026.00,300.00,1050.00] z=0
+[op] DrawTextOp bounds=[0.00,1045.00,54.00,1063.00] z=0
+[text] '百一、' x=0.0 y=1045.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1026.00,44.62,1050.00] z=0
+[text] '101' x=29.6 y=1045.0 size=9.0
+[op] PushClipOp bounds=[0.00,1050.00,300.00,1074.00] z=0
+[op] PopClipOp bounds=[0.00,1050.00,300.00,1074.00] z=0
+[op] DrawTextOp bounds=[0.00,1069.00,36.00,1087.00] z=0
+[text] '千、' x=0.0 y=1069.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1050.00,49.62,1074.00] z=0
+[text] '1000' x=29.6 y=1069.0 size=9.0
+[op] PushClipOp bounds=[0.00,1074.00,300.00,1098.00] z=0
+[op] PopClipOp bounds=[0.00,1074.00,300.00,1098.00] z=0
+[op] DrawTextOp bounds=[0.00,1093.00,144.00,1111.00] z=0
+[text] '九千九百九十九、' x=0.0 y=1093.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1074.00,49.62,1098.00] z=0
+[text] '9999' x=29.6 y=1093.0 size=9.0
+[op] PushClipOp bounds=[0.00,1098.00,300.00,1122.00] z=0
+[op] PopClipOp bounds=[0.00,1098.00,300.00,1122.00] z=0
+[op] DrawTextOp bounds=[0.00,1117.00,108.00,1135.00] z=0
+[text] '一〇〇〇〇、' x=0.0 y=1117.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1098.00,54.63,1122.00] z=0
+[text] '10000' x=29.6 y=1117.0 size=9.0
+[op] PushClipOp bounds=[0.00,1122.00,300.00,1146.00] z=0
+[op] PopClipOp bounds=[0.00,1122.00,300.00,1146.00] z=0
+[op] DrawTextOp bounds=[0.00,1141.00,126.00,1159.00] z=0
+[text] '一〇〇〇〇〇、' x=0.0 y=1141.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1122.00,59.63,1146.00] z=0
+[text] '100000' x=29.6 y=1141.0 size=9.0
+[op] PushClipOp bounds=[300.00,844.00,600.00,1146.00] z=0
+[op] PopClipOp bounds=[300.00,844.00,600.00,1146.00] z=0
+[op] PushClipOp bounds=[300.00,844.00,600.00,858.00] z=0
+[op] PopClipOp bounds=[300.00,844.00,600.00,858.00] z=0
+[op] DrawTextOp bounds=[300.00,844.00,386.04,858.00] z=0
+[text] 'japanese-formal' x=300.0 y=855.0 size=12.0
+[op] PushClipOp bounds=[300.00,858.00,600.00,1146.00] z=0
+[op] PopClipOp bounds=[300.00,858.00,600.00,1146.00] z=0
+[op] PushClipOp bounds=[300.00,858.00,600.00,882.00] z=0
+[op] PopClipOp bounds=[300.00,858.00,600.00,882.00] z=0
+[op] DrawTextOp bounds=[300.00,877.00,336.00,895.00] z=0
+[text] '零、' x=300.0 y=877.0 size=18.0
+[op] DrawTextOp bounds=[329.60,858.00,334.61,882.00] z=0
+[text] '0' x=329.6 y=877.0 size=9.0
+[op] PushClipOp bounds=[300.00,882.00,600.00,906.00] z=0
+[op] PopClipOp bounds=[300.00,882.00,600.00,906.00] z=0
+[op] DrawTextOp bounds=[300.00,901.00,336.00,919.00] z=0
+[text] '壱、' x=300.0 y=901.0 size=18.0
+[op] DrawTextOp bounds=[329.60,882.00,334.61,906.00] z=0
+[text] '1' x=329.6 y=901.0 size=9.0
+[op] PushClipOp bounds=[300.00,906.00,600.00,930.00] z=0
+[op] PopClipOp bounds=[300.00,906.00,600.00,930.00] z=0
+[op] DrawTextOp bounds=[300.00,925.00,336.00,943.00] z=0
+[text] '四、' x=300.0 y=925.0 size=18.0
+[op] DrawTextOp bounds=[329.60,906.00,334.61,930.00] z=0
+[text] '4' x=329.6 y=925.0 size=9.0
+[op] PushClipOp bounds=[300.00,930.00,600.00,954.00] z=0
+[op] PopClipOp bounds=[300.00,930.00,600.00,954.00] z=0
+[op] DrawTextOp bounds=[300.00,949.00,354.00,967.00] z=0
+[text] '壱拾、' x=300.0 y=949.0 size=18.0
+[op] DrawTextOp bounds=[329.60,930.00,339.61,954.00] z=0
+[text] '10' x=329.6 y=949.0 size=9.0
+[op] PushClipOp bounds=[300.00,954.00,600.00,978.00] z=0
+[op] PopClipOp bounds=[300.00,954.00,600.00,978.00] z=0
+[op] DrawTextOp bounds=[300.00,973.00,372.00,991.00] z=0
+[text] '壱拾壱、' x=300.0 y=973.0 size=18.0
+[op] DrawTextOp bounds=[329.60,954.00,339.61,978.00] z=0
+[text] '11' x=329.6 y=973.0 size=9.0
+[op] PushClipOp bounds=[300.00,978.00,600.00,1002.00] z=0
+[op] PopClipOp bounds=[300.00,978.00,600.00,1002.00] z=0
+[op] DrawTextOp bounds=[300.00,997.00,354.00,1015.00] z=0
+[text] '弐拾、' x=300.0 y=997.0 size=18.0
+[op] DrawTextOp bounds=[329.60,978.00,339.61,1002.00] z=0
+[text] '20' x=329.6 y=997.0 size=9.0
+[op] PushClipOp bounds=[300.00,1002.00,600.00,1026.00] z=0
+[op] PopClipOp bounds=[300.00,1002.00,600.00,1026.00] z=0
+[op] DrawTextOp bounds=[300.00,1021.00,372.00,1039.00] z=0
+[text] '九拾九、' x=300.0 y=1021.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1002.00,339.61,1026.00] z=0
+[text] '99' x=329.6 y=1021.0 size=9.0
+[op] PushClipOp bounds=[300.00,1026.00,600.00,1050.00] z=0
+[op] PopClipOp bounds=[300.00,1026.00,600.00,1050.00] z=0
+[op] DrawTextOp bounds=[300.00,1045.00,372.00,1063.00] z=0
+[text] '壱百壱、' x=300.0 y=1045.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1026.00,344.62,1050.00] z=0
+[text] '101' x=329.6 y=1045.0 size=9.0
+[op] PushClipOp bounds=[300.00,1050.00,600.00,1074.00] z=0
+[op] PopClipOp bounds=[300.00,1050.00,600.00,1074.00] z=0
+[op] DrawTextOp bounds=[300.00,1069.00,354.00,1087.00] z=0
+[text] '壱阡、' x=300.0 y=1069.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1050.00,349.62,1074.00] z=0
+[text] '1000' x=329.6 y=1069.0 size=9.0
+[op] PushClipOp bounds=[300.00,1074.00,600.00,1098.00] z=0
+[op] PopClipOp bounds=[300.00,1074.00,600.00,1098.00] z=0
+[op] DrawTextOp bounds=[300.00,1093.00,444.00,1111.00] z=0
+[text] '九阡九百九拾九、' x=300.0 y=1093.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1074.00,349.62,1098.00] z=0
+[text] '9999' x=329.6 y=1093.0 size=9.0
+[op] PushClipOp bounds=[300.00,1098.00,600.00,1122.00] z=0
+[op] PopClipOp bounds=[300.00,1098.00,600.00,1122.00] z=0
+[op] DrawTextOp bounds=[300.00,1117.00,408.00,1135.00] z=0
+[text] '一〇〇〇〇、' x=300.0 y=1117.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1098.00,354.63,1122.00] z=0
+[text] '10000' x=329.6 y=1117.0 size=9.0
+[op] PushClipOp bounds=[300.00,1122.00,600.00,1146.00] z=0
+[op] PopClipOp bounds=[300.00,1122.00,600.00,1146.00] z=0
+[op] DrawTextOp bounds=[300.00,1141.00,426.00,1159.00] z=0
+[text] '一〇〇〇〇〇、' x=300.0 y=1141.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1122.00,359.63,1146.00] z=0
+[text] '100000' x=329.6 y=1141.0 size=9.0
+[op] PushClipOp bounds=[600.00,844.00,900.00,1146.00] z=0
+[op] PopClipOp bounds=[600.00,844.00,900.00,1146.00] z=0
+[op] PushClipOp bounds=[600.00,844.00,900.00,858.00] z=0
+[op] PopClipOp bounds=[600.00,844.00,900.00,858.00] z=0
+[op] DrawTextOp bounds=[600.00,844.00,714.06,858.00] z=0
+[text] 'korean-hangul-formal' x=600.0 y=855.0 size=12.0
+[op] PushClipOp bounds=[600.00,858.00,900.00,1146.00] z=0
+[op] PopClipOp bounds=[600.00,858.00,900.00,1146.00] z=0
+[op] PushClipOp bounds=[600.00,858.00,900.00,882.00] z=0
+[op] PopClipOp bounds=[600.00,858.00,900.00,882.00] z=0
+[op] DrawTextOp bounds=[600.00,877.00,615.95,895.00] z=0
+[text] '영,' x=600.0 y=877.0 size=18.0
+[op] DrawTextOp bounds=[629.60,858.00,634.61,882.00] z=0
+[text] '0' x=629.6 y=877.0 size=9.0
+[op] PushClipOp bounds=[600.00,882.00,900.00,906.00] z=0
+[op] PopClipOp bounds=[600.00,882.00,900.00,906.00] z=0
+[op] DrawTextOp bounds=[600.00,901.00,615.95,919.00] z=0
+[text] '일,' x=600.0 y=901.0 size=18.0
+[op] DrawTextOp bounds=[629.60,882.00,634.61,906.00] z=0
+[text] '1' x=629.6 y=901.0 size=9.0
+[op] PushClipOp bounds=[600.00,906.00,900.00,930.00] z=0
+[op] PopClipOp bounds=[600.00,906.00,900.00,930.00] z=0
+[op] DrawTextOp bounds=[600.00,925.00,615.95,943.00] z=0
+[text] '사,' x=600.0 y=925.0 size=18.0
+[op] DrawTextOp bounds=[629.60,906.00,634.61,930.00] z=0
+[text] '4' x=629.6 y=925.0 size=9.0
+[op] PushClipOp bounds=[600.00,930.00,900.00,954.00] z=0
+[op] PopClipOp bounds=[600.00,930.00,900.00,954.00] z=0
+[op] DrawTextOp bounds=[600.00,949.00,627.57,967.00] z=0
+[text] '일십,' x=600.0 y=949.0 size=18.0
+[op] DrawTextOp bounds=[629.60,930.00,639.61,954.00] z=0
+[text] '10' x=629.6 y=949.0 size=9.0
+[op] PushClipOp bounds=[600.00,954.00,900.00,978.00] z=0
+[op] PopClipOp bounds=[600.00,954.00,900.00,978.00] z=0
+[op] DrawTextOp bounds=[600.00,973.00,639.19,991.00] z=0
+[text] '일십일,' x=600.0 y=973.0 size=18.0
+[op] DrawTextOp bounds=[629.60,954.00,639.61,978.00] z=0
+[text] '11' x=629.6 y=973.0 size=9.0
+[op] PushClipOp bounds=[600.00,978.00,900.00,1002.00] z=0
+[op] PopClipOp bounds=[600.00,978.00,900.00,1002.00] z=0
+[op] DrawTextOp bounds=[600.00,997.00,639.19,1015.00] z=0
+[text] '일십구,' x=600.0 y=997.0 size=18.0
+[op] DrawTextOp bounds=[629.60,978.00,639.61,1002.00] z=0
+[text] '19' x=629.6 y=997.0 size=9.0
+[op] PushClipOp bounds=[600.00,1002.00,900.00,1026.00] z=0
+[op] PopClipOp bounds=[600.00,1002.00,900.00,1026.00] z=0
+[op] DrawTextOp bounds=[600.00,1021.00,627.57,1039.00] z=0
+[text] '이십,' x=600.0 y=1021.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1002.00,639.61,1026.00] z=0
+[text] '20' x=629.6 y=1021.0 size=9.0
+[op] PushClipOp bounds=[600.00,1026.00,900.00,1050.00] z=0
+[op] PopClipOp bounds=[600.00,1026.00,900.00,1050.00] z=0
+[op] DrawTextOp bounds=[600.00,1045.00,639.19,1063.00] z=0
+[text] '구십구,' x=600.0 y=1045.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1026.00,639.61,1050.00] z=0
+[text] '99' x=629.6 y=1045.0 size=9.0
+[op] PushClipOp bounds=[600.00,1050.00,900.00,1074.00] z=0
+[op] PopClipOp bounds=[600.00,1050.00,900.00,1074.00] z=0
+[op] DrawTextOp bounds=[600.00,1069.00,627.57,1087.00] z=0
+[text] '일백,' x=600.0 y=1069.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1050.00,644.62,1074.00] z=0
+[text] '100' x=629.6 y=1069.0 size=9.0
+[op] PushClipOp bounds=[600.00,1074.00,900.00,1098.00] z=0
+[op] PopClipOp bounds=[600.00,1074.00,900.00,1098.00] z=0
+[op] DrawTextOp bounds=[600.00,1093.00,627.57,1111.00] z=0
+[text] '일천,' x=600.0 y=1093.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1074.00,649.62,1098.00] z=0
+[text] '1000' x=629.6 y=1093.0 size=9.0
+[op] PushClipOp bounds=[600.00,1098.00,900.00,1122.00] z=0
+[op] PopClipOp bounds=[600.00,1098.00,900.00,1122.00] z=0
+[op] DrawTextOp bounds=[600.00,1117.00,627.57,1135.00] z=0
+[text] '일만,' x=600.0 y=1117.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1098.00,654.63,1122.00] z=0
+[text] '10000' x=629.6 y=1117.0 size=9.0
+[op] PushClipOp bounds=[600.00,1122.00,900.00,1146.00] z=0
+[op] PopClipOp bounds=[600.00,1122.00,900.00,1146.00] z=0
+[op] DrawTextOp bounds=[600.00,1141.00,639.19,1159.00] z=0
+[text] '일십만,' x=600.0 y=1141.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1122.00,659.63,1146.00] z=0
+[text] '100000' x=629.6 y=1141.0 size=9.0
+[op] PushClipOp bounds=[0.00,1146.00,300.00,1448.00] z=0
+[op] PopClipOp bounds=[0.00,1146.00,300.00,1448.00] z=0
+[op] PushClipOp bounds=[0.00,1146.00,300.00,1160.00] z=0
+[op] PopClipOp bounds=[0.00,1146.00,300.00,1160.00] z=0
+[op] DrawTextOp bounds=[0.00,1146.00,116.72,1160.00] z=0
+[text] 'korean-hanja-informal' x=0.0 y=1157.0 size=12.0
+[op] PushClipOp bounds=[0.00,1160.00,300.00,1448.00] z=0
+[op] PopClipOp bounds=[0.00,1160.00,300.00,1448.00] z=0
+[op] PushClipOp bounds=[0.00,1160.00,300.00,1184.00] z=0
+[op] PopClipOp bounds=[0.00,1160.00,300.00,1184.00] z=0
+[op] DrawTextOp bounds=[0.00,1179.00,22.33,1197.00] z=0
+[text] '零,' x=0.0 y=1179.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1160.00,34.61,1184.00] z=0
+[text] '0' x=29.6 y=1179.0 size=9.0
+[op] PushClipOp bounds=[0.00,1184.00,300.00,1208.00] z=0
+[op] PopClipOp bounds=[0.00,1184.00,300.00,1208.00] z=0
+[op] DrawTextOp bounds=[0.00,1203.00,22.33,1221.00] z=0
+[text] '一,' x=0.0 y=1203.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1184.00,34.61,1208.00] z=0
+[text] '1' x=29.6 y=1203.0 size=9.0
+[op] PushClipOp bounds=[0.00,1208.00,300.00,1232.00] z=0
+[op] PopClipOp bounds=[0.00,1208.00,300.00,1232.00] z=0
+[op] DrawTextOp bounds=[0.00,1227.00,22.33,1245.00] z=0
+[text] '四,' x=0.0 y=1227.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1208.00,34.61,1232.00] z=0
+[text] '4' x=29.6 y=1227.0 size=9.0
+[op] PushClipOp bounds=[0.00,1232.00,300.00,1256.00] z=0
+[op] PopClipOp bounds=[0.00,1232.00,300.00,1256.00] z=0
+[op] DrawTextOp bounds=[0.00,1251.00,22.33,1269.00] z=0
+[text] '十,' x=0.0 y=1251.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1232.00,39.61,1256.00] z=0
+[text] '10' x=29.6 y=1251.0 size=9.0
+[op] PushClipOp bounds=[0.00,1256.00,300.00,1280.00] z=0
+[op] PopClipOp bounds=[0.00,1256.00,300.00,1280.00] z=0
+[op] DrawTextOp bounds=[0.00,1275.00,40.33,1293.00] z=0
+[text] '十一,' x=0.0 y=1275.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1256.00,39.61,1280.00] z=0
+[text] '11' x=29.6 y=1275.0 size=9.0
+[op] PushClipOp bounds=[0.00,1280.00,300.00,1304.00] z=0
+[op] PopClipOp bounds=[0.00,1280.00,300.00,1304.00] z=0
+[op] DrawTextOp bounds=[0.00,1299.00,40.33,1317.00] z=0
+[text] '十九,' x=0.0 y=1299.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1280.00,39.61,1304.00] z=0
+[text] '19' x=29.6 y=1299.0 size=9.0
+[op] PushClipOp bounds=[0.00,1304.00,300.00,1328.00] z=0
+[op] PopClipOp bounds=[0.00,1304.00,300.00,1328.00] z=0
+[op] DrawTextOp bounds=[0.00,1323.00,40.33,1341.00] z=0
+[text] '二十,' x=0.0 y=1323.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1304.00,39.61,1328.00] z=0
+[text] '20' x=29.6 y=1323.0 size=9.0
+[op] PushClipOp bounds=[0.00,1328.00,300.00,1352.00] z=0
+[op] PopClipOp bounds=[0.00,1328.00,300.00,1352.00] z=0
+[op] DrawTextOp bounds=[0.00,1347.00,58.33,1365.00] z=0
+[text] '九十九,' x=0.0 y=1347.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1328.00,39.61,1352.00] z=0
+[text] '99' x=29.6 y=1347.0 size=9.0
+[op] PushClipOp bounds=[0.00,1352.00,300.00,1376.00] z=0
+[op] PopClipOp bounds=[0.00,1352.00,300.00,1376.00] z=0
+[op] DrawTextOp bounds=[0.00,1371.00,22.33,1389.00] z=0
+[text] '百,' x=0.0 y=1371.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1352.00,44.62,1376.00] z=0
+[text] '100' x=29.6 y=1371.0 size=9.0
+[op] PushClipOp bounds=[0.00,1376.00,300.00,1400.00] z=0
+[op] PopClipOp bounds=[0.00,1376.00,300.00,1400.00] z=0
+[op] DrawTextOp bounds=[0.00,1395.00,22.33,1413.00] z=0
+[text] '千,' x=0.0 y=1395.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1376.00,49.62,1400.00] z=0
+[text] '1000' x=29.6 y=1395.0 size=9.0
+[op] PushClipOp bounds=[0.00,1400.00,300.00,1424.00] z=0
+[op] PopClipOp bounds=[0.00,1400.00,300.00,1424.00] z=0
+[op] DrawTextOp bounds=[0.00,1419.00,22.33,1437.00] z=0
+[text] '萬,' x=0.0 y=1419.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1400.00,54.63,1424.00] z=0
+[text] '10000' x=29.6 y=1419.0 size=9.0
+[op] PushClipOp bounds=[0.00,1424.00,300.00,1448.00] z=0
+[op] PopClipOp bounds=[0.00,1424.00,300.00,1448.00] z=0
+[op] DrawTextOp bounds=[0.00,1443.00,40.33,1461.00] z=0
+[text] '十萬,' x=0.0 y=1443.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1424.00,59.63,1448.00] z=0
+[text] '100000' x=29.6 y=1443.0 size=9.0
+[op] PushClipOp bounds=[300.00,1146.00,600.00,1448.00] z=0
+[op] PopClipOp bounds=[300.00,1146.00,600.00,1448.00] z=0
+[op] PushClipOp bounds=[300.00,1146.00,600.00,1160.00] z=0
+[op] PopClipOp bounds=[300.00,1146.00,600.00,1160.00] z=0
+[op] DrawTextOp bounds=[300.00,1146.00,407.38,1160.00] z=0
+[text] 'korean-hanja-formal' x=300.0 y=1157.0 size=12.0
+[op] PushClipOp bounds=[300.00,1160.00,600.00,1448.00] z=0
+[op] PopClipOp bounds=[300.00,1160.00,600.00,1448.00] z=0
+[op] PushClipOp bounds=[300.00,1160.00,600.00,1184.00] z=0
+[op] PopClipOp bounds=[300.00,1160.00,600.00,1184.00] z=0
+[op] DrawTextOp bounds=[300.00,1179.00,322.33,1197.00] z=0
+[text] '零,' x=300.0 y=1179.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1160.00,334.61,1184.00] z=0
+[text] '0' x=329.6 y=1179.0 size=9.0
+[op] PushClipOp bounds=[300.00,1184.00,600.00,1208.00] z=0
+[op] PopClipOp bounds=[300.00,1184.00,600.00,1208.00] z=0
+[op] DrawTextOp bounds=[300.00,1203.00,322.33,1221.00] z=0
+[text] '壹,' x=300.0 y=1203.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1184.00,334.61,1208.00] z=0
+[text] '1' x=329.6 y=1203.0 size=9.0
+[op] PushClipOp bounds=[300.00,1208.00,600.00,1232.00] z=0
+[op] PopClipOp bounds=[300.00,1208.00,600.00,1232.00] z=0
+[op] DrawTextOp bounds=[300.00,1227.00,322.33,1245.00] z=0
+[text] '四,' x=300.0 y=1227.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1208.00,334.61,1232.00] z=0
+[text] '4' x=329.6 y=1227.0 size=9.0
+[op] PushClipOp bounds=[300.00,1232.00,600.00,1256.00] z=0
+[op] PopClipOp bounds=[300.00,1232.00,600.00,1256.00] z=0
+[op] DrawTextOp bounds=[300.00,1251.00,340.33,1269.00] z=0
+[text] '壹拾,' x=300.0 y=1251.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1232.00,339.61,1256.00] z=0
+[text] '10' x=329.6 y=1251.0 size=9.0
+[op] PushClipOp bounds=[300.00,1256.00,600.00,1280.00] z=0
+[op] PopClipOp bounds=[300.00,1256.00,600.00,1280.00] z=0
+[op] DrawTextOp bounds=[300.00,1275.00,358.33,1293.00] z=0
+[text] '壹拾壹,' x=300.0 y=1275.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1256.00,339.61,1280.00] z=0
+[text] '11' x=329.6 y=1275.0 size=9.0
+[op] PushClipOp bounds=[300.00,1280.00,600.00,1304.00] z=0
+[op] PopClipOp bounds=[300.00,1280.00,600.00,1304.00] z=0
+[op] DrawTextOp bounds=[300.00,1299.00,358.33,1317.00] z=0
+[text] '壹拾九,' x=300.0 y=1299.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1280.00,339.61,1304.00] z=0
+[text] '19' x=329.6 y=1299.0 size=9.0
+[op] PushClipOp bounds=[300.00,1304.00,600.00,1328.00] z=0
+[op] PopClipOp bounds=[300.00,1304.00,600.00,1328.00] z=0
+[op] DrawTextOp bounds=[300.00,1323.00,340.33,1341.00] z=0
+[text] '貳拾,' x=300.0 y=1323.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1304.00,339.61,1328.00] z=0
+[text] '20' x=329.6 y=1323.0 size=9.0
+[op] PushClipOp bounds=[300.00,1328.00,600.00,1352.00] z=0
+[op] PopClipOp bounds=[300.00,1328.00,600.00,1352.00] z=0
+[op] DrawTextOp bounds=[300.00,1347.00,358.33,1365.00] z=0
+[text] '九拾九,' x=300.0 y=1347.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1328.00,339.61,1352.00] z=0
+[text] '99' x=329.6 y=1347.0 size=9.0
+[op] PushClipOp bounds=[300.00,1352.00,600.00,1376.00] z=0
+[op] PopClipOp bounds=[300.00,1352.00,600.00,1376.00] z=0
+[op] DrawTextOp bounds=[300.00,1371.00,340.33,1389.00] z=0
+[text] '壹百,' x=300.0 y=1371.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1352.00,344.62,1376.00] z=0
+[text] '100' x=329.6 y=1371.0 size=9.0
+[op] PushClipOp bounds=[300.00,1376.00,600.00,1400.00] z=0
+[op] PopClipOp bounds=[300.00,1376.00,600.00,1400.00] z=0
+[op] DrawTextOp bounds=[300.00,1395.00,340.33,1413.00] z=0
+[text] '壹仟,' x=300.0 y=1395.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1376.00,349.62,1400.00] z=0
+[text] '1000' x=329.6 y=1395.0 size=9.0
+[op] PushClipOp bounds=[300.00,1400.00,600.00,1424.00] z=0
+[op] PopClipOp bounds=[300.00,1400.00,600.00,1424.00] z=0
+[op] DrawTextOp bounds=[300.00,1419.00,340.33,1437.00] z=0
+[text] '壹萬,' x=300.0 y=1419.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1400.00,354.63,1424.00] z=0
+[text] '10000' x=329.6 y=1419.0 size=9.0
+[op] PushClipOp bounds=[300.00,1424.00,600.00,1448.00] z=0
+[op] PopClipOp bounds=[300.00,1424.00,600.00,1448.00] z=0
+[op] DrawTextOp bounds=[300.00,1443.00,358.33,1461.00] z=0
+[text] '壹拾萬,' x=300.0 y=1443.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1424.00,359.63,1448.00] z=0
+[text] '100000' x=329.6 y=1443.0 size=9.0
+[op] PushClipOp bounds=[600.00,1146.00,900.00,1448.00] z=0
+[op] PopClipOp bounds=[600.00,1146.00,900.00,1448.00] z=0
+[op] PushClipOp bounds=[600.00,1146.00,900.00,1160.00] z=0
+[op] PopClipOp bounds=[600.00,1146.00,900.00,1160.00] z=0
+[op] DrawTextOp bounds=[600.00,1146.00,695.37,1160.00] z=0
+[text] 'cjk-earthly-branch' x=600.0 y=1157.0 size=12.0
+[op] PushClipOp bounds=[600.00,1160.00,900.00,1280.00] z=0
+[op] PopClipOp bounds=[600.00,1160.00,900.00,1280.00] z=0
+[op] PushClipOp bounds=[600.00,1160.00,900.00,1184.00] z=0
+[op] PopClipOp bounds=[600.00,1160.00,900.00,1184.00] z=0
+[op] DrawTextOp bounds=[600.00,1179.00,636.00,1197.00] z=0
+[text] '子、' x=600.0 y=1179.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1160.00,634.61,1184.00] z=0
+[text] '1' x=629.6 y=1179.0 size=9.0
+[op] PushClipOp bounds=[600.00,1184.00,900.00,1208.00] z=0
+[op] PopClipOp bounds=[600.00,1184.00,900.00,1208.00] z=0
+[op] DrawTextOp bounds=[600.00,1203.00,636.00,1221.00] z=0
+[text] '戌、' x=600.0 y=1203.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1184.00,639.61,1208.00] z=0
+[text] '11' x=629.6 y=1203.0 size=9.0
+[op] PushClipOp bounds=[600.00,1208.00,900.00,1232.00] z=0
+[op] PopClipOp bounds=[600.00,1208.00,900.00,1232.00] z=0
+[op] DrawTextOp bounds=[600.00,1227.00,636.00,1245.00] z=0
+[text] '亥、' x=600.0 y=1227.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1208.00,639.61,1232.00] z=0
+[text] '12' x=629.6 y=1227.0 size=9.0
+[op] PushClipOp bounds=[600.00,1232.00,900.00,1256.00] z=0
+[op] PopClipOp bounds=[600.00,1232.00,900.00,1256.00] z=0
+[op] DrawTextOp bounds=[600.00,1251.00,654.00,1269.00] z=0
+[text] '一三、' x=600.0 y=1251.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1232.00,639.61,1256.00] z=0
+[text] '13' x=629.6 y=1251.0 size=9.0
+[op] PushClipOp bounds=[600.00,1256.00,900.00,1280.00] z=0
+[op] PopClipOp bounds=[600.00,1256.00,900.00,1280.00] z=0
+[op] DrawTextOp bounds=[600.00,1275.00,654.00,1293.00] z=0
+[text] '二五、' x=600.0 y=1275.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1256.00,639.61,1280.00] z=0
+[text] '25' x=629.6 y=1275.0 size=9.0
+[op] PushClipOp bounds=[0.00,1448.00,300.00,1798.00] z=0
+[op] PopClipOp bounds=[0.00,1448.00,300.00,1798.00] z=0
+[op] PushClipOp bounds=[0.00,1448.00,300.00,1462.00] z=0
+[op] PopClipOp bounds=[0.00,1448.00,300.00,1462.00] z=0
+[op] DrawTextOp bounds=[0.00,1448.00,96.70,1462.00] z=0
+[text] 'cjk-heavenly-stem' x=0.0 y=1459.0 size=12.0
+[op] PushClipOp bounds=[0.00,1462.00,300.00,1582.00] z=0
+[op] PopClipOp bounds=[0.00,1462.00,300.00,1582.00] z=0
+[op] PushClipOp bounds=[0.00,1462.00,300.00,1486.00] z=0
+[op] PopClipOp bounds=[0.00,1462.00,300.00,1486.00] z=0
+[op] DrawTextOp bounds=[0.00,1481.00,36.00,1499.00] z=0
+[text] '甲、' x=0.0 y=1481.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1462.00,34.61,1486.00] z=0
+[text] '1' x=29.6 y=1481.0 size=9.0
+[op] PushClipOp bounds=[0.00,1486.00,300.00,1510.00] z=0
+[op] PopClipOp bounds=[0.00,1486.00,300.00,1510.00] z=0
+[op] DrawTextOp bounds=[0.00,1505.00,36.00,1523.00] z=0
+[text] '壬、' x=0.0 y=1505.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1486.00,34.61,1510.00] z=0
+[text] '9' x=29.6 y=1505.0 size=9.0
+[op] PushClipOp bounds=[0.00,1510.00,300.00,1534.00] z=0
+[op] PopClipOp bounds=[0.00,1510.00,300.00,1534.00] z=0
+[op] DrawTextOp bounds=[0.00,1529.00,36.00,1547.00] z=0
+[text] '癸、' x=0.0 y=1529.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1510.00,39.61,1534.00] z=0
+[text] '10' x=29.6 y=1529.0 size=9.0
+[op] PushClipOp bounds=[0.00,1534.00,300.00,1558.00] z=0
+[op] PopClipOp bounds=[0.00,1534.00,300.00,1558.00] z=0
+[op] DrawTextOp bounds=[0.00,1553.00,54.00,1571.00] z=0
+[text] '一一、' x=0.0 y=1553.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1534.00,39.61,1558.00] z=0
+[text] '11' x=29.6 y=1553.0 size=9.0
+[op] PushClipOp bounds=[0.00,1558.00,300.00,1582.00] z=0
+[op] PopClipOp bounds=[0.00,1558.00,300.00,1582.00] z=0
+[op] DrawTextOp bounds=[0.00,1577.00,54.00,1595.00] z=0
+[text] '二一、' x=0.0 y=1577.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1558.00,39.61,1582.00] z=0
+[text] '21' x=29.6 y=1577.0 size=9.0
+[op] PushClipOp bounds=[300.00,1448.00,600.00,1798.00] z=0
+[op] PopClipOp bounds=[300.00,1448.00,600.00,1798.00] z=0
+[op] PushClipOp bounds=[300.00,1448.00,600.00,1462.00] z=0
+[op] PopClipOp bounds=[300.00,1448.00,600.00,1462.00] z=0
+[op] DrawTextOp bounds=[300.00,1448.00,350.03,1462.00] z=0
+[text] 'armenian' x=300.0 y=1459.0 size=12.0
+[op] PushClipOp bounds=[300.00,1462.00,600.00,1798.00] z=0
+[op] PopClipOp bounds=[300.00,1462.00,600.00,1798.00] z=0
+[op] PushClipOp bounds=[300.00,1462.00,600.00,1486.00] z=0
+[op] PopClipOp bounds=[300.00,1462.00,600.00,1486.00] z=0
+[op] DrawTextOp bounds=[300.00,1481.00,314.89,1499.00] z=0
+[text] '0.' x=300.0 y=1481.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1462.00,334.61,1486.00] z=0
+[text] '0' x=329.6 y=1481.0 size=9.0
+[op] PushClipOp bounds=[300.00,1486.00,600.00,1510.00] z=0
+[op] PopClipOp bounds=[300.00,1486.00,600.00,1510.00] z=0
+[op] DrawTextOp bounds=[300.00,1505.00,318.34,1523.00] z=0
+[text] 'Ա.' x=300.0 y=1505.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1486.00,334.61,1510.00] z=0
+[text] '1' x=329.6 y=1505.0 size=9.0
+[op] PushClipOp bounds=[300.00,1510.00,600.00,1534.00] z=0
+[op] PopClipOp bounds=[300.00,1510.00,600.00,1534.00] z=0
+[op] DrawTextOp bounds=[300.00,1529.00,316.70,1547.00] z=0
+[text] 'Բ.' x=300.0 y=1529.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1510.00,334.61,1534.00] z=0
+[text] '2' x=329.6 y=1529.0 size=9.0
+[op] PushClipOp bounds=[300.00,1534.00,600.00,1558.00] z=0
+[op] PopClipOp bounds=[300.00,1534.00,600.00,1558.00] z=0
+[op] DrawTextOp bounds=[300.00,1553.00,316.76,1571.00] z=0
+[text] 'Ժ.' x=300.0 y=1553.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1534.00,339.61,1558.00] z=0
+[text] '10' x=329.6 y=1553.0 size=9.0
+[op] PushClipOp bounds=[300.00,1558.00,600.00,1582.00] z=0
+[op] PopClipOp bounds=[300.00,1558.00,600.00,1582.00] z=0
+[op] DrawTextOp bounds=[300.00,1577.00,330.77,1595.00] z=0
+[text] 'ԺԱ.' x=300.0 y=1577.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1558.00,339.61,1582.00] z=0
+[text] '11' x=329.6 y=1577.0 size=9.0
+[op] PushClipOp bounds=[300.00,1582.00,600.00,1606.00] z=0
+[op] PopClipOp bounds=[300.00,1582.00,600.00,1606.00] z=0
+[op] DrawTextOp bounds=[300.00,1601.00,316.03,1619.00] z=0
+[text] 'Ի.' x=300.0 y=1601.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1582.00,339.61,1606.00] z=0
+[text] '20' x=329.6 y=1601.0 size=9.0
+[op] PushClipOp bounds=[300.00,1606.00,600.00,1630.00] z=0
+[op] PopClipOp bounds=[300.00,1606.00,600.00,1630.00] z=0
+[op] DrawTextOp bounds=[300.00,1625.00,330.94,1643.00] z=0
+[text] 'ՂԹ.' x=300.0 y=1625.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1606.00,339.61,1630.00] z=0
+[text] '99' x=329.6 y=1625.0 size=9.0
+[op] PushClipOp bounds=[300.00,1630.00,600.00,1654.00] z=0
+[op] PopClipOp bounds=[300.00,1630.00,600.00,1654.00] z=0
+[op] DrawTextOp bounds=[300.00,1649.00,317.75,1667.00] z=0
+[text] 'Ճ.' x=300.0 y=1649.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1630.00,344.62,1654.00] z=0
+[text] '100' x=329.6 y=1649.0 size=9.0
+[op] PushClipOp bounds=[300.00,1654.00,600.00,1678.00] z=0
+[op] PopClipOp bounds=[300.00,1654.00,600.00,1678.00] z=0
+[op] DrawTextOp bounds=[300.00,1673.00,317.32,1691.00] z=0
+[text] 'Ռ.' x=300.0 y=1673.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1654.00,349.62,1678.00] z=0
+[text] '1000' x=329.6 y=1673.0 size=9.0
+[op] PushClipOp bounds=[300.00,1678.00,600.00,1702.00] z=0
+[op] PopClipOp bounds=[300.00,1678.00,600.00,1702.00] z=0
+[op] DrawTextOp bounds=[300.00,1697.00,355.34,1715.00] z=0
+[text] 'ՔՋՂԹ.' x=300.0 y=1697.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1678.00,349.62,1702.00] z=0
+[text] '9999' x=329.6 y=1697.0 size=9.0
+[op] PushClipOp bounds=[300.00,1702.00,600.00,1726.00] z=0
+[op] PopClipOp bounds=[300.00,1702.00,600.00,1726.00] z=0
+[op] DrawTextOp bounds=[300.00,1721.00,357.11,1739.00] z=0
+[text] '10000.' x=300.0 y=1721.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1702.00,354.63,1726.00] z=0
+[text] '10000' x=329.6 y=1721.0 size=9.0
+[op] PushClipOp bounds=[300.00,1726.00,600.00,1750.00] z=0
+[op] PopClipOp bounds=[300.00,1726.00,600.00,1750.00] z=0
+[op] DrawTextOp bounds=[300.00,1745.00,357.11,1763.00] z=0
+[text] '10001.' x=300.0 y=1745.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1726.00,354.63,1750.00] z=0
+[text] '10001' x=329.6 y=1745.0 size=9.0
+[op] PushClipOp bounds=[300.00,1750.00,600.00,1774.00] z=0
+[op] PopClipOp bounds=[300.00,1750.00,600.00,1774.00] z=0
+[op] DrawTextOp bounds=[300.00,1769.00,388.78,1787.00] z=0
+[text] '99999999.' x=300.0 y=1769.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1750.00,369.64,1774.00] z=0
+[text] '99999999' x=329.6 y=1769.0 size=9.0
+[op] PushClipOp bounds=[300.00,1774.00,600.00,1798.00] z=0
+[op] PopClipOp bounds=[300.00,1774.00,600.00,1798.00] z=0
+[op] DrawTextOp bounds=[300.00,1793.00,399.33,1811.00] z=0
+[text] '100000000.' x=300.0 y=1793.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1774.00,374.65,1798.00] z=0
+[text] '100000000' x=329.6 y=1793.0 size=9.0
+[op] PushClipOp bounds=[600.00,1448.00,900.00,1798.00] z=0
+[op] PopClipOp bounds=[600.00,1448.00,900.00,1798.00] z=0
+[op] PushClipOp bounds=[600.00,1448.00,900.00,1462.00] z=0
+[op] PopClipOp bounds=[600.00,1448.00,900.00,1462.00] z=0
+[op] DrawTextOp bounds=[600.00,1448.00,684.71,1462.00] z=0
+[text] 'upper-armenian' x=600.0 y=1459.0 size=12.0
+[op] PushClipOp bounds=[600.00,1462.00,900.00,1582.00] z=0
+[op] PopClipOp bounds=[600.00,1462.00,900.00,1582.00] z=0
+[op] PushClipOp bounds=[600.00,1462.00,900.00,1486.00] z=0
+[op] PopClipOp bounds=[600.00,1462.00,900.00,1486.00] z=0
+[op] DrawTextOp bounds=[600.00,1481.00,618.34,1499.00] z=0
+[text] 'Ա.' x=600.0 y=1481.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1462.00,634.61,1486.00] z=0
+[text] '1' x=629.6 y=1481.0 size=9.0
+[op] PushClipOp bounds=[600.00,1486.00,900.00,1510.00] z=0
+[op] PopClipOp bounds=[600.00,1486.00,900.00,1510.00] z=0
+[op] DrawTextOp bounds=[600.00,1505.00,616.76,1523.00] z=0
+[text] 'Ժ.' x=600.0 y=1505.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1486.00,639.61,1510.00] z=0
+[text] '10' x=629.6 y=1505.0 size=9.0
+[op] PushClipOp bounds=[600.00,1510.00,900.00,1534.00] z=0
+[op] PopClipOp bounds=[600.00,1510.00,900.00,1534.00] z=0
+[op] DrawTextOp bounds=[600.00,1529.00,617.75,1547.00] z=0
+[text] 'Ճ.' x=600.0 y=1529.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1510.00,644.62,1534.00] z=0
+[text] '100' x=629.6 y=1529.0 size=9.0
+[op] PushClipOp bounds=[600.00,1534.00,900.00,1558.00] z=0
+[op] PopClipOp bounds=[600.00,1534.00,900.00,1558.00] z=0
+[op] DrawTextOp bounds=[600.00,1553.00,617.32,1571.00] z=0
+[text] 'Ռ.' x=600.0 y=1553.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1534.00,649.62,1558.00] z=0
+[text] '1000' x=629.6 y=1553.0 size=9.0
+[op] PushClipOp bounds=[600.00,1558.00,900.00,1582.00] z=0
+[op] PopClipOp bounds=[600.00,1558.00,900.00,1582.00] z=0
+[op] DrawTextOp bounds=[600.00,1577.00,657.11,1595.00] z=0
+[text] '10000.' x=600.0 y=1577.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1558.00,654.63,1582.00] z=0
+[text] '10000' x=629.6 y=1577.0 size=9.0
+[op] PushClipOp bounds=[0.00,1798.00,300.00,2460.00] z=0
+[op] PopClipOp bounds=[0.00,1798.00,300.00,2460.00] z=0
+[op] PushClipOp bounds=[0.00,1798.00,300.00,1812.00] z=0
+[op] PopClipOp bounds=[0.00,1798.00,300.00,1812.00] z=0
+[op] DrawTextOp bounds=[0.00,1798.00,82.70,1812.00] z=0
+[text] 'lower-armenian' x=0.0 y=1809.0 size=12.0
+[op] PushClipOp bounds=[0.00,1812.00,300.00,1932.00] z=0
+[op] PopClipOp bounds=[0.00,1812.00,300.00,1932.00] z=0
+[op] PushClipOp bounds=[0.00,1812.00,300.00,1836.00] z=0
+[op] PopClipOp bounds=[0.00,1812.00,300.00,1836.00] z=0
+[op] DrawTextOp bounds=[0.00,1831.00,19.84,1849.00] z=0
+[text] 'ա.' x=0.0 y=1831.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1812.00,34.61,1836.00] z=0
+[text] '1' x=29.6 y=1831.0 size=9.0
+[op] PushClipOp bounds=[0.00,1836.00,300.00,1860.00] z=0
+[op] PopClipOp bounds=[0.00,1836.00,300.00,1860.00] z=0
+[op] DrawTextOp bounds=[0.00,1855.00,15.11,1873.00] z=0
+[text] 'ժ.' x=0.0 y=1855.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1836.00,39.61,1860.00] z=0
+[text] '10' x=29.6 y=1855.0 size=9.0
+[op] PushClipOp bounds=[0.00,1860.00,300.00,1884.00] z=0
+[op] PopClipOp bounds=[0.00,1860.00,300.00,1884.00] z=0
+[op] DrawTextOp bounds=[0.00,1879.00,13.54,1897.00] z=0
+[text] 'ճ.' x=0.0 y=1879.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1860.00,44.62,1884.00] z=0
+[text] '100' x=29.6 y=1879.0 size=9.0
+[op] PushClipOp bounds=[0.00,1884.00,300.00,1908.00] z=0
+[op] PopClipOp bounds=[0.00,1884.00,300.00,1908.00] z=0
+[op] DrawTextOp bounds=[0.00,1903.00,14.52,1921.00] z=0
+[text] 'ռ.' x=0.0 y=1903.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1884.00,49.62,1908.00] z=0
+[text] '1000' x=29.6 y=1903.0 size=9.0
+[op] PushClipOp bounds=[0.00,1908.00,300.00,1932.00] z=0
+[op] PopClipOp bounds=[0.00,1908.00,300.00,1932.00] z=0
+[op] DrawTextOp bounds=[0.00,1927.00,57.11,1945.00] z=0
+[text] '10000.' x=0.0 y=1927.0 size=18.0
+[op] DrawTextOp bounds=[29.60,1908.00,54.63,1932.00] z=0
+[text] '10000' x=29.6 y=1927.0 size=9.0
+[op] PushClipOp bounds=[300.00,1798.00,600.00,2460.00] z=0
+[op] PopClipOp bounds=[300.00,1798.00,600.00,2460.00] z=0
+[op] PushClipOp bounds=[300.00,1798.00,600.00,1812.00] z=0
+[op] PopClipOp bounds=[300.00,1798.00,600.00,1812.00] z=0
+[op] DrawTextOp bounds=[300.00,1798.00,346.71,1812.00] z=0
+[text] 'georgian' x=300.0 y=1809.0 size=12.0
+[op] PushClipOp bounds=[300.00,1812.00,600.00,2124.00] z=0
+[op] PopClipOp bounds=[300.00,1812.00,600.00,2124.00] z=0
+[op] PushClipOp bounds=[300.00,1812.00,600.00,1836.00] z=0
+[op] PopClipOp bounds=[300.00,1812.00,600.00,1836.00] z=0
+[op] DrawTextOp bounds=[300.00,1831.00,314.89,1849.00] z=0
+[text] '0.' x=300.0 y=1831.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1812.00,334.61,1836.00] z=0
+[text] '0' x=329.6 y=1831.0 size=9.0
+[op] PushClipOp bounds=[300.00,1836.00,600.00,1860.00] z=0
+[op] PopClipOp bounds=[300.00,1836.00,600.00,1860.00] z=0
+[op] DrawTextOp bounds=[300.00,1855.00,313.26,1873.00] z=0
+[text] 'ა.' x=300.0 y=1855.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1836.00,334.61,1860.00] z=0
+[text] '1' x=329.6 y=1855.0 size=9.0
+[op] PushClipOp bounds=[300.00,1860.00,600.00,1884.00] z=0
+[op] PopClipOp bounds=[300.00,1860.00,600.00,1884.00] z=0
+[op] DrawTextOp bounds=[300.00,1879.00,314.88,1897.00] z=0
+[text] 'ბ.' x=300.0 y=1879.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1860.00,334.61,1884.00] z=0
+[text] '2' x=329.6 y=1879.0 size=9.0
+[op] PushClipOp bounds=[300.00,1884.00,600.00,1908.00] z=0
+[op] PopClipOp bounds=[300.00,1884.00,600.00,1908.00] z=0
+[op] DrawTextOp bounds=[300.00,1903.00,315.31,1921.00] z=0
+[text] 'ი.' x=300.0 y=1903.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1884.00,339.61,1908.00] z=0
+[text] '10' x=329.6 y=1903.0 size=9.0
+[op] PushClipOp bounds=[300.00,1908.00,600.00,1932.00] z=0
+[op] PopClipOp bounds=[300.00,1908.00,600.00,1932.00] z=0
+[op] DrawTextOp bounds=[300.00,1927.00,331.35,1945.00] z=0
+[text] 'ით.' x=300.0 y=1927.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1908.00,339.61,1932.00] z=0
+[text] '19' x=329.6 y=1927.0 size=9.0
+[op] PushClipOp bounds=[300.00,1932.00,600.00,1956.00] z=0
+[op] PopClipOp bounds=[300.00,1932.00,600.00,1956.00] z=0
+[op] DrawTextOp bounds=[300.00,1951.00,314.04,1969.00] z=0
+[text] 'კ.' x=300.0 y=1951.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1932.00,339.61,1956.00] z=0
+[text] '20' x=329.6 y=1951.0 size=9.0
+[op] PushClipOp bounds=[300.00,1956.00,600.00,1980.00] z=0
+[op] PopClipOp bounds=[300.00,1956.00,600.00,1980.00] z=0
+[op] DrawTextOp bounds=[300.00,1975.00,317.96,1993.00] z=0
+[text] 'რ.' x=300.0 y=1975.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1956.00,344.62,1980.00] z=0
+[text] '100' x=329.6 y=1975.0 size=9.0
+[op] PushClipOp bounds=[300.00,1980.00,600.00,2004.00] z=0
+[op] PopClipOp bounds=[300.00,1980.00,600.00,2004.00] z=0
+[op] DrawTextOp bounds=[300.00,1999.00,341.85,2017.00] z=0
+[text] 'შჟთ.' x=300.0 y=1999.0 size=18.0
+[op] DrawTextOp bounds=[329.60,1980.00,344.62,2004.00] z=0
+[text] '999' x=329.6 y=1999.0 size=9.0
+[op] PushClipOp bounds=[300.00,2004.00,600.00,2028.00] z=0
+[op] PopClipOp bounds=[300.00,2004.00,600.00,2028.00] z=0
+[op] DrawTextOp bounds=[300.00,2023.00,314.11,2041.00] z=0
+[text] 'ჩ.' x=300.0 y=2023.0 size=18.0
+[op] DrawTextOp bounds=[329.60,2004.00,349.62,2028.00] z=0
+[text] '1000' x=329.6 y=2023.0 size=9.0
+[op] PushClipOp bounds=[300.00,2028.00,600.00,2052.00] z=0
+[op] PopClipOp bounds=[300.00,2028.00,600.00,2052.00] z=0
+[op] DrawTextOp bounds=[300.00,2047.00,351.63,2065.00] z=0
+[text] 'ჩშჟთ.' x=300.0 y=2047.0 size=18.0
+[op] DrawTextOp bounds=[329.60,2028.00,349.62,2052.00] z=0
+[text] '1999' x=329.6 y=2047.0 size=9.0
+[op] PushClipOp bounds=[300.00,2052.00,600.00,2076.00] z=0
+[op] PopClipOp bounds=[300.00,2052.00,600.00,2076.00] z=0
+[op] DrawTextOp bounds=[300.00,2071.00,315.40,2089.00] z=0
+[text] 'ც.' x=300.0 y=2071.0 size=18.0
+[op] DrawTextOp bounds=[329.60,2052.00,349.62,2076.00] z=0
+[text] '2000' x=329.6 y=2071.0 size=9.0
+[op] PushClipOp bounds=[300.00,2076.00,600.00,2100.00] z=0
+[op] PopClipOp bounds=[300.00,2076.00,600.00,2100.00] z=0
+[op] DrawTextOp bounds=[300.00,2095.00,362.31,2113.00] z=0
+[text] 'ჵჰშჟთ.' x=300.0 y=2095.0 size=18.0
+[op] DrawTextOp bounds=[329.60,2076.00,354.63,2100.00] z=0
+[text] '19999' x=329.6 y=2095.0 size=9.0
+[op] PushClipOp bounds=[300.00,2100.00,600.00,2124.00] z=0
+[op] PopClipOp bounds=[300.00,2100.00,600.00,2124.00] z=0
+[op] DrawTextOp bounds=[300.00,2119.00,357.11,2137.00] z=0
+[text] '20000.' x=300.0 y=2119.0 size=18.0
+[op] DrawTextOp bounds=[329.60,2100.00,354.63,2124.00] z=0
+[text] '20000' x=329.6 y=2119.0 size=9.0
+[op] PushClipOp bounds=[600.00,1798.00,900.00,2460.00] z=0
+[op] PopClipOp bounds=[600.00,1798.00,900.00,2460.00] z=0
+[op] PushClipOp bounds=[600.00,1798.00,900.00,1812.00] z=0
+[op] PopClipOp bounds=[600.00,1798.00,900.00,1812.00] z=0
+[op] DrawTextOp bounds=[600.00,1798.00,639.36,1812.00] z=0
+[text] 'hebrew' x=600.0 y=1809.0 size=12.0
+[op] PushClipOp bounds=[600.00,1812.00,900.00,2460.00] z=0
+[op] PopClipOp bounds=[600.00,1812.00,900.00,2460.00] z=0
+[op] PushClipOp bounds=[600.00,1812.00,900.00,1836.00] z=0
+[op] PopClipOp bounds=[600.00,1812.00,900.00,1836.00] z=0
+[op] DrawTextOp bounds=[600.00,1831.00,614.89,1849.00] z=0
+[text] '0.' x=600.0 y=1831.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1812.00,634.61,1836.00] z=0
+[text] '0' x=629.6 y=1831.0 size=9.0
+[op] PushClipOp bounds=[600.00,1836.00,900.00,1860.00] z=0
+[op] PopClipOp bounds=[600.00,1836.00,900.00,1860.00] z=0
+[op] DrawTextOp bounds=[600.00,1855.00,615.79,1873.00] z=0
+[text] 'א.' x=600.0 y=1855.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1836.00,634.61,1860.00] z=0
+[text] '1' x=629.6 y=1855.0 size=9.0
+[op] PushClipOp bounds=[600.00,1860.00,900.00,1884.00] z=0
+[op] PopClipOp bounds=[600.00,1860.00,900.00,1884.00] z=0
+[op] DrawTextOp bounds=[600.00,1879.00,614.60,1897.00] z=0
+[text] 'ב.' x=600.0 y=1879.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1860.00,634.61,1884.00] z=0
+[text] '2' x=629.6 y=1879.0 size=9.0
+[op] PushClipOp bounds=[600.00,1884.00,900.00,1908.00] z=0
+[op] PopClipOp bounds=[600.00,1884.00,900.00,1908.00] z=0
+[op] DrawTextOp bounds=[600.00,1903.00,616.58,1921.00] z=0
+[text] 'ט.' x=600.0 y=1903.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1884.00,634.61,1908.00] z=0
+[text] '9' x=629.6 y=1903.0 size=9.0
+[op] PushClipOp bounds=[600.00,1908.00,900.00,1932.00] z=0
+[op] PopClipOp bounds=[600.00,1908.00,900.00,1932.00] z=0
+[op] DrawTextOp bounds=[600.00,1927.00,609.16,1945.00] z=0
+[text] 'י.' x=600.0 y=1927.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1908.00,639.61,1932.00] z=0
+[text] '10' x=629.6 y=1927.0 size=9.0
+[op] PushClipOp bounds=[600.00,1932.00,900.00,1956.00] z=0
+[op] PopClipOp bounds=[600.00,1932.00,900.00,1956.00] z=0
+[op] DrawTextOp bounds=[600.00,1951.00,620.62,1969.00] z=0
+[text] 'יא.' x=600.0 y=1951.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1932.00,639.61,1956.00] z=0
+[text] '11' x=629.6 y=1951.0 size=9.0
+[op] PushClipOp bounds=[600.00,1956.00,900.00,1980.00] z=0
+[op] PopClipOp bounds=[600.00,1956.00,900.00,1980.00] z=0
+[op] DrawTextOp bounds=[600.00,1975.00,621.41,1993.00] z=0
+[text] 'טו.' x=600.0 y=1975.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1956.00,639.61,1980.00] z=0
+[text] '15' x=629.6 y=1975.0 size=9.0
+[op] PushClipOp bounds=[600.00,1980.00,900.00,2004.00] z=0
+[op] PopClipOp bounds=[600.00,1980.00,900.00,2004.00] z=0
+[op] DrawTextOp bounds=[600.00,1999.00,622.65,2017.00] z=0
+[text] 'טז.' x=600.0 y=1999.0 size=18.0
+[op] DrawTextOp bounds=[629.60,1980.00,639.61,2004.00] z=0
+[text] '16' x=629.6 y=1999.0 size=9.0
+[op] PushClipOp bounds=[600.00,2004.00,900.00,2028.00] z=0
+[op] PopClipOp bounds=[600.00,2004.00,900.00,2028.00] z=0
+[op] DrawTextOp bounds=[600.00,2023.00,614.14,2041.00] z=0
+[text] 'כ.' x=600.0 y=2023.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2004.00,639.61,2028.00] z=0
+[text] '20' x=629.6 y=2023.0 size=9.0
+[op] PushClipOp bounds=[600.00,2028.00,900.00,2052.00] z=0
+[op] PopClipOp bounds=[600.00,2028.00,900.00,2052.00] z=0
+[op] DrawTextOp bounds=[600.00,2047.00,616.47,2065.00] z=0
+[text] 'מ.' x=600.0 y=2047.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2028.00,639.61,2052.00] z=0
+[text] '40' x=629.6 y=2047.0 size=9.0
+[op] PushClipOp bounds=[600.00,2052.00,900.00,2076.00] z=0
+[op] PopClipOp bounds=[600.00,2052.00,900.00,2076.00] z=0
+[op] DrawTextOp bounds=[600.00,2071.00,627.12,2089.00] z=0
+[text] 'צט.' x=600.0 y=2071.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2052.00,639.61,2076.00] z=0
+[text] '99' x=629.6 y=2071.0 size=9.0
+[op] PushClipOp bounds=[600.00,2076.00,900.00,2100.00] z=0
+[op] PopClipOp bounds=[600.00,2076.00,900.00,2100.00] z=0
+[op] DrawTextOp bounds=[600.00,2095.00,616.28,2113.00] z=0
+[text] 'ק.' x=600.0 y=2095.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2076.00,644.62,2100.00] z=0
+[text] '100' x=629.6 y=2095.0 size=9.0
+[op] PushClipOp bounds=[600.00,2100.00,900.00,2124.00] z=0
+[op] PopClipOp bounds=[600.00,2100.00,900.00,2124.00] z=0
+[op] DrawTextOp bounds=[600.00,2119.00,627.74,2137.00] z=0
+[text] 'קא.' x=600.0 y=2119.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2100.00,644.62,2124.00] z=0
+[text] '101' x=629.6 y=2119.0 size=9.0
+[op] PushClipOp bounds=[600.00,2124.00,900.00,2148.00] z=0
+[op] PopClipOp bounds=[600.00,2124.00,900.00,2148.00] z=0
+[op] DrawTextOp bounds=[600.00,2143.00,614.40,2161.00] z=0
+[text] 'ר.' x=600.0 y=2143.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2124.00,644.62,2148.00] z=0
+[text] '200' x=629.6 y=2143.0 size=9.0
+[op] PushClipOp bounds=[600.00,2148.00,900.00,2172.00] z=0
+[op] PopClipOp bounds=[600.00,2148.00,900.00,2172.00] z=0
+[op] DrawTextOp bounds=[600.00,2167.00,641.25,2185.00] z=0
+[text] 'שצט.' x=600.0 y=2167.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2148.00,644.62,2172.00] z=0
+[text] '399' x=629.6 y=2167.0 size=9.0
+[op] PushClipOp bounds=[600.00,2172.00,900.00,2196.00] z=0
+[op] PopClipOp bounds=[600.00,2172.00,900.00,2196.00] z=0
+[op] DrawTextOp bounds=[600.00,2191.00,617.40,2209.00] z=0
+[text] 'ת.' x=600.0 y=2191.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2172.00,644.62,2196.00] z=0
+[text] '400' x=629.6 y=2191.0 size=9.0
+[op] PushClipOp bounds=[600.00,2196.00,900.00,2220.00] z=0
+[op] PopClipOp bounds=[600.00,2196.00,900.00,2220.00] z=0
+[op] DrawTextOp bounds=[600.00,2215.00,628.86,2233.00] z=0
+[text] 'תא.' x=600.0 y=2215.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2196.00,644.62,2220.00] z=0
+[text] '401' x=629.6 y=2215.0 size=9.0
+[op] PushClipOp bounds=[600.00,2220.00,900.00,2244.00] z=0
+[op] PopClipOp bounds=[600.00,2220.00,900.00,2244.00] z=0
+[op] DrawTextOp bounds=[600.00,2239.00,629.35,2257.00] z=0
+[text] 'תק.' x=600.0 y=2239.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2220.00,644.62,2244.00] z=0
+[text] '500' x=629.6 y=2239.0 size=9.0
+[op] PushClipOp bounds=[600.00,2244.00,900.00,2268.00] z=0
+[op] PopClipOp bounds=[600.00,2244.00,900.00,2268.00] z=0
+[op] DrawTextOp bounds=[600.00,2263.00,654.32,2281.00] z=0
+[text] 'תשצט.' x=600.0 y=2263.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2244.00,644.62,2268.00] z=0
+[text] '799' x=629.6 y=2263.0 size=9.0
+[op] PushClipOp bounds=[600.00,2268.00,900.00,2292.00] z=0
+[op] PopClipOp bounds=[600.00,2268.00,900.00,2292.00] z=0
+[op] DrawTextOp bounds=[600.00,2287.00,630.47,2305.00] z=0
+[text] 'תת.' x=600.0 y=2287.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2268.00,644.62,2292.00] z=0
+[text] '800' x=629.6 y=2287.0 size=9.0
+[op] PushClipOp bounds=[600.00,2292.00,900.00,2316.00] z=0
+[op] PopClipOp bounds=[600.00,2292.00,900.00,2316.00] z=0
+[op] DrawTextOp bounds=[600.00,2311.00,665.21,2329.00] z=0
+[text] 'תתקצט.' x=600.0 y=2311.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2292.00,644.62,2316.00] z=0
+[text] '999' x=629.6 y=2311.0 size=9.0
+[op] PushClipOp bounds=[600.00,2316.00,900.00,2340.00] z=0
+[op] PopClipOp bounds=[600.00,2316.00,900.00,2340.00] z=0
+[op] DrawTextOp bounds=[600.00,2335.00,619.92,2353.00] z=0
+[text] 'א׳.' x=600.0 y=2335.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2316.00,649.62,2340.00] z=0
+[text] '1000' x=629.6 y=2335.0 size=9.0
+[op] PushClipOp bounds=[600.00,2340.00,900.00,2364.00] z=0
+[op] PopClipOp bounds=[600.00,2340.00,900.00,2364.00] z=0
+[op] DrawTextOp bounds=[600.00,2359.00,631.38,2377.00] z=0
+[text] 'א׳א.' x=600.0 y=2359.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2340.00,649.62,2364.00] z=0
+[text] '1001' x=629.6 y=2359.0 size=9.0
+[op] PushClipOp bounds=[600.00,2364.00,900.00,2388.00] z=0
+[op] PopClipOp bounds=[600.00,2364.00,900.00,2388.00] z=0
+[op] DrawTextOp bounds=[600.00,2383.00,624.74,2401.00] z=0
+[text] 'א׳י.' x=600.0 y=2383.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2364.00,649.62,2388.00] z=0
+[text] '1010' x=629.6 y=2383.0 size=9.0
+[op] PushClipOp bounds=[600.00,2388.00,900.00,2412.00] z=0
+[op] PopClipOp bounds=[600.00,2388.00,900.00,2412.00] z=0
+[op] DrawTextOp bounds=[600.00,2407.00,630.92,2425.00] z=0
+[text] 'ב׳ה.' x=600.0 y=2407.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2388.00,649.62,2412.00] z=0
+[text] '2005' x=629.6 y=2407.0 size=9.0
+[op] PushClipOp bounds=[600.00,2412.00,900.00,2436.00] z=0
+[op] PopClipOp bounds=[600.00,2412.00,900.00,2436.00] z=0
+[op] DrawTextOp bounds=[600.00,2431.00,730.20,2449.00] z=0
+[text] 'תתקצט׳תתקצט.' x=600.0 y=2431.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2412.00,659.63,2436.00] z=0
+[text] '999999' x=629.6 y=2431.0 size=9.0
+[op] PushClipOp bounds=[600.00,2436.00,900.00,2460.00] z=0
+[op] PopClipOp bounds=[600.00,2436.00,900.00,2460.00] z=0
+[op] DrawTextOp bounds=[600.00,2455.00,678.22,2473.00] z=0
+[text] '1000000.' x=600.0 y=2455.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2436.00,664.64,2460.00] z=0
+[text] '1000000' x=629.6 y=2455.0 size=9.0
+[op] PushClipOp bounds=[0.00,2460.00,300.00,3002.00] z=0
+[op] PopClipOp bounds=[0.00,2460.00,300.00,3002.00] z=0
+[op] PushClipOp bounds=[0.00,2460.00,300.00,2474.00] z=0
+[op] PopClipOp bounds=[0.00,2460.00,300.00,2474.00] z=0
+[op] DrawTextOp bounds=[0.00,2460.00,88.04,2474.00] z=0
+[text] 'ethiopic-numeric' x=0.0 y=2471.0 size=12.0
+[op] PushClipOp bounds=[0.00,2474.00,300.00,3002.00] z=0
+[op] PopClipOp bounds=[0.00,2474.00,300.00,3002.00] z=0
+[op] PushClipOp bounds=[0.00,2474.00,300.00,2498.00] z=0
+[op] PopClipOp bounds=[0.00,2474.00,300.00,2498.00] z=0
+[op] DrawTextOp bounds=[0.00,2493.00,19.31,2511.00] z=0
+[text] '፩/' x=0.0 y=2493.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2474.00,34.61,2498.00] z=0
+[text] '1' x=29.6 y=2493.0 size=9.0
+[op] PushClipOp bounds=[0.00,2498.00,300.00,2522.00] z=0
+[op] PopClipOp bounds=[0.00,2498.00,300.00,2522.00] z=0
+[op] DrawTextOp bounds=[0.00,2517.00,19.31,2535.00] z=0
+[text] '፪/' x=0.0 y=2517.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2498.00,34.61,2522.00] z=0
+[text] '2' x=29.6 y=2517.0 size=9.0
+[op] PushClipOp bounds=[0.00,2522.00,300.00,2546.00] z=0
+[op] PopClipOp bounds=[0.00,2522.00,300.00,2546.00] z=0
+[op] DrawTextOp bounds=[0.00,2541.00,19.31,2559.00] z=0
+[text] '፭/' x=0.0 y=2541.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2522.00,34.61,2546.00] z=0
+[text] '5' x=29.6 y=2541.0 size=9.0
+[op] PushClipOp bounds=[0.00,2546.00,300.00,2570.00] z=0
+[op] PopClipOp bounds=[0.00,2546.00,300.00,2570.00] z=0
+[op] DrawTextOp bounds=[0.00,2565.00,19.31,2583.00] z=0
+[text] '፱/' x=0.0 y=2565.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2546.00,34.61,2570.00] z=0
+[text] '9' x=29.6 y=2565.0 size=9.0
+[op] PushClipOp bounds=[0.00,2570.00,300.00,2594.00] z=0
+[op] PopClipOp bounds=[0.00,2570.00,300.00,2594.00] z=0
+[op] DrawTextOp bounds=[0.00,2589.00,19.31,2607.00] z=0
+[text] '፲/' x=0.0 y=2589.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2570.00,39.61,2594.00] z=0
+[text] '10' x=29.6 y=2589.0 size=9.0
+[op] PushClipOp bounds=[0.00,2594.00,300.00,2618.00] z=0
+[op] PopClipOp bounds=[0.00,2594.00,300.00,2618.00] z=0
+[op] DrawTextOp bounds=[0.00,2613.00,30.93,2631.00] z=0
+[text] '፲፩/' x=0.0 y=2613.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2594.00,39.61,2618.00] z=0
+[text] '11' x=29.6 y=2613.0 size=9.0
+[op] PushClipOp bounds=[0.00,2618.00,300.00,2642.00] z=0
+[op] PopClipOp bounds=[0.00,2618.00,300.00,2642.00] z=0
+[op] DrawTextOp bounds=[0.00,2637.00,30.93,2655.00] z=0
+[text] '፲፱/' x=0.0 y=2637.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2618.00,39.61,2642.00] z=0
+[text] '19' x=29.6 y=2637.0 size=9.0
+[op] PushClipOp bounds=[0.00,2642.00,300.00,2666.00] z=0
+[op] PopClipOp bounds=[0.00,2642.00,300.00,2666.00] z=0
+[op] DrawTextOp bounds=[0.00,2661.00,19.31,2679.00] z=0
+[text] '፳/' x=0.0 y=2661.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2642.00,39.61,2666.00] z=0
+[text] '20' x=29.6 y=2661.0 size=9.0
+[op] PushClipOp bounds=[0.00,2666.00,300.00,2690.00] z=0
+[op] PopClipOp bounds=[0.00,2666.00,300.00,2690.00] z=0
+[op] DrawTextOp bounds=[0.00,2685.00,30.93,2703.00] z=0
+[text] '፴፪/' x=0.0 y=2685.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2666.00,39.61,2690.00] z=0
+[text] '32' x=29.6 y=2685.0 size=9.0
+[op] PushClipOp bounds=[0.00,2690.00,300.00,2714.00] z=0
+[op] PopClipOp bounds=[0.00,2690.00,300.00,2714.00] z=0
+[op] DrawTextOp bounds=[0.00,2709.00,19.31,2727.00] z=0
+[text] '፶/' x=0.0 y=2709.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2690.00,39.61,2714.00] z=0
+[text] '50' x=29.6 y=2709.0 size=9.0
+[op] PushClipOp bounds=[0.00,2714.00,300.00,2738.00] z=0
+[op] PopClipOp bounds=[0.00,2714.00,300.00,2738.00] z=0
+[op] DrawTextOp bounds=[0.00,2733.00,30.93,2751.00] z=0
+[text] '፺፱/' x=0.0 y=2733.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2714.00,39.61,2738.00] z=0
+[text] '99' x=29.6 y=2733.0 size=9.0
+[op] PushClipOp bounds=[0.00,2738.00,300.00,2762.00] z=0
+[op] PopClipOp bounds=[0.00,2738.00,300.00,2762.00] z=0
+[op] DrawTextOp bounds=[0.00,2757.00,19.31,2775.00] z=0
+[text] '፻/' x=0.0 y=2757.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2738.00,44.62,2762.00] z=0
+[text] '100' x=29.6 y=2757.0 size=9.0
+[op] PushClipOp bounds=[0.00,2762.00,300.00,2786.00] z=0
+[op] PopClipOp bounds=[0.00,2762.00,300.00,2786.00] z=0
+[op] DrawTextOp bounds=[0.00,2781.00,30.93,2799.00] z=0
+[text] '፻፩/' x=0.0 y=2781.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2762.00,44.62,2786.00] z=0
+[text] '101' x=29.6 y=2781.0 size=9.0
+[op] PushClipOp bounds=[0.00,2786.00,300.00,2810.00] z=0
+[op] PopClipOp bounds=[0.00,2786.00,300.00,2810.00] z=0
+[op] DrawTextOp bounds=[0.00,2805.00,30.93,2823.00] z=0
+[text] '፻፶/' x=0.0 y=2805.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2786.00,44.62,2810.00] z=0
+[text] '150' x=29.6 y=2805.0 size=9.0
+[op] PushClipOp bounds=[0.00,2810.00,300.00,2834.00] z=0
+[op] PopClipOp bounds=[0.00,2810.00,300.00,2834.00] z=0
+[op] DrawTextOp bounds=[0.00,2829.00,42.55,2847.00] z=0
+[text] '፻፺፱/' x=0.0 y=2829.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2810.00,44.62,2834.00] z=0
+[text] '199' x=29.6 y=2829.0 size=9.0
+[op] PushClipOp bounds=[0.00,2834.00,300.00,2858.00] z=0
+[op] PopClipOp bounds=[0.00,2834.00,300.00,2858.00] z=0
+[op] DrawTextOp bounds=[0.00,2853.00,30.93,2871.00] z=0
+[text] '፪፻/' x=0.0 y=2853.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2834.00,44.62,2858.00] z=0
+[text] '200' x=29.6 y=2853.0 size=9.0
+[op] PushClipOp bounds=[0.00,2858.00,300.00,2882.00] z=0
+[op] PopClipOp bounds=[0.00,2858.00,300.00,2882.00] z=0
+[op] DrawTextOp bounds=[0.00,2877.00,54.17,2895.00] z=0
+[text] '፰፻፺፱/' x=0.0 y=2877.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2858.00,44.62,2882.00] z=0
+[text] '899' x=29.6 y=2877.0 size=9.0
+[op] PushClipOp bounds=[0.00,2882.00,300.00,2906.00] z=0
+[op] PopClipOp bounds=[0.00,2882.00,300.00,2906.00] z=0
+[op] DrawTextOp bounds=[0.00,2901.00,30.93,2919.00] z=0
+[text] '፱፻/' x=0.0 y=2901.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2882.00,44.62,2906.00] z=0
+[text] '900' x=29.6 y=2901.0 size=9.0
+[op] PushClipOp bounds=[0.00,2906.00,300.00,2930.00] z=0
+[op] PopClipOp bounds=[0.00,2906.00,300.00,2930.00] z=0
+[op] DrawTextOp bounds=[0.00,2925.00,30.93,2943.00] z=0
+[text] '፲፻/' x=0.0 y=2925.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2906.00,49.62,2930.00] z=0
+[text] '1000' x=29.6 y=2925.0 size=9.0
+[op] PushClipOp bounds=[0.00,2930.00,300.00,2954.00] z=0
+[op] PopClipOp bounds=[0.00,2930.00,300.00,2954.00] z=0
+[op] DrawTextOp bounds=[0.00,2949.00,19.31,2967.00] z=0
+[text] '፼/' x=0.0 y=2949.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2930.00,54.63,2954.00] z=0
+[text] '10000' x=29.6 y=2949.0 size=9.0
+[op] PushClipOp bounds=[0.00,2954.00,300.00,2978.00] z=0
+[op] PopClipOp bounds=[0.00,2954.00,300.00,2978.00] z=0
+[op] DrawTextOp bounds=[0.00,2973.00,30.93,2991.00] z=0
+[text] '፲፼/' x=0.0 y=2973.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2954.00,59.63,2978.00] z=0
+[text] '100000' x=29.6 y=2973.0 size=9.0
+[op] PushClipOp bounds=[0.00,2978.00,300.00,3002.00] z=0
+[op] PopClipOp bounds=[0.00,2978.00,300.00,3002.00] z=0
+[op] DrawTextOp bounds=[0.00,2997.00,30.93,3015.00] z=0
+[text] '፻፼/' x=0.0 y=2997.0 size=18.0
+[op] DrawTextOp bounds=[29.60,2978.00,64.64,3002.00] z=0
+[text] '1000000' x=29.6 y=2997.0 size=9.0
+[op] PushClipOp bounds=[300.00,2460.00,600.00,3002.00] z=0
+[op] PopClipOp bounds=[300.00,2460.00,600.00,3002.00] z=0
+[op] PushClipOp bounds=[300.00,2460.00,600.00,2474.00] z=0
+[op] PopClipOp bounds=[300.00,2460.00,600.00,2474.00] z=0
+[op] DrawTextOp bounds=[300.00,2460.00,346.71,2474.00] z=0
+[text] 'hiragana' x=300.0 y=2471.0 size=12.0
+[op] PushClipOp bounds=[300.00,2474.00,600.00,2642.00] z=0
+[op] PopClipOp bounds=[300.00,2474.00,600.00,2642.00] z=0
+[op] PushClipOp bounds=[300.00,2474.00,600.00,2498.00] z=0
+[op] PopClipOp bounds=[300.00,2474.00,600.00,2498.00] z=0
+[op] DrawTextOp bounds=[300.00,2493.00,336.00,2511.00] z=0
+[text] 'あ、' x=300.0 y=2493.0 size=18.0
+[op] DrawTextOp bounds=[329.60,2474.00,334.61,2498.00] z=0
+[text] '1' x=329.6 y=2493.0 size=9.0
+[op] PushClipOp bounds=[300.00,2498.00,600.00,2522.00] z=0
+[op] PopClipOp bounds=[300.00,2498.00,600.00,2522.00] z=0
+[op] DrawTextOp bounds=[300.00,2517.00,336.00,2535.00] z=0
+[text] 'い、' x=300.0 y=2517.0 size=18.0
+[op] DrawTextOp bounds=[329.60,2498.00,334.61,2522.00] z=0
+[text] '2' x=329.6 y=2517.0 size=9.0
+[op] PushClipOp bounds=[300.00,2522.00,600.00,2546.00] z=0
+[op] PopClipOp bounds=[300.00,2522.00,600.00,2546.00] z=0
+[op] DrawTextOp bounds=[300.00,2541.00,336.00,2559.00] z=0
+[text] 'ゑ、' x=300.0 y=2541.0 size=18.0
+[op] DrawTextOp bounds=[329.60,2522.00,339.61,2546.00] z=0
+[text] '46' x=329.6 y=2541.0 size=9.0
+[op] PushClipOp bounds=[300.00,2546.00,600.00,2570.00] z=0
+[op] PopClipOp bounds=[300.00,2546.00,600.00,2570.00] z=0
+[op] DrawTextOp bounds=[300.00,2565.00,336.00,2583.00] z=0
+[text] 'を、' x=300.0 y=2565.0 size=18.0
+[op] DrawTextOp bounds=[329.60,2546.00,339.61,2570.00] z=0
+[text] '47' x=329.6 y=2565.0 size=9.0
+[op] PushClipOp bounds=[300.00,2570.00,600.00,2594.00] z=0
+[op] PopClipOp bounds=[300.00,2570.00,600.00,2594.00] z=0
+[op] DrawTextOp bounds=[300.00,2589.00,336.00,2607.00] z=0
+[text] 'ん、' x=300.0 y=2589.0 size=18.0
+[op] DrawTextOp bounds=[329.60,2570.00,339.61,2594.00] z=0
+[text] '48' x=329.6 y=2589.0 size=9.0
+[op] PushClipOp bounds=[300.00,2594.00,600.00,2618.00] z=0
+[op] PopClipOp bounds=[300.00,2594.00,600.00,2618.00] z=0
+[op] DrawTextOp bounds=[300.00,2613.00,354.00,2631.00] z=0
+[text] 'ああ、' x=300.0 y=2613.0 size=18.0
+[op] DrawTextOp bounds=[329.60,2594.00,339.61,2618.00] z=0
+[text] '49' x=329.6 y=2613.0 size=9.0
+[op] PushClipOp bounds=[300.00,2618.00,600.00,2642.00] z=0
+[op] PopClipOp bounds=[300.00,2618.00,600.00,2642.00] z=0
+[op] DrawTextOp bounds=[300.00,2637.00,354.00,2655.00] z=0
+[text] 'あい、' x=300.0 y=2637.0 size=18.0
+[op] DrawTextOp bounds=[329.60,2618.00,339.61,2642.00] z=0
+[text] '50' x=329.6 y=2637.0 size=9.0
+[op] PushClipOp bounds=[600.00,2460.00,900.00,3002.00] z=0
+[op] PopClipOp bounds=[600.00,2460.00,900.00,3002.00] z=0
+[op] PushClipOp bounds=[600.00,2460.00,900.00,2474.00] z=0
+[op] PopClipOp bounds=[600.00,2460.00,900.00,2474.00] z=0
+[op] DrawTextOp bounds=[600.00,2460.00,648.70,2474.00] z=0
+[text] 'katakana' x=600.0 y=2471.0 size=12.0
+[op] PushClipOp bounds=[600.00,2474.00,900.00,2570.00] z=0
+[op] PopClipOp bounds=[600.00,2474.00,900.00,2570.00] z=0
+[op] PushClipOp bounds=[600.00,2474.00,900.00,2498.00] z=0
+[op] PopClipOp bounds=[600.00,2474.00,900.00,2498.00] z=0
+[op] DrawTextOp bounds=[600.00,2493.00,636.00,2511.00] z=0
+[text] 'ア、' x=600.0 y=2493.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2474.00,634.61,2498.00] z=0
+[text] '1' x=629.6 y=2493.0 size=9.0
+[op] PushClipOp bounds=[600.00,2498.00,900.00,2522.00] z=0
+[op] PopClipOp bounds=[600.00,2498.00,900.00,2522.00] z=0
+[op] DrawTextOp bounds=[600.00,2517.00,636.00,2535.00] z=0
+[text] 'ヲ、' x=600.0 y=2517.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2498.00,639.61,2522.00] z=0
+[text] '47' x=629.6 y=2517.0 size=9.0
+[op] PushClipOp bounds=[600.00,2522.00,900.00,2546.00] z=0
+[op] PopClipOp bounds=[600.00,2522.00,900.00,2546.00] z=0
+[op] DrawTextOp bounds=[600.00,2541.00,636.00,2559.00] z=0
+[text] 'ン、' x=600.0 y=2541.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2522.00,639.61,2546.00] z=0
+[text] '48' x=629.6 y=2541.0 size=9.0
+[op] PushClipOp bounds=[600.00,2546.00,900.00,2570.00] z=0
+[op] PopClipOp bounds=[600.00,2546.00,900.00,2570.00] z=0
+[op] DrawTextOp bounds=[600.00,2565.00,654.00,2583.00] z=0
+[text] 'アア、' x=600.0 y=2565.0 size=18.0
+[op] DrawTextOp bounds=[629.60,2546.00,639.61,2570.00] z=0
+[text] '49' x=629.6 y=2565.0 size=9.0
+[op] PushClipOp bounds=[0.00,3002.00,300.00,3136.00] z=0
+[op] PopClipOp bounds=[0.00,3002.00,300.00,3136.00] z=0
+[op] PushClipOp bounds=[0.00,3002.00,300.00,3016.00] z=0
+[op] PopClipOp bounds=[0.00,3002.00,300.00,3016.00] z=0
+[op] DrawTextOp bounds=[0.00,3002.00,77.38,3016.00] z=0
+[text] 'hiragana-iroha' x=0.0 y=3013.0 size=12.0
+[op] PushClipOp bounds=[0.00,3016.00,300.00,3112.00] z=0
+[op] PopClipOp bounds=[0.00,3016.00,300.00,3112.00] z=0
+[op] PushClipOp bounds=[0.00,3016.00,300.00,3040.00] z=0
+[op] PopClipOp bounds=[0.00,3016.00,300.00,3040.00] z=0
+[op] DrawTextOp bounds=[0.00,3035.00,36.00,3053.00] z=0
+[text] 'い、' x=0.0 y=3035.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3016.00,34.61,3040.00] z=0
+[text] '1' x=29.6 y=3035.0 size=9.0
+[op] PushClipOp bounds=[0.00,3040.00,300.00,3064.00] z=0
+[op] PopClipOp bounds=[0.00,3040.00,300.00,3064.00] z=0
+[op] DrawTextOp bounds=[0.00,3059.00,36.00,3077.00] z=0
+[text] 'せ、' x=0.0 y=3059.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3040.00,39.61,3064.00] z=0
+[text] '46' x=29.6 y=3059.0 size=9.0
+[op] PushClipOp bounds=[0.00,3064.00,300.00,3088.00] z=0
+[op] PopClipOp bounds=[0.00,3064.00,300.00,3088.00] z=0
+[op] DrawTextOp bounds=[0.00,3083.00,36.00,3101.00] z=0
+[text] 'す、' x=0.0 y=3083.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3064.00,39.61,3088.00] z=0
+[text] '47' x=29.6 y=3083.0 size=9.0
+[op] PushClipOp bounds=[0.00,3088.00,300.00,3112.00] z=0
+[op] PopClipOp bounds=[0.00,3088.00,300.00,3112.00] z=0
+[op] DrawTextOp bounds=[0.00,3107.00,54.00,3125.00] z=0
+[text] 'いい、' x=0.0 y=3107.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3088.00,39.61,3112.00] z=0
+[text] '48' x=29.6 y=3107.0 size=9.0
+[op] PushClipOp bounds=[300.00,3002.00,600.00,3136.00] z=0
+[op] PopClipOp bounds=[300.00,3002.00,600.00,3136.00] z=0
+[op] PushClipOp bounds=[300.00,3002.00,600.00,3016.00] z=0
+[op] PopClipOp bounds=[300.00,3002.00,600.00,3016.00] z=0
+[op] DrawTextOp bounds=[300.00,3002.00,379.38,3016.00] z=0
+[text] 'katakana-iroha' x=300.0 y=3013.0 size=12.0
+[op] PushClipOp bounds=[300.00,3016.00,600.00,3112.00] z=0
+[op] PopClipOp bounds=[300.00,3016.00,600.00,3112.00] z=0
+[op] PushClipOp bounds=[300.00,3016.00,600.00,3040.00] z=0
+[op] PopClipOp bounds=[300.00,3016.00,600.00,3040.00] z=0
+[op] DrawTextOp bounds=[300.00,3035.00,336.00,3053.00] z=0
+[text] 'イ、' x=300.0 y=3035.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3016.00,334.61,3040.00] z=0
+[text] '1' x=329.6 y=3035.0 size=9.0
+[op] PushClipOp bounds=[300.00,3040.00,600.00,3064.00] z=0
+[op] PopClipOp bounds=[300.00,3040.00,600.00,3064.00] z=0
+[op] DrawTextOp bounds=[300.00,3059.00,336.00,3077.00] z=0
+[text] 'セ、' x=300.0 y=3059.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3040.00,339.61,3064.00] z=0
+[text] '46' x=329.6 y=3059.0 size=9.0
+[op] PushClipOp bounds=[300.00,3064.00,600.00,3088.00] z=0
+[op] PopClipOp bounds=[300.00,3064.00,600.00,3088.00] z=0
+[op] DrawTextOp bounds=[300.00,3083.00,336.00,3101.00] z=0
+[text] 'ス、' x=300.0 y=3083.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3064.00,339.61,3088.00] z=0
+[text] '47' x=329.6 y=3083.0 size=9.0
+[op] PushClipOp bounds=[300.00,3088.00,600.00,3112.00] z=0
+[op] PopClipOp bounds=[300.00,3088.00,600.00,3112.00] z=0
+[op] DrawTextOp bounds=[300.00,3107.00,354.00,3125.00] z=0
+[text] 'イイ、' x=300.0 y=3107.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3088.00,339.61,3112.00] z=0
+[text] '48' x=329.6 y=3107.0 size=9.0
+[op] PushClipOp bounds=[600.00,3002.00,900.00,3136.00] z=0
+[op] PopClipOp bounds=[600.00,3002.00,900.00,3136.00] z=0
+[op] PushClipOp bounds=[600.00,3002.00,900.00,3016.00] z=0
+[op] PopClipOp bounds=[600.00,3002.00,900.00,3016.00] z=0
+[op] DrawTextOp bounds=[600.00,3002.00,641.35,3016.00] z=0
+[text] 'decimal' x=600.0 y=3013.0 size=12.0
+[op] PushClipOp bounds=[600.00,3016.00,900.00,3136.00] z=0
+[op] PopClipOp bounds=[600.00,3016.00,900.00,3136.00] z=0
+[op] PushClipOp bounds=[600.00,3016.00,900.00,3040.00] z=0
+[op] PopClipOp bounds=[600.00,3016.00,900.00,3040.00] z=0
+[op] DrawTextOp bounds=[600.00,3035.00,622.68,3053.00] z=0
+[text] '-2.' x=600.0 y=3035.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3016.00,637.60,3040.00] z=0
+[text] '-2' x=629.6 y=3035.0 size=9.0
+[op] PushClipOp bounds=[600.00,3040.00,900.00,3064.00] z=0
+[op] PopClipOp bounds=[600.00,3040.00,900.00,3064.00] z=0
+[op] DrawTextOp bounds=[600.00,3059.00,622.68,3077.00] z=0
+[text] '-1.' x=600.0 y=3059.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3040.00,637.60,3064.00] z=0
+[text] '-1' x=629.6 y=3059.0 size=9.0
+[op] PushClipOp bounds=[600.00,3064.00,900.00,3088.00] z=0
+[op] PopClipOp bounds=[600.00,3064.00,900.00,3088.00] z=0
+[op] DrawTextOp bounds=[600.00,3083.00,614.89,3101.00] z=0
+[text] '0.' x=600.0 y=3083.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3064.00,634.61,3088.00] z=0
+[text] '0' x=629.6 y=3083.0 size=9.0
+[op] PushClipOp bounds=[600.00,3088.00,900.00,3112.00] z=0
+[op] PopClipOp bounds=[600.00,3088.00,900.00,3112.00] z=0
+[op] DrawTextOp bounds=[600.00,3107.00,614.89,3125.00] z=0
+[text] '1.' x=600.0 y=3107.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3088.00,634.61,3112.00] z=0
+[text] '1' x=629.6 y=3107.0 size=9.0
+[op] PushClipOp bounds=[600.00,3112.00,900.00,3136.00] z=0
+[op] PopClipOp bounds=[600.00,3112.00,900.00,3136.00] z=0
+[op] DrawTextOp bounds=[600.00,3131.00,614.89,3149.00] z=0
+[text] '2.' x=600.0 y=3131.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3112.00,634.61,3136.00] z=0
+[text] '2' x=629.6 y=3131.0 size=9.0
+[op] PushClipOp bounds=[0.00,3136.00,300.00,3438.00] z=0
+[op] PopClipOp bounds=[0.00,3136.00,300.00,3438.00] z=0
+[op] PushClipOp bounds=[0.00,3136.00,300.00,3150.00] z=0
+[op] PopClipOp bounds=[0.00,3136.00,300.00,3150.00] z=0
+[op] DrawTextOp bounds=[0.00,3136.00,111.39,3150.00] z=0
+[text] 'decimal-leading-zero' x=0.0 y=3147.0 size=12.0
+[op] PushClipOp bounds=[0.00,3150.00,300.00,3318.00] z=0
+[op] PopClipOp bounds=[0.00,3150.00,300.00,3318.00] z=0
+[op] PushClipOp bounds=[0.00,3150.00,300.00,3174.00] z=0
+[op] PopClipOp bounds=[0.00,3150.00,300.00,3174.00] z=0
+[op] DrawTextOp bounds=[0.00,3169.00,22.68,3187.00] z=0
+[text] '-1.' x=0.0 y=3169.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3150.00,37.60,3174.00] z=0
+[text] '-1' x=29.6 y=3169.0 size=9.0
+[op] PushClipOp bounds=[0.00,3174.00,300.00,3198.00] z=0
+[op] PopClipOp bounds=[0.00,3174.00,300.00,3198.00] z=0
+[op] DrawTextOp bounds=[0.00,3193.00,25.44,3211.00] z=0
+[text] '00.' x=0.0 y=3193.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3174.00,34.61,3198.00] z=0
+[text] '0' x=29.6 y=3193.0 size=9.0
+[op] PushClipOp bounds=[0.00,3198.00,300.00,3222.00] z=0
+[op] PopClipOp bounds=[0.00,3198.00,300.00,3222.00] z=0
+[op] DrawTextOp bounds=[0.00,3217.00,25.44,3235.00] z=0
+[text] '01.' x=0.0 y=3217.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3198.00,34.61,3222.00] z=0
+[text] '1' x=29.6 y=3217.0 size=9.0
+[op] PushClipOp bounds=[0.00,3222.00,300.00,3246.00] z=0
+[op] PopClipOp bounds=[0.00,3222.00,300.00,3246.00] z=0
+[op] DrawTextOp bounds=[0.00,3241.00,25.44,3259.00] z=0
+[text] '09.' x=0.0 y=3241.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3222.00,34.61,3246.00] z=0
+[text] '9' x=29.6 y=3241.0 size=9.0
+[op] PushClipOp bounds=[0.00,3246.00,300.00,3270.00] z=0
+[op] PopClipOp bounds=[0.00,3246.00,300.00,3270.00] z=0
+[op] DrawTextOp bounds=[0.00,3265.00,25.44,3283.00] z=0
+[text] '10.' x=0.0 y=3265.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3246.00,39.61,3270.00] z=0
+[text] '10' x=29.6 y=3265.0 size=9.0
+[op] PushClipOp bounds=[0.00,3270.00,300.00,3294.00] z=0
+[op] PopClipOp bounds=[0.00,3270.00,300.00,3294.00] z=0
+[op] DrawTextOp bounds=[0.00,3289.00,46.56,3307.00] z=0
+[text] '9999.' x=0.0 y=3289.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3270.00,49.62,3294.00] z=0
+[text] '9999' x=29.6 y=3289.0 size=9.0
+[op] PushClipOp bounds=[0.00,3294.00,300.00,3318.00] z=0
+[op] PopClipOp bounds=[0.00,3294.00,300.00,3318.00] z=0
+[op] DrawTextOp bounds=[0.00,3313.00,57.11,3331.00] z=0
+[text] '10000.' x=0.0 y=3313.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3294.00,54.63,3318.00] z=0
+[text] '10000' x=29.6 y=3313.0 size=9.0
+[op] PushClipOp bounds=[300.00,3136.00,600.00,3438.00] z=0
+[op] PopClipOp bounds=[300.00,3136.00,600.00,3438.00] z=0
+[op] PushClipOp bounds=[300.00,3136.00,600.00,3150.00] z=0
+[op] PopClipOp bounds=[300.00,3136.00,600.00,3150.00] z=0
+[op] DrawTextOp bounds=[300.00,3136.00,366.69,3150.00] z=0
+[text] 'lower-roman' x=300.0 y=3147.0 size=12.0
+[op] PushClipOp bounds=[300.00,3150.00,600.00,3438.00] z=0
+[op] PopClipOp bounds=[300.00,3150.00,600.00,3438.00] z=0
+[op] PushClipOp bounds=[300.00,3150.00,600.00,3174.00] z=0
+[op] PopClipOp bounds=[300.00,3150.00,600.00,3174.00] z=0
+[op] DrawTextOp bounds=[300.00,3169.00,314.89,3187.00] z=0
+[text] '0.' x=300.0 y=3169.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3150.00,334.61,3174.00] z=0
+[text] '0' x=329.6 y=3169.0 size=9.0
+[op] PushClipOp bounds=[300.00,3174.00,600.00,3198.00] z=0
+[op] PopClipOp bounds=[300.00,3174.00,600.00,3198.00] z=0
+[op] DrawTextOp bounds=[300.00,3193.00,309.12,3211.00] z=0
+[text] 'i.' x=300.0 y=3193.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3174.00,334.61,3198.00] z=0
+[text] '1' x=329.6 y=3193.0 size=9.0
+[op] PushClipOp bounds=[300.00,3198.00,600.00,3222.00] z=0
+[op] PopClipOp bounds=[300.00,3198.00,600.00,3222.00] z=0
+[op] DrawTextOp bounds=[300.00,3217.00,318.57,3235.00] z=0
+[text] 'iv.' x=300.0 y=3217.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3198.00,334.61,3222.00] z=0
+[text] '4' x=329.6 y=3217.0 size=9.0
+[op] PushClipOp bounds=[300.00,3222.00,600.00,3246.00] z=0
+[op] PopClipOp bounds=[300.00,3222.00,600.00,3246.00] z=0
+[op] DrawTextOp bounds=[300.00,3241.00,318.25,3259.00] z=0
+[text] 'ix.' x=300.0 y=3241.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3222.00,334.61,3246.00] z=0
+[text] '9' x=329.6 y=3241.0 size=9.0
+[op] PushClipOp bounds=[300.00,3246.00,600.00,3270.00] z=0
+[op] PopClipOp bounds=[300.00,3246.00,600.00,3270.00] z=0
+[op] DrawTextOp bounds=[300.00,3265.00,327.69,3283.00] z=0
+[text] 'xiv.' x=300.0 y=3265.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3246.00,339.61,3270.00] z=0
+[text] '14' x=329.6 y=3265.0 size=9.0
+[op] PushClipOp bounds=[300.00,3270.00,600.00,3294.00] z=0
+[op] PopClipOp bounds=[300.00,3270.00,600.00,3294.00] z=0
+[op] DrawTextOp bounds=[300.00,3289.00,318.25,3307.00] z=0
+[text] 'xl.' x=300.0 y=3289.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3270.00,339.61,3294.00] z=0
+[text] '40' x=329.6 y=3289.0 size=9.0
+[op] PushClipOp bounds=[300.00,3294.00,600.00,3318.00] z=0
+[op] PopClipOp bounds=[300.00,3294.00,600.00,3318.00] z=0
+[op] DrawTextOp bounds=[300.00,3313.00,336.40,3331.00] z=0
+[text] 'xcix.' x=300.0 y=3313.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3294.00,339.61,3318.00] z=0
+[text] '99' x=329.6 y=3313.0 size=9.0
+[op] PushClipOp bounds=[300.00,3318.00,600.00,3342.00] z=0
+[op] PopClipOp bounds=[300.00,3318.00,600.00,3342.00] z=0
+[op] DrawTextOp bounds=[300.00,3337.00,324.87,3355.00] z=0
+[text] 'cd.' x=300.0 y=3337.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3318.00,344.62,3342.00] z=0
+[text] '400' x=329.6 y=3337.0 size=9.0
+[op] PushClipOp bounds=[300.00,3342.00,600.00,3366.00] z=0
+[op] PopClipOp bounds=[300.00,3342.00,600.00,3366.00] z=0
+[op] DrawTextOp bounds=[300.00,3361.00,362.29,3379.00] z=0
+[text] 'cmxcix.' x=300.0 y=3361.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3342.00,344.62,3366.00] z=0
+[text] '999' x=329.6 y=3361.0 size=9.0
+[op] PushClipOp bounds=[300.00,3366.00,600.00,3390.00] z=0
+[op] PopClipOp bounds=[300.00,3366.00,600.00,3390.00] z=0
+[op] DrawTextOp bounds=[300.00,3385.00,379.15,3403.00] z=0
+[text] 'mcmxcix.' x=300.0 y=3385.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3366.00,349.62,3390.00] z=0
+[text] '1999' x=329.6 y=3385.0 size=9.0
+[op] PushClipOp bounds=[300.00,3390.00,600.00,3414.00] z=0
+[op] PopClipOp bounds=[300.00,3390.00,600.00,3414.00] z=0
+[op] DrawTextOp bounds=[300.00,3409.00,412.89,3427.00] z=0
+[text] 'mmmcmxcix.' x=300.0 y=3409.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3390.00,349.62,3414.00] z=0
+[text] '3999' x=329.6 y=3409.0 size=9.0
+[op] PushClipOp bounds=[300.00,3414.00,600.00,3438.00] z=0
+[op] PopClipOp bounds=[300.00,3414.00,600.00,3438.00] z=0
+[op] DrawTextOp bounds=[300.00,3433.00,346.56,3451.00] z=0
+[text] '4000.' x=300.0 y=3433.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3414.00,349.62,3438.00] z=0
+[text] '4000' x=329.6 y=3433.0 size=9.0
+[op] PushClipOp bounds=[600.00,3136.00,900.00,3438.00] z=0
+[op] PopClipOp bounds=[600.00,3136.00,900.00,3438.00] z=0
+[op] PushClipOp bounds=[600.00,3136.00,900.00,3150.00] z=0
+[op] PopClipOp bounds=[600.00,3136.00,900.00,3150.00] z=0
+[op] DrawTextOp bounds=[600.00,3136.00,668.70,3150.00] z=0
+[text] 'upper-roman' x=600.0 y=3147.0 size=12.0
+[op] PushClipOp bounds=[600.00,3150.00,900.00,3438.00] z=0
+[op] PopClipOp bounds=[600.00,3150.00,900.00,3438.00] z=0
+[op] PushClipOp bounds=[600.00,3150.00,900.00,3174.00] z=0
+[op] PopClipOp bounds=[600.00,3150.00,900.00,3174.00] z=0
+[op] DrawTextOp bounds=[600.00,3169.00,614.89,3187.00] z=0
+[text] '0.' x=600.0 y=3169.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3150.00,634.61,3174.00] z=0
+[text] '0' x=629.6 y=3169.0 size=9.0
+[op] PushClipOp bounds=[600.00,3174.00,900.00,3198.00] z=0
+[op] PopClipOp bounds=[600.00,3174.00,900.00,3198.00] z=0
+[op] DrawTextOp bounds=[600.00,3193.00,609.62,3211.00] z=0
+[text] 'I.' x=600.0 y=3193.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3174.00,634.61,3198.00] z=0
+[text] '1' x=629.6 y=3193.0 size=9.0
+[op] PushClipOp bounds=[600.00,3198.00,900.00,3222.00] z=0
+[op] PopClipOp bounds=[600.00,3198.00,900.00,3222.00] z=0
+[op] DrawTextOp bounds=[600.00,3217.00,621.80,3235.00] z=0
+[text] 'IV.' x=600.0 y=3217.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3198.00,634.61,3222.00] z=0
+[text] '4' x=629.6 y=3217.0 size=9.0
+[op] PushClipOp bounds=[600.00,3222.00,900.00,3246.00] z=0
+[op] PopClipOp bounds=[600.00,3222.00,900.00,3246.00] z=0
+[op] DrawTextOp bounds=[600.00,3241.00,621.23,3259.00] z=0
+[text] 'IX.' x=600.0 y=3241.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3222.00,634.61,3246.00] z=0
+[text] '9' x=629.6 y=3241.0 size=9.0
+[op] PushClipOp bounds=[600.00,3246.00,900.00,3270.00] z=0
+[op] PopClipOp bounds=[600.00,3246.00,900.00,3270.00] z=0
+[op] DrawTextOp bounds=[600.00,3265.00,633.41,3283.00] z=0
+[text] 'XIV.' x=600.0 y=3265.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3246.00,639.61,3270.00] z=0
+[text] '14' x=629.6 y=3265.0 size=9.0
+[op] PushClipOp bounds=[600.00,3270.00,900.00,3294.00] z=0
+[op] PopClipOp bounds=[600.00,3270.00,900.00,3294.00] z=0
+[op] DrawTextOp bounds=[600.00,3289.00,625.18,3307.00] z=0
+[text] 'XL.' x=600.0 y=3289.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3270.00,639.61,3294.00] z=0
+[text] '40' x=629.6 y=3289.0 size=9.0
+[op] PushClipOp bounds=[600.00,3294.00,900.00,3318.00] z=0
+[op] PopClipOp bounds=[600.00,3294.00,900.00,3318.00] z=0
+[op] DrawTextOp bounds=[600.00,3313.00,644.89,3331.00] z=0
+[text] 'XCIX.' x=600.0 y=3313.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3294.00,639.61,3318.00] z=0
+[text] '99' x=629.6 y=3313.0 size=9.0
+[op] PushClipOp bounds=[600.00,3318.00,900.00,3342.00] z=0
+[op] PopClipOp bounds=[600.00,3318.00,900.00,3342.00] z=0
+[op] DrawTextOp bounds=[600.00,3337.00,630.08,3355.00] z=0
+[text] 'CD.' x=600.0 y=3337.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3318.00,644.62,3342.00] z=0
+[text] '400' x=629.6 y=3337.0 size=9.0
+[op] PushClipOp bounds=[600.00,3342.00,900.00,3366.00] z=0
+[op] PopClipOp bounds=[600.00,3342.00,900.00,3366.00] z=0
+[op] DrawTextOp bounds=[600.00,3361.00,674.51,3379.00] z=0
+[text] 'CMXCIX.' x=600.0 y=3361.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3342.00,644.62,3366.00] z=0
+[text] '999' x=629.6 y=3361.0 size=9.0
+[op] PushClipOp bounds=[600.00,3366.00,900.00,3390.00] z=0
+[op] PopClipOp bounds=[600.00,3366.00,900.00,3390.00] z=0
+[op] DrawTextOp bounds=[600.00,3385.00,692.10,3403.00] z=0
+[text] 'MCMXCIX.' x=600.0 y=3385.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3366.00,649.62,3390.00] z=0
+[text] '1999' x=629.6 y=3385.0 size=9.0
+[op] PushClipOp bounds=[600.00,3390.00,900.00,3414.00] z=0
+[op] PopClipOp bounds=[600.00,3390.00,900.00,3414.00] z=0
+[op] DrawTextOp bounds=[600.00,3409.00,727.27,3427.00] z=0
+[text] 'MMMCMXCIX.' x=600.0 y=3409.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3390.00,649.62,3414.00] z=0
+[text] '3999' x=629.6 y=3409.0 size=9.0
+[op] PushClipOp bounds=[600.00,3414.00,900.00,3438.00] z=0
+[op] PopClipOp bounds=[600.00,3414.00,900.00,3438.00] z=0
+[op] DrawTextOp bounds=[600.00,3433.00,646.56,3451.00] z=0
+[text] '4000.' x=600.0 y=3433.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3414.00,649.62,3438.00] z=0
+[text] '4000' x=629.6 y=3433.0 size=9.0
+[op] PushClipOp bounds=[0.00,3438.00,300.00,3548.00] z=0
+[op] PopClipOp bounds=[0.00,3438.00,300.00,3548.00] z=0
+[op] PushClipOp bounds=[0.00,3438.00,300.00,3452.00] z=0
+[op] PopClipOp bounds=[0.00,3438.00,300.00,3452.00] z=0
+[op] DrawTextOp bounds=[0.00,3438.00,62.69,3452.00] z=0
+[text] 'lower-greek' x=0.0 y=3449.0 size=12.0
+[op] PushClipOp bounds=[0.00,3452.00,300.00,3548.00] z=0
+[op] PopClipOp bounds=[0.00,3452.00,300.00,3548.00] z=0
+[op] PushClipOp bounds=[0.00,3452.00,300.00,3476.00] z=0
+[op] PopClipOp bounds=[0.00,3452.00,300.00,3476.00] z=0
+[op] DrawTextOp bounds=[0.00,3471.00,16.32,3489.00] z=0
+[text] 'α.' x=0.0 y=3471.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3452.00,34.61,3476.00] z=0
+[text] '1' x=29.6 y=3471.0 size=9.0
+[op] PushClipOp bounds=[0.00,3476.00,300.00,3500.00] z=0
+[op] PopClipOp bounds=[0.00,3476.00,300.00,3500.00] z=0
+[op] DrawTextOp bounds=[0.00,3495.00,20.09,3513.00] z=0
+[text] 'ω.' x=0.0 y=3495.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3476.00,39.61,3500.00] z=0
+[text] '24' x=29.6 y=3495.0 size=9.0
+[op] PushClipOp bounds=[0.00,3500.00,300.00,3524.00] z=0
+[op] PopClipOp bounds=[0.00,3500.00,300.00,3524.00] z=0
+[op] DrawTextOp bounds=[0.00,3519.00,28.31,3537.00] z=0
+[text] 'αα.' x=0.0 y=3519.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3500.00,39.61,3524.00] z=0
+[text] '25' x=29.6 y=3519.0 size=9.0
+[op] PushClipOp bounds=[0.00,3524.00,300.00,3548.00] z=0
+[op] PopClipOp bounds=[0.00,3524.00,300.00,3548.00] z=0
+[op] DrawTextOp bounds=[0.00,3543.00,27.14,3561.00] z=0
+[text] 'αβ.' x=0.0 y=3543.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3524.00,39.61,3548.00] z=0
+[text] '26' x=29.6 y=3543.0 size=9.0
+[op] PushClipOp bounds=[300.00,3438.00,600.00,3548.00] z=0
+[op] PopClipOp bounds=[300.00,3438.00,600.00,3548.00] z=0
+[op] PushClipOp bounds=[300.00,3438.00,600.00,3452.00] z=0
+[op] PopClipOp bounds=[300.00,3438.00,600.00,3452.00] z=0
+[op] DrawTextOp bounds=[300.00,3438.00,364.71,3452.00] z=0
+[text] 'upper-greek' x=300.0 y=3449.0 size=12.0
+[op] PushClipOp bounds=[300.00,3452.00,600.00,3524.00] z=0
+[op] PopClipOp bounds=[300.00,3452.00,600.00,3524.00] z=0
+[op] PushClipOp bounds=[300.00,3452.00,600.00,3476.00] z=0
+[op] PopClipOp bounds=[300.00,3452.00,600.00,3476.00] z=0
+[op] DrawTextOp bounds=[300.00,3471.00,317.00,3489.00] z=0
+[text] 'Α.' x=300.0 y=3471.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3452.00,334.61,3476.00] z=0
+[text] '1' x=329.6 y=3471.0 size=9.0
+[op] PushClipOp bounds=[300.00,3476.00,600.00,3500.00] z=0
+[op] PopClipOp bounds=[300.00,3476.00,600.00,3500.00] z=0
+[op] DrawTextOp bounds=[300.00,3495.00,319.04,3513.00] z=0
+[text] 'Ω.' x=300.0 y=3495.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3476.00,339.61,3500.00] z=0
+[text] '24' x=329.6 y=3495.0 size=9.0
+[op] PushClipOp bounds=[300.00,3500.00,600.00,3524.00] z=0
+[op] PopClipOp bounds=[300.00,3500.00,600.00,3524.00] z=0
+[op] DrawTextOp bounds=[300.00,3519.00,329.66,3537.00] z=0
+[text] 'ΑΑ.' x=300.0 y=3519.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3500.00,339.61,3524.00] z=0
+[text] '25' x=329.6 y=3519.0 size=9.0
+[op] PushClipOp bounds=[600.00,3438.00,900.00,3548.00] z=0
+[op] PopClipOp bounds=[600.00,3438.00,900.00,3548.00] z=0
+[op] PushClipOp bounds=[600.00,3438.00,900.00,3452.00] z=0
+[op] PopClipOp bounds=[600.00,3438.00,900.00,3452.00] z=0
+[op] DrawTextOp bounds=[600.00,3438.00,654.69,3452.00] z=0
+[text] 'lower-latin' x=600.0 y=3449.0 size=12.0
+[op] PushClipOp bounds=[600.00,3452.00,900.00,3548.00] z=0
+[op] PopClipOp bounds=[600.00,3452.00,900.00,3548.00] z=0
+[op] PushClipOp bounds=[600.00,3452.00,900.00,3476.00] z=0
+[op] PopClipOp bounds=[600.00,3452.00,900.00,3476.00] z=0
+[op] DrawTextOp bounds=[600.00,3471.00,614.28,3489.00] z=0
+[text] 'a.' x=600.0 y=3471.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3452.00,634.61,3476.00] z=0
+[text] '1' x=629.6 y=3471.0 size=9.0
+[op] PushClipOp bounds=[600.00,3476.00,900.00,3500.00] z=0
+[op] PopClipOp bounds=[600.00,3476.00,900.00,3500.00] z=0
+[op] DrawTextOp bounds=[600.00,3495.00,613.18,3513.00] z=0
+[text] 'z.' x=600.0 y=3495.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3476.00,639.61,3500.00] z=0
+[text] '26' x=629.6 y=3495.0 size=9.0
+[op] PushClipOp bounds=[600.00,3500.00,900.00,3524.00] z=0
+[op] PopClipOp bounds=[600.00,3500.00,900.00,3524.00] z=0
+[op] DrawTextOp bounds=[600.00,3519.00,624.23,3537.00] z=0
+[text] 'aa.' x=600.0 y=3519.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3500.00,639.61,3524.00] z=0
+[text] '27' x=629.6 y=3519.0 size=9.0
+[op] PushClipOp bounds=[600.00,3524.00,900.00,3548.00] z=0
+[op] PopClipOp bounds=[600.00,3524.00,900.00,3548.00] z=0
+[op] DrawTextOp bounds=[600.00,3543.00,625.78,3561.00] z=0
+[text] 'ab.' x=600.0 y=3543.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3524.00,639.61,3548.00] z=0
+[text] '28' x=629.6 y=3543.0 size=9.0
+[op] PushClipOp bounds=[0.00,3548.00,300.00,3658.00] z=0
+[op] PopClipOp bounds=[0.00,3548.00,300.00,3658.00] z=0
+[op] PushClipOp bounds=[0.00,3548.00,300.00,3562.00] z=0
+[op] PopClipOp bounds=[0.00,3548.00,300.00,3562.00] z=0
+[op] DrawTextOp bounds=[0.00,3548.00,104.74,3562.00] z=0
+[text] 'canadian-aboriginal' x=0.0 y=3559.0 size=12.0
+[op] PushClipOp bounds=[0.00,3562.00,300.00,3658.00] z=0
+[op] PopClipOp bounds=[0.00,3562.00,300.00,3658.00] z=0
+[op] PushClipOp bounds=[0.00,3562.00,300.00,3586.00] z=0
+[op] PopClipOp bounds=[0.00,3562.00,300.00,3586.00] z=0
+[op] DrawTextOp bounds=[0.00,3581.00,15.95,3599.00] z=0
+[text] 'ᐴ.' x=0.0 y=3581.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3562.00,34.61,3586.00] z=0
+[text] '1' x=29.6 y=3581.0 size=9.0
+[op] PushClipOp bounds=[0.00,3586.00,300.00,3610.00] z=0
+[op] PopClipOp bounds=[0.00,3586.00,300.00,3610.00] z=0
+[op] DrawTextOp bounds=[0.00,3605.00,15.95,3623.00] z=0
+[text] 'ᐼ.' x=0.0 y=3605.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3586.00,34.61,3610.00] z=0
+[text] '9' x=29.6 y=3605.0 size=9.0
+[op] PushClipOp bounds=[0.00,3610.00,300.00,3634.00] z=0
+[op] PopClipOp bounds=[0.00,3610.00,300.00,3634.00] z=0
+[op] DrawTextOp bounds=[0.00,3629.00,27.57,3647.00] z=0
+[text] 'ᐴᐳ.' x=0.0 y=3629.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3610.00,39.61,3634.00] z=0
+[text] '10' x=29.6 y=3629.0 size=9.0
+[op] PushClipOp bounds=[0.00,3634.00,300.00,3658.00] z=0
+[op] PopClipOp bounds=[0.00,3634.00,300.00,3658.00] z=0
+[op] DrawTextOp bounds=[0.00,3653.00,27.57,3671.00] z=0
+[text] 'ᐴᐴ.' x=0.0 y=3653.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3634.00,39.61,3658.00] z=0
+[text] '11' x=29.6 y=3653.0 size=9.0
+[op] PushClipOp bounds=[300.00,3548.00,600.00,3658.00] z=0
+[op] PopClipOp bounds=[300.00,3548.00,600.00,3658.00] z=0
+[op] PushClipOp bounds=[300.00,3548.00,600.00,3562.00] z=0
+[op] PopClipOp bounds=[300.00,3548.00,600.00,3562.00] z=0
+[op] DrawTextOp bounds=[300.00,3548.00,338.01,3562.00] z=0
+[text] 'symbol' x=300.0 y=3559.0 size=12.0
+[op] PushClipOp bounds=[300.00,3562.00,600.00,3658.00] z=0
+[op] PopClipOp bounds=[300.00,3562.00,600.00,3658.00] z=0
+[op] PushClipOp bounds=[300.00,3562.00,600.00,3586.00] z=0
+[op] PopClipOp bounds=[300.00,3562.00,600.00,3586.00] z=0
+[op] DrawTextOp bounds=[300.00,3581.00,315.50,3599.00] z=0
+[text] '☐' x=300.0 y=3581.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3562.00,334.61,3586.00] z=0
+[text] '1' x=329.6 y=3581.0 size=9.0
+[op] PushClipOp bounds=[300.00,3586.00,600.00,3610.00] z=0
+[op] PopClipOp bounds=[300.00,3586.00,600.00,3610.00] z=0
+[op] DrawTextOp bounds=[300.00,3605.00,324.71,3623.00] z=0
+[text] '☑' x=300.0 y=3605.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3586.00,334.61,3610.00] z=0
+[text] '2' x=329.6 y=3605.0 size=9.0
+[op] PushClipOp bounds=[300.00,3610.00,600.00,3634.00] z=0
+[op] PopClipOp bounds=[300.00,3610.00,600.00,3634.00] z=0
+[op] DrawTextOp bounds=[300.00,3629.00,316.26,3647.00] z=0
+[text] '☙' x=300.0 y=3629.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3610.00,339.61,3634.00] z=0
+[text] '10' x=329.6 y=3629.0 size=9.0
+[op] PushClipOp bounds=[300.00,3634.00,600.00,3658.00] z=0
+[op] PopClipOp bounds=[300.00,3634.00,600.00,3658.00] z=0
+[op] DrawTextOp bounds=[300.00,3653.00,331.01,3671.00] z=0
+[text] '☐☐' x=300.0 y=3653.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3634.00,339.61,3658.00] z=0
+[text] '11' x=329.6 y=3653.0 size=9.0
+[op] PushClipOp bounds=[600.00,3548.00,900.00,3658.00] z=0
+[op] PopClipOp bounds=[600.00,3548.00,900.00,3658.00] z=0
+[op] PushClipOp bounds=[600.00,3548.00,900.00,3562.00] z=0
+[op] PopClipOp bounds=[600.00,3548.00,900.00,3562.00] z=0
+[op] DrawTextOp bounds=[600.00,3548.00,684.71,3562.00] z=0
+[text] 'disclosure-open' x=600.0 y=3559.0 size=12.0
+[op] PushClipOp bounds=[600.00,3562.00,900.00,3610.00] z=0
+[op] PopClipOp bounds=[600.00,3562.00,900.00,3610.00] z=0
+[op] PushClipOp bounds=[600.00,3562.00,900.00,3586.00] z=0
+[op] PopClipOp bounds=[600.00,3562.00,900.00,3586.00] z=0
+[op] DrawTextOp bounds=[600.00,3581.00,615.50,3599.00] z=0
+[text] '▾' x=600.0 y=3581.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3562.00,634.61,3586.00] z=0
+[text] '1' x=629.6 y=3581.0 size=9.0
+[op] PushClipOp bounds=[600.00,3586.00,900.00,3610.00] z=0
+[op] PopClipOp bounds=[600.00,3586.00,900.00,3610.00] z=0
+[op] DrawTextOp bounds=[600.00,3605.00,615.50,3623.00] z=0
+[text] '▾' x=600.0 y=3605.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3586.00,634.61,3610.00] z=0
+[text] '2' x=629.6 y=3605.0 size=9.0
+[op] PushClipOp bounds=[0.00,3658.00,300.00,3720.00] z=0
+[op] PopClipOp bounds=[0.00,3658.00,300.00,3720.00] z=0
+[op] PushClipOp bounds=[0.00,3658.00,300.00,3672.00] z=0
+[op] PopClipOp bounds=[0.00,3658.00,300.00,3672.00] z=0
+[op] DrawTextOp bounds=[0.00,3658.00,92.71,3672.00] z=0
+[text] 'disclosure-closed' x=0.0 y=3669.0 size=12.0
+[op] PushClipOp bounds=[0.00,3672.00,300.00,3720.00] z=0
+[op] PopClipOp bounds=[0.00,3672.00,300.00,3720.00] z=0
+[op] PushClipOp bounds=[0.00,3672.00,300.00,3696.00] z=0
+[op] PopClipOp bounds=[0.00,3672.00,300.00,3696.00] z=0
+[op] DrawTextOp bounds=[0.00,3691.00,15.50,3709.00] z=0
+[text] '▸' x=0.0 y=3691.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3672.00,34.61,3696.00] z=0
+[text] '1' x=29.6 y=3691.0 size=9.0
+[op] PushClipOp bounds=[0.00,3696.00,300.00,3720.00] z=0
+[op] PopClipOp bounds=[0.00,3696.00,300.00,3720.00] z=0
+[op] DrawTextOp bounds=[0.00,3715.00,15.50,3733.00] z=0
+[text] '▸' x=0.0 y=3715.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3696.00,34.61,3720.00] z=0
+[text] '2' x=29.6 y=3715.0 size=9.0
+[op] PushClipOp bounds=[300.00,3658.00,600.00,3720.00] z=0
+[op] PopClipOp bounds=[300.00,3658.00,600.00,3720.00] z=0
+[op] PushClipOp bounds=[300.00,3658.00,600.00,3672.00] z=0
+[op] PopClipOp bounds=[300.00,3658.00,600.00,3672.00] z=0
+[op] DrawTextOp bounds=[300.00,3658.00,328.00,3672.00] z=0
+[text] 'circle' x=300.0 y=3669.0 size=12.0
+[op] PushClipOp bounds=[300.00,3672.00,600.00,3720.00] z=0
+[op] PopClipOp bounds=[300.00,3672.00,600.00,3720.00] z=0
+[op] PushClipOp bounds=[300.00,3672.00,600.00,3696.00] z=0
+[op] PopClipOp bounds=[300.00,3672.00,600.00,3696.00] z=0
+[op] DrawTextOp bounds=[300.00,3691.00,306.93,3709.00] z=0
+[text] '◦' x=300.0 y=3691.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3672.00,334.61,3696.00] z=0
+[text] '1' x=329.6 y=3691.0 size=9.0
+[op] PushClipOp bounds=[300.00,3696.00,600.00,3720.00] z=0
+[op] PopClipOp bounds=[300.00,3696.00,600.00,3720.00] z=0
+[op] DrawTextOp bounds=[300.00,3715.00,306.93,3733.00] z=0
+[text] '◦' x=300.0 y=3715.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3696.00,334.61,3720.00] z=0
+[text] '2' x=329.6 y=3715.0 size=9.0
+[op] PushClipOp bounds=[600.00,3658.00,900.00,3720.00] z=0
+[op] PopClipOp bounds=[600.00,3658.00,900.00,3720.00] z=0
+[op] PushClipOp bounds=[600.00,3658.00,900.00,3672.00] z=0
+[op] PopClipOp bounds=[600.00,3658.00,900.00,3672.00] z=0
+[op] DrawTextOp bounds=[600.00,3658.00,636.69,3672.00] z=0
+[text] 'square' x=600.0 y=3669.0 size=12.0
+[op] PushClipOp bounds=[600.00,3672.00,900.00,3720.00] z=0
+[op] PopClipOp bounds=[600.00,3672.00,900.00,3720.00] z=0
+[op] PushClipOp bounds=[600.00,3672.00,900.00,3696.00] z=0
+[op] PopClipOp bounds=[600.00,3672.00,900.00,3696.00] z=0
+[op] DrawTextOp bounds=[600.00,3691.00,610.87,3709.00] z=0
+[text] '■' x=600.0 y=3691.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3672.00,634.61,3696.00] z=0
+[text] '1' x=629.6 y=3691.0 size=9.0
+[op] PushClipOp bounds=[600.00,3696.00,900.00,3720.00] z=0
+[op] PopClipOp bounds=[600.00,3696.00,900.00,3720.00] z=0
+[op] DrawTextOp bounds=[600.00,3715.00,610.87,3733.00] z=0
+[text] '■' x=600.0 y=3715.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3696.00,634.61,3720.00] z=0
+[text] '2' x=629.6 y=3715.0 size=9.0
+[op] PushClipOp bounds=[0.00,3720.00,300.00,3830.00] z=0
+[op] PopClipOp bounds=[0.00,3720.00,300.00,3830.00] z=0
+[op] PushClipOp bounds=[0.00,3720.00,300.00,3734.00] z=0
+[op] PopClipOp bounds=[0.00,3720.00,300.00,3734.00] z=0
+[op] DrawTextOp bounds=[0.00,3720.00,59.38,3734.00] z=0
+[text] 'devanagari' x=0.0 y=3731.0 size=12.0
+[op] PushClipOp bounds=[0.00,3734.00,300.00,3830.00] z=0
+[op] PopClipOp bounds=[0.00,3734.00,300.00,3830.00] z=0
+[op] PushClipOp bounds=[0.00,3734.00,300.00,3758.00] z=0
+[op] PopClipOp bounds=[0.00,3734.00,300.00,3758.00] z=0
+[op] DrawTextOp bounds=[0.00,3753.00,13.67,3771.00] z=0
+[text] '०.' x=0.0 y=3753.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3734.00,34.61,3758.00] z=0
+[text] '0' x=29.6 y=3753.0 size=9.0
+[op] PushClipOp bounds=[0.00,3758.00,300.00,3782.00] z=0
+[op] PopClipOp bounds=[0.00,3758.00,300.00,3782.00] z=0
+[op] DrawTextOp bounds=[0.00,3777.00,12.63,3795.00] z=0
+[text] '१.' x=0.0 y=3777.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3758.00,34.61,3782.00] z=0
+[text] '1' x=29.6 y=3777.0 size=9.0
+[op] PushClipOp bounds=[0.00,3782.00,300.00,3806.00] z=0
+[op] PopClipOp bounds=[0.00,3782.00,300.00,3806.00] z=0
+[op] DrawTextOp bounds=[0.00,3801.00,21.96,3819.00] z=0
+[text] '१०.' x=0.0 y=3801.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3782.00,39.61,3806.00] z=0
+[text] '10' x=29.6 y=3801.0 size=9.0
+[op] PushClipOp bounds=[0.00,3806.00,300.00,3830.00] z=0
+[op] PopClipOp bounds=[0.00,3806.00,300.00,3830.00] z=0
+[op] DrawTextOp bounds=[0.00,3825.00,31.30,3843.00] z=0
+[text] '१००.' x=0.0 y=3825.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3806.00,44.62,3830.00] z=0
+[text] '100' x=29.6 y=3825.0 size=9.0
+[op] PushClipOp bounds=[300.00,3720.00,600.00,3830.00] z=0
+[op] PopClipOp bounds=[300.00,3720.00,600.00,3830.00] z=0
+[op] PushClipOp bounds=[300.00,3720.00,600.00,3734.00] z=0
+[op] PopClipOp bounds=[300.00,3720.00,600.00,3734.00] z=0
+[op] DrawTextOp bounds=[300.00,3720.00,339.36,3734.00] z=0
+[text] 'gujarati' x=300.0 y=3731.0 size=12.0
+[op] PushClipOp bounds=[300.00,3734.00,600.00,3830.00] z=0
+[op] PopClipOp bounds=[300.00,3734.00,600.00,3830.00] z=0
+[op] PushClipOp bounds=[300.00,3734.00,600.00,3758.00] z=0
+[op] PopClipOp bounds=[300.00,3734.00,600.00,3758.00] z=0
+[op] DrawTextOp bounds=[300.00,3753.00,313.88,3771.00] z=0
+[text] '૦.' x=300.0 y=3753.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3734.00,334.61,3758.00] z=0
+[text] '0' x=329.6 y=3753.0 size=9.0
+[op] PushClipOp bounds=[300.00,3758.00,600.00,3782.00] z=0
+[op] PopClipOp bounds=[300.00,3758.00,600.00,3782.00] z=0
+[op] DrawTextOp bounds=[300.00,3777.00,312.65,3795.00] z=0
+[text] '૧.' x=300.0 y=3777.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3758.00,334.61,3782.00] z=0
+[text] '1' x=329.6 y=3777.0 size=9.0
+[op] PushClipOp bounds=[300.00,3782.00,600.00,3806.00] z=0
+[op] PopClipOp bounds=[300.00,3782.00,600.00,3806.00] z=0
+[op] DrawTextOp bounds=[300.00,3801.00,322.19,3819.00] z=0
+[text] '૧૦.' x=300.0 y=3801.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3782.00,339.61,3806.00] z=0
+[text] '10' x=329.6 y=3801.0 size=9.0
+[op] PushClipOp bounds=[300.00,3806.00,600.00,3830.00] z=0
+[op] PopClipOp bounds=[300.00,3806.00,600.00,3830.00] z=0
+[op] DrawTextOp bounds=[300.00,3825.00,331.74,3843.00] z=0
+[text] '૧૦૦.' x=300.0 y=3825.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3806.00,344.62,3830.00] z=0
+[text] '100' x=329.6 y=3825.0 size=9.0
+[op] PushClipOp bounds=[600.00,3720.00,900.00,3830.00] z=0
+[op] PopClipOp bounds=[600.00,3720.00,900.00,3830.00] z=0
+[op] PushClipOp bounds=[600.00,3720.00,900.00,3734.00] z=0
+[op] PopClipOp bounds=[600.00,3720.00,900.00,3734.00] z=0
+[op] DrawTextOp bounds=[600.00,3720.00,649.35,3734.00] z=0
+[text] 'gurmukhi' x=600.0 y=3731.0 size=12.0
+[op] PushClipOp bounds=[600.00,3734.00,900.00,3830.00] z=0
+[op] PopClipOp bounds=[600.00,3734.00,900.00,3830.00] z=0
+[op] PushClipOp bounds=[600.00,3734.00,900.00,3758.00] z=0
+[op] PopClipOp bounds=[600.00,3734.00,900.00,3758.00] z=0
+[op] DrawTextOp bounds=[600.00,3753.00,614.49,3771.00] z=0
+[text] '੦.' x=600.0 y=3753.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3734.00,634.61,3758.00] z=0
+[text] '0' x=629.6 y=3753.0 size=9.0
+[op] PushClipOp bounds=[600.00,3758.00,900.00,3782.00] z=0
+[op] PopClipOp bounds=[600.00,3758.00,900.00,3782.00] z=0
+[op] DrawTextOp bounds=[600.00,3777.00,614.49,3795.00] z=0
+[text] '੧.' x=600.0 y=3777.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3758.00,634.61,3782.00] z=0
+[text] '1' x=629.6 y=3777.0 size=9.0
+[op] PushClipOp bounds=[600.00,3782.00,900.00,3806.00] z=0
+[op] PopClipOp bounds=[600.00,3782.00,900.00,3806.00] z=0
+[op] DrawTextOp bounds=[600.00,3801.00,624.65,3819.00] z=0
+[text] '੧੦.' x=600.0 y=3801.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3782.00,639.61,3806.00] z=0
+[text] '10' x=629.6 y=3801.0 size=9.0
+[op] PushClipOp bounds=[600.00,3806.00,900.00,3830.00] z=0
+[op] PopClipOp bounds=[600.00,3806.00,900.00,3830.00] z=0
+[op] DrawTextOp bounds=[600.00,3825.00,634.81,3843.00] z=0
+[text] '੧੦੦.' x=600.0 y=3825.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3806.00,644.62,3830.00] z=0
+[text] '100' x=629.6 y=3825.0 size=9.0
+[op] PushClipOp bounds=[0.00,3830.00,300.00,3940.00] z=0
+[op] PopClipOp bounds=[0.00,3830.00,300.00,3940.00] z=0
+[op] PushClipOp bounds=[0.00,3830.00,300.00,3844.00] z=0
+[op] PopClipOp bounds=[0.00,3830.00,300.00,3844.00] z=0
+[op] DrawTextOp bounds=[0.00,3830.00,46.04,3844.00] z=0
+[text] 'kannada' x=0.0 y=3841.0 size=12.0
+[op] PushClipOp bounds=[0.00,3844.00,300.00,3940.00] z=0
+[op] PopClipOp bounds=[0.00,3844.00,300.00,3940.00] z=0
+[op] PushClipOp bounds=[0.00,3844.00,300.00,3868.00] z=0
+[op] PopClipOp bounds=[0.00,3844.00,300.00,3868.00] z=0
+[op] DrawTextOp bounds=[0.00,3863.00,16.77,3881.00] z=0
+[text] '೦.' x=0.0 y=3863.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3844.00,34.61,3868.00] z=0
+[text] '0' x=29.6 y=3863.0 size=9.0
+[op] PushClipOp bounds=[0.00,3868.00,300.00,3892.00] z=0
+[op] PopClipOp bounds=[0.00,3868.00,300.00,3892.00] z=0
+[op] DrawTextOp bounds=[0.00,3887.00,16.96,3905.00] z=0
+[text] '೧.' x=0.0 y=3887.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3868.00,34.61,3892.00] z=0
+[text] '1' x=29.6 y=3887.0 size=9.0
+[op] PushClipOp bounds=[0.00,3892.00,300.00,3916.00] z=0
+[op] PopClipOp bounds=[0.00,3892.00,300.00,3916.00] z=0
+[op] DrawTextOp bounds=[0.00,3911.00,29.40,3929.00] z=0
+[text] '೧೦.' x=0.0 y=3911.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3892.00,39.61,3916.00] z=0
+[text] '10' x=29.6 y=3911.0 size=9.0
+[op] PushClipOp bounds=[0.00,3916.00,300.00,3940.00] z=0
+[op] PopClipOp bounds=[0.00,3916.00,300.00,3940.00] z=0
+[op] DrawTextOp bounds=[0.00,3935.00,41.84,3953.00] z=0
+[text] '೧೦೦.' x=0.0 y=3935.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3916.00,44.62,3940.00] z=0
+[text] '100' x=29.6 y=3935.0 size=9.0
+[op] PushClipOp bounds=[300.00,3830.00,600.00,3940.00] z=0
+[op] PopClipOp bounds=[300.00,3830.00,600.00,3940.00] z=0
+[op] PushClipOp bounds=[300.00,3830.00,600.00,3844.00] z=0
+[op] PopClipOp bounds=[300.00,3830.00,600.00,3844.00] z=0
+[op] DrawTextOp bounds=[300.00,3830.00,358.02,3844.00] z=0
+[text] 'malayalam' x=300.0 y=3841.0 size=12.0
+[op] PushClipOp bounds=[300.00,3844.00,600.00,3940.00] z=0
+[op] PopClipOp bounds=[300.00,3844.00,600.00,3940.00] z=0
+[op] PushClipOp bounds=[300.00,3844.00,600.00,3868.00] z=0
+[op] PopClipOp bounds=[300.00,3844.00,600.00,3868.00] z=0
+[op] DrawTextOp bounds=[300.00,3863.00,313.95,3881.00] z=0
+[text] '൦.' x=300.0 y=3863.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3844.00,334.61,3868.00] z=0
+[text] '0' x=329.6 y=3863.0 size=9.0
+[op] PushClipOp bounds=[300.00,3868.00,600.00,3892.00] z=0
+[op] PopClipOp bounds=[300.00,3868.00,600.00,3892.00] z=0
+[op] DrawTextOp bounds=[300.00,3887.00,320.93,3905.00] z=0
+[text] '൧.' x=300.0 y=3887.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3868.00,334.61,3892.00] z=0
+[text] '1' x=329.6 y=3887.0 size=9.0
+[op] PushClipOp bounds=[300.00,3892.00,600.00,3916.00] z=0
+[op] PopClipOp bounds=[300.00,3892.00,600.00,3916.00] z=0
+[op] DrawTextOp bounds=[300.00,3911.00,330.54,3929.00] z=0
+[text] '൧൦.' x=300.0 y=3911.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3892.00,339.61,3916.00] z=0
+[text] '10' x=329.6 y=3911.0 size=9.0
+[op] PushClipOp bounds=[300.00,3916.00,600.00,3940.00] z=0
+[op] PopClipOp bounds=[300.00,3916.00,600.00,3940.00] z=0
+[op] DrawTextOp bounds=[300.00,3935.00,340.16,3953.00] z=0
+[text] '൧൦൦.' x=300.0 y=3935.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3916.00,344.62,3940.00] z=0
+[text] '100' x=329.6 y=3935.0 size=9.0
+[op] PushClipOp bounds=[600.00,3830.00,900.00,3940.00] z=0
+[op] PopClipOp bounds=[600.00,3830.00,900.00,3940.00] z=0
+[op] PushClipOp bounds=[600.00,3830.00,900.00,3844.00] z=0
+[op] PopClipOp bounds=[600.00,3830.00,900.00,3844.00] z=0
+[op] DrawTextOp bounds=[600.00,3830.00,626.01,3844.00] z=0
+[text] 'oriya' x=600.0 y=3841.0 size=12.0
+[op] PushClipOp bounds=[600.00,3844.00,900.00,3940.00] z=0
+[op] PopClipOp bounds=[600.00,3844.00,900.00,3940.00] z=0
+[op] PushClipOp bounds=[600.00,3844.00,900.00,3868.00] z=0
+[op] PopClipOp bounds=[600.00,3844.00,900.00,3868.00] z=0
+[op] DrawTextOp bounds=[600.00,3863.00,615.17,3881.00] z=0
+[text] '୦.' x=600.0 y=3863.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3844.00,634.61,3868.00] z=0
+[text] '0' x=629.6 y=3863.0 size=9.0
+[op] PushClipOp bounds=[600.00,3868.00,900.00,3892.00] z=0
+[op] PopClipOp bounds=[600.00,3868.00,900.00,3892.00] z=0
+[op] DrawTextOp bounds=[600.00,3887.00,613.52,3905.00] z=0
+[text] '୧.' x=600.0 y=3887.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3868.00,634.61,3892.00] z=0
+[text] '1' x=629.6 y=3887.0 size=9.0
+[op] PushClipOp bounds=[600.00,3892.00,900.00,3916.00] z=0
+[op] PopClipOp bounds=[600.00,3892.00,900.00,3916.00] z=0
+[op] DrawTextOp bounds=[600.00,3911.00,624.35,3929.00] z=0
+[text] '୧୦.' x=600.0 y=3911.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3892.00,639.61,3916.00] z=0
+[text] '10' x=629.6 y=3911.0 size=9.0
+[op] PushClipOp bounds=[600.00,3916.00,900.00,3940.00] z=0
+[op] PopClipOp bounds=[600.00,3916.00,900.00,3940.00] z=0
+[op] DrawTextOp bounds=[600.00,3935.00,635.19,3953.00] z=0
+[text] '୧୦୦.' x=600.0 y=3935.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3916.00,644.62,3940.00] z=0
+[text] '100' x=629.6 y=3935.0 size=9.0
+[op] PushClipOp bounds=[0.00,3940.00,300.00,4050.00] z=0
+[op] PopClipOp bounds=[0.00,3940.00,300.00,4050.00] z=0
+[op] PushClipOp bounds=[0.00,3940.00,300.00,3954.00] z=0
+[op] PopClipOp bounds=[0.00,3940.00,300.00,3954.00] z=0
+[op] DrawTextOp bounds=[0.00,3940.00,36.03,3954.00] z=0
+[text] 'tibetan' x=0.0 y=3951.0 size=12.0
+[op] PushClipOp bounds=[0.00,3954.00,300.00,4050.00] z=0
+[op] PopClipOp bounds=[0.00,3954.00,300.00,4050.00] z=0
+[op] PushClipOp bounds=[0.00,3954.00,300.00,3978.00] z=0
+[op] PopClipOp bounds=[0.00,3954.00,300.00,3978.00] z=0
+[op] DrawTextOp bounds=[0.00,3973.00,14.09,3991.00] z=0
+[text] '༠.' x=0.0 y=3973.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3954.00,34.61,3978.00] z=0
+[text] '0' x=29.6 y=3973.0 size=9.0
+[op] PushClipOp bounds=[0.00,3978.00,300.00,4002.00] z=0
+[op] PopClipOp bounds=[0.00,3978.00,300.00,4002.00] z=0
+[op] DrawTextOp bounds=[0.00,3997.00,13.47,4015.00] z=0
+[text] '༡.' x=0.0 y=3997.0 size=18.0
+[op] DrawTextOp bounds=[29.60,3978.00,34.61,4002.00] z=0
+[text] '1' x=29.6 y=3997.0 size=9.0
+[op] PushClipOp bounds=[0.00,4002.00,300.00,4026.00] z=0
+[op] PopClipOp bounds=[0.00,4002.00,300.00,4026.00] z=0
+[op] DrawTextOp bounds=[0.00,4021.00,23.23,4039.00] z=0
+[text] '༡༠.' x=0.0 y=4021.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4002.00,39.61,4026.00] z=0
+[text] '10' x=29.6 y=4021.0 size=9.0
+[op] PushClipOp bounds=[0.00,4026.00,300.00,4050.00] z=0
+[op] PopClipOp bounds=[0.00,4026.00,300.00,4050.00] z=0
+[op] DrawTextOp bounds=[0.00,4045.00,32.99,4063.00] z=0
+[text] '༡༠༠.' x=0.0 y=4045.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4026.00,44.62,4050.00] z=0
+[text] '100' x=29.6 y=4045.0 size=9.0
+[op] PushClipOp bounds=[300.00,3940.00,600.00,4050.00] z=0
+[op] PopClipOp bounds=[300.00,3940.00,600.00,4050.00] z=0
+[op] PushClipOp bounds=[300.00,3940.00,600.00,3954.00] z=0
+[op] PopClipOp bounds=[300.00,3940.00,600.00,3954.00] z=0
+[op] DrawTextOp bounds=[300.00,3940.00,319.35,3954.00] z=0
+[text] 'thai' x=300.0 y=3951.0 size=12.0
+[op] PushClipOp bounds=[300.00,3954.00,600.00,4050.00] z=0
+[op] PopClipOp bounds=[300.00,3954.00,600.00,4050.00] z=0
+[op] PushClipOp bounds=[300.00,3954.00,600.00,3978.00] z=0
+[op] PopClipOp bounds=[300.00,3954.00,600.00,3978.00] z=0
+[op] DrawTextOp bounds=[300.00,3973.00,317.10,3991.00] z=0
+[text] '๐.' x=300.0 y=3973.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3954.00,334.61,3978.00] z=0
+[text] '0' x=329.6 y=3973.0 size=9.0
+[op] PushClipOp bounds=[300.00,3978.00,600.00,4002.00] z=0
+[op] PopClipOp bounds=[300.00,3978.00,600.00,4002.00] z=0
+[op] DrawTextOp bounds=[300.00,3997.00,318.16,4015.00] z=0
+[text] '๑.' x=300.0 y=3997.0 size=18.0
+[op] DrawTextOp bounds=[329.60,3978.00,334.61,4002.00] z=0
+[text] '1' x=329.6 y=3997.0 size=9.0
+[op] PushClipOp bounds=[300.00,4002.00,600.00,4026.00] z=0
+[op] PopClipOp bounds=[300.00,4002.00,600.00,4026.00] z=0
+[op] DrawTextOp bounds=[300.00,4021.00,330.93,4039.00] z=0
+[text] '๑๐.' x=300.0 y=4021.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4002.00,339.61,4026.00] z=0
+[text] '10' x=329.6 y=4021.0 size=9.0
+[op] PushClipOp bounds=[300.00,4026.00,600.00,4050.00] z=0
+[op] PopClipOp bounds=[300.00,4026.00,600.00,4050.00] z=0
+[op] DrawTextOp bounds=[300.00,4045.00,343.70,4063.00] z=0
+[text] '๑๐๐.' x=300.0 y=4045.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4026.00,344.62,4050.00] z=0
+[text] '100' x=329.6 y=4045.0 size=9.0
+[op] PushClipOp bounds=[600.00,3940.00,900.00,4050.00] z=0
+[op] PopClipOp bounds=[600.00,3940.00,900.00,4050.00] z=0
+[op] PushClipOp bounds=[600.00,3940.00,900.00,3954.00] z=0
+[op] PopClipOp bounds=[600.00,3940.00,900.00,3954.00] z=0
+[op] DrawTextOp bounds=[600.00,3940.00,616.01,3954.00] z=0
+[text] 'lao' x=600.0 y=3951.0 size=12.0
+[op] PushClipOp bounds=[600.00,3954.00,900.00,4050.00] z=0
+[op] PopClipOp bounds=[600.00,3954.00,900.00,4050.00] z=0
+[op] PushClipOp bounds=[600.00,3954.00,900.00,3978.00] z=0
+[op] PopClipOp bounds=[600.00,3954.00,900.00,3978.00] z=0
+[op] DrawTextOp bounds=[600.00,3973.00,617.19,3991.00] z=0
+[text] '໐.' x=600.0 y=3973.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3954.00,634.61,3978.00] z=0
+[text] '0' x=629.6 y=3973.0 size=9.0
+[op] PushClipOp bounds=[600.00,3978.00,900.00,4002.00] z=0
+[op] PopClipOp bounds=[600.00,3978.00,900.00,4002.00] z=0
+[op] DrawTextOp bounds=[600.00,3997.00,617.16,4015.00] z=0
+[text] '໑.' x=600.0 y=3997.0 size=18.0
+[op] DrawTextOp bounds=[629.60,3978.00,634.61,4002.00] z=0
+[text] '1' x=629.6 y=3997.0 size=9.0
+[op] PushClipOp bounds=[600.00,4002.00,900.00,4026.00] z=0
+[op] PopClipOp bounds=[600.00,4002.00,900.00,4026.00] z=0
+[op] DrawTextOp bounds=[600.00,4021.00,630.01,4039.00] z=0
+[text] '໑໐.' x=600.0 y=4021.0 size=18.0
+[op] DrawTextOp bounds=[629.60,4002.00,639.61,4026.00] z=0
+[text] '10' x=629.6 y=4021.0 size=9.0
+[op] PushClipOp bounds=[600.00,4026.00,900.00,4050.00] z=0
+[op] PopClipOp bounds=[600.00,4026.00,900.00,4050.00] z=0
+[op] DrawTextOp bounds=[600.00,4045.00,642.87,4063.00] z=0
+[text] '໑໐໐.' x=600.0 y=4045.0 size=18.0
+[op] DrawTextOp bounds=[629.60,4026.00,644.62,4050.00] z=0
+[text] '100' x=629.6 y=4045.0 size=9.0
+[op] PushClipOp bounds=[0.00,4050.00,300.00,4160.00] z=0
+[op] PopClipOp bounds=[0.00,4050.00,300.00,4160.00] z=0
+[op] PushClipOp bounds=[0.00,4050.00,300.00,4064.00] z=0
+[op] PopClipOp bounds=[0.00,4050.00,300.00,4064.00] z=0
+[op] DrawTextOp bounds=[0.00,4050.00,33.34,4064.00] z=0
+[text] 'khmer' x=0.0 y=4061.0 size=12.0
+[op] PushClipOp bounds=[0.00,4064.00,300.00,4160.00] z=0
+[op] PopClipOp bounds=[0.00,4064.00,300.00,4160.00] z=0
+[op] PushClipOp bounds=[0.00,4064.00,300.00,4088.00] z=0
+[op] PopClipOp bounds=[0.00,4064.00,300.00,4088.00] z=0
+[op] DrawTextOp bounds=[0.00,4083.00,14.92,4101.00] z=0
+[text] '០.' x=0.0 y=4083.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4064.00,34.61,4088.00] z=0
+[text] '0' x=29.6 y=4083.0 size=9.0
+[op] PushClipOp bounds=[0.00,4088.00,300.00,4112.00] z=0
+[op] PopClipOp bounds=[0.00,4088.00,300.00,4112.00] z=0
+[op] DrawTextOp bounds=[0.00,4107.00,15.24,4125.00] z=0
+[text] '១.' x=0.0 y=4107.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4088.00,34.61,4112.00] z=0
+[text] '1' x=29.6 y=4107.0 size=9.0
+[op] PushClipOp bounds=[0.00,4112.00,300.00,4136.00] z=0
+[op] PopClipOp bounds=[0.00,4112.00,300.00,4136.00] z=0
+[op] DrawTextOp bounds=[0.00,4131.00,25.82,4149.00] z=0
+[text] '១០.' x=0.0 y=4131.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4112.00,39.61,4136.00] z=0
+[text] '10' x=29.6 y=4131.0 size=9.0
+[op] PushClipOp bounds=[0.00,4136.00,300.00,4160.00] z=0
+[op] PopClipOp bounds=[0.00,4136.00,300.00,4160.00] z=0
+[op] DrawTextOp bounds=[0.00,4155.00,36.40,4173.00] z=0
+[text] '១០០.' x=0.0 y=4155.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4136.00,44.62,4160.00] z=0
+[text] '100' x=29.6 y=4155.0 size=9.0
+[op] PushClipOp bounds=[300.00,4050.00,600.00,4160.00] z=0
+[op] PopClipOp bounds=[300.00,4050.00,600.00,4160.00] z=0
+[op] PushClipOp bounds=[300.00,4050.00,600.00,4064.00] z=0
+[op] PopClipOp bounds=[300.00,4050.00,600.00,4064.00] z=0
+[op] DrawTextOp bounds=[300.00,4050.00,350.01,4064.00] z=0
+[text] 'myanmar' x=300.0 y=4061.0 size=12.0
+[op] PushClipOp bounds=[300.00,4064.00,600.00,4160.00] z=0
+[op] PopClipOp bounds=[300.00,4064.00,600.00,4160.00] z=0
+[op] PushClipOp bounds=[300.00,4064.00,600.00,4088.00] z=0
+[op] PopClipOp bounds=[300.00,4064.00,600.00,4088.00] z=0
+[op] DrawTextOp bounds=[300.00,4083.00,314.49,4101.00] z=0
+[text] '၀.' x=300.0 y=4083.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4064.00,334.61,4088.00] z=0
+[text] '0' x=329.6 y=4083.0 size=9.0
+[op] PushClipOp bounds=[300.00,4088.00,600.00,4112.00] z=0
+[op] PopClipOp bounds=[300.00,4088.00,600.00,4112.00] z=0
+[op] DrawTextOp bounds=[300.00,4107.00,314.15,4125.00] z=0
+[text] '၁.' x=300.0 y=4107.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4088.00,334.61,4112.00] z=0
+[text] '1' x=329.6 y=4107.0 size=9.0
+[op] PushClipOp bounds=[300.00,4112.00,600.00,4136.00] z=0
+[op] PopClipOp bounds=[300.00,4112.00,600.00,4136.00] z=0
+[op] DrawTextOp bounds=[300.00,4131.00,324.31,4149.00] z=0
+[text] '၁၀.' x=300.0 y=4131.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4112.00,339.61,4136.00] z=0
+[text] '10' x=329.6 y=4131.0 size=9.0
+[op] PushClipOp bounds=[300.00,4136.00,600.00,4160.00] z=0
+[op] PopClipOp bounds=[300.00,4136.00,600.00,4160.00] z=0
+[op] DrawTextOp bounds=[300.00,4155.00,334.47,4173.00] z=0
+[text] '၁၀၀.' x=300.0 y=4155.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4136.00,344.62,4160.00] z=0
+[text] '100' x=329.6 y=4155.0 size=9.0
+[op] PushClipOp bounds=[600.00,4050.00,900.00,4160.00] z=0
+[op] PopClipOp bounds=[600.00,4050.00,900.00,4160.00] z=0
+[op] PushClipOp bounds=[600.00,4050.00,900.00,4064.00] z=0
+[op] PopClipOp bounds=[600.00,4050.00,900.00,4064.00] z=0
+[op] DrawTextOp bounds=[600.00,4050.00,655.37,4064.00] z=0
+[text] 'mongolian' x=600.0 y=4061.0 size=12.0
+[op] PushClipOp bounds=[600.00,4064.00,900.00,4160.00] z=0
+[op] PopClipOp bounds=[600.00,4064.00,900.00,4160.00] z=0
+[op] PushClipOp bounds=[600.00,4064.00,900.00,4088.00] z=0
+[op] PopClipOp bounds=[600.00,4064.00,900.00,4088.00] z=0
+[op] DrawTextOp bounds=[600.00,4083.00,613.56,4101.00] z=0
+[text] '᠐.' x=600.0 y=4083.0 size=18.0
+[op] DrawTextOp bounds=[629.60,4064.00,634.61,4088.00] z=0
+[text] '0' x=629.6 y=4083.0 size=9.0
+[op] PushClipOp bounds=[600.00,4088.00,900.00,4112.00] z=0
+[op] PopClipOp bounds=[600.00,4088.00,900.00,4112.00] z=0
+[op] DrawTextOp bounds=[600.00,4107.00,612.88,4125.00] z=0
+[text] '᠑.' x=600.0 y=4107.0 size=18.0
+[op] DrawTextOp bounds=[629.60,4088.00,634.61,4112.00] z=0
+[text] '1' x=629.6 y=4107.0 size=9.0
+[op] PushClipOp bounds=[600.00,4112.00,900.00,4136.00] z=0
+[op] PopClipOp bounds=[600.00,4112.00,900.00,4136.00] z=0
+[op] DrawTextOp bounds=[600.00,4131.00,622.10,4149.00] z=0
+[text] '᠑᠐.' x=600.0 y=4131.0 size=18.0
+[op] DrawTextOp bounds=[629.60,4112.00,639.61,4136.00] z=0
+[text] '10' x=629.6 y=4131.0 size=9.0
+[op] PushClipOp bounds=[600.00,4136.00,900.00,4160.00] z=0
+[op] PopClipOp bounds=[600.00,4136.00,900.00,4160.00] z=0
+[op] DrawTextOp bounds=[600.00,4155.00,631.33,4173.00] z=0
+[text] '᠑᠐᠐.' x=600.0 y=4155.0 size=18.0
+[op] DrawTextOp bounds=[629.60,4136.00,644.62,4160.00] z=0
+[text] '100' x=629.6 y=4155.0 size=9.0
+[op] PushClipOp bounds=[0.00,4160.00,300.00,4270.00] z=0
+[op] PopClipOp bounds=[0.00,4160.00,300.00,4270.00] z=0
+[op] PushClipOp bounds=[0.00,4160.00,300.00,4174.00] z=0
+[op] PopClipOp bounds=[0.00,4160.00,300.00,4174.00] z=0
+[op] DrawTextOp bounds=[0.00,4160.00,39.36,4174.00] z=0
+[text] 'persian' x=0.0 y=4171.0 size=12.0
+[op] PushClipOp bounds=[0.00,4174.00,300.00,4270.00] z=0
+[op] PopClipOp bounds=[0.00,4174.00,300.00,4270.00] z=0
+[op] PushClipOp bounds=[0.00,4174.00,300.00,4198.00] z=0
+[op] PopClipOp bounds=[0.00,4174.00,300.00,4198.00] z=0
+[op] DrawTextOp bounds=[0.00,4193.00,11.84,4211.00] z=0
+[text] '۰.' x=0.0 y=4193.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4174.00,34.61,4198.00] z=0
+[text] '0' x=29.6 y=4193.0 size=9.0
+[op] PushClipOp bounds=[0.00,4198.00,300.00,4222.00] z=0
+[op] PopClipOp bounds=[0.00,4198.00,300.00,4222.00] z=0
+[op] DrawTextOp bounds=[0.00,4217.00,8.84,4235.00] z=0
+[text] '۱.' x=0.0 y=4217.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4198.00,34.61,4222.00] z=0
+[text] '1' x=29.6 y=4217.0 size=9.0
+[op] PushClipOp bounds=[0.00,4222.00,300.00,4246.00] z=0
+[op] PopClipOp bounds=[0.00,4222.00,300.00,4246.00] z=0
+[op] DrawTextOp bounds=[0.00,4241.00,16.35,4259.00] z=0
+[text] '۱۰.' x=0.0 y=4241.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4222.00,39.61,4246.00] z=0
+[text] '10' x=29.6 y=4241.0 size=9.0
+[op] PushClipOp bounds=[0.00,4246.00,300.00,4270.00] z=0
+[op] PopClipOp bounds=[0.00,4246.00,300.00,4270.00] z=0
+[op] DrawTextOp bounds=[0.00,4265.00,23.85,4283.00] z=0
+[text] '۱۰۰.' x=0.0 y=4265.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4246.00,44.62,4270.00] z=0
+[text] '100' x=29.6 y=4265.0 size=9.0
+[op] PushClipOp bounds=[300.00,4160.00,600.00,4270.00] z=0
+[op] PopClipOp bounds=[300.00,4160.00,600.00,4270.00] z=0
+[op] PushClipOp bounds=[300.00,4160.00,600.00,4174.00] z=0
+[op] PopClipOp bounds=[300.00,4160.00,600.00,4174.00] z=0
+[op] DrawTextOp bounds=[300.00,4160.00,361.36,4174.00] z=0
+[text] 'arabic-indic' x=300.0 y=4171.0 size=12.0
+[op] PushClipOp bounds=[300.00,4174.00,600.00,4270.00] z=0
+[op] PopClipOp bounds=[300.00,4174.00,600.00,4270.00] z=0
+[op] PushClipOp bounds=[300.00,4174.00,600.00,4198.00] z=0
+[op] PopClipOp bounds=[300.00,4174.00,600.00,4198.00] z=0
+[op] DrawTextOp bounds=[300.00,4193.00,311.84,4211.00] z=0
+[text] '٠.' x=300.0 y=4193.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4174.00,334.61,4198.00] z=0
+[text] '0' x=329.6 y=4193.0 size=9.0
+[op] PushClipOp bounds=[300.00,4198.00,600.00,4222.00] z=0
+[op] PopClipOp bounds=[300.00,4198.00,600.00,4222.00] z=0
+[op] DrawTextOp bounds=[300.00,4217.00,308.84,4235.00] z=0
+[text] '١.' x=300.0 y=4217.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4198.00,334.61,4222.00] z=0
+[text] '1' x=329.6 y=4217.0 size=9.0
+[op] PushClipOp bounds=[300.00,4222.00,600.00,4246.00] z=0
+[op] PopClipOp bounds=[300.00,4222.00,600.00,4246.00] z=0
+[op] DrawTextOp bounds=[300.00,4241.00,316.35,4259.00] z=0
+[text] '١٠.' x=300.0 y=4241.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4222.00,339.61,4246.00] z=0
+[text] '10' x=329.6 y=4241.0 size=9.0
+[op] PushClipOp bounds=[300.00,4246.00,600.00,4270.00] z=0
+[op] PopClipOp bounds=[300.00,4246.00,600.00,4270.00] z=0
+[op] DrawTextOp bounds=[300.00,4265.00,323.85,4283.00] z=0
+[text] '١٠٠.' x=300.0 y=4265.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4246.00,344.62,4270.00] z=0
+[text] '100' x=329.6 y=4265.0 size=9.0
+[op] PushClipOp bounds=[600.00,4160.00,900.00,4270.00] z=0
+[op] PopClipOp bounds=[600.00,4160.00,900.00,4270.00] z=0
+[op] PushClipOp bounds=[600.00,4160.00,900.00,4174.00] z=0
+[op] PopClipOp bounds=[600.00,4160.00,900.00,4174.00] z=0
+[op] DrawTextOp bounds=[600.00,4160.00,638.70,4174.00] z=0
+[text] 'bengali' x=600.0 y=4171.0 size=12.0
+[op] PushClipOp bounds=[600.00,4174.00,900.00,4270.00] z=0
+[op] PopClipOp bounds=[600.00,4174.00,900.00,4270.00] z=0
+[op] PushClipOp bounds=[600.00,4174.00,900.00,4198.00] z=0
+[op] PopClipOp bounds=[600.00,4174.00,900.00,4198.00] z=0
+[op] DrawTextOp bounds=[600.00,4193.00,616.05,4211.00] z=0
+[text] '০.' x=600.0 y=4193.0 size=18.0
+[op] DrawTextOp bounds=[629.60,4174.00,634.61,4198.00] z=0
+[text] '0' x=629.6 y=4193.0 size=9.0
+[op] PushClipOp bounds=[600.00,4198.00,900.00,4222.00] z=0
+[op] PopClipOp bounds=[600.00,4198.00,900.00,4222.00] z=0
+[op] DrawTextOp bounds=[600.00,4217.00,613.60,4235.00] z=0
+[text] '১.' x=600.0 y=4217.0 size=18.0
+[op] DrawTextOp bounds=[629.60,4198.00,634.61,4222.00] z=0
+[text] '1' x=629.6 y=4217.0 size=9.0
+[op] PushClipOp bounds=[600.00,4222.00,900.00,4246.00] z=0
+[op] PopClipOp bounds=[600.00,4222.00,900.00,4246.00] z=0
+[op] DrawTextOp bounds=[600.00,4241.00,625.31,4259.00] z=0
+[text] '১০.' x=600.0 y=4241.0 size=18.0
+[op] DrawTextOp bounds=[629.60,4222.00,639.61,4246.00] z=0
+[text] '10' x=629.6 y=4241.0 size=9.0
+[op] PushClipOp bounds=[600.00,4246.00,900.00,4270.00] z=0
+[op] PopClipOp bounds=[600.00,4246.00,900.00,4270.00] z=0
+[op] DrawTextOp bounds=[600.00,4265.00,637.03,4283.00] z=0
+[text] '১০০.' x=600.0 y=4265.0 size=18.0
+[op] DrawTextOp bounds=[629.60,4246.00,644.62,4270.00] z=0
+[text] '100' x=629.6 y=4265.0 size=9.0
+[op] PushClipOp bounds=[0.00,4270.00,300.00,4380.00] z=0
+[op] PopClipOp bounds=[0.00,4270.00,300.00,4380.00] z=0
+[op] PushClipOp bounds=[0.00,4270.00,300.00,4284.00] z=0
+[op] PopClipOp bounds=[0.00,4270.00,300.00,4284.00] z=0
+[op] DrawTextOp bounds=[0.00,4270.00,25.34,4284.00] z=0
+[text] 'tamil' x=0.0 y=4281.0 size=12.0
+[op] PushClipOp bounds=[0.00,4284.00,300.00,4380.00] z=0
+[op] PopClipOp bounds=[0.00,4284.00,300.00,4380.00] z=0
+[op] PushClipOp bounds=[0.00,4284.00,300.00,4308.00] z=0
+[op] PopClipOp bounds=[0.00,4284.00,300.00,4308.00] z=0
+[op] DrawTextOp bounds=[0.00,4303.00,14.78,4321.00] z=0
+[text] '௦.' x=0.0 y=4303.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4284.00,34.61,4308.00] z=0
+[text] '0' x=29.6 y=4303.0 size=9.0
+[op] PushClipOp bounds=[0.00,4308.00,300.00,4332.00] z=0
+[op] PopClipOp bounds=[0.00,4308.00,300.00,4332.00] z=0
+[op] DrawTextOp bounds=[0.00,4327.00,17.59,4345.00] z=0
+[text] '௧.' x=0.0 y=4327.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4308.00,34.61,4332.00] z=0
+[text] '1' x=29.6 y=4327.0 size=9.0
+[op] PushClipOp bounds=[0.00,4332.00,300.00,4356.00] z=0
+[op] PopClipOp bounds=[0.00,4332.00,300.00,4356.00] z=0
+[op] DrawTextOp bounds=[0.00,4351.00,28.04,4369.00] z=0
+[text] '௧௦.' x=0.0 y=4351.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4332.00,39.61,4356.00] z=0
+[text] '10' x=29.6 y=4351.0 size=9.0
+[op] PushClipOp bounds=[0.00,4356.00,300.00,4380.00] z=0
+[op] PopClipOp bounds=[0.00,4356.00,300.00,4380.00] z=0
+[op] DrawTextOp bounds=[0.00,4375.00,38.49,4393.00] z=0
+[text] '௧௦௦.' x=0.0 y=4375.0 size=18.0
+[op] DrawTextOp bounds=[29.60,4356.00,44.62,4380.00] z=0
+[text] '100' x=29.6 y=4375.0 size=9.0
+[op] PushClipOp bounds=[300.00,4270.00,600.00,4380.00] z=0
+[op] PopClipOp bounds=[300.00,4270.00,600.00,4380.00] z=0
+[op] PushClipOp bounds=[300.00,4270.00,600.00,4284.00] z=0
+[op] PopClipOp bounds=[300.00,4270.00,600.00,4284.00] z=0
+[op] DrawTextOp bounds=[300.00,4270.00,332.70,4284.00] z=0
+[text] 'telugu' x=300.0 y=4281.0 size=12.0
+[op] PushClipOp bounds=[300.00,4284.00,600.00,4380.00] z=0
+[op] PopClipOp bounds=[300.00,4284.00,600.00,4380.00] z=0
+[op] PushClipOp bounds=[300.00,4284.00,600.00,4308.00] z=0
+[op] PopClipOp bounds=[300.00,4284.00,600.00,4308.00] z=0
+[op] DrawTextOp bounds=[300.00,4303.00,317.53,4321.00] z=0
+[text] '౦.' x=300.0 y=4303.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4284.00,334.61,4308.00] z=0
+[text] '0' x=329.6 y=4303.0 size=9.0
+[op] PushClipOp bounds=[300.00,4308.00,600.00,4332.00] z=0
+[op] PopClipOp bounds=[300.00,4308.00,600.00,4332.00] z=0
+[op] DrawTextOp bounds=[300.00,4327.00,320.05,4345.00] z=0
+[text] '౧.' x=300.0 y=4327.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4308.00,334.61,4332.00] z=0
+[text] '1' x=329.6 y=4327.0 size=9.0
+[op] PushClipOp bounds=[300.00,4332.00,600.00,4356.00] z=0
+[op] PopClipOp bounds=[300.00,4332.00,600.00,4356.00] z=0
+[op] DrawTextOp bounds=[300.00,4351.00,333.25,4369.00] z=0
+[text] '౧౦.' x=300.0 y=4351.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4332.00,339.61,4356.00] z=0
+[text] '10' x=329.6 y=4351.0 size=9.0
+[op] PushClipOp bounds=[300.00,4356.00,600.00,4380.00] z=0
+[op] PopClipOp bounds=[300.00,4356.00,600.00,4380.00] z=0
+[op] DrawTextOp bounds=[300.00,4375.00,346.45,4393.00] z=0
+[text] '౧౦౦.' x=300.0 y=4375.0 size=18.0
+[op] DrawTextOp bounds=[329.60,4356.00,344.62,4380.00] z=0
+[text] '100' x=329.6 y=4375.0 size=9.0

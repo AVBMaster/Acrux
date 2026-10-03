@@ -1,0 +1,24 @@
+<!DOCTYPE html><head><style>
+body{margin:20px;font:16px Arial}
+p{border:1px solid #ccc;margin:6px 0;background:#eef}
+.fs1{font-size:calc(10px + 1em)}          /* 10 + 16 = 26 */
+.fs2{font-size:calc(50% + 8px)}           /* 8 + 8 = 16 (50% of parent 16) */
+.fs3{font-size:calc(1.5rem)}              /* 24 (rem=16) */
+.lh1{line-height:calc(20px + 1em)}        /* 36 */
+.lh2{line-height:1.5}                     /* unitless: 1.5*own font-size */
+.lh3{line-height:150%}                    /* percentage resolves at parent, inherits computed */
+.lh4{line-height:calc(2 * 1em)}           /* 32 */
+.child{font-size:12px}
+.lh2 .child{border:1px solid #a00}
+.lh3 .child{border:1px solid #00a}
+.sp{letter-spacing:calc(1px + 0.1em);word-spacing:calc(0.5em)}
+</style><body>
+<p class="fs1">Aa</p>
+<p class="fs2">Bb</p>
+<p class="fs3">Cc</p>
+<p class="lh1">Line one<br>Line two</p>
+<p class="lh2">parent<span class="child"> child</span><br>next</p>
+<p class="lh3">parent<span class="child"> child</span><br>next</p>
+<p class="lh4">Line one<br>Line two</p>
+<p class="sp">hello world again</p>
+</body></html>

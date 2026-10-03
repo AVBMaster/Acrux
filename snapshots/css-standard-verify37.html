@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 37</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+
+/* 1. CSS transitions */
+.transition-box {
+  width: 100px;
+  height: 50px;
+  background: #4a90e2;
+  transition: width 0.3s, background 0.3s;
+}
+
+/* 2. CSS animations */
+@keyframes slide {
+  from { transform: translateX(0); }
+  to { transform: translateX(100px); }
+}
+.anim-box {
+  width: 80px;
+  height: 40px;
+  background: #e24a4a;
+  animation: slide 2s infinite alternate;
+}
+
+/* 3. CSS counters nested */
+.counter-test { counter-reset: section; }
+.counter-test h3 { counter-increment: section; }
+.counter-test h3::before { content: "Section " counter(section) ". "; }
+.counter-test .subsection { counter-reset: subsection; margin-left: 20px; }
+.counter-test .subsection h4 { counter-increment: subsection; }
+.counter-test .subsection h4::before { content: counter(section) "." counter(subsection) " "; }
+
+/* 4. CSS grid auto-fill vs auto-fit */
+.grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
+  margin: 10px 0;
+}
+.grid-auto-fit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 10px;
+  margin: 10px 0;
+}
+.grid-cell {
+  background: #4a90e2;
+  padding: 20px;
+  color: white;
+  text-align: center;
+}
+
+/* 5. CSS flex wrap with align-content */
+.flex-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: space-between;
+  height: 200px;
+  border: 2px solid #333;
+  margin: 10px 0;
+}
+.flex-item {
+  width: 120px;
+  height: 40px;
+  background: #e24a4a;
+  margin: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+/* 6. CSS position sticky */
+.sticky-container {
+  height: 300px;
+  overflow-y: auto;
+  border: 2px solid #333;
+  margin: 10px 0;
+}
+.sticky-header {
+  position: sticky;
+  top: 0;
+  background: #4a90e2;
+  color: white;
+  padding: 10px;
+  margin: 0;
+}
+.sticky-content {
+  padding: 10px;
+  height: 500px;
+  background: #f0f0f0;
+}
+
+/* 7. CSS z-index stacking contexts */
+.stacking-parent {
+  position: relative;
+  width: 300px;
+  height: 200px;
+  margin: 10px 0;
+}
+.stacking-child {
+  position: absolute;
+  width: 150px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+}
+.stacking-1 {
+  background: #4a90e2;
+  top: 20px;
+  left: 20px;
+  z-index: 1;
+}
+.stacking-2 {
+  background: #e24a4a;
+  top: 50px;
+  left: 50px;
+  z-index: 2;
+}
+.stacking-3 {
+  background: #4ae24a;
+  top: 80px;
+  left: 80px;
+  z-index: 3;
+}
+
+/* 8. CSS overflow scenarios */
+.overflow-test {
+  width: 200px;
+  height: 100px;
+  border: 2px solid #333;
+  margin: 10px 0;
+  padding: 10px;
+}
+.overflow-hidden { overflow: hidden; }
+.overflow-scroll { overflow: scroll; }
+.overflow-auto { overflow: auto; }
+
+/* 9. CSS clip-path polygon */
+.clip-polygon {
+  width: 150px;
+  height: 150px;
+  background: #4a90e2;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  margin: 10px 0;
+}
+
+/* 10. CSS filter combinations */
+.filter-combo {
+  width: 150px;
+  height: 100px;
+  background: #e24a4a;
+  filter: blur(2px) brightness(1.2) contrast(1.1);
+  margin: 10px 0;
+}
+
+/* 11. CSS transform 3D */
+.transform-3d {
+  width: 100px;
+  height: 100px;
+  background: #4a90e2;
+  transform: perspective(500px) rotateY(45deg);
+  margin: 10px 0;
+}
+
+/* 12. CSS backdrop-filter */
+.backdrop-test {
+  position: relative;
+  width: 300px;
+  height: 200px;
+  background: linear-gradient(45deg, #4a90e2, #e24a4a);
+  margin: 10px 0;
+}
+.backdrop-blur {
+  position: absolute;
+  top: 50px;
+  left: 50px;
+  width: 150px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  border: 2px solid white;
+}
+
+/* 13. CSS mix-blend-mode */
+.blend-test {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  margin: 10px 0;
+}
+.blend-circle {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+}
+.blend-1 {
+  background: #4a90e2;
+  top: 20px;
+  left: 20px;
+  mix-blend-mode: multiply;
+}
+.blend-2 {
+  background: #e24a4a;
+  top: 60px;
+  left: 60px;
+  mix-blend-mode: multiply;
+}
+
+/* 14. CSS scroll-snap */
+.scroll-snap-container {
+  width: 300px;
+  height: 150px;
+  overflow-x: scroll;
+  scroll-snap-type: x mandatory;
+  display: flex;
+  border: 2px solid #333;
+  margin: 10px 0;
+}
+.scroll-snap-item {
+  flex: 0 0 280px;
+  height: 100%;
+  background: #4a90e2;
+  scroll-snap-align: start;
+  margin-right: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+}
+
+/* 15. CSS aspect-ratio */
+.aspect-ratio-test {
+  width: 200px;
+  aspect-ratio: 16 / 9;
+  background: #4a90e2;
+  margin: 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+/* 16. CSS container queries */
+.container-test {
+  container-type: inline-size;
+  width: 300px;
+  border: 2px solid #333;
+  padding: 10px;
+  margin: 10px 0;
+}
+.container-child {
+  background: #4a90e2;
+  padding: 20px;
+  color: white;
+}
+@container (min-width: 250px) {
+  .container-child {
+    background: #e24a4a;
+  }
+}
+
+/* 17. CSS :has() selector */
+.has-test {
+  border: 2px solid #333;
+  padding: 10px;
+  margin: 10px 0;
+}
+.has-test:has(.highlight) {
+  background: #ffffcc;
+}
+.highlight {
+  background: #4a90e2;
+  color: white;
+  padding: 5px;
+}
+
+/* 18. CSS nesting */
+.nesting-test {
+  border: 2px solid #333;
+  padding: 10px;
+  margin: 10px 0;
+  & .nested {
+    background: #4a90e2;
+    color: white;
+    padding: 10px;
+    margin: 5px 0;
+  }
+}
+
+/* 19. CSS @layer */
+@layer base, theme;
+@layer base {
+  .layer-test {
+    background: #4a90e2;
+    color: white;
+    padding: 10px;
+  }
+}
+@layer theme {
+  .layer-test {
+    background: #e24a4a;
+  }
+}
+
+/* 20. CSS @scope */
+.scope-test {
+  border: 2px solid #333;
+  padding: 10px;
+  margin: 10px 0;
+}
+@scope (.scope-test) {
+  :scope {
+    background: #f0f0f0;
+  }
+  p {
+    color: #4a90e2;
+    font-weight: bold;
+  }
+}
+</style>
+</head>
+<body>
+
+<h2>1. CSS transitions (static state)</h2>
+<div class="transition-box">Transition</div>
+
+<h2>2. CSS animations (first frame)</h2>
+<div class="anim-box">Animation</div>
+
+<h2>3. CSS counters nested</h2>
+<div class="counter-test">
+  <h3>Introduction</h3>
+  <div class="subsection">
+    <h4>Background</h4>
+    <h4>Scope</h4>
+  </div>
+  <h3>Methods</h3>
+  <div class="subsection">
+    <h4>Setup</h4>
+    <h4>Execution</h4>
+    <h4>Analysis</h4>
+  </div>
+</div>
+
+<h2>4. CSS grid auto-fill vs auto-fit</h2>
+<div class="grid-auto">
+  <div class="grid-cell">1</div>
+  <div class="grid-cell">2</div>
+  <div class="grid-cell">3</div>
+</div>
+<div class="grid-auto-fit">
+  <div class="grid-cell">1</div>
+  <div class="grid-cell">2</div>
+  <div class="grid-cell">3</div>
+</div>
+
+<h2>5. CSS flex wrap with align-content</h2>
+<div class="flex-wrap">
+  <div class="flex-item">Item 1</div>
+  <div class="flex-item">Item 2</div>
+  <div class="flex-item">Item 3</div>
+  <div class="flex-item">Item 4</div>
+  <div class="flex-item">Item 5</div>
+</div>
+
+<h2>6. CSS position sticky (scroll to see effect)</h2>
+<div class="sticky-container">
+  <h3 class="sticky-header">Sticky Header</h3>
+  <div class="sticky-content">Scroll down to see sticky effect...</div>
+</div>
+
+<h2>7. CSS z-index stacking contexts</h2>
+<div class="stacking-parent">
+  <div class="stacking-child stacking-1">Z-1</div>
+  <div class="stacking-child stacking-2">Z-2</div>
+  <div class="stacking-child stacking-3">Z-3</div>
+</div>
+
+<h2>8. CSS overflow scenarios</h2>
+<div class="overflow-test overflow-hidden">
+  <p>This is overflow hidden. Content that exceeds the box will be clipped.</p>
+</div>
+<div class="overflow-test overflow-scroll">
+  <p>This is overflow scroll. Scrollbars will always be visible.</p>
+</div>
+<div class="overflow-test overflow-auto">
+  <p>This is overflow auto. Scrollbars appear only when needed.</p>
+</div>
+
+<h2>9. CSS clip-path polygon</h2>
+<div class="clip-polygon"></div>
+
+<h2>10. CSS filter combinations</h2>
+<div class="filter-combo">Filtered</div>
+
+<h2>11. CSS transform 3D</h2>
+<div class="transform-3d">3D</div>
+
+<h2>12. CSS backdrop-filter</h2>
+<div class="backdrop-test">
+  <div class="backdrop-blur">Blurred</div>
+</div>
+
+<h2>13. CSS mix-blend-mode</h2>
+<div class="blend-test">
+  <div class="blend-circle blend-1"></div>
+  <div class="blend-circle blend-2"></div>
+</div>
+
+<h2>14. CSS scroll-snap</h2>
+<div class="scroll-snap-container">
+  <div class="scroll-snap-item">1</div>
+  <div class="scroll-snap-item">2</div>
+  <div class="scroll-snap-item">3</div>
+</div>
+
+<h2>15. CSS aspect-ratio</h2>
+<div class="aspect-ratio-test">16:9</div>
+
+<h2>16. CSS container queries</h2>
+<div class="container-test">
+  <div class="container-child">Container Child</div>
+</div>
+
+<h2>17. CSS :has() selector</h2>
+<div class="has-test">
+  <div class="highlight">Has highlight</div>
+</div>
+<div class="has-test">
+  <div>No highlight</div>
+</div>
+
+<h2>18. CSS nesting</h2>
+<div class="nesting-test">
+  <div class="nested">Nested content</div>
+</div>
+
+<h2>19. CSS @layer</h2>
+<div class="layer-test">Layer test (should be red from theme layer)</div>
+
+<h2>20. CSS @scope</h2>
+<div class="scope-test">
+  <p>This paragraph should be blue and bold</p>
+</div>
+<p>This paragraph should be normal</p>
+
+</body>
+</html>

@@ -1,0 +1,17 @@
+<!DOCTYPE html><head><style>
+body{margin:20px;font:16px Arial}
+/* border-width with calc (em) → 8px each side → box 100+16=116 */
+.b1{width:100px;height:40px;border-style:solid;border-color:#939;border-width:calc(0.5em)}
+/* border-width four-value with calc */
+.b2{width:100px;height:40px;border-style:solid;border-color:#090;border-width:calc(10px - 5px) calc(2em - 10px)}
+/* row/column gap with calc in flex */
+.f{display:flex;width:300px;gap:calc(1em + 5px);border:1px solid #009}
+.f div{width:40px;height:30px;background:#cfe}
+/* border-width with max()/clamp() */
+.b3{width:100px;height:40px;border-style:solid;border-color:#909;border-width:max(3px, 0.25em)}
+</style><body>
+<div class="b1">b1</div>
+<div class="b2">b2</div>
+<div class="f"><div>1</div><div>2</div></div>
+<div class="b3">b3</div>
+</body></html>

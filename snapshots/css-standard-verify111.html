@@ -1,0 +1,18 @@
+<!DOCTYPE html><head><style>
+body{margin:24px;font:16px/1 Arial}
+p{margin:10px 0;background:#eef;height:80px}
+.ib{display:inline-block;width:60px;height:40px;background:#cfc;border:1px solid #080}
+.text{background:#fec}
+.hid{overflow:hidden}
+.empty{}
+.inner{display:inline-block;width:60px;height:40px;background:#ccf}
+.inner div{margin:0;background:#f99}
+.ref{display:inline-block;width:1px;height:0;background:#000}
+</style><body>
+<p>AB<span class="ib text">cd</span>EF</p>
+<p>AB<span class="ib hid">cd</span>EF</p>
+<p>AB<span class="ib empty"></span>EF</p>
+<p>AB<span class="inner"><div>x</div></span>EF</p>
+<p>AB<span class="ib" style="vertical-align:top">cd</span>EF</p>
+<p>AB<span class="ib" style="vertical-align:bottom">cd</span>EF</p>
+</body></html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 70 — grid item %padding/%margin, column-rule, line-height % on flex</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.c { background:#cfe; border:1px solid #369; }
+
+/* 1. grid item with percentage padding (should resolve against grid area / container content) */
+.g1 { display:grid; grid-template-columns:200px 200px; width:404px; border:2px solid #939; }
+.g1 .p { padding:10%; background:#fec; }
+
+/* 2. grid item with percentage margin */
+.g2 { display:grid; grid-template-columns:200px 200px; width:404px; border:2px solid #939; }
+.g2 .m { margin:5%; background:#cfe; height:40px; }
+
+/* 3. multicol column-rule */
+.mc { column-count:2; column-gap:16px; column-rule:3px solid #f00; width:300px; border:2px solid #939; padding:4px; }
+.mc p { margin:0 0 6px; }
+
+/* 4. line-height percentage on flex item text */
+.f { display:flex; align-items:flex-start; border:2px solid #939; }
+.f .lh { line-height:200%; background:#eef; }
+.f .norm { background:#fee; }
+</style>
+</head>
+<body>
+
+<h2>1. grid item padding:10% (of area width 200 = 20px)</h2>
+<div class="g1"><div class="p">A</div><div class="c">B</div></div>
+
+<h2>2. grid item margin:5% (of area 200 = 10px)</h2>
+<div class="g2"><div class="m">A</div><div class="c">B</div></div>
+
+<h2>3. multicol column-rule 3px solid red</h2>
+<div class="mc"><p>Left column text here with some words to wrap.</p><p>Right column text here also wrapping a bit.</p></div>
+
+<h2>4. flex line-height:200% vs normal</h2>
+<div class="f"><div class="lh">tall</div><div class="norm">norm</div></div>
+
+</body>
+</html>

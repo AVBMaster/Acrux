@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Batch 15 (Text-Decoration Family / Font Synthesis / Flex Align-Content / Grid Span &amp; Dense / Box-Decoration-Break / Wrapping / Collapsed Borders)</title>
+<style>
+html, body { margin: 0; padding: 4px; background: rgb(255,255,255); font-family: Arial, sans-serif; font-size: 16px; line-height: 20px; }
+h2 { margin: 10px 0 4px 0; font-size: 13px; color: rgb(51,51,51); }
+p { margin: 0; }
+
+/* ====== GROUP 1: decoration lines: underline / overline / line-through / all ====== */
+#d1 { text-decoration: underline solid rgb(255,0,0) 3px; }
+#d2 { text-decoration: overline solid rgb(0,255,0) 3px; }
+#d3 { text-decoration: line-through solid rgb(0,0,255) 3px; }
+#d4 { text-decoration: underline overline line-through solid rgb(255,0,255) 2px; }
+
+/* ====== GROUP 2: dashed/dotted style, offset, from-font, percentage thickness ====== */
+#e1 { text-decoration: underline dashed rgb(255,128,0); text-decoration-thickness: 2px; }
+#e2 { text-decoration: underline dotted rgb(0,128,255); text-decoration-thickness: 4px; }
+#e3 { text-decoration: underline solid rgb(0,0,0); text-decoration-thickness: from-font; }
+#e4 { text-decoration: underline solid rgb(0,0,0) 25%; }
+#e5 { text-decoration: underline solid rgb(0,0,0); text-decoration-thickness: 2px; text-underline-offset: 6px; }
+
+/* ====== GROUP 3: font synthesis and small caps ====== */
+#f1 { font-variant: small-caps; font-size: 20px; }
+#f2 { font-weight: 900; font-size: 20px; }
+#f3 { font-style: oblique 20deg; font-size: 20px; }
+#f4 { font-weight: bold; font-style: italic; font-size: 20px; }
+
+/* ====== GROUP 4: flex align-content with wrapped lines ====== */
+#ac { display: flex; flex-wrap: wrap; align-content: center; gap: 6px;
+      width: 120px; height: 100px; background: rgb(238,238,238); }
+#ac i { display: block; width: 50px; height: 20px; background: rgb(255,0,0); }
+#sb { display: flex; flex-wrap: wrap; align-content: space-between; gap: 0;
+      width: 60px; height: 100px; background: rgb(238,238,238); }
+#sb i { display: block; width: 20px; height: 20px; background: rgb(0,255,0); }
+
+/* ====== GROUP 5: flex column with gap and justify-content: space-evenly ====== */
+#col { display: flex; flex-direction: column; justify-content: space-evenly; gap: 10px;
+       width: 60px; height: 120px; background: rgb(238,238,238); }
+#col i { display: block; width: 40px; height: 15px; background: rgb(0,0,255); }
+
+/* ====== GROUP 6: grid span + dense auto-flow ====== */
+#gr { display: grid; grid-template-columns: repeat(3, 30px); grid-auto-rows: 20px;
+      grid-auto-flow: dense; gap: 2px; width: 100px; background: rgb(238,238,238); }
+#gr b { display: block; background: rgb(255,0,0); }
+#gr b.s2 { grid-row: span 2; background: rgb(0,128,0); }
+#gr b.skip { grid-column: 3; background: rgb(0,0,255); }
+
+/* ====== GROUP 7: box-decoration-break clone vs slice ====== */
+#clone { width: 120px; background: rgb(238,238,238); }
+#clone span { background: rgb(255,255,0); border: 2px solid rgb(255,0,0); padding: 2px 6px;
+              box-decoration-break: clone; }
+#slice { width: 120px; background: rgb(238,238,238); margin-top: 6px; }
+#slice span { background: rgb(255,255,0); border: 2px solid rgb(255,0,0); padding: 2px 6px;
+              box-decoration-break: slice; }
+
+/* ====== GROUP 8: wrapping behaviour ====== */
+.wrapany { width: 80px; overflow-wrap: anywhere; background: rgb(240,240,240); }
+.wrapword { width: 80px; overflow-wrap: break-word; background: rgb(240,240,240); }
+.keepall { width: 60px; word-break: keep-all; background: rgb(250,240,230); }
+
+/* ====== GROUP 9: line-height normal at three sizes ====== */
+.lh { background: rgb(230,230,255); }
+.lh12 { font-size: 12px; } .lh16 { font-size: 16px; } .lh32 { font-size: 32px; }
+
+/* ====== GROUP 10: collapsed borders, thick shared edges ====== */
+#tb { border-collapse: collapse; }
+#tb td { width: 40px; height: 20px; border: 4px solid rgb(255,0,0); padding: 0; }
+
+/* ====== GROUP 11: outline with border-radius ====== */
+#ol { width: 60px; height: 40px; border-radius: 12px; background: rgb(238,238,238);
+      outline: 3px solid rgb(255,0,0); }
+
+/* ====== GROUP 12: letter-spacing with centered and justified text ====== */
+#ls1 { width: 200px; text-align: center; letter-spacing: 4px; background: rgb(245,245,245); }
+#ls2 { width: 200px; text-align: justify; letter-spacing: 4px; background: rgb(245,245,245); }
+</style>
+</head>
+<body>
+<h2>1. text-decoration: underline / overline / line-through / all three (3px solid)</h2>
+<p id="d1">Abcg</p><p id="d2">Abcg</p><p id="d3">Abcg</p><p id="d4">Abcg</p>
+
+<h2>2. dashed / dotted / from-font / 25% thickness / underline-offset 6px</h2>
+<p id="e1">Abcg</p><p id="e2">Abcg</p><p id="e3">Abcg</p><p id="e4">Abcg</p><p id="e5">Abcg</p>
+
+<h2>3. font-variant: small-caps / weight 900 synthesis / oblique 20deg / bold italic</h2>
+<p id="f1">Hello World</p><p id="f2">Hello World</p><p id="f3">Hello World</p><p id="f4">Hello World</p>
+
+<h2>4. flex align-content: center (gap 6) / space-between (column-reverse wrap)</h2>
+<div id="ac"><i></i><i></i><i></i><i></i></div>
+<div id="sb"><i></i><i></i><i></i></div>
+
+<h2>5. flex column justify-content: space-evenly with gap 10</h2>
+<div id="col"><i></i><i></i><i></i></div>
+
+<h2>6. grid 3x auto rows, one row-span-2 item, one column-3 item, dense flow</h2>
+<div id="gr"><b class="s2"></b><b></b><b class="skip"></b><b></b><b></b><b></b></div>
+
+<h2>7. box-decoration-break: clone vs slice on a wrapped inline (2px border, 6px h-padding)</h2>
+<div id="clone"><span>aaaa bbbb cccc dddd eeee ffff</span></div>
+<div id="slice"><span>aaaa bbbb cccc dddd eeee ffff</span></div>
+
+<h2>8. overflow-wrap: anywhere vs break-word; word-break: keep-all on CJK</h2>
+<div class="wrapany">Supercalifragilistic</div>
+<div class="wrapword">Supercalifragilistic</div>
+<div class="keepall">中文 english 中文 english</div>
+
+<h2>9. line-height: normal at 12 / 16 / 32 px</h2>
+<div class="lh lh12">line</div><div class="lh lh16">line</div><div class="lh lh32">line</div>
+
+<h2>10. border-collapse: collapse with 4px cell borders (cells 40x20 content)</h2>
+<table id="tb"><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>
+
+<h2>11. outline 3px on a border-radius: 12px box</h2>
+<div id="ol"></div>
+
+<h2>12. letter-spacing 4px with text-align: center / justify (200px box)</h2>
+<div id="ls1">abc def</div>
+<div id="ls2">abc def ghi jkl</div>
+</body>
+</html>

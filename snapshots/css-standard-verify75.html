@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 75 — text-transform boundaries, break-all, overflow-wrap anywhere, negative letter-spacing</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.box { width:180px; border:2px solid #939; padding:4px; margin:8px 0; }
+
+/* 1. text-transform capitalize boundaries */
+.cap { text-transform: capitalize; }
+/* 2. word-break: break-all in narrow box */
+.ba { word-break: break-all; }
+/* 3. overflow-wrap: anywhere forces min-content shrink */
+.aw { overflow-wrap: anywhere; }
+/* 4. negative letter-spacing */
+.ls { letter-spacing: -2px; }
+/* 5. line-height unitless inheritance */
+.lh { line-height: 1.2; }
+.lh .sub { line-height: inherit; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h2>1. capitalize: "the prince-of-italy o'clock 3d-cd"</h2>
+<p class="cap">the prince-of-italy o'clock 3d-cd end</p>
+
+<h2>2. word-break:break-all (longword in 180px)</h2>
+<div class="box ba">Antidisestablishmentarianism</div>
+
+<h2>3. overflow-wrap:anywhere (longword in 180px)</h2>
+<div class="box aw">Pneumonoultramicroscopicsilicovolcanoconiosis</div>
+
+<h2>4. negative letter-spacing -2px</h2>
+<p class="ls">AVASTA WIDE TEXT</p>
+
+<h2>5. line-height:1.2 parent, child 12px inherits ratio (=14.4)</h2>
+<div class="lh">Parent line <span class="sub">child small text here</span> tail</div>
+
+</body>
+</html>

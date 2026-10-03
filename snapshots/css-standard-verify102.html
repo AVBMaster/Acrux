@@ -1,0 +1,14 @@
+<!DOCTYPE html><head><style>
+body{margin:20px;font:14px Arial}
+ol{margin:0 0 8px;padding-left:30px}
+.sec{counter-reset:ch}
+.sec h3{counter-increment:ch}
+.sec h3::before{content:"Ch" counter(ch) ": "}
+ol.decp{counter-reset:item;list-style:none}
+ol.decp li{counter-increment:item}
+ol.decp li::before{content:counter(item) ". ";}
+</style><body>
+<ol class="decp"><li>a</li><li>b</li><li>c</li></ol>
+<div class="sec"><h3>one</h3><h3>two</h3><h3>three</h3></div>
+<ol style="list-style-type:upper-alpha"><li>x</li><li>y</li><li>z</li></ol>
+</body></html>

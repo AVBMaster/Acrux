@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html, body { margin: 0; padding: 0; }
+/* p1: definite parent height, child height 50% */
+#p1 { height: 80px; width: 100px; background: rgb(238,238,238); }
+#p1 .c { height: 50%; background: rgb(255,0,255); }
+/* p2: max-height percentage */
+#p2 { height: 80px; width: 100px; background: rgb(238,238,238); }
+#p2 .c { height: 200px; max-height: 25%; background: rgb(0,255,255); }
+/* p3: min-height percentage */
+#p3 { height: 80px; width: 100px; background: rgb(238,238,238); }
+#p3 .c { height: 10px; min-height: 50%; background: rgb(0,128,0); }
+/* p4: auto parent height (percentage must behave like auto) */
+#p4 { width: 100px; background: rgb(238,238,238); }
+#p4 .c { height: 50%; background: rgb(255,128,0); }
+/* p5: nested percentages */
+#p5 { height: 200px; width: 100px; background: rgb(238,238,238); }
+#p5 .a { height: 50%; background: rgb(255,0,0); }
+#p5 .a .b { height: 50%; background: rgb(0,0,255); }
+</style>
+</head>
+<body>
+<div id="p1"><div class="c">x</div></div>
+<div id="p2"><div class="c">y</div></div>
+<div id="p3"><div class="c">z</div></div>
+<div id="p4"><div class="c">w</div></div>
+<div id="p5"><div class="a"><div class="b">v</div></div></div>
+</body>
+</html>

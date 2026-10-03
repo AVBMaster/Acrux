@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{margin:0;font:14px sans-serif;background:#fff}
+h4{margin:10px 8px 4px}
+.bg{width:220px;height:60px;margin:8px;border:1px solid #999}
+.lin{background:linear-gradient(to right, red, yellow, lime)}
+.lin2{background:linear-gradient(45deg, #36c 0%, #fff 50%, #c63 100%)}
+.rad{background:radial-gradient(circle, #fff 20%, #036 100%)}
+.rep{background:repeating-linear-gradient(90deg, #000 0 10px, #fff 10px 20px)}
+.pos{background:#8ac url(none);background-color:#8ac}
+.two{background:linear-gradient(to bottom, rgba(255,0,0,.5), rgba(0,0,255,.5)), #ccc}
+.sh1{width:120px;height:40px;background:#fff;box-shadow:4px 4px 8px rgba(0,0,0,.5);margin:14px}
+.sh2{width:120px;height:40px;background:#fed;box-shadow:0 0 0 3px #c30, inset 0 0 6px #03c;margin:14px}
+.op{width:100px;height:40px;background:#000;opacity:.4;display:inline-block;margin:6px}
+.op2{width:100px;height:40px;background:#00f;opacity:.6;display:inline-block;margin:6px -30px 0 10px}
+ul{margin:6px 40px}ol{margin:6px 40px}
+.nl{list-style:none}
+.ins{list-style-position:inside}
+table{border-collapse:separate;border-spacing:4px;margin:8px}
+.bc{border-collapse:collapse;margin:8px}
+td,th{border:2px solid #555;padding:4px;background:#fff}
+.hidden{border:hidden-style}
+</style></head>
+<body>
+<h4>1. gradients: linear LR / 45deg / radial / repeating</h4>
+<div class="bg lin"></div><div class="bg lin2"></div><div class="bg rad"></div><div class="bg rep"></div>
+<h4>2. layered translucent gradient over color</h4>
+<div class="bg two"></div>
+<h4>3. box-shadow outset / inset+spread</h4>
+<div class="sh1"></div><div class="sh2"></div>
+<h4>4. opacity overlap (two semi-transparent bars)</h4>
+<div><span class="op"></span><span class="op2"></span></div>
+<h4>5. lists: disc / decimal / none / inside</h4>
+<ul><li>disc one</li><li>disc two</li></ul>
+<ol><li>first</li><li>second</li><li>third</li></ol>
+<ul class="nl"><li>no marker</li></ul>
+<ul class="ins"><li>inside marker</li></ul>
+<h4>6. tables: separate spacing vs collapse</h4>
+<table><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></table>
+<table class="bc"><tr><th>H1</th><th>H2</th></tr><tr><td>x</td><td>y</td></tr></table>
+</body></html>

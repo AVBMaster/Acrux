@@ -1,0 +1,15 @@
+<html><head><style>
+ul li::marker { }
+li.a::marker { content: "> "; }
+.p5::first-line { }
+.bx::before { content: "prefix-"; font-weight: bold; }
+.bx { border: 1px solid #888; }
+.gen::after { content: normal; }
+.cont::after { content: ""; border: 2px solid #e60; display: inline-block; width: 20px; height: 8px; }
+</style></head><body>
+<ul><li class="a">arrow</li><li>disc</li></ul>
+<div class="p5">fl</div>
+<div class="bx">sufix</div>
+<div class="gen">gn</div>
+<div class="cont">cb</div>
+</body></html>

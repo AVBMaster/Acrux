@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html, body { margin: 0; padding: 0; background: rgb(255,255,255); }
+/* group A: negative z-index sibling must stay under the translucent box */
+#iso { position: relative; width: 100px; height: 40px; }
+#iso .p { position: absolute; left: 0; top: 0; width: 60px; height: 40px; background: rgb(0,255,0); opacity: 0.5; }
+#iso .q { position: absolute; left: 20px; top: 10px; width: 60px; height: 20px; background: rgb(0,0,255); z-index: -1; }
+/* group B: z-index on a static element is ignored; the positioned red box wins */
+#st { position: relative; top: 20px; width: 100px; height: 40px; }
+#st .a { position: absolute; left: 0; top: 0; width: 60px; height: 40px; background: rgb(255,0,0); }
+#st .b { width: 60px; height: 40px; background: rgb(0,0,255); z-index: 99; }
+</style>
+</head>
+<body>
+<div id="iso"><div class="p"></div><div class="q"></div></div>
+<div id="st"><div class="a"></div><div class="b"></div></div>
+</body>
+</html>

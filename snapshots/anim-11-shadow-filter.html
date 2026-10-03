@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 11 鈥?shadows and filters</title>
+<style>
+/* box-shadow and text-shadow interpolate component-wise: the two offsets, the
+   blur, the spread and the colour are each blended, and the shadow list matches
+   by index (a list of different lengths is not interpolable and flips at 50%).
+   filter interpolates its function list the same way, per function. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 300px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 90px; height: 60px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  font-size: 15px; line-height: 60px; text-align: center;
+}
+#w1 { left: 10px;  top: 10px; }  #w2 { left: 120px; top: 10px; }
+#w3 { left: 230px; top: 10px; }  #w4 { left: 340px; top: 10px; }
+#w5 { left: 10px;  top: 90px; }  #w6 { left: 120px; top: 90px; }
+#w7 { left: 230px; top: 90px; }  #w8 { left: 340px; top: 90px; }
+#w9 { left: 10px;  top: 170px; }  #w10{ left: 120px; top: 170px; }
+#w11{ left: 230px; top: 170px; }  #w12{ left: 340px; top: 170px; }
+
+/* --- box-shadow: offset, blur, spread and colour all blend --- */
+#w1 { animation: sh 1s linear -400ms paused; }
+@keyframes sh {
+  from { box-shadow: 0px 0px 0px rgb(255,0,0); }
+  to   { box-shadow: 10px 20px 5px rgb(0,0,255); }
+}
+/* an inset shadow blends the same way. The third length is the blur radius,
+   so this row animates blur (not spread); row 2 of the grid below uses a
+   fourth length to animate spread instead. */
+#w2 { animation: shi 1s linear -400ms paused; }
+@keyframes shi {
+  from { box-shadow: inset 0px 0px 0px rgb(255,0,0); }
+  to   { box-shadow: inset 0px 0px 8px rgb(0,0,255); }
+}
+/* two shadows, matched by index */
+#w3 { animation: sh2 1s linear -400ms paused; }
+@keyframes sh2 {
+  from { box-shadow: 0px 0px 0px rgb(255,0,0), 0px 0px 0px rgb(0,128,0); }
+  to   { box-shadow: 8px 0px 0px rgb(0,0,255), 0px 8px 0px rgb(255,255,0); }
+}
+/* a shadow list of different lengths is not interpolable: discrete 50% flip */
+#w4 { animation: sh3 1s linear -400ms paused; }
+@keyframes sh3 {
+  from { box-shadow: 0px 0px 0px rgb(255,0,0); }
+  to   { box-shadow: 6px 6px 0px rgb(0,0,255), 0px 0px 4px rgb(0,0,0); }
+}
+
+/* --- text-shadow --- */
+#w5 { color: #000; animation: ts 1s linear -400ms paused; }
+@keyframes ts {
+  from { text-shadow: 0px 0px 0px rgb(255,0,0); }
+  to   { text-shadow: 6px 6px 2px rgb(0,0,255); }
+}
+
+/* --- filter: each function in the list blends --- */
+#w6 { animation: br 1s linear -400ms paused; }
+@keyframes br { from { filter: brightness(1); } to { filter: brightness(0.5); } }
+#w7 { animation: gr 1s linear -400ms paused; }
+@keyframes gr { from { filter: grayscale(0); } to { filter: grayscale(1); } }
+#w8 { animation: sa 1s linear -400ms paused; }
+@keyframes sa { from { filter: saturate(1); } to { filter: saturate(0); } }
+#w9 { animation: iv 1s linear -400ms paused; }
+@keyframes iv { from { filter: invert(0); } to { filter: invert(1); } }
+#w10 { animation: op 1s linear -400ms paused; }
+@keyframes op { from { filter: opacity(0.5); } to { filter: opacity(1); } }
+/* `none` against a single function pairs against that function's identity */
+#w11 { background: linear-gradient(90deg, #000000 0%, #000000 50%, #ffffff 50%, #ffffff 100%);
+       animation: bl 1s linear -400ms paused; }
+@keyframes bl { from { filter: none; } to { filter: blur(6px); } }
+/* two filter functions, blended in place */
+#w12 { animation: brg 1s linear -400ms paused; }
+@keyframes brg {
+  from { filter: brightness(1) grayscale(0); }
+  to   { filter: brightness(0.5) grayscale(1); }
+}
+
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+#legend code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="w1">1</i>
+  <i class="sw" id="w2">2</i>
+  <i class="sw" id="w3">3</i>
+  <i class="sw" id="w4">4</i>
+  <i class="sw" id="w5">5</i>
+  <i class="sw" id="w6">6</i>
+  <i class="sw" id="w7">7</i>
+  <i class="sw" id="w8">8</i>
+  <i class="sw" id="w9">9</i>
+  <i class="sw" id="w10">10</i>
+  <i class="sw" id="w11">11</i>
+  <i class="sw" id="w12">12</i>
+</div>
+
+<div id="legend">
+  <p>all rows at <b>40%</b> of a 1s linear animation; <code>filter</code> rows keep #c0c0c0 (192) as the swatch colour</p>
+  <p><b>1</b> <code>box-shadow 0 0 0 red -&gt; 10px 20px 5px blue</code> &rarr; <b>4px 8px 2px rgb(153,0,102)</b></p>
+  <p><b>2</b> <code>inset 0 0 0 red -&gt; inset 0 0 8px blue</code> &rarr; blur <b>3.2px</b></p>
+  <p><b>3</b> two shadows matched by index &rarr; red&rarr;<b>rgb(153,0,102)</b> at 3.2px, green&rarr;rgb(102,179,0) at 3.2px</p>
+  <p><b>4</b> shadow lists of different lengths are <b>not interpolable</b>: discrete flip, so at 40% the <code>from</code> value stands (no shadow)</p>
+  <p><b>5</b> <code>text-shadow 0 0 0 red -&gt; 6px 6px 2px blue</code> &rarr; <b>2.4px 2.4px 0.8px</b></p>
+  <p><b>6</b> <code>brightness 1 -&gt; 0.5</code> at 40% = 0.8 &rarr; 192*0.8 = <b>154</b></p>
+  <p><b>7</b> <code>grayscale 0 -&gt; 1</code> at 40% = 0.4 &rarr; 255-63*0.4 = <b>230</b></p>
+  <p><b>8</b> <code>saturate 1 -&gt; 0</code> at 40% = 0.6 &rarr; <b>218</b></p>
+  <p><b>9</b> <code>invert 0 -&gt; 1</code> at 40% = 0.4 &rarr; 192*0.6 + 63*0.4 = <b>140</b></p>
+  <p><b>10</b> <code>opacity 0.5 -&gt; 1</code> at 40% = 0.7 &rarr; 255-63*0.7 = <b>211</b></p>
+  <p><b>11</b> <code>filter: none -&gt; blur(6px)</code> at 40% = <b>blur(2.4px)</b>: the black/white seam softens</p>
+  <p><b>12</b> two filter functions, blended in place &rarr; <code>brightness(0.8) grayscale(0.4)</code></p>
+</div>
+
+</body>
+</html>

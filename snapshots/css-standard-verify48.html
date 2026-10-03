@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 48 — float shrink-to-fit & intrinsic min/max-width</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+.clear { clear: both; }
+.wrap { width: 400px; border: 1px dashed #999; padding: 4px; margin: 8px 0; }
+
+/* 1. float shrink-to-fit */
+.fl { float: left; background: #cfe; border: 1px solid #369; padding: 4px; margin: 2px; }
+
+/* 2. min-width: max-content on a block */
+.mw-max { min-width: max-content; background: #fec; border: 1px solid #c69; padding: 4px; }
+/* 3. max-width: min-content */
+.xw-min { max-width: min-content; background: #cf9; border: 1px solid #393; padding: 4px; }
+/* 4. min-width: min-content + long unbreakable */
+.mw-min { min-width: min-content; background: #ff9; border: 1px solid #cc3; padding: 4px; }
+
+/* 5. intrinsic width on flex item */
+.f { display: flex; border: 1px solid #939; margin: 8px 0; }
+.fitem-mc { width: max-content; background: #ddf; padding: 4px; }
+.fitem-auto { background: #fdd; padding: 4px; }
+
+/* 6. aspect-ratio + max-content */
+.ar { width: max-content; aspect-ratio: 1; background: #ada; padding: 4px; }
+</style>
+</head>
+<body>
+
+<h2>1. float: left shrink-to-fit (two floats side by side)</h2>
+<div class="wrap"><div class="fl">Float A short</div><div class="fl">Float B is a longer piece of text</div><div class="clear"></div></div>
+
+<h2>2. min-width: max-content (block won't shrink below content)</h2>
+<div class="wrap"><div class="mw-max">UnbreakableSupercalifragilistic content forces min-width to max-content</div></div>
+
+<h2>3. max-width: min-content (wraps to narrowest)</h2>
+<div class="wrap"><div class="xw-min">This text is constrained to min-content width and wraps every word</div></div>
+
+<h2>4. min-width: min-content with long word</h2>
+<div class="wrap"><div class="mw-min">Pneumonoultramicroscopicsilicovolcanoconiosis done</div></div>
+
+<h2>5. flex item width: max-content vs auto</h2>
+<div class="f"><div class="fitem-mc">max-content item that is quite long indeed</div><div class="fitem-auto">auto item</div></div>
+
+<h2>6. aspect-ratio 1 with max-content width</h2>
+<div class="ar">square</div>
+
+</body>
+</html>

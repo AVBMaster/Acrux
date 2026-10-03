@@ -1,0 +1,15 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{margin:20px;font:14px Arial}
+/* border shorthand order variants + width keyword */
+.b1{border:3px solid red;width:100px;height:40px}
+.b2{border:thick dashed blue;width:100px;height:40px}     /* thick=5px */
+.b3{border:green double thin;width:100px;height:40px}     /* thin=1px, order color-style-width */
+.b4{border-width:2px 4px;border-style:solid;border-color:#090;width:100px;height:40px}
+/* border with 1 value (style only) → width defaults medium(3px) */
+.b5{border:solid;width:100px;height:40px}
+/* box-sizing border-box with border */
+.b6{box-sizing:border-box;border:10px solid #939;width:100px;height:40px}
+</style></head><body>
+<div class="b1">b1</div><div class="b2">b2</div><div class="b3">b3</div>
+<div class="b4">b4</div><div class="b5">b5</div><div class="b6">b6</div>
+</body></html>

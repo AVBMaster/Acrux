@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b140 anonymous table wrappers</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+.host { width: 300px; margin-bottom: 10px; background: rgb(235,235,235); }
+.cell { display: table-cell; border: 2px solid rgb(200,0,0); padding: 6px; background: rgb(255,240,240); }
+.row { display: table-row; border: 2px solid rgb(0,120,0); background: rgb(235,255,235); }
+.cap { display: table-caption; border: 2px solid rgb(0,0,180); padding: 4px; background: rgb(235,235,255); }
+.col { display: table-column; background: rgb(255,255,200); }
+.cell2 { display: table-cell; border: 2px solid rgb(200,0,0); padding: 6px; }
+.lg { display: list-item; }
+</style>
+</head>
+<body>
+<div class="host" id="h1"><div class="cell" id="c1">alpha</div></div>
+<div class="host" id="h2"><div class="cell" id="c2">alpha</div><div class="cell2" id="c3">beta</div></div>
+<div class="host" id="h3"><div class="row" id="r1"><div class="cell" id="c4">gamma</div></div></div>
+<div class="host" id="h4"><div class="cap" id="p1">caption text</div><div class="cell" id="c5">delta</div></div>
+<div class="host" id="h5"><div class="col" id="q1"></div><div class="cell" id="c6">epsilon</div></div>
+</body>
+</html>

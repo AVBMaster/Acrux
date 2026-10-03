@@ -1,0 +1,25 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{margin:20px;font:16px Arial}
+/* font-size absolute keywords */
+.s-med{font-size:medium}   /* 16 */
+.s-lg{font-size:large}     /* 18 */
+.s-xl{font-size:x-large}   /* 21 */
+.s-sm{font-size:small}     /* 13 */
+.s-xsm{font-size:x-small}  /* 10 */
+.s-xxl{font-size:xx-large} /* 32 */
+/* padding 3-value: top=10 lr=20 bottom=30 → box height grows 40, width grows 40 */
+.p3{width:100px;padding:10px 20px 30px;background:#cfe}
+.p3 span{display:block;height:20px}
+/* margin 3-value on a 100px-wide block in 200px parent */
+.mwrap{width:200px;border:1px solid #939}
+.m3{width:100px;margin:5px 10px 15px;height:20px;background:#fec}
+/* inset 2-value: top/bottom=4 left/right=8 on abspos */
+.iw{position:relative;width:200px;height:100px;border:1px solid #090}
+.i2{position:absolute;inset:4px 8px;width:100px;height:30px;background:#cef}
+</style></head><body>
+<div class="s-med">medium</div><div class="s-lg">large</div><div class="s-xl">x-large</div>
+<div class="s-sm">small</div><div class="s-xsm">x-small</div><div class="s-xxl">xx-large</div>
+<div class="p3"><span>p3</span></div>
+<div class="mwrap"><div class="m3">m3</div></div>
+<div class="iw"><div class="i2">inset</div></div>
+</body></html>

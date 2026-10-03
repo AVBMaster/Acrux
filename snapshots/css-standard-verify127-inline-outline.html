@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b127 inline element outline</title>
+<style>
+body { font: 20px "Segoe UI", sans-serif; margin: 20px; }
+p { line-height: 30px; margin: 0 0 26px 0; }
+.o1 { outline: 3px solid rgb(255,0,0); }
+.o2 { outline: 2px dashed rgb(0,0,255); outline-offset: 3px; }
+.o3 { outline: 4px double rgb(0,150,0); }
+.o4 { outline: rgb(160,0,160) solid 1px; outline-offset: -4px; }
+.wrapped { outline: 2px solid rgb(0,120,120); }
+.ib { display: inline-block; outline: 3px solid rgb(200,120,0); }
+.mark { outline: 2px solid rgb(0,0,0); background: rgb(255,255,0); }
+</style>
+</head>
+<body>
+<p>1 <span class="o1">solid inline outline</span> tail</p>
+<p>2 <span class="o2">dashed with offset</span> tail</p>
+<p>3 <span class="o3">double style</span> tail</p>
+<p>4 <span class="o4">negative offset</span> tail</p>
+<p>5 <span class="wrapped">this inline outline has to be broken across two lines because the text is long enough to wrap inside the paragraph box</span> tail</p>
+<p>6 <span class="ib">inline-block outline</span> tail</p>
+<p>7 <span class="mark">background plus outline</span> tail</p>
+</body>
+</html>

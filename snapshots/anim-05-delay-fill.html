@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 05 閳?delay and fill modes</title>
+<style>
+/* An effect is Before / Active / After relative to its delay and duration
+   (Web Animations 鎼?.4.4). Outside the active phase the animation only
+   contributes a value when the fill mode says so:
+     none       never
+     forwards   after the end
+     backwards  during the delay
+     both       both
+
+   Every row is paused, so the effect is held at local time 0 whatever the
+   timeline does. A positive delay therefore parks the effect in the delay phase
+   and a negative delay large enough to exceed delay+duration parks it after the
+   end 閳?which is how all four fill behaviours are reachable from one static
+   frame, and identically in every engine. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 300px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 90px; height: 60px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  outline: 1px solid #000;
+  text-align: center; line-height: 60px; font-size: 13px;
+  /* the underlying value every row starts from and returns to. 0.6 rather than
+     0.5 so the composited fill (217.2) is not an exact .5, which would sit on the
+     8-bit rounding boundary and could differ by one level between engines. */
+  opacity: 0.6;
+}
+#f1 { left: 10px;  top: 10px; }  #f2 { left: 120px; top: 10px; }
+#f3 { left: 230px; top: 10px; }  #f4 { left: 340px; top: 10px; }
+#f5 { left: 10px;  top: 90px; }  #f6 { left: 120px; top: 90px; }
+#f7 { left: 230px; top: 90px; }  #f8 { left: 340px; top: 90px; }
+#f9 { left: 10px;  top: 170px; }  #f10{ left: 120px; top: 170px; }
+#f11{ left: 230px; top: 170px; }  #f12{ left: 340px; top: 170px; }
+
+@keyframes f { from { opacity: 1; } to { opacity: 0; } }
+
+/* delay phase (+500ms, held at local time 0) */
+#f1  { animation: f 1s 500ms backwards paused; }  /* fill: backwards -> 0%   */
+#f2  { animation: f 1s 500ms forwards  paused; }  /* forwards does not apply before */
+#f3  { animation: f 1s 500ms both      paused; }  /* both      -> 0%         */
+#f4  { animation: f 1s 500ms none      paused; }  /* none      -> underlying */
+
+/* active phase (-500ms puts the held time at 500ms of a 1s iteration) */
+#f5  { animation: f 1s -500ms both     paused; }  /* 50% -> 0.5, same as base */
+#f6  { animation: f 1s -500ms none     paused; }  /* active, fill irrelevant  */
+
+/* after the end (-1200ms > 1s duration) */
+#f7  { animation: f 1s -1200ms forwards paused; }  /* forwards -> 100% (0)   */
+#f8  { animation: f 1s -1200ms none     paused; }  /* none     -> underlying */
+#f9  { animation: f 1s -1200ms backwards paused; }  /* backwards does not apply after */
+#f10 { animation: f 1s -1200ms both      paused; }  /* both     -> 100% (0)   */
+
+/* a zero-duration animation never becomes active */
+#f11 { animation: f 0s 0s forwards paused; }
+#f12 { animation: f 0s -1200ms forwards paused; }
+
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+#legend code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="f1">1</i>
+  <i class="sw" id="f2">2</i>
+  <i class="sw" id="f3">3</i>
+  <i class="sw" id="f4">4</i>
+  <i class="sw" id="f5">5</i>
+  <i class="sw" id="f6">6</i>
+  <i class="sw" id="f7">7</i>
+  <i class="sw" id="f8">8</i>
+  <i class="sw" id="f9">9</i>
+  <i class="sw" id="f10">10</i>
+  <i class="sw" id="f11">11</i>
+  <i class="sw" id="f12">12</i>
+</div>
+
+<div id="legend">
+  <p>underlying <code>opacity: 0.6</code> &rarr; fill <b>217</b>; keyframe 0% = 1 &rarr; fill <b>192</b>; keyframe 100% = 0 &rarr; fill <b>255</b></p>
+  <p><b>1</b> delay 500ms, <code>backwards</code> &rarr; 0% &rarr; <b>192</b></p>
+  <p><b>2</b> delay 500ms, <code>forwards</code> &rarr; underlying &rarr; <b>217</b></p>
+  <p><b>3</b> delay 500ms, <code>both</code> &rarr; 0% &rarr; <b>192</b></p>
+  <p><b>4</b> delay 500ms, <code>none</code> &rarr; underlying &rarr; <b>217</b></p>
+  <p><b>5</b> delay -500ms (active at 50%), <code>both</code> &rarr; <b>217</b></p>
+  <p><b>6</b> delay -500ms (active at 50%), <code>none</code> &rarr; <b>217</b></p>
+  <p><b>7</b> delay -1200ms (past the end), <code>forwards</code> &rarr; 100% &rarr; <b>255</b></p>
+  <p><b>8</b> delay -1200ms (past the end), <code>none</code> &rarr; underlying &rarr; <b>217</b></p>
+  <p><b>9</b> delay -1200ms, <code>backwards</code> &rarr; underlying &rarr; <b>217</b></p>
+  <p><b>10</b> delay -1200ms, <code>both</code> &rarr; 100% &rarr; <b>255</b></p>
+  <p><b>11</b> <code>duration 0s</code> never activates &rarr; underlying &rarr; <b>217</b></p>
+  <p><b>12</b> <code>duration 0s, delay -1200ms</code> &rarr; underlying &rarr; <b>217</b></p>
+</div>
+
+</body>
+</html>

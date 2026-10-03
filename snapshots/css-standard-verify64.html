@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 64 — flex align-content multi-line, order, grid auto-flow dense, place-content</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:16px; }
+.item { background:#cfe; border:1px solid #369; padding:6px 10px; box-sizing:border-box; }
+
+/* 1. align-content on wrapped flex (3 lines) */
+.wrap { display:flex; flex-wrap:wrap; width:240px; height:180px; border:2px solid #939; align-content:space-between; }
+.wrap .item { width:100px; height:40px; }
+
+/* 2. order */
+.ord { display:flex; width:300px; border:2px solid #939; }
+.ord .item { flex:0 0 auto; }
+.o1 { order:2; } .o2 { order:-1; } .o3 { order:0; } .o4 { order:1; }
+
+/* 3. grid auto-flow dense: item spanning forces gaps */
+.dense { display:grid; grid-template-columns:repeat(4,50px); grid-auto-flow:dense; gap:4px; border:2px solid #939; width:max-content; }
+.dense div { background:#cfe; border:1px solid #369; height:30px; }
+.span2 { grid-column: span 2; background:#fec; }
+
+/* 4. place-content (align+justify) on grid */
+.place { display:grid; grid-template-columns:repeat(2,60px); grid-auto-rows:40px; gap:6px; width:240px; height:160px; border:2px solid #939; place-content:center; }
+.place div { background:#cfe; border:1px solid #369; }
+</style>
+</head>
+<body>
+
+<h2>1. flex align-content: space-between (wrapped, 3 rows in 180px)</h2>
+<div class="wrap"><div class="item">A</div><div class="item">B</div><div class="item">C</div><div class="item">D</div><div class="item">E</div><div class="item">F</div></div>
+
+<h2>2. flex order (DOM A B C D → order 2,-1,0,1)</h2>
+<div class="ord"><div class="item o1">A(o2)</div><div class="item o2">B(o-1)</div><div class="item o3">C(o0)</div><div class="item o4">D(o1)</div></div>
+
+<h2>3. grid auto-flow: dense (span2 creates a hole that dense backfills)</h2>
+<div class="dense">
+  <div>1</div><div>2</div><div class="span2">3-4</div><div>5</div><div>6</div><div>7</div><div>8</div><div>9</div>
+</div>
+
+<h2>4. grid place-content: center (2x2 tracks centered in 240x160)</h2>
+<div class="place"><div>1</div><div>2</div><div>3</div><div>4</div></div>
+
+</body>
+</html>

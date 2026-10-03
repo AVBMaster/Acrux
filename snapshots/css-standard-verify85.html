@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 85 — grid placement shorthands (grid-column/row span & lines, grid-area)</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:14px 0 6px; font-size:15px; }
+.g { display:grid; grid-template-columns:60px 60px 60px 60px; grid-template-rows:30px 30px 30px; gap:4px; width:264px; border:2px solid #939; margin-bottom:14px; }
+.g div { background:#cfe; border:1px solid #369; }
+.a { grid-column:2/span 3; grid-row:span 2; }        /* col2..5, row auto span2 */
+.b { grid-area:3/1/4/3; }                            /* row3, col1..3 */
+.c { grid-column:1/2; grid-row:3/4; }                /* col1, row3 (overlaps b) */
+.d { grid-column:span 2; }                           /* auto place, span 2 cols */
+.e { grid-row:2/4; grid-column:4/5; }                /* rows2..4, col4 */
+</style>
+</head>
+<body>
+
+<h2>1. a=col2 span3 + row span2 ; b=grid-area 3/1/4/3 ; c=col1/2 row3/4 (overlap)</h2>
+<div class="g"><div class="a">A</div><div class="b">B</div><div class="c">C</div></div>
+
+<h2>2. d=grid-column:span 2 (auto) ; e=grid-row:2/4 col4/5</h2>
+<div class="g"><div class="d">D</div><div class="e">E</div></div>
+
+</body>
+</html>

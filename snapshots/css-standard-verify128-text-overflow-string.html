@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b128 text-overflow custom string</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 8px; }
+.t { width: 200px; overflow: hidden; white-space: nowrap; border: 1px solid rgb(0,0,0); margin: 0 0 6px 0; }
+.c1 { text-overflow: ellipsis; }
+.c2 { text-overflow: "\00BB"; }
+.c3 { text-overflow: "... more"; }
+.c4 { text-overflow: "\2026 "; }
+.c5 { text-overflow: ""; }
+.c6 { text-overflow: "#" clip; }
+.c7 { text-overflow: no-ellipsis; }
+.c8 { text-overflow: "-"; direction: rtl; }
+.c9 { text-overflow: "\003E\003E\003E"; }
+</style>
+</head>
+<body>
+<div class="t c1" id="t1">aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</div>
+<div class="t c2" id="t2">bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</div>
+<div class="t c3" id="t3">cccccccccccccccccccccccccccccccccccccccccccccccccccccc</div>
+<div class="t c4" id="t4">dddddddddddddddddddddddddddddddddddddddddddddddddddddd</div>
+<div class="t c5" id="t5">eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee</div>
+<div class="t c6" id="t6">ffffffffffffffffffffffffffffffffffffffffffffffffffffff</div>
+<div class="t c7" id="t7">gggggggggggggggggggggggggggggggggggggggggggggggggggggggg</div>
+<div class="t c8" id="t8">hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh</div>
+<div class="t c9" id="t9">iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii</div>
+</body>
+</html>

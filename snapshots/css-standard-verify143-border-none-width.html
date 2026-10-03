@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b143 border style none must zero width</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+table { border-collapse: separate; border-spacing: 0; margin-bottom: 8px; }
+td { padding: 6px; }
+.v1 { border: 0; }
+.v2 { border-width: 3px; }
+.v3 { border: 3px solid rgb(200,0,0); }
+.v4 { border-style: solid; border-color: rgb(200,0,0); }
+.v5 { border: none; }
+.v6 { border: hidden; }
+div.v2d { border-width: 3px; padding: 6px; width: 100px; }
+div.v3d { border: 3px solid rgb(0,120,0); padding: 6px; width: 100px; }
+</style>
+</head>
+<body>
+<table id="m1"><tr><td id="v1" class="v1">alpha</td></tr></table>
+<table id="m2"><tr><td id="v2" class="v2">alpha</td></tr></table>
+<table id="m3"><tr><td id="v3" class="v3">alpha</td></tr></table>
+<table id="m4"><tr><td id="v4" class="v4">alpha</td></tr></table>
+<table id="m5"><tr><td id="v5" class="v5">alpha</td></tr></table>
+<table id="m6"><tr><td id="v6" class="v6">alpha</td></tr></table>
+<div id="v2d" class="v2d">div</div>
+<div id="v3d" class="v3d">div</div>
+</body>
+</html>

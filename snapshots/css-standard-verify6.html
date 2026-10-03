@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Batch 6 (White-space / Blend / Reversal / Counters)</title>
+<style>
+html, body { margin: 0; padding: 0; background: white; font-family: Arial, sans-serif; font-size: 16px; }
+body { padding: 4px; }
+h2 { margin: 8px 0 4px 0; font-size: 14px; color: #333; }
+
+/* ====== GROUP 1: white-space pre / pre-wrap ====== */
+#ws-pre { white-space: pre; font-size: 16px; background: rgb(230,230,230); }
+#ws-prewrap { white-space: pre-wrap; width: 120px; font-size: 16px; background: rgb(230,255,230); }
+
+/* ====== GROUP 2: word-spacing ====== */
+#wsp1 { word-spacing: 12px; font-size: 16px; }
+#wsp2 { font-size: 16px; }
+
+/* ====== GROUP 3: text-shadow offset ====== */
+#ts { font-size: 24px; color: rgb(255,255,255); text-shadow: 3px 3px 0 rgb(255,0,0); background: rgb(0,0,0); }
+
+/* ====== GROUP 4: border styles dashed/dotted/double ====== */
+#bd div { width: 80px; height: 24px; margin-bottom: 6px; border-width: 4px; border-color: rgb(255,0,0); }
+#bd .dashed { border-style: dashed; }
+#bd .dotted { border-style: dotted; }
+#bd .double { border-style: double; border-width: 6px; }
+
+/* ====== GROUP 5: float left + clear ====== */
+#fl { width: 200px; background: rgb(240,240,240); }
+#fl .f { float: left; width: 60px; height: 30px; background: rgb(255,0,0); }
+#fl .f2 { float: left; width: 60px; height: 30px; background: rgb(0,0,255); }
+#fl .c { clear: both; width: 100px; height: 16px; background: rgb(0,255,0); }
+
+/* ====== GROUP 6: inline-block baseline ====== */
+#ib { font-size: 30px; }
+#ib .a { display: inline-block; font-size: 12px; width: 40px; height: 20px; background: rgb(200,200,255); }
+#ib .b { display: inline-block; font-size: 12px; width: 40px; height: 40px; background: rgb(255,200,200); }
+
+/* ====== GROUP 7: transform rotate 45 about center ====== */
+#rot-wrap { width: 120px; height: 120px; position: relative; background: rgb(245,245,245); }
+#rot { position: absolute; left: 40px; top: 40px; width: 40px; height: 40px; background: rgb(255,0,0); transform: rotate(45deg); }
+
+/* ====== GROUP 8: transform-origin 100% 100% scale ====== */
+#to-wrap { width: 120px; height: 80px; position: relative; }
+#to { position: absolute; left: 0; top: 0; width: 40px; height: 40px; background: rgb(0,0,255); transform: scale(2); transform-origin: 100% 100%; }
+
+/* ====== GROUP 9: outline dashed ====== */
+#od { width: 80px; height: 30px; background: rgb(220,220,220); outline: 4px dashed rgb(255,0,0); outline-offset: 2px; }
+
+/* ====== GROUP 10: table border-collapse: collapse ====== */
+#tc { border-collapse: collapse; }
+#tc td { width: 40px; height: 20px; border: 4px solid rgb(255,0,0); padding: 0; }
+
+/* ====== GROUP 11: colgroup width ====== */
+#cg { border-collapse: separate; border-spacing: 0; }
+#cg col.w1 { width: 60px; }
+#cg col.w2 { width: 20px; }
+#cg td { height: 16px; background: rgb(200,200,255); }
+
+/* ====== GROUP 12: justify-content space-around / space-evenly ====== */
+#ja { display: flex; justify-content: space-around; width: 200px; height: 24px; background: rgb(235,235,235); }
+#je { display: flex; justify-content: space-evenly; width: 200px; height: 24px; background: rgb(235,235,235); }
+#ja div, #je div { width: 40px; background: rgb(255,0,0); }
+
+/* ====== GROUP 13: align-self flex-end ====== */
+#as { display: flex; align-items: flex-start; width: 200px; height: 60px; background: rgb(235,235,235); }
+#as .a { width: 40px; height: 20px; background: rgb(255,0,0); }
+#as .b { width: 40px; height: 20px; background: rgb(0,0,255); align-self: flex-end; }
+
+/* ====== GROUP 14: flex-direction row-reverse / column-reverse ====== */
+#rr { display: flex; flex-direction: row-reverse; width: 140px; height: 20px; }
+#rr div { width: 40px; }
+#rr .a { background: rgb(255,0,0); }
+#rr .b { background: rgb(0,255,0); }
+#cr { display: flex; flex-direction: column-reverse; width: 40px; height: 60px; }
+#cr div { height: 20px; }
+#cr .a { background: rgb(255,0,0); }
+#cr .b { background: rgb(0,0,255); }
+
+/* ====== GROUP 15: grid gap + auto-rows + fr ====== */
+#gr { display: grid; grid-template-columns: 1fr 2fr; grid-auto-rows: 20px; gap: 8px; width: 128px; }
+#gr div { background: rgb(255,0,0); }
+#gr .g2 { background: rgb(0,0,255); }
+
+/* ====== GROUP 16: order property ====== */
+#or { display: flex; width: 140px; height: 20px; }
+#or div { width: 40px; }
+#or .a { background: rgb(255,0,0); order: 2; }
+#or .b { background: rgb(0,0,255); order: 1; }
+
+/* ====== GROUP 17: list-style-type roman/alpha ====== */
+#lm { list-style-type: lower-roman; margin-left: 0; padding-left: 40px; }
+#lm li { font-size: 16px; }
+#la { list-style-type: upper-alpha; padding-left: 40px; }
+#la li { font-size: 16px; }
+
+/* ====== GROUP 18: content: counter() ====== */
+#cn { counter-reset: sec; }
+#cn .h::before { content: counter(sec) ". "; counter-increment: sec; }
+
+/* ====== GROUP 19: display: contents ====== */
+#dc { display: contents; }
+#dc div { width: 60px; height: 20px; background: rgb(255,0,0); }
+#dc .d2 { background: rgb(0,0,255); }
+
+/* ====== GROUP 20: mix-blend-mode multiply + filter grayscale ====== */
+#mb { position: relative; width: 100px; height: 40px; background: rgb(255,255,0); }
+#mb .o { position: absolute; left: 20px; top: 10px; width: 60px; height: 20px; background: rgb(0,255,255); mix-blend-mode: multiply; }
+#fg { width: 60px; height: 30px; background: linear-gradient(to right, rgb(255,0,0), rgb(0,0,255)); filter: grayscale(1); }
+</style>
+</head>
+<body>
+
+<h2>1. white-space pre / pre-wrap</h2>
+<div id="ws-pre">a b   c
+d</div>
+<div id="ws-prewrap">hello verylongword here
+next line</div>
+
+<h2>2. word-spacing 12px</h2>
+<div><span id="wsp1">one two three</span></div>
+<div><span id="wsp2">one two three</span></div>
+
+<h2>3. text-shadow 3px 3px red</h2>
+<div id="ts">SHADOW</div>
+
+<h2>4. border dashed/dotted/double</h2>
+<div id="bd"><div class="dashed"></div><div class="dotted"></div><div class="double"></div></div>
+
+<h2>5. float left + clear both</h2>
+<div id="fl"><div class="f"></div><div class="f2"></div><div class="c"></div></div>
+
+<h2>6. inline-block baseline</h2>
+<div id="ib">X<span class="a">a</span><span class="b">b</span></div>
+
+<h2>7. rotate(45deg) center</h2>
+<div id="rot-wrap"><div id="rot"></div></div>
+
+<h2>8. scale(2) origin 100% 100%</h2>
+<div id="to-wrap"><div id="to"></div></div>
+
+<h2>9. outline 4px dashed +2 offset</h2>
+<div id="od"></div>
+
+<h2>10. table border-collapse: collapse</h2>
+<table id="tc"><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>
+
+<h2>11. colgroup widths 60/20</h2>
+<table id="cg"><colgroup><col class="w1"><col class="w2"></colgroup><tr><td>a</td><td>b</td></tr></table>
+
+<h2>12. space-around / space-evenly</h2>
+<div id="ja"><div></div><div></div></div>
+<div id="je"><div></div><div></div></div>
+
+<h2>13. align-self: flex-end</h2>
+<div id="as"><div class="a"></div><div class="b"></div></div>
+
+<h2>14. row-reverse / column-reverse</h2>
+<div id="rr"><div class="a"></div><div class="b"></div></div>
+<div id="cr"><div class="a"></div><div class="b"></div></div>
+
+<h2>15. grid 1fr 2fr gap 8</h2>
+<div id="gr"><div></div><div class="g2"></div><div></div><div></div></div>
+
+<h2>16. order: blue(1) before red(2)</h2>
+<div id="or"><div class="a"></div><div class="b"></div></div>
+
+<h2>17. list markers roman / alpha</h2>
+<ul id="lm"><li>one</li><li>two</li><li>three</li></ul>
+<ul id="la"><li>one</li><li>two</li></ul>
+
+<h2>18. counter() in ::before</h2>
+<div id="cn"><div class="h">first</div><div class="h">second</div><div class="h">third</div></div>
+
+<h2>19. display: contents wrapper</h2>
+<div style="width:200px"><div id="dc"><div></div><div class="d2"></div></div></div>
+
+<h2>20. mix-blend multiply / grayscale filter</h2>
+<div id="mb"><div class="o"></div></div>
+<div id="fg"></div>
+
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 71 — flex item margins (stretch/main/auto)</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.c { background:#cfe; border:1px solid #369; }
+
+/* 1. flex row: item with horizontal margin, main distribution */
+.f1 { display:flex; width:300px; height:60px; border:2px solid #939; }
+.f1 .m { margin:0 20px; width:60px; }
+.f1 .g { flex:1; }
+
+/* 2. flex row align-items:stretch, item with vertical margin (should not stretch into margin) */
+.f2 { display:flex; align-items:stretch; width:200px; height:100px; border:2px solid #939; }
+.f2 .vm { margin:15px 0; width:50px; background:#fec; }
+
+/* 3. auto margin pushes item to end */
+.f3 { display:flex; width:300px; border:2px solid #939; }
+.f3 .push { margin-left:auto; }
+
+/* 4. flex item margin + flex-basis interplay */
+.f4 { display:flex; width:300px; border:2px solid #939; }
+.f4 .a { flex:0 0 100px; margin:0 10px; }
+.f4 .b { flex:1; margin:0 10px; }
+</style>
+</head>
+<body>
+
+<h2>1. flex row: A margin 0/20, B flex:1 (B should be 300-60-40=200)</h2>
+<div class="f1"><div class="c m">A</div><div class="c g">B</div></div>
+
+<h2>2. align-items:stretch, item margin 15px v (border-box height = 100-30=70)</h2>
+<div class="f2"><div class="vm">V</div></div>
+
+<h2>3. auto margin-left pushes item to right end</h2>
+<div class="f3"><div class="c">L</div><div class="c push">R</div></div>
+
+<h2>4. flex-basis + margin: a=100+20margin, b=flex:1 (b border-box=300-120-20-20=140)</h2>
+<div class="f4"><div class="c a">A</div><div class="c b">B</div></div>
+
+</body>
+</html>

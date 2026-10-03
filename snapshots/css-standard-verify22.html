@@ -1,0 +1,68 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body { font-family: Arial; font-size: 16px; margin: 8px; }
+h2 { font-size: 14px; background: #eee; margin: 10px 0 4px; }
+.box { border: 1px solid black; }
+
+/* g1: CSS 2.1 §10.6.4 min/max vs height */
+.mh1 { min-height: 100px; max-height: 60px; background: #f88; width: 120px; }
+.mh2 { max-height: 40px; min-height: 80px; background: #8f8; width: 120px; }
+.mh3 { height: 200px; max-height: 90px; overflow: hidden; background: #88f; width: 120px; }
+.mh4wrap { height: 120px; background: #eee; width: 120px; }
+.mh4 { height: 50%; background: #fc0; }
+.mh5 { display: inline-block; height: 300px; max-height: 100px; background: #c8f; width: 60px; vertical-align: top; }
+
+/* g2: auto margins */
+.ib-auto { display: inline-block; width: 100px; height: 20px; margin: 0 auto; background: #f9c; border: 1px solid black; }
+.b-auto { width: 100px; height: 20px; margin: 0 auto; background: #9cf; }
+.fx { display: flex; width: 300px; border: 1px solid gray; }
+.fx .auto { margin-left: auto; width: 50px; height: 20px; background: #6c6; }
+
+/* g3: text-shadow */
+.ts1 { text-shadow: 2px 2px red; }
+.ts2 { text-shadow: 2px 2px 0 blue, -2px -2px 0 green; }
+.ts3 { color: transparent; text-shadow: 1px 1px 1px black; }
+.ts4 { text-shadow: 3px 3px 2px; }
+
+/* g4: place-* shorthands */
+.p1 { display: flex; place-items: center; height: 60px; border: 1px solid black; }
+.p2 { display: flex; place-content: center space-between; height: 60px; flex-wrap: wrap; border: 1px solid black; }
+.p2 > div { width: 40%; height: 15px; background: #faa; }
+.p3 { display: grid; grid-template-columns: 60px 60px; place-items: end start; height: 60px; border: 1px solid black; }
+.p3 > div { background: #adf; width: 20px; height: 10px; }
+
+/* g5: caption-side */
+caption { caption-side: bottom; background: #ffd; }
+table.cap { border-collapse: collapse; width: 200px; }
+table.cap td { border: 1px solid black; padding: 2px; }
+
+/* g6: percentage padding & box-sizing */
+.pp { width: 200px; padding-bottom: 25%; background: #cdf; border: 1px solid black; }
+.pp2 { width: 200px; padding: 10% 5%; background: #fdc; }
+.bs { box-sizing: border-box; width: 100px; padding: 20px; border: 5px solid black; background: #afa; }
+</style></head><body>
+<h2>1. min/max-height interaction (§10.6.4)</h2>
+<div class="mh1 box">min100 gt max60</div>
+<div class="mh2 box">max40 lt min80</div>
+<div class="mh3 box">h200 clipped to 90: filler filler filler filler filler filler filler filler filler filler filler filler</div>
+<div class="mh4wrap"><div class="mh4">50% of 120</div></div>
+<p>ib: <span class="mh5"></span> tail</p>
+<h2>2. margin:auto on inline-block vs block vs flex</h2>
+<p>[<span class="ib-auto">ib</span>] after</p>
+<div class="b-auto box">block auto</div>
+<div class="fx"><div class="auto"></div></div>
+<h2>3. text-shadow matrix</h2>
+<div class="ts1">shadow offset solid</div>
+<div class="ts2">two shadows</div>
+<div class="ts3">transparent fill</div>
+<div class="ts4">no color inherits</div>
+<h2>4. place-* shorthands</h2>
+<div class="p1"><div class="box" style="height:20px">pi-center</div></div>
+<div class="p2"><div>a</div><div>b</div><div>c</div></div>
+<div class="p3"><div>1</div><div>2</div><div>3</div><div>4</div></div>
+<h2>5. caption-side: bottom</h2>
+<table class="cap"><caption>cap below</caption><tr><td>cell</td><td>cell2</td></tr></table>
+<h2>6. percentage padding &amp; box-sizing</h2>
+<div class="pp">pb 25% of width</div>
+<div class="pp2 box">p 10% 5%</div>
+<div class="bs">border-box 100</div>
+</body></html>

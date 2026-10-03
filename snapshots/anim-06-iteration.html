@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 06 閳?iteration count and direction</title>
+<style>
+/* iteration-count and animation-direction decide which keyframe interval the
+   current time lands in and whether it runs forwards. Each row is paused with a
+   negative delay chosen so the held local time falls on a specific iteration
+   boundary region:
+     -1250ms into a 1s animation is iteration 1 at 25% (an odd iteration)
+     -2250ms is iteration 2 at 25% (an even iteration)
+   fill = 255 - 63 * opacity, and opacity = 1 - progress. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 300px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 90px; height: 60px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  outline: 1px solid #000;
+  text-align: center; line-height: 60px; font-size: 13px;
+}
+#i1 { left: 10px;  top: 10px; }  #i2 { left: 120px; top: 10px; }
+#i3 { left: 230px; top: 10px; }  #i4 { left: 340px; top: 10px; }
+#i5 { left: 10px;  top: 90px; }  #i6 { left: 120px; top: 90px; }
+#i7 { left: 230px; top: 90px; }  #i8 { left: 340px; top: 90px; }
+#i9 { left: 10px;  top: 170px; }  #i10{ left: 120px; top: 170px; }
+#i11{ left: 230px; top: 170px; }  #i12{ left: 340px; top: 170px; }
+
+@keyframes f { from { opacity: 1; } to { opacity: 0; } }
+
+/* one iteration: at 50% of it, whichever the direction */
+#i1  { animation: f 1s -500ms normal linear paused; }
+#i2  { animation: f 1s -500ms reverse linear paused; }
+
+/* 4 iterations, held in iteration 1 (odd) at 25% */
+#i3  { animation: f 1s -1250ms 4 normal linear paused; }
+#i4  { animation: f 1s -1250ms 4 reverse linear paused; }
+#i5  { animation: f 1s -1250ms 4 alternate linear paused; }
+#i6  { animation: f 1s -1250ms 4 alternate-reverse linear paused; }
+
+/* 4 iterations, held in iteration 2 (even) at 25% */
+#i7  { animation: f 1s -2250ms 4 alternate linear paused; }
+#i8  { animation: f 1s -2250ms 4 alternate-reverse linear paused; }
+
+/* infinite keeps iterating past the nominal end */
+#i9  { animation: f 1s -3250ms infinite alternate linear paused; }
+
+/* fractional iteration counts: the last iteration is cut short */
+#i10 { animation: f 1s -250ms 0.5 linear paused; }
+#i11 { animation: f 1s -1250ms 2.5 linear paused; }
+
+/* past the end of a single iteration, holding the fill */
+#i12 { animation: f 1s -1200ms forwards linear paused; }
+
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+#legend code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="i1">1</i>
+  <i class="sw" id="i2">2</i>
+  <i class="sw" id="i3">3</i>
+  <i class="sw" id="i4">4</i>
+  <i class="sw" id="i5">5</i>
+  <i class="sw" id="i6">6</i>
+  <i class="sw" id="i7">7</i>
+  <i class="sw" id="i8">8</i>
+  <i class="sw" id="i9">9</i>
+  <i class="sw" id="i10">10</i>
+  <i class="sw" id="i11">11</i>
+  <i class="sw" id="i12">12</i>
+</div>
+
+<div id="legend">
+  <p>fill = <b>255 - 63 &times; opacity</b>, opacity = 1 - progress</p>
+  <p><b>1</b> <code>normal</code> at 50% &rarr; opacity 0.5 &rarr; <b>223</b></p>
+  <p><b>2</b> <code>reverse</code> at 50% &rarr; opacity 0.5 &rarr; <b>223</b></p>
+  <p><b>3</b> 4 iters, iteration 1 (odd), <code>normal</code> &rarr; progress 0.25, opacity 0.75 &rarr; <b>208</b></p>
+  <p><b>4</b> 4 iters, iteration 1, <code>reverse</code> &rarr; progress 0.75, opacity 0.25 &rarr; <b>239</b></p>
+  <p><b>5</b> 4 iters, iteration 1 (odd), <code>alternate</code> &rarr; progress 0.75, opacity 0.25 &rarr; <b>239</b></p>
+  <p><b>6</b> 4 iters, iteration 1 (odd), <code>alternate-reverse</code> &rarr; progress 0.25, opacity 0.75 &rarr; <b>208</b></p>
+  <p><b>7</b> 4 iters, iteration 2 (even), <code>alternate</code> &rarr; progress 0.25, opacity 0.75 &rarr; <b>208</b></p>
+  <p><b>8</b> 4 iters, iteration 2 (even), <code>alternate-reverse</code> &rarr; progress 0.75, opacity 0.25 &rarr; <b>239</b></p>
+  <p><b>9</b> <code>infinite alternate</code> at iteration 3 (odd) &rarr; opacity 0.25 &rarr; <b>239</b></p>
+  <p><b>10</b> <code>0.5</code> iterations at 50% of the half-iteration &rarr; opacity 0.5 &rarr; <b>223</b></p>
+  <p><b>11</b> <code>2.5</code> iterations at iteration 1, 25% &rarr; opacity 0.75 &rarr; <b>208</b></p>
+  <p><b>12</b> past the end, <code>forwards</code> &rarr; opacity 0 &rarr; <b>255</b></p>
+</div>
+
+</body>
+</html>

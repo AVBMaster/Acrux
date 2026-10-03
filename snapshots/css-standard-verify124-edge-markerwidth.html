@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b124 edge marker width fingerprint</title>
+<style>
+body { font: 16px "Segoe UI", "Yu Gothic", sans-serif; margin: 6px; }
+#u { list-style-position: inside; padding: 0; margin: 0; }
+#u li { display: list-item; font: 16px "Segoe UI", "Yu Gothic", sans-serif; }
+#cand { font: 16px "Segoe UI", "Yu Gothic", sans-serif; }
+#out { white-space: pre; font: 12px Consolas, monospace; }
+</style>
+</head>
+<body>
+<ul id="u"></ul><span id="cand"></span><div id="out"></div>
+<script src="tools/markerwidth_data.js"></script>
+<script>
+var NL = String.fromCharCode(10);
+var ul = document.getElementById("u");
+var cand = document.getElementById("cand");
+var rows = [];
+function textLeft(li) {
+  var r = document.createRange();
+  r.selectNodeContents(li);
+  return r.getBoundingClientRect().left;
+}
+function measure(style, value) {
+  ul.textContent = "";
+  var a = document.createElement("li");
+  a.textContent = "8";
+  a.setAttribute("value", String(value));
+  a.style.listStyleType = style;
+  ul.appendChild(a);
+  var b = document.createElement("li");
+  b.textContent = "8";
+  b.style.listStyleType = "none";
+  ul.appendChild(b);
+  return textLeft(a) - textLeft(b);
+}
+for (var i = 0; i < MARKER_DATA.length; i++) {
+  var d = MARKER_DATA[i];
+  var got = measure(d.style, d.value);
+  cand.textContent = d.marker;
+  var want = cand.getBoundingClientRect().width;
+  cand.textContent = d.marker + " ";
+  var wantSpace = cand.getBoundingClientRect().width;
+  rows.push([d.style, d.value, d.marker, got.toFixed(2), want.toFixed(2),
+             (got - want).toFixed(2), (got - wantSpace).toFixed(2)].join("|"));
+}
+document.getElementById("out").textContent = rows.join(NL);
+document.title = "DONE " + rows.length;
+</script>
+</body>
+</html>

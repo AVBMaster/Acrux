@@ -1,0 +1,20 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{margin:20px;font:15px Arial}
+ol{margin:0 0 10px}
+.roman{list-style-type:upper-roman}
+.latin{list-style-type:lower-latin}
+.greek{list-style-type:lower-greek}
+.hanzi{list-style-type:cjk-decimal}
+.armn{list-style-type:armenian}
+.dec0{list-style-type:decimal-leading-zero}
+/* nested counters */
+.c{counter-reset:sec 0}
+.c li{counter-increment:sec}
+.c li::before{content:"§" counter(sec) ". "}
+</style></head><body>
+<ol class="roman"><li>I</li><li>II</li><li>III</li><li>IV</li></ol>
+<ol class="greek"><li>al</li><li>be</li><li>ga</li></ol>
+<ol class="hanzi"><li>一</li><li>二</li><li>三</li></ol>
+<ol class="dec0"><li>a</li><li>b</li><li>c</li></ol>
+<ol class="c"><li>first</li><li>second</li><li>third</li></ol>
+</body></html>

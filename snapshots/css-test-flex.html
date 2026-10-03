@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{margin:0;font:14px sans-serif;background:#fff}
+h4{margin:10px 8px 4px}
+.f{display:flex;background:#f3f6fa;border:1px solid #99a;margin:8px;width:320px;padding:4px}
+.f i{display:block;width:40px;height:24px;background:#5a8;color:#fff;font-style:normal;text-align:center}
+.jc{justify-content:center}.je{justify-content:flex-end}
+.sb{justify-content:space-between}.sa{justify-content:space-around}.se{justify-content:space-evenly}
+.ac{align-items:center}.ae{align-items:flex-end}.as{align-items:flex-start}
+.g10{gap:10px}
+.col{flex-direction:column;height:120px}
+.colr{flex-direction:column-reverse;height:120px}
+.rowr{flex-direction:row-reverse}
+.wrap{flex-wrap:wrap;width:110px}
+.grow i:first-child{flex-grow:1}
+.shrink i{width:100px;flex-shrink:1}
+.basis i:first-child{flex-basis:120px;width:40px}
+.ord i:nth-child(2){order:-1}
+.self i:nth-child(2){align-self:flex-end;height:40px}
+.auto i:nth-child(2){margin-left:auto}
+.ibf{display:inline-flex;width:auto}
+.n4 i:nth-child(1){background:#e33}.n4 i:nth-child(2){background:#3e3}.n4 i:nth-child(3){background:#33e}
+</style></head>
+<body>
+<h4>1. default row (3 items left, stretch cross)</h4>
+<div class="f"><i>1</i><i>2</i><i>3</i></div>
+<h4>2. justify: center / flex-end / space-between / around / evenly</h4>
+<div class="f jc"><i>1</i><i>2</i><i>3</i></div>
+<div class="f je"><i>1</i><i>2</i><i>3</i></div>
+<div class="f sb"><i>1</i><i>2</i><i>3</i></div>
+<div class="f sa"><i>1</i><i>2</i><i>3</i></div>
+<div class="f se"><i>1</i><i>2</i><i>3</i></div>
+<h4>3. align-items center / flex-end (tall container)</h4>
+<div class="f ac" style="height:60px"><i>1</i><i>2</i><i>3</i></div>
+<div class="f ae" style="height:60px"><i>1</i><i>2</i><i>3</i></div>
+<h4>4. gap 10 + row-reverse</h4>
+<div class="f g10"><i>1</i><i>2</i><i>3</i></div>
+<div class="f rowr"><i>1</i><i>2</i><i>3</i></div>
+<h4>5. column / column-reverse</h4>
+<div class="f col"><i>1</i><i>2</i><i>3</i></div>
+<div class="f colr"><i>1</i><i>2</i><i>3</i></div>
+<h4>6. wrap narrow (3 rows of 1)</h4>
+<div class="f wrap"><i>1</i><i>2</i><i>3</i></div>
+<h4>7. grow first / shrink all (3x100 in 320) / basis first</h4>
+<div class="f grow"><i>1</i><i>2</i><i>3</i></div>
+<div class="f shrink"><i>1</i><i>2</i><i>3</i></div>
+<div class="f basis"><i>1</i><i>2</i><i>3</i></div>
+<h4>8. order -1 on middle / margin-left auto / align-self</h4>
+<div class="f ord n4"><i>1</i><i>2</i><i>3</i></div>
+<div class="f auto n4"><i>1</i><i>2</i><i>3</i></div>
+<div class="f self n4" style="height:60px"><i>1</i><i>2</i><i>3</i></div>
+<h4>9. inline-flex shrink-to-fit</h4>
+<div style="margin:8px">text before <span class="f ibf"><i>1</i><i>2</i></span> text after</div>
+</body></html>

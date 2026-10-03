@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 66 — grid justify-self/place-items, minmax, flex column gap + baseline</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.c { background:#cfe; border:1px solid #369; padding:2px; }
+
+/* 1. grid justify-items + per-item justify-self override */
+.g1 { display:grid; grid-template-columns:repeat(3,80px); grid-auto-rows:36px; gap:6px; width:258px; border:2px solid #939; justify-items:start; }
+.g1 .end { justify-self:end; }
+.g1 .ctr { justify-self:center; }
+.g1 .str { justify-self:stretch; }
+
+/* 2. grid minmax + auto-fit */
+.g2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(60px,1fr)); gap:8px; width:300px; border:2px solid #939; }
+.g2 div { background:#fec; border:1px solid #c60; height:30px; }
+
+/* 3. flex column with gap */
+.f3 { display:flex; flex-direction:column; gap:10px; width:120px; border:2px solid #939; }
+.f3 div { background:#cfe; border:1px solid #369; height:24px; }
+
+/* 4. flex baseline align with different font sizes */
+.f4 { display:flex; align-items:baseline; width:300px; border:2px solid #939; }
+.f4 .s1 { font-size:14px; background:#fec; }
+.f4 .s2 { font-size:32px; background:#cfe; }
+.f4 .s3 { font-size:14px; background:#fec; }
+</style>
+</head>
+<body>
+
+<h2>1. grid justify-items:start + justify-self(end/center/stretch)</h2>
+<div class="g1"><div class="c">a</div><div class="c end">b</div><div class="c ctr">c</div><div class="c str">d</div><div class="c">e</div><div class="c">f</div></div>
+
+<h2>2. grid auto-fit minmax(60px,1fr) in 300px (should be 4 cols)</h2>
+<div class="g2"><div>1</div><div>2</div><div>3</div><div>4</div></div>
+
+<h2>3. flex column gap:10 (3 items 24px each)</h2>
+<div class="f3"><div>one</div><div>two</div><div>three</div></div>
+
+<h2>4. flex align-items:baseline (mixed font sizes share baseline)</h2>
+<div class="f4"><div class="s1">Aa</div><div class="s2">Bb</div><div class="s3">Cc</div></div>
+
+</body>
+</html>

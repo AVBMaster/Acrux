@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Batch 12 (Tab Stops / Generic Fonts / Drop Cap / Column Span / Pre Defaults)</title>
+<style>
+html, body { margin: 0; padding: 4px; background: rgb(255,255,255); font-family: Arial, sans-serif; font-size: 16px; line-height: 20px; }
+h2 { margin: 10px 0 4px 0; font-size: 13px; color: rgb(51,51,51); }
+p { margin: 0; }
+.box { width: 240px; background: rgb(238,238,238); }
+
+/* ====== GROUP 1-3: tab stops (CSS Text 3 §3.4) ====== */
+.t { white-space: pre; background: rgb(255,255,0); tab-size: 30px; }
+.u { white-space: pre; background: rgb(255,255,0); tab-size: 2; }
+.d { white-space: pre; background: rgb(255,255,0); }
+
+/* ====== GROUP 4: generic font keywords ====== */
+#g4 { line-height: 20px; }
+#g4 span { background: rgb(255,255,0); }
+.mono { font-family: monospace; }
+.sans { font-family: sans-serif; }
+.serif { font-family: serif; }
+
+/* ====== GROUP 5: ::first-letter with float:left (drop cap) ====== */
+#g5 { width: 240px; background: rgb(238,238,238); }
+#g5::first-letter { float: left; font-size: 40px; line-height: 40px; color: rgb(255,0,0); padding-right: 6px; }
+
+/* ====== GROUP 6: multi-column with a spanner ====== */
+#g6 { columns: 2; column-gap: 20px; width: 240px; background: rgb(230,230,255); }
+#g6 .span { column-span: all; background: rgb(255,0,0); height: 20px; }
+#g6 p { margin: 0; background: rgb(255,255,0); }
+
+/* ====== GROUP 7: pre UA defaults (no padding/border/background) ====== */
+pre { margin: 0; }
+</style>
+</head>
+<body>
+
+<h2>1. tab-size: 30px (a@8, b@38, tail@68)</h2>
+<div class="t" id="g1">a	b	tail</div>
+
+<h2>2. tab-size: 2 (two space advances per stop)</h2>
+<div class="u" id="g2">a	b	tail</div>
+
+<h2>3. default tab-size (8 spaces)</h2>
+<div class="d" id="g3">a	b	tail</div>
+
+<h2>4. generic families: monospace / sans-serif / serif widths of "0000"</h2>
+<div id="g4"><span class="mono" id="g4a">0000</span> <span class="sans" id="g4b">0000</span> <span class="serif" id="g4c">0000</span></div>
+
+<h2>5. ::first-letter float:left drop cap (40px red, 6px gap)</h2>
+<div id="g5">Drop cap letters hang out to the left of the first lines of text beside them.</div>
+
+<h2>6. column-span: all heading across both columns</h2>
+<div id="g6"><p>one two three four five six seven eight</p><div class="span">span</div><p>aaa bbb ccc ddd eee fff</p></div>
+
+<h2>7. pre has no padding/border/background (text starts at x=8)</h2>
+<pre id="g7">abcdef</pre>
+
+</body>
+</html>

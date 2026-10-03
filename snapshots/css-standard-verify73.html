@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 73 — calc in geometry, margin auto mixed, inset 4-value, border-width sides</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.c { background:#cfe; border:1px solid #369; }
+
+/* 1. width: calc(50% + 20px) with min/max clamp */
+.w1 { width: calc(50% + 20px); max-width: 200px; border:2px solid #939; background:#cfe; height:24px; }
+/* 2. padding calc + margin calc */
+.p1 { width:200px; padding: calc(10px + 5px) calc(2em - 10px); border:2px solid #939; background:#fec; box-sizing:content-box; }
+/* 3. margin shorthand with auto mixed: margin: 10px auto */
+.m1 { width:150px; height:24px; margin: 10px auto; background:#cfe; border:1px solid #369; }
+/* 4. inset 4-value (top right bottom left) */
+.wrap { position:relative; width:200px; height:120px; border:2px solid #939; background:#eef; }
+.ins { position:absolute; background:#fec; inset: 10px 20px 30px 40px; }
+/* 5. border-width four sides via shorthand */
+.bw { width:120px; height:40px; background:#cfe; border-style:solid; border-color:#000; border-width: 1px 10px 20px 30px; }
+/* 6. top/left calc on absolute */
+.abs { position:absolute; top: calc(50% - 10px); left: calc(25% + 5px); width:40px; height:20px; background:#0a0; }
+</style>
+</head>
+<body>
+
+<h2>1. width calc(50%+20px) clamped by max-width 200 (container 596 → 200)</h2>
+<div class="w1">W</div>
+
+<h2>2. padding calc(10px+5px) calc(2em-10px) [15px / 18px] on 200 wide</h2>
+<div class="p1">P</div>
+
+<h2>3. margin:10px auto (centered 150px box)</h2>
+<div class="m1">M</div>
+
+<h2>4. inset: 10px 20px 30px 40px (absolute)</h2>
+<div class="wrap"><div class="ins">I</div><div class="abs">A</div></div>
+
+<h2>5. border-width 1px 10px 20px 30px</h2>
+<div class="bw">B</div>
+
+</body>
+</html>

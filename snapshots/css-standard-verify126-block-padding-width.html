@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b126 auto-width block child inside padding / border container</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+.wrap { width: 300px; }
+.p { padding: 0 20px; background: rgb(230,230,230); }
+.p2 { padding: 10px 30px 10px 5px; background: rgb(235,225,205); }
+.b { border: 4px solid rgb(120,120,200); padding: 0 12px; }
+.child { background: rgb(255,128,128); height: 20px; }
+.child2 { background: rgb(0,160,0); height: 20px; width: auto; }
+.marg { margin: 0 15px; }
+.pct { width: 50%; }
+.ib { display: inline-block; }
+.abs { position: absolute; left: 0; right: 0; }
+.row { position: relative; height: 40px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="p" id="w1"><div class="child" id="k1"></div></div>
+  <div class="p2" id="w2"><div class="child" id="k2"></div></div>
+  <div class="b" id="w3"><div class="child" id="k3"></div></div>
+  <div class="p" id="w4"><div class="child marg" id="k4"></div></div>
+  <div class="p" id="w5"><div class="child pct" id="k5"></div></div>
+  <div class="p" id="w6"><div class="child ib" id="k6" style="width:auto;height:20px"></div></div>
+  <div class="row" id="w7"><div class="child abs" id="k7" style="height:20px"></div></div>
+  <div class="p" id="w8"><div class="child" id="k8" style="min-width:400px"></div></div>
+  <div class="p" id="w9"><div class="child" id="k9" style="max-width:100px"></div></div>
+  <div class="p" id="w10"><div class="child" id="k10" style="box-sizing:border-box;border-left:7px solid #000;border-right:9px solid #000"></div></div>
+</div>
+</body>
+</html>

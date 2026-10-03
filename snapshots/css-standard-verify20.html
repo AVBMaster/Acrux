@@ -1,0 +1,55 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body { font-family: Arial; font-size: 16px; margin: 8px; }
+h2 { font-size: 14px; background: #eee; margin: 10px 0 4px; }
+.box { border: 1px solid black; padding: 2px; }
+#g1 div { border: 1px solid rgb(0,128,0); margin: 2px 0; padding: 2px; direction: rtl; }
+#g1 .ta-left { text-align: left; }
+#g1 .ta-right { text-align: right; }
+#g1 .ta-center { text-align: center; }
+#g1 .ta-end { text-align: end; }
+va { background: rgba(255,0,0,0.25); }
+.tall { display: inline-block; width: 8px; height: 60px; background: rgb(0,0,255); vertical-align: baseline; }
+#g4 table { border-collapse: collapse; table-layout: auto; width: 160px; }
+#g4 td, #g4 th { border: 1px solid black; }
+.ws { white-space: pre-line; border: 1px solid rgb(128,0,128); width: 200px; display: inline-block; }
+.brk { white-space: break-spaces; }
+</style></head><body>
+<h2>1. direction: rtl + text-align physical/logical</h2>
+<div id="g1">
+  <div>mixed English and עברית text here</div>
+  <div class="ta-left">left aligned rtl paragraph</div>
+  <div class="ta-right">right aligned rtl paragraph</div>
+  <div class="ta-center">center aligned rtl paragraph</div>
+  <div class="ta-end">end aligned rtl paragraph</div>
+</div>
+<h2>2. vertical-align keyword matrix (60px tall blue block)</h2>
+<p id="g2"><span class="tall"></span>
+  <va style="vertical-align: baseline">base</va>
+  <va style="vertical-align: top">top</va>
+  <va style="vertical-align: middle">mid</va>
+  <va style="vertical-align: bottom">bot</va>
+  <va style="vertical-align: text-top">ttop</va>
+  <va style="vertical-align: text-bottom">tbot</va>
+  <span class="tall"></span></p>
+<h2>3. synthetic italic / synthetic bold</h2>
+<p id="g3"><span style="font-style: italic">italic Arial</span>
+  <span style="font-style: oblique 20deg">oblique20</span>
+  <span style="font-weight: 900">heavy900</span>
+  <span style="font-weight: 100">light100</span></p>
+<h2>4. overflow-wrap in table cell (160px table)</h2>
+<div id="g4">
+  <table><tr><td class="box" style="overflow-wrap: break-word">Supercalifragilisticexpialidocious</td></tr>
+        <tr><td class="box" style="overflow-wrap: normal">Supercalifragilisticexpialidocious</td></tr></table>
+</div>
+<h2>5. white-space: pre-line vs break-spaces (200px boxes)</h2>
+<p id="g5"><span class="ws">line one
+  extra   spaces   kept?
+
+after blank</span>
+<span class="ws brk">a b
+c d   </span></p>
+<h2>6. letter-spacing / word-spacing with text-transform</h2>
+<p id="g6"><span style="letter-spacing: 4px; text-transform: capitalize">hello world</span>
+  <span style="word-spacing: 14px">one two three</span>
+  <span style="word-spacing: -4px">tight one here</span></p>
+</body></html>

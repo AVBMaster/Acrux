@@ -12,4 +12,5 @@
   <Project Path="UpBrowser.JsEngineHost\UpBrowser.JsEngineHost.csproj" />
   <Project Path="UpBrowser.PageContract/UpBrowser.PageContract.csproj" />
   <Project Path="UpBrowser.PageHost/UpBrowser.PageHost.csproj" />
+  <Project Path="UpBrowser.BrowserUi/UpBrowser.BrowserUi.csproj" />
 </Solution>

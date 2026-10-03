@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 02 — transforms</title>
+<style>
+/* Transform interpolation takes one of two paths (Web Animations
+   §interpolation): when both lists have the same functions in the same order the
+   arguments are blended pairwise and the value stays in function form;
+   otherwise both sides are flattened to a 2x3 matrix and the matrices are
+   blended. The rows below cover both. --anim prints the exact resulting
+   transform string, --dumplayout and --pixels read the geometry back.
+
+   Probes are absolutely positioned so their boxes match the reference engine
+   exactly; only the transform moves them. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 260px; overflow: hidden; }
+.sw {
+  position: absolute; left: 0; top: 0;
+  width: 60px; height: 60px;
+  background: rgb(255, 0, 0);
+  box-sizing: border-box;
+}
+.bar { position: absolute; left: 0; top: 0; width: 40px; height: 8px; background: #000; }
+
+/* Anchors (where each probe starts before its transform). */
+#a  { left: 10px;  top: 10px; }
+#b  { left: 110px; top: 20px; }
+#c  { left: 210px; top: 10px; }
+#d  { left: 310px; top: 10px; }
+#e  { left: 10px;  top: 110px; }
+#e2 { left: 110px; top: 110px; }
+#f  { left: 210px; top: 110px; }
+#g  { left: 310px; top: 110px; }
+#h  { left: 10px;  top: 200px; }
+#i  { left: 110px; top: 200px; }
+
+/* A: translateX 0 -> 100px, 40% = 40px. Left edge lands at 10+40 = 50. */
+#a { animation: tx 1s linear -400ms paused; }
+@keyframes tx { from { transform: translateX(0px); } to { transform: translateX(100px); } }
+
+/* B: rotate 0 -> 90deg, 40% = 36deg about the centre. The 40x8 bar's painted
+   width is 40*cos36 + 8*sin36 = 37.0px, and it leans to the right. */
+#b { animation: rot 1s linear -400ms paused; }
+@keyframes rot { from { transform: rotate(0deg); } to { transform: rotate(90deg); } }
+
+/* C: scale 1 -> 2, 40% = 1.4, so the 60px box paints 84x84. */
+#c { animation: sc 1s linear -400ms paused; }
+@keyframes sc { from { transform: scale(1); } to { transform: scale(2); } }
+
+/* D: none -> translateX(80px) pairs the identity against the single function,
+   so the value stays translateX(32px) instead of collapsing to a matrix. */
+#d { animation: idn 1s linear -400ms paused; }
+@keyframes idn { from { transform: none; } to { transform: translateX(80px); } }
+
+/* E: mismatched function names take the matrix path.
+   translateX(0px) -> scale(2) at 40% = matrix(1.4, 0, 0, 1.4, 0, 0). */
+#e { animation: mm 1s linear -400ms paused; }
+@keyframes mm { from { transform: translateX(0px); } to { transform: scale(2); } }
+
+/* E2: another matrix case, differing only in translation.
+   translateX(0px) -> translateY(60px) at 40% = matrix(1, 0, 0, 1, 0, 24). */
+#e2 { animation: mm2 1s linear -400ms paused; }
+@keyframes mm2 { from { transform: translateX(0px); } to { transform: translateY(60px); } }
+
+/* F: two functions on both sides pair pairwise:
+   translateX(0) rotate(0) -> translateX(40px) rotate(90deg)
+   at 40% = translateX(16px) rotate(36deg). */
+#f { animation: pr 1s linear -400ms paused; }
+@keyframes pr {
+  from { transform: translateX(0px) rotate(0deg); }
+  to   { transform: translateX(40px) rotate(90deg); }
+}
+
+/* G: scale 0.5 -> 1.5, 40% = 0.9, so the box paints 54x54. */
+#g { animation: sc2 1s linear -400ms paused; }
+@keyframes sc2 { from { transform: scale(0.5); } to { transform: scale(1.5); } }
+
+/* H: the same 36deg as B, but about transform-origin 0 0 instead of the centre,
+   so the bar sweeps from the anchor instead of swinging around it. */
+#h { transform-origin: 0 0; animation: rot 1s linear -400ms paused; }
+
+/* I: the individual transform properties are composed first, then `transform`.
+   With translate/rotate at 0 the result matches F. */
+#i { translate: 0 0; rotate: 0deg; animation: pr 1s linear -400ms paused; }
+
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw"  id="a"></i>
+  <i class="bar" id="b"></i>
+  <i class="sw"  id="c"></i>
+  <i class="sw"  id="d"></i>
+  <i class="sw"  id="e"></i>
+  <i class="sw"  id="e2"></i>
+  <i class="sw"  id="f"></i>
+  <i class="sw"  id="g"></i>
+  <i class="bar" id="h"></i>
+  <i class="sw"  id="i"></i>
+</div>
+
+<div id="legend">
+  <p><b>A</b> translateX 0&rarr;100px at 40% = <b>translateX(40px)</b>, left edge x=50, 60 wide</p>
+  <p><b>B</b> rotate 0&rarr;90deg at 40% = <b>36deg</b> about the centre; bar paints 37px wide</p>
+  <p><b>C</b> scale 1&rarr;2 at 40% = <b>1.4</b>; box paints 84x84 from (210,10)</p>
+  <p><b>D</b> none&rarr;translateX(80px) at 40% = <b>translateX(32px)</b>, left edge x=342</p>
+  <p><b>E</b> translateX&rarr;scale, matrix path = <b>matrix(1.4,0,0,1.4,0,0)</b>; 84x84 from (10,110)</p>
+  <p><b>E2</b> translateX&rarr;translateY, matrix path = <b>matrix(1,0,0,1,0,24)</b>; 60x60 from (110,134)</p>
+  <p><b>F</b> two functions, pairwise = <b>translateX(16px) rotate(36deg)</b></p>
+  <p><b>G</b> scale 0.5&rarr;1.5 at 40% = <b>0.9</b>; box paints 54x54 from (310,110)</p>
+  <p><b>H</b> rotate 36deg about <b>transform-origin 0 0</b></p>
+  <p><b>I</b> translate/rotate properties composed before transform</p>
+</div>
+
+</body>
+</html>

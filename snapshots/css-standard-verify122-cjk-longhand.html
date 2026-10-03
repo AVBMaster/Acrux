@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CSS verify 122 - CJK longhand counter styles (range beyond 9999)</title>
+<style>
+  body { margin: 0; background: #fff; color: #000; font: 14px Arial, sans-serif; }
+  ol { margin: 0; padding: 0; list-style-position: inside; white-space: nowrap;
+       font: 20px "Microsoft YaHei", "SimSun", sans-serif; }
+  li { margin: 0; padding: 0; }
+  li .v { font: 11px Arial, sans-serif; color: #888; }
+</style>
+</head>
+<body>
+<div id="out"></div>
+<script>
+  var styles = [
+    'trad-chinese-informal', 'trad-chinese-formal',
+    'simp-chinese-informal', 'simp-chinese-formal',
+    'cjk-ideographic', 'cjk-decimal',
+    'japanese-informal', 'japanese-formal',
+    'korean-hanja-informal', 'korean-hangul-formal',
+    'cjk-earthly-branch', 'cjk-heavenly-stem',
+    'armenian', 'lower-armenian', 'georgian', 'hebrew',
+    'hiragana', 'katakana', 'ethiopic-numeric'
+  ];
+  var vals = [0, 10, 11, 20, 101, 1010, 1100, 12345, 10000, 20000, 100000,
+              1000000, 10000000, 100000000, 1000000000, 2147483647];
+  var out = document.getElementById('out');
+  var html = '';
+  for (var s = 0; s < styles.length; s++) {
+    html += '<div class="name">' + styles[s] + '</div><ol style="list-style-type:' + styles[s] + '">';
+    for (var i = 0; i < vals.length; i++) {
+      html += '<li value="' + vals[i] + '"><span class="v">' + vals[i] + '</span></li>';
+    }
+    html += '</ol>';
+  }
+  out.innerHTML = html;
+</script>
+</body>
+</html>

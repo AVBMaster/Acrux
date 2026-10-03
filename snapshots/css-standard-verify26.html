@@ -1,0 +1,51 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  html { font-size: 16px; }
+  body { font-family: Arial; font-size: 16px; margin: 8px; }
+  h2 { font-size: 14px; background: #eee; margin: 10px 0 4px; }
+  .b { border: 1px solid black; height: 12px; margin-bottom: 3px; }
+  .c { height: 24px; margin-bottom: 3px; }
+  .f { font-size: 14px; height: 20px; line-height: 20px; margin-bottom: 2px; }
+</style></head><body>
+<h2>1. round() variants (expect 50,50,50,49 / 60,50,60,50 at 53.5 base)</h2>
+<div class="b" style="width: round(up, 53.5px, 10px)"></div>
+<div class="b" style="width: round(down, 53.5px, 10px)"></div>
+<div class="b" style="width: round(nearest, 53.5px, 10px)"></div>
+<div class="b" style="width: round(to-zero, -53.5px, 10px)"></div>
+<h2>2. mod() / rem() / sign() / abs()</h2>
+<div class="b" style="width: calc(1px * mod(23, 7))"></div>
+<div class="b" style="width: calc(1px * rem(23, 7))"></div>
+<div class="b" style="width: calc(1px * abs(-37))"></div>
+<div class="b" style="width: calc(40px + 1px * sign(-3))"></div>
+<h2>3. nested calc with mixed units (em/%/vw)</h2>
+<div class="b" style="width: calc(2em + 10%)"></div>
+<div class="b" style="width: calc(calc(100% - 40px) / 3)"></div>
+<div class="b" style="width: calc(50px + calc(25% - 10px))"></div>
+<h2>4. min() / max() / clamp() in width and font-size</h2>
+<div class="b" style="width: min(1000px, 60px)"></div>
+<div class="b" style="width: max(20px, 3em)"></div>
+<div class="b" style="width: clamp(100px, 10px, 50px)"></div>
+<div class="f" style="font-size: clamp(10px, 2vw, 30px)">font-size clamp</div>
+<h2>5. color-mix() in srgb / oklab / hsl</h2>
+<div class="c" style="background: color-mix(in srgb, red, blue)"></div>
+<div class="c" style="background: color-mix(in srgb, rgb(255,0,0) 25%, rgb(0,255,0))"></div>
+<div class="c" style="background: color-mix(in oklab, red, blue)"></div>
+<div class="c" style="background: color-mix(in hsl, hsl(0 100% 50%), hsl(240 100% 50%))"></div>
+<div class="c" style="background: color-mix(in srgb, transparent, black)"></div>
+<h2>6. lab() / lch() / oklab() / oklch()</h2>
+<div class="c" style="background: lab(54.29 80.81 69.89)"></div>
+<div class="c" style="background: lch(54.29 106.83 40.85)"></div>
+<div class="c" style="background: oklab(0.628 0.2577 0.1756)"></div>
+<div class="c" style="background: oklch(0.628 0.313 29.23)"></div>
+<h2>7. relative color syntax and hwb()</h2>
+<div class="c" style="background: rgb(from rgb(120, 60, 200) r g 255)"></div>
+<div class="c" style="background: hsl(from red h s calc(l + 20))"></div>
+<div class="c" style="background: hwb(120 10% 20%)"></div>
+<div class="c" style="background: rgb(from #783cc8 0 255 calc(0 + 200))"></div>
+<h2>8. color-mix in the remaining interpolation spaces</h2>
+<div class="c" style="background: color-mix(in lab, red, blue)"></div>
+<div class="c" style="background: color-mix(in lch, red, blue)"></div>
+<div class="c" style="background: color-mix(in oklch, red, blue)"></div>
+<div class="c" style="background: color-mix(in xyz, red, blue)"></div>
+<div class="c" style="background: color-mix(in srgb-linear, red, blue)"></div>
+<div class="c" style="background: color-mix(in srgb, red 75%, blue 25%)"></div>
+</body></html>

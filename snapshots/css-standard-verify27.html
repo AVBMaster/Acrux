@@ -1,0 +1,38 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { font-family: Arial; font-size: 16px; margin: 8px; }
+  h2 { font-size: 14px; background: #eee; margin: 10px 0 4px; }
+  .c { height: 24px; margin-bottom: 3px; }
+  .bi { width: 120px; height: 40px; margin-bottom: 10px; border: 20px solid #ccc; }
+  .m { width: 120px; height: 40px; background: #36c; margin-bottom: 6px; }
+  .t { width: 220px; font-size: 16px; line-height: 20px; border: 1px solid #999; margin-bottom: 6px; }
+</style></head><body>
+<h2>1. color() with wide-gamut spaces (in-gamut values; Chrome gamut-maps the rest)</h2>
+<div class="c" style="background: color(display-p3 0.4 0.3 0.5)"></div>
+<div class="c" style="background: color(srgb 0.4 0.3 0.5)"></div>
+<div class="c" style="background: color(srgb-linear 0.4 0.3 0.5)"></div>
+<div class="c" style="background: color(a98-rgb 0.4 0.3 0.5)"></div>
+<div class="c" style="background: color(prophoto-rgb 0.4 0.3 0.5)"></div>
+<div class="c" style="background: color(rec2020 0.4 0.3 0.5)"></div>
+<div class="c" style="background: color(xyz 0.2 0.15 0.25)"></div>
+<div class="c" style="background: color(xyz-d50 0.2 0.15 0.25)"></div>
+<div class="c" style="background: color(display-p3 1 0 0)"></div>
+<h2>2. light-dark() and color-scheme</h2>
+<div class="c" style="color-scheme: light; background: light-dark(#0f0, #f00)"></div>
+<div class="c" style="color-scheme: dark; background: light-dark(#0f0, #f00)"></div>
+<h2>3. border-image from a gradient</h2>
+<div class="bi" style="border-image: linear-gradient(#e33, #33e) 10 / 20px stretch"></div>
+<div class="bi" style="border-image: linear-gradient(#e33, #33e) 10 / 20px repeat"></div>
+<div class="bi" style="border-image: linear-gradient(#e33, #33e) 10 / 20px round"></div>
+<div class="bi" style="border-image: linear-gradient(#e33, #33e) 10 / 20px"></div>
+<h2>4. mask-composite and layered masks</h2>
+<div class="m" style="mask-image: linear-gradient(#000, transparent); mask-composite: add"></div>
+<div class="m" style="mask-image: linear-gradient(90deg, #000 25%, transparent 25% 75%, #000 75%)"></div>
+<div class="m" style="mask: linear-gradient(#000,#000) 0 0/60px 40px no-repeat, linear-gradient(#000,#000) 60px 0/60px 40px no-repeat; mask-composite: subtract"></div>
+<div class="m" style="mask: linear-gradient(#000,#000) 0 0/60px 40px no-repeat, linear-gradient(#000,#000) 60px 0/60px 40px no-repeat; mask-composite: intersect"></div>
+<h2>5. CJK breaking: word-break / line-break</h2>
+<div class="t">日本語のテキストは文字単位で改行できます that mixes latin words too longtokenhere</div>
+<div class="t" style="word-break: keep-all">日本語のテキストは文字単位で改行できます</div>
+<div class="t" style="line-break: strict">日本語のテキストは文字単位で改行できます。</div>
+<div class="t" style="line-break: loose">日本語のテキストは文字単位で改行できます。</div>
+<div class="t" style="word-break: break-all">longtokenhere 日本語のテキストは文字単位で改行できます</div>
+</body></html>

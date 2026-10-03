@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+:root { --main: #369; --pad: 12px; --half: 50%; }
+body { font-family: sans-serif; font-size: 13px; margin: 10px; color: #222; }
+h3 { margin: 8px 0 4px; }
+.em1 { font-size: 2em; }
+.em-child { font-size: 1.5em; }
+.rem1 { font-size: 2rem; }
+.pct-w { width: 50%; background: #ddb; }
+.vw-h { height: 5vh; background: #bde; }
+.calc-w { width: calc(50% + 40px); background: #ebd; }
+.calc-pad { padding: calc(1rem - 6px); background: #dee; }
+.var-bg { background: var(--main); color: #fff; padding: var(--pad); }
+.var-calc { margin-left: calc(var(--pad) * 2); background: #fed; }
+.tiny { line-height: 1.2; font-size: 10px; }
+.abs-pct { position: relative; height: 60px; background: #eee; }
+.abs-pct > div { position: absolute; left: 25%; top: 10px; width: 40%; background: #8b8; }
+.mw { max-width: 200px; min-height: 30px; background: #cdf; }
+.h-auto { height: auto; }
+</style>
+</head>
+<body>
+<h3>1. em nesting (2em then 1.5em)</h3>
+<div class="em1">outer <span class="em-child">inner</span></div>
+<h3>2. rem 2rem</h3>
+<div class="rem1">rem-text</div>
+<h3>3. percent width 50%</h3>
+<div class="pct-w">half-width</div>
+<h3>4. vh height</h3>
+<div class="vw-h">5vh box</div>
+<h3>5. calc width/padding</h3>
+<div class="calc-w">calc(50%+40px)</div>
+<div class="calc-pad">calc padding</div>
+<h3>6. var() background/pad</h3>
+<div class="var-bg">var box</div>
+<h3>7. var inside calc</h3>
+<div class="var-calc">calc(var*2) margin</div>
+<h3>8. abs % inside relative</h3>
+<div class="abs-pct"><div>left25% w40%</div></div>
+<h3>9. max-width + min-height</h3>
+<div class="mw">This is a long line of text that should wrap at 200px max width because the box is constrained.</div>
+</body>
+</html>

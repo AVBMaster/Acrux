@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 04 — steps() timing functions</title>
+<style>
+/* steps() produces a step function whose output jumps a fixed number of times
+   across an iteration (CSS Easing 1 §2.3). The position keyword decides *where*
+   the jumps land: jump-start before each step, jump-end after each, jump-both on
+   both sides, and jump-none strictly between — which is why jump-none divides by
+   n-1 rather than n: it keeps 0 and 1 as endpoints and fits n-1 jumps between
+   them. Each swatch is pinned 40% into a 1s animation, so the raw input is 0.4
+   and the output is one of the exact fractions below; the fill colour is
+   192 + 63 * output. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 300px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 90px; height: 60px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  outline: 1px solid #000;
+  text-align: center; line-height: 60px; font-size: 13px;
+}
+#s1  { left: 10px;  top: 10px; }  #s2  { left: 120px; top: 10px; }
+#s3  { left: 230px; top: 10px; }  #s4  { left: 340px; top: 10px; }
+#s5  { left: 10px;  top: 90px; }  #s6  { left: 120px; top: 90px; }
+#s7  { left: 230px; top: 90px; }  #s8  { left: 340px; top: 90px; }
+#s9  { left: 10px;  top: 170px; }  #s10 { left: 120px; top: 170px; }
+#s11 { left: 230px; top: 170px; }  #s12 { left: 340px; top: 170px; }
+
+#s1  { animation: e 1s linear                    -400ms paused; }
+#s2  { animation: e 1s steps(4, jump-end)        -400ms paused; }
+#s3  { animation: e 1s steps(4, jump-start)      -400ms paused; }
+#s4  { animation: e 1s steps(4, jump-none)       -400ms paused; }
+#s5  { animation: e 1s steps(4, jump-both)       -400ms paused; }
+#s6  { animation: e 1s step-start                -400ms paused; }
+#s7  { animation: e 1s step-end                  -400ms paused; }
+#s8  { animation: e 1s steps(2, jump-end)        -400ms paused; }
+#s9  { animation: e 1s steps(2, jump-start)      -400ms paused; }
+#s10 { animation: e 1s steps(3, jump-end)        -400ms paused; }
+#s11 { animation: e 1s steps(10, jump-none)      -400ms paused; }
+#s12 { animation: e 1s steps(5, jump-both)       -400ms paused; }
+@keyframes e { from { opacity: 1; } to { opacity: 0; } }
+
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+#legend code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="s1">1</i>
+  <i class="sw" id="s2">2</i>
+  <i class="sw" id="s3">3</i>
+  <i class="sw" id="s4">4</i>
+  <i class="sw" id="s5">5</i>
+  <i class="sw" id="s6">6</i>
+  <i class="sw" id="s7">7</i>
+  <i class="sw" id="s8">8</i>
+  <i class="sw" id="s9">9</i>
+  <i class="sw" id="s10">10</i>
+  <i class="sw" id="s11">11</i>
+  <i class="sw" id="s12">12</i>
+</div>
+
+<div id="legend">
+  <p>fill = <b>192 + 63 &times; steps(0.4)</b></p>
+  <p><b>1</b> <code>linear</code> &rarr; 0.4 &rarr; fill <b>217</b></p>
+  <p><b>2</b> <code>steps(4, jump-end)</code> = floor(1.6)/4 = <b>0.25</b> &rarr; fill <b>208</b></p>
+  <p><b>3</b> <code>steps(4, jump-start)</code> = (floor(1.6)+1)/4 = <b>0.5</b> &rarr; fill <b>224</b></p>
+  <p><b>4</b> <code>steps(4, jump-none)</code> = floor(1.6)/3 = <b>0.3333</b> &rarr; fill <b>213</b></p>
+  <p><b>5</b> <code>steps(4, jump-both)</code> = (1+1)/5 = <b>0.4</b> &rarr; fill <b>217</b></p>
+  <p><b>6</b> <code>step-start</code> = <b>1</b> for any input &gt; 0 &rarr; fill <b>255</b> (invisible)</p>
+  <p><b>7</b> <code>step-end</code> = <b>0</b> until the end &rarr; fill <b>192</b></p>
+  <p><b>8</b> <code>steps(2, jump-end)</code> = floor(0.8)/2 = <b>0</b> &rarr; fill <b>192</b></p>
+  <p><b>9</b> <code>steps(2, jump-start)</code> = 1/2 = <b>0.5</b> &rarr; fill <b>224</b></p>
+  <p><b>10</b> <code>steps(3, jump-end)</code> = floor(1.2)/3 = <b>0.3333</b> &rarr; fill <b>213</b></p>
+  <p><b>11</b> <code>steps(10, jump-none)</code> = floor(4)/9 = <b>0.4444</b> &rarr; fill <b>220</b></p>
+  <p><b>12</b> <code>steps(5, jump-both)</code> = (2+1)/6 = <b>0.5</b> &rarr; fill <b>224</b></p>
+</div>
+
+</body>
+</html>

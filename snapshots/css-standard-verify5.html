@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Batch 5 (Transform / Pseudo / Gradients / Stacking)</title>
+<style>
+html, body { margin: 0; padding: 0; background: white; font-family: Arial, sans-serif; font-size: 16px; }
+body { padding: 4px; }
+h2 { margin: 8px 0 4px 0; font-size: 14px; color: #333; }
+
+/* ====== GROUP 1: ::before / ::after content ====== */
+#pe1::before { content: "PRE:"; color: rgb(255,0,0); }
+#pe1::after { content: ":POST"; color: rgb(0,0,255); }
+
+/* ====== GROUP 2: :not() selector ====== */
+#nt span { background: rgb(255,0,0); }
+#nt span:not(.x) { background: rgb(0,255,0); }
+
+/* ====== GROUP 3: :nth-child(even/odd) ====== */
+#nc div { height: 16px; width: 100px; }
+#nc div:nth-child(odd) { background: rgb(255,0,0); }
+#nc div:nth-child(even) { background: rgb(0,0,255); }
+
+/* ====== GROUP 4: :first-of-type / :last-child ====== */
+#fo p { width: 100px; height: 16px; background: rgb(255,0,0); }
+#fo p:first-of-type { background: rgb(0,0,255); }
+#fo p:last-child { background: rgb(0,255,0); }
+
+/* ====== GROUP 5: transform translate ====== */
+#tr1 { width: 40px; height: 40px; background: rgb(255,0,0); transform: translate(30px, 20px); }
+
+/* ====== GROUP 6: transform scale (origin top left) ====== */
+#tr2wrap { width: 100px; height: 60px; position: relative; }
+#tr2 { width: 40px; height: 40px; background: rgb(0,0,255); transform: scale(1.5); transform-origin: 0 0; position: absolute; left: 0; top: 0; }
+
+/* ====== GROUP 7: linear-gradient with angle ====== */
+#g1 { width: 200px; height: 40px; background: linear-gradient(to right, rgb(255,0,0), rgb(0,0,255)); }
+
+/* ====== GROUP 8: radial-gradient circle ====== */
+#g2 { width: 100px; height: 100px; background: radial-gradient(circle at 50px 50px, rgb(255,0,0) 0 20px, rgb(0,0,255) 20px 50px); }
+
+/* ====== GROUP 9: opacity blending ====== */
+#op1 { width: 60px; height: 40px; background: rgb(255,0,0); }
+#op2 { width: 60px; height: 40px; background: rgb(0,0,255); opacity: 0.5; margin-top: -20px; margin-left: 20px; }
+
+/* ====== GROUP 10: z-index stacking with position ====== */
+#zs { position: relative; width: 120px; height: 60px; }
+#z-under { position: absolute; left: 0; top: 0; width: 60px; height: 60px; background: rgb(255,0,0); z-index: 1; }
+#z-over { position: absolute; left: 20px; top: 0; width: 60px; height: 60px; background: rgb(0,0,255); z-index: 2; }
+
+/* ====== GROUP 11: negative z-index behind text ====== */
+#nz { position: relative; width: 120px; height: 40px; background: rgb(255,255,0); }
+#nz-bg { position: absolute; left: 10px; top: 10px; width: 100px; height: 20px; background: rgb(255,0,0); z-index: -1; }
+
+/* ====== GROUP 12: flex justify-content space-between ====== */
+#fj { display: flex; justify-content: space-between; width: 200px; height: 30px; background: rgb(220,220,220); }
+#fj div { width: 40px; background: rgb(255,0,0); }
+
+/* ====== GROUP 13: flex align-items baseline ====== */
+#fb { display: flex; align-items: baseline; width: 200px; }
+#fb span { background: rgb(200,200,255); }
+#fb .big { font-size: 30px; }
+
+/* ====== GROUP 14: grid row/column span ====== */
+#gs { display: grid; grid-template-columns: 40px 40px 40px; grid-template-rows: 20px 20px 20px; width: 120px; }
+#gs .a { grid-column: 1 / 3; grid-row: 1 / 3; background: rgb(255,0,0); }
+#gs .b { grid-column: 3; grid-row: 1; background: rgb(0,255,0); }
+#gs .c { grid-column: 3; grid-row: 2 / 4; background: rgb(0,0,255); }
+#gs .d { grid-column: 1 / 3; grid-row: 3; background: rgb(255,255,0); }
+
+/* ====== GROUP 15: letter-spacing ====== */
+#ls1 { letter-spacing: 4px; font-size: 16px; }
+#ls2 { font-size: 16px; }
+
+/* ====== GROUP 16: text-overflow ellipsis ====== */
+#to { width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: rgb(230,230,230); }
+
+/* ====== GROUP 17: border-radius percentage pill ====== */
+#br { width: 100px; height: 40px; background: rgb(255,0,0); border-radius: 50%; }
+
+/* ====== GROUP 18: text-decoration overline + line-through ====== */
+#tdo { text-decoration: overline line-through rgb(255,0,0); font-size: 18px; }
+
+/* ====== GROUP 19: vertical-align middle ====== */
+#va { font-size: 30px; }
+#va img-sm { }
+#va .mid { vertical-align: middle; font-size: 12px; background: rgb(200,200,200); }
+#va .base { font-size: 12px; background: rgb(200,255,200); }
+
+/* ====== GROUP 20: CSS var with fallback ====== */
+#vf { --c: rgb(255,128,0); background: var(--undefined, rgb(0,128,255)); width: 100px; height: 20px; }
+#vf2 { background: var(--c, red); width: 100px; height: 20px; }
+</style>
+</head>
+<body>
+
+<h2>1. ::before / ::after</h2>
+<div id="pe1">MID</div>
+
+<h2>2. :not(.x)</h2>
+<div id="nt"><span class="x">x-red</span> <span>y-green</span></div>
+
+<h2>3. :nth-child odd/even</h2>
+<div id="nc"><div>odd-red</div><div>even-blue</div><div>odd-red</div></div>
+
+<h2>4. :first-of-type / :last-child</h2>
+<div id="fo"><p>first-blue</p><p>mid-red</p><p>last-green</p></div>
+
+<h2>5. translate(30,20) — box at 34,~</h2>
+<div id="tr1"></div>
+
+<h2>6. scale(1.5) origin 0 0 — 60x60</h2>
+<div id="tr2wrap"><div id="tr2"></div></div>
+
+<h2>7. gradient to right red→blue</h2>
+<div id="g1"></div>
+
+<h2>8. radial red core / blue ring</h2>
+<div id="g2"></div>
+
+<h2>9. opacity .5 blue over red</h2>
+<div id="op1"></div>
+<div id="op2"></div>
+
+<h2>10. z2 blue over z1 red</h2>
+<div id="zs"><div id="z-under"></div><div id="z-over"></div></div>
+
+<h2>11. z:-1 behind text on yellow</h2>
+<div id="nz"><span id="nz-bg"></span>TEXT</div>
+
+<h2>12. flex space-between</h2>
+<div id="fj"><div></div><div></div><div></div></div>
+
+<h2>13. flex align-items baseline</h2>
+<div id="fb"><span class="big">Big</span><span>small</span></div>
+
+<h2>14. grid spans</h2>
+<div id="gs"><div class="a"></div><div class="b"></div><div class="c"></div><div class="d"></div></div>
+
+<h2>15. letter-spacing 4px</h2>
+<div><span id="ls1">ABCDE</span> vs <span id="ls2">ABCDE</span></div>
+
+<h2>16. text-overflow ellipsis</h2>
+<div id="to">This text is far too long for the box</div>
+
+<h2>17. border-radius 50% ellipse</h2>
+<div id="br"></div>
+
+<h2>18. overline + line-through red</h2>
+<div><span id="tdo">both lines</span></div>
+
+<h2>19. vertical-align middle vs base</h2>
+<div id="va">Big <span class="mid">mid</span> <span class="base">base</span></div>
+
+<h2>20. var() fallback blue / inherit --c</h2>
+<div id="vf"></div>
+<div id="vf2"></div>
+
+</body>
+</html>

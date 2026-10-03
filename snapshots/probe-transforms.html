@@ -1,0 +1,15 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { font-family: Arial; margin: 8px; }
+  .row { position: relative; height: 120px; margin-bottom: 10px; border-left: 1px dotted #ccc; }
+  .b { position: absolute; left: 40px; top: 40px; width: 40px; height: 24px; background: #fd8;
+       border: 2px solid #36c; }
+</style></head><body>
+<div class="row"><div class="b" id="a1" style="rotate: 0 0 1 90deg"></div></div>
+<div class="row"><div class="b" id="a2" style="rotate: z 90deg"></div></div>
+<div class="row"><div class="b" id="a3" style="rotate: 90deg"></div></div>
+<div class="row"><div class="b" id="a4" style="translate: 40px 0; rotate: 45deg; scale: 2"></div></div>
+<div class="row"><div class="b" id="a5" style="transform: translate(40px) rotate(45deg) scale(2)"></div></div>
+<div class="row"><div class="b" id="a6" style="translate: 40px 0; transform: rotate(45deg)"></div></div>
+<div class="row"><div class="b" id="a7" style="transform: matrix3d(1,0,0,0, 0,1,0,0, 0,0,1,0, 20,10,0,1)"></div></div>
+<div class="row"><div class="b" id="a8" style="transform: perspective(60px) rotateY(45deg)"></div></div>
+</body></html>

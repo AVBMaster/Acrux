@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 84 — calc()/min()/max()/clamp() as grid track sizing functions</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:14px 0 6px; font-size:15px; }
+.g { display:grid; gap:6px; width:212px; margin-bottom:10px; }
+.g div { height:20px; }
+.g1 { grid-template-columns:calc(50% + 5px) 100px; border:2px solid #939; }
+.g1 div { background:#cfe; }
+.g2 { grid-template-columns:minmax(min(60px,50%), 1fr) 100px; border:2px solid #090; }
+.g2 div { background:#fec; }
+.g3 { grid-template-columns:clamp(30px,40%,80px) 1fr; border:2px solid #009; }
+.g3 div { background:#cef; }
+</style>
+</head>
+<body>
+
+<h2>1. calc(50% + 5px) 100px in 212px (exp 111 / 100)</h2>
+<div class="g g1"><div>a</div><div>b</div></div>
+
+<h2>2. minmax(min(60px,50%), 1fr) 100px (exp 106 / 100)</h2>
+<div class="g g2"><div>a</div><div>b</div></div>
+
+<h2>3. clamp(30px,40%,80px) 1fr (exp 80 / 126)</h2>
+<div class="g g3"><div>a</div><div>b</div></div>
+
+</body>
+</html>

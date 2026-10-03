@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS standard verify 16 - table box model, borders, oblique</title>
+<style>
+/* shared baseline: no page margin, deterministic font */
+body { margin: 0; font: 16px sans-serif; background: rgb(255,255,255); }
+h2 { font: bold 16px sans-serif; margin: 8px 0 4px 8px; background: rgb(245,245,245); }
+
+/* ====== GROUP 1: separated model, table's own border, sized cells ====== */
+#g1 { border: 4px solid rgb(0,0,255); }
+#g1 td { width: 40px; height: 20px; }
+
+/* ====== GROUP 2: separated model, border-spacing: 0 ====== */
+#g2 { border: 4px solid rgb(0,0,255); border-spacing: 0; }
+#g2 td { width: 40px; height: 20px; }
+
+/* ====== GROUP 3: separated model, two-value border-spacing (8px 4px) ====== */
+#g3 { border-spacing: 8px 4px; background: rgb(230,230,230); }
+#g3 td { width: 30px; height: 14px; background: rgb(255,255,255);
+         border: 1px solid rgb(128,128,128); }
+
+/* ====== GROUP 4: collapsed 4px borders on a 2x2 grid ====== */
+#g4 { border-collapse: collapse; }
+#g4 td { width: 40px; height: 20px; border: 4px solid rgb(255,0,0); padding: 0; }
+
+/* ====== GROUP 5: collapsed, conflicting border widths (wider wins) ====== */
+#g5 { border-collapse: collapse; }
+#g5 td { width: 30px; height: 16px; padding: 0; }
+#g5 .thin { border: 2px solid rgb(0,128,0); }
+#g5 .thick { border: 6px solid rgb(0,0,255); }
+
+/* ====== GROUP 6: collapsed with colspan / rowspan ====== */
+#g6 { border-collapse: collapse; width: 140px; }
+#g6 td { border: 2px solid rgb(0,0,0); padding: 1px; }
+
+/* ====== GROUP 7: caption-side bottom on a bordered separated table ====== */
+#g7 { border: 3px solid rgb(255,0,255); caption-side: bottom; background: rgb(238,238,238); }
+#g7 td { width: 30px; height: 14px; }
+#g7 caption { background: rgb(255,255,0); }
+
+/* ====== GROUP 8: caption-side top, collapsed borders, table border ====== */
+#g8 { border-collapse: collapse; border: 3px solid rgb(0,0,0); }
+#g8 td { width: 30px; height: 14px; border: 2px solid rgb(255,128,0); }
+#g8 caption { background: rgb(220,220,255); }
+
+/* ====== GROUP 9: inline-formatting root with border and padding ====== */
+#b1 { border: 5px solid rgb(255,0,0); width: 120px; background: rgb(240,240,240); }
+#b2 { border: 5px solid rgb(0,0,255); padding: 4px; width: 120px; background: rgb(240,255,240); }
+#b3 { border: 2px solid rgb(0,128,0); padding: 0 10px; width: 100px; background: rgb(255,250,220); }
+
+/* ====== GROUP 10: th / td user-agent defaults (no border, 1px padding) ====== */
+#g10 th { background: rgb(230,230,230); }
+#g10 td { background: rgb(250,250,250); }
+
+/* ====== GROUP 11: table with auto margins (centred) ====== */
+#w11 { width: 200px; }
+#g11 { width: 120px; margin: 0 auto; border: 2px solid rgb(128,0,128); }
+#g11 td { height: 14px; }
+
+/* ====== GROUP 12: oblique angles versus synthetic italic ====== */
+#o1 { font-style: italic; }
+#o2 { font-style: oblique; }
+#o3 { font-style: oblique 20deg; }
+#o4 { font-style: oblique -20deg; }
+#o5 { font-style: oblique 0.25turn; }
+</style>
+</head>
+<body>
+<h2>1. separated: table border 4px, cells 40x20, spacing 2 (box 54x34)</h2>
+<table id="g1"><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>
+
+<h2>2. separated: table border 4px, border-spacing 0 (box 50x30)</h2>
+<table id="g2"><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>
+
+<h2>3. separated: border-spacing 8px 4px (two values)</h2>
+<table id="g3"><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>
+
+<h2>4. collapsed: 4px cell borders, cells 40x20 (box 92x52, cells 44x24)</h2>
+<table id="g4"><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>
+
+<h2>5. collapsed: 2px against 6px - the wider border wins the shared edge</h2>
+<table id="g5"><tr><td class="thin">a</td><td class="thick">b</td></tr><tr><td class="thick">c</td><td class="thin">d</td></tr></table>
+
+<h2>6. collapsed: colspan 2 and rowspan 2 in a 140px table</h2>
+<table id="g6"><tr><td rowspan="2">R</td><td>a</td><td>b</td></tr><tr><td colspan="2">c</td></tr></table>
+
+<h2>7. caption-side: bottom, separated table with a 3px border</h2>
+<table id="g7"><caption>cap</caption><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>
+
+<h2>8. caption-side: top, collapsed borders plus a 3px table border</h2>
+<table id="g8"><caption>cap</caption><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>
+
+<h2>9. inline formatting root: border 5px (and padding) must inset the text</h2>
+<div id="b1">Abc</div>
+<div id="b2">Abc</div>
+<div id="b3">Abc def ghi jkl mno pqr stu vwx yz</div>
+
+<h2>10. th and td have no user-agent border and 1px padding</h2>
+<table id="g10"><tr><th>H1</th><th>H2</th></tr><tr><td>a</td><td>b</td></tr></table>
+
+<h2>11. table 120px with margin auto inside a 200px block (centred)</h2>
+<div id="w11"><table id="g11"><tr><td>centered table</td></tr></table></div>
+
+<h2>12. font-style: italic / oblique / oblique 20deg / -20deg / 0.25turn</h2>
+<div id="o1">Abc Italic</div>
+<div id="o2">Abc Oblique</div>
+<div id="o3">Abc Oblique20</div>
+<div id="o4">Abc ObliqueNeg</div>
+<div id="o5">Abc ObliqueTurn</div>
+</body>
+</html>

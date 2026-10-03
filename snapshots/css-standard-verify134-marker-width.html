@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b134 outside marker width</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+ul { margin: 0; padding: 0 0 0 80px; list-style: none; }
+li { background: rgb(240,240,240); margin-bottom: 4px; }
+.d { list-style-type: disc; }
+.n { list-style-type: decimal; }
+.r { list-style-type: lower-roman; }
+.c { list-style-type: cjk-decimal; }
+.h { list-style-type: hebrew; }
+.big { font-size: 32px; }
+.ins li, li.ins { list-style-position: inside; }
+li span { background: rgb(255,200,200); }
+</style>
+</head>
+<body>
+<ul id="outer">
+  <li class="d" id="o1"><span>Alpha</span></li>
+  <li class="n" id="o2"><span>Alpha</span></li>
+  <li class="n" id="o3"><span>Alpha</span></li>
+  <li class="n" id="o4"><span>Alpha</span></li>
+  <li class="r" id="o5"><span>Alpha</span></li>
+  <li class="c" id="o6"><span>Alpha</span></li>
+  <li class="n big" id="o7"><span>Alpha</span></li>
+</ul>
+<ol id="inner" class="ins">
+  <li class="d" id="i1"><span>Alpha</span></li>
+  <li class="n" id="i2"><span>Alpha</span></li>
+  <li class="n" id="i3"><span>Alpha</span></li>
+  <li class="n" id="i4"><span>Alpha</span></li>
+  <li class="r" id="i5"><span>Alpha</span></li>
+  <li class="c" id="i6"><span>Alpha</span></li>
+  <li class="h" id="i7"><span>Alpha</span></li>
+  <li class="n big" id="i8"><span>Alpha</span></li>
+</ol>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b125 position:relative static probe</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+/* Each case is its own positioned container so the percentage containing block is
+   fixed at 400x200 exactly like the dynamic probe, and one case cannot move another. */
+.case { position: relative; width: 400px; height: 200px; }
+.box { width: 40px; height: 20px; background: rgb(200,200,200); }
+.tgt { background: rgb(255,128,128); }
+.inl { background: rgb(180,220,180); }
+</style>
+</head>
+<body>
+<div class="case" id="c01"><div id="c01r" class="box"></div><div id="c01t" class="box tgt" style="position:relative;top:20px;left:30px"></div></div>
+<div class="case" id="c02"><div id="c02r" class="box"></div><div id="c02t" class="box tgt" style="position:relative;bottom:10px;right:25px"></div></div>
+<div class="case" id="c03"><div id="c03r" class="box"></div><div id="c03t" class="box tgt" style="position:relative;top:10px;bottom:40px"></div></div>
+<div class="case" id="c04"><div id="c04r" class="box"></div><div id="c04t" class="box tgt" style="position:relative;left:10px;right:40px"></div></div>
+<div class="case" id="c05"><div id="c05r" class="box"></div><div id="c05t" class="box tgt" style="position:relative;top:auto;left:auto"></div></div>
+<div class="case" id="c06"><div id="c06r" class="box"></div><div id="c06t" class="box tgt" style="position:relative;left:50%"></div></div>
+<div class="case" id="c07"><div id="c07r" class="box"></div><div id="c07t" class="box tgt" style="position:relative;top:25%"></div></div>
+<div class="case" id="c08"><div id="c08r" class="box"></div><div id="c08t" class="box tgt" style="position:relative;left:2em"></div></div>
+<div class="case" id="c09"><div id="c09r" class="box"></div><div id="c09t" class="box tgt" style="position:relative;left:calc(10px + 1em)"></div></div>
+<div class="case" id="c10"><div id="c10r" class="box"></div><div id="c10t" class="box tgt" style="position:relative;top:-15px;left:-30px"></div></div>
+<div class="case" id="c11"><div id="c11r" class="box"></div><div id="c11t" class="box tgt" style="position:relative;z-index:3"></div></div>
+<div class="case" id="c12"><span id="c12r" class="inl">ref</span><span id="c12t" class="inl" style="position:relative;left:15px;top:5px">tgt</span></div>
+<div class="case" id="c13"><span id="c13r" class="inl">ref</span><span id="c13t" class="inl tgt" style="position:relative;left:12px;top:8px;display:inline-block;width:30px;height:12px">&nbsp;</span></div>
+<div class="case" id="c14"><div style="direction:rtl"><span id="c14r" class="inl">ref</span><span id="c14t" class="inl" style="position:relative;left:10px;right:30px">tgt</span></div></div>
+<div class="case" id="c15"><div id="c15r" class="box"></div><div id="c15t" class="box tgt" style="position:relative;top:5px;left:5px"><div id="c15k" class="box" style="width:20px;height:10px"></div></div></div>
+<div class="case" id="c16"><div id="c16r" class="box"></div><div style="display:table"><div id="c16t" class="tgt" style="position:relative;top:6px;left:7px;display:table-cell;width:40px;height:20px"></div></div></div>
+<div class="case" id="c17"><div id="c17r" class="box"></div><div id="c17t" class="box tgt" style="position:relative;top:40px;left:40px"></div><div id="c17a" class="box"></div></div>
+<div class="case" id="c18"><div id="c18r" class="box"></div><table style="border:0"><tr><td id="c18t" class="tgt" style="position:relative;top:9px;left:11px;width:40px;height:20px"></td></tr></table></div>
+<div class="case" id="c19"><div id="c19r" class="box"></div><div style="display:flex"><div id="c19t" class="box tgt" style="position:relative;top:7px;left:13px"></div></div></div>
+<div class="case" id="c20"><div id="c20r" class="box"></div><div id="c20t" class="box tgt" style="position:relative;top:1em;left:calc(50% - 20px)"></div></div>
+<div class="case" id="c22"><div id="c22r" class="box"></div><table style="border:0"><tr><td id="c22t" class="box" style="width:40px;height:20px"></td></tr></table></div>
+<div class="case" id="c21"><div style="position:static;width:400px;height:200px"><div id="c21r" class="box"></div><div id="c21t" class="box tgt" style="position:relative;top:10%;left:10%"></div></div></div>
+</body>
+</html>

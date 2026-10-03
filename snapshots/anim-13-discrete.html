@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 13 — discrete properties</title>
+<style>
+/* A property whose value type cannot be blended still animates, by flipping from
+   the "from" value to the "to" value at the 50% mark of the progress (Web
+   Animations §interpolation). Each pair of rows below is the same keyframe rule
+   pinned either side of that boundary, so the flip is directly observable.
+
+   A property that is not animatable at all is simply ignored inside
+   @keyframes, so the element keeps its declared value. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 300px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 90px; height: 60px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  outline: 1px solid #000;
+  text-align: center; line-height: 60px; font-size: 13px;
+}
+#d1 { left: 10px;  top: 10px; }  #d2 { left: 120px; top: 10px; }
+#d3 { left: 230px; top: 10px; }  #d4 { left: 340px; top: 10px; }
+#d5 { left: 10px;  top: 90px; }  #d6 { left: 120px; top: 90px; }
+#d7 { left: 230px; top: 90px; }  #d8 { left: 340px; top: 90px; }
+#d9 { left: 10px;  top: 170px; }  #d10{ left: 120px; top: 170px; }
+#d11{ left: 230px; top: 170px; }  #d12{ left: 340px; top: 170px; }
+
+/* visibility: below 50% the "from" value shows, above it the "to" value */
+#d1  { animation: vis 1s linear -400ms paused; }   /* 40% -> visible   */
+#d2  { animation: vis 1s linear -600ms paused; }   /* 60% -> hidden    */
+@keyframes vis { from { visibility: visible; } to { visibility: hidden; } }
+
+/* display: the same boundary, but the box disappears entirely */
+#d3  { animation: dis 1s linear -400ms paused; }   /* 40% -> block     */
+#d4  { animation: dis 1s linear -600ms paused; }   /* 60% -> none      */
+@keyframes dis { from { display: block; } to { display: none; } }
+
+/* background-image: an <image> is not interpolable, so it flips whole */
+#d5  { background-image: none; animation: bi 1s linear -400ms paused; }
+#d6  { background-image: none; animation: bi 1s linear -600ms paused; }
+@keyframes bi {
+  from { background-image: none; }
+  to   { background-image: linear-gradient(90deg, rgb(255,0,0), rgb(0,0,255)); }
+}
+
+/* a keyword-typed property: border-style flips between solid and dashed */
+#d7  { border-width: 4px; animation: bs 1s linear -400ms paused; }
+#d8  { border-width: 4px; animation: bs 1s linear -600ms paused; }
+@keyframes bs { from { border-style: solid; } to { border-style: dashed; } }
+
+/* list-style-type is discrete; the marker changes at 50% */
+#d9  { padding-left: 40px; list-style-position: inside;
+       animation: ls 1s linear -400ms paused; }
+#d10 { padding-left: 40px; list-style-position: inside;
+       animation: ls 1s linear -600ms paused; }
+@keyframes ls { from { list-style-type: disc; } to { list-style-type: square; } }
+
+/* a non-animatable property inside @keyframes is dropped: the element keeps the
+   value it declared */
+#d11 { opacity: 0.25; animation: drop 1s linear -400ms paused; }
+@keyframes drop { from { opacity: 1; all: 2; } to { opacity: 0; } }
+
+/* a custom property is not interpolated by the engine either */
+#d12 { opacity: 0.75; animation: cp 1s linear -400ms paused; }
+@keyframes cp { from { opacity: 1; --tint: 0; } to { opacity: 0; --tint: 1; } }
+
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+#legend code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="d1">1</i>
+  <i class="sw" id="d2">2</i>
+  <i class="sw" id="d3">3</i>
+  <i class="sw" id="d4">4</i>
+  <i class="sw" id="d5">5</i>
+  <i class="sw" id="d6">6</i>
+  <i class="sw" id="d7">7</i>
+  <i class="sw" id="d8">8</i>
+  <i class="sw" id="d9">disc</i>
+  <i class="sw" id="d10">square</i>
+  <i class="sw" id="d11">11</i>
+  <i class="sw" id="d12">12</i>
+</div>
+
+<div id="legend">
+  <p>each pair is the same keyframe rule pinned at <b>40%</b> and at <b>60%</b>, i.e. either side of the 50% flip</p>
+  <p><b>1</b> <code>visibility</code> at 40% &rarr; <code>visible</code>, fill <b>192</b></p>
+  <p><b>2</b> <code>visibility</code> at 60% &rarr; still <code>visible</code>, fill <b>192</b> &mdash; if either endpoint is <code>visible</code> the box stays visible until the run ends</p>
+  <p><b>3</b> <code>display</code> is not an animatable property, so the keyframe declaration is dropped and the swatch keeps its static fill <b>192</b></p>
+  <p><b>4</b> same, at 60%: nothing is painted differently &mdash; animating <code>display</code> needs <code>transition-behavior: allow-discrete</code></p>
+  <p><b>5</b> <code>background-image</code> at 40% &rarr; <code>none</code>, fill <b>192</b></p>
+  <p><b>6</b> <code>background-image</code> at 60% &rarr; the gradient, <b>rgb(153, 0, 102)</b> to <b>rgb(0, 0, 255)</b></p>
+  <p><b>7</b> <code>border-style</code> at 40% &rarr; <code>solid</code>: an unbroken 4px frame</p>
+  <p><b>8</b> <code>border-style</code> at 60% &rarr; <code>dashed</code>: gaps in the frame</p>
+  <p><b>9</b> <code>list-style-type</code> at 40% &rarr; <code>disc</code> (round bullet)</p>
+  <p><b>10</b> <code>list-style-type</code> at 60% &rarr; <code>square</code> (square bullet)</p>
+  <p><b>11</b> a non-animatable declaration inside <code>@keyframes</code> is dropped; opacity 0.4 &rarr; fill <b>230</b></p>
+  <p><b>12</b> a custom property is not interpolated; opacity 0.3 &rarr; fill <b>236</b></p>
+</div>
+
+</body>
+</html>

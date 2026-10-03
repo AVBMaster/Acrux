@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { font-family: sans-serif; font-size: 13px; margin: 10px; color: #222; }
+h3 { margin: 8px 0 4px; }
+ul li:first-child { background: #fec; }
+ul li:last-child { border-bottom: 3px solid #00a; }
+ol li:nth-child(2) { color: #a0a; }
+ol li:nth-child(odd) { font-weight: bold; }
+ol li:nth-child(-n+2) { text-decoration: underline; }
+.box p:not(.skip) { background: #cef; }
+:is(.a, .b) span { color: #070; }
+.wrap > span { background: #eee; }
+.wrap > .direct { border: 1px solid #f00; }
+#idsel { letter-spacing: 2px; }
+.empty:empty { outline: 2px solid #e0b; }
+[data-x] { font-style: italic; }
+[data-y="2"] { text-transform: uppercase; }
+li + li { margin-top: 4px; }
+.hovered:hover { background: red; }
+</style>
+</head>
+<body>
+<h3>1. first/last-child + nth</h3>
+<ul><li>one-fec</li><li>two</li><li>three-border</li></ul>
+<ol><li>bold+underline</li><li>bold-purple-under</li><li>bold3</li><li>four</li><li>bold5</li></ol>
+<h3>2. :not + :is + id</h3>
+<div class="box"><p>blue-bg</p><p class="skip">plain</p></div>
+<div class="a"><span>green</span></div>
+<div class="b"><span>green2</span></div>
+<div id="idsel">letterspacing</div>
+<h3>3. child combinator + sibling</h3>
+<div class="wrap"><span>direct-border</span><div><span>indirect-noborder</span></div></div>
+<h3>4. attr selectors</h3>
+<div data-x="1">italic</div>
+<div data-y="2">UPPERCASE-ITALIC</div>
+<h3>5. :empty</h3>
+<div class="empty" style="width:40px;height:20px"></div>
+<div class="empty" style="width:40px;height:20px">x</div>
+</body>
+</html>

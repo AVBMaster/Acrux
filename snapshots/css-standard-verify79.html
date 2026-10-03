@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 79 — text-indent calc/ch/ex, wavy decoration, underline-position, letter-spacing tail</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; line-height:1.5; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.box { width:300px; border:1px solid #ccc; margin:6px 0; }
+
+/* 1. text-indent with ch and calc */
+.ti-ch { text-indent: 5ch; }
+.ti-ex { text-indent: 5ex; }
+.ti-calc { text-indent: calc(2ch + 10px); }
+
+/* 2. wavy decoration */
+.wavy { text-decoration: underline wavy red; }
+.dashed { text-decoration: underline dashed blue; text-decoration-thickness: 2px; }
+
+/* 3. underline-position alphabetic vs under */
+.ualph { text-decoration: underline; text-underline-position: alphabetic; }
+.uunder { text-decoration: underline; text-underline-position: under; }
+
+/* 4. letter-spacing on justified line (trailing spacing) */
+.ls { letter-spacing: 3px; }
+</style>
+</head>
+<body>
+
+<h2>1. text-indent: 5ch / 5ex / calc(2ch+10px)</h2>
+<div class="box ti-ch">First line indented by 5ch, second line not.</div>
+<div class="box ti-ex">First line indented by 5ex.</div>
+<div class="box ti-calc">First line indented by calc(2ch+10px).</div>
+
+<h2>2. wavy / dashed underline</h2>
+<p><span class="wavy">wavy red underline</span> and <span class="dashed">dashed blue</span></p>
+
+<h2>3. underline-position alphabetic vs under (with descenders gjpqy)</h2>
+<p><span class="ualph">gjpqy alpha</span> <span class="uunder">gjpqy beta</span></p>
+
+<h2>4. letter-spacing 3px on a line</h2>
+<p class="ls">SPACED TEXT HERE</p>
+
+</body>
+</html>

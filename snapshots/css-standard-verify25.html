@@ -1,0 +1,35 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { font-family: Arial; font-size: 16px; margin: 8px; }
+  h2 { font-size: 14px; background: #eee; margin: 10px 0 4px; }
+  .box { border: 1px solid black; }
+  .b { font-variant-numeric: tabular-nums; font-size: 14px; }
+  .pro { font-size: 14px; }
+  .wrap { width: 200px; font-size: 14px; }
+  .hyb { width: 90px; font-size: 18px; hyphens: auto; -webkit-hyphens: auto; lang: en; }
+  .lh { font-size: 14px; line-height: 1.5; }
+  .big { font-size: 40px; }
+</style></head><body>
+<h2>1. text-underline-position / text-underline-offset</h2>
+<div class="lh"><u>from-auto</u> <u style="text-underline-position: under">under</u>
+  <u style="text-decoration-thickness: 4px">thick4</u>
+  <u style="text-decoration-skip-ink: none">skipnone</u></div>
+<h2>2. font-optical-sizing and font-size-adjust</h2>
+<div class="b"><span style="font-optical-sizing: none">optical-none 0123456789</span></div>
+<div class="b"><span style="font-size-adjust: 0.5">adjust-half HxHxHx</span> vs <span>HxHxHx</span></div>
+<h2>3. font-variant-numeric</h2>
+<div class="b">0123456789 <span style="font-variant-numeric: oldstyle-nums">0123456789 oldstyle</span></div>
+<div class="b">1<sup>st</sup> 2<sup>nd</sup> <span style="font-variant-numeric: super">x2</span></div>
+<h2>4. text-emphasis</h2>
+<div class="pro"><span style="text-emphasis: filled dot">emphasis dots 中文测试</span></div>
+<div class="pro"><span style="text-emphasis: open circle; text-emphasis-position: under">open under</span></div>
+<h2>5. hyphenation</h2>
+<div class="hyb box">Understanding hyphenation behavior in browsers is surprisingly complicated</div>
+<h2>6. letter-spacing and word-spacing on justification</h2>
+<div class="wrap box" style="text-align: justify; word-spacing: 6px">The quick brown fox jumps over the lazy dog again</div>
+<h2>7. text-wrap: balance</h2>
+<div class="wrap box" style="text-wrap: balance">Short heading that should balance across two lines</div>
+<h2>8. text-indent each-line</h2>
+<div class="wrap box" style="text-indent: 2em each-line">Every single line of this paragraph should be indented by exactly two em</div>
+<h2>9. white-space: break-spaces trailing at end of line</h2>
+<div class="wrap box" style="white-space: break-spaces">aaa        bbb        ccc</div>
+</body></html>

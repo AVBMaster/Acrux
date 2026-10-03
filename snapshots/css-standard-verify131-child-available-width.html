@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b131 child available width vs parent padding</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+.a { width: 300px; padding: 0 50px; }
+.b { padding: 0 50px; }
+.bb { width: 300px; padding: 0 50px; box-sizing: border-box; }
+.c { width: 300px; padding: 0 50px; border: 5px solid #bbb; }
+.kid { background: rgb(255,128,128); height: 10px; }
+.mid { background: rgb(200,200,255); }
+</style>
+</head>
+<body>
+<div class="a" id="A"><div class="kid" id="A1"></div></div>
+<div class="a" id="B"><div class="mid" id="B0"><div class="kid" id="B1"></div></div></div>
+<div class="bb" id="C"><div class="kid" id="C1"></div></div>
+<div class="c" id="D"><div class="kid" id="D1"></div></div>
+<div class="b" id="E"><div class="kid" id="E1"></div></div>
+</body>
+</html>

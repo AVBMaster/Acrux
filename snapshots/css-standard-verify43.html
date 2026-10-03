@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 43 — text-transform / line-height / white-space</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+.t { background: #f0f0f0; padding: 6px; margin: 6px 0; border: 1px solid #ccc; }
+
+/* text-transform edge cases */
+.up { text-transform: uppercase; }
+.low { text-transform: lowercase; }
+.cap { text-transform: capitalize; }
+/* capitalize should uppercase after word boundaries incl. hyphen/space,
+   but NOT after a digit-only or within a word */
+
+/* line-height unitless inheritance: child must multiply by ITS OWN font-size */
+.parent-lh { line-height: 1.5; font-size: 20px; }
+.child-lh { font-size: 10px; }  /* inherited line-height should be 15px, not 30px */
+.child-lh-big { font-size: 40px; } /* inherited line-height should be 30px */
+
+/* white-space variants */
+.ws { width: 220px; border: 1px solid #333; margin: 8px 0; padding: 4px; }
+.pre-line { white-space: pre-line; }
+.pre-wrap { white-space: pre-wrap; }
+.normal-ws { white-space: normal; }
+</style>
+</head>
+<body>
+
+<h2>1. text-transform: capitalize (word boundaries)</h2>
+<div class="t cap">hello world — foo bar-baz qux</div>
+<div class="t cap">the 'quick' (brown) fox: jumps</div>
+<div class="t cap">macDonald 2fast 3go</div>
+
+<h2>2. text-transform: uppercase (German ß → SS)</h2>
+<div class="t up">straße gross</div>
+
+<h2>3. line-height: unitless inheritance (child scales by own font-size)</h2>
+<div class="parent-lh">
+  <div class="child-lh">small line 1<br>small line 2</div>
+  <div class="child-lh-big">big line 1<br>big line 2</div>
+</div>
+
+<h2>4. white-space: pre-line (collapse spaces, keep newlines)</h2>
+<div class="ws pre-line">Line   one    here
+Line   two    here</div>
+
+<h2>5. white-space: pre-wrap (keep spaces, keep newlines, wrap)</h2>
+<div class="ws pre-wrap">Supercalifragilisticexpialidocious   trailing   spaces</div>
+
+</body>
+</html>

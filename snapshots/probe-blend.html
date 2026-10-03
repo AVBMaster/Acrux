@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html, body { margin: 0; padding: 0; }
+div { width: 60px; height: 40px; }
+/* red background-color under a solid blue layer, difference => magenta */
+#d1 { background-color: rgb(255,0,0); background-image: linear-gradient(rgb(0,0,255), rgb(0,0,255)); background-blend-mode: difference; }
+/* same layers, no blending => the blue layer wins */
+#d2 { background-color: rgb(255,0,0); background-image: linear-gradient(rgb(0,0,255), rgb(0,0,255)); }
+/* two image layers: green over blue, multiply => black; bottom layer normal */
+#d3 { background-image: linear-gradient(rgb(0,255,0), rgb(0,255,0)), linear-gradient(rgb(0,0,255), rgb(0,0,255)); background-blend-mode: multiply; }
+/* screen: green screen blue = cyan-white mix (0,255,255) | ... */
+#d4 { background-image: linear-gradient(rgb(0,255,0), rgb(0,255,0)), linear-gradient(rgb(0,0,255), rgb(0,0,255)); background-blend-mode: screen; }
+/* exclusion of green and blue = cyan (0,255,255) */
+#d5 { background-image: linear-gradient(rgb(0,255,0), rgb(0,255,0)), linear-gradient(rgb(0,0,255), rgb(0,0,255)); background-blend-mode: exclusion; }
+/* lighten(green, blue) = green */
+#d6 { background-image: linear-gradient(rgb(0,255,0), rgb(0,255,0)), linear-gradient(rgb(0,0,255), rgb(0,0,255)); background-blend-mode: lighten; }
+/* isolation check: no background-color, difference over the white page must keep
+   the layer's own color rather than inverting the page */
+#d7 { background-image: linear-gradient(rgb(0,0,255), rgb(0,0,255)); background-blend-mode: difference; }
+</style>
+</head>
+<body>
+<div id="d1"></div>
+<div id="d2"></div>
+<div id="d3"></div>
+<div id="d4"></div>
+<div id="d5"></div>
+<div id="d6"></div>
+<div id="d7"></div>
+</body>
+</html>

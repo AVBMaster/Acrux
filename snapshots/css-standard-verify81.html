@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 81 - object-fit / object-position</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:14px 0 6px; font-size:15px; }
+.row { display:flex; gap:24px; flex-wrap:wrap; }
+figure { margin:0; }
+figcaption { text-align:center; font-size:12px; color:#333; }
+img { display:block; background:#ddf; outline:1px solid #88a; }
+.box { width:120px; height:80px; }
+.cover { object-fit:cover; }
+.contain { object-fit:contain; }
+.fill { object-fit:fill; }
+.none { object-fit:none; }
+.sdown { object-fit:scale-down; }
+.pos-r { object-position:right center; }
+.pos-bl { object-position:left bottom; }
+.pos-pct { object-position:25% 75%; }
+</style>
+</head>
+<body>
+<h2>1. object-fit variants - green 100x50 into a 120x80 box</h2>
+<div class="row">
+ <figure><img class="box fill" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAAAyCAIAAAAlV+npAAAAg0lEQVR4nO3SMREAMAwDsbT8gRVWKeR3afb05zNvWLrbIWIlnhWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWINXsfpdUBLE/6fcgAAAAASUVORK5CYII="><figcaption>fill</figcaption></figure>
+ <figure><img class="box contain" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAAAyCAIAAAAlV+npAAAAg0lEQVR4nO3SMREAMAwDsbT8gRVWKeR3afb05zNvWLrbIWIlnhWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWINXsfpdUBLE/6fcgAAAAASUVORK5CYII="><figcaption>contain</figcaption></figure>
+ <figure><img class="box cover" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAAAyCAIAAAAlV+npAAAAg0lEQVR4nO3SMREAMAwDsbT8gRVWKeR3afb05zNvWLrbIWIlnhWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWINXsfpdUBLE/6fcgAAAAASUVORK5CYII="><figcaption>cover</figcaption></figure>
+ <figure><img class="box none" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAAAyCAIAAAAlV+npAAAAg0lEQVR4nO3SMREAMAwDsbT8gRVWKeR3afb05zNvWLrbIWIlnhWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWINXsfpdUBLE/6fcgAAAAASUVORK5CYII="><figcaption>none</figcaption></figure>
+ <figure><img class="box sdown" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAAAyCAIAAAAlV+npAAAAg0lEQVR4nO3SMREAMAwDsbT8gRVWKeR3afb05zNvWLrbIWIlnhWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWINXsfpdUBLE/6fcgAAAAASUVORK5CYII="><figcaption>scale-down</figcaption></figure>
+</div>
+<h2>2. object-position - blue 200x100 (cover) and red 40x80 (none) in 120x80 box</h2>
+<div class="row">
+ <figure><img class="box cover pos-r" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAABkCAIAAABM5OhcAAABGklEQVR4nO3UMREAIBDEQEDX+7cFJki3K+CqzO2Zu+C3830RhEXFY5EQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYbEKD5pLAj+T9EKVAAAAAElFTkSuQmCC"><figcaption>cover right center</figcaption></figure>
+ <figure><img class="box cover pos-bl" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAABkCAIAAABM5OhcAAABGklEQVR4nO3UMREAIBDEQEDX+7cFJki3K+CqzO2Zu+C3830RhEXFY5EQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYbEKD5pLAj+T9EKVAAAAAElFTkSuQmCC"><figcaption>cover left bottom</figcaption></figure>
+ <figure><img class="box none pos-bl" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAABQCAIAAADk7aCWAAAAeElEQVR4nO3NQQGDQADEwGvU4N9g+bIGwoOMgfn9r+u8gVfWUyzCzJ6KNXjVKtbgVatYg1etYg1etYo1eNUq1uBVq1iDV61iDV61ijV41SrW4FWrWINXrWINXrWKNXjVKtbgVatYg1etYg1etYo1eNUq1uBV5+PxDXPMAe/raXKeAAAAAElFTkSuQmCC"><figcaption>none left bottom</figcaption></figure>
+ <figure><img class="box contain pos-pct" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAABQCAIAAADk7aCWAAAAeElEQVR4nO3NQQGDQADEwGvU4N9g+bIGwoOMgfn9r+u8gVfWUyzCzJ6KNXjVKtbgVatYg1etYg1etYo1eNUq1uBVq1iDV61iDV61ijV41SrW4FWrWINXrWINXrWKNXjVKtbgVatYg1etYg1etYo1eNUq1uBV5+PxDXPMAe/raXKeAAAAAElFTkSuQmCC"><figcaption>contain 25% 75%</figcaption></figure>
+</div>
+</body>
+</html>

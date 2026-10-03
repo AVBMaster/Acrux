@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 40 — line-clamp</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+
+.clamp {
+  width: 260px;
+  border: 2px solid #333;
+  padding: 8px;
+  margin: 10px 0;
+  background: #f7f7f7;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 20px;
+}
+.clamp2 { -webkit-line-clamp: 2; }
+.clamp3 { -webkit-line-clamp: 3; }
+.clampnone { -webkit-line-clamp: none; }
+.clamp0 { -webkit-line-clamp: 0; }
+.shorttext { -webkit-line-clamp: 3; }
+</style>
+</head>
+<body>
+
+<h2>1. -webkit-line-clamp: 2 (content overflows → ellipsis on line 2)</h2>
+<div class="clamp clamp2">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam quis nostrud.</div>
+
+<h2>2. -webkit-line-clamp: 3 (ellipsis on line 3)</h2>
+<div class="clamp clamp3">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</div>
+
+<h2>3. -webkit-line-clamp: none (no clamp, all lines shown)</h2>
+<div class="clamp clampnone">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam quis nostrud.</div>
+
+<h2>4. -webkit-line-clamp: 0 (treated as no clamp)</h2>
+<div class="clamp clamp0">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam quis nostrud.</div>
+
+<h2>5. text shorter than clamp (no ellipsis, fits in 1 line)</h2>
+<div class="clamp shorttext">Short text that fits easily.</div>
+
+</body>
+</html>

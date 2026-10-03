@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 83 — calc/min/max/clamp in width/height/margin/padding/gap</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background:#eee; padding:4px; margin:14px 0 6px; font-size:15px; }
+.row { border:1px solid #bbb; }
+/* width: calc(50% + 10px), container 300 → 160 */
+.w1 { width:300px; border:1px solid #939; }
+.w1 > div { width:calc(50% + 10px); height:20px; background:#cfe; }
+/* min/max clamp: width:min(100px,50%)=100, max(60%,200px)=200, clamp(50px,10%,150px)=100 */
+.w2 { width:400px; border:1px solid #939; display:flex; }
+.w2 .a { width:min(100px,50%); height:20px; background:#fec; }
+.w2 .b { width:max(60%,200px); height:20px; background:#cef; }
+.w2 .c { width:clamp(50px,10%,150px); height:20px; background:#efe; }
+/* margin: calc(1em + 5px)=21, padding: calc(2ch) , nested calc */
+.w3 { width:300px; border:1px solid #939; }
+.w3 .m { width:100px; height:20px; background:#cfe; margin-left:calc(1em + 5px); margin-top:calc(calc(5px + 3px)); }
+/* flex gap: calc(10px + 1em)=26 */
+.w4 { width:400px; border:1px solid #939; display:flex; gap:calc(10px + 1em); }
+.w4 div { width:50px; height:20px; background:#cfe; }
+/* padding: min(10px, 20%) top */
+.w5 { width:200px; border:1px solid #939; padding:calc(20px - 1em) 10px; }
+.w5 span { background:#cfe; }
+/* height: calc(100% - 10px) in a 100px parent */
+.w6 { width:120px; height:100px; border:1px solid #939; }
+.w6 div { height:calc(100% - 10px); width:30px; background:#cfe; }
+</style>
+</head>
+<body>
+
+<h2>1. width calc(50% + 10px) in 300px (exp child 160)</h2>
+<div class="row w1"><div>x</div></div>
+
+<h2>2. min/max/clamp widths in 400px flex (exp a=100 b=240 c=40→clamped)</h2>
+<div class="row w2"><div class="a">a</div><div class="b">b</div><div class="c">c</div></div>
+
+<h2>3. margin-left calc(1em+5px)=21 + nested calc margin-top=8</h2>
+<div class="row w3"><div class="m">m</div></div>
+
+<h2>4. flex gap calc(10px+1em)=26 (exp item2 x=76)</h2>
+<div class="row w4"><div>1</div><div>2</div><div>3</div></div>
+
+<h2>5. padding calc(20px-1em)=4 top/bottom, 10 left/right</h2>
+<div class="row w5"><span>text</span></div>
+
+<h2>6. height calc(100%-10px)=90 in 100px parent</h2>
+<div class="row w6"><div>y</div></div>
+
+</body>
+</html>

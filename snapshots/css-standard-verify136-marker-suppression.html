@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b136 marker suppression by parent list-style shorthand</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+ul { margin: 0; padding: 0 0 0 80px; }
+li { margin-bottom: 4px; }
+/* (a) parent resets everything, children re-declare only the type */
+.reset li { list-style-type: decimal; }
+/* (b) parent leaves the type alone */
+.plain li { list-style-type: decimal; }
+/* (c) type inherited from the parent */
+.inherit { list-style-type: decimal; }
+span { background: rgb(255,200,200); }
+</style>
+</head>
+<body>
+<ul class="reset" style="list-style: none" id="ga">
+  <li id="a1">Alpha</li>
+  <li id="a2"><span>Beta</span></li>
+</ul>
+<ul class="plain" id="gb">
+  <li id="b1">Alpha</li>
+  <li id="b2"><span>Beta</span></li>
+</ul>
+<ul class="inherit" id="gc">
+  <li id="c1">Alpha</li>
+  <li id="c2"><span>Beta</span></li>
+</ul>
+</body>
+</html>

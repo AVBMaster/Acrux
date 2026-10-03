@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body { font: 16px sans-serif; margin: 8px; }
+h2 { font-size: 16px; margin: 14px 0 6px; background: rgb(240,240,240); }
+p { margin: 4px 0; }
+
+/* ====== GROUP 1: decoration color defaults to currentcolor ====== */
+#g1 { color: rgb(0,0,255); text-decoration: underline; }
+
+/* ====== GROUP 2: several decoration lines at once ====== */
+#g2 span { text-decoration-line: underline overline line-through; color: rgb(0,0,0); }
+
+/* ====== GROUP 3: dotted / dashed / wavy with explicit color+thickness ====== */
+#g3 .dotted { text-decoration: underline dotted rgb(255,0,0); text-decoration-thickness: 4px; }
+#g3 .dashed  { text-decoration: underline dashed rgb(0,128,0); text-decoration-thickness: 4px; }
+#g3 .wavy    { text-decoration: underline wavy rgb(0,0,255); text-decoration-thickness: 2px; }
+
+/* ====== GROUP 4: double line, thickness split into two strokes ====== */
+#g4 span { text-decoration: underline double rgb(128,0,128); text-decoration-thickness: 6px; }
+
+/* ====== GROUP 5: thickness keywords / percentage ====== */
+#g5 .fromfont { text-decoration: underline rgb(0,0,0); text-decoration-thickness: from-font; font-size: 24px; }
+#g5 .pct { text-decoration: underline rgb(0,0,0); text-decoration-thickness: 25%; font-size: 24px; }
+#g5 .auto { text-decoration: underline rgb(0,0,0); text-decoration-thickness: auto; font-size: 24px; }
+
+/* ====== GROUP 6: nested decorations, both paint on the child text ====== */
+#g6 { text-decoration: underline; text-decoration-color: rgb(255,0,0); }
+#g6 span { text-decoration: line-through; text-decoration-color: rgb(0,0,255); }
+
+/* ====== GROUP 7: 'none' on a child cannot cancel the parent's line ====== */
+#g7 { text-decoration: underline; text-decoration-color: rgb(0,0,0); }
+#g7 span { text-decoration: none; }
+
+/* ====== GROUP 8: text-underline-position ====== */
+#g8 .auto { text-decoration: underline; text-decoration-thickness: 3px; font-size: 24px; }
+#g8 .alpha { text-decoration: underline; text-decoration-thickness: 3px; text-underline-position: alphabetic; font-size: 24px; }
+#g8 .under { text-decoration: underline; text-decoration-thickness: 3px; text-underline-position: under; font-size: 24px; }
+
+/* ====== GROUP 9: wrapped inline gets one line box per fragment ====== */
+#g9 { width: 150px; text-decoration: underline rgb(0,0,0); }
+
+/* ====== GROUP 10: link default decoration + decoration on a block child ====== */
+#g10 a { }
+#g10b { text-decoration: overline rgb(255,0,255); }
+
+/* ====== GROUP 11: text-underline-offset ====== */
+#g11 span { font-size: 24px; text-decoration: underline; text-decoration-thickness: 3px; }
+#g11 .o2 { text-underline-offset: 2px; }
+#g11 .o8 { text-underline-offset: 8px; }
+#g11 .pct { text-underline-offset: 50%; }
+#g11 .neg { text-underline-offset: -4px; }
+
+/* ====== GROUP 12: text-decoration-skip-ink ====== */
+#g12 .auto { text-decoration: underline rgb(255,0,0); text-decoration-thickness: 6px; }
+#g12 .none { text-decoration: underline rgb(0,0,255); text-decoration-thickness: 6px; text-decoration-skip-ink: none; }
+</style></head><body>
+<h2>1. blue text, underline color must follow currentcolor</h2>
+<p id="g1">Blue underlined text</p>
+
+<h2>2. text-decoration-line: underline overline line-through</h2>
+<p id="g2"><span>three lines at once</span></p>
+
+<h2>3. dotted / dashed / wavy, 4px and 2px thickness</h2>
+<p id="g3"><span class="dotted">dotted</span> <span class="dashed">dashed</span> <span class="wavy">wavy</span></p>
+
+<h2>4. double with 6px total thickness</h2>
+<p id="g4"><span>double underline</span></p>
+
+<h2>5. thickness: from-font / 25% / auto at 24px</h2>
+<p id="g5"><span class="fromfont">from-font</span> <span class="pct">25pct</span> <span class="auto">auto</span></p>
+
+<h2>6. parent underline (red) + child line-through (blue)</h2>
+<p id="g6">plain text <span>crossed text</span> more plain</p>
+
+<h2>7. child 'text-decoration: none' keeps the parent underline</h2>
+<p id="g7">underlined <span>also underlined</span> still underlined</p>
+
+<h2>8. text-underline-position: auto / alphabetic / under</h2>
+<p id="g8"><span class="auto">auto</span> <span class="alpha">alphabetic</span> <span class="under">under</span></p>
+
+<h2>9. wrapped underlined inline in a 150px box</h2>
+<p id="g9">some longer text that has to wrap inside the box</p>
+
+<h2>10. UA link underline + overline on a block child</h2>
+<p id="g10"><a href="#">a link</a> <span>plain</span></p>
+<div id="g10b">block overline</div>
+
+<h2>11. text-underline-offset: auto / 2px / 8px / 50% / -4px</h2>
+<p id="g11"><span>auto</span> <span class="o2">2px</span> <span class="o8">8px</span> <span class="pct">50%</span> <span class="neg">neg</span></p>
+
+<h2>12. text-decoration-skip-ink: auto (red) / none (blue)</h2>
+<p id="g12"><span class="auto">gqpygqpy</span> <span class="none">gqpygqpy</span></p>
+</body></html>

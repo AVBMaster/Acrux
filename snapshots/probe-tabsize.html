@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>probe: tab-size tab stops</title>
+<style>
+html, body { margin: 0; padding: 4px; background: rgb(255,255,255); font-family: Arial, sans-serif; font-size: 16px; line-height: 20px; }
+pre { margin: 0; white-space: pre; background: rgb(240,240,240); }
+.t1 { tab-size: 30px; }
+.t2 { tab-size: 2; }
+.t3 { }
+.t4 { tab-size: 40px; font-size: 12px; }
+</style>
+</head>
+<body>
+<pre id="p1" class="t1">a	b	tail</pre>
+<pre id="p2" class="t2">a	b	tail</pre>
+<pre id="p3" class="t3">a	b	tail</pre>
+<pre id="p4" class="t4">ab	cd	tail</pre>
+<pre id="p5" class="t1">    x</pre>
+<div id="p6" style="white-space:pre-wrap;width:120px;tab-size:20px;background:rgb(230,230,230)">aa	bb	cc	dd	ee	ff</div>
+</body>
+</html>

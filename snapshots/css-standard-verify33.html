@@ -1,0 +1,38 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { font-family: Arial; font-size: 16px; margin: 8px; }
+  h2 { font-size: 14px; background: #eee; margin: 8px 0 4px; }
+  .f { width: 60px; height: 40px; background: rgb(200,80,60); margin-bottom: 10px; }
+  .g { width: 60px; height: 40px; margin-bottom: 10px; background: linear-gradient(90deg,#00e,#fff); }
+  .b { width: 70px; height: 44px; background: #fd8; display: inline-block; margin: 0 10px 14px 0; }
+</style></head><body>
+<h2>1. single filter functions</h2>
+<div class="f" id="f0"></div>
+<div class="f" style="filter: grayscale(1)" id="f1"></div>
+<div class="f" style="filter: sepia(1)" id="f2"></div>
+<div class="f" style="filter: invert(1)" id="f3"></div>
+<div class="f" style="filter: brightness(0.5)" id="f4"></div>
+<div class="f" style="filter: contrast(2)" id="f5"></div>
+<div class="f" style="filter: saturate(0)" id="f6"></div>
+<div class="f" style="filter: hue-rotate(90deg)" id="f7"></div>
+<div class="f" style="filter: opacity(0.5)" id="f8"></div>
+<div class="f" style="filter: blur(3px)" id="f9"></div>
+<h2>2. chained and keyword filters</h2>
+<div class="f" style="filter: saturate(2) brightness(0.8) hue-rotate(45deg)" id="c1"></div>
+<div class="f" style="filter: grayscale" id="c2"></div>
+<div class="f" style="filter: sepia(0.5) grayscale(0.5)" id="c3"></div>
+<div class="f" style="filter: invert(50%)" id="c4"></div>
+<div class="g" style="filter: hue-rotate(180deg)" id="c5"></div>
+<div class="g" style="filter: contrast(0.5) brightness(1.2)" id="c6"></div>
+<h2>3. filter on text and drop-shadow</h2>
+<p style="filter: drop-shadow(3px 3px 2px #000); font-size: 20px">ShadowedText</p>
+<p style="filter: invert(1); font-size: 20px; background:#fff">InvertedText</p>
+<h2>4. rounded borders with non-uniform widths</h2>
+<div class="b" style="border: 2px 8px 12px 4px solid #36c; border-radius: 16px"></div>
+<div class="b" style="border-width: 2px 8px 12px 4px; border-color: #36c; border-radius: 16px"></div>
+<div class="b" style="border-width: 2px 8px 12px 4px; border-color: #e33 #3c3 #33e #cc3; border-radius: 16px"></div>
+<div class="b" style="border-top: 8px solid #e33; border-bottom: 8px solid #33e; border-radius: 20px"></div>
+<div class="b" style="border: 6px dashed #36c; border-radius: 18px"></div>
+<div class="b" style="border: 6px dotted #36c; border-radius: 18px"></div>
+<div class="b" style="border: 6px double #36c; border-radius: 18px"></div>
+<div class="b" style="border: 6px ridge #36c; border-radius: 18px"></div>
+</body></html>

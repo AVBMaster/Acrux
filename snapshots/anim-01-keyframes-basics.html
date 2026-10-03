@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 01 — @keyframes basics</title>
+<style>
+/* Every animation here is `paused` with a negative delay, which is the standard
+   way to pin an engine to one exact frame: -400ms into a 1s linear animation is
+   40% progress, identically in every engine. That makes the numbers below spec
+   values rather than implementation artifacts.
+
+   The probes live in an absolutely-positioned grid so their boxes are identical
+   in every engine regardless of font metrics: the probe coordinates are the
+   declared ones, and the same --pixels command reads the same pixel in ours and
+   in the reference. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 260px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 90px; height: 60px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  outline: 1px solid #000;   /* an edge that takes no part in layout */
+  text-align: center; line-height: 60px;
+  font-size: 14px; color: #000;
+}
+#a { left: 10px;  top: 10px; }
+#b { left: 120px; top: 10px; }
+#c { left: 230px; top: 10px; }
+#d { left: 340px; top: 10px; }
+#e { left: 10px;  top: 90px; }
+#f { left: 120px; top: 90px; }
+#g { left: 230px; top: 90px; }
+
+/* A: from/to over 40% of a 1s animation. opacity 1 -> 0 gives 0.6.
+   Fill = 255 - 63 * 0.6 = 217. */
+#a { animation: fade 1s linear -400ms paused; }
+@keyframes fade { from { opacity: 1; } to { opacity: 0; } }
+
+/* B: three explicit keyframes. 40% lands in the 20%..100% interval, so the
+   local progress is (40-20)/80 = 0.25 and the value is 0.2 + (0-0.2)*0.25 = 0.15.
+   Fill = 255 - 63 * 0.15 = 246. */
+#b { animation: three 1s linear -400ms paused; }
+@keyframes three {
+  0%   { opacity: 1; }
+  20%  { opacity: 0.2; }
+  100% { opacity: 0; }
+}
+
+/* C: an implicit 100% endpoint. 0% sets opacity 1; the 100% endpoint comes from
+   the element's own value 0.4, so at 40% the blend is 1 -> 0.4 = 0.76.
+   Fill = 255 - 63 * 0.76 = 207. */
+#c { opacity: 0.4; animation: implicit 1s linear -400ms paused; }
+@keyframes implicit { 0% { opacity: 1; } }
+
+/* D: a comma selector list. 0.3..1.0 interpolates 1 -> 0, so at 40% the local
+   progress is 0.1/0.7 = 0.1429 and the value is 0.857.
+   Fill = 255 - 63 * 0.857 = 201. */
+#d { animation: pair 1s linear -400ms paused; }
+@keyframes pair { 0%, 30% { opacity: 1; } 100% { opacity: 0; } }
+
+/* E: several properties in one keyframe rule. At 40%:
+   width 40->100 = 64px, background #ff0000 -> #0000ff = rgb(153, 0, 102),
+   translateX 0->40 = 16px. */
+#e { animation: multi 1s linear -400ms paused; }
+@keyframes multi {
+  from { width: 40px; background-color: #ff0000; transform: translateX(0px); }
+  to   { width: 100px; background-color: #0000ff; transform: translateX(40px); }
+}
+
+/* F: identical endpoints, so the effect exists but nothing moves. */
+#f { animation: hold 1s linear -400ms paused; }
+@keyframes hold { from { opacity: 0.25; } to { opacity: 0.25; } }
+
+/* G: font-size, a layout-affecting property: 10px -> 30px at 40% = 18px. */
+#g { height: 34px; line-height: 34px; animation: grow 1s linear -400ms paused; }
+@keyframes grow { from { font-size: 10px; } to { font-size: 30px; } }
+
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="a">A</i>
+  <i class="sw" id="b">B</i>
+  <i class="sw" id="c">C</i>
+  <i class="sw" id="d">D</i>
+  <i class="sw" id="e">E</i>
+  <i class="sw" id="f">F</i>
+  <i class="sw" id="g">Hg</i>
+</div>
+
+<div id="legend">
+  <p><b>A</b> from/to, opacity 1&rarr;0 at 40% = <b>0.60</b> &rarr; fill rgb(217,217,217)</p>
+  <p><b>B</b> 0% / 20% / 100%, at 40% = <b>0.15</b> &rarr; fill rgb(246,246,246)</p>
+  <p><b>C</b> implicit 100% from the element's 0.4, at 40% = <b>0.76</b> &rarr; fill rgb(207,207,207)</p>
+  <p><b>D</b> selector list "0%, 30%", at 40% = <b>0.857</b> &rarr; fill rgb(201,201,201)</p>
+  <p><b>E</b> width <b>64px</b>, background <b>rgb(153, 0, 102)</b>, translateX <b>16px</b> (left edge 26)</p>
+  <p><b>F</b> identical endpoints, opacity <b>0.25</b> &rarr; fill rgb(240,240,240)</p>
+  <p><b>G</b> font-size 10&rarr;30 at 40% = <b>18px</b></p>
+</div>
+
+</body>
+</html>

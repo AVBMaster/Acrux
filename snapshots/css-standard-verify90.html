@@ -1,0 +1,18 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{margin:20px;font:14px Arial}
+.f{display:flex;width:300px;height:40px;border:1px solid #939;margin-bottom:10px}
+.f div{width:40px;height:30px;background:#cfe}
+.jb{justify-content:space-between}
+.jr{justify-content:space-around}
+.je{justify-content:space-evenly}
+.fe{justify-content:flex-end}
+/* align-content on wrapped flex */
+.w{display:flex;flex-wrap:wrap;width:120px;height:120px;border:1px solid #090;align-content:space-between}
+.w div{width:50px;height:30px;background:#fec}
+</style></head><body>
+<div class="f jb"><div>1</div><div>2</div><div>3</div></div>
+<div class="f jr"><div>1</div><div>2</div><div>3</div></div>
+<div class="f je"><div>1</div><div>2</div><div>3</div></div>
+<div class="f fe"><div>1</div><div>2</div><div>3</div></div>
+<div class="w"><div>1</div><div>2</div><div>3</div><div>4</div></div>
+</body></html>

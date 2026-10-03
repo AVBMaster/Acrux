@@ -1,0 +1,17 @@
+<!DOCTYPE html><head><style>
+body{margin:30px;font:14px Arial}
+.row{margin-bottom:60px}
+.t{width:80px;height:40px;background:#cfe;border:1px solid #939;display:inline-block;margin-right:60px}
+/* translate percentages resolve against own border box: w=82 h=42 */
+.p50{transform:translate(50%,100%)}       /* +41 x, +42 y */
+.px{transform:translate(30px,10px)}        /* +30 x, +10 y */
+.tx25{transform:translateX(25%)}           /* +20.5 x */
+.ty50{transform:translateY(50%)}           /* +21 y */
+.t3d{transform:translate3d(50%,0,-25%)}    /* +41 x (z ignored) */
+.combined{transform:rotate(0) translate(50%,0) scale(1)} /* +41 x */
+.indep{translate:50% 100%}                 /* independent prop +41x +42y */
+</style><body>
+<div class="row"><div class="t">base</div><div class="t p50">tr 50/100</div><div class="t px">tr px</div></div>
+<div class="row"><div class="t tx25">tx25</div><div class="t ty50">ty50</div><div class="t t3d">t3d</div></div>
+<div class="row"><div class="t combined">combined</div><div class="t indep">indep</div></div>
+</body></html>

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b130 text-indent calc percentage basis</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+.box { width: 300px; padding: 0 50px; background: rgb(240,240,240); margin-bottom: 8px; }
+.i1 { text-indent: calc(50% + 10px); }
+.i2 { text-indent: calc(25%); }
+.i3 { text-indent: calc(1em + 5px); }
+.i4 { text-indent: 50%; }
+.i5 { text-indent: calc(100% - 20px); }
+.i6 { text-indent: calc(10px + 2ch); }
+p { margin: 0; background: rgb(255,255,255); }
+</style>
+</head>
+<body>
+<div class="box"><p class="i1" id="p1">AAAA first line</p><p class="i1">second</p></div>
+<div class="box"><p class="i2" id="p2">BBBB first line</p></div>
+<div class="box"><p class="i3" id="p3">CCCC first line</p></div>
+<div class="box"><p class="i4" id="p4">DDDD first line</p></div>
+<div class="box"><p class="i5" id="p5">EEEE first line</p></div>
+<div class="box"><p class="i6" id="p6">FFFF first line</p></div>
+</body>
+</html>

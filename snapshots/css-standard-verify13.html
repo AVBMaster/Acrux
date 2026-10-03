@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Batch 13 (Length Units / Font Keywords / Line-Height / Vertical-Align / Wrapping / Tables / Flex / Filters / Radii / Decorations)</title>
+<style>
+html, body { margin: 0; padding: 4px; background: rgb(255,255,255); font-family: Arial, sans-serif; font-size: 16px; line-height: 20px; }
+h2 { margin: 10px 0 4px 0; font-size: 13px; color: rgb(51,51,51); }
+p { margin: 0; }
+
+/* ====== GROUP 1: absolute length units (1in=96px, 1pc=16, 12pt=16, 1cm=37.795, 1mm=3.78, 1q=0.945) ====== */
+#u1 { height: 10px; background: rgb(255,0,0); width: 1in; }
+#u2 { height: 10px; background: rgb(0,255,0); width: 1pc; margin-top: 2px; }
+#u3 { height: 10px; background: rgb(0,0,255); width: 12pt; margin-top: 2px; }
+#u4 { height: 10px; background: rgb(255,255,0); width: 2cm; margin-top: 2px; }
+#u5 { height: 10px; background: rgb(255,0,255); width: 20mm; margin-top: 2px; }
+#u6 { height: 10px; background: rgb(0,255,255); width: 40q; margin-top: 2px; }
+
+/* ====== GROUP 2: font-size keywords chain (root 16 → large 18 → larger 24 → smaller 16) ====== */
+#g2 { font-size: large; background: rgb(238,238,238); }
+#g2 .a { font-size: larger; }
+#g2 .b { font-size: smaller; }
+#g2 .c { font-size: x-small; }
+
+/* ====== GROUP 3: line-height variants ====== */
+.lh-num { line-height: 2; background: rgb(255,255,0); }
+.lh-pct { line-height: 150%; background: rgb(255,220,0); }
+.lh-len { line-height: 30px; background: rgb(255,180,0); }
+.lh-norm { line-height: normal; background: rgb(255,140,0); }
+
+/* ====== GROUP 4: vertical-align ====== */
+#g4 { font-size: 30px; background: rgb(238,238,238); }
+#g4 .pct { vertical-align: 50%; font-size: 12px; background: rgb(255,0,0); }
+#g4 .tt { vertical-align: text-top; font-size: 12px; background: rgb(0,255,0); }
+#g4 .tb { vertical-align: text-bottom; font-size: 12px; background: rgb(0,0,255); }
+#g4 .mid { vertical-align: middle; font-size: 12px; background: rgb(255,255,0); }
+
+/* ====== GROUP 5: overflow-wrap / word-break ====== */
+#g5a { width: 80px; overflow-wrap: break-word; background: rgb(238,238,238); }
+#g5b { width: 80px; word-break: break-all; background: rgb(228,228,228); margin-top: 4px; }
+
+/* ====== GROUP 6: text-transform ====== */
+#g6 { text-transform: capitalize; background: rgb(238,238,238); }
+
+/* ====== GROUP 7: table caption-side + spans ====== */
+table { border-collapse: separate; border-spacing: 2px; }
+#g7 { caption-side: bottom; background: rgb(238,238,238); border-collapse: collapse; }
+#g7 td, #g7 th { border: 1px solid rgb(0,0,0); padding: 2px; }
+#g7 .cs { colspan: 2; }
+#g7 caption { background: rgb(255,0,0); height: 14px; }
+
+/* ====== GROUP 8: flex order / basis / wrap-reverse ====== */
+#g8 { display: flex; width: 200px; flex-wrap: wrap-reverse; height: 60px; background: rgb(238,238,238); }
+#g8 .i { width: 90px; height: 30px; }
+#g8 .o1 { order: 2; background: rgb(255,0,0); }
+#g8 .o2 { order: 1; background: rgb(0,255,0); }
+#g8 .o3 { background: rgb(0,0,255); }
+
+/* ====== GROUP 9: transform-origin ====== */
+#g9 { width: 60px; height: 60px; background: rgb(255,0,0); transform: rotate(90deg); transform-origin: left top; }
+
+/* ====== GROUP 10: letter-spacing / word-spacing ====== */
+#g10a { letter-spacing: 6px; background: rgb(255,255,0); }
+#g10b { word-spacing: 20px; background: rgb(255,255,0); }
+
+/* ====== GROUP 11: elliptical per-corner border-radius ====== */
+#g11 { width: 120px; height: 60px; background: rgb(0,0,255); border-radius: 40px 10px / 10px 40px; }
+
+/* ====== GROUP 12: filter functions ====== */
+#f1 { width: 60px; height: 20px; background: rgb(255,0,0); filter: grayscale(1); }
+#f2 { width: 60px; height: 20px; background: rgb(255,0,0); filter: invert(1); }
+#f3 { width: 60px; height: 20px; background: rgb(255,0,0); filter: brightness(0.5); }
+#f4 { width: 60px; height: 20px; background: rgb(0,128,255); filter: sepia(1); }
+#f5 { width: 60px; height: 20px; background: rgb(255,0,0); filter: opacity(0.5); }
+
+/* ====== GROUP 13: exotic list styles ====== */
+ol { margin: 0; padding-left: 40px; }
+#g13a { list-style-type: lower-greek; }
+#g13b { list-style-type: armenian; }
+#g13c { list-style-type: cjk-decimal; }
+#g13d { list-style-type: upper-roman; }
+
+/* ====== GROUP 14: text-decoration offset / thickness ====== */
+#g14 a { color: rgb(0,0,255); text-decoration-line: underline; text-decoration-thickness: 4px; text-underline-offset: 6px; }
+#g15 { width: 120px; height: 40px; background: rgb(255,0,0); }
+#g16 { aspect-ratio: 2 / 1; height: 30px; background: rgb(0,255,0); }
+</style>
+</head>
+<body>
+
+<h2>1. absolute units: 1in / 1pc / 12pt / 2cm / 20mm / 40q</h2>
+<div id="u1"></div><div id="u2"></div><div id="u3"></div><div id="u4"></div><div id="u5"></div><div id="u6"></div>
+
+<h2>2. font-size keywords: large → larger / smaller / x-small</h2>
+<div id="g2"><span class="a">Aa</span> <span class="b">Bb</span> <span class="c">Cc</span></div>
+
+<h2>3. line-height: 2 / 150% / 30px / normal</h2>
+<div class="lh-num" id="g3a">line</div>
+<div class="lh-pct" id="g3b">line</div>
+<div class="lh-len" id="g3c">line</div>
+<div class="lh-norm" id="g3d">line</div>
+
+<h2>4. vertical-align: 50% / text-top / text-bottom / middle (30px parent)</h2>
+<div id="g4">X<span class="pct">p</span><span class="tt">t</span><span class="tb">b</span><span class="mid">m</span>X</div>
+
+<h2>5. overflow-wrap: break-word and word-break: break-all (80px box)</h2>
+<div id="g5a">Supercalifragilistic</div>
+<div id="g5b">Supercalifragilistic</div>
+
+<h2>6. text-transform: capitalize</h2>
+<div id="g6">hello world - second (third) 4th</div>
+
+<h2>7. table with colspan/rowspan and caption-side: bottom</h2>
+<table id="g7" width="160"><caption>cap</caption><tr><td rowspan="2">R</td><td>a</td><td>b</td></tr><tr><td colspan="2">c</td></tr></table>
+
+<h2>8. flex order + wrap-reverse (200x60, items 90x30)</h2>
+<div id="g8"><div class="i o1">1</div><div class="i o2">2</div><div class="i o3">3</div></div>
+
+<h2>9. transform: rotate(90deg) with transform-origin left top</h2>
+<div id="g9"></div>
+
+<h2>10. letter-spacing 6px / word-spacing 20px</h2>
+<div id="g10a">abcde</div>
+<div id="g10b">a b c</div>
+
+<h2>11. border-radius: 40px 10px / 10px 40px</h2>
+<div id="g11"></div>
+
+<h2>12. filters: grayscale / invert / brightness / sepia / opacity</h2>
+<div id="f1"></div><div id="f2"></div><div id="f3"></div><div id="f4"></div><div id="f5"></div>
+
+<h2>13. list-style-type: lower-greek / armenian / cjk-decimal / upper-roman</h2>
+<ol id="g13a"><li>x</li><li>y</li></ol>
+<ol id="g13b"><li>x</li><li>y</li></ol>
+<ol id="g13c"><li>x</li><li>y</li></ol>
+<ol id="g13d"><li>x</li><li>y</li></ol>
+
+<h2>14. underline thickness 4px with 6px offset</h2>
+<div id="g14"><a href="#">under</a></div>
+
+<h2>15. aspect-ratio: 2/1 with height 30px (width 60)</h2>
+<div id="g16"></div>
+
+</body>
+</html>

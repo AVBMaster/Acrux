@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 77 — min/max/clamp geometry, relative % offsets, grid % margin</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.c { background:#cfe; border:1px solid #369; }
+
+/* 1. min()/max()/clamp() in width */
+.w-min { width: min(300px, 50%); height:24px; background:#cfe; border:1px solid #369; }
+.w-max { width: max(100px, 20%); height:24px; background:#fec; border:1px solid #369; }
+.w-clamp { width: clamp(80px, 10%, 120px); height:24px; background:#fcf; border:1px solid #369; }
+
+/* 2. relative positioning with % top/left */
+.rel-parent { width:200px; height:100px; border:2px solid #939; background:#eef; position:relative; }
+.rel { position:relative; top:20%; left:25%; width:40px; height:20px; background:#0a0; }
+
+/* 3. grid item with % margin (resolves against area width) */
+.g1 { display:grid; grid-template-columns:200px; border:2px solid #939; width:204px; }
+.g1 .m { margin:10% 5%; height:30px; background:#fec; }
+
+/* 4. nested calc */
+.nc { width: calc(calc(50% + 10px) - 20px); height:24px; background:#cfe; border:1px solid #369; }
+</style>
+</head>
+<body>
+
+<h2>1. width min(300,50%) / max(100,20%) / clamp(80,10%,120) in ~596 container</h2>
+<div class="w-min">min</div>
+<div class="w-max">max</div>
+<div class="w-clamp">clamp</div>
+
+<h2>2. relative top:20% left:25% of 200x100 parent</h2>
+<div class="rel-parent"><div class="rel">R</div></div>
+
+<h2>3. grid item margin 10% (v) 5% (h) of 200 area → 20/10</h2>
+<div class="g1"><div class="m">G</div></div>
+
+<h2>4. nested calc: calc(calc(50%+10px)-20px)</h2>
+<div class="nc">nc</div>
+
+</body>
+</html>

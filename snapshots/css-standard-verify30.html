@@ -1,0 +1,23 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { font-family: Arial; font-size: 16px; margin: 8px; }
+  h2 { font-size: 14px; background: #eee; margin: 10px 0 4px; }
+  .j { width: 200px; line-height: 20px; border: 1px solid #999; margin-bottom: 6px; text-align: justify; }
+  .ib { display: inline-block; width: 40px; height: 14px; background: #f88; }
+</style></head><body>
+<h2>1. forced break ends the justification run</h2>
+<div class="j">aa bb cc dd ee ff gg<br>hh ii jj kk ll mm nn</div>
+<h2>2. nbsp must not expand</h2>
+<div class="j">aa&nbsp;bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr</div>
+<h2>3. text-indent shrinks the justified line</h2>
+<div class="j" style="text-indent: 40px">aa bb cc dd ee ff gg hh ii jj</div>
+<h2>4. one word only</h2>
+<div class="j">Supercalifragilisticexpialidocious aa bb cc dd ee ff gg hh ii jj</div>
+<h2>5. letter-spacing with justify</h2>
+<div class="j" style="letter-spacing: 3px">aa bb cc dd ee ff gg hh ii</div>
+<h2>6. atomic inline child</h2>
+<div class="j">aa <span class="ib"></span> bb cc dd ee ff gg hh ii jj kk</div>
+<h2>7. nowrap keeps justify inert</h2>
+<div class="j" style="white-space: nowrap">aa bb cc dd ee ff gg hh ii jj</div>
+<h2>8. justify inside shrink-to-fit box</h2>
+<div style="display: inline-block; width: 120px"><div class="j" style="width: 120px">aa bb cc dd ee ff gg hh</div></div>
+</body></html>

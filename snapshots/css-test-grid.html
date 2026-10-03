@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{margin:0;font:14px sans-serif;background:#fff}
+h4{margin:10px 8px 4px}
+.g{display:grid;margin:8px;background:#eee;border:1px solid #888;width:320px}
+.g>div{background:#5a8;color:#fff;border:1px solid #2c5;padding:2px}
+.g2>div{background:#79c}
+.g3>div{background:#a76}
+.c1{grid-template-columns:100px 100px 100px;grid-template-rows:40px 40px}
+.c2{grid-template-columns:repeat(3,1fr);grid-auto-rows:30px}
+.c3{grid-template-columns:80px 1fr 1fr;grid-template-rows:50px 50px;gap:8px}
+.c4{grid-template-columns:1fr 2fr;gap:4px 12px;grid-auto-rows:24px}
+.sp1{grid-column:1 / 3;background:#e55 !important}
+.sp2{grid-row:2 / 4;background:#5e5 !important}
+.sp3{grid-column:span 2;background:#55e !important}
+.au{grid-template-columns:100px auto 100px;grid-auto-rows:30px}
+.al{justify-items:center;align-items:center;grid-template-columns:100px 100px;grid-template-rows:50px}
+.ae{justify-items:end;grid-template-columns:100px 100px;grid-template-rows:40px}
+</style></head>
+<body>
+<h4>1. fixed tracks 3x2</h4>
+<div class="g c1"><div>a</div><div>b</div><div>c</div><div>d</div><div>e</div><div>f</div></div>
+<h4>2. repeat(3,1fr) auto rows</h4>
+<div class="g c2 g2"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div></div>
+<h4>3. mixed 80px+1fr+1fr with gap 8</h4>
+<div class="g c3 g3"><div>a</div><div>b</div><div>c</div><div>d</div><div>e</div><div>f</div></div>
+<h4>4. column span (item1 spans 2 cols)</h4>
+<div class="g c4"><div class="sp1">span col 1-2</div><div>x</div><div>y</div><div>z</div></div>
+<h4>5. row span item2 (2..4)</h4>
+<div class="g" style="grid-template-columns:60px 60px 60px;grid-auto-rows:24px">
+<div>1</div><div class="sp2">rowspan</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div></div>
+<h4>6. auto placement with span2</h4>
+<div class="g c2"><div class="sp3">A span2</div><div>B</div><div>C</div><div>D</div></div>
+<h4>7. auto track sizing (content)</h4>
+<div class="g au"><div>short</div><div>a middle column sized to content</div><div>end</div><div>2</div><div>2</div><div>2</div></div>
+<h4>8. justify/align-items center</h4>
+<div class="g al"><div>a</div><div>b</div></div>
+<div class="g ae"><div>a</div><div>b</div></div>
+</body></html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b129 absolute containing block</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+/* Each case is isolated in a fixed-size slide so one case cannot move another. */
+.case { position: static; width: 400px; height: 200px; margin: 0 0 40px 0; }
+.pos { position: relative; }
+.stat { position: static; margin: 10px 0 0 20px; padding: 8px; border: 3px solid rgb(200,200,200); }
+.ab { position: absolute; width: 40px; height: 20px; background: rgb(255,128,128); }
+.fx { position: fixed; width: 40px; height: 20px; background: rgb(128,128,255); }
+.auto { width: auto; }
+</style>
+</head>
+<body>
+<!-- 1. no positioned ancestor at all: the containing block is the initial one -->
+<div class="case" id="s1"><div class="stat"><div class="ab" id="a1" style="top:12px;left:24px"></div></div></div>
+<!-- 2. a positioned ancestor two levels up wins over the static parent -->
+<div class="case pos" id="s2"><div class="stat"><div class="ab" id="a2" style="top:12px;left:24px"></div></div></div>
+<!-- 3. static wrapper between: same as 2 but with margin/padding to expose the origin -->
+<div class="case pos" id="s3"><div class="stat" style="margin:25px 0 0 30px;padding:12px;border-width:5px"><div class="ab" id="a3" style="top:0;left:0"></div></div></div>
+<!-- 4. percentages resolve against the containing block, not the static parent -->
+<div class="case pos" id="s4"><div class="stat"><div class="ab" id="a4" style="top:50%;left:50%"></div></div></div>
+<!-- 5. left and right both given: width resolves against the containing block -->
+<div class="case pos" id="s5"><div class="stat"><div class="ab auto" id="a5" style="left:10px;right:20px"></div></div></div>
+<!-- 6. percentage width against the containing block -->
+<div class="case pos" id="s6"><div class="stat"><div class="ab" id="a6" style="width:50%;left:0;top:0"></div></div></div>
+<!-- 7. nested positioned ancestors: the nearest one wins -->
+<div class="case pos" id="s7" style="left:0"><div class="stat pos" style="left:40px;top:15px"><div class="ab" id="a7" style="top:5px;left:5px"></div></div></div>
+<!-- 8. fixed with no containing-block-forming ancestor: the viewport -->
+<div class="case" id="s8"><div class="stat"><div class="fx" id="a8" style="top:8px;left:16px"></div></div></div>
+<!-- 9. body-level: no positioned ancestor anywhere in the document -->
+<div class="ab" id="a9" style="top:5px;left:7px"></div>
+</body>
+</html>

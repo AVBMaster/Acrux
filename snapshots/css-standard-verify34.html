@@ -1,0 +1,42 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { font-family: Arial; font-size: 16px; margin: 8px; }
+  h2 { font-size: 14px; background: #eee; margin: 8px 0 4px; }
+  p { margin: 0 0 6px 0; }
+  .e { text-emphasis: filled circle #e33; }
+  .t { font-size: 20px; }
+  .n { font-variant-numeric: oldstyle-nums; font-size: 24px; }
+  .l { font-variant-numeric: lining-nums; font-size: 24px; }
+  .tb { font-variant-numeric: tabular-nums; font-size: 24px; }
+  .pr { font-variant-numeric: proportional-nums; font-size: 24px; }
+  .fr { font-variant-numeric: fractional-nums; font-size: 24px; }
+  .sz { font-variant-numeric: slashed-zero; font-size: 24px; }
+  .od { font-variant-numeric: ordinal; font-size: 24px; }
+</style></head><body>
+<h2>1. text-emphasis marks and line box growth</h2>
+<p id="m0" class="t">Baseline abcd</p>
+<p id="m1" class="t e">Dot abcd</p>
+<p id="m2" class="t" style="text-emphasis-style: open circle">Open abcd</p>
+<p id="m3" class="t" style="text-emphasis-style: filled sesame">Sesame abcd</p>
+<p id="m4" class="t" style="text-emphasis-style: filled triangle">Triangle abcd</p>
+<p id="m5" class="t" style="text-emphasis-style: double-circle">DoubleCircle abcd</p>
+<p id="m6" class="t" style="text-emphasis: filled dot #00c; text-emphasis-position: under">UnderDot abcd</p>
+<p id="m7" class="t" style="line-height: 1; text-emphasis: filled circle">LH1 abcd</p>
+<p id="m8" class="t" style="line-height: 1">LH1Plain abcd</p>
+<p id="m9" style="font-size: 32px; text-emphasis: filled circle">Big32 abcd</p>
+<p id="m10" style="font-size: 32px">Big32Plain abcd</p>
+<p id="m11" style="font-size: 10px; text-emphasis: filled circle">Tiny10 abcd</p>
+<p id="m12" style="font-size: 10px">Tiny10Plain abcd</p>
+<h2>2. text-emphasis with white space and punctuation</h2>
+<p id="w1" class="t" style="text-emphasis: filled dot; text-emphasis-skip: white-space">skip ws a b</p>
+<p id="w2" class="t" style="text-emphasis: filled dot">plain a b</p>
+<p id="w3" class="t" style="text-emphasis: filled dot">标点，。测试</p>
+<p id="w4" class="t" style="text-emphasis: filled dot; text-emphasis-skip: spaces">spaces ab cd</p>
+<h2>3. font-variant-numeric</h2>
+<p class="n">0123456789 oldstyle</p>
+<p class="l">0123456789 lining</p>
+<p class="tb">1111111111 0000000000 tabular</p>
+<p class="pr">1111111111 0000000000 proportional</p>
+<p class="sz">0000 0123 slashed zero</p>
+<p class="od">1st 2nd 3rd ordinal</p>
+<p class="fr">1/2 3/4 12/32 fractional</p>
+</body></html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { font-family: sans-serif; font-size: 13px; margin: 10px; color: #222; }
+h3 { margin: 8px 0 4px; }
+.f { display: flex; width: 300px; background: #eee; border: 1px solid #bbb; margin-bottom: 8px; }
+.f div { background: #cde; border: 1px solid #89a; height: 30px; }
+.g1x { flex-grow: 1; }
+.g2x { flex-grow: 2; }
+.basis { flex-basis: 100px; flex-grow: 0; }
+.baspct { flex-basis: 50%; }
+.shrink1 { flex-shrink: 1; }
+.noshrink { flex-shrink: 0; }
+.wide { width: 200px; }
+.ord { order: -1; background: #fcd !important; }
+.b0 { flex: 0 1 auto; }
+.b1 { flex: 1 1 auto; }
+.bauto { flex: 1 1 auto; min-width: 0; }
+.mw { max-width: 60px; }
+.minw { min-width: 120px; }
+.col { display: flex; flex-direction: column; height: 100px; width: 100px; background: #eee; }
+.col div { background: #cde; border: 1px solid #89a; }
+</style>
+</head>
+<body>
+<h3>1. grow 1:2 in free space (300px, contents 3x40)</h3>
+<div class="f"><div>base</div><div class="g1x">g1</div><div class="g2x">g2</div></div>
+<h3>2. basis 100px + basis 50%</h3>
+<div class="f"><div class="basis">b100</div><div class="baspct">b50%</div><div>auto</div></div>
+<h3>3. shrink: noshrink pushes shrinkable</h3>
+<div class="f"><div class="wide noshrink">fixed200</div><div class="wide shrink1">shrunk</div><div>tail</div></div>
+<h3>4. order:-1 moves first</h3>
+<div class="f"><div>one</div><div class="ord">ordered-first</div><div>three</div></div>
+<h3>5. min-width beats shrink</h3>
+<div class="f"><div class="wide minw">min120</div><div class="wide">shrink-to-fit</div></div>
+<h3>6. max-width caps grow</h3>
+<div class="f"><div class="g1x mw">max60</div><div class="g2x">rest</div></div>
+<h3>7. column flex basis height</h3>
+<div class="col"><div style="flex-basis:30px">b30</div><div style="flex-grow:1">grow</div></div>
+</body>
+</html>

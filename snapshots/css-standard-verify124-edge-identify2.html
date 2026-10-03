@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b124 edge marker identify 2</title>
+<style>
+body { font: 16px "Segoe UI", "Yu Gothic", sans-serif; margin: 6px; }
+#u { list-style-position: inside; padding: 0; margin: 0; }
+#u li { display: list-item; font: 16px "Segoe UI", "Yu Gothic", sans-serif; }
+#c { font: 16px "Segoe UI", "Yu Gothic", sans-serif; }
+#out { white-space: pre; font: 12px Consolas, monospace; }
+</style>
+</head>
+<body>
+<ul id="u"></ul><span id="c"></span><div id="out"></div>
+<script>
+var NL = String.fromCharCode(10);
+var probes = [
+  { style: "korean-hangul-formal", value: 1111,
+    cands: ["일천일백일십일,", "일천 일백 일십 일,", "일천 일백일십일,", "일천일백 일십일,"] },
+  { style: "korean-hangul-formal", value: 110000,
+    cands: ["십일만,", "일십일만,", "십일 만,", "일십 일만,"] },
+  { style: "korean-hangul-formal", value: 1005,
+    cands: ["일천오,", "일천영영오,", "일천 영영 오,"] },
+  { style: "korean-hanja-informal", value: 1111,
+    cands: ["千百十一,", "一千百十一,", "千百一十一,", "一千一百一十一,"] },
+  { style: "korean-hanja-informal", value: 100000000,
+    cands: ["億,", "一億,", "一〇〇〇〇〇〇〇,"] },
+  { style: "korean-hanja-formal", value: 1111,
+    cands: ["壹仟壹百壹拾壹,", "仟佰拾壹,", "壹仟佰拾壹,"] },
+  { style: "japanese-informal", value: 10005,
+    cands: ["一万五、", "一〇〇〇五、", "一〇〇〇〇五、", "10005、"] },
+  { style: "japanese-informal", value: 9999,
+    cands: ["九千九百九十九、", "九千九百九十九、"] },
+  { style: "japanese-formal", value: 1111,
+    cands: ["壱阡壱百壱拾壱、", "阡佰拾壱、", "九千…"] },
+  { style: "simp-chinese-informal", value: 1111,
+    cands: ["一千一百一十一、", "千百十一、", "一千百十一、"] },
+  { style: "simp-chinese-informal", value: 1005,
+    cands: ["一千〇五、", "一千五、", "千五、"] },
+  { style: "hebrew", value: 12000,
+    cands: ["יב׳.", "ב׳י׳.", "12000.", "יא׳."] }
+];
+
+var ul = document.getElementById("u");
+var cand = document.getElementById("c");
+var rows = [];
+function textLeft(li) {
+  var r = document.createRange();
+  r.selectNodeContents(li);
+  return r.getBoundingClientRect().left;
+}
+function markerWidth(style, value) {
+  ul.textContent = "";
+  var a = document.createElement("li");
+  a.textContent = "8";
+  a.setAttribute("value", String(value));
+  a.style.listStyleType = style;
+  ul.appendChild(a);
+  var b = document.createElement("li");
+  b.textContent = "8";
+  b.style.listStyleType = "none";
+  ul.appendChild(b);
+  return textLeft(a) - textLeft(b);
+}
+for (var i = 0; i < probes.length; i++) {
+  var p = probes[i];
+  var got = markerWidth(p.style, p.value);
+  var hits = [];
+  for (var k = 0; k < p.cands.length; k++) {
+    cand.textContent = p.cands[k];
+    var w0 = cand.getBoundingClientRect().width;
+    cand.textContent = p.cands[k] + " ";
+    var w1 = cand.getBoundingClientRect().width;
+    hits.push(p.cands[k] + "=" + (Math.abs(got - w0) < 0.7 ? "HIT" : Math.abs(got - w1) < 0.7 ? "HITsp"
+      : (got - w0).toFixed(1)));
+  }
+  rows.push(p.style + "|" + p.value + "|m=" + got.toFixed(2) + "| " + hits.join("  "));
+}
+document.getElementById("out").textContent = rows.join(NL);
+document.title = "DONE " + rows.length;
+</script>
+</body>
+</html>

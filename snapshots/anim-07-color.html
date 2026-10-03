@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 07 — colour interpolation</title>
+<style>
+/* Colours interpolate in non-premultiplied sRGB (CSS Color 4 §12): the
+   unpremultiplied components are blended and the alpha is tracked separately, so
+   fading `red` to `transparent blue` passes through purple rather than through
+   grey. Every row is pinned 40% into a 1s animation. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 260px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 90px; height: 60px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  outline: 1px solid #000;
+  text-align: center; line-height: 60px; font-size: 13px;
+}
+#c1 { left: 10px;  top: 10px; }  #c2 { left: 120px; top: 10px; }
+#c3 { left: 230px; top: 10px; }  #c4 { left: 340px; top: 10px; }
+#c5 { left: 10px;  top: 90px; }  #c6 { left: 120px; top: 90px; }
+#c7 { left: 230px; top: 90px; }  #c8 { left: 340px; top: 90px; }
+#c9 { left: 10px;  top: 170px; } #c10{ left: 120px; top: 170px; }
+
+@keyframes k { from { background-color: rgb(255, 0, 0); } to { background-color: rgb(0, 0, 255); } }
+@keyframes l { from { background-color: rgb(255, 0, 0); } to { background-color: rgb(0, 255, 0); } }
+@keyframes m { from { background-color: rgba(255, 0, 0, 1); } to { background-color: rgba(0, 0, 255, 0); } }
+@keyframes n { from { background-color: rgba(255, 0, 0, 0); } to { background-color: rgba(255, 0, 0, 1); } }
+@keyframes o { from { background-color: #808080; } to { background-color: #ffffff; } }
+@keyframes p { from { background-color: #000000; } to { background-color: #ffff00; } }
+/* Several colour slots at once, including the currentColor-derived ones. */
+@keyframes q {
+  from { color: rgb(255,255,0); border-color: rgb(0,128,0);
+         background-color: rgb(255,0,255); outline-color: rgb(0,0,255); }
+  to   { color: rgb(0,0,255);   border-color: rgb(255,0,0);
+         background-color: rgb(0,255,255); outline-color: rgb(255,255,0); }
+}
+@keyframes r { from { color: rgb(0,0,0); } to { color: rgb(255,255,255); } }
+
+#c1  { animation: k 1s linear -400ms paused; }  /* red  -> blue */
+#c2  { animation: l 1s linear -400ms paused; }  /* red  -> lime */
+#c3  { animation: m 1s linear -400ms paused; }  /* opaque red -> transparent blue */
+#c4  { animation: n 1s linear -400ms paused; }  /* transparent red -> opaque red */
+#c5  { animation: o 1s linear -400ms paused; }  /* #808080 -> #ffffff */
+#c6  { animation: p 1s linear -400ms paused; }  /* black -> yellow */
+#c7  { animation: q 1s linear -400ms paused; border-width: 3px; }
+#c8  { animation: r 1s linear -400ms paused; }  /* text colour */
+#c9  { background-color: #ff0000; animation: k 1s linear -400ms paused; }
+#c10 { background-color: #ff0000; }
+
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+#legend code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="c1">1</i>
+  <i class="sw" id="c2">2</i>
+  <i class="sw" id="c3">3</i>
+  <i class="sw" id="c4">4</i>
+  <i class="sw" id="c5">5</i>
+  <i class="sw" id="c6">6</i>
+  <i class="sw" id="c7">7</i>
+  <i class="sw" id="c8">8</i>
+  <i class="sw" id="c9">9</i>
+  <i class="sw" id="c10">10</i>
+</div>
+
+<div id="legend">
+  <p>all rows at <b>40%</b> of a 1s linear animation</p>
+  <p><b>1</b> <code>red -&gt; blue</code> &rarr; <b>rgb(153, 0, 102)</b></p>
+  <p><b>2</b> <code>red -&gt; lime</code> &rarr; <b>rgb(255, 102, 0)</b></p>
+  <p><b>3</b> <code>rgba(255,0,0,1) -&gt; rgba(0,0,255,0)</code>: alpha 0.6 with the hue held at red &rarr; over white <b>rgb(255, 102, 102)</b></p>
+  <p><b>4</b> <code>rgba(255,0,0,0) -&gt; rgba(255,0,0,1)</code>: alpha 0.4 &rarr; over white <b>rgb(255, 153, 153)</b></p>
+  <p><b>5</b> <code>#808080 -&gt; #ffffff</code> &rarr; <b>rgb(179, 179, 179)</b></p>
+  <p><b>6</b> <code>black -&gt; yellow</code> &rarr; <b>rgb(102, 102, 51)</b></p>
+  <p><b>7</b> four slots at once: background <b>rgb(178, 0, 178)</b>, border <b>rgb(102, 77, 0)</b>, outline <b>rgb(102, 102, 0)</b>, text <b>rgb(153, 153, 51)</b></p>
+  <p><b>8</b> text colour <code>black -&gt; white</code> &rarr; <b>rgb(102, 102, 102)</b></p>
+  <p><b>9</b> a <code>background-color</code> in the author sheet is overridden by the animation</p>
+  <p><b>10</b> no animation: the author value <b>rgb(255, 0, 0)</b> stands</p>
+</div>
+
+</body>
+</html>

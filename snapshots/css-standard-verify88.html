@@ -1,0 +1,16 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{margin:20px;font:14px Arial}
+/* gap shorthand: row-gap column-gap. grid 3 cols 40px, gap: 10px 20px → colgap20 rowgap10 */
+.g{display:grid;grid-template-columns:40px 40px 40px;grid-template-rows:30px 30px;gap:10px 20px;width:200px;border:1px solid #939;margin-bottom:12px}
+.g div{background:#cfe}
+/* place-items: center end (align-items center, justify-items end) */
+.p{display:grid;grid-template-columns:150px;grid-template-rows:60px;gap:0;width:150px;border:1px solid #090;place-items:center end}
+.p div{width:40px;height:20px;background:#fec}
+/* flex gap shorthand */
+.f{display:flex;width:200px;height:80px;gap:8px 16px;flex-wrap:wrap;border:1px solid #009}
+.f div{width:80px;height:30px;background:#cef}
+</style></head><body>
+<div class="g"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div></div>
+<div class="p"><div>x</div></div>
+<div class="f"><div>1</div><div>2</div><div>3</div></div>
+</body></html>

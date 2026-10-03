@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 0; font: 16px monospace; }
+table { margin-bottom: 8px; }
+.sep { border: 4px solid rgb(0,0,255); }
+.sep td { width: 40px; height: 20px; }
+.col { border-collapse: collapse; }
+.col td { width: 40px; height: 20px; border: 4px solid rgb(255,0,0); }
+.cap table { border-collapse: collapse; }
+.cap td { width: 40px; height: 20px; border: 4px solid rgb(0,128,0); }
+.cap caption { background: rgb(255,255,0); }
+</style></head>
+<body>
+<table class="sep" id="t1"><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>
+<table class="col" id="t2"><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>
+<table id="t3"><tr><td>a</td><td>b</td></tr></table>
+<table class="cap" id="t4"><caption>cap</caption><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>
+</body></html>

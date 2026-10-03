@@ -1,0 +1,51 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { font-family: Arial; font-size: 16px; margin: 4px; }
+  .t { width: 96px; line-height: 20px; border: 1px solid #999; margin-bottom: 6px; }
+</style></head><body>
+<div id="host"></div>
+<script>
+  var cases = [
+    ['(unset)', '日本語「本文」です語'],
+    ['normal', '日本語「本文」です語'],
+    ['loose', '日本語「本文」です語'],
+    ['strict', '日本語「本文」です語'],
+    ['normal', '漢字々カタカナー語'],
+    ['strict', '漢字々カタカナー語'],
+    ['normal', '漢字ＡＢＣＤＥＦＧ語'],
+    ['strict', '漢字ＡＢＣＤＥＦＧ語'],
+    ['normal', '漢字abcdefg語'],
+    ['strict', '漢字abcdefg語'],
+    ['normal', '説。明：です。もう語'],
+    ['loose', '説。明：です。もう語'],
+    ['normal', 'ＡＢＣＤ-ＥＦＧ語'],
+    ['loose', 'ＡＢＣＤ-ＥＦＧ語']
+  ];
+  window.__probe = function () {
+    var host = document.getElementById('host');
+    host.textContent = '';
+    var out = [];
+    cases.forEach(function (c, i) {
+      var el = document.createElement('div');
+      el.className = 't';
+      if (c[0] !== '(unset)') el.style.lineBreak = c[0];
+      var spans = [];
+      for (var j = 0; j < c[1].length; j++) {
+        var s = document.createElement('span');
+        s.textContent = c[1][j];
+        spans.push(s);
+        el.appendChild(s);
+      }
+      host.appendChild(el);
+      var base = el.getBoundingClientRect().top;
+      var lines = {};
+      spans.forEach(function (s) {
+        var top = Math.round(s.getBoundingClientRect().top - base);
+        (lines[top] = lines[top] || []).push(s.textContent);
+      });
+      out.push(i + ' lb=' + c[0] + ' -> ' + Object.keys(lines).sort(function (a, b) { return a - b; })
+        .map(function (k) { return '[' + lines[k].join('') + ']'; }).join(' '));
+    });
+    return out;
+  };
+</script>
+</body></html>

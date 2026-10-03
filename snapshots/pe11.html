@@ -1,0 +1,12 @@
+<html><head><style>
+body { font-family: sans-serif; font-size: 13px; margin: 10px; color: #222; }
+h3 { margin: 8px 0 4px; }
+.p4::after { content: "block-ish"; display: block; background: #cfc; }
+ul li::marker { }
+li.a::marker { content: "> "; }
+</style></head><body>
+<h3>4. display:block pseudo after</h3>
+<div class="p4">inline-part</div>
+<h3>5. ul with ::marker override</h3>
+<ul><li class="a">marker-arrow</li><li>normal-disc</li></ul>
+</body></html>

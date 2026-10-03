@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{margin:0;font:14px sans-serif;color:#222;background:#fff}
+h4{margin:10px 8px 4px}
+.c{position:relative;background:#f7f7f7;border:1px solid #bbb;margin:8px;width:400px;padding:6px}
+.f{float:left;width:100px;height:50px;background:#f99;margin:2px}
+.f2{float:right;width:120px;height:70px;background:#9f9;margin:2px}
+.txt{background:#ffffcc}
+.clr{clear:both}
+.ib{display:inline-block;width:60px;height:30px;background:#9cf;margin:2px;vertical-align:top}
+/* overflow */
+.ov{width:150px;height:60px;border:2px solid #369;background:#eef;overflow:hidden;margin:8px}
+.oa{width:150px;height:60px;border:2px solid #369;background:#eef;overflow:auto;margin:8px}
+.ovsc{width:150px;height:60px;border:2px solid #369;background:#eef;overflow:scroll;margin:8px}
+/* positioning */
+.p1{position:relative;top:8px;left:20px;width:100px;height:30px;background:#c9f;margin:4px}
+.p2{position:absolute;top:4px;right:4px;width:80px;height:24px;background:#fc9}
+.p3{position:absolute;bottom:4px;left:4px;width:80px;height:24px;background:#9cf}
+.z1{position:absolute;top:10px;left:10px;width:80px;height:40px;background:red;z-index:1}
+.z2{position:absolute;top:20px;left:30px;width:80px;height:40px;background:blue;z-index:2}
+.z3{position:absolute;top:30px;left:50px;width:80px;height:40px;background:green}
+/* static abs (no insets) */
+.st{position:absolute;width:60px;height:20px;background:#0a0;color:#fff}
+.vis{visibility:hidden}
+.hid{display:none}
+</style></head>
+<body>
+<h4>1. float left/right with text flow + clear</h4>
+<div class="c"><div class="f"></div><div class="f2"></div>
+<span class="txt">Text before floats. This paragraph is long enough to demonstrate how inline content flows around floated boxes on both sides of the container when there is sufficient width available for wrapping.</span>
+<div class="clr txt" style="height:20px">cleared line</div></div>
+<h4>2. inline-block row</h4>
+<div class="c"><span class="ib"></span><span class="ib"></span><span class="ib"></span> inline text between</div>
+<h4>3. overflow hidden / auto / scroll (long content)</h4>
+<div class="ov">This content is much longer than the box and must be clipped by overflow hidden so nothing paints outside the border edge of this element.</div>
+<div class="oa">This content is much longer than the box and should show a scrollbar with overflow auto so the user can scroll to read the rest of the text in this small viewport.</div>
+<div class="ovsc">This content is much longer than the box and should always show scrollbars with overflow scroll even when the content fits in the box.</div>
+<h4>4. relative offset (moves down-right, keeps space)</h4>
+<div class="c"><div class="p1">relative</div>after</div>
+<h4>5. absolute corners in relative container</h4>
+<div class="c" style="height:100px"><div class="p2">top-right</div><div class="p3">bottom-left</div></div>
+<h4>6. z-index: blue(2) over red(1) over green(auto)</h4>
+<div class="c" style="height:90px"><div class="z3">green</div><div class="z1">red</div><div class="z2">blue</div></div>
+<h4>7. absolute no insets = static position (green bar at this line)</h4>
+<div class="c">before <span class="st">abs-static</span> after</div>
+<h4>8. visibility hidden keeps space / display none removes</h4>
+<div class="c">A<span class="vis">BBB</span>C<span class="hid">DDD</span>E</div>
+</body></html>

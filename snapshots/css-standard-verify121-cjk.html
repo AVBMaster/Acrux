@@ -1,0 +1,27 @@
+<!DOCTYPE html><head><style>
+body{margin:0;font:16px Arial}
+li{margin:0;padding:0;list-style-position:inside}
+</style></head><body>
+<ol id="cjkdec" style="list-style-type:cjk-decimal"></ol>
+<ol id="cjkideo" style="list-style-type:cjk-ideographic"></ol>
+<ol id="branch" style="list-style-type:cjk-earthly-branch"></ol>
+<ol id="stem" style="list-style-type:cjk-heavenly-stem"></ol>
+<ol id="arm" style="list-style-type:armenian"></ol>
+<ol id="geo" style="list-style-type:georgian"></ol>
+<ol id="heb" style="list-style-type:hebrew"></ol>
+<div id="refs"></div>
+<script>
+const vals = [1,2,9,10,11,12,19,20,21,22,29,30,31,40,41,49,50,59,60,90,91,99,100,101,110,111,120,199,200,300,999,1000,1001,1100,2021,3999,4000,9999];
+for (const id of ["cjkdec","cjkideo","branch","stem","arm","geo","heb"]) {
+  const ol = document.getElementById(id);
+  for (const v of vals) {
+    const li = document.createElement("li");
+    li.setAttribute("value", v);
+    const s = document.createElement("span");
+    s.textContent = "x";
+    li.appendChild(s);
+    ol.appendChild(li);
+  }
+}
+</script>
+</body></html>

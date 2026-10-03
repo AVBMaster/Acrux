@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { font-family: sans-serif; font-size: 13px; margin: 10px; color: #222; }
+h3 { margin: 8px 0 4px; }
+div { border: 1px solid #bbb; background: #f8f8f8; width: 260px; }
+.pre { white-space: pre; }
+.preline { white-space: pre-line; }
+.prewrap { white-space: pre-wrap; }
+.brk { white-space: break-spaces; }
+.nw { white-space: nowrap; overflow: hidden; width: 120px; }
+.tab { white-space: pre-wrap; tab-size: 30px; }
+.nbsp { background: #fec; }
+.indent { text-indent: 30px; }
+.indent-pct { text-indent: 20%; }
+.indent-neg { text-indent: -20px; padding-left: 20px; }
+.bword { width: 90px; overflow-wrap: break-word; }
+.bany { width: 90px; overflow-wrap: anywhere; }
+.nobreak { width: 90px; word-break: keep-all; }
+.wb { width: 90px; word-break: break-all; }
+</style>
+</head>
+<body>
+<h3>1. pre / pre-line / pre-wrap / break-spaces</h3>
+<div class="pre">a   b
+c</div>
+<div class="preline">a   b
+c</div>
+<div class="prewrap">a   b
+c</div>
+<div class="brk">a   b
+c</div>
+<h3>2. nowrap + hidden</h3>
+<div class="nw">this text is very long and will not wrap</div>
+<h3>3. nbsp keeps words together</h3>
+<div class="nbsp">word&nbsp;&nbsp;&nbsp;next&nbsp;end</div>
+<h3>4. text-indent variants</h3>
+<div class="indent">indented first line here</div>
+<div class="indent-pct">pct-indented first line</div>
+<div class="indent-neg">hanging indent text line</div>
+<h3>5. long word breaking</h3>
+<div class="bword">Supercalifragilisticexpialidocious</div>
+<div class="bany">Supercalifragilisticexpialidocious</div>
+<div class="wb">Supercalifragilisticexpialidocious</div>
+<div class="nobreak">Supercalifragilisticexpialidocious second word</div>
+</body>
+</html>

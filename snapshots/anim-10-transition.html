@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 10 鈥?transitions</title>
+<style>
+/* A transition is started by a *change* in computed value, not by a declaration
+   (CSS Transitions 1 搂2). The inline script below adds the class `on` at load,
+   so every transition on this page begins at timeline 0.
+
+   To make that frame reproducible 鈥?here and in a reference engine, which keeps
+   running after load 鈥?each transition uses a 2000s duration with a negative
+   delay chosen to pin it at 40%. Over the few hundred milliseconds a screenshot
+   takes, 2000s of duration moves the value by less than a thousandth, so the
+   frame is stable. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 300px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 90px; height: 60px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  outline: 1px solid #000;
+  text-align: center; line-height: 60px; font-size: 13px;
+  opacity: 1;
+}
+/* the "before" state; the class below moves to the "after" state */
+#x1, #x2, #x3, #x4 { opacity: 1; }
+#x5 { width: 40px; }
+#x6 { left: 120px; }
+#x7 { transform: translateX(0px); }
+#x8 { opacity: 0.2; }
+
+#x1 { left: 10px;  top: 10px; }  #x2 { left: 120px; top: 10px; }
+#x3 { left: 230px; top: 10px; }  #x4 { left: 340px; top: 10px; }
+#x5 { left: 10px;  top: 90px; }  #x6 { left: 120px; top: 90px; }
+#x7 { left: 230px; top: 90px; }  #x8 { left: 340px; top: 90px; }
+#x9 { left: 10px;  top: 170px; }  #x10{ left: 120px; top: 170px; }
+#x11{ left: 230px; top: 170px; }  #x12{ left: 340px; top: 170px; }
+
+/* the "after" state */
+#x1.on  { opacity: 0; }
+#x2.on  { opacity: 0; }
+#x3.on  { opacity: 0; }
+#x4.on  { opacity: 0; }
+#x5.on  { width: 140px; }
+#x6.on  { left: 170px; }
+#x7.on  { transform: translateX(60px); }
+#x8.on  { opacity: 1; }
+#x9.on  { background-color: rgb(0, 0, 255); }
+#x10.on { background-color: rgb(0, 0, 255); }
+#x12.on { opacity: 0; }
+
+/* 2000s duration, -800s delay -> 40% at timeline 0 */
+#x1  { transition: opacity 2000s linear -800s; }
+#x2  { transition: opacity 2000s ease -800s; }
+#x3  { transition: opacity 2000s ease-in -800s; }
+#x4  { transition: opacity 2000s steps(4, jump-end) -800s; }
+/* several properties in one list, each with its own duration and delay */
+#x5  { transition: width 2000s linear -800s; }
+#x6  { transition: left 2000s linear -800s; }
+#x7  { transition: transform 2000s linear -800s; }
+#x8  { transition: opacity 2000s linear -800s; }
+/* transition-property: all reaches properties that are not named explicitly */
+#x9  { transition: all 2000s linear -800s; }
+#x10 { transition: background-color 2000s ease-in-out -800s; }
+/* a non-interpolable property flips at 50% rather than transitioning */
+#x11 { transition: display 2000s linear -800s; }
+#x12 { transition: opacity 2000s linear -800s; }
+
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+#legend code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="x1">1</i>
+  <i class="sw" id="x2">2</i>
+  <i class="sw" id="x3">3</i>
+  <i class="sw" id="x4">4</i>
+  <i class="sw" id="x5">5</i>
+  <i class="sw" id="x6">6</i>
+  <i class="sw" id="x7">7</i>
+  <i class="sw" id="x8">8</i>
+  <i class="sw" id="x9">9</i>
+  <i class="sw" id="x10">10</i>
+  <i class="sw" id="x11">11</i>
+  <i class="sw" id="x12">12</i>
+</div>
+
+<div id="legend">
+  <p>every transition is <code>2000s &lt;easing&gt; -800s</code>, i.e. 40% complete at timeline 0</p>
+  <p><b>1</b> <code>opacity 1 -&gt; 0</code> linear &rarr; 0.6 &rarr; fill <b>217</b></p>
+  <p><b>2</b> <code>ease</code> (eased 0.682) &rarr; opacity 0.318 &rarr; fill <b>235</b></p>
+  <p><b>3</b> <code>ease-in</code> (eased 0.215) &rarr; opacity 0.785 &rarr; fill <b>206</b></p>
+  <p><b>4</b> <code>steps(4, jump-end)</code> (eased 0.25) &rarr; opacity 0.75 &rarr; fill <b>208</b></p>
+  <p><b>5</b> <code>width 40 -&gt; 140px</code> &rarr; <b>80px</b></p>
+  <p><b>6</b> <code>left 120 -&gt; 170px</code> &rarr; <b>140px</b>, box painted from x=139 (outline included)</p>
+  <p><b>7</b> <code>translateX 0 -&gt; 60px</code> &rarr; <b>24px</b>, painted from x=254</p>
+  <p><b>8</b> <code>opacity 0.2 -&gt; 1</code> &rarr; 0.52 &rarr; fill <b>222</b></p>
+  <p><b>9</b> <code>transition: all</code> reaches the undeclared <code>background-color</code> (#c0c0c0 &rarr; blue) &rarr; <b>rgb(115, 115, 217)</b></p>
+  <p><b>10</b> <code>ease-in-out</code> on the same pair &rarr; <b>rgb(128, 128, 213)</b></p>
+  <p><b>11</b> <code>display</code> is discrete: no visible change</p>
+  <p><b>12</b> no transition declared: the class change applies at once &rarr; opacity 0 &rarr; fill <b>255</b></p>
+</div>
+
+<script>
+  // Two things make these real transitions rather than a first paint:
+  //
+  //  * the class is applied from a task, so the element already has a computed
+  //    style when it changes; and
+  //  * getComputedStyle is read first, which forces that style to be resolved.
+  //    Without a resolved "before" style there is nothing to animate from, and
+  //    the change lands as an instant jump — which is what a reference engine
+  //    does if the flush is missing.
+  function apply() {
+    var ids = ['x1','x2','x3','x4','x5','x6','x7','x8','x9','x10','x11','x12'];
+    var warm = '';
+    for (var i = 0; i < ids.length; i++) {
+      var el = document.getElementById(ids[i]);
+      if (el) warm += getComputedStyle(el).opacity;
+    }
+    for (var j = 0; j < ids.length; j++) {
+      var e2 = document.getElementById(ids[j]);
+      if (e2) e2.className = 'sw on';
+    }
+  }
+  setTimeout(apply, 0);
+  if (document.addEventListener) document.addEventListener('DOMContentLoaded', apply);
+  if (window.addEventListener) window.addEventListener('load', apply);
+</script>
+
+</body>
+</html>

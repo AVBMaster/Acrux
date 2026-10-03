@@ -1,0 +1,53 @@
+﻿<!DOCTYPE html>
+<html><head><style>
+body { font-family: Arial; background: #ffffff; }
+.row { display: flex; gap: 12px; margin: 12px; flex-wrap: wrap; }
+.box { width: 120px; height: 80px; border: 2px solid #333; margin: 6px; }
+.shadow { box-shadow: 8px 8px 12px rgba(0,0,0,0.5); }
+.grad { background: linear-gradient(180deg, #ff8800, #4400ff); }
+.grad2 { background: radial-gradient(circle, #fff, #000); }
+.tshadow { text-shadow: 2px 2px 4px rgba(255,0,0,0.8); font-size: 28px; }
+.transform { transform: rotate(20deg) scale(1.2); }
+.transform2 { transform: translate(30px, 20px); }
+.flexcenter { display: flex; align-items: center; justify-content: center; }
+.grid { display: grid; grid-template-columns: 50px 50px 50px; gap: 4px; }
+.radius { border-radius: 20px 8px 30px 4px; }
+.outline { outline: 3px solid #00ff00; outline-offset: 4px; }
+.opacity { opacity: 0.4; }
+.ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100px; }
+.bgpos { background-image: linear-gradient(90deg, #f00, #00f); background-size: 50px 50px; background-repeat: repeat; }
+.abs { position: absolute; top: 20px; right: 20px; width: 60px; height: 60px; background: #f0f; }
+.relative { position: relative; }
+.multi { column-count: 2; column-gap: 20px; }
+.bdimg { border: 10px solid transparent; border-image: linear-gradient(45deg, #f00, #00f) 30 / 10px; }
+.hoverme:hover { background: #ff0; }
+.lst { list-style: square inside; }
+.hyphens { hyphens: auto; width: 100px; }
+</style></head><body>
+<div class="row">
+  <div class="box shadow">shadow</div>
+  <div class="box grad">grad</div>
+  <div class="box grad2">radial</div>
+  <div class="box radius">radius</div>
+  <div class="box outline">outline</div>
+  <div class="box opacity">opacity</div>
+  <div class="box flexcenter">center</div>
+</div>
+<div class="row">
+  <div class="box transform">rot</div>
+  <div class="box transform2">trans</div>
+  <div class="box ellipsis">this is a very long text that will be truncated</div>
+  <div class="box bgpos">bgpos</div>
+</div>
+<div class="row">
+  <div class="box tshadow">tshadow</div>
+  <div class="box hoverme">hover</div>
+  <div class="box bdimg">bdimg</div>
+</div>
+<div class="row">
+  <ul class="lst"><li>a</li><li>b</li></ul>
+  <div class="box multi">Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</div>
+</div>
+<div class="relative"><div class="abs">abs</div></div>
+<div class="box grid"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span></div>
+</body></html>

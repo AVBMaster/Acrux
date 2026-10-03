@@ -1,0 +1,14 @@
+<!DOCTYPE html><html><head><style>
+body { margin: 8px; font-size: 16px; }
+.fl { float: left; width: 80px; height: 40px; background: #f88; }
+.fr { float: right; width: 80px; height: 40px; background: #88f; }
+.cl { height: 12px; background: #8b8; }
+.c1 { clear: left; } .c2 { clear: right; } .c3 { clear: both; }
+.wrap { width: 220px; }
+</style></head><body>
+<div class="fl"></div><div class="fr"></div>
+<div class="cl c1">A clear:left</div>
+<div class="cl c2">B clear:right</div>
+<div class="wrap"><div class="fl"></div><div class="fr"></div>
+<div class="cl c3">C clear:both nested</div></div>
+</body></html>

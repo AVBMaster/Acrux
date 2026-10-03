@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 80 — grid intrinsic width (min-content / max-content), auto & fr & minmax tracks</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:14px 0 6px; font-size:15px; }
+.grid { display:grid; border:2px solid #939; margin-bottom:8px; }
+.cell { background:#cfe; border:1px solid #369; height:22px; box-sizing:border-box; }
+
+/* auto tracks, definite 40px items: min & max content both = 40/40/40 */
+.a-min { grid-template-columns:repeat(3,auto); gap:6px; width:min-content; }
+.a-max { grid-template-columns:repeat(3,auto); gap:6px; width:max-content; }
+.a-min .cell, .a-max .cell { width:40px; }
+
+/* fixed tracks: shrink to sum (b64 dense companion) */
+.f-fixed { grid-template-columns:50px 60px 70px; gap:8px; width:max-content; }
+
+/* fr tracks + definite-width items: min→30/50/80, max→frUnit=max(c/f)=80→80/160/80 */
+.fr-min { grid-template-columns:1fr 2fr 1fr; gap:10px; width:min-content; }
+.fr-max { grid-template-columns:1fr 2fr 1fr; gap:10px; width:max-content; }
+.fr-min .x1,.fr-max .x1{ width:30px; }
+.fr-min .x2,.fr-max .x2{ width:50px; }
+.fr-min .x3,.fr-max .x3{ width:80px; }
+
+/* minmax(50px,1fr) + auto, definite 70px items: min→50/70, max→70/70 */
+.mm-min { grid-template-columns:minmax(50px,1fr) auto; gap:10px; width:min-content; }
+.mm-max { grid-template-columns:minmax(50px,1fr) auto; gap:10px; width:max-content; }
+.mm-min .cell,.mm-max .cell { width:70px; }
+
+/* auto tracks sized by unbreakable words: min & max both = word width */
+.w-min { grid-template-columns:repeat(2,auto); gap:8px; width:min-content; }
+.w-max { grid-template-columns:repeat(2,auto); gap:8px; width:max-content; }
+.w-min .cell,.w-max .cell { width:auto; height:auto; }
+</style>
+</head>
+<body>
+
+<h2>1. auto + 40px items — min-content (exp 136) / max-content (exp 136)</h2>
+<div class="grid a-min"><div class="cell">1</div><div class="cell">2</div><div class="cell">3</div></div>
+<div class="grid a-max"><div class="cell">1</div><div class="cell">2</div><div class="cell">3</div></div>
+
+<h2>2. fixed 50/60/70 + gap8 — max-content (exp 200 = 180+16 gap+4 border)</h2>
+<div class="grid f-fixed"><div class="cell">1</div><div class="cell">2</div><div class="cell">3</div></div>
+
+<h2>3. 1fr 2fr 1fr + 30/50/80 items — min (exp 184) / max (exp 344)</h2>
+<div class="grid fr-min"><div class="cell x1">1</div><div class="cell x2">2</div><div class="cell x3">3</div></div>
+<div class="grid fr-max"><div class="cell x1">1</div><div class="cell x2">2</div><div class="cell x3">3</div></div>
+
+<h2>4. minmax(50px,1fr) auto + 70px items — min (exp 134) / max (exp 154)</h2>
+<div class="grid mm-min"><div class="cell">1</div><div class="cell">2</div></div>
+<div class="grid mm-max"><div class="cell">1</div><div class="cell">2</div></div>
+
+<h2>5. auto + unbreakable words — min (exp ~221) / max (exp ~221)</h2>
+<div class="grid w-min"><div class="cell">HelloWorldText</div><div class="cell">AnotherLongWord</div></div>
+<div class="grid w-max"><div class="cell">HelloWorldText</div><div class="cell">AnotherLongWord</div></div>
+
+</body>
+</html>

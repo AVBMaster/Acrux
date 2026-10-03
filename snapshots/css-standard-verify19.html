@@ -1,0 +1,77 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body { font: 16px Arial, sans-serif; margin: 8px; }
+h2 { font-size: 16px; margin: 14px 0 6px; background: rgb(240,240,240); }
+p { margin: 4px 0; }
+.box { border: 1px solid rgb(0,0,0); margin: 4px 0; }
+
+/* ====== GROUP 1: text-overflow ====== */
+#g1 .to { width: 150px; overflow: hidden; white-space: nowrap;
+          border: 1px solid rgb(255,0,0); background: rgb(255,255,200); }
+#g1 .clip { text-overflow: clip; }
+#g1 .ell { text-overflow: ellipsis; }
+#g1 .custom { text-overflow: "[…]"; }
+
+/* ====== GROUP 2: overflow clipping ====== */
+#g2 .hidden { width: 200px; height: 40px; overflow: hidden; }
+#g2 .scroll { width: 200px; height: 40px; overflow: scroll; }
+#g2 .auto { width: 200px; height: 40px; overflow: auto; }
+#g2 .yx { width: 200px; height: 40px; overflow-x: hidden; overflow-y: scroll; }
+
+/* ====== GROUP 3: breaking long words ====== */
+#g3 .narrow { width: 120px; border: 1px solid rgb(0,0,255); margin: 4px 0; }
+#g3 .wb { word-break: break-all; }
+#g3 .ow { overflow-wrap: anywhere; }
+#g3 .bw { overflow-wrap: break-word; }
+#g3 .keep { overflow-wrap: normal; word-break: normal; }
+
+/* ====== GROUP 4: nowrap overflow + indent ====== */
+#g4 .nw { width: 140px; overflow: hidden; white-space: nowrap; text-indent: 20px;
+          border: 1px solid rgb(0,128,0); }
+#g4 .nw2 { width: 140px; white-space: nowrap; border: 1px solid rgb(0,128,0); }
+
+/* ====== GROUP 5: vertical-align sub/super + text-orientation basics ====== */
+#g5 .sub { vertical-align: sub; }
+#g5 .sup { vertical-align: super; }
+#g5 .base { vertical-align: baseline; }
+
+/* ====== GROUP 6: min/max interaction with overflow ====== */
+#g6 .minmax { min-width: 100px; max-width: 60px; overflow: hidden; white-space: nowrap;
+              border: 1px solid rgb(128,0,128); display: inline-block; }
+#g6 .ib { display: inline-block; width: 90px; overflow: hidden; white-space: nowrap;
+          text-overflow: ellipsis; border: 1px solid rgb(0,0,0); }
+</style></head><body>
+<h2>1. text-overflow: clip / ellipsis / custom string</h2>
+<div id="g1">
+<div class="to clip">The quick brown fox jumps over the lazy dog again</div>
+<div class="to ell">The quick brown fox jumps over the lazy dog again</div>
+<div class="to custom">The quick brown fox jumps over the lazy dog again</div>
+</div>
+
+<h2>2. overflow: hidden / scroll / auto / mixed on tall content</h2>
+<div id="g2">
+<div class="box hidden">line one<br>line two<br>line three<br>line four<br>line five</div>
+<div class="box scroll">line one<br>line two<br>line three<br>line four<br>line five</div>
+<div class="box auto">line one<br>line two<br>line three<br>line four<br>line five</div>
+<div class="box yx">wide content that definitely exceeds two hundred pixels in width for sure<br>more</div>
+</div>
+
+<h2>3. word-break: break-all vs overflow-wrap: anywhere / break-word</h2>
+<div id="g3">
+<div class="narrow keep">Supercalifragilisticexpialidocious tail</div>
+<div class="narrow wb">Supercalifragilisticexpialidocious tail</div>
+<div class="narrow ow">Supercalifragilisticexpialidocious tail</div>
+<div class="narrow bw">Supercalifragilisticexpialidocious tail</div>
+</div>
+
+<h2>4. nowrap overflow with text-indent (visible vs hidden)</h2>
+<div id="g4">
+<div class="nw">aaa bbb ccc ddd eee fff ggg hhh iii jjj</div>
+<div class="nw2">aaa bbb ccc ddd eee fff ggg hhh iii jjj</div>
+</div>
+
+<h2>5. vertical-align: <span class="sub">sub</span> <span class="base">base</span> <span class="sup">super</span> inline</h2>
+<p id="g5">text with <span class="sub">sub</span> <span class="base">base</span> <span class="sup">super</span> spans</p>
+
+<h2>6. min-width beats max-width; ellipsis on inline-block</h2>
+<p id="g6"><span class="minmax">The quick brown fox</span> <span class="ib">inline block ellipsis text</span></p>
+</body></html>

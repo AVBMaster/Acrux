@@ -1,0 +1,12 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;padding:0;background:#fff;font-family:Arial;font-size:20px;color:rgb(0,0,0);}
+q:before{content:open-quote;} q:after{content:close-quote;}
+#custom{quotes:"«" "»" "‹" "›";}
+#custom q:before{content:open-quote;color:rgb(255,0,0);} #custom q:after{content:close-quote;color:rgb(255,0,0);}
+#nest q q:before{content:open-quote;} #nest q q:after{content:close-quote;}
+#noq:before{content:"x" no-open-quote "y";}
+</style></head><body>
+<div id="custom"><q>hi</q></div>
+<div id="nest"><q>a<q>b</q>c</q></div>
+<div id="noq">z</div>
+</body></html>

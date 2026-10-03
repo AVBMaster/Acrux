@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{margin:0;font:14px sans-serif;color:#222;background:#fff}
+h4{margin:10px 8px 4px}
+.t{background:#f4f4f4;margin:6px 8px;padding:4px;width:300px}
+.left{text-align:left}.right{text-align:right}.center{text-align:center}.justify{text-align:justify}
+.u{text-decoration:underline}.lt{text-decoration:line-through}.ol{text-decoration:overline}
+.red{text-decoration:underline red}.comb{text-decoration:underline;line-through}
+.cap{text-transform:capitalize}.up{text-transform:uppercase}.low{text-transform:lowercase}
+.ind{text-indent:40px}
+.ls{letter-spacing:4px}.ws{word-spacing:8px}
+.lh1{line-height:1}.lh2{line-height:2.5}
+.pre{white-space:pre;background:#eee}
+.nowrap{white-space:nowrap;width:100px;background:#eee;overflow:hidden;text-overflow:ellipsis}
+.pre-wrap{white-space:pre-wrap;width:120px;background:#eee}
+va{vertical-align:baseline}
+.big{font-size:28px}
+.vab{vertical-align:bottom}.vat{vertical-align:top}.vam{vertical-align:middle}
+.ib{display:inline-block;width:40px;height:24px;background:#9cf;vertical-align:middle}
+.clr{color:#c00}.fnt{font-weight:bold;font-style:italic}
+.small{font-size:10px}
+</style></head>
+<body>
+<h4>1. text-align left/right/center/justify</h4>
+<div class="t left">The quick brown fox jumps over the lazy dog again</div>
+<div class="t right">The quick brown fox jumps over the lazy dog again</div>
+<div class="t center">The quick brown fox jumps over the lazy dog again</div>
+<div class="t justify">The quick brown fox jumps over the lazy dog again</div>
+<h4>2. decorations: underline / line-through / overline / colored</h4>
+<div class="t"><span class="u">under</span> <span class="lt">through</span> <span class="ol">over</span> <span class="red">red</span> <span class="comb">both</span></div>
+<h4>3. transforms</h4>
+<div class="t"><span class="cap">hello world</span> | <span class="up">hello</span> | <span class="low">HeLLo</span></div>
+<h4>4. indent 40px</h4>
+<div class="t ind">First line indented. Second line should not be. The quick brown fox jumps over the lazy dog again</div>
+<h4>5. letter-spacing 4 / word-spacing 8</h4>
+<div class="t ls">letters</div>
+<div class="t ws">words here now</div>
+<h4>6. line-height 1 vs 2.5</h4>
+<div class="t lh1">line one<br>line two<br>line three</div>
+<div class="t lh2">line one<br>line two<br>line three</div>
+<h4>7. white-space pre / pre-wrap / nowrap+ellipsis</h4>
+<div class="t pre">  spaced   text  
+second raw</div>
+<div class="t nowrap">ThisWillOverflowAndShouldEllipsizeBecauseNowrap abcdefgh</div>
+<div class="t pre-wrap">word wrap   preserved here too with long content</div>
+<h4>8. vertical-align with mixed sizes and inline-blocks</h4>
+<div class="t"><span class="big">BIG</span> <span class="vab">bottom</span> <span class="vat">top</span> <span class="vam">middle</span> <span class="ib"></span> <span class="small">small</span></div>
+<h4>9. color / bold+italic</h4>
+<div class="t"><span class="clr">red text</span> <span class="fnt">bold italic</span></div>
+</body></html>

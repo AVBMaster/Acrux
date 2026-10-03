@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 41 — mask-composite & text-wrap:balance</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+.row { display: flex; gap: 30px; flex-wrap: wrap; align-items: flex-start; }
+.box { width: 160px; height: 160px; }
+.label { font-size: 13px; margin-top: 4px; }
+
+/* mask-composite: two full-size gradients, different operators */
+.m-intersect {
+  background: #4a90e2;
+  -webkit-mask-image: linear-gradient(black, transparent), linear-gradient(90deg, black, transparent);
+  mask-image: linear-gradient(black, transparent), linear-gradient(90deg, black, transparent);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+.m-add {
+  background: #e24a4a;
+  -webkit-mask-image: linear-gradient(black, transparent), linear-gradient(90deg, black, transparent);
+  mask-image: linear-gradient(black, transparent), linear-gradient(90deg, black, transparent);
+  -webkit-mask-composite: source-over;
+  mask-composite: add;
+}
+.m-subtract {
+  background: #4ae24a;
+  -webkit-mask-image: linear-gradient(black, transparent), linear-gradient(90deg, black, transparent);
+  mask-image: linear-gradient(black, transparent), linear-gradient(90deg, black, transparent);
+  -webkit-mask-composite: source-out;
+  mask-composite: subtract;
+}
+.m-exclude {
+  background: #e2e24a;
+  -webkit-mask-image: linear-gradient(black, transparent), linear-gradient(90deg, black, transparent);
+  mask-image: linear-gradient(black, transparent), linear-gradient(90deg, black, transparent);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* text-wrap: balance */
+.bal {
+  width: 300px;
+  background: #f0f0f0;
+  padding: 8px;
+  margin: 8px 0;
+  border: 1px solid #ccc;
+}
+.bal-on { text-wrap: balance; }
+.bal-off { text-wrap: nowrap; }
+</style>
+</head>
+<body>
+
+<h2>1. mask-composite operators (top=vertical black→transparent, bottom=horizontal)</h2>
+<div class="row">
+  <div><div class="box m-intersect"></div><div class="label">intersect</div></div>
+  <div><div class="box m-add"></div><div class="label">add</div></div>
+  <div><div class="box m-subtract"></div><div class="label">subtract</div></div>
+  <div><div class="box m-exclude"></div><div class="label">exclude</div></div>
+</div>
+
+<h2>2. text-wrap: balance vs normal</h2>
+<div class="bal" style="width:340px">The balance feature is designed to prevent short last lines in headings and captions</div>
+<div class="label">normal (unbalanced)</div>
+<div class="bal bal-on" style="width:340px">The balance feature is designed to prevent short last lines in headings and captions</div>
+<div class="label">balance</div>
+<div class="bal" style="width:260px">Qoder builds fast browsers from source with a hand written layout and paint engine</div>
+<div class="label">normal (unbalanced)</div>
+<div class="bal bal-on" style="width:260px">Qoder builds fast browsers from source with a hand written layout and paint engine</div>
+<div class="label">balance</div>
+
+</body>
+</html>

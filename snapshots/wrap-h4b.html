@@ -1,0 +1,12 @@
+<!DOCTYPE html><style>
+body{margin:0;font:14px sans-serif}
+h4{margin:8px 8px 4px;background:none;color:#222}
+.effects{display:flex;flex-wrap:wrap;gap:8px;width:560px;padding:8px;background:#eef;border:2px solid #333;margin:10px}
+.box{width:70px;height:50px;background:#4a90d9;color:#fff}
+.wrapbox{position:relative;width:400px;height:120px;background:#ffd;margin:12px;border:1px solid #999;padding:10px}
+.ab{position:absolute;top:10px;right:10px;width:80px;height:40px;background:#e33;color:#fff}
+</style>
+<h4>1. flex-wrap (expect 7 boxes per row inside 560px content)</h4>
+<div class="effects"><div class="box">1</div><div class="box">2</div><div class="box">3</div><div class="box">4</div><div class="box">5</div><div class="box">6</div><div class="box">7</div><div class="box">8</div><div class="box">9</div><div class="box">10</div></div>
+<h4>2. absolute (red top-right, green bottom-left, blue 150/40)</h4>
+<div class="wrapbox"><span>flow text</span><div class="ab">ab R10 T10</div></div>

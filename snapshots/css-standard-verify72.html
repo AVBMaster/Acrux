@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>CSS Standard Verification Batch 72 — object-fit scale-down, object-position %, bg-position calc, pre-line, inline-block valign</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.imgbox { width:120px; height:80px; border:2px solid #939; background:#eef; display:inline-block; vertical-align:top; margin-right:16px; }
+img { width:100%; height:100%; }
+.scale { object-fit: scale-down; }
+.pos { object-fit: none; object-position: 100% 25%; }
+.bg { width:200px; height:60px; border:2px solid #939; background:#eef; background-image:linear-gradient(#f00,#f00); background-size:20px 20px; background-repeat:no-repeat; }
+.bg1 { background-position: calc(100% - 10px) calc(50% + 5px); }
+.pre { white-space: pre-line; width:220px; border:2px solid #939; padding:4px; background:#faf;}
+.vb { font-size:32px; line-height:48px; border:1px solid #666; background:#eef; }
+.vb .ib { display:inline-block; width:30px; height:20px; background:#ffe; border:1px solid #c90; font-size:14px; vertical-align:middle; }
+.vb .ib2 { display:inline-block; width:30px; height:20px; background:#ffe; border:1px solid #c90; font-size:14px; vertical-align:top; }
+</style></head><body>
+<h2>1. object-fit:scale-down (20x20 green, no upscale, centered) / object-fit:none + object-position 100% 25% (blue img, red corner)</h2>
+<div class="imgbox"><img class="scale" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAIAAAAC64paAAAAHElEQVR4nGPgWsBANiJf56jmUc2jmkc1L6CGZgAouwmwCiYLOAAAAABJRU5ErkJggg=="></div>
+<div class="imgbox"><img class="pos" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAIAAAAiOjnJAAAC/ElEQVR4nO3SwQnEABSE0PTfdLaBuS1BvgivAA8+z/MmH+ALosQXRIkviBJfECW+IEp8QZT4gijxBVHiC6LEF0SJL4gSXxAlviBKfEGU+IIo8QVR4guixBdEiS+IEl+Qv/AFS2OdxxcsjXUeX7A01nl8wdJY5/EFS2OdxxcsjXUeX7A01nl8wdJY5/EFS2OdxxcsjXUeX7A01nl8wdJY5/EFS2OdxxcsjXUeX7A01nl8wdJY5/EFS2OdxxcsjXUeX7A01nl8wdJY5/EFS2OdxxcsjXUeX7A01nl8wdJY5/EFS2OdxxcsjXUeX7A01nl8wdJY5/EFS2OdxxcsjXUeX7A01nl8wdJY5/EFS2OdxxcsjXUeX7A01nl8wdJY5/EFS2OdxxcsjXUeX7A01nl8wdJY5/EFS2OdxxcsjXUeX7A01nl8wdJY5/EFS2OdxxcsjXUeX7A01nl8wdJY5/EFS2OdxxcsjZWP8AVR4guixBdEiS+IEl8QJb4gSnxBlPiCKPEFUeILosQXRIkviBJfECW+IEp8QZT4gijxBVHiC6LEF0SJL4gSXxAlviBKfEGU+IIo8QVR4guixBdEiS+IEl8QJb4gSnxBlPiCKPEFUeILosQXRIkviBJfECW+IEp8QZT4gijxBVHiC6LEF0SJL4gSXxAlviBKfEGU+IIo8QVR4guixBdEiS+IEl8QJb4gSnxBlPiCKPEFUeILosQXRIkviBJfECW+IEp8QZT4gijxBVHiC6LEF0SJL4gSXxAlviBKfEGU+IIo8QVR4guixBdEiS+IEl8QJb4gSnxBlPiCKPEFUeILosQXRIkviBJfECW+IEp8QZT4gijxBVHiC6LEF0SJL4gSXxAlviBKfEGU+IIo8QVR4guixBdEiS+IEl8QJb4gSnxBlPiCKPEFUeILosQXRIkviBJfECW+IEp8QZT4gijxBVHiC6LEF0SJL4gSXxAlviBKfEGU+IIo8QVR4guixBdEiS+IEl8QJb4gSnxBlPiCKPEFeX1+7WOs1lI6rvAAAAAASUVORK5CYII="></div>
+<h2>2. background-position calc(100% - 10px) calc(50% + 5px)</h2>
+<div class="bg bg1"></div>
+<h2>3. white-space:pre-line (collapse spaces, honor newlines)</h2>
+<div class="pre">line   one   has   spaces
+line two after newline
+   line   three indented</div>
+<h2>4. inline-block vertical-align: middle / top (big text line)</h2>
+<p class="vb">AB<span class="ib">m</span>CD<span class="ib2">t</span>EF</p>
+</body></html>

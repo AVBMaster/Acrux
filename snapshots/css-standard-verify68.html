@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 68 — grid place-items, explicit-width justify-self, flex align-self, multicol balance</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.c { background:#cfe; border:1px solid #369; }
+
+/* 1. grid place-items: center end (align-items center, justify-items end) */
+.g1 { display:grid; grid-template-columns:120px 120px; grid-template-rows:50px 50px; gap:6px; width:252px; border:2px solid #939; place-items:center end; }
+.g1 .c { width:40px; height:20px; }
+
+/* 2. grid item explicit width + justify-self:center */
+.g2 { display:grid; grid-template-columns:200px; border:2px solid #939; width:204px; }
+.g2 .c { width:60px; height:24px; justify-self:center; }
+
+/* 3. flex align-self override per item */
+.f { display:flex; height:80px; width:200px; border:2px solid #939; align-items:flex-start; }
+.f div { width:40px; height:24px; }
+.f .st { align-self:stretch; }
+.f .en { align-self:flex-end; }
+.f .ct { align-self:center; }
+
+/* 4. multicol balance (3 short paragraphs, column-count:3) */
+.mc { column-count:3; column-gap:12px; width:300px; border:2px solid #939; padding:4px; }
+.mc p { margin:0 0 8px; }
+</style>
+</head>
+<body>
+
+<h2>1. grid place-items: center end (v-center, h-right in each cell)</h2>
+<div class="g1"><div class="c">a</div><div class="c">b</div><div class="c">c</div><div class="c">d</div></div>
+
+<h2>2. grid item width:60 justify-self:center in 200 col</h2>
+<div class="g2"><div class="c">x</div></div>
+
+<h2>3. flex align-self: stretch / flex-end / center (container align flex-start)</h2>
+<div class="f"><div class="c">A</div><div class="c st">S</div><div class="c en">E</div><div class="c ct">C</div></div>
+
+<h2>4. multicol column-count:3 balance</h2>
+<div class="mc"><p>First paragraph with several words to fill some space here.</p><p>Second paragraph also moderately long for the column.</p><p>Third paragraph wraps across the balanced columns nicely.</p></div>
+
+</body>
+</html>

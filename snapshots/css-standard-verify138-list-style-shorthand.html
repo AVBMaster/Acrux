@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b138 list-style shorthand and quoted marker</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+ul { margin: 0; padding: 0 0 0 90px; list-style-position: inside; }
+li { margin-bottom: 3px; }
+.q1 { list-style-type: "->"; }
+.q2 { list-style-type: "»"; }
+.q3 { list-style-type: "A. "; }
+.shorthand { list-style: lower-greek; }
+.shorthand2 { list-style: inside square; }
+.shorthand3 { list-style: circle outside; }
+.empty { list-style-type: ""; }
+.markercontent::marker { content: "#"; color: rgb(200,0,0); }
+.nothere::marker { content: none; }
+.counter::marker { content: counter(list-item) "-"; }
+.badvalue { list-style-type: not-a-real-type; }
+</style>
+</head>
+<body>
+<ul>
+  <li class="q1" id="k1">quoted arrow</li>
+  <li class="q2" id="k2">single char</li>
+  <li class="q3" id="k3">multi char</li>
+  <li class="shorthand" id="k4">lower-greek via shorthand</li>
+  <li class="shorthand" id="k5">second greek</li>
+  <li class="shorthand2" id="k6">inside square</li>
+  <li class="shorthand3" id="k7">circle outside</li>
+  <li class="empty" id="k8">empty string marker</li>
+  <li class="markercontent" id="k9">marker content override</li>
+  <li class="nothere" id="k11">content none removes box</li>
+  <li class="counter" id="k12">content with list-item counter</li>
+  <li class="badvalue" id="k10">invalid type falls back</li>
+</ul>
+</body>
+</html>

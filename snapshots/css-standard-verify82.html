@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 82 — overflow-wrap anywhere, line-break, white-space pre-line, text-align-last, word-spacing</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background:#eee; padding:4px; margin:14px 0 6px; font-size:15px; }
+.box { width:160px; border:1px solid #999; padding:4px; margin-bottom:6px; }
+.nowrap { white-space:nowrap; }
+.anywhere { overflow-wrap:anywhere; }
+.breakword { overflow-wrap:break-word; }
+.normal { overflow-wrap:normal; }
+.preline { white-space:pre-line; }
+.tight { line-break:strict; }
+.loose { line-break:loose; }
+.justify { text-align:justify; }
+.tal-right { text-align-last:right; }
+.tal-justify { text-align-last:justify; }
+.ws40 { word-spacing:40px; }
+.ws-neg { word-spacing:-6px; }
+</style>
+</head>
+<body>
+
+<h2>1. overflow-wrap on a long unbreakable token (box=160px)</h2>
+<div class="box normal">Supercalifragilisticexpialidocious</div>
+<div class="box breakword">Supercalifragilisticexpialidocious</div>
+<div class="box anywhere">Supercalifragilisticexpialidocious</div>
+
+<h2>2. overflow-wrap:anywhere also affects min-content / shrink (two words, narrow box)</h2>
+<div class="box anywhere">aaaa bbbb</div>
+
+<h2>3. white-space: pre-line (collapses spaces, keeps newlines)</h2>
+<div class="box preline">line one    spaces   collapsed
+line two after newline</div>
+
+<h2>4. text-align: justify + text-align-last variants</h2>
+<div class="box justify">some words to justify across the full width of this box here</div>
+<div class="box justify tal-right">last line to the right end</div>
+<div class="box justify tal-justify">first second third last</div>
+
+<h2>5. word-spacing large / negative</h2>
+<div class="box ws40">one two three</div>
+<div class="box ws-neg">one two three four five six seven</div>
+
+</body>
+</html>

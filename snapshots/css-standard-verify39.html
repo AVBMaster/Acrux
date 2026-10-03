@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 39</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
+
+/* 1. column-span offset issue */
+.col-span-demo {
+  column-count: 3;
+  column-gap: 20px;
+  width: 600px;
+  border: 2px solid #333;
+  padding: 10px;
+  margin: 10px 0;
+}
+.col-span-demo .spanner {
+  column-span: all;
+  background: #4a90e2;
+  color: white;
+  padding: 10px;
+  text-align: center;
+}
+.col-span-demo p { margin: 0 0 8px; }
+
+/* 2. contain property */
+.contain-test {
+  contain: layout;
+  width: 200px;
+  background: #4a90e2;
+  color: white;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+/* 3. content-visibility */
+.cv-test {
+  content-visibility: auto;
+  width: 200px;
+  background: #e24a4a;
+  color: white;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+/* 4. scroll-behavior */
+.scroll-smooth {
+  scroll-behavior: smooth;
+  width: 200px;
+  height: 100px;
+  overflow-y: auto;
+  border: 2px solid #333;
+  margin: 10px 0;
+}
+
+/* 5. caret-color */
+.caret-test {
+  caret-color: #e24a4a;
+  border: 2px solid #333;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+/* 6. accent-color */
+input[type="checkbox"] {
+  accent-color: #4a90e2;
+  transform: scale(2);
+  margin: 10px 20px;
+}
+
+/* 7. color-scheme */
+:root { color-scheme: light; }
+
+/* 8. text-wrap: balance */
+.balance-test {
+  text-wrap: balance;
+  width: 300px;
+  background: #f0f0f0;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+/* 9. line-clamp */
+.clamp-test {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  width: 300px;
+  background: #f0f0f0;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+/* 10. mask-composite */
+.mask-composite-test {
+  width: 200px;
+  height: 200px;
+  background: #4a90e2;
+  margin: 10px 0;
+  -webkit-mask-image: linear-gradient(black, transparent), linear-gradient(90deg, black, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(black, transparent), linear-gradient(90deg, black, transparent);
+  mask-composite: intersect;
+}
+
+/* 11. mask shorthand */
+.mask-shorthand {
+  width: 200px;
+  height: 200px;
+  background: #e24a4a;
+  margin: 10px 0;
+  mask: radial-gradient(circle, black 50%, transparent 50%);
+  -webkit-mask: radial-gradient(circle, black 50%, transparent 50%);
+}
+
+/* 12. will-change */
+.will-change-test {
+  will-change: transform;
+  width: 200px;
+  height: 100px;
+  background: #4ae24a;
+  margin: 10px 0;
+}
+
+/* 13. pointer-events */
+.pointer-test {
+  pointer-events: none;
+  background: #4a90e2;
+  color: white;
+  padding: 20px;
+  margin: 10px 0;
+}
+
+/* 14. cursor styles */
+.cursor-test {
+  padding: 10px;
+  margin: 5px 0;
+  background: #f0f0f0;
+}
+.cursor-pointer { cursor: pointer; }
+.cursor-grab { cursor: grab; }
+.cursor-not-allowed { cursor: not-allowed; }
+.cursor-crosshair { cursor: crosshair; }
+
+/* 15. resize */
+.resize-test {
+  resize: both;
+  overflow: auto;
+  width: 200px;
+  height: 100px;
+  background: #f0f0f0;
+  border: 2px solid #333;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+/* 16. appearance */
+.appearance-test {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 200px;
+  height: 40px;
+  background: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  margin: 10px 0;
+  font-size: 16px;
+}
+
+/* 17. outline complex */
+.outline-test {
+  outline: 4px dashed #e24a4a;
+  outline-offset: 8px;
+  background: #f0f0f0;
+  padding: 20px;
+  margin: 20px;
+  width: 200px;
+}
+
+/* 18. box-shadow inset */
+.inset-shadow {
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+  background: #f0f0f0;
+  padding: 20px;
+  margin: 10px 0;
+  width: 200px;
+  height: 100px;
+}
+
+/* 19. text-shadow multiple */
+.text-shadow-multi {
+  text-shadow: 2px 2px 0 #e24a4a, 4px 4px 0 #4a90e2, 6px 6px 0 #4ae24a;
+  font-size: 32px;
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+/* 20. filter drop-shadow */
+.drop-shadow-test {
+  filter: drop-shadow(4px 4px 4px rgba(0,0,0,0.5));
+  background: #4a90e2;
+  color: white;
+  padding: 20px;
+  margin: 10px 0;
+  width: 200px;
+  border-radius: 20px;
+}
+</style>
+</head>
+<body>
+
+<h2>1. column-span offset (after spanner, columns should realign)</h2>
+<div class="col-span-demo">
+  <p>Before the spanner. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore.</p>
+  <div class="spanner">This spans all columns</div>
+  <p>After the spanner. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip.</p>
+  <p>More text after spanner. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore.</p>
+</div>
+
+<h2>2. contain: layout</h2>
+<div class="contain-test">Contain layout test</div>
+
+<h2>3. content-visibility: auto</h2>
+<div class="cv-test">Content visibility test</div>
+
+<h2>4. scroll-behavior: smooth</h2>
+<div class="scroll-smooth">
+  <p>Scroll me. Lorem ipsum dolor sit amet.</p>
+  <p>More content here.</p>
+  <p>And more content here.</p>
+  <p>Even more content.</p>
+</div>
+
+<h2>5. caret-color</h2>
+<input class="caret-test" type="text" value="Click to see caret">
+
+<h2>6. accent-color</h2>
+<input type="checkbox" checked> Checkbox with accent-color
+
+<h2>7. text-wrap: balance</h2>
+<div class="balance-test">This is a long text that should be balanced across lines when text-wrap balance is applied correctly</div>
+
+<h2>8. line-clamp</h2>
+<div class="clamp-test">
+  <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+</div>
+
+<h2>9. mask-composite: intersect</h2>
+<div class="mask-composite-test"></div>
+
+<h2>10. mask shorthand</h2>
+<div class="mask-shorthand"></div>
+
+<h2>11. will-change</h2>
+<div class="will-change-test">Will change transform</div>
+
+<h2>12. pointer-events: none</h2>
+<div class="pointer-test">Pointer events none</div>
+
+<h2>13. cursor styles</h2>
+<div class="cursor-test cursor-pointer">cursor: pointer</div>
+<div class="cursor-test cursor-grab">cursor: grab</div>
+<div class="cursor-test cursor-not-allowed">cursor: not-allowed</div>
+<div class="cursor-test cursor-crosshair">cursor: crosshair</div>
+
+<h2>14. resize: both</h2>
+<div class="resize-test">Resize me</div>
+
+<h2>15. appearance: none (button)</h2>
+<button class="appearance-test">Styled Button</button>
+
+<h2>16. outline dashed with offset</h2>
+<div class="outline-test">Dashed outline with offset</div>
+
+<h2>17. box-shadow inset</h2>
+<div class="inset-shadow">Inset shadow</div>
+
+<h2>18. text-shadow multiple</h2>
+<div class="text-shadow-multi">Multi Shadow</div>
+
+<h2>19. filter: drop-shadow</h2>
+<div class="drop-shadow-test">Drop shadow</div>
+
+</body>
+</html>

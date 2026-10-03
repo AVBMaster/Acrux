@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b124 edge marker label identify</title>
+<style>
+body { font: 16px "Segoe UI", "Yu Gothic", sans-serif; margin: 6px; }
+#u { list-style-position: inside; padding: 0; margin: 0; }
+#u li { display: list-item; font: 16px "Segoe UI", "Yu Gothic", sans-serif; }
+#c { font: 16px "Segoe UI", "Yu Gothic", sans-serif; }
+#out { white-space: pre; font: 12px Consolas, monospace; }
+</style>
+</head>
+<body>
+<ul id="u"></ul><span id="c"></span><div id="out"></div>
+<script>
+var NL = String.fromCharCode(10);
+var ARM = "ԱԲԳԴԵԶԷԸԹԺԻԼԽԾԿՀՁՂՃՄՅՆՇՈՉՊՋՒՓՔ";
+var probes = [];
+(function () {
+  var a = [];
+  for (var i = 0; i < 36; i++) a.push(ARM[i] + ".");
+  probes.push({ style: "armenian", value: 10000, cands: a.concat(["10000.", "ԱԱ.", "ՔՌ.", "ՔՌԱ.", ""]) });
+  probes.push({ style: "armenian", value: 10036, cands: ["Ա.", "Բ.", "ՔԱ.", "10036.", ""] });
+  probes.push({ style: "armenian", value: 10037, cands: ["Ա.", "Բ.", "10037.", ""] });
+  probes.push({ style: "armenian", value: 99999999, cands: ["99999999.", "Ք.", "ՔՔ.", "ԱՔՌ.", ""] });
+  probes.push({ style: "hebrew", value: 0, cands: ["אפס.", "0.", "א׳.", ""] });
+  probes.push({ style: "hebrew", value: 11000, cands: ["11000.", "יא׳.", "יא״.", "י׳א׳.", "י״א׳."] });
+  probes.push({ style: "hebrew", value: 20000, cands: ["20000.", "ב׳.", "ב״.", "בא׳."] });
+  probes.push({ style: "hebrew", value: 999999, cands: ["999999.", "תתקצט׳.", "תקצט׳.", "ת״תקצט׳.", "תתקצט״."] });
+  probes.push({ style: "hebrew", value: 10999, cands: ["י׳תתקצט.", "10999.", "תתקצט."] });
+  probes.push({ style: "hebrew", value: 5000, cands: ["ה׳.", "5000.", "ח׳."] });
+  probes.push({ style: "hebrew", value: 15, cands: ["טו.", "י״ה.", "יה."] });
+  probes.push({ style: "korean-hanja-informal", value: 100000000, cands: ["一億,", "億,", "一億, ", "億, "] });
+  probes.push({ style: "korean-hanja-informal", value: 1001, cands: ["千一,", "一千一,", "千零一,", "천일,"] });
+  probes.push({ style: "korean-hanja-informal", value: 1100, cands: ["千百,", "一千百,", "千百,", "一千一百,"] });
+  probes.push({ style: "korean-hanja-informal", value: 110000, cands: ["十一萬,", "一十一萬,", "十萬,", "萬,"] });
+  probes.push({ style: "korean-hanja-formal", value: 1100, cands: ["壹仟壹百,", "壹阡壹百,", "千佰,", "壹仟佰,"] });
+  probes.push({ style: "korean-hangul-formal", value: 1100, cands: ["일천 일백,", "천 백,", "일천백,", "일천일백,"] });
+  probes.push({ style: "japanese-informal", value: 1111, cands: ["千一百十一、", "千百十一、", "一千百十一、", "一千一百十一、"] });
+  probes.push({ style: "japanese-informal", value: 20000, cands: ["二万、", "一〇〇〇〇、", "20000、"] });
+  probes.push({ style: "simp-chinese-informal", value: 20000, cands: ["二万、", "二〇〇〇〇、"] });
+})();
+
+var ul = document.getElementById("u");
+var cand = document.getElementById("c");
+var rows = [];
+function textLeft(li) {
+  var r = document.createRange();
+  r.selectNodeContents(li);
+  return r.getBoundingClientRect().left;
+}
+function markerWidth(style, value) {
+  ul.textContent = "";
+  var a = document.createElement("li");
+  a.textContent = "8";
+  a.setAttribute("value", String(value));
+  a.style.listStyleType = style;
+  ul.appendChild(a);
+  var b = document.createElement("li");
+  b.textContent = "8";
+  b.style.listStyleType = "none";
+  ul.appendChild(b);
+  return textLeft(a) - textLeft(b);
+}
+for (var i = 0; i < probes.length; i++) {
+  var p = probes[i];
+  var got = markerWidth(p.style, p.value);
+  var hits = [];
+  for (var k = 0; k < p.cands.length; k++) {
+    cand.textContent = p.cands[k];
+    var w0 = cand.getBoundingClientRect().width;
+    cand.textContent = p.cands[k] + " ";
+    var w1 = cand.getBoundingClientRect().width;
+    if (Math.abs(got - w0) < 0.7) hits.push("\"" + p.cands[k] + "\"");
+    else if (Math.abs(got - w1) < 0.7) hits.push("\"" + p.cands[k] + "\"+sp");
+  }
+  rows.push(p.style + "|" + p.value + "|measured=" + got.toFixed(2) + "|hit=" + (hits.join(",") || "NONE"));
+}
+document.getElementById("out").textContent = rows.join(NL);
+document.title = "DONE " + rows.length;
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<!DOCTYPE html><head><style>
+body{margin:20px;font:16px Arial;counter-reset:sec}
+@counter-style squares { system: cyclic; symbols: "\25A0"; suffix: " "; }
+@counter-style wings { system: additive; additive-symbols: 10 X, 5 V, 1 I; }
+h1{counter-increment:sec}
+h1::before{content:"§" counter(sec) ". "}
+.item{counter-increment:sub}
+.list{counter-reset:sub}
+.list .item::before{content:counters(sub,".") " "}
+ol{counter-reset:n}
+li{counter-increment:n}
+li::marker{content:counter(n,wings) ". "}
+.sq li::marker{content:counter(n,squares)}
+.nest{counter-reset:a}
+.nest div{counter-increment:a}
+.nest div::before{content:counters(a,"-") " › "}
+</style><body>
+<h1>First</h1><h1>Second</h1>
+<div class="list"><div class="item">a</div><div class="item">b</div></div>
+<ol><li>x</li><li>y</li><li>z</li></ol>
+<ol class="sq"><li>x</li><li>y</li></ol>
+<div class="nest"><div>1<div>2<div>3</div></div></div></div>
+</body></html>

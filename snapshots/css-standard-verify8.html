@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Batch 8 (Object-fit / Images / Blend / Filter / Clip / Font)</title>
+<style>
+html, body { margin: 0; padding: 0; background: white; font-family: Arial, sans-serif; font-size: 16px; }
+body { padding: 4px; }
+h2 { margin: 8px 0 4px 0; font-size: 14px; color: #333; }
+img { display: block; }
+
+/* ====== GROUP 1: natural size ====== */
+#g1 { width: 40px; height: 40px; }
+
+/* ====== GROUP 2: object-fit contain in 80x40 ====== */
+#g2 { width: 80px; height: 40px; object-fit: contain; background: rgb(0,0,0); }
+
+/* ====== GROUP 3: object-fit cover in 20x40 ====== */
+#g3 { width: 20px; height: 40px; object-fit: cover; }
+
+/* ====== GROUP 4: object-fit fill in 80x20 ====== */
+#g4 { width: 80px; height: 20px; object-fit: fill; }
+
+/* ====== GROUP 5: object-fit scale-down in 20x20 ====== */
+#g5 { width: 20px; height: 20px; object-fit: scale-down; }
+
+/* ====== GROUP 6: object-position right bottom, contain in 80x80 ====== */
+#g6 { width: 80px; height: 80px; object-fit: contain; object-position: right bottom; background: rgb(0,0,0); }
+
+/* ====== GROUP 7: background-repeat repeat-x ====== */
+#g7 { width: 100px; height: 20px; background: url("quad40.png") repeat-x; }
+
+/* ====== GROUP 8: background-repeat repeat-y ====== */
+#g8 { width: 20px; height: 60px; background: url("quad40.png") repeat-y; }
+
+/* ====== GROUP 9: background-repeat round (60x40 over 40px tile) ====== */
+#g9 { width: 60px; height: 40px; background: url("quad40.png") no-repeat; background-repeat: round; }
+
+/* ====== GROUP 10: background-origin content-box ====== */
+#g10 { width: 60px; height: 60px; padding: 10px; background: url("quad40.png") no-repeat; background-origin: content-box; border: 2px solid rgb(255,0,255); }
+
+/* ====== GROUP 11: background-clip: text ====== */
+#g11 { font-size: 30px; background: linear-gradient(to right, rgb(255,0,0), rgb(0,0,255)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* ====== GROUP 12: mix-blend-mode difference (red over blue) ====== */
+#bd { position: relative; width: 60px; height: 40px; background: rgb(0,0,255); }
+#bd .o { position: absolute; left: 10px; top: 10px; width: 40px; height: 20px; background: rgb(255,0,0); mix-blend-mode: difference; }
+
+/* ====== GROUP 13: mix-blend-mode screen (red over blue) ====== */
+#bs { position: relative; width: 60px; height: 40px; background: rgb(0,0,255); }
+#bs .o { position: absolute; left: 10px; top: 10px; width: 40px; height: 20px; background: rgb(255,0,0); mix-blend-mode: screen; }
+
+/* ====== GROUP 14: mix-blend-mode lighten (red over blue) ====== */
+#bl { position: relative; width: 60px; height: 40px; background: rgb(0,0,255); }
+#bl .o { position: absolute; left: 10px; top: 10px; width: 40px; height: 20px; background: rgb(255,0,0); mix-blend-mode: lighten; }
+
+/* ====== GROUP 15: filter invert on red ====== */
+#f1 { width: 40px; height: 20px; background: rgb(255,0,0); filter: invert(1); }
+
+/* ====== GROUP 16: filter brightness(2) ====== */
+#f2 { width: 40px; height: 20px; background: rgb(100,50,25); filter: brightness(2); }
+
+/* ====== GROUP 17: filter hue-rotate(180deg) on red ====== */
+#f3 { width: 40px; height: 20px; background: rgb(255,0,0); filter: hue-rotate(180deg); }
+
+/* ====== GROUP 18: filter blur(4px) edge softening ====== */
+#f4 { width: 60px; height: 40px; background: rgb(255,0,0); filter: blur(4px); }
+
+/* ====== GROUP 19: clip-path inset(10px) ====== */
+#c1 { width: 60px; height: 60px; background: rgb(255,0,0); clip-path: inset(10px); }
+
+/* ====== GROUP 20: clip-path circle(50%) ====== */
+#c2 { width: 60px; height: 60px; background: rgb(0,0,255); clip-path: circle(50%); }
+
+/* ====== GROUP 21: font-size keywords ====== */
+#fs1 { font-size: x-large; }
+#fs2 { font-size: large; }
+#fs3 { font-size: medium; }
+
+/* ====== GROUP 22: font shorthand with line-height ====== */
+#fnt { font: italic bold 20px/1.5 Arial, sans-serif; }
+
+/* ====== GROUP 23: @media min-width applies at 900px ====== */
+#mq { width: 60px; height: 20px; background: rgb(255,0,0); }
+@media (min-width: 500px) { #mq { background: rgb(0,128,0); } }
+@media (min-width: 5000px) { #mq { background: rgb(0,0,255); } }
+
+/* ====== GROUP 24: @supports ====== */
+#sp { width: 60px; height: 20px; background: rgb(255,0,0); }
+@supports (display: flex) { #sp { background: rgb(0,128,0); } }
+@supports (not-a-real-property: value) { #sp { background: rgb(0,0,255); } }
+
+/* ====== GROUP 25: all: unset ====== */
+#au { color: rgb(255,0,0); background: rgb(0,255,0); border: 5px solid blue; padding: 10px; }
+#au .styled { color: rgb(0,0,255); background: rgb(255,255,0); border: 3px solid rgb(0,255,255); padding: 4px; }
+#au .reset { all: unset; }
+
+/* ====== GROUP 26: border-radius slash (elliptical) ====== */
+#br { width: 80px; height: 40px; background: rgb(255,0,0); border-radius: 50% / 25%; }
+
+/* ====== GROUP 27: quotes + open-quote/close-quote ====== */
+#q { quotes: "«" "»"; }
+#q span::before { content: open-quote; color: rgb(255,0,0); }
+#q span::after { content: close-quote; color: rgb(255,0,0); }
+
+/* ====== GROUP 28: list-style-position inside + ::marker color ====== */
+#li { list-style-position: inside; padding-left: 4px; }
+#li ::marker { color: rgb(255,0,0); }
+
+/* ====== GROUP 29: flex align-content space-around ====== */
+#fa { display: flex; flex-wrap: wrap; align-content: space-around; gap: 0; width: 100px; height: 80px; background: rgb(235,235,235); }
+#fa div { width: 40px; height: 20px; background: rgb(255,0,0); }
+
+/* ====== GROUP 30: place-items / place-content shorthand ====== */
+#pi { display: grid; place-items: end start; width: 100px; height: 60px; background: rgb(235,235,235); }
+#pi div { width: 30px; height: 20px; background: rgb(0,0,255); }
+#pc { display: grid; place-content: center; width: 100px; height: 60px; grid-template-columns: 30px; grid-template-rows: 20px; background: rgb(235,235,235); }
+#pc div { width: 30px; height: 20px; background: rgb(255,0,0); }
+
+/* ====== GROUP 31: grid-auto-flow column ====== */
+#gaf { display: grid; grid-auto-flow: column; grid-template-rows: 20px 20px; grid-auto-columns: 30px; gap: 4px; width: 120px; }
+#gaf div { background: rgb(255,0,0); }
+#gaf .b { background: rgb(0,0,255); }
+
+/* ====== GROUP 32: column-span all ====== */
+#cs { columns: 2; column-gap: 10px; width: 120px; column-rule: 2px solid rgb(255,0,0); }
+#cs .span { column-span: all; background: rgb(200,200,255); }
+
+/* ====== GROUP 33: opacity creates stacking context (isolation) ====== */
+#iso { position: relative; width: 100px; height: 40px; }
+#iso .p { position: absolute; left: 0; top: 0; width: 60px; height: 40px; background: rgb(0,255,0); opacity: 0.5; }
+#iso .q { position: absolute; left: 20px; top: 10px; width: 60px; height: 20px; background: rgb(0,0,255); z-index: -1; }
+
+/* ====== GROUP 34: z-index ignored on static ====== */
+#st { position: relative; width: 100px; height: 40px; }
+#st .a { position: absolute; left: 0; top: 0; width: 60px; height: 40px; background: rgb(255,0,0); }
+#st .b { width: 60px; height: 40px; background: rgb(0,0,255); z-index: 99; }
+</style>
+</head>
+<body>
+
+<h2>1. natural 40x40</h2>
+<img id="g1" src="quad40.png">
+
+<h2>2. object-fit contain 80x40 (letterboxed on black)</h2>
+<img id="g2" src="quad40.png">
+
+<h2>3. object-fit cover 20x40</h2>
+<img id="g3" src="quad40.png">
+
+<h2>4. object-fit fill 80x20</h2>
+<img id="g4" src="quad40.png">
+
+<h2>5. object-fit scale-down 20x20</h2>
+<img id="g5" src="quad40.png">
+
+<h2>6. contain + position right bottom (80x80)</h2>
+<img id="g6" src="quad40.png">
+
+<h2>7. background repeat-x</h2>
+<div id="g7"></div>
+
+<h2>8. background repeat-y</h2>
+<div id="g8"></div>
+
+<h2>9. background-size round (60px row)</h2>
+<div id="g9"></div>
+
+<h2>10. background-origin content-box</h2>
+<div id="g10"></div>
+
+<h2>11. background-clip: text</h2>
+<div id="g11">CLIP</div>
+
+<h2>12. blend difference red over blue</h2>
+<div id="bd"><div class="o"></div></div>
+
+<h2>13. blend screen red over blue</h2>
+<div id="bs"><div class="o"></div></div>
+
+<h2>14. blend lighten red over blue</h2>
+<div id="bl"><div class="o"></div></div>
+
+<h2>15. invert(1) on red</h2>
+<div id="f1"></div>
+
+<h2>16. brightness(2) on (100,50,25)</h2>
+<div id="f2"></div>
+
+<h2>17. hue-rotate(180deg) on red</h2>
+<div id="f3"></div>
+
+<h2>18. blur(4px) red box</h2>
+<div id="f4"></div>
+
+<h2>19. clip-path inset(10px)</h2>
+<div id="c1"></div>
+
+<h2>20. clip-path circle(50%)</h2>
+<div id="c2"></div>
+
+<h2>21. font-size x-large / large / medium</h2>
+<div id="fs1">Xlarge</div>
+<div id="fs2">Large</div>
+<div id="fs3">Medium</div>
+
+<h2>22. font: italic bold 20px/1.5</h2>
+<div id="fnt">Styled text</div>
+
+<h2>23. @media min-width 500 wins (green)</h2>
+<div id="mq"></div>
+
+<h2>24. @supports flex wins (green)</h2>
+<div id="sp"></div>
+
+<h2>25. all: unset removes box (text only, black)</h2>
+<div id="au"><span class="styled">styled</span> <span class="styled reset">unset</span></div>
+
+<h2>26. border-radius 50% / 25%</h2>
+<div id="br"></div>
+
+<h2>27. open-quote / close-quote</h2>
+<div id="q"><span>quoted</span></div>
+
+<h2>28. list-style-position inside, red markers</h2>
+<ul id="li"><li>one</li><li>two</li></ul>
+
+<h2>29. flex align-content space-around</h2>
+<div id="fa"><div></div><div></div><div></div></div>
+
+<h3>30a. place-items end start</h3>
+<div id="pi"><div></div></div>
+<h3>30b. place-content center</h3>
+<div id="pc"><div></div></div>
+
+<h2>31. grid-auto-flow column</h2>
+<div id="gaf"><div class="a"></div><div class="b"></div><div class="a"></div><div class="b"></div></div>
+
+<h2>32. column-span: all</h2>
+<div id="cs"><div>alpha beta gamma delta epsilon zeta eta theta iota kappa</div><div class="span">spans all columns here</div><div>more text continues in columns after the span</div></div>
+
+<h2>33. opacity isolation (blue z-1 behind green)</h2>
+<div id="iso"><div class="p"></div><div class="q"></div></div>
+
+<h2>34. static z-index ignored (blue under red)</h2>
+<div id="st"><div class="a"></div><div class="b"></div></div>
+
+</body>
+</html>

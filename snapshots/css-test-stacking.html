@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { font-family: sans-serif; font-size: 13px; margin: 10px; color: #222; }
+h3 { margin: 8px 0 4px; }
+.stage { position: relative; width: 300px; height: 90px; background: #f4f4f4; border: 1px solid #ccc; }
+.neg { position: absolute; z-index: -1; top: 10px; left: 10px; width: 120px; height: 50px; background: #0a0; }
+.base { position: absolute; top: 25px; left: 60px; width: 150px; height: 50px; background: #88f; }
+.op { position: absolute; top: 40px; left: 110px; width: 120px; height: 50px; background: #f88; opacity: 0.8; }
+.tf { position: absolute; top: 55px; left: 160px; width: 100px; height: 40px; background: #ff0; transform: translate(4px, 4px); }
+.z2 { position: absolute; top: 15px; left: 200px; width: 80px; height: 40px; background: #0aa; z-index: 2; }
+.z10 { position: absolute; top: 30px; left: 220px; width: 80px; height: 40px; background: #a0a; z-index: 10; }
+.auto { position: absolute; top: 45px; left: 240px; width: 80px; height: 40px; background: #fa0; }
+.ctx { position: relative; z-index: 1; width: 200px; height: 60px; background: #ddd; }
+.ctx .big-z { position: absolute; z-index: 100; top: 5px; left: 5px; width: 100px; height: 30px; background: #00f; }
+.outside { position: absolute; z-index: 50; top: 20px; left: 150px; width: 100px; height: 30px; background: #d0d; }
+</style>
+</head>
+<body>
+<h3>1. z-index:-1 green BEHIND blue base (green partially hidden)</h3>
+<div class="stage"><div class="neg"></div><div class="base"></div><div class="op"></div><div class="tf"></div></div>
+<h3>2. z2<a0auto<z10 stacking order</h3>
+<div class="stage"><div class="z2"></div><div class="z10"></div><div class="auto"></div></div>
+<h3>3. z-index:1 context traps z100 (blue under magenta z50)</h3>
+<div style="position:relative">
+  <div class="ctx"><div class="big-z"></div></div>
+  <div class="outside"></div>
+</div>
+</body>
+</html>

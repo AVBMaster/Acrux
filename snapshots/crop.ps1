@@ -1,0 +1,10 @@
+param([string]$Src, [string]$Dst, [int]$X, [int]$Y, [int]$W = 400, [int]$H = 300)
+Add-Type -AssemblyName System.Drawing
+$bmp = [System.Drawing.Bitmap]::FromFile((Resolve-Path $Src))
+$x0 = [Math]::Max(0, $X); $y0 = [Math]::Max(0, $Y)
+$x1 = [Math]::Min($bmp.Width, $x0 + $W); $y1 = [Math]::Min($bmp.Height, $y0 + $H)
+$rect = New-Object System.Drawing.Rectangle($x0, $y0, ($x1 - $x0), ($y1 - $y0))
+$cropped = $bmp.Clone($rect, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+$cropped.Save($Dst, [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Dispose(); $cropped.Dispose()
+Write-Output ("wrote " + $Dst)

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>滚动交互测试</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; padding: 20px; font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; }
+h2 { margin: 24px 0 8px; font-size: 15px; color: #88f; }
+
+/* ── ① 内部滚动容器（默认样式） ── */
+.default-scroll {
+    width: 280px; height: 150px;
+    overflow-y: auto; overflow-x: hidden;
+    border: 1px solid #444; border-radius: 6px;
+    background: #16213e; padding: 8px;
+    display: inline-block; vertical-align: top; margin-right: 16px;
+}
+
+/* ── ② 自定义滚动条样式 ── */
+.custom-scroll {
+    width: 280px; height: 150px;
+    overflow-y: auto; overflow-x: hidden;
+    border: 1px solid #444; border-radius: 6px;
+    background: #16213e; padding: 8px;
+    display: inline-block; vertical-align: top;
+}
+.custom-scroll::-webkit-scrollbar { width: 14px; }
+.custom-scroll::-webkit-scrollbar-track { background: rgb(20,30,50); border-radius: 7px; }
+.custom-scroll::-webkit-scrollbar-thumb { background: rgb(255,140,0); border-radius: 7px; }
+.custom-scroll::-webkit-scrollbar-thumb:hover { background: rgb(255,180,60); }
+
+/* ── ③ thin + scrollbar-color ── */
+.thin-scroll {
+    width: 280px; height: 150px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(200,0,100) rgb(30,30,60);
+    border: 1px solid #444; border-radius: 6px;
+    background: #0f3460; padding: 8px;
+    display: inline-block; vertical-align: top;
+}
+
+/* ── ④ none（不显示滚动条） ── */
+.no-scroll {
+    width: 280px; height: 100px;
+    overflow-y: scroll; scrollbar-width: none;
+    border: 1px solid #444; border-radius: 6px;
+    background: #333; padding: 8px;
+}
+
+/* ── ⑤ 横向+纵向双向滚动 ── */
+.both-scroll {
+    width: 400px; height: 120px;
+    overflow: scroll;
+    border: 1px solid #555; border-radius: 6px;
+    background: #1a1a3e;
+}
+.both-scroll table { border-collapse: collapse; width: 800px; }
+.both-scroll td { border: 1px solid #333; padding: 6px 14px; font-size: 13px; }
+
+/* ── ⑥ column-rule ── */
+.col-rule {
+    columns: 3; column-gap: 24px; column-rule: 2px solid rgb(255,0,255);
+    width: 580px; height: 100px; font-size: 12px; color: #aaa;
+}
+
+/* ── 内容填充 ── */
+.item { padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 13px; }
+.tall-spacer { height: 600px; background: linear-gradient(to bottom, #2a2a4a, #1a1a2e); }
+
+/* 状态指示 */
+#status { margin-top: 16px; padding: 8px 12px; background: #0a0a1a; border-radius: 4px; font-size: 12px; color: #6f6; min-height: 18px; }
+</style>
+</head>
+<body>
+
+<h2>① 默认滚动条 — 滚轮 / 拖拽 thumb</h2>
+<div class="default-scroll">
+    <div class="item">Item 01</div><div class="item">Item 02</div><div class="item">Item 03</div>
+    <div class="item">Item 04</div><div class="item">Item 05</div><div class="item">Item 06</div>
+    <div class="item">Item 07</div><div class="item">Item 08</div><div class="item">Item 09</div>
+    <div class="item">Item 10</div><div class="item">Item 11</div><div class="item">Item 12</div>
+    <div class="item">Item 13</div><div class="item">Item 14</div><div class="item">Item 15</div>
+    <div class="item">Item 16</div><div class="item">Item 17</div><div class="item">Item 18</div>
+    <div class="item">Item 19</div><div class="item">Item 20</div>
+</div>
+
+<h2>② ::-webkit-scrollbar 自定义样式</h2>
+<div class="custom-scroll">
+    <div class="item">Custom A</div><div class="item">Custom B</div><div class="item">Custom C</div>
+    <div class="item">Custom D</div><div class="item">Custom E</div><div class="item">Custom F</div>
+    <div class="item">Custom G</div><div class="item">Custom H</div><div class="item">Custom I</div>
+    <div class="item">Custom J</div><div class="item">Custom K</div><div class="item">Custom L</div>
+    <div class="item">Custom M</div><div class="item">Custom N</div><div class="item">Custom O</div>
+</div>
+
+<h2>③ scrollbar-width:thin + scrollbar-color</h2>
+<div class="thin-scroll">
+    <div class="item">Thin 1</div><div class="item">Thin 2</div><div class="item">Thin 3</div>
+    <div class="item">Thin 4</div><div class="item">Thin 5</div><div class="item">Thin 6</div>
+    <div class="item">Thin 7</div><div class="item">Thin 8</div><div class="item">Thin 9</div>
+    <div class="item">Thin 10</div><div class="item">Thin 11</div><div class="item">Thin 12</div>
+</div>
+
+<h2>④ scrollbar-width:none — 不显示但可滚</h2>
+<div class="no-scroll">
+    Hidden scrollbar test — use wheel or touch to scroll this content even without visible bar.
+    Hidden scrollbar test — line two.
+</div>
+
+<h2>⑤ 双向滚动（水平+垂直）</h2>
+<div class="both-scroll">
+<table>
+<tr><td>R1C1</td><td>R1C2</td><td>R1C3</td><td>R1C4</td><td>R1C5</td><td>R1C6</td><td>R1C7</td><td>R1C8</td></tr>
+<tr><td>R2C1</td><td>R2C2</td><td>R2C3</td><td>R2C4</td><td>R2C5</td><td>R2C6</td><td>R2C7</td><td>R2C8</td></tr>
+<tr><td>R3C1</td><td>R3C2</td><td>R3C3</td><td>R3C4</td><td>R3C5</td><td>R3C6</td><td>R3C7</td><td>R3C8</td></tr>
+<tr><td>R4C1</td><td>R4C2</td><td>R4C3</td><td>R4C4</td><td>R4C5</td><td>R4C6</td><td>R4C7</td><td>R4C8</td></tr>
+<tr><td>R5C1</td><td>R5C2</td><td>R5C3</td><td>R5C4</td><td>R5C5</td><td>R5C6</td><td>R5C7</td><td>R5C8</td></tr>
+<tr><td>R6C1</td><td>R6C2</td><td>R6C3</td><td>R6C4</td><td>R6C5</td><td>R6C6</td><td>R6C7</td><td>R6C8</td></tr>
+</table>
+</div>
+
+<h2>⑥ column-rule 分隔线</h2>
+<div class="col-rule">
+Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+Ut enim ad minim veniam quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat duis aute irure
+dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur excepteur sint occaecat cupidatat
+non proident sunt in culpa qui officia deserunt mollit anim id est laborum sed ut perspiciatis unde omnis iste natus.
+</div>
+
+<div id="status">交互测试：滚轮滚动各容器 → 拖拽 thumb → 点击 track 跳转</div>
+
+<script>
+// 交互状态反馈
+var statusEl = document.getElementById('status');
+var containers = document.querySelectorAll('.default-scroll, .custom-scroll, .thin-scroll');
+
+containers.forEach(function(el, i) {
+    el.addEventListener('scroll', function() {
+        statusEl.textContent = 'Container[' + i + '] scrolled to scrollTop=' + Math.round(el.scrollTop);
+    });
+});
+
+// B1 验证：scrollIntoView smooth
+function testSmoothScroll() {
+    var target = document.querySelector('.default-scroll .item:nth-child(15)');
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+setTimeout(testSmoothScroll, 2000);
+</script>
+
+</body>
+</html>

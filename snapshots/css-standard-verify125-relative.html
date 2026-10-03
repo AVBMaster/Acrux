@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b125 position:relative conformance</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+#root { position: relative; width: 400px; height: 200px; }
+.box { position: static; width: 40px; height: 20px; background: rgb(200,200,200); }
+span.inl { background: rgb(180,220,180); }
+#log div { font: 12px Consolas, monospace; white-space: pre; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="log"></div>
+<script>
+// Every case puts a static flow reference first, so dx/dy is the shift of the
+// relatively positioned box from where it would have been without the offset.
+var cases = [
+  ["block", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;top:20px;left:30px;"></div>'],
+  ["bottom-right", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;bottom:10px;right:25px;"></div>'],
+  ["top-and-bottom", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;top:10px;bottom:40px;"></div>'],
+  ["left-and-right", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;left:10px;right:40px;"></div>'],
+  ["auto", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;top:auto;left:auto;"></div>'],
+  ["left-50pct", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;left:50%;"></div>'],
+  ["top-25pct", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;top:25%;"></div>'],
+  ["left-2em", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;left:2em;"></div>'],
+  ["left-calc", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;left:calc(10px + 1em);"></div>'],
+  ["negative", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;top:-15px;left:-30px;"></div>'],
+  ["zindex", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;z-index:3;"></div>'],
+  ["inline", '<span id="ref" class="inl">ref</span><span id="t" class="inl" style="position:relative;left:15px;top:5px;">tgt</span>'],
+  ["inline-block", '<span id="ref" class="inl">ref</span><span id="t" class="inl" style="position:relative;left:12px;top:8px;display:inline-block;width:30px;height:12px;"></span>'],
+  ["rtl", '<span id="ref" class="inl">ref</span><span id="t" class="inl" style="position:relative;left:10px;right:30px;direction:rtl;">tgt</span>'],
+  ["nested-child", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;top:5px;left:5px;"><div id="kid" class="box" style="width:20px;height:10px;"></div></div>'],
+  ["table-cell", '<div id="ref" class="box"></div><div style="display:table"><div id="t" class="box" style="position:relative;top:6px;left:7px;display:table-cell;"></div></div>'],
+  ["after-flow", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;top:40px;left:40px;"></div><div id="after" class="box"></div>']
+];
+var log = document.getElementById("log");
+var stage = document.getElementById("stage");
+function emit(text) {
+  var d = document.createElement("div");
+  d.textContent = text;
+  log.appendChild(d);
+}
+for (var i = 0; i < cases.length; i++) {
+  var name = cases[i][0];
+  stage.innerHTML = '<div id="root">' + cases[i][1] + '</div>';
+  var t = document.getElementById("t");
+  var r = document.getElementById("ref");
+  if (!t || !r) { emit(name + " MISSING"); continue; }
+  var tr = t.getBoundingClientRect(), rr = r.getBoundingClientRect();
+  var line = name + " dx=" + (tr.left - rr.left).toFixed(1) + " dy=" + (tr.top - rr.top).toFixed(1);
+  var kid = document.getElementById("kid");
+  if (kid) {
+    var kr = kid.getBoundingClientRect();
+    line += " kidRel=" + (kr.left - tr.left).toFixed(1) + "," + (kr.top - tr.top).toFixed(1);
+  }
+  var aft = document.getElementById("after");
+  if (aft) {
+    var ar = aft.getBoundingClientRect();
+    line += " afterTop=" + ar.top.toFixed(1);
+  }
+  emit(line);
+}
+stage.innerHTML = "";
+</script>
+</body>
+</html>

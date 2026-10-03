@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Batch 14 (Text-Shadow / Clip-Path / Conic Gradient / Blend Modes / Display Contents / Cell Baselines / Filters)</title>
+<style>
+html, body { margin: 0; padding: 4px; background: rgb(255,255,255); font-family: Arial, sans-serif; font-size: 16px; line-height: 20px; }
+h2 { margin: 10px 0 4px 0; font-size: 13px; color: rgb(51,51,51); }
+p { margin: 0; }
+.box { width: 100px; height: 60px; background: rgb(255,0,0); }
+
+/* ====== GROUP 1: text-shadow offsets, blur and multiple shadows ====== */
+#s1 { color: rgb(0,0,0); text-shadow: 3px 3px 0 rgb(255,0,0); font-size: 20px; }
+#s2 { color: rgb(0,0,0); text-shadow: 2px 2px 4px rgb(0,0,255); font-size: 20px; }
+#s3 { color: rgb(0,0,0); text-shadow: 2px 0 0 rgb(0,128,0), 4px 0 0 rgb(0,0,255); font-size: 20px; }
+
+/* ====== GROUP 2: clip-path ====== */
+#c1 { clip-path: inset(10px 40px 10px 10px); }
+#c2 { width: 60px; height: 60px; background: rgb(0,255,0); clip-path: circle(20px at 20px 20px); }
+#c3 { clip-path: polygon(0 0, 100% 0, 0 100%); }
+
+/* ====== GROUP 3: conic-gradient ====== */
+#cg { width: 80px; height: 80px; background: conic-gradient(rgb(255,0,0) 0 25%, rgb(0,255,0) 25% 50%, rgb(0,0,255) 50% 75%, rgb(255,255,0) 75% 100%); }
+#cg2 { width: 80px; height: 80px; background: conic-gradient(from 90deg, rgb(255,0,0) 0 50%, rgb(0,0,255) 50% 100%); }
+
+/* ====== GROUP 4: mix-blend-mode / background-blend-mode ====== */
+#blendhost { position: relative; width: 100px; height: 60px; background: rgb(0,0,255); }
+#blend { position: absolute; left: 20px; top: 10px; width: 60px; height: 40px; background: rgb(255,0,0); mix-blend-mode: multiply; }
+#bgblend { width: 100px; height: 60px; background-color: rgb(255,0,0); background-image: linear-gradient(rgb(0,0,255), rgb(0,0,255)); background-blend-mode: difference; }
+
+/* ====== GROUP 5: display: contents in a flex container ====== */
+#dc { display: flex; width: 200px; height: 30px; background: rgb(238,238,238); }
+#dc .w { display: contents; }
+#dc .a { width: 50px; background: rgb(255,0,0); }
+#dc .b { width: 70px; background: rgb(0,255,0); }
+
+/* ====== GROUP 6: white-space: break-spaces ====== */
+#ws { width: 90px; white-space: break-spaces; background: rgb(255,255,0); }
+
+/* ====== GROUP 7: filter blur / drop-shadow ====== */
+#fb { width: 60px; height: 60px; background: rgb(255,0,0); filter: blur(4px); }
+#fd { width: 40px; height: 40px; background: rgb(0,0,255); filter: drop-shadow(6px 6px 0 rgb(0,128,0)); }
+
+/* ====== GROUP 8: table cell vertical-align ====== */
+#t8 { border-collapse: collapse; }
+#t8 td { border: 1px solid rgb(0,0,0); padding: 0; }
+#t8 .tall { height: 60px; }
+#t8 .top { vertical-align: top; }
+#t8 .mid { vertical-align: middle; }
+#t8 .bot { vertical-align: bottom; }
+
+/* ====== GROUP 9: outline-offset on inline and block ====== */
+#o1 { width: 60px; height: 30px; background: rgb(238,238,238); outline: 3px solid rgb(255,0,0); outline-offset: 4px; }
+
+/* ====== GROUP 10: min/max height percentage resolution ====== */
+#mh { height: 80px; background: rgb(238,238,238); }
+#mh .half { height: 50%; background: rgb(255,0,255); }
+#mh .capped { height: 200px; max-height: 25%; background: rgb(0,255,255); }
+#mh .floor { height: 10px; min-height: 50%; background: rgb(128,0,255); }
+/* an auto-height parent gives percentages nothing to resolve against (CSS 2.1 §10.5) */
+#mh-auto { background: rgb(238,238,238); }
+#mh-auto .pct { height: 50%; background: rgb(0,128,0); }
+#nest { height: 200px; width: 100px; background: rgb(238,238,238); }
+#nest .a { height: 50%; background: rgb(255,0,0); }
+#nest .a .b { height: 50%; background: rgb(0,0,255); }
+</style>
+</head>
+<body>
+<h2>1. text-shadow: 3px offset hard / 4px blur / two shadows</h2>
+<p id="s1">Abc</p>
+<p id="s2">Abc</p>
+<p id="s3">Abc</p>
+
+<h2>2. clip-path: inset(10px 40px 10px 10px) / circle(20px at 20px 20px) / triangle</h2>
+<div class="box" id="c1"></div>
+<div id="c2"></div>
+<div class="box" id="c3"></div>
+
+<h2>3. conic-gradient quadrants / from 90deg halves</h2>
+<div id="cg"></div>
+<div id="cg2"></div>
+
+<h2>4. mix-blend-mode: multiply over blue / background-blend-mode: difference</h2>
+<div id="blendhost"><div id="blend"></div></div>
+<div id="bgblend"></div>
+
+<h2>5. display: contents wrapper inside flex (items 50 and 70 wide)</h2>
+<div id="dc"><div class="w"><div class="a">a</div><div class="b">b</div></div></div>
+
+<h2>6. white-space: break-spaces keeps trailing spaces</h2>
+<div id="ws">aaa bbb ccc ddd</div>
+
+<h2>7. filter: blur(4px) and drop-shadow(6px 6px 0 green)</h2>
+<div id="fb"></div>
+<div id="fd"></div>
+
+<h2>8. table cells vertical-align top / middle / bottom in a 60px row</h2>
+<table id="t8"><tr><td class="tall">tall</td><td class="top">T</td><td class="mid">M</td><td class="bot">B</td></tr></table>
+
+<h2>9. outline 3px with outline-offset 4px</h2>
+<div id="o1"></div>
+
+<h2>10. height: 50% of an 80px parent / max-height: 25% / min-height: 50%</h2>
+<div id="mh"><div class="half">h</div><div class="capped">c</div><div class="floor">f</div></div>
+
+<h2>11. percentage height with an auto-height parent (behaves as auto) and nested 50%/50%</h2>
+<div id="mh-auto"><div class="pct">auto-parent</div></div>
+<div id="nest"><div class="a"><div class="b">n</div></div></div>
+</body>
+</html>

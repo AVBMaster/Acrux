@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 69 — flex gap axis mapping, % padding in flex item, elliptical radius, bg-position keywords</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.item { background:#cfe; border:1px solid #369; }
+
+/* 1. flex row wrap: column-gap between items, row-gap between lines */
+.f1 { display:flex; flex-wrap:wrap; width:200px; column-gap:30px; row-gap:12px; border:2px solid #939; }
+.f1 .item { width:80px; height:30px; }
+
+/* 2. flex column: column-gap between lines, row-gap between items */
+.f2 { display:flex; flex-direction:column; height:120px; column-gap:20px; row-gap:8px; border:2px solid #939; width:120px; }
+.f2 .item { height:20px; }
+
+/* 3. flex item with percentage padding (against container width 300) */
+.f3 { display:flex; width:300px; border:2px solid #939; }
+.f3 .item { padding:10% 0; background:#fec; }
+
+/* 4. elliptical border-radius slash */
+.r1 { width:120px; height:80px; background:#cfe; border:2px solid #369; border-radius:60px/40px; margin:8px 0; }
+.r2 { width:120px; height:80px; background:#fec; border:2px solid #369; border-radius:50%; margin:8px 0; }
+
+/* 5. background-position multi-keyword */
+.bg { width:200px; height:80px; background:#eef; border:2px solid #939; margin:8px 0;
+      background-image:linear-gradient(#f00,#f00); background-size:20px 20px; background-repeat:no-repeat; }
+.bg1 { background-position:right bottom; }
+.bg2 { background-position:left 20px top 30px; }
+</style>
+</head>
+<body>
+
+<h2>1. flex row wrap: column-gap 30 (h), row-gap 12 (v)</h2>
+<div class="f1"><div class="item">1</div><div class="item">2</div><div class="item">3</div><div class="item">4</div></div>
+
+<h2>2. flex column: row-gap 8 (between items)</h2>
+<div class="f2"><div class="item">a</div><div class="item">b</div><div class="item">c</div></div>
+
+<h2>3. flex item padding 10% (30px top/bottom) of 300</h2>
+<div class="f3"><div class="item">pad</div></div>
+
+<h2>4. elliptical radius 60px/40px and 50%</h2>
+<div class="r1"></div>
+<div class="r2"></div>
+
+<h2>5. bg-position: right bottom / left 20px top 30px</h2>
+<div class="bg bg1"></div>
+<div class="bg bg2"></div>
+
+</body>
+</html>

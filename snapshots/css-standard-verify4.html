@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Batch 4 (Selectors / Functions / Box Details)</title>
+<style>
+html, body { margin: 0; padding: 0; background: white; font-family: Arial, sans-serif; font-size: 16px; }
+body { padding: 4px; }
+h2 { margin: 8px 0 4px 0; font-size: 14px; color: #333; }
+
+/* ====== GROUP 1: attribute selectors ====== */
+#a1 [data-x^="st"] { background: rgb(255,0,0); }   /* starts with */
+#a1 [data-x$="ng"] { background: rgb(0,255,0); }   /* ends with */
+#a1 [data-x~="word"] { background: rgb(0,0,255); } /* word in list */
+#a1 [data-x*="mid"] { background: rgb(255,255,0); }/* substring */
+#a1 [data-x|="en"] { background: rgb(255,0,255); } /* hyphen list */
+#a1 div { width: 100px; height: 16px; background: #ccc; }
+
+/* ====== GROUP 2: :is() :where() :has() ====== */
+#sel2 .box { width: 100px; height: 16px; background: #ccc; }
+#sel2 :is(.red, .blue) { background: rgb(255,0,0); }
+#sel2 .red:where(.special) { width: 150px; } /* :where has 0 specificity */
+#sel2 .wrap:has(.inner) { height: 40px; background: rgb(0,255,255); }
+
+/* ====== GROUP 3: sibling combinators ====== */
+#sel3 .a + .b { background: rgb(255,0,0); }     /* adjacent */
+#sel3 .c ~ .d { background: rgb(0,0,255); }     /* general */
+#sel3 div { width: 80px; height: 16px; background: #ccc; }
+
+/* ====== GROUP 4: !important precedence ====== */
+#imp1 { background: rgb(255,0,0) !important; }
+#imp2 { background: rgb(255,0,0); }
+/* later equal rules: last wins */
+.later1 { background: rgb(0,255,0); }
+.later2 { background: rgb(0,0,255); }
+
+/* ====== GROUP 5: min()/max()/clamp() ====== */
+#fn1 { width: min(100px, 200px); height: 20px; background: rgb(255,128,0); }
+#fn2 { width: max(100px, 200px); height: 20px; background: rgb(0,128,255); }
+#fn3 { width: clamp(50px, 400px, 150px); height: 20px; background: rgb(128,0,255); }
+
+/* ====== GROUP 6: nested calc ====== */
+#calc6 { width: calc(calc(100px + 50px) * 2); height: 20px; background: rgb(0,255,128); }
+#calc7 { width: calc(50% + calc(100px - 50px)); height: 20px; background: rgb(128,255,0); }
+#calc67-wrap { width: 400px; }
+
+/* ====== GROUP 7: padding % resolves vs width ====== */
+#padpct { width: 200px; padding: 10%; height: 20px; background: rgb(255,200,0); }
+
+/* ====== GROUP 8: margin auto centering ====== */
+#c8 { width: 300px; background: #eee; }
+#c8 .center { width: 100px; height: 20px; margin: 0 auto; background: rgb(255,0,0); }
+
+/* ====== GROUP 9: margin collapse cases ====== */
+#mc-parent { margin-top: 20px; background: #eee; width: 200px; }
+#mc-child { margin-top: 30px; height: 20px; background: rgb(255,0,0); }
+/* collapsed: parent top should be 30 (max), child at parent top */
+
+/* ====== GROUP 10: border-spacing / caption-side ====== */
+#tbl { border-collapse: separate; border-spacing: 8px; }
+#tbl td { width: 40px; height: 20px; background: rgb(200,200,255); }
+#tbl caption { caption-side: bottom; background: rgb(255,200,200); }
+
+/* ====== GROUP 11: empty-cells hide ====== */
+#tbl2 { border-collapse: separate; border-spacing: 0; empty-cells: hide; }
+#tbl2 td { width: 40px; height: 20px; border: 2px solid black; }
+
+/* ====== GROUP 12: box-shadow multiple + inset ====== */
+#shadow { width: 80px; height: 40px; background: white; box-shadow: 4px 4px 0 rgb(255,0,0), -4px -4px 0 rgb(0,0,255); margin: 10px; }
+#shadow-inset { width: 80px; height: 40px; background: rgb(255,255,255); box-shadow: inset 10px 0 0 rgb(255,0,0); margin: 10px; }
+
+/* ====== GROUP 13: outline-offset ====== */
+#ool { width: 60px; height: 30px; background: rgb(200,200,200); outline: 4px solid rgb(255,0,0); outline-offset: 6px; margin: 12px; }
+
+/* ====== GROUP 14: text-decoration longhands ====== */
+#td1 { text-decoration-line: underline; text-decoration-style: dashed; text-decoration-color: rgb(255,0,0); font-size: 18px; }
+#td2 { text-decoration: underline rgb(0,0,255); font-size: 18px; }
+
+/* ====== GROUP 15: line-height unitless inheritance ====== */
+#lh-parent { line-height: 0.5; font-size: 20px; }
+#lh-child { font-size: 40px; background: #efe; }
+
+/* ====== GROUP 16: em/rem chaining ====== */
+#em-p { font-size: 20px; }
+#em-c { font-size: 1.5em; width: 2em; height: 10px; background: rgb(255,128,128); }
+/* 2em of child = 2*30 = 60px */
+
+/* ====== GROUP 17: grid place-items + justify-items ====== */
+#g17 { display: grid; grid-template-columns: 100px 100px; grid-template-rows: 60px 60px; place-items: center; }
+#g17 .item { width: 30px; height: 30px; background: rgb(0,150,255); }
+#g17 .ja { justify-self: start; background: rgb(255,0,0); }
+#g17 .je { justify-self: end; background: rgb(0,255,0); }
+
+/* ====== GROUP 18: grid minmax + auto rows ====== */
+#g18 { display: grid; grid-template-columns: minmax(50px, 150px) 1fr; width: 300px; gap: 0; }
+#g18 .a { background: rgb(255,0,0); height: 20px; }
+#g18 .b { background: rgb(0,255,0); height: 20px; }
+
+/* ====== GROUP 19: flex align-content multi-line ====== */
+#ac { display: flex; flex-wrap: wrap; align-content: flex-end; height: 100px; width: 200px; background: #eee; }
+#ac div { width: 100px; height: 20px; background: rgb(255,128,0); }
+
+/* ====== GROUP 20: white-space pre-line + tab-size ====== */
+#pre-line { white-space: pre-line; width: 200px; background: #ffe; }
+
+/* ====== GROUP 21: content none/normal override on ::before ====== */
+.c21a::before { content: "X"; background: rgb(255,0,0); }
+.c21b::before { content: "Y"; }
+.c21b::before { content: none; }
+/* c21b should show no pseudo */
+
+/* ====== GROUP 22: overflow clip vs hidden ====== */
+#oc { width: 60px; height: 40px; overflow: clip; background: #eee; }
+#oc-inner { width: 120px; height: 80px; background: rgb(255,0,0); }
+</style>
+</head>
+<body>
+
+<h2>1. attribute selectors</h2>
+<div id="a1">
+<div data-x="start">1starts(red)</div>
+<div data-x="going">2ends(green)</div>
+<div data-x="a word b">3word(blue)</div>
+<div data-x="xmidy">4sub(yellow)</div>
+<div data-x="en-US">5hyphen(magenta)</div>
+</div>
+
+<h2>2. :is() :where() :has()</h2>
+<div id="sel2">
+<div class="box red">red via :is</div>
+<div class="box blue">blue via :is</div>
+<div class="box red special">special width150</div>
+<div class="wrap"><div class="inner">has-child</div></div>
+</div>
+
+<h2>3. sibling combinators</h2>
+<div id="sel3">
+<div class="a">a</div><div class="b">b red(adjacent)</div>
+<div class="x">x</div><div class="c">c</div><div class="d">d blue(general)</div>
+</div>
+
+<h2>4. !important / last-wins</h2>
+<div id="imp1" class="later2" style="width:100px;height:16px">imp1 red(!important wins)</div>
+<div id="imp2" class="later2" style="width:100px;height:16px">imp2 blue(id vs class: id wins? no—later class vs id: id wins)</div>
+<div class="later1 later2" style="width:100px;height:16px">later2 blue (same spec, last wins)</div>
+
+<h2>5. min/max/clamp</h2>
+<div id="fn1">min=100</div>
+<div id="fn2">max=200</div>
+<div id="fn3">clamp=150</div>
+
+<h2>6. nested calc</h2>
+<div id="calc67-wrap"><div id="calc6">calc300</div><div id="calc7">calc(50%+50px)=250</div></div>
+
+<h2>7. padding % vs width (200*10%=20)</h2>
+<div id="padpct">padded</div>
+
+<h2>8. margin auto center (x=104)</h2>
+<div id="c8"><div class="center">centered</div></div>
+
+<h2>9. margin collapse (parent+child 20/30)</h2>
+<div id="mc-parent"><div id="mc-child">child</div></div>
+
+<h2>10. border-spacing 8 + caption bottom</h2>
+<table id="tbl"><caption>cap-bottom</caption><tr><td>a</td><td>b</td></tr></table>
+
+<h2>11. empty-cells: hide</h2>
+<table id="tbl2"><tr><td>x</td><td></td></tr></table>
+
+<h2>12. box-shadow multiple + inset</h2>
+<div id="shadow"></div>
+<div id="shadow-inset"></div>
+
+<h2>13. outline-offset 6</h2>
+<div id="ool"></div>
+
+<h2>14. text-decoration longhands</h2>
+<div><span id="td1">dashed red underline</span></div>
+<div><span id="td2">solid blue underline</span></div>
+
+<h2>15. line-height unitless (0.5 of parent 20 = 10)</h2>
+<div id="lh-parent"><div id="lh-child">big text small lh</div></div>
+
+<h2>16. em chaining (2em=60px)</h2>
+<div id="em-p"><div id="em-c">em</div></div>
+
+<h2>17. grid place-items center + justify-self</h2>
+<div id="g17"><div class="item ja">ja</div><div class="item">c</div><div class="item je">je</div><div class="item">d</div></div>
+
+<h2>18. grid minmax(50,150)+1fr</h2>
+<div id="g18"><div class="a">a</div><div class="b">b</div></div>
+
+<h2>19. flex align-content flex-end</h2>
+<div id="ac"><div>1</div><div>2</div><div>3</div><div>4</div></div>
+
+<h2>20. pre-line</h2>
+<div id="pre-line">line1
+  collapsed   spaces
+line3</div>
+
+<h2>21. content none override</h2>
+<div><span class="c21a">A(has X)</span> <span class="c21b">B(no Y)</span></div>
+
+<h2>22. overflow: clip</h2>
+<div id="oc"><div id="oc-inner"></div></div>
+
+</body>
+</html>

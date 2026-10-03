@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { font-family: sans-serif; font-size: 13px; margin: 10px; color: #222; }
+h3 { margin: 8px 0 4px; }
+table { border-collapse: separate; border-spacing: 4px; margin-bottom: 10px; }
+table.c { border-collapse: collapse; }
+th, td { border: 1px solid #666; padding: 3px 6px; background: #eee; }
+th { background: #cde; }
+caption { caption-side: top; text-align: center; background: #fdc; padding: 2px; }
+table.hidden { display: none; }
+table.it { display: inline-table; }
+td.span { background: #efe; }
+table.nob th, table.nob td { border: none; background: #ddf; }
+table.hidrow tr.hidden { display: none; }
+table.b5 td { border: 5px solid #088; padding: 2px; }
+table.pd td { padding: 8px 12px; }
+table.align td { text-align: center; }
+table.mixed th, table.mixed td { border-collapse: collapse; }
+</style>
+</head>
+<body>
+<h3>1. separate spacing 4px + caption</h3>
+<table>
+  <caption>cap-A</caption>
+  <tr><th>h1</th><th>h2</th></tr>
+  <tr><td>a1</td><td>a2</td></tr>
+</table>
+<h3>2. collapse + colspan</h3>
+<table class="c">
+  <tr><td colspan="2" class="span">c2</td><td>b</td></tr>
+  <tr><td>c</td><td>d</td><td>e</td></tr>
+</table>
+<h3>3. rowspan 2</h3>
+<table class="c">
+  <tr><td rowspan="2" class="span">r2</td><td>f</td></tr>
+  <tr><td>g</td></tr>
+  <tr><td>h</td><td>i</td></tr>
+</table>
+<h3>4. no borders auto width</h3>
+<table class="nob">
+  <tr><td>wide cell one</td><td>w2</td></tr>
+  <tr><td>xx</td><td>yyyyyy</td></tr>
+</table>
+<h3>5. hidden table + hidden row</h3>
+<table class="hidden"><tr><td>never</td></tr></table>
+<table class="hidrow c">
+  <tr><td>visible1</td></tr>
+  <tr class="hidden"><td>gone</td></tr>
+  <tr><td>visible2</td></tr>
+</table>
+<h3>6. thick borders 5px</h3>
+<table class="b5 c">
+  <tr><td>t1</td><td>t2</td></tr>
+  <tr><td>t3</td><td>t4</td></tr>
+</table>
+<h3>7. padding + centered text</h3>
+<table class="pd c align">
+  <tr><td>p1</td><td>p2</td></tr>
+</table>
+<h3>8. inline-table</h3>
+<div>before <table class="it c"><tr><td>it1</td><td>it2</td></tr></table> after</div>
+</body>
+</html>

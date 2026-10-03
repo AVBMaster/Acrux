@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Batch 10 (Inline Box Rules / BFC vs Float / Isolation / Grid Auto Min / Pseudo Lines / Tabs)</title>
+<style>
+html, body { margin: 0; padding: 4px; background: rgb(255,255,255); font-family: Arial, sans-serif; font-size: 16px; }
+h2 { margin: 10px 0 4px 0; font-size: 13px; color: rgb(51,51,51); }
+p { margin: 0; line-height: 20px; }
+
+/* ====== GROUP 1: vertical margins on an inline box are ignored (CSS 2.1 §8.6) ====== */
+#g1 { background: rgb(235,235,235); }
+#g1 span { margin-top: 20px; margin-bottom: 20px; }
+
+/* ====== GROUP 2: vertical padding on inline paints but does not grow the line ====== */
+#g2 { background: rgb(235,235,235); }
+#g2 span { padding-top: 10px; padding-bottom: 10px; padding-left: 4px; padding-right: 4px; background: rgb(255,255,0); }
+
+/* ====== GROUP 3: borders on an inline box ====== */
+#g3 { background: rgb(235,235,235); }
+#g3 span { border: 2px solid rgb(255,0,0); padding: 1px 3px; }
+
+/* ====== GROUP 4: overflow:hidden creates a BFC that avoids the float ====== */
+#wrap4 { width: 200px; background: rgb(255,255,255); }
+#wrap4 .f { float: left; width: 60px; height: 40px; background: rgb(0,0,255); }
+#wrap4 .bfc { overflow: hidden; height: 30px; background: rgb(255,0,0); }
+
+/* ====== GROUP 5: no BFC — block overlaps the float (control) ====== */
+#wrap5 { width: 200px; margin-top: 8px; }
+#wrap5 .f { float: left; width: 60px; height: 40px; background: rgb(0,0,255); }
+#wrap5 .plain { height: 30px; background: rgb(255,0,0); }
+
+/* ====== GROUP 6: isolation:isolate limits a blend group ====== */
+#iso6 { position: relative; isolation: isolate; width: 80px; height: 40px; background: rgb(0,0,255); }
+#iso6 .o { position: absolute; left: 20px; top: 10px; width: 40px; height: 20px; background: rgb(255,0,0); mix-blend-mode: multiply; }
+#plain7 { position: relative; width: 80px; height: 40px; margin-top: 8px; background: rgb(0,0,255); }
+#plain7 .o { position: absolute; left: 20px; top: 10px; width: 40px; height: 20px; background: rgb(255,0,0); mix-blend-mode: multiply; }
+
+/* ====== GROUP 8: grid item auto min-width (min-content) widens the fr column ====== */
+#g8 { display: grid; grid-template-columns: 1fr 1fr; width: 200px; margin-top: 8px; }
+#g8 .a { background: rgb(255,255,0); }
+#g8 .b { background: rgb(0,255,0); }
+
+/* ====== GROUP 9: place-self end start in a grid cell ====== */
+#g9 { display: grid; grid-template-columns: 100px; grid-template-rows: 60px; width: 100px; margin-top: 8px; background: rgb(235,235,235); }
+#g9 div { width: 30px; height: 20px; background: rgb(0,0,255); place-self: end start; }
+
+/* ====== GROUP 10: text-indent percentage of the containing block ====== */
+#g10 { width: 200px; font-size: 14px; text-indent: 25%; background: rgb(240,240,240); }
+
+/* ====== GROUP 11: ::first-line ====== */
+#g11 { width: 220px; }
+#g11::first-line { color: rgb(255,0,0); font-weight: bold; }
+
+/* ====== GROUP 12: ::first-letter ====== */
+#g12 { width: 220px; }
+#g12::first-letter { font-size: 30px; color: rgb(0,0,255); font-weight: bold; }
+
+/* ====== GROUP 13: tab-size ====== */
+#g13 { white-space: pre; tab-size: 30px; }
+
+/* ====== GROUP 14: ::first-line background on the whole line ====== */
+#g14 { width: 200px; }
+#g14::first-line { background: rgb(255,255,0); }
+</style>
+</head>
+<body>
+
+<h2>1. inline vertical margin must be ignored (line stays 20px tall)</h2>
+<p id="g1">a<span>b</span>c</p>
+
+<h2>2. inline vertical padding paints, does not grow the line</h2>
+<p id="g2">a<span>b</span>c</p>
+
+<h2>3. inline borders (2px red) with 3px horizontal padding</h2>
+<p id="g3">a<span>b</span>c</p>
+
+<h2>4. float + overflow:hidden BFC (red block starts right of the float)</h2>
+<div id="wrap4"><div class="f"></div><div class="bfc"></div></div>
+
+<h2>5. control: no BFC, the red block sits under the float</h2>
+<div id="wrap5"><div class="f"></div><div class="plain"></div></div>
+
+<h2>6. isolation:isolate — red multiply blends with the blue parent only</h2>
+<div id="iso6"><div class="o"></div></div>
+
+<h2>7. control without isolation</h2>
+<div id="plain7"><div class="o"></div></div>
+
+<h2>8. grid 1fr 1fr with a long word in the first item (auto min-size widens col 1)</h2>
+<div id="g8"><div class="a">Supercalifragilisticexpialidocious</div><div class="b">second</div></div>
+
+<h2>9. place-self: end start (item at bottom-left of the 100x60 cell)</h2>
+<div id="g9"><div></div></div>
+
+<h2>10. text-indent: 25% of a 200px containing block = 50px</h2>
+<div id="g10">indented first line text here</div>
+
+<h2>11. ::first-line red + bold</h2>
+<div id="g11">first line here is styled and the second line is not styled at all</div>
+
+<h2>12. ::first-letter 30px blue bold</h2>
+<div id="g12">Capital letter styling applies here</div>
+
+<h2>13. tab-size: 30px (pre)</h2>
+<div id="g13">a	b	tail</div>
+
+<h2>14. ::first-line background covers the first line box</h2>
+<div id="g14">yellow first line and a second line without any background at all</div>
+
+</body>
+</html>

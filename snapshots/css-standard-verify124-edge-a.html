@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font: 13px "Segoe UI", sans-serif; margin: 6px; }
+h3 { margin: 6px 0 2px; font-size: 13px; }
+ul { margin: 0 0 6px 0; padding-left: 2.2em; columns: 4; column-gap: 26px; }
+li { margin: 0; line-height: 1.35; break-inside: avoid; }
+</style>
+</head>
+<body>
+<script>
+var styles = ["japanese-informal", "japanese-formal", "simp-chinese-informal",
+              "korean-hanja-informal", "korean-hangul-formal", "korean-hanja-formal"];
+var values = [1, 9, 10, 11, 14, 15, 16, 17, 19, 20, 99, 100, 101, 110, 115, 200, 400, 450, 500,
+              900, 999, 1000, 1005, 1010, 1100, 1111, 2000, 9999, 10000, 10001, 11000, 110000,
+              1000000, 2147483647, -1, -11];
+for (var s = 0; s < styles.length; s++) {
+  var h = document.createElement("h3");
+  h.textContent = styles[s];
+  document.body.appendChild(h);
+  var ul = document.createElement("ul");
+  ul.style.listStyleType = styles[s];
+  for (var v = 0; v < values.length; v++) {
+    var li = document.createElement("li");
+    li.setAttribute("value", values[v]);
+    li.textContent = "=" + values[v];
+    ul.appendChild(li);
+  }
+  document.body.appendChild(ul);
+}
+</script>
+</body>
+</html>

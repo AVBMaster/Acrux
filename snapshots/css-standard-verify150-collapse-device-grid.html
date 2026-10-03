@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b150 collapsed borders on the device pixel grid</title>
+<style>
+body { font: 16px "Segoe UI", Arial, sans-serif; margin: 0; padding: 4px; }
+table { border-collapse: collapse; margin-bottom: 12px; }
+td { padding: 0; }
+/* Collapsed borders take the wider of the two half borders, so a fractional
+   (device-quantised) width has to survive the halving and the merging. */
+.w1 td { border: 1px solid #f00; }
+.w2 td { border: 2px solid #f00; }
+.w3 td { border: 3px solid #00a; }
+.w5 td { border: 5px solid #0a0; }
+.mix td { border: 2px solid #a0a; }
+.mix td.wide { border-width: 5px; }
+</style>
+</head>
+<body>
+<table id="t1" class="w1"><tr><td id="a1">ab</td><td id="a2">cd</td></tr><tr><td id="a3">ef</td><td id="a4">gh</td></tr></table>
+<table id="t2" class="w2"><tr><td id="b1">ab</td><td id="b2">cd</td></tr><tr><td id="b3">ef</td><td id="b4">gh</td></tr></table>
+<table id="t3" class="w3"><tr><td id="c1">ab</td><td id="c2">cd</td></tr><tr><td id="c3">ef</td><td id="c4">gh</td></tr></table>
+<table id="t5" class="w5"><tr><td id="e1">ab</td><td id="e2">cd</td></tr></table>
+<table id="t6" class="mix"><tr><td id="f1" class="wide">ab</td><td id="f2">cd</td></tr></table>
+</body>
+</html>

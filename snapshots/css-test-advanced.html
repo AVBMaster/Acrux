@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { font-family: sans-serif; font-size: 13px; margin: 10px; color: #222; }
+h3 { margin: 8px 0 4px; }
+.outline1 { border: 2px solid #000; outline: 3px solid #e00; padding: 4px; background: #eee; }
+.outline2 { outline: 2px dashed #00e; outline-offset: 6px; padding: 4px; display: inline-block; }
+.shadow1 { text-shadow: 2px 2px 0 #f88; font-size: 20px; }
+.shadow2 { text-shadow: 1px 1px 3px #888; font-size: 18px; }
+.tf-a { display: inline-block; transform: rotate(10deg); background: #cdf; padding: 6px; }
+.tf-b { display: inline-block; transform: scale(1.4); background: #dcf; padding: 4px; transform-origin: left center; }
+.tf-c { display: inline-block; transform: translate(10px, 5px); background: #fed; padding: 4px; }
+.tf-wrap { background: #ddd; display: inline-block; padding: 20px; }
+.sticky-box { overflow: auto; height: 120px; background: #f6f6f6; border: 1px solid #999; }
+.sticky-head { position: sticky; top: 0; background: #fea; }
+.tall { height: 90px; }
+.inv { visibility: hidden; }
+.disp-n { display: none; }
+.op7 { opacity: 0.7; background: #acf; display: inline-block; padding: 4px; }
+</style>
+</head>
+<body>
+<h3>1. outline solid + border</h3>
+<div class="outline1">outlined</div>
+<h3>2. dashed outline + offset</h3>
+<div class="outline2">offset dashed</div>
+<h3>3. text-shadow hard + blur</h3>
+<div class="shadow1">Hard Shadow</div>
+<div class="shadow2">Blur Shadow</div>
+<h3>4. transforms in inline-block row</h3>
+<div class="tf-wrap">
+  <span class="tf-a">rot10</span>
+  <span class="tf-b">scale</span>
+  <span class="tf-c">move</span>
+</div>
+<h3>5. sticky header inside scroller</h3>
+<div class="sticky-box">
+  <div class="sticky-head">STICKY</div>
+  <div class="tall">row1</div>
+  <div class="tall">row2</div>
+</div>
+<h3>6. visibility hidden vs display none</h3>
+<div>before <span class="inv">invisible</span> after</div>
+<div>pre <span class="disp-n">gone</span> post</div>
+<h3>7. opacity 0.7 box</h3>
+<div class="op7">semi</div>
+</body>
+</html>

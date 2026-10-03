@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b149 border widths on the device pixel grid</title>
+<style>
+body { margin: 0; padding: 6px; background: #fff; font: 12px "Segoe UI", Arial, sans-serif; color: #000; }
+/* Block layout keeps every box at a predictable size: the border box is the content
+   width plus two quantised side widths, so --dumplayout and --pixels can be checked
+   against each other. */
+.b { width: 44px; height: 20px; background: #eee; margin-bottom: 4px; }
+.p1 { border: 1px solid #f00; }
+.p2 { border: 2px solid #f00; }
+.p3 { border: 3px solid #f00; }
+.p5 { border: 5px solid #f00; }
+.d2 { border: 2px dashed #00a; }
+.d3 { border: 3px dashed #00a; }
+.t2 { border: 2px dotted #0a0; }
+.t3 { border: 3px dotted #0a0; }
+.u3 { border: 3px double #a0a; }
+.u5 { border: 5px double #a0a; }
+.g3 { border: 3px groove #fa0; }
+.r3 { border: 3px ridge #0aa; }
+.thin { border: thin solid #555; }
+.medium { border: medium solid #555; }
+.thick { border: thick solid #555; }
+</style>
+</head>
+<body>
+<div class="b p1"></div>
+<div class="b p2"></div>
+<div class="b p3"></div>
+<div class="b p5"></div>
+<div class="b thin"></div>
+<div class="b medium"></div>
+<div class="b thick"></div>
+<div class="b d2"></div>
+<div class="b d3"></div>
+<div class="b t2"></div>
+<div class="b t3"></div>
+<div class="b u3"></div>
+<div class="b u5"></div>
+<div class="b g3"></div>
+<div class="b r3"></div>
+</body>
+</html>

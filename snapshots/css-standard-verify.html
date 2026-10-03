@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CSS Standard Verification</title>
+<style>
+/* Reset */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font: 16px/20px Arial, sans-serif; background: #fff; color: #000; width: 800px; }
+
+/* ====== GROUP 1: Box Model ====== */
+#box1 { width: 200px; height: 100px; margin: 10px 20px 30px 40px; padding: 5px 10px 15px 20px; border: 2px solid rgb(255,0,0); background: rgb(255,255,0); }
+#box2 { width: 200px; height: 100px; box-sizing: content-box; margin: 10px; padding: 10px; border: 5px solid blue; background: rgb(0,255,0); }
+#box3 { width: 200px; height: 100px; box-sizing: border-box; margin: 10px; padding: 10px; border: 5px solid blue; background: rgb(0,255,255); }
+
+/* ====== GROUP 2: Flexbox ====== */
+#flex1 { display: flex; width: 300px; height: 60px; background: #eee; gap: 10px; }
+#flex1 > .a { flex: 1 1 0px; background: rgb(255,0,0); }
+#flex1 > .b { flex: 2 1 0px; background: rgb(0,255,0); }
+#flex1 > .c { flex: 1 1 0px; background: rgb(0,0,255); }
+
+#flex2 { display: flex; width: 200px; background: #ddd; align-items: center; height: 80px; }
+#flex2 > div { width: 40px; height: 30px; background: rgb(128,0,128); margin: 2px; }
+
+#flex3 { display: flex; flex-direction: column; width: 100px; background: #ccc; }
+#flex3 > div { height: 20px; background: rgb(255,128,0); margin: 2px 0; }
+
+#flex4 { display: flex; width: 200px; background: #bbb; flex-wrap: wrap; gap: 5px; }
+#flex4 > div { width: 80px; height: 30px; background: rgb(0,128,128); }
+
+/* flex-shrink test: 3 items, total natural=300, container=200, shrink proportionally */
+#flex5 { display: flex; width: 200px; height: 40px; background: #aaa; }
+#flex5 > .x { flex: 0 1 100px; background: rgb(255,128,128); }
+#flex5 > .y { flex: 0 1 100px; background: rgb(128,255,128); }
+#flex5 > .z { flex: 0 1 100px; background: rgb(128,128,255); }
+
+/* ====== GROUP 3: Grid ====== */
+#grid1 { display: grid; grid-template-columns: 100px 100px 100px; grid-template-rows: 40px 40px; gap: 10px; background: #eee; width: 320px; }
+#grid1 > div { background: rgb(100,149,237); }
+
+#grid2 { display: grid; grid-template-columns: 1fr 2fr 1fr; width: 400px; gap: 0px; background: #ddd; }
+#grid2 > div { height: 30px; background: rgb(255,165,0); }
+
+#grid3 { display: grid; grid-template-columns: repeat(3, 1fr); width: 300px; background: #ccc; }
+#grid3 > .span2 { grid-column: span 2; background: rgb(220,20,60); height: 25px; }
+#grid3 > .normal { background: rgb(60,179,113); height: 25px; }
+
+/* ====== GROUP 4: Positioning ====== */
+#pos-rel { position: relative; width: 200px; height: 200px; background: rgb(240,240,240); border: 1px solid #999; margin: 10px 0; }
+#pos-abs { position: absolute; top: 10px; left: 10px; width: 80px; height: 40px; background: rgb(255,0,0); }
+#pos-fix { position: fixed; top: 0; left: 0; width: 1px; height: 1px; background: transparent; }
+
+/* z-index test */
+#zstack { position: relative; width: 200px; height: 100px; margin: 10px 0; }
+#z1 { position: absolute; top: 0; left: 0; width: 100px; height: 60px; background: rgb(255,0,0); z-index: 1; }
+#z2 { position: absolute; top: 20px; left: 50px; width: 100px; height: 60px; background: rgb(0,0,255); z-index: 2; }
+#z10 { position: absolute; top: 10px; left: 20px; width: 80px; height: 50px; background: rgb(0,255,0); z-index: 10; }
+
+/* ====== GROUP 5: Background ====== */
+#bg1 { width: 200px; height: 80px; background-color: rgb(255,128,128); }
+#bg2 { width: 200px; height: 80px; background: rgb(128,128,255); }
+#bg3 { width: 200px; height: 100px; background: linear-gradient(to right, rgb(255,0,0), rgb(0,0,255)); }
+
+/* background-size: cover */
+#bg-cover { width: 200px; height: 100px; background: rgb(200,200,200); border: 1px solid #000; }
+
+/* ====== GROUP 6: Text ====== */
+#txt1 { font-size: 24px; color: rgb(255,0,0); text-align: center; width: 300px; background: #f0f0f0; }
+#txt2 { text-transform: uppercase; background: #e0e0e0; padding: 5px; }
+#txt3 { text-decoration: underline red; text-decoration-style: wavy; background: #d0d0d0; padding: 5px; }
+#txt4 { text-indent: 30px; background: #c0ffc0; width: 300px; }
+#txt5 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 150px; background: #ffe0e0; }
+
+/* ====== GROUP 7: Border ====== */
+#brd1 { width: 100px; height: 60px; border: 3px solid rgb(0,0,0); background: rgb(255,255,200); }
+#brd2 { width: 100px; height: 60px; border: 2px dashed rgb(255,0,0); background: rgb(255,200,200); }
+#brd3 { width: 100px; height: 100px; border-radius: 50%; background: rgb(0,128,0); }
+#brd4 { width: 100px; height: 60px; border-top: 4px double rgb(0,0,255); border-bottom: 2px dotted rgb(255,0,0); background: rgb(200,200,255); }
+
+/* ====== GROUP 8: Display & Visibility ====== */
+#disp-ib { display: inline-block; width: 80px; height: 40px; background: rgb(255,0,0); }
+#disp-ib2 { display: inline-block; width: 80px; height: 40px; background: rgb(0,0,255); }
+#disp-none { display: none; background: rgb(255,0,0); width: 100px; height: 100px; }
+#disp-vis { visibility: hidden; background: rgb(0,255,0); width: 100px; height: 40px; }
+
+/* ====== GROUP 9: Opacity ====== */
+#opaq { width: 100px; height: 60px; background: rgb(255,0,0); opacity: 1.0; }
+#opaq50 { width: 100px; height: 60px; background: rgb(255,0,0); opacity: 0.5; }
+#opaq0 { width: 100px; height: 60px; background: rgb(255,0,0); opacity: 0; }
+
+/* ====== GROUP 10: Overflow ====== */
+#oflow { width: 150px; height: 60px; overflow: hidden; background: rgb(240,240,240); border: 1px solid #999; }
+#oflow-inner { width: 300px; height: 200px; background: rgb(255,0,0); }
+
+/* ====== GROUP 11: Calc ====== */
+#calc1 { width: calc(200px + 50px); height: 40px; background: rgb(0,128,0); }
+#calc2 { width: calc(100% - 100px); height: 40px; background: rgb(128,0,0); }
+
+/* ====== GROUP 12: Transform ====== */
+#xform1 { width: 100px; height: 60px; background: rgb(255,165,0); transform: translate(20px, 10px); }
+#xform2 { width: 100px; height: 60px; background: rgb(0,128,0); transform: scale(1.5); }
+
+/* ====== GROUP 13: Table ====== */
+#tbl1 { display: table; width: 300px; border-collapse: collapse; }
+#tbl1 .row { display: table-row; }
+#tbl1 .cell { display: table-cell; border: 1px solid rgb(0,0,0); padding: 5px; background: rgb(200,220,255); }
+#tbl1 .hdr { display: table-cell; border: 1px solid rgb(0,0,0); padding: 5px; background: rgb(100,100,200); color: white; }
+
+/* ====== GROUP 14: List ====== */
+#list1 { margin: 10px 0 10px 40px; }
+#list1 li { margin: 2px 0; }
+
+/* ====== GROUP 15: Pseudo & Counters ====== */
+.counter-box { counter-reset: item; }
+.counter-box div { counter-increment: item; }
+.counter-box div::before { content: counter(item) ". "; }
+
+/* ====== GROUP 16: Vertical align ====== */
+#valign { height: 60px; background: #eee; line-height: 60px; }
+#valign .big { font-size: 30px; vertical-align: middle; background: rgb(255,200,200); }
+#valign .small { font-size: 14px; vertical-align: baseline; }
+
+/* ====== GROUP 17: White-space ====== */
+#ws-pre { white-space: pre; background: #f0f0f0; padding: 5px; width: 200px; overflow: auto; }
+#ws-normal { white-space: normal; background: #e0e0e0; padding: 5px; width: 100px; }
+
+/* ====== GROUP 18: Object-fit ====== */
+#objfit { width: 200px; height: 100px; background: rgb(200,200,200); border: 1px solid #000; }
+
+/* ====== GROUP 19: Outline ====== */
+#outline1 { width: 100px; height: 60px; background: rgb(255,255,0); outline: 3px solid rgb(255,0,0); outline-offset: 2px; margin: 10px; }
+
+/* ====== GROUP 20: Box-shadow ====== */
+#bshadow { width: 100px; height: 60px; background: rgb(255,255,255); box-shadow: 5px 5px 0px 0px rgb(255,0,0); margin: 20px; }
+</style>
+</head>
+<body>
+
+<!-- GROUP 1: Box Model -->
+<div id="box1">Box1: border-box 200x100 m(10,20,30,40) p(5,10,15,20) bdr=2</div>
+<div id="box2">Box2: content-box 200x100 m=10 p=10 bdr=5</div>
+<div id="box3">Box3: border-box 200x100 m=10 p=10 bdr=5</div>
+
+<!-- GROUP 2: Flexbox -->
+<div id="flex1"><div class="a"></div><div class="b"></div><div class="c"></div></div>
+<div id="flex2"><div></div><div></div></div>
+<div id="flex3"><div></div><div></div><div></div></div>
+<div id="flex4"><div></div><div></div><div></div></div>
+<div id="flex5"><div class="x"></div><div class="y"></div><div class="z"></div></div>
+
+<!-- GROUP 3: Grid -->
+<div id="grid1"><div></div><div></div><div></div><div></div><div></div><div></div></div>
+<div id="grid2"><div></div><div></div><div></div></div>
+<div id="grid3"><div class="span2"></div><div class="normal"></div></div>
+
+<!-- GROUP 4: Positioning -->
+<div id="pos-rel"><div id="pos-abs"></div></div>
+<div id="zstack"><div id="z1"></div><div id="z2"></div><div id="z10"></div></div>
+
+<!-- GROUP 5: Background -->
+<div id="bg1">bg: salmon</div>
+<div id="bg2">bg: cornflower</div>
+<div id="bg3">gradient</div>
+
+<!-- GROUP 6: Text -->
+<div id="txt1">Centered Red 24px</div>
+<div id="txt2">uppercase text</div>
+<div id="txt3">underlined wavy red</div>
+<div id="txt4">This text has a 30px indent.</div>
+<div id="txt5">This is a very long text that should be truncated with ellipsis</div>
+
+<!-- GROUP 7: Border -->
+<div id="brd1">solid 3px</div>
+<div id="brd2">dashed 2px</div>
+<div id="brd3"></div>
+<div id="brd4">multi border</div>
+
+<!-- GROUP 8: Display -->
+<div><div id="disp-ib"></div><div id="disp-ib2"></div></div>
+<div id="disp-none">should not appear</div>
+<div id="disp-vis">hidden but takes space</div>
+
+<!-- GROUP 9: Opacity -->
+<div style="display:flex;gap:5px;">
+<div id="opaq"></div><div id="opaq50"></div><div id="opaq0"></div>
+</div>
+
+<!-- GROUP 10: Overflow -->
+<div id="oflow"><div id="oflow-inner"></div></div>
+
+<!-- GROUP 11: Calc -->
+<div id="calc1">calc(200px+50px)=250px</div>
+<div id="calc2">calc(100%-100px)</div>
+
+<!-- GROUP 12: Transform -->
+<div style="height:100px;"><div id="xform1"></div></div>
+<div style="height:100px;"><div id="xform2"></div></div>
+
+<!-- GROUP 13: Table -->
+<div id="tbl1">
+<div class="row"><div class="hdr">Name</div><div class="hdr">Age</div></div>
+<div class="row"><div class="cell">Alice</div><div class="cell">28</div></div>
+<div class="row"><div class="cell">Bob</div><div class="cell">35</div></div>
+</div>
+
+<!-- GROUP 14: List -->
+<ul id="list1"><li>Item one</li><li>Item two</li><li>Item three</li></ul>
+
+<!-- GROUP 15: Counter -->
+<div class="counter-box"><div>First</div><div>Second</div><div>Third</div></div>
+
+<!-- GROUP 16: Vertical align -->
+<div id="valign"><span class="big">Big</span> <span class="small">small</span></div>
+
+<!-- GROUP 17: White-space -->
+<div id="ws-pre">line1
+line2    line3</div>
+<div id="ws-normal">this text should wrap within 100px width</div>
+
+<!-- GROUP 19: Outline -->
+<div id="outline1">outline</div>
+
+<!-- GROUP 20: Box-shadow -->
+<div id="bshadow">shadow</div>
+
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Animation 03 — easing functions</title>
+<style>
+/* Easing shapes the progress *inside* an iteration: the animation still reaches
+   exactly 0% and 100%, the rate in between differs. All rows are pinned 40% into
+   a 1s animation, so each swatch's fill is 192 + 63 * eased(0.4): the swatch
+   starts at the background colour 192 and reaches white 255 as the fade
+   completes. The expected values in the legend are the spec values, checked
+   against the closed-form cubic-bezier solution; --anim prints what the engine
+   computed. */
+body { font: 12px/1.4 Arial, sans-serif; margin: 0; background: #fff; color: #222; }
+#pad { position: relative; width: 448px; height: 260px; overflow: hidden; }
+.sw {
+  position: absolute;
+  width: 90px; height: 60px;
+  background: #c0c0c0;
+  box-sizing: border-box;
+  outline: 1px solid #000;
+  text-align: center; line-height: 60px; font-size: 13px;
+}
+#t1 { left: 10px;  top: 10px; }  #t2 { left: 120px; top: 10px; }
+#t3 { left: 230px; top: 10px; }  #t4 { left: 340px; top: 10px; }
+#t5 { left: 10px;  top: 90px; }  #t6 { left: 120px; top: 90px; }
+#t7 { left: 230px; top: 90px; }  #t8 { left: 340px; top: 90px; }
+#t9 { left: 10px;  top: 170px; } #t10{ left: 120px; top: 170px; }
+
+/* Each swatch fades opacity 1 -> 0 with a different easing. */
+#t1  { animation: e 1s linear            -400ms paused; }
+#t2  { animation: e 1s ease              -400ms paused; }
+#t3  { animation: e 1s ease-in           -400ms paused; }
+#t4  { animation: e 1s ease-out          -400ms paused; }
+#t5  { animation: e 1s ease-in-out       -400ms paused; }
+#t6  { animation: e 1s cubic-bezier(0, 0, 1, 1)      -400ms paused; }
+#t7  { animation: e 1s cubic-bezier(1, 0, 0, 1)      -400ms paused; }
+#t8  { animation: e 1s cubic-bezier(0.5, 0, 0.5, 1) -400ms paused; }
+#t9  { animation: e 1s cubic-bezier(0.2, 0, 0.2, 1.4) -400ms paused; }
+#t10 { animation: e 1s linear(0, 0.25, 1)            -400ms paused; }
+@keyframes e { from { opacity: 1; } to { opacity: 0; } }
+
+/* The same easing list, sampled at 20% and 80% instead of 40%, so the curve's
+   shape is visible as a set rather than a single point. */
+#legend { padding: 8px 10px; }
+#legend p { margin: 3px 0; color: #444; }
+#legend code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<div id="pad">
+  <i class="sw" id="t1">1</i>
+  <i class="sw" id="t2">2</i>
+  <i class="sw" id="t3">3</i>
+  <i class="sw" id="t4">4</i>
+  <i class="sw" id="t5">5</i>
+  <i class="sw" id="t6">6</i>
+  <i class="sw" id="t7">7</i>
+  <i class="sw" id="t8">8</i>
+  <i class="sw" id="t9">9</i>
+  <i class="sw" id="t10">10</i>
+</div>
+
+<div id="legend">
+  <p>fill = <b>192 + 63 &times; eased(0.4)</b> (background #c0c0c0 fading to transparent over white)</p>
+  <p><b>1</b> <code>linear</code> &rarr; 0.4000 &rarr; fill <b>217</b></p>
+  <p><b>2</b> <code>ease</code> = cubic-bezier(.25,.1,.25,1) &rarr; 0.6823 &rarr; fill <b>235</b></p>
+  <p><b>3</b> <code>ease-in</code> = cubic-bezier(.42,0,1,1) &rarr; 0.2146 &rarr; fill <b>206</b></p>
+  <p><b>4</b> <code>ease-out</code> = cubic-bezier(0,0,.58,1) &rarr; 0.5709 &rarr; fill <b>228</b></p>
+  <p><b>5</b> <code>ease-in-out</code> = cubic-bezier(.42,0,.58,1) &rarr; 0.3320 &rarr; fill <b>213</b></p>
+  <p><b>6</b> <code>cubic-bezier(0,0,1,1)</code> is linear &rarr; 0.4000 &rarr; fill <b>217</b></p>
+  <p><b>7</b> <code>cubic-bezier(1,0,0,1)</code> &rarr; 0.1113 &rarr; fill <b>199</b></p>
+  <p><b>8</b> <code>cubic-bezier(.5,0,.5,1)</code> &rarr; 0.3089 &rarr; fill <b>211</b></p>
+  <p><b>9</b> y outside [0,1]: <code>cubic-bezier(.2,0,.2,1.4)</code> &rarr; 0.8807 &rarr; fill <b>247</b></p>
+  <p><b>10</b> <code>linear(0, .25, 1)</code> (CSS Easing 2) &rarr; 0.2000 &rarr; fill <b>205</b></p>
+</div>
+
+</body>
+</html>

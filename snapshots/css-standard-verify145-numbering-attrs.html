@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b145 numbering attributes and CJK longhand spacing</title>
+<style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+ol, ul { margin: 0; padding: 0 0 0 200px; list-style-position: inside; }
+li { margin-bottom: 2px; background: rgb(240,240,240); }
+li span { background: rgb(255,200,200); }
+.kf { list-style-type: korean-hangul-formal; }
+.jf { list-style-type: japanese-formal; }
+.cf { list-style-type: simp-chinese-formal; }
+.dec { list-style-type: decimal; }
+</style>
+</head>
+<body>
+<ol class="dec" start="1100" id="g1"><li><span>A</span></li><li><span>A</span></li></ol>
+<ol class="dec" id="g2"><li value="7"><span>A</span></li><li><span>A</span></li></ol>
+<ol class="dec" reversed start="5" id="g3"><li><span>A</span></li><li><span>A</span></li></ol>
+<ol class="kf" start="1099" id="g4"><li><span>A</span></li><li><span>A</span></li><li><span>A</span></li><li><span>A</span></li><li><span>A</span></li></ol>
+<ol class="jf" start="1099" id="g5"><li><span>A</span></li><li><span>A</span></li><li><span>A</span></li></ol>
+<ol class="cf" start="1099" id="g6"><li><span>A</span></li><li><span>A</span></li><li><span>A</span></li></ol>
+<ol class="dec" id="g7"><li value="10"><span>A</span></li><li><span>A</span></li><li><span>A</span></li></ol>
+<ol class="dec" id="g8"><li value="9"><span>A</span></li><li><span>A</span></li><li><span>A</span></li></ol>
+<ol class="dec" reversed id="g9"><li value="20"><span>A</span></li><li><span>A</span></li></ol>
+</body>
+</html>

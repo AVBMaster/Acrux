@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html, body { margin: 0; padding: 4px; font-family: Arial, sans-serif; font-size: 16px; line-height: 20px; }
+table { border-collapse: collapse; }
+td, th { border: 1px solid rgb(0,0,0); padding: 2px; }
+caption { background: rgb(255,0,0); height: 14px; }
+#t2 caption { height: 40px; }
+#t3 caption { height: auto; }
+#t4 { width: 200px; }
+#t4 td { height: 25px; }
+</style>
+</head>
+<body>
+<table id="t1" width="160"><caption>cap</caption><tr><td rowspan="2">R</td><td>a</td><td>b</td></tr><tr><td colspan="2">c</td></tr></table>
+<table id="t2" width="120"><caption>cap40</caption><tr><td>x</td><td>y</td></tr></table>
+<table id="t3" width="120"><caption>capauto</caption><tr><td>x</td><td>y</td></tr></table>
+<table id="t4"><tr height="30"><td>h1</td><td>h2</td></tr><tr><td>h3</td><td>h4</td></tr></table>
+<table id="t5"><colgroup><col width="50"><col width="30"></colgroup><tr><td>p</td><td>q</td></tr></table>
+</body>
+</html>

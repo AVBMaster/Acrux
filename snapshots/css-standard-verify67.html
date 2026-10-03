@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 67 — auto-fit vs auto-fill collapse, justify space-evenly+margins, grid align-content</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+h2 { background:#eee; padding:4px; margin:16px 0 8px; font-size:15px; }
+.cell { background:#cfe; border:1px solid #369; height:30px; }
+
+/* 1. auto-fill vs auto-fit: minmax(60px,1fr), only 2 items in 300px.
+   auto-fill: 4 tracks, items in first two (69px each), 2 empty tracks remain.
+   auto-fit:  empty tracks collapse, 2 items stretch to fill (146px each). */
+.fill { display:grid; grid-template-columns:repeat(auto-fill, minmax(60px,1fr)); gap:8px; width:300px; border:2px solid #939; }
+.fit  { display:grid; grid-template-columns:repeat(auto-fit,  minmax(60px,1fr)); gap:8px; width:300px; border:2px solid #939; }
+
+/* 2. flex justify-content:space-evenly with item margins */
+.f { display:flex; justify-content:space-evenly; width:300px; border:2px solid #939; height:40px; }
+.f div { background:#fec; border:1px solid #c60; width:40px; }
+.f .m { margin-left:10px; margin-right:10px; }
+
+/* 3. grid align-content:space-between (2 rows in 120px) */
+.gc { display:grid; grid-template-columns:100px 100px; grid-auto-rows:30px; gap:6px; width:206px; height:120px; border:2px solid #939; align-content:space-between; }
+.gc div { background:#cfe; border:1px solid #369; }
+</style>
+</head>
+<body>
+
+<h2>1a. auto-fill (4 tracks, 2 items left-aligned)</h2>
+<div class="fill"><div class="cell">1</div><div class="cell">2</div></div>
+<h2>1b. auto-fit (empty tracks collapse, 2 items fill 300)</h2>
+<div class="fit"><div class="cell">1</div><div class="cell">2</div></div>
+
+<h2>2. flex space-evenly + item margin 10px</h2>
+<div class="f"><div>A</div><div class="m">B</div><div>C</div></div>
+
+<h2>3. grid align-content:space-between (rows pushed top/bottom)</h2>
+<div class="gc"><div>1</div><div>2</div><div>3</div><div>4</div></div>
+
+</body>
+</html>

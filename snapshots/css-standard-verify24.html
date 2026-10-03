@@ -1,0 +1,38 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body { font-family: Arial; font-size: 16px; margin: 8px; }
+h2 { font-size: 14px; background: #eee; margin: 10px 0 4px; }
+.box { border: 1px solid black; }
+.tile { width: 150px; height: 40px; background-image: linear-gradient(#e33,#33e); background-size: 20px 20px; margin-bottom: 6px; }
+.t-space { background-repeat: space; }
+.t-round { background-repeat: round; }
+.t-repeat { background-repeat: repeat; }
+.word { font-size: 14px; }
+.a-any { overflow-wrap: anywhere; width: min-content; background: #ffd; }
+.a-bw { overflow-wrap: break-word; width: min-content; background: #dfd; }
+.bs { white-space: break-spaces; width: 120px; background: #ddf; font-family: 'Courier New', monospace; font-size: 14px; }
+.pw { white-space: pre-wrap; width: 120px; background: #fdd; font-family: 'Courier New', monospace; font-size: 14px; }
+.par { text-decoration: underline; text-decoration-color: #e33; text-decoration-style: dotted; text-decoration-thickness: 3px; font-size: 16px; }
+.par span { color: #06c; }
+.cf { width: 220px; height: 120px; background: #eee; }
+.fl { float: left; width: 80px; height: 40px; background: #f88; }
+.fr { float: right; width: 80px; height: 40px; background: #88f; }
+.cl { height: 12px; background: #8b8; font-size: 12px; }
+.c-left { clear: left; }
+.c-right { clear: right; }
+.c-both { clear: both; }
+</style></head><body>
+<h2>1. background-repeat: space / round / repeat</h2>
+<div class="tile t-space box"></div>
+<div class="tile t-round box"></div>
+<div class="tile t-repeat box"></div>
+<h2>2. overflow-wrap: anywhere vs break-word (min-content)</h2>
+<div class="a-any word">Supercalifragilisticexpialidocious</div>
+<div class="a-bw word">Supercalifragilisticexpialidocious</div>
+<h2>3. white-space: break-spaces vs pre-wrap</h2>
+<div class="bs box">aaa        bbb        ccc</div>
+<div class="pw box">aaa        bbb        ccc</div>
+<h2>4. parent decoration propagates through child</h2>
+<div class="par box">start <span>middle child</span> end</div>
+<h2>5. clear left / right / both after floats</h2>
+<div class="cf box"><div class="fl"></div><div class="fr"></div><div class="cl c-left">clear:left</div><div class="cl c-right">clear:right</div><div class="cl c-both">clear:both</div></div>
+</body></html>

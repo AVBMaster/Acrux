@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification — Batch 9 (Independent Transforms / First-line &amp; First-letter / Border Styles / Mask / Generated Content)</title>
+<style>
+html, body { margin: 0; padding: 4px; background: rgb(255,255,255); font-family: Arial, sans-serif; font-size: 16px; }
+h2 { margin: 10px 0 4px 0; font-size: 13px; color: rgb(51,51,51); }
+.row { display: block; }
+.cell { display: inline-block; vertical-align: top; margin-right: 26px; }
+
+/* ====== GROUP 1: translate: 20px 10px (40x40 red) ====== */
+#g1 { width: 40px; height: 40px; background: rgb(255,0,0); translate: 20px 10px; }
+
+/* ====== GROUP 2: rotate: 45deg (40x40 blue) ====== */
+#g2 { width: 40px; height: 40px; background: rgb(0,0,255); rotate: 45deg; }
+
+/* ====== GROUP 3: scale: 2 0.5 (40x40 green) ====== */
+#g3 { width: 40px; height: 40px; background: rgb(0,128,0); scale: 2 0.5; }
+
+/* ====== GROUP 4: translate + transform both apply (purple) ====== */
+#g4 { width: 40px; height: 40px; background: rgb(128,0,128); translate: 14px 0; transform: rotate(45deg); }
+
+/* ====== GROUP 5: border: 6px double red ====== */
+#g5 { width: 40px; height: 20px; border: 6px double rgb(255,0,0); }
+/* ====== GROUP 6: border: 6px solid red (control) ====== */
+#g6 { width: 40px; height: 20px; border: 6px solid rgb(255,0,0); }
+
+/* ====== GROUP 7-10: 3D border styles on rgb(200,100,50) ====== */
+.b3d { width: 40px; height: 20px; border-width: 6px; border-color: rgb(200,100,50); }
+#g7 { border-style: groove; }
+#g8 { border-style: ridge; }
+#g9 { border-style: inset; }
+#g10 { border-style: outset; }
+
+/* ====== GROUP 11: ::first-line ====== */
+#fl { width: 220px; }
+#fl::first-line { color: rgb(255,0,0); font-weight: bold; letter-spacing: 2px; }
+
+/* ====== GROUP 12: ::first-letter (big blue bold) ====== */
+#ft { width: 220px; }
+#ft::first-letter { font-size: 30px; color: rgb(0,0,255); font-weight: bold; }
+
+/* ====== GROUP 13: ::first-letter drop cap (float: left) ====== */
+#fd { width: 220px; }
+#fd::first-letter { float: left; font-size: 28px; line-height: 28px; padding-right: 4px; color: rgb(0,128,0); }
+
+/* ====== GROUP 14: mask-image gradient over solid red ====== */
+#mk { width: 60px; height: 20px; background: rgb(255,0,0);
+      -webkit-mask-image: linear-gradient(to right, rgb(0,0,0), rgba(0,0,0,0));
+      mask-image: linear-gradient(to right, rgb(0,0,0), rgba(0,0,0,0)); }
+
+/* ====== GROUP 15: list-style-image ====== */
+#ll { margin: 0; padding-left: 50px; }
+#ll li { list-style-image: url("quad40.png"); }
+
+/* ====== GROUP 16: content: url() on ::before ====== */
+#cu::before { content: url("quad40.png"); }
+
+/* ====== GROUP 17: tab-size: 30px in pre ====== */
+#tb { white-space: pre; tab-size: 30px; font-size: 16px; }
+
+/* ====== GROUP 18: text-underline-offset + thickness ====== */
+#uo { font-size: 20px; color: rgb(0,0,0); text-decoration: underline;
+      text-decoration-thickness: 3px; text-underline-offset: 6px; text-decoration-color: rgb(255,0,0); }
+
+/* ====== GROUP 19: overflow-wrap: anywhere in a 60px box ====== */
+#ow { width: 60px; border: 1px solid rgb(0,0,0); overflow-wrap: anywhere; font-size: 14px; }
+
+/* ====== GROUP 20: text-indent: hanging 20px ====== */
+#hi { width: 200px; text-indent: hanging 20px; font-size: 14px; }
+
+/* ====== GROUP 21: box-decoration-break: clone on a wrapped inline ====== */
+#bd { width: 120px; font-size: 14px; }
+#bd span { background: rgb(255,255,0); padding: 2px; box-decoration-break: clone; }
+
+/* ====== GROUP 22: aspect-ratio 2/1 with width only ====== */
+#ar { width: 60px; aspect-ratio: 2 / 1; background: rgb(0,0,255); }
+</style>
+</head>
+<body>
+
+<h2>1. translate: 20px 10px (red 40x40 moves right 20 / down 10)</h2>
+<div class="row"><div id="g1"></div></div>
+
+<h2>2. rotate: 45deg (blue 40x40 about its center)</h2>
+<div class="row"><div id="g2"></div></div>
+
+<h2>3. scale: 2 0.5 (green 40x40 becomes 80x20 about center)</h2>
+<div class="row"><div id="g3"></div></div>
+
+<h2>4. translate + transform: rotate(45deg) (purple, both apply)</h2>
+<div class="row"><div id="g4"></div></div>
+
+<h2>5. border 6px double (three red bands)</h2>
+<h2>6. border 6px solid (control)</h2>
+<div class="row"><span class="cell"><div id="g5"></div></span><span class="cell"><div id="g6"></div></span></div>
+
+<h2>7. groove</h2>
+<h2>8. ridge</h2>
+<h2>9. inset</h2>
+<h2>10. outset</h2>
+<div class="row">
+  <span class="cell"><div id="g7" class="b3d"></div></span>
+  <span class="cell"><div id="g8" class="b3d"></div></span>
+  <span class="cell"><div id="g9" class="b3d"></div></span>
+  <span class="cell"><div id="g10" class="b3d"></div></span>
+</div>
+
+<h2>11. ::first-line red + bold + letter-spacing 2px</h2>
+<div id="fl">first line here is styled and the second line is not styled at all by the rule</div>
+
+<h2>12. ::first-letter 30px blue bold</h2>
+<div id="ft">Capital letter styling applies to the very first character only</div>
+
+<h2>13. ::first-letter drop cap (float left, green)</h2>
+<div id="fd">Drop cap implemented with a floated first letter, following text wraps beside it</div>
+
+<h2>14. mask-image linear-gradient (red fades to nothing)</h2>
+<div id="mk"></div>
+
+<h2>15. list-style-image: url(quad40.png)</h2>
+<ul id="ll"><li>item one</li><li>item two</li></ul>
+
+<h2>16. content: url(quad40.png) before text</h2>
+<div id="cu">after image</div>
+
+<h2>17. tab-size: 30px (pre)</h2>
+<div id="tb">a	b	tail</div>
+
+<h2>18. underline 3px thick, offset 6px, red</h2>
+<div id="uo">underlined text</div>
+
+<h2>19. overflow-wrap: anywhere (60px box)</h2>
+<div id="ow">Supercalifragilisticexpialidocious</div>
+
+<h2>20. text-indent: hanging 20px</h2>
+<div id="hi">hanging indent pulls the first line left and keeps the rest of the paragraph indented by twenty pixels</div>
+
+<h2>21. box-decoration-break: clone (yellow inline across two lines)</h2>
+<div id="bd"><span>cloned box decoration across the fragment break here</span></div>
+
+<h2>22. aspect-ratio 2/1, width 60px (height must be 30px)</h2>
+<div id="ar"></div>
+
+</body>
+</html>

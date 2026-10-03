@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<!--
+  Live smoke test for the animation system.
+
+  Every other page under snapshots/ is pinned with `animation-play-state: paused`
+  plus a negative delay so a capture is reproducible. This one deliberately does
+  NOT pin: it is meant to be opened in the real browser window and watched, which
+  is the only way to catch the failure modes a pinned capture cannot - a document
+  timeline that is not re-based on navigation, or a tab host that never samples
+  animations at all.
+
+  What to look for:
+    1. swatch 1 cycles red -> blue continuously, and keeps cycling after a
+       reload or after navigating away and back (timeline re-based per document).
+    2. swatch 2 slides left/right, so the layout stage re-runs each frame.
+    3. swatch 3 fades out and back, so an opacity animation restarts.
+    4. the status line counts animation/transition events, so a page that only
+       animates without events would show 0.
+  Run it with UPBROWSER_ANIM_LIVE=1 to get a per-frame sample in
+  upbrowser_anim_live.log.
+-->
+<html>
+<head>
+<style>
+  body { margin: 0; background: #fff; color: #222; font: 13px/1.4 Arial, sans-serif; }
+  #pad { padding: 10px; }
+  .s {
+    display: inline-block;
+    width: 120px; height: 60px;
+    margin: 6px;
+    background: #c0c0c0;
+    vertical-align: top;
+    text-align: center; line-height: 60px;
+    outline: 1px solid #000;
+  }
+  /* 1. paint-only: the engine must report NeedsLayout = false and still repaint */
+  #a { animation: spin 2s linear infinite; }
+  @keyframes spin { from { background: rgb(255,0,0); } to { background: rgb(0,0,255); } }
+
+  /* 2. layout-affecting: forces a relayout every frame */
+  #b { animation: slide 2s ease-in-out infinite alternate; }
+  @keyframes slide { from { transform: translateX(0px); } to { transform: translateX(60px); } }
+
+  /* 3. restarts on every loop; a stuck clock shows a frozen swatch */
+  #c { animation: fade 1.5s linear infinite; }
+  @keyframes fade { from { opacity: 1; } to { opacity: 0.15; } }
+
+  /* 4. transition: the class is added by script on load and on click */
+  #d { background: rgb(0,0,102); transition: background 1s linear, transform 1s linear; }
+  #d.on { background: rgb(102,0,0); transform: translateX(40px); }
+
+  #log { padding: 8px 10px; font: 11px/1.5 Consolas, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="pad">
+  <div class="s" id="a">1 paint</div>
+  <div class="s" id="b">2 layout</div>
+  <div class="s" id="c">3 opacity</div>
+  <div class="s" id="d" onclick="this.classList.toggle('on')">4 transition</div>
+</div>
+<div id="log"></div>
+
+<script>
+(function () {
+  var log = document.getElementById('log');
+  var counts = { animationstart: 0, animationiteration: 0, animationend: 0,
+                 transitionrun: 0, transitionstart: 0, transitionend: 0 };
+  var lines = [];
+  function on(type) {
+    return function () { counts[type]++; lines.unshift(type + ' #' + counts[type]); lines.length = 20; log.textContent = lines.join('\n'); };
+  }
+  for (var t in counts) document.addEventListener(t, on(t));
+
+  // Kick the transition off once so a fresh load exercises it too.
+  document.getElementById('d').classList.add('on');
+})();
+</script>
+</body>
+</html>
