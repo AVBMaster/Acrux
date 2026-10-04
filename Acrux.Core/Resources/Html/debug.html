@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head><title>Debug - Acrux</title></head>
+<body>
+
+<h1>Debug Page</h1>
+<p>No custom CSS. Open console to see element dump. Compare Edge vs Acrux output.</p>
+
+<h2>Headings</h2>
+<h1>H1</h1>
+<h2>H2</h2>
+<h3>H3</h3>
+<h4>H4</h4>
+<h5>H5</h5>
+<h6>H6</h6>
+
+<h2>Inline Elements</h2>
+<p><strong>bold</strong> <b>b</b> <em>italic</em> <i>i</i> <u>underline</u> <s>strike</s></p>
+<p><del>del</del> <ins>ins</ins> <code>code</code> <kbd>kbd</kbd></p>
+<p><mark>mark</mark> <small>small</small> X<sub>sub</sub> X<sup>sup</sup></p>
+<p><a href="#">link</a></p>
+
+<h2>Text Decoration</h2>
+<p style="text-decoration:underline;">underline</p>
+<p style="text-decoration:line-through;">line-through</p>
+<p style="text-decoration:overline;">overline</p>
+
+<h2>Font Styles</h2>
+<p style="font-style:normal;">normal</p>
+<p style="font-style:italic;">italic</p>
+<p style="font-weight:normal;">weight normal</p>
+<p style="font-weight:bold;">weight bold</p>
+
+<h2>Lists</h2>
+<ul><li>ul 1</li><li>ul 2</li><li>ul 3</li></ul>
+<ol><li>ol 1</li><li>ol 2</li><li>ol 3</li></ol>
+<dl><dt>dt 1</dt><dd>dd 1</dd><dt>dt 2</dt><dd>dd 2</dd></dl>
+
+<h2>Table</h2>
+<table border="1" cellpadding="6" cellspacing="0">
+  <caption>Table</caption>
+  <thead><tr><th>TH1</th><th>TH2</th></tr></thead>
+  <tbody><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></tbody>
+  <tfoot><tr><td>T1</td><td>T2</td></tr></tfoot>
+</table>
+
+<h2>Text Inputs</h2>
+<p><input type="text" placeholder="text"></p>
+<p><input type="password" placeholder="pwd"></p>
+<p><input type="email" placeholder="email"></p>
+<p><input type="tel" placeholder="tel"></p>
+<p><input type="url" placeholder="url"></p>
+<p><input type="search" placeholder="search"></p>
+<p><input type="number" value="42"></p>
+<p><input type="text" value="readonly" readonly></p>
+<p><input type="text" value="disabled" disabled></p>
+
+<h2>Buttons</h2>
+<p>
+  <button>Default</button>
+  <button type="submit">Submit</button>
+  <button type="reset">Reset</button>
+  <button disabled>Disabled</button>
+</p>
+
+<h2>Checkboxes &amp; Radios</h2>
+<p>
+  <label><input type="checkbox" checked> A</label>
+  <label><input type="checkbox"> B</label>
+  <label><input type="checkbox" disabled> C</label>
+</p>
+<p>
+  <label><input type="radio" name="r1" checked> R1</label>
+  <label><input type="radio" name="r1"> R2</label>
+  <label><input type="radio" name="r1"> R3</label>
+</p>
+
+<h2>Select</h2>
+<p>
+  <select>
+    <option>One</option>
+    <option selected>Two</option>
+    <option>Three</option>
+    <option disabled>Four</option>
+  </select>
+</p>
+
+<h2>Textarea</h2>
+<p><textarea rows="3" cols="40" placeholder="textarea..."></textarea></p>
+
+<h2>Range &amp; Color</h2>
+<p><input type="range" min="0" max="100" value="50"></p>
+<p><input type="color" value="#667eea"></p>
+
+<h2>Date/Time</h2>
+<p><input type="date"></p>
+<p><input type="time"></p>
+<p><input type="datetime-local"></p>
+<p><input type="month"></p>
+<p><input type="week"></p>
+
+<h2>Fieldset</h2>
+<fieldset>
+  <legend>Legend</legend>
+  <p>Fieldset content.</p>
+</fieldset>
+
+<h2>Media</h2>
+<div style="width:200px;height:120px;background:#ccc;border:2px dashed #999;">img placeholder</div>
+<br>
+<video width="320" height="180" controls><source src="test.mp4" type="video/mp4">no video</video>
+<br><br>
+<audio controls><source src="test.mp3" type="audio/mpeg">no audio</audio>
+
+<h2>Pre &amp; Blockquote</h2>
+<pre>function hello() {
+  console.log("hi");
+}</pre>
+<blockquote>This is a blockquote.</blockquote>
+
+<h2>HR</h2>
+<p>above</p>
+<hr>
+<p>below</p>
+
+<h2>Details</h2>
+<details><summary>closed</summary><p>hidden</p></details>
+<details open><summary>open</summary><p>visible</p></details>
+
+<h2>Address</h2>
+<address>Author, 123 St, City</address>
+
+<h2>Abbr / Cite / DFN</h2>
+<p><abbr title="HyperText Markup Language">HTML</abbr> lang.</p>
+<p><cite>Book</cite> novel.</p>
+<p><dfn>Term</dfn> def.</p>
+
+<h2>Mark / Time / Output</h2>
+<p><mark>hl</mark></p>
+<p><time datetime="2026-07-11">Jul 11</time></p>
+<p><output>42</output></p>
+
+<h2>Progress / Meter</h2>
+<progress value="70" max="100">70%</progress>
+<br><br>
+<meter value="0.6" min="0" max="1">60%</meter>
+
+<h2>Figure</h2>
+<figure>
+  <div style="width:150px;height:100px;background:#ddd;border:1px solid #999;">img</div>
+  <figcaption>Fig 1</figcaption>
+</figure>
+
+<h2>Div / Span</h2>
+<div style="width:300px;height:80px;background:#eef;border:1px solid #99c;padding:10px;">
+  div text <span style="background:#fee;border:1px solid #c99;padding:2px 6px;">span</span> more
+</div>
+
+<h2>Sub / Sup</h2>
+<p>H<sub>2</sub>O</p>
+<p>E=mc<sup>2</sup></p>
+
+<h2>Kbd / Var / Samp</h2>
+<p><kbd>Ctrl</kbd>+<kbd>C</kbd> <var>x</var>=10 <samp>out</samp></p>
+
+<h2>Pre / Samp / Var / Code</h2>
+<p><code>code</code> <kbd>kbd</kbd> <samp>samp</samp> <var>var</var></p>
+
+<hr>
+
+<div id="dump" style="background:#1e1e2e;color:#a6e3a1;padding:16px;font-family:monospace;font-size:12px;white-space:pre-wrap;border-radius:8px;margin:20px 0;">Loading dump...</div>
+
+<script>
+(function(){
+  var dumpEl = document.getElementById && document.getElementById("dump");
+  if (!dumpEl) { setTimeout(function(){ dumpEl = document.getElementById("dump"); if (dumpEl) dumpEl.textContent = "Waiting for DOM..."; }, 100); }
+
+  var lines = [];
+  lines.push("========== FULL ELEMENT DUMP ==========");
+  lines.push("URL: " + location.href);
+  lines.push("Title: " + document.title);
+  try { lines.push("Doc size: " + document.documentElement.scrollWidth + "x" + document.documentElement.scrollHeight); } catch(e) {}
+  lines.push("Window size: " + window.innerWidth + "x" + window.innerHeight);
+  lines.push("");
+
+  var all = document.querySelectorAll("*");
+  for (var i = 0; i < all.length; i++) {
+    var el = all[i];
+    try {
+      var tag = el.tagName;
+      var id = el.id ? "#" + el.id : "";
+      var cls = "";
+      if (typeof el.className === "string" && el.className) { cls = "." + el.className.trim().split(/\s+/).join("."); }
+      var txt = "";
+      try {
+        if (el.childNodes && el.childNodes.length === 1 && el.childNodes[0] && el.childNodes[0].nodeType === 3) {
+          txt = ' "' + (el.childNodes[0].textContent || "").substring(0, 30) + '"';
+        }
+      } catch(e) {}
+      lines.push("[" + i + "] <" + tag + id + cls + ">" + txt);
+
+      try { lines.push("  offset:  W=" + el.offsetWidth + " H=" + el.offsetHeight); } catch(e) { lines.push("  offset:  N/A"); }
+      try { lines.push("  client:  W=" + el.clientWidth + " H=" + el.clientHeight + " L=" + el.clientLeft + " T=" + el.clientTop); } catch(e) { lines.push("  client:  N/A"); }
+      try { lines.push("  scroll:  W=" + el.scrollWidth + " H=" + el.scrollHeight + " X=" + el.scrollLeft + " Y=" + el.scrollTop); } catch(e) { lines.push("  scroll:  N/A"); }
+      try { lines.push("  offsetParent: " + (el.offsetParent ? (el.offsetParent.tagName + (el.offsetParent.id ? "#" + el.offsetParent.id : "")) : "null")); } catch(e) {}
+      try { lines.push("  offsetPos: top=" + el.offsetTop + " left=" + el.offsetLeft); } catch(e) {}
+
+      try {
+        var r = el.getBoundingClientRect && el.getBoundingClientRect();
+        if (r) {
+          var rt = r.top, rl = r.left, rr = r.right, rb = r.bottom, rw = r.width, rh = r.height;
+          var fmt = function(v) { return (v === undefined || v === null || v !== v) ? "N/A" : v.toFixed(1); };
+          lines.push("  rect:    top=" + fmt(rt) + " left=" + fmt(rl) + " right=" + fmt(rr) + " bottom=" + fmt(rb) + " w=" + fmt(rw) + " h=" + fmt(rh));
+        }
+      } catch(e) { lines.push("  rect:    N/A"); }
+
+      try {
+        var cs = window.getComputedStyle && window.getComputedStyle(el);
+        if (cs) {
+          var props = [
+            "display", "position", "float", "clear",
+            "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
+            "margin-top", "margin-right", "margin-bottom", "margin-left",
+            "padding-top", "padding-right", "padding-bottom", "padding-left",
+            "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+            "border-top-style", "border-right-style", "border-bottom-style", "border-left-style",
+            "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+            "border-radius",
+            "box-sizing",
+            "fontSize", "fontWeight", "fontStyle", "fontFamily", "lineHeight",
+            "color", "backgroundColor", "opacity",
+            "textAlign", "textDecoration", "textDecorationLine", "textDecorationStyle",
+            "textTransform", "letterSpacing", "wordSpacing",
+            "verticalAlign", "whiteSpace", "overflow", "overflowX", "overflowY",
+            "zIndex", "visibility", "cursor",
+            "flexDirection", "flexWrap", "justifyContent", "alignItems", "alignSelf",
+            "gridTemplateColumns", "gridTemplateRows"
+          ];
+          var styleParts = [];
+          for (var p = 0; p < props.length; p++) {
+            var v = cs[props[p]];
+            if (v && typeof v === "string" && v !== "none" && v !== "normal" && v !== "auto" && v !== "visible" && v !== "static" && v !== "" && v !== "0px" && v !== "rgba(0, 0, 0, 0)" && v !== "0" && v !== "start" && v !== "stretch") {
+              styleParts.push(props[p] + "=" + v);
+            }
+          }
+          if (styleParts.length > 0) {
+            lines.push("  style:   " + styleParts.join(" | "));
+          }
+        }
+      } catch(e) {}
+
+      if (tag === "INPUT") {
+        try { lines.push("  input:   type=" + el.type + " value=" + el.value + " checked=" + el.checked + " disabled=" + el.disabled + " readOnly=" + el.readOnly + " placeholder=" + el.placeholder); } catch(e) {}
+      }
+      if (tag === "SELECT") {
+        try { lines.push("  select:  selectedIndex=" + el.selectedIndex + " value=" + el.value + " options=" + el.options.length); } catch(e) {}
+      }
+      if (tag === "TEXTAREA") {
+        try { lines.push("  textarea: value=" + (el.value || "").substring(0, 50) + " rows=" + el.rows + " cols=" + el.cols); } catch(e) {}
+      }
+      if (tag === "BUTTON") {
+        try { lines.push("  button:  type=" + el.type + " disabled=" + el.disabled + " text=" + (el.textContent || "").substring(0, 30)); } catch(e) {}
+      }
+      if (tag === "A") {
+        try { lines.push("  link:    href=" + el.href); } catch(e) {}
+      }
+      if (tag === "IMG") {
+        try { lines.push("  img:     src=" + el.src + " alt=" + el.alt + " naturalW=" + el.naturalWidth + " naturalH=" + el.naturalHeight); } catch(e) {}
+      }
+
+      try { lines.push("  tree:    parent=" + (el.parentElement ? el.parentElement.tagName : "null") + " children=" + el.children.length + " childNodes=" + el.childNodes.length); } catch(e) {}
+
+      lines.push("");
+    } catch(e) {
+      lines.push("  ERROR: " + e.message);
+      lines.push("");
+    }
+  }
+
+  lines.push("========== DUMP DONE ==========");
+  lines.push("Total elements: " + all.length);
+
+  var output = lines.join("\n");
+  console.log(output);
+  if (dumpEl) { dumpEl.textContent = output; }
+})();
+</script>
+
+</body>
+</html>

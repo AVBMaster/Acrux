@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Acrux.PerfSmokeTest</RootNamespace>
+    <AssemblyName>Acrux.PerfSmokeTest</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="VC-LTL" Version="5.3.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Acrux.Core\Acrux.Core.csproj" />
+    <ProjectReference Condition="'$(UseMultipleJsEngine)' == 'true'" Include="..\Acrux.JsEngineProtocol\Acrux.JsEngineProtocol.csproj" />
+    <ProjectReference Include="..\Acrux.Rendering\Acrux.Rendering.csproj" />
+  </ItemGroup>
+</Project>

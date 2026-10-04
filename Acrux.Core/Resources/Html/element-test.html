@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html>
+<head><title>Element Test - Acrux</title></head>
+<body style='background:#f8f9fa;color:#212529;font-family:Arial,Helvetica,sans-serif;padding:0;margin:0;'>
+<div style='background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:24px 32px;'>
+  <h1 style='margin:0;font-size:28px;font-weight:700;'>Acrux Element &amp; CSS Test</h1>
+  <p style='margin:6px 0 0;font-size:14px;opacity:0.9;'>All HTML elements and CSS rendering features</p>
+</div>
+<div style='padding:24px 32px;'>
+
+<!-- Section: Typography -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>1. Typography Elements</h2>
+<div style='display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;'>
+  <div style='flex:1;min-width:280px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h3 style='margin:0 0 12px;color:#333;'>Headings</h3>
+    <h1 style='font-size:28px;margin:4px 0;'>H1 - The Quick Brown Fox</h1>
+    <h2 style='font-size:22px;margin:4px 0;'>H2 - The Quick Brown Fox</h2>
+    <h3 style='font-size:18px;margin:4px 0;'>H3 - The Quick Brown Fox</h3>
+    <h4 style='font-size:16px;margin:4px 0;'>H4 - The Quick Brown Fox</h4>
+    <h5 style='font-size:14px;margin:4px 0;'>H5 - The Quick Brown Fox</h5>
+    <h6 style='font-size:12px;margin:4px 0;'>H6 - The Quick Brown Fox</h6>
+  </div>
+  <div style='flex:1;min-width:280px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h3 style='margin:0 0 12px;color:#333;'>Inline Elements</h3>
+    <p style='margin:4px 0;'><strong>Bold text</strong> via &lt;strong&gt;</p>
+    <p style='margin:4px 0;'><b>Bold text</b> via &lt;b&gt;</p>
+    <p style='margin:4px 0;'><em>Italic text</em> via &lt;em&gt;</p>
+    <p style='margin:4px 0;'><i>Italic text</i> via &lt;i&gt;</p>
+    <p style='margin:4px 0;'><u>Underline text</u> via &lt;u&gt;</p>
+    <p style='margin:4px 0;'><s>Strikethrough</s> via &lt;s&gt;</p>
+    <p style='margin:4px 0;'><del>Deleted text</del> and <ins>Inserted text</ins></p>
+    <p style='margin:4px 0;'><code style='background:#f1f3f5;padding:2px 6px;border-radius:3px;font-family:monospace;'>inline code</code></p>
+    <p style='margin:4px 0;'><kbd style='background:#e9ecef;padding:2px 6px;border-radius:3px;border:1px solid #ccc;font-family:monospace;'>Ctrl+C</kbd></p>
+    <p style='margin:4px 0;'><mark style='background:#fff3cd;padding:1px 4px;'>Highlighted text</mark></p>
+    <p style='margin:4px 0;'><small>Small text</small></p>
+    <p style='margin:4px 0;'>X<sub style='font-size:0.75em;'>sub</sub> and X<sup style='font-size:0.75em;'>sup</sup></p>
+  </div>
+</div>
+
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <h3 style='margin:0 0 12px;color:#333;'>Text Transform &amp; Letter Spacing</h3>
+  <p style='margin:4px 0;text-transform:uppercase;'>uppercase: the quick brown fox jumps over the lazy dog</p>
+  <p style='margin:4px 0;text-transform:lowercase;'>LOWERCASE: THE QUICK BROWN FOX JUMPS</p>
+  <p style='margin:4px 0;text-transform:capitalize;'>capitalize: the quick brown fox jumps over the lazy dog</p>
+  <p style='margin:4px 0;letter-spacing:4px;'>Letter spacing: 4px between each character</p>
+  <p style='margin:4px 0;letter-spacing:8px;font-size:12px;'>WIDE SPACING</p>
+</div>
+
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <h3 style='margin:0 0 12px;color:#333;'>Font Styles</h3>
+  <p style='margin:4px 0;font-style:normal;'>font-style: normal - Regular text</p>
+  <p style='margin:4px 0;font-style:italic;'>font-style: italic - The quick brown fox</p>
+  <p style='margin:4px 0;font-weight:normal;'>font-weight: normal (400)</p>
+  <p style='margin:4px 0;font-weight:bold;'>font-weight: bold (700)</p>
+</div>
+
+<!-- Section: Text Decoration -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>2. Text Decoration</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <p style='margin:4px 0;text-decoration-line:underline;'>Underline decoration</p>
+  <p style='margin:4px 0;text-decoration-line:line-through;'>Line-through decoration</p>
+  <p style='margin:4px 0;text-decoration-line:overline;'>Overline decoration</p>
+  <p style='margin:4px 0;text-decoration-line:underline;text-decoration-style:solid;'>Solid underline</p>
+  <p style='margin:4px 0;text-decoration-line:underline;text-decoration-style:double;'>Double underline</p>
+  <p style='margin:4px 0;text-decoration-line:underline;text-decoration-style:dotted;'>Dotted underline</p>
+  <p style='margin:4px 0;text-decoration-line:underline;text-decoration-style:dashed;'>Dashed underline</p>
+  <p style='margin:4px 0;text-decoration-line:underline;text-decoration-style:wavy;'>Wavy underline</p>
+  <p style='margin:4px 0;text-decoration-line:underline;text-decoration-color:#e74c3c;'>Red underline</p>
+  <p style='margin:4px 0;text-shadow:2px 2px 4px rgba(0,0,0,0.3);'>Text with shadow</p>
+  <p style='margin:4px 0;text-shadow:1px 1px 0 #ff0000, 2px 2px 0 #00ff00, 3px 3px 0 #0000ff;'>Multi-color text shadow</p>
+</div>
+
+<!-- Section: Box Model -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>3. Box Model</h2>
+<div style='display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;'>
+  <div style='flex:1;min-width:200px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h4 style='margin:0 0 8px;'>Margin &amp; Padding</h4>
+    <div style='background:#e3f2fd;padding:20px;margin:10px;border:2px solid #2196F3;border-radius:4px;'>
+      <div style='background:#bbdefb;padding:15px;border:1px solid #1976D2;border-radius:4px;'>Inner content</div>
+    </div>
+  </div>
+  <div style='flex:1;min-width:200px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h4 style='margin:0 0 8px;'>Border Radius</h4>
+    <div style='display:flex;gap:10px;flex-wrap:wrap;'>
+      <div style='width:60px;height:60px;background:#e91e63;border-radius:4px;'></div>
+      <div style='width:60px;height:60px;background:#9c27b0;border-radius:12px;'></div>
+      <div style='width:60px;height:60px;background:#673ab7;border-radius:50%;'></div>
+    </div>
+  </div>
+</div>
+
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <h3 style='margin:0 0 12px;color:#333;'>Border Styles</h3>
+  <div style='display:flex;gap:12px;flex-wrap:wrap;'>
+    <div style='padding:12px;border:3px solid #333;border-radius:4px;min-width:100px;text-align:center;font-size:13px;'>solid</div>
+    <div style='padding:12px;border:3px dashed #e74c3c;border-radius:4px;min-width:100px;text-align:center;font-size:13px;'>dashed</div>
+    <div style='padding:12px;border:3px dotted #2196F3;border-radius:4px;min-width:100px;text-align:center;font-size:13px;'>dotted</div>
+    <div style='padding:12px;border:3px double #ff9800;border-radius:4px;min-width:100px;text-align:center;font-size:13px;'>double</div>
+    <div style='padding:12px;border:3px groove #9e9e9e;border-radius:4px;min-width:100px;text-align:center;font-size:13px;'>groove</div>
+    <div style='padding:12px;border:3px ridge #9e9e9e;border-radius:4px;min-width:100px;text-align:center;font-size:13px;'>ridge</div>
+    <div style='padding:12px;border:3px inset #9e9e9e;border-radius:4px;min-width:100px;text-align:center;font-size:13px;'>inset</div>
+    <div style='padding:12px;border:3px outset #9e9e9e;border-radius:4px;min-width:100px;text-align:center;font-size:13px;'>outset</div>
+  </div>
+</div>
+
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <h3 style='margin:0 0 12px;color:#333;'>Box Shadow</h3>
+  <div style='display:flex;gap:16px;flex-wrap:wrap;'>
+    <div style='width:100px;height:100px;background:white;border-radius:8px;box-shadow:2px 2px 8px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;font-size:11px;'>soft</div>
+    <div style='width:100px;height:100px;background:white;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;'>large</div>
+    <div style='width:100px;height:100px;background:white;border-radius:8px;box-shadow:0 0 0 3px #667eea;display:flex;align-items:center;justify-content:center;font-size:11px;'>ring</div>
+    <div style='width:100px;height:100px;background:white;border-radius:8px;box-shadow:inset 0 2px 8px rgba(0,0,0,0.15);display:flex;align-items:center;justify-content:center;font-size:11px;'>inset</div>
+  </div>
+</div>
+
+<!-- Section: Backgrounds -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>4. Backgrounds &amp; Colors</h2>
+<div style='display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;'>
+  <div style='flex:1;min-width:200px;height:120px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;'>Linear Gradient</div>
+  <div style='flex:1;min-width:200px;height:120px;background:radial-gradient(circle,#ff6b6b,#ee5a24);border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;'>Radial Gradient</div>
+  <div style='flex:1;min-width:200px;height:120px;background:conic-gradient(#ff6b6b,#feca57,#48dbfb,#ff9ff3,#ff6b6b);border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;text-shadow:0 1px 3px rgba(0,0,0,0.5);'>Conic Gradient</div>
+</div>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <h3 style='margin:0 0 12px;color:#333;'>Opacity</h3>
+  <div style='display:flex;gap:12px;'>
+    <div style='width:80px;height:60px;background:#667eea;border-radius:4px;opacity:1;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;'>1.0</div>
+    <div style='width:80px;height:60px;background:#667eea;border-radius:4px;opacity:0.8;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;'>0.8</div>
+    <div style='width:80px;height:60px;background:#667eea;border-radius:4px;opacity:0.6;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;'>0.6</div>
+    <div style='width:80px;height:60px;background:#667eea;border-radius:4px;opacity:0.4;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;'>0.4</div>
+    <div style='width:80px;height:60px;background:#667eea;border-radius:4px;opacity:0.2;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;'>0.2</div>
+  </div>
+</div>
+
+<!-- Section: Lists -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>5. Lists</h2>
+<div style='display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;'>
+  <div style='flex:1;min-width:150px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h4 style='margin:0 0 8px;'>disc</h4>
+    <ul style='list-style-type:disc;margin:0;padding-left:20px;'>
+      <li>Item One</li><li>Item Two</li><li>Item Three</li>
+    </ul>
+  </div>
+  <div style='flex:1;min-width:150px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h4 style='margin:0 0 8px;'>circle</h4>
+    <ul style='list-style-type:circle;margin:0;padding-left:20px;'>
+      <li>Item One</li><li>Item Two</li><li>Item Three</li>
+    </ul>
+  </div>
+  <div style='flex:1;min-width:150px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h4 style='margin:0 0 8px;'>square</h4>
+    <ul style='list-style-type:square;margin:0;padding-left:20px;'>
+      <li>Item One</li><li>Item Two</li><li>Item Three</li>
+    </ul>
+  </div>
+  <div style='flex:1;min-width:150px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h4 style='margin:0 0 8px;'>decimal</h4>
+    <ol style='list-style-type:decimal;margin:0;padding-left:20px;'>
+      <li>Item One</li><li>Item Two</li><li>Item Three</li>
+    </ol>
+  </div>
+  <div style='flex:1;min-width:150px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h4 style='margin:0 0 8px;'>lower-roman</h4>
+    <ol style='list-style-type:lower-roman;margin:0;padding-left:20px;'>
+      <li>Item One</li><li>Item Two</li><li>Item Three</li><li>Item Four</li><li>Item Five</li>
+    </ol>
+  </div>
+  <div style='flex:1;min-width:150px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h4 style='margin:0 0 8px;'>upper-roman</h4>
+    <ol style='list-style-type:upper-roman;margin:0;padding-left:20px;'>
+      <li>Item One</li><li>Item Two</li><li>Item Three</li><li>Item Four</li>
+    </ol>
+  </div>
+  <div style='flex:1;min-width:150px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h4 style='margin:0 0 8px;'>lower-alpha</h4>
+    <ol style='list-style-type:lower-alpha;margin:0;padding-left:20px;'>
+      <li>Item One</li><li>Item Two</li><li>Item Three</li><li>Item Four</li>
+    </ol>
+  </div>
+  <div style='flex:1;min-width:150px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h4 style='margin:0 0 8px;'>upper-alpha</h4>
+    <ol style='list-style-type:upper-alpha;margin:0;padding-left:20px;'>
+      <li>Item One</li><li>Item Two</li><li>Item Three</li><li>Item Four</li>
+    </ol>
+  </div>
+</div>
+
+<!-- Section: Layout - Flexbox -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>6. Flexbox Layout</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <h4 style='margin:0 0 8px;'>justify-content variations</h4>
+  <div style='display:flex;justify-content:flex-start;gap:8px;margin-bottom:8px;background:#f1f3f5;padding:8px;border-radius:4px;'>
+    <div style='background:#667eea;color:white;padding:8px 16px;border-radius:4px;font-size:12px;'>A</div>
+    <div style='background:#667eea;color:white;padding:8px 16px;border-radius:4px;font-size:12px;'>B</div>
+    <div style='background:#667eea;color:white;padding:8px 16px;border-radius:4px;font-size:12px;'>C</div>
+  </div>
+  <div style='display:flex;justify-content:center;gap:8px;margin-bottom:8px;background:#f1f3f5;padding:8px;border-radius:4px;'>
+    <div style='background:#e91e63;color:white;padding:8px 16px;border-radius:4px;font-size:12px;'>A</div>
+    <div style='background:#e91e63;color:white;padding:8px 16px;border-radius:4px;font-size:12px;'>B</div>
+    <div style='background:#e91e63;color:white;padding:8px 16px;border-radius:4px;font-size:12px;'>C</div>
+  </div>
+  <div style='display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px;background:#f1f3f5;padding:8px;border-radius:4px;'>
+    <div style='background:#ff9800;color:white;padding:8px 16px;border-radius:4px;font-size:12px;'>A</div>
+    <div style='background:#ff9800;color:white;padding:8px 16px;border-radius:4px;font-size:12px;'>B</div>
+    <div style='background:#ff9800;color:white;padding:8px 16px;border-radius:4px;font-size:12px;'>C</div>
+  </div>
+  <div style='display:flex;justify-content:space-between;background:#f1f3f5;padding:8px;border-radius:4px;'>
+    <div style='background:#4caf50;color:white;padding:8px 16px;border-radius:4px;font-size:12px;'>A</div>
+    <div style='background:#4caf50;color:white;padding:8px 16px;border-radius:4px;font-size:12px;'>B</div>
+    <div style='background:#4caf50;color:white;padding:8px 16px;border-radius:4px;font-size:12px;'>C</div>
+  </div>
+</div>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <h4 style='margin:0 0 8px;'>Flex Wrap</h4>
+  <div style='display:flex;flex-wrap:wrap;gap:8px;background:#f1f3f5;padding:8px;border-radius:4px;'>
+    <div style='background:#667eea;color:white;padding:8px 20px;border-radius:4px;font-size:12px;'>Item 1</div>
+    <div style='background:#667eea;color:white;padding:8px 20px;border-radius:4px;font-size:12px;'>Item 2</div>
+    <div style='background:#667eea;color:white;padding:8px 20px;border-radius:4px;font-size:12px;'>Item 3</div>
+    <div style='background:#667eea;color:white;padding:8px 20px;border-radius:4px;font-size:12px;'>Item 4</div>
+    <div style='background:#667eea;color:white;padding:8px 20px;border-radius:4px;font-size:12px;'>Item 5</div>
+    <div style='background:#667eea;color:white;padding:8px 20px;border-radius:4px;font-size:12px;'>Item 6</div>
+  </div>
+</div>
+
+<!-- Section: Positioning -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>7. Positioning</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <div style='position:relative;height:120px;background:#f1f3f5;border-radius:4px;overflow:hidden;'>
+    <div style='position:absolute;top:8px;left:8px;background:#667eea;color:white;padding:6px 12px;border-radius:4px;font-size:12px;'>relative parent</div>
+    <div style='position:absolute;top:10px;right:10px;background:#e91e63;color:white;padding:6px 12px;border-radius:4px;font-size:12px;'>top:10 right:10</div>
+    <div style='position:absolute;bottom:10px;left:10px;background:#4caf50;color:white;padding:6px 12px;border-radius:4px;font-size:12px;'>bottom:10 left:10</div>
+    <div style='position:absolute;bottom:10px;right:10px;background:#ff9800;color:white;padding:6px 12px;border-radius:4px;font-size:12px;'>bottom:10 right:10</div>
+    <div style='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#333;color:white;padding:6px 12px;border-radius:4px;font-size:12px;'>centered</div>
+  </div>
+</div>
+
+<!-- Section: Overflow -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>8. Overflow &amp; Scroll</h2>
+<div style='display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;'>
+  <div style='flex:1;min-width:200px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h4 style='margin:0 0 8px;'>overflow: hidden</h4>
+    <div style='width:100%;height:80px;overflow:hidden;background:#f1f3f5;border:1px solid #dee2e6;border-radius:4px;padding:8px;'>
+      <p style='margin:0;'>This is a long paragraph that should be clipped when it exceeds the container height. The text continues beyond the visible area to demonstrate overflow hidden behavior.</p>
+    </div>
+  </div>
+  <div style='flex:1;min-width:200px;background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;'>
+    <h4 style='margin:0 0 8px;'>overflow: auto (scroll)</h4>
+    <div style='width:100%;height:80px;overflow:auto;background:#f1f3f5;border:1px solid #dee2e6;border-radius:4px;padding:8px;'>
+      <p style='margin:0;'>This is a long paragraph inside a scrollable container. You should see scrollbars appear when the content exceeds the container bounds. Try scrolling to see more content below.</p>
+      <p style='margin:8px 0 0;'>More content line 2. The scroll container should have visible scrollbars on the right side and bottom.</p>
+      <p style='margin:8px 0 0;'>More content line 3. Additional text to ensure scrollbars appear.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Section: Tables -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>9. Tables</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <table style='width:100%;border-collapse:collapse;font-size:14px;'>
+    <thead>
+      <tr style='background:#667eea;color:white;'>
+        <th style='padding:10px 12px;text-align:left;border:1px solid #5a6fd6;'>Name</th>
+        <th style='padding:10px 12px;text-align:left;border:1px solid #5a6fd6;'>Type</th>
+        <th style='padding:10px 12px;text-align:right;border:1px solid #5a6fd6;'>Size</th>
+        <th style='padding:10px 12px;text-align:center;border:1px solid #5a6fd6;'>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style='background:#f8f9fa;'>
+        <td style='padding:8px 12px;border:1px solid #dee2e6;'>index.html</td>
+        <td style='padding:8px 12px;border:1px solid #dee2e6;'>HTML</td>
+        <td style='padding:8px 12px;text-align:right;border:1px solid #dee2e6;'>4.2 KB</td>
+        <td style='padding:8px 12px;text-align:center;border:1px solid #dee2e6;'><span style='background:#28a745;color:white;padding:2px 8px;border-radius:10px;font-size:12px;'>Active</span></td>
+      </tr>
+      <tr>
+        <td style='padding:8px 12px;border:1px solid #dee2e6;'>style.css</td>
+        <td style='padding:8px 12px;border:1px solid #dee2e6;'>CSS</td>
+        <td style='padding:8px 12px;text-align:right;border:1px solid #dee2e6;'>12.8 KB</td>
+        <td style='padding:8px 12px;text-align:center;border:1px solid #dee2e6;'><span style='background:#28a745;color:white;padding:2px 8px;border-radius:10px;font-size:12px;'>Active</span></td>
+      </tr>
+      <tr style='background:#f8f9fa;'>
+        <td style='padding:8px 12px;border:1px solid #dee2e6;'>app.js</td>
+        <td style='padding:8px 12px;border:1px solid #dee2e6;'>JavaScript</td>
+        <td style='padding:8px 12px;text-align:right;border:1px solid #dee2e6;'>45.1 KB</td>
+        <td style='padding:8px 12px;text-align:center;border:1px solid #dee2e6;'><span style='background:#ffc107;color:#333;padding:2px 8px;border-radius:10px;font-size:12px;'>Draft</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Section: Form Elements -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>10. Form Elements</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <div style='display:flex;gap:16px;flex-wrap:wrap;'>
+    <div style='flex:1;min-width:280px;'>
+      <label style='display:block;margin-bottom:4px;font-size:13px;font-weight:bold;color:#555;'>Text Input</label>
+      <input type='text' placeholder='Enter text...' style='width:100%;padding:8px 12px;border:1px solid #ced4da;border-radius:4px;font-size:14px;box-sizing:border-box;margin-bottom:12px;'>
+      <label style='display:block;margin-bottom:4px;font-size:13px;font-weight:bold;color:#555;'>Password</label>
+      <input type='password' placeholder='Password' style='width:100%;padding:8px 12px;border:1px solid #ced4da;border-radius:4px;font-size:14px;box-sizing:border-box;margin-bottom:12px;'>
+      <label style='display:block;margin-bottom:4px;font-size:13px;font-weight:bold;color:#555;'>Email</label>
+      <input type='email' placeholder='user@example.com' style='width:100%;padding:8px 12px;border:1px solid #ced4da;border-radius:4px;font-size:14px;box-sizing:border-box;margin-bottom:12px;'>
+      <label style='display:block;margin-bottom:4px;font-size:13px;font-weight:bold;color:#555;'>Number</label>
+      <input type='number' value='42' style='width:100%;padding:8px 12px;border:1px solid #ced4da;border-radius:4px;font-size:14px;box-sizing:border-box;margin-bottom:12px;'>
+      <label style='display:block;margin-bottom:4px;font-size:13px;font-weight:bold;color:#555;'>Textarea</label>
+      <textarea rows='3' placeholder='Multi-line text...' style='width:100%;padding:8px 12px;border:1px solid #ced4da;border-radius:4px;font-size:14px;box-sizing:border-box;resize:vertical;margin-bottom:12px;'></textarea>
+    </div>
+    <div style='flex:1;min-width:280px;'>
+      <label style='display:block;margin-bottom:8px;font-size:13px;font-weight:bold;color:#555;'>Checkbox</label>
+      <div style='margin-bottom:12px;'>
+        <label style='display:block;margin-bottom:4px;'><input type='checkbox' checked> Option A (checked)</label>
+        <label style='display:block;margin-bottom:4px;'><input type='checkbox'> Option B</label>
+        <label style='display:block;margin-bottom:4px;'><input type='checkbox' checked> Option C (checked)</label>
+      </div>
+      <label style='display:block;margin-bottom:8px;font-size:13px;font-weight:bold;color:#555;'>Radio</label>
+      <div style='margin-bottom:12px;'>
+        <label style='display:block;margin-bottom:4px;'><input type='radio' name='demo' checked> Choice 1</label>
+        <label style='display:block;margin-bottom:4px;'><input type='radio' name='demo'> Choice 2</label>
+        <label style='display:block;margin-bottom:4px;'><input type='radio' name='demo'> Choice 3</label>
+      </div>
+      <label style='display:block;margin-bottom:8px;font-size:13px;font-weight:bold;color:#555;'>Range</label>
+      <input type='range' min='0' max='100' value='60' style='width:100%;margin-bottom:12px;'>
+      <label style='display:block;margin-bottom:8px;font-size:13px;font-weight:bold;color:#555;'>Color</label>
+      <input type='color' value='#667eea' style='margin-bottom:12px;'>
+      <label style='display:block;margin-bottom:8px;font-size:13px;font-weight:bold;color:#555;'>Select</label>
+      <select style='width:100%;padding:8px;border:1px solid #ced4da;border-radius:4px;font-size:14px;margin-bottom:12px;'>
+        <option>Option 1</option>
+        <option selected>Option 2 (selected)</option>
+        <option>Option 3</option>
+      </select>
+    </div>
+  </div>
+  <div style='margin-top:12px;'>
+    <label style='display:block;margin-bottom:8px;font-size:13px;font-weight:bold;color:#555;'>Buttons</label>
+    <div style='display:flex;gap:8px;flex-wrap:wrap;'>
+      <button style='background:#667eea;color:white;padding:8px 20px;border:none;border-radius:4px;font-size:14px;cursor:pointer;'>Primary</button>
+      <button style='background:#6c757d;color:white;padding:8px 20px;border:none;border-radius:4px;font-size:14px;cursor:pointer;'>Secondary</button>
+      <button style='background:#28a745;color:white;padding:8px 20px;border:none;border-radius:4px;font-size:14px;cursor:pointer;'>Success</button>
+      <button style='background:#dc3545;color:white;padding:8px 20px;border:none;border-radius:4px;font-size:14px;cursor:pointer;'>Danger</button>
+      <button style='background:transparent;color:#667eea;padding:8px 20px;border:2px solid #667eea;border-radius:4px;font-size:14px;cursor:pointer;'>Outline</button>
+    </div>
+  </div>
+</div>
+
+<!-- Section: Media Elements -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>11. Media Elements</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <h4 style='margin:0 0 8px;'>Image (placeholder)</h4>
+  <div style='display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;'>
+    <div style='width:120px;height:80px;background:#e9ecef;border:2px dashed #adb5bd;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#6c757d;font-size:12px;'>&lt;img&gt;</div>
+    <div style='width:120px;height:120px;background:#e9ecef;border:2px dashed #adb5bd;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#6c757d;font-size:12px;'>circle</div>
+    <div style='width:160px;height:80px;background:#e9ecef;border:2px dashed #adb5bd;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#6c757d;font-size:12px;'>wide</div>
+  </div>
+  <h4 style='margin:0 0 8px;'>Video (placeholder)</h4>
+  <div style='width:100%;max-width:320px;height:180px;background:#212529;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#6c757d;font-size:14px;'>&lt;video&gt; placeholder</div>
+  <h4 style='margin:12px 0 8px;'>Audio (placeholder)</h4>
+  <div style='width:100%;max-width:320px;height:40px;background:#343a40;border-radius:20px;display:flex;align-items:center;padding:0 16px;color:#adb5bd;font-size:12px;'>&lt;audio&gt; placeholder</div>
+</div>
+
+<!-- Section: Details / Summary -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>12. Details / Summary</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <details style='margin-bottom:8px;'>
+    <summary style='cursor:pointer;padding:8px;background:#f8f9fa;border-radius:4px;font-weight:bold;'>Click to expand - Section 1</summary>
+    <p style='margin:8px 0;padding:8px;background:#f1f3f5;border-radius:4px;'>This is the hidden content inside details element. It should be visible when the details element is open.</p>
+  </details>
+  <details style='margin-bottom:8px;'>
+    <summary style='cursor:pointer;padding:8px;background:#f8f9fa;border-radius:4px;font-weight:bold;'>Click to expand - Section 2</summary>
+    <p style='margin:8px 0;padding:8px;background:#f1f3f5;border-radius:4px;'>More hidden content here. The disclosure triangle should toggle between open/closed states.</p>
+  </details>
+  <details open style='margin-bottom:8px;'>
+    <summary style='cursor:pointer;padding:8px;background:#f8f9fa;border-radius:4px;font-weight:bold;'>This one is open by default</summary>
+    <p style='margin:8px 0;padding:8px;background:#f1f3f5;border-radius:4px;'>This content is visible by default because the details element has the open attribute.</p>
+  </details>
+</div>
+
+<!-- Section: Blockquote / Pre / Code -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>13. Preformatted &amp; Quote</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <blockquote style='margin:0 0 12px;padding:12px 20px;background:#f1f3f5;border-left:4px solid #667eea;border-radius:0 4px 4px 0;font-style:italic;color:#555;'>
+    The only way to do great work is to love what you do. - Steve Jobs
+  </blockquote>
+  <pre style='margin:0;padding:16px;background:#282c34;color:#abb2bf;border-radius:4px;font-family:monospace;font-size:13px;overflow-x:auto;'>function greet(name) {
+  console.log('Hello, ' + name + '!');
+  return true;
+}
+
+greet('Acrux');</pre>
+</div>
+
+<!-- Section: HR -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>14. Horizontal Rule</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <p style='margin:0 0 8px;'>Content above the hr</p>
+  <hr>
+  <p style='margin:8px 0 0;'>Content below the hr</p>
+</div>
+
+<!-- Section: CSS Transforms -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>15. CSS Transforms</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <div style='display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end;'>
+    <div style='text-align:center;'>
+      <div style='width:80px;height:80px;background:#667eea;border-radius:4px;transform:rotate(15deg);margin:0 auto;'></div>
+      <div style='font-size:11px;margin-top:4px;color:#666;'>rotate(15deg)</div>
+    </div>
+    <div style='text-align:center;'>
+      <div style='width:80px;height:80px;background:#e91e63;border-radius:4px;transform:scale(1.2);margin:0 auto;'></div>
+      <div style='font-size:11px;margin-top:4px;color:#666;'>scale(1.2)</div>
+    </div>
+    <div style='text-align:center;'>
+      <div style='width:80px;height:80px;background:#4caf50;border-radius:4px;transform:skewX(10deg);margin:0 auto;'></div>
+      <div style='font-size:11px;margin-top:4px;color:#666;'>skewX(10deg)</div>
+    </div>
+    <div style='text-align:center;'>
+      <div style='width:80px;height:80px;background:#ff9800;border-radius:4px;transform:translate(10px,-10px);margin:0 auto;'></div>
+      <div style='font-size:11px;margin-top:4px;color:#666;'>translate(10,-10)</div>
+    </div>
+  </div>
+</div>
+
+<!-- Section: Clip Path -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>16. Clip Path</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <div style='display:flex;gap:16px;flex-wrap:wrap;'>
+    <div style='text-align:center;'>
+      <div style='width:100px;height:100px;background:#667eea;clip-path:circle(50%);margin:0 auto;'></div>
+      <div style='font-size:11px;margin-top:4px;color:#666;'>circle(50%)</div>
+    </div>
+    <div style='text-align:center;'>
+      <div style='width:120px;height:80px;background:#e91e63;clip-path:ellipse(50% 50%);margin:0 auto;'></div>
+      <div style='font-size:11px;margin-top:4px;color:#666;'>ellipse(50% 50%)</div>
+    </div>
+    <div style='text-align:center;'>
+      <div style='width:100px;height:100px;background:#4caf50;clip-path:polygon(50% 0%,100% 100%,0% 100%);margin:0 auto;'></div>
+      <div style='font-size:11px;margin-top:4px;color:#666;'>polygon(triangle)</div>
+    </div>
+    <div style='text-align:center;'>
+      <div style='width:100px;height:100px;background:#ff9800;clip-path:inset(10px);margin:0 auto;'></div>
+      <div style='font-size:11px;margin-top:4px;color:#666;'>inset(10px)</div>
+    </div>
+  </div>
+</div>
+
+<!-- Section: Inline-block -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>17. Inline-Block</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <p style='margin:0 0 8px;'>Inline-block elements in a line:</p>
+  <div>
+    <span style='display:inline-block;width:60px;height:30px;background:#667eea;color:white;text-align:center;line-height:30px;border-radius:4px;margin:2px;font-size:12px;'>A</span>
+    <span style='display:inline-block;width:60px;height:30px;background:#e91e63;color:white;text-align:center;line-height:30px;border-radius:4px;margin:2px;font-size:12px;'>B</span>
+    <span style='display:inline-block;width:60px;height:50px;background:#4caf50;color:white;text-align:center;line-height:50px;border-radius:4px;margin:2px;font-size:12px;'>Tall</span>
+    <span style='display:inline-block;width:60px;height:30px;background:#ff9800;color:white;text-align:center;line-height:30px;border-radius:4px;margin:2px;font-size:12px;'>D</span>
+    <span style='display:inline-block;width:60px;height:30px;background:#9c27b0;color:white;text-align:center;line-height:30px;border-radius:4px;margin:2px;font-size:12px;'>E</span>
+  </div>
+</div>
+
+<!-- Section: Visibilty & Display -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>18. Visibility &amp; Display</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <p style='margin:0 0 8px;'>visibility: hidden (element takes space but invisible):</p>
+  <div style='background:#f1f3f5;padding:8px;border-radius:4px;'>
+    Before
+    <span style='visibility:hidden;background:#e74c3c;color:white;padding:4px 8px;border-radius:4px;'>HIDDEN</span>
+    After
+  </div>
+  <p style='margin:12px 0 8px;'>display: none (element removed from flow):</p>
+  <div style='background:#f1f3f5;padding:8px;border-radius:4px;'>
+    Before
+    <span style='display:none;background:#e74c3c;color:white;padding:4px 8px;border-radius:4px;'>NONE</span>
+    After (no gap)
+  </div>
+</div>
+
+<!-- Section: Z-index -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>19. Z-Index Stacking</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <div style='position:relative;height:120px;'>
+    <div style='position:absolute;top:0;left:0;width:100px;height:100px;background:rgba(102,126,234,0.8);border-radius:8px;z-index:1;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;'>z:1</div>
+    <div style='position:absolute;top:20px;left:30px;width:100px;height:100px;background:rgba(233,30,99,0.8);border-radius:8px;z-index:2;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;'>z:2</div>
+    <div style='position:absolute;top:40px;left:60px;width:100px;height:100px;background:rgba(76,175,80,0.8);border-radius:8px;z-index:3;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;'>z:3</div>
+  </div>
+</div>
+
+<!-- Section: Vertical Align -->
+<h2 style='color:#667eea;border-bottom:2px solid #667eea;padding-bottom:8px;'>20. Mixed Content</h2>
+<div style='background:white;padding:16px;border-radius:8px;border:1px solid #e9ecef;margin-bottom:20px;'>
+  <p style='margin:0 0 8px;'>Inline elements mixed with block:</p>
+  <div style='background:#f1f3f5;padding:12px;border-radius:4px;'>
+    Normal text
+    <strong>Bold</strong>
+    <em>Italic</em>
+    <span style='background:#667eea;color:white;padding:2px 8px;border-radius:3px;font-size:12px;'>styled span</span>
+    <code style='background:#e9ecef;padding:2px 6px;border-radius:3px;font-family:monospace;font-size:13px;'>code</code>
+    <mark style='background:#fff3cd;padding:1px 4px;'>highlighted</mark>
+    <span style='display:inline-block;width:20px;height:20px;background:#e91e63;border-radius:50%;vertical-align:middle;'></span>
+    inline-block circle
+  </div>
+</div>
+
+<div style='text-align:center;padding:24px;color:#6c757d;font-size:13px;border-top:1px solid #e9ecef;margin-top:20px;'>
+  Acrux Element Test Page - Testing all HTML elements and CSS features
+</div>
+</div>
+</body>
+</html>

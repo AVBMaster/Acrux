@@ -1,0 +1,16 @@
+﻿<Solution>
+  <Project Path="Acrux.Input/Acrux.Input.csproj" />
+  <Project Path="Acrux.Native\Acrux.Native.csproj" />
+  <Project Path="Acrux.Platform\Acrux.Platform.csproj" />
+  <Project Path="Acrux.Rendering\Acrux.Rendering.csproj" />
+  <Project Path="Acrux.Core\Acrux.Core.csproj" />
+  <Project Path="Acrux.Core.Tests\Acrux.Core.Tests.csproj" />
+  <Project Path="Acrux.SmokeTest\Acrux.SmokeTest.csproj" />
+  <Project Path="Acrux.PerfSmokeTest\Acrux.PerfSmokeTest.csproj" />
+  <Project Path="Acrux\Acrux.csproj" />
+  <Project Path="Acrux.JsEngineProtocol\Acrux.JsEngineProtocol.csproj" />
+  <Project Path="Acrux.JsEngineHost\Acrux.JsEngineHost.csproj" />
+  <Project Path="Acrux.PageContract/Acrux.PageContract.csproj" />
+  <Project Path="Acrux.PageHost/Acrux.PageHost.csproj" />
+  <Project Path="Acrux.BrowserUi/Acrux.BrowserUi.csproj" />
+</Solution>

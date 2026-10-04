@@ -1,0 +1,69 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PublishSingleFile>true</PublishSingleFile>
+	<PublishReadyToRun>true</PublishReadyToRun>
+    <SelfContained>true</SelfContained>
+    <PublishAot>true</PublishAot>
+    <IsTrimmable>true</IsTrimmable>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <NoWarn>$(NoWarn);IL2026;IL2111</NoWarn>
+  </PropertyGroup>
+
+  <!-- Single-process mode (default): the engine host is not compiled at all -->
+  <PropertyGroup Condition="'$(UseMultipleJsEngine)' != 'true'">
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <OutputType>Library</OutputType>
+    <PublishSingleFile>false</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <PublishAot>false</PublishAot>
+    <IsTrimmable>false</IsTrimmable>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <SupportedOSPlatformVersion>5.1</SupportedOSPlatformVersion>
+    <SupportWinXP>true</SupportWinXP>
+  </PropertyGroup>
+  <PropertyGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <PackageReference Include="YY-Thunks" Version="1.2.2" />
+    <PackageReference Include="VC-LTL" Version="5.3.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseMultipleJsEngine)' == 'true'">
+    <ProjectReference Include="..\third_party\jint\Jint\Jint.csproj" />
+    <ProjectReference Include="..\Acrux.JsEngineProtocol\Acrux.JsEngineProtocol.csproj" />
+    <TrimmerRootAssembly Include="Jint" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="DomSetup.js">
+      <LogicalName>Acrux.JsEngineHost.DomSetup.js</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- Shim DLL copy during build/publish (stays with JsEngineHost output) -->
+  <Target Name="CopyKnownFolderShim" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <PropertyGroup>
+      <ShimSrc>$(MSBuildThisFileDirectory)..\Acrux.Native\shim\KnownFolderShim.dll</ShimSrc>
+    </PropertyGroup>
+    <Copy SourceFiles="$(ShimSrc)" DestinationFolder="$(TargetDir)" OverwriteReadOnlyFiles="true"
+          Condition="Exists('$(ShimSrc)')" />
+  </Target>
+
+  <Target Name="PublishKnownFolderShim" AfterTargets="Publish" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <PropertyGroup>
+      <ShimSrc>$(MSBuildThisFileDirectory)..\Acrux.Native\shim\KnownFolderShim.dll</ShimSrc>
+    </PropertyGroup>
+    <Copy SourceFiles="$(ShimSrc)" DestinationFolder="$(PublishDir)" OverwriteReadOnlyFiles="false"
+          Condition="Exists('$(ShimSrc)')" />
+  </Target>
+
+</Project>

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Browser chrome UI: tab strip, omnibox, DevTools panels, settings and task manager
+    pages. Kept out of Acrux.Rendering on purpose: the page host (a tab's child
+    process) links Rendering to paint page content and must never be able to reach
+    these types, which is what keeps "engine" and "shell" separate assemblies rather
+    than just separate folders.
+  -->
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsTrimmable>false</IsTrimmable>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="VC-LTL" Version="5.3.1" />
+    <PackageReference Include="YY-Thunks" Version="1.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Acrux.Rendering\Acrux.Rendering.csproj" />
+    <ProjectReference Include="..\Acrux.Platform\Acrux.Platform.csproj" />
+    <ProjectReference Include="..\Acrux.Core\Acrux.Core.csproj" />
+    <ProjectReference Include="..\Acrux.PageContract\Acrux.PageContract.csproj" />
+  </ItemGroup>
+
+</Project>

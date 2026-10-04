@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Acrux.SmokeTest</RootNamespace>
+    <AssemblyName>Acrux.SmokeTest</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Acrux.Core\Acrux.Core.csproj" />
+  </ItemGroup>
+</Project>

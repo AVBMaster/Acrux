@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="VC-LTL" Version="5.3.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseLocalSkiaSharp)' == 'true'">
+    <ProjectReference Include="..\third_party\SkiaSharp\binding\SkiaSharp\SkiaSharp.csproj" Properties="TargetFramework=net10.0" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux')) or $(RuntimeIdentifier.Contains('linux'))">
+    <UseLinuxSkiaNative>true</UseLinuxSkiaNative>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseLocalSkiaSharp)' != 'true'">
+    <PackageReference Include="SkiaSharp" Version="4.150.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.150.1" Condition="'$(UseLinuxSkiaNative)' == 'true'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Acrux.Native\Acrux.Native.csproj" />
+    <ProjectReference Include="..\Acrux.Core\Acrux.Core.csproj" />
+    <ProjectReference Include="..\Acrux.Input\Acrux.Input.csproj" />
+  </ItemGroup>
+</Project>

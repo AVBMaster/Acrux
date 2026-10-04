@@ -1,0 +1,46 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<IsTrimmable>false</IsTrimmable>
+		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+	</PropertyGroup>
+
+   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <SupportedOSPlatformVersion>5.1</SupportedOSPlatformVersion>
+    <SupportWinXP>true</SupportWinXP>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <PackageReference Include="YY-Thunks" Version="1.2.2" />
+    <PackageReference Include="VC-LTL" Version="5.3.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Html\*.html" />
+    <EmbeddedResource Include="Resources\Css\*.css" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseMultipleJsEngine)' == 'true'">
+    <ProjectReference Include="..\Acrux.JsEngineProtocol\Acrux.JsEngineProtocol.csproj" />
+  </ItemGroup>
+
+  <!-- Single-process mode: the built-in Jint engine runs inside the browser process -->
+  <ItemGroup Condition="'$(UseMultipleJsEngine)' != 'true'">
+    <ProjectReference Include="..\third_party\jint\Jint\Jint.csproj" />
+    <TrimmerRootAssembly Include="Jint" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AngleSharp" Version="1.7.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseLocalSkiaSharp)' == 'true'">
+    <ProjectReference Include="..\third_party\SkiaSharp\binding\SkiaSharp\SkiaSharp.csproj" Properties="TargetFramework=net10.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseLocalSkiaSharp)' != 'true'">
+    <PackageReference Include="SkiaSharp" Version="4.150.1" />
+    <!--<PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="*" />-->
+  </ItemGroup>
+</Project>
