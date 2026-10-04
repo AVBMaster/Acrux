@@ -1,0 +1,46 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+@counter-style nopad  { system: numeric; symbols: "A" "B"; }
+@counter-style pad4   { system: numeric; symbols: "A" "B"; pad: 4; }
+@counter-style pad4A  { system: numeric; symbols: "A" "B"; pad: 4 "A"; }
+@counter-style pad4Z  { system: numeric; symbols: "A" "B"; pad: 4 "Z"; }
+@counter-style suffixx{ system: numeric; symbols: "A" "B"; suffix: ">"; }
+@counter-style prefixx{ system: numeric; symbols: "A" "B"; prefix: "<"; }
+@counter-style bothx  { system: numeric; symbols: "A" "B"; prefix: "<"; suffix: ">"; }
+@counter-style emptySuf { system: numeric; symbols: "A" "B"; suffix: ""; }
+@counter-style twoSuf { system: numeric; symbols: "A" "B"; suffix: "!" "?"; }
+@counter-style negx   { system: numeric; symbols: "A" "B"; negative: "~" "!"; }
+@counter-style rngx   { system: numeric; symbols: "A" "B"; range: 2 3; }
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+ol { margin: 0; padding: 0 0 0 8px; list-style-position: inside; }
+li { width: 500px; margin: 0; }
+.c1 { list-style-type: nopad; }
+.c2 { list-style-type: pad4; }
+.c3 { list-style-type: pad4A; }
+.c4 { list-style-type: pad4Z; }
+.c5 { list-style-type: suffixx; }
+.c6 { list-style-type: prefixx; }
+.c7 { list-style-type: bothx; }
+.c8 { list-style-type: emptySuf; }
+.c9 { list-style-type: twoSuf; }
+.c10 { list-style-type: negx; }
+.c11 { list-style-type: rngx; }
+p.gen { counter-increment: g; margin: 0; }
+p.gen::before { content: "[" counter(g, nopad) "|" counter(g, pad4) "|" counter(g, pad4Z) "|"
+                counter(g, suffixx) "|" counter(g, prefixx) "|" counter(g, bothx) "|"
+                counter(g, negx) "|" counter(g, rngx) "] "; }
+</style></head><body>
+<ol class="c1"><li id="l1">x</li><li id="l2">x</li><li id="l3">x</li></ol>
+<ol class="c2"><li id="m1">x</li><li id="m2">x</li><li id="m3">x</li></ol>
+<ol class="c3"><li id="n1">x</li></ol>
+<ol class="c4"><li id="o1">x</li></ol>
+<ol class="c5"><li id="s1">x</li></ol>
+<ol class="c6"><li id="p1">x</li></ol>
+<ol class="c7"><li id="b1">x</li></ol>
+<ol class="c8"><li id="e1">x</li></ol>
+<ol class="c9"><li id="t1">x</li></ol>
+<ol class="c10"><li id="g1">x</li></ol>
+<ol class="c11"><li id="r1">x</li><li id="r2">x</li><li id="r3">x</li></ol>
+<p class="gen" id="q1">1</p>
+<p class="gen" id="q2">2</p>
+<p class="gen" id="q3">3</p>
+</body></html>

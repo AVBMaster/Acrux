@@ -50,7 +50,7 @@ $pass = 0; $near = 0; $fail = 0
 
 # Bounding box of the non-white pixels in a window, as "L,T R,B".
 function BoundingBox($image, $x0, $y0, $x1, $y1) {
-  $lines = dotnet run --project UpBrowser --no-build -- --rows $image $x0 $x1 $y0 $y1 2>&1
+  $lines = dotnet run --project Acrux --no-build -- --rows $image $x0 $x1 $y0 $y1 2>&1
   $minX = 99999; $maxX = -1; $minY = 99999; $maxY = -1
   foreach ($l in $lines) {
     if ($l -match '^\[row\] y=(-?\d+) first=(-?\d+) last=(-?\d+)') {
@@ -92,8 +92,8 @@ for ($i = 1; $i -le $Count; $i++) {
     continue
   }
 
-  $a = (dotnet run --project UpBrowser --no-build -- --pixels $ours $y $x $x 2>&1) -join ''
-  $b = (dotnet run --project UpBrowser --no-build -- --pixels $ref  $y $x $x 2>&1) -join ''
+  $a = (dotnet run --project Acrux --no-build -- --pixels $ours $y $x $x 2>&1) -join ''
+  $b = (dotnet run --project Acrux --no-build -- --pixels $ref  $y $x $x 2>&1) -join ''
   $ra = ($a -replace '.*rgb=', '')
   $rb = ($b -replace '.*rgb=', '')
 

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CSS verify 123 - counter styles (CJK longhand, armenian, georgian, hebrew, ethiopic, kana)</title>
+<style>
+  body { margin: 0; background: #fff; color: #000; font: 12px Arial, sans-serif; }
+  #out { display: flex; flex-wrap: wrap; }
+  .block { width: 300px; }
+  .name { font: 12px Arial, sans-serif; color: #008000; }
+  /* 'list-style-position: inside' keeps the marker in the item's own line box, so
+     the glyph run is what a screenshot shows; the grey number is the ordinal. */
+  ol.m { margin: 0; padding: 0; list-style-position: inside;
+         font: 18px "Microsoft YaHei", "SimSun", sans-serif; }
+  ol.m li { margin: 0; padding: 0; white-space: nowrap; }
+  li .v { font: 9px Arial, sans-serif; color: #999; }
+</style>
+</head>
+<body>
+<div id="out"></div>
+<script>
+  var cjk = [0, 1, 4, 10, 11, 20, 99, 101, 200, 1001, 10000, 10010, 100000,
+             1000000, 10000000, 100000000, 2147483647];
+  var groups = [
+    ['trad-chinese-informal', cjk],
+    ['trad-chinese-formal', cjk],
+    ['simp-chinese-informal', cjk],
+    ['simp-chinese-formal', cjk],
+    ['cjk-ideographic', [0, 1, 4, 10, 11, 20, 99, 101, 1001, 10000, 10010, 100000, 1000000, 10000000, 100000000]],
+    ['cjk-decimal', [0, 1, 9, 10, 11, 20, 100, 101, 1000, 10000]],
+    ['japanese-informal', [0, 1, 4, 10, 11, 20, 99, 101, 1000, 9999, 10000, 100000]],
+    ['japanese-formal', [0, 1, 4, 10, 11, 20, 99, 101, 1000, 9999, 10000, 100000]],
+    ['korean-hangul-formal', [0, 1, 4, 10, 11, 19, 20, 99, 100, 1000, 10000, 100000]],
+    ['korean-hanja-informal', [0, 1, 4, 10, 11, 19, 20, 99, 100, 1000, 10000, 100000]],
+    ['korean-hanja-formal', [0, 1, 4, 10, 11, 19, 20, 99, 100, 1000, 10000, 100000]],
+    ['cjk-earthly-branch', [1, 11, 12, 13, 25]],
+    ['cjk-heavenly-stem', [1, 9, 10, 11, 21]],
+    ['armenian', [0, 1, 2, 10, 11, 20, 99, 100, 1000, 9999, 10000, 10001, 99999999, 100000000]],
+    ['upper-armenian', [1, 10, 100, 1000, 10000]],
+    ['lower-armenian', [1, 10, 100, 1000, 10000]],
+    ['georgian', [0, 1, 2, 10, 19, 20, 100, 999, 1000, 1999, 2000, 19999, 20000]],
+    ['hebrew', [0, 1, 2, 9, 10, 11, 15, 16, 20, 40, 99, 100, 101, 200, 399, 400,
+                401, 500, 799, 800, 999, 1000, 1001, 1010, 2005, 999999, 1000000]],
+    ['ethiopic-numeric', [1, 2, 5, 9, 10, 11, 19, 20, 32, 50, 99, 100, 101, 150,
+                          199, 200, 899, 900, 1000, 10000, 100000, 1000000]],
+    ['hiragana', [1, 2, 46, 47, 48, 49, 50]],
+    ['katakana', [1, 47, 48, 49]],
+    ['hiragana-iroha', [1, 46, 47, 48]],
+    ['katakana-iroha', [1, 46, 47, 48]],
+    ['decimal', [-2, -1, 0, 1, 2]],
+    ['decimal-leading-zero', [-1, 0, 1, 9, 10, 9999, 10000]],
+    ['lower-roman', [0, 1, 4, 9, 14, 40, 99, 400, 999, 1999, 3999, 4000]],
+    ['upper-roman', [0, 1, 4, 9, 14, 40, 99, 400, 999, 1999, 3999, 4000]],
+    ['lower-greek', [1, 24, 25, 26]],
+    ['upper-greek', [1, 24, 25]],
+    ['lower-latin', [1, 26, 27, 28]],
+    ['canadian-aboriginal', [1, 9, 10, 11]],
+    ['symbol', [1, 2, 10, 11]],
+    ['disclosure-open', [1, 2]],
+    ['disclosure-closed', [1, 2]],
+    ['circle', [1, 2]],
+    ['square', [1, 2]],
+    ['devanagari', [0, 1, 10, 100]],
+    ['gujarati', [0, 1, 10, 100]],
+    ['gurmukhi', [0, 1, 10, 100]],
+    ['kannada', [0, 1, 10, 100]],
+    ['malayalam', [0, 1, 10, 100]],
+    ['oriya', [0, 1, 10, 100]],
+    ['tibetan', [0, 1, 10, 100]],
+    ['thai', [0, 1, 10, 100]],
+    ['lao', [0, 1, 10, 100]],
+    ['khmer', [0, 1, 10, 100]],
+    ['myanmar', [0, 1, 10, 100]],
+    ['mongolian', [0, 1, 10, 100]],
+    ['persian', [0, 1, 10, 100]],
+    ['arabic-indic', [0, 1, 10, 100]],
+    ['bengali', [0, 1, 10, 100]],
+    ['tamil', [0, 1, 10, 100]],
+    ['telugu', [0, 1, 10, 100]]
+  ];
+  groups = groups.slice(0,1);
+  var out = document.getElementById('out');
+  var html = '';
+  for (var s = 0; s < groups.length; s++) {
+    var name = groups[s][0], vals = groups[s][1];
+    html += '<div class="block"><div class="name">' + name + '</div>' +
+            '<ol class="m" style="list-style-type:' + name + '">';
+    for (var i = 0; i < vals.length; i++)
+      html += '<li value="' + vals[i] + '"><span class="v">' + vals[i] + '</span></li>';
+    html += '</ol></div>';
+  }
+  out.innerHTML = html;
+</script>
+</body>
+</html>

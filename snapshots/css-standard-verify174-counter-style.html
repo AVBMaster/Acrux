@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b174 @counter-style and counter() styles</title>
+<style>
+@counter-style cyc   { system: cyclic;   symbols: "\25C6" "\25C7"; suffix: " "; }
+@counter-style num   { system: numeric;  symbols: "A" "B" "C"; }
+@counter-style alpha3{ system: alphabetic; symbols: "\03B1" "\03B2" "\03B3"; suffix: ") "; }
+@counter-style sym   { system: symbolic; symbols: "\2701" "\2702"; }
+@counter-style add   { system: additive; additive-symbols: 10 "X", 5 "V", 1 "I"; }
+@counter-style fix   { system: fixed;    symbols: "a" "b" "c"; }
+@counter-style pad4  { system: numeric;  symbols: "0" "1"; pad: 4; }
+@counter-style parens{ system: cyclic;   symbols: "P"; prefix: "("; suffix: ")"; }
+@counter-style extal { system: extends lower-alpha; suffix: ") "; }
+@counter-style negab { system: numeric; symbols: "a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k";
+                       negative: "(" ")"; }
+@counter-style rng   { system: symbolic; symbols: "\25CF"; range: 1 2; }
+@counter-style broken{ system: cyclic; }
+@counter-style zero  { system: fixed 3;  symbols: "x" "y" "z"; }
+@counter-style fb    { system: fixed;    symbols: "\00B9" "\00B2"; fallback: alpha3; }
+
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; counter-reset: main 0 sub 0; }
+h4 { margin: 6px 0 2px; font-size: 13px; font-weight: 600; color: rgb(80,80,80); }
+ol { margin: 0; padding: 0 0 0 70px; }
+li { margin-bottom: 2px; }
+.cyc { list-style-type: cyc; }
+.num { list-style-type: num; }
+.alpha3 { list-style-type: alpha3; }
+.sym { list-style-type: sym; }
+.add { list-style-type: add; }
+.fix { list-style-type: fix; }
+.pad4 { list-style-type: pad4; }
+.parens { list-style-type: parens; }
+.extal { list-style-type: extal; }
+.negab { list-style-type: negab; }
+.rng { list-style-type: rng; }
+.broken { list-style-type: broken; }
+.zero { list-style-type: zero; }
+.fb { list-style-type: fb; }
+.undefined-name { list-style-type: never-declared-anywhere; }
+
+p.gen { margin: 2px 0; counter-increment: main; }
+p.gen::before { content: "n=" counter(main) " dec0=" counter(main, decimal-leading-zero)
+                " rom=" counter(main, lower-roman) " greek=" counter(main, lower-greek)
+                " cjk=" counter(main, cjk-decimal) " "; }
+p.custom::before { content: "[" counter(main, num) "|" counter(main, cyc) "|"
+                   counter(main, alpha3) "|" counter(main, add) "|" counter(main, pad4) "|"
+                   counter(main, parens) "|" counter(main, extal) "] "; }
+p.custom { margin: 2px 0; }
+p.bad::before { content: "bad: " counter(main, never-declared-anywhere); }
+p.bad { margin: 2px 0; }
+
+/* Negative and out-of-range values only come through counters: the marker ordinal of a
+   list item is clamped to the positive range by the numbering itself. */
+body { counter-reset: neg -2; }
+p.neg::before { content: counter(neg, negab) "|" counter(neg, alpha3) "|" counter(neg, sym) "|"
+                counter(neg, cyc) "|" counter(neg, add) "|" counter(neg, pad4) "|"; }
+p.neg { margin: 2px 0; }
+.n1 { counter-increment: neg 0; }
+.n2 { counter-increment: neg 1; }
+.n3 { counter-increment: neg 1; }
+.n4 { counter-increment: neg 1; }
+.n5 { counter-increment: neg 1; }
+.n6 { counter-increment: neg 1; }
+.n7 { counter-increment: neg 1; }
+.n8 { counter-increment: neg 1; }
+</style>
+</head>
+<body>
+<h4>cyclic / numeric / alphabetic / symbolic</h4>
+<ol class="cyc"><li>cyc 1</li><li>cyc 2</li><li>cyc 3</li><li>cyc 4</li></ol>
+<ol class="num"><li>num 1</li><li>num 2</li><li>num 3</li><li>num 4</li><li>num 5</li></ol>
+<ol class="alpha3"><li>alpha3 1</li><li>alpha3 2</li><li>alpha3 3</li><li>alpha3 4</li></ol>
+<ol class="sym"><li>sym 1</li><li>sym 2</li><li>sym 3</li><li>sym 4</li></ol>
+
+<h4>additive / fixed / fixed 3 / pad</h4>
+<ol class="add"><li>add 1</li><li>add 2</li><li>add 4</li><li>add 8</li><li>add 12</li></ol>
+<ol class="fix"><li>fix 1</li><li>fix 2</li><li>fix 3</li><li>fix 4</li></ol>
+<ol class="zero"><li>fixed3 1</li><li>fixed3 2</li><li>fixed3 3</li><li>fixed3 4</li></ol>
+<ol class="pad4"><li>pad4 1</li><li>pad4 2</li><li>pad4 3</li></ol>
+<ol class="fb"><li>fb 1</li><li>fb 2</li><li>fb 3</li><li>fb 4</li></ol>
+
+<h4>prefix+suffix / extends lower-alpha / negative / range</h4>
+<ol class="parens"><li>parens 1</li><li>parens 2</li></ol>
+<ol class="extal"><li>ext 1</li><li>ext 2</li><li>ext 3</li></ol>
+<ol class="negab"><li>neg item 1</li><li>neg item 2</li><li>neg item 3</li></ol>
+<ol class="rng"><li>rng 1</li><li>rng 2</li><li>rng 3</li><li>rng 4</li></ol>
+
+<h4>negative and out-of-range counter values through counter()</h4>
+<p class="neg n1">start -2</p>
+<p class="neg n2">start -1</p>
+<p class="neg n3">start 0</p>
+<p class="neg n4">start 1</p>
+<p class="neg n5">start 2</p>
+<p class="neg n6">start 3</p>
+<p class="neg n7">start 4</p>
+<p class="neg n8">start 5</p>
+
+<h4>invalid rule (cyclic with no symbols) / undefined name</h4>
+<ol class="broken"><li>broken 1</li><li>broken 2</li></ol>
+<ol class="undefined-name"><li>undefined 1</li><li>undefined 2</li></ol>
+
+<h4>counter(name, preset) in generated content</h4>
+<p class="gen">one</p>
+<p class="gen">two</p>
+<p class="gen">three</p>
+
+<h4>counter(name, custom) in generated content</h4>
+<p class="custom">one</p>
+<p class="custom">two</p>
+<p class="custom">three</p>
+<p class="bad">three</p>
+</body>
+</html>

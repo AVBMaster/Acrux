@@ -45,16 +45,16 @@ foreach ($n in $Batches) {
   if (-not (Test-Path $src)) { Write-Output "skip b$n (missing $src)"; continue }
 
   # PNG: the deterministic frame at the page's pinned timeline instant.
-  dotnet run --project UpBrowser --no-build -- --snapshot $src $new $c.W $c.H 1 $c.T 2>&1 |
+  dotnet run --project Acrux --no-build -- --snapshot $src $new $c.W $c.H 1 $c.T 2>&1 |
     Where-Object { $_ -match '^\[snapshot\]' } | ForEach-Object { Write-Output $_ }
 
   # Numeric dump: every animated element's computed values, so the PNG can be
   # cross-checked against exact numbers instead of eyeballed colour.
-  dotnet run --project UpBrowser --no-build -- --anim $src $c.W $c.H $c.T 2>&1 |
+  dotnet run --project Acrux --no-build -- --anim $src $c.W $c.H $c.T 2>&1 |
     Out-File -Encoding utf8 $txt
 
   if (Test-Path $ref) {
-    dotnet run --project UpBrowser --no-build -- --diff $ref $new "snapshots/out/anim-$tag-diff.png" $Tolerance 2>&1 |
+    dotnet run --project Acrux --no-build -- --diff $ref $new "snapshots/out/anim-$tag-diff.png" $Tolerance 2>&1 |
       Where-Object { $_ -match '^\[diff\]' } | ForEach-Object { Write-Output ("  b$n " + $_) }
   } else {
     Write-Output "  b$n no reference yet (run snapshots/animref.ps1)"

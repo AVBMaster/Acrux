@@ -1,0 +1,36 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+p { margin: 1px 0; }
+p::before { font-weight: inherit; }
+.a p::before { content: "A[" counter(q) "] "; }
+.b p::before { content: "B[" counter(q) "] "; }
+.c p::before { content: "C[" counter(q) "] "; }
+.incOnDiv { counter-increment: q 5; }
+.setOnDiv { counter-set: q 77; }
+/* nested same-name scopes for counters() */
+.lvl { counter-increment: n; }
+.lvl p::before { content: "N[" counters(n, ".") "] "; }
+/* three-argument counters() forms */
+.t1 p::before { content: "T1[" counters(n2, "-", decimal) "] "; }
+.t2 p::before { content: "T2[" counters(n2, "-", lower-roman) "] "; }
+.t3 p::before { content: "T3[" counters(n2, "-") "] "; }
+.n2 { counter-increment: n2; }
+</style></head><body>
+
+<div class="a">
+  <div class="incOnDiv"><p>inside-increment</p></div>
+  <p>sibling-of-increment-inside-A</p>
+</div>
+<p>after-A</p>
+<div class="b"><p>inside-B</p></div>
+<div class="c"><div class="setOnDiv"><p>inside-set</p></div><p>sibling-of-set</p></div>
+
+<h4>nested same-name counter</h4>
+<div class="lvl"><p>one</p><div class="lvl"><p>two</p><div class="lvl"><p>three</p></div></div><p>one-again</p></div>
+<div class="lvl"><p>second-top</p></div>
+
+<div class="t1"><div class="n2"><p>x</p></div><div class="n2"><p>y</p></div></div>
+<div class="t2"><div class="n2"><p>x</p></div><div class="n2"><p>y</p></div></div>
+<div class="t3"><div class="n2"><p>x</p></div><div class="n2"><p>y</p></div></div>
+
+</body></html>

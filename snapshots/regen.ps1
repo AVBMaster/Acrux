@@ -38,6 +38,6 @@ foreach ($n in $Batches) {
   $src = "snapshots/css-standard-verify$n.html"
   $dst = "snapshots/out/new-b$n.png"
   $wh = $Sizes[[int]$n]
-  dotnet run --project UpBrowser --no-build -- --snapshot $src $dst $wh[0] $wh[1] 2 2 *> $null
+  dotnet run --project Acrux --no-build -- --snapshot $src $dst $wh[0] $wh[1] 2 2 *> $null
   Write-Output ("baked b$n -> " + $dst)
 }

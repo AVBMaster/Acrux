@@ -1,0 +1,51 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+@counter-style ref    { system: numeric; symbols: "A" "B"; }
+@counter-style badpad { system: numeric; symbols: "A" "B"; pad: -4; }
+@counter-style padbig { system: numeric; symbols: "A" "B"; pad: 200; }
+@counter-style nosym  { system: numeric; }
+@counter-style onesym { system: numeric; symbols: "A"; }
+@counter-style badsys { system: bogus; symbols: "A" "B"; }
+@counter-style badsuf { system: numeric; symbols: "A" "B"; suffix: "!" "?"; }
+@counter-style revrng { system: numeric; symbols: "A" "B"; range: 3 1; }
+@counter-style noadd  { system: additive; }
+@counter-style badext { system: extends; symbols: "A" "B"; }
+@counter-style unkext { system: extends nosuchstyle; }
+@counter-style cycsym { system: cyclic; symbols: "A" "B"; }
+@counter-style badfb  { system: numeric; symbols: "A" "B"; fallback: nosuchstyle; }
+@counter-style negtwo { system: numeric; symbols: "A" "B"; negative: "~"; }
+@counter-style padA0  { system: numeric; symbols: "0" "1"; pad: 4; }
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+ol { margin: 0; padding: 0 0 0 8px; list-style-position: inside; }
+li { width: 500px; margin: 0; }
+#t1 { list-style-type: ref; }
+#t2 { list-style-type: badpad; }
+#t3 { list-style-type: padbig; }
+#t4 { list-style-type: nosym; }
+#t5 { list-style-type: onesym; }
+#t6 { list-style-type: badsys; }
+#t7 { list-style-type: badsuf; }
+#t8 { list-style-type: revrng; }
+#t9 { list-style-type: noadd; }
+#t10 { list-style-type: badext; }
+#t11 { list-style-type: unkext; }
+#t12 { list-style-type: cycsym; }
+#t13 { list-style-type: badfb; }
+#t14 { list-style-type: negtwo; }
+#t15 { list-style-type: padA0; }
+</style></head><body>
+<ol id="t1"><li id="a1">x</li></ol>
+<ol id="t2"><li id="a2">x</li></ol>
+<ol id="t3"><li id="a3">x</li></ol>
+<ol id="t4"><li id="a4">x</li></ol>
+<ol id="t5"><li id="a5">x</li></ol>
+<ol id="t6"><li id="a6">x</li></ol>
+<ol id="t7"><li id="a7">x</li></ol>
+<ol id="t8"><li id="a8">x</li></ol>
+<ol id="t9"><li id="a9">x</li></ol>
+<ol id="t10"><li id="a10">x</li></ol>
+<ol id="t11"><li id="a11">x</li></ol>
+<ol id="t12"><li id="a12">x</li></ol>
+<ol id="t13"><li id="a13">x</li></ol>
+<ol id="t14"><li id="a14">x</li></ol>
+<ol id="t15"><li id="a15">x</li></ol>
+</body></html>

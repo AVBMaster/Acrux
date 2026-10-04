@@ -1,0 +1,39 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+@counter-style nosys   { symbols: "A" "B" "C"; }
+@counter-style onlyname { }
+@counter-style cyc1    { system: cyclic; symbols: "A"; }
+@counter-style addsym  { system: symbolic; symbols: "A"; add-to-symbols: "B" "C"; }
+@counter-style neg2    { system: numeric; symbols: "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"; negative: "<" ">"; }
+@counter-style inf     { system: symbolic; symbols: "S"; range: 1 infinite; }
+@counter-style tworange{ system: symbolic; symbols: "S"; range: 1 1, 3 4; }
+@counter-style badneg  { system: numeric; symbols: "A" "B"; negative: 3; }
+@counter-style padsym  { system: numeric; symbols: "A" "B"; pad: 3 "P"; }
+@counter-style speak   { system: numeric; symbols: "A" "B"; speak-as: spell-out; }
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; }
+ol { margin: 0; padding: 0 0 0 8px; list-style-position: inside; }
+li { width: 500px; margin: 0; }
+#t1 { list-style-type: nosys; }
+#t2 { list-style-type: onlyname; }
+#t3 { list-style-type: cyc1; }
+#t4 { list-style-type: addsym; }
+#t5 { list-style-type: neg2; }
+#t6 { list-style-type: inf; }
+#t7 { list-style-type: tworange; }
+#t8 { list-style-type: badneg; }
+#t9 { list-style-type: padsym; }
+#t10 { list-style-type: speak; }
+p.v { counter-increment: c; margin: 0; }
+p.v::before { content: "[" counter(c, neg2) "|" counter(c, tworange) "|" counter(c, padsym) "] "; }
+</style></head><body>
+<ol id="t1"><li id="a1">x</li><li id="a1b">x</li><li id="a1c">x</li></ol>
+<ol id="t2"><li id="a2">x</li></ol>
+<ol id="t3"><li id="a3">x</li></ol>
+<ol id="t4"><li id="a4">x</li><li id="a4b">x</li><li id="a4c">x</li><li id="a4d">x</li></ol>
+<ol id="t5"><li id="a5">x</li></ol>
+<ol id="t6"><li id="a6">x</li><li id="a6b">x</li><li id="a6c">x</li></ol>
+<ol id="t7"><li id="a7">x</li><li id="a7b">x</li><li id="a7c">x</li><li id="a7d">x</li></ol>
+<ol id="t8"><li id="a8">x</li></ol>
+<ol id="t9"><li id="a9">x</li></ol>
+<ol id="t10"><li id="a10">x</li></ol>
+<p class="v" id="v1">1</p>
+</body></html>

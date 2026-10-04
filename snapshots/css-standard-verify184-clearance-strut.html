@@ -1,0 +1,27 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { margin: 0; font: 16px/1.4 Arial, sans-serif; }
+  .lbl { font: bold 12px/14px Arial; color: #666; margin: 6px 0 2px; }
+  .clear { clear: both; }
+  .fl { float: left; width: 60px; height: 24px; background: #cfe; }
+  /* The cursor is measured from the content edge, while the float exclusion space is
+     anchored there too; a child pushed down by clearance reports a content-anchored
+     position. Mixing the two grows the box by its own block-start strut. */
+  .box { width: 200px; padding: 6px; border: 6px solid #ccc; }
+  .zero { height: 0; }
+  .eight { height: 8px; background: #f99; }
+  #a { width: 200px; }
+  #d .kid { height: 10px; background: #9f9; }
+</style></head><body>
+<div class="lbl">a: float + zero-height clear, no strut (Edge 24)</div>
+<div id="a"><div class="fl"></div><div class="clear zero"></div></div>
+<div class="lbl">b: same with padding 6 + border 6 (Edge 47.2)</div>
+<div id="b" class="box"><div class="fl"></div><div class="clear zero"></div></div>
+<div class="lbl">c: float + 8px clear block, strut (Edge 55.2)</div>
+<div id="c" class="box"><div class="fl"></div><div class="clear eight"></div></div>
+<div class="lbl">d: float + following block, no clear (Edge 33.2)</div>
+<div id="d" class="box"><div class="fl"></div><div class="kid"></div></div>
+<div class="lbl">e: cleared block after a taller float, strut (Edge 71.2)</div>
+<div id="e" class="box"><div class="fl" style="height:40px"></div><div class="clear eight"></div></div>
+<div class="lbl">f: two cleared blocks in sequence, strut (Edge 63.2)</div>
+<div id="f" class="box"><div class="fl"></div><div class="clear eight"></div><div class="clear eight"></div></div>
+</body></html>

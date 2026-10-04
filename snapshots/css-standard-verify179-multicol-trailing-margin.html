@@ -1,0 +1,24 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { margin: 0; font: 16px/20px "Segoe UI", Arial, sans-serif; }
+  .box { margin: 8px 10px; }
+  .label { font: bold 12px/14px "Segoe UI", Arial, sans-serif; color: #666; }
+  /* t1: content fits in one of two columns - does the trailing margin count? */
+  #t1 { width: 300px; column-count: 2; column-gap: 12px; background: #eaf2ff; }
+  /* t2: three columns, one short paragraph */
+  #t2 { width: 300px; column-count: 3; column-gap: 12px; background: #f6ffe8; }
+  /* t3: two paragraphs, the second short */
+  #t3 { width: 300px; column-count: 2; column-gap: 12px; background: #fff3e0; }
+  /* t4: no margins at all (control) */
+  #t4 { width: 300px; column-count: 2; column-gap: 12px; background: #eee; }
+  #t4 p { margin: 0; }
+  p { margin: 16px 0; }
+</style></head><body>
+<div class="box"><div class="label">t1 two columns, one line</div>
+<div id="t1"><p id="p1">alpha bravo</p></div></div>
+<div class="box"><div class="label">t2 three columns, one line</div>
+<div id="t2"><p id="p2">alpha bravo</p></div></div>
+<div class="box"><div class="label">t3 two columns, two paragraphs</div>
+<div id="t3"><p id="p3a">alpha bravo charlie delta echo</p><p id="p3b">foxtrot</p></div></div>
+<div class="box"><div class="label">t4 control, no margins</div>
+<div id="t4"><p id="p4">alpha bravo</p></div></div>
+</body></html>

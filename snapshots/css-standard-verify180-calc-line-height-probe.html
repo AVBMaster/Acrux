@@ -1,0 +1,16 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { margin: 0; font: 16px/1.2 Arial, sans-serif; }
+  /* Regression probe: calc() on the font-relative properties. */
+  #a { line-height: calc(20px + 1em); }      /* 36 */
+  #b { line-height: calc(2 * 1em); }         /* 32 */
+  #c { line-height: 1.5; }                   /* 24 */
+  #d { line-height: 150%; }                  /* 24 */
+  #e { font-size: calc(10px + 1em); }        /* 26 */
+  #f { font-size: calc(1.5rem); }            /* 24 */
+  #g { letter-spacing: calc(1px + 0.1em); }  /* 2.6 */
+  #h { word-spacing: calc(0.5em); }          /* 8 */
+  #i { line-height: calc(30px); }            /* 30 */
+</style></head><body>
+<p id="a">A</p><p id="b">B</p><p id="c">C</p><p id="d">D</p>
+<p id="e">E</p><p id="f">F</p><p id="g">G</p><p id="h">H</p><p id="i">I</p>
+</body></html>

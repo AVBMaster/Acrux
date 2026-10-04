@@ -3,7 +3,7 @@
 #   powershell -File snapshots/animref.ps1              # all cases
 #   powershell -File snapshots/animref.ps1 -Batches 1,2
 #
-# The reference has to be taken at exactly the instant the UpBrowser capture
+# The reference has to be taken at exactly the instant the Acrux capture
 # pins itself to, which is why every probe in these pages is a paused animation
 # with a negative delay: that is a fixed frame in every engine, so a screenshot
 # taken at any wall-clock moment shows the same pixels.

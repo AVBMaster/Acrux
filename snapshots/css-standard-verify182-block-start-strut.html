@@ -1,0 +1,36 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { margin: 0; font: 16px/1.4 Arial, sans-serif; color: #111; }
+  .lbl { font: bold 12px/14px Arial, sans-serif; color: #666; margin: 8px 0 2px; }
+  /* An auto-height block that ends on a block-level child must still contain its own
+     block-start border+padding (the in-flow cursor counts from the content edge). */
+  #a { padding: 10px; background: #eaf2ff; }
+  #a > div { height: 28px; background: #cfe0ff; }
+  /* Inline content in the same box model (already worked; kept as a control). */
+  #b { padding: 10px; background: #f6ffe8; }
+  /* Border + padding on both axes. */
+  #c { padding: 10px; border: 2px solid #7a7; background: #fff3e0; }
+  #c > div { height: 28px; background: #ffe2b8; }
+  /* A BFC root (overflow) has the same requirement. */
+  #d { padding: 10px; overflow: hidden; background: #efe; }
+  #d > div { height: 28px; background: #cfc; }
+  /* Floats do not add height without a BFC: expected 20, not 50. */
+  #e { padding: 10px; background: #eee8f5; }
+  #e > div { float: left; width: 50px; height: 30px; background: #d6c6f0; }
+  /* Nested: the inner box's own strut must not be counted twice. */
+  #f { padding: 10px; background: #e0f7fa; }
+  #f > div { padding: 8px; border: 2px solid #90a4ae; }
+  #f > div > div { height: 20px; background: #b2ebf2; }
+</style></head><body>
+<div class="lbl">a: padding 10 over a 28px block = 48</div>
+<div id="a"><div></div></div>
+<div class="lbl">b: padding 10 over text = 42.4</div>
+<div id="b">text</div>
+<div class="lbl">c: padding 10 + border 2 over a 28px block</div>
+<div id="c"><div></div></div>
+<div class="lbl">d: same, but a BFC root (overflow: hidden)</div>
+<div id="d"><div></div></div>
+<div class="lbl">e: float-only content, no BFC = 20</div>
+<div id="e"><div></div></div>
+<div class="lbl">f: nested padded/bordered blocks</div>
+<div id="f"><div><div></div></div></div>
+</body></html>

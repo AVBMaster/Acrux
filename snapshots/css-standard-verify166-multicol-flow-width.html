@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b166 multicol flow width</title>
+<style>
+  body { margin: 0; font: 16px/20px "Segoe UI", Arial, sans-serif; color: #111; background: #fff; }
+  .box { margin: 8px 10px; }
+  .label { font: bold 12px/14px "Segoe UI", Arial, sans-serif; color: #666; }
+  /* s1: 300px wide, 3 columns, 12px gap -> column content = (300-24)/3 = 92 */
+  #s1 { width: 300px; column-count: 3; column-gap: 12px; background: #eaf2ff; }
+  /* s2: same with 10px padding: the padding is outside the columns, so the column width stays (300-24)/3 = 92 */
+  #s2 { width: 300px; padding: 6px 10px; column-count: 3; column-gap: 12px; background: #f6ffe8; }
+  /* s3: definite column width + separate gap -> floor((300+8)/(92+8)) = 3 */
+  #s3 { width: 300px; columns: 92px; column-gap: 8px; background: #fff3e0; }
+  /* s7: two lengths are invalid for the columns shorthand (width || count only),
+     so the declaration is dropped and the box is a single-column block. */
+  #s7 { width: 300px; columns: 92px 8px; background: #efe; }
+  /* s8: columns: auto 3 -> count 3, width auto */
+  #s8 { width: 300px; columns: auto 3; column-gap: 12px; background: #eee8f5; }
+  /* s9: only one 92px column fits a 150px box - does the definite width stretch? */
+  #s9 { width: 150px; columns: 92px; column-gap: 8px; background: #e0e0e0; }
+  /* s4: text directly in the multicol (container is itself the IFC root) */
+  #s4 { width: 300px; column-count: 3; column-gap: 12px; background: #f3e5f5; }
+  /* s5: fixed height fragmentainer, column-fill auto */
+  #s5 { width: 300px; height: 60px; column-count: 3; column-gap: 12px; column-fill: auto; background: #e0f7fa; }
+  /* s6: spanner splits the flow */
+  #s6 { width: 300px; column-count: 3; column-gap: 12px; background: #fffde7; }
+  #s6 .span { column-span: all; background: #ffcdd2; }
+  .word { background: rgba(255,0,0,0.18); }
+</style>
+</head>
+<body>
+<div class="box"><div class="label">s1 width:300 column-count:3 gap:12 =&gt; column 92</div>
+<div id="s1"><p id="p1">
+<span class="word">alpha</span> <span class="word">bravo</span> <span class="word">charlie</span> <span class="word">delta</span> <span class="word">echo</span> <span class="word">foxtrot</span> <span class="word">golf</span> <span class="word">hotel</span> <span class="word">india</span> <span class="word">juliet</span> <span class="word">kilo</span> <span class="word">lima</span> <span class="word">mike</span> <span class="word">november</span> <span class="word">oscar</span> <span class="word">papa</span> <span class="word">quebec</span> <span class="word">romeo</span> <span class="word">sierra</span> <span class="word">tango</span> <span class="word">uniform</span> <span class="word">victor</span> <span class="word">whiskey</span> <span class="word">xray</span> <span class="word">yankee</span> <span class="word">zulu</span>
+</p></div></div>
+
+<div class="box"><div class="label">s2 padding 10 =&gt; column still 92, box 320 wide</div>
+<div id="s2"><p id="p2">
+<span class="word">alpha</span> <span class="word">bravo</span> <span class="word">charlie</span> <span class="word">delta</span> <span class="word">echo</span> <span class="word">foxtrot</span> <span class="word">golf</span> <span class="word">hotel</span> <span class="word">india</span> <span class="word">juliet</span> <span class="word">kilo</span> <span class="word">lima</span> <span class="word">mike</span> <span class="word">november</span> <span class="word">oscar</span>
+</p></div></div>
+
+<div class="box"><div class="label">s3 columns: 92px 8px =&gt; 3 columns</div>
+<div id="s3"><p id="p3">
+<span class="word">alpha</span> <span class="word">bravo</span> <span class="word">charlie</span> <span class="word">delta</span> <span class="word">echo</span> <span class="word">foxtrot</span> <span class="word">golf</span> <span class="word">hotel</span> <span class="word">india</span> <span class="word">juliet</span> <span class="word">kilo</span> <span class="word">lima</span> <span class="word">mike</span> <span class="word">november</span> <span class="word">oscar</span>
+</p></div></div>
+
+<div class="box"><div class="label">s4 text directly in multicol</div>
+<div id="s4">
+<span class="word">alpha</span> <span class="word">bravo</span> <span class="word">charlie</span> <span class="word">delta</span> <span class="word">echo</span> <span class="word">foxtrot</span> <span class="word">golf</span> <span class="word">hotel</span> <span class="word">india</span> <span class="word">juliet</span> <span class="word">kilo</span> <span class="word">lima</span> <span class="word">mike</span> <span class="word">november</span> <span class="word">oscar</span> <span class="word">papa</span>
+</div></div>
+
+<div class="box"><div class="label">s7 columns: 92px 8px (invalid) => single column</div>
+<div id="s7"><p id="p7">
+<span class="word">alpha</span> <span class="word">bravo</span> <span class="word">charlie</span> <span class="word">delta</span> <span class="word">echo</span> <span class="word">foxtrot</span> <span class="word">golf</span> <span class="word">hotel</span> <span class="word">india</span> <span class="word">juliet</span>
+</p></div></div>
+
+<div class="box"><div class="label">s8 columns: auto 3 gap 12 => 92</div>
+<div id="s8"><p id="p8">
+<span class="word">alpha</span> <span class="word">bravo</span> <span class="word">charlie</span> <span class="word">delta</span> <span class="word">echo</span> <span class="word">foxtrot</span> <span class="word">golf</span> <span class="word">hotel</span> <span class="word">india</span> <span class="word">juliet</span> <span class="word">kilo</span> <span class="word">lima</span>
+</p></div></div>
+
+<div class="box"><div class="label">s9 width:150 columns:92px gap:8 =&gt; one column</div>
+<div id="s9"><p id="p9">
+<span class="word">alpha</span> <span class="word">bravo</span> <span class="word">charlie</span> <span class="word">delta</span> <span class="word">echo</span> <span class="word">foxtrot</span>
+</p></div></div>
+
+<div class="box"><div class="label">s5 height:60 column-fill:auto</div>
+<div id="s5"><p id="p5">
+<span class="word">alpha</span> <span class="word">bravo</span> <span class="word">charlie</span> <span class="word">delta</span> <span class="word">echo</span> <span class="word">foxtrot</span> <span class="word">golf</span> <span class="word">hotel</span> <span class="word">india</span> <span class="word">juliet</span> <span class="word">kilo</span> <span class="word">lima</span> <span class="word">mike</span>
+</p></div></div>
+
+<div class="box"><div class="label">s6 spanner</div>
+<div id="s6"><p id="p6a">
+<span class="word">alpha</span> <span class="word">bravo</span> <span class="word">charlie</span> <span class="word">delta</span> <span class="word">echo</span> <span class="word">foxtrot</span> <span class="word">golf</span> <span class="word">hotel</span>
+</p><div class="span" id="sp6">spanning title across all columns</div><p id="p6b">
+<span class="word">india</span> <span class="word">juliet</span> <span class="word">kilo</span> <span class="word">lima</span> <span class="word">mike</span> <span class="word">november</span> <span class="word">oscar</span> <span class="word">papa</span>
+</p></div></div>
+</body>
+</html>

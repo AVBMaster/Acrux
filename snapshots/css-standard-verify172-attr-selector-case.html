@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b172 attribute selector case rules</title>
+<style>
+  body { margin: 8px; font: 16px/20px "Segoe UI", Arial, sans-serif; color: #111; }
+  .row { margin: 3px 0; }
+  p { height: 6px; background: #ddd; margin: 3px 0; }
+
+  /* HTML enumerated attributes have a case-insensitive value space: the [type]
+     rules below must match the mixed-case attributes on the elements. */
+  input.noFlag { width: 11px; height: 11px; }
+  input.noFlag[type="checkbox"] { width: 33px; height: 33px; }
+  input.withFlag[type="checkbox" i] { width: 44px; height: 44px; }
+  input.strict[type="radio" s] { width: 55px; height: 55px; }
+
+  /* data-* is not enumerated: only the i flag may ignore case. */
+  p[data-x="AbC"] { width: 77px; background: #f00; }
+  p[data-y="AbC" s] { width: 88px; background: #0f0; }
+  p[data-z="AbC" i] { width: 99px; background: #00f; }
+
+  /* ~= and |= follow the same rule. */
+  input.list[type~="SUBMIT"] { width: 66px; height: 22px; }
+  p[data-l~="B"] { width: 120px; background: #0aa; }
+  p[data-h|="En-US"] { width: 130px; background: #a0a; }
+</style>
+</head>
+<body>
+<div class="row">1. enumerated attribute, no flag (expect 33):
+  <input class="noFlag" type=CHECKBOX id=n1></div>
+<div class="row">2. enumerated attribute, i flag, mixed case (expect 44):
+  <input class="withFlag" type=ChEcKbOx id=n2></div>
+<div class="row">3. uppercase attribute NAME (expect 13 via UA):
+  <input TYPE="RADIO" id=n2b></div>
+<div class="row">4. data-x, no flag (expect inherited width, no red):
+  <p data-x="aBc" id=n3></p></div>
+<div class="row">5. data-y, s flag (expect no green):
+  <p data-y="aBc" id=n4></p></div>
+<div class="row">6. data-z, i flag (expect 99, blue):
+  <p data-z="aBc" id=n5></p></div>
+<div class="row">7. ~= on enumerated type (expect 66):
+  <input class="list" type="submit" id=n6></div>
+<div class="row">8. ~= on data-l (expect 120):
+  <p data-l="a B c" id=n7></p></div>
+<div class="row">9. |= on data-h (expect 130):
+  <p data-h="en-US" id=n8></p></div>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b171 system colors</title>
+<style>
+  body { margin: 8px; font: 14px/18px "Segoe UI", Arial, sans-serif; color: #111; background: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(6, 30px); grid-auto-rows: 20px; gap: 2px; }
+  .c { width: 30px; height: 20px; outline: 1px solid #ddd; }
+  .row { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="row">1. UA widgets (button must not be a black block):
+  <button id="w1">ok</button>
+  <input id="w2" value="abc">
+  <select id="w3"><option>a</option></select>
+  <textarea id="w4">hi</textarea>
+  <fieldset id="w5"></fieldset>
+</div>
+
+<div class="row">2. system color swatches (6 per row, 30x20 each):</div>
+<div class="grid">
+  <div class="c" id="c01" style="background:buttonface"></div>
+  <div class="c" id="c02" style="background:buttontext"></div>
+  <div class="c" id="c03" style="background:buttonborder"></div>
+  <div class="c" id="c04" style="background:buttonshadow"></div>
+  <div class="c" id="c05" style="background:field"></div>
+  <div class="c" id="c06" style="background:fieldtext"></div>
+
+  <div class="c" id="c07" style="background:canvas"></div>
+  <div class="c" id="c08" style="background:canvastext"></div>
+  <div class="c" id="c09" style="background:highlight"></div>
+  <div class="c" id="c10" style="background:highlighttext"></div>
+  <div class="c" id="c11" style="background:mark"></div>
+  <div class="c" id="c12" style="background:marktext"></div>
+
+  <div class="c" id="c13" style="background:graytext"></div>
+  <div class="c" id="c14" style="background:linktext"></div>
+  <div class="c" id="c15" style="background:visitedtext"></div>
+  <div class="c" id="c16" style="background:activetext"></div>
+  <div class="c" id="c17" style="background:window"></div>
+  <div class="c" id="c18" style="background:windowtext"></div>
+
+  <div class="c" id="c19" style="background:scrollbar"></div>
+  <div class="c" id="c20" style="background:activecaption"></div>
+  <div class="c" id="c21" style="background:inactivecaptiontext"></div>
+  <div class="c" id="c22" style="background:infobackground"></div>
+  <div class="c" id="c23" style="background:threedface"></div>
+  <div class="c" id="c24" style="background:threedshadow"></div>
+</div>
+
+<div class="row">3. mixed into shorthands:
+  <div id="s1" style="border:3px solid linktext; width:60px; height:16px"></div>
+  <div id="s2" style="border:4px outset buttonface; background:field; width:60px; height:16px"></div>
+  <div id="s3" style="outline:3px solid highlight; width:60px; height:16px"></div>
+  <div id="s4" style="box-shadow:0 0 0 4px graytext; width:60px; height:16px"></div>
+</div>
+</body>
+</html>

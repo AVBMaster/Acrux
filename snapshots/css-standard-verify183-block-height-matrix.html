@@ -1,0 +1,38 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { margin: 0; font: 16px/1.4 Arial, sans-serif; color: #111; }
+  .lbl { font: bold 12px/14px Arial, sans-serif; color: #666; margin: 6px 0 2px; }
+  /* Every case is an auto-height block with the same border+padding, differing only
+     in what flows inside it. The box must be bp.Top + content + bp.Bottom in all of
+     them; the child types are where an accounting mistake shows up. */
+  .p { padding: 10px; border: 2px solid #7a7; background: #eef6ee; }
+  .kid { height: 20px; background: #cfe0ff; }
+  .ib { display: inline-block; width: 40px; height: 18px; background: #ffd9b3; }
+  .fl { float: left; width: 50px; height: 24px; background: #d6c6f0; }
+  .ap { position: absolute; top: 4px; left: 4px; width: 30px; height: 12px; background: #f8c8dc; }
+  .fx { display: flex; height: 26px; background: #bdecb6; }
+  .gr { display: grid; grid-template-columns: 20px 20px; height: 22px; background: #a3c4f3; }
+  .tb { display: table; background: #ffe5b4; }
+  .tr { display: table-row; }
+  .tc { display: table-cell; padding: 3px; }
+  .rel { position: relative; top: 6px; height: 14px; background: #ddd; }
+  .neg { height: 20px; margin-bottom: -8px; background: #fbb; }
+  .emp { height: 20px; }
+  .emp::after { content: ""; display: block; height: 6px; background: #999; }
+</style></head><body>
+<div class="lbl">1 text</div><div class="p" id="c1">text</div>
+<div class="lbl">2 single block child</div><div class="p" id="c2"><div class="kid"></div></div>
+<div class="lbl">3 two block children</div><div class="p" id="c3"><div class="kid"></div><div class="kid"></div></div>
+<div class="lbl">4 inline-block child</div><div class="p" id="c4"><span class="ib"></span></div>
+<div class="lbl">5 float only (no BFC)</div><div class="p" id="c5"><div class="fl"></div></div>
+<div class="lbl">6 float inside BFC</div><div class="p" id="c6" style="overflow:hidden"><div class="fl"></div></div>
+<div class="lbl">7 abspos only</div><div class="p" id="c7" style="position:relative"><div class="ap"></div></div>
+<div class="lbl">8 flex child</div><div class="p" id="c8"><div class="fx"></div></div>
+<div class="lbl">9 grid child</div><div class="p" id="c9"><div class="gr"></div></div>
+<div class="lbl">10 table child</div><div class="p" id="c10"><div class="tb"><div class="tr"><span class="tc">cell</span></div></div></div>
+<div class="lbl">11 mixed block + inline text</div><div class="p" id="c11"><div class="kid"></div>tail text</div>
+<div class="lbl">12 child with negative bottom margin</div><div class="p" id="c12"><div class="neg"></div><div class="kid"></div></div>
+<div class="lbl">13 relative child</div><div class="p" id="c13"><div class="rel"></div></div>
+<div class="lbl">14 ::after block child</div><div class="p" id="c14"><div class="emp"></div></div>
+<div class="lbl">15 empty block</div><div class="p" id="c15"></div>
+<div class="lbl">16 child with its own padding</div><div class="p" id="c16"><div class="p"><div class="kid"></div></div></div>
+</body></html>

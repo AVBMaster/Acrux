@@ -1,0 +1,70 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body { font: 16px "Segoe UI", sans-serif; margin: 0; padding: 0; counter-reset: doc 1; }
+h4 { margin: 6px 0 2px; font-size: 13px; font-weight: 600; color: rgb(80,80,80); }
+.sec { counter-increment: sec; margin-left: 12px; }
+.sub { counter-increment: sub; margin-left: 12px; }
+p { margin: 1px 0; }
+/* one value per open scope, outermost first */
+p.c1::before { content: "S[" counters(sec, ".") "] "; }
+/* a nested reset must not leak back to the enclosing list's later sibling */
+p.c2::before { content: "D[" counter(doc) "] "; }
+/* increments of an inherited name are seen by the ancestor's next sibling */
+p.c3::before { content: "N[" counter(n) "] "; }
+/* counter-set writes the innermost open scope without incrementing */
+p.c4::before { content: "T[" counter(t) "] "; }
+/* style argument inside counter() */
+p.c8::before { content: "Q[" counter(sec, "decimal") "] "; }
+p.c9::before { content: "V[" counter(sec, lower-roman) "] "; }
+/* a name with no open scope anywhere reads zero */
+p.c5::before { content: "Z[" counter(never) "] "; }
+/* style argument applies to every joined value */
+p.c6::before { content: "R[" counters(sec, "-", "lower-alpha") "] "; }
+/* the separator is a string: empty and multi-character forms */
+p.c7::before { content: "E[" counters(sec, "") "] G[" counters(sec, "->") "] "; }
+.resetHere { counter-reset: sec 10 sub 20; }
+.setT { counter-set: t 42; }
+.incN { counter-increment: n 3; }
+</style></head><body>
+
+<h4>1 flat sequence</h4>
+<div class="sec"><p class="c1">a</p></div>
+<div class="sec"><p class="c1">b</p></div>
+
+<h4>2 two nesting levels</h4>
+<div class="sec">
+  <p class="c1">outer-1</p>
+  <div class="sub"><p class="c1">inner-1a</p></div>
+  <div class="sub"><p class="c1">inner-1b</p></div>
+</div>
+<div class="sec">
+  <p class="c1">outer-2</p>
+  <div class="sub"><p class="c1">inner-2a</p></div>
+</div>
+
+<h4>3 nested reset does not leak (doc stays 1)</h4>
+<p class="c2">top</p>
+<div class="sec"><div class="resetHere"><p class="c1">reset-sec-10</p><p class="c1">reset-sec-11</p></div></div>
+<p class="c2">after</p>
+
+<h4>4 increment inside a subtree is seen afterwards</h4>
+<div class="incN"><p class="c3">plus-three</p></div>
+<p class="c3">after-plus-three</p>
+
+<h4>5 counter-set</h4>
+<div class="setT"><p class="c4">inside-set</p></div>
+<p class="c4">outside-set</p>
+
+<h4>6 unset name reads zero</h4>
+<p class="c5">never</p>
+
+<h4>7 style argument inside counters()</h4>
+<div class="sec"><div class="sub"><p class="c6">styled</p></div></div>
+
+<h4>8 separator forms</h4>
+<div class="sec"><div class="sub"><p class="c7">seps</p></div></div>
+
+<h4>9 quoted style argument invalid</h4>
+<p class="c8">quoted-style</p>
+<p class="c9">keyword-style</p>
+
+</body></html>
