@@ -1,16 +1,16 @@
-# UpBrowser
+# Acrux
 
 一个从零构建的现代浏览器引擎，使用 C# 编写，基于 SkiaSharp 渲染，支持多引擎 JavaScript 执行。
 
 # 停更通知
 
-由于本人学业和工作原因，UpBrowser 项目将暂停维护约半年，期间可以正常提交issue和pr，项目恢复后将继续维护，每一条issue和pr都会得到回复。感谢所有关注和支持的朋友们！
+由于本人学业和工作原因，Acrux 项目将暂停维护约半年，期间可以正常提交issue和pr，项目恢复后将继续维护，每一条issue和pr都会得到回复。感谢所有关注和支持的朋友们！
 
 ## 项目结构（旧版概览，新版在legacy算法的基础上添加了大量LayoutNG代码，暂时未更新文档，仅供参考）
 
 ```
-UpBrowser/
-├── UpBrowser.Core/              # 核心引擎
+Acrux/
+├── Acrux.Core/              # 核心引擎
 │   ├── Css/                     # CSS 解析器（自定义）、选择器、层叠解析、变量、动画
 │   ├── Dom/                     # DOM 实现（基于 AngleSharp 解析 + 自定义 DOM 树）
 │   ├── JavaScript/              # JS 引擎适配层（V8 / Jint / Jurassic 三引擎支持）
@@ -28,7 +28,7 @@ UpBrowser/
 │   ├── EventLoop/               # 事件循环（主线程任务调度）
 │   ├── Process/                 # 标签页进程指标
 │   └── Fonts/                   # 字体管理
-├── UpBrowser.Rendering/         # 渲染层
+├── Acrux.Rendering/         # 渲染层
 │   ├── SkiaRenderer.cs          # SkiaSharp 渲染器（CPU + GPU OpenGL）
 │   ├── ChromeRenderer.cs        # 浏览器 Chrome UI（标签栏、地址栏、按钮、状态栏）
 │   ├── PaintVisitor.cs          # Paint 操作生成器
@@ -44,7 +44,7 @@ UpBrowser/
 │   ├── RenderingSettingsPage.cs # 设置页面 UI
 │   ├── TaskManagerPage.cs       # 任务管理器页面 UI
 │   └── DevTools/                # 开发者工具
-├── UpBrowser.Platform/          # 平台抽象层
+├── Acrux.Platform/          # 平台抽象层
 │   ├── IWindow.cs               # 窗口接口
 │   ├── PlatformFactory.cs       # 平台工厂（自动选择 Windows/Linux/macOS）
 │   ├── InputManager.cs          # 输入事件管理
@@ -53,15 +53,15 @@ UpBrowser/
 │   ├── Windows/                 # Windows Win32 实现（窗口、IME、原生 API）
 │   ├── Linux/                   # Linux X11 实现
 │   └── Mac/                     # macOS Cocoa 实现
-├── UpBrowser.Native/            # 原生互操作
+├── Acrux.Native/            # 原生互操作
 │   ├── Windows/Imm32Interop.cs  # Windows IME P/Invoke
 │   ├── Linux/ImeBridge.cs       # Linux IME
 │   └── macOS/TextInputClient.cs # macOS 文本输入
-├── UpBrowser.Input/             # 输入法模块
+├── Acrux.Input/             # 输入法模块
 │   └── InputMethod.cs
-├── UpBrowser.Core.Tests/        # 单元测试（DOM / CSS / 布局 / Paint / 性能）
-├── UpBrowser.PerfSmokeTest/     # 性能冒烟测试
-├── UpBrowser/                   # 桌面应用入口
+├── Acrux.Core.Tests/        # 单元测试（DOM / CSS / 布局 / Paint / 性能）
+├── Acrux.PerfSmokeTest/     # 性能冒烟测试
+├── Acrux/                   # 桌面应用入口
 │   ├── Program.cs               # 入口点
 │   ├── BrowserApp.cs            # 应用主逻辑（窗口管理、导航、渲染循环）
 │   ├── InputHandler.cs          # 输入事件路由
@@ -215,7 +215,7 @@ HTML → AngleSharp 解析 → 自定义 DOM 树 → StyleComputer（层叠解�
 dotnet build
 
 # 运行浏览器
-dotnet run --project UpBrowser
+dotnet run --project Acrux
 
 # 运行测试
 dotnet test

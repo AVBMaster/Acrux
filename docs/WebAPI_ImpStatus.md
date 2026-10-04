@@ -1,6 +1,6 @@
-# UpBrowser WebAPI 实现对照文档
+# Acrux WebAPI 实现对照文档
 
-> 对照 MDN Web API 标准，整理 UpBrowser 当前的实现状态。
+> 对照 MDN Web API 标准，整理 Acrux 当前的实现状态。
 > 状态标记：`✅ 已实现` / `⚠️ 部分实现（骨架/空壳/仅属性）` / `❌ 未实现` / `🚫 暂不需要（浏览器无关）`
 
 ---
@@ -120,9 +120,9 @@
 
 | 属性/方法 | 状态 | 值 |
 | :--- | :--- | :--- |
-| `navigator.userAgent` | ⚠️ | 静态 "UpBrowser/1.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" |
+| `navigator.userAgent` | ⚠️ | 静态 "Acrux/1.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" |
 | `navigator.appCodeName` | ⚠️ | "Mozilla" |
-| `navigator.appName` | ⚠️ | "UpBrowser" |
+| `navigator.appName` | ⚠️ | "Acrux" |
 | `navigator.appVersion` | ⚠️ | "1.0" |
 | `navigator.platform` | ⚠️ | "Win32" |
 | `navigator.product` | ⚠️ | "Gecko" |
@@ -371,17 +371,17 @@
 
 | 实现文件 | 对应 WebAPI |
 | :--- | :--- |
-| `UpBrowser.Core/JavaScript/JavaScriptEngine.cs` | Window 全局、Navigator、Location、History、Screen、Storage、Console、Fetch、Builtins |
-| `UpBrowser.Core/JavaScript/URLHost.cs` | URL、URLSearchParams |
-| `UpBrowser.Core/JavaScript/XMLHttpRequestHost.cs` | XMLHttpRequest |
-| `UpBrowser.Core/JavaScript/DocumentHost.cs` | Document、HTMLElement |
-| `UpBrowser.Core/JavaScript/ElementHost.cs` | Element、EventTarget、DOMTokenList |
-| `UpBrowser.Core/JavaScript/StyleHost.cs` | CSSStyleDeclaration |
-| `UpBrowser.Core/Dom/Html/HTMLCanvasElement.cs` | Canvas API |
-| `UpBrowser.Core/Dom/MutationObserver/MutationObserver.cs` | MutationObserver |
-| `UpBrowser.Core/Dom/Html/Observers.cs` | IntersectionObserver、ResizeObserver |
-| `UpBrowser.Core/Dom/Html/Fullscreen.cs` | Fullscreen API、ServiceWorker（空壳） |
-| `UpBrowser.Core/Dom/Events/*.cs` | Event、EventTarget、MouseEvent、TouchEvent、WheelEvent、KeyboardEvent |
-| `UpBrowser.Core/Dom/Geometry/*.cs` | DOMMatrix、DOMPoint、DOMRect |
-| `UpBrowser.Core/Performance/Diagnostics/PerformanceApi.cs` | Performance API（内部） |
-| `UpBrowser.Core/Performance/Diagnostics/PerformanceMetrics.cs` | PerformanceMetrics（内部） |
+| `Acrux.Core/JavaScript/JavaScriptEngine.cs` | Window 全局、Navigator、Location、History、Screen、Storage、Console、Fetch、Builtins |
+| `Acrux.Core/JavaScript/URLHost.cs` | URL、URLSearchParams |
+| `Acrux.Core/JavaScript/XMLHttpRequestHost.cs` | XMLHttpRequest |
+| `Acrux.Core/JavaScript/DocumentHost.cs` | Document、HTMLElement |
+| `Acrux.Core/JavaScript/ElementHost.cs` | Element、EventTarget、DOMTokenList |
+| `Acrux.Core/JavaScript/StyleHost.cs` | CSSStyleDeclaration |
+| `Acrux.Core/Dom/Html/HTMLCanvasElement.cs` | Canvas API |
+| `Acrux.Core/Dom/MutationObserver/MutationObserver.cs` | MutationObserver |
+| `Acrux.Core/Dom/Html/Observers.cs` | IntersectionObserver、ResizeObserver |
+| `Acrux.Core/Dom/Html/Fullscreen.cs` | Fullscreen API、ServiceWorker（空壳） |
+| `Acrux.Core/Dom/Events/*.cs` | Event、EventTarget、MouseEvent、TouchEvent、WheelEvent、KeyboardEvent |
+| `Acrux.Core/Dom/Geometry/*.cs` | DOMMatrix、DOMPoint、DOMRect |
+| `Acrux.Core/Performance/Diagnostics/PerformanceApi.cs` | Performance API（内部） |
+| `Acrux.Core/Performance/Diagnostics/PerformanceMetrics.cs` | PerformanceMetrics（内部） |
