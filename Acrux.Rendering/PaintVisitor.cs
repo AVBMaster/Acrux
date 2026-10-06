@@ -1900,7 +1900,9 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         bool hasMask = _maskPainter.HasMask(style);
         SKImage? maskImage = null;
         if (hasMask)
-            maskImage = _maskPainter.TryBuildMaskImage(style, offsetBorderBox);
+            // The laid-out box is passed so the mask can be positioned and clipped against
+        // the origin/clip boxes, not just the border box (CSS Masking 1 §7.1).
+        maskImage = _maskPainter.TryBuildMaskImage(style, offsetBorderBox, layoutBox);
 
         bool hasFilter = !string.IsNullOrEmpty(style.Filter) && style.Filter != "none";
         SKImageFilter? elementFilter = null;

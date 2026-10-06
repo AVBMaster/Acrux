@@ -23,63 +23,158 @@ internal sealed class MaskPainter
 
     public bool HasMask(ComputedStyle style) =>
         !string.IsNullOrEmpty(style.MaskImage) && style.MaskImage != "none" ||
-        !string.IsNullOrEmpty(style.Mask) && style.Mask != "none";
+        !string.IsNullOrEmpty(style.Mask) && style.Mask.Trim() != "none";
 
     public SKImage? TryLoadMaskImage(ComputedStyle style) => TryBuildMaskImage(style, SKRect.Empty);
+
+    /// <summary>The three boxes a mask layer can be positioned in or clipped to, in the mask
+    /// surface's own coordinates (its top-left is the border box's top-left).</summary>
+    private readonly record struct Boxes(SKRect Border, SKRect Padding, SKRect Content)
+    {
+        public static Boxes For(ComputedStyle style, SKRect borderBox, Acrux.Core.Dom.LayoutBox? box)
+        {
+            // The mask surface is the border box, so every rect below is expressed from its
+            // top-left — feeding the caller's document-space rect in would place the tiles
+            // outside the surface and mask the element away entirely.
+            var local = new SKRect(0, 0, MathF.Max(0, borderBox.Width), MathF.Max(0, borderBox.Height));
+            if (local.Width <= 0 || local.Height <= 0) return new Boxes(local, local, local);
+            // Without the laid-out box there is nothing to derive the inner boxes from, and a
+            // mask with no authored geometry paints the whole border box either way.
+            if (box == null) return new Boxes(local, local, local);
+            var shift = new SKPoint(-borderBox.Left, -borderBox.Top);
+            var padding = box.PaddingBox; padding.Offset(shift);
+            var content = box.ContentBox; content.Offset(shift);
+            return new Boxes(local, padding, content);
+        }
+
+        public SKRect Resolve(string? name, bool isClip) =>
+            MaskGeometry.Box(name, Border, Padding, Content, isClip);
+    }
 
     /// <summary>
     /// Build the mask paint source for mask-image: a decoded url() image, or a
     /// rasterized gradient sized to the element's border box. The layer blends
     /// with SrcIn, so the gradient's alpha channel is what masks (CSS Masking 1 §11).
     /// </summary>
-    public SKImage? TryBuildMaskImage(ComputedStyle style, SKRect borderBox)
+    public SKImage? TryBuildMaskImage(ComputedStyle style, SKRect borderBox,
+        Acrux.Core.Dom.LayoutBox? layoutBox = null)
     {
-        var maskValue = style.MaskImage;
-        if (string.IsNullOrEmpty(maskValue) || maskValue == "none")
-            maskValue = style.Mask;
+        // The authored 'mask' text is preferred over the normalized 'mask-image' list because
+        // it still carries each layer's own position/size; the longhands fill in whatever a
+        // layer did not name (they are single scalars until the lists are modelled per layer).
+        var maskValue = style.Mask;
+        if (string.IsNullOrEmpty(maskValue) || maskValue.Trim() == "none")
+            maskValue = style.MaskImage;
         if (string.IsNullOrEmpty(maskValue) || maskValue.Trim().Equals("none", StringComparison.OrdinalIgnoreCase))
             return null;
 
-        var layers = SplitTopLevel(maskValue, ',');
-        // 'mask-mode: luminance' masks by the image's luminance instead of its alpha;
-        // 'match-source' (the default) means alpha for gradients.
-        _luminance = (style.MaskMode ?? string.Empty)
-            .Contains("luminance", StringComparison.OrdinalIgnoreCase);
-        if (layers.Count > 1)
-            return BuildCompositedMask(layers, style.MaskComposite, borderBox);
+        var layers = Acrux.Core.Css.MaskLayerParser.Parse(maskValue);
+        if (layers.Count == 0) return null;
 
-        if (maskValue.Contains("gradient", StringComparison.OrdinalIgnoreCase))
+        int width = (int)MathF.Max(1, MathF.Round(borderBox.Width));
+        int height = (int)MathF.Max(1, MathF.Round(borderBox.Height));
+        var info = new SKImageInfo((int)width, (int)height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var surface = SKSurface.Create(info);
+        if (surface == null) return null;
+        surface.Canvas.Clear(SKColors.Transparent);
+
+        var boxes = Boxes.For(style, borderBox, layoutBox);
+
+        // Layers are listed top first, so the bottom one is painted as the backdrop and each
+        // layer above it is blended with the operator declared for that layer.
+        for (int i = layers.Count - 1; i >= 0; i--)
         {
-            float width = MathF.Max(1, MathF.Round(borderBox.Width));
-            float height = MathF.Max(1, MathF.Round(borderBox.Height));
-            var area = new SKRect(0, 0, width, height);
-            if (_luminance)
+            var layer = layers[i];
+            bool isBottom = i == layers.Count - 1;
+            var composite = isBottom ? "add"
+                : layer.Composite ?? CompositeAt(style.MaskComposite, i);
+
+            if (isBottom && composite == "add")
             {
-                using var raster = GradientRenderer.RasterizeToImage(maskValue, area);
-                return raster == null ? null : ToLuminanceAlpha(raster);
+                PaintLayerOnto(surface.Canvas, layer, style, boxes, width, height);
+                continue;
             }
-            var shader = GradientRenderer.CreateGradient(maskValue, area);
-            if (shader == null)
-                return null;
-            using var paint = new SKPaint { Shader = shader };
-            var info = new SKImageInfo((int)width, (int)height, SKColorType.Rgba8888, SKAlphaType.Premul);
-            using var surface = SKSurface.Create(info);
-            if (surface == null)
-                return null;
-            surface.Canvas.Clear(SKColors.Transparent);
-            surface.Canvas.DrawRect(0, 0, width, height, paint);
-            return surface.Snapshot();
+
+            using var scratch = SKSurface.Create(info);
+            if (scratch == null) return null;
+            scratch.Canvas.Clear(SKColors.Transparent);
+            PaintLayerOnto(scratch.Canvas, layer, style, boxes, width, height);
+
+            if (composite != "subtract")
+            {
+                using var layerImage = scratch.Snapshot();
+                using var paint = new SKPaint { BlendMode = CompositeToBlendMode(composite) };
+                surface.Canvas.DrawImage(layerImage, 0, 0, paint);
+                continue;
+            }
+
+            // 'subtract' is max(0, layer - backdrop) and replaces the accumulated mask.
+            // This Skia build has no subtracting blend mode, so the alpha channel is
+            // computed directly; only a mask's alpha is ever consumed downstream.
+            if (!TrySubtractAlpha(scratch, surface, width, height, out var difference)) return null;
+            using (difference)
+            using (var replace = new SKPaint { BlendMode = SKBlendMode.Src })
+                surface.Canvas.DrawImage(difference, 0, 0, replace);
         }
 
-        var resolved = ResolveMaskUrl(maskValue);
-        if (resolved == null) return null;
+        return surface.Snapshot();
+    }
 
-        var imageTask = _imageCache.GetImageAsync(resolved);
-        imageTask.Wait();
-        var decodedImage = imageTask.Result;
-        if (decodedImage == null) return null;
-        if (!_luminance) return decodedImage;
-        return ToLuminanceAlpha(decodedImage);
+    private static string CompositeAt(string? list, int index)
+    {
+        var parts = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(list ?? string.Empty, ',');
+        if (parts.Count == 0) return "add";
+        return parts[index % parts.Count];
+    }
+
+    /// <summary>
+    /// Paint one layer's tiles into a mask canvas: resolve the box the layer is positioned in
+    /// ('mask-origin') and the box it is clipped to ('mask-clip'), size and anchor the tile
+    /// from 'mask-size' / 'mask-position', then repeat it per 'mask-repeat'
+    /// (CSS Masking 1 §7.1, §9; the geometry is the background algorithm).
+    /// </summary>
+    private void PaintLayerOnto(SKCanvas canvas, Acrux.Core.Css.MaskLayer layer, ComputedStyle style,
+        Boxes boxes, int surfaceWidth, int surfaceHeight)
+    {
+        if (layer.Image == "none") return;
+
+        // 'mask-mode' may be named per layer or once for the element; 'match-source' means
+        // alpha for a gradient and for a raster image (there is no SVG <mask> here).
+        var mode = layer.Mode ?? style.MaskMode ?? string.Empty;
+        _luminance = mode.Contains("luminance", StringComparison.OrdinalIgnoreCase);
+
+        var origin = boxes.Resolve(layer.Origin ?? style.MaskOrigin, isClip: false);
+        var clip = boxes.Resolve(layer.Clip ?? style.MaskClip, isClip: true);
+        var area = new SKSize(Math.Max(0, origin.Width), Math.Max(0, origin.Height));
+
+        var intrinsic = TryIntrinsicSize(layer.Image);
+        var tile = MaskGeometry.TileSize(layer.Size ?? style.MaskSize, area, intrinsic);
+        var anchor = MaskGeometry.Position(layer.Position ?? style.MaskPosition, area, tile);
+        var repeat = MaskGeometry.Repeat(layer.Repeat ?? style.MaskRepeat);
+        var tiles = MaskGeometry.Tiles(area, tile, anchor, repeat);
+        if (tiles.Count == 0) return;
+
+        int save = canvas.Save();
+        // Everything outside the clip box masks nothing, so it stays transparent.
+        canvas.ClipRect(clip);
+        canvas.Translate(origin.Left, origin.Top);
+        foreach (var rect in tiles)
+            DrawLayerOnto(canvas, layer.Image, rect, SKBlendMode.Src);
+        canvas.RestoreToCount(save);
+    }
+
+    /// <summary>A raster mask source has an intrinsic size, which 'auto', 'contain', 'cover'
+    /// and the single-length 'mask-size' all need; a gradient does not, so its default object
+    /// size is the positioning area.</summary>
+    private SKSize? TryIntrinsicSize(string image)
+    {
+        if (image.Contains("gradient", StringComparison.OrdinalIgnoreCase)) return null;
+        var resolved = ResolveMaskUrl(image);
+        if (resolved == null) return null;
+        var task = _imageCache.GetImageAsync(resolved);
+        task.Wait();
+        var decoded = task.Result;
+        return decoded == null ? null : new SKSize(decoded.Width, decoded.Height);
     }
 
     /// <summary>

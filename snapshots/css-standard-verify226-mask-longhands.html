@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<!--
+  b226 — CSS Masking 1 §9: the mask longhands' value grammar, their computed serialization,
+  and (as a sentinel) the geometry they are supposed to control.
+
+  §A is checked against the reference browser value by value — see the table below.
+  §B is the geometry itself. It was written as a sentinel first (all six boxes identical
+  while the longhands were inert) and the same six cases now separate, measured from the
+  engine's own raster — each .inner is 130x60 at the sampled row:
+    m1 no geometry       RED across x[0,130)              (one full-area tile)
+    m2 50% 50% rb no-rep RED only from x=65 and the lower half  (bottom-right quarter)
+    m3 100% 20px center  RED only on the band y[20,40)
+    m4 clip content-box  see-through for x[0,10) and RED from x=10 on — because
+                         'width:100%' + 'padding:10px' under content-box sizing makes the
+                         element's own content box x[10,140): it is the BORDER box that
+                         overflows the parent, so nothing is clipped on the right.
+    m5 25% repeat-x      four fading bands, period 32.5px (alpha at x=3,35,67,99 alike)
+    m6 33.333% round     three tiles stretched to 43.33px, covering the area exactly
+  m5/m6 use a left-to-right fading tile on purpose: a solid tile repeats invisibly.
+
+  EDGE TRUTH (2026-10-06) — getComputedStyle, all 28 values matched by the engine:
+    a: mask-size '50% 25%' | mask-position '100% 100%' ('right bottom' resolves to
+       percentages of the positioning area, never to the keyword) | mask-repeat 'space'
+       | mask-clip 'content-box' | mask-composite 'add' | mask-mode 'match-source'
+       | mask-origin 'border-box' (origin does NOT follow clip)
+    b: 'mask: url(x.png) 10px 20px / 30px no-repeat padding-box' expands to
+       mask-size '30px' | mask-position '10px 20px' | mask-repeat 'no-repeat'
+       | mask-clip 'padding-box' | mask-origin 'padding-box'  ← one geometry box names
+       BOTH origin and clip (CSS Masking 1 §5.1)
+    c: mask-size 'contain' | mask-clip 'no-clip' | mask-position '0% 0%' | mask-repeat 'repeat'
+    d: mask-size 'bogus'  -> REJECTED, computes 'auto'
+       mask-repeat 'round round' -> accepted, collapses identical axes to 'round'
+       mask-repeat 'repeat-x repeat' -> REJECTED ('repeat-x' is a single-axis value and
+       takes no second token, so it computes back to 'repeat')
+       mask-repeat 'repeat-x' alone -> stays 'repeat-x'; the two-axis form is NOT expanded
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b226 mask longhands</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font: 11px/14px monospace; color: #111; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0 0 4px; }
+  .cell { width: 140px; }
+  .lbl { font: 10px/12px monospace; color: #555; }
+  .box { width: 130px; height: 60px; background: #d0d0ff; position: relative;
+         border: 6px solid #ffcc00; padding: 8px; }
+  .inner { width: 100%; height: 100%; background: #e04040; }
+  /* §B: same element, four mask geometries. Only box 1 is the reference behaviour today. */
+  #m1 .inner { mask-image: linear-gradient(#000, #000); }
+  #m2 .inner { mask-image: linear-gradient(#000, #000); mask-size: 50% 50%;
+               mask-position: right bottom; mask-repeat: no-repeat; }
+  #m3 .inner { mask-image: linear-gradient(#000, #000); mask-size: 100% 20px;
+               mask-position: center; mask-repeat: no-repeat; }
+  #m4 .inner { mask-image: linear-gradient(#000, #000); mask-size: 100% 100%;
+               mask-clip: content-box; padding: 10px; }
+  /* m5/m6 prove the tiling itself: a 25% tile repeated, and the same tile rounded to fit. */
+  /* A fading tile makes the repetition observable: a solid tile would cover the area
+     uniformly and look identical to 'no geometry at all'. */
+  #m5 .inner { mask-image: linear-gradient(to right, rgb(0,0,0), rgba(0,0,0,0.2));
+               mask-size: 25% 100%; mask-repeat: repeat-x; }
+  #m6 .inner { mask-image: linear-gradient(to right, rgb(0,0,0), rgba(0,0,0,0.2));
+               mask-size: 33.333% 100%; mask-repeat: round; }
+</style>
+</head>
+<body>
+
+<div class="lbl">A. computed value matrix (script-written, one line per property)</div>
+<div id="matrix">
+  <p id="a" style="mask-size:50% 25%;mask-position:right bottom;mask-repeat:space;mask-clip:content-box;mask-image:linear-gradient(#000,#000)">a</p>
+  <p id="b" style="mask:url(data:image/png;base64,iVBORw0KGgo=) 10px 20px / 30px no-repeat padding-box">b</p>
+  <p id="c" style="mask-size:contain;mask-clip:no-clip">c</p>
+  <p id="d" style="mask-size:bogus;mask-repeat:round round">d</p>
+  <p id="e" style="mask-repeat:repeat-x repeat">e (repeat-x + second axis: invalid)</p>
+  <p id="f" style="mask-repeat:repeat-x">f (repeat-x alone: stays 'repeat-x')</p>
+</div>
+<script>
+(function () {
+  var keys = ['mask-size','mask-position','mask-repeat','mask-clip','mask-origin','mask-composite','mask-mode'];
+  var ids = ['a','b','c','d','e','f'];
+  for (var t = 0; t < ids.length; t++) {
+    var cs = getComputedStyle(document.getElementById(ids[t]));
+    var line = [];
+    for (var i = 0; i < keys.length; i++) {
+      var v = cs.getPropertyValue(keys[i]);
+      if (keys[i] === 'mask-image' || (v && v.indexOf('data:') === 0)) v = '<image>';
+      line.push(keys[i] + '=' + v);
+    }
+    for (var i = 0; i < line.length; i++) {
+      var pre = document.createElement('pre');
+      pre.textContent = ids[t] + ' ' + line[i];
+      document.getElementById('matrix').appendChild(pre);
+    }
+  }
+})();
+</script>
+
+<div class="lbl">B. geometry sentinel — today all four paint the same; see the header for what must change</div>
+<div class="row">
+  <div class="cell"><div class="box" id="m1"><div class="inner"></div></div><div class="lbl">m1 image only</div></div>
+  <div class="cell"><div class="box" id="m2"><div class="inner"></div></div><div class="lbl">m2 50%x50% right bottom</div></div>
+  <div class="cell"><div class="box" id="m3"><div class="inner"></div></div><div class="lbl">m3 100%x20px center</div></div>
+  <div class="cell"><div class="box" id="m4"><div class="inner"></div></div><div class="lbl">m4 clip content-box</div></div>
+  <div class="cell"><div class="box" id="m5"><div class="inner"></div></div><div class="lbl">m5 25% repeat-x</div></div>
+  <div class="cell"><div class="box" id="m6"><div class="inner"></div></div><div class="lbl">m6 33.33% round</div></div>
+</div>
+
+</body>
+</html>

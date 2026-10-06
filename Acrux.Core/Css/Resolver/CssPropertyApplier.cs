@@ -607,8 +607,7 @@ public static class CssPropertyApplier
                 break;
             case "mask-position": style.MaskPosition = value; break;
             case "mask-repeat":
-                if (IsKeywordList(value, "repeat-x", "repeat-y", "repeat", "no-repeat", "space", "round"))
-                    style.MaskRepeat = value.Trim().ToLowerInvariant();
+                if (IsMaskRepeat(value)) style.MaskRepeat = value.Trim().ToLowerInvariant();
                 break;
             case "mask-size":
                 if (IsMaskSize(value)) style.MaskSize = value.Trim().ToLowerInvariant();
@@ -1152,6 +1151,28 @@ public static class CssPropertyApplier
                    or "cm" or "mm" or "q" or "in" or "pt" or "pc" or "lh" or "rlh"
                    or "svw" or "svh" or "lvw" or "lvh" or "dvw" or "dvh"
                    or "vi" or "vb" or "cqw" or "cqh" or "cqi" or "cqb" or "cqmin" or "cqmax";
+    }
+
+    /// <summary>'mask-repeat' (CSS Masking 1 §9.3): per layer, one or two repeat keywords —
+    /// the two-token form names the horizontal and vertical axis separately, and the reference
+    /// engine collapses identical axes back to one keyword on output.</summary>
+    public static bool IsMaskRepeat(string value)
+    {
+        var layers = SplitCommaTokens(value);
+        if (layers.Count == 0) return false;
+        var allowed = new[] { "repeat-x", "repeat-y", "repeat", "no-repeat", "space", "round" };
+        foreach (var layer in layers)
+        {
+            var axes = layer.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (axes.Length is 0 or > 2) return false;
+            // 'repeat-x'/'repeat-y' are single-axis values and take no second token.
+            if (axes.Length == 2
+                && (axes[0].Equals("repeat-x", StringComparison.OrdinalIgnoreCase)
+                    || axes[0].Equals("repeat-y", StringComparison.OrdinalIgnoreCase)))
+                return false;
+            if (!axes.All(a => allowed.Any(k => a.Equals(k, StringComparison.OrdinalIgnoreCase)))) return false;
+        }
+        return true;
     }
 
     /// <summary>A comma list drawn from one keyword set (each layer may name its own value).</summary>

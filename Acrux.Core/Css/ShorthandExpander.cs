@@ -1075,140 +1075,28 @@ public static class ShorthandExpander
     private static bool IsColor(string p) => p.StartsWith("#") || p.StartsWith("rgb") || p == "transparent" || p == "currentcolor" || IsNamedColor(p);
     private static bool IsFontSize(string p) => p is "xx-small" or "x-small" or "small" or "medium" or "large" or "x-large" or "xx-large" or "larger" or "smaller";
     private static bool IsNamedColor(string p) => KnownColors.Get(p).HasValue;    /// <summary>
-    /// 'mask' (CSS Masking 1 §5.1). A layer is
-    ///   &lt;mask-reference&gt; || &lt;position&gt; [ / &lt;bg-size&gt; ]? || &lt;repeat-style&gt; ||
-    ///   &lt;geometry-box&gt; || [ &lt;geometry-box&gt; | no-clip ] || &lt;compositing-operator&gt; || &lt;masking-mode&gt;
-    /// with every part optional and in any order, so the tokens are classified rather than
-    /// positionally parsed. One geometry box names BOTH 'mask-origin' and 'mask-clip'; a second
-    /// one replaces whichever of the two is still unset, and 'no-clip' only ever names the clip.
-    /// Omitted parts take their initial values, which is what makes the shorthand reset them.
-    /// A comma-separated multi-layer value keeps the whole image list on 'mask-image' (that is
-    /// what the mask painter splits), with the non-image parts taken from the first layer.
+    /// 'mask' (CSS Masking 1 §5.1) into its longhands. The layer list is decomposed by
+    /// <see cref="MaskLayerParser"/>, the same code the mask painter uses, so the cascade and
+    /// the rendering can never disagree about what a layer said. Parts the value does not name
+    /// fall back to their initial values — that reset is what a shorthand means.
     /// </summary>
     private static void ExpandMask(Dictionary<string, string> result, string value)
     {
-        var layers = SplitTopLevel(value, ',');
+        var layers = MaskLayerParser.Parse(value);
         if (layers.Count == 0) return;
+        var first = layers[0];
 
-        var imageParts = new List<string>();
-        string? position = null, size = null, repeat = null, origin = null, clip = null,
-               composite = null, mode = null;
-        bool firstLayer = true;
-
-        foreach (var layerText in layers)
-        {
-            var tokens = SplitMaskTokens(layerText);
-            imageParts.Add(string.Join(", ", tokens.Where(t => IsMaskImageToken(t))));
-            if (!firstLayer) continue;   // the geometry of later layers has nowhere to live yet
-            firstLayer = false;
-
-            bool seenBox = false;
-            for (int i = 0; i < tokens.Count; i++)
-            {
-                var t = tokens[i];
-                var lower = t.ToLowerInvariant();
-                if (IsMaskImageToken(t)) continue;
-                if (lower == "no-clip") { clip = "no-clip"; continue; }
-                if (lower is "border-box" or "padding-box" or "content-box"
-                    or "fill-box" or "stroke-box" or "view-box")
-                {
-                    if (!seenBox) { origin = lower; clip = lower; seenBox = true; }
-                    else if (clip == null || clip == "no-clip") clip = lower;
-                    else origin = lower;
-                    continue;
-                }
-                if (lower is "add" or "subtract" or "intersect" or "exclude") { composite = lower; continue; }
-                if (lower is "alpha" or "luminance" or "match-source") { mode = lower; continue; }
-                if (lower is "repeat" or "repeat-x" or "repeat-y" or "no-repeat" or "space" or "round")
-                {
-                    // 'repeat-x'/'repeat-y' are two-axis shorthands of their own.
-                    repeat = lower switch
-                    {
-                        "repeat-x" => "repeat no-repeat",
-                        "repeat-y" => "no-repeat repeat",
-                        _ => BuildRepeat(tokens, ref i),
-                    };
-                    continue;
-                }
-                if (lower == "auto" && size == null && position != null) { size = "auto"; continue; }
-                if (lower is "contain" or "cover") { size ??= lower; continue; }
-                if (t.StartsWith("/", StringComparison.Ordinal) || t == "/")
-                {
-                    // '<position> / <size>': everything up to the next axis keyword is the size.
-                    var rest = new List<string>();
-                    for (int j = i + 1; j < tokens.Count; j++)
-                    {
-                        var s2 = tokens[j].ToLowerInvariant();
-                        if (s2 is "repeat" or "repeat-x" or "repeat-y" or "no-repeat" or "space" or "round"
-                            || s2 is "border-box" or "padding-box" or "content-box" or "no-clip"
-                            || s2 is "add" or "subtract" or "intersect" or "exclude"
-                            || s2 is "alpha" or "luminance" or "match-source") break;
-                        rest.Add(tokens[j]);
-                        i = j;
-                    }
-                    if (rest.Count > 0) size = string.Join(" ", rest);
-                    continue;
-                }
-                // Anything left is a position token (keyword, length or percentage).
-                position = position == null ? t : position + " " + t;
-            }
-        }
-
-        result["mask-image"] = string.Join(", ", imageParts.Select(p2 => string.IsNullOrEmpty(p2) ? "none" : p2));
-        result["mask-position"] = position ?? "0% 0%";
-        result["mask-size"] = size ?? "auto";
-        result["mask-repeat"] = repeat ?? "repeat";
-        result["mask-origin"] = origin ?? "border-box";
-        result["mask-clip"] = clip ?? "border-box";
-        result["mask-composite"] = composite ?? "add";
-        result["mask-mode"] = mode ?? "match-source";
-    }
-
-    /// <summary>url(...), a gradient function or 'none' name the mask image; 'src(...)' does not.</summary>
-    private static bool IsMaskImageToken(string token)
-    {
-        var lower = token.Trim().ToLowerInvariant();
-        return lower == "none"
-            || lower.StartsWith("url(", StringComparison.Ordinal)
-            || lower.StartsWith("-webkit-", StringComparison.Ordinal) && lower.Contains("gradient(")
-            || lower.Contains("gradient(") && !lower.StartsWith("src(", StringComparison.Ordinal);
-    }
-
-    /// <summary>Split a layer on whitespace, keeping url(...) and function(...) intact.</summary>
-    private static List<string> SplitMaskTokens(string layerText)
-    {
-        var tokens = new List<string>();
-        int depth = 0;
-        var sb = new System.Text.StringBuilder();
-        foreach (var c in layerText)
-        {
-            if (c == '(') depth++;
-            else if (c == ')') depth = Math.Max(0, depth - 1);
-            if (depth == 0 && char.IsWhiteSpace(c))
-            {
-                if (sb.Length > 0) { tokens.Add(sb.ToString()); sb.Clear(); }
-                continue;
-            }
-            sb.Append(c);
-        }
-        if (sb.Length > 0) tokens.Add(sb.ToString());
-        return tokens;
-    }
-
-    /// <summary>Two consecutive repeat keywords are one axis each; consume the second.</summary>
-    private static string BuildRepeat(List<string> tokens, ref int index)
-    {
-        string first = tokens[index].ToLowerInvariant();
-        if (index + 1 < tokens.Count)
-        {
-            string next = tokens[index + 1].ToLowerInvariant();
-            if (next is "repeat" or "repeat-x" or "repeat-y" or "no-repeat" or "space" or "round")
-            {
-                index++;
-                return $"{first} {next}";
-            }
-        }
-        return first;
+        // The full authored value stays available too: each layer keeps its own geometry in
+        // it, and the longhands below are single scalars until the painter reads layer lists.
+        result["mask"] = value;
+        result["mask-image"] = string.Join(", ", layers.Select(l => l.Image));
+        result["mask-position"] = first.Position ?? "0% 0%";
+        result["mask-size"] = first.Size ?? "auto";
+        result["mask-repeat"] = first.Repeat ?? "repeat";
+        result["mask-origin"] = first.Origin ?? "border-box";
+        result["mask-clip"] = first.Clip ?? "border-box";
+        result["mask-composite"] = first.Composite ?? "add";
+        result["mask-mode"] = first.Mode ?? "match-source";
     }
 
 
