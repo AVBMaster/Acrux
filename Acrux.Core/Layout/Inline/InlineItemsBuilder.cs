@@ -323,11 +323,14 @@ public class InlineItemsBuilder
     {
         ['ß'] = "SS",
         ['ŉ'] = "ʼN",
-        ['ǅ'] = "DŽ", ['ǆ'] = "DŽ",
-        ['ǈ'] = "LJ", ['ǉ'] = "LJ",
-        ['ǋ'] = "NJ", ['ǌ'] = "NJ",
-        ['ȷ'] = "J",
-        ['ⅎ'] = "C",
+        // The digraph/trigraph letters have PRECOMPOSED capitals (measured in the
+        // reference engine: ǆ -> Ǆ, ǉ -> Ǉ, ǌ -> Ǌ, ǲ -> Ǳ), so they must not be
+        // expanded into separate letters. 'ȷ' (dotless j) has no capital at all and
+        // is left alone, which is also what the reference engine does.
+        ['ǅ'] = "Ǆ", ['ǆ'] = "Ǆ",
+        ['ǈ'] = "Ǉ", ['ǉ'] = "Ǉ",
+        ['ǋ'] = "Ǌ", ['ǌ'] = "Ǌ",
+        ['ǰ'] = "J̌",
         ['ﬀ'] = "FF", ['ﬁ'] = "FI", ['ﬂ'] = "FL", ['ﬃ'] = "FFI", ['ﬄ'] = "FFL", ['ﬅ'] = "ST", ['ﬆ'] = "ST",
         ['ﬗ'] = "MB",
     };
@@ -368,18 +371,29 @@ public class InlineItemsBuilder
     private static bool StartsNewWord(char prevPrev, char prev, char next)
     {
         if (char.IsWhiteSpace(prev)) return true;
-        // Underscore is ExtendNumLet and always joins. A straight/curly apostrophe
-        // joins only between letters ("o'clock" → "O'clock"); a leading quote is a
-        // separator, so the letter after it starts a word ("'quick" → "'Quick").
-        if (prev is '_' or 'ʼ') return false;
-        if (prev is '\'' or '’') return !char.IsLetter(prevPrev);
-        if (prev is '.' or ',' or ':' or ';' or '·' or '‧' or '״') return !char.IsLetter(next);
+        // Only this small joining family keeps a letter inside the current word.
+        // Measured in Edge: "a.b"/"foo.bar"/"a,b"/"a:b"/"a;b"/"a-b"/"a–b"/"a—b"/
+        // "a/b"/"a\"b"/"a!b"/"a?b"/"a(b" all start a NEW word (so "a.b" -> "A.B"),
+        // while "a·b" -> "A·b", "don’t" -> "Don’t", "o'clock" -> "O'clock" and
+        // "ab_cd" -> "Ab_cd" do not.
+        if (prev is '\'' or '’' or 'ʼ' or '·' or '‧' or '״')
+            // UAX#29 WB6/WB7: a quote or middle dot joins only between letters, so a
+            // leading one is still a separator ("'quick" -> "'Quick").
+            return !(IsWordLetter(prevPrev) && IsWordLetter(next));
+        // Underscore is ExtendNumLet and always joins.
+        if (prev == '_') return false;
         // A letter or digit continues the current word, so a letter right after a
-        // digit is not word-initial ("2fast" → "2fast", matching Chrome).
-        if ((char.IsLetter(prev) || char.IsDigit(prev)) && char.IsLetter(next)) return false;
+        // digit is not word-initial ("2fast" -> "2fast", matching Chrome).
+        if ((IsWordLetter(prev) || char.IsDigit(prev)) && IsWordLetter(next)) return false;
         if (char.IsDigit(prev) && char.IsDigit(next)) return false;
         return true;
     }
+
+    /// <summary>UAX#29 ALetter is wider than <see cref="char.IsLetter"/>: it includes
+    /// letter-numerals, which is why "Ⅷb" keeps its lower-case b in the reference
+    /// engine (the Roman numeral is already the word's first letter).</summary>
+    private static bool IsWordLetter(char c) =>
+        char.IsLetter(c) || char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.LetterNumber;
 
     private static string FullWidth(string text)
     {

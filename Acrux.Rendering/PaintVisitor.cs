@@ -1929,7 +1929,16 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         {
             SKPath? clipPath = null;
             if (hasClipPath)
+            {
                 clipPath = ClipPathClipper.Parse(style.ClipPath, layoutBox);
+                // Every other geometry in this method is expressed in the offset space
+                // the caller passes in (scroll/tile offset already added), and the ops
+                // the clip has to intersect are built in that space too — a path left
+                // in raw layout coordinates would drift as soon as contentOffsetY != 0.
+                if (clipPath != null)
+                    clipPath.Offset(offsetBorderBox.Left - layoutBox.BorderBox.Left,
+                                    offsetBorderBox.Top - layoutBox.BorderBox.Top);
+            }
             objectPaintState.PushLayer(hasOpacityLayer ? style.Opacity : 1.0f,
                 elementFilter, clipPath, offsetBorderBox, maskImage,
                 hasBlendMode ? MixBlendModeToSkBlendMode(style.MixBlendMode) : SKBlendMode.SrcOver,

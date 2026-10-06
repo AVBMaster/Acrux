@@ -45,8 +45,39 @@ internal sealed class PaintLayerClipper
         {
             var style = ancestor.ComputedStyle;
             var box = ancestor.LayoutBox;
-            if (style == null || box == null || !CreatesClip(style))
+            if (style == null || box == null) continue;
+
+            // CSS Masking 1 §1.1: a clip-path clips the element AND its descendants, and
+            // the layer-tree walk paints those as separate layers — so the shape has to be
+            // replayed here exactly like the overflow clip. It is pushed as a plain
+            // intersecting clip (never a layer), which is why replaying it cannot
+            // double-apply anything the way opacity or a filter would.
+            SKPath? shapeClip = ClipPathClipper.HasClipPath(style.ClipPath)
+                ? ClipPathClipper.Parse(style.ClipPath, box)
+                : null;
+            if (shapeClip != null)
+                shapeClip.Offset(-ax, contentOffsetY - ay);
+
+            bool clipsOverflow = CreatesClip(style);
+            if (!clipsOverflow && shapeClip == null)
+            {
+                shapeClip?.Dispose();
                 continue;
+            }
+
+            if (shapeClip != null)
+            {
+                var shapeOp = PaintOpPool.GetPushClipOp();
+                shapeOp.ClipPath = shapeClip;
+                shapeOp.AntiAlias = true;
+                shapeOp.Bounds = new SKRect(box.BorderBox.Left - ax,
+                    box.BorderBox.Top + contentOffsetY - ay,
+                    box.BorderBox.Right - ax, box.BorderBox.Bottom + contentOffsetY - ay);
+                _displayList.Add(shapeOp);
+                pushed.Add(false);
+            }
+
+            if (!clipsOverflow) continue;
 
             var clip = ClipRectFor(box, style);
             // 'overflow-clip-margin' (CSS Overflow 3 §4.1) moves the clip edge off the

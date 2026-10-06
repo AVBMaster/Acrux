@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>probe clip-path and independent transforms</title>
+<style>
+  html,body{margin:0;padding:0;background:#fff;font:12px Arial}
+  .row{position:relative;height:130px;width:100%}
+  .t{position:absolute;background:#f80;width:120px;height:120px}
+  #c1{left:0;top:0}
+  #c2{left:140px;top:0;clip-path:circle(50% at 50% 50%)}
+  #c3{left:280px;top:0;clip-path:inset(10px 20px 30px 40px)}
+  #c4{left:420px;top:0;clip-path:polygon(0 0,100% 0,0 100%)}
+  #c5{left:560px;top:0;clip-path:circle(20px at 0 0)}
+  #c6{left:700px;top:0;clip-path:ellipse(30% 50% at 50% 50%)}
+  /* independent transform properties */
+  .tr{position:absolute;left:0;top:0;width:60px;height:20px;background:#0a0}
+  #t1{transform:translate(40px,20px)}
+  #t2{translate:40px 20px}
+  #t3{rotate:90deg;transform-origin:0 0}
+  #t4{scale:2;transform-origin:0 0}
+  #t5{translate:10px 0;rotate:45deg}
+  /* text-overflow custom string */
+  .ov{position:absolute;width:60px;overflow:hidden;white-space:nowrap;background:#ddd;font:16px Arial}
+  #o1{top:160px;left:0;text-overflow:ellipsis}
+  #o2{top:185px;left:0;text-overflow:"→"}
+  #o3{top:210px;left:0;text-overflow:".."}
+  #o4{top:235px;left:0;text-overflow:clip}
+  /* min-content with overflow-wrap */
+  .mc{position:absolute;font:16px Arial;width:min-content;background:#eef}
+  #w1{top:270px;left:0}
+  #w2{top:295px;left:0;overflow-wrap:anywhere}
+  #w3{top:320px;left:0;word-break:break-all}
+  /* line clamp */
+  .lc{position:absolute;top:350px;left:0;width:150px;font:16px/20px Arial;background:#fee}
+  .lc2{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+</style></head><body>
+<div class="row">
+  <div class="t" id="c1"></div><div class="t" id="c2"></div><div class="t" id="c3"></div>
+  <div class="t" id="c4"></div><div class="t" id="c5"></div><div class="t" id="c6"></div>
+</div>
+<div class="row" style="height:420px">
+  <div class="tr" id="t1" style="left:40px;top:20px"></div>
+  <div class="tr" id="t2" style="left:40px;top:100px"></div>
+  <div class="tr" id="t3" style="left:40px;top:180px"></div>
+  <div class="tr" id="t4" style="left:40px;top:260px"></div>
+  <div class="tr" id="t5" style="left:40px;top:340px"></div>
+</div>
+<div class="ov" id="o1">abcdefghij</div><div class="ov" id="o2">abcdefghij</div><div class="ov" id="o3">abcdefghij</div><div class="ov" id="o4">abcdefghij</div>
+<div class="mc" id="w1">supercalifragilistic</div>
+<div class="mc" id="w2">supercalifragilistic</div>
+<div class="mc" id="w3">supercalifragilistic</div>
+<div class="lc lc2" id="lc1">one two three four five six seven eight nine ten eleven twelve</div>
+<div class="lc" id="lc2" style="top:430px">one two three four five six seven eight nine ten eleven twelve</div>
+</body></html>

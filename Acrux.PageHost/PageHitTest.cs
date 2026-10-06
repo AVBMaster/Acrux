@@ -46,7 +46,8 @@ public static class PageHitTest
             // 'pointer-events: none' span falls through to the block that owns the line,
             // exactly as the reference engine resolves it to the containing box.
             if (inline != null && !ReferenceEquals(inline, block) &&
-                IsHittable(inline, inline.LayoutBox ?? box))
+                IsHittable(inline, inline.LayoutBox ?? box) &&
+                !Acrux.Rendering.ClipPathHitTest.IsClippedAway(inline, x, y))
                 found = inline;
         }
         return found;
@@ -93,7 +94,8 @@ public static class PageHitTest
         // CSS UI 4 §11: 'pointer-events: none' takes this box out of the hit set, but the
         // walk still descends — a descendant may set the property back to 'auto' and become
         // the target of the very pointer that passes through its parent.
-        if (box != null && IsHittable(element, box) && box.BorderBox.Contains(x, y))
+        if (box != null && IsHittable(element, box) && box.BorderBox.Contains(x, y) &&
+            !Acrux.Rendering.ClipPathHitTest.IsClippedAway(element, x, y))
         {
             // A generated box (::before / ::after / a floated ::first-letter) has no node to
             // receive the event, so the pointer is attributed to the element that declared it.

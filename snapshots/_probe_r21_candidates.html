@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>probe round21 candidates</title>
+<style>
+  html,body{margin:0;padding:0;font:16px/20px Arial,sans-serif;color:#111}
+  .b{width:200px;border:1px solid #888;margin:6px 0 2px 6px;padding:2px;background:#fff}
+  .lbl{font:12px Arial;color:#555;margin:2px 0 0 8px}
+  /* D. text-transform */
+  .tt-ss{width:200px;background:#eee;text-transform:uppercase}
+  .tt-cap{width:200px;background:#eee;text-transform:capitalize}
+  .tt-fwi{width:200px;background:#eee;text-transform:full-width}
+  /* F. white-space: break-spaces */
+  .bs{width:120px;background:#eef;white-space:break-spaces}
+  .pwr{width:120px;background:#efe;white-space:pre-wrap}
+  /* K. overflow-wrap anywhere vs break-word min-content */
+  .wrapbox{width:60px;background:#fee;border:1px solid #333}
+  .ow-bw{overflow-wrap:break-word}
+  .ow-any{overflow-wrap:anywhere}
+  /* L. tab-size */
+  .tabs{white-space:pre;background:#eef;font:16px monospace;tab-size:8}
+  .tabs2{white-space:pre;background:#eef;font:16px monospace;tab-size:2}
+  /* M. text-overflow custom */
+  .to{width:80px;overflow:hidden;white-space:nowrap;text-overflow:"→";background:#eee}
+  /* I. vertical-align */
+  .va{background:#eee;font-size:16px;line-height:20px}
+  .va i{display:inline-block;width:8px;height:8px;background:#4a4;vertical-align:text-top}
+  .va em{display:inline-block;width:8px;height:8px;background:#a44;vertical-align:text-bottom}
+  .va s{display:inline-block;width:8px;height:8px;background:#44a;vertical-align:middle}
+  /* A. text-wrap balance */
+  .bal{width:150px;background:#ddf;text-wrap:balance}
+  .flat{width:150px;background:#ddf}
+  /* B. font-stretch / font-weight matching */
+  .fs1{width:260px;background:#eee;font-stretch:condensed}
+  .fs2{width:260px;background:#eee;font-stretch:150%}
+  .fw1{width:260px;background:#eee;font-weight:100}
+  .fw2{width:260px;background:#eee;font-weight:900}
+  .fw3{width:260px;background:#eee;font-weight:450}
+  /* G. content attr with fallback + counter */
+  .ca::before{content:attr(data-x "FB");background:#ffd}
+  .cn{counter-reset:x 3;list-style:none;padding:0;margin:0}
+  .cn li::after{content:"[" counter(x,lower-roman) "]"}
+  .cn li{counter-increment:x 2}
+</style></head><body>
+<div class="lbl">D1 uppercase of sharp-s and dotted-i</div>
+<div class="tt-ss" id="d1">straße İstanbul</div>
+<div class="lbl">D2 capitalize after punctuation/digit</div>
+<div class="lbl"></div>
+<div class="tt-cap" id="d2">a.b c'de 5fg (hi) jK</div>
+<div class="lbl">D3 full-width</div>
+<div class="tt-fwi" id="d3">ab1</div>
+<div class="lbl">F break-spaces vs pre-wrap (trailing run of spaces wraps)</div>
+<div class="bs" id="f1">aaa          bbb</div>
+<div class="pwr" id="f2">aaa          bbb</div>
+<div class="lbl">K min-content with anywhere</div>
+<div class="wrapbox ow-bw" id="k1">supercalifragilistic</div>
+<div class="wrapbox ow-any" id="k2">supercalifragilistic</div>
+<div class="lbl">L tab-size 8 vs 2</div>
+<div class="tabs" id="l1">x	y</div>
+<div class="tabs2" id="l2">x	y</div>
+<div class="lbl">M text-overflow custom string</div>
+<div class="to" id="m1">abcdefghij</div>
+<div class="lbl">I vertical-align text-top / text-bottom / middle</div>
+<div class="va" id="i1">x<i></i><em></em><s></s>y</div>
+<div class="lbl">A text-wrap: balance</div>
+<div class="bal" id="a1">The quick brown fox jumps over the lazy dog today</div>
+<div class="flat" id="a2">The quick brown fox jumps over the lazy dog today</div>
+<div class="lbl">B font-stretch and font-weight matching widths</div>
+<div class="fs1" id="b1">Hello World 0123</div>
+<div class="fs2" id="b2">Hello World 0123</div>
+<div class="fw1" id="b3">Hello World 0123</div>
+<div class="fw2" id="b4">Hello World 0123</div>
+<div class="fw3" id="b5">Hello World 0123</div>
+<div class="lbl">G content attr fallback + counter lower-roman step</div>
+<div class="ca" id="g1">tail</div>
+<div class="ca" id="g2" data-x="V">tail</div>
+<ul class="cn" id="g3"><li>i</li><li>ii</li><li>iii</li></ul>
+</body></html>

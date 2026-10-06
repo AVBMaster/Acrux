@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<!--
+  b229 — clip-path hit-testing (CSS Masking 1 §1.1), text-transform word boundaries
+  (CSS Text 3 §4.4/§5.4), and the two-argument form of content: attr()
+  (CSS Values 4 §11.1). Plus the tab-size / vertical-align numbers that pinned the
+  investigation.
+
+  EDGE TRUTH (2026-10-06, Edge 141 / dpr=1):
+  §A clip-path shapes — document.elementFromPoint(x,y), 120px boxes at x=0/140/280/420:
+       c2 circle(50% at 50%): (140,2)=div (clipped)  (200,2)=c2  (260,2)=div
+                              (142,60)=c2  (200,60)=c2  (258,60)=c2  (200,118)=c2
+                              (140,118)=div (clipped)
+       c3 inset(10px 20px 30px 40px): visible rect is x 320..360, y 10..90
+       c4 polygon(0 0,100% 0,0 100%): the upper-left triangle; (420,0) inside,
+                                      (538,118) outside
+       c5 circle(20px at 0 0): (562,2) inside, (560+60,60) outside
+  §B a clip-path on an ANCESTOR removes its descendants too: #a is
+     inset(0 100px 0 0) and #akid sits at x 150..180 -> Edge (160,25)=div, not akid.
+     A fully transparent MASK does NOT: #b has mask-image:linear-gradient(transparent,
+     transparent) and Edge still answers (100,90)=b.
+  §C text-transform:capitalize, measured per input (Edge):
+       "a.b"->"A.B"  "foo.bar"->"Foo.Bar"  "a,b"->"A,B"  "a:b"->"A:B"  "a;b"->"A;B"
+       "hot-dog"->"Hot-Dog"  "x.y.z"->"X.Y.Z"  "e.g. this"->"E.G. This"  "a(b"->"A(B"
+       "a–b"->"A–B"  "a—b"->"A—B"  "a/b"->"A/B"  "a\"b"->"A\"B"  "a!b"->"A!B"  "a?b"->"A?B"
+       "a·b"->"A·b"   "don’t"->"Don’t"  "l’ordre"->"L’ordre"  "ab_cd"->"Ab_cd"
+       "2fast"->"2fast"  "3.14"->"3.14"  "Ⅷb"->"Ⅷb"   "'quick"->"'Quick"
+     uppercase: "straße"->"STRASSE", "İstanbul"->"İSTANBUL".
+     full-width: "ab1"->"ａｂ１" (Edge does not ship this value; we follow CSS Text 3 §4.7).
+  §D content: attr(data-x "FB") -> "FB" when data-x is absent, the value when present.
+     counter(x, lower-roman) with counter-reset:x 3 and counter-increment:x 2 -> v, vii, ix.
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>b229 clip-path hit and text-transform</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 12px/16px Arial, sans-serif; }
+  /* Two rows of three so every probe point stays inside the reference viewport
+     (elementFromPoint answers nothing outside it). */
+  .row { position: relative; height: 260px; }
+  .t { position: absolute; width: 120px; height: 120px; background: rgb(255, 128, 128); }
+  #c1 { left: 0; top: 0; }
+  #c2 { left: 130px; top: 0; clip-path: circle(50% at 50% 50%); }
+  #c3 { left: 260px; top: 0; clip-path: inset(10px 20px 30px 40px); }
+  #c4 { left: 0; top: 130px; clip-path: polygon(0 0, 100% 0, 0 100%); }
+  #c5 { left: 130px; top: 130px; clip-path: circle(20px at 0 0); }
+  #c6 { left: 260px; top: 130px; clip-path: ellipse(30% 50% at 50% 50%); }
+
+  .clipwrap { position: relative; width: 200px; height: 60px; margin: 0 0 20px 0; }
+  #a { position: absolute; inset: 0; background: rgb(255, 136, 0); clip-path: inset(0 100px 0 0); }
+  #akid { position: absolute; left: 150px; top: 10px; width: 30px; height: 30px; background: #0a0; }
+  #b { position: absolute; left: 0; top: 0; width: 200px; height: 60px; background: #8f8;
+       mask-image: linear-gradient(transparent, transparent); }
+  /* Text is painted by a different path than the box decorations, so the subtree
+     clip has to be proven on it separately: the line must be cut at x=100. */
+  #d1 { position: absolute; left: 0; top: 0; width: 200px; font: 16px/20px Arial;
+        color: #00c; clip-path: inset(0 100px 0 0); }
+
+  .cap { font: 16px/20px Arial; background: #eee; margin: 0 0 2px 0; text-transform: capitalize; }
+  .upp { font: 16px/20px Arial; background: #eef; margin: 0 0 2px 0; text-transform: uppercase; }
+  .fwi { font: 16px/20px Arial; background: #efe; margin: 0 0 2px 0; text-transform: full-width; }
+  .gen::before { content: attr(data-x "FB"); background: #ffd; }
+  .cn { counter-reset: x 3; list-style: none; padding: 0; margin: 0; }
+  .cn li { counter-increment: x 2; }
+  .cn li::after { content: "[" counter(x, lower-roman) "]"; }
+  .tabs { white-space: pre; font: 16px monospace; background: #ddd; }
+  .ts8 { tab-size: 8; } .ts2 { tab-size: 2; }
+  .va { font: 16px/20px Arial; background: #eee; }
+  .va i, .va em, .va s { display: inline-block; width: 8px; height: 8px; }
+  .va i { background: #4a4; vertical-align: text-top; }
+  .va em { background: #a44; vertical-align: text-bottom; }
+  .va s { background: #44a; vertical-align: middle; }
+</style></head>
+<body>
+<h2>1. clip-path shapes (paint + hit)</h2>
+<div class="row">
+  <div class="t" id="c1"></div><div class="t" id="c2"></div><div class="t" id="c3"></div>
+  <div class="t" id="c4"></div><div class="t" id="c5"></div><div class="t" id="c6"></div>
+</div>
+<h2>2. ancestor clip removes descendants; a transparent mask does not</h2>
+<div class="clipwrap"><div id="a"><div id="akid"></div></div></div>
+<div class="clipwrap" style="height:80px"><div id="b"></div></div>
+<div class="clipwrap"><div id="d1">iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii</div></div>
+<h2>3. text-transform: capitalize word boundaries</h2>
+<div class="cap" id="p1">a.b foo.bar a,b a:b a;b hot-dog x.y.z e.g. this a(b</div>
+<div class="cap" id="p2">a–b a—b a/b a"b a!b a?b a·b don’t l’ordre ab_cd</div>
+<div class="cap" id="p3">2fast 3.14 Ⅷb 'quick o'clock 1.2.3</div>
+<h2>4. uppercase special-casing and full-width</h2>
+<div class="upp" id="p4">straße İstanbul</div>
+<div class="fwi" id="p5">ab1</div>
+<h2>5. content: attr(name "fallback") and counter styles</h2>
+<div class="gen" id="g1">tail</div>
+<div class="gen" id="g2" data-x="V">tail</div>
+<ul class="cn" id="g3"><li>item</li><li>item</li><li>item</li></ul>
+<h2>6. tab-size and vertical-align reference numbers</h2>
+<div class="tabs ts8" id="tb1">x	y</div>
+<div class="tabs ts2" id="tb2">x	y</div>
+<div class="va" id="vv">x<i></i><em></em><s></s>y</div>
+</body></html>

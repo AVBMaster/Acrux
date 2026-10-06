@@ -720,16 +720,20 @@ public class LayoutEngine
                      && i + 4 < trimmed.Length && trimmed[i + 4] == '(')
             {
                 // attr(name) resolves against the originating element; a missing
-                // attribute contributes an empty string (CSS Values 4 §11.1).
+                // attribute contributes an empty string (CSS Values 4 §11.1) unless the
+                // two-argument form supplies a fallback: attr(name "FB").
                 int parenStart = i + 4;
                 int parenEnd = FindMatchingParen(trimmed, parenStart);
                 if (parenEnd > parenStart)
                 {
-                    var attrName = trimmed.Substring(parenStart + 1, parenEnd - parenStart - 1).Trim();
-                    int space = attrName.IndexOfAny(new[] { ' ', '	' });
-                    if (space > 0) attrName = attrName[..space];
+                    var argument = trimmed.Substring(parenStart + 1, parenEnd - parenStart - 1).Trim();
+                    int space = argument.IndexOfAny(new[] { ' ', '\t' });
+                    var attrName = space > 0 ? argument[..space] : argument;
+                    var fallback = space > 0 ? UnquoteAttrFallback(argument[(space + 1)..]) : null;
                     if (owner != null && owner.HasAttribute(attrName))
                         sb.Append(owner.GetAttribute(attrName));
+                    else if (fallback != null)
+                        sb.Append(fallback);
                     i = parenEnd + 1;
                 }
                 else
@@ -914,6 +918,16 @@ public class LayoutEngine
 
     /// <summary>A counter() separator is a &lt;string&gt;; an unquoted argument is not a
     /// valid value and contributes nothing.</summary>
+    /// <summary>The fallback argument of <c>attr(name "FB")</c>: only a quoted string is
+    /// a valid fallback here, so an unquoted remainder yields no fallback at all.</summary>
+    private static string? UnquoteAttrFallback(string text)
+    {
+        text = text.Trim();
+        if (text.Length >= 2 && (text[0] == '"' || text[0] == '\'') && text[^1] == text[0])
+            return Css.Resolver.CssPropertyApplier.UnescapeCssString(text[1..^1]);
+        return null;
+    }
+
     private static string UnquoteCounterArg(string text)
     {
         text = text.Trim();
