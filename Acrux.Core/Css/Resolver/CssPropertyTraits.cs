@@ -19,11 +19,11 @@ public static class CssPropertyTraits
         "color", "cursor", "direction", "empty-cells", "font", "font-family", "font-feature-settings",
         "font-kerning", "font-optical-sizing", "font-size", "font-size-adjust", "font-stretch",
         "font-style", "font-synthesis", "font-variant", "font-variant-caps", "font-variation-settings", "font-weight",
-        "hyphens", "image-rendering", "letter-spacing", "line-break", "line-height", "list-style",
+        "hyphens", "hyphenate-character", "image-rendering", "letter-spacing", "line-break", "line-height", "list-style",
         "list-style-image", "list-style-position", "list-style-type", "orphans", "pointer-events",
         "quotes", "tab-size", "text-align", "text-align-last", "text-indent", "text-justify",
         "text-rendering", "text-shadow", "text-transform",
-        "visibility", "white-space", "widows", "word-break",
+        "visibility", "white-space", "white-space-collapse", "text-wrap-mode", "text-wrap-style", "widows", "word-break",
         "word-spacing", "writing-mode", "overflow-wrap", "color-scheme", "ruby-position",
         "text-emphasis", "text-emphasis-color", "text-emphasis-style", "text-emphasis-position",
     };
@@ -32,7 +32,15 @@ public static class CssPropertyTraits
     public static bool IsInherited(string property) => Inherited.Contains(property);
 
     /// <summary>Whether the cascade recognizes this property at all.</summary>
-    public static bool IsKnown(string property) => Known.Contains(property);
+    /// <summary>Whether the cascade can resolve CSS-wide keywords for a property.
+    /// Derived from the property-id table (which is generated from the enum) rather
+    /// than from the hand-maintained 'Known' set below: that set had drifted, so
+    /// 'border-top-left-radius: inherit' and every other missing name silently did
+    /// nothing at all. 'Known' stays as the extra vocabulary the enum does not carry.</summary>
+    public static bool IsKnown(string property) =>
+        Known.Contains(property)
+        || Acrux.Core.Css.Properties.CssPropertyIdExtensions.FromString(property)
+           != Acrux.Core.Css.Properties.CssPropertyId.Invalid;
 
     /// <summary>Properties the cascade can resolve initial values for.</summary>
     private static readonly HashSet<string> Known = new(StringComparer.Ordinal)
@@ -45,10 +53,17 @@ public static class CssPropertyTraits
         "text-align", "text-decoration", "text-decoration-color", "text-decoration-line",
         "text-decoration-skip-ink", "text-decoration-style", "text-decoration-thickness",
         "text-underline-offset", "text-underline-position",
-        "vertical-align", "white-space", "visibility",
+        "vertical-align", "white-space", "white-space-collapse", "text-wrap-mode", "text-wrap-style", "visibility",
+        // Not inherited (CSS Overflow 3 §4.1) but must be known so 'inherit'/'initial'
+        // and the 'all' shorthand can reach it.
+        "overflow", "overflow-x", "overflow-y", "overflow-clip-margin", "overflow-wrap",
         "overflow", "z-index", "opacity", "border", "border-top", "border-right",
         "border-bottom", "border-left", "border-width", "border-style", "border-color",
         "border-radius", "box-sizing", "outline", "top", "right", "bottom", "left",
+        "border-start-start-radius", "border-start-end-radius",
+        "border-end-start-radius", "border-end-end-radius",
+        "overscroll-behavior-block", "overscroll-behavior-inline",
+        "grid-gap", "grid-row-gap", "grid-column-gap",
         "cursor", "flex", "flex-direction", "flex-wrap", "flex-grow", "flex-shrink",
         "flex-basis", "justify-content", "align-items", "align-self", "order", "gap",
         "transform", "transform-origin", "transition", "animation", "filter",
@@ -107,6 +122,7 @@ public static class CssPropertyTraits
                 to.TextDecorationLine = from.TextDecorationLine;
                 to.TextDecorationStyle = from.TextDecorationStyle;
                 to.TextDecorationColor = from.TextDecorationColor;
+                to.TextDecorationColorIsAuto = from.TextDecorationColorIsAuto;
                 to.TextDecorationThickness = from.TextDecorationThickness;
                 to.TextDecorationThicknessFromFont = from.TextDecorationThicknessFromFont;
                 to.TextDecorationSkipInk = from.TextDecorationSkipInk;
@@ -119,7 +135,8 @@ public static class CssPropertyTraits
                 to.TextDecoration = CssPropertyApplier.LegacyTextDecorationOf(to.TextDecorationLine);
                 break;
             case "text-decoration-style": to.TextDecorationStyle = from.TextDecorationStyle; break;
-            case "text-decoration-color": to.TextDecorationColor = from.TextDecorationColor; break;
+            case "text-decoration-color": to.TextDecorationColor = from.TextDecorationColor;
+                to.TextDecorationColorIsAuto = from.TextDecorationColorIsAuto; break;
             case "text-decoration-thickness": to.TextDecorationThickness = from.TextDecorationThickness;
                 to.TextDecorationThicknessFromFont = from.TextDecorationThicknessFromFont; break;
             case "text-decoration-skip-ink": to.TextDecorationSkipInk = from.TextDecorationSkipInk; break;
@@ -128,7 +145,30 @@ public static class CssPropertyTraits
             case "text-underline-position": to.TextUnderlinePosition = from.TextUnderlinePosition; break;
             case "box-decoration-break": to.BoxDecorationBreak = from.BoxDecorationBreak; break;
             case "vertical-align": to.VerticalAlign = from.VerticalAlign; break;
-            case "white-space": to.WhiteSpace = from.WhiteSpace; break;
+            case "white-space": to.WhiteSpace = from.WhiteSpace;
+                to.WhiteSpaceCollapse = from.WhiteSpaceCollapse;
+                to.TextWrapMode = from.TextWrapMode; to.TextWrapStyle = from.TextWrapStyle; break;
+            case "white-space-collapse": to.WhiteSpaceCollapse = from.WhiteSpaceCollapse; break;
+            case "text-wrap-mode": to.TextWrapMode = from.TextWrapMode; break;
+            case "text-wrap-style": to.TextWrapStyle = from.TextWrapStyle; break;
+            case "overflow-clip-margin": to.OverflowClipMargin = from.OverflowClipMargin;
+                to.OverflowClipMarginBox = from.OverflowClipMarginBox; break;
+            case "contain": to.Contain = from.Contain; break;
+            case "content-visibility": to.ContentVisibility = from.ContentVisibility; break;
+            case "field-sizing": to.FieldSizing = from.FieldSizing; break;
+            case "contain-intrinsic-size":
+                to.ContainIntrinsicWidth = from.ContainIntrinsicWidth;
+                to.ContainIntrinsicWidthIsAuto = from.ContainIntrinsicWidthIsAuto;
+                to.ContainIntrinsicHeight = from.ContainIntrinsicHeight;
+                to.ContainIntrinsicHeightIsAuto = from.ContainIntrinsicHeightIsAuto; break;
+            case "contain-intrinsic-width":
+            case "contain-intrinsic-inline-size":
+                to.ContainIntrinsicWidth = from.ContainIntrinsicWidth;
+                to.ContainIntrinsicWidthIsAuto = from.ContainIntrinsicWidthIsAuto; break;
+            case "contain-intrinsic-height": case "contain-intrinsic-block-size":
+                to.ContainIntrinsicHeight = from.ContainIntrinsicHeight;
+                to.ContainIntrinsicHeightIsAuto = from.ContainIntrinsicHeightIsAuto; break;
+
             case "tab-size": to.TabSize = from.TabSize; to.TabSizePx = from.TabSizePx; break;
             case "visibility": to.Visibility = from.Visibility; break;
             case "overflow": to.Overflow = to.OverflowX = to.OverflowY = from.Overflow; break;
@@ -148,10 +188,23 @@ public static class CssPropertyTraits
             case "border-right-color": to.BorderRightColor = from.BorderRightColor; break;
             case "border-bottom-color": to.BorderBottomColor = from.BorderBottomColor; break;
             case "border-left-color": to.BorderLeftColor = from.BorderLeftColor; break;
-            case "border-radius": case "border-top-left-radius": to.BorderTopLeftRadius = from.BorderTopLeftRadius; break;
-            case "border-top-right-radius": to.BorderTopRightRadius = from.BorderTopRightRadius; break;
-            case "border-bottom-right-radius": to.BorderBottomRightRadius = from.BorderBottomRightRadius; break;
-            case "border-bottom-left-radius": to.BorderBottomLeftRadius = from.BorderBottomLeftRadius; break;
+            // Every corner carries an elliptical pair; copying only the horizontal one
+            // made 'border-top-left-radius: 10px 20px' lose its 20px through
+            // inherit/initial. 'border-radius' is a shorthand over all four corners.
+            // The logical corner names map to their LTR corner here: the direction-aware
+            // mapping happens in the applier's replay queue, and for 'initial' every
+            // corner is zero anyway.
+            case "border-radius":
+                CopyRadius(to, from, 0); CopyRadius(to, from, 1);
+                CopyRadius(to, from, 2); CopyRadius(to, from, 3); break;
+            case "border-top-left-radius": case "border-start-start-radius":
+                CopyRadius(to, from, 0); break;
+            case "border-top-right-radius": case "border-start-end-radius":
+                CopyRadius(to, from, 1); break;
+            case "border-bottom-right-radius": case "border-end-end-radius":
+                CopyRadius(to, from, 2); break;
+            case "border-bottom-left-radius": case "border-end-start-radius":
+                CopyRadius(to, from, 3); break;
             case "box-sizing": to.BoxSizing = from.BoxSizing; break;
             case "top": to.Top = from.Top; break;
             case "right": to.Right = from.Right; break;
@@ -178,6 +231,10 @@ public static class CssPropertyTraits
             case "word-break": to.WordBreak = from.WordBreak; break;
             case "overflow-wrap": to.OverflowWrap = from.OverflowWrap; break;
             case "letter-spacing": to.LetterSpacing = from.LetterSpacing; break;
+            // 'hyphens' had no Copy case at all, so 'hyphens: inherit' and
+            // 'initial' silently kept whatever the element already had.
+            case "hyphens": to.Hyphens = from.Hyphens; break;
+            case "hyphenate-character": to.HyphenateCharacter = from.HyphenateCharacter; break;
             case "word-spacing": to.WordSpacing = from.WordSpacing; break;
             case "text-indent": to.TextIndent = from.TextIndent; to.TextIndentHanging = from.TextIndentHanging;
                 to.TextIndentEachLine = from.TextIndentEachLine;
@@ -194,6 +251,26 @@ public static class CssPropertyTraits
     }
 
     /// <summary>Restores a property to its initial (default) value.</summary>
+    /// <summary>Copy one corner's elliptical pair (horizontal + vertical radius).</summary>
+    private static void CopyRadius(ComputedStyle to, ComputedStyle from, int corner)
+    {
+        switch (corner)
+        {
+            case 0:
+                to.BorderTopLeftRadius = from.BorderTopLeftRadius;
+                to.BorderTopLeftRadiusY = from.BorderTopLeftRadiusY; break;
+            case 1:
+                to.BorderTopRightRadius = from.BorderTopRightRadius;
+                to.BorderTopRightRadiusY = from.BorderTopRightRadiusY; break;
+            case 2:
+                to.BorderBottomRightRadius = from.BorderBottomRightRadius;
+                to.BorderBottomRightRadiusY = from.BorderBottomRightRadiusY; break;
+            default:
+                to.BorderBottomLeftRadius = from.BorderBottomLeftRadius;
+                to.BorderBottomLeftRadiusY = from.BorderBottomLeftRadiusY; break;
+        }
+    }
+
     public static void SetInitial(ComputedStyle to, string property)
     {
         // 'display' has the initial value 'inline' (CSS 2.1 §9.7), while a fresh
@@ -248,6 +325,9 @@ public static class CssPropertyTraits
     private static bool TryApplyAll(ComputedStyle style, string value, ComputedStyle? parentStyle)
     {
         var source = parentStyle ?? new ComputedStyle();
+        // 'all' also addresses the logical properties, whose queued re-mapping pass
+        // would otherwise re-assert a logical value that 'all' has just reset.
+        style.PendingBoxEdgeProperties = null;
         switch (value)
         {
             case "inherit":

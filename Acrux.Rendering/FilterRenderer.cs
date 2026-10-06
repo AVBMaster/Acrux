@@ -4,27 +4,94 @@ namespace Acrux.Rendering;
 
 public static class FilterRenderer
 {
-    public static SKImageFilter? ParseAndChain(string? filterString)
+    // Filter strings are re-parsed on every display-list rebuild of every element
+    // that declares one, and the chain is immutable — the classic cache case.
+    // The inflation is the distance the chain's output can spread beyond the
+    // element's box (Gaussian tails reach ~3σ); the compositor layer bounds use
+    // it to stop allocating a full-window offscreen surface per filter layer.
+    private static readonly Dictionary<string, (SKImageFilter? Filter, float Inflation)> _chainCache = new();
+    private static readonly object _chainCacheLock = new();
+    private const int MaxChainCacheSize = 64;
+
+    public static SKImageFilter? ParseAndChain(string? filterString) =>
+        ParseAndChain(filterString, out _);
+
+    public static SKImageFilter? ParseAndChain(string? filterString, out float inflationPx)
     {
         if (string.IsNullOrWhiteSpace(filterString) || filterString == "none")
+        {
+            inflationPx = 0f;
             return null;
+        }
+
+        lock (_chainCacheLock)
+        {
+            if (_chainCache.TryGetValue(filterString, out var hit))
+            {
+                inflationPx = hit.Inflation;
+                return hit.Filter;
+            }
+        }
+
+        float inflation = 0f;
+        SKImageFilter? result = null;
+        bool invalid = false;
 
         var filters = ParseFilters(filterString);
-        if (filters == null || filters.Count == 0) return null;
-
-        SKImageFilter? result = null;
-        foreach (var filter in filters)
+        if (filters == null || filters.Count == 0) invalid = true;
+        else
         {
-            var f = CreateFilter(filter);
-            if (f == null)
-                return null;
+            foreach (var filter in filters)
+            {
+                var f = CreateFilter(filter);
+                if (f == null) { invalid = true; break; }
 
-            // CreateCompose(outer, inner) evaluates inner first, so the next function in
-            // the list has to become the outer one. Each stage renders through an 8-bit
-            // image, which is what clamps the channels between functions.
-            result = result != null ? SKImageFilter.CreateCompose(f, result) : f;
+                inflation += EntryInflation(filter);
+
+                // CreateCompose(outer, inner) evaluates inner first, so the next function in
+                // the list has to become the outer one. Each stage renders through an 8-bit
+                // image, which is what clamps the channels between functions.
+                result = result != null ? SKImageFilter.CreateCompose(f, result) : f;
+            }
         }
+
+        if (invalid) { result = null; inflation = 0f; }
+
+        lock (_chainCacheLock)
+        {
+            if (_chainCache.Count >= MaxChainCacheSize) _chainCache.Clear();
+            _chainCache[filterString] = (result, inflation);
+        }
+        inflationPx = inflation;
         return result;
+    }
+
+    private static float EntryInflation(FilterEntry entry)
+    {
+        switch (entry.Name)
+        {
+            case "blur":
+            {
+                float radius = 0;
+                if (entry.Args.Length >= 1) TryFilterLength(entry.Args[0], out radius);
+                return Math.Max(0f, radius) * 3f;
+            }
+            case "drop-shadow":
+            {
+                // Re-parse the tokens the same way CreateDropShadow does: dx dy [blur] color.
+                var tokens = new List<string>();
+                foreach (var a in entry.Args)
+                    tokens.AddRange(a.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+                float dx = 0, dy = 0, blur = 0;
+                int idx = 0;
+                if (tokens.Count > idx) { float.TryParse(tokens[idx].Replace("px", "").Trim(), out dx); idx++; }
+                if (tokens.Count > idx) { float.TryParse(tokens[idx].Replace("px", "").Trim(), out dy); idx++; }
+                if (tokens.Count > idx && float.TryParse(tokens[idx].Replace("px", "").Trim(), out var b)) { blur = b; }
+                return blur * 3f + Math.Max(Math.Abs(dx), Math.Abs(dy));
+            }
+            default:
+                return 0f;
+        }
     }
 
     /// <summary>Split the filter list; returns null when the value is invalid.</summary>

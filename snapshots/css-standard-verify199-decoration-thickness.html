@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 199 - text-decoration-thickness / text-underline-offset (CSS Text Decoration 4 §2.2, §3.1)</title>
+<style>
+/* The two properties that decide WHERE a decoration line sits and HOW thick it is are
+   inherited, resolve as percentages of the FONT SIZE of the element that carries the
+   decoration (not the text it decorates), and have a 'from-font' keyword that asks the
+   font's own metrics. 'double' doubles the ink and adds a gap. Each case is measured
+   through getComputedStyle so the resolution rules are visible without eyeballing. */
+body { font: 16px/20px Arial, sans-serif; margin: 8px; color: #111; background: #fff; }
+h2 { background: #eee; padding: 2px; margin: 10px 0 4px; font-size: 14px; }
+p { margin: 6px 0; text-decoration-line: underline; text-decoration-color: #000; }
+.t2 { text-decoration-thickness: 2px; }
+.t10 { text-decoration-thickness: 10%; }
+.tff { text-decoration-thickness: from-font; }
+.tauto { text-decoration-thickness: auto; }
+.big { font-size: 32px; }
+.u4 { text-underline-offset: 4px; }
+.u25 { text-underline-offset: 25%; }
+.uff { text-underline-offset: from-font; }
+.ua { text-underline-offset: auto; }
+.dbl { text-decoration-style: double; }
+.wavy { text-decoration-style: wavy; }
+.dn { /* parent carries the decoration properties, the child only changes font-size */
+}
+.child { font-size: 40px; }
+</style>
+</head>
+<body>
+
+<h2>1. thickness: auto / 2px / 10% / from-font (16px font)</h2>
+<p id="a1" class="tauto">auto</p>
+<p id="a2" class="t2">2px</p>
+<p id="a3" class="t10">10%</p>
+<p id="a4" class="tff">from-font</p>
+
+<h2>2. percentage resolves against THIS element's font size (32px)</h2>
+<p id="b1" class="t10 big">10% at 32px</p>
+<p id="b2" class="t2 big">2px at 32px</p>
+<p id="b3" class="tff big">from-font at 32px</p>
+
+<h2>3. inherited thickness, larger child font (who owns the percentage base?)</h2>
+<p id="c1" class="t10"><span class="child" id="c1a">10% inherited into 40px text</span></p>
+<p id="c2" class="t2"><span class="child" id="c2a">2px inherited into 40px text</span></p>
+<p id="c3"><span class="child t10" id="c3a">10% on the child itself (40px)</span></p>
+
+<h2>4. underline-offset: auto / 4px / 25% / from-font</h2>
+<p id="d1" class="ua">auto</p>
+<p id="d2" class="u4">4px</p>
+<p id="d3" class="u25">25%</p>
+<p id="d4" class="uff">from-font</p>
+
+<h2>5. double style: two lines and a gap</h2>
+<p id="e1" class="dbl tauto">double auto</p>
+<p id="e2" class="dbl t2">double 2px</p>
+<p id="e3" class="dbl t10">double 10%</p>
+
+<h2>6. thickness with overline / line-through</h2>
+<p id="f1" style="text-decoration-line:overline" class="t2">overline 2px</p>
+<p id="f2" style="text-decoration-line:line-through" class="t10">through 10%</p>
+<p id="f3" style="text-decoration-line:underline overline line-through" class="t2">all three 2px</p>
+
+<h2>7. wavy and its thickness</h2>
+<p id="g1" class="wavy tauto">wavy auto</p>
+<p id="g2" class="wavy t2">wavy 2px</p>
+
+<h2>8. block-level decoration (the element itself is the decorator)</h2>
+<div id="h1" class="t2" style="text-decoration-line:underline">block underline 2px</div>
+<div id="h2" class="t10 u4" style="text-decoration-line:underline">block 10% offset 4px</div>
+<div id="h3" style="text-decoration-line:underline"><span class="t2 big">inline 2px inside a 32px block</span></div>
+
+</body>
+</html>

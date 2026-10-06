@@ -89,7 +89,7 @@ internal sealed class HighlightPainter
             runBounds, thickness, offset, style.FontSize, underline);
 
         SKColor color = SKColors.Red;
-        if (style.TextDecorationColor != default && style.TextDecorationColor.Alpha > 0)
+        if (!style.TextDecorationColorIsAuto)
             color = style.TextDecorationColor;
 
         foreach (var rect in rects)

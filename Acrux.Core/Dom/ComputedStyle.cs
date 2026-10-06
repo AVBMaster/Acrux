@@ -674,13 +674,34 @@ public class ComputedStyle
     public FloatType Float { get; set; } = FloatType.None;
     public ClearType Clear { get; set; } = ClearType.None;
 
-    public string FontFamily { get; set; } = "Arial, sans-serif";
+    public string FontFamily { get; set; } = Fonts.FontManager.StandardFontFamily;
     public float FontSize { get; set; } = 16;
+    /// <summary>True while 'font-size' has never been given a real value anywhere up
+    /// the chain — nothing declared, or only the initial keyword 'medium' (and
+    /// descendants inheriting that). The generic 'monospace' carries its own size in a
+    /// reference engine, and it substitutes only in this state; an authored
+    /// 'font-size: 16px' blocks it even though it is numerically the default.
+    /// Measured in Edge: parent 'font-size: medium' + child 'font-family: monospace'
+    /// computes 13px, parent 'font-size: 16px' + the same child computes 16px.
+    /// See <c>StyleAdjuster.AdjustMonospaceGenericFontSize</c>.</summary>
+    public bool FontSizeIsDefault { get; set; } = true;
     public FontWeight FontWeight { get; set; } = FontWeight.Normal;
     public FontStyleType FontStyle { get; set; } = FontStyleType.Normal;
     /// <summary>Authored angle of 'font-style: oblique &lt;angle&gt;' (CSS Fonts 4 §3.2.2).
     /// Null means the style asked for the font family's own oblique/italic face.</summary>
     public float? FontStyleObliqueDegrees { get; set; }
+
+    /// <summary>The 'font-style' value as the reference engine serializes it: a bare
+    /// 'oblique' is reported as 'italic' (only an authored angle survives as 'oblique &lt;angle&gt;'),
+    /// measured for b225 §D. Kept in one place so getComputedStyle and any dump agree.</summary>
+    public string FontStyleCssText => FontStyle switch
+    {
+        FontStyleType.Italic => "italic",
+        FontStyleType.Oblique => FontStyleObliqueDegrees is { } deg
+            ? $"oblique {deg.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}deg"
+            : "italic",
+        _ => "normal",
+    };
     public float LineHeight { get; set; } = 1.5f;
 
     /// <summary>
@@ -705,6 +726,24 @@ public class ComputedStyle
     public Length? BackgroundPositionX { get; set; }
     public Length? BackgroundPositionY { get; set; }
     public BackgroundRepeat BackgroundRepeat { get; set; } = BackgroundRepeat.Repeat;
+
+    // ── Per-layer background geometry (CSS Backgrounds 3 §2) ────────────────
+    // A background is a LIST of layers and every geometry longhand takes its own
+    // comma-separated list, which cycles against the image count INDEPENDENTLY:
+    // "three images, two positions, one size" means position 3 wraps to position 1
+    // while all three share the single size. Flattening the lists into the scalars
+    // above lost whole layers (a two-layer background-size parsed to a degenerate
+    // box and the element painted nothing), so the lists are kept as written and
+    // indexed at paint time. The scalars still hold the FIRST layer: every consumer
+    // that has not been converted reads those, and one-layer backgrounds — the
+    // overwhelming majority — are bit-identical either way.
+
+    public List<BackgroundPositionLayer>? BackgroundPositionLayers { get; set; }
+    public List<BackgroundSizeLayer>? BackgroundSizeLayers { get; set; }
+    public List<BackgroundRepeatPair>? BackgroundRepeatLayers { get; set; }
+    public List<BackgroundAttachment>? BackgroundAttachmentLayers { get; set; }
+    public List<string>? BackgroundOriginLayers { get; set; }
+    public List<string>? BackgroundClipLayers { get; set; }
     public BackgroundAttachment BackgroundAttachment { get; set; } = BackgroundAttachment.Scroll;
 
     public TextAlignType TextAlign { get; set; } = TextAlignType.Start;
@@ -721,6 +760,16 @@ public class ComputedStyle
     /// </summary>
     public bool VerticalAlignIsAuthored { get; set; }
     public WhiteSpaceMode WhiteSpace { get; set; } = WhiteSpaceMode.Normal;
+    /// <summary>The modular pieces 'white-space' and 'text-wrap' are shorthands of
+    /// (CSS Text 4 §1). <see cref="WhiteSpace"/> above stays the value layout consumes,
+    /// and is always kept in sync with this triple by <c>CssPropertyApplier</c> —
+    /// whichever of the shorthand and the longhands wins the cascade writes both.</summary>
+    public WhiteSpaceCollapseType WhiteSpaceCollapse { get; set; } = WhiteSpaceCollapseType.Collapse;
+    public TextWrapModeType TextWrapMode { get; set; } = TextWrapModeType.Wrap;
+    /// <summary>'text-wrap-style'. <c>Auto</c> is the initial value; the legacy
+    /// 'balance'/'pretty' keywords live on <see cref="TextWrap"/> so the existing
+    /// line-balancing code keeps working.</summary>
+    public TextWrapStyleType TextWrapStyle { get; set; } = TextWrapStyleType.Auto;
     public WordBreakMode WordBreak { get; set; } = WordBreakMode.Normal;
     public OverflowWrapMode OverflowWrap { get; set; } = OverflowWrapMode.Normal;
 
@@ -735,6 +784,15 @@ public class ComputedStyle
     public ScrollbarStyles? ScrollbarCustom { get; set; }
 
     public OverflowType Overflow { get; set; } = OverflowType.Visible;
+    /// <summary>'overflow-clip-margin' (CSS Overflow 3 §4.1): how far the clip region
+    /// may extend past the padding box. Only applies when the box actually clips, and
+    /// a percentage resolves against the corresponding box's dimensions — the initial
+    /// value is 0, so 'clip' hugs the padding box exactly.</summary>
+    public Length? OverflowClipMargin { get; set; }
+    /// <summary>The keyword form of 'overflow-clip-margin' (CSS Overflow 3 §4.1):
+    /// the clip edge is pushed to the named box instead of by a length. The initial
+    /// value is 0, which is 'padding-box' with no offset.</summary>
+    public OverflowClipMarginBox OverflowClipMarginBox { get; set; } = OverflowClipMarginBox.PaddingBox;
     public OverflowType OverflowX { get; set; } = OverflowType.Visible;
     public OverflowType OverflowY { get; set; } = OverflowType.Visible;
     public VisibilityType Visibility { get; set; } = VisibilityType.Visible;
@@ -800,6 +858,13 @@ public class ComputedStyle
     public string? PointerEvents { get; set; } = "auto";
     public string? UserSelect { get; set; } = "auto";
     public string Direction { get; set; } = "ltr";
+    /// <summary>Logical box properties as authored, queued for a second mapping pass
+    /// in <c>StyleAdjuster</c>. A logical edge addresses an edge, not a side, so it
+    /// resolves against the element's <i>final</i> computed 'direction' (CSS Logical
+    /// Properties 1 §2): <c>{ margin-inline-start: 13px; direction: rtl }</c> still
+    /// lands on the right, which a single pass over the declarations cannot know.
+    /// Null until a logical box property is seen.</summary>
+    public System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, string>>? PendingBoxEdgeProperties { get; set; }
     public float LetterSpacing { get; set; }
     public float WordSpacing { get; set; }
     public float TextIndent { get; set; }
@@ -830,10 +895,18 @@ public class ComputedStyle
     public List<TextShadowValue> TextShadow { get; set; } = new();
 public TextDecorationLineType TextDecorationLine { get; set; } = TextDecorationLineType.None;
 public TextDecorationStyleType TextDecorationStyle { get; set; } = TextDecorationStyleType.Solid;
-/// <summary>'text-decoration-color'. The initial value is 'auto', which paints with
-/// the element's 'color'; that is modelled as a fully transparent SKColor so no
-/// authored color can be confused with it.</summary>
+/// <summary>'text-decoration-color' as authored. Meaningful only when
+/// <see cref="TextDecorationColorIsAuto"/> is false; the initial value 'auto'
+/// paints with the element's own 'color', which is resolved at use time.</summary>
 public SKColor TextDecorationColor { get; set; }
+/// <summary>Authored 'auto' keyword (or no declaration at all) for
+/// 'text-decoration-color' (CSS Text Decoration 4 §3.2, initial value 'auto').
+/// The alpha channel cannot double as this marker: an explicit 'transparent'
+/// must stay invisible, while 'auto' must resolve to 'color'.</summary>
+public bool TextDecorationColorIsAuto { get; set; } = true;
+/// <summary><see cref="TextDecorationColor"/> with 'auto' resolved to the
+/// element's own 'color', as a reference engine's computed value reports it.</summary>
+public SKColor ResolvedTextDecorationColor => TextDecorationColorIsAuto ? Color : TextDecorationColor;
 /// <summary>Resolved 'text-decoration-thickness' in px; NaN means 'auto'.</summary>
 public float TextDecorationThickness { get; set; } = float.NaN;
 /// <summary>'text-decoration-thickness: from-font' (CSS Text Decoration 4 §3.4).</summary>
@@ -868,10 +941,10 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
         if (TextDecorationLine != TextDecorationLineType.None)
         {
             // 'text-decoration-color' has the initial value 'auto', which paints
-            // with the originating box's own text color. That is modelled as a
-            // fully transparent color, so fall back here — the box keeps its own
-            // color even after the decoration propagates into a child.
-            var decorationColor = TextDecorationColor.Alpha > 0 ? TextDecorationColor : Color;
+            // with the originating box's own text color. That fallback must key on
+            // the 'auto' keyword itself, not on the alpha channel — an authored
+            // 'transparent' is an explicit color and draws nothing.
+            var decorationColor = ResolvedTextDecorationColor;
             list.Add(new AppliedTextDecoration(
                 TextDecorationLine, TextDecorationStyle, decorationColor,
                 TextDecorationThickness, TextDecorationThicknessFromFont,
@@ -973,7 +1046,19 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public BackgroundBlendModeType BackgroundBlendMode { get; set; } = BackgroundBlendModeType.Normal;
 
     public WritingModeType WritingMode { get; set; } = WritingModeType.HorizontalTb;
-    public HyphensType Hyphens { get; set; } = HyphensType.None;
+    // CSS Text 3 §4.4: the initial value is 'manual', which still honours the soft
+    // hyphens the author wrote — only 'none' removes those break opportunities.
+    public HyphensType Hyphens { get; set; } = HyphensType.Manual;
+    /// <summary>'hyphenate-character' (CSS Text 4 §5.1, inherited). 'auto' lets the
+    /// engine pick the language's hyphen, which in practice is '-'; any other value is
+    /// the literal string drawn at a break — including a multi-character one, and the
+    /// empty string, which breaks without drawing anything. Measured in Edge: 'auto',
+    /// '-' and an invalid 'none' all give a 6.67px mark at 20px, '"="' gives 11.69,
+    /// '"→"' gives 20.00 and '">>"' gives 23.36. Note 'none' is NOT a value of this
+    /// property, so it must be dropped rather than parsed.</summary>
+    public string HyphenateCharacter { get; set; } = "auto";
+    /// <summary>The text actually drawn at a soft-hyphen break.</summary>
+    public string EffectiveHyphenText => HyphenateCharacter == "auto" ? "-" : HyphenateCharacter;
     /// <summary>CSS Multi-Column 1 §3: 'column-span: all' makes the box span every
     /// column of its multicol ancestor.</summary>
     public bool ColumnSpanAll { get; set; }
@@ -988,11 +1073,54 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public OverflowAnchorType OverflowAnchor { get; set; } = OverflowAnchorType.Auto;
     public ContainType Contain { get; set; } = ContainType.None;
     public ContentVisibilityType ContentVisibility { get; set; } = ContentVisibilityType.Visible;
+
+    /// <summary>CSS Containment 3 §2.2/§2.3: 'layout' and 'paint' each establish an
+    /// independent formatting context, while 'size' and 'style' do not — measured on the
+    /// reference engine, a 'contain: style' box still lets its child's block-start margin
+    /// collapse through it (20px where 'contain: layout' reports 40px).</summary>
+    public bool HasLayoutContainment => (Contain & (ContainType.Layout | ContainType.Paint)) != 0;
+    public bool HasPaintContainment => (Contain & ContainType.Paint) != 0;
+
+    /// <summary>Style containment: the keyword, or either non-visible
+    /// 'content-visibility' value, which implies it (CSS Containment 3 §3).</summary>
+    public bool HasStyleContainment => (Contain & ContainType.Style) != 0
+        || ContentVisibility is not ContentVisibilityType.Visible;
+
+    /// <summary>CSS Containment 3 §3: 'content-visibility: hidden' applies size containment
+    /// while its contents are not rendered, so the box collapses to its contain-intrinsic
+    /// fallback; 'auto' only does so while it is skipped, which this engine never does (it
+    /// renders the whole document), so 'auto' keeps its content block size.</summary>
+    public bool HasSizeContainment => (Contain & ContainType.Size) != 0
+        || ContentVisibility == ContentVisibilityType.Hidden;
+
+    /// <summary>The union of the containment flags that turn the box into a paint boundary:
+    /// layout and paint containment, and either non-visible 'content-visibility' value.</summary>
+    public bool CreatesContainmentContext =>
+        HasLayoutContainment || ContentVisibility is ContentVisibilityType.Auto or ContentVisibilityType.Hidden;
+
+    /// <summary>'contain-intrinsic-width' / '-height': the size that replaces the box's own
+    /// intrinsic size while size containment is on. Null means 'none' — no replacement, so
+    /// the contained axis measures 0. The auto bit is the remembered-size variant of
+    /// 'contain-intrinsic-size: auto &lt;length&gt;'; with no skip rendering it behaves as the
+    /// fallback length, but it is kept so the computed value round-trips.</summary>
+    public Length? ContainIntrinsicWidth { get; set; }
+    public Length? ContainIntrinsicHeight { get; set; }
+    public bool ContainIntrinsicWidthIsAuto { get; set; }
+    public bool ContainIntrinsicHeightIsAuto { get; set; }
+
     public string WillChange { get; set; } = "auto";
     public SKColor? AccentColor { get; set; }
     public SKColor? CaretColor { get; set; }
     public string ColorScheme { get; set; } = "normal";
     public string Appearance { get; set; } = "auto";
+
+    /// <summary>CSS 'field-sizing' (shipped by the reference engine as
+    /// <c>normal | content</c>): 'content' replaces a text control's rendered size with the
+    /// size of its own content — the value text, or the placeholder when there is none. The
+    /// initial 'normal' keeps the widget size, which is what the reference engine reports as
+    /// the computed value <c>fixed</c> on a form control.</summary>
+    public FieldSizingType FieldSizing { get; set; } = FieldSizingType.Normal;
+
     public ForcedColorAdjustType ForcedColorAdjust { get; set; } = ForcedColorAdjustType.Auto;
     public ImageRenderingType ImageRendering { get; set; } = ImageRenderingType.Auto;
     public IsolationType Isolation { get; set; } = IsolationType.Auto;
@@ -1033,7 +1161,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public string FontVariantCaps { get; set; } = "normal";
     public string FontKerning { get; set; } = "auto";
     public string FontStretch { get; set; } = "normal";
-    public string FontSynthesis { get; set; } = "weight style";
+    public FontSynthesisType FontSynthesis { get; set; } = FontSynthesisType.Auto;
     public string FontOpticalSizing { get; set; } = "auto";
     public string FontVariationSettings { get; set; } = "normal";
     public string FontFeatureSettings { get; set; } = "normal";
@@ -1074,6 +1202,11 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
         return $"{px:F1}px";
     }
 
+    /// <summary>Copy a per-layer background list so a cloned style never shares a
+    /// mutable list with its source. Null stays null (= "no list was authored").</summary>
+    private static List<T>? CopyLayerList<T>(List<T>? list) =>
+        list == null ? null : new List<T>(list);
+
     public ComputedStyle Clone()
     {
         return new ComputedStyle
@@ -1094,12 +1227,20 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             BorderTopLeftRadiusY = BorderTopLeftRadiusY, BorderTopRightRadiusY = BorderTopRightRadiusY,
             BorderBottomRightRadiusY = BorderBottomRightRadiusY, BorderBottomLeftRadiusY = BorderBottomLeftRadiusY,
             Display = Display, Position = Position, Float = Float, Clear = Clear,
-            FontFamily = FontFamily, FontSize = FontSize, FontWeight = FontWeight,
+            FontFamily = FontFamily, FontSize = FontSize, FontSizeIsDefault = FontSizeIsDefault, FontWeight = FontWeight,
             FontStyle = FontStyle, FontStyleObliqueDegrees = FontStyleObliqueDegrees, LineHeight = LineHeight,
             LineHeightIsNormal = LineHeightIsNormal, LineHeightPx = LineHeightPx,
             Color = Color, BackgroundColor = BackgroundColor, BackgroundImage = BackgroundImage,
             BackgroundPositionX = BackgroundPositionX, BackgroundPositionY = BackgroundPositionY,
             BackgroundRepeat = BackgroundRepeat, BackgroundAttachment = BackgroundAttachment,
+            // The per-layer lists are copied (the entries themselves are written once by
+            // the parser and treated as immutable afterwards).
+            BackgroundPositionLayers = CopyLayerList(BackgroundPositionLayers),
+            BackgroundSizeLayers = CopyLayerList(BackgroundSizeLayers),
+            BackgroundRepeatLayers = CopyLayerList(BackgroundRepeatLayers),
+            BackgroundAttachmentLayers = CopyLayerList(BackgroundAttachmentLayers),
+            BackgroundOriginLayers = CopyLayerList(BackgroundOriginLayers),
+            BackgroundClipLayers = CopyLayerList(BackgroundClipLayers),
             TextAlign = TextAlign, TextAlignLast = TextAlignLast, TextDecoration = TextDecoration, VerticalAlign = VerticalAlign, VerticalAlignOffsetPx = VerticalAlignOffsetPx,
             VerticalAlignIsAuthored = VerticalAlignIsAuthored,
             WhiteSpace = WhiteSpace, WordBreak = WordBreak, OverflowWrap = OverflowWrap,
@@ -1128,13 +1269,18 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             AnimationFillMode = AnimationFillMode, AnimationPlayState = AnimationPlayState,
             PointerEvents = PointerEvents, UserSelect = UserSelect,
             Direction = Direction, LetterSpacing = LetterSpacing, WordSpacing = WordSpacing,
+            // Carried so a style cloned before adjustment still gets its logical
+            // properties re-mapped; replaying an already-mapped pair is idempotent.
+            PendingBoxEdgeProperties = PendingBoxEdgeProperties == null
+                ? null : new(PendingBoxEdgeProperties),
             TextIndent = TextIndent, TextIndentHanging = TextIndentHanging,
             TextIndentEachLine = TextIndentEachLine,
             TextIndentPercent = TextIndentPercent, TextIndentMath = TextIndentMath, TextTransform = TextTransform,
             TextOverflow = TextOverflow, TextOverflowString = TextOverflowString,
             TextShadow = TextShadow, LineClamp = LineClamp, TextWrap = TextWrap,
             TextDecorationLine = TextDecorationLine, TextDecorationStyle = TextDecorationStyle,
-            TextDecorationColor = TextDecorationColor, TextDecorationThickness = TextDecorationThickness,
+            TextDecorationColor = TextDecorationColor, TextDecorationColorIsAuto = TextDecorationColorIsAuto,
+            TextDecorationThickness = TextDecorationThickness,
             TextDecorationThicknessFromFont = TextDecorationThicknessFromFont,
             TextUnderlineOffset = TextUnderlineOffset, TextUnderlineOffsetIsAuto = TextUnderlineOffsetIsAuto,
             TextUnderlinePosition = TextUnderlinePosition, TextDecorationSkipInk = TextDecorationSkipInk,
@@ -1158,11 +1304,14 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             GridRowStart = GridRowStart, GridRowEnd = GridRowEnd,
             GridColumn = GridColumn, GridRow = GridRow, GridArea = GridArea, Grid = Grid,
             BackgroundClip = BackgroundClip, BackgroundOrigin = BackgroundOrigin, BackgroundBlendMode = BackgroundBlendMode,
-            WritingMode = WritingMode, Hyphens = Hyphens, TabSize = TabSize, TabSizePx = TabSizePx, ColumnSpanAll = ColumnSpanAll,
+            WritingMode = WritingMode, Hyphens = Hyphens, HyphenateCharacter = HyphenateCharacter, TabSize = TabSize, TabSizePx = TabSizePx, ColumnSpanAll = ColumnSpanAll,
             ScrollBehavior = ScrollBehavior, OverscrollBehavior = OverscrollBehavior,
             OverscrollBehaviorX = OverscrollBehaviorX, OverscrollBehaviorY = OverscrollBehaviorY,
             OverflowAnchor = OverflowAnchor, Contain = Contain, ContentVisibility = ContentVisibility,
-            WillChange = WillChange, Appearance = Appearance, AccentColor = AccentColor, CaretColor = CaretColor,
+            ContainIntrinsicWidth = ContainIntrinsicWidth, ContainIntrinsicHeight = ContainIntrinsicHeight,
+            ContainIntrinsicWidthIsAuto = ContainIntrinsicWidthIsAuto,
+            ContainIntrinsicHeightIsAuto = ContainIntrinsicHeightIsAuto,
+            WillChange = WillChange, Appearance = Appearance, FieldSizing = FieldSizing, AccentColor = AccentColor, CaretColor = CaretColor,
             ColorScheme = ColorScheme, ForcedColorAdjust = ForcedColorAdjust,
             ImageRendering = ImageRendering, Isolation = Isolation, MixBlendMode = MixBlendMode,
             Filter = Filter, BackdropFilter = BackdropFilter, ClipPath = ClipPath,
@@ -1293,9 +1442,29 @@ public enum TextAlignLastType { Auto, Start, End, Left, Right, Center, Justify }
 public enum TextDecorationType { None, Underline, Overline, LineThrough }
 public enum VerticalAlignType { Baseline, Top, Middle, Bottom, Sub, Super, TextTop, TextBottom, Inherit, Percentage, Length }
 public enum WhiteSpaceMode { Normal, Nowrap, Pre, PreWrap, PreLine, BreakSpaces }
+
+/// <summary>'white-space-collapse' (CSS Text 4 §3.2). 'Discard' only comes from the
+/// longhand — no 'white-space' shorthand keyword produces it. 'BreakSpaces' is not in
+/// the CSS Text 4 grammar, but the reference engine exposes it here anyway, because
+/// 'pre-wrap' and 'break-spaces' otherwise share one identical triple and the
+/// shorthand could not round-trip through the longhands.</summary>
+public enum WhiteSpaceCollapseType { Collapse, Preserve, PreserveBreaks, Discard, BreakSpaces }
+
+/// <summary>'text-wrap-mode' (CSS Text 4 §4.1), the wrapping half of 'white-space'.</summary>
+public enum TextWrapModeType { Wrap, NoWrap }
+
+/// <summary>'text-wrap-style' (CSS Text 4 §4.3). 'Balanced' is the standard keyword;
+/// 'Pretty' is the browser-specific one that 'text-wrap: pretty' maps to.</summary>
+public enum TextWrapStyleType { Auto, Stable, Balanced, Pretty }
 public enum WordBreakMode { Normal, BreakAll, BreakWord, KeepAll }
 public enum OverflowWrapMode { Normal, BreakWord, Anywhere }
-public enum OverflowType { Visible, Hidden, Scroll, Auto }
+/// <summary>CSS Overflow 3 §3.3. 'Clip' is NOT a scroll container and, unlike every
+/// other non-visible value, it does not establish a block formatting context
+/// (CSS Overflow 3 §4.1) — the two differences from 'Hidden' that a naive alias loses.</summary>
+public enum OverflowType { Visible, Clip, Hidden, Scroll, Auto }
+
+/// <summary>'overflow-clip-margin' keyword forms (CSS Overflow 3 §4.1).</summary>
+public enum OverflowClipMarginBox { ContentBox, PaddingBox, BorderBox }
 public enum VisibilityType { Visible, Hidden, Collapse }
 public enum FlexDirectionType { Row, RowReverse, Column, ColumnReverse }
 public enum FlexWrapType { NoWrap, Wrap, WrapReverse }
@@ -1303,6 +1472,29 @@ public enum JustifyContentType { FlexStart, FlexEnd, Center, SpaceBetween, Space
 public enum AlignItemsType { Stretch, FlexStart, FlexEnd, Center, Baseline }
 public enum AlignSelfType { Auto, Stretch, FlexStart, FlexEnd, Center, Baseline }
 public enum BackgroundRepeat { Repeat, RepeatX, RepeatY, NoRepeat, Round, Space }
+
+/// <summary>One entry of a comma-separated 'background-position' list.</summary>
+public sealed class BackgroundPositionLayer
+{
+    public Length? X;
+    public Length? Y;
+}
+
+/// <summary>One entry of a comma-separated 'background-size' list.</summary>
+public sealed class BackgroundSizeLayer
+{
+    public BackgroundSizeType Type = BackgroundSizeType.Auto;
+    public Length? Width;
+    public Length? Height;
+}
+
+/// <summary>One entry of a comma-separated 'background-repeat' list. The longhand
+/// takes one or two keywords: one applies to both axes, two are x-then-y.</summary>
+public sealed class BackgroundRepeatPair
+{
+    public BackgroundRepeat X = BackgroundRepeat.Repeat;
+    public BackgroundRepeat Y = BackgroundRepeat.Repeat;
+}
 public enum BackgroundAttachment { Scroll, Fixed, Local }
 public enum BoxSizingType { ContentBox, BorderBox }
 /// <summary>'list-style-type' values (CSS Lists 3 §5 plus the counter styles of
@@ -1349,8 +1541,44 @@ public static class LengthExtensions
 public enum BackgroundSizeType { Auto, Cover, Contain, Length }
 public enum ObjectFitType { Fill, Contain, Cover, None, ScaleDown }
 public enum OverflowAnchorType { Auto, None }
-public enum ContainType { None, Strict, Content, Layout, Paint, Size }
+
+/// <summary>
+/// CSS Containment 3 §2. 'contain' takes a keyword *list*, so the computed value is a
+/// flag set and not one of six states: 'size layout' and 'layout paint style' are both
+/// legal and behave as the union of their keywords. 'content' and 'strict' are the two
+/// shorthands that name a whole set. Measured against the reference engine, the sets split
+/// exactly on these lines: layout/paint give a formatting context, a stacking context and
+/// a clip, while size/style give none of them.
+/// </summary>
+[Flags]
+public enum ContainType
+{
+    None = 0,
+    Size = 1 << 0,
+    Layout = 1 << 1,
+    Style = 1 << 2,
+    Paint = 1 << 3,
+    Content = Layout | Style | Paint,
+    Strict = Size | Layout | Style | Paint,
+}
+
 public enum ContentVisibilityType { Visible, Auto, Hidden }
+
+/// <summary>
+/// CSS Fonts 4 §6.1: which faces the engine may invent when the family does not have one.
+/// 'auto' is the initial value and means all three; 'none' is the empty set, so the flag
+/// type is a plain union with no bit for 'auto' itself. 'bold' and 'italic'/'oblique' are
+/// the compatibility spellings of 'weight' and 'style' in the same grammar.
+/// </summary>
+[Flags]
+public enum FontSynthesisType
+{
+    None = 0,
+    Weight = 1 << 0,
+    Style = 1 << 1,
+    SmallCaps = 1 << 2,
+    Auto = Weight | Style | SmallCaps,
+}
 public enum ScrollBehaviorType { Auto, Smooth }
 public enum OverscrollBehaviorType { Auto, Contain, None }
 public enum ImageRenderingType { Auto, CrispEdges, Pixelated }
@@ -1361,6 +1589,10 @@ public enum TextJustifyType { Auto, InterWord, InterCharacter, None }
 public enum HyphensType { None, Manual, Auto }
 public enum WritingModeType { HorizontalTb, VerticalRl, VerticalLr }
 public enum ResizeType { None, Both, Horizontal, Vertical }
+
+/// <summary>'field-sizing' (CSS Form Control sizing): 'normal' keeps the widget's rendered
+/// size, 'content' sizes the control from its own content.</summary>
+public enum FieldSizingType { Normal, Content }
 public enum ForcedColorAdjustType { Auto, None }
 public enum TextOverflowType { Clip, Ellipsis }
 public enum ColorSchemeType { Normal, Light, Dark, Only }
@@ -1534,6 +1766,16 @@ public class LayoutBox
 
     public LayoutBox? ContainingBlock { get; set; }
 
+    /// <summary>CSS Content Distribution 1 §4: 'content-visibility: hidden' keeps the box's
+    /// own background and border but its contents — its text and every descendant — are not
+    /// rendered. Layout is unaffected, which is why the flag lives on the box and not on the
+    /// style.</summary>
+    public bool ContentsNotRendered { get; set; }
+
+    /// <summary>True for the whole subtree below such a box: nothing in it paints, not even
+    /// its own decoration.</summary>
+    public bool InHiddenSubtree { get; set; }
+
     public LayoutBox? NextSibling
     {
         get
@@ -1641,19 +1883,21 @@ public class PaintContext
 // ===== 新增 CSS 枚举格式化器（修复问题5） =====
 public static class CssEnumFormatter
 {
-    public static string ToCssString(this DisplayType display) => display switch
+    /// <summary>'display' as a CSS keyword. Derived rather than listed: the hand-written
+    /// table had every multi-word member wrong ('TableCell' came out as "tablecell"), and the
+    /// same drift keeps happening wherever an enum name is lowercased by hand.</summary>
+    public static string ToCssString(this DisplayType display) =>
+        CssKeywordFromEnum(display.ToString());
+
+    /// <summary>CamelCase enum member → kebab-case CSS keyword: TableCell → "table-cell",
+    /// RowReverse → "row-reverse", InlineBlock → "inline-block", Contents → "contents".
+    /// 'nowrap' is the one keyword in this set that is not a hyphenation of its member name
+    /// (measured: the reference engine reports 'nowrap', never 'no-wrap').</summary>
+    public static string CssKeywordFromEnum(string member)
     {
-        DisplayType.InlineBlock => "inline-block",
-        DisplayType.InlineFlex => "inline-flex",
-        DisplayType.InlineGrid => "inline-grid",
-        DisplayType.ListItem => "list-item",
-        DisplayType.TableRowGroup => "table-row-group",
-        DisplayType.TableHeaderGroup => "table-header-group",
-        DisplayType.TableFooterGroup => "table-footer-group",
-        DisplayType.TableColumnGroup => "table-column-group",
-        DisplayType.TableCaption => "table-caption",
-        _ => display.ToString().ToLowerInvariant()
-    };
+        if (member == "NoWrap") return "nowrap";
+        return System.Text.RegularExpressions.Regex.Replace(member, "([a-z0-9])([A-Z])", "$1-$2").ToLowerInvariant();
+    }
 
     public static string ToCssString(this BoxSizingType boxSizing) => boxSizing switch
     {

@@ -6,7 +6,13 @@
 </style></head><body>
 <h2>1. forced break ends the justification run</h2>
 <div class="j">aa bb cc dd ee ff gg<br>hh ii jj kk ll mm nn</div>
-<h2>2. nbsp must not expand</h2>
+<!-- Corrected 2026-10-05: this case used to be titled "nbsp must not expand". That was
+     measured on a single-line paragraph, and the last line of a block is never
+     justified - so it proved nothing about the NBSP. Re-measured on a line that really
+     justifies, a reference browser gives the no-break space the SAME added width as a
+     U+0020 (nbspAdvance 6.03 vs spaceAdvance 6.05 against a natural 4.45), while U+2003,
+     U+2009 and U+3000 keep their natural advance. See b196 for the twelve-case sweep. -->
+<h2>2. nbsp expands like a space when the line really justifies</h2>
 <div class="j">aa&nbsp;bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr</div>
 <h2>3. text-indent shrinks the justified line</h2>
 <div class="j" style="text-indent: 40px">aa bb cc dd ee ff gg hh ii jj</div>

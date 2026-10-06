@@ -259,15 +259,61 @@ public class InlineItemsBuilder
     public static string ApplyTextTransform(string text, string? transform)
     {
         if (string.IsNullOrEmpty(transform) || transform == "none") return text;
-        return transform.ToLowerInvariant() switch
+        // CSS Text 4 §6.1: 'text-transform' is a <'text-transform'> list, so several
+        // keywords may be given and they apply in the order written. Edge implements
+        // neither the list nor 'full-width' (a multi-keyword value computes to 'none'
+        // there), so this is a deliberate step past the reference engine rather than a
+        // divergence from a behaviour it has — see the note in docs/CSS-HANDOFF.md §4.
+        string result = text;
+        foreach (var token in transform.Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
-            "uppercase" => FullUpperCase(text),
-            "lowercase" => text.ToLowerInvariant(),
-            "capitalize" => Capitalize(text),
-            "full-width" => FullWidth(text),
-            _ => text,
-        };
+            switch (token)
+            {
+                case "uppercase": result = FullUpperCase(result); break;
+                case "lowercase": result = result.ToLowerInvariant(); break;
+                case "capitalize": result = Capitalize(result); break;
+                case "full-width": result = FullWidth(result); break;
+                case "full-size-kana": result = FullSizeKana(result); break;
+                // 'none' suppresses the rest, per the grammar's 'none' winning alone.
+                case "none": return text;
+            }
+        }
+        return result;
     }
+
+    /// <summary>'text-transform: full-size-kana' (CSS Text 4 §6.1.1): the nine small
+    /// kana letters map to their full-size counterparts. It is a plain code-point
+    /// mapping, so no font feature is involved.</summary>
+    private static string FullSizeKana(string text)
+    {
+        if (text.IndexOfAny(SmallKanaChars) < 0) return text;
+        var sb = new StringBuilder(text.Length);
+        foreach (var c in text)
+            sb.Append(SmallKanaToFullSize.TryGetValue(c, out var mapped) ? mapped : c);
+        return sb.ToString();
+    }
+
+    private static readonly char[] SmallKanaChars =
+        ['\u30A1','\u30A3','\u30A5','\u30A7','\u30A9','\u30E3','\u30E5','\u30E7','\u30EE','\u30F5','\u30F6','\u30F7','\u30F8','\u30F9','\u30FA'];
+
+    private static readonly Dictionary<char, char> SmallKanaToFullSize = new()
+    {
+        ['\u30A1'] = '\u30A2',
+        ['\u30A3'] = '\u30A4',
+        ['\u30A5'] = '\u30A6',
+        ['\u30A7'] = '\u30A8',
+        ['\u30A9'] = '\u30AA',
+        ['\u30E3'] = '\u30E4',
+        ['\u30E5'] = '\u30E6',
+        ['\u30E7'] = '\u30E8',
+        ['\u30EE'] = '\u30EF',
+        ['\u30F5'] = '\u30AB',
+        ['\u30F6'] = '\u30B1',
+        ['\u30F7'] = '\u30EF',
+        ['\u30F8'] = '\u30A4',
+        ['\u30F9'] = '\u30A8',
+        ['\u30FA'] = '\u30AA',
+    };
 
     /// <summary>
     /// Unicode full case mapping for the characters .NET maps 1:1 but the spec
@@ -367,21 +413,36 @@ public class InlineItemsBuilder
         return string.IsNullOrEmpty(caps) ? "normal" : caps;
     }
 
+    /// <summary>Which characters of a string the caps mode turns into small capitals.
+    /// Measured against the reference engine (b225 §A): 'small-caps' and 'petite-caps' scale
+    /// the lowercase only, 'all-small-caps'/'all-petite-caps' scale both cases, and 'unicase'
+    /// is the mirror image — it scales the UPPERCASE and leaves the lowercase alone (the
+    /// OpenType 'unic' feature renders capitals as small ones). 'titling-caps' scales nothing
+    /// unless the face carries 'titl'.</summary>
     private static bool CapsIsSmallChar(char c, string mode) => mode switch
     {
-        "small-caps" or "petite-caps" or "unicase" => char.IsLower(c),
+        "small-caps" or "petite-caps" => char.IsLower(c),
+        "unicase" => char.IsUpper(c),
         "all-small-caps" or "all-petite-caps" => char.IsLower(c) || char.IsUpper(c),
         _ => false,
     };
+
+    /// <summary>
+    /// The size a synthesized small capital is drawn at. The reference engine uses a constant
+    /// 0.7 of the capital's own size — measured across five families at 100px, the ratio of the
+    /// scaled advance to the full capital is 0.7001 for the proportional faces and exactly 0.7
+    /// for Liberation Mono (60.02 → 42.02) and for 'monospace' (50 → 35). Deriving it from
+    /// x-height/cap-height looks similar on text faces and is wrong everywhere else (it clamps
+    /// to 0.8 on mono, giving 48 where the reference gives 42).
+    /// </summary>
+    public const float SmallCapsScale = 0.7f;
 
     private ComputedStyle SmallCapsStyle(ComputedStyle style)
     {
         if (!_smallCapsStyles.TryGetValue(style, out var small))
         {
             small = style.Clone();
-            var metrics = Acrux.Core.Fonts.LineBoxMetrics.GetFontMetrics(style);
-            float ratio = metrics.CapHeight > 0 ? metrics.XHeight / metrics.CapHeight : 0f;
-            small.FontSize = style.FontSize * (ratio > 0 ? Math.Clamp(ratio, 0.65f, 0.8f) : 0.7f);
+            small.FontSize = style.FontSize * SmallCapsScale;
             _smallCapsStyles[style] = small;
         }
         return small;
@@ -425,9 +486,12 @@ public class InlineItemsBuilder
 
         // font-variant-caps synthesis operates on the post-transform text
         // (CSS Text 3: text-transform capitalizes first, the variant then
-        // synthesizes on the result).
+        // synthesizes on the result). 'font-synthesis-small-caps: none' — and the
+        // shorthand's 'none' — stop the engine from inventing the small capitals at all,
+        // which the reference engine shows by rendering the lowercase unchanged (b225 §A2).
         string capsMode = EffectiveCapsMode(style);
-        bool capsActive = capsMode is not ("normal" or "titling-caps");
+        bool capsActive = capsMode is not ("normal" or "titling-caps")
+            && (style.FontSynthesis & FontSynthesisType.SmallCaps) != 0;
         ComputedStyle? smallStyle = null;
 
         for (int i = 0; i < length; i++)

@@ -204,10 +204,9 @@ public static class FormElements
                 style.BorderRightStyle = BorderStyle.Inset;
                 style.BorderBottomStyle = BorderStyle.Inset;
                 style.BorderLeftStyle = BorderStyle.Inset;
-                style.PaddingTop = new PixelLength(1);
-                style.PaddingBottom = new PixelLength(1);
-                style.PaddingLeft = new PixelLength(2);
-                style.PaddingRight = new PixelLength(2);
+                // A closed menu list has no box padding: the label is inset inside the
+                // widget, and FormControlDefaults.MenuListArrowPx carries that whole inset
+                // (reference engine: computed padding is 0 on a <select>).
                 style.BackgroundColor = SKColors.White;
                 style.Color = SKColors.Black;
                 style.FontSize = 13.3333f;

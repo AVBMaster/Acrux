@@ -123,6 +123,17 @@ public static class AnimatableProperties
 
     public static bool IsLayoutAffecting(string property) => _layoutAffecting.Contains(property);
 
+    /// <summary>
+    /// True when the property moves or resizes the element's painted pixels while
+    /// <em>no layout generation changes</em> — transform is the case that matters
+    /// (CSS Transforms 1: it maps boxes without relayout). Anything that consults
+    /// geometry computed from laid-out boxes must treat such an effect as live
+    /// churn: the verdict it cached a frame ago is stale as soon as the matrix
+    /// moves, even though neither style nor layout re-ran.
+    /// </summary>
+    public static bool GeometryAffecting(string property) =>
+        IsLayoutAffecting(property) || property == "transform";
+
     /// <summary>True when the animated value can paint pixels outside the box entirely.</summary>
     public static bool BleedsOutsideBox(string property) => _bleedsOutsideBox.Contains(property);
 

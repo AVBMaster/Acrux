@@ -317,6 +317,10 @@ public enum CssPropertyId
     ContainIntrinsicSize,
     ContainIntrinsicWidth,
     ContainIntrinsicHeight,
+    /// <summary>CSS Containment 3 §2.2: the logical pair of the two physical longhands;
+    /// they select the axis through the writing mode.</summary>
+    ContainIntrinsicInlineSize,
+    ContainIntrinsicBlockSize,
     TouchAction,
     ImageRendering,
     ImageOrientation,
@@ -448,6 +452,15 @@ public enum CssPropertyId
     All,
     /// <summary>CSS Text 3 §3.4.</summary>
     TabSize,
+    /// <summary>CSS Text 4 §3.2/§4.1/§4.3 — the modular longhands that
+    /// 'white-space' and 'text-wrap' are shorthands of.</summary>
+    WhiteSpaceCollapse,
+    TextWrapMode,
+    TextWrapStyle,
+    /// <summary>CSS Writing Modes 4 §3.4. The applier has had a case for this since long
+    /// before it could ever run: with no ID the cascade dropped every 'unicode-bidi'
+    /// declaration — even an inline style — before reaching it.</summary>
+    UnicodeBidi,
     MaxProperties
 }
 

@@ -126,8 +126,7 @@ public class LogicalLineBuilder
                         }
                         else
                         {
-                            lineBox.AddChild(item, itemResult, itemResult.TextOffset(), box.TextTop,
-                                itemResult.InlineSize, box.TextHeight, item.BidiLevel);
+                            AddTextChildren(lineBox, item, itemResult, box);
                         }
                         break;
                     }
@@ -264,6 +263,64 @@ public class LogicalLineBuilder
 
         lineBox.AddChild(item, itemResult.ShapeResult, itemResult.TextOffset(), "",
             box?.TextTop ?? 0, itemResult.InlineSize, box?.TextHeight ?? 0, item.BidiLevel);
+    }
+
+    /// <summary>
+    /// Emit the line children for one text result.
+    ///
+    /// A no-break space is never a break opportunity, so the line breaker leaves
+    /// "aa&#160;bb" inside a single result — but justification <em>does</em> stretch it
+    /// (CSS Text 3 §4.4, measured: a justified line gives its NBSP the same added
+    /// space as its U+0020, while U+2003/U+2009/U+3000 keep their natural advance). The
+    /// expansion pass can only widen a run it can see on its own, so the result is cut
+    /// at every NBSP here. The pieces reuse the advances the shaper already produced,
+    /// so the natural width of the line is unchanged — this only makes the character
+    /// addressable.
+    /// </summary>
+    private static void AddTextChildren(LogicalLineItems lineBox, InlineItem item,
+        InlineItemResult itemResult, InlineBoxState box)
+    {
+        var shape = itemResult.ShapeResult;
+        int start = itemResult.StartOffset;
+        int end = itemResult.EndOffset;
+        string source = shape?.Text ?? itemResult.TextContent ?? "";
+
+        if (shape == null || end <= start || source.IndexOf('\u00A0') < 0
+            || start >= source.Length || end > source.Length
+            || !source.AsSpan(start, end - start).Contains('\u00A0'))
+        {
+            lineBox.AddChild(item, itemResult, itemResult.TextOffset(), box.TextTop,
+                itemResult.InlineSize, box.TextHeight, item.BidiLevel);
+            return;
+        }
+
+        int piece = start;
+        for (int i = start; i < end; i++)
+        {
+            if (source[i] != '\u00A0') continue;
+            int after = i + 1;
+            while (after < end && source[after] == '\u00A0') after++;
+            if (piece < i)
+                AddTextPiece(lineBox, item, itemResult, shape, source, piece, i, box);
+            AddTextPiece(lineBox, item, itemResult, shape, source, i, after, box);
+            i = after - 1;
+            piece = after;
+        }
+        if (piece < end)
+            AddTextPiece(lineBox, item, itemResult, shape, source, piece, end, box);
+    }
+
+    private static void AddTextPiece(LogicalLineItems lineBox, InlineItem item, InlineItemResult itemResult,
+        ShapeResult shape, string source, int from, int to, InlineBoxState box)
+    {
+        if (to <= from) return;
+        string text = source.Substring(from, to - from);
+        // Soft hyphens are measured as zero and never drawn (CSS Text 3 §4.4); the
+        // result's own text already had them removed, so a piece has to do the same.
+        if (text.IndexOf('\u00AD') >= 0) text = text.Replace("\u00AD", "");
+        lineBox.AddChild(item, new TextOffsetRange(from, to), box.TextTop,
+            shape.CachedWidth(from, to), box.TextHeight, item.BidiLevel,
+            ShapeResult.Create(shape, from, to), text);
     }
 
     private void PlaceHyphen(InlineItemResult itemResult, float hyphenInlineSize, LogicalLineItems lineBox, InlineBoxState? box)

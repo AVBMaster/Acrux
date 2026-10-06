@@ -205,6 +205,7 @@ public class CssStyleDeclaration
     public string? position { get => GetStyle("position"); set => SetStyle("position", value); }
     public string? quotes { get => GetStyle("quotes"); set => SetStyle("quotes", value); }
     public string? resize { get => GetStyle("resize"); set => SetStyle("resize", value); }
+    public string? fieldSizing { get => GetStyle("field-sizing"); set => SetStyle("field-sizing", value); }
     public string? right { get => GetStyle("right"); set => SetStyle("right", value); }
     public string? rowGap { get => GetStyle("row-gap"); set => SetStyle("row-gap", value); }
     public string? scrollBehavior { get => GetStyle("scroll-behavior"); set => SetStyle("scroll-behavior", value); }

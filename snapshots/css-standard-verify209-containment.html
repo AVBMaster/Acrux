@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<!-- b209: CSS Containment 3 + CSS Content Distribution 1, measured in Edge (dpr 1,
+     viewport 383 -> content width 368, scrollbar 15). Every number below is Edge's.
+
+  A. computed 'contain': size/layout/style/paint echo as written; 'layout paint style'
+     -> 'content'; 'style size layout paint' -> 'strict'; a repeated keyword ('size size')
+     and 'auto' are INVALID -> 'none'; canonical order is size, layout, style, paint
+     ('paint style' serializes as 'style paint').
+  B/i. size containment: b1 contain:size = 368x0, b7 strict = 368x0, b9 (block, stretched)
+     = 368x0, b6 (inline-block, text) = 0x0, b2 'contain-intrinsic-size: 0 40px' = 368x40,
+     b3 'contain-intrinsic-height: 2em' = 368x32, b5 'contain-intrinsic-width: 100px' = 100x0,
+     b8 '50px 60px' = 50x60, b10 'auto 30px' = 368x30, i3 (padding 10, no fallback) = 20x20,
+     i1 (padding 10 + width 100px) = 120x20, i4 (border 3 + height 30px) = 368x36 -> the
+     fallback is a CONTENT-box size; 'none 25px' = 0x25; percentages are rejected outright
+     ('50% 20%' and '50px 20%' compute to 'none'); bare 'auto' is rejected too.
+     h14 'contain-intrinsic-inline-size: 44px' = 44x0, h15 block-size = 0x44.
+  C. formatting context: c2 'contain: layout' = 40 (child margin does not collapse through),
+     c6 'contain: paint' = 40-style BFC too (float contained, h=30), c3 'contain: style' = 20
+     (NO BFC), c1 none = 20, c4 = 0, c5 = 30.
+  D/H. paint boundary: d1c/d4c/h4c (abspos child of contain:paint / contain:layout /
+     content-visibility:auto) land at parent+20,20 -> those are containing blocks;
+     h1c (contain:style) and h2c (contain:size) land at 20,20 in page space -> NOT containing
+     blocks. Clip: d2 clips its 80px child at 60 (hit test outside = BODY), d3 does not;
+     h3 (padding 10, box 80) still hit-tests its child at 5,5 and loses it at 95; h13 (border 4
+     + padding 10, box 88) hit-tests the child over its own border band at 2,2 and 85,3 but not
+     at 95,40 or 40,95 -> containment clips to the BORDER box, unlike overflow's padding box.
+  E. content-visibility: e1 hidden = 368x0 and its child is unpainted/unhit-testable; e2 hidden
+     + 'contain-intrinsic-size: 0 60px' = 368x60; e3 auto = 368x40 and e4 auto + fallback 70px
+     = 368x20 (Chrome sizes an 'auto' box from its contents once measured; the fallback only
+     applies while the box is skipped, which a full-page render never is); h10 hidden 60x60 box
+     paints its own #cc00ff background with its 80x80 child gone.
+  F. style containment scopes counters: f1 'plain' = [98]98| (marker M at x=86.91), f2
+     contain:style = [89]89| (M at 122.50; the 2-digit read proves a fresh scope), f3 after =
+     98| (M at 58.42; three digits would mean the contained increment leaked out).
+  G. stacking: overlap of the z-index:99 child of g1/g3/g5/g7 (paint/style/size/layout) with a
+     z-index:1 child of the following positioned sibling -> g1 and g7 give the BLUE (layout and
+     paint containment create a stacking context), g3 and g5 give the RED (style/size do not).
+  J. control for the same question without containment: j1c (z 99) paints ABOVE j2c (z 1) -
+     z-index is compared across cousins in one shared stacking context.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b209 containment</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/20px Arial, sans-serif; color: #000; background: #fff; }
+  .box { background: #ccc; }
+  .line { height: 20px; background: #888; }
+  .a { background: #000; }
+  .ib { display: inline-block; background: #ccc; }
+  .t { font: 16px/20px Arial, sans-serif; }
+  .inc { counter-increment: c 89; }
+  .inc::after { content: "[" counter(c) "]"; }
+  .late::after { content: counter(c) "|"; }
+</style>
+</head>
+<body>
+
+<!-- ============ A. computed value of the contain keyword list ============ -->
+<div id="a1" class="box t" style="height:8px">a1 contain none</div>
+<div id="a2" class="box t" style="height:8px; contain: size">a2</div>
+<div id="a3" class="box t" style="height:8px; contain: layout">a3</div>
+<div id="a4" class="box t" style="height:8px; contain: paint">a4</div>
+<div id="a5" class="box t" style="height:8px; contain: style">a5</div>
+<div id="a6" class="box t" style="height:8px; contain: strict">a6</div>
+<div id="a7" class="box t" style="height:8px; contain: content">a7</div>
+<div id="a8" class="box t" style="height:8px; contain: size layout">a8</div>
+<div id="a9" class="box t" style="height:8px; contain: layout paint style">a9</div>
+<div id="a10" class="box t" style="height:8px; contain: auto">a10</div>
+<div id="a11" class="box t" style="height:8px; contain: size style">a11</div>
+<div id="a12" class="box t" style="height:8px; contain: paint style">a12</div>
+
+<!-- ============ B. size containment / contain-intrinsic-size ============ -->
+<div style="clear: both; height: 4px"></div>
+<div id="b1" class="box" style="contain: size"><div class="line"></div><div class="line"></div></div>
+<div id="b2" class="box" style="contain: size; contain-intrinsic-size: 0 40px"><div class="line"></div></div>
+<div id="b3" class="box" style="contain: size; contain-intrinsic-height: 2em"><div class="line"></div></div>
+<div id="b4" class="ib t">plain shrink-to-fit text</div>
+<div id="b5" class="ib t" style="contain: size; contain-intrinsic-width: 100px">plain shrink-to-fit text</div>
+<div id="b6" class="ib t" style="contain: size">plain shrink-to-fit text</div>
+<div id="b7" class="box" style="contain: strict"><div class="line"></div><div class="line"></div></div>
+<div id="b8" class="ib t" style="contain: size; contain-intrinsic-size: 50px 60px">plain shrink-to-fit text</div>
+<div id="b9" class="box t" style="contain: size">stretched block keeps its width</div>
+<div id="b10" class="box" style="contain: size; contain-intrinsic-size: auto 30px"><div class="line"></div></div>
+<div style="clear: both; height: 4px"></div>
+
+<!-- ============ C. layout/paint containment establishes a BFC ============ -->
+<div id="c1" class="box"><div class="a" style="height:20px; margin-top:20px"></div></div>
+<div id="c2" class="box" style="contain: layout"><div class="a" style="height:20px; margin-top:20px"></div></div>
+<div id="c3" class="box" style="contain: style"><div class="a" style="height:20px; margin-top:20px"></div></div>
+<div id="c4" class="box"><div class="a" style="float: left; width: 40px; height: 30px"></div></div>
+<div style="clear: both"></div>
+<div id="c5" class="box" style="contain: layout"><div class="a" style="float: left; width: 40px; height: 30px"></div></div>
+<div id="c6" class="box" style="contain: paint"><div class="a" style="float: left; width: 40px; height: 30px"></div></div>
+
+<!-- ============ D. paint containment: clip + containing block ============ -->
+<div style="height: 8px"></div>
+<div id="d1" class="box" style="contain: paint; width: 60px; height: 60px; position: static">
+  <div id="d1c" class="a" style="position: absolute; left: 20px; top: 20px; width: 20px; height: 20px"></div>
+</div>
+<div style="height: 8px; clear: both"></div>
+<div id="d2" class="box" style="contain: paint; width: 60px; height: 60px">
+  <div id="d2c" class="a" style="width: 80px; height: 80px"></div>
+</div>
+<div style="height: 8px"></div>
+<div id="d3" class="box" style="width: 60px; height: 60px">
+  <div id="d3c" class="a" style="width: 80px; height: 80px"></div>
+</div>
+<div style="height: 8px; clear: both"></div>
+<div id="d4" class="box" style="contain: layout; width: 60px; height: 60px; position: static">
+  <div id="d4c" class="a" style="position: absolute; left: 20px; top: 20px; width: 20px; height: 20px"></div>
+</div>
+
+<!-- ============ E. content-visibility ============ -->
+<div style="height: 8px; clear: both"></div>
+<div id="e1" class="box" style="content-visibility: hidden; background: #00aaff"><div id="e1c" class="line"></div><div class="line"></div></div>
+<div id="e2" class="box" style="content-visibility: hidden; contain-intrinsic-size: 0 60px; background: #00aaff"><div id="e2c" class="line"></div></div>
+<div id="e3" class="box" style="content-visibility: auto; background: #00aaff"><div id="e3c" class="line"></div><div class="line"></div></div>
+<div id="e4" class="box" style="content-visibility: auto; contain-intrinsic-size: 0 70px; background: #00aaff"><div id="e4c" class="line"></div></div>
+<div id="e5" class="box" style="content-visibility: visible; background: #00aaff"><div id="e5c" class="line"></div></div>
+
+<!-- ============ F. style containment scopes counters ============ -->
+<div id="f0" class="box t" style="counter-reset: c 9">reset c=9</div>
+<div id="f1" class="box t">plain <span class="inc"></span><span class="late probe"></span><span id="f1m">M</span></div>
+<div id="f2" class="box t" style="contain: style">contained <span class="inc"></span><span class="late probe"></span><span id="f2m">M</span></div>
+<div id="f3" class="box t">after <span class="late probe"></span><span id="f3m">M</span></div>
+
+<!-- ============ G. only paint containment is a stacking context ============ -->
+<div style="height: 8px; clear: both"></div>
+<div id="g1" class="box" style="contain: paint; width: 200px; height: 40px; margin-bottom: -22px">
+  <div id="g1c" style="position: relative; z-index: 99; left: 40px; top: 8px; width: 60px; height: 30px; background: #ff0000"></div>
+</div>
+<div id="g2" style="position: relative; width: 200px; height: 40px; background: #00cc00">
+  <div id="g2c" style="position: absolute; z-index: 1; left: 55px; top: 12px; width: 60px; height: 30px; background: #0000ff"></div>
+</div>
+<div style="height: 12px; clear: both"></div>
+<div id="g3" class="box" style="contain: style; width: 200px; height: 40px; margin-bottom: -22px">
+  <div id="g3c" style="position: relative; z-index: 99; left: 40px; top: 8px; width: 60px; height: 30px; background: #ff0000"></div>
+</div>
+<div id="g4" style="position: relative; width: 200px; height: 40px; background: #00cc00">
+  <div id="g4c" style="position: absolute; z-index: 1; left: 55px; top: 12px; width: 60px; height: 30px; background: #0000ff"></div>
+</div>
+<div style="height: 12px; clear: both"></div>
+<div id="g5" class="box" style="contain: size; width: 200px; height: 40px; margin-bottom: -22px">
+  <div id="g5c" style="position: relative; z-index: 99; left: 40px; top: 8px; width: 60px; height: 30px; background: #ff0000"></div>
+</div>
+<div id="g6" style="position: relative; width: 200px; height: 40px; background: #00cc00">
+  <div id="g6c" style="position: absolute; z-index: 1; left: 55px; top: 12px; width: 60px; height: 30px; background: #0000ff"></div>
+</div>
+<div style="height: 12px; clear: both"></div>
+<div id="g7" class="box" style="contain: layout; width: 200px; height: 40px; margin-bottom: -22px">
+  <div id="g7c" style="position: relative; z-index: 99; left: 40px; top: 8px; width: 60px; height: 30px; background: #ff0000"></div>
+</div>
+<div id="g8" style="position: relative; width: 200px; height: 40px; background: #00cc00">
+  <div id="g8c" style="position: absolute; z-index: 1; left: 55px; top: 12px; width: 60px; height: 30px; background: #0000ff"></div>
+</div>
+
+
+<!-- ============ H. containment details ============ -->
+<div style="height: 8px; clear: both"></div>
+<div id="h1" class="box" style="contain: style; width: 60px; height: 60px; position: static">
+  <div id="h1c" class="a" style="position: absolute; left: 20px; top: 20px; width: 20px; height: 20px"></div>
+</div>
+<div id="h2" class="box" style="contain: size; width: 60px; height: 60px; position: static">
+  <div id="h2c" class="a" style="position: absolute; left: 20px; top: 20px; width: 20px; height: 20px"></div>
+</div>
+<div id="h3" class="box" style="contain: paint; width: 60px; height: 60px; padding: 10px; box-sizing: content-box">
+  <div id="h3c" class="a" style="width: 100px; height: 100px; margin: -10px 0 0 -10px"></div>
+</div>
+<div id="h4" class="box" style="content-visibility: auto; width: 60px; height: 60px; position: static">
+  <div id="h4c" class="a" style="position: absolute; left: 20px; top: 20px; width: 20px; height: 20px"></div>
+</div>
+<div id="h5" class="box t" style="height:8px; contain: size size">h5</div>
+<div id="h6" class="box t" style="height:8px; contain: size paint">h6</div>
+<div id="h7" class="box t" style="height:8px; contain: layout size">h7</div>
+<div id="h8" class="box t" style="height:8px; contain: foo">h8</div>
+<div id="h9" class="ib t" style="contain: size; contain-intrinsic-size: 50% 20%">h9</div>
+<div id="h10" class="box" style="content-visibility: hidden; width: 60px; height: 60px; background:#cc00ff">
+  <div id="h10c" class="a" style="width: 80px; height: 80px"></div>
+</div>
+<div id="h12" class="ib t" style="contain: size; contain-intrinsic-size: 50px 20%">h12</div>
+<div id="h13" class="box" style="contain: paint; width: 60px; height: 60px; border: 4px solid #000000; padding: 10px; box-sizing: content-box; background: #cccccc">
+  <div id="h13c" class="a" style="width: 120px; height: 120px; margin: -14px 0 0 -14px"></div>
+</div>
+<div id="h14" class="ib t" style="contain: size; contain-intrinsic-inline-size: 44px">h14</div>
+<div id="h15" class="ib t" style="contain: size; contain-intrinsic-block-size: 44px">h15</div>
+<div id="h16" class="ib t" style="contain: size; contain-intrinsic-size: auto">h16</div>
+<div id="h17" class="ib t" style="contain: size; contain-intrinsic-size: none 25px">h17</div>
+<div id="i1" class="ib t" style="contain: size; padding: 10px; contain-intrinsic-width: 100px">i1</div>
+<div id="i2" class="box" style="contain: size; padding: 10px; contain-intrinsic-height: 40px"><div class="line"></div></div>
+<div id="i3" class="ib t" style="contain: size; padding: 10px">i3</div>
+<div id="i4" class="box" style="contain: size; border: 3px solid #000; contain-intrinsic-height: 30px"><div class="line"></div></div>
+<div id="h11" class="box t" style="height:8px; contain: style size layout paint">h11</div>
+
+
+<!-- ============ J. z-index across cousins (one shared stacking context) ============ -->
+<div style="height: 8px; clear: both"></div>
+<div id="j1" class="box" style="position: relative; width: 200px; height: 40px; margin-bottom: -22px">
+  <div id="j1c" style="position: absolute; z-index: 99; left: 40px; top: 8px; width: 60px; height: 30px; background: #ff0000"></div>
+</div>
+<div id="j2" class="box" style="position: relative; width: 200px; height: 40px; background: #00cc00">
+  <div id="j2c" style="position: absolute; z-index: 1; left: 55px; top: 12px; width: 60px; height: 30px; background: #0000ff"></div>
+</div>
+<div style="height: 12px; clear: both"></div>
+<div id="j3" class="box" style="position: relative; width: 200px; height: 40px; margin-bottom: -22px">
+  <div id="j3c" style="position: static; margin: 8px 0 0 40px; width: 60px; height: 30px; background: #ff0000"></div>
+</div>
+<div id="j4" class="box" style="position: relative; width: 200px; height: 40px; background: #00cc00">
+  <div id="j4c" style="position: static; margin: 12px 0 0 55px; width: 60px; height: 30px; background: #0000ff"></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 187 — intrinsic size keywords (CSS Sizing 3 §4)</title>
+<style>
+/* Every measured box sits in a 400px dashed wrapper so the containing block is
+   constant; the wrapper is not part of the judgement. */
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 18px 0 8px; font-size: 16px; }
+.wrap { width: 400px; border: 1px dashed #999; padding: 4px; margin: 6px 0; }
+.b { border: 1px solid #c60; background: #fec; padding: 4px; margin: 2px 0; }
+.t { border: 1px solid #369; background: #cfe; padding: 4px; }
+.long { word-break: normal; }
+.clear { clear: both; }
+
+/* 1. min-width: max-content — the box refuses to shrink below one line. */
+#c1 { min-width: max-content; }
+/* 2. max-width: min-content — the box narrows to the longest unbreakable word. */
+#c2 { max-width: min-content; }
+/* 3-5. width keywords on a block container whose children are blocks. */
+#c3 { width: max-content; }
+#c4 { width: min-content; }
+#c5 { width: fit-content; }
+/* 6. flex items on the main axis. */
+.f { display: flex; width: 400px; border: 1px solid #939; margin: 6px 0; }
+#c6a { width: min-content; background: #ddf; padding: 4px; }
+#c6b { width: max-content; background: #fdd; padding: 4px; }
+/* 7. box-sizing:border-box with an intrinsic keyword. */
+#c7 { box-sizing: border-box; min-width: max-content; }
+/* 8. block-axis keywords. */
+#c8 { width: 120px; height: max-content; background: #ada; padding: 4px; }
+/* 9. contribution of a nested box with a definite min-width. */
+#c9 { width: max-content; }
+#c9 .inner { min-width: 200px; }
+/* 10. atomic inline (inline-block) with intrinsic keywords. */
+#c10 { display: inline-block; width: min-content; background: #ece; padding: 4px; }
+/* 11. float with an intrinsic keyword. */
+#c11 { float: left; width: max-content; background: #eee; border: 1px solid #666; padding: 4px; }
+/* 12. plain text-width probe (no keywords): guards the measurement itself. */
+#c12 { width: max-content; background: #fff; border: 1px solid #000; }
+</style>
+</head>
+<body>
+
+<h2>1. min-width: max-content (long word keeps one line)</h2>
+<div class="wrap"><div class="b" id="c1">UnbreakableSupercalifragilistic content forces min-width to max-content</div></div>
+
+<h2>2. max-width: min-content (wraps to the longest word)</h2>
+<div class="wrap"><div class="b" id="c2">This text is constrained to min-content width and wraps every word</div></div>
+
+<h2>3. width: max-content on a block container with block children</h2>
+<div class="wrap"><div id="c3"><div class="t">short line</div><div class="t">a much longer line of text inside a nested block</div></div></div>
+
+<h2>4. width: min-content on the same container</h2>
+<div class="wrap"><div id="c4"><div class="t">short line</div><div class="t">a much longer line of text inside a nested block</div></div></div>
+
+<h2>5. width: fit-content on the same container (400px available)</h2>
+<div class="wrap"><div id="c5"><div class="t">short line</div><div class="t">a much longer line of text inside a nested block</div></div></div>
+
+<h2>6. flex items: min-content vs max-content</h2>
+<div class="f"><div id="c6a">min-content item with several words</div><div id="c6b">max-content item with several words</div></div>
+
+<h2>7. box-sizing: border-box + min-width: max-content</h2>
+<div class="wrap"><div class="b" id="c7">BorderBoxSupercalifragilistic word forces a wide minimum</div></div>
+
+<h2>8. height: max-content on a 120px-wide block</h2>
+<div class="wrap"><div id="c8">Several words that must wrap inside the 120 pixel wide box</div></div>
+
+<h2>9. width: max-content with a nested min-width contribution</h2>
+<div class="wrap"><div id="c9"><div class="t inner">tiny</div></div></div>
+
+<h2>10. inline-block with width: min-content</h2>
+<div class="wrap"><div id="c10">one two three four five</div><span style="background:#ff0">next</span></div>
+
+<h2>11. float: left with width: max-content</h2>
+<div class="wrap"><div id="c11">a floated box of max-content width</div><div class="clear"></div></div>
+
+<h2>12. text measurement probe (max-content of one run)</h2>
+<div class="wrap"><div id="c12">max-content item that is quite long indeed</div></div>
+
+</body>
+</html>

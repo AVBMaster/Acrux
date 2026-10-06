@@ -159,7 +159,7 @@ internal sealed class ImagePainter
             op.Y = rect.Top + style.FontSize;
             op.Color = style.Color;
             op.FontSize = style.FontSize;
-            op.FontFamily = style.FontFamily ?? "Arial";
+            op.FontFamily = style.FontFamily ?? Core.Fonts.FontManager.StandardFontFamily;
             op.Bounds = rect;
             _displayList.Add(op);
         }

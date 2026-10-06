@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 207 - overflow: clip and overflow-clip-margin (CSS Overflow 3 §3.3, §4.1)</title>
+<style>
+/* 'overflow: clip' did not exist in OverflowType, so ParseOverflow fell through to
+   'Visible': the declaration parsed, matched, and the box stopped clipping at all —
+   the opposite of what the keyword asks for. Three questions must stay separate, and
+   folding 'clip' into 'hidden' answers all three wrongly:
+     clip  -> clips the subtree            (like hidden)
+     clip  -> is NOT a scroll container    (unlike hidden)
+     clip  -> does NOT establish a BFC     (unlike hidden, CSS Overflow 3 §4.1)
+   The pair constraints of §3.3.1 also differ for 'clip', both measured in Edge:
+     overflow: visible clip -> visible/clip   (no upgrade: clip makes no scroll container)
+     overflow: clip hidden  -> hidden/hidden  (clip downgrades next to a scrollable axis)
+   Proofs below, all with a 60x60 box holding a 120x120 child:
+     c1 visible   -> child overflows, ink reaches x=128
+     c2 clip      -> ink stops at the padding edge (x=68 with the 1px border at 8..68)
+     c3 hidden    -> same clipping as clip (so clipping alone cannot tell them apart)
+     c4 clip + overflow-clip-margin:10px -> ink reaches 10px past the padding edge
+     b1/b2/b3 BFC test: a 40px float (at x=48) beside a 100px-wide box. A BFC root is
+       pushed to the float's right edge (x=48); a non-BFC box stays at x=8 and the
+       float overlaps it.
+
+   MEASURED (Edge via elementFromPoint hit-testing, which follows the clip; ours via
+   --rows ink extents). Boxes sit at absolute x=16 with a 62px border box, so the
+   padding edge is 77:
+     k1 visible   Edge lastHit rel 61+ (unclipped, ink to 136) / ours 136   OK
+     k2 clip      Edge 61 rel -> abs 77   / ours 77   OK  (clips like hidden)
+     k3 hidden    Edge 61 rel -> abs 77   / ours 77   OK
+     k4 clip+10px Edge 70 rel -> abs 86   / ours 86   OK  (the margin reaches 10px out,
+                                                            last inked pixel is 86)
+     k5 clip + border-box  Edge 61 rel -> abs 77 / ours 77  OK  (with a 1px border the
+                                                            border box lands on the same
+                                                            pixel as the padding box —
+                                                            the initial assumption of 78
+                                                            was wrong, the measurement
+                                                            settled it)
+   BFC: n1 clip x=8 (Edge 8), n2 hidden x=48 (Edge 48), n3 visible x=8 (Edge 8).
+   Pair coercion: 'overflow: visible clip' -> Edge visible/clip, ours visible/clip
+   (the blanket 'visible upgrades to auto' rule wrongly produced auto/clip and made
+   the box a scroll container); 'overflow: clip hidden' -> Edge hidden/hidden, ours
+   hidden/hidden.
+*/
+body { font: 12px/16px Arial, sans-serif; margin: 8px; color: #111; background: #fff; }
+.row { position: relative; height: 70px; margin: 4px 0; }
+.box { width: 60px; height: 60px; border: 1px solid #333; background: #eee; position: absolute; left: 8px; top: 4px; }
+.kid { width: 120px; height: 120px; background: rgb(255, 128, 128); }
+.c1 { overflow: visible; }
+.c2 { overflow: clip; }
+.c3 { overflow: hidden; }
+.c4 { overflow: clip; overflow-clip-margin: 10px; }
+.c5 { overflow: clip; overflow-clip-margin: border-box; }
+/* BFC probes: float at left:48 width 40, then a 100px box in normal flow. */
+.flt { float: left; width: 40px; height: 50px; background: #4a4; }
+.b1 { width: 100px; height: 30px; background: #ddf; overflow: clip; }
+.b2 { width: 100px; height: 30px; background: #ddf; overflow: hidden; }
+.b3 { width: 100px; height: 30px; background: #ddf; }
+</style></head>
+<body>
+
+<h2>1. clipping</h2>
+<div class="row"><div id="k1" class="box c1"><div class="kid"></div></div></div>
+<div class="row"><div id="k2" class="box c2"><div class="kid"></div></div></div>
+<div class="row"><div id="k3" class="box c3"><div class="kid"></div></div></div>
+<div class="row"><div id="k4" class="box c4"><div class="kid"></div></div></div>
+<div class="row"><div id="k5" class="box c5"><div class="kid"></div></div></div>
+
+<h2>2. BFC: clip must not establish one, hidden must</h2>
+<div class="row" style="height:60px"><div class="flt"></div><div id="n1" class="b1">clip</div></div>
+<div class="row" style="height:60px"><div class="flt"></div><div id="n2" class="b2">hidden</div></div>
+<div class="row" style="height:60px"><div class="flt"></div><div id="n3" class="b3">visible</div></div>
+
+</body>
+</html>

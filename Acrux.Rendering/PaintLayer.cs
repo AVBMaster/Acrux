@@ -82,16 +82,25 @@ public class PaintLayer
         var overflow = style.Overflow;
         var overflowX = style.OverflowX;
         var overflowY = style.OverflowY;
-        HasClip = overflow == OverflowType.Hidden ||
+        // 'clip' clips without being a scroll container (CSS Overflow 3 §3.3), so it
+        // belongs here and NOT in ScrollsOverflowAxis*.
+        HasClip = overflow == OverflowType.Clip ||
+                  overflowX == OverflowType.Clip ||
+                  overflowY == OverflowType.Clip ||
+                  overflow == OverflowType.Hidden ||
                   overflowX == OverflowType.Hidden ||
                   overflowY == OverflowType.Hidden ||
                   overflowX == OverflowType.Scroll ||
                   overflowY == OverflowType.Scroll ||
                   overflowX == OverflowType.Auto ||
-                  overflowY == OverflowType.Auto;
+                  overflowY == OverflowType.Auto ||
+                  // CSS Containment 3 §2.4: paint containment clips to the border box.
+                  style.HasPaintContainment;
 
         if (HasClip)
-            ClipRect = layoutBox.PaddingBox;
+            ClipRect = style.HasPaintContainment && !PaintLayerClipper.CreatesOverflowClip(style)
+                ? layoutBox.BorderBox
+                : layoutBox.PaddingBox;
 
         IsStackingContext = CreatesStackingContext(style);
         IsSelfPainting = IsStackingContext || IsPositioned || HasClip || IsFloating;
@@ -135,8 +144,11 @@ public class PaintLayer
         if (style.Isolation == IsolationType.Isolate)
             return true;
 
-        // Contain
-        if (style.Contain != ContainType.None)
+        // Containment: layout and paint each make the box a stacking context, so its
+        // subtree can no longer interleave with later siblings; 'size' and 'style' do not
+        // (measured: a z-index:99 descendant of a 'contain: size' box still paints over a
+        // later positioned sibling, and of a 'contain: style' box as well).
+        if (style.CreatesContainmentContext)
             return true;
 
         // Display: contents does not create stacking context

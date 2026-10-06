@@ -2,11 +2,14 @@
 accessibility text. Usage: python counter_rows.py <html> [out]"""
 import collections, io, re, subprocess, sys
 
-EXE = "./Acrux/bin/Debug/net10.0-windows/Acrux.exe"
+import _acrux_cli as cli
+
+ENV = cli.environment()
 page = sys.argv[1]
 out = sys.argv[2] if len(sys.argv) > 2 else "snapshots/out/_counter_rows.txt"
 
-raw = subprocess.run([EXE, "--textops", page], capture_output=True).stdout.decode("utf-8", "replace")
+raw = subprocess.run(cli.command(["--textops", page]), capture_output=True, env=ENV).stdout
+raw = raw.decode("utf-8", "replace")
 rows = collections.OrderedDict()
 for m in re.finditer(r"\[text\] '(.*)' x=([\d.]+) y=([\d.]+)", raw):
     rows.setdefault(round(float(m.group(3)), 1), []).append((float(m.group(2)), m.group(1)))

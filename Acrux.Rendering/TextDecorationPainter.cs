@@ -198,7 +198,11 @@ public static class TextDecorationPainter
             return;
 
         float thickness = ResolveThickness(fontSize, geometry);
-        var lineColor = underlineColor.Alpha > 0 ? underlineColor : color;
+        // The caller resolves 'text-decoration-color: auto' against the originating
+        // box's own color before it gets here (ComputedStyle.ResolvedTextDecoration
+        // Color), so a transparent value is an authored 'transparent' and must draw
+        // no ink — falling back to `color` again here erased that distinction.
+        var lineColor = underlineColor;
 
         // text-decoration-skip-ink: auto — punch holes in the decoration line
         // where the glyph ink crosses it. Mirrors the engine's

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 188 — break opportunities (UAX #14 LB21/LB24/LB25/LB31, CSS Text 3 §4)</title>
+<style>
+/* Two columns of boxes: the left half of each pair is the reference width (auto),
+   the right half is squeezed to min-content so the unbreakable atom is visible.
+   Every box has an id so --computed and --dumplayout can address it. */
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 16px 0 6px; font-size: 16px; }
+.row { border: 1px dashed #999; padding: 4px; margin: 4px 0; width: 260px; }
+.mc { width: min-content; background: #fec; border: 1px solid #c60; padding: 2px; }
+.wr { width: 60px; background: #cfe; border: 1px solid #369; padding: 2px; }
+.cl { clear: both; }
+</style>
+</head>
+<body>
+
+<h2>1. hyphen: U+002D HYPHEN-MINUS may break after (LB21 forbids break before)</h2>
+<div class="row"><div class="mc" id="m1">min-content item</div><div class="cl"></div></div>
+<div class="row"><div class="wr" id="w1">min-content item</div></div>
+
+<h2>2. multiple hyphens inside one token</h2>
+<div class="row"><div class="mc" id="m2">well-known-thing here</div><div class="cl"></div></div>
+<div class="row"><div class="wr" id="w2">well-known-thing here</div></div>
+
+<h2>3. non-breaking hyphen U+2011 must NOT break</h2>
+<div class="row"><div class="mc" id="m3">na&#8209;ho&#8209;go</div><div class="cl"></div></div>
+<div class="row"><div class="wr" id="w3">na&#8209;ho&#8209;go</div></div>
+
+<h2>4. en dash U+2013 (class BA: break before and after)</h2>
+<div class="row"><div class="mc" id="m4">pre&#8211;post</div><div class="cl"></div></div>
+<div class="row"><div class="wr" id="w4">pre&#8211;post</div></div>
+
+<h2>5. slash: break before a slash is allowed in Chrome (class SY territory)</h2>
+<div class="row"><div class="mc" id="m5">http://example.com/path</div><div class="cl"></div></div>
+<div class="row"><div class="wr" id="w5">http://example.com/path</div></div>
+
+<h2>6. soft hyphen U+00AD: break allowed, glyph appears only when broken</h2>
+<div class="row"><div class="mc" id="m6">pe&#173;tite</div><div class="cl"></div></div>
+<div class="row"><div class="wr" id="w6">pe&#173;tite</div></div>
+
+<h2>7. digits with a comma separator (IS class: no break before, break after)</h2>
+<div class="row"><div class="mc" id="m7">total 123,456,789 end</div><div class="cl"></div></div>
+<div class="row"><div class="wr" id="w7">total 123,456,789 end</div></div>
+
+<h2>8. closing punctuation may not start a line (LB13)</h2>
+<div class="row"><div class="wr" id="w8">alpha beta(gamma) delta</div></div>
+
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 195 — form-control widget metrics and their line participation (HTML Living Standard §10.4 rendering, CSS 2.1 §10.8)</title>
+<style>
+/* A form control's box is a widget, not a shrink-to-fit block: its height comes from
+   the UA (one line of the control's own font plus the frame), and it still has to sit
+   on the text baseline like any other atomic inline. Both halves were wrong at once
+   before: the menu-list <option> boxes were only visibility:hidden (so they still
+   laid out and their min-height inflated the widget) and the control aligned by its
+   bottom edge instead of its inner text baseline. Font sizes are swept so a fit is
+   not accidentally valid at one size only. */
+body { font: 16px/20px Arial, sans-serif; margin: 8px; color: #111; background: #fff; }
+h2 { background: #eee; padding: 2px; margin: 12px 0 4px; font-size: 16px; }
+.row { margin: 2px 0; background: #eef; }
+.f10 { font-size: 10px; }
+.f12 { font-size: 12px; }
+.f13 { font-size: 13.3333px; }
+.f16 { font-size: 16px; }
+.f20 { font-size: 20px; }
+.f24 { font-size: 24px; }
+.f32 { font-size: 32px; }
+.f40 { font-size: 40px; }
+</style>
+</head>
+<body>
+
+<h2>1. &lt;select&gt; menu-list height across font sizes (UA font unless set)</h2>
+<div class="row" id="q10"><select class="f10"><option>a</option></select> tail</div>
+<div class="row" id="q12"><select class="f12"><option>a</option></select> tail</div>
+<div class="row" id="q13"><select class="f13"><option>a</option></select> tail</div>
+<div class="row" id="q16"><select class="f16"><option>a</option></select> tail</div>
+<div class="row" id="q20"><select class="f20"><option>a</option></select> tail</div>
+<div class="row" id="q24"><select class="f24"><option>a</option></select> tail</div>
+<div class="row" id="q32"><select class="f32"><option>a</option></select> tail</div>
+<div class="row" id="q40"><select class="f40"><option>a</option></select> tail</div>
+
+<h2>2. &lt;input&gt; height across font sizes</h2>
+<div class="row" id="i10"><input class="f10" value="abc"> tail</div>
+<div class="row" id="i12"><input class="f12" value="abc"> tail</div>
+<div class="row" id="i13"><input class="f13" value="abc"> tail</div>
+<div class="row" id="i16"><input class="f16" value="abc"> tail</div>
+<div class="row" id="i20"><input class="f20" value="abc"> tail</div>
+<div class="row" id="i24"><input class="f24" value="abc"> tail</div>
+<div class="row" id="i32"><input class="f32" value="abc"> tail</div>
+<div class="row" id="i40"><input class="f40" value="abc"> tail</div>
+
+<h2>3. &lt;textarea&gt; rows across font sizes (rows x line-height + frame)</h2>
+<div class="row" id="t13"><textarea class="f13" cols="6" rows="2"></textarea> tail</div>
+<div class="row" id="t16"><textarea class="f16" cols="6" rows="2"></textarea> tail</div>
+<div class="row" id="t24"><textarea class="f24" cols="6" rows="2"></textarea> tail</div>
+<div class="row" id="t40"><textarea class="f40" cols="6" rows="2"></textarea> tail</div>
+
+<h2>4. &lt;button&gt; and the replaced media widgets</h2>
+<div class="row" id="u13"><button class="f13">ok</button> tail</div>
+<div class="row" id="u16"><button class="f16">ok</button> tail</div>
+<div class="row" id="a16"><audio class="f16" controls></audio> tail</div>
+<div class="row" id="a40"><audio class="f40" controls></audio> tail</div>
+<div class="row" id="v16"><video class="f16" controls width=40 height=24></video> tail</div>
+
+<h2>5. the control aligns by its inner text baseline, not its bottom edge</h2>
+<div class="row" id="b13">x<input class="f13" value="abc">y</div>
+<div class="row" id="b13b">x<select class="f13"><option>a</option></select>y</div>
+<div class="row" id="b40">x<input class="f40" value="abc">y</div>
+<div class="row" id="b40b">x<select class="f40"><option>a</option></select>y</div>
+
+</body>
+</html>

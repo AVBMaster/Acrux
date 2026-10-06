@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 203 - modular white-space longhands (CSS Text 4 §1, §3.2, §4.1, §4.3)</title>
+<style>
+/* 'white-space' is a SHORTHAND of 'white-space-collapse' + 'text-wrap-mode'
+   (+ 'text-wrap-style'), and none of the three longhands existed here at all, so a page
+   that used them silently got full collapsing. The spec's mapping table (CSS Text 4 §1)
+   is applied both ways in CssPropertyApplier:
+     normal        collapse / wrap          pre        preserve / nowrap
+     nowrap        collapse / nowrap        pre-wrap   preserve / wrap
+     pre-line      preserve-breaks / wrap   break-spaces  preserve / wrap
+   'pre-wrap' and 'break-spaces' share one triple, so re-deriving the effective mode from
+   a longhand must NOT downgrade an already-effective 'break-spaces' — that guard is
+   case s4 below.
+
+   Every case is a 100px-wide box holding the SAME source text, which has a newline and a
+   double space in it, so the number of rendered lines is the proof:
+     "aa bb\ncc  dd ee"   (12 visible chars, 1 forced break, 1 double space)
+   EDGE TRUTH (dpr 1, viewport 383) — computed white-space / collapse / mode / style and
+   the content-box height, then OUR result after the fix (all 11 matched):
+     a1 pre-wrap   preserve/wrap/auto        40px  -> PreWrap   42 border-box, 2 lines
+     a2 nowrap     collapse/nowrap/auto      20px  -> Nowrap    22, 1 line
+     a3 pre-line   preserve-breaks/wrap/auto 40px  -> PreLine   42, 2 lines
+     a4 break-spaces break-spaces/wrap/stable 40px -> BreakSpaces 42, 2 lines
+     a5 pre-wrap   preserve/wrap/auto        40px  -> PreWrap   42  (pre + text-wrap-mode:wrap)
+     a6 normal     collapse/wrap/auto        40px  -> Normal    42  (the shorthand must reset
+                                                                      the earlier longhand — this
+                                                                      is why 'white-space' is
+                                                                      expanded as a real shorthand)
+     a7 normal     (Chrome drops 'discard')  40px  -> Normal    42
+     a8 nowrap     collapse/nowrap/auto      20px  -> Nowrap    22  (text-wrap shorthand)
+     a9 normal     collapse/wrap/balance     40px  -> Normal+Balanced 42, breaks as "aa bb cc"/"dd ee"
+     a10 pre-wrap  inherited longhands       40px  -> PreWrap   42
+     a11 pre-wrap  shorthand control         40px  -> PreWrap   42
+   'break-spaces' is modelled as its own white-space-collapse value (Chrome serialises it
+   the same way): with plain 'preserve' it would be indistinguishable from 'pre-wrap' and
+   the shorthand could not round-trip through the longhands.
+*/
+body { font: 16px/20px Arial, sans-serif; margin: 8px; color: #111; background: #fff; }
+.box { width: 100px; border: 1px solid #777; background: #eef; margin: 4px 0; }
+/* 1. the triple that means 'pre-wrap' */
+.c1 { white-space-collapse: preserve; text-wrap-mode: wrap; }
+/* 2. the triple that means 'nowrap' */
+.c2 { white-space-collapse: collapse; text-wrap-mode: nowrap; }
+/* 3. the triple that means 'pre-line' */
+.c3 { white-space-collapse: preserve-breaks; text-wrap-mode: wrap; }
+/* 4. shorthand then an unrelated longhand: break-spaces must survive */
+.c4 { white-space: break-spaces; text-wrap-style: stable; }
+/* 5. shorthand then a longhand that CHANGES the mode: pre -> preserve+wrap */
+.c5 { white-space: pre; text-wrap-mode: wrap; }
+/* 6. longhand then shorthand: the shorthand resets everything it does not carry */
+.c6 { white-space-collapse: preserve; white-space: normal; }
+/* 7. 'discard' has no shorthand equivalent */
+.c7 { white-space-collapse: discard; text-wrap-mode: wrap; }
+/* 8. text-wrap shorthand drives mode + style */
+.c8 { text-wrap: nowrap; }
+.c9 { text-wrap: balance; }
+/* 10. inheritance: the longhands inherit like the shorthand */
+.inherit-parent { white-space-collapse: preserve; text-wrap-mode: wrap; }
+/* 11. control: the shorthand alone */
+.c11 { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<div id="a1" class="box c1">aa bb
+cc  dd ee</div>
+<div id="a2" class="box c2">aa bb
+cc  dd ee</div>
+<div id="a3" class="box c3">aa bb
+cc  dd ee</div>
+<div id="a4" class="box c4">aa bb
+cc  dd ee</div>
+<div id="a5" class="box c5">aa bb
+cc  dd ee</div>
+<div id="a6" class="box c6">aa bb
+cc  dd ee</div>
+<div id="a7" class="box c7">aa bb
+cc  dd ee</div>
+<div id="a8" class="box c8">aa bb
+cc  dd ee</div>
+<div id="a9" class="box c9">aa bb
+cc  dd ee</div>
+<div id="a10" class="box inherit-parent"><span id="a10c">aa bb
+cc  dd ee</span></div>
+<div id="a11" class="box c11">aa bb
+cc  dd ee</div>
+
+</body>
+</html>

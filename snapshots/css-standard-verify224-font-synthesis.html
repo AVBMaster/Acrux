@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<!--
+  b224 — CSS Fonts 4 §6.1 'font-synthesis' (shorthand + the three longhands).
+
+  Two things are verified here:
+   §A/§C/§D  the value grammar and the computed serialization, read from Edge with
+             getComputedStyle(el, '') for the shorthand and each longhand, and from the
+             engine with `--computed` (the 'synthesis=' column).
+   §B        what the flag actually gates. The engine invents one slant today: an
+             'oblique <angle>' run is sheared, because no face is asked for at all.
+             'font-synthesis-style: none' must leave those glyphs upright. Verified with
+             --pixels across the top of a slanted stem (a sheared stem starts further
+             right at the top than at the bottom); the reference browser cannot be
+             screenshotted on this box, so §B is an engine-side assertion pinned to the
+             spec rule, and §A is the Edge-checked part.
+
+  EDGE TRUTH (2026-10-06, dpr=1, viewport 383x481) — getComputedStyle for
+  [shorthand, weight, style, small-caps]; the engine's `--computed` synthesis= column
+  answers all 32 rows identically:
+    a0 (initial)   weight style small-caps | auto auto auto
+    a1 none        none                    | none none none
+    a2 auto        REJECTED -> initial     (the shorthand has no 'auto' keyword)
+    a3 weight      weight  | auto none none
+    a4 style       style   | none auto none
+    a5 small-caps  small-caps | none none auto
+    a6 weight style / a7 style small-caps / a8 small-caps weight style
+                   -> 'weight style', 'style small-caps', 'weight style small-caps'
+                      (canonical order on output, whatever the authored order)
+    a9 bold / a10 italic / a11 oblique
+                   REJECTED -> initial     (the CSS Fonts 4 compatibility spellings are
+                      not accepted by the reference engine at all)
+    a12 'weight weight'  REJECTED (a duplicate invalidates the declaration)
+    a13 'none auto'      REJECTED ('none' may not stand beside a category)
+    a14 bogus            REJECTED
+    a15 'WEIGHT Style'   weight style   (case-insensitive input)
+    a16 '  style   small-caps  '  style small-caps  (any run of spaces separates)
+    c1 weight:none       style small-caps | none auto auto
+    c2 style:none        weight small-caps | auto none auto
+    c3 small-caps:none   weight style | auto auto none
+    c4 weight:auto       weight style small-caps (already the initial state)
+    c5 weight:bogus      REJECTED -> initial
+    c6 'none; weight auto'   weight      (last declaration in the rule wins)
+    c7 'weight auto; none'   none
+    c8 'weight; style auto'  weight style
+    d1 (parent none, no declaration) none   — the property inherits
+    d2 (parent none, own 'weight')   weight
+    b1 oblique 20deg     font-style: oblique 20deg
+    b4 italic            font-style: italic
+    b5 oblique (no angle) font-style: ITALIC  — the reference engine folds the bare
+                      keyword onto 'italic'; we keep an Oblique state of our own, which
+                      only changes the getComputedStyle string (registered as a gap).
+  §B (engine-side, --pixels/crop): b1 leans, b2 and b3 stand upright, b4/b5 keep the
+  family's real italic face — i.e. the flag removes synthesized slant only.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b224 font-synthesis</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font: 16px/1.4 Arial, sans-serif; color: #111; }
+  p { margin: 2px 0; font-size: 14px; }
+  .row { height: 22px; }
+</style>
+</head>
+<body>
+
+<!-- A. the shorthand grammar: which values the reference engine accepts at all -->
+<p id="a0">a0 initial</p>
+<p id="a1" style="font-synthesis: none">a1 none</p>
+<p id="a2" style="font-synthesis: auto">a2 auto (rejected by the reference engine)</p>
+<p id="a3" style="font-synthesis: weight">a3 weight</p>
+<p id="a4" style="font-synthesis: style">a4 style</p>
+<p id="a5" style="font-synthesis: small-caps">a5 small-caps</p>
+<p id="a6" style="font-synthesis: weight style">a6 weight style</p>
+<p id="a7" style="font-synthesis: style small-caps">a7 style small-caps (order kept)</p>
+<p id="a8" style="font-synthesis: small-caps weight style">a8 canonical order?</p>
+<p id="a9" style="font-synthesis: bold">a9 bold (compatibility spelling)</p>
+<p id="a10" style="font-synthesis: italic">a10 italic</p>
+<p id="a11" style="font-synthesis: oblique">a11 oblique</p>
+<p id="a12" style="font-synthesis: weight weight">a12 duplicate</p>
+<p id="a13" style="font-synthesis: none auto">a13 none + keyword</p>
+<p id="a14" style="font-synthesis: bogus">a14 unknown keyword</p>
+<p id="a15" style="font-synthesis: WEIGHT Style">a15 case-insensitive</p>
+<p id="a16" style="font-synthesis:   style   small-caps  ">a16 extra spaces</p>
+
+<!-- C. longhands, and the shorthand/longhand interplay inside one rule -->
+<p id="c1" style="font-synthesis-weight: none">c1 weight none</p>
+<p id="c2" style="font-synthesis-style: none">c2 style none</p>
+<p id="c3" style="font-synthesis-small-caps: none">c3 small-caps none</p>
+<p id="c4" style="font-synthesis-weight: auto">c4 weight auto</p>
+<p id="c5" style="font-synthesis-weight: bogus">c5 weight invalid</p>
+<p id="c6" style="font-synthesis: none; font-synthesis-weight: auto">c6 none then weight auto</p>
+<p id="c7" style="font-synthesis-weight: auto; font-synthesis: none">c7 weight auto then none</p>
+<p id="c8" style="font-synthesis: weight; font-synthesis-style: auto">c8 weight then style auto</p>
+
+<!-- D. inheritance: font-synthesis is an inherited property -->
+<div id="d0" style="font-synthesis: none"><p id="d1">d1 inherits none</p>
+  <p id="d2" style="font-synthesis: weight">d2 own weight</p></div>
+
+<!-- B. the behaviour the flag gates: a synthesized oblique shear -->
+<p id="b1" class="row" style="font-style: oblique 20deg; background:#eef">b1 oblique 20deg, synthesis default</p>
+<p id="b2" class="row" style="font-style: oblique 20deg; font-synthesis-style: none; background:#eef">b2 oblique 20deg, synthesis-style none</p>
+<p id="b3" class="row" style="font-style: oblique 20deg; font-synthesis: none; background:#eef">b3 oblique 20deg, synthesis none</p>
+<p id="b4" class="row" style="font-style: italic; font-synthesis-style: none; background:#fee">b4 real italic face, synthesis none</p>
+<p id="b5" class="row" style="font-style: oblique; font-synthesis-style: none; background:#fee">b5 oblique (no angle), synthesis none</p>
+<p id="b6" class="row" style="background:#eef">b6 upright control</p>
+
+</body>
+</html>

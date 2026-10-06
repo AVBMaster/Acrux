@@ -12,8 +12,47 @@ namespace Acrux.Core.Fonts;
 public static class FontManager
 {
     private static Dictionary<string, SKTypeface> _typefaceCache = new();
+    private static Dictionary<int, SKTypeface> _fallbackByCodePoint = new();
     private static FontFallbackChain? _fallbackChain;
     private static readonly object _lock = new();
+
+    /// <summary>
+    /// The browser's <b>standard font</b> — what an element with no 'font-family'
+    /// declaration computes to. Chrome's is a SERIF face, and on this box its setting
+    /// resolves to "Times New Roman" (measured: getComputedStyle on an unstyled
+    /// &lt;p&gt; reports font-family: "Times New Roman", and the reference string
+    /// "The quick brown fox jumps over the lazy dog" is 292.38px at 16px).
+    /// Hardcoding a sans default made every page that does not declare a font render in
+    /// the wrong face AND measure ~5% wide, which shows up as odd word spacing.
+    /// The name is deliberately a concrete family rather than 'serif': the platform
+    /// alias table (Times New Roman -> Liberation Serif) resolves it to a
+    /// metric-compatible face, which is what the reference engine does here.
+    /// </summary>
+    public const string StandardFontFamily = "Times New Roman";
+
+    /// <summary>The reference engine's "Fixed-width" font size setting, which the
+    /// generic 'monospace' carries with it: an element whose family list is exactly
+    /// 'monospace' and whose size was never authored computes to 13px, not 16px
+    /// (measured in Edge — 43 'a' glyphs are 279.50px wide there, 6.5px each, versus
+    /// 8.0px each when the size stays 16px).</summary>
+    public const float StandardFixedFontSize = 13f;
+
+    /// <summary>True when the specified list is the single generic keyword 'monospace'
+    /// (any of the aliases the platform accepts for it). A list that merely *ends* in
+    /// the generic — <c>'Nope Not Here', monospace</c> — does not get the substituted
+    /// size, and neither does <c>monospace, sans-serif</c>: measured in Edge both stay
+    /// at 16px, so the substitution keys on the specified list, not on which face the
+    /// glyphs finally came from.</summary>
+    public static bool IsSoleMonospaceGeneric(string? familyList)
+    {
+        if (string.IsNullOrWhiteSpace(familyList)) return false;
+        var parts = familyList.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 1) return false;
+        string one = parts[0].Trim().Trim('"', '\'').ToLowerInvariant();
+        // Only the exact keyword: measured in Edge, 'ui-monospace' and 'fixed' do NOT
+        // get the substituted size — they stay at the inherited 16px.
+        return one == "monospace";
+    }
 
     public static void Initialize()
     {
@@ -74,7 +113,20 @@ public static class FontManager
     public static SKTypeface GetFallbackTypeface(int codePoint)
     {
         Initialize();
-        return _fallbackChain!.GetFallbackForCodePoint(codePoint);
+        // Every text run with a glyph the primary face lacks lands here — measurement,
+        // line breaking AND paint all call it per character. Without a cache each miss
+        // walks the whole generic family list through SKTypeface.FromFamilyName
+        // (a fontconfig query), which is millisecond-scale; on CJK pages that turned a
+        // five-line paragraph into seconds of raster time. SKTypeface is immutable and
+        // shared by reference everywhere else, so caching the instance is safe.
+        lock (_lock)
+        {
+            if (_fallbackByCodePoint.TryGetValue(codePoint, out var cached))
+                return cached;
+            var tf = _fallbackChain!.GetFallbackForCodePoint(codePoint);
+            _fallbackByCodePoint[codePoint] = tf;
+            return tf;
+        }
     }
 
     public static void ClearCache()
@@ -84,6 +136,9 @@ public static class FontManager
             foreach (var tf in _typefaceCache.Values)
                 tf?.Dispose();
             _typefaceCache.Clear();
+            // Fallback faces are handed out by GetFallbackTypeface and may still be
+            // referenced by live paint state — drop the map but not the objects.
+            _fallbackByCodePoint.Clear();
         }
     }
 
@@ -163,17 +218,53 @@ public class FontFallbackChain
             string fam = raw.Trim().Trim('"', '\'').Trim();
             if (fam.Length == 0) continue;
 
-            if (_familyFallbacks.TryGetValue(fam.ToLowerInvariant(), out var fallbacks))
+            // 1. A face installed under exactly this name wins outright.
+            var exact = TryCreateExactTypeface(fam, skWeight, skSlant);
+            if (exact != null) return exact;
+
+            // 2. Otherwise ask the platform matcher. On Linux that is fontconfig,
+            //    which carries the distro's alias table: "Arial" -> Liberation Sans,
+            //    "Times New Roman" -> Liberation Serif, "Courier New" -> Liberation
+            //    Mono. Those substitutes ship as metric-compatible clones, so every
+            //    other application on the machine lays Arial out with them. Our own
+            //    candidate lists were assembled around Windows/macOS faces and used to
+            //    shadow the aliases with Noto Sans, whose advances are ~9% wider than
+            //    Arial's and whose line box is 22px instead of 18px at 16px — which
+            //    threw off every text measurement, line break and intrinsic-width
+            //    comparison against a reference browser.
+            if (!IsGenericFontKeyword(fam))
             {
-                foreach (var candidate in fallbacks)
+                var aliased = TryMatchAliasedFamily(fam, skWeight, skSlant);
+                if (aliased != null) return aliased;
+            }
+
+            // 3. Curated candidates: the seeds behind the generic keywords (CSS Fonts
+            //    4 §5.4) and the script families fontconfig has no alias for.
+            if (_familyFallbacks.TryGetValue(fam.ToLowerInvariant(), out var candidates))
+            {
+                foreach (var candidate in candidates)
                 {
-                    var tf = TryCreateTypeface(candidate, skWeight, skSlant);
+                    var tf = TryCreateExactTypeface(candidate, skWeight, skSlant)
+                             ?? TryMatchAliasedFamily(candidate, skWeight, skSlant, IsMonospaceKeyword(candidate));
                     if (tf != null) return tf;
                 }
             }
+        }
 
-            var direct = TryCreateTypeface(fam, skWeight, skSlant);
-            if (direct != null) return direct;
+        // Nothing in the list matched. CSS Fonts 4 §5.3.1 then hands the text to the
+        // "first available font", i.e. the browser's standard font — a serif face in
+        // every mainstream engine — rather than to the platform's no-match default,
+        // which on a CJK-configured desktop is a huge multi-script sans (and ~28%
+        // taller than Arial). Windows and macOS keep the previous tail of the chain:
+        // their font linkers already resolve unknown names for us.
+        if (UsesPlatformFontMatching)
+        {
+            foreach (var candidate in GetPlatformCandidates("serif"))
+            {
+                var tf = TryCreateExactTypeface(candidate, SKFontStyleWeight.Normal, SKFontStyleSlant.Upright)
+                         ?? TryMatchAliasedFamily(candidate, SKFontStyleWeight.Normal, SKFontStyleSlant.Upright);
+                if (tf != null) return tf;
+            }
         }
 
         foreach (var candidate in _genericFallbacks)
@@ -185,8 +276,109 @@ public class FontFallbackChain
         return _defaultTypeface;
     }
 
+    /// <summary>The generic classes of CSS Fonts 4 §5.5. They are not family names:
+    /// the user agent resolves them through its own font settings, so the platform
+    /// matcher must not answer them with whatever "sans-serif" happens to alias to
+    /// in this desktop's fontconfig configuration (a CJK face on many images).</summary>
+    private static bool IsGenericFontKeyword(string family) => family.ToLowerInvariant() switch
+    {
+        "serif" or "sans-serif" or "monospace" or "cursive" or "fantasy"
+        or "system-ui" or "ui-serif" or "ui-sans-serif" or "ui-monospace" or "ui-rounded"
+        or "math" or "emoji" or "fixed" => true,
+        _ => false,
+    };
+
+    /// <summary>Installed under exactly this name (case-insensitive).</summary>
+    private SKTypeface? TryCreateExactTypeface(string family, SKFontStyleWeight weight, SKFontStyleSlant slant)
+    {
+        var tf = TryCreateTypeface(family, weight, slant);
+        if (tf == null) return null;
+        return string.Equals(tf.FamilyName, family, StringComparison.OrdinalIgnoreCase) ? tf : null;
+    }
+
+    /// <summary>True where the OS font matcher (fontconfig) owns family resolution and
+    /// carries the distro's metric-compatible alias table — Linux and the other Unix
+    /// flavours. Windows and macOS resolve links through their own font linkers.</summary>
+    private static bool UsesPlatformFontMatching =>
+        !RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+        && !RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+    /// <summary>Ask the platform matcher for the family and accept its answer only
+    /// when it is a real substitution: a face whose name differs both from the
+    /// request and from the desktop's own class defaults. The second test is what
+    /// separates "fontconfig aliased Arial to Liberation Sans" from "fontconfig gave
+    /// up and returned its serif/sans default" — a request for "Georgia" on a box
+    /// without Georgia must fall through to the first-available font (CSS Fonts 4
+    /// §5.3.1), not to the CJK face the desktop uses to render generic serif.</summary>
+    private SKTypeface? TryMatchAliasedFamily(string family, SKFontStyleWeight weight, SKFontStyleSlant slant,
+        bool acceptClassDefault = false)
+    {
+        if (!UsesPlatformFontMatching) return null;
+
+        var tf = TryCreateTypeface(family, weight, slant);
+        if (tf == null) return null;
+        string resolved = tf.FamilyName ?? "";
+        if (resolved.Length == 0) return null;
+        if (string.Equals(resolved, family, StringComparison.OrdinalIgnoreCase)) return null;
+        if (!acceptClassDefault && PlatformClassDefaultNames.Contains(resolved)) return null;
+        return tf;
+    }
+
+    /// <summary>The fixed-width generic classes. Unlike serif and sans-serif — which the
+    /// reference browser resolves through its own font preferences, so the platform
+    /// matcher must not be allowed to answer them with the desktop's CJK default — the
+    /// monospace class goes straight to fontconfig, and its answer is accepted even when
+    /// it is a class default. Measured here: <c>font-family: monospace</c> sets ASCII at
+    /// 0.5em in a reference browser because fontconfig's "monospace" alias is
+    /// "Noto Sans Mono CJK SC", while every other generic stays Latin.</summary>
+    private static bool IsMonospaceKeyword(string family) => family.ToLowerInvariant() switch
+    {
+        "monospace" or "fixed" or "ui-monospace" => true,
+        _ => false,
+    };
+
+    /// <summary>Face names the matcher hands out when a request carries no family it
+    /// knows: the answers to nonsense names and to the generic classes themselves.
+    /// Collected once, on first use, because they describe the installed system.</summary>
+    private HashSet<string>? _platformClassDefaultNames;
+
+    private HashSet<string> PlatformClassDefaultNames => _platformClassDefaultNames ??= BuildPlatformClassDefaults();
+
+    private HashSet<string> BuildPlatformClassDefaults()
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var probe in new[]
+                 {
+                     "acrux-not-a-real-family \u2400", "\u2400\u2400", "sans-serif", "serif",
+                     "monospace", "cursive", "fantasy",
+                 })
+        {
+            var tf = TryCreateTypeface(probe, SKFontStyleWeight.Normal, SKFontStyleSlant.Upright);
+            if (!string.IsNullOrEmpty(tf?.FamilyName)) names.Add(tf!.FamilyName!);
+        }
+        return names;
+    }
+
+
     public SKTypeface GetFallbackForCodePoint(int codePoint)
     {
+        // The colour face is the one case that must come BEFORE the generic chain
+        // rather than last: it is the only face with the right advance (a 1em strike),
+        // and the paint side already draws those characters from it — measuring them
+        // against DejaVu made an emoji run a third narrower than what was drawn, so
+        // the text after it overlapped. The face stays last for everything else,
+        // because it carries legacy coverage of Thai and Indic and would silently
+        // replace those scripts' own face (see SetupGenericFallbacks).
+        //
+        // Which characters qualify is Unicode's Emoji_Presentation property, not
+        // "everything above U+1F000": ✈ U+2708 is an emoji but text-presentation, and
+        // an open-ended astral test also claimed CJK extension B (U+20000+), which no
+        // emoji font contains and which then painted as tofu. ContainsGlyph still gates
+        // the decision so a machine without a colour face keeps its outline metrics.
+        if (EmojiRanges.IsDefaultEmojiPresentation(codePoint)
+            && _emojiTypeface != null && _emojiTypeface.ContainsGlyph(codePoint))
+            return _emojiTypeface;
+
         foreach (var family in _genericFallbacks)
         {
             var tf = TryCreateTypeface(family, SKFontStyleWeight.Normal, SKFontStyleSlant.Upright);
@@ -395,30 +587,44 @@ public class FontFallbackChain
         {
             return category switch
             {
-                "sans-serif" => new() { "Noto Sans", "DejaVu Sans", "Liberation Sans", "Ubuntu", "Cantarell", "FreeSans" },
-                "serif" => new() { "Noto Serif", "DejaVu Serif", "Liberation Serif", "FreeSerif" },
-                "monospace" => new() { "Noto Sans Mono", "DejaVu Sans Mono", "Liberation Mono", "Ubuntu Mono", "FreeMono" },
+                // Chrome resolves the generic classes through its own font settings,
+                // whose defaults are the CSS named families: sans-serif -> Arial,
+                // serif -> Times New Roman. fontconfig then aliases those to the
+                // metric-compatible faces installed here, which is why "sans-serif"
+                // must NOT be handed to the matcher as the literal string — on a
+                // CJK-configured desktop that answers with Noto Sans CJK (22px line
+                // box at 16px, ~9% wider than Arial).
+                "sans-serif" => new() { "Arial", "Liberation Sans", "DejaVu Sans", "Noto Sans", "Roboto", "Cantarell", "FreeSans" },
+                "serif" => new() { "Times New Roman", "Liberation Serif", "DejaVu Serif", "Noto Serif", "FreeSerif" },
+                // The fixed font is the one place Chrome does consult the platform
+                // generic, so "monospace" is matched literally first.
+                "monospace" => new() { "monospace", "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "Ubuntu Mono", "FreeMono" },
                 "emoji" => new() { "Noto Color Emoji", "EmojiOne", "Twemoji Mozilla" },
                 "chinese" => new() { "Noto Sans CJK SC", "Noto Sans SC", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", "AR PL UMing CN" },
                 "japanese" => new() { "Noto Sans CJK JP", "Noto Sans JP" },
                 "korean" => new() { "Noto Sans CJK KR", "Noto Sans KR" },
                 "thai" => new() { "Noto Sans Thai", "Loma", "Garuda" },
                 "indic" => new() { "Noto Sans Devanagari", "Mangal", "Lohit Devanagari" },
-                "arial" => new() { "Noto Sans", "DejaVu Sans", "Liberation Sans" },
-                "helvetica" => new() { "Noto Sans", "DejaVu Sans" },
-                "times" => new() { "Noto Serif", "DejaVu Serif", "Liberation Serif" },
-                "courier" => new() { "Noto Sans Mono", "DejaVu Sans Mono", "Liberation Mono" },
-                "verdana" => new() { "DejaVu Sans" },
-                "georgia" => new() { "DejaVu Serif" },
-                "palatino" => new() { "DejaVu Serif" },
-                "garamond" => new() { "DejaVu Serif" },
-                "bookman" => new() { "DejaVu Serif" },
-                "comic-sans" => new() { "DejaVu Sans" },
-                "trebuchet" => new() { "DejaVu Sans" },
-                "arial-black" => new() { "DejaVu Sans" },
-                "impact" => new() { "DejaVu Sans" },
-                "generic-fallback" => new() { "Noto Sans", "DejaVu Sans", "Noto Serif", "Noto Sans CJK SC", "Noto Color Emoji" },
-                _ => new() { "Noto Sans" }
+                // Named families are NOT listed here on purpose: the fontconfig alias
+                // table installed with the distro is authoritative and already covers
+                // Arial/Helvetica/Times/Courier. A family it does not know resolves
+                // through the "first available font" rule above, exactly as Chrome's
+                // does — hardcoding a substitute here would only drift from it.
+                "arial" => new() { "Arial" },
+                "helvetica" => new() { "Helvetica", "Arial" },
+                "times" => new() { "Times New Roman" },
+                "courier" => new() { "Courier New" },
+                "verdana" => new() { "Verdana" },
+                "georgia" => new() { "Georgia" },
+                "palatino" => new() { "Palatino Linotype", "Palatino" },
+                "garamond" => new() { "Garamond" },
+                "bookman" => new() { "Bookman Old Style" },
+                "comic-sans" => new() { "Comic Sans MS" },
+                "trebuchet" => new() { "Trebuchet MS" },
+                "arial-black" => new() { "Arial Black" },
+                "impact" => new() { "Impact" },
+                "generic-fallback" => new() { "Arial", "Noto Sans", "DejaVu Sans", "Times New Roman", "Noto Sans CJK SC", "Noto Color Emoji" },
+                _ => new() { "Arial" }
             };
         }
     }

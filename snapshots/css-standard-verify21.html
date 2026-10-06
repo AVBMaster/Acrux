@@ -68,7 +68,11 @@
   .ua p + p { background: #ffe; }
   .ua ul { background: #efe; margin: 0; }
 
-  /* g6: overflow quirk */
+  /* g6: overflow quirk — CSS Overflow 3 §3.3.1. Re-baked 2026-10-06: the reference
+     engine computes 'overflow-x: hidden; overflow-y: visible' to **hidden / auto** (the
+     visible axis upgrades because the other one scrolls), and 'overflow-x: clip' alone
+     stays **clip / visible** (clip never upgrades). Our earlier baseline baked the
+     un-upgraded pair because the constraint only ran for the two-value shorthand. */
   .ovq { width: 120px; height: 60px; overflow-x: hidden; overflow-y: visible; border: 1px solid #000; background: #ffc; }
   .ovq2 { width: 120px; border: 1px solid #000; background: #cff; overflow-x: hidden; overflow-y: visible; }
   .wide { width: 200px; height: 12px; background: #f77; }

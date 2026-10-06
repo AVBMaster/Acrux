@@ -254,7 +254,12 @@ public class LayoutDevTool
             if (!string.IsNullOrEmpty(style.WillChange) && style.WillChange != "auto")
                 _sb.AppendLine($"{indent}  [will-change]   {style.WillChange}");
             if (style.Contain != ContainType.None)
-                _sb.AppendLine($"{indent}  [contain]       {style.Contain}");
+                _sb.AppendLine($"{indent}  [contain]       {Acrux.Core.Css.Resolver.CssPropertyApplier.FormatContain(style.Contain)}");
+            if (style.ContentVisibility != ContentVisibilityType.Visible)
+                _sb.AppendLine($"{indent}  [content-visibility] {style.ContentVisibility}");
+            if (style.ContainIntrinsicWidth != null || style.ContainIntrinsicHeight != null)
+                _sb.AppendLine($"{indent}  [contain-intrinsic] "
+                    + $"{Acrux.Core.Css.Resolver.CssPropertyApplier.FormatContainIntrinsic(style)}");
         }
         else
         {
@@ -645,7 +650,7 @@ public class LayoutDevTool
         {
             _sb.AppendLine($"  <{tag}{id}>");
             _sb.AppendLine($"    text-align:      {style.TextAlign}");
-            _sb.AppendLine($"    text-decoration: {style.TextDecoration} line={style.TextDecorationLine} style={style.TextDecorationStyle} color={FmtColor(style.TextDecorationColor)}");
+            _sb.AppendLine($"    text-decoration: {style.TextDecoration} line={style.TextDecorationLine} style={style.TextDecorationStyle} color={FmtColor(style.ResolvedTextDecorationColor)}");
             _sb.AppendLine($"    text-indent:     {style.TextIndent:F1}px");
             _sb.AppendLine($"    text-transform:  {style.TextTransform}");
             _sb.AppendLine($"    text-overflow:   {style.TextOverflow}");

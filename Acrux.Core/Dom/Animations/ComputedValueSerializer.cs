@@ -37,7 +37,10 @@ public static class ComputedValueSerializer
             case "caret-color": return style.CaretColor.HasValue ? ColorText(style.CaretColor.Value) : "auto";
             case "accent-color": return style.AccentColor.HasValue ? ColorText(style.AccentColor.Value) : "auto";
             case "column-rule-color": return style.ColumnRuleColor.HasValue ? ColorText(style.ColumnRuleColor.Value) : "transparent";
-            case "text-decoration-color": return ColorText(style.TextDecorationColor);
+            // 'auto' has no computed color of its own; a reference engine reports it
+            // as the element's resolved 'color', and that is also what an animation
+            // must interpolate from.
+            case "text-decoration-color": return ColorText(style.ResolvedTextDecorationColor);
             case "text-emphasis-color":
                 return string.Equals(style.TextEmphasisColor, "currentcolor", StringComparison.OrdinalIgnoreCase)
                     ? "currentcolor"
@@ -118,7 +121,7 @@ public static class ComputedValueSerializer
             case "box-sizing": return style.BoxSizing.ToCssString();
             case "list-style-type": return string.IsNullOrEmpty(style.ListStyleTypeString)
                 ? string.IsNullOrEmpty(style.ListStyleTypeName)
-                    ? style.ListStyleType.ToString().ToLowerInvariant()
+                    ? CssEnumFormatter.CssKeywordFromEnum(style.ListStyleType.ToString())
                     : style.ListStyleTypeName!
                 : style.ListStyleTypeString!;
             case "list-style-position": return style.ListStylePosition == ListStylePosition.Inside ? "inside" : "outside";
@@ -134,7 +137,7 @@ public static class ComputedValueSerializer
                 ObjectFitType.ScaleDown => "scale-down",
                 _ => "fill",
             };
-            case "mix-blend-mode": return style.MixBlendMode.ToString().ToLowerInvariant();
+            case "mix-blend-mode": return CssEnumFormatter.CssKeywordFromEnum(style.MixBlendMode.ToString());
             case "isolation": return style.Isolation == IsolationType.Isolate ? "isolate" : "auto";
             case "image-rendering": return style.ImageRendering switch
             {
@@ -143,6 +146,64 @@ public static class ComputedValueSerializer
                 _ => "auto",
             };
             case "pointer-events": return style.PointerEvents ?? "auto";
+            case "font-synthesis": return Css.Resolver.CssPropertyApplier.FormatFontSynthesis(style.FontSynthesis);
+            case "font-synthesis-weight":
+                return (style.FontSynthesis & FontSynthesisType.Weight) != 0 ? "auto" : "none";
+            case "font-synthesis-style":
+                return (style.FontSynthesis & FontSynthesisType.Style) != 0 ? "auto" : "none";
+            case "font-synthesis-small-caps":
+                return (style.FontSynthesis & FontSynthesisType.SmallCaps) != 0 ? "auto" : "none";
+
+            // ------------------------------------------------- modelled but unserialised
+            // These all have a real field on ComputedStyle; they used to answer nothing at
+            // all, which made a supported property look unsupported to a script. Formats
+            // below follow the reference engine's serialization (measured, b225 §E).
+            case "font-variant-caps": return style.FontVariantCaps;
+            case "font-kerning": return style.FontKerning;
+            case "font-optical-sizing": return style.FontOpticalSizing;
+            // 'normal' is reported as the percentage it means.
+            case "font-stretch": return style.FontStretch is "" or "normal" ? "100%" : style.FontStretch;
+            case "text-rendering": return style.TextRendering;
+            case "contain": return Css.Resolver.CssPropertyApplier.FormatContain(style.Contain);
+            case "contain-intrinsic-size": return Css.Resolver.CssPropertyApplier.FormatContainIntrinsic(style);
+            case "field-sizing": return style.FieldSizing == FieldSizingType.Content ? "content" : "normal";
+            case "text-overflow": return style.TextOverflowString is { Length: > 0 } tos ? tos
+                : style.TextOverflow == TextOverflowType.Ellipsis ? "ellipsis" : "clip";
+            case "line-break": return style.LineBreak.ToString().ToLowerInvariant();
+            case "hyphens": return style.Hyphens.ToString().ToLowerInvariant();
+            case "tab-size": return (style.TabSizePx ?? 8f).ToString("0.###", CultureInfo.InvariantCulture);
+            case "scroll-behavior": return style.ScrollBehavior.ToString().ToLowerInvariant();
+            case "overscroll-behavior-x": return style.OverscrollBehaviorX.ToString().ToLowerInvariant();
+            case "overscroll-behavior-y": return style.OverscrollBehaviorY.ToString().ToLowerInvariant();
+            case "text-wrap": return style.TextWrapStyle == TextWrapStyleType.Auto
+                ? style.TextWrapMode.ToString().ToLowerInvariant()
+                : $"{style.TextWrapMode.ToString().ToLowerInvariant()} {style.TextWrapStyle.ToString().ToLowerInvariant()}";
+            case "text-wrap-mode": return style.TextWrapMode.ToString().ToLowerInvariant();
+            case "text-wrap-style": return style.TextWrapStyle.ToString().ToLowerInvariant();
+            case "writing-mode": return style.WritingMode switch
+            {
+                WritingModeType.VerticalRl => "vertical-rl",
+                WritingModeType.VerticalLr => "vertical-lr",
+                _ => "horizontal-tb",
+            };
+            case "direction": return style.Direction;
+            case "unicode-bidi": return style.UnicodeBidi;
+            case "user-select": return style.UserSelect ?? "auto";
+            case "counter-reset": return string.IsNullOrEmpty(style.CounterReset) ? "none" : style.CounterReset;
+            case "counter-increment": return string.IsNullOrEmpty(style.CounterIncrement) ? "none" : style.CounterIncrement;
+            case "quotes": return style.Quotes;
+            case "mask-image": return string.IsNullOrEmpty(style.MaskImage) ? "none" : style.MaskImage;
+            case "mask-size": return style.MaskSize is { Length: > 0 } msz && msz != "auto" ? msz : "auto";
+            // 'mask-position' is stored as authored; the reference engine resolves the
+            // keywords to their percentage of the positioning area (measured: 'right bottom'
+            // serializes as '100% 100%', 'center' as '50% 50%'), and an omitted y is 'center'.
+            case "mask-position": return MaskKeywordSerializer.Position(style.MaskPosition);
+            // 'mask-repeat' collapses two identical axes to one keyword ('round round' → 'round').
+            case "mask-repeat": return MaskKeywordSerializer.Repeat(style.MaskRepeat);
+            case "mask-clip": return string.IsNullOrEmpty(style.MaskClip) ? "border-box" : style.MaskClip;
+            case "mask-origin": return string.IsNullOrEmpty(style.MaskOrigin) ? "border-box" : style.MaskOrigin;
+            case "mask-mode": return string.IsNullOrEmpty(style.MaskMode) ? "match-source" : style.MaskMode;
+            case "mask-composite": return string.IsNullOrEmpty(style.MaskComposite) ? "add" : style.MaskComposite;
             case "cursor": return style.Cursor ?? "auto";
             case "resize": return style.Resize == ResizeType.Both ? "both"
                 : style.Resize == ResizeType.Vertical ? "vertical"
@@ -171,7 +232,7 @@ public static class ComputedValueSerializer
                 return $"{BackgroundPosText(style.BackgroundPositionX)} {BackgroundPosText(style.BackgroundPositionY)}";
             case "background-size":
                 return $"{BackgroundSizeText(style.BackgroundSizeWidth)} {BackgroundSizeText(style.BackgroundSizeHeight)}";
-            case "background-repeat": return style.BackgroundRepeat.ToString().ToLowerInvariant();
+            case "background-repeat": return CssEnumFormatter.CssKeywordFromEnum(style.BackgroundRepeat.ToString());
             case "background-attachment": return style.BackgroundAttachment == BackgroundAttachment.Fixed ? "fixed"
                 : style.BackgroundAttachment == BackgroundAttachment.Local ? "local" : "scroll";
             case "background-image": return style.BackgroundImage is { Count: > 0 } ? style.BackgroundImage[0] : "none";
@@ -199,7 +260,7 @@ public static class ComputedValueSerializer
                 TextDecorationStyleType.Wavy => "wavy",
                 _ => "solid",
             };
-            case "text-decoration-line": return style.TextDecorationLine.ToString().ToLowerInvariant();
+            case "text-decoration-line": return CssEnumFormatter.CssKeywordFromEnum(style.TextDecorationLine.ToString());
             case "text-decoration-thickness":
                 return style.TextDecorationThicknessFromFont || float.IsNaN(style.TextDecorationThickness)
                     ? "auto"

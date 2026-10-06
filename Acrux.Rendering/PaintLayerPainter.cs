@@ -25,6 +25,9 @@ internal sealed class PaintLayerPainter
         var layoutBox = _layer.LayoutBox;
         var style = _layer.Style;
         if (layoutBox == null || style == null) return;
+        // The layer-tree traversal does not go through PaintVisitor.VisitElement, so the
+        // 'content-visibility: hidden' subtree test has to be made here too.
+        if (layoutBox.InHiddenSubtree) return;
 
         // A layered scroll container paints its background statically and its
         // scrollable content via the cached DrawScrollLayerOp (live scroll); its
@@ -71,16 +74,27 @@ internal sealed class PaintLayerPainter
 
         // The element's own inline content must respect its overflow clip;
         // PushAncestorStates only clips descendant layers.
-        bool selfClips = PaintLayerClipper.CreatesOverflowClip(style) &&
+        bool selfClips = (PaintLayerClipper.CreatesOverflowClip(style) &&
             (layoutBox.IsScrollContainer || style.Overflow == OverflowType.Hidden
-             || style.OverflowX == OverflowType.Hidden || style.OverflowY == OverflowType.Hidden);
+             || style.OverflowX == OverflowType.Hidden || style.OverflowY == OverflowType.Hidden
+             // 'clip' clips exactly like 'hidden' here; it only differs in not being a
+             // scroll container and not establishing a BFC.
+             || style.Overflow == OverflowType.Clip || style.OverflowX == OverflowType.Clip
+             || style.OverflowY == OverflowType.Clip))
+            // Paint containment is a second, independent clip boundary on the same box.
+            || style.HasPaintContainment;
         if (selfClips)
         {
-            var selfClip = layoutBox.IsScrollContainer
+            var overflowClip = layoutBox.IsScrollContainer
                 ? new SKRect(layoutBox.ContentBox.Left, layoutBox.ContentBox.Top + contentOffsetY,
                     layoutBox.ContentBox.Right, layoutBox.ContentBox.Bottom + contentOffsetY)
                 : new SKRect(layoutBox.PaddingBox.Left, layoutBox.PaddingBox.Top + contentOffsetY,
                     layoutBox.PaddingBox.Right, layoutBox.PaddingBox.Bottom + contentOffsetY);
+            var containmentClip = new SKRect(layoutBox.BorderBox.Left, layoutBox.BorderBox.Top + contentOffsetY,
+                layoutBox.BorderBox.Right, layoutBox.BorderBox.Bottom + contentOffsetY);
+            var selfClip = style.HasPaintContainment && !PaintLayerClipper.CreatesOverflowClip(style)
+                ? containmentClip
+                : overflowClip;
             if (selfClip.Width > 0 && selfClip.Height > 0)
             {
                 // overflow clips to the rounded padding box when the element has a

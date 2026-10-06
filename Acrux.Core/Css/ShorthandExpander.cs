@@ -30,6 +30,7 @@ public static class ShorthandExpander
         {
             case "margin": ExpandFourSides(result, "margin", value); break;
             case "padding": ExpandFourSides(result, "padding", value); break;
+            case "border": ExpandBorder(result, value); break;
             case "border-width": ExpandFourSides(result, "border", value, "width"); break;
             case "border-color": ExpandFourSides(result, "border", value, "color"); break;
             case "border-style": ExpandFourSides(result, "border", value, "style"); break;
@@ -49,13 +50,20 @@ public static class ShorthandExpander
             case "transition": ExpandTransition(result, value); break;
             case "outline": ExpandOutline(result, value); break;
             case "text-decoration": ExpandTextDecoration(result, value); break;
+            case "white-space": ExpandWhiteSpace(result, value); break;
+            case "contain-intrinsic-size": ExpandContainIntrinsicSize(result, value); break;
+            case "text-wrap": ExpandTextWrap(result, value); break;
             case "text-emphasis": ExpandTextEmphasis(result, value); break;
             case "gap": ExpandGap(result, value); break;
         case "columns": ExpandColumns(result, value); break;
         case "column-rule": ExpandColumnRule(result, value); break;
             case "inset": ExpandFourSides(result, "", value); break;
+            case "margin-block": ExpandLogicalPair(result, "margin-block", value); break;
+            case "margin-inline": ExpandLogicalPair(result, "margin-inline", value); break;
+            case "padding-block": ExpandLogicalPair(result, "padding-block", value); break;
+            case "padding-inline": ExpandLogicalPair(result, "padding-inline", value); break;
             case "overflow": ExpandOverflow(result, value); break;
-            case "mask": result["mask-image"] = value; break;
+            case "mask": ExpandMask(result, value); break;
             default: result[name] = value; break;
         }
 
@@ -78,11 +86,105 @@ public static class ShorthandExpander
             "font-variant" => new[] { "font-variant-caps" },
             "flex" => new[] { "flex-grow", "flex-shrink", "flex-basis" },
             "outline" => new[] { "outline-color", "outline-style", "outline-width" },
+            // CSS Text 4 §1/§4: both shorthands reset the whole modular triple.
+            "white-space" => new[] { "white-space-collapse", "text-wrap-mode", "text-wrap-style" },
+            "text-wrap" => new[] { "text-wrap-mode", "text-wrap-style" },
             "animation" => new[] { "animation-name", "animation-duration", "animation-timing-function", "animation-delay", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state" },
             "transition" => new[] { "transition-property", "transition-duration", "transition-timing-function", "transition-delay" },
+            // Every entry below mirrors exactly what the matching Expand* method emits, so a
+            // shorthand resets its parts without erasing properties it does not own
+            // ('text-decoration' must not reset 'text-underline-offset', 'font' must not
+            // reset 'font-kerning', …).
+            "border-top" => new[] { "border-top-width", "border-top-style", "border-top-color" },
+            "border-right" => new[] { "border-right-width", "border-right-style", "border-right-color" },
+            "border-bottom" => new[] { "border-bottom-width", "border-bottom-style", "border-bottom-color" },
+            "border-left" => new[] { "border-left-width", "border-left-style", "border-left-color" },
+            "border-width" => new[] { "border-top-width", "border-right-width", "border-bottom-width", "border-left-width" },
+            "border-style" => new[] { "border-top-style", "border-right-style", "border-bottom-style", "border-left-style" },
+            "border-color" => new[] { "border-top-color", "border-right-color", "border-bottom-color", "border-left-color" },
+            "border-radius" => new[] { "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius" },
+            "inset" => new[] { "top", "right", "bottom", "left" },
+            "margin-block" => new[] { "margin-block-start", "margin-block-end" },
+            "margin-inline" => new[] { "margin-inline-start", "margin-inline-end" },
+            "padding-block" => new[] { "padding-block-start", "padding-block-end" },
+            "padding-inline" => new[] { "padding-inline-start", "padding-inline-end" },
+            "overflow" => new[] { "overflow-x", "overflow-y" },
+            "contain-intrinsic-size" => new[] { "contain-intrinsic-width", "contain-intrinsic-height" },
+            "mask" => new[] { "mask-image", "mask-position", "mask-size", "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode" },
+            "gap" => new[] { "row-gap", "column-gap" },
+            "columns" => new[] { "column-width", "column-count" },
+            "column-rule" => new[] { "column-rule-width", "column-rule-style", "column-rule-color" },
+            "flex-flow" => new[] { "flex-direction", "flex-wrap" },
+            "text-decoration" => new[] { "text-decoration-line", "text-decoration-style", "text-decoration-color", "text-decoration-thickness" },
+            "text-emphasis" => new[] { "text-emphasis-style", "text-emphasis-color" },
+            "grid-column" => new[] { "grid-column-start", "grid-column-end" },
+            "grid-row" => new[] { "grid-row-start", "grid-row-end" },
+            "grid-area" => new[] { "grid-row-start", "grid-row-end", "grid-column-start", "grid-column-end" },
             _ => System.Array.Empty<string>(),
         };
         return keys.Select(CssPropertyIdExtensions.FromString).Where(id => id != CssPropertyId.Invalid);
+    }
+
+    /// <summary>'white-space' is a shorthand of the CSS Text 4 §1 triple. Expanding it
+    /// here (rather than mapping it inside the applier) is what makes source order work:
+    /// 'white-space-collapse: preserve; white-space: normal' must end at 'normal', and
+    /// both declarations then write the same longhand keys.</summary>
+    private static void ExpandWhiteSpace(Dictionary<string, string> result, string value)
+    {
+        string v = value.Trim().ToLowerInvariant();
+        string head = v.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "normal";
+        string collapse = head switch
+        {
+            "pre" => "preserve",
+            "pre-wrap" => "preserve",
+            "pre-line" => "preserve-breaks",
+            "break-spaces" => "break-spaces",
+            "nowrap" => "collapse",
+            _ => "collapse",
+        };
+        string mode = head == "pre" || head == "nowrap" ? "nowrap" : "wrap";
+        string style = v.Contains("balance") ? "balanced"
+            : v.Contains("stable") ? "stable"
+            : v.Contains("pretty") ? "pretty" : "auto";
+        result["white-space-collapse"] = collapse;
+        result["text-wrap-mode"] = mode;
+        result["text-wrap-style"] = style;
+    }
+
+    /// <summary>CSS Containment 3 §2.2: 'contain-intrinsic-size' is the two-axis shorthand of
+    /// the width/height pair, with an optional leading 'auto' that applies to both axes. An
+    /// ill-formed value (a bare 'auto', a percentage, three lengths) emits nothing at all,
+    /// which is what the reference engine does with the declaration — it drops it and leaves
+    /// the axes as they were.</summary>
+    private static void ExpandContainIntrinsicSize(Dictionary<string, string> result, string value)
+    {
+        var tokens = (value ?? string.Empty).Trim().ToLowerInvariant()
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0) return;
+        int start = 0;
+        string prefix = "";
+        if (tokens[0] == "auto")
+        {
+            prefix = "auto ";
+            start = 1;
+        }
+        var axes = tokens.Skip(start).ToArray();
+        if (axes.Length is < 1 or > 2) return;
+        if (axes.Any(t => t.Contains('%'))) return;
+        string inlineAxis = prefix + axes[0];
+        string blockAxis = prefix + (axes.Length == 2 ? axes[1] : axes[0]);
+        result["contain-intrinsic-width"] = inlineAxis;
+        result["contain-intrinsic-height"] = blockAxis;
+    }
+
+    /// <summary>'text-wrap' = &lt;text-wrap-mode&gt; || &lt;text-wrap-style&gt; (CSS Text 4 §4).
+    private static void ExpandTextWrap(Dictionary<string, string> result, string value)
+    {
+        string v = value.Trim().ToLowerInvariant();
+        result["text-wrap-mode"] = v.Contains("nowrap") ? "nowrap" : "wrap";
+        result["text-wrap-style"] = v.Contains("balance") ? "balanced"
+            : v.Contains("stable") ? "stable"
+            : v.Contains("pretty") ? "pretty" : "auto";
     }
 
     private static void ExpandBorderRadius(Dictionary<string, string> result, string value)
@@ -156,6 +258,19 @@ public static class ShorthandExpander
             result["bottom"] = bottom;
             result["left"] = left;
         }
+    }
+
+    /// <summary>CSS Logical Properties 1 §4: the block/inline pair shorthands
+    /// (<c>margin-block</c>, <c>padding-inline</c>, …) take one or two values that address
+    /// the axis' start and end. They must expand to the <em>logical</em> longhands — the
+    /// mapping onto physical sides happens later, against the final computed 'direction' —
+    /// so this deliberately does not pick a side itself.</summary>
+    private static void ExpandLogicalPair(Dictionary<string, string> result, string axis, string value)
+    {
+        var parts = SplitShorthand(value);
+        if (parts.Count == 0) return;
+        result[$"{axis}-start"] = parts[0];
+        result[$"{axis}-end"] = parts.Count >= 2 ? parts[1] : parts[0];
     }
 
     private static void ExpandBorder(Dictionary<string, string> result, string value)
@@ -234,17 +349,57 @@ public static class ShorthandExpander
         // of which can itself contain spaces inside gradient functions. Split into
         // layers on top-level commas first, then tokenize each layer by space.
         var layers = SplitTopLevel(value, ',');
-        var images = new List<string>();
-        var repeats = new List<string>();
 
+        // CSS Backgrounds 3 §4: the <color> may only appear in the FINAL layer. In any
+        // other layer the whole declaration is invalid, so it must not produce a single
+        // longhand — not even the ones that look harmless. Measured on
+        // snapshots/css-standard-verify197-multilayer-background.html §9: a reference
+        // browser keeps the element's earlier background-color and paints no layers,
+        // while accepting it leaked the second layer's blue into the box.
+        var tokens = new List<string[]>();
         foreach (var layer in layers)
+            tokens.Add(SplitShorthand(layer).Select(t => t.Trim().TrimEnd(',').Trim()).Where(t => t.Length > 0).ToArray());
+        for (int i = 0; i < tokens.Count - 1; i++)
         {
-            var parts = SplitShorthand(layer);
+            foreach (var p in tokens[i])
+            {
+                if (p.Equals("transparent", StringComparison.OrdinalIgnoreCase) || ColorParser.LooksLikeColor(p))
+                    return;
+            }
+        }
+
+        var images = new List<string>();
+        // One entry per layer for every geometry longhand, filled with the property's
+        // initial value where the layer stayed silent. A shorthand must produce a list
+        // exactly as long as the layer count: a shorter list would CYCLE, so
+        // "background: url(a) 10px 10px, url(b)" would move the second layer to
+        // 10px 10px as well instead of leaving it at 0% 0%.
+        var positions = new List<string>();
+        var sizes = new List<string>();
+        var repeats = new List<string>();
+        var origins = new List<string>();
+        var clips = new List<string>();
+        var attachments = new List<string>();
+        string? finalColor = null;
+
+        foreach (var parts in tokens)
+        {
+            // `<position> / <size>`: the position is a LIST of tokens ("10px 20px",
+            // "center bottom", "calc(50% - 10px) 0"), so they have to be collected and
+            // joined. Matching only '%' and the keywords — as this did — silently dropped
+            // every length, so "background: url(a) 10px 20px" positioned the image at
+            // 10px/0 instead of 10px/20px.
+            var position = new List<string>();
+            string size = "auto";
+            string repeat = "repeat";
+            string origin = "padding-box";
+            string clip = "border-box";
+            string attachment = "scroll";
+            bool afterSlash = false;
+            bool sawBoxKeyword = false;
             foreach (var raw in parts)
             {
-                var p = raw.Trim().TrimEnd(',').Trim();
-                if (string.IsNullOrEmpty(p)) continue;
-
+                var p = raw;
                 if (p.StartsWith("url(") || p.StartsWith("linear-gradient") || p.StartsWith("radial-gradient") || p.StartsWith("conic-gradient") || p.StartsWith("repeating-linear-gradient") || p.StartsWith("repeating-radial-gradient") || p.StartsWith("repeating-conic-gradient"))
                 {
                     // An empty url() has no address and is invalid at computed-value
@@ -254,30 +409,80 @@ public static class ShorthandExpander
                     images.Add(p);
                 }
                 else if (ColorParser.LooksLikeColor(p))
-                    result["background-color"] = p;
+                    finalColor = p;
                 else if (p == "repeat" || p == "no-repeat" || p == "repeat-x" || p == "repeat-y" || p == "round" || p == "space")
-                    repeats.Add(p);
+                    repeat = repeat == "repeat" ? p : repeat + " " + p;
                 else if (p == "scroll" || p == "fixed" || p == "local")
-                    result["background-attachment"] = p;
-                else if (p == "cover" || p == "contain")
-                    result["background-size"] = p;
+                    attachment = p;
+                else if (p == "padding-box" || p == "border-box" || p == "content-box")
+                {
+                    // The first box keyword is 'background-origin'; the one after the
+                    // '/' (or a second one) is 'background-clip' (CSS Backgrounds 3 §4.1).
+                    if (!sawBoxKeyword) { origin = p; sawBoxKeyword = true; }
+                    else clip = p;
+                }
+                else if (p == "/")
+                {
+                    afterSlash = true;
+                }
+                else if (afterSlash)
+                {
+                    size = size == "auto" ? p : size + " " + p;
+                }
                 else if (p.Contains('/') && !p.Contains("("))
                 {
                     var posSize = p.Split('/', StringSplitOptions.RemoveEmptyEntries);
-                    if (posSize.Length >= 1) result["background-position"] = posSize[0].Trim();
-                    if (posSize.Length >= 2) result["background-size"] = posSize[1].Trim();
+                    if (posSize.Length >= 1) position.Add(posSize[0].Trim());
+                    if (posSize.Length >= 2) size = posSize[1].Trim();
+                    afterSlash = true;
                 }
-                else if (p.Contains('%') || p == "center" || p == "left" || p == "right" || p == "top" || p == "bottom")
-                    result["background-position"] = p;
+                else if (p == "left" || p == "right" || p == "center" || p == "top" || p == "bottom"
+                         || p.EndsWith("%") || p.EndsWith("px") || p.EndsWith("em") || p.EndsWith("rem")
+                         || p.EndsWith("vw") || p.EndsWith("vh") || p.StartsWith("calc("))
+                {
+                    position.Add(p);
+                }
             }
+            positions.Add(position.Count > 0 ? string.Join(" ", position) : "0% 0%");
+            sizes.Add(size);
+            repeats.Add(repeat);
+            origins.Add(origin);
+            clips.Add(clip);
+            attachments.Add(attachment);
         }
 
         if (images.Count > 0)
             result["background-image"] = string.Join(", ", images);
+        if (finalColor != null)
+            result["background-color"] = finalColor;
 
-        if (repeats.Count > 0)
-            result["background-repeat"] = string.Join(" ", repeats);
+        // Only write a list when there actually is more than one layer; a single-entry
+        // list would round-trip through the comma-splitting parsers for no reason, and
+        // the scalar path already handles it identically.
+        if (tokens.Count > 1)
+        {
+            result["background-position"] = string.Join(", ", positions);
+            result["background-size"] = string.Join(", ", sizes);
+            result["background-repeat"] = string.Join(", ", repeats);
+            result["background-origin"] = string.Join(", ", origins);
+            result["background-clip"] = string.Join(", ", clips);
+            result["background-attachment"] = string.Join(", ", attachments);
+        }
+        else if (positions[0] != "0% 0%" || sizes[0] != "auto" || repeats[0] != "repeat"
+                 || origins[0] != "padding-box" || clips[0] != "border-box" || attachments[0] != "scroll")
+        {
+            result["background-position"] = positions[0];
+            result["background-size"] = sizes[0];
+            result["background-repeat"] = repeats[0];
+            result["background-origin"] = origins[0];
+            result["background-clip"] = clips[0];
+            result["background-attachment"] = attachments[0];
+        }
 
+        // A shorthand resets the longhands it does not set (CSS 2.1 §14.3): with no
+        // <color> in the list the layer stack sits on a transparent box, not on whatever
+        // the cascade had before.
+        result.TryAdd("background-color", "transparent");
         result.TryAdd("background-repeat", "repeat");
         result.TryAdd("background-attachment", "scroll");
         result.TryAdd("background-position", "0% 0%");
@@ -869,5 +1074,142 @@ public static class ShorthandExpander
     private static bool IsBorderWidth(string p) => CssPropertyApplier.IsBorderWidthToken(p);
     private static bool IsColor(string p) => p.StartsWith("#") || p.StartsWith("rgb") || p == "transparent" || p == "currentcolor" || IsNamedColor(p);
     private static bool IsFontSize(string p) => p is "xx-small" or "x-small" or "small" or "medium" or "large" or "x-large" or "xx-large" or "larger" or "smaller";
-    private static bool IsNamedColor(string p) => KnownColors.Get(p).HasValue;
+    private static bool IsNamedColor(string p) => KnownColors.Get(p).HasValue;    /// <summary>
+    /// 'mask' (CSS Masking 1 §5.1). A layer is
+    ///   &lt;mask-reference&gt; || &lt;position&gt; [ / &lt;bg-size&gt; ]? || &lt;repeat-style&gt; ||
+    ///   &lt;geometry-box&gt; || [ &lt;geometry-box&gt; | no-clip ] || &lt;compositing-operator&gt; || &lt;masking-mode&gt;
+    /// with every part optional and in any order, so the tokens are classified rather than
+    /// positionally parsed. One geometry box names BOTH 'mask-origin' and 'mask-clip'; a second
+    /// one replaces whichever of the two is still unset, and 'no-clip' only ever names the clip.
+    /// Omitted parts take their initial values, which is what makes the shorthand reset them.
+    /// A comma-separated multi-layer value keeps the whole image list on 'mask-image' (that is
+    /// what the mask painter splits), with the non-image parts taken from the first layer.
+    /// </summary>
+    private static void ExpandMask(Dictionary<string, string> result, string value)
+    {
+        var layers = SplitTopLevel(value, ',');
+        if (layers.Count == 0) return;
+
+        var imageParts = new List<string>();
+        string? position = null, size = null, repeat = null, origin = null, clip = null,
+               composite = null, mode = null;
+        bool firstLayer = true;
+
+        foreach (var layerText in layers)
+        {
+            var tokens = SplitMaskTokens(layerText);
+            imageParts.Add(string.Join(", ", tokens.Where(t => IsMaskImageToken(t))));
+            if (!firstLayer) continue;   // the geometry of later layers has nowhere to live yet
+            firstLayer = false;
+
+            bool seenBox = false;
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                var t = tokens[i];
+                var lower = t.ToLowerInvariant();
+                if (IsMaskImageToken(t)) continue;
+                if (lower == "no-clip") { clip = "no-clip"; continue; }
+                if (lower is "border-box" or "padding-box" or "content-box"
+                    or "fill-box" or "stroke-box" or "view-box")
+                {
+                    if (!seenBox) { origin = lower; clip = lower; seenBox = true; }
+                    else if (clip == null || clip == "no-clip") clip = lower;
+                    else origin = lower;
+                    continue;
+                }
+                if (lower is "add" or "subtract" or "intersect" or "exclude") { composite = lower; continue; }
+                if (lower is "alpha" or "luminance" or "match-source") { mode = lower; continue; }
+                if (lower is "repeat" or "repeat-x" or "repeat-y" or "no-repeat" or "space" or "round")
+                {
+                    // 'repeat-x'/'repeat-y' are two-axis shorthands of their own.
+                    repeat = lower switch
+                    {
+                        "repeat-x" => "repeat no-repeat",
+                        "repeat-y" => "no-repeat repeat",
+                        _ => BuildRepeat(tokens, ref i),
+                    };
+                    continue;
+                }
+                if (lower == "auto" && size == null && position != null) { size = "auto"; continue; }
+                if (lower is "contain" or "cover") { size ??= lower; continue; }
+                if (t.StartsWith("/", StringComparison.Ordinal) || t == "/")
+                {
+                    // '<position> / <size>': everything up to the next axis keyword is the size.
+                    var rest = new List<string>();
+                    for (int j = i + 1; j < tokens.Count; j++)
+                    {
+                        var s2 = tokens[j].ToLowerInvariant();
+                        if (s2 is "repeat" or "repeat-x" or "repeat-y" or "no-repeat" or "space" or "round"
+                            || s2 is "border-box" or "padding-box" or "content-box" or "no-clip"
+                            || s2 is "add" or "subtract" or "intersect" or "exclude"
+                            || s2 is "alpha" or "luminance" or "match-source") break;
+                        rest.Add(tokens[j]);
+                        i = j;
+                    }
+                    if (rest.Count > 0) size = string.Join(" ", rest);
+                    continue;
+                }
+                // Anything left is a position token (keyword, length or percentage).
+                position = position == null ? t : position + " " + t;
+            }
+        }
+
+        result["mask-image"] = string.Join(", ", imageParts.Select(p2 => string.IsNullOrEmpty(p2) ? "none" : p2));
+        result["mask-position"] = position ?? "0% 0%";
+        result["mask-size"] = size ?? "auto";
+        result["mask-repeat"] = repeat ?? "repeat";
+        result["mask-origin"] = origin ?? "border-box";
+        result["mask-clip"] = clip ?? "border-box";
+        result["mask-composite"] = composite ?? "add";
+        result["mask-mode"] = mode ?? "match-source";
+    }
+
+    /// <summary>url(...), a gradient function or 'none' name the mask image; 'src(...)' does not.</summary>
+    private static bool IsMaskImageToken(string token)
+    {
+        var lower = token.Trim().ToLowerInvariant();
+        return lower == "none"
+            || lower.StartsWith("url(", StringComparison.Ordinal)
+            || lower.StartsWith("-webkit-", StringComparison.Ordinal) && lower.Contains("gradient(")
+            || lower.Contains("gradient(") && !lower.StartsWith("src(", StringComparison.Ordinal);
+    }
+
+    /// <summary>Split a layer on whitespace, keeping url(...) and function(...) intact.</summary>
+    private static List<string> SplitMaskTokens(string layerText)
+    {
+        var tokens = new List<string>();
+        int depth = 0;
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in layerText)
+        {
+            if (c == '(') depth++;
+            else if (c == ')') depth = Math.Max(0, depth - 1);
+            if (depth == 0 && char.IsWhiteSpace(c))
+            {
+                if (sb.Length > 0) { tokens.Add(sb.ToString()); sb.Clear(); }
+                continue;
+            }
+            sb.Append(c);
+        }
+        if (sb.Length > 0) tokens.Add(sb.ToString());
+        return tokens;
+    }
+
+    /// <summary>Two consecutive repeat keywords are one axis each; consume the second.</summary>
+    private static string BuildRepeat(List<string> tokens, ref int index)
+    {
+        string first = tokens[index].ToLowerInvariant();
+        if (index + 1 < tokens.Count)
+        {
+            string next = tokens[index + 1].ToLowerInvariant();
+            if (next is "repeat" or "repeat-x" or "repeat-y" or "no-repeat" or "space" or "round")
+            {
+                index++;
+                return $"{first} {next}";
+            }
+        }
+        return first;
+    }
+
+
 }

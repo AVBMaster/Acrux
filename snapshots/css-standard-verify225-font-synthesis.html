@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<!--
+  b225 — font synthesis: what the engine invents when the family does not have the face.
+
+  Everything here is a static, id-named box so the same numbers come out of
+  `--dumplayout` (run advance) and of Edge's getBoundingClientRect — no script runs in
+  this page, so neither engine measures a DOM the other one mutated.
+
+  EDGE TRUTH (2026-10-06, dpr=1, 100px font-size, all five families measured):
+    §A synthetic small caps. The scaled glyph is the CAPITAL drawn at a constant
+       **0.7 of its own size** — the ratio h_sc/H is 0.7001 for MathJax_Fraktur, Arial
+       and Liberation Serif and exactly 0.7 for Liberation Mono (60.02 -> 42.02) and
+       monospace (50 -> 35). It is NOT x-height/cap-height: that model only happens to
+       land near 0.7 for proportional text faces.
+         H=72      h=52.11   H_sc=72     h_sc=50.41   (MathJax_Fraktur)
+         H=72.22   h=55.63   H_sc=72.22  h_sc=50.56   (Arial)
+         H=72.22   h=50      H_sc=72.22  h_sc=50.56   (Liberation Serif)
+         H=60.02   h=60.02   H_sc=60.02  h_sc=42.02   (Liberation Mono)
+       all-small-caps: BOTH cases scale (H_asc = h_asc = 0.7*H).
+       petite-caps / all-petite-caps: identical to small-caps / all-small-caps (no
+         'petite' feature in these faces, so the engine falls back).
+       unicase: the UPPERCASE scales (H_uni = 0.7*H) and lowercase stays as it is
+         (h_uni = h). Not the other way round.
+       titling-caps: no change at all (no 'titl' feature).
+       The line box never changes height (96px in every case).
+    §B synthetic bold, MathJax_Fraktur 'Hamburgefonstiv' at 100px:
+         weight 100..500 -> 722.00    weight 600..900 -> 858.31
+       i.e. synthesis starts at 600 and widens the advances by 18.9% (the line box height
+       stays 96). A family that really has a bold face changes face instead of emboldening.
+    §C synthetic oblique. Advances do not change (a shear preserves them), so this is a
+       paint-only property; measured here on the engine side with --pixels across a stem.
+       CSS Fonts 4 §6.1 / Skia: the synthesized slant is 12 degrees.
+    §D computed value: 'font-style: oblique' (no angle) serializes as **italic**;
+       'oblique 20deg' stays 'oblique 20deg'.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b225 font synthesis</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-size: 16px; }
+  .t { display: inline-block; white-space: pre; font-size: 100px; line-height: 1; }
+  .s { display: inline-block; white-space: pre; font-size: 14px; line-height: 18px; }
+  .cap { background: #eef; }
+  .bg { background: #fee; }
+</style>
+</head>
+<body>
+
+<!-- A. small-caps synthesis: capital at 0.7, per case, per mode -->
+<div style="font-family:'MathJax_Fraktur'">
+  <span class="t" id="a-mj-H">H</span><span class="t" id="a-mj-h">h</span>
+  <span class="t cap" id="a-mj-H-sc" style="font-variant-caps:small-caps">H</span>
+  <span class="t cap" id="a-mj-h-sc" style="font-variant-caps:small-caps">h</span>
+  <span class="t cap" id="a-mj-H-asc" style="font-variant-caps:all-small-caps">H</span>
+  <span class="t cap" id="a-mj-h-asc" style="font-variant-caps:all-small-caps">h</span>
+  <span class="t cap" id="a-mj-h-pc" style="font-variant-caps:petite-caps">h</span>
+  <span class="t cap" id="a-mj-H-uni" style="font-variant-caps:unicase">H</span>
+  <span class="t cap" id="a-mj-h-uni" style="font-variant-caps:unicase">h</span>
+  <span class="t cap" id="a-mj-H-tit" style="font-variant-caps:titling-caps">H</span>
+</div>
+<div style="font-family:'Liberation Mono'">
+  <span class="t" id="a-mo-H">H</span><span class="t" id="a-mo-h">h</span>
+  <span class="t cap" id="a-mo-h-sc" style="font-variant-caps:small-caps">h</span>
+  <span class="t cap" id="a-mo-H-asc" style="font-variant-caps:all-small-caps">H</span>
+</div>
+<div style="font-family:monospace">
+  <span class="t" id="a-gen-H">H</span>
+  <span class="t cap" id="a-gen-h-sc" style="font-variant-caps:small-caps">h</span>
+</div>
+<!-- A2. font-synthesis-small-caps: none must stop the synthesis -->
+<div style="font-family:'MathJax_Fraktur'">
+  <span class="t bg" id="a2-h-sc-off" style="font-variant-caps:small-caps;font-synthesis-small-caps:none">h</span>
+  <span class="t bg" id="a2-h-sc-none" style="font-variant-caps:small-caps;font-synthesis:none">h</span>
+  <span class="t bg" id="a2-h-sc-auto" style="font-variant-caps:small-caps;font-synthesis:small-caps">h</span>
+</div>
+
+<!-- B. synthetic bold on a family with no bold face -->
+<div style="font-family:'MathJax_Fraktur'">
+  <span class="s" id="b-w400" style="font-weight:400">Hamburgefonstiv</span>
+  <span class="s" id="b-w500" style="font-weight:500">Hamburgefonstiv</span>
+  <span class="s" id="b-w600" style="font-weight:600">Hamburgefonstiv</span>
+  <span class="s" id="b-w700" style="font-weight:700">Hamburgefonstiv</span>
+  <span class="s" id="b-w900" style="font-weight:900">Hamburgefonstiv</span>
+  <span class="s bg" id="b-w700-off" style="font-weight:700;font-synthesis-weight:none">Hamburgefonstiv</span>
+  <span class="s bg" id="b-w700-none" style="font-weight:700;font-synthesis:none">Hamburgefonstiv</span>
+  <span class="s" id="b-bold-arial" style="font-family:Arial;font-weight:700">Hamburgefonstiv</span>
+  <span class="s" id="b-reg-arial" style="font-family:Arial;font-weight:400">Hamburgefonstiv</span>
+</div>
+
+<!-- C. synthetic oblique: the shear must disappear when style synthesis is off -->
+<div style="font-family:'MathJax_Fraktur'">
+  <span class="s cap" id="c-norm" style="background:#ddf">hhhhhhhhhh</span>
+  <span class="s cap" id="c-italic" style="font-style:italic;background:#ddf">hhhhhhhhhh</span>
+  <span class="s cap" id="c-oblique" style="font-style:oblique;background:#ddf">hhhhhhhhhh</span>
+  <span class="s cap" id="c-oblique-off" style="font-style:oblique;font-synthesis-style:none;background:#ddf">hhhhhhhhhh</span>
+  <span class="s cap" id="c-ob20-off" style="font-style:oblique 20deg;font-synthesis-style:none;background:#ddf">hhhhhhhhhh</span>
+</div>
+
+<!-- E. computed-value serialization (see the header table §E). The strings are written by
+     the page's own script from getComputedStyle, so the snapshot records what the engine
+     reports to scripts — the same page answers the same question in the reference browser. -->
+<div id="e-blocks">
+  <p id="ea" style="display:table-cell;background-repeat:no-repeat;text-decoration:line-through;
+                    list-style-type:lower-roman;mix-blend-mode:color-dodge;flex-direction:row-reverse;
+                    flex-wrap:wrap-reverse;justify-content:space-between;align-items:flex-start;
+                    white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere;
+                    writing-mode:vertical-rl;text-align:end;visibility:collapse;overflow:clip">ea</p>
+  <p id="eb" style="display:table-row-group;background-repeat:repeat-x;list-style-type:decimal-leading-zero;
+                    mix-blend-mode:hard-light;justify-content:space-evenly;align-items:flex-end;
+                    white-space:pre-line;clear:both">eb</p>
+  <div id="ub-div"><span id="ub-span">s</span></div><p id="ub-p">p</p><table id="ub-table"><tr><td id="ub-td">c</td></tr></table>
+  <fieldset id="ub-fieldset">f</fieldset><details id="ub-details"><summary>u</summary>d</details>
+</div>
+<script>
+(function () {
+  var keys = ['display','background-repeat','text-decoration-line','list-style-type','mix-blend-mode',
+              'flex-direction','flex-wrap','justify-content','align-items','white-space','word-break',
+              'overflow-wrap','writing-mode','text-align','visibility','overflow','clear'];
+  var out = document.createElement('div');
+  out.id = 'enum-out';
+  out.style.font = '10px/12px monospace';
+  var lines = [];
+  ['ea','eb'].forEach(function (id) {
+    var cs = getComputedStyle(document.getElementById(id));
+    for (var i = 0; i < keys.length; i++) lines.push(id + '.' + keys[i] + '=' + cs.getPropertyValue(keys[i]));
+  });
+  ['ub-div','ub-span','ub-p','ub-table','ub-td','ub-fieldset','ub-details'].forEach(function (id) {
+    lines.push(id + '.unicode-bidi=' + getComputedStyle(document.getElementById(id)).getPropertyValue('unicode-bidi'));
+  });
+  out.textContent = lines.join('  ');
+  document.getElementById('e-blocks').appendChild(out);
+})();
+</script>
+
+<!-- D. computed value of the bare 'oblique' keyword -->
+<div>
+  <span class="s" id="d-oblique" style="font-style:oblique">x</span>
+  <span class="s" id="d-ob20" style="font-style:oblique 20deg">x</span>
+  <span class="s" id="d-italic" style="font-style:italic">x</span>
+</div>
+
+</body>
+</html>

@@ -737,7 +737,7 @@ public class CascadeResolver
         {
             var resolved = CssFunctionEvaluator.Evaluate(fontSizeVal, element, style.FontSize, RootFontSize(), _viewportWidth, _viewportHeight);
             if (!TryApplyCssWideKeyword(style, "font-size", resolved, parentStyle))
-                style.FontSize = ParseFontSize(resolved, parentStyle);
+                CssPropertyApplier.SetFontSize(style, resolved, ParseFontSize(resolved, parentStyle));
         }
 
         if (_cascadeMap.TryGetValue("font-weight", out var fontWeightVal))
@@ -889,74 +889,10 @@ public class CascadeResolver
     };
     private void InheritProperties(ComputedStyle child, ComputedStyle parent)
     {
-        child.Color = parent.Color;
-        child.FontFamily = parent.FontFamily;
-        child.FontSize = parent.FontSize;
-        child.FontWeight = parent.FontWeight;
-        child.FontStyle = parent.FontStyle;
-        child.LineHeight = parent.LineHeight;
-        // 'line-height' inherits its computed value, so the 'normal' flag and any
-        // absolute length must travel with the multiplier.
-        child.LineHeightIsNormal = parent.LineHeightIsNormal;
-        child.LineHeightPx = parent.LineHeightPx;
-        child.TextAlign = parent.TextAlign;
-        child.TextAlignLast = parent.TextAlignLast;
-        child.WhiteSpace = parent.WhiteSpace;
-        child.WordBreak = parent.WordBreak;
-        child.OverflowWrap = parent.OverflowWrap;
-        child.Visibility = parent.Visibility;
-        child.Cursor = parent.Cursor;
-        child.Direction = parent.Direction;
-        child.LetterSpacing = parent.LetterSpacing;
-        child.WordSpacing = parent.WordSpacing;
-        child.TextIndent = parent.TextIndent;
-        child.TextTransform = parent.TextTransform;
-        child.CaptionSide = parent.CaptionSide;
-        child.EmptyCells = parent.EmptyCells;
-        child.WritingMode = parent.WritingMode;
-        child.Orphans = parent.Orphans;
-        child.Widows = parent.Widows;
-        child.Hyphens = parent.Hyphens;
-        child.LineBreak = parent.LineBreak;
-        child.TextJustify = parent.TextJustify;
-        child.TextRendering = parent.TextRendering;
-        child.TextShadow = new List<TextShadowValue>(parent.TextShadow);
-        // 'text-decoration-*' is NOT inherited (CSS Text Decoration 4 §5.1): a
-        // decoration on an ancestor still reaches its text, but by propagation at
-        // paint time, where every originating box keeps its own line list, style,
-        // color and metrics. Inheriting it here would merge nested decorations
-        // into a single line and let an inner 'text-decoration: none' erase the
-        // outer one.
-        child.TextEmphasis = parent.TextEmphasis;
-        child.TextEmphasisColor = parent.TextEmphasisColor;
-        child.TextEmphasisStyle = parent.TextEmphasisStyle;
-        child.TextEmphasisPosition = parent.TextEmphasisPosition;
-        child.FontVariant = parent.FontVariant;
-        child.FontVariantCaps = parent.FontVariantCaps;
-        child.FontKerning = parent.FontKerning;
-        child.FontStretch = parent.FontStretch;
-        child.FontSynthesis = parent.FontSynthesis;
-        child.FontOpticalSizing = parent.FontOpticalSizing;
-        child.FontVariationSettings = parent.FontVariationSettings;
-        child.FontFeatureSettings = parent.FontFeatureSettings;
-        child.FontSizeAdjust = parent.FontSizeAdjust;
-        child.Quotes = parent.Quotes;
-        child.ImageRendering = parent.ImageRendering;
-        child.AccentColor = parent.AccentColor;
-        child.CaretColor = parent.CaretColor;
-        child.ColorScheme = parent.ColorScheme;
-        child.ForcedColorAdjust = parent.ForcedColorAdjust;
-        child.ListStyleType = parent.ListStyleType;
-        child.ListStylePosition = parent.ListStylePosition;
-        child.TabSize = parent.TabSize;
-        child.TabSizePx = parent.TabSizePx;
-        child.BorderSpacing = parent.BorderSpacing;
-        child.BorderRowSpacing = parent.BorderRowSpacing;
-        child.RubyPosition = parent.RubyPosition;
-        child.PointerEvents = parent.PointerEvents;
-        child.UserSelect = parent.UserSelect;
-        child.Zoom = parent.Zoom;
+        // Single definition lives in CssInheritance; this used to be a second, drifting copy.
+        Acrux.Core.Css.CssInheritance.Apply(child, parent);
     }
+
 
     private ComputedStyle CreateUserAgentStyle(string tagName)
     {
@@ -989,6 +925,7 @@ public class CascadeResolver
         dest.BackgroundOrigin = src.BackgroundOrigin;
         dest.BackgroundBlendMode = src.BackgroundBlendMode;
         dest.FontFamily = src.FontFamily; dest.FontSize = src.FontSize;
+        dest.FontSizeIsDefault = src.FontSizeIsDefault;
         dest.FontWeight = src.FontWeight; dest.FontStyle = src.FontStyle;
         dest.LineHeight = src.LineHeight;
         dest.LineHeightIsNormal = src.LineHeightIsNormal;
@@ -998,6 +935,7 @@ public class CascadeResolver
         dest.TextDecorationLine = src.TextDecorationLine;
         dest.TextDecorationStyle = src.TextDecorationStyle;
         dest.TextDecorationColor = src.TextDecorationColor;
+        dest.TextDecorationColorIsAuto = src.TextDecorationColorIsAuto;
         dest.TextDecorationThickness = src.TextDecorationThickness;
         dest.TextDecorationThicknessFromFont = src.TextDecorationThicknessFromFont;
         dest.TextUnderlineOffset = src.TextUnderlineOffset;
@@ -1006,7 +944,9 @@ public class CascadeResolver
         dest.TextDecorationSkipInk = src.TextDecorationSkipInk;
         dest.BoxDecorationBreak = src.BoxDecorationBreak;
         dest.VerticalAlign = src.VerticalAlign;
-        dest.WhiteSpace = src.WhiteSpace;
+        dest.WhiteSpace = src.WhiteSpace; dest.WhiteSpaceCollapse = src.WhiteSpaceCollapse;
+        dest.TextWrapMode = src.TextWrapMode; dest.TextWrapStyle = src.TextWrapStyle;
+        dest.HyphenateCharacter = src.HyphenateCharacter;
         dest.WordBreak = src.WordBreak;
         dest.OverflowWrap = src.OverflowWrap;
         dest.Visibility = src.Visibility;
@@ -1113,6 +1053,10 @@ public class CascadeResolver
         dest.MixBlendMode = src.MixBlendMode;
         dest.ImageRendering = src.ImageRendering;
         dest.Contain = src.Contain;
+        dest.ContainIntrinsicWidth = src.ContainIntrinsicWidth;
+        dest.ContainIntrinsicHeight = src.ContainIntrinsicHeight;
+        dest.ContainIntrinsicWidthIsAuto = src.ContainIntrinsicWidthIsAuto;
+        dest.ContainIntrinsicHeightIsAuto = src.ContainIntrinsicHeightIsAuto;
         dest.ContentVisibility = src.ContentVisibility;
         dest.WillChange = src.WillChange;
         dest.ScrollBehavior = src.ScrollBehavior;

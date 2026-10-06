@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 193 — soft hyphen U+00AD (CSS Text 3 §4.4, UAX #14 LB14/LB15)</title>
+<style>
+/* A soft hyphen is three behaviours at once and each one is separately breakable:
+   it is a break opportunity, it contributes ZERO width while the line is not broken
+   there, and it is replaced by a visible hyphen-minus on the line that IS broken.
+   Widths are pinned (the reference browser's window is 383px wide) so the numbers
+   below stay comparable. */
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 16px 0 6px; font-size: 16px; }
+.row { border: 1px dashed #999; padding: 4px; margin: 6px 0; background: #fff; }
+.mc { width: min-content; outline: 1px solid #f88; }
+.w20 { width: 20px; outline: 1px solid #88f; }
+.w24 { width: 24px; outline: 1px solid #88f; }
+.w28 { width: 28px; outline: 1px solid #88f; }
+.w40 { width: 40px; outline: 1px solid #88f; }
+.w70 { width: 70px; outline: 1px solid #88f; }
+.w200 { width: 200px; outline: 1px solid #88f; }
+.hn { hyphens: none; }
+.hm { hyphens: manual; }
+.lg { font-size: 32px; }
+.ls { letter-spacing: 4px; }
+</style>
+</head>
+<body>
+
+<h2>1. min-content is the widest fragment, hyphen included</h2>
+<div class="row"><div class="mc" id="m1">pe&#173;tite</div></div>
+<div class="row"><div class="mc" id="m2">under&#173;standing</div></div>
+<div class="row"><div class="mc" id="m3">extraordinar&#173;ily</div></div>
+
+<h2>2. unbroken: the soft hyphen contributes no width</h2>
+<div class="row w200" id="u1">pe&#173;tite</div>
+<div class="row w200" id="u2">petite</div>
+
+<h2>3. broken at the soft hyphen: a visible hyphen ends the line</h2>
+<div class="row w20" id="b1">pe&#173;tite</div>
+<div class="row w24" id="b2">pe&#173;tite</div>
+<div class="row w28" id="b3">pe&#173;tite</div>
+
+<h2>4. hyphens:none removes the break opportunity</h2>
+<div class="row w20 hn" id="n1">pe&#173;tite</div>
+<div class="row w200 hn" id="n2">pe&#173;tite</div>
+
+<h2>5. several soft hyphens in one word</h2>
+<div class="row w40" id="s1">in&#173;for&#173;mation</div>
+<div class="row mc" id="s2">in&#173;for&#173;mation</div>
+
+<h2>6. soft hyphen at the start and at the end of a word</h2>
+<div class="row w40" id="e1">&#173;word</div>
+<div class="row w40" id="e2">word&#173;</div>
+
+<h2>7. soft hyphen and letter-spacing / font-size</h2>
+<div class="row w70 ls" id="l1">pe&#173;tite</div>
+<div class="row w70 lg" id="l2">pe&#173;tite</div>
+
+<h2>8. a soft hyphen alone is not a space (white-space interactions)</h2>
+<div class="row w200" id="w1">a&#173; &#173;b</div>
+<div class="row w200" id="w2">ab&#173;</div>
+
+<!--
+Reference measurements (Chromium, dpr 1, viewport 383px, Arial -> Liberation Sans
+at 16px; "-" = 5.33px, "pe" = 17.8px, "tite" = 21.34px, "petite" = 39.14px):
+
+  m1 23x36 ("pe-" 23.13 / "tite" 21.34)   m2 61x36   m3 91x36
+  u1 39.14 = u2 39.14            (unbroken soft hyphen is zero width)
+  b1/b2/b3 2 lines "pe-" + "tite" (a visible hyphen ends the line)
+  n1 1 line 39.14, n2 39.14       (hyphens:none: no break, still zero width)
+  s1 50x46, s2 min-content 58x46  (two opportunities; the widest fragment wins)
+  e1 34.69, e2 34.69              (leading/trailing hyphen alone never shows)
+  l1 63.14 = 39.14 + 6x4          (the soft hyphen takes no letter-spacing)
+  l2 2 lines at 32px              ("pe-" 46.25 / "tite" 42.69)
+  w1 22.25 = "a b", w2 17.8 = "ab"
+-->
+
+</body>
+</html>

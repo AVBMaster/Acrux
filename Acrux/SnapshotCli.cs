@@ -24,6 +24,7 @@ internal static class SnapshotCli
                 "--dumplayout" => RunDumpLayout(args),
                 "--computed" => RunComputed(args),
                 "--textops" => RunTextOps(args),
+                "--hittest" => RunHitTest(args),
                 "--pixels" => RunPixels(args),
                 "--rows" => RunRows(args),
                 "--anim" => RunAnimDump(args),
@@ -300,6 +301,11 @@ internal static class SnapshotCli
 
         var style = element.ComputedStyle;
         var id = element.GetAttribute("id");
+        // A generated box has no id, but its style is exactly what a browser's
+        // getComputedStyle(element, '::before') reports, so dump it under the originating
+        // element's name — the only other way to see why a pseudo box is the size it is.
+        if (string.IsNullOrEmpty(id) && element.IsGeneratedPseudoElement)
+            id = $"{element.ParentElement?.GetAttribute("id") ?? "?"}:{element.TagName.ToLowerInvariant().Replace("pseudo-", "::")}";
         if (style != null && !string.IsNullOrEmpty(id))
         {
             Console.WriteLine($"{id} display={style.Display} boxSizing={style.BoxSizing} position={style.Position}");
@@ -310,21 +316,29 @@ internal static class SnapshotCli
             Console.WriteLine($"{id} radius={Fmt(style.BorderTopLeftRadius)},{Fmt(style.BorderTopRightRadius)},{Fmt(style.BorderBottomRightRadius)},{Fmt(style.BorderBottomLeftRadius)}" +
                 $"/{Fmt(style.BorderTopLeftRadiusY)},{Fmt(style.BorderTopRightRadiusY)},{Fmt(style.BorderBottomRightRadiusY)},{Fmt(style.BorderBottomLeftRadiusY)}");
             Console.WriteLine($"{id} outline={Fmt(style.OutlineWidth)}/{style.OutlineStyle}/{Color(style.OutlineColor)} offset={Fmt(style.OutlineOffset)}");
-            Console.WriteLine($"{id} textDecoration={style.TextDecorationLine}/{style.TextDecorationStyle}/{Color(style.TextDecorationColor)}/{Fmt(style.TextDecorationThickness)} fromFont={style.TextDecorationThicknessFromFont} uOffset={(style.TextUnderlineOffsetIsAuto ? "auto" : Fmt(style.TextUnderlineOffset))} uPos={style.TextUnderlinePosition}");
+            Console.WriteLine($"{id} textDecoration={style.TextDecorationLine}/{style.TextDecorationStyle}/{Color(style.ResolvedTextDecorationColor)}/{Fmt(style.TextDecorationThickness)} fromFont={style.TextDecorationThicknessFromFont} uOffset={(style.TextUnderlineOffsetIsAuto ? "auto" : Fmt(style.TextUnderlineOffset))} uPos={style.TextUnderlinePosition}");
             Console.WriteLine($"{id} margin={Fmt(style.MarginTop)} {Fmt(style.MarginRight)} {Fmt(style.MarginBottom)} {Fmt(style.MarginLeft)}");
             Console.WriteLine($"{id} padding={Fmt(style.PaddingTop)} {Fmt(style.PaddingRight)} {Fmt(style.PaddingBottom)} {Fmt(style.PaddingLeft)}");
             Console.WriteLine($"{id} inset={Fmt(style.Top)}/{Fmt(style.Right)}/{Fmt(style.Bottom)}/{Fmt(style.Left)} z={style.ZIndex?.ToString() ?? "auto"} opacity={Fmt(style.Opacity)}");
-            Console.WriteLine($"{id} font={Fmt(style.FontSize)}/{style.FontWeight}/{style.FontStyle}/{style.FontFamily} lh={Fmt(style.LineHeight)}({style.LineHeightIsNormal}) variant={style.FontVariant} transform={style.TextTransform}");
+            Console.WriteLine($"{id} font={Fmt(style.FontSize)}/{style.FontWeight}/{style.FontStyle}/{style.FontFamily} lh={Fmt(style.LineHeight)}({style.LineHeightIsNormal}) variant={style.FontVariant} transform={style.TextTransform} synthesis={Acrux.Core.Css.Resolver.CssPropertyApplier.FormatFontSynthesis(style.FontSynthesis)}");
             Console.WriteLine($"{id} color={Color(style.Color)} bg={Color(style.BackgroundColor)} bgImg={style.BackgroundImage?.Count ?? 0} bgSize={style.BackgroundSize} bgRepeat={style.BackgroundRepeat} bgPos={style.BackgroundPositionX}|{style.BackgroundPositionY} bgClip={style.BackgroundClip} bgOrigin={style.BackgroundOrigin}");
             Console.WriteLine($"{id} boxShadow={ShadowList(style.BoxShadow)} textShadow={ShadowList(style.TextShadow)}");
             Console.WriteLine($"{id} flex={Fmt(style.FlexGrow)}/{Fmt(style.FlexShrink)}/{Fmt(style.FlexBasis)} dir={style.FlexDirection} wrap={style.FlexWrap} jc={style.JustifyContent} ai={style.AlignItems} ac={style.AlignContent} gap={Fmt(style.RowGap)}/{Fmt(style.ColumnGap)}");
             Console.WriteLine($"{id} listStyle={style.ListStyleType}/{style.ListStylePosition}/{style.ListStyleImage} custom='{style.ListStyleTypeString}'");
-            Console.WriteLine($"{id} spacing={Fmt(style.LetterSpacing)}/{Fmt(style.WordSpacing)} indent={Fmt(style.TextIndent)}({style.TextIndentPercent}%) hang={style.TextIndentHanging} ws={style.WhiteSpace} overflow={style.OverflowX}/{style.OverflowY}");
-            Console.WriteLine($"{id} textOverflow={style.TextOverflow}/'{style.TextOverflowString}' wrap={style.OverflowWrap}/{style.WordBreak} lineBreak={style.LineBreak} hyphens={style.Hyphens} textWrap={style.TextWrap}");
-            Console.WriteLine($"{id} columns={style.ColumnCount}/{Fmt(style.ColumnWidth)}/{Fmt(style.ColumnGap)} rule={Fmt(style.ColumnRuleWidth)}/{style.ColumnRuleStyle}");
+            Console.WriteLine($"{id} spacing={Fmt(style.LetterSpacing)}/{Fmt(style.WordSpacing)} indent={Fmt(style.TextIndent)}({style.TextIndentPercent}%) hang={style.TextIndentHanging} ws={style.WhiteSpace}[{style.WhiteSpaceCollapse}/{style.TextWrapMode}/{style.TextWrapStyle}] overflow={style.OverflowX}/{style.OverflowY} clipMargin={style.OverflowClipMargin?.ToString() ?? style.OverflowClipMarginBox.ToString()}");
+            Console.WriteLine($"{id} textOverflow={style.TextOverflow}/'{style.TextOverflowString}' wrap={style.OverflowWrap}/{style.WordBreak} lineBreak={style.LineBreak} hyphens={style.Hyphens} hyphenateChar={style.HyphenateCharacter} textWrap={style.TextWrap}");
+            Console.WriteLine($"{id} columns={style.ColumnCount}/{Fmt(style.ColumnWidth)}/{Fmt(style.ColumnGap)} rule={Fmt(style.ColumnRuleWidth)}/{style.ColumnRuleStyle} orphans={style.Orphans} widows={style.Widows}");
+            Console.WriteLine($"{id} contain={Acrux.Core.Css.Resolver.CssPropertyApplier.FormatContain(style.Contain)} contentVisibility={style.ContentVisibility} containIntrinsic={Acrux.Core.Css.Resolver.CssPropertyApplier.FormatContainIntrinsic(style)} fieldSizing={style.FieldSizing}");
             Console.WriteLine($"{id} transition={Or(style.TransitionProperty, "all")}/{Or(style.TransitionDuration, "0s")}/{Or(style.TransitionDelay, "0s")}/{Or(style.TransitionTimingFunction, "ease")}");
             Console.WriteLine($"{id} animation={Or(style.AnimationName, "none")}/{Or(style.AnimationDuration, "0s")}/{Or(style.AnimationIterationCount, "1")}/{Or(style.AnimationFillMode, "none")}");
-            Console.WriteLine($"{id} misc=caret:{Color(style.CaretColor)} accent:{Color(style.AccentColor)} imgRendering:{style.ImageRendering} scroll:{style.ScrollBehavior} tab:{Fmt(style.TabSizePx)} contain:{style.Contain} cv:{style.ContentVisibility} filter:{style.Filter}");
+            Console.WriteLine($"{id} pe={Or(style.PointerEvents, "auto")} visibility={style.Visibility} contentVisibility={style.ContentVisibility} caret={Color(style.CaretColor)} accent={Color(style.AccentColor)} imgRendering:{style.ImageRendering} scroll:{style.ScrollBehavior} overscroll:{style.OverscrollBehaviorX}/{style.OverscrollBehaviorY} tab:{Fmt(style.TabSizePx)} filter:{style.Filter}");
+            // The pseudo-element side-car is what the layout engine actually receives, so a
+            // declaration that never reaches a generated box is only diagnosable by reading
+            // it here (generated boxes have no ComputedStyle of their own in this dump).
+            if (element.BeforeStyles is { Count: > 0 } before)
+                Console.WriteLine($"{id} ::before {{{SideCar(before)}}}");
+            if (element.AfterStyles is { Count: > 0 } after)
+                Console.WriteLine($"{id} ::after {{{SideCar(after)}}}");
         }
 
         foreach (var child in element.Children)
@@ -358,8 +372,11 @@ internal static class SnapshotCli
             : string.Join(", ", shadows.Select(s =>
                 $"{Color(s.Color)} {Fmt(s.OffsetX)} {Fmt(s.OffsetY)} {Fmt(s.BlurRadius)} {Fmt(s.Spread)}{(s.Inset ? " inset" : "")}"));
 
-    private static string ShadowList(System.Collections.Generic.List<Acrux.Core.Dom.TextShadowValue>? shadows) =>
-        shadows is not { Count: > 0 } ? "none"
+    // The raw pseudo-element side-car, in the order the cascade stored it.
+    private static string SideCar(System.Collections.Generic.Dictionary<string, string> values) =>
+        string.Join("; ", values.Select(kv => kv.Key + "=" + kv.Value));
+
+    private static string ShadowList(System.Collections.Generic.List<Acrux.Core.Dom.TextShadowValue>? shadows) =>        shadows is not { Count: > 0 } ? "none"
             : string.Join(", ", shadows.Select(s =>
                 $"{Color(s.Color)} {Fmt(s.OffsetX)} {Fmt(s.OffsetY)} {Fmt(s.BlurRadius)}"));
 
@@ -425,6 +442,80 @@ internal static class SnapshotCli
         foreach (var child in element.Children)
             if (child is Acrux.Core.Dom.Element ce)
                 DumpBox(ce, depth + 1);
+    }
+
+    /// <summary>
+    /// Hit-test channel: answers "which element takes a pointer here" for a page.
+    /// Probe points come from the markup itself — every [data-probe] element contributes
+    /// the centre of its own border box — so the same page can be probed in a reference
+    /// browser through document.elementFromPoint without either side publishing pixel
+    /// coordinates. Extra arguments are read as explicit "x,y" points.
+    ///   Acrux --hittest &lt;input.html&gt; [width] [height] [dpiScale] [x,y ...]
+    /// </summary>
+    private static int RunHitTest(string[] args)
+    {
+        if (args.Length < 2) return Usage();
+
+        string inputPath = args[1];
+        int width = args.Length > 2 ? int.Parse(args[2]) : 1024;
+        int height = args.Length > 3 ? int.Parse(args[3]) : 768;
+        float dpiScale = args.Length > 4
+            ? float.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture)
+            : 1f;
+
+        if (!File.Exists(inputPath))
+        {
+            Console.Error.WriteLine($"[hittest] input not found: {inputPath}");
+            return 1;
+        }
+
+        var full = Path.GetFullPath(inputPath);
+        var html = File.ReadAllText(full);
+        var baseUrl = new Uri(full).AbsoluteUri;
+        var page = RenderSnapshot.Prepare(html, width, height, baseUrl, dpiScale, true, 0);
+        var doc = page.Load.Document;
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+
+        var points = new List<(string Label, float X, float Y)>();
+        foreach (var probe in CollectProbes(doc.DocumentElement))
+        {
+            var box = probe.LayoutBox;
+            if (box == null) { Console.WriteLine($"[hit] {probe.GetAttribute("data-probe")} (no box)"); continue; }
+            float px = (box.BorderBox.Left + box.BorderBox.Right) / 2f;
+            float py = (box.BorderBox.Top + box.BorderBox.Bottom) / 2f;
+            points.Add((probe.GetAttribute("data-probe")!, px, py));
+        }
+        for (int i = 5; i < args.Length; i++)
+        {
+            var parts = args[i].Split(',');
+            if (parts.Length != 2) continue;
+            if (!float.TryParse(parts[0], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var px)
+                || !float.TryParse(parts[1], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var py)) continue;
+            points.Add(($"{px.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}," +
+                        $"{py.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}", px, py));
+        }
+
+        foreach (var (label, px, py) in points)
+        {
+            var hit = Acrux.PageHost.PageHitTest.HitTest(doc, px, py);
+            var id = hit?.GetAttribute("id");
+            var name = string.IsNullOrEmpty(id) ? (hit?.TagName.ToLowerInvariant() ?? "null") : id;
+            var style = hit?.ComputedStyle;
+            Console.WriteLine($"[hit] {label} ({Fmt(px)},{Fmt(py)}) -> {name}" +
+                (style == null ? "" : $" pe={Or(style.PointerEvents, "auto")} vis={style.Visibility} z={Fmt(style.ZIndex)}"));
+        }
+        return 0;
+    }
+
+    private static IEnumerable<Acrux.Core.Dom.Element> CollectProbes(Acrux.Core.Dom.Element? element)
+    {
+        if (element == null) yield break;
+        if (!string.IsNullOrEmpty(element.GetAttribute("data-probe"))) yield return element;
+        foreach (var child in element.Children.OfType<Acrux.Core.Dom.Element>())
+            foreach (var found in CollectProbes(child))
+                yield return found;
     }
 
     /// <summary>
@@ -584,6 +675,7 @@ internal static class SnapshotCli
         Console.Error.WriteLine("  Acrux --diff <expected.png> <actual.png> [diff.png] [tolerance]");
         Console.Error.WriteLine("  Acrux --dumplayout <input.html> [width] [height]");
         Console.Error.WriteLine("  Acrux --computed <input.html> [width] [height] [dpiScale]");
+        Console.Error.WriteLine("  Acrux --hittest <input.html> [width] [height] [dpiScale] [x,y ...]");
         Console.Error.WriteLine("  Acrux --anim <input.html> [width] [height] [timeMs]");
         Console.Error.WriteLine("  Acrux --rows <image.png> <x0> <x1> <y0> <y1>");
         return 64;

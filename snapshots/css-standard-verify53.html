@@ -20,7 +20,16 @@ h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
 /* 3. negative left margin on a float pulls it outside */
 .nf { float: left; width: 120px; height: 40px; margin-left: -40px; background: #f9f; border: 1px solid #939; }
 
-/* 4. overflow:clip should establish a BFC like hidden (contain float) */
+/* 4. overflow:clip does NOT establish a BFC (CORRECTED 2026-10-06 — this batch used to
+      assert the opposite, and the wrong rule was baked into its reference image).
+      Measured in Edge with a 40px float inside a 200px box:
+        overflow:clip -> 22px tall   (float NOT contained, same as 'visible')
+        overflow:hidden -> 42px      (contained: it is the only one of the two that makes a BFC)
+        overflow:visible -> 22px
+      CSS Overflow 3 §4.1 narrows CSS 2.1 §9.4.1: 'visible' and 'clip' are the two values
+      that keep the box out of being a BFC root. 'clip' still CLIPS (like hidden) and still
+      is NOT a scroll container (unlike hidden) — three independent questions.
+      See css-standard-verify207-overflow-clip.html for the full matrix. */
 .clip { overflow: clip; border: 1px solid #639; padding: 4px; margin: 4px 0; }
 .float-in { float: left; width: 80px; height: 50px; background: #fc9; }
 
@@ -41,7 +50,7 @@ h2 { background: #eee; padding: 4px; margin: 20px 0 10px; }
 <h2>3. negative-margin float (margin-left:-40)</h2>
 <div class="wrap"><div class="nf"></div><div class="clear"></div></div>
 
-<h2>4. overflow:clip contains float (BFC like hidden)</h2>
+<h2>4. overflow:clip does NOT contain the float (no BFC; unlike hidden)</h2>
 <div class="clip"><div class="float-in"></div>text beside clipped float</div>
 
 <h2>5. clear:both after left+right floats</h2>

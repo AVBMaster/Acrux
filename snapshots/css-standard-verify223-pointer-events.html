@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<!--
+  b223 — CSS UI 4 §11 "pointer-events" as a hit-testing control.
+
+  Ground truth is document.elementFromPoint in Edge, read through the 1px
+  [data-probe] markers below (each marker is pointer-events:none, so it never
+  becomes the target itself). The engine answers the same markers through
+  `Acrux --hittest`, which makes the comparison coordinate-free: neither side
+  has to know the other's pixel positions, both resolve the point from the
+  marker's own box.
+
+  Every box is absolutely positioned with explicit px lengths inside a
+  fixed-height .case block, so the geometry does not depend on text measurement
+  (which drifts by <1% — §4 #188). NOTE: lengths must carry a unit; `left:20` is
+  an invalid declaration and the reference engine drops it (see the trap this
+  page originally caught).
+
+  EDGE TRUTH (2026-10-06, dpr=1, viewport 383x481, each probe scrolled into view; the
+  engine's `--hittest` answers all 41 identically):
+    A1  p1-child=a1a      p1-parent=a1
+    A2  p2-child=a2a      p2-inherit=c2    p2-parent=c2      (nested: auto re-enables,
+        an undeclared child inherits 'none' and is not a target either)
+    A3  p3-child=a3a      p3-parent=c3                        (a sibling is unaffected)
+    A4  p4-inner=a4b      p4-b=a4b         p4-a=c4            (the hit falls to the
+        nearest hittable ancestor, not to the topmost box)
+    B1  p5-overlap=a5high p5-low=c5        p5-high=c5
+    C1  p6-hidden-auto=c6 p6-hidden-all=c6                    (visibility removes the box;
+        'all' does not rescue it)
+    C2  p7-opaque-auto=a7 p7-opaque-none=c7                   (opacity is irrelevant)
+    D1  p8-visible-painted=a8  p8-visible=a8b                 (SVG keywords behave like auto)
+    D2  p9-fill=a9  p9-stroke-inside=a9b  p9-stroke-edge=a9b
+    D3  p10-bbox=c10 (its box is also hidden)  p10-invalid=a10b ('transparent' is not a
+        keyword → declaration dropped → computed 'auto')
+    E1  p11-span=a11  p11-before=a11  p11-after=a11           (text in a 'none' span falls
+        through to the block that owns the line)
+    E2  p12-span=a12s p12-before=c12
+    E3  p13-link=a13a p13-text=a13
+    F1  p14-canvas=a14bg p14-input=a14bg
+    G1  p15-unpainted-auto=a15 p15-unpainted-vp=a15b          (being painted is irrelevant)
+    G2  p16-hidden-parent=c16 p16-visible-child=a16a p16-bbox-visible=a16b
+    H1  p17-before=a17  p17-after=a17                          (a generated box takes events
+        for its originating element, even where that box lies outside the parent's own rect)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b223 pointer-events hit-testing</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  body { font: 12px/1.2 Arial, sans-serif; color: #333; }
+  .case { position: relative; height: 56px; background: #f0f0f0;
+          border-bottom: 1px solid #c8c8c8; }
+  .case::before { content: attr(data-label); position: absolute; right: 4px; top: 2px;
+                  color: #666; font-size: 10px; }
+  .box { position: absolute; color: #fff; font-size: 10px; }
+  .probe { position: absolute; width: 1px; height: 1px; pointer-events: none;
+           background: transparent; }
+  .on  { background: #2a8f2a; }   /* pointer-events: auto family */
+  .kid { background: #2050c0; }   /* re-enabled descendant       */
+  .hid { background: #808080; visibility: hidden; }
+  .opa { background: #2a8f2a; opacity: 0; }
+  /* H1: the generated boxes are declared in <head> — a <style> element inside <body>
+     is a separate question (see the note in docs/CSS-HANDOFF.md §4). */
+  #a17::before { content: "BEFORE"; position: absolute; left: 0px; top: 0px;
+                 width: 100px; height: 56px; background: #d2691e; color: #fff; font-size: 10px; }
+  #a17::after  { content: "AFTER"; position: absolute; left: 220px; top: 0px;
+                 width: 80px; height: 56px; background: #7040a0; color: #fff; font-size: 10px; }
+</style>
+</head>
+<body>
+
+<!-- A. own value vs inherited value, and the descendant escape hatch -->
+<div class="case" id="c1" data-label="A1 parent auto, child auto">
+  <div class="box on" id="a1" style="left:0px;top:0px;width:200px;height:56px">a1</div>
+  <div class="box kid" id="a1a" style="left:20px;top:8px;width:60px;height:40px">a1a</div>
+  <i class="probe" data-probe="p1-child"  style="left:50px;top:28px"></i>
+  <i class="probe" data-probe="p1-parent" style="left:150px;top:28px"></i>
+</div>
+
+<div class="case" id="c2" data-label="A2 parent none, nested child auto">
+  <div class="box off" id="a2" style="left:0px;top:0px;width:200px;height:56px;pointer-events:none">a2
+    <div class="box kid" id="a2a" style="left:20px;top:8px;width:60px;height:40px;pointer-events:auto">a2a</div>
+    <div class="box kid" id="a2b" style="left:100px;top:8px;width:60px;height:40px">a2b</div>
+  </div>
+  <i class="probe" data-probe="p2-child"    style="left:50px;top:28px"></i>
+  <i class="probe" data-probe="p2-inherit"  style="left:130px;top:28px"></i>
+  <i class="probe" data-probe="p2-parent"   style="left:185px;top:28px"></i>
+</div>
+
+<div class="case" id="c3" data-label="A3 sibling of a none box, overlapping it">
+  <div class="box off" id="a3" style="left:0px;top:0px;width:200px;height:56px;pointer-events:none">a3</div>
+  <div class="box kid" id="a3a" style="left:20px;top:8px;width:60px;height:40px">a3a</div>
+  <i class="probe" data-probe="p3-child"  style="left:50px;top:28px"></i>
+  <i class="probe" data-probe="p3-parent" style="left:150px;top:28px"></i>
+</div>
+
+<div class="case" id="c4" data-label="A4 none &gt; auto &gt; none">
+  <div class="box off" id="a4" style="left:0px;top:0px;width:368px;height:56px;pointer-events:none">a4</div>
+  <div class="box on" id="a4b" style="left:20px;top:8px;width:140px;height:40px;pointer-events:auto">a4b</div>
+  <div class="box off" id="a4c" style="left:60px;top:16px;width:60px;height:24px;pointer-events:none">a4c</div>
+  <i class="probe" data-probe="p4-inner" style="left:90px;top:28px"></i>
+  <i class="probe" data-probe="p4-b"      style="left:30px;top:28px"></i>
+  <i class="probe" data-probe="p4-a"      style="left:300px;top:28px"></i>
+</div>
+
+<!-- B. stacking: a higher, non-hittable box shields nothing, and a lower
+     non-hittable box must not shield what is under it -->
+<div class="case" id="c5" data-label="B1 none(z1) under auto(z2)">
+  <div class="box off" id="a5low" style="left:0px;top:0px;width:160px;height:56px;pointer-events:none;z-index:1">low</div>
+  <div class="box on" id="a5high" style="left:100px;top:8px;width:160px;height:40px;z-index:2">high</div>
+  <i class="probe" data-probe="p5-overlap" style="left:130px;top:28px"></i>
+  <i class="probe" data-probe="p5-low"     style="left:40px;top:28px"></i>
+  <i class="probe" data-probe="p5-high"    style="left:300px;top:28px"></i>
+</div>
+
+<!-- C. invisible-but-present: visibility, opacity -->
+<div class="case" id="c6" data-label="C1 hidden+auto / hidden+all">
+  <div class="box hid" id="a6" style="left:0px;top:0px;width:100px;height:56px">a6</div>
+  <div class="box hid" id="a6b" style="left:120px;top:0px;width:100px;height:56px;pointer-events:all">a6b</div>
+  <i class="probe" data-probe="p6-hidden-auto" style="left:50px;top:28px"></i>
+  <i class="probe" data-probe="p6-hidden-all"   style="left:170px;top:28px"></i>
+</div>
+
+<div class="case" id="c7" data-label="C2 opacity0+auto / +none">
+  <div class="box opa" id="a7" style="left:0px;top:0px;width:100px;height:56px">a7</div>
+  <div class="box opa" id="a7b" style="left:120px;top:0px;width:100px;height:56px;pointer-events:none">a7b</div>
+  <i class="probe" data-probe="p7-opaque-auto" style="left:50px;top:28px"></i>
+  <i class="probe" data-probe="p7-opaque-none"  style="left:170px;top:28px"></i>
+</div>
+
+<!-- D. the SVG-only keyword family on HTML boxes -->
+<div class="case" id="c8" data-label="D1 visiblePainted / visible">
+  <div class="box on" id="a8" style="left:0px;top:0px;width:100px;height:56px;pointer-events:visiblePainted">vp</div>
+  <div class="box on" id="a8b" style="left:120px;top:0px;width:100px;height:56px;pointer-events:visible">vis</div>
+  <i class="probe" data-probe="p8-visible-painted" style="left:50px;top:28px"></i>
+  <i class="probe" data-probe="p8-visible"          style="left:170px;top:28px"></i>
+</div>
+
+<div class="case" id="c9" data-label="D2 fill / stroke(6px border)">
+  <div class="box on" id="a9" style="left:0px;top:0px;width:100px;height:56px;pointer-events:fill">fill</div>
+  <div class="box on" id="a9b" style="left:120px;top:0px;width:100px;height:56px;border:6px solid #2050c0;background:#ffffff;pointer-events:stroke">stk</div>
+  <i class="probe" data-probe="p9-fill"          style="left:50px;top:28px"></i>
+  <i class="probe" data-probe="p9-stroke-inside" style="left:170px;top:28px"></i>
+  <i class="probe" data-probe="p9-stroke-edge"   style="left:123px;top:28px"></i>
+</div>
+
+<div class="case" id="c10" data-label="D3 bounding-box(hidden) / invalid kw">
+  <div class="box hid" id="a10" style="left:0px;top:0px;width:100px;height:56px;pointer-events:bounding-box">bb</div>
+  <div class="box on" id="a10b" style="left:120px;top:0px;width:100px;height:56px;pointer-events:transparent">inv</div>
+  <i class="probe" data-probe="p10-bbox"      style="left:50px;top:28px"></i>
+  <i class="probe" data-probe="p10-invalid"   style="left:170px;top:28px"></i>
+</div>
+
+<!-- E. inline runs: geometry lives in the parent block's lines -->
+<div class="case" id="c11" data-label="E1 span none inside p auto">
+  <p id="a11" style="position:absolute;left:0px;top:6px;margin:0;font-size:20px;line-height:24px;font-family:Arial,sans-serif;color:#000000">
+    alpha <span id="a11s" style="pointer-events:none;background-color:#ffe08a">bravo</span> charlie</p>
+  <i class="probe" data-probe="p11-span"   style="left:80px;top:18px"></i>
+  <i class="probe" data-probe="p11-before" style="left:20px;top:18px"></i>
+  <i class="probe" data-probe="p11-after"  style="left:140px;top:18px"></i>
+</div>
+
+<div class="case" id="c12" data-label="E2 span auto inside p none">
+  <p id="a12" style="position:absolute;left:0px;top:6px;margin:0;font-size:20px;line-height:24px;font-family:Arial,sans-serif;color:#000000;pointer-events:none">
+    delta <span id="a12s" style="pointer-events:auto;background-color:#ffe08a">echo</span> foxtrot</p>
+  <i class="probe" data-probe="p12-span"   style="left:70px;top:18px"></i>
+  <i class="probe" data-probe="p12-before" style="left:20px;top:18px"></i>
+</div>
+
+<div class="case" id="c13" data-label="E3 link inside plain p">
+  <p id="a13" style="position:absolute;left:0px;top:6px;margin:0;font-size:20px;line-height:24px;font-family:Arial,sans-serif;color:#000000">
+    <a id="a13a" href="#" style="color:#2050c0">golf</a> hotel</p>
+  <i class="probe" data-probe="p13-link" style="left:20px;top:18px"></i>
+  <i class="probe" data-probe="p13-text" style="left:60px;top:18px"></i>
+</div>
+
+<!-- F. replaced elements and form controls -->
+<div class="case" id="c14" data-label="F1 canvas none / input none">
+  <div class="box on" id="a14bg" style="left:0px;top:0px;width:368px;height:56px;background:#e8a0a0">bg</div>
+  <canvas id="a14c" width="80" height="40" style="position:absolute;left:10px;top:8px;background:#2a8f2a;pointer-events:none"></canvas>
+  <input id="a14i" value="hittable" style="position:absolute;left:120px;top:8px;width:100px;pointer-events:none">
+  <i class="probe" data-probe="p14-canvas" style="left:50px;top:28px"></i>
+  <i class="probe" data-probe="p14-input"  style="left:170px;top:20px"></i>
+</div>
+
+<!-- G. does painting matter, and does visibility gate the whole family? -->
+<div class="case" id="c15" data-label="G1 unpainted auto / unpainted visiblePainted">
+  <div class="box" id="a15" style="left:0px;top:0px;width:100px;height:56px;color:#000">up</div>
+  <div class="box" id="a15b" style="left:120px;top:0px;width:100px;height:56px;color:#000;pointer-events:visiblePainted">upvp</div>
+  <i class="probe" data-probe="p15-unpainted-auto" style="left:50px;top:28px"></i>
+  <i class="probe" data-probe="p15-unpainted-vp"   style="left:170px;top:28px"></i>
+</div>
+
+<div class="case" id="c16" data-label="G2 hidden parent + visible child / bbox visible">
+  <div class="box hid" id="a16" style="left:0px;top:0px;width:200px;height:56px;pointer-events:auto">a16
+    <div class="box on" id="a16a" style="left:20px;top:8px;width:60px;height:40px;visibility:visible">a16a</div>
+  </div>
+  <div class="box on" id="a16b" style="left:220px;top:0px;width:100px;height:56px;pointer-events:bounding-box">bb2</div>
+  <i class="probe" data-probe="p16-hidden-parent"  style="left:10px;top:10px"></i>
+  <i class="probe" data-probe="p16-visible-child"  style="left:50px;top:28px"></i>
+  <i class="probe" data-probe="p16-bbox-visible"   style="left:270px;top:28px"></i>
+</div>
+
+<!-- H. a generated box takes events for its originating element -->
+<div class="case" id="c17" data-label="H1 ::before inside / ::after outside the parent box">
+  <div class="box on" id="a17" style="left:0px;top:0px;width:200px;height:56px">a17</div>
+  <i class="probe" data-probe="p17-before" style="left:50px;top:28px"></i>
+  <i class="probe" data-probe="p17-after"  style="left:250px;top:28px"></i>
+</div>
+
+<!-- I. a justified line: the run geometry the hit test uses must be the one layout recorded.
+     The paragraph wraps, so its FIRST line is stretched to the full width and every run after
+     the first sits further right than its natural position — a hit test that re-adds widths
+     from the content edge resolves the shifted words to the wrong element. -->
+<div class="case" id="c18" data-label="I1 justify, wrapped line" style="height:100px">
+  <p id="a18" style="position:absolute;left:0px;top:6px;width:200px;margin:0;text-align:justify;
+                    font-size:20px;line-height:24px;font-family:Arial,sans-serif;color:#000">
+    <a id="a18a" href="#" style="color:#2050c0">alpha</a> <span id="a18b">bravo</span>
+    <a id="a18c" href="#" style="color:#2050c0">charlie</a> <span id="a18d">delta</span>
+    <a id="a18e" href="#" style="color:#2050c0">echo</a> foxtrot</p>
+  <i class="probe" data-probe="p18-alpha"   style="left:10px;top:18px"></i>
+  <i class="probe" data-probe="p18-bravo-justified" style="left:96px;top:18px"></i>
+  <i class="probe" data-probe="p18-charlie-justified"    style="left:186px;top:18px"></i>
+</div>
+
+</body>
+</html>

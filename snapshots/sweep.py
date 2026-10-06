@@ -3,7 +3,9 @@ report the worst pixel diffs. Refs were baked either at dpr 1.25 (device px = CS
 x 1.25) or at dpr 1, so each page is tried both ways and the better match is kept."""
 import glob, os, re, struct, subprocess, sys
 
-EXE = "./Acrux/bin/Debug/net10.0-windows/Acrux.exe"
+import _acrux_cli as cli
+
+ENV = cli.environment()
 TMP = "snapshots/out/_sweep.png"
 
 
@@ -27,7 +29,7 @@ def pick_page(num, ref_name):
 
 
 def run(args):
-    return subprocess.run([EXE] + args, capture_output=True, text=True, timeout=300).stdout
+    return subprocess.run(cli.command(args), capture_output=True, text=True, timeout=300, env=ENV).stdout
 
 
 def diff_pct(ref, page, w, h, dpi):

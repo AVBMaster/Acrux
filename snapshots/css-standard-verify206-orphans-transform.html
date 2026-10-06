@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 206 - orphans/widows parsing and text-transform composition</title>
+<style>
+/* TWO FIXES PINNED HERE.
+   1) 'orphans' and 'widows' had EMPTY cases in CssPropertyApplier.Apply: the
+      declaration parsed, matched, and was thrown away, so the properties were stuck at
+      their initial 2 — which also silently disabled the multicol 'orphans' floor that
+      ColumnLayoutAlgorithm.BalancedColumnBlockSize already reads from this style.
+      Now they take an <integer> >= 1 (CSS Text 3 §5.5.1); 0, negatives and decimals are
+      out of range and are dropped.
+   2) 'text-transform' was matched as ONE whole string, so a CSS Text 4 §6.1 keyword
+      list ('uppercase full-width') fell through to "no transform at all", and
+      'full-size-kana' did not exist. Each token is now applied in the order written.
+      Edge implements neither the list nor 'full-width'/'full-size-kana' (measured: it
+      reports computed 'none' for all of them), so this batch is checked against the
+      spec table rather than the reference engine — a deliberate step past Edge, not a
+      divergence from behaviour it has.
+
+   EDGE TRUTH for the inheritance part (dpr 1, viewport 383):
+     o1/o1c orphans 7  widows 9   (parent declares both, child inherits both)
+     o2     orphans 7  widows 9   ('orphans: 0' is invalid -> dropped, the earlier valid
+                                    declaration survives; WE report 2/9 — that is gap
+                                    #202, the name-keyed declaration store)
+     o3     orphans 7  widows 9   ('widows: -3', same reason)
+     o4     orphans 7  widows 9   ('orphans: 2.5', decimal is not an <integer>)
+     o5     orphans 5  widows 9   ('orphans: inherit' picks the div's 5)
+   Multicol effect (20 words, columns:2, width 300, 16px/20px Arial) — box height:
+     orphans 2 -> Edge 60,  ours 40
+     orphans 4 -> Edge 80,  ours 80
+     orphans 6 -> Edge 100, ours 80
+   Before the fix all three were 40 (the property never reached the balancer). The
+   remaining gap is the balancing model itself, not the plumbing: gap #210.
+*/
+body { font: 16px/20px Arial, sans-serif; margin: 8px; color: #111; background: #fff; }
+p { margin: 4px 0; }
+.own { orphans: 7; widows: 9; }
+.bad0 { orphans: 0; }
+.badNeg { widows: -3; }
+.badDec { orphans: 2.5; }
+.kw { orphans: inherit; }
+.host { orphans: 5; widows: 9; }
+.mc { columns: 2; column-gap: 10px; width: 300px; border: 1px solid #bbb; }
+.o4 { orphans: 4; }
+.o6 { orphans: 6; }
+.t1 { text-transform: uppercase full-width; }
+.t2 { text-transform: full-size-kana; }
+.t3 { text-transform: lowercase full-size-kana; }
+.t4 { text-transform: full-width; }
+</style></head>
+<body>
+
+<h2>1. orphans / widows parse, inherit, and reject out-of-range</h2>
+<div id="o1" class="own">parent<span id="o1c"> child</span></div>
+<p id="o2" class="own bad0">orphans:0 must not erase the valid 7 (see #202)</p>
+<p id="o3" class="own badNeg">widows:-3</p>
+<p id="o4" class="own badDec">orphans:2.5</p>
+<div class="host"><p id="o5" class="kw">orphans:inherit</p></div>
+
+<h2>2. the value reaches the multicol balancer</h2>
+<div id="m1" class="mc">aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm nnn ooo ppp qqq rrr sss ttt</div>
+<div id="m2" class="mc o4">aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm nnn ooo ppp qqq rrr sss ttt</div>
+<div id="m3" class="mc o6">aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm nnn ooo ppp qqq rrr sss ttt</div>
+
+<h2>3. text-transform keyword lists and full-size-kana</h2>
+<p id="t1" class="t1">ab ss</p>
+<p id="t2" class="t2">ァゥェォ ャュョ ヮヵヶ</p>
+<p id="t3" class="t3">ァュョ</p>
+<p id="t4" class="t4">ab 1!~</p>
+
+</body>
+</html>

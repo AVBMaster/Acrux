@@ -570,38 +570,14 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     }
 
     /// <summary>
-    /// TODO(mstensho/ikilpatrick): port the full min/max contribution algorithm.
-    /// The engine computes both bounds from an actual layout pass.
+    /// This box's min- and max-content inline sizes, border box (CSS Sizing 3 §4.2).
+    /// Everything the sizing keywords and the shrink-to-fit rule consume resolves
+    /// through this, so it delegates to the same recursive contribution walk the
+    /// parent uses for its children — one implementation of §4, not two.
     /// </summary>
     public MinMaxSizesResult ComputeMinMaxSizes(MinMaxSizesFloatInput floatInput)
     {
-        float minContent = 0;
-        float maxContent = 0;
-
-        foreach (var node in Node.Children)
-        {
-            if (node is not Element child)
-                continue;
-            var s = child.ComputedStyle;
-            if (s == null || s.Display == DisplayType.None)
-                continue;
-            if (IsOutOfFlowPositionedChild(child))
-                continue;
-
-            float childInline;
-            if (s.Width is PixelLength pw)
-                childInline = pw.Value + BorderPaddingFor(child).HorizontalSum;
-            else if (s.Width is PercentLength pct)
-                childInline = pct.Value * ChildAvailableInlineSize + BorderPaddingFor(child).HorizontalSum;
-            else
-                childInline = ChildAvailableInlineSize;
-
-            maxContent = Math.Max(maxContent, childInline);
-            minContent = Math.Max(minContent, childInline);
-        }
-
-        var sizes = new MinMaxSizes(minContent + _borderPadding.HorizontalSum, maxContent + _borderPadding.HorizontalSum);
-        return new MinMaxSizesResult(sizes, /* depends_on_block_constraints */ false);
+        return IntrinsicMeasure.SizeResult(Node, Space);
     }
 
     private static BoxStrut BorderPaddingFor(Element child)
@@ -622,7 +598,17 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         // option plus the arrow, whatever line it happens to sit on. Hand that
         // width to ourselves as the constraint space, then top the finished box up
         // to the widget height - content shorter than `rows` never reaches it.
+        // This runs FIRST: the control is not shrink-to-fit, so letting the content
+        // pass pin the space to the (empty) text width first capped the widget width
+        // at that value and <textarea cols=20> laid out 6px wide.
         bool widgetSized = TryApplyFormControlWidgetSpace();
+
+        // A box that is sized by its own content must have that width settled before
+        // its children flow: the children lay out in this box's content box, so
+        // flowing them at the container's full width and shrinking the box afterwards
+        // left every nested block unwrapped (b187 §4 — 'width: min-content' around two
+        // block children reported the narrow box but kept the wide lines).
+        TryApplyContentDrivenInlineSpace();
 
         if (Node.IsInlineFormattingContextRoot())
         {
@@ -637,6 +623,49 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         if (r.Status != EStatus.Success)
             return HandleNonsuccessfulLayoutResult(r);
         return FinishFormControlWidgetLayout(r, widgetSized);
+    }
+
+    /// <summary>Pin the constraint space to the inline size this box's own content
+    /// decides — an intrinsic sizing keyword, or shrink-to-fit for a float,
+    /// inline-block or atomic inline. Returns true when the space was replaced.</summary>
+    private bool TryApplyContentDrivenInlineSpace()
+    {
+        if (Space.IsFixedInlineSize)
+            return false;
+        bool shrinkToFit = Space.IsShrinkToFit && Style.Width is null or AutoLength;
+        if (!shrinkToFit && Style.Width is not IntrinsicLength
+            && Style.MinWidth is not IntrinsicLength && Style.MaxWidth is not IntrinsicLength)
+            return false;
+
+        Func<SizeType, MinMaxSizesResult> intrinsic = _ => IntrinsicMeasure.SizeResult(Node, Space);
+        float desired = LengthUtils.ResolveMainInlineLength(Space, Style, _borderPadding,
+            intrinsic, Style.Width, null);
+        if (LengthUtils.IsIndefinite(desired))
+            desired = ChildAvailableInlineSize + _borderPadding.HorizontalSum;
+
+        var (floorI, ceilI) = LengthUtils.ComputeMinMaxInlineSizes(Space, Style, _borderPadding, intrinsic);
+        desired = Math.Clamp(desired, floorI, Math.Max(floorI, ceilI));
+        if (shrinkToFit)
+        {
+            var mm = intrinsic(SizeType.Intrinsic).Sizes;
+            desired = Math.Min(Math.Max(mm.MinSize, desired), mm.MaxSize);
+        }
+        if (LengthUtils.IsIndefinite(desired))
+            return false;
+        // Zero is a legitimate settled width: a shrink-to-fit box whose intrinsic sizes
+        // have been replaced by size containment measures exactly its border and padding
+        // (reference engine: 'display: inline-block; contain: size' with text inside is a
+        // 0x0 box). Bailing out here used to keep the container's full width instead.
+        desired = Math.Max(0, desired);
+
+        float contentInline = Math.Max(0, desired - _borderPadding.HorizontalSum);
+        // Copy the space rather than rebuilding one: the BFC block/line offsets,
+        // margin strut, exclusion space, direction and fragmentation type all have to
+        // survive, or the parent loses the child's block position and stacks every
+        // sibling at zero.
+        Space = Space.WithInlineSize(desired)
+            .WithPercentageResolution(contentInline, Space.PercentageResolutionBlockSize);
+        return true;
     }
 
     /// <summary>True when this box is a form control whose width the author left
@@ -835,6 +864,43 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         // columns.
         if (Space.HasBlockFragmentation && Space.HasDefiniteBlockSize)
             FragmentInlineLinesForColumn(result);
+
+        // CSS Containment 3 §2.2: an inline formatting context sizes its box from its line
+        // boxes, so the containment replacement has to be applied to the finished fragment
+        // as well (the block path does the same to _intrinsicBlockSize). The lines stay in
+        // place and still overflow — containment replaces the box's size, not its content —
+        // and a specified width/height/min/max still wins over the replacement, which is why
+        // this runs through the same length resolution as the block path.
+        if (Style.HasSizeContainment && result.Fragment != null)
+        {
+            float intrinsicInline = ContainmentMetrics.ContainedInlineBorderBox(
+                Style, Space, _borderPadding.HorizontalSum);
+            float intrinsicBlock = ContainmentMetrics.ContainedBlockBorderBox(
+                Style, Space, _borderPadding.VerticalSum);
+            var contained = new MinMaxSizesResult(new MinMaxSizes(intrinsicInline, intrinsicInline));
+
+            float inlineSize = LengthUtils.ComputeInlineSizeForFragment(Space, Style, _borderPadding,
+                _ => contained);
+            if (LengthUtils.IsIndefinite(inlineSize))
+                inlineSize = Space.IsShrinkToFit ? intrinsicInline : Space.AvailableInlineSize;
+            var (minI, maxI) = LengthUtils.ComputeMinMaxInlineSizes(Space, Style, _borderPadding, _ => contained);
+            inlineSize = Math.Clamp(inlineSize, minI, maxI);
+
+            float blockSize = LengthUtils.ComputeBlockSizeForFragment(Space, Style, _borderPadding,
+                intrinsicBlock, inlineSize);
+            if (LengthUtils.IsIndefinite(blockSize))
+                blockSize = intrinsicBlock;
+            var (minB, maxB) = LengthUtils.ComputeMinMaxBlockSizes(Space, Style, _borderPadding,
+                null, _ => intrinsicBlock);
+            blockSize = Math.Clamp(blockSize, minB, maxB);
+
+            result.Fragment.InlineSize = inlineSize;
+            result.Fragment.BlockSize = blockSize;
+            Builder.InlineSize = inlineSize;
+            Builder.BlockSize = blockSize;
+            Builder.IntrinsicBlockSize = intrinsicBlock;
+            result.IntrinsicBlockSize = intrinsicBlock;
+        }
 
         return result;
     }
@@ -1388,6 +1454,15 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
                 _borderPadding.Top + previousInflowPosition.logical_block_offset);
         }
 
+        // CSS Containment 3 §2.2: while size containment is on (either the keyword or
+        // 'content-visibility: hidden') the contents contribute nothing to the box's auto
+        // block size, which becomes the contain-intrinsic fallback plus border and padding.
+        // The children are still laid out and still overflow the box — the reference engine
+        // keeps their geometry and only replaces the size contribution.
+        if (Style.HasSizeContainment)
+            _intrinsicBlockSize = ContainmentMetrics.ContainedBlockBorderBox(
+                Style, Space, _borderPadding.VerticalSum);
+
         float unconstrainedIntrinsicBlockSize = _intrinsicBlockSize;        _intrinsicBlockSize = ClampIntrinsicBlockSize(
             Space, Node, _breakToken, _borderPadding, _intrinsicBlockSize, CalculateQuirkyBodyMarginBlockSum(endMarginStrut));
 
@@ -1401,7 +1476,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         // Inline size (kept on the original engine's semantics: the fragment's
         // border-box inline size).
         float inlineSize = LengthUtils.ComputeInlineSizeForFragment(Space, Style, _borderPadding,
-            t => new MinMaxSizesResult(new MinMaxSizes(ChildAvailableInlineSize, ChildAvailableInlineSize)));
+            _ => IntrinsicMeasure.SizeResult(Node, Space));
         if (LengthUtils.IsIndefinite(inlineSize))
             inlineSize = Space.AvailableInlineSize;
 
@@ -1448,7 +1523,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         }
 
         var (minI, maxI) = LengthUtils.ComputeMinMaxInlineSizes(Space, Style, _borderPadding,
-            t => new MinMaxSizesResult(new MinMaxSizes(ChildAvailableInlineSize, ChildAvailableInlineSize)));
+            _ => IntrinsicMeasure.SizeResult(Node, Space));
         _inlineSize = Math.Clamp(inlineSize, minI, maxI);
 
         // Recompute the block-axis size now that we know our content size.
@@ -1465,8 +1540,16 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         }
         if (LengthUtils.IsIndefinite(blockSize))
             blockSize = _intrinsicBlockSize;
-        var (minB, maxB) = LengthUtils.ComputeMinMaxBlockSizes(Space, Style, _borderPadding, null, _ => _intrinsicBlockSize);
-        _blockSize = Math.Clamp(blockSize, minB, maxB);
+        if (Space.IsTableCell)
+        {
+            // Cells take the §17.5.2.1 rules instead of the ordinary min/max clamp.
+            _blockSize = TableCellBlockSize(Style, Space, _borderPadding, unconstrainedIntrinsicBlockSize);
+        }
+        else
+        {
+            var (minB, maxB) = LengthUtils.ComputeMinMaxBlockSizes(Space, Style, _borderPadding, null, _ => _intrinsicBlockSize);
+            _blockSize = Math.Clamp(blockSize, minB, maxB);
+        }
 
         // When min/max-height constrains an aspect-ratio box whose inline size is
         // auto, the used block size no longer equals the ratio-derived one, so the
@@ -1549,14 +1632,8 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         builderReadyForFinalize();
 
         // At this point, perform the final block-content adjustments.
-        if (Space.IsTableCell)
-        {
-            FinalizeTableCellLayout(_intrinsicBlockSize);
-        }
-        else
-        {
+        if (!Space.IsTableCell)
             BlockLayoutUtils.AlignBlockContent(Style, unconstrainedIntrinsicBlockSize, Builder);
-        }
 
         HandleOofsAndSpecialDescendants();
 
@@ -3197,7 +3274,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             availableInline = Math.Max(0, availableInline - ComputeMarginsFor(childStyle).HorizontalSum);
         var childSpace = Space.InheritBuilder(availableInline, float.PositiveInfinity).ToConstraintSpace();
         float inlineSize = LengthUtils.ComputeInlineSizeForFragment(childSpace, childStyle, childBp,
-            t => new MinMaxSizesResult(new MinMaxSizes(availableInline, availableInline)));
+            _ => IntrinsicMeasure.SizeResult(child, childSpace));
         if (LengthUtils.IsIndefinite(inlineSize))
             return availableInline;
         return inlineSize;
@@ -3310,9 +3387,48 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     // Interpolation helpers for table cells / alignment / fragmentation.
     // ==========================================================================
 
-    private void FinalizeTableCellLayout(float unconstrainedIntrinsicBlockSize)
+    /// <summary>Used block size of a table cell, per CSS 2.1 §17.5.2.1 as confirmed
+    /// against a reference browser (b190 §1-§9):
+    ///  - 'height' names a MINIMUM for the cell box, so content can always push the box
+    ///    taller (height:12px around a 30px line box is 40px, not 22px);
+    ///  - 'min-height' and 'max-height' do not apply to cells at all (a 45px min-height
+    ///    leaves a one-line row at its content height; a 10px max-height does not cut a
+    ///    50px height);
+    ///  - a percentage 'height' resolves against a definite TABLE height only, never
+    ///    against the auto row (50% of an auto-height row is 'auto', not 210px);
+    ///  - the size the row distribution assigns the cell is also a floor, because a cell
+    ///    stretches to its row.
+    /// <paramref name="contentBlockSize"/> is the unclamped content height (border box).
+    /// Shared with the inline formatting path, which is where a text-only cell — the
+    /// common case — actually gets its block size.</summary>
+    internal static float TableCellBlockSize(ComputedStyle style, ConstraintSpace space,
+        BoxStrut borderPadding, float contentBlockSize)
     {
-        // Table-cell block-size adjustments live in the table layout algorithm.
+        float cellBlock = contentBlockSize;
+
+        float specified = float.NaN;
+        if (style.Height is PixelLength px)
+        {
+            specified = style.BoxSizing == BoxSizingType.BorderBox
+                ? Math.Max(borderPadding.VerticalSum, px.Value)
+                : px.Value + borderPadding.VerticalSum;
+        }
+        else if (style.Height is MathLength math && !math.Expression.Contains('%'))
+        {
+            using var _scope = FontUnitContext.Use(style);
+            float v = math.ToPixels(style.FontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
+            if (!float.IsNaN(v) && !float.IsInfinity(v))
+                specified = style.BoxSizing == BoxSizingType.BorderBox
+                    ? Math.Max(borderPadding.VerticalSum, v) : v + borderPadding.VerticalSum;
+        }
+        if (!float.IsNaN(specified))
+            cellBlock = Math.Max(cellBlock, specified);
+
+        float assigned = space.AvailableBlockSize;
+        if (space.HasDefiniteBlockSize && !float.IsNaN(assigned) && !float.IsInfinity(assigned))
+            cellBlock = Math.Max(cellBlock, assigned);
+
+        return cellBlock;
     }
 
     // ==========================================================================
@@ -3421,6 +3537,11 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         return false;
     }
 
+    /// <summary>Only 'visible' and 'clip' keep the box out of being a BFC root
+    /// (CSS Overflow 3 §4.1).</summary>
+    internal static bool IsBfcFormingOverflow(OverflowType o) =>
+        o != OverflowType.Visible && o != OverflowType.Clip;
+
     private static bool CreatesNewFormattingContext(Element child)
     {
         var s = child.ComputedStyle;
@@ -3432,12 +3553,17 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         // CSS 2.1 §9.4.1: a box with a computed 'overflow' other than 'visible'
         // establishes a new block formatting context. That is what lets it sit beside
         // a float instead of overlapping it, and what makes it contain its own floats.
-        if (s.Overflow != OverflowType.Visible || s.OverflowX != OverflowType.Visible
-            || s.OverflowY != OverflowType.Visible)
+        // CSS Overflow 3 §4.1 narrows that rule: 'clip' does NOT create a BFC even
+        // though it is non-visible, so a clipped box still overlaps floats and still
+        // lets its children's margins collapse through it.
+        if (IsBfcFormingOverflow(s.Overflow) || IsBfcFormingOverflow(s.OverflowX)
+            || IsBfcFormingOverflow(s.OverflowY))
             return true;
-        // CSS Containment 3 §2.5: 'contain: layout' / 'paint' (and the shorthands
-        // that include them) also create a new formatting context.
-        if (s.Contain is ContainType.Strict or ContainType.Content or ContainType.Layout or ContainType.Paint)
+        // CSS Containment 3 §2.2/§2.3: 'contain: layout' and 'contain: paint' each establish
+        // an independent formatting context (measured: 'contain: paint' sizes around a floated
+        // child just like 'layout' does), while 'size' and 'style' do not. Either
+        // non-visible 'content-visibility' value implies layout containment.
+        if (s.CreatesContainmentContext)
             return true;
         return s.Display is DisplayType.Flex or DisplayType.InlineFlex or DisplayType.Grid or DisplayType.InlineGrid
             or DisplayType.Table or DisplayType.InlineBlock or DisplayType.TableCell or DisplayType.TableRow
@@ -3525,15 +3651,19 @@ internal static class BlockLayoutAlgorithmNodeExtensions
         // into the box's block size. Treat a floating child as block-level here so
         // such a box is routed through BlockLayoutAlgorithm instead of the inline
         // path, which sizes only to its line boxes and lets the float overflow.
-        // For a block-flow box the BFC triggers are a non-visible overflow or
-        // layout/paint containment (float/abspos/flex/grid are not IFC roots).
+        // For a block-flow box the BFC triggers are a BFC-forming overflow or layout/paint
+        // containment (float/abspos/flex/grid are not IFC roots). 'overflow: clip' is
+        // deliberately excluded — CSS Overflow 3 §4.1 narrows the non-visible rule to
+        // hidden/scroll/auto — so it has to be tested through the same predicate the BFC
+        // query above uses, or the two paths disagree about clipped boxes.
         bool selfIsBfc = false;
         {
             var ns = node.ComputedStyle;
             if (ns != null)
-                selfIsBfc = ns.Overflow != OverflowType.Visible || ns.OverflowX != OverflowType.Visible
-                    || ns.OverflowY != OverflowType.Visible
-                    || ns.Contain is ContainType.Strict or ContainType.Content or ContainType.Layout or ContainType.Paint;
+                selfIsBfc = BlockLayoutAlgorithm.IsBfcFormingOverflow(ns.Overflow)
+                    || BlockLayoutAlgorithm.IsBfcFormingOverflow(ns.OverflowX)
+                    || BlockLayoutAlgorithm.IsBfcFormingOverflow(ns.OverflowY)
+                    || ns.CreatesContainmentContext;
         }
         foreach (var child in node.Children)
         {

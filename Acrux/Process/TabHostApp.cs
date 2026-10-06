@@ -135,10 +135,13 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
     // Idle diagnostics: set ACRUX_TAB_STATS=1 to print a 2s heartbeat of
     // which pipeline stages are firing (commands/layout/dl/raster/frames).
     private readonly bool _stats = Environment.GetEnvironmentVariable("ACRUX_TAB_STATS") == "1";
+    private static readonly bool s_noBand = Environment.GetEnvironmentVariable("ACRUX_NO_BAND_SCROLL") == "1";
     private long _stCmds, _stRaster, _stFull, _stRows, _stBlit, _stSilent, _stBytes, _stNextLog;
     private long _stReplayMs, _stDiffMs, _stRepBand, _stNBand, _stRepFull, _stNFull;
     // Where the idle CPU goes: per-wake JS pump time, pipeline time and wake count.
     private long _stPump, _stPipe, _stWakes, _stPipeN;
+    private long _stUpd, _stRas;
+    private long _stClearMs, _stExecMs, _stFlushMs;
     private readonly long[] _stCmdHist = new long[32];
 
     public TabHost(int tab, string channelName, Stream pipe, float dpi, float res, bool hang = false, bool fault = false)
@@ -395,7 +398,7 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
                     $"animPark={_engine.AnimParkCount} animPaint={_engine.AnimPaintCount} " +
                     $"raster={_stRaster} " +
                     $"full={_stFull} rows={_stRows} blit={_stBlit} silent={_stSilent} KB={_stBytes / 1024} " +
-                    $"wakes={_stWakes} pumpMs={_stPump} pipeMs={_stPipe} pipeN={_stPipeN} " +
+                    $"wakes={_stWakes} pumpMs={_stPump} pipeMs={_stPipe} pipeN={_stPipeN} updMs={_stUpd} rasMs={_stRas} clearMs={_stClearMs} execMs={_stExecMs} flushMs={_stFlushMs} " +
                     $"sampleMs={_engine.AnimSampleMs / Math.Max(1, _engine.AnimSampleCount)} " +
                     $"rep={_stReplayMs / Math.Max(1, _stRaster)}ms bandRep={_stRepBand / Math.Max(1, _stNBand)}ms(n={_stNBand}) fullRep={_stRepFull / Math.Max(1, _stNFull)}ms(n={_stNFull}) diff={_stDiffMs / Math.Max(1, _stRaster)}ms " +
                     $"heapMB={GC.GetTotalMemory(false) / 1048576} wsMB={Environment.WorkingSet / 1048576}";
@@ -632,12 +635,17 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
         if (_engine.Document == null) return;
         try
         {
+            // Split of _stPipe into pipeline-update and raster halves for the stats heartbeat.
+            long upT = _stats ? Stopwatch.GetTimestamp() : 0;
             _engine.UpdatePipeline();
+            if (_stats) _stUpd += (Stopwatch.GetTimestamp() - upT) * 1000 / Stopwatch.Frequency;
 
             if (_renderDirty)
             {
                 if (_stats) _stRaster++;
+                long rasT = _stats ? Stopwatch.GetTimestamp() : 0;
                 RasterizeAndSend();
+                if (_stats) _stRas += (Stopwatch.GetTimestamp() - rasT) * 1000 / Stopwatch.Frequency;
                 _renderDirty = false;
             }
             _lastRenderTick = Environment.TickCount64;
@@ -692,6 +700,9 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
         int dyW = (int)Math.Round(scrollDevY - _workDevY);
         bool bandScroll = _sentValid && dlSerial == _sentDlSerial && _bandRun < 64 &&
                           xStable && dyW != 0 && dyW > -hPx && dyW < hPx;
+        // TEMP bisect (band-scroll artifact hunt): ACRUX_NO_BAND_SCROLL=1 forces
+        // every scroll frame through the full repaint path.
+        if (s_noBand) bandScroll = false;
 
         // Claim the raster surface. A band shift mutates the baseline pixels: only ever
         // take it on a slot we own — still leased from an unpublished pass, or re-claimed
@@ -757,11 +768,28 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
             else
             {
                 var docWindow = new SKRect(scrollX - 8, scrollY - 512, scrollX + wPx * invS + 8, scrollY + hPx * invS + 512);
-                canvas.Clear(bg);
-                canvas.Scale(scale);
-                canvas.Translate(-scrollX, -scrollY);
-                dl.ExecuteCulled(canvas, docWindow);
-                canvas.Flush();
+                if (_stats)
+                {
+                    long cT = Stopwatch.GetTimestamp();
+                    canvas.Clear(bg);
+                    _stClearMs += (Stopwatch.GetTimestamp() - cT) * 1000 / Stopwatch.Frequency;
+                    long eT = Stopwatch.GetTimestamp();
+                    canvas.Scale(scale);
+                    canvas.Translate(-scrollX, -scrollY);
+                    dl.ExecuteCulled(canvas, docWindow);
+                    _stExecMs += (Stopwatch.GetTimestamp() - eT) * 1000 / Stopwatch.Frequency;
+                    long fT = Stopwatch.GetTimestamp();
+                    canvas.Flush();
+                    _stFlushMs += (Stopwatch.GetTimestamp() - fT) * 1000 / Stopwatch.Frequency;
+                }
+                else
+                {
+                    canvas.Clear(bg);
+                    canvas.Scale(scale);
+                    canvas.Translate(-scrollX, -scrollY);
+                    dl.ExecuteCulled(canvas, docWindow);
+                    canvas.Flush();
+                }
                 _workDevY = scrollDevY;
                 _bandRun = 0;
                 if (_stats) { _stRepFull += (Stopwatch.GetTimestamp() - rsT) * 1000 / Stopwatch.Frequency; _stNFull++; }

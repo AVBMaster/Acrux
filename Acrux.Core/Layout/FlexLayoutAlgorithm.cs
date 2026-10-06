@@ -280,8 +280,8 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
             {
                 var alignSelf = ResolveAlignSelf(item.Style, style);
                 bool hasDefiniteCross = isRow
-                    ? item.Style.Height is PixelLength or PercentLength or MathLength
-                    : item.Style.Width is PixelLength or PercentLength or MathLength;
+                    ? item.Style.Height is PixelLength or PercentLength or MathLength or IntrinsicLength
+                    : item.Style.Width is PixelLength or PercentLength or MathLength or IntrinsicLength;
 
                 item.Stretched = alignSelf == Dom.AlignSelfType.Stretch && !hasDefiniteCross;
                 item.UsedCrossSize = item.Stretched
@@ -319,7 +319,15 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         {
             foreach (var item in line.Items)
             {
-                var childSpace = ConstraintSpace.Builder(item.UsedMainSize, float.PositiveInfinity)
+                // The size the item's own children flow in. The constraint space takes
+                // a border box (the block path removes the child's border+padding to
+                // get its content width), and on the cross axis the inline extent is
+                // the CROSS size — passing the main size here made a column item break
+                // its text as if its line were its height wide (b189 §5).
+                float childInline = isRow
+                    ? item.UsedMainSize + item.MainAxisBorderPadding
+                    : item.UsedCrossSize + item.CrossAxisBorderPadding;
+                var childSpace = ConstraintSpace.Builder(childInline, float.PositiveInfinity)
                     .SetIsFixedInlineSize(true)
                     .SetIsFixedBlockSize(false)
                     .SetPercentageResolution(containerContentInline, containerContentBlock)
@@ -366,6 +374,61 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                     line.CrossSize = Math.Max(line.CrossSize,
                         item.CrossOffset + item.UsedCrossSize + item.CrossAxisBorderPadding
                         + item.MarginCrossStart + item.MarginCrossEnd);
+                }
+            }
+        }
+
+        // ---- Cross sizes settle against the main size the item actually got ----
+        // An item with an auto height is as tall as its content at the width it ended
+        // up with. The hypothetical cross size measured above comes from a max-content
+        // pass, but shrinking below max-content wraps the text and adds lines that
+        // measurement never saw — so a two-line item reported one line's height, and
+        // because 'align-items: stretch' (the initial value) then pinned every item to
+        // that too-small line, the whole line collapsed (b189 §3/§4: 26px for a 44px
+        // box).
+        if (isRow)
+        {
+            foreach (var (line, item, fragment) in laidOut)
+            {
+                bool heightGiven = item.Style.Height is PixelLength or PercentLength or MathLength;
+                if (heightGiven) continue;
+                float measured = Math.Max(0, fragment.BlockSize - item.CrossAxisBorderPadding);
+                if (measured <= 0) continue;
+                item.UsedCrossSize = measured;
+                item.HypotheticalCrossSize = measured;
+            }
+
+            foreach (var line in lines)
+            {
+                float natural = 0;
+                foreach (var item in line.Items)
+                    natural = Math.Max(natural, item.HypotheticalCrossSize + item.CrossAxisBorderPadding
+                        + item.MarginCrossStart + item.MarginCrossEnd);
+                if (lines.Count == 1 && !float.IsNaN(definiteCross))
+                    natural = Math.Max(natural, availableCross);
+                // The baseline pass may already have grown the line to fit an item's
+                // descent below its baseline; never shrink it back.
+                line.CrossSize = Math.Max(line.CrossSize, natural);
+
+                foreach (var item in line.Items)
+                {
+                    var alignSelf = ResolveAlignSelf(item.Style, style);
+                    bool definite = item.Style.Height is PixelLength or PercentLength or MathLength;
+                    if (alignSelf == Dom.AlignSelfType.Stretch && !definite)
+                    {
+                        item.Stretched = true;
+                        item.UsedCrossSize = Math.Max(0, line.CrossSize - item.CrossAxisBorderPadding
+                            - item.MarginCrossStart - item.MarginCrossEnd);
+                    }
+                    else
+                    {
+                        item.Stretched = false;
+                    }
+                    // Baseline-aligned items keep the offset the baseline pass derived
+                    // from their own first baseline; anything else re-centres on the
+                    // settled line.
+                    if (alignSelf != Dom.AlignSelfType.Baseline)
+                        item.CrossOffset = ComputeCrossOffset(item, line.CrossSize, style);
                 }
             }
         }
@@ -424,8 +487,11 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         // size (content-box semantics, like block layout); the border box adds the
         // container's own border+padding, so e.g. width:200px + 10px borders give
         // a 220px-wide box.
-        float containerMain = _items.Count > 0 ? maxMainSize + bp.HorizontalSum : 0;
-        float containerCross = _items.Count > 0 ? crossTotal + bp.VerticalSum : 0;
+        // An empty container still owns its border and padding (CSS 2.1 §10.5): a
+        // 'display:flex; padding:20px' box with no items is 40 tall in the reference
+        // engine, not 0 — the content term is what goes to zero, not the strut.
+        float containerMain = maxMainSize + bp.HorizontalSum;
+        float containerCross = crossTotal + bp.VerticalSum;
 
         // A block-level flex container (display:flex, not inline-flex) with an
         // auto width stretches to its containing block, exactly like a block
@@ -434,10 +500,17 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         bool fillsAvailableInline = style.Width is AutoLength && style.Display == DisplayType.Flex;
         if (fillsAvailableInline)
         {
+            // CSS 2.1 §10.3.2/§10.3.3: 'width: auto' stretches the MARGIN box to the
+            // containing block, so the container's own border and padding sit inside that
+            // width and the content box is what shrinks. 'ChildAvailableInlineSize' is the
+            // space already cleared of the strut, hence adding it back here — without it a
+            // 'display:flex; padding:20px; border:5px' box measured 318 where the reference
+            // engine gives the full 368/383.
+            float stretch = ChildAvailableInlineSize + bp.HorizontalSum;
             if (isRow && float.IsNaN(definiteMain))
-                containerMain = ChildAvailableInlineSize;
+                containerMain = stretch;
             else if (!isRow && float.IsNaN(definiteCross))
-                containerCross = ChildAvailableInlineSize;
+                containerCross = stretch;
         }
         if (!float.IsNaN(definiteMain))
             containerMain = isRow
@@ -544,6 +617,44 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         return float.NaN;
     }
 
+    /// <summary>An item sized by an intrinsic keyword: the min- or max-content
+    /// contribution of the item, converted to a content-box extent for the axis the
+    /// keyword applies to (the algorithm adds the item's own border+padding back on).</summary>
+    private float KeywordInlineSize(FlexItemData item, IntrinsicLength keyword, float availableInline, float borderPadding)
+    {
+        var space = Space.InheritBuilder(availableInline, float.PositiveInfinity)
+            .SetPercentageResolution(_itemPctInline, float.NaN)
+            .ToConstraintSpace();
+        var (min, max) = IntrinsicMeasure.Contributions(item.Element, space);
+        float borderBox = keyword.Kind switch
+        {
+            IntrinsicSizeKind.MinContent => min,
+            IntrinsicSizeKind.MaxContent => max,
+            _ => Math.Min(Math.Max(min, availableInline), max),
+        };
+        return float.IsNaN(borderBox) ? float.NaN : Math.Max(0, borderBox - borderPadding);
+    }
+
+    /// <summary>A column item's height named by a keyword: measured on the block axis,
+    /// which for the min/max-content pair means laying the item out at the width that
+    /// keyword implies.</summary>
+    private float KeywordBlockSize(FlexItemData item, IntrinsicLength keyword, float availableInline)
+    {
+        var space = Space.InheritBuilder(availableInline, float.PositiveInfinity)
+            .SetPercentageResolution(_itemPctInline, float.NaN)
+            .ToConstraintSpace();
+        float probeInline = keyword.Kind switch
+        {
+            IntrinsicSizeKind.MinContent => IntrinsicMeasure.Contributions(item.Element, space).min,
+            IntrinsicSizeKind.MaxContent => IntrinsicMeasure.Contributions(item.Element, space).max,
+            _ => availableInline,
+        };
+        if (float.IsNaN(probeInline)) return float.NaN;
+        var sized = BlockLayoutAlgorithm.LayoutAtomicInlineRoot(item.Element,
+            space.WithInlineSize(Math.Max(1, probeInline)));
+        return sized.Fragment == null ? float.NaN : sized.Fragment.BlockSize;
+    }
+
     private void ComputeFlexBaseSize(FlexItemData item, float availableMain, bool isRow)
     {
         var style = item.Style;
@@ -579,6 +690,14 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         {
             item.FlexBaseSize = ContentBox(MathMainPx(widthMath, isRow));
         }
+        else if (isRow && style.Width is IntrinsicLength widthKeyword)
+        {
+            // 'width: max-content' / 'min-content' on a row item names its main size,
+            // so the keyword is the flex basis (CSS Flexbox §7.2.3 step 4).
+            item.FlexBaseSize = KeywordInlineSize(item, widthKeyword, availableMain, item.MainAxisBorderPadding);
+            if (float.IsNaN(item.FlexBaseSize))
+                item.FlexBaseSize = EstimateContentSize(item.Element, availableMain);
+        }
         else if (!isRow && style.Height is PixelLength heightPx)
         {
             item.FlexBaseSize = ContentBox(heightPx.Value);
@@ -591,15 +710,29 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         {
             item.FlexBaseSize = ContentBox(MathMainPx(heightMath, isRow));
         }
+        else if (!isRow && style.Height is IntrinsicLength heightKeyword)
+        {
+            float kw = KeywordBlockSize(item, heightKeyword, availableMain);
+            item.FlexBaseSize = float.IsNaN(kw) ? EstimateContentSize(item.Element, availableMain) : kw;
+        }
         else
         {
             // Auto main size: with 'aspect-ratio' and a definite cross size the
             // main size is derived from the ratio (CSS aspect-ratio §5.2), not the
             // content; otherwise fall back to content sizing.
             float arMain = AspectRatioMainSize(item, style, isRow);
-            item.FlexBaseSize = !float.IsNaN(arMain)
-                ? arMain
-                : EstimateContentSize(item.Element, availableMain);
+            if (!float.IsNaN(arMain))
+            {
+                item.FlexBaseSize = arMain;
+                return;
+            }
+            // On a column the main axis is the block axis: an auto main size is the
+            // content's height at the width the item gets. Reusing the row's
+            // max-content INLINE measurement here handed a height-shaped number built
+            // from a width (b189 §5: a 5-line item reported 235px for a 98px box).
+            item.FlexBaseSize = isRow
+                ? EstimateContentSize(item.Element, availableMain, item.MainAxisBorderPadding)
+                : EstimateContentBlockMainSize(item);
         }
 
         item.ClampedMainSize = item.FlexBaseSize;
@@ -619,6 +752,16 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         float crossBorderBox = style.BoxSizing == BoxSizingType.BorderBox ? item.CrossAxisBorderPadding : 0;
         float crossContent = Math.Max(0, crossPx.Value - crossBorderBox);
         return isRow ? crossContent * style.AspectRatio : crossContent / style.AspectRatio;
+    }
+
+    /// <summary>Auto main size of a column item: the content height at the item's
+    /// resolved cross (inline) size.</summary>
+    private float EstimateContentBlockMainSize(FlexItemData item)
+    {
+        float crossContent = ComputeCrossSize(item, float.NaN, isRow: false);
+        float crossBorderBox = crossContent + item.CrossAxisBorderPadding;
+        float block = IntrinsicMeasure.BlockSizeAtInline(item.Element, crossBorderBox);
+        return block > 0 ? block : EstimateContentSize(item.Element, crossBorderBox);
     }
 
     private float ResolvePercent(PercentLength pct, bool isRow)
@@ -644,8 +787,8 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
     /// <summary>Clamp a content-box main size by the item's min/max on the main axis.</summary>
     private float ClampMainSize(FlexItemData item, float size, bool isRow)
     {
-        float min = ResolveMinMax(item.Style.MinWidth, isRow);
-        float max = ResolveMinMax(item.Style.MaxWidth, isRow);
+        float min = ResolveMinMax(item.Style.MinWidth, isRow, item);
+        float max = ResolveMinMax(item.Style.MaxWidth, isRow, item);
         if (float.IsNaN(min)) min = 0;
         if (float.IsNaN(max)) max = float.MaxValue;
 
@@ -656,7 +799,10 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         if (isRow && item.Style.MinWidth is AutoLength or null)
         {
             if (item.MinContentMainSize < 0)
-                item.MinContentMainSize = ContentMinInlineSize(item.Element);
+                // Same border-box → content-box conversion as the flex base size: the
+                // clamp works in content units and the strut is added back afterwards.
+                item.MinContentMainSize = Math.Max(0,
+                    ContentMinInlineSize(item.Element) - item.MainAxisBorderPadding);
             min = Math.Max(min, Math.Min(item.MinContentMainSize, max));
         }
 
@@ -677,13 +823,21 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         return Math.Clamp(size, Math.Max(0, min), Math.Max(min, max));
     }
 
-    private float ResolveMinMax(Length? length, bool inlineAxis)
+    private float ResolveMinMax(Length? length, bool inlineAxis, FlexItemData? item = null)
     {
         switch (length)
         {
             case null:
             case AutoLength:
                 return float.NaN;
+            case IntrinsicLength keyword when item != null:
+            {
+                float axis = inlineAxis ? item.MainAxisBorderPadding : item.CrossAxisBorderPadding;
+                float available = inlineAxis
+                    ? (float.IsNaN(_itemPctInline) || float.IsInfinity(_itemPctInline) ? ChildAvailableInlineSize : _itemPctInline)
+                    : 0f;
+                return KeywordInlineSize(item, keyword, available, axis);
+            }
             case PixelLength px:
                 return px.Value;
             case PercentLength pct:
@@ -704,15 +858,21 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         }
     }
 
-    private static float EstimateContentSize(Element element, float availableMain)
+    private static float EstimateContentSize(Element element, float availableMain, float borderPaddingMain = 0f)
     {
         // A flex item with an auto main size is content-sized. Measure its real
         // max-content inline size (a full layout pass that recurses into nested
         // block/inline children); the earlier shallow child scan returned 0 for an
         // item whose text lived inside a nested element, collapsing the item.
+        //
+        // The measurement is a BORDER box, while the flex base size is stored as a
+        // content box and the algorithm adds the item's border+padding back on — so
+        // handing it through unchanged sized every padded item 2x its own padding
+        // (probe: an item with 20px padding and 18px of text reported 98px where a
+        // reference browser reports 57.8px).
         float max = IntrinsicMeasure.MaxContentInlineSize(element);
         if (max > 0)
-            return max;
+            return Math.Max(0, max - borderPaddingMain);
 
         // Fallback: shallow scan for text/children with explicit pixel widths.
         float size = 0;
@@ -769,6 +929,11 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                 float v = wm.ToPixels(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
                 if (!float.IsNaN(v)) return ContentBox(v);
             }
+            if (style.Width is IntrinsicLength wk)
+            {
+                float kw = KeywordInlineSize(item, wk, _itemPctInline, item.CrossAxisBorderPadding);
+                if (!float.IsNaN(kw)) return Math.Max(0, kw);
+            }
         }
         return EstimateContentCrossSize(item.Element);
     }
@@ -778,6 +943,7 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         // Content-sized cross axis: measure the element's real stacked height so a
         // nested block/inline child (no explicit height) is counted. The shallow scan
         // below only handled direct text and explicitly-sized children.
+        // Content box, like the flex cross size expects (see MaxContentBlockSize).
         float block = IntrinsicMeasure.MaxContentBlockSize(element);
         if (block > 0)
             return block;

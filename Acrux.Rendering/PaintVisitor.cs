@@ -609,6 +609,12 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
     {
         var layoutBox = element.LayoutBox;
 
+        // CSS Content Distribution 1 §4: an element below a 'content-visibility: hidden'
+        // ancestor paints nothing at all — not even its own decoration, which is why this
+        // test is separate from the contents-only one in DrawElementContent.
+        if (layoutBox is { InHiddenSubtree: true })
+            return;
+
         // If no layout box (e.g. <tr>, <thead>, <tbody>), descendants still need
         // to be painted when the layer tree is driving the traversal.
         if (layoutBox == null)
@@ -1223,7 +1229,7 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
         // in the marker's own font.
         SKColor markerColor = style.Color;
         float markerFontSize = style.FontSize;
-        string markerFamily = style.FontFamily ?? "Arial";
+        string markerFamily = style.FontFamily ?? Core.Fonts.FontManager.StandardFontFamily;
         if (element.MarkerStyles != null)
         {
             if (element.MarkerStyles.TryGetValue("color", out var colorText))
@@ -1378,6 +1384,10 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
             blendLayer.HasClipRect = true;
             blendLayer.ClipRect = bgClipRect;
             blendLayer.Bounds = borderRect;
+            // The backgrounds inside blend against each other and must not reach
+            // the page below — that is isolation, which the neutral paint fields
+            // alone would not reveal.
+            blendLayer.ForceIsolation = true;
             _displayList.Add(blendLayer);
         }
 
@@ -1501,7 +1511,7 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
             return;
 
         var typeface = Core.Fonts.FontManager.GetOrCreateTypeface(
-            string.IsNullOrEmpty(family) ? "Arial" : family, weight);
+            string.IsNullOrEmpty(family) ? Core.Fonts.FontManager.StandardFontFamily : family, weight);
         if (!Core.Fonts.FontManager.HasCharacter(typeface, text[0]))
             typeface = Core.Fonts.FontManager.GetFallbackTypeface(text[0]) ?? typeface;
 
@@ -1681,7 +1691,8 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
     /// Map 'font-style' onto a text run. A plain 'oblique' asks the family for its own
     /// slanted face; 'oblique &lt;angle&gt;' names the slant, which is synthesized by
     /// shearing the upright glyphs - asking for the italic face as well would double
-    /// the slant (CSS Fonts 4 §3.2.2).
+    /// the slant (CSS Fonts 4 §3.2.2). That shear is invented by the engine, so
+    /// 'font-synthesis-style: none' switches it off and the run stays upright.
     /// </summary>
     private static void SetFontSlant(DrawTextOp op, ComputedStyle? style)
     {
@@ -1690,7 +1701,15 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
             : null;
         bool slanted = style?.FontStyle is FontStyleType.Italic or FontStyleType.Oblique;
         op.Italic = degrees == null && slanted;
-        op.ObliqueSkewX = degrees is { } d ? -MathF.Tan(d * MathF.PI / 180f) : 0f;
+        bool allowSynthesis = style == null
+            || (style.FontSynthesis & Acrux.Core.Dom.FontSynthesisType.Style) != 0;
+        // An authored angle is always drawn as a shear (no such face exists to ask for);
+        // a bare 'italic'/'oblique' asks the family for a slanted face first and only
+        // shears if the face that came back is upright — see DrawTextOp.SynthesizeStyle.
+        op.SynthesizeStyle = op.Italic && allowSynthesis;
+        op.ObliqueSkewX = degrees is { } d && allowSynthesis
+            ? -MathF.Tan(d * MathF.PI / 180f)
+            : 0f;
     }
 
     /// <summary>
@@ -1706,9 +1725,9 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         op.Underline = style?.TextDecorationLine.HasUnderline() == true || style?.TextDecoration == TextDecorationType.Underline;
         op.LineThrough = style?.TextDecorationLine.HasLineThrough() == true || style?.TextDecoration == TextDecorationType.LineThrough;
         op.Overline = style?.TextDecorationLine.HasOverline() == true || style?.TextDecoration == TextDecorationType.Overline;
-        // 'auto' decoration color means the originating box's own text color.
-        op.UnderlineColor = style == null ? default
-            : style.TextDecorationColor.Alpha > 0 ? style.TextDecorationColor : style.Color;
+        // 'auto' decoration color means the originating box's own text color; an
+        // authored 'transparent' is explicit ink and must draw nothing.
+        op.UnderlineColor = style == null ? default : style.ResolvedTextDecorationColor;
         op.DecorationStyle = style?.TextDecorationStyle ?? TextDecorationStyleType.Solid;
         op.DecorationThickness = style?.TextDecorationThickness ?? float.NaN;
         op.DecorationThicknessFromFont = style?.TextDecorationThicknessFromFont ?? false;
@@ -1885,8 +1904,9 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
 
         bool hasFilter = !string.IsNullOrEmpty(style.Filter) && style.Filter != "none";
         SKImageFilter? elementFilter = null;
+        float filterInflation = 0f;
         if (hasFilter)
-            elementFilter = FilterRenderer.ParseAndChain(style.Filter);
+            elementFilter = FilterRenderer.ParseAndChain(style.Filter, out filterInflation);
 
         if (hasFilter || hasOpacityLayer || hasBlendMode || hasClipPath || hasMask)
         {
@@ -1895,7 +1915,8 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                 clipPath = ClipPathClipper.Parse(style.ClipPath, layoutBox);
             objectPaintState.PushLayer(hasOpacityLayer ? style.Opacity : 1.0f,
                 elementFilter, clipPath, offsetBorderBox, maskImage,
-                hasBlendMode ? MixBlendModeToSkBlendMode(style.MixBlendMode) : SKBlendMode.SrcOver);
+                hasBlendMode ? MixBlendModeToSkBlendMode(style.MixBlendMode) : SKBlendMode.SrcOver,
+                filterInflation);
         }
 
         // Apply CSS transform BEFORE background so the entire element (including background) is transformed
@@ -2346,6 +2367,11 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
 
     private void DrawElementContent(Element element, LayoutBox box, ComputedStyle style)
     {
+        // CSS Content Distribution 1 §4: 'content-visibility: hidden' paints the box's own
+        // background and border (the caller does that) but none of its contents — no text,
+        // no replaced content, no pseudo-element content.
+        if (box.ContentsNotRendered) return;
+
         // visibility:hidden hides the element's OWN content but not descendants
         // that re-declare visibility:visible. Text runs are filtered per run in
         // DrawInlineRuns (a run paints only when its owning node's nearest
@@ -2890,7 +2916,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
             op.Y = lineY + Core.Fonts.LineBoxMetrics.GetTextAscent(fontSize, style.FontFamily, style.FontWeight) + TotalOffsetY;
             op.Color = color;
             op.FontSize = fontSize;
-            op.FontFamily = style.FontFamily ?? "Arial";
+            op.FontFamily = style.FontFamily ?? Core.Fonts.FontManager.StandardFontFamily;
             op.FontWeight = style.FontWeight;
             SetFontSlant(op, style);
             op.Bounds = new SKRect(segX, lineY + TotalOffsetY, segX + MeasureTextWidth(seg, fontSize, style.FontFamily), lineY + TotalOffsetY + fontSize);
@@ -3343,7 +3369,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         op.Y = contentBox.Top + Core.Fonts.LineBoxMetrics.GetTextAscent(fontSize, style.FontFamily, style.FontWeight) + yOffset;
         op.Color = color;
         op.FontSize = fontSize;
-        op.FontFamily = style.FontFamily ?? "Arial";
+        op.FontFamily = style.FontFamily ?? Core.Fonts.FontManager.StandardFontFamily;
         op.FontWeight = style.FontWeight;
         SetFontSlant(op, style);
         op.Bounds = new SKRect(contentBox.Left, contentBox.Top + yOffset,
@@ -3399,7 +3425,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         op.Y = textY + TotalOffsetY;
         op.Color = isDisabled ? new SKColor(160, 160, 160) : (style.Color.Alpha > 0 ? style.Color : SKColors.Black);
         op.FontSize = fontSize;
-        op.FontFamily = style.FontFamily ?? "Arial";
+        op.FontFamily = style.FontFamily ?? Core.Fonts.FontManager.StandardFontFamily;
         op.Bounds = new SKRect(textX, contentBox.Top + TotalOffsetY, textX + textWidth, contentBox.Bottom + TotalOffsetY);
         _displayList.Add(op);
 
@@ -3951,7 +3977,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         op.Y = y;
         op.Color = textColor;
         op.FontSize = parentStyle?.FontSize ?? 16;
-        op.FontFamily = parentStyle?.FontFamily ?? "Arial";
+        op.FontFamily = parentStyle?.FontFamily ?? Core.Fonts.FontManager.StandardFontFamily;
         op.FontWeight = parentStyle?.FontWeight ?? FontWeight.Normal;
         op.TextAlign = parentStyle?.TextAlign ?? TextAlignType.Start;
         SetDecorations(op, parentStyle, textNode.ParentElement);
@@ -4327,6 +4353,10 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                         op.Text = runText;
                         op.X = runLeft;
                         op.Y = runY;
+                        // The run is already at its laid-out x: 'text-align' was applied
+                        // to the line box (lineOffsetX above), so the op must not shift
+                        // the glyphs again.
+                        op.TextAlign = TextAlignType.Start;
                         op.Color = run.Color ?? effectiveStyle?.Color ?? SKColors.Black;
                         op.FontSize = actualFontSize;
                         op.FontFamily = run.FontFamily ?? effectiveStyle?.FontFamily ?? "Arial";

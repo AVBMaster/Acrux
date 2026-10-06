@@ -302,7 +302,10 @@ fieldset {
   display: block;
   margin-left: 2px;
   margin-right: 2px;
-  padding: 0.35em 0.625em 0.75em;
+  /* Reference engine: 0.35em top, 0.75em on both inline sides, 0.625em bottom. The
+     three-value form would put 0.625em on the inline axis and 0.75em at the end, which is
+     the other way round (measured: 5.6px 12px 10px 12px). */
+  padding: 0.35em 0.75em 0.625em;
   border: 2px groove;
   border-color: threedface;
   min-width: min-content;
@@ -337,6 +340,10 @@ input {
   display: inline-block;
   appearance: auto;
   -webkit-appearance: textfield;
+  /* A text field never shows content outside its box (reference engine computes
+     overflow: clip on both axes, which unlike 'hidden' also keeps it out of the
+     scroll-container business). */
+  overflow: clip;
   padding: 1px 2px;
   border: 2px inset;
   border-color: -webkit-focus-ring-color;
@@ -363,7 +370,11 @@ input[type="checkbox" i] {
   appearance: auto;
   -webkit-appearance: checkbox;
   box-sizing: border-box;
+  overflow: visible;
   cursor: default;
+  /* The tick box's own inset. It is not decoration: it is what puts a checkbox 3px
+     below the top of its line and makes the line 21px tall rather than 20px. */
+  margin: 3px 3px 3px 4px;
   padding: 0;
   border: none;
   background-color: transparent;
@@ -372,7 +383,9 @@ input[type="radio" i] {
   appearance: auto;
   -webkit-appearance: radio;
   box-sizing: border-box;
+  overflow: visible;
   cursor: default;
+  margin: 3px 3px 3px 4px;
   padding: 0;
   border: none;
   background-color: transparent;
@@ -461,6 +474,8 @@ textarea {
   display: inline-block;
   appearance: auto;
   -webkit-appearance: textarea;
+  overflow: auto;
+  padding: 2px;
   border: 1px solid;
   border-color: -webkit-focus-ring-color;
   background-color: white;
@@ -487,6 +502,7 @@ select {
   display: inline-block;
   appearance: auto;
   -webkit-appearance: menulist;
+  padding: 3px 4px;
   border: 1px solid;
   border-color: -webkit-focus-ring-color;
   background-color: white;
@@ -500,18 +516,26 @@ select {
   text-indent: 0;
   text-shadow: none;
   text-align: start;
-  padding: 1px 2px;
+  /* A menu list insets its label inside the widget and has no box padding at all
+     (reference engine: computed padding is 0 on a <select>); FormControlDefaults
+     carries the whole inset as MenuListArrowPx. This rule used to declare 'padding'
+     twice, which is why editing the first one had no effect. */
+  padding: 0;
   box-sizing: border-box;
   white-space: nowrap;
 }
 /* A menu-list <select> shows only its selected item: the option elements live in
-   the popup rather than in the box, so they must not paint over it. A listbox
-   (multiple, or size > 1) shows its rows and keeps them visible. */
+   the popup rather than in the box, so they must not paint over it — and they must
+   not take part in the box's layout either. 'visibility: hidden' still laid them
+   out, and the option's own `min-height: 1.2em` + 1px padding pushed the widget from
+   Chrome's 1lh + 4 (19px at 13.3333px) to 21px. The label is painted by the widget
+   painter, and the intrinsic width reads the option text from the DOM, so neither
+   needs the boxes. A listbox (multiple, or size > 1) shows its rows and keeps them. */
 select:not([multiple]):not([size]) > option,
 select:not([multiple]):not([size]) > optgroup,
 select:not([multiple])[size="1" i] > option,
 select:not([multiple])[size="1" i] > optgroup {
-  visibility: hidden;
+  display: none;
 }
 
 optgroup {
@@ -630,31 +654,40 @@ track {
 
 /* Media */
 img {
-  display: inline-block;
-  /* Chrome leaves these at the initial inline display; the layout still treats
-     them as atomic inline boxes (by tag name), and keeps the baseline alignment:
-     an image sits on the text baseline (leaving the descender gap below it) and
-     the line box grows above the baseline to contain it. */
+  /* CSS 2.1 §9.4 and the HTML rendering section keep replaced elements at their
+     initial 'inline' display, and a reference browser reports exactly that from
+     getComputedStyle(). The layout does not care which of the two words is written:
+     it decides "atomic inline" from the tag name (InlineItemsBuilder), so 'inline'
+     here flows inline and still sits on the baseline with its margin box growing the
+     line. The old 'inline-block' was a shortcut that made the DevTools readout differ
+     from every other browser (#164). */
+  display: inline;
 }
 canvas {
-  display: inline-block;
+  display: inline;
 }
 video {
-  display: inline-block;
+  display: inline;
   vertical-align: baseline;
   object-fit: contain;
   background-color: black;
-  width: 300px;
-  height: 150px;
+  /* No width/height here on purpose. 300x150 is the video's DEFAULT OBJECT SIZE
+     (CSS Sizing 4 §5), which the layout already supplies as its intrinsic size —
+     declaring it as a UA CSS length instead made it outrank the `width`/`height`
+     content attributes, which a reference browser honours (<video width=40
+     height=24> measures 40x24 there and 300x150 here). */
 }
 audio:not([controls]) {
   display: none;
 }
 audio {
-  display: inline-block;
+  display: inline;
   vertical-align: baseline;
+  /* The control strip is a fixed widget, not font-relative: measured 300x54 at
+     font-size 10px, 16px and 40px alike. The old 30px made every line carrying a
+     player half as tall as it should be. */
   width: 300px;
-  height: 30px;
+  height: 54px;
 }
 
 /* Embedded content */
@@ -700,12 +733,30 @@ plaintext {
   margin: 1em 0;
 }
 
-/* Bidirectional */
-bdi, bdo {
+/* Bidirectional. 'bdi' isolates its content from the surrounding text (it is
+   direction-agnostic by definition); only 'bdo' overrides, and its direction comes from the
+   'dir' attribute. Measured against the reference engine, bdi computes to 'isolate'. */
+bdi {
+  unicode-bidi: isolate;
+}
+bdo {
   unicode-bidi: bidi-override;
 }
 bdo {
   direction: rtl;
+}
+
+/* Block-level isolation of the bidirectional flow (HTML rendering section, and the list the
+   reference engine ships): every block-level element isolates, so a paragraph's own base
+   direction cannot leak into its neighbour. Measured element by element (b225 §E): the
+   elements NOT in this set are fieldset, details, dialog, html, body, head, the inline
+   elements and every form control / replaced element — 'dialog' included, which is why it
+   is absent from the list below even though it is a block. */
+address, blockquote, center, div, figure, figcaption, footer, header, hr, main,
+p, section, summary, article, aside, nav, h1, h2, h3, h4, h5, h6,
+ul, ol, menu, dir, dl, dt, dd, li, form, legend, listing, xmp, plaintext, pre,
+table, thead, tbody, tfoot, tr, td, th, caption, col, colgroup {
+  unicode-bidi: isolate;
 }
 
 /* Phrasing */

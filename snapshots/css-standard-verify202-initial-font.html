@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 202 - initial font-family (the browser's standard font)</title>
+<style>
+/* 'font-family' has NO universal initial value: it is the user agent's "standard font"
+   setting. Measured in Edge (dpr 1, viewport 531) on a page that declares nothing:
+       getComputedStyle(p).fontFamily === "Times New Roman"
+   and the reference string below is 292.38px wide at 16px. The engine used to seed
+   <html> with 'sans-serif', so every page that did not declare a font rendered in a
+   sans face AND measured ~5% wide — which is what made word spacing look broken.
+
+   The generic families must keep their own answers (they are NOT the standard font):
+     serif -> Times New Roman/Liberation Serif, sans-serif -> Arial/Liberation Sans,
+     monospace -> the platform mono answer, and the UA sheet still forces monospace on
+     code/kbd/pre/samp/textarea. Form controls do NOT inherit the author font.
+   Every number below is Edge's (dpr 1, viewport 383), copied here so the batch is
+   checkable without re-running a browser:
+     d1 no declaration      "Times New Roman"  w=292.38 h=18
+     e1 Arial, sans-serif   w=316.61           e2 sans-serif  w=316.61  (same face)
+     e3 serif               w=292.38           e4 monospace   w=279.50 h=19
+     e5 system-ui           w=318.61           e6 cursive     w=292.38  (falls to the
+                                                standard font on this box)
+     e7 font:16px serif     w=292.38
+     e8c inherited sans     "Arial, sans-serif" w=219.70
+     f1c code  monospace    w=71.50 h=19       f2c kbd  monospace w=26.00 h=19
+     f3c pre   monospace    w=352.00 (block)   f6c textarea monospace w=155 h=25
+     f4c button "Arial"     w=84.92 h=21       f5c input "Arial" w=185.00 h=21
+
+   RESIDUAL FOUND BY THIS BATCH (#208): the generic 'monospace' also carries a SIZE in
+   the reference engine. Edge computes font-size: 13px for #e4 (which only declares
+   'font-family: monospace' and inherits 16px), 13px for <code>, 13.3333px for
+   <textarea> — so the 43-character line is 279.50px (6.5px per glyph) and 19px tall.
+   We keep 16px, giving 344.0px (8.0 per glyph) and h=24 — monospace text renders ~23%
+   too large everywhere. Fixing it needs an "was font-size authored?" bit (the size must
+   only be substituted when it came from inheritance/initial), which the style object
+   does not have today; same plumbing family as gap #89.
+
+   MEASURED AFTER THE FIX (ours vs Edge, same page, viewport 383):
+     d1 no declaration   289.0x18   vs 292.38x18   OK  (serif standard font now)
+     e1 Arial,sans-serif 315.0x18   vs 316.61x18   OK
+     e2 sans-serif       315.0x18   vs 316.61x18   OK
+     e3 serif            289.0x18   vs 292.38x18   OK
+     e4 monospace        344.0x24   vs 279.50x19   #208
+     e5 system-ui        315.0x18   vs 318.61x18   OK
+     e6 cursive          289.0x18   vs 292.38x18   OK  (falls to the standard font)
+     e7 font:16px serif  289.0x18   vs 292.38x18   OK
+   Also found while shaping this page: 'display: table' on a text-only block lays out
+   0x0 with zero lines here, where Edge gives the shrink-to-fit 292.38x18 — that is
+   gap #153 (anonymous table boxes) with a much cleaner reproduction.
+*/
+body { margin: 8px; background: #fff; color: #111; }
+p { margin: 4px 0; }
+.line { display: block; }
+.shrink { display: inline-block; }
+.sans { font-family: Arial, sans-serif; }
+.sansGeneric { font-family: sans-serif; }
+.serifG { font-family: serif; }
+.monoG { font-family: monospace; }
+.sysUi { font-family: system-ui; }
+.cursive { font-family: cursive; }
+.shorthand { font: 16px serif; }
+.inheritChild { }
+</style>
+</head>
+<body>
+
+<h2>1. no declaration at all — must compute the standard font</h2>
+<div class="line"><p id="d1" class="shrink">The quick brown fox jumps over the lazy dog</p></div>
+<p id="d2">size and face of a plain paragraph</p>
+
+<h2>2. explicit families still win</h2>
+<div class="line"><p id="e1" class="sans shrink">The quick brown fox jumps over the lazy dog</p></div>
+<div class="line"><p id="e2" class="sansGeneric shrink">The quick brown fox jumps over the lazy dog</p></div>
+<div class="line"><p id="e3" class="serifG shrink">The quick brown fox jumps over the lazy dog</p></div>
+<div class="line"><p id="e4" class="monoG shrink">The quick brown fox jumps over the lazy dog</p></div>
+<div class="line"><p id="e5" class="sysUi shrink">The quick brown fox jumps over the lazy dog</p></div>
+<div class="line"><p id="e6" class="cursive shrink">The quick brown fox jumps over the lazy dog</p></div>
+<div class="line"><p id="e7" class="shorthand shrink">The quick brown fox jumps over the lazy dog</p></div>
+<p id="e8" class="sans"><span id="e8c" class="shrink">inherited sans into a child span</span></p>
+
+<h2>3. UA-forced families and form controls</h2>
+<p id="f1"><code id="f1c" class="shrink">const x = 1</code></p>
+<p id="f2"><kbd id="f2c" class="shrink">Ctrl</kbd></p>
+<p id="f3"><pre id="f3c">pre block</pre></p>
+<p id="f4"><button id="f4c">button label</button></p>
+<p id="f5"><input id="f5c" type=text value="input text"></p>
+<p id="f6"><textarea id="f6c" rows="1">textarea</textarea></p>
+
+</body>
+</html>

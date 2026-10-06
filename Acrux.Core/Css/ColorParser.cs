@@ -10,6 +10,11 @@ namespace Acrux.Core.Css;
 /// </summary>
 public static class ColorParser
 {
+    /// <summary>CSS 'transparent' is rgba(0, 0, 0, 0). SkiaSharp's
+    /// <see cref="SKColors.Transparent"/> is WHITE with zero alpha, and that leaked
+    /// (255,255,255,0) into every computed value and into any interpolation that
+    /// reads the channels rather than just the alpha.</summary>
+    public static readonly SKColor CssTransparent = new SKColor(0, 0, 0, 0);
     private static readonly Regex RgbFuncRegex = new(@"^\s*rgba?\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex HslFuncRegex = new(@"^\s*hsla?\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex HwbRegex = new(@"^\s*hwb\s*\(\s*([\d.]+)(?:deg|turn|rad|grad)?\s*[,\s]\s*([\d.]+)%\s*[,\s]\s*([\d.]+)%\s*(?:[/,]\s*([\d.]+%?))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -26,8 +31,10 @@ public static class ColorParser
     /// light-dark(), which depends on the element's used color scheme.</param>
     public static SKColor Parse(string value, ComputedStyle? context = null)
     {
-        if (string.IsNullOrEmpty(value) || value == "transparent" || value == "inherit")
+        if (string.IsNullOrEmpty(value) || value == "inherit")
             return SKColors.Transparent;
+        if (value.Equals("transparent", StringComparison.OrdinalIgnoreCase))
+            return CssTransparent;
 
         value = value.Trim();
 
@@ -896,7 +903,7 @@ public static class KnownColors
         { "gold", SKColor.Parse("#FFD700") }, { "khaki", SKColor.Parse("#F0E68C") },
         { "plum", SKColor.Parse("#DDA0DD") }, { "violet", SKColor.Parse("#EE82EE") },
         { "tan", SKColor.Parse("#D2B48C") }, { "chocolate", SKColor.Parse("#D2691E") },
-        { "transparent", SKColors.Transparent },
+        { "transparent", ColorParser.CssTransparent },
         { "aliceblue", SKColor.Parse("#F0F8FF") }, { "antiquewhite", SKColor.Parse("#FAEBD7") },
         { "aquamarine", SKColor.Parse("#7FFFD4") }, { "azure", SKColor.Parse("#F0FFFF") },
         { "beige", SKColor.Parse("#F5F5DC") }, { "bisque", SKColor.Parse("#FFE4C4") },

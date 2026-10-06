@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 198 - filter/opacity over out-of-flow descendants (CSS Filter Effects 1 §1, CSS Color 4 §14)</title>
+<style>
+/* A filter or a group opacity applies to the element and EVERYTHING it contains,
+   including descendants that are positioned out of its flow. In the paint pipeline
+   those descendants are drawn by the stacking-context layer pass, which runs after the
+   element's own effect layer has been popped - so the effect silently misses them: a
+   blurred container shows a crisp abspos child, and opacity:.5 on a container leaves an
+   abspos badge fully opaque.
+
+   Each case puts a hard black-on-white edge in the affected child: a crisp edge is two
+   colour steps, a blurred one is a ramp, so a pixel probe decides without eyeballing. */
+body { font: 14px/18px Arial, sans-serif; margin: 8px; color: #111; background: #fff; }
+h2 { background: #eee; padding: 2px; margin: 10px 0 4px; font-size: 14px; }
+.case { position: relative; width: 300px; height: 120px; margin: 6px 0; background: #fff;
+        border: 1px solid #ccc; }
+.inflow { width: 60px; height: 20px; background: #000; margin: 8px 0 0 8px; }
+.abs { position: absolute; left: 120px; top: 30px; width: 60px; height: 20px; background: #000; }
+.abs2 { position: absolute; right: 8px; bottom: 8px; width: 60px; height: 20px; background: #000; }
+.fixed { position: fixed; left: 330px; top: 8px; width: 60px; height: 20px; background: #000; }
+.blur { filter: blur(3px); }
+.blur2 { filter: blur(3px); }
+.op50 { opacity: 0.5; }
+.wrap { background: #fff; }
+</style>
+</head>
+<body>
+
+<h2>1. blur on the container: in-flow AND abspos children must both be soft</h2>
+<div class="case blur" id="c1"><div class="inflow"></div><div class="abs" id="c1a"></div></div>
+
+<h2>2. blur on a NON-positioned container with an abspos child (CB is the outer .case)</h2>
+<div class="case"><div class="wrap blur" id="c2"><div class="abs2" id="c2a"></div></div></div>
+
+<h2>3. opacity .5 on the container: the abspos child must be .5 too</h2>
+<div class="case op50" id="c3"><div class="inflow"></div><div class="abs" id="c3a"></div></div>
+
+<h2>4. opacity .5 on a non-positioned wrapper</h2>
+<div class="case"><div class="wrap op50" id="c4"><div class="abs2" id="c4a"></div></div></div>
+
+<h2>5. blur + opacity together</h2>
+<div class="case blur op50" id="c5"><div class="inflow"></div><div class="abs" id="c5a"></div></div>
+
+<h2>6. control: no effect on the container, effect on the abspos element itself</h2>
+<div class="case" id="c6"><div class="inflow"></div><div class="abs blur" id="c6a"></div></div>
+
+<h2>7. nested: blur outside, opacity inside, abspos at the innermost level</h2>
+<div class="case blur"><div class="wrap op50" id="c7"><div class="abs2" id="c7a"></div></div></div>
+
+<!--
+MEASURED STATE OF THIS ENGINE (700x1128 snapshot, luminance profile across the middle of
+each 60x20 black box; a blurred edge ramps, a crisp edge is a single step):
+
+  c1 in-flow child of .case{filter:blur(3px)}   profile 255,254,255,0,0,...,0,255  CRISP
+  c1 abs child of the same container            profile 255,...,255,0,...,0,255    CRISP
+  c6 abs child WITH the blur on itself          251,235,198,143,83,35,10,1,0,...   SOFT
+
+So the effect reaches neither the out-of-flow NOR the in-flow descendants - gap #185 is
+wider than "abspos escapes". The ref for this page is a sentinel for that state, not a
+correctness proof: every case above must become SOFT (and cases 3/4/5/7 must show the
+black at ~50% of the surrounding white) once the effect is threaded through the ancestor
+paint state. See docs/CSS-HANDOFF.md §4 #185 for why the obvious fix double-applies
+transforms and clips.
+-->
+
+</body>
+</html>

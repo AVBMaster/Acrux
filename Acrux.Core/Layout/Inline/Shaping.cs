@@ -202,10 +202,39 @@ public sealed class HarfBuzzShaper
         var advances = new float[end - start];
         float letterSpacing = style.LetterSpacing;
         float wordSpacing = style.WordSpacing;
+        // A soft hyphen is never drawn unless the line breaks on it (CSS Text 3 §4.4),
+        // so it measures zero here and the line breaker substitutes a real hyphen-minus
+        // at the position it broke. That also means it takes no letter-spacing: a
+        // reference browser sets "pe&shy;tite" at letter-spacing:4px as wide as
+        // "petite" plus six gaps, not seven.
+        int softHyphens = 0;
         for (int i = start; i < end; i++)
         {
             char c = _text[i];
-            float advance = ShapeCharacter(c, style);
+            float advance;
+            if (char.IsHighSurrogate(c) && i + 1 < end && char.IsLowSurrogate(_text[i + 1]))
+            {
+                // An astral character (emoji, CJK ext B…, a Korean supplementary
+                // syllable) is TWO UTF-16 units, and neither half is a character:
+                // asking the font about a lone surrogate answers "no glyph", so both
+                // advances came out 0 and the whole run collapsed — an emoji measured
+                // zero wide and the text after it painted on top of it. Measure the
+                // pair once and keep the cluster's width on its first unit; the
+                // trailing unit stays 0 so a break can never split the pair.
+                advance = ShapeSurrogatePair(c, _text[i + 1], style);
+                advances[i - start] = advance;
+                if (letterSpacing != 0) advances[i - start] += letterSpacing;
+                i++;
+                advances[i - start] = 0;
+                continue;
+            }
+            if (c == '\u00AD')
+            {
+                softHyphens++;
+                advances[i - start] = 0;
+                continue;
+            }
+            advance = ShapeCharacter(c, style);
             if (letterSpacing != 0) advance += letterSpacing;
             if (wordSpacing != 0 && (c == ' ' || c == '\t' || c == '\u00A0')) advance += wordSpacing;
             advances[i - start] = advance;
@@ -219,6 +248,7 @@ public sealed class HarfBuzzShaper
         // cluster positioning arrives with the SkiaSharp.HarfBuzz packaging
         // decision; this removes the drift today).
         string runText = _text[start..end];
+        if (softHyphens > 0) runText = runText.Replace("\u00AD", "");
         float charSum = 0;
         foreach (var a in advances) charSum += a;
         if (advances.Length > 1 && charSum > 0.01f)
@@ -226,7 +256,7 @@ public sealed class HarfBuzzShaper
             float shapedWidth = TextMeasureProxy.MeasureText(runText, style)
                 // letter-spacing is added after every character, the last one
                 // included (CSS Text 3 §5.1) - Edge measures "abcde" + 6px as 73.6.
-                + letterSpacing * advances.Length;
+                + letterSpacing * (advances.Length - softHyphens);
             if (!float.IsNaN(shapedWidth) && shapedWidth > 0)
             {
                 float k = shapedWidth / charSum;
@@ -250,12 +280,41 @@ public sealed class HarfBuzzShaper
     {
         return TextMeasureProxy.MeasureCharacter(c, style);
     }
+
+    private static float ShapeSurrogatePair(char high, char low, ComputedStyle style)
+    {
+        return TextMeasureProxy.MeasureCodePoint(char.ConvertToUtf32(high, low), style);
+    }
 }
 
 /// <summary>Static text-measurement entry points for shaping.</summary>
 public static class TextMeasureProxy
 {
     private static readonly Dictionary<(char, float, string, int), float> Cache = new();
+
+    /// <summary>Advance of one astral code point (a surrogate pair as a unit).</summary>
+    public static float MeasureCodePoint(int codePoint, ComputedStyle style)
+    {
+        var key = (codePoint, style.FontSize, style.FontFamily, (int)style.FontWeight);
+        if (CodePointCache.TryGetValue(key, out var cachedWidth)) return cachedWidth;
+
+        float width;
+        var measurer = TextMeasurer.Instance;
+        if (measurer != null)
+        {
+            string s = char.ConvertFromUtf32(codePoint);
+            width = measurer.MeasureTextAdvanced(s, style.FontFamily, style.FontSize, style.FontWeight, style.FontStyle);
+        }
+        else
+        {
+            width = style.FontSize; // an emoji is roughly one em wide
+        }
+        if (CodePointCache.Count > 100000) CodePointCache.Clear();
+        CodePointCache[key] = width;
+        return width;
+    }
+
+    private static readonly Dictionary<(int, float, string, int), float> CodePointCache = new();
 
     public static float MeasureCharacter(char c, ComputedStyle style)
     {
@@ -314,11 +373,30 @@ public static class Character
         || (c >= 0x3400 && c <= 0x4DBF) || (c >= 0x20000 && c <= 0x2A6DF)
         || (c >= 0xFF00 && c <= 0xFF6F) || (c >= 0xFF9F && c <= 0xFFDC);
 
-    /// <summary>Approximate line-break boundary used for greedy wrapping (CJK + punctuation).</summary>
+    /// <summary>Break-after opportunity carried by a single character (CJK and the
+    /// Latin characters that open one). Measured character by character against a
+    /// reference browser's min-content widths (b188 §1-§7, _probe_breaks2): Latin text
+    /// breaks at spaces, AFTER a hyphen or a dash, and after '?', and nowhere else -
+    /// a slash, dot, colon, semicolon, '!', '#', '@' or '_' never opens an
+    /// opportunity, which is what keeps a URL or "10:30:45" on one line. The old set
+    /// treated all of those as breakable, so "http://example.com/path" wrapped into
+    /// three lines and its min-content came out ~2.5x too narrow.</summary>
     public static bool IsLineBreakBoundary(char c)
     {
         if (IsCJKIdeographOrSymbol(c)) return true;
-        return c == '-' || c == '/' || c == '\\' || c == '.' || c == '_' || c == '@' || c == '#' || c == '?' || c == '!' || c == ';' || c == ':';
+        switch (c)
+        {
+            case '-':            // U+002D HYPHEN-MINUS (class HY): break after
+            case '\u2010':      // U+2010 HYPHEN (class HY)
+            case '\u2013':      // U+2013 EN DASH (class BA)
+            case '\u2014':      // U+2014 EM DASH (class BA)
+            case '\u2015':      // U+2015 HORIZONTAL BAR (class BA)
+            case '\u2E3A':      // U+2E3A TWO-EM DASH (class BA)
+            case '\u2E3B':      // U+2E3B THREE-EM DASH (class BA)
+            case '?':            // class QU: a reference browser breaks after it
+                return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -686,6 +764,12 @@ public sealed class ShapingLineBreaker
     {
         public int BreakOffset;
         public bool IsHyphenated;
+        /// <summary>The hyphen comes from a soft hyphen the author wrote, not from an
+        /// automatic hyphenation dictionary. The two are treated differently: an
+        /// automatic point may be abandoned when the hyphenated fragment does not fit,
+        /// while an authored one is mandatory — a reference browser keeps it and lets
+        /// the line overflow instead of dropping it (see b193 §3's 20px box).</summary>
+        public bool IsSoftHyphen;
         public bool HasTrailingSpaces;
         public bool IsOverflow;
     }
@@ -877,7 +961,7 @@ public sealed class Hyphenation
 /// <summary>A cached hyphen string and its shape.</summary>
 public sealed class HyphenResult
 {
-    public string Text { get; }
+    public string Text { get; private set; }
     public ShapeResult ShapeResult { get; }
 
     public HyphenResult()
@@ -890,9 +974,22 @@ public sealed class HyphenResult
 
     public HyphenResult(ComputedStyle style) : this()
     {
+        // 'hyphenate-character' may be any string (CSS Text 4 §5.1), so the mark is
+        // measured per character against the breaking element's own font — a single
+        // '-' advance would misprice '"→"' and silently overlap the next line.
+        string mark = style.EffectiveHyphenText;
+        var advances = new float[mark.Length];
+        for (int i = 0; i < mark.Length; i++)
+            advances[i] = TextMeasureProxy.MeasureCharacter(mark[i], style);
+        Text = mark;
+        ShapeResult = new ShapeResult(0, mark.Length, mark, advances, false);
     }
 
-    private static float TextShapeFallback(char c) => c == '-' ? 0.5f : 16;
+    /// <summary>The width the substituted hyphen-minus takes on the line. This has to
+    /// be the real glyph advance: a line that breaks at a soft hyphen is only allowed
+    /// when the word plus this hyphen still fits, and a stub value let words overflow
+    /// their box by ~8px at every soft-hyphen break.</summary>
+    internal static float TextShapeFallback(char c) => c == '-' ? 0.5f : 16;
     public float InlineSize() => ShapeResult.SnappedWidth();
     public bool IsValid => true;
 

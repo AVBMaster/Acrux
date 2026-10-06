@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<!-- b210: 'field-sizing' (CSS form-control sizing; shipped by the reference engine as
+     normal | content). Measured in Edge, dpr 1, viewport 383, Arial 16px/20px, UA box for a
+     text field = 2px padding + 2px border per side.
+       k1  default <input value="ab">          215.00 x 26   (widget size, #196 territory)
+       k2  field-sizing: content               25.80  x 26   -> content 17.8 = width("ab")
+       k3  content, empty value                 9.00  x 26   -> no content allowance
+       k4  content, placeholder "hello world"  84.48  x 26   -> placeholder is the fallback
+       k5  content, long value                177.00  x 26
+       k6  content + size="5"                  25.80  x 26   -> 'size' is ignored
+       k7  content + padding:10px              41.80  x 44   -> 17.8 + 20 padding + 4 border
+       k8  content + border:4px                29.80  x 30   -> 17.8 + 8 border + 4 padding
+       k9  content + width:200px              208.00  x 26   -> an explicit width wins
+       k10 field-sizing: normal               215.00  x 26   -> same as default
+       k11 textarea content                    23.80  x 26   -> 17.8 + 4 padding + 2 border,
+                                                                one line tall, NO scrollbar gutter
+       k12 textarea default                   207.00  x 46   -> cols x rows widget
+       k13 checkbox content                    13.00  x 13   -> tick boxes keep the widget size
+       k14 select content                      51.64  x 19   -> the *selected* option, not the widest
+       k15 content + min-width:150px          158.00  x 26   -> min-width still clamps
+     getComputedStyle().fieldSizing answers 'fixed' for the initial 'normal' on a control and
+     'content' when asked for it.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b210 field-sizing</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/20px Arial, sans-serif; color: #000; background: #fff; }
+  .row { position: relative; height: 34px; }
+  .lbl { position: absolute; left: 300px; top: 6px; font-size: 12px; color: #444; }
+  input, textarea { font: 16px/20px Arial, sans-serif; }
+</style>
+</head>
+<body>
+
+<div class="row"><input id="k1" value="ab"><span class="lbl">k1 default input</span></div>
+<div class="row"><input id="k2" value="ab" style="field-sizing: content"><span class="lbl">k2 content</span></div>
+<div class="row"><input id="k3" style="field-sizing: content"><span class="lbl">k3 content, empty</span></div>
+<div class="row"><input id="k4" placeholder="hello world" style="field-sizing: content"><span class="lbl">k4 content, placeholder</span></div>
+<div class="row"><input id="k5" value="a rather long value here" style="field-sizing: content"><span class="lbl">k5 content, long</span></div>
+<div class="row"><input id="k6" value="ab" size="5" style="field-sizing: content"><span class="lbl">k6 content + size=5</span></div>
+<div class="row"><input id="k7" value="ab" style="field-sizing: content; padding: 10px"><span class="lbl">k7 content + padding</span></div>
+<div class="row"><input id="k8" value="ab" style="field-sizing: content; border: 4px solid #000"><span class="lbl">k8 content + border</span></div>
+<div class="row"><input id="k9" value="ab" style="field-sizing: content; width: 200px"><span class="lbl">k9 content + width</span></div>
+<div class="row"><input id="k10" value="ab" style="field-sizing: normal"><span class="lbl">k10 normal</span></div>
+<div class="row"><textarea id="k11" style="field-sizing: content">ab</textarea><span class="lbl">k11 textarea content</span></div>
+<div class="row"><textarea id="k12">ab</textarea><span class="lbl">k12 textarea default</span></div>
+<div class="row"><input id="k13" type="checkbox" style="field-sizing: content"><span class="lbl">k13 checkbox</span></div>
+<div class="row"><select id="k14" style="field-sizing: content"><option>short</option><option>a much longer option</option></select><span class="lbl">k14 select</span></div>
+<div class="row"><input id="k15" value="ab" style="field-sizing: content; min-width: 150px"><span class="lbl">k15 content + min-width</span></div>
+
+</body>
+</html>

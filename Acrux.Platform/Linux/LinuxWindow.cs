@@ -259,7 +259,10 @@ public sealed unsafe class LinuxWindow : IWindow
         }
 
         _framebuffer = (byte*)Marshal.AllocHGlobal((nint)_width * _height * 4);
-        NativeMemory.Clear(_framebuffer, (nuint)(_width * _height * 4));
+        // White, not black: the Expose/RedrawWindow that follows a resize copies
+        // this buffer before the first Render lands, and a zero-filled one flashed
+        // a black frame over the page.
+        NativeMemory.Fill(_framebuffer, (nuint)(_width * _height * 4), 0xFF);
         _fbW = _width;
         _fbH = _height;
 
@@ -336,14 +339,35 @@ public sealed unsafe class LinuxWindow : IWindow
                     throw;
                 }
             }
-            else if (XPending(_display) == 0)
+            else
             {
-                int sleepMs = Math.Max(1, (int)((targetDt - dt) * 1000.0));
-                Thread.Sleep(sleepMs);
+                // Block in the kernel until the next X event or the frame deadline,
+                // whichever comes first. Polling XPending in a sleep loop kept two
+                // socket polls + a sleep per frame budget even when fully idle.
+                var remainingMs = (int)Math.Ceiling((targetDt - dt) * 1000.0);
+                WaitForEvents(Math.Max(1, remainingMs));
             }
         }
 
         Cleanup();
+    }
+
+    /// <summary>
+    /// Waits on the X socket with poll() instead of busy-checking XPending.
+    /// Safe only when XPending reported 0: Xlib's buffers are then empty and
+    /// all queued output has been flushed, so new data can only arrive on the fd.
+    /// </summary>
+    private void WaitForEvents(int timeoutMs)
+    {
+        if (XPending(_display) > 0) return;
+        XFlush(_display);
+        var pfd = new PollFd
+        {
+            Fd = ConnectionNumber(_display),
+            Events = PollIn,
+            Revents = 0,
+        };
+        poll(&pfd, 1, timeoutMs);
     }
 
     private void PumpOneEvent()
@@ -610,17 +634,24 @@ public sealed unsafe class LinuxWindow : IWindow
         }
         else
         {
-            // ResolutionScale != 1: copy the overlapping region 1:1; the rest
-            // keeps the previous frame (stretched presentation is handled by
-            // the caller resizing its surface).
+            // ResolutionScale != 1: copy the overlapping region 1:1 and paint the
+            // exposed remainder white. Leaving it at the previous frame's pixels
+            // smeared stale content whenever the surface grew (scale up, resize);
+            // stretched presentation is handled by the caller resizing its surface.
             int copyW = Math.Min(width, _fbW);
             int copyH = Math.Min(height, _fbH);
             fixed (byte* src = pixels)
             {
+                for (int y = copyH; y < _fbH; y++)
+                    NativeMemory.Fill(_framebuffer + (long)y * _fbW * 4, (nuint)((long)_fbW * 4), 0xFF);
                 for (int y = 0; y < copyH; y++)
+                {
                     Buffer.MemoryCopy(src + (long)y * width * 4, _framebuffer + (long)y * _fbW * 4, _fbW * 4, copyW * 4);
+                    if (copyW < _fbW)
+                        NativeMemory.Fill(_framebuffer + (long)y * _fbW * 4 + copyW * 4, (nuint)((long)(_fbW - copyW) * 4), 0xFF);
+                }
             }
-            XPutImage(_display, _backPixmap, _gc, _ximage, 0, 0, 0, 0, (uint)copyW, (uint)copyH);
+            XPutImage(_display, _backPixmap, _gc, _ximage, 0, 0, 0, 0, (uint)_fbW, (uint)_fbH);
         }
 
         RedrawWindow();
@@ -833,8 +864,22 @@ public sealed unsafe class LinuxWindow : IWindow
     // P/Invoke (libX11.so.6)
     // ------------------------------------------------------------------
     private const string libX11 = "libX11.so.6";
+    private const string libc = "libc.so.6";
+
+    private const int PollIn = 0x0001;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PollFd
+    {
+        public int Fd;
+        public short Events;
+        public short Revents;
+    }
+
+    [DllImport(libc)] private static extern int poll(PollFd* fds, uint nfds, int timeoutMs);
 
     [DllImport(libX11)] private static extern IntPtr XOpenDisplay(IntPtr name);
+    [DllImport(libX11, EntryPoint = "XConnectionNumber")] private static extern int ConnectionNumber(IntPtr display);
     [DllImport(libX11)] private static extern int XCloseDisplay(IntPtr display);
     [DllImport(libX11)] private static extern int XDefaultScreen(IntPtr display);
     [DllImport(libX11)] private static extern int XDisplayWidth(IntPtr display, int screen);

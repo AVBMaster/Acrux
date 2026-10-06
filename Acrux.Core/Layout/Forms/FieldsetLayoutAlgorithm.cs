@@ -50,7 +50,9 @@ public class FieldsetLayoutAlgorithm : LayoutAlgorithm
         if (float.IsNaN(blockSize))
             blockSize = _intrinsicBlockSize;
 
-        if (Style.Contain is not ContainType.Size and not ContainType.Strict)
+        // Size containment removes the legend's contribution from the minimum block
+        // size (CSS Containment 3 §2.2: the contents do not contribute any size).
+        if (!Style.HasSizeContainment)
             blockSize = Math.Max(blockSize, _minimumBorderBoxBlockSize);
 
         float allFragmentsBlockSize = blockSize;
@@ -107,7 +109,7 @@ public class FieldsetLayoutAlgorithm : LayoutAlgorithm
                 adjustedPaddingBoxBlockSize = Math.Max(adjustedPaddingBoxBlockSize - legendSizeContribution, paddingBlockSum);
             }
 
-            if (Style.Contain is not ContainType.Size and not ContainType.Strict)
+            if (!Style.HasSizeContainment)
             {
                 _minimumBorderBoxBlockSize = BorderTop + BorderBottom + PaddingTop + PaddingBottom + legendSizeContribution;
             }
@@ -340,10 +342,14 @@ public class FieldsetLayoutAlgorithm : LayoutAlgorithm
         var border = LengthUtils.ComputeBorders(Style);
         var padding = LengthUtils.ComputePadding(Space, Style);
 
-        bool hasInlineSizeContainment = Style.Contain is ContainType.Size or ContainType.Strict;
+        bool hasInlineSizeContainment = Style.HasSizeContainment;
         if (hasInlineSizeContainment)
         {
-            result.Sizes = new MinMaxSizes(border.HorizontalSum + padding.HorizontalSum, border.HorizontalSum + padding.HorizontalSum);
+            // 'contain-intrinsic-width' replaces the zero the contained axis would
+            // otherwise measure (CSS Containment 3 §2.2).
+            float fallback = border.HorizontalSum + padding.HorizontalSum
+                + ContainmentMetrics.FallbackInlineSize(Style, Space);
+            result.Sizes = new MinMaxSizes(fallback, fallback);
             return result;
         }
 

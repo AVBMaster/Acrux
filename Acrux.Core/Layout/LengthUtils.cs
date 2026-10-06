@@ -80,6 +80,27 @@ public static class LengthUtils
             }
         }
 
+        // Intrinsic sizing keywords (CSS Sizing 3 §4.2): the value is a content
+        // contribution, so it comes from the intrinsic-sizes callback rather than from
+        // a unit conversion. The box-sizing correction is deliberately NOT applied —
+        // a contribution is already a border box, which is what a reference browser
+        // yields as well (b187 §7: 'min-width: max-content' with box-sizing:
+        // border-box resolves to the same border box as with content-box).
+        if (length is IntrinsicLength keyword)
+        {
+            var sizes = minMaxSizesFunc(SizeType.Intrinsic).Sizes;
+            if (IsIndefinite(sizes.MinSize) || IsIndefinite(sizes.MaxSize)) return IndefiniteSize;
+            float available = availableSize;
+            if (IsIndefinite(available) || float.IsInfinity(available))
+                available = lengthType == LengthTypeInternal.Max ? sizes.MaxSize : sizes.MinSize;
+            return keyword.Kind switch
+            {
+                IntrinsicSizeKind.MinContent => sizes.MinSize,
+                IntrinsicSizeKind.MaxContent => sizes.MaxSize,
+                _ => Math.Min(Math.Max(sizes.MinSize, available), sizes.MaxSize),
+            };
+        }
+
         // Every remaining unit (em/rem/vw/vh/vmin/vmax/ex/ch/cq*/dv*/sv*/lv*/
         // vi/vb/re*/ric/lh/rlh/cap/rcap/math…) resolves through the shared ToPixels
         // with the real root-font-size & viewport carried by the constraint space.
@@ -121,6 +142,13 @@ public static class LengthUtils
                 value += borderPadding.VerticalSum;
             return value;
         }
+
+        // Intrinsic keywords in the block axis: with a definite inline size the
+        // content contributes a single block size, which is what these keywords mean
+        // there (CSS Sizing 3 §4.3) — measured on b187 §8, a 120px-wide box with
+        // 'height: max-content' gets the same height 'auto' gives it.
+        if (length is IntrinsicLength)
+            return blockSizeFunc(SizeType.Content);
 
         // Every remaining unit (em/rem/vw/vh/vmin/vmax/ex/ch/cq*/dv*/sv*/lv*/
         // vi/vb/re*/ric/lh/rlh/cap/rcap/math…) resolves through the shared ToPixels
@@ -354,13 +382,23 @@ public static class LengthUtils
         // CONTAINING BLOCK inline size handed to us (spec), not against whatever
         // percentage base the incoming space happens to carry — anonymous/atomic
         // child spaces can have stale bases (was producing max-width:100% → 8px).
+        // 'min-width'/'min-height' start at zero for a replaced box (CSS 2.1 §10.4/§10.7:
+        // 'auto' is zero outside the flex/grid automatic-minimum-size rule). The helpers
+        // fall back to the border+padding strut when the length is indefinite, and this
+        // function's result is the CONTENT box — flooring the content at the strut counted
+        // the padding twice (an <input> with 'padding:10px' came out 48 tall where the
+        // reference engine gives 1lh + 2p + 2b = 39).
         float minW = style.MinWidth is PercentLength minPct
             ? availableInline * minPct.Value - borderPadding.HorizontalSum
-            : ResolveMinInlineLength(space, style, borderPadding, _ => minMax, style.MinWidth);
+            : style.MinWidth is null or AutoLength
+                ? 0f
+                : ResolveMinInlineLength(space, style, borderPadding, _ => minMax, style.MinWidth);
         float maxW = style.MaxWidth is PercentLength maxPct
             ? Math.Max(0, availableInline * maxPct.Value - borderPadding.HorizontalSum)
             : ResolveMaxInlineLength(space, style, borderPadding, _ => minMax, style.MaxWidth);
-        float minH = ResolveMinBlockLength(space, style, borderPadding, _ => h, style.MinHeight);
+        float minH = style.MinHeight is null or AutoLength
+            ? 0f
+            : ResolveMinBlockLength(space, style, borderPadding, _ => h, style.MinHeight);
         float maxH = style.MaxHeight is PercentLength maxPctH
             ? Math.Max(0, availableBlock * maxPctH.Value - borderPadding.VerticalSum)
             : ResolveMaxBlockLength(space, style, borderPadding, style.MaxHeight, _ => h);

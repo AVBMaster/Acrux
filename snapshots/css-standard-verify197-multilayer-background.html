@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 197 - multi-layer backgrounds (CSS Backgrounds 3 &sect;2, &sect;4)</title>
+<style>
+/* A background is a LIST of layers, and each comma-separated part has its own
+   position, size, repeat, origin, clip and attachment. The engine kept one scalar
+   field for each of those, so a second layer inherited the first one's geometry.
+
+   Flat colour layers have to be written as gradients: the <color> of the shorthand is
+   only allowed in the FINAL layer, so "background: red 0 0, blue 0 0" is invalid as a
+   whole and the declaration is dropped (case 9 keeps that as a parser judgement).
+
+   The first layer is painted LAST, i.e. uppermost (CSS Backgrounds 3 &sect;2). */
+body { font: 14px/18px Arial, sans-serif; margin: 8px; color: #111; background: #fff; }
+h2 { background: #eee; padding: 2px; margin: 12px 0 4px; font-size: 14px; }
+.box { width: 200px; height: 100px; border: 6px solid #444; padding: 12px; margin: 6px 0;
+       background-color: #fff; }
+.R { background-image: linear-gradient(rgb(255,0,0),rgb(255,0,0)); }
+.G { background-image: linear-gradient(rgb(0,255,0),rgb(0,255,0)); }
+.B { background-image: linear-gradient(rgb(0,0,255),rgb(0,0,255)); }
+
+/* 1. two layers, own position + size, written as longhands */
+.l2 { background-image: linear-gradient(rgb(255,0,0),rgb(255,0,0)),
+                       linear-gradient(rgb(0,0,255),rgb(0,0,255));
+      background-position: 10px 10px, 100px 20px;
+      background-size: 40px 40px, 60px 60px;
+      background-repeat: no-repeat, no-repeat; }
+/* 2. three layers side by side, written as a shorthand with the colour last */
+.l3 { background: linear-gradient(rgb(255,0,0),rgb(255,0,0)) 0 0 / 30px 30px no-repeat,
+                linear-gradient(rgb(0,255,0),rgb(0,255,0)) 40px 0 / 30px 30px no-repeat,
+                linear-gradient(rgb(0,0,255),rgb(0,0,255)) 80px 0 / 30px 30px no-repeat rgb(250,250,250); }
+/* 3. per-layer repeat */
+.lr { background-image: linear-gradient(rgb(255,0,0),rgb(255,0,0)),
+                       linear-gradient(rgb(0,0,255),rgb(0,0,255));
+      background-position: 0 0, 0 40px;
+      background-size: 20px 20px, 20px 20px;
+      background-repeat: repeat-x, repeat-y; }
+/* 4. per-layer origin and clip */
+.lo { background-image: linear-gradient(rgb(255,0,0),rgb(255,0,0)),
+                       linear-gradient(rgb(0,0,255),rgb(0,0,255));
+      background-origin: padding-box, border-box;
+      background-clip: content-box, border-box;
+      background-size: 100% 100%, 40px 100%;
+      background-position: 0 0, 0 0;
+      background-repeat: no-repeat, no-repeat; }
+/* 5. cycling: 3 images, 2 positions, 1 size, 1 repeat */
+.cyc { background-image: linear-gradient(rgb(255,0,0),rgb(255,0,0)),
+                       linear-gradient(rgb(0,0,255),rgb(0,0,255)),
+                       linear-gradient(rgb(0,255,0),rgb(0,255,0));
+       background-size: 30px 30px;
+       background-position: 0 0, 100px 0;
+       background-repeat: no-repeat; }
+/* 6. alpha on the top layer shows the one below */
+.tr { background-image: linear-gradient(rgba(255,0,0,0.5),rgba(255,0,0,0.5)),
+                       linear-gradient(rgb(0,0,255),rgb(0,0,255));
+      background-size: 100% 100%, 100% 100%;
+      background-repeat: no-repeat, no-repeat; }
+/* 7. overlap order: the FIRST layer wins where they intersect */
+.ov { background-image: linear-gradient(rgb(255,0,0),rgb(255,0,0)),
+                       linear-gradient(rgb(0,0,255),rgb(0,0,255));
+      background-position: 0 0, 10px 0;
+      background-size: 40px 40px, 40px 40px;
+      background-repeat: no-repeat, no-repeat; }
+/* 8. one layer only, so the geometry must not be shared with anything */
+.one { background-image: linear-gradient(rgb(0,0,255),rgb(0,0,255));
+       background-position: 50px 10px; background-size: 30px 30px; background-repeat: no-repeat; }
+/* 9. parser judgement: a <color> outside the final layer invalidates the whole
+      shorthand, so the .box background-color (#fff) stays and nothing is painted */
+.bad { background: rgb(255,0,0) 0 0 / 50px 100% no-repeat, rgb(0,0,255) 50px 0 / 50px 100% no-repeat; }
+/* 10. background-color is painted under every layer, in its own clip */
+.bc { background-image: linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0));
+      background-color: rgb(0,0,255); }
+</style>
+</head>
+<body>
+
+<h2>1. two layers, own position + size (longhands)</h2>
+<div class="box l2" id="a"></div>
+
+<h2>2. three layers + trailing colour (shorthand)</h2>
+<div class="box l3" id="b"></div>
+
+<h2>3. per-layer repeat (x and y)</h2>
+<div class="box lr" id="c"></div>
+
+<h2>4. per-layer origin and clip</h2>
+<div class="box lo" id="d"></div>
+
+<h2>5. cycling: 3 images, 2 positions, 1 size</h2>
+<div class="box cyc" id="f"></div>
+
+<h2>6. alpha on the top layer</h2>
+<div class="box tr" id="g"></div>
+
+<h2>7. overlap: the first layer is uppermost</h2>
+<div class="box ov" id="i"></div>
+
+<h2>8. single layer control</h2>
+<div class="box one" id="j"></div>
+
+<h2>9. colour outside the final layer: whole shorthand invalid</h2>
+<div class="box bad" id="k"></div>
+
+<h2>10. background-color under a transparent layer</h2>
+<div class="box bc" id="l"></div>
+
+<!--
+Reference values (Chromium, getComputedStyle per layer):
+
+  a  layers=2 pos=[10px 10px, 100px 20px] size=[40px 40px, 60px 60px] rep=[no-repeat, no-repeat]
+  b  layers=3 pos=[0 0, 40px 0, 80px 0] size=[30px x3] rep=[no-repeat x3] color=rgb(250,250,250)
+  c  layers=2 pos=[0 0, 0 40px] size=[20px 20px x2] rep=[repeat-x, repeat-y]
+  d  layers=2 size=[100% 100%, 40px 100%] origin=[padding-box, border-box] clip=[content-box, border-box]
+  f  layers=3 pos=[0 0, 100px 0, 0 0]  <- the 2-value position list CYCLES over 3 images
+        size=[30px 30px x3]            <- one value repeats for all three
+        rep=[no-repeat x3]
+  g  layers=2 pos=[0% 0% x2] size=[100% 100% x2]
+  i  layers=2 pos=[0 0, 10px 0] size=[40px 40px x2]   (the FIRST layer is uppermost)
+  j  layers=1 pos=[50px 10px] size=[30px 30px] rep=[no-repeat]
+  k  layers=0 color=rgb(255,255,255)   <- <color> outside the final layer voids the shorthand
+  l  layers=1 color=rgb(0,0,255)
+
+STATUS of this batch: cases 9 and 10 are exact. The rest still render with ONE
+scalar position/size/repeat shared by every layer (#127) - the ref for this page is a
+regression sentinel for the current state, NOT a correctness proof. The values above
+are what the layer model has to produce.
+-->
+
+</body>
+</html>

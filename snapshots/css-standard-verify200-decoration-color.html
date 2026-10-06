@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 200 - text-decoration-color: auto vs transparent (CSS Text Decoration 4 §3.2, §5.1)</title>
+<style>
+/* 'text-decoration-color' has the initial value 'auto', which paints with the
+   ORIGINATING box's own 'color'. The engine modelled 'auto' as "a color with alpha 0",
+   which made an authored 'transparent' indistinguishable from 'auto'; the same alpha
+   test was then repeated at three more layers (ComputedStyle -> DrawTextOp ->
+   TextDecorationPainter), so a zero-alpha authored color drew a solid line in the text
+   color. 'auto' was also a keyword the longhand parser fed to ColorParser, which read
+   it as opaque BLACK.
+
+   Edge truth (dpr 1, viewport 554), getComputedStyle + our own pixel scan of the
+   snapshot (16/16 clean cases matched, see snapshots/check_b200.py):
+     a1 'auto' / a2 no declaration / a3 initial / a4 unset / a5 currentcolor
+        -> rgb(200, 30, 30)  (= the element's color; line IS drawn)
+     b1 transparent / b2 rgba(0,0,0,0) / b3 hsla(…,0)
+        -> rgba(0, 0, 0, 0)  (NO ink — before the fix all three drew 200,30,30)
+     c1 rgb(0,0,255) -> rgb(0,0,255);  c2 shorthand color -> rgb(0,128,255)
+     d1..d5 the same rule for overline / line-through / wavy / double
+     e1c/e2c a child computes its OWN value: Edge gives rgb(200,30,30), i.e.
+        'text-decoration-*' is NOT inherited (CSS Text Decoration 4 §5.1) even though
+        the parent's line still propagates over the child's text in the PARENT's color.
+     e3c a bare child of a decorated parent computes text-decoration-line: none.
+
+   KNOWN DIVERGENCE (c3): Edge reports the *shorthand's* rgb(0,128,255) for
+   'text-decoration: underline rgb(0,128,255); text-decoration-color: auto', because
+   Chrome rejects the longhand 'auto' at parse time and the earlier declaration
+   survives (measured: an inline 'text-decoration-color: auto' leaves
+   CSSStyleDeclaration.length at 0). We accept 'auto' as the spec's keyword and reset
+   to auto -> rgb(200,30,30). Our cascade cannot express Chrome's behavior anyway:
+   StyleResolver stores a rule's declarations in a name-keyed dictionary, so the LAST
+   declaration for a property replaces the earlier one before it is ever parsed (an
+   invalid value therefore erases a valid one, and ColorParser turns anything it
+   cannot parse into a transparent color instead of failing). See CSS-HANDOFF §4 #202.
+*/
+body { font: 24px/34px Arial, sans-serif; margin: 8px; color: rgb(200, 30, 30); background: #fff; }
+p { margin: 4px 0; text-decoration-line: underline; }
+.auto-kw { text-decoration-color: auto; }
+.none { }
+.currentcolor { text-decoration-color: currentcolor; }
+.transparent { text-decoration-color: transparent; }
+.rgba0 { text-decoration-color: rgba(0, 0, 0, 0); }
+.hsla0 { text-decoration-color: hsla(120, 100%, 50%, 0); }
+.blue { text-decoration-color: rgb(0, 0, 255); }
+.initial { text-decoration-color: initial; }
+.unset { text-decoration-color: unset; }
+.shorthand { text-decoration: underline; }
+.shorthand-color { text-decoration: underline rgb(0, 128, 255); }
+.shorthand-reset { text-decoration: underline rgb(0, 128, 255); text-decoration-color: auto; }
+</style>
+</head>
+<body>
+
+<h2>1. auto must resolve to the element's own color (not black)</h2>
+<p id="a1" class="auto-kw">AUTOKEYWORD</p>
+<p id="a2" class="none">NODECLARATION</p>
+<p id="a3" class="initial">INITIALKEYWORD</p>
+<p id="a4" class="unset">UNSETKEYWORD</p>
+<p id="a5" class="currentcolor">CURRENTCOLOR</p>
+
+<h2>2. an authored fully transparent color must draw no ink</h2>
+<p id="b1" class="transparent">TRANSPARENT</p>
+<p id="b2" class="rgba0">RGBA0</p>
+<p id="b3" class="hsla0">HSLA0</p>
+
+<h2>3. explicit colors, and the shorthand that carries one</h2>
+<p id="c1" class="blue">BLUE</p>
+<p id="c2" class="shorthand-color">SHORTHAND COLOR</p>
+<p id="c3" class="shorthand-reset">LONGHAND RESETS TO AUTO</p>
+
+<h2>4. other line positions use the same color</h2>
+<p id="d1" class="transparent" style="text-decoration-line:overline">OVERLINE TRANSPARENT</p>
+<p id="d2" class="transparent" style="text-decoration-line:line-through">THROUGH TRANSPARENT</p>
+<p id="d3" class="blue" style="text-decoration-line:line-through">THROUGH BLUE</p>
+<p id="d4" class="transparent" style="text-decoration-style:wavy">WAVY TRANSPARENT</p>
+<p id="d5" class="transparent" style="text-decoration-style:double">DOUBLE TRANSPARENT</p>
+
+<h2>5. propagation: the parent keeps its own color over child text</h2>
+<p id="e1" class="blue">parent blue <span id="e1c" style="text-decoration-line:underline">child own auto</span></p>
+<p id="e2" style="text-decoration-color:rgb(0,128,255)">parent explicit blue
+  <span id="e2c" style="text-decoration-line:underline">child computes its own</span>
+  <span id="e2b" style="text-decoration-line:underline;text-decoration-color:transparent">child transparent own line</span></p>
+<p id="e3" class="shorthand">shorthand parent <span id="e3c">bare child inherits nothing</span></p>
+
+</body>
+</html>

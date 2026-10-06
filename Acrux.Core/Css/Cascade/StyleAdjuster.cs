@@ -12,6 +12,7 @@ public class StyleAdjuster
 {
     public void AdjustComputedStyle(ComputedStyle style, Element element, ComputedStyle? parentStyle)
     {
+        AdjustMonospaceGenericFontSize(style);
         AdjustDisplayForElement(style, element);
         DefaultTableBoxSizing(style);
         DefaultTableCellVerticalAlign(style);
@@ -22,8 +23,53 @@ public class StyleAdjuster
         AdjustForReplacedElements(style, element);
         AdjustTouchAction(style, element);
         AdjustZIndex(style, parentStyle);
+        AdjustTickBoxDecoration(style, element);
+        ReplayBoxEdgeProperties(style);
         ResolveCurrentColors(style);
         ApplyInitialBorderWidths(style);
+    }
+
+    /// <summary>
+    /// Logical box properties address an edge, not a side, so they must be mapped onto
+    /// the physical sides using the element's <b>final</b> computed 'direction'
+    /// (CSS Logical Properties 1 §2) — a 'direction' authored later in the same rule
+    /// still flips it, which one pass over the declarations cannot know. It runs before
+    /// currentColor resolution so a logical border color written as 'currentColor'
+    /// still resolves.
+    /// </summary>
+    /// <summary>
+    /// Blink's checkbox/radio adjustment: while the control still has its native
+    /// appearance, its border and padding are the widget's own drawing, not box decoration,
+    /// so an author <c>border: 4px solid red</c> or <c>padding: 10px</c> is thrown away
+    /// entirely (reference engine: <c>&lt;input type=checkbox style="border:4px solid red;
+    /// padding:10px; width:40px; height:40px"&gt;</c> computes to 0/none + 0 padding and stays
+    /// 40x40 — the author's size survives, its decoration does not). The UA registry cannot
+    /// express this: it writes zeros, which are also the initial values, so they never reach
+    /// the cascade and an author declaration simply won.
+    /// </summary>
+    private static void AdjustTickBoxDecoration(ComputedStyle style, Element element)
+    {
+        if (element is null) return;
+        if (!element.TagName.Equals("INPUT", StringComparison.OrdinalIgnoreCase)) return;
+        // Only a control that gave up its native appearance may style its own decoration.
+        if (style.Appearance.Equals("none", StringComparison.OrdinalIgnoreCase)) return;
+        var type = (element.GetAttribute("type") ?? "text").ToLowerInvariant();
+        if (type is not ("checkbox" or "radio")) return;
+
+        style.BorderTopWidth = style.BorderRightWidth = style.BorderBottomWidth = style.BorderLeftWidth = 0;
+        style.BorderTopStyle = style.BorderRightStyle = style.BorderBottomStyle = style.BorderLeftStyle = BorderStyle.None;
+        style.PaddingTop = style.PaddingRight = style.PaddingBottom = style.PaddingLeft = new PixelLength(0);
+    }
+
+    private static void ReplayBoxEdgeProperties(ComputedStyle style)
+    {
+        var pending = style.PendingBoxEdgeProperties;
+        if (pending == null || pending.Count == 0) return;
+        // Detach first: re-applying records into a fresh list, which is then dropped.
+        style.PendingBoxEdgeProperties = null;
+        foreach (var kv in pending)
+            CssPropertyApplier.Apply(style, kv.Key, kv.Value);
+        style.PendingBoxEdgeProperties = null;
     }
 
     /// <summary>
@@ -87,7 +133,10 @@ public class StyleAdjuster
             style.BoxSizing = BoxSizingType.BorderBox;
     }
 
-    private static void BlockifyFloatAndAbsolute(ComputedStyle style)
+    /// <summary>CSS Display 3 §3.2: a floated or absolutely positioned box has its
+    /// 'display' blockified. Internal because a generated box is built outside the cascade
+    /// (LayoutEngine's pseudo-element path) and needs the same rule applied by hand.</summary>
+    internal static void BlockifyFloatAndAbsolute(ComputedStyle style)
     {
         bool isFloat = style.Float != FloatType.None;
         bool isAbsolute = style.Position is PositionType.Absolute or PositionType.Fixed;
@@ -111,6 +160,22 @@ public class StyleAdjuster
             if (!parentIsFlexOrGrid)
                 style.ZIndex = null;
         }
+    }
+
+    /// <summary>
+    /// The generic 'monospace' carries a size of its own: an element whose specified
+    /// family list is exactly 'monospace' and whose 'font-size' was never authored (or
+    /// only 'medium') computes to the platform's fixed-font size, not to the inherited
+    /// 16px. Measured in Edge: <c>&lt;code&gt;</c> and <c>font-family: monospace</c>
+    /// both give 13px, while an authored <c>font-size: 16px</c> anywhere up the chain —
+    /// or a list like <c>'Nope', monospace</c> — keeps 16px. Runs first, so every later
+    /// adjustment and every font-relative unit sees the substituted size.
+    /// </summary>
+    private static void AdjustMonospaceGenericFontSize(ComputedStyle style)
+    {
+        if (!style.FontSizeIsDefault) return;
+        if (!Fonts.FontManager.IsSoleMonospaceGeneric(style.FontFamily)) return;
+        style.FontSize = Fonts.FontManager.StandardFixedFontSize;
     }
 
     /// <summary>
@@ -180,11 +245,15 @@ public class StyleAdjuster
             style.Display = DisplayType.ListItem;
 
         // Chrome reports the initial 'inline' for img/canvas/video/iframe/embed/
-        // object/svg and inline-block only for the form controls. We still force the
-        // media tags: a replaced box's background and border are only painted when the
-        // element owns a visited LayoutBox, and an atomic inline run paints the image
-        // alone - measured, an <img> with display:inline paints no background and no
-        // border at all. Flip this once the run path paints its box decoration (#164).
+        // object/svg and inline-block only for the form controls. The UA sheet now says
+        // 'inline' for the media tags (that is the standard value), and the force lives
+        // here instead, because the engine cannot yet honour it: a replaced box's
+        // background and border are painted by the block-box visit, and an element that
+        // stays 'inline' never reaches it. Measured, not theoretical — dropping this
+        // force makes the whole 10x10 red square of b167's <img style="background:#e33">
+        // disappear (100 differing pixels, exactly its box), while every geometry stays
+        // right. The real fix is box decoration on the atomic-inline run (#164); flip
+        // this list away once that lands.
         if (tag is "IMG" or "VIDEO" or "CANVAS" or "IFRAME" or "EMBED" or "OBJECT" or "INPUT" or "TEXTAREA" or "SELECT" or "BUTTON")
         {
             if (style.Display == DisplayType.Inline)
@@ -207,8 +276,24 @@ public class StyleAdjuster
 
     private static void AdjustOverflow(ComputedStyle style)
     {
-        // Propagate visible overflow to the viewport
-        // The root element's overflow becomes the viewport's overflow
+        // The root element's overflow propagates to the viewport (not modeled here); what
+        // *is* decided here is CSS Overflow 3 §3.3.1's pair constraints. They belong on the
+        // computed style rather than inside the 'overflow' shorthand, because they hold
+        // whichever way the two axes arrived: 'overflow: visible hidden' and
+        // 'overflow-x: visible; overflow-y: hidden' compute the same pair, and so does a lone
+        // 'overflow-x: hidden' (whose other axis then stops being 'visible').
+        var x = style.OverflowX;
+        var y = style.OverflowY;
+        if (x == OverflowType.Visible && CssPropertyApplier.IsScrollContainerOverflow(y)) x = OverflowType.Auto;
+        else if (y == OverflowType.Visible && CssPropertyApplier.IsScrollContainerOverflow(x)) y = OverflowType.Auto;
+        if (x == OverflowType.Clip && CssPropertyApplier.IsScrollContainerOverflow(y)) x = OverflowType.Hidden;
+        else if (y == OverflowType.Clip && CssPropertyApplier.IsScrollContainerOverflow(x)) y = OverflowType.Hidden;
+        style.OverflowX = x;
+        style.OverflowY = y;
+        // The single 'Overflow' field is an aggregate the paint gates read; taking the more
+        // restrictive axis keeps it from claiming scrollability the pair does not have.
+        style.Overflow = x == y ? x
+            : CssPropertyApplier.OverflowSeverity(x) >= CssPropertyApplier.OverflowSeverity(y) ? x : y;
     }
 
     private static void AdjustForTextElements(ComputedStyle style, Element element)

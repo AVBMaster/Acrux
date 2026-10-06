@@ -142,8 +142,8 @@ public class PaintPropertyTreeBuilder
                 Parent = _clipParent,
                 State = new ClipNodeState
                 {
-                    ClipRect = element.LayoutBox?.PaddingBox,
-                    ClipRectInLocalSpace = element.LayoutBox?.PaddingBox
+                    ClipRect = ClipRectFor(element.LayoutBox, style),
+                    ClipRectInLocalSpace = ClipRectFor(element.LayoutBox, style)
                 }
             };
             _clipParent.Children.Add(clipNode);
@@ -191,9 +191,22 @@ public class PaintPropertyTreeBuilder
     {
         var overflowX = style.OverflowX;
         var overflowY = style.OverflowY;
-        return overflowX == OverflowType.Hidden || overflowY == OverflowType.Hidden ||
+        return overflowX == OverflowType.Clip || overflowY == OverflowType.Clip ||
+               overflowX == OverflowType.Hidden || overflowY == OverflowType.Hidden ||
                overflowX == OverflowType.Scroll || overflowY == OverflowType.Scroll ||
-               overflowX == OverflowType.Auto || overflowY == OverflowType.Auto;
+               overflowX == OverflowType.Auto || overflowY == OverflowType.Auto ||
+               // CSS Containment 3 §2.4: paint containment is its own clip boundary.
+               style.HasPaintContainment;
+    }
+
+    /// <summary>The box paint containment and an overflow clip fall on: containment clips
+    /// the border box, an overflow clip the (smaller) padding box.</summary>
+    private static SKRect? ClipRectFor(LayoutBox? box, ComputedStyle style)
+    {
+        if (box == null) return null;
+        bool overflowClips = style.OverflowX != OverflowType.Visible || style.OverflowY != OverflowType.Visible
+            || style.Overflow != OverflowType.Visible;
+        return overflowClips ? box.PaddingBox : box.BorderBox;
     }
 
     private static bool NeedsEffect(ComputedStyle style) =>

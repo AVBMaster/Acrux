@@ -89,7 +89,7 @@ public static class StyleableMarkerPainter
         if (marker.UseTextColor || inDarkMode)
             markerColor = style.Color;
         else
-            markerColor = marker.UnderlineColor ?? style.TextDecorationColor;
+            markerColor = marker.UnderlineColor ?? style.ResolvedTextDecorationColor;
         if (fillColorOverride.Alpha > 0)
             markerColor = fillColorOverride;
 

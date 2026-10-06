@@ -5,11 +5,15 @@ baked at different device-pixel ratios, so each one is probed at the ratios this
 project has used and the first exact match wins; a mismatch there is a real diff.
 Usage: python marker_gate.py 166 179 | python marker_gate.py --all
 """
+import _acrux_cli as cli
 import glob, os, re, struct, subprocess, sys
 
-EXE = "./Acrux/bin/Debug/net10.0-windows/Acrux.exe"
 TMP = "snapshots/out/_gate.png"
-DPIS = (1.25, 1.0, 2.0)
+ENV = cli.environment()
+# The Windows-baked refs cannot gate a Linux build (Skia raster differs per
+# platform); on Linux the gate compares against the linux-ref baseline baked
+# by bake_linux_refs.py at dpi 1.0.
+REF_PREFIX, DPIS = ("ref", (1.25, 1.0, 2.0)) if os.name == "nt" else ("linux-ref", (1.0,))
 
 
 def dims(path):
@@ -19,12 +23,13 @@ def dims(path):
 
 
 def run(args):
-    return subprocess.run([EXE] + args, capture_output=True, text=True, timeout=300).stdout
+    return subprocess.run(cli.command(args), capture_output=True, text=True,
+                          timeout=300, env=ENV).stdout
 
 
 def parse(ref):
-    """ref-b166-multicol-flow-width.png -> ('166', '-multicol-flow-width')."""
-    m = re.match(r"ref-b(\d+)(.*)\.png$", os.path.basename(ref))
+    """ref-b166-multicol-flow-width.png / linux-ref-b166-….png -> ('166', '-multicol-flow-width')."""
+    m = re.match(r"(?:linux-)?ref-b(\d+)(.*)\.png$", os.path.basename(ref))
     return (m.group(1), m.group(2)) if m else (None, None)
 
 
@@ -43,7 +48,7 @@ def page_for(num, suffix):
     return cands[0]
 
 
-refs = sorted(glob.glob("snapshots/out/ref-b*.png"))
+refs = sorted(glob.glob(f"snapshots/out/{REF_PREFIX}-b*.png"))
 if len(sys.argv) > 1 and sys.argv[1] == "--all":
     selected = refs
 else:
@@ -60,6 +65,7 @@ for ref in selected:
         continue
     w, h = dims(ref)
     best = None
+    why = "binary produced no diff report"
     for dpi in DPIS:
         css_w, css_h = (w * 100 // 125, h * 100 // 125) if dpi == 1.25 else (w, h)
         if dpi == 2.0:
@@ -67,12 +73,15 @@ for ref in selected:
         if css_w <= 0 or css_h <= 0:
             continue
         run(["--snapshot", page, TMP, str(css_w), str(css_h), str(dpi)])
-        m = re.search(r"(\d+)/(\d+) px differ \(([\d.]+)%\)", run(["--diff", ref, TMP]))
+        out = run(["--diff", ref, TMP])
+        m = re.search(r"(\d+)/(\d+) px differ \(([\d.]+)%\)", out)
         if not m:
+            why = (out.strip().splitlines() or ["empty output"])[-1][:80]
             continue
         pct = float(m.group(3))
         if best is None or pct < best[0]:
             best = (pct, dpi, m.group(0))
         if pct == 0.0:
             break
-    print(f"b{num}{suffix}: " + (f"{best[2]} @dpi{best[1]}" if best else "no diff line"), flush=True)
+    print(f"b{num}{suffix}: " + (f"{best[2]} @dpi{best[1]}" if best
+                                 else f"NOT MEASURED ({why})"), flush=True)

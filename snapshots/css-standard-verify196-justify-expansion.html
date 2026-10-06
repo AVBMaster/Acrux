@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 196 - justify expansion opportunities (CSS Text 3 &sect;4.4)</title>
+<style>
+/* text-align: justify stretches a line by adding space at *expansion opportunities*.
+   Those are not the same characters as *break opportunities*: a no-break space and the
+   other Unicode space separators occupy space without ever being a break point, and the
+   question this batch settles is whether they stretch anyway.
+
+   Every case needs at least TWO lines and the first one must be FULL:
+   a single-line paragraph is its block's last line, and the last line of a block is never
+   justified, so short text measures natural spacing and proves nothing.: the last line of a block is never justified, so a
+   single-line paragraph measures the natural spacing instead and proves nothing.
+   The text is the same in every case except for the one separator under test, and the
+   per-character x positions are read from a Range so the distribution is visible rather
+   than just the line's extent. */
+body { font: 16px/20px Arial, sans-serif; margin: 8px; color: #111; }
+h2 { background: #eee; padding: 2px; margin: 12px 0 4px; font-size: 16px; }
+.j { text-align: justify; width: 300px; background: #eef; margin: 4px 0; }
+.n { text-align: left; width: 300px; background: #fee; margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<h2>1. control: regular spaces only</h2>
+<p class="j" id="c1">aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv</p>
+
+<h2>2. NBSP U+00A0 after the first word</h2>
+<p class="j" id="c2">aa&#160;bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv</p>
+
+<h2>3. em space U+2003 after the first word</h2>
+<p class="j" id="c3">aa&#8195;bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv</p>
+
+<h2>4. thin space U+2009 after the first word</h2>
+<p class="j" id="c4">aa&#8201;bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv</p>
+
+<h2>5. two NBSP in a row (one opportunity or two?)</h2>
+<p class="j" id="c5">aa&#160;&#160;bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv</p>
+
+<h2>6. NBSP between every pair (all opportunities are NBSP)</h2>
+<p class="j" id="c6">aa&#160;bb&#160;cc&#160;dd&#160;ee&#160;ff&#160;gg&#160;hh&#160;ii&#160;jj&#160;kk&#160;ll&#160;mm&#160;nn&#160;oo&#160;pp&#160;qq&#160;rr&#160;ss&#160;tt&#160;uu&#160;vv</p>
+
+<h2>7. first line ends in NBSP (trailing: content or not?)</h2>
+<p class="j" id="c7">aa bb cc dd ee ff&#160;gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv</p>
+
+<h2>8. NBSP immediately followed by a regular space</h2>
+<p class="j" id="c8">aa&#160; bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv</p>
+
+<h2>9. ideographic space U+3000 after the first word</h2>
+<p class="j" id="c9">aa&#12288;bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv</p>
+
+<h2>10. non-justified control for case 2</h2>
+<p class="n" id="c10">aa&#160;bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv</p>
+
+<h2>11. justify on top of word-spacing:10px</h2>
+<p class="j" id="c11" style="word-spacing:10px">aa&#160;bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv</p>
+
+<h2>12. NBSP before the last word of the justified line</h2>
+<p class="j" id="c12">aa bb cc dd ee&#160;ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv</p>
+
+</body>
+</html>

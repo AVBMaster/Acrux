@@ -45,14 +45,15 @@ internal sealed class PaintLayerClipper
         {
             var style = ancestor.ComputedStyle;
             var box = ancestor.LayoutBox;
-            if (style == null || box == null || !CreatesOverflowClip(style))
+            if (style == null || box == null || !CreatesClip(style))
                 continue;
 
-            var clip = (box.IsScrollContainer
-                    ? new SKRect(box.ContentBox.Left, box.ContentBox.Top,
-                        box.ContentBox.Right, box.ContentBox.Bottom)
-                    : new SKRect(box.PaddingBox.Left, box.PaddingBox.Top,
-                        box.PaddingBox.Right, box.PaddingBox.Bottom));
+            var clip = ClipRectFor(box, style);
+            // 'overflow-clip-margin' (CSS Overflow 3 §4.1) moves the clip edge off the
+            // padding box: the keyword forms pick another box, a length inflates it.
+            // The initial value is 0, so boxes that never mention it are unaffected.
+            clip = ApplyOverflowClipMargin(style, box, clip);
+
             clip = new SKRect(
                 clip.Left - ax,
                 clip.Top + contentOffsetY - ay,
@@ -116,7 +117,48 @@ internal sealed class PaintLayerClipper
         }
     }
 
+    private static SKRect ApplyOverflowClipMargin(ComputedStyle style, LayoutBox box, SKRect clip)
+    {
+        if (style.OverflowClipMarginBox != OverflowClipMarginBox.PaddingBox)
+        {
+            var reference = style.OverflowClipMarginBox == OverflowClipMarginBox.ContentBox
+                ? box.ContentBox : box.BorderBox;
+            clip = new SKRect(reference.Left, reference.Top, reference.Right, reference.Bottom);
+        }
+        var margin = style.OverflowClipMargin;
+        if (margin == null) return clip;
+        // A percentage resolves against the corresponding dimension of the padding box.
+        float mx = margin.ToPixels(clip.Width, style.FontSize, 0, 0);
+        float my = margin.ToPixels(clip.Height, style.FontSize, 0, 0);
+        if (mx <= 0 && my <= 0) return clip;
+        return new SKRect(clip.Left - mx, clip.Top - my, clip.Right + mx, clip.Bottom + my);
+    }
+
+    /// <summary>Which computed 'overflow' values actually clip the subtree. 'Clip' is
+    /// here (it clips) but deliberately absent from IsScrollableOverflow (it cannot be
+    /// scrolled) and from the BFC predicate (it does not establish a BFC) — the three
+    /// questions are independent, and folding 'clip' into 'hidden' answers all three
+    /// wrongly.</summary>
+    /// <summary>CSS Containment 3 §2.4: paint containment clips the subtree as well, and it
+    /// clips to the <em>border</em> box — measured against the reference engine with a 4px
+    /// border and 10px padding, descendants stay hit-testable over the border band and are
+    /// gone one pixel outside the border box. An element that also has an overflow clip gets
+    /// the smaller padding/content clip of the two, which is what the intersection gives.</summary>
+    internal static bool CreatesClip(ComputedStyle style) =>
+        CreatesOverflowClip(style) || style.HasPaintContainment;
+
+    /// <summary>The rectangle <see cref="CreatesClip"/> clips to.</summary>
+    internal static SKRect ClipRectFor(LayoutBox box, ComputedStyle style) =>
+        box.IsScrollContainer
+            ? new SKRect(box.ContentBox.Left, box.ContentBox.Top, box.ContentBox.Right, box.ContentBox.Bottom)
+            : CreatesOverflowClip(style)
+                ? new SKRect(box.PaddingBox.Left, box.PaddingBox.Top, box.PaddingBox.Right, box.PaddingBox.Bottom)
+                : new SKRect(box.BorderBox.Left, box.BorderBox.Top, box.BorderBox.Right, box.BorderBox.Bottom);
+
     internal static bool CreatesOverflowClip(ComputedStyle style) =>
+        style.Overflow == OverflowType.Clip ||
+        style.OverflowX == OverflowType.Clip ||
+        style.OverflowY == OverflowType.Clip ||
         style.Overflow == OverflowType.Hidden ||
         style.Overflow == OverflowType.Scroll ||
         style.Overflow == OverflowType.Auto ||

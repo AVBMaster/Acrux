@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 205 - inheritance of the text properties that were missing (gap #209)</title>
+<style>
+/* StyleResolver.InheritProperties (the copy that actually runs) and
+   CascadeResolver.InheritProperties were two hand-maintained lists, and the live one had
+   drifted: nine inherited properties were never copied to a child, so declaring them on an
+   ancestor was silently ignored —
+     hyphens, line-break, text-justify, text-rendering, text-wrap,
+     orphans, widows, writing-mode, text-shadow
+   This batch pins each one: the value is set on the PARENT only, and the assertion is the
+   CHILD's computed value. Edge truth is recorded per case.
+   i11 keeps a behavioural proof as well: 'hyphens: none' on the parent must remove the
+   soft-hyphen break opportunity from the child's text (CSS Text 3 §4.4).
+
+   EDGE TRUTH (dpr 1, viewport 383) — the CHILD's computed value, and OURS after the fix:
+     i1c  hyphens=none                 -> hy=None              OK
+     i2c  line-break=loose             -> lb=Loose             OK
+     i5c  text-wrap=balance            -> TextWrapStyle=Balanced, textWrap=balance   OK
+     i8c  text-shadow=rgb(255,0,0) 2px 2px 0px  -> textShadow=rgb(255,0,0) 2 2 0     OK
+     i9c  hyphenate-character="%"      -> hc=%                 OK
+     i10c white-space-collapse=preserve -> PreWrap[Preserve/Wrap/Auto]               OK
+     i6c/i7c orphans=7 widows=7        (our --computed does not print these two; the
+                                        inheritance line exists, the readout does not —
+                                        adding it to the dump is left as a follow-up)
+     i3c/i4c: Chrome exposes neither text-justify nor a non-auto text-rendering on HTML,
+              so those two cases only pin that the declaration does not crash the cascade.
+     i11 (40px box, hyphens:none inherited)  -> 1 line,  h=22  == Edge
+     i12 (40px box, default manual hyphens)  -> 2 lines, h=42  == Edge
+
+*/
+body { font: 16px/20px Arial, sans-serif; margin: 8px; color: #111; background: #fff; }
+div { margin: 3px 0; }
+.p-hyphens { hyphens: none; }
+.p-linebreak { line-break: loose; }
+.p-textjustify { text-justify: inter-word; }
+.p-textrendering { text-rendering: crispEdges; }
+.p-textwrap { text-wrap: balance; }
+.p-orphans { orphans: 7; }
+.p-widows { widows: 7; }
+.p-shadow { text-shadow: 2px 2px 0 rgb(255, 0, 0); }
+.p-hyphenchar { hyphenate-character: "%"; }
+.p-ws { white-space-collapse: preserve; text-wrap-mode: wrap; }
+/* i11: narrow box + a soft hyphen, so the break is observable */
+.p-nobreak { hyphens: none; }
+.narrow { width: 40px; border: 1px solid #999; }
+</style></head>
+<body>
+<div id="i1" class="p-hyphens">child<span id="i1c"> text</span></div>
+<div id="i2" class="p-linebreak">child<span id="i2c"> text</span></div>
+<div id="i3" class="p-textjustify">child<span id="i3c"> text</span></div>
+<div id="i4" class="p-textrendering">child<span id="i4c"> text</span></div>
+<div id="i5" class="p-textwrap">child<span id="i5c"> text</span></div>
+<div id="i6" class="p-orphans">child<span id="i6c"> text</span></div>
+<div id="i7" class="p-widows">child<span id="i7c"> text</span></div>
+<div id="i8" class="p-shadow">child<span id="i8c"> text</span></div>
+<div id="i9" class="p-hyphenchar">child<span id="i9c"> text</span></div>
+<div id="i10" class="p-ws">child<span id="i10c"> text</span></div>
+<div id="i11" class="p-nobreak narrow"><span id="i11c">under&shy;standing</span></div>
+<div id="i12" class="narrow"><span id="i12c">under&shy;standing</span></div>
+
+</body>
+</html>

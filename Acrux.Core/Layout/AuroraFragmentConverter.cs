@@ -15,11 +15,17 @@ public static class AuroraFragmentConverter
     public static Dom.LayoutBox ToLayoutBox(BoxFragment fragment, Element? element, Dom.LayoutBox? parent = null,
         bool applyRelativeOffset = true)
     {
+        var selfStyle = fragment.Element?.ComputedStyle;
         var box = new Dom.LayoutBox
         {
             Parent = parent,
             Dimensions = new BoxDimensions { Style = fragment.Element?.ComputedStyle, Element = fragment.Element },
             IsFloating = fragment.IsFloating,
+            // CSS Content Distribution 1 §4: 'content-visibility: hidden' renders the box's
+            // own decoration but none of its contents, and nothing at all below them. The
+            // flag travels with the box because layout has already run by then.
+            ContentsNotRendered = selfStyle?.ContentVisibility == ContentVisibilityType.Hidden,
+            InHiddenSubtree = parent?.ContentsNotRendered == true || parent?.InHiddenSubtree == true,
         };
 
         // Offset of the parent content box for computing absolute child positions.

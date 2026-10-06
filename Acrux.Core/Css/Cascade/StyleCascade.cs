@@ -206,7 +206,7 @@ public class CascadeResolverState
         switch (id)
         {
             case CssPropertyId.FontSize:
-                style.FontSize = CssPropertyApplier.ParseFontSize(text, ParentStyle, RootFontSize, ViewportWidth, ViewportHeight);
+                CssPropertyApplier.SetFontSize(style, text, CssPropertyApplier.ParseFontSize(text, ParentStyle, RootFontSize, ViewportWidth, ViewportHeight));
                 FontSize = style.FontSize;
                 return;
             case CssPropertyId.FontWeight:

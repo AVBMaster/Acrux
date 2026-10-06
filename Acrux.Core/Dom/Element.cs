@@ -132,6 +132,11 @@ public abstract class Element : Node
     public ScrollbarStyles? ScrollbarCustom { get; set; }
     public bool HasGeneratedBefore { get; set; }
     public bool HasGeneratedAfter { get; set; }
+    /// <summary>True for a box the engine materialized from a 'content' value
+    /// (::before, ::after, a floated ::first-letter). It has no node in the author's DOM,
+    /// so it can never be the target of a pointer event either — a hit inside it belongs
+    /// to the element that declared it.</summary>
+    public bool IsGeneratedPseudoElement { get; set; }
     /// <summary>Set when a floated ::first-letter box was materialized (CSS
     /// Pseudo-Elements 4 §3): the letter no longer belongs to the text run, so the
     /// inline ::first-letter slicing must not claim the character after it.</summary>

@@ -44,39 +44,45 @@ public class SkiaTextMeasurer : ITextMeasurer
             return width;
         }
 
-        // Slow path: split text into runs by glyph support for CJK/emoji fallback
+        // Slow path: split text into runs by glyph support for CJK/emoji fallback.
+        // The walk is by CODE POINT: an astral character (emoji, and every CJK
+        // extension beyond the BMP) arrives as a surrogate pair, and asking a face
+        // about the halves answers "no glyph" for both — which sent each half to the
+        // fallback chain and measured a broken pair as zero width, so an emoji run
+        // collapsed to nothing and the text after it painted on top of it.
         float totalWidth = 0;
         int runStart = 0;
         SKTypeface currentTf = primaryTypeface;
 
-        for (int i = 0; i <= text.Length; i++)
+        for (int i = 0; i < text.Length;)
         {
-            if (i < text.Length)
-            {
-                char c = text[i];
-                SKTypeface neededTf = primaryTypeface.ContainsGlyph(c) ? primaryTypeface : FontManager.GetFallbackTypeface(c);
+            int cp = char.IsHighSurrogate(text[i]) && i + 1 < text.Length
+                ? char.ConvertToUtf32(text[i], text[i + 1])
+                : text[i];
+            int next = i + (char.IsHighSurrogate(text[i]) && i + 1 < text.Length ? 2 : 1);
+            SKTypeface neededTf = primaryTypeface.ContainsGlyph(cp) ? primaryTypeface : FontManager.GetFallbackTypeface(cp);
 
-                if (neededTf != currentTf)
-                {
-                    if (i > runStart)
-                    {
-                        string run = text.Substring(runStart, i - runStart);
-                        using var runFont = new SKFont(currentTf, fontSize);
-                        totalWidth += runFont.MeasureText(run);
-                    }
-                    currentTf = neededTf;
-                    runStart = i;
-                }
-            }
-            else
+            if (neededTf != currentTf)
             {
+                // The character that changes the face belongs to the NEW run: folding
+                // it into the previous one measured an emoji with the text face (its
+                // .notdef pair, 12px) and started the emoji run after it.
                 if (i > runStart)
                 {
-                    string run = text.Substring(runStart);
+                    string run = text.Substring(runStart, i - runStart);
                     using var runFont = new SKFont(currentTf, fontSize);
                     totalWidth += runFont.MeasureText(run);
                 }
+                currentTf = neededTf;
+                runStart = i;
             }
+            i = next;
+        }
+        if (text.Length > runStart)
+        {
+            string run = text.Substring(runStart);
+            using var runFont = new SKFont(currentTf, fontSize);
+            totalWidth += runFont.MeasureText(run);
         }
 
         CacheIfNeeded(_widthCache, key, totalWidth);

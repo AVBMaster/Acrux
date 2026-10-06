@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 190 — table row/cell heights (CSS 2.1 §17.5.2.1, min/max height vs line box)</title>
+<style>
+/* Every table has an explicit width so the measurement does not depend on the
+   browser window; the row in question carries an id on each of its cells. */
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 16px 0 6px; font-size: 16px; }
+table { border-collapse: separate; border-spacing: 2px; width: 400px; margin: 6px 0; }
+td, th { border: 1px solid #369; padding: 4px; background: #cfe; }
+.b { border-collapse: collapse; }
+
+/* 1. a specified height smaller than the line box must not shrink the row */
+#c1 { height: 6px; }
+/* 2. specified height larger than the content wins */
+#c2 { height: 60px; }
+/* 3. max-height on a cell does not clamp the row (rows are a minimum, not a maximum) */
+#c3 { max-height: 10px; height: 50px; }
+/* 4. min-height on a cell raises the row */
+#c4 { min-height: 45px; }
+/* 5. a row with two cells of different content heights takes the taller */
+#c5b { height: auto; }
+/* 6. tr height applies to the row */
+#r6 { height: 55px; }
+/* 7. an empty cell in Chrome is 0x0 unless it has padding/border */
+#c7 { padding: 0; border: 0; }
+/* 8. percentage height on a cell against an auto-height row */
+#c8 { height: 50%; }
+/* 9. line-height larger than the specified cell height */
+#c9 { height: 12px; line-height: 30px; }
+/* 10. vertical-align must not grow the row a second time */
+#c10 { vertical-align: bottom; height: 40px; }
+</style>
+</head>
+<body>
+
+<h2>1. height smaller than the line box (row must stay one line tall)</h2>
+<table id="t1"><tr><td id="c1">text</td><td>other</td></tr></table>
+
+<h2>2. height larger than the content</h2>
+<table id="t2"><tr><td id="c2">text</td><td>other</td></tr></table>
+
+<h2>3. max-height on the cell, height 50px</h2>
+<table id="t3"><tr><td id="c3">text</td><td>other</td></tr></table>
+
+<h2>4. min-height: 45px on the cell</h2>
+<table id="t4"><tr><td id="c4">text</td><td>other</td></tr></table>
+
+<h2>5. two cells, second wraps to three lines</h2>
+<table id="t5"><tr><td id="c5a">one</td><td id="c5b">a long line of text that wraps into three lines here</td></tr></table>
+
+<h2>6. height declared on the tr</h2>
+<table id="t6"><tr id="r6"><td>text</td><td>other</td></tr></table>
+
+<h2>7. empty cell with no padding or border</h2>
+<table id="t7"><tr><td id="c7"></td><td>x</td></tr></table>
+
+<h2>8. percentage height against an auto-height row</h2>
+<table id="t8"><tr><td id="c8">text</td><td>other</td></tr></table>
+
+<h2>9. line-height 30px with height 12px</h2>
+<table id="t9"><tr><td id="c9">text</td><td>other</td></tr></table>
+
+<h2>10. vertical-align: bottom with height 40px</h2>
+<table class="b" id="t10"><tr><td id="c10">text</td><td style="height:70px">tall</td></tr></table>
+
+</body>
+</html>

@@ -474,21 +474,21 @@ public class DocumentHost
                 ["height"] = computedStyle.Height.ToString(),
                 ["display"] = computedStyle.Display.ToCssString(),
                 ["position"] = computedStyle.Position.ToCssString(),
-                ["float"] = computedStyle.Float.ToString().ToLowerInvariant(),
-                ["clear"] = computedStyle.Clear.ToString().ToLowerInvariant(),
+                ["float"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Float.ToString()),
+                ["clear"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Clear.ToString()),
                 ["color"] = $"rgb({computedStyle.Color.Red}, {computedStyle.Color.Green}, {computedStyle.Color.Blue})",
                 ["font-family"] = computedStyle.FontFamily ?? "",
                 ["font-size"] = $"{computedStyle.FontSize}px",
                 ["font-weight"] = ((int)computedStyle.FontWeight).ToString(),
-                ["font-style"] = computedStyle.FontStyle.ToString().ToLowerInvariant(),
+                ["font-style"] = computedStyle.FontStyleCssText,
                 ["line-height"] = computedStyle.LineHeight == 1.2f ? "normal" : computedStyle.LineHeight.ToString(),
-                ["text-align"] = computedStyle.TextAlign.ToString().ToLowerInvariant(),
-                ["text-decoration"] = computedStyle.TextDecoration.ToString().ToLowerInvariant(),
-                ["white-space"] = computedStyle.WhiteSpace.ToString().ToLowerInvariant(),
-                ["word-break"] = computedStyle.WordBreak.ToString().ToLowerInvariant(),
-                ["overflow-wrap"] = computedStyle.OverflowWrap.ToString().ToLowerInvariant(),
-                ["visibility"] = computedStyle.Visibility.ToString().ToLowerInvariant(),
-                ["overflow"] = computedStyle.Overflow.ToString().ToLowerInvariant(),
+                ["text-align"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.TextAlign.ToString()),
+                ["text-decoration"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.TextDecoration.ToString()),
+                ["white-space"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.WhiteSpace.ToString()),
+                ["word-break"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.WordBreak.ToString()),
+                ["overflow-wrap"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.OverflowWrap.ToString()),
+                ["visibility"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Visibility.ToString()),
+                ["overflow"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Overflow.ToString()),
                 ["opacity"] = computedStyle.Opacity.ToString(),
                 ["z-index"] = computedStyle.ZIndex?.ToString() ?? "auto",
                 ["background-color"] = computedStyle.BackgroundColor.HasValue
@@ -506,14 +506,14 @@ public class DocumentHost
                 ["border-right-width"] = $"{computedStyle.BorderRightWidth}px",
                 ["border-bottom-width"] = $"{computedStyle.BorderBottomWidth}px",
                 ["border-left-width"] = $"{computedStyle.BorderLeftWidth}px",
-                ["flex-direction"] = computedStyle.FlexDirection.ToString().ToLowerInvariant(),
-                ["flex-wrap"] = computedStyle.FlexWrap.ToString().ToLowerInvariant(),
-                ["justify-content"] = computedStyle.JustifyContent.ToString().ToLowerInvariant(),
-                ["align-items"] = computedStyle.AlignItems.ToString().ToLowerInvariant()
+                ["flex-direction"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.FlexDirection.ToString()),
+                ["flex-wrap"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.FlexWrap.ToString()),
+                ["justify-content"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.JustifyContent.ToString()),
+                ["align-items"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.AlignItems.ToString())
             };
         }
 
-        return new ComputedStyleHost(props);
+        return new ComputedStyleHost(props, element.NativeElement.ComputedStyle);
     }
 
     private static Dictionary<string, string> CreateDefaultComputedStyleForElement(ElementHost element)
@@ -531,7 +531,7 @@ public class DocumentHost
             ["width"] = "auto",
             ["height"] = "auto",
             ["color"] = "rgb(0, 0, 0)",
-            ["font-family"] = "Arial, sans-serif",
+            ["font-family"] = Acrux.Core.Fonts.FontManager.StandardFontFamily,
             ["font-size"] = "16px",
             ["line-height"] = "normal",
             ["text-align"] = "start",
@@ -696,18 +696,27 @@ public class DocumentHost
 public class ComputedStyleHost
 {
     private readonly Dictionary<string, string> _properties;
+    private readonly ComputedStyle? _style;
 
-    public ComputedStyleHost(Dictionary<string, string> properties)
+    public ComputedStyleHost(Dictionary<string, string> properties, ComputedStyle? style = null)
     {
         _properties = properties ?? new Dictionary<string, string>();
+        _style = style;
     }
 
     public string? getProperty(string name) => getPropertyValue(name);
 
+    /// <summary>The hand-written list above answers the properties it covers; everything else
+    /// falls through to the serializer the animation engine already uses, so a property does
+    /// not have to be added to two places before scripts can read it. Without this, a
+    /// property that is fully modelled still reports the empty string to JS.</summary>
     public string? getPropertyValue(string name)
     {
         if (string.IsNullOrEmpty(name)) return null;
-        return _properties.GetValueOrDefault(name.ToLowerInvariant());
+        var lower = name.ToLowerInvariant();
+        return _properties.TryGetValue(lower, out var value)
+            ? value
+            : _style != null ? Acrux.Core.Dom.Animations.ComputedValueSerializer.Get(_style, lower) : null;
     }
 
     // Common camelCase shortcuts for JS consumers

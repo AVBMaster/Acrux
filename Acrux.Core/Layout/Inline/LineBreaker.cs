@@ -1147,6 +1147,19 @@ public class LineBreaker
         var result = new ShapingLineBreaker.Result();
         var shapeResult = breaker.ShapeLine(itemResult.StartOffset, Math.Max(0, availableWidth), out result);
 
+        // A line that ends on a soft hyphen shows a real hyphen-minus there
+        // (CSS Text 3 §4.4). The character itself measured zero, so the visible one
+        // has to be added to the line and paid for — that is what makes a reference
+        // browser's min-content of "pe&shy;tite" 23.13 ("pe-") rather than 21.34
+        // ("pe"), and it is why the hyphen can push the word onto the next line.
+        if (!result.IsHyphenated && result.BreakOffset > itemResult.StartOffset
+            && result.BreakOffset < item.EndOffset
+            && _text[result.BreakOffset - 1] == '\u00AD'
+            && item.Style().Hyphens != HyphensType.None) {
+            result.IsHyphenated = true;
+            result.IsSoftHyphen = true;
+        }
+
         if (shapeResult == null)
         {
             itemResult.InlineSize = availableWidthWithHyphens + 1;
@@ -1156,11 +1169,21 @@ public class LineBreaker
 
         float inlineSize = Math.Max(0, shapeResult.SnappedWidth());
         itemResult.InlineSize = inlineSize;
+        float softHyphenAllowance = 0;
         if (result.IsHyphenated)
         {
             var itemResults = lineInfo.MutableResults();
             float hyphenInlineSize = AddHyphen(itemResults, itemResult);
-            if (!result.IsOverflow && inlineSize <= availableWidth)
+            if (result.IsSoftHyphen)
+            {
+                // An authored soft hyphen is not negotiable. When the word fits but the
+                // hyphen does not, the reference browser keeps "pe-" and lets the line
+                // stick out past the box; abandoning the hyphen (which is what the
+                // re-shape below does for automatic hyphenation) loses a glyph the
+                // author asked for. Measured: a 20px box holds "pe-" at 23.13px.
+                softHyphenAllowance = hyphenInlineSize;
+            }
+            else if (!result.IsOverflow && inlineSize <= availableWidth)
             {
                 float spaceForHyphen = availableWidthWithHyphens - inlineSize;
                 if (spaceForHyphen >= 0 && hyphenInlineSize > spaceForHyphen)
@@ -1202,7 +1225,10 @@ public class LineBreaker
         }
 
         itemResult.MayBreakInside = !result.IsOverflow;
-        return inlineSize <= availableWidthWithHyphens ? BreakResult.Success : BreakResult.Overflow;
+        // The mandatory hyphen is allowed to stick out (see above); everything else on
+        // the line still has to fit, so the allowance is exactly the hyphen's advance.
+        return inlineSize <= availableWidthWithHyphens + softHyphenAllowance
+            ? BreakResult.Success : BreakResult.Overflow;
     }
 
     private bool BreakTextAtPreviousBreakOpportunity(InlineItemResult itemResult)
@@ -2213,7 +2239,11 @@ public class LineBreaker
             var r = results[i];
             if (r.Item.Type != InlineItem.InlineItemType.Text) continue;
             if (r.Length <= 0) continue;
-            r.TextContent = _text.Substring(r.StartOffset, r.Length);
+            var slice = _text.Substring(r.StartOffset, r.Length);
+            // Soft hyphens are not drawn on a line that did not break at them, and
+            // they measured zero, so leaving one in the run's text would make the
+            // painted string wider than the box the line breaker reserved for it.
+            r.TextContent = slice.IndexOf('\u00AD') >= 0 ? slice.Replace("\u00AD", "") : slice;
         }
     }
 }

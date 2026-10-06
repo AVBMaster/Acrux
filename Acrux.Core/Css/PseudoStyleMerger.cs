@@ -27,7 +27,7 @@ public static class PseudoStyleMerger
                 // Font longhands are "high-priority" in the cascade (em/ch units
                 // depend on the resolved font-size), so they are not in Apply.
                 case "font-size":
-                    style.FontSize = Css.Resolver.CssPropertyApplier.ParseFontSize(value, baseStyle);
+                    Css.Resolver.CssPropertyApplier.SetFontSize(style, value, Css.Resolver.CssPropertyApplier.ParseFontSize(value, baseStyle));
                     continue;
                 case "font-weight":
                     style.FontWeight = Css.Resolver.CssPropertyApplier.ParseFontWeight(value);

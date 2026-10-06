@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 191 — multicol as first child / parent block-start strut (#181)</title>
+<style>
+/* #181 was: a multicol that is the FIRST child of a box whose block-start offset comes
+   from a propagated margin (body margin, parent padding) reported the pre-collapse BFC
+   offset and was placed at the page edge, swallowing that strut — and every following
+   sibling stacked against the wrong cursor. Each case here puts a multicol first inside
+   a differently-shifted parent. */
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 16px 0 6px; font-size: 16px; }
+.mc { width: 300px; columns: 3; column-gap: 12px; background: #fec; border: 1px solid #c60; padding: 4px; }
+.plain { width: 100px; height: 30px; background: #cfe; border: 1px solid #369; }
+.pad20 { padding: 20px; border: 1px dashed #999; }
+.mar40 { margin-top: 40px; border: 1px dashed #999; }
+.bfc { overflow: hidden; border: 1px dashed #999; }
+.bord { border: 12px solid #ddd; }
+</style>
+</head>
+<body>
+
+<h2>1. multicol first in body (body margin 20 must survive)</h2>
+<div class="mc" id="m1">one two three four five six seven eight nine ten</div>
+<div class="plain" id="p1"></div>
+
+<h2>2. multicol first inside a padded parent</h2>
+<div class="pad20"><div class="mc" id="m2">alpha beta gamma delta epsilon zeta eta theta</div><div class="plain" id="p2"></div></div>
+
+<h2>3. multicol after a margin-collapsing sibling (strut through the parent)</h2>
+<div class="mar40"><div class="mc" id="m3">alpha beta gamma delta epsilon zeta eta theta</div><div class="plain" id="p3"></div></div>
+
+<h2>4. multicol first inside a BFC parent</h2>
+<div class="bfc"><div class="mc" id="m4">alpha beta gamma delta epsilon zeta eta theta</div><div class="plain" id="p4"></div></div>
+
+<h2>5. multicol first inside a bordered parent</h2>
+<div class="bord"><div class="mc" id="m5">alpha beta gamma delta epsilon zeta eta theta</div><div class="plain" id="p5"></div></div>
+
+<h2>6. two multicol siblings in a row</h2>
+<div class="bfc"><div class="mc" id="m6">one two three four five six</div><div class="mc" id="m7">seven eight nine ten eleven twelve</div></div>
+
+</body>
+</html>

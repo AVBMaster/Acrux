@@ -4,7 +4,9 @@ kept as old-<name>.png for evidence. Usage: python rebake_from_gate.py [_gate_al
 """
 import glob, os, re, shutil, struct, subprocess, sys
 
-EXE = "./Acrux/bin/Debug/net10.0-windows/Acrux.exe"
+import _acrux_cli as cli
+
+ENV = cli.environment()
 SRC = "snapshots/out/" + (sys.argv[1] if len(sys.argv) > 1 else "_gate_all.txt")
 LINE = re.compile(r"^b(\d+)([^:]*): .*?(\d+)/(\d+) px differ \(([\d.]+)%\) @dpi([\d.]+)$")
 
@@ -41,8 +43,8 @@ for raw in open(SRC, encoding="utf-8"):
     w, h = dims(ref)
     css_w, css_h = (round(w / dpi), round(h / dpi)) if dpi != 1.0 else (w, h)
     shutil.copy(ref, f"snapshots/out/old-b{num}{suffix}.png")
-    subprocess.run([EXE, "--snapshot", page, ref, str(css_w), str(css_h), str(dpi)],
-                   capture_output=True, timeout=300)
+    subprocess.run(cli.command(["--snapshot", page, ref, str(css_w), str(css_h), str(dpi)]),
+                   capture_output=True, timeout=300, env=ENV)
     baked += 1
     print(f"b{num}{suffix}: {css_w}x{css_h}@{dpi} ({pct}% -> ref)")
 print(f"re-baked {baked}, skipped {skipped}")

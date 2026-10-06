@@ -107,6 +107,12 @@ namespace Acrux;
     private float _lastDevToolsHeight;
     private bool _lastDevToolsVisible;
     private long _lastTaskManagerRefresh;
+    private long _lastTaskManagerDataTick;
+    private readonly System.Collections.Generic.List<TmRowData> _tmRowsCache = new();
+    private long _lastTooltipRefreshTick;
+    private long _lastLoadingPulseTick;
+    private long _lastStaleMapCleanupTick;
+    private long _lastMemReportTick;
     private readonly DevToolsPanel _devTools;
 
     private readonly ImageCache _sharedImageCache = new();
@@ -3024,6 +3030,176 @@ namespace Acrux;
         }
     }
 
+    /// <summary>Builds the task-manager table rows. Expensive: /proc refresh,
+    /// full DOM walks, per-tab process metrics. Callers must gate cadence.</summary>
+    private void BuildTaskManagerRows(System.Collections.Generic.List<TmRowData> tmRows, double dt, int activeTabIdx)
+    {
+        var proc = System.Diagnostics.Process.GetCurrentProcess();
+        proc.Refresh();
+
+        // Collect per-tab process metrics
+        var allProcMetrics = _processManager.GetAllMetrics();
+        double wsmb = proc.WorkingSet64 / (1024.0 * 1024.0);
+        double heapMB = System.GC.GetTotalMemory(false) / (1024.0 * 1024.0);
+
+        // Performance pipeline timings (read accumulators for latest values)
+        double styleMs = PipelineTimings.Style.MeanMillis;
+        double layoutMs = PipelineTimings.Layout.MeanMillis;
+        double paintMs = PipelineTimings.Paint.MeanMillis;
+        double scriptMs = PipelineTimings.Script.MeanMillis;
+        double compositeMs = PipelineTimings.Composite.MeanMillis;
+        double imageDecodeMs = PipelineTimings.ImageDecode.MeanMillis;
+        double tileRasterMs = PipelineTimings.TileRaster.MeanMillis;
+        double networkMs = PipelineTimings.NetworkWait.MeanMillis;
+
+        // Memory breakdown from performance subsystems
+        double imagePoolMB = _perfHub?.ImagePool.CapacityBytes / (1024.0 * 1024.0) ?? 0;
+        double tileMemoryMB = (_perfHub?.Tiles.Settings?.MaxTilesInMemory ?? 0) * (256.0 * 256.0 * 4.0) / (1024.0 * 1024.0);
+
+        // Rendering counters
+        int tilesRast = (int)PipelineTimings.TilesRasterized.Value;
+        int tilesReused = (int)PipelineTimings.TilesReused.Value;
+        int imagesDecoded = (int)PipelineTimings.ImagesDecoded.Value;
+        int imageHits = (int)PipelineTimings.ImageCacheHits.Value;
+        int cacheHits = (int)PipelineTimings.ResourceCacheHits.Value;
+
+        // JS stats
+        int jsHeapSize = _jsEngine.GetHeapSizeKB();
+        int jsCallbacks = _jsEngine.TimerCount;
+
+        // Frame timing from the window
+        double frameTimeMs = Math.Max(dt, 1.0 / 1000.0);
+        double fps = 1000.0 / frameTimeMs;
+
+        tmRows.Add(new TmRowData
+        {
+            Name = "Browser",
+            Detail = $"PID: {proc.Id}",
+            Memory = $"{wsmb:F1} MB",
+            Cpu = "",
+            Status = "Running",
+            Pid = proc.Id,
+            TabIndex = -1,
+            StyleTimingMs = styleMs,
+            LayoutTimingMs = layoutMs,
+            PaintTimingMs = paintMs,
+            ScriptTimingMs = scriptMs,
+            CompositeTimingMs = compositeMs,
+            ImageDecodeTimingMs = imageDecodeMs,
+            TileRasterTimingMs = tileRasterMs,
+            NetworkWaitTimingMs = networkMs,
+            WorkingSetMB = wsmb,
+            ManagedHeapMB = heapMB,
+            ImageCacheMB = imagePoolMB,
+            TileMemoryMB = tileMemoryMB,
+            TilesRasterized = tilesRast,
+            TilesReused = tilesReused,
+            ImagesDecoded = imagesDecoded,
+            ImageCacheHits = imageHits,
+            ResourceCacheHits = cacheHits,
+            JsHeapSizeKB = jsHeapSize,
+            JsCallbackCount = jsCallbacks,
+            FrameTimeMs = frameTimeMs,
+            Fps = fps,
+        });
+        tmRows.Add(new TmRowData
+        {
+            Name = "  Working Set",
+            Detail = "",
+            Memory = $"{wsmb:F1} MB",
+            Status = "",
+            TabIndex = -1,
+            WorkingSetMB = wsmb,
+        });
+        tmRows.Add(new TmRowData
+        {
+            Name = "  Managed Heap",
+            Detail = "",
+            Memory = $"{heapMB:F1} MB",
+            Status = "",
+            TabIndex = -1,
+            ManagedHeapMB = heapMB,
+        });
+        tmRows.Add(new TmRowData
+        {
+            Name = "  Image Cache",
+            Detail = "",
+            Memory = $"{imagePoolMB:F1} MB",
+            Status = "",
+            TabIndex = -1,
+            ImageCacheMB = imagePoolMB,
+        });
+
+        var tabSnapshot = _chrome.SnapshotTabs();
+        for (int i = 0; i < tabSnapshot.Length; i++)
+        {
+            var tab = tabSnapshot[i];
+            int domNodes = 0, layoutBoxes = 0;
+            double memMB = 0;
+            if (i == activeTabIdx && _currentLoad != null)
+            {
+                domNodes = CountDomNodes(_currentLoad.Document);
+                layoutBoxes = CountLayoutBoxes(_currentLoad.Document);
+            }
+            else if (_processTabs && _remoteTabs.TryGetValue(i, out var rvTm))
+            {
+                domNodes = rvTm.DomCount;
+                layoutBoxes = rvTm.BoxCount;
+            }
+            else if (_tabStates.TryGetValue(i, out var st))
+            {
+                domNodes = st.DomNodeCount;
+                layoutBoxes = st.LayoutBoxCount;
+            }
+
+            // Use per-process metrics when available
+            var tcMetrics = _processManager.GetMetrics(i);
+            if (tcMetrics != null)
+            {
+                if (domNodes == 0) domNodes = tcMetrics.DomNodeCount;
+                if (layoutBoxes == 0) layoutBoxes = tcMetrics.LayoutBoxCount;
+                memMB = tcMetrics.MemoryBytes / (1024.0 * 1024.0);
+            }
+
+            string detail = string.IsNullOrEmpty(tab.Url) || tab.Url == "acrux://newtab" ? "" : tab.Url;
+            string status = tab.IsLoading ? "Loading" : (i == activeTabIdx ? "Running" : "Complete");
+            // 每个标签页只显示自己独立的内存数据（来自 TabProcess），
+            // 不显示整个进程的内存占用，避免误导
+            tmRows.Add(new TmRowData
+            {
+                Name = string.IsNullOrEmpty(tab.Title) ? "New Tab" : tab.Title,
+                Detail = detail,
+                Memory = memMB > 0 ? $"{memMB:F1} MB" : "-",
+                Cpu = i == activeTabIdx ? "" : "-",
+                DomNodes = domNodes,
+                LayoutBoxes = layoutBoxes,
+                Status = status,
+                TabIndex = i,
+                StyleTimingMs = i == activeTabIdx ? styleMs : 0,
+                LayoutTimingMs = i == activeTabIdx ? layoutMs : 0,
+                PaintTimingMs = i == activeTabIdx ? paintMs : 0,
+                ScriptTimingMs = i == activeTabIdx ? scriptMs : 0,
+                CompositeTimingMs = i == activeTabIdx ? compositeMs : 0,
+                ImageDecodeTimingMs = i == activeTabIdx ? imageDecodeMs : 0,
+                TileRasterTimingMs = i == activeTabIdx ? tileRasterMs : 0,
+                NetworkWaitTimingMs = i == activeTabIdx ? networkMs : 0,
+                WorkingSetMB = memMB,
+                ManagedHeapMB = i == activeTabIdx ? heapMB : 0,
+                ImageCacheMB = i == activeTabIdx ? imagePoolMB : 0,
+                TileMemoryMB = i == activeTabIdx ? tileMemoryMB : 0,
+                TilesRasterized = i == activeTabIdx ? tilesRast : 0,
+                TilesReused = i == activeTabIdx ? tilesReused : 0,
+                ImagesDecoded = i == activeTabIdx ? imagesDecoded : 0,
+                ImageCacheHits = i == activeTabIdx ? imageHits : 0,
+                ResourceCacheHits = i == activeTabIdx ? cacheHits : 0,
+                JsHeapSizeKB = (i == activeTabIdx ? jsHeapSize : (tcMetrics?.JsHeapSizeKB ?? 0)),
+                JsCallbackCount = (i == activeTabIdx ? jsCallbacks : (tcMetrics?.JsTimerCount ?? 0)),
+                FrameTimeMs = i == activeTabIdx ? frameTimeMs : 0,
+                Fps = i == activeTabIdx ? fps : 0,
+            });
+        }
+    }
+
     private void RenderFrame(double dt)
     {
         long rsMark = 0;
@@ -3039,7 +3215,14 @@ namespace Acrux;
         {
             jsInt.ProcessTimers();
             jsInt.MicrotaskQueue.DrainMicrotasks();
-            jsInt.IdentityMap.CleanupStaleEntries();
+            // Sweeping the JS object identity map every frame is pure overhead;
+            // stale entries live at most a quarter-second longer than before.
+            long staleNow = Environment.TickCount64;
+            if (staleNow - _lastStaleMapCleanupTick >= 250)
+            {
+                _lastStaleMapCleanupTick = staleNow;
+                jsInt.IdentityMap.CleanupStaleEntries();
+            }
         }
 
         if (_jsEngine.HasTimers && jsInt == null)
@@ -3155,8 +3338,22 @@ namespace Acrux;
                 }
         }
 
+        // 加载中需要帧渲染让进度条可见，但整窗重绘不必 60Hz——节流到 ~15Hz；
+        // 其余渲染原因（滚动/动画/输入）仍按帧触发，不受影响。
+        bool loadingFrame = false;
+        if (_chrome.IsLoading)
+        {
+            long nowTick = Environment.TickCount64;
+            if (nowTick - _lastLoadingPulseTick >= 66)
+            {
+                _lastLoadingPulseTick = nowTick;
+                loadingFrame = true;
+            }
+        }
+
         bool needsRedraw = _input.NeedsRedraw || _pendingRelayout || devToolsChanged ||
                            (cursorNeedsRedraw && !inputRecently) || scrollChanged || remoteNavPending ||
+                           loadingFrame ||
                            // A running animation or transition is itself a reason
                            // to produce a frame: nothing else about the page has
                            // changed, but its style has.
@@ -3191,11 +3388,11 @@ namespace Acrux;
             }
         }
 
-        // 加载中时强制全帧渲染，确保进度条可见
-        if (_chrome.IsLoading)
+        // 加载中时按节流节奏强制帧渲染，确保进度条推进
+        if (loadingFrame)
             _input.NeedsRedraw = true;
 
-        if (!sizeChanged && !needsRedraw && !_chrome.IsLoading)
+        if (!sizeChanged && !needsRedraw)
             return;
 
         if (windowWidth <= 0 || windowHeight <= 0 || (_currentLoad == null && !_adoptionPending && !_processTabs))
@@ -3577,28 +3774,40 @@ namespace Acrux;
         if (string.IsNullOrEmpty(currentUrl))
             currentUrl = "acrux://local";
 
-        // Update tab tooltips
+        // Update tab tooltips. The DOM/box counts walk the ENTIRE document —
+        // they only feed hover tooltip text, so refresh at 2 Hz, not per frame,
+        // and walk the active document once instead of once per tab.
         int activeTabIdx = _chrome.ActiveTabIndex;
-        for (int i = 0; i < _chrome.Tabs.Count; i++)
+        if (Environment.TickCount64 - _lastTooltipRefreshTick >= 500)
         {
-            var tab = _chrome.Tabs[i];
-            int nDom = 0, nBox = 0;
-            if (i == activeTabIdx && _currentLoad != null)
+            _lastTooltipRefreshTick = Environment.TickCount64;
+            int activeDom = 0, activeBox = 0;
+            if (_currentLoad != null)
             {
-                nDom = CountDomNodes(_currentLoad.Document);
-                nBox = CountLayoutBoxes(_currentLoad.Document);
+                activeDom = CountDomNodes(_currentLoad.Document);
+                activeBox = CountLayoutBoxes(_currentLoad.Document);
             }
-            else if (_processTabs && _remoteTabs.TryGetValue(i, out var rv))
+            for (int i = 0; i < _chrome.Tabs.Count; i++)
             {
-                nDom = rv.DomCount;
-                nBox = rv.BoxCount;
+                var tab = _chrome.Tabs[i];
+                int nDom = 0, nBox = 0;
+                if (i == activeTabIdx)
+                {
+                    nDom = activeDom;
+                    nBox = activeBox;
+                }
+                else if (_processTabs && _remoteTabs.TryGetValue(i, out var rv))
+                {
+                    nDom = rv.DomCount;
+                    nBox = rv.BoxCount;
+                }
+                else if (_tabStates.TryGetValue(i, out var st))
+                {
+                    nDom = st.DomNodeCount;
+                    nBox = st.LayoutBoxCount;
+                }
+                tab.TooltipText = $"Title: {tab.Title}\nURL: {(string.IsNullOrEmpty(tab.Url) ? "acrux://newtab" : tab.Url)}\nDOM Nodes: {nDom}\nLayout Boxes: {nBox}\nStatus: {(tab.IsLoading ? "Loading" : (i == activeTabIdx ? "Running" : "Complete"))}";
             }
-            else if (_tabStates.TryGetValue(i, out var st))
-            {
-                nDom = st.DomNodeCount;
-                nBox = st.LayoutBoxCount;
-            }
-            tab.TooltipText = $"Title: {tab.Title}\nURL: {(string.IsNullOrEmpty(tab.Url) ? "acrux://newtab" : tab.Url)}\nDOM Nodes: {nDom}\nLayout Boxes: {nBox}\nStatus: {(tab.IsLoading ? "Loading" : (i == activeTabIdx ? "Running" : "Complete"))}";
         }
 
         _chrome.RenderChrome(_skiaRenderer.Canvas, windowWidth, windowHeight, currentUrl, title);
@@ -3627,174 +3836,16 @@ namespace Acrux;
 
         _renderingSettingsPage.Render(_skiaRenderer.Canvas, windowWidth, windowHeight, _contentOffset);
 
-        // Build rich data for task manager with multi-process metrics
-        var tmRows = new System.Collections.Generic.List<TmRowData>();
-        var proc = System.Diagnostics.Process.GetCurrentProcess();
-        proc.Refresh();
-
-        // Collect per-tab process metrics
-        var allProcMetrics = _processManager.GetAllMetrics();
-        double wsmb = proc.WorkingSet64 / (1024.0 * 1024.0);
-        double heapMB = System.GC.GetTotalMemory(false) / (1024.0 * 1024.0);
-
-        // Performance pipeline timings (read accumulators for latest values)
-        double styleMs = PipelineTimings.Style.MeanMillis;
-        double layoutMs = PipelineTimings.Layout.MeanMillis;
-        double paintMs = PipelineTimings.Paint.MeanMillis;
-        double scriptMs = PipelineTimings.Script.MeanMillis;
-        double compositeMs = PipelineTimings.Composite.MeanMillis;
-        double imageDecodeMs = PipelineTimings.ImageDecode.MeanMillis;
-        double tileRasterMs = PipelineTimings.TileRaster.MeanMillis;
-        double networkMs = PipelineTimings.NetworkWait.MeanMillis;
-
-        // Memory breakdown from performance subsystems
-        double imagePoolMB = _perfHub?.ImagePool.CapacityBytes / (1024.0 * 1024.0) ?? 0;
-        double tileMemoryMB = (_perfHub?.Tiles.Settings?.MaxTilesInMemory ?? 0) * (256.0 * 256.0 * 4.0) / (1024.0 * 1024.0);
-
-        // Rendering counters
-        int tilesRast = (int)PipelineTimings.TilesRasterized.Value;
-        int tilesReused = (int)PipelineTimings.TilesReused.Value;
-        int imagesDecoded = (int)PipelineTimings.ImagesDecoded.Value;
-        int imageHits = (int)PipelineTimings.ImageCacheHits.Value;
-        int cacheHits = (int)PipelineTimings.ResourceCacheHits.Value;
-
-        // JS stats
-        int jsHeapSize = _jsEngine.GetHeapSizeKB();
-        int jsCallbacks = _jsEngine.TimerCount;
-
-        // Frame timing from the window
-        double frameTimeMs = Math.Max(dt, 1.0 / 1000.0);
-        double fps = 1000.0 / frameTimeMs;
-
-        tmRows.Add(new TmRowData
+        // Task manager rows walk /proc, the whole DOM and every tab. They only
+        // have a consumer while the task manager page is visible — and that
+        // page re-arms its own redraw at 1 Hz — so rebuild at most that often.
+        if (_taskManagerPage.Visible && Environment.TickCount64 - _lastTaskManagerDataTick >= 1000)
         {
-            Name = "Browser",
-            Detail = $"PID: {proc.Id}",
-            Memory = $"{wsmb:F1} MB",
-            Cpu = "",
-            Status = "Running",
-            Pid = proc.Id,
-            TabIndex = -1,
-            StyleTimingMs = styleMs,
-            LayoutTimingMs = layoutMs,
-            PaintTimingMs = paintMs,
-            ScriptTimingMs = scriptMs,
-            CompositeTimingMs = compositeMs,
-            ImageDecodeTimingMs = imageDecodeMs,
-            TileRasterTimingMs = tileRasterMs,
-            NetworkWaitTimingMs = networkMs,
-            WorkingSetMB = wsmb,
-            ManagedHeapMB = heapMB,
-            ImageCacheMB = imagePoolMB,
-            TileMemoryMB = tileMemoryMB,
-            TilesRasterized = tilesRast,
-            TilesReused = tilesReused,
-            ImagesDecoded = imagesDecoded,
-            ImageCacheHits = imageHits,
-            ResourceCacheHits = cacheHits,
-            JsHeapSizeKB = jsHeapSize,
-            JsCallbackCount = jsCallbacks,
-            FrameTimeMs = frameTimeMs,
-            Fps = fps,
-        });
-        tmRows.Add(new TmRowData
-        {
-            Name = "  Working Set",
-            Detail = "",
-            Memory = $"{wsmb:F1} MB",
-            Status = "",
-            TabIndex = -1,
-            WorkingSetMB = wsmb,
-        });
-        tmRows.Add(new TmRowData
-        {
-            Name = "  Managed Heap",
-            Detail = "",
-            Memory = $"{heapMB:F1} MB",
-            Status = "",
-            TabIndex = -1,
-            ManagedHeapMB = heapMB,
-        });
-        tmRows.Add(new TmRowData
-        {
-            Name = "  Image Cache",
-            Detail = "",
-            Memory = $"{imagePoolMB:F1} MB",
-            Status = "",
-            TabIndex = -1,
-            ImageCacheMB = imagePoolMB,
-        });
-
-        var tabSnapshot = _chrome.SnapshotTabs();
-        for (int i = 0; i < tabSnapshot.Length; i++)
-        {
-            var tab = tabSnapshot[i];
-            int domNodes = 0, layoutBoxes = 0;
-            double memMB = 0;
-            if (i == activeTabIdx && _currentLoad != null)
-            {
-                domNodes = CountDomNodes(_currentLoad.Document);
-                layoutBoxes = CountLayoutBoxes(_currentLoad.Document);
-            }
-            else if (_processTabs && _remoteTabs.TryGetValue(i, out var rvTm))
-            {
-                domNodes = rvTm.DomCount;
-                layoutBoxes = rvTm.BoxCount;
-            }
-            else if (_tabStates.TryGetValue(i, out var st))
-            {
-                domNodes = st.DomNodeCount;
-                layoutBoxes = st.LayoutBoxCount;
-            }
-
-            // Use per-process metrics when available
-            var tcMetrics = _processManager.GetMetrics(i);
-            if (tcMetrics != null)
-            {
-                if (domNodes == 0) domNodes = tcMetrics.DomNodeCount;
-                if (layoutBoxes == 0) layoutBoxes = tcMetrics.LayoutBoxCount;
-                memMB = tcMetrics.MemoryBytes / (1024.0 * 1024.0);
-            }
-
-            string detail = string.IsNullOrEmpty(tab.Url) || tab.Url == "acrux://newtab" ? "" : tab.Url;
-            string status = tab.IsLoading ? "Loading" : (i == activeTabIdx ? "Running" : "Complete");
-            // 每个标签页只显示自己独立的内存数据（来自 TabProcess），
-            // 不显示整个进程的内存占用，避免误导
-            tmRows.Add(new TmRowData
-            {
-                Name = string.IsNullOrEmpty(tab.Title) ? "New Tab" : tab.Title,
-                Detail = detail,
-                Memory = memMB > 0 ? $"{memMB:F1} MB" : "-",
-                Cpu = i == activeTabIdx ? "" : "-",
-                DomNodes = domNodes,
-                LayoutBoxes = layoutBoxes,
-                Status = status,
-                TabIndex = i,
-                StyleTimingMs = i == activeTabIdx ? styleMs : 0,
-                LayoutTimingMs = i == activeTabIdx ? layoutMs : 0,
-                PaintTimingMs = i == activeTabIdx ? paintMs : 0,
-                ScriptTimingMs = i == activeTabIdx ? scriptMs : 0,
-                CompositeTimingMs = i == activeTabIdx ? compositeMs : 0,
-                ImageDecodeTimingMs = i == activeTabIdx ? imageDecodeMs : 0,
-                TileRasterTimingMs = i == activeTabIdx ? tileRasterMs : 0,
-                NetworkWaitTimingMs = i == activeTabIdx ? networkMs : 0,
-                WorkingSetMB = memMB,
-                ManagedHeapMB = i == activeTabIdx ? heapMB : 0,
-                ImageCacheMB = i == activeTabIdx ? imagePoolMB : 0,
-                TileMemoryMB = i == activeTabIdx ? tileMemoryMB : 0,
-                TilesRasterized = i == activeTabIdx ? tilesRast : 0,
-                TilesReused = i == activeTabIdx ? tilesReused : 0,
-                ImagesDecoded = i == activeTabIdx ? imagesDecoded : 0,
-                ImageCacheHits = i == activeTabIdx ? imageHits : 0,
-                ResourceCacheHits = i == activeTabIdx ? cacheHits : 0,
-                JsHeapSizeKB = (i == activeTabIdx ? jsHeapSize : (tcMetrics?.JsHeapSizeKB ?? 0)),
-                JsCallbackCount = (i == activeTabIdx ? jsCallbacks : (tcMetrics?.JsTimerCount ?? 0)),
-                FrameTimeMs = i == activeTabIdx ? frameTimeMs : 0,
-                Fps = i == activeTabIdx ? fps : 0,
-            });
+            _lastTaskManagerDataTick = Environment.TickCount64;
+            _tmRowsCache.Clear();
+            BuildTaskManagerRows(_tmRowsCache, dt, activeTabIdx);
         }
-
-        _taskManagerPage.Render(_skiaRenderer.Canvas, windowWidth, windowHeight, _contentOffset, tmRows);
+        _taskManagerPage.Render(_skiaRenderer.Canvas, windowWidth, windowHeight, _contentOffset, _tmRowsCache);
 
         // A page-host modal is drawn by the ordinary frame loop — the shell keeps
         // painting and animating while the page's script thread waits for the answer.
@@ -6767,8 +6818,14 @@ namespace Acrux;
             // Coarse memory accounting: bytes used by managed heap is not directly
             // observable, but we can poke the GC heap and feed it to the pressure
             // monitor. This is a hint — the real policy is in MemoryPressureMonitor.
-            long managedBytes = GC.GetTotalMemory(forceFullCollection: false);
-            _perfHub.Registry.MemoryPressure.ReportUsage(managedBytes);
+            // The walk is only worth 1 Hz — the pressure policy reacts on that scale.
+            long nowTick = Environment.TickCount64;
+            if (nowTick - _lastMemReportTick >= 1000)
+            {
+                _lastMemReportTick = nowTick;
+                long managedBytes = GC.GetTotalMemory(forceFullCollection: false);
+                _perfHub.Registry.MemoryPressure.ReportUsage(managedBytes);
+            }
         }
 
         // Periodic JS GC to release V8/native heap memory every 30s

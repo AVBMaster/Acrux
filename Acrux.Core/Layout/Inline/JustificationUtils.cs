@@ -31,9 +31,11 @@ public static class JustificationUtils
         // (CSS Text 3 4.3, verified against Chrome).
         int lastMeaningful = -1;
         var spaceRun = new bool[items.Count];
+        var expansion = new bool[items.Count];
         for (int i = 0; i < items.Count; i++)
         {
             spaceRun[i] = IsSpaceRun(items[i], source);
+            expansion[i] = IsExpansionRun(items[i], source);
             if (!spaceRun[i])
                 lastMeaningful = i;
         }
@@ -66,7 +68,7 @@ public static class JustificationUtils
                 break;
 
             case TextAlignType.Justify when ShouldJustifyLine(info):
-                ApplyJustifyExpansion(items, contentBoxInlineSize - info.TextIndent(), naturalExtent, spaceRun, lastMeaningful);
+                ApplyJustifyExpansion(items, contentBoxInlineSize - info.TextIndent(), naturalExtent, expansion, lastMeaningful);
                 break;
         }
     }
@@ -107,31 +109,33 @@ public static class JustificationUtils
 
     /// <summary>
     /// Distribute the free space into word-spacing expansion opportunities.
-    /// Every collapsible space run between words counts as ONE opportunity and
-    /// absorbs an equal share; the run's own advance grows so following items
-    /// shift cumulatively. Trailing (hanging) spaces never expand.
+    /// Every opportunity absorbs an equal share and the run's own advance grows so
+    /// following items shift cumulatively. Trailing (hanging) spaces never expand.
+    /// |opportunities| is the expansion set, not the collapsible-space set.
     /// </span>
     /// </summary>
     private static void ApplyJustifyExpansion(LogicalLineItems items,
-        float contentBoxInlineSize, float naturalExtent, bool[] spaceRun, int lastMeaningful)
+        float contentBoxInlineSize, float naturalExtent, bool[] opportunities, int lastMeaningful)
     {
         float free = contentBoxInlineSize - naturalExtent;
         if (free <= 0 || lastMeaningful < 0)
             return;
 
-        // Every collapsible space run between words counts as ONE opportunity
-        // regardless of how many collapsed spaces it represents.
-        List<int> opportunities = new();
+        // Every collapsible space run counts as ONE opportunity regardless of how many
+        // collapsed spaces it represents; a run of no-break spaces counts one each,
+        // which is what a reference browser measures (a justified line adds the same
+        // amount to its NBSP as to its spaces).
+        List<int> points = new();
         for (int i = 0; i < lastMeaningful; i++)
         {
-            if (spaceRun[i])
-                opportunities.Add(i);
+            if (opportunities[i])
+                points.Add(i);
         }
 
-        if (opportunities.Count == 0)
+        if (points.Count == 0)
             return;
 
-        float expansion = free / opportunities.Count;
+        float expansion = free / points.Count;
 
         float accumulatedShift = 0;
         for (int i = 0; i < items.Count; i++)
@@ -140,7 +144,7 @@ public static class JustificationUtils
             if (accumulatedShift != 0)
                 it.MoveInInlineDirection(accumulatedShift);
 
-            if (opportunities.BinarySearch(i) >= 0)
+            if (points.BinarySearch(i) >= 0)
             {
                 // Widen the space run itself so paint/picking see the full advance.
                 it.InlineSize += expansion;
@@ -171,16 +175,34 @@ public static class JustificationUtils
     /// Whether this item receives part of the free space a justified line distributes.
     ///
     /// It is a separate predicate from <see cref="IsSpaceRun"/> on purpose: the two answer
-    /// different questions and are about to diverge. Breaking and trailing-space trimming ask
-    /// "is this collapsible whitespace"; justification asks "is this an expansion
-    /// opportunity", and the two differ on characters that occupy space without being
-    /// collapsible (no-break space and the other Zs separators) — those must never stretch,
-    /// and a line ending in one must still count its last glyph as content. Today both sides
-    /// select the same items, because the line items only split at breakable spaces; the
-    /// remaining difference needs the item builder to cut a run at the space/non-space
-    /// boundary, which is what makes a space inside a mixed item an opportunity of its own.
+    /// different questions. Breaking and trailing-space trimming ask "is this collapsible
+    /// whitespace"; justification asks "is this an expansion opportunity", and the two
+    /// differ on the no-break space — U+00A0 occupies space without ever being a break
+    /// point, and a reference browser stretches it by the same share as a U+0020 while
+    /// U+2003, U+2009 and U+3000 keep their natural advance (measured on b196's twelve
+    /// cases). <c>LogicalLineBuilder.AddTextChildren</c> cuts a text run at every NBSP so
+    /// this predicate can see one; the other space separators are left inside their word.
     /// </summary>
-    private static bool IsExpansionRun(LogicalLineItem item, string source) => IsSpaceRun(item, source);
+    private static bool IsExpansionRun(LogicalLineItem item, string source)
+    {
+        if (IsSpaceRun(item, source))
+            return true;
+
+        if (item.InlineItem is not { Type: InlineItem.InlineItemType.Text })
+            return false;
+
+        int start = item.TextOffset.Start;
+        int end = item.TextOffset.End;
+        if (end <= start || end > source.Length)
+            return false;
+
+        for (int i = start; i < end; i++)
+        {
+            if (source[i] != '\u00A0')
+                return false;
+        }
+        return true;
+    }
 
     private static bool ParticipatesInAlignment(LogicalLineItem item) =>
         item.HasInFlowFragment() && !item.IsHiddenForPaint;

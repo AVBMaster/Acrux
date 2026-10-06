@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 194 — inline-level margin boxes in the line (CSS 2.1 §10.8, §9.4.2)</title>
+<style>
+/* An inline-block's own vertical margins are part of the space it occupies on the
+   line, and when its baseline is its own bottom edge (CSS 2.1 §10.8: an inline-block
+   with no line boxes, or with overflow other than 'visible') that baseline is the
+   bottom MARGIN edge. Both halves matter: the line box has to grow to the margin box,
+   and the alignment point has to move with it. A replaced inline behaves the same
+   way about its margins (its baseline is the bottom border edge, margins outside).
+   Widths and font metrics are pinned so the numbers stay comparable across the
+   reference browser's 383px window. */
+body { font: 16px/20px Arial, sans-serif; margin: 8px; color: #111; background: #fff; }
+h2 { background: #eee; padding: 2px; margin: 14px 0 4px; font-size: 16px; }
+.r { margin: 2px 0; background: #eef; }
+.b { display: inline-block; vertical-align: baseline; background: #e33; }
+.vh { display: inline-block; overflow: hidden; background: #36c; }
+.it { display: inline-block; background: #3a3; }
+</style>
+</head>
+<body>
+
+<h2>1. empty inline-block: baseline is the bottom MARGIN edge</h2>
+<div class="r" id="s1a">x<span class="b" style="width:20px;height:21px"></span>y</div>
+<div class="r" id="s1b">x<span class="b" style="width:20px;height:21px;margin:6px 0 9px"></span>y</div>
+<div class="r" id="s1c">x<span class="b" style="width:20px;height:21px;margin:12px 0 0"></span>y</div>
+<div class="r" id="s1d">x<span class="b" style="width:20px;height:21px;margin:0 0 12px"></span>y</div>
+
+<h2>2. overflow:hidden inline-block: same baseline rule, with margins</h2>
+<div class="r" id="s2a">x<span class="vh" style="width:30px;height:21px"><span style="font-size:13px">ab</span></span>y</div>
+<div class="r" id="s2b">x<span class="vh" style="width:30px;height:21px;margin:6px 0 9px"><span style="font-size:13px">ab</span></span>y</div>
+
+<h2>3. inline-block WITH line boxes: baseline is the last line's baseline, margins still grow the line</h2>
+<div class="r" id="s3a">x<span class="b" style="width:40px;height:21px"><span style="font-size:13px">ab</span></span>y</div>
+<div class="r" id="s3b">x<span class="b" style="width:40px;height:21px;margin:6px 0 9px"><span style="font-size:13px">ab</span></span>y</div>
+<div class="r" id="s3c">x<span class="b" style="width:40px;height:auto;margin:6px 0 9px"><span style="font-size:13px">ab</span></span>y</div>
+
+<h2>4. replaced inline (img) with margins</h2>
+<div class="r" id="s4a">x<img style="width:20px;height:21px;margin:6px 0 9px" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">y</div>
+<div class="r" id="s4b">x<img style="width:20px;height:21px" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">y</div>
+
+<h2>5. border + padding + margin together</h2>
+<div class="r" id="s5a">x<span class="b" style="width:20px;height:21px;border:3px solid #3a3;padding:4px;margin:6px 0 9px"></span>y</div>
+
+<h2>6. negative margins</h2>
+<div class="r" id="s6a">x<span class="b" style="width:20px;height:21px;margin:-6px 0 -9px"></span>y</div>
+
+<h2>7. other vertical-align values still see the margin box</h2>
+<div class="r" id="s7a">x<span class="b" style="width:20px;height:21px;margin:6px 0 9px;vertical-align:top"></span>y</div>
+<div class="r" id="s7b">x<span class="b" style="width:20px;height:21px;margin:6px 0 9px;vertical-align:bottom"></span>y</div>
+<div class="r" id="s7c">x<span class="b" style="width:20px;height:21px;margin:6px 0 9px;vertical-align:middle"></span>y</div>
+<div class="r" id="s7d">x<span class="b" style="width:20px;height:21px;margin:6px 0 9px;vertical-align:text-bottom"></span>y</div>
+
+<h2>8. several boxes on one line: the line is the union of the margin boxes</h2>
+<div class="r" id="s8a">x<span class="b" style="width:10px;height:10px;margin:0 0 14px"></span><span class="b" style="width:10px;height:10px;margin:14px 0 0"></span><span class="it" style="width:10px;height:10px;background:#a3a"></span>y</div>
+
+<h2>9. length and percentage 'vertical-align' on top of margins</h2>
+<div class="r" id="s9a">x<span class="b" style="width:20px;height:21px;vertical-align:6px"></span>y</div>
+<div class="r" id="s9b">x<span class="b" style="width:20px;height:21px;margin:6px 0 9px;vertical-align:6px"></span>y</div>
+<div class="r" id="s9c">x<span class="b" style="width:20px;height:21px;margin:6px 0 9px;vertical-align:-6px"></span>y</div>
+<div class="r" id="s9d">x<span class="b" style="width:20px;height:21px;margin:6px 0 9px;line-height:40px;vertical-align:25%"></span>y</div>
+<div class="r" id="s9e">x<span class="b" style="width:20px;height:21px;margin:6px 0 9px;vertical-align:12px"></span>y</div>
+
+<h2>10. sub and super</h2>
+<div class="r" id="s10a">x<span class="b" style="width:20px;height:21px;margin:6px 0 9px;vertical-align:sub"></span>y</div>
+<div class="r" id="s10b">x<span class="b" style="width:20px;height:21px;vertical-align:super"></span>y</div>
+
+</body>
+</html>

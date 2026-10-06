@@ -9,4 +9,15 @@
   <ItemGroup>
     <ProjectReference Include="..\Acrux.Core\Acrux.Core.csproj" />
   </ItemGroup>
+
+  <!-- The headless channels measure and raster through Acrux.Core, so they need the
+       same Linux native Skia asset Acrux.Rendering pulls in; without it every run
+       dies in FontFallbackChain's constructor with DllNotFoundException. -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux')) or $(RuntimeIdentifier.Contains('linux'))">
+    <UseLinuxSkiaNative>true</UseLinuxSkiaNative>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseLocalSkiaSharp)' != 'true'">
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.150.1" Condition="'$(UseLinuxSkiaNative)' == 'true'" />
+  </ItemGroup>
 </Project>

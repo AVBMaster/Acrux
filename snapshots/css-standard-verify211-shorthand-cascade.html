@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<!-- b211: shorthand-vs-longhand cascade (the 'border' family, logical pair shorthands,
+     overflow pair constraints) + the UA defaults of form controls.
+     Edge truth, dpr 1, viewport 383 (content 368), Arial 16px/20px:
+       s1 <input style="border:4px solid red">   4px solid red on all four sides,
+          overflow clip/clip, box-sizing content-box, padding 1px 2px
+       s2 <button style="border:3px solid #00f"> 3px solid blue, border-box, padding 1px 6px
+       s3 <hr style="border:1px solid red">      1px solid red on ALL FOUR sides (the top
+          side used to keep the UA's #6d6d6d), margins 8px 0, overflow hidden/hidden
+       s4 <fieldset style="border:5px solid #0a0"> 5px solid, padding 5.6px 12px 10px 12px
+          (= 0.35em 0.75em 0.625em 0.75em; the three-value form is the wrong order)
+       s6 <textarea style="border:4px solid red"> 4px solid red, overflow auto/auto,
+          padding 2px, content-box
+       s7 <select style="border:4px solid red">   4px solid red, padding 0 (a menu list has
+          no box padding), border-box
+       s8c <td style="border:3px solid #00f">     3px solid blue, padding 1px
+       s9 <input type=checkbox style="border:4px solid red; padding:10px; width:40px;
+          height:40px"> -> 0px none + 0 padding, but 40x40: while a control keeps its
+          native appearance its border/padding are widget drawing, not box decoration, so
+          the author's values are dropped; the size survives. With 'appearance: none' the
+          author's border applies again.
+       r1 'border-right-style:dotted; border:2px solid' -> 2px solid everywhere (the
+          shorthand resets the longhand it controls)
+       r2 'border-top-width:9px; border-top:1px solid'   -> top 1px solid, others 0/none
+       r3 'border-color:red; border-style:solid; border-width:3px' -> 3px solid red
+       r4 'outline-width:7px; outline:1px solid' -> outline 1px solid
+       m1 margin-block:11px -> 11/0/11/0        m2 margin-inline:7px 9px -> left 7 right 9
+       m3 rtl padding-inline:5px 15px -> right 5 left 15   m4 margin-block:4px 8px -> 4/8
+       m5 padding-block:6px + padding-inline:2px 3px -> 6px top/bottom, left 2 right 3
+       m6 <input style="margin-block:13px"> -> 13/13 with the UA 2px inset border intact
+       o1 'overflow-x:hidden; overflow:visible' -> visible/visible (shorthand resets)
+       o2 'overflow:visible hidden' -> auto/hidden     o3 -> auto/auto
+       o4 'overflow-x:hidden' alone -> hidden/auto     o5 'overflow-y:scroll' -> auto/scroll
+       o6 'overflow-x:clip' alone -> clip/visible (clip never coerces the other axis)
+       o7 'overflow:hidden; overflow-y:visible' -> hidden/auto
+       o8 'overflow-x:hidden; overflow-y:clip' -> hidden/hidden (clip downgrades)
+       q1 'contain-intrinsic-width:30px; contain-intrinsic-size:10px 20px' -> 10px 20px
+       q2 reverse order -> 30px 20px             q3 'contain-intrinsic-height:44px' -> none 44px
+     Not matched yet: box-sizing on input/textarea (we are border-box, #215) and the
+     computed border-color of a style:none tick box (we echo the author, Edge currentColor).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b211 shorthand cascade</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/20px Arial, sans-serif; color: #000; background: #fff; }
+  .box { height: 20px; background: #ddd; }
+  table { border-collapse: separate; }
+</style>
+</head>
+<body>
+
+<!-- 1. 'border' shorthand on elements whose UA sheet carries per-side longhands -->
+<input id="s1" style="border: 4px solid #ff0000">
+<button id="s2" style="border: 3px solid #0000ff">go</button>
+<hr id="s3" style="border: 1px solid #ff0000">
+<fieldset id="s4" style="border: 5px solid #00aa00"></fieldset>
+<textarea id="s6" style="border: 4px solid #ff0000"></textarea>
+<select id="s7" style="border: 4px solid #ff0000"><option>a</option></select>
+<table id="s8"><tr><td id="s8c" style="border: 3px solid #0000ff">t</td></tr></table>
+<input id="s9" type="checkbox" style="border: 4px solid #ff0000">
+
+<!-- 2. shorthand resets the longhands it controls (same rule, different keys) -->
+<div id="r1" class="box" style="border-right-style: dotted; border: 2px solid #000000"></div>
+<div id="r2" class="box" style="border-top-width: 9px; border-top: 1px solid #000000"></div>
+<div id="r3" class="box" style="border-color: #ff0000; border-style: solid; border-width: 3px"></div>
+<div id="r4" class="box" style="outline-width: 7px; outline: 1px solid #0000ff"></div>
+
+<!-- 3. logical pair shorthands -->
+<div id="m1" class="box" style="margin-block: 11px"></div>
+<div id="m2" class="box" style="margin-inline: 7px 9px"></div>
+<div id="m3" class="box" style="direction: rtl; padding-inline: 5px 15px"></div>
+<div id="m4" class="box" style="margin-block: 4px 8px"></div>
+<div id="m5" class="box" style="padding-block: 6px; padding-inline: 2px 3px"></div>
+<input id="m6" style="margin-block: 13px">
+
+<!-- 4. 'overflow' shorthand vs its longhands (source order) -->
+<div id="o1" class="box" style="overflow-x: hidden; overflow: visible"></div>
+<div id="o2" class="box" style="overflow: visible hidden"></div>
+<div id="o3" class="box" style="overflow-y: scroll; overflow-x: visible; overflow: auto"></div>
+
+<!-- 4b. single-axis longhands only: the other axis must stop being 'visible' -->
+<div id="o4" class="box" style="overflow-x: hidden"></div>
+<div id="o5" class="box" style="overflow-y: scroll"></div>
+<div id="o6" class="box" style="overflow-x: clip"></div>
+<div id="o7" class="box" style="overflow: hidden; overflow-y: visible"></div>
+<div id="o8" class="box" style="overflow-x: hidden; overflow-y: clip"></div>
+
+<!-- 5. 'contain-intrinsic-size' vs its longhands -->
+<div id="q1" class="box" style="contain: size; contain-intrinsic-width: 30px; contain-intrinsic-size: 10px 20px"></div>
+<div id="q2" class="box" style="contain: size; contain-intrinsic-size: 10px 20px; contain-intrinsic-width: 30px"></div>
+<div id="q3" class="box" style="contain: size; contain-intrinsic-height: 44px"></div>
+
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 189 — flex item sizing: auto, padding, intrinsic keywords (CSS Flexbox §4.5/§7.2.3, CSS Sizing 3 §4)</title>
+<style>
+/* The container widths are explicit so the page measures the same whatever the
+   browser window is: a block-level flex container in a narrow viewport shrinks to
+   fit beside floats and every number shifts. */
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 16px 0 6px; font-size: 16px; }
+.f { display: flex; width: 400px; border: 1px solid #939; padding: 0; margin: 6px 0; }
+.i { background: #ddf; padding: 4px; }
+/* 1. auto item with padding: the flex base size is the item's max-content CONTENT
+      width, so its border box must not carry the padding twice. */
+#c1 { }
+/* 2. the same item with box-sizing: border-box and a percentage-free auto width. */
+#c2 { box-sizing: border-box; }
+/* 3. min-width:auto (initial for a row item) floors the item at its min-content. */
+#c3 { min-width: auto; }
+/* 4. grow: a single item with flex-grow takes the leftover line. */
+.g { flex: 1 1 auto; background: #fdd; padding: 4px; }
+/* 5. shrink: two max-content items in a line too short for both. */
+#c5a { width: max-content; background: #cfe; padding: 4px; }
+#c5b { width: max-content; background: #fec; padding: 4px; }
+/* 6. column container: the cross axis is the inline axis, so width keywords live
+      there. */
+.fc { display: flex; flex-direction: column; width: 400px; border: 1px solid #939; margin: 6px 0; }
+#c6 { width: min-content; background: #eef; padding: 4px; }
+/* 7. a definite basis with grow must not re-add the strut. */
+#c7 { flex: 1 0 100px; background: #efe; padding: 4px; }
+</style>
+</head>
+<body>
+
+<h2>1. auto item with padding (flex base = max-content content box)</h2>
+<div class="f"><div class="i" id="c1">an item that is auto sized</div><div class="g">grow</div></div>
+
+<h2>2. same, box-sizing: border-box</h2>
+<div class="f"><div class="i" id="c2">an item that is auto sized</div><div class="g">grow</div></div>
+
+<h2>3. min-width: auto floors at min-content (item squeezed by a grow sibling)</h2>
+<div class="f"><div class="i" id="c3">supercalifragilisticexpialidocious several more words here</div><div class="g">grow grow grow grow grow grow</div></div>
+
+<h2>4. two max-content items that must shrink to fit 398px</h2>
+<div class="f"><div id="c5a">first max-content item with quite a lot of text in it</div><div id="c5b">second max-content item with quite a lot of text</div></div>
+
+<h2>5. column container, item with width: min-content</h2>
+<div class="fc"><div id="c6">several words in a column item</div><div style="background:#fee;padding:4px">sibling</div></div>
+
+<h2>6. flex: 1 0 100px with padding</h2>
+<div class="f"><div id="c7">basis item</div><div class="g">grow</div></div>
+
+</body>
+</html>

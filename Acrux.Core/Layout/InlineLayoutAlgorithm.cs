@@ -52,32 +52,37 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
 
         // Line breaking must use THIS block's content-box width, not the parent's
         // available width. Otherwise a width-constrained block (e.g. width:129px,
-        // or a multicol column) never wraps its text 鈥?it breaks only at the
+        // or a multicol column) never wraps its text — it breaks only at the
         // ancestor width. When the constraint space fixes the inline size
         // (fragmentainers), that fixed size is already the content width.
+        //
+        // Every width decision is taken here, BEFORE the lines are broken: a box
+        // sized by an intrinsic keyword ('width: max-content', a 'min-width' that is
+        // 'max-content', …) or a float/inline-block that shrinks to fit has to wrap
+        // its text at the width it will actually get. Resolving the same keywords
+        // after the fact gave a box whose fragment was as wide as the keyword asked
+        // for but whose lines were still broken at the container's width (b187 §1/§12:
+        // 517px of max-content holding two lines of text).
         if (!Space.IsFixedInlineSize)
         {
-            float ownBorderBox = LengthUtils.ComputeInlineSizeForFragment(Space, Style, bp,
-                t => new MinMaxSizesResult(new MinMaxSizes(availInline, availInline)));
-            if (!LengthUtils.IsIndefinite(ownBorderBox))
-                availInline = Math.Max(0, ownBorderBox - bp.HorizontalSum);
-        }
+            Func<SizeType, MinMaxSizesResult> intrinsicSizes = _ => IntrinsicMeasure.SizeResult(Node, Space);
 
-        // width: max-content / min-content / fit-content on an inline-formatting
-        // context root: measure the content's intrinsic inline size with an
-        // unconstrained / fully-constrained pass, then lay out at that width.
-        if (Style.Width is IntrinsicLength intrinsicWidth && !_measuringIntrinsics)
-        {
-            float maxContent = MeasureIntrinsicInlineSize(minContent: false, bp);
-            float minContent = MeasureIntrinsicInlineSize(minContent: true, bp);
-            float resolved = intrinsicWidth.Kind switch
+            float desired = LengthUtils.ResolveMainInlineLength(Space, Style, bp, intrinsicSizes, Style.Width, null);
+            if (LengthUtils.IsIndefinite(desired))
+                desired = availInline + bp.HorizontalSum;
+
+            var (floorI, ceilI) = LengthUtils.ComputeMinMaxInlineSizes(Space, Style, bp, intrinsicSizes);
+            desired = Math.Clamp(desired, floorI, Math.Max(floorI, ceilI));
+
+            // Shrink-to-fit (CSS 2.1 §10.3.5): clamp to the content between its
+            // min- and max-content sizes.
+            if (Space.IsShrinkToFit && Style.Width is null or AutoLength)
             {
-                IntrinsicSizeKind.MaxContent => maxContent,
-                IntrinsicSizeKind.MinContent => minContent,
-                _ => Math.Min(Math.Max(minContent, availInline + bp.HorizontalSum), maxContent),
-            };
-            if (resolved > 0 && !float.IsNaN(resolved))
-                availInline = Math.Max(0, resolved - bp.HorizontalSum);
+                var mm = intrinsicSizes(SizeType.Intrinsic).Sizes;
+                desired = Math.Min(Math.Max(mm.MinSize, desired), mm.MaxSize);
+            }
+
+            availInline = Math.Max(0, desired - bp.HorizontalSum);
         }
 
         float curInlineSize = 0, curBlockSize = 0, curBaseline = 0, maxBlockSize = 0;
@@ -112,23 +117,15 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         float blockSize = LengthUtils.ComputeBlockSizeForFragment(Space, Style, bp, intrinsicBlock, availInline);
         if (LengthUtils.IsIndefinite(blockSize)) blockSize = intrinsicBlock;
         var (minB, maxB) = LengthUtils.ComputeMinMaxBlockSizes(Space, Style, bp, null, _ => intrinsicBlock);
-        Builder.BlockSize = Math.Clamp(blockSize, minB, maxB);
+        // A cell whose content is only text — the usual case — takes its block size on
+        // this path, so the table rules (§17.5.2.1) have to apply here too.
+        Builder.BlockSize = Space.IsTableCell
+            ? BlockLayoutAlgorithm.TableCellBlockSize(Style, Space, bp, intrinsicBlock)
+            : Math.Clamp(blockSize, minB, maxB);
 
         float inlineSize = LengthUtils.ComputeInlineSizeForFragment(Space, Style, bp,
-            t => new MinMaxSizesResult(new MinMaxSizes(availInline, availInline)));
+            _ => IntrinsicMeasure.SizeResult(Node, Space));
         if (LengthUtils.IsIndefinite(inlineSize)) inlineSize = availInline;
-
-        // Intrinsic width keywords: the line breaking above already ran at the
-        // measured content width, so the box takes that width (plus the box
-        // model struts) rather than stretching to the container.
-        if (Style.Width is IntrinsicLength)
-        {
-            float widestLine = 0;
-            foreach (var l in _lines)
-                widestLine = Math.Max(widestLine, l.InlineSize);
-            if (widestLine > 0)
-                inlineSize = widestLine + bp.HorizontalSum;
-        }
 
         // Shrink-to-fit auto width (atomic inline / inline-block / float): the box
         // sizes to its content (the widest line), not to the full available
@@ -146,7 +143,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         }
 
         var (minI, maxI) = LengthUtils.ComputeMinMaxInlineSizes(Space, Style, bp,
-            t => new MinMaxSizesResult(new MinMaxSizes(availInline, availInline)));
+            _ => IntrinsicMeasure.SizeResult(Node, Space));
         Builder.InlineSize = Math.Clamp(inlineSize, minI, maxI);
 
         // Aspect-ratio with auto height: derive the block size from the resolved
@@ -190,16 +187,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
     private void RunOutOfFlowChildren(BoxStrut bp)
     {
         List<Element>? oof = null;
-        foreach (var child in Node.Children)
-        {
-            if (child is Element el &&
-                el.ComputedStyle?.Position is PositionType.Absolute or PositionType.Fixed &&
-                el.ComputedStyle.Display != DisplayType.None)
-            {
-                oof ??= new List<Element>();
-                oof.Add(el);
-            }
-        }
+        CollectOutOfFlowInlineDescendants(Node, ref oof);
         if (oof == null) return;
 
         var oofPart = new OutOfFlowLayoutPart(Builder, Space);
@@ -220,6 +208,30 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             oofPart.AddCandidate(candidate);
         }
         oofPart.Run();
+    }
+
+    /// <summary>The out-of-flow candidates hiding in an inline subtree. An inline element
+    /// never becomes a box to position against, so the reference engine hoists its
+    /// absolutely positioned descendants up to the nearest block — the same reason the walk
+    /// here has to descend through static inline children instead of only looking at the
+    /// direct ones. Generated boxes ('::before', '::after') are inline elements too, which is
+    /// why an abs-positioned pseudo-element needs this pass to get a box at all. A child that
+    /// is itself out-of-flow is its own containing block, so the walk stops there.</summary>
+    private static void CollectOutOfFlowInlineDescendants(Element node, ref List<Element>? into)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child is not Element el || el.ComputedStyle is not { } s) continue;
+            if (s.Display == DisplayType.None) continue;
+            if (s.Position is PositionType.Absolute or PositionType.Fixed)
+            {
+                into ??= new List<Element>();
+                into.Add(el);
+                continue;
+            }
+            if (s.Display == DisplayType.Inline)
+                CollectOutOfFlowInlineDescendants(el, ref into);
+        }
     }
 
     /// <summary>
@@ -614,11 +626,11 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
 
         float maxAscent = strutAscent;
         float maxDescent = strutDescent;
-        var reach = new System.Collections.Generic.Dictionary<BoxRun, (float Top, float Bottom)>();
+        var reach = new System.Collections.Generic.Dictionary<BoxRun, (float Top, float Bottom, float MarginTop)>();
         // 'top' and 'bottom' align against the final extents of the line box, which
         // only exist once every other box has been placed, so they are applied in a
         // second pass.
-        var edgeAligned = new System.Collections.Generic.List<(BoxRun Run, float BoxHeight, float BaselineFromTop, bool ToTop)>();
+        var edgeAligned = new System.Collections.Generic.List<(BoxRun Run, float ReachHeight, float BaselineFromReachTop, float MarginTop, bool ToTop)>();
 
         foreach (var run in boxLine.Runs)
         {
@@ -632,12 +644,33 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             // Half the leading sits above the baseline, exactly like the strut does,
             // so a box that needs no shift contributes its own height and never
             // grows the line box.
-            float baselineFromTop = run.IsAtomicInline
-                ? AtomicBaselineFromTop(run, boxHeight)
-                : Fonts.LineBoxMetrics.GetBaselineForLineHeight(runStyle, boxHeight);
+            //
+            // CSS 2.1 §10.6.3 grows the line box to contain the inline-level boxes
+            // **including their own margins**, and §10.8 puts the baseline of an
+            // inline-block with no line boxes (or with overflow other than visible),
+            // and of every replaced box, at its bottom MARGIN edge. So for an atomic
+            // inline the whole calculation below runs in margin-box quantities; the
+            // border box is only kept where the spec names it (the percentage
+            // 'vertical-align' basis). Non-replaced inline boxes contribute no margins
+            // at all, which is why text runs keep the plain line-height.
+            float marginTop = 0;
+            float reachHeight = boxHeight;
+            float baselineFromReachTop;
+            if (run.IsAtomicInline)
+            {
+                var margins = LengthUtils.ComputeMargins(Space, runStyle);
+                marginTop = margins.Top;
+                reachHeight = boxHeight + margins.Top + margins.Bottom;
+                baselineFromReachTop = AtomicBaselineFromTop(run, boxHeight, margins.Bottom, runStyle, Space)
+                    + margins.Top;
+            }
+            else
+            {
+                baselineFromReachTop = Fonts.LineBoxMetrics.GetBaselineForLineHeight(runStyle, boxHeight);
+            }
 
             // The box's top, measured above the line's baseline.
-            float top = baselineFromTop;
+            float top = baselineFromReachTop;
             // 'vertical-align' applies to inline boxes only. A table cell's own text is
             // not an inline box: the cell's 'vertical-align: middle' positions the
             // cell's content inside the cell (see the table code), and re-applying it
@@ -647,36 +680,41 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             switch (isOwnText ? VerticalAlignType.Baseline : runStyle.VerticalAlign)
             {
                 case VerticalAlignType.Middle:
-                    top = boxHeight / 2f + xHeight / 2f;
+                    top = reachHeight / 2f + xHeight / 2f;
                     break;
                 case VerticalAlignType.TextTop:
                     top = parentAscent;
                     break;
                 case VerticalAlignType.TextBottom:
-                    top = boxHeight - parentDescent;
+                    top = reachHeight - parentDescent;
                     break;
                 case VerticalAlignType.Sub:
-                    top = baselineFromTop - (Style.FontSize / 5f + 1f);
+                    top = baselineFromReachTop - (Style.FontSize / 5f + 1f);
                     break;
                 case VerticalAlignType.Super:
-                    top = baselineFromTop + (Style.FontSize / 3f + 1f);
+                    top = baselineFromReachTop + (Style.FontSize / 3f + 1f);
                     break;
                 case VerticalAlignType.Percentage:
                 case VerticalAlignType.Length:
                     {
-                        // Percentages resolve against the box's own line-height; a
-                        // positive value raises the box (CSS 2.1 §10.8.1).
+                        // CSS 2.1 §10.8.1: a percentage 'vertical-align' resolves
+                        // against the value of the box's own 'line-height' — for a text
+                        // run those are the same number, but an atomic inline's border
+                        // box is usually taller or shorter than its line box, and using
+                        // it made 'line-height:40px; vertical-align:25%' shift by 5.25
+                        // where the reference browser shifts by 10.
                         float offset = runStyle.VerticalAlign == VerticalAlignType.Percentage
-                            ? (runStyle.VerticalAlignOffsetPx ?? 0) * boxHeight
+                            ? (runStyle.VerticalAlignOffsetPx ?? 0)
+                              * (run.IsAtomicInline ? Fonts.LineBoxMetrics.GetLineHeight(runStyle) : boxHeight)
                             : runStyle.VerticalAlignOffsetPx ?? 0;
-                        top = baselineFromTop + offset;
+                        top = baselineFromReachTop + offset;
                         break;
                     }
                 case VerticalAlignType.Top:
                 case VerticalAlignType.Bottom:
                     // Not part of the "aligned subtree" whose extents they align to,
                     // so they take no share in computing it.
-                    edgeAligned.Add((run, boxHeight, baselineFromTop,
+                    edgeAligned.Add((run, reachHeight, baselineFromReachTop, marginTop,
                         runStyle.VerticalAlign == VerticalAlignType.Top));
                     continue;
             }
@@ -684,19 +722,19 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             // Same negative-leading rule for the boxes on the line: a box whose baseline
             // sits below its own bottom edge reaches negatively, which is what keeps the
             // union at the requested line-height.
-            float bottom = boxHeight - top;
+            float bottom = reachHeight - top;
             if (!run.IsAtomicInline)
                 ApplyEmphasisMarkReach(runStyle, boxHeight, ref top, ref bottom);
-            ApplyRunReach(run, reach, top, bottom, baselineFromTop);
+            ApplyRunReach(run, reach, top, bottom, baselineFromReachTop, marginTop);
             maxAscent = Math.Max(maxAscent, top);
             maxDescent = Math.Max(maxDescent, bottom);
         }
 
-        foreach (var (run, boxHeight, baselineFromTop, toTop) in edgeAligned)
+        foreach (var (run, runReachHeight, runBaselineFromTop, runMarginTop, toTop) in edgeAligned)
         {
-            float top = toTop ? maxAscent : boxHeight - maxDescent;
-            float bottom = boxHeight - top;
-            ApplyRunReach(run, reach, top, bottom, baselineFromTop);
+            float top = toTop ? maxAscent : runReachHeight - maxDescent;
+            float bottom = runReachHeight - top;
+            ApplyRunReach(run, reach, top, bottom, runBaselineFromTop, runMarginTop);
             maxAscent = Math.Max(maxAscent, top);
             maxDescent = Math.Max(maxDescent, bottom);
         }
@@ -714,7 +752,8 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         {
             if (!run.IsAtomicInline || !reach.TryGetValue(run, out var r))
                 continue;
-            run.BlockOffset = boxLine.BlockOffset + maxAscent - r.Top;
+            // 'r.Top' is the reach of the MARGIN box; the fragment is the border box.
+            run.BlockOffset = boxLine.BlockOffset + maxAscent - r.Top + r.MarginTop;
         }
     }
 
@@ -722,11 +761,11 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
     /// bottom reach from the line baseline, and the resulting baseline shift (the
     /// painter raises the glyphs, background and border by that amount).</summary>
     private static void ApplyRunReach(BoxRun run,
-        System.Collections.Generic.Dictionary<BoxRun, (float Top, float Bottom)> reach,
-        float top, float bottom, float baselineFromTop)
+        System.Collections.Generic.Dictionary<BoxRun, (float Top, float Bottom, float MarginTop)> reach,
+        float top, float bottom, float baselineFromTop, float marginTop)
     {
         run.BaselineShift = top - baselineFromTop;
-        reach[run] = (top, bottom);
+        reach[run] = (top, bottom, marginTop);
     }
 
     /// <summary>
@@ -757,27 +796,56 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
     /// Baseline of an atomic inline (inline-block / table) measured from its
     /// border-box top, per CSS 2.1 §10.8: the baseline of its last line box, but
     /// only when its overflow is 'visible' and it actually has line boxes;
-    /// otherwise the bottom margin edge (i.e. the full box height). Images and
-    /// other replaced boxes have no line boxes, so they fall back to the bottom.
+    /// otherwise its bottom MARGIN edge. Images and other replaced boxes have no
+    /// line boxes, so they always fall back to the margin edge — which is why the
+    /// caller's bottom margin is passed in: a 21px box with margin-bottom:9px sits
+    /// 30px above the line's baseline, not 21px.
     /// </summary>
-    private static float AtomicBaselineFromTop(BoxRun run, float boxHeight)
+    private static float AtomicBaselineFromTop(BoxRun run, float boxHeight, float marginBottom,
+        ComputedStyle runStyle, ConstraintSpace space)
     {
+        var element = run.Element ?? (run.Node as Element);
+
+        // A form control keeps its text in a shadow tree, so its fragment has no line
+        // boxes of its own — but the reference engine still aligns INPUT/SELECT/BUTTON by
+        // that text's baseline rather than their bottom edge (their inner editor is a
+        // block, so ChildrenInline() is false and the §10.8 fallback never triggers).
+        // Falling back to the bottom edge stretched every line carrying a 19px <select>
+        // to 24px. <textarea> is deliberately NOT in this list: its content is inline
+        // text in a clipped box, which is exactly the case §10.8 sends to the bottom
+        // margin edge — measured, a 44px textarea sits on a 49px line (44 + the strut's
+        // 5px descent) while a 21px <input> leaves its line at 21px.
+        if (element?.TagName is "INPUT" or "SELECT" or "BUTTON")
+        {
+            // A tick box has no text at all. Measured: a 33x33 checkbox with the UA's
+            // 3px block margins sits on a 41px line at +3, which is only reproducible
+            // with its baseline at the bottom BORDER edge (margin box 39 would give 44).
+            if (element.TagName == "INPUT"
+                && ((element.GetAttribute("type") ?? "text").Equals("checkbox", StringComparison.OrdinalIgnoreCase)
+                    || (element.GetAttribute("type") ?? "text").Equals("radio", StringComparison.OrdinalIgnoreCase)))
+                return boxHeight;
+            var borders = LengthUtils.ComputeBorders(runStyle);
+            var padding = LengthUtils.ComputePadding(space, runStyle);
+            float contentInset = borders.Top + padding.Top;
+            float contentHeight = Math.Max(0, boxHeight - contentInset - borders.Bottom - padding.Bottom);
+            return contentInset + Fonts.LineBoxMetrics.GetBaselineForLineHeight(runStyle, contentHeight);
+        }
+
         // A replaced box has no line boxes of its own, so its baseline is its bottom
         // margin edge (CSS 2.1 §10.8). Its fragment can still carry an internal strut
         // line, and treating that as the baseline source sat every image 4px too high
         // and stopped the line box from growing around it.
-        var replacedElement = run.Element ?? (run.Node as Element);
-        if (replacedElement != null && BlockLayoutAlgorithm.IsReplacedElement(replacedElement))
-            return boxHeight;
+        if (element != null && BlockLayoutAlgorithm.IsReplacedElement(element))
+            return boxHeight + marginBottom;
 
         var frag = run.AtomicInlineBox;
         if (frag == null || frag.Lines.Count == 0)
-            return boxHeight;
+            return boxHeight + marginBottom;
         var style = (run.Element ?? frag.Element)?.ComputedStyle;
         bool overflowVisible = style == null
             || (style.OverflowX == OverflowType.Visible && style.OverflowY == OverflowType.Visible);
         if (!overflowVisible)
-            return boxHeight;
+            return boxHeight + marginBottom;
         var lastLine = frag.Lines[^1];
         // Lines carry block coordinates in the fragment's own space; the baseline
         // measured from the border-box top is the line baseline minus the fragment
@@ -785,7 +853,7 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         // difference cannot push the box off the line.
         float fromTop = lastLine.BaselineOffset - frag.BlockOffset;
         if (fromTop <= 0 || fromTop > boxHeight)
-            return boxHeight;
+            return boxHeight + marginBottom;
         return fromTop;
     }
 

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<!-- b212: three cascade/layout fixes found while closing #214/#219 and the flex strut bug.
+     Edge truth below was measured at dpr 1 with innerWidth 368 (no scrollbar on this page,
+     so the content width equals 368 — render us at 368 to compare).
+
+  A. counter scope (CSS Lists 4 §4.2). Values are chosen so the digit count identifies the
+     number (Arial digits are tabular, so '{0}'/'{30}'/'{95}'/'{125}' differ in width):
+       g1 'counter-reset: aa 95' (top level) ; g2 reads '{95}'   — the scope reaches the
+                                                          following siblings and their subtree
+       h0 reads '{0}' ; h1 (inside h0) 'counter-reset: bb 95' reads '{95}' ;
+       h2 (h1's following sibling inside h0) reads '{95}' ; h3 (outside h0) reads '{0}'
+                                                          — the scope ends at the parent's end
+       i0 increments bb by 30 and reads '[30]{30}' ; i1 (a following sibling of i0) reads
+       '{0}'  — an increment creates inside its own parent's subtree only
+       j0 'counter-reset: cc 95' reads '{95}' ; its child j1 reads '{95}' ; the following
+       sibling j2 reads '{95}'
+     Before the fix we answered g2/h2/j2 with '{0}'.
+
+  B. a block-level flex container with auto width stretches its MARGIN box to the containing
+     block, so its own border+padding sit inside that width (CSS 2.1 §10.3.2):
+       f1 flex row, padding 20 + border 5, one 50x20 item   -> 368 x 70
+       f2 same container, empty                              -> 368 x 50
+       f3 flex row, padding 20, no border, one item          -> 368 x 60
+       f4 column flex, padding 20, one item                  -> 368 x 60
+       f5 inline-flex, padding 20, one item (shrink-to-fit)  ->  90 x 60
+       f6 flex, width 200 + padding 20 + border 5            -> 250 x 70
+     Before the fix f1..f4 were 318/318/328/328 wide and f2 was 0 tall.
+
+  C. 'min-height: auto' is zero for a replaced box; the reference engine's input height is
+     exactly 1lh + 2*padding + 2*border (13.3333px UA font, UA border 2px inset):
+       q0 padding 0  -> 181x19   q1 padding 5px  -> 191x29
+       q2 padding 10 -> 201x39  q3 padding 20px -> 221x59   (widths carry the #196 drift;
+     the heights are the point: 1lh + 2p + 2b, exactly linear in the padding)
+       k1 empty div padding 20            -> 40
+       k2 empty div padding 20 + border 5 -> 50
+       k3 empty div height 0 + padding 20 -> 40
+       k4 empty div padding 20 + min-height 5px -> 45
+       k5 empty flex div padding 20 -> 40      k6 empty div padding 20 overflow hidden -> 40
+     Before the fix q2/q3 were 48/88 (the padding counted twice).
+
+  D. a control with an authored width keeps its widget height (the replaced widget size is
+     solved per axis, not per box):
+       w1 auto                           -> 185 x 21
+       w2 width:200px                    -> 208 x 21
+       w3 width:200px + field-sizing     -> 208 x 21
+       w4 field-sizing:content           -> 22.83 x 21
+     Before the fix w2/w3 were 200x57.6 — the '&&' between the two widget helpers threw
+     the whole intrinsic info away as soon as one axis was authored, and the auto height
+     then came from the available block size. Width deltas vs Edge are #215 (we are
+     border-box on inputs) plus #196 (the character allowance), not this bug.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b212 counter scope, flex strut, replaced min-size</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 16px/20px Arial, sans-serif; color: #000; background: #fff; }
+  div { white-space: nowrap; }
+  .la::after { content: "{" counter(aa) "}"; }
+  .lb::after { content: "{" counter(bb) "}"; }
+  .lc::after { content: "{" counter(cc) "}"; }
+  .ra { counter-reset: aa 95; }
+  .rb { counter-reset: bb 95; }
+  .rc { counter-reset: cc 95; }
+  .incb { counter-increment: bb 30; }
+  .incb::after { content: "[" counter(bb) "]"; }
+  .item { width: 50px; height: 20px; background: #f77; }
+  .f { display: flex; padding: 20px; border: 5px solid #333333; background: #cccccc; }
+  .g { display: flex; padding: 20px; background: #ccffcc; }
+  .col { display: flex; flex-direction: column; padding: 20px; background: #eeeeff; }
+  .k { background: #dddddd; }
+  #k1 { padding: 20px; } #k2 { padding: 20px; border: 5px solid #333333; }
+  #k3 { height: 0; padding: 20px; } #k4 { padding: 20px; min-height: 5px; }
+  #k5 { display: flex; padding: 20px; } #k6 { padding: 20px; overflow: hidden; }
+  input { display: block; border: 2px inset #333333; padding: 10px; }
+  #q0 { padding: 0; } #q1 { padding: 5px; } #q2 { padding: 10px; } #q3 { padding: 20px; }
+  /* D's inputs go back to the UA inset so the heights are directly comparable to Edge. */
+  #w1, #w2, #w3, #w4 { padding: 1px 2px; }
+</style>
+</head>
+<body>
+
+<!-- A. counter scope -->
+<div id="g1" class="ra">g1</div>
+<div id="g2">g2<span class="la"></span><span class="mk">|</span></div>
+<div id="h0">h0<span class="lb"></span><span class="mk">|</span><div id="h1" class="rb">h1<span class="lb"></span><span class="mk">|</span></div>h2<span class="lb"></span><span class="mk">|</span></div>
+<div id="h3">h3<span class="lb"></span><span class="mk">|</span></div>
+<div id="i0">i0<span class="incb"></span><span class="lb"></span><span class="mk">|</span></div>
+<div id="i1">i1<span class="lb"></span><span class="mk">|</span></div>
+<div id="j0" class="rc">j0<span class="lc"></span><span class="mk">|</span><div id="j1">j1<span class="lc"></span><span class="mk">|</span></div></div>
+<div id="j2">j2<span class="lc"></span><span class="mk">|</span></div>
+
+<!-- B. flex container stretch / empty strut -->
+<div id="f1" class="f"><div class="item"></div></div>
+<div id="f2" class="f"></div>
+<div id="f3" class="g"><div class="item"></div></div>
+<div id="f4" class="col"><div class="item"></div></div>
+<div id="f5" style="display:inline-flex;padding:20px;background:#ffeeee"><div class="item"></div></div>
+<div id="f6" style="display:flex;width:200px;padding:20px;border:5px solid #333333;background:#dddddd"><div class="item"></div></div>
+
+<!-- C. replaced min-size and empty padded boxes -->
+<input id="q0" value="ab"><input id="q1" value="ab"><input id="q2" value="ab"><input id="q3" value="ab">
+<div id="k1" class="k"></div><div id="k2" class="k"></div><div id="k3" class="k"></div>
+<div id="k4" class="k"></div><div id="k5" class="k"></div><div id="k6" class="k"></div>
+
+<!-- D. an authored width must not cost a control its widget height (Edge: all four 21 tall) -->
+<input id="w1" value="ab">
+<input id="w2" value="ab" style="width:200px">
+<input id="w3" value="ab" style="width:200px;field-sizing:content">
+<input id="w4" value="ab" style="field-sizing:content">
+
+</body>
+</html>

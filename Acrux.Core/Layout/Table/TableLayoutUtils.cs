@@ -173,7 +173,7 @@ public static class TableLayoutUtils
     {
         if (string.IsNullOrEmpty(text)) return 0;
         float fontSize = style?.FontSize ?? 16;
-        string fontFamily = style?.FontFamily ?? "Arial, sans-serif";
+        string fontFamily = style?.FontFamily ?? Acrux.Core.Fonts.FontManager.StandardFontFamily;
         var measurer = TextMeasurer.Instance;
         if (measurer != null)
             return measurer.MeasureText(text, fontFamily, fontSize);

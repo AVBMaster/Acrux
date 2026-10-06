@@ -31,6 +31,10 @@ public static class CssPropertyApplier
 
     public static void Apply(ComputedStyle style, string name, string value)
     {
+    // Logical box properties are also queued so StyleAdjuster can re-map them once
+    // 'direction' is final; the first mapping below still gives the LTR answer.
+    if (IsLogicalBoxProperty(name))
+        QueueLogicalProperty(style, name, value);
     // Font-relative units inside these values resolve against this element's
     // own font (CSS Values 4 §6.3); the style argument carries it.
     using var _fontUnitScope = FontUnitContext.Use(style);
@@ -65,11 +69,11 @@ public static class CssPropertyApplier
             case "margin-left": style.MarginLeft = Length.Parse(value); break;
             case "margin-right": style.MarginRight = Length.Parse(value); break;
             case "margin-block": ParseShorthand2(value, out var mbt, out var mbb); style.MarginTop = mbt; style.MarginBottom = mbb; break;
-            case "margin-inline": ParseShorthand2(value, out var mil, out var mir); style.MarginLeft = mil; style.MarginRight = mir; break;
+            case "margin-inline": ParseShorthand2(value, out var mil, out var mir); SetMarginSide(style, InlineStartSide(style), mil); SetMarginSide(style, InlineEndSide(style), mir); break;
             case "margin-block-start": style.MarginTop = Length.Parse(value); break;
             case "margin-block-end": style.MarginBottom = Length.Parse(value); break;
-            case "margin-inline-start": style.MarginLeft = Length.Parse(value); break;
-            case "margin-inline-end": style.MarginRight = Length.Parse(value); break;
+            case "margin-inline-start": SetMarginSide(style, InlineStartSide(style), Length.Parse(value)); break;
+            case "margin-inline-end": SetMarginSide(style, InlineEndSide(style), Length.Parse(value)); break;
             case "padding":
                 ParseShorthand4(value, out var pt, out var pr, out var pb, out var pl);
                 style.PaddingTop = pt; style.PaddingRight = pr; style.PaddingBottom = pb; style.PaddingLeft = pl;
@@ -79,11 +83,11 @@ public static class CssPropertyApplier
             case "padding-left": style.PaddingLeft = Length.Parse(value); break;
             case "padding-right": style.PaddingRight = Length.Parse(value); break;
             case "padding-block": ParseShorthand2(value, out var pbt, out var pbb); style.PaddingTop = pbt; style.PaddingBottom = pbb; break;
-            case "padding-inline": ParseShorthand2(value, out var pil, out var pir); style.PaddingLeft = pil; style.PaddingRight = pir; break;
+            case "padding-inline": ParseShorthand2(value, out var pil, out var pir); SetPaddingSide(style, InlineStartSide(style), pil); SetPaddingSide(style, InlineEndSide(style), pir); break;
             case "padding-block-start": style.PaddingTop = Length.Parse(value); break;
             case "padding-block-end": style.PaddingBottom = Length.Parse(value); break;
-            case "padding-inline-start": style.PaddingLeft = Length.Parse(value); break;
-            case "padding-inline-end": style.PaddingRight = Length.Parse(value); break;
+            case "padding-inline-start": SetPaddingSide(style, InlineStartSide(style), Length.Parse(value)); break;
+            case "padding-inline-end": SetPaddingSide(style, InlineEndSide(style), Length.Parse(value)); break;
             case "color": style.Color = ColorParser.Parse(value, style); break;
             case "accent-color": style.AccentColor = value == "auto" ? null : ColorParser.Parse(value, style); break;
             case "caret-color": style.CaretColor = value == "auto" ? null : ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.Caret, value); break;
@@ -111,14 +115,32 @@ public static class CssPropertyApplier
             case "background-image":
                 style.BackgroundImage = ParseImageLayerList(value);
                 break;
-            case "background-repeat": style.BackgroundRepeat = ParseBackgroundRepeat(value); break;
-            case "background-position": ParseBackgroundPosition(value, style); break;
+            case "background-repeat":
+                style.BackgroundRepeat = ParseBackgroundRepeat(FirstBackgroundLayer(value));
+                style.BackgroundRepeatLayers = ParseBackgroundLayerList(value, ParseOneBackgroundRepeatPair);
+                break;
+            case "background-position":
+                ParseBackgroundPosition(FirstBackgroundLayer(value), style);
+                style.BackgroundPositionLayers = ParseBackgroundLayerList(value, ParseOneBackgroundPosition);
+                break;
             case "background-position-x": style.BackgroundPositionX = ParsePositionKeywordOrLength(value); break;
             case "background-position-y": style.BackgroundPositionY = ParsePositionKeywordOrLength(value); break;
-            case "background-size": ParseBackgroundSize(value, style); break;
-            case "background-attachment": style.BackgroundAttachment = ParseBackgroundAttachment(value); break;
-            case "background-clip": style.BackgroundClip = value.ToLowerInvariant(); break;
-            case "background-origin": style.BackgroundOrigin = value.ToLowerInvariant(); break;
+            case "background-size":
+                ParseBackgroundSize(FirstBackgroundLayer(value), style);
+                style.BackgroundSizeLayers = ParseBackgroundLayerList(value, ParseOneBackgroundSize);
+                break;
+            case "background-attachment":
+                style.BackgroundAttachment = ParseBackgroundAttachment(FirstBackgroundLayer(value));
+                style.BackgroundAttachmentLayers = ParseBackgroundLayerList(value, ParseBackgroundAttachment);
+                break;
+            case "background-clip":
+                style.BackgroundClip = value.ToLowerInvariant();
+                style.BackgroundClipLayers = ParseBackgroundLayerList(value, s => s.ToLowerInvariant());
+                break;
+            case "background-origin":
+                style.BackgroundOrigin = value.ToLowerInvariant();
+                style.BackgroundOriginLayers = ParseBackgroundLayerList(value, s => s.ToLowerInvariant());
+                break;
             case "background-blend-mode": style.BackgroundBlendMode = ParseBackgroundBlendMode(value); break;
             case "text-align": style.TextAlign = ParseTextAlign(value); break;
             case "text-align-last": style.TextAlignLast = ParseTextAlignLast(value); break;
@@ -128,7 +150,7 @@ public static class CssPropertyApplier
                 style.TextDecoration = LegacyTextDecorationOf(style.TextDecorationLine);
                 break;
             case "text-decoration-style": style.TextDecorationStyle = ParseTextDecorationStyle(value); break;
-            case "text-decoration-color": style.TextDecorationColor = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.TextDecoration, value); break;
+            case "text-decoration-color": ApplyTextDecorationColor(style, value); break;
             case "text-decoration-thickness": ApplyTextDecorationThickness(style, value); break;
             case "text-underline-offset": ApplyTextUnderlineOffset(style, value); break;
             case "text-underline-position": style.TextUnderlinePosition = ParseTextUnderlinePosition(value); break;
@@ -142,9 +164,17 @@ public static class CssPropertyApplier
             case "text-shadow": style.TextShadow = ParseTextShadow(value); break;
             case "text-overflow": ParseTextOverflow(value, style); break;
             case "text-wrap":
-                // Keep the whole (lowercased) value; 'balance'/'pretty' may combine with a
-                // second keyword (e.g. "balance nowrap") in future, so we substring-match.
-                style.TextWrap = value.Trim().ToLowerInvariant();
+                // 'text-wrap' is the shorthand of text-wrap-mode + text-wrap-style
+                // (CSS Text 4 §4). Tokens are classified rather than positional, and the
+                // legacy string is kept in sync for the balancing code.
+                {
+                    string tw = value.Trim().ToLowerInvariant();
+                    style.TextWrapMode = tw.Contains("nowrap") ? TextWrapModeType.NoWrap : TextWrapModeType.Wrap;
+                    style.TextWrapStyle = tw.Contains("balance") ? TextWrapStyleType.Balanced
+                        : tw.Contains("pretty") ? TextWrapStyleType.Pretty
+                        : tw.Contains("stable") ? TextWrapStyleType.Stable : TextWrapStyleType.Auto;
+                    RecomputeEffectiveWhiteSpace(style);
+                }
                 break;
             case "-webkit-line-clamp":
             case "line-clamp":
@@ -153,30 +183,86 @@ public static class CssPropertyApplier
                 style.LineClamp = int.TryParse(value.Trim(), out var clampLines) && clampLines > 0 ? clampLines : 0;
                 break;
             case "vertical-align": ApplyVerticalAlign(style, value); break;
-            case "white-space": style.WhiteSpace = ParseWhiteSpace(value); break;
+            case "white-space": ApplyWhiteSpaceShorthand(style, value); break;
+            case "white-space-collapse":
+                // CSS Text 4 §3.2 longhand of 'white-space'.
+                style.WhiteSpaceCollapse = value.Trim().ToLowerInvariant() switch
+                {
+                    "preserve" => WhiteSpaceCollapseType.Preserve,
+                    "break-spaces" => WhiteSpaceCollapseType.BreakSpaces,
+                    "preserve-breaks" => WhiteSpaceCollapseType.PreserveBreaks,
+                    "discard" => WhiteSpaceCollapseType.Discard,
+                    _ => WhiteSpaceCollapseType.Collapse,
+                };
+                RecomputeEffectiveWhiteSpace(style);
+                break;
+            case "text-wrap-mode":
+                // CSS Text 4 §4.1: the wrapping half of 'white-space'.
+                style.TextWrapMode = value.Trim().ToLowerInvariant() == "nowrap"
+                    ? TextWrapModeType.NoWrap : TextWrapModeType.Wrap;
+                RecomputeEffectiveWhiteSpace(style);
+                break;
+            case "text-wrap-style":
+                // CSS Text 4 §4.3. 'auto' is the initial; 'pretty' is browser-specific.
+                style.TextWrapStyle = value.Trim().ToLowerInvariant() switch
+                {
+                    "stable" => TextWrapStyleType.Stable,
+                    "balanced" => TextWrapStyleType.Balanced,
+                    "pretty" => TextWrapStyleType.Pretty,
+                    _ => TextWrapStyleType.Auto,
+                };
+                RecomputeEffectiveWhiteSpace(style);
+                break;
             case "word-break": style.WordBreak = ParseWordBreak(value); break;
             case "overflow-wrap": case "word-wrap": style.OverflowWrap = ParseOverflowWrap(value); break;
             case "visibility": style.Visibility = ParseVisibility(value); break;
             case "overflow":
-                // Two-value shorthand: overflow: <x> <y>. Per CSS Overflow 3, if one
-                // axis is 'visible' and the other is not, the 'visible' computes to
-                // 'auto' (a box cannot be a scroll container on one axis only).
+                // Two-value shorthand: overflow: <x> <y>. The §3.3.1 pair constraints are NOT
+                // applied here — StyleAdjuster.AdjustOverflow decides them on the computed
+                // style, so that a longhand-written pair gets the same answer.
                 {
                     var oparts = value.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
                     OverflowType oxs, oys;
                     if (oparts.Length >= 2) { oxs = ParseOverflow(oparts[0]); oys = ParseOverflow(oparts[1]); }
                     else { oxs = oys = ParseOverflow(value); }
-                    if (oxs == OverflowType.Visible && oys != OverflowType.Visible) oxs = OverflowType.Auto;
-                    else if (oys == OverflowType.Visible && oxs != OverflowType.Visible) oys = OverflowType.Auto;
                     style.OverflowX = oxs; style.OverflowY = oys;
-                    style.Overflow = oxs == oys ? oxs : OverflowType.Auto;
                 }
                 break;
             case "overflow-x": style.OverflowX = ParseOverflow(value); break;
+            case "overflow-clip-margin":
+                // CSS Overflow 3 §4.1: 'content-box' | 'border-box' | 'padding-box' | <length>.
+                // A negative length is out of range and drops the declaration.
+                {
+                    string cm = value.Trim().ToLowerInvariant();
+                    if (cm == "content-box") style.OverflowClipMarginBox = OverflowClipMarginBox.ContentBox;
+                    else if (cm == "border-box") style.OverflowClipMarginBox = OverflowClipMarginBox.BorderBox;
+                    else if (cm == "padding-box") style.OverflowClipMarginBox = OverflowClipMarginBox.PaddingBox;
+                    else
+                    {
+                        var len = Length.Parse(cm);
+                        // A negative length is out of range: drop the declaration.
+                        if (len is PixelLength neg && neg.Value < 0) break;
+                        style.OverflowClipMargin = len;
+                    }
+                }
+                break;
             case "overflow-y": style.OverflowY = ParseOverflow(value); break;
             case "overflow-anchor": style.OverflowAnchor = value.ToLowerInvariant() == "none" ? OverflowAnchorType.None : OverflowAnchorType.Auto; break;
             case "overscroll-behavior": style.OverscrollBehavior = ParseOverscrollBehavior(value); style.OverscrollBehaviorX = style.OverscrollBehavior; style.OverscrollBehaviorY = style.OverscrollBehavior; break;
             case "overscroll-behavior-x": style.OverscrollBehaviorX = ParseOverscrollBehavior(value); break;
+            // Logical axes (CSS Overscroll Behavior 1 §3): for the horizontal writing
+            // modes the engine supports, block maps to the y axis and inline to x.
+            case "overscroll-behavior-block": style.OverscrollBehaviorY = ParseOverscrollBehavior(value); break;
+            case "overscroll-behavior-inline": style.OverscrollBehaviorX = ParseOverscrollBehavior(value); break;
+            // Legacy grid aliases (CSS Grid 1 §2.1.1, renamed by Grid 2): 'grid-gap'
+            // takes <row-gap> <column-gap>, the same order as today's 'gap'.
+            case "grid-gap": ParseGap(value, style); break;
+            case "grid-row-gap":
+                if (Length.TryParse(value, out var grg)) style.RowGap = grg;
+                break;
+            case "grid-column-gap":
+                if (Length.TryParse(value, out var gcg)) style.ColumnGap = gcg;
+                break;
             case "overscroll-behavior-y": style.OverscrollBehaviorY = ParseOverscrollBehavior(value); break;
             case "z-index": if (value != "auto") style.ZIndex = int.TryParse(value, out var z) ? z : null; break;
             case "border": ParseBorderShorthand(value, style); break;
@@ -186,8 +272,30 @@ public static class CssPropertyApplier
             case "border-right": ParseBorderSide(style, "right", value); break;
             case "border-block-start": ParseBorderSide(style, "top", value); break;
             case "border-block-end": ParseBorderSide(style, "bottom", value); break;
-            case "border-inline-start": ParseBorderSide(style, "left", value); break;
-            case "border-inline-end": ParseBorderSide(style, "right", value); break;
+            // The inline sides resolve against 'direction' (CSS Logical Properties 1 §2),
+            // with a second mapping pass in StyleAdjuster.
+            case "border-inline-start": ParseBorderSide(style, InlineStartSide(style), value); break;
+            case "border-inline-end": ParseBorderSide(style, InlineEndSide(style), value); break;
+            case "border-inline": ParseBorderSide(style, InlineStartSide(style), value); ParseBorderSide(style, InlineEndSide(style), value); break;
+            case "border-block": ParseBorderSide(style, "top", value); ParseBorderSide(style, "bottom", value); break;
+            case "border-inline-start-width": SetBorderWidthSide(style, InlineStartSide(style), value); break;
+            case "border-inline-end-width": SetBorderWidthSide(style, InlineEndSide(style), value); break;
+            case "border-inline-start-style": SetBorderStyleSide(style, InlineStartSide(style), value); break;
+            case "border-inline-end-style": SetBorderStyleSide(style, InlineEndSide(style), value); break;
+            case "border-inline-start-color": SetBorderColorSide(style, InlineStartSide(style), value); break;
+            case "border-inline-end-color": SetBorderColorSide(style, InlineEndSide(style), value); break;
+            case "border-inline-width": SetBorderWidthSide(style, InlineStartSide(style), value); SetBorderWidthSide(style, InlineEndSide(style), value); break;
+            case "border-inline-style": SetBorderStyleSide(style, InlineStartSide(style), value); SetBorderStyleSide(style, InlineEndSide(style), value); break;
+            case "border-inline-color": SetBorderColorSide(style, InlineStartSide(style), value); SetBorderColorSide(style, InlineEndSide(style), value); break;
+            case "border-block-start-width": SetBorderWidthSide(style, "top", value); break;
+            case "border-block-end-width": SetBorderWidthSide(style, "bottom", value); break;
+            case "border-block-start-style": SetBorderStyleSide(style, "top", value); break;
+            case "border-block-end-style": SetBorderStyleSide(style, "bottom", value); break;
+            case "border-block-start-color": SetBorderColorSide(style, "top", value); break;
+            case "border-block-end-color": SetBorderColorSide(style, "bottom", value); break;
+            case "border-block-width": SetBorderWidthSide(style, "top", value); SetBorderWidthSide(style, "bottom", value); break;
+            case "border-block-style": SetBorderStyleSide(style, "top", value); SetBorderStyleSide(style, "bottom", value); break;
+            case "border-block-color": ParseBorderColorBothAxes(style, value); break;
             case "border-width": ParseBorderWidth(value, style); break;
             case "border-color": ParseBorderColor(value, style); break;
             case "border-style": ParseBorderStyle(value, style); break;
@@ -208,6 +316,14 @@ public static class CssPropertyApplier
             case "border-top-right-radius": ApplyRadiusPair(style, value, 1); break;
             case "border-bottom-right-radius": ApplyRadiusPair(style, value, 2); break;
             case "border-bottom-left-radius": ApplyRadiusPair(style, value, 3); break;
+            // Logical corner radii (CSS Backgrounds 3 §5.3): 'start'/'end' name the
+            // inline edges, so with 'direction: rtl' start-start is the TOP-RIGHT
+            // corner. Queued with the other logical box properties so the mapping runs
+            // once 'direction' is final (a 'direction' authored later still flips it).
+            case "border-start-start-radius": ApplyRadiusPair(style, value, LogicalCorner(style, 0, 1)); break;
+            case "border-start-end-radius": ApplyRadiusPair(style, value, LogicalCorner(style, 1, 0)); break;
+            case "border-end-start-radius": ApplyRadiusPair(style, value, LogicalCorner(style, 3, 2)); break;
+            case "border-end-end-radius": ApplyRadiusPair(style, value, LogicalCorner(style, 2, 3)); break;
             case "border-collapse": style.BorderCollapse = value.ToLowerInvariant() == "collapse"; break;
             case "border-spacing": ApplyBorderSpacing(style, value); break;
             case "border-image": ParseBorderImageShorthand(value, style); break;
@@ -328,7 +444,13 @@ public static class CssPropertyApplier
             case "animation-direction": style.AnimationDirection = value; break;
             case "animation-fill-mode": style.AnimationFillMode = value; break;
             case "animation-play-state": style.AnimationPlayState = value; break;
-            case "pointer-events": style.PointerEvents = value; break;
+            case "pointer-events":
+                // CSS UI 4 §11. The whole keyword family is valid on any element (the SVG-only
+                // members just behave like 'auto' outside SVG), and anything else is an invalid
+                // declaration: the reference engine leaves the property at its initial 'auto'
+                // rather than storing the typo.
+                if (IsPointerEventsKeyword(value)) style.PointerEvents = value.Trim().ToLowerInvariant();
+                break;
             case "user-select": style.UserSelect = value; break;
             case "text-indent":
                 {
@@ -419,7 +541,21 @@ public static class CssPropertyApplier
             case "font-variant-caps": style.FontVariantCaps = value.ToLowerInvariant(); break;
             case "font-stretch": style.FontStretch = value.ToLowerInvariant(); break;
             case "font-kerning": style.FontKerning = value.ToLowerInvariant(); break;
-            case "font-synthesis": style.FontSynthesis = value.ToLowerInvariant(); break;
+            case "font-synthesis":
+                if (TryParseFontSynthesis(value, out var synthesis)) style.FontSynthesis = synthesis;
+                break;
+            case "font-synthesis-weight":
+                if (TryParseFontSynthesisLonghand(value, out var fsWeight))
+                    style.FontSynthesis = SetFlag(style.FontSynthesis, FontSynthesisType.Weight, fsWeight);
+                break;
+            case "font-synthesis-style":
+                if (TryParseFontSynthesisLonghand(value, out var fsStyle))
+                    style.FontSynthesis = SetFlag(style.FontSynthesis, FontSynthesisType.Style, fsStyle);
+                break;
+            case "font-synthesis-small-caps":
+                if (TryParseFontSynthesisLonghand(value, out var fsCaps))
+                    style.FontSynthesis = SetFlag(style.FontSynthesis, FontSynthesisType.SmallCaps, fsCaps);
+                break;
             case "font-optical-sizing": style.FontOpticalSizing = value.ToLowerInvariant(); break;
             case "font-variation-settings": style.FontVariationSettings = value; break;
             case "font-feature-settings": style.FontFeatureSettings = value; break;
@@ -457,26 +593,67 @@ public static class CssPropertyApplier
             case "clip-path": style.ClipPath = value; break;
             case "mask": style.Mask = value; break;
             case "mask-image": style.MaskImage = value; break;
-            case "mask-clip": style.MaskClip = value; break;
-            case "mask-composite": style.MaskComposite = value; break;
-            case "mask-mode": style.MaskMode = value; break;
-            case "mask-origin": style.MaskOrigin = value; break;
+            case "mask-clip":
+                if (IsMaskBoxList(value, allowNoClip: true)) style.MaskClip = value.Trim().ToLowerInvariant();
+                break;
+            case "mask-origin":
+                if (IsMaskBoxList(value, allowNoClip: false)) style.MaskOrigin = value.Trim().ToLowerInvariant();
+                break;
+            case "mask-composite":
+                if (IsKeywordList(value, "add", "subtract", "intersect", "exclude")) style.MaskComposite = value.Trim().ToLowerInvariant();
+                break;
+            case "mask-mode":
+                if (IsKeywordList(value, "match-source", "alpha", "luminance")) style.MaskMode = value.Trim().ToLowerInvariant();
+                break;
             case "mask-position": style.MaskPosition = value; break;
-            case "mask-repeat": style.MaskRepeat = value; break;
-            case "mask-size": style.MaskSize = value; break;
+            case "mask-repeat":
+                if (IsKeywordList(value, "repeat-x", "repeat-y", "repeat", "no-repeat", "space", "round"))
+                    style.MaskRepeat = value.Trim().ToLowerInvariant();
+                break;
+            case "mask-size":
+                if (IsMaskSize(value)) style.MaskSize = value.Trim().ToLowerInvariant();
+                break;
             case "isolation": style.Isolation = value.ToLowerInvariant() == "isolate" ? IsolationType.Isolate : IsolationType.Auto; break;
             case "mix-blend-mode": style.MixBlendMode = ParseMixBlendMode(value); break;
             case "image-rendering": style.ImageRendering = ParseImageRendering(value); break;
             case "contain": style.Contain = ParseContain(value); break;
             case "content-visibility": style.ContentVisibility = ParseContentVisibility(value); break;
+            case "contain-intrinsic-size": ApplyContainIntrinsicSize(style, value); break;
+            case "contain-intrinsic-width": ApplyContainIntrinsicAxis(style, "width", value); break;
+            case "contain-intrinsic-height": ApplyContainIntrinsicAxis(style, "height", value); break;
+            case "contain-intrinsic-inline-size": ApplyContainIntrinsicAxis(style, "inline", value); break;
+            case "contain-intrinsic-block-size": ApplyContainIntrinsicAxis(style, "block", value); break;
             case "will-change": style.WillChange = value; break;
             case "scroll-behavior": style.ScrollBehavior = value.ToLowerInvariant() == "smooth" ? ScrollBehaviorType.Smooth : ScrollBehaviorType.Auto; break;
             case "tab-size": ParseTabSize(style, value); break;
+            case "hyphenate-character":
+                // CSS Text 4 §5.1: 'auto' or a <string>. 'none' is not a value here, so
+                // an invalid declaration must leave the property untouched (measured: Edge
+                // reports 'auto' for a rule that says 'none').
+                {
+                    string hc = value.Trim();
+                    if (hc.Equals("auto", StringComparison.OrdinalIgnoreCase))
+                        style.HyphenateCharacter = "auto";
+                    else if (hc.Length >= 2 && (hc[0] == '"' || hc[0] == '\'')
+                             && hc[^1] == hc[0])
+                        style.HyphenateCharacter = UnescapeCssString(hc[1..^1]);
+                }
+                break;
             case "hyphens": style.Hyphens = ParseHyphens(value); break;
             case "line-break": style.LineBreak = ParseLineBreak(value); break;
             case "text-justify": style.TextJustify = ParseTextJustify(value); break;
             case "hanging-punctuation": style.HangingPunctuation = value.ToLowerInvariant(); break;
             case "resize": style.Resize = ParseResize(value); break;
+            case "field-sizing":
+                // 'field-sizing: normal | content'. An unknown keyword (the draft's 'size'
+                // among them) invalidates the declaration rather than resetting the axis, so
+                // it must not be folded into the 'normal' branch.
+                switch (value.Trim().ToLowerInvariant())
+                {
+                    case "normal": style.FieldSizing = FieldSizingType.Normal; break;
+                    case "content": style.FieldSizing = FieldSizingType.Content; break;
+                }
+                break;
             case "zoom": style.Zoom = ParseZoom(value); break;
             case "all": break; // all shorthand - handled via reset cascade
             case "initial-letter": break; // recognized, minimal handling
@@ -487,8 +664,17 @@ public static class CssPropertyApplier
             case "page-break-after": break;
             case "page-break-before": break;
             case "page-break-inside": break;
-            case "orphans": break;
-            case "widows": break;
+            // Both were empty stubs: the declaration was accepted (so nothing warned)
+            // and then thrown away, which also silently disabled the multicol
+            // 'orphans' floor that ColumnLayoutAlgorithm reads from this style.
+            // CSS Text 3 §5.5.1/GCP: <integer> with a minimum of 1; anything below is
+            // out of range and the declaration is dropped, keeping the inherited value.
+            case "orphans":
+                if (TryFragmentationCount(value, out var orphans)) style.Orphans = orphans;
+                break;
+            case "widows":
+                if (TryFragmentationCount(value, out var widows)) style.Widows = widows;
+                break;
         }
     }
     catch (FormatException) { /* Gracefully skip malformed CSS values */ }
@@ -545,6 +731,19 @@ public static class CssPropertyApplier
         }
     }
 
+
+    /// <summary>Record 'font-size' together with whether it is still the default.
+    /// Every path that assigns a font size (the longhand, the 'font' shorthand, the
+    /// typed cascade, pseudo-element styles) must go through here, because the
+    /// generic 'monospace' substitutes its own size only while the value has never
+    /// been authored — and 'medium' is the initial keyword, so it does not count as
+    /// authored (measured in Edge, see ComputedStyle.FontSizeIsDefault).</summary>
+    public static void SetFontSize(ComputedStyle style, string? specified, float size)
+    {
+        style.FontSize = size;
+        string s = specified?.Trim().ToLowerInvariant() ?? "";
+        style.FontSizeIsDefault = s.Length == 0 || s == "medium" || s == "auto";
+    }
 
     public static float ParseFontSize(string value, ComputedStyle? parentStyle,
         float rootFontSize = 16f, float viewportWidth = 0f, float viewportHeight = 0f)
@@ -656,7 +855,7 @@ public static class CssPropertyApplier
         // that need a single family use the first entry (PrimaryFamily /
         // FontFamily.Split(',')[0]).
         var families = value.Split(',', StringSplitOptions.RemoveEmptyEntries);
-        if (families.Length == 0) return "Arial, sans-serif";
+        if (families.Length == 0) return Acrux.Core.Fonts.FontManager.StandardFontFamily;
         return string.Join(",", families.Select(f => f.Trim().Trim('"', '\'')));
     }
 
@@ -784,6 +983,89 @@ public static class CssPropertyApplier
         _ => VerticalAlignType.Baseline
     };
 
+    /// <summary>'white-space' is a shorthand of the collapse/mode/style triple
+    /// (CSS Text 4 §1). The shorthand writes all three plus the effective mode layout
+    /// consumes; a longhand writes its own field and re-derives the mode.</summary>
+    private static void ApplyWhiteSpaceShorthand(ComputedStyle style, string value)
+    {
+        string v = value.Trim().ToLowerInvariant();
+        string head = v.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "normal";
+        switch (head)
+        {
+            case "nowrap":
+                style.WhiteSpaceCollapse = WhiteSpaceCollapseType.Collapse;
+                style.TextWrapMode = TextWrapModeType.NoWrap;
+                style.WhiteSpace = WhiteSpaceMode.Nowrap;
+                break;
+            case "pre":
+                style.WhiteSpaceCollapse = WhiteSpaceCollapseType.Preserve;
+                style.TextWrapMode = TextWrapModeType.NoWrap;
+                style.WhiteSpace = WhiteSpaceMode.Pre;
+                break;
+            case "pre-wrap":
+                style.WhiteSpaceCollapse = WhiteSpaceCollapseType.Preserve;
+                style.TextWrapMode = TextWrapModeType.Wrap;
+                style.WhiteSpace = WhiteSpaceMode.PreWrap;
+                break;
+            case "pre-line":
+                style.WhiteSpaceCollapse = WhiteSpaceCollapseType.PreserveBreaks;
+                style.TextWrapMode = TextWrapModeType.Wrap;
+                style.WhiteSpace = WhiteSpaceMode.PreLine;
+                break;
+            case "break-spaces":
+                // Modelled as its own collapse value (see WhiteSpaceCollapseType): with
+                // plain 'preserve' it would be indistinguishable from 'pre-wrap'.
+                style.WhiteSpaceCollapse = WhiteSpaceCollapseType.BreakSpaces;
+                style.TextWrapMode = TextWrapModeType.Wrap;
+                style.WhiteSpace = WhiteSpaceMode.BreakSpaces;
+                break;
+            default: // 'normal'
+                style.WhiteSpaceCollapse = WhiteSpaceCollapseType.Collapse;
+                style.TextWrapMode = TextWrapModeType.Wrap;
+                style.WhiteSpace = WhiteSpaceMode.Normal;
+                break;
+        }
+        // 'white-space' also accepts the wrapping-style keywords of 'text-wrap'.
+        if (v.Contains("balance")) style.TextWrapStyle = TextWrapStyleType.Balanced;
+        else if (v.Contains("stable")) style.TextWrapStyle = TextWrapStyleType.Stable;
+        else if (v.Contains("pretty")) style.TextWrapStyle = TextWrapStyleType.Pretty;
+        else style.TextWrapStyle = TextWrapStyleType.Auto;
+        SyncTextWrapString(style);
+    }
+
+    /// <summary>Re-derive the effective 'white-space' mode from the triple after a
+    /// longhand changed. 'preserve' + 'wrap' is ambiguous by spec (it is both 'pre-wrap'
+    /// and 'break-spaces'), so an already-effective 'break-spaces' is kept rather than
+    /// silently downgraded — the shorthand is the only way to ask for it.</summary>
+    private static void RecomputeEffectiveWhiteSpace(ComputedStyle style)
+    {
+        style.WhiteSpace = (style.WhiteSpaceCollapse, style.TextWrapMode) switch
+        {
+            (WhiteSpaceCollapseType.Collapse, TextWrapModeType.NoWrap) => WhiteSpaceMode.Nowrap,
+            (WhiteSpaceCollapseType.Collapse, _) => WhiteSpaceMode.Normal,
+            (WhiteSpaceCollapseType.Preserve, TextWrapModeType.NoWrap) => WhiteSpaceMode.Pre,
+            (WhiteSpaceCollapseType.Preserve, _) => WhiteSpaceMode.PreWrap,
+            (WhiteSpaceCollapseType.BreakSpaces, TextWrapModeType.NoWrap) => WhiteSpaceMode.Pre,
+            (WhiteSpaceCollapseType.BreakSpaces, _) => WhiteSpaceMode.BreakSpaces,
+            (WhiteSpaceCollapseType.PreserveBreaks, TextWrapModeType.NoWrap) => WhiteSpaceMode.Pre,
+            (WhiteSpaceCollapseType.PreserveBreaks, _) => WhiteSpaceMode.PreLine,
+            (WhiteSpaceCollapseType.Discard, TextWrapModeType.NoWrap) => WhiteSpaceMode.Nowrap,
+            _ => WhiteSpaceMode.Normal,
+        };
+        SyncTextWrapString(style);
+    }
+
+    /// <summary>Layout reads the legacy 'text-wrap' string for 'balance'/'pretty'; keep
+    /// it consistent with the modular fields so both spellings drive the same code.</summary>
+    private static void SyncTextWrapString(ComputedStyle style) =>
+        style.TextWrap = style.TextWrapStyle switch
+        {
+            TextWrapStyleType.Balanced => "balance",
+            TextWrapStyleType.Pretty => "pretty",
+            TextWrapStyleType.Stable => "stable",
+            _ => style.TextWrapMode == TextWrapModeType.NoWrap ? "nowrap" : "normal",
+        };
+
     public static WhiteSpaceMode ParseWhiteSpace(string value) => value.ToLowerInvariant() switch
     {
         "nowrap" => WhiteSpaceMode.Nowrap,
@@ -816,11 +1098,117 @@ public static class CssPropertyApplier
         _ => VisibilityType.Visible
     };
 
+    /// <summary>'mask-size' (CSS Masking 1 §9): 'auto', one of the two fit keywords, or one or
+    /// two lengths/percentages. Anything else is an invalid declaration and leaves the property
+    /// alone — the reference engine reports 'auto' for 'mask-size: bogus', not the typo.</summary>
+    public static bool IsMaskSize(string value)
+    {
+        var tokens = (value ?? string.Empty).Trim()
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0 || tokens.Length > 2) return false;
+        foreach (var t in tokens)
+        {
+            var lower = t.ToLowerInvariant();
+            if (lower is "auto" or "contain" or "cover") continue;
+            // Length.Parse never answers null — an unknown word comes back as a length of zero —
+            // so validity has to be decided on the token's shape, not by parsing it.
+            if (!IsLengthOrPercentageToken(t)) return false;
+        }
+        // 'contain'/'cover' are single-keyword values and cannot stand beside anything.
+        if (tokens.Length == 2 && tokens.Any(t => t.Equals("contain", StringComparison.OrdinalIgnoreCase)
+                                               || t.Equals("cover", StringComparison.OrdinalIgnoreCase)))
+            return false;
+        return true;
+    }
+
+    /// <summary>'&lt;length&gt; | &lt;percentage&gt;' by shape: a sign, a number, then a known unit or '%'.
+    /// Deliberately stricter than the length parser, which is forgiving by design and would read
+    /// any bare word as zero.</summary>
+    public static bool IsLengthOrPercentageToken(string token)
+    {
+        token = (token ?? string.Empty).Trim();
+        if (token.Length == 0) return false;
+        if (token.EndsWith("%", StringComparison.Ordinal))
+            return double.TryParse(token[..^1], System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out _);
+        int i = 0;
+        if (token[0] == '+' || token[0] == '-') i = 1;
+        int digits = i;
+        bool dot = false;
+        for (; i < token.Length; i++)
+        {
+            if (char.IsAsciiDigit(token[i])) continue;
+            if (token[i] == '.' && !dot) { dot = true; continue; }
+            break;
+        }
+        if (i == digits) return false;                       // no number at all
+        var number = token[..i];
+        var unit = token[i..].ToLowerInvariant();
+        if (double.TryParse(number, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out _) is false) return false;
+        return unit.Length == 0 ? double.TryParse(number, System.Globalization.NumberStyles.Float,
+                   System.Globalization.CultureInfo.InvariantCulture, out var zero) && zero == 0   // CSS '0' without a unit
+               : unit is "px" or "em" or "rem" or "ex" or "ch" or "vw" or "vh" or "vmin" or "vmax"
+                   or "cm" or "mm" or "q" or "in" or "pt" or "pc" or "lh" or "rlh"
+                   or "svw" or "svh" or "lvw" or "lvh" or "dvw" or "dvh"
+                   or "vi" or "vb" or "cqw" or "cqh" or "cqi" or "cqb" or "cqmin" or "cqmax";
+    }
+
+    /// <summary>A comma list drawn from one keyword set (each layer may name its own value).</summary>
+    public static bool IsKeywordList(string value, params string[] allowed) =>
+        SplitCommaTokens(value).Count > 0
+        && SplitCommaTokens(value).All(t => allowed.Any(a => t.Equals(a, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>'mask-origin' / 'mask-clip': a comma list of geometry boxes. Only 'mask-clip'
+    /// also accepts 'no-clip' (CSS Masking 1 §9.1/§11).</summary>
+    public static bool IsMaskBoxList(string value, bool allowNoClip)
+    {
+        var boxes = new[] { "border-box", "padding-box", "content-box", "fill-box", "stroke-box", "view-box" };
+        var tokens = SplitCommaTokens(value);
+        return tokens.Count > 0 && tokens.All(t =>
+            (allowNoClip && t.Equals("no-clip", StringComparison.OrdinalIgnoreCase))
+            || boxes.Any(b => t.Equals(b, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static List<string> SplitCommaTokens(string value) =>
+        (value ?? string.Empty).Split(',')
+            .Select(t => t.Trim())
+            .Where(t => t.Length > 0)
+            .ToList();
+
+    /// <summary>The keyword set of 'pointer-events' (CSS UI 4 §11 plus SVG 2's
+    /// 'bounding-box'). Anything else is an invalid declaration rather than a value, so the
+    /// property stays at its initial 'auto' — the reference engine drops the typo.</summary>
+    public static bool IsPointerEventsKeyword(string value) =>
+        value.Trim().ToLowerInvariant() is "auto" or "none" or "visiblepainted" or "visiblefill"
+            or "visiblestroke" or "visible" or "painted" or "fill" or "stroke" or "all"
+            or "bounding-box";
+
+    /// <summary>Which values make the box a scroll container (CSS Overflow 3 §3.3):
+    /// 'visible' and 'clip' do not; 'hidden', 'auto' and 'scroll' do.</summary>
+    internal static bool IsScrollContainerOverflow(OverflowType o) =>
+        o is OverflowType.Hidden or OverflowType.Auto or OverflowType.Scroll;
+
+    /// <summary>Ordering used to collapse a mixed pair into the single 'Overflow'
+    /// field. 'clip' sits between 'visible' and 'hidden': it clips, but scrolls on
+    /// neither axis.</summary>
+    internal static int OverflowSeverity(OverflowType o) => o switch
+    {
+        OverflowType.Visible => 0,
+        OverflowType.Clip => 1,
+        OverflowType.Hidden => 2,
+        _ => 3,
+    };
+
     public static OverflowType ParseOverflow(string value) => value.ToLowerInvariant() switch
     {
         "hidden" => OverflowType.Hidden,
         "scroll" => OverflowType.Scroll,
         "auto" => OverflowType.Auto,
+        // CSS Overflow 3 §3.3. Before this case existed, 'clip' fell through to
+        // 'Visible' — so the declaration parsed, matched, and the box stopped clipping
+        // at all, which is the opposite of what the keyword asks for.
+        "clip" => OverflowType.Clip,
         _ => OverflowType.Visible
     };
 
@@ -927,14 +1315,16 @@ public static class CssPropertyApplier
     {
         // Split by commas outside parentheses to get individual layers.
         var layers = SplitCommaOutsideParens(value);
-        var images = new List<string>();
 
+        // Pass 1 — split each layer into its <image> and the tokens left over. Nothing
+        // is written to the style yet: a single malformed layer voids the whole
+        // declaration, and by then half of it would already have landed.
+        var parsed = new List<(string? Image, string Remaining, bool HasColor)>();
         foreach (var layer in layers)
         {
             var trimmed = layer.Trim();
             if (string.IsNullOrEmpty(trimmed)) continue;
 
-            // Extract gradient/url from the layer before splitting by space.
             string? image = null;
             string remaining = trimmed;
 
@@ -964,8 +1354,44 @@ public static class CssPropertyApplier
                         remaining = (trimmed[..urlIdx] + " " + trimmed[(end + 1)..]).Trim();
                     }
                 }
+                else if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)
+                         || trimmed.StartsWith("none ", StringComparison.OrdinalIgnoreCase))
+                {
+                    remaining = trimmed[4..].Trim();
+                }
             }
 
+            bool hasColor = false;
+            foreach (var part in ShorthandExpander.SplitShorthand(remaining))
+            {
+                // 'none' is an <image>, not a <color>; only the colour is restricted.
+                if (part.Equals("transparent", StringComparison.OrdinalIgnoreCase)
+                    || ColorParser.LooksLikeColor(part))
+                {
+                    hasColor = true;
+                    break;
+                }
+            }
+            parsed.Add((image, remaining, hasColor));
+        }
+
+        // CSS Backgrounds 3 §4: the <color> is only allowed in the FINAL layer — in any
+        // other one the whole declaration is invalid, so not a single longhand may
+        // change. Measured against a reference browser on
+        // snapshots/css-standard-verify197-multilayer-background.html §9: accepting it
+        // instead leaked the last layer's colour into background-color and painted a
+        // box the reference browser leaves white.
+        for (int i = 0; i < parsed.Count - 1; i++)
+            if (parsed[i].HasColor)
+                return;
+
+        // A shorthand resets every longhand it does not set (CSS 2.1 §14.3), so
+        // "background: url(a)" drops the colour the cascade had before it.
+        style.BackgroundColor = SKColors.Transparent;
+
+        var images = new List<string>();
+        foreach (var (image, remaining, _) in parsed)
+        {
             if (image != null)
                 images.Add(image);
 
@@ -978,7 +1404,8 @@ public static class CssPropertyApplier
                 var lower = part.ToLowerInvariant();
                 if (lower == "none" || lower == "transparent")
                 {
-                    style.BackgroundColor = SKColors.Transparent;
+                    if (lower == "transparent")
+                        style.BackgroundColor = SKColors.Transparent;
                 }
                 else if (ColorParser.LooksLikeColor(part))
                 {
@@ -996,6 +1423,19 @@ public static class CssPropertyApplier
                 {
                     style.BackgroundSize = lower == "cover" ? BackgroundSizeType.Cover : BackgroundSizeType.Contain;
                 }
+                else if (lower is "padding-box" or "border-box" or "content-box")
+                {
+                    // One box keyword sets 'background-origin'; a second one (or the
+                    // one after '/') sets 'background-clip' (CSS Backgrounds 3 §4.1).
+                    if (style.BackgroundOrigin == "padding-box")
+                        style.BackgroundOrigin = lower;
+                    else
+                        style.BackgroundClip = lower;
+                }
+                else if (lower.StartsWith("exclusion") || lower.StartsWith("blend"))
+                {
+                    // handled by background-blend-mode; ignore here
+                }
                 else if (lower is "left" or "right" or "center" or "top" or "bottom" ||
                          lower.EndsWith("%") || lower.EndsWith("px") || lower.StartsWith("calc("))
                 {
@@ -1006,8 +1446,81 @@ public static class CssPropertyApplier
                 ParseBackgroundPosition(string.Join(" ", positionTokens), style);
         }
 
-        if (images.Count > 0)
-            style.BackgroundImage = images;
+        style.BackgroundImage = images.Count > 0 ? images : null;
+    }
+
+    /// <summary>
+    /// Take the first layer of a comma-separated background longhand. The scalar
+    /// position/size/repeat/attachment fields can only hold one, and handing them the
+    /// whole list produced a degenerate parse (nothing painted) rather than a
+    /// first-layer approximation.
+    /// </summary>
+    private static string FirstBackgroundLayer(string value)
+    {
+        if (string.IsNullOrEmpty(value) || value.IndexOf(',') < 0)
+            return value;
+        var layers = System.Linq.Enumerable.ToArray(SplitCommaOutsideParens(value));
+        for (int i = 0; i < layers.Length; i++)
+        {
+            string layer = layers[i].Trim();
+            if (layer.Length > 0)
+                return layer;
+        }
+        return value;
+    }
+
+    /// <summary>
+    /// Parse a comma-separated background longhand into one entry per layer.
+    /// Returns null for a single-value list on purpose: the scalar fields already hold
+    /// that value, so one-layer backgrounds (nearly all of them) keep using the exact
+    /// same code path and allocate nothing.
+    /// </summary>
+    private static List<T>? ParseBackgroundLayerList<T>(string value, Func<string, T> parseOne)
+    {
+        if (string.IsNullOrEmpty(value) || value.IndexOf(',') < 0)
+            return null;
+        var layers = SplitCommaOutsideParens(value);
+        List<T>? list = null;
+        foreach (var layer in layers)
+        {
+            string entry = layer.Trim();
+            if (entry.Length == 0) continue;
+            list ??= new List<T>();
+            list.Add(parseOne(entry));
+        }
+        return list is { Count: > 1 } ? list : null;
+    }
+
+    private static BackgroundPositionLayer ParseOneBackgroundPosition(string value)
+    {
+        var scratch = new ComputedStyle();
+        ParseBackgroundPosition(value, scratch);
+        return new BackgroundPositionLayer { X = scratch.BackgroundPositionX, Y = scratch.BackgroundPositionY };
+    }
+
+    private static BackgroundSizeLayer ParseOneBackgroundSize(string value)
+    {
+        var scratch = new ComputedStyle();
+        ParseBackgroundSize(value, scratch);
+        return new BackgroundSizeLayer
+        {
+            Type = scratch.BackgroundSize,
+            Width = scratch.BackgroundSizeWidth,
+            Height = scratch.BackgroundSizeHeight,
+        };
+    }
+
+    private static BackgroundRepeatPair ParseOneBackgroundRepeatPair(string value)
+    {
+        var parts = ShorthandExpander.SplitShorthand(value);
+        if (parts.Count >= 2)
+            return new BackgroundRepeatPair
+            {
+                X = ParseBackgroundRepeat(parts[0]),
+                Y = ParseBackgroundRepeat(parts[1]),
+            };
+        var single = ParseBackgroundRepeat(value);
+        return new BackgroundRepeatPair { X = single, Y = single };
     }
 
     private static int FindGradientStart(string s)
@@ -1923,7 +2436,7 @@ public static class CssPropertyApplier
             parts[i].EndsWith("%") || parts[i] is "xx-small" or "x-small" or "small" or "medium" or
             "large" or "x-large" or "xx-large"))
         {
-            style.FontSize = Length.ParseFontSize(parts[i], style.FontSize);
+            SetFontSize(style, parts[i], Length.ParseFontSize(parts[i], style.FontSize));
             i++;
         }
 
@@ -2013,6 +2526,149 @@ public static class CssPropertyApplier
         style.Left = Length.Parse(parts.Length > 3 ? parts[3] : (parts.Length > 1 ? parts[1] : parts[0]));
     }
 
+    /// <summary>The logical box properties whose physical target depends on
+    /// 'direction' (CSS Logical Properties 1 §2). They are applied immediately (so a
+    /// style that never reaches the adjuster still gets the LTR answer) and queued for
+    /// a second pass once 'direction' is final. The physical longhands they alias are
+    /// deliberately not queued: they need no re-mapping, and the cascade resolves each
+    /// property id independently (StyleCascade.ApplyIfPresent → TryGetWinner) before
+    /// walking ids in enum order, so authoring order between an alias pair is already
+    /// lost by the time Apply runs — queueing the physical side could not restore it
+    /// (residual gap #205).</summary>
+    private static readonly System.Collections.Generic.HashSet<string> BoxEdgeProperties =
+        new(System.StringComparer.OrdinalIgnoreCase)
+        {
+            "margin-inline", "margin-inline-start", "margin-inline-end",
+            "padding-inline", "padding-inline-start", "padding-inline-end",
+            "border-inline", "border-inline-start", "border-inline-end",
+            "border-inline-width", "border-inline-style", "border-inline-color",
+            "border-inline-start-width", "border-inline-start-style", "border-inline-start-color",
+            "border-inline-end-width", "border-inline-end-style", "border-inline-end-color",
+            "inset-inline", "inset-inline-start", "inset-inline-end",
+            "border-start-start-radius", "border-start-end-radius",
+            "border-end-start-radius", "border-end-end-radius",
+        };
+
+    /// <summary>'orphans' / 'widows' take an &lt;integer&gt; of at least 1; a decimal or a
+    /// value below 1 is out of range, so the caller keeps the inherited value.</summary>
+    private static bool TryFragmentationCount(string value, out int result)
+    {
+        result = 0;
+        string v = value.Trim();
+        if (!int.TryParse(v, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var n))
+            return false;
+        if (n < 1) return false;
+        result = n;
+        return true;
+    }
+
+    private static bool IsLogicalBoxProperty(string name) => BoxEdgeProperties.Contains(name);
+
+    private static void QueueLogicalProperty(ComputedStyle style, string name, string value)
+    {
+        var list = style.PendingBoxEdgeProperties ??= new();
+        string lower = name.ToLowerInvariant();
+        for (int i = list.Count - 1; i >= 0; i--)
+        {
+            // One entry per property name, the last-authored value winning.
+            if (list[i].Key.Equals(lower, StringComparison.OrdinalIgnoreCase))
+                list.RemoveAt(i);
+        }
+        list.Add(new System.Collections.Generic.KeyValuePair<string, string>(lower, value));
+    }
+
+    /// <summary>Physical side of the inline-start edge: 'direction: rtl' puts it on
+    /// the right (CSS Logical Properties 1 §2). 'writing-mode' is not supported yet
+    /// (gap #131), so the block axis keeps its physical top/bottom mapping.</summary>
+    /// <summary>Physical corner index for a logical corner name. Corners are numbered
+    /// 0=top-left, 1=top-right, 2=bottom-right, 3=bottom-left; 'direction: rtl' swaps
+    /// the inline pair. The block axis keeps its physical meaning because 'writing-mode'
+    /// is not supported yet (gap #131).</summary>
+    private static int LogicalCorner(ComputedStyle style, int ltrCorner, int rtlCorner) =>
+        style.Direction == "rtl" ? rtlCorner : ltrCorner;
+
+    private static string InlineStartSide(ComputedStyle style) => style.Direction == "rtl" ? "right" : "left";
+    private static string InlineEndSide(ComputedStyle style) => style.Direction == "rtl" ? "left" : "right";
+
+    /// <summary>Set one margin side by physical name.</summary>
+    private static void SetMarginSide(ComputedStyle style, string side, Length value)
+    {
+        switch (side)
+        {
+            case "top": style.MarginTop = value; break;
+            case "bottom": style.MarginBottom = value; break;
+            case "left": style.MarginLeft = value; break;
+            default: style.MarginRight = value; break;
+        }
+    }
+
+    private static void SetPaddingSide(ComputedStyle style, string side, Length value)
+    {
+        switch (side)
+        {
+            case "top": style.PaddingTop = value; break;
+            case "bottom": style.PaddingBottom = value; break;
+            case "left": style.PaddingLeft = value; break;
+            default: style.PaddingRight = value; break;
+        }
+    }
+
+    /// <summary>One border width on one physical side, mirroring the
+    /// 'border-&lt;side&gt;-width' longhand (the authored slot is recorded so
+    /// 'ApplyInitialBorderWidths' can turn a style without a width into 'medium').</summary>
+    private static void SetBorderWidthSide(ComputedStyle style, string side, string value)
+    {
+        var w = BorderWidthPx(value);
+        switch (side)
+        {
+            case "top": style.BorderTopWidth = w; break;
+            case "bottom": style.BorderBottomWidth = w; break;
+            case "left": style.BorderLeftWidth = w; break;
+            default: style.BorderRightWidth = w; break;
+        }
+        style.AuthoredWidthSlots |= (uint)SideWidthSlot(side);
+    }
+
+    private static void SetBorderStyleSide(ComputedStyle style, string side, string value)
+    {
+        var bs = ParseBorderStyleValue(value);
+        switch (side)
+        {
+            case "top": style.BorderTopStyle = bs; break;
+            case "bottom": style.BorderBottomStyle = bs; break;
+            case "left": style.BorderLeftStyle = bs; break;
+            default: style.BorderRightStyle = bs; break;
+        }
+    }
+
+    private static void SetBorderColorSide(ComputedStyle style, string side, string value)
+    {
+        var color = ColorParser.Parse(value, style);
+        var slot = SideWidthSlot(side);
+        MarkCurrentColor(style, slot, value);
+        switch (side)
+        {
+            case "top": style.BorderTopColor = color; break;
+            case "bottom": style.BorderBottomColor = color; break;
+            case "left": style.BorderLeftColor = color; break;
+            default: style.BorderRightColor = color; break;
+        }
+    }
+
+    /// <summary>'border-block-color: &lt;a&gt; &lt;b&gt;' addresses block-start then
+    /// block-end, which for the supported horizontal writing modes are top/bottom.
+    /// Split on the raw text: these are colors, so they never go through Length.</summary>
+    private static void ParseBorderColorBothAxes(ComputedStyle style, string value)
+    {
+        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
+        if (parts.Length == 0) return;
+        string start = parts[0];
+        string end = parts.Length > 1 ? parts[1] : parts[0];
+        SetBorderColorSide(style, "top", start);
+        SetBorderColorSide(style, "bottom", end);
+    }
+
     /// <summary>
     /// Maps inline-axis insets (from inset-inline[-start|-end]) onto the
     /// physical left/right properties. With 'direction: rtl' the start and end
@@ -2087,6 +2743,28 @@ public static class CssPropertyApplier
         style.TextDecorationThickness = Math.Max(0, length.ToPixels(style.FontSize, style.FontSize, 0, 0));
     }
 
+    /// <summary>'text-decoration-color: auto | &lt;color&gt;' (CSS Text Decoration 4
+    /// §3.2). 'auto' is a distinct state, not a color: it paints with the element's
+    /// own 'color', while an authored 'transparent' is explicit ink that must draw
+    /// nothing — keying that distinction on the alpha channel conflated the two and
+    /// made every zero-alpha spelling paint the text color.</summary>
+    private static void ApplyTextDecorationColor(ComputedStyle style, string value)
+    {
+        var token = value.Trim();
+        if (token.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            style.TextDecorationColorIsAuto = true;
+            style.TextDecorationColor = default;
+            // Clear any stale currentColor slot: 'auto' is resolved at use time, and
+            // leaving the slot set would re-make the color explicit in the adjuster.
+            MarkCurrentColor(style, CurrentColorSlot.TextDecoration, token);
+            return;
+        }
+        style.TextDecorationColorIsAuto = false;
+        style.TextDecorationColor = ColorParser.Parse(token, style);
+        MarkCurrentColor(style, CurrentColorSlot.TextDecoration, token);
+    }
+
     /// <summary>'text-underline-offset: auto | &lt;length&gt; | &lt;percentage&gt;'
     /// (CSS Text Decoration 4 §3.2); percentages resolve against the font size.</summary>
     private static void ApplyTextUnderlineOffset(ComputedStyle style, string value)
@@ -2125,6 +2803,7 @@ public static class CssPropertyApplier
         style.TextDecorationLine = TextDecorationLineType.None;
         style.TextDecorationStyle = TextDecorationStyleType.Solid;
         style.TextDecorationColor = default;
+        style.TextDecorationColorIsAuto = true;
         style.TextDecorationThickness = float.NaN;
         style.TextDecorationThicknessFromFont = false;
 
@@ -2162,8 +2841,7 @@ public static class CssPropertyApplier
                 ApplyTextDecorationThickness(style, lower);
                 continue;
             }
-            style.TextDecorationColor = ColorParser.Parse(part, style);
-            MarkCurrentColor(style, CurrentColorSlot.TextDecoration, part);
+            ApplyTextDecorationColor(style, part);
         }
         style.TextDecoration = LegacyTextDecorationOf(style.TextDecorationLine);
     }
@@ -2413,17 +3091,212 @@ public static class CssPropertyApplier
         _ => ResizeType.None
     };
 
+    /// <summary>
+    /// CSS Containment 3 §2: 'contain' is a keyword list, so 'size layout' is the union of
+    /// two bits rather than a sixth state. The whole declaration is invalid when a keyword
+    /// repeats or is unknown (reference engine: 'contain: size size' and 'contain: auto'
+    /// both compute to 'none'), and the two set keywords 'strict'/'content' only stand alone.
+    /// </summary>
     public static ContainType ParseContain(string value)
     {
-        var lower = value.ToLowerInvariant();
-        if (lower == "none") return ContainType.None;
-        if (lower == "strict") return ContainType.Strict;
-        if (lower == "content") return ContainType.Content;
-        if (lower == "layout") return ContainType.Layout;
-        if (lower == "paint") return ContainType.Paint;
-        if (lower == "size") return ContainType.Size;
-        return ContainType.None;
+        var tokens = (value ?? string.Empty).Trim().ToLowerInvariant()
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0) return ContainType.None;
+        if (tokens.Length == 1)
+        {
+            if (tokens[0] == "none") return ContainType.None;
+            if (tokens[0] == "strict") return ContainType.Strict;
+            if (tokens[0] == "content") return ContainType.Content;
+        }
+        ContainType result = ContainType.None;
+        foreach (var token in tokens)
+        {
+            ContainType bit = token switch
+            {
+                "size" => ContainType.Size,
+                "layout" => ContainType.Layout,
+                "style" => ContainType.Style,
+                "paint" => ContainType.Paint,
+                _ => ContainType.None,
+            };
+            if (bit == ContainType.None || (result & bit) != 0) return ContainType.None;
+            result |= bit;
+        }
+        return result;
     }
+
+    /// <summary>The computed value in the reference engine's canonical order — size, layout,
+    /// style, paint — collapsing the full sets back to the 'strict'/'content' keywords.</summary>
+    public static string FormatContain(ContainType contain)
+    {
+        if (contain == ContainType.None) return "none";
+        if (contain == ContainType.Strict) return "strict";
+        if (contain == ContainType.Content) return "content";
+        var parts = new List<string>(4);
+        if ((contain & ContainType.Size) != 0) parts.Add("size");
+        if ((contain & ContainType.Layout) != 0) parts.Add("layout");
+        if ((contain & ContainType.Style) != 0) parts.Add("style");
+        if ((contain & ContainType.Paint) != 0) parts.Add("paint");
+        return string.Join(' ', parts);
+    }
+
+    /// <summary>
+    /// 'font-synthesis' (CSS Fonts 4 §6.1) as the reference engine implements it: 'none' alone,
+    /// or a duplicate-free list of the three category keywords. Measured value by value: the
+    /// 'auto' keyword and the 'bold'/'italic'/'oblique' compatibility spellings are rejected in
+    /// the shorthand (they never reach the computed value), 'none' may not appear beside a
+    /// category, and a repeated category invalidates the whole declaration. Case-insensitive,
+    /// any run of spaces separates the list.
+    /// </summary>
+    public static bool TryParseFontSynthesis(string value, out FontSynthesisType flags)
+    {
+        flags = FontSynthesisType.None;
+        var tokens = (value ?? string.Empty).Trim()
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0) return false;
+        if (tokens.Length == 1 && tokens[0].Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
+        foreach (var token in tokens)
+        {
+            FontSynthesisType bit = token.ToLowerInvariant() switch
+            {
+                "weight" => FontSynthesisType.Weight,
+                "style" => FontSynthesisType.Style,
+                "small-caps" => FontSynthesisType.SmallCaps,
+                _ => (FontSynthesisType)0,
+            };
+            if (bit == 0 || (flags & bit) != 0) { flags = FontSynthesisType.Auto; return false; }
+            flags |= bit;
+        }
+        return true;
+    }
+
+    /// <summary>A 'font-synthesis-*' longhand: 'auto' turns that one synthesis on, 'none' off.</summary>
+    public static bool TryParseFontSynthesisLonghand(string value, out bool on)
+    {
+        switch ((value ?? string.Empty).Trim().ToLowerInvariant())
+        {
+            case "auto": on = true; return true;
+            case "none": on = false; return true;
+            default: on = false; return false;
+        }
+    }
+
+    private static FontSynthesisType SetFlag(FontSynthesisType flags, FontSynthesisType bit, bool on) =>
+        on ? flags | bit : flags & ~bit;
+
+    /// <summary>The computed value in the reference engine's canonical order. 'auto' is the
+    /// initial state but never the serialization — the engine lists the three categories.</summary>
+    public static string FormatFontSynthesis(FontSynthesisType synthesis)
+    {
+        if (synthesis == FontSynthesisType.None) return "none";
+        var parts = new List<string>(3);
+        if ((synthesis & FontSynthesisType.Weight) != 0) parts.Add("weight");
+        if ((synthesis & FontSynthesisType.Style) != 0) parts.Add("style");
+        if ((synthesis & FontSynthesisType.SmallCaps) != 0) parts.Add("small-caps");
+        return string.Join(' ', parts);
+    }
+
+    /// <summary>'contain-intrinsic-size': one or two per-axis sizes, optionally prefixed by
+    /// the remembered-size 'auto' that applies to both axes. A bare 'auto' is invalid (the
+    /// reference engine computes it to 'none'), as is any percentage.</summary>
+    private static void ApplyContainIntrinsicSize(ComputedStyle style, string value)
+    {
+        var tokens = (value ?? string.Empty).Trim().ToLowerInvariant()
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0) return;
+        int index = 0;
+        bool bothAuto = false;
+        if (tokens[0] == "auto")
+        {
+            bothAuto = true;
+            index = 1;
+            if (tokens.Length == 1) return;
+        }
+        int remaining = tokens.Length - index;
+        if (remaining is < 1 or > 2) return;
+        if (tokens.Any(t => t != "none" && t != "auto" && t.Contains('%'))) return;
+
+        var inlineAxis = ParseContainIntrinsicToken(tokens[index]);
+        var blockAxis = remaining == 2 ? ParseContainIntrinsicToken(tokens[index + 1]) : inlineAxis;
+        if (inlineAxis == null || blockAxis == null) return;
+        if (bothAuto)
+        {
+            inlineAxis = (inlineAxis.Value.Size, true);
+            blockAxis = (blockAxis.Value.Size, true);
+        }
+        SetContainIntrinsic(style, inlineAxis, blockAxis);
+    }
+
+    /// <summary>The four longhands. 'inline'/'block' are the logical pair and land on the
+    /// physical axis the writing mode selects; 'width'/'height' are unambiguous.</summary>
+    private static void ApplyContainIntrinsicAxis(ComputedStyle style, string axis, string value)
+    {
+        var tokens = (value ?? string.Empty).Trim().ToLowerInvariant()
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0) return;
+        int index = 0;
+        bool auto = false;
+        if (tokens[0] == "auto")
+        {
+            auto = true;
+            index = 1;
+            if (tokens.Length == 1) return;
+        }
+        if (tokens.Length - index != 1) return;
+        if (tokens[^1].Contains('%')) return;
+        var parsed = ParseContainIntrinsicToken(tokens[^1]);
+        if (parsed == null) return;
+        parsed = (parsed.Value.Size, parsed.Value.Auto || auto);
+        bool vertical = style.WritingMode is WritingModeType.VerticalRl or WritingModeType.VerticalLr;
+        switch (axis)
+        {
+            case "width": SetContainIntrinsic(style, parsed, null); break;
+            case "height": SetContainIntrinsic(style, null, parsed); break;
+            case "inline": SetContainIntrinsic(style, vertical ? null : parsed, vertical ? parsed : null); break;
+            default: SetContainIntrinsic(style, vertical ? parsed : null, vertical ? null : parsed); break;
+        }
+    }
+
+    /// <summary>One axis value: 'none', or a single non-percentage length. Anything else
+    /// (a garbage token, which <see cref="Length.Parse"/> reports as 'auto') is invalid and
+    /// makes the caller drop the whole declaration.</summary>
+    private static (Length? Size, bool Auto)? ParseContainIntrinsicToken(string token)
+    {
+        if (token == "none") return (null, false);
+        var length = Length.Parse(token);
+        return length is AutoLength or IntrinsicLength ? null : (length, false);
+    }
+
+    /// <summary>Null for an axis the caller does not touch; a non-null tuple with a null
+    /// <c>Size</c> is the explicit 'none', which resets the axis to no fallback.</summary>
+    private static void SetContainIntrinsic(ComputedStyle style,
+        (Length? Size, bool Auto)? inlineAxis, (Length? Size, bool Auto)? blockAxis)
+    {
+        if (inlineAxis != null)
+        {
+            style.ContainIntrinsicWidth = inlineAxis.Value.Size;
+            style.ContainIntrinsicWidthIsAuto = inlineAxis.Value.Auto;
+        }
+        if (blockAxis != null)
+        {
+            style.ContainIntrinsicHeight = blockAxis.Value.Size;
+            style.ContainIntrinsicHeightIsAuto = blockAxis.Value.Auto;
+        }
+    }
+
+    /// <summary>The computed text of the contain-intrinsic pair, e.g. 'auto 30px'.</summary>
+    public static string FormatContainIntrinsic(ComputedStyle style)
+    {
+        string Axis(Length? size, bool auto)
+        {
+            if (size == null) return auto ? "auto none" : "none";
+            return (auto ? "auto " : "") + size.ToCssString();
+        }
+        var inlineText = Axis(style.ContainIntrinsicWidth, style.ContainIntrinsicWidthIsAuto);
+        var blockText = Axis(style.ContainIntrinsicHeight, style.ContainIntrinsicHeightIsAuto);
+        return inlineText == blockText ? inlineText : $"{inlineText} {blockText}";
+    }
+
 
     public static ContentVisibilityType ParseContentVisibility(string value) => value.ToLowerInvariant() switch
     {

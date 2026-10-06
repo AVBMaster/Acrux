@@ -14,7 +14,7 @@ class Program
         };
 
         if (args.Length > 0 && args[0] is "--snapshot" or "--diff" or "--dumplayout" or "--computed"
-            or "--textops" or "--pixels" or "--anim" or "--rows")
+            or "--textops" or "--pixels" or "--anim" or "--rows" or "--hittest")
         {
             Environment.ExitCode = SnapshotCli.Run(args);
             return;
@@ -61,6 +61,16 @@ class Program
         if (args.Length > 0 && args[0] == "--tabtest")
         {
             Environment.ExitCode = TabConcurrencySelfTest.Run();
+            return;
+        }
+
+        // Every headless channel is dispatched above, and the GUI takes at most a URL, so an
+        // unrecognised '--' flag used to fall through and open a window with nothing to show:
+        // a typo in a script became a hang. Print the channel list instead and fail.
+        if (args.Length > 0 && args[0].StartsWith("--", StringComparison.Ordinal))
+        {
+            Log($"[Main] Unknown option: {args[0]}");
+            Environment.ExitCode = SnapshotCli.Run(["--usage"]);
             return;
         }
 

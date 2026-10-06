@@ -212,15 +212,7 @@ public class MmapTransport : IDisposable
             throw new InvalidOperationException($"Message too large: {len}");
 
         var deadline = DateTime.UtcNow + timeout;
-        var sw = new SpinWait();
-        while (DateTime.UtcNow < deadline)
-        {
-            var sync = new byte[4];
-            _outView.ReadArray<byte>(SyncOffset, sync, 0, 4);
-            if (BitConverter.ToInt32(sync, 0) == StateIdle) break;
-            sw.SpinOnce();
-        }
-        if (DateTime.UtcNow >= deadline)
+        if (!WaitSync(_outView, StateIdle, deadline))
         {
             ResetSyncToIdle(_outView);
             var sync = new byte[4];
@@ -256,14 +248,7 @@ public class MmapTransport : IDisposable
         if (len > MaxMsgSize) return;
 
         var deadline = DateTime.UtcNow + TimeSpan.FromMilliseconds(100);
-        var sw = new SpinWait();
-        while (DateTime.UtcNow < deadline)
-        {
-            var sync = new byte[4];
-            _outView.ReadArray<byte>(SyncOffset, sync, 0, 4);
-            if (BitConverter.ToInt32(sync, 0) == StateIdle) break;
-            sw.SpinOnce();
-        }
+        WaitSync(_outView, StateIdle, deadline);
 
         ResetSyncToIdle(_outView);
 
@@ -289,21 +274,9 @@ public class MmapTransport : IDisposable
         var len = data.Length;
         if (len > MaxMsgSize) return;
 
-        // 内联自旋：先快速轮询 10 次（约几微秒），再降速到 Thread.Sleep
+        // 梯度退避等待通道空闲（最多 100ms），快路径仍是紧密自旋
         var deadline = DateTime.UtcNow + TimeSpan.FromMilliseconds(100);
-        var pollCount = 0;
-        while (DateTime.UtcNow < deadline)
-        {
-            var sync = new byte[4];
-            _outView.ReadArray<byte>(SyncOffset, sync, 0, 4);
-            if (BitConverter.ToInt32(sync, 0) == StateIdle) break;
-            pollCount++;
-            if (pollCount > 20)
-            {
-                Thread.Sleep(1);
-                pollCount = 0;
-            }
-        }
+        WaitSync(_outView, StateIdle, deadline);
 
         // 超时则强制重置通道，确保不卡死
         ResetSyncToIdle(_outView);
@@ -328,30 +301,48 @@ public class MmapTransport : IDisposable
         catch { }
     }
 
+    /// <summary>
+    /// 等待同步标志变为 expected。梯度退避：先紧密自旋（约百微秒，保证突发消息
+    /// 间延迟仍是亚毫秒级），再 1ms 短睡，最后 10ms——空闲时的常驻接收循环
+    /// 几乎不耗 CPU，而旧实现以 ~1ms 节奏永久轮询。
+    /// </summary>
+    private static bool WaitSync(MemoryMappedViewAccessor view, int expected, DateTime deadline, CancellationToken ct = default)
+    {
+        var sync = new byte[4];
+        int spins = 0;
+        while (DateTime.UtcNow < deadline)
+        {
+            view.ReadArray<byte>(SyncOffset, sync, 0, 4);
+            if (BitConverter.ToInt32(sync, 0) == expected) return true;
+            if (ct.IsCancellationRequested) return false;
+            spins++;
+            if (spins <= 1000)
+            {
+                // tight spin — fast path for back-to-back messages
+            }
+            else if (spins <= 1010) Thread.Sleep(1);
+            else if (spins <= 1030) Thread.Sleep(5);
+            else Thread.Sleep(10);
+        }
+        return false;
+    }
+
     public async Task<byte[]> ReceiveAsync(CancellationToken ct = default)
     {
         if (_disposed || _inView == null)
             return Array.Empty<byte>();
 
         var deadline = DateTime.UtcNow.AddSeconds(10);
-        var sw = new SpinWait();
-        while (DateTime.UtcNow < deadline && !ct.IsCancellationRequested)
+        if (!WaitSync(_inView, StateReady, deadline, ct))
         {
+            if (ct.IsCancellationRequested)
+                throw new OperationCanceledException("[MmapTransport] Cancelled during ReceiveAsync");
+            ResetSyncToIdle(_inView);
             var sync = new byte[4];
             _inView.ReadArray<byte>(SyncOffset, sync, 0, 4);
-            if (BitConverter.ToInt32(sync, 0) == StateReady) break;
-            sw.SpinOnce();
+            var finalState = BitConverter.ToInt32(sync, 0);
+            throw new TimeoutException($"ReceiveAsync: timeout waiting for Ready (final_state={finalState})");
         }
-    if (ct.IsCancellationRequested)
-        throw new OperationCanceledException("[MmapTransport] Cancelled during ReceiveAsync");
-    if (DateTime.UtcNow >= deadline)
-    {
-        ResetSyncToIdle(_inView);
-        var sync = new byte[4];
-        _inView.ReadArray<byte>(SyncOffset, sync, 0, 4);
-        var finalState = BitConverter.ToInt32(sync, 0);
-        throw new TimeoutException($"ReceiveAsync: timeout waiting for Ready (final_state={finalState})");
-    }
 
         var header = new byte[HeaderSize];
         int? len = null;
@@ -396,22 +387,14 @@ public class MmapTransport : IDisposable
             return (false, Array.Empty<byte>());
 
         var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
-        var sw = new SpinWait();
-        while (DateTime.UtcNow < deadline && !ct.IsCancellationRequested)
+        if (!WaitSync(_inView, StateReady, deadline, ct))
         {
-            var sync = new byte[4];
-            _inView.ReadArray<byte>(SyncOffset, sync, 0, 4);
-            if (BitConverter.ToInt32(sync, 0) == StateReady) break;
-            sw.SpinOnce();
+            if (ct.IsCancellationRequested)
+                return (false, Array.Empty<byte>());
+            // 超时（空闲）：重置同步标志，避免后续 SendAsync 卡死
+            ResetSyncToIdle(_inView);
+            return (false, Array.Empty<byte>());
         }
-    if (ct.IsCancellationRequested)
-        return (false, Array.Empty<byte>());
-    if (DateTime.UtcNow >= deadline)
-    {
-        // 超时（空闲）：重置同步标志，避免后续 SendAsync 卡死
-        ResetSyncToIdle(_inView);
-        return (false, Array.Empty<byte>());
-    }
 
         var header = new byte[HeaderSize];
         int? len = null;

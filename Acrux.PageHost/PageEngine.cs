@@ -62,6 +62,16 @@ public sealed class PageEngine : IDisposable
     // A shadow, outline or blur paints outside the box by an amount the geometry does
     // not carry, so the estimate below has nothing to test against.
     private bool _animBleeds;
+
+    // Cached AnimDamageVisible verdict (see the method): valid until the next style
+    // or layout recompute, keyed also on scroll position and viewport.
+    private bool _animDamageCached;
+    private bool _animDamageResult;
+    private long _layoutGeneration;
+    private long _animDamageLayoutGen;
+    private float _animDamageScrollX, _animDamageScrollY;
+    private float _animDamageViewportW, _animDamageViewportH;
+    private int _animDamageTargets;
     // Set by the sample that observed the last effect retire, which is what asks the
     // pipeline for its extra style round (see RunPipeline).
     private bool _animEffectsEnded;
@@ -1987,6 +1997,13 @@ public sealed class PageEngine : IDisposable
             _animNeedsRepaint = result.NeedsRepaint;
             _animTargets = result.RepaintTargets;
             _animBleeds = result.RepaintBleeds;
+            // A transform tick moves painted pixels without touching any of the
+            // generations the damage cache keys on — the cached verdict is stale
+            // the moment this is set (a slide-in parked as "off screen" is on
+            // screen now). Recompute it every such frame; opacity-only effects
+            // keep the cache and stay cheap.
+            if (result.AnimatesGeometry)
+                _animDamageCached = false;
             _lastSampleTimelineMs = _animations.Timeline.CurrentTimeMs;
             if (_animTrace)
             {
@@ -1996,7 +2013,8 @@ public sealed class PageEngine : IDisposable
                         $"tab{_id} t={_animations.Timeline.CurrentTimeMs:F1}ms " +
                         $"kf={_styleComputer.CollectKeyframeRules().Count} " +
                         $"active={result.HasActiveAnimations} effects={_animations.ActiveEffectCount} " +
-                        $"animated={result.AnimatedElements} layout={result.NeedsLayout}\n");
+                        $"animated={result.AnimatedElements} layout={result.NeedsLayout} " +
+                        $"live={_animations.DescribeActiveEffectsForDiagnostics()}\n");
                 }
                 catch { }
             }
@@ -2022,6 +2040,11 @@ public sealed class PageEngine : IDisposable
     /// subtree over budget — counts as visible, because the answer only ever skips work and
     /// must never be wrong in the direction that drops pixels.
     /// </summary>
+        // TEMP bisect (residue hunt): ACRUX_NO_DAMAGE_CACHE=1 disables the verdict
+        // cache so the parked decision recomputes every pass, as before.
+        private readonly bool _damageCacheDisabled =
+            Environment.GetEnvironmentVariable("ACRUX_NO_DAMAGE_CACHE") == "1";
+
     private bool AnimDamageVisible()
     {
         // Shadow spread, outline offset and blur put pixels outside the box by an amount
@@ -2031,6 +2054,34 @@ public sealed class PageEngine : IDisposable
         var targets = _animTargets;
         if (targets == null || targets.Count == 0) return true;
 
+        if (_damageCacheDisabled) return ComputeAnimDamageVisible(targets);
+
+        // The walk below re-derives the whole painted area of every animated subtree —
+        // with a transform parse per box — and an opacity pulse asks the SAME question
+        // once per animation sample forever. The answer only depends on geometry, style
+        // and scroll position; both invalidation points (style/layout recompute, the
+        // scroll terms in the key) make a cached answer safe, and a stale one could only
+        // ever mis-park, which the next scroll or style pass corrects.
+        if (_animDamageCached && _animDamageLayoutGen == _layoutGeneration &&
+            _animDamageScrollX == _scrollX && _animDamageScrollY == _scrollY &&
+            _animDamageViewportW == _viewportW && _animDamageViewportH == _viewportH &&
+            _animDamageTargets == targets.Count)
+            return _animDamageResult;
+
+        bool result = ComputeAnimDamageVisible(targets);
+        _animDamageCached = true;
+        _animDamageResult = result;
+        _animDamageLayoutGen = _layoutGeneration;
+        _animDamageScrollX = _scrollX;
+        _animDamageScrollY = _scrollY;
+        _animDamageViewportW = _viewportW;
+        _animDamageViewportH = _viewportH;
+        _animDamageTargets = targets.Count;
+        return result;
+    }
+
+    private bool ComputeAnimDamageVisible(IReadOnlyList<Element> targets)
+    {
         float x0 = _scrollX, y0 = _scrollY, x1 = _scrollX + _viewportW, y1 = _scrollY + _viewportH;
         for (int i = 0; i < targets.Count; i++)
         {
@@ -2189,6 +2240,9 @@ public sealed class PageEngine : IDisposable
                 _styleComputer.ComputeStyles(_document, _viewportW, _viewportH);
                 _stStylePass++;
                 _styleDirty = false;
+                // Style can change transforms and box-affecting values without a
+                // layout pass; the cached damage verdict is only good until then.
+                _layoutGeneration++;
                 tStyle = _animTrace ? Stopwatch.GetTimestamp() : t0;
             }
 
@@ -2239,6 +2293,7 @@ public sealed class PageEngine : IDisposable
             _incremental ??= new IncrementalLayoutEngine(_layoutEngine, _layoutCache);
             _incremental.Layout(_document, _viewportW, _viewportH, _dpi, 16f);
             _layoutDirty = false;
+            _layoutGeneration++;
 
             var bodyBox = _document.Body?.LayoutBox;
             _contentW = bodyBox?.BorderBox.Width ?? _viewportW;

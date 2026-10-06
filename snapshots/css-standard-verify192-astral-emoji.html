@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 192 — astral characters: colour emoji, surrogate pairs, per-code-point fallback (CSS Fonts 4 §5.2, Unicode)</title>
+<style>
+/* The defects this page guards were invisible in the old pixel baseline: an astral
+   character arrives as a SURROGATE PAIR, and every layer that walked UTF-16 units
+   asked the font about half a character. Measurement answered "no glyph" for both
+   halves (so an emoji run collapsed to 12px of .notdef, or to 0) while the paint side
+   resolved its "emoji face" through SKFontManager.GetFontStyles(familyIndex) — an index
+   into the FONT list, not the family list — and got Nimbus Sans, which has no colour
+   strike: the emoji painted nothing at all. */
+body { font-family: Arial, sans-serif; margin: 20px; font-size: 16px; }
+h2 { background: #eee; padding: 4px; margin: 16px 0 6px; font-size: 16px; }
+.row { border: 1px dashed #999; padding: 4px; margin: 6px 0; background: #fff; }
+.big { font-size: 32px; }
+.mono { font-family: monospace; }
+.bold { font-weight: bold; }
+<i>/* italic + astral: the styled-typeface match must not change the family */</i>
+.it { font-style: italic; }
+</style>
+</head>
+<body>
+
+<h2>1. a lone emoji occupies one em, not a .notdef pair</h2>
+<div class="row" id="r1">😀</div>
+
+<h2>2. emoji between letters keeps the letters at their own advances</h2>
+<div class="row" id="r2">x😀x</div>
+
+<h2>3. three emoji (two distinct pairs)</h2>
+<div class="row" id="r3">😀🎉😀</div>
+
+<h2>4. emoji at 32px scales its strike</h2>
+<div class="row big" id="r4">😀🎉</div>
+
+<h2>5. emoji inside bold / italic / monospace contexts</h2>
+<div class="row bold" id="r5">bold😀text</div>
+<div class="row it" id="r6">italic😀text</div>
+<div class="row mono" id="r7">mono😀text</div>
+
+<h2>6. astral CJK extension (surrogate pair, non-emoji) must not take the emoji face</h2>
+<div class="row" id="r8">𠀀𠀁 tail</div>
+
+<h2>7. BMP symbols keep their outline fallback</h2>
+<div class="row" id="r9">⚡✂→∑√ ✓</div>
+
+<h2>8. family lookup must not answer a different family</h2>
+<div class="row" id="r10"><span style="font-family:'No Such Font At All 12345'">fallback text 😀</span></div>
+
+</body>
+</html>

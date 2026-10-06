@@ -336,6 +336,13 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
             {
                 var inlineResult = new InlineLayoutAlgorithm(Node, contentSpace, this).Layout();
                 allLines = new List<BoxLine>(inlineResult.Fragment.Lines);
+                // That pass anchors its line boxes on the node's own border box, but the
+                // column machinery measures a fragmentainer from the START of the flow:
+                // leaving the block-start strut in made the balanced height one strut
+                // too tall and the columns shorter than the box (b191 §2-§5: 51px where
+                // a reference browser reports 46px). It is re-applied when the columns
+                // are merged into the container.
+                RebaseLinesToFlowStart(allLines);
             }
             else
             {
@@ -361,7 +368,11 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
         bool definiteHeight = Style.ColumnFill() == EColumnFill.Auto && Style.Height is not AutoLength && _columnBlockSize > 0;
         float columnBlockSize = definiteHeight
             ? _columnBlockSize
-            : BalancedColumnBlockSize(allLines, colCount);
+            // The orphans floor only models a single continuous block; with several
+            // blocks in the flow the rule is per block, which needs the block identity
+            // per line that the flat line list does not carry.
+            : BalancedColumnBlockSize(allLines, colCount,
+                orphansFloor: Node.IsInlineFormattingContextRoot() ? Style.Orphans : 0);
 
         var columnFragments = DistributeLinesToColumns(allLines, columnBlockSize, colInlineSize, colProgression,
             colCount, bp, blockOffsetBase: 0, flowTotalBlock: flowBlock);
@@ -407,7 +418,12 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
         var result = LayoutResult.FromFragment(fragment);
         result.IntrinsicBlockSize = _intrinsicBlockSize;
         result.BfcLineOffset = Space.GetBfcOffset().LineOffset;
-        result.BfcBlockOffsetValue = Space.ForcedBfcBlockOffset ?? Space.GetBfcOffset().BlockOffset;
+        // Mirror the block path's NextBorderEdge: the incoming estimate does not carry
+        // the parent's pending margin strut, so a multicol that is its container's FIRST
+        // child reported the pre-collapse offset and got placed at the page edge — the
+        // body's propagated 20px vanished (b191 / #181).
+        result.BfcBlockOffsetValue = Space.ForcedBfcBlockOffset
+            ?? Space.GetBfcOffset().BlockOffset + Space.MarginStrut.Sum;
         return result;
     }
 
@@ -496,6 +512,25 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
             flowBlockSize = flowBlock + trailingMargin;
         }
         return lines;
+    }
+
+    /// <summary>Move a laid-out flow onto a zero origin, so the balance search and the
+    /// fragmentainer fill both measure from the flow's own start.</summary>
+    private static void RebaseLinesToFlowStart(List<BoxLine> lines)
+    {
+        if (lines.Count == 0) return;
+        float start = lines[0].BlockOffset;
+        if (start == 0) return;
+        foreach (var line in lines)
+        {
+            line.BlockOffset -= start;
+            line.BaselineOffset -= start;
+            foreach (var run in line.Runs)
+            {
+                run.BlockOffset -= start;
+                run.BaselineOffset -= start;
+            }
+        }
     }
 
     /// <summary>CSS 2.1 §10.5.3 for one pair of adjacent block-level margins.</summary>
@@ -650,7 +685,12 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
         var result = LayoutResult.FromFragment(fragment);
         result.IntrinsicBlockSize = _intrinsicBlockSize;
         result.BfcLineOffset = Space.GetBfcOffset().LineOffset;
-        result.BfcBlockOffsetValue = Space.ForcedBfcBlockOffset ?? Space.GetBfcOffset().BlockOffset;
+        // Mirror the block path's NextBorderEdge: the incoming estimate does not carry
+        // the parent's pending margin strut, so a multicol that is its container's FIRST
+        // child reported the pre-collapse offset and got placed at the page edge — the
+        // body's propagated 20px vanished (b191 / #181).
+        result.BfcBlockOffsetValue = Space.ForcedBfcBlockOffset
+            ?? Space.GetBfcOffset().BlockOffset + Space.MarginStrut.Sum;
         return result;
     }
 
@@ -692,7 +732,7 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
     /// says whether lines were left over, i.e. whether the height was too small.
     /// </summary>
     private static bool PlanColumnFills(List<BoxLine> lines, float fragmentainerBlockSize, int colCount,
-        List<(int Start, int End)> fills, List<float>? leadingMargins = null)
+        List<(int Start, int End)> fills, List<float>? leadingMargins = null, int orphansFloor = 0)
     {
         fills.Clear();
         float flowOrigin = 0;
@@ -715,6 +755,20 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
             flowOrigin = lines[idx - 1].BlockEnd;
             fills.Add((start, idx));
         }
+        if (idx >= lines.Count && orphansFloor > 1 && fills.Count > 1)
+        {
+            // CSS Fragmentation 1 §3.3 through a reference browser's column balance: a
+            // fragmentainer that CONTINUES a block has to keep at least 'orphans' lines
+            // of it. Measured on b191 §6: three lines over three columns is a legal
+            // 1/1/1 split geometrically, and Chrome still returns 2/1 (box 46px, not
+            // 28px) — with 'orphans: 1; widows: 1' it returns exactly our 1/1/1. So the
+            // height is only accepted once every non-final fragmentainer clears the
+            // floor; the final one may hold the remainder ('widows' is not applied to
+            // balancing, which the same measurement shows).
+            for (int f = 0; f < fills.Count - 1; f++)
+                if (fills[f].End - fills[f].Start < orphansFloor)
+                    return true;
+        }
         return idx < lines.Count;
     }
 
@@ -729,7 +783,7 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
     /// taller than its neighbours.
     /// </summary>
     private static float BalancedColumnBlockSize(List<BoxLine> lines, int colCount,
-        List<float>? leadingMargins = null)
+        List<float>? leadingMargins = null, int orphansFloor = 0)
     {
         if (lines.Count == 0 || colCount <= 1)
             return lines.Count > 0 ? lines[^1].BlockEnd : 0;
@@ -740,7 +794,7 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
             return 0;
 
         var fills = new List<(int Start, int End)>();
-        if (!PlanColumnFills(lines, low, colCount, fills, leadingMargins))
+        if (!PlanColumnFills(lines, low, colCount, fills, leadingMargins, orphansFloor))
             return low;
 
         // Monotone in the height: a taller fragmentainer never needs more columns,
@@ -751,7 +805,7 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
             float mid = MathF.Ceiling((low + high) / 2f);
             if (mid <= low || mid >= high)
                 break;
-            if (PlanColumnFills(lines, mid, colCount, fills, leadingMargins))
+            if (PlanColumnFills(lines, mid, colCount, fills, leadingMargins, orphansFloor))
                 low = mid;
             else
                 high = mid;
@@ -773,9 +827,12 @@ public class ColumnLayoutAlgorithm : LayoutAlgorithm
         // column's fill from the first line placed in it (the old behaviour) hid the
         // flow's leading margin, so a fixed-height multicol over-filled its first
         // column by exactly that margin (CSS Multi-Column 1 §3.2: a fragmentainer
-        // holds at most its block-size worth of flow). The set's own flow starts at
-        // zero; |blockOffsetBase| is only where the rebased column lands, so it must
-        // not enter the measurement.
+        // holds at most its block-size worth of flow). |blockOffsetBase| is only where
+        // the rebased column lands, so it must not enter the measurement — but the
+        // flow's own start must not: a block flow begins at its first child's
+        // block-start margin, which is real content height (b166 §9). The inline case
+        // is rebased to zero by the caller instead, because there the offset is the
+        // container's own border+padding and not part of the flow.
         float flowOrigin = 0;
         for (int c = 0; c < colCount && idx < allLines.Count; c++)
         {

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 204 - hyphenate-character (CSS Text 4 §5.1)</title>
+<style>
+/* The mark drawn at a soft-hyphen break is a PROPERTY, not a fixed '-'. Before this
+   batch 'hyphenate-character' had a property id but no applier case, so every
+   declaration was dropped and the engine always drew '-'.
+
+   Rules measured in Edge (dpr 1, viewport 383), all boxes 46px wide with the source
+   "un&shy;derstand" at 20px/26px Arial, reading the width of the break mark:
+     h1 no declaration          mark '-'   6.67   hyphenate-character: auto
+     h2 auto                    mark '-'   6.67
+     h3 none                    mark '-'   6.67   'none' is NOT a value -> invalid,
+                                                  dropped, so it stays 'auto'
+     h4 "="                     mark '='  11.69
+     h5 "\2192"                 mark '→'  20.00   escape decoded
+     h6 ">>"                    mark '>>' 23.36   multi-character marks are allowed
+     h7 "-"                     mark '-'   6.67   explicit equals the default
+   All seven boxes are 54px tall (three client rects: "un", the mark, "derstand"),
+   so the property changes only the mark, never the break opportunity.
+   Our engine after the fix measures the mark PER CHARACTER against the breaking
+   element's own font, giving 7.0 / 12.0 / 20.0 / 24.0 — the same ranking and the
+   same strings, with the residual sub-pixel gap documented as gap #188 (hinted
+   advances).
+     h8 inheritance: '%' on the parent, child computes '%' too and the break draws
+        a mark 18.0 wide (Edge 17.80). Before the fix the child computed 'auto'.
+     h9 empty string: Edge keeps the break and gives a 0.00-wide mark; we emit no
+        mark run at all, which is the same rendered result ('un' / 'derstand').
+
+   FOUND WHILE VERIFYING INHERITANCE: StyleResolver.InheritProperties and
+   CascadeResolver.InheritProperties are two copies of the same rule and the live one
+   had drifted behind — 'hyphens', 'line-break', 'text-justify', 'text-rendering',
+   'text-wrap', 'orphans', 'widows', 'writing-mode' and 'text-shadow' were never
+   copied to a child, so setting any of them on an ancestor was silently ignored.
+   All nine are now inherited here; merging the two lists is registered as a gap.
+*/
+body { font: 20px/26px Arial, sans-serif; margin: 8px; color: #111; background: #fff; }
+.box { width: 46px; border: 1px solid #888; background: #efe; margin: 6px 0; }
+.auto { hyphenate-character: auto; }
+.none { hyphenate-character: none; }
+.eq { hyphenate-character: "="; }
+.arrow { hyphenate-character: "\2192"; }
+.two { hyphenate-character: ">>"; }
+.dash { hyphenate-character: "-"; }
+.empty { hyphenate-character: ""; }
+.inherit-owner { hyphenate-character: "%"; }
+</style>
+</head>
+<body>
+<div id="h1" class="box">un&shy;derstand</div>
+<div id="h2" class="box auto">un&shy;derstand</div>
+<div id="h3" class="box none">un&shy;derstand</div>
+<div id="h4" class="box eq">un&shy;derstand</div>
+<div id="h5" class="box arrow">un&shy;understand</div>
+<div id="h6" class="box two">un&shy;derstand</div>
+<div id="h7" class="box dash">un&shy;derstand</div>
+<div id="h8" class="box inherit-owner"><span id="h8c">un&shy;derstand</span></div>
+<div id="h9" class="box empty">un&shy;derstand</div>
+
+</body>
+</html>

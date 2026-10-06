@@ -119,7 +119,14 @@ public class StyleResolver
 
     private void ResolveTree(Element element, ComputedStyle? parent)
     {
-        var style = ResolveStyle(element, parent);
+        // A generated box (::before / ::after / a floated ::first-letter) has no selector that
+        // can match it: its style was built when the box was created, from the originating
+        // element's clone plus the pseudo-element's own declarations. Re-resolving it here would
+        // find no rule at all and quietly replace that style with plain inheritance, which
+        // drops every declaration except the inherited ones (font-size, position, background).
+        var style = element.IsGeneratedPseudoElement && element.ComputedStyle != null
+            ? element.ComputedStyle
+            : ResolveStyle(element, parent);
         foreach (var child in element.Children)
         {
             if (child is Element childEl)
@@ -570,7 +577,8 @@ public class StyleResolver
         "border-top" or "border-right" or "border-bottom" or "border-left" or "border" or "margin-block" or
         "margin-inline" or "padding-block" or "padding-inline" or "inset" or "gap" or "background" or
         "font" or "font-variant" or "flex" or "flex-flow" or "outline" or "text-decoration" or "text-emphasis" or "columns" or
-        "column-rule" or "animation" or "transition" or "grid-area" or "grid-column" or "grid-row" or "mask" => true,
+        "column-rule" or "animation" or "transition" or "grid-area" or "grid-column" or "grid-row" or "mask" or
+        "white-space" or "text-wrap" or "overflow" or "contain-intrinsic-size" => true,
         _ => false
     };
 
@@ -681,54 +689,11 @@ public class StyleResolver
 
     private static void InheritProperties(ComputedStyle style, ComputedStyle parent)
     {
-        style.Color = parent.Color;
-        style.FontFamily = parent.FontFamily;
-        style.FontSize = parent.FontSize;
-        style.FontWeight = parent.FontWeight;
-        style.FontStyle = parent.FontStyle;
-        style.LineHeight = parent.LineHeight;
-        // 'line-height' inherits its computed value, so the 'normal' flag and any
-        // absolute length must travel with the multiplier.
-        style.LineHeightIsNormal = parent.LineHeightIsNormal;
-        style.LineHeightPx = parent.LineHeightPx;
-        style.TextAlign = parent.TextAlign;
-        style.TextAlignLast = parent.TextAlignLast;
-        style.Visibility = parent.Visibility;
-        style.WhiteSpace = parent.WhiteSpace;
-        style.TabSize = parent.TabSize;
-        style.TabSizePx = parent.TabSizePx;
-        style.Direction = parent.Direction;
-        style.TextTransform = parent.TextTransform;
-        // Inherited table properties: caption placement, empty-cell rendering and
-        // the border model must flow from the table to rows/cells (CSS 2.1 §17.6).
-        // A cell that does not know the table collapses its borders would add its
-        // own full border widths, double-counting every shared edge.
-        style.CaptionSide = parent.CaptionSide;
-        style.EmptyCells = parent.EmptyCells;
-        style.BorderCollapse = parent.BorderCollapse;
-        style.BorderSpacing = parent.BorderSpacing;
-        style.BorderRowSpacing = parent.BorderRowSpacing;
-        style.LetterSpacing = parent.LetterSpacing;
-        style.WordSpacing = parent.WordSpacing;
-        style.TextIndent = parent.TextIndent;
-        style.TextIndentHanging = parent.TextIndentHanging;
-        style.TextIndentEachLine = parent.TextIndentEachLine;
-        style.TextIndentPercent = parent.TextIndentPercent;
-        style.Cursor = parent.Cursor;
-        style.ListStyleType = parent.ListStyleType;
-        style.ListStyleTypeString = parent.ListStyleTypeString;
-        style.ListStyleTypeName = parent.ListStyleTypeName;
-        style.ListStylePosition = parent.ListStylePosition;
-        style.WordBreak = parent.WordBreak;
-        style.OverflowWrap = parent.OverflowWrap;
-        style.FontVariant = parent.FontVariant;
-        style.FontVariantCaps = parent.FontVariantCaps;
-        style.FontKerning = parent.FontKerning;
-        style.FontStretch = parent.FontStretch;
-        // 'quotes' is inherited so descendants' open-quote/close-quote resolve
-        // against the same quote set (CSS GCP §4.1).
-        style.Quotes = parent.Quotes;
+        // Single definition lives in CssInheritance; this used to be a second, drifting copy
+        // that had lost twenty-four inherited properties.
+        Acrux.Core.Css.CssInheritance.Apply(style, parent);
     }
+
 
     private static void CollectNonDefaultProperties(ComputedStyle source, CssPropertyValueSet target)
     {

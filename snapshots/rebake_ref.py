@@ -2,7 +2,9 @@
 keeping the previous image as evidence. Usage: python rebake_ref.py 137 138 134"""
 import glob, os, re, shutil, struct, subprocess, sys
 
-EXE = "./Acrux/bin/Debug/net10.0-windows/Acrux.exe"
+import _acrux_cli as cli
+
+ENV = cli.environment()
 
 
 def dims(path):
@@ -40,7 +42,7 @@ for num in sys.argv[1:]:
         css_w, css_h = (w * 100 // 125, h * 100 // 125) if dpi == 1.25 else (w, h)
         evidence = os.path.join("snapshots/out", f"old-b{num}-{os.path.basename(page)[26:-5]}.png")
         shutil.copy(ref, evidence)
-        before = subprocess.run([EXE, "--diff", ref, ref], capture_output=True, text=True).stdout
-        subprocess.run([EXE, "--snapshot", page, ref, str(css_w), str(css_h), str(dpi)],
-                       capture_output=True, text=True)
+        subprocess.run(cli.command(["--diff", ref, ref]), capture_output=True, text=True, env=ENV)
+        subprocess.run(cli.command(["--snapshot", page, ref, str(css_w), str(css_h), str(dpi)]),
+                       capture_output=True, text=True, env=ENV)
         print(f"b{num} {os.path.basename(ref)}: {css_w}x{css_h}@{dpi} (old kept as {os.path.basename(evidence)})")

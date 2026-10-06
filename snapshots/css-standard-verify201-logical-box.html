@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 201 - logical box properties under direction (CSS Logical Properties 1 §2, §4)</title>
+<style>
+/* A logical property addresses an EDGE, not a side: with 'direction: rtl' inline-start
+   is the RIGHT edge (CSS Logical Properties 1 §2). The engine used to translate logical
+   names to left/right while reading the declaration, so it answered with whatever
+   'direction' happened to be set at that moment and never re-mapped it. Measured in
+   Edge (dpr 1, viewport 445), getComputedStyle + geometry:
+
+     a2 .m1.rtl      margin-inline-start:20  -> marginLeft 0,  marginRight 20
+     a3 .m2.rtl      margin-inline-end:7     -> marginLeft 7,  marginRight 0
+     a4 .m3.rtl      margin-inline:20px 7px  -> marginLeft 7,  marginRight 20
+     a5 .m4          margin-inline:11px      -> marginLeft 11, marginRight 11 (one value = both)
+     a6 .p1.rtl      padding-inline-start:20 -> paddingRight 20, paddingLeft 0
+     a7 .p2.rtl      padding-inline:20px 7px -> paddingLeft 7,  paddingRight 20
+     a8 .b1.rtl      border-inline-start:4px solid red  -> RIGHT border 4 solid, left 0 none
+     a9 .b2.rtl      border-inline:3px solid blue       -> BOTH inline sides 3 solid blue
+     a10 .b3         border-inline-start-width/-style/-color longhands -> left 6 dashed green
+     a11 .b4         border-block-start:5px solid cyan  -> top 5, bottom 0
+     a12 .b5         border-block:2px solid magenta     -> top 2 AND bottom 2, height 20 = 16+2+2
+     a15             { margin-inline-start:13px; direction:rtl } -> marginRight 13
+                     (the direction authored AFTER the logical property still flips it)
+     a16             inline-size:111px block-size:33px  -> 111 x 33
+
+   Before this round a9/a12 and the whole border-inline-* / border-block-* component
+   family were dropped silently (the property ids exist but the applier had no case),
+   and a2/a3/a4/a6/a7/a8/a15 put the value on the wrong edge.
+
+   KNOWN RESIDUAL (#205): a13/a14 mix a logical property with the physical longhand it
+   aliases in one rule. Edge resolves that by authoring order (a13 -> 10, a14 -> 5) but
+   the cascade picks a winner per property id and then walks ids in enum order, so the
+   two names never compete in source order; we answer 10 for both.
+*/
+body { font: 12px/16px Arial, sans-serif; margin: 8px; color: #111; background: #fff; }
+div { background: #ddd; }
+.rtl { direction: rtl; }
+.m1 { margin-inline-start: 20px; }
+.m2 { margin-inline-end: 7px; }
+.m3 { margin-inline: 20px 7px; }
+.m4 { margin-inline: 11px; }
+.p1 { padding-inline-start: 20px; }
+.p2 { padding-inline: 20px 7px; }
+.b1 { border-inline-start: 4px solid rgb(255, 0, 0); }
+.b2 { border-inline: 3px solid rgb(0, 0, 255); }
+.b3 { border-inline-start-width: 6px; border-inline-start-style: dashed; border-inline-start-color: rgb(0, 128, 0); }
+.b4 { border-block-start: 5px solid rgb(0, 200, 200); }
+.b5 { border-block: 2px solid rgb(200, 0, 200); }
+.b6 { border-inline-end-width: 3px; border-inline-end-style: solid; border-inline-end-color: rgb(0, 0, 200); }
+.b7 { border-block-color: rgb(10, 100, 10) rgb(20, 20, 200); border-block-width: 4px; border-block-style: solid; }
+.i1 { position: relative; inset-inline-start: 12px; }
+.a1 { margin-inline-start: 10px; all: initial; }
+.mix1 { margin-left: 5px; margin-inline-start: 10px; }
+.mix2 { margin-inline-start: 10px; margin-left: 5px; }
+.order1 { margin-inline-start: 13px; direction: rtl; }
+.sized { inline-size: 111px; block-size: 33px; }
+.inherit-rtl-parent { direction: rtl; }
+/* Sentinel cases for gap #206 (RTL block placement) — see the comment in section 5. */
+.c { width: 400px; }
+.css-rtl { direction: rtl; }
+.k100 { width: 100px; }
+.mr20 { margin-right: 20px; }
+.parent-rtl { direction: rtl; }
+</style>
+</head>
+<body>
+
+<h2>1. margins on the inline edges, LTR then RTL</h2>
+<div id="a1x" class="m1">LTR start 20</div>
+<div id="a2" class="m1 rtl">RTL start 20</div>
+<div id="a3" class="m2 rtl">RTL end 7</div>
+<div id="a4" class="m3 rtl">RTL inline 20 7</div>
+<div id="a5" class="m4">LTR inline 11</div>
+
+<h2>2. padding</h2>
+<div id="a6" class="p1 rtl">RTL padding start 20</div>
+<div id="a7" class="p2 rtl">RTL padding inline 20 7</div>
+
+<h2>3. borders: the per-side shorthand and the component longhands</h2>
+<div id="a8" class="b1 rtl">RTL border-inline-start</div>
+<div id="a9" class="b2 rtl">RTL border-inline</div>
+<div id="a10" class="b3">border-inline-start components</div>
+<div id="a10b" class="b6 rtl">RTL border-inline-end components</div>
+<div id="a11" class="b4">border-block-start</div>
+<div id="a12" class="b5">border-block</div>
+<div id="a12b" class="b7">border-block two-value color</div>
+
+<h2>4. inset, all-reset, alias order, inherited direction, sized</h2>
+<div id="a14a" class="i1 rtl">RTL inset-inline-start 12</div>
+<div id="a1" class="a1">margin-inline-start then all:initial</div>
+<div id="a13" class="mix1">left 5 then start 10 (#205)</div>
+<div id="a14" class="mix2">start 10 then left 5 (#205)</div>
+<div id="a15" class="order1">start 13 then direction rtl</div>
+<div id="a16" class="sized">inline/block size</div>
+<div class="inherit-rtl-parent"><div id="a17" class="m1">child of RTL parent, start 20 (Edge x=8; see #206)</div></div>
+<h2>5. RTL block placement — PRE-EXISTING ENGINE DEFECT, recorded as sentinels</h2>
+<!-- These two cases are NOT about logical properties: they fail with physical margins
+     too (measured below), so they are registered as gap #206. They are kept in this
+     batch so the reference image records the wrong state and a future fix shows up as
+     a diff. Edge truth (viewport 531, dpr 1, container 400px at x=0):
+       b1: <div style="direction:rtl;width:400px"><div style="width:100px">
+           -> child x=300 (flush to the inline-start edge, which is the RIGHT one)
+           we render x=-500.
+       b2: same container, child with margin-right:20px -> x=280; we render x=-500.
+     And with an auto-width container whose 'direction: rtl' comes from a CSS class
+     (not from the dir attribute, which the UA sheet does not map at all — gap #207):
+       a17: <div class="parent-rtl"><div style="margin-inline-start:20px">
+           -> Edge x=8 w=394; we render x=-406, i.e. off-canvas.
+     An auto-width child inside a dir="rtl" parent (cases a2/a4 above) is unaffected,
+     which is why the rest of this page renders correctly. -->
+<div id="b1" class="c css-rtl"><div id="b1k" class="kid k100">RTL container, fixed 100 child (Edge x=300)</div></div>
+<div id="b2" class="c css-rtl"><div id="b2k" class="kid k100 mr20">RTL container, fixed child + margin-right 20 (Edge x=280)</div></div>
+<div class="parent-rtl"><div id="b3k" class="kid mr20">class-RTL parent + PHYSICAL margin-right 20 (Edge x=8)</div></div>
+
+</body>
+</html>

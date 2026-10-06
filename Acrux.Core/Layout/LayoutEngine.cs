@@ -178,7 +178,13 @@ public class LayoutEngine
         // One scope per element: what the element and its pseudo-elements reset stays
         // inside its subtree, while an increment of an inherited name still writes to the
         // scope that owns it (CSS GCP §4.2).
-        counters.Push();
+        // CSS Containment 3 §2.5: 'contain: style' seals that scope. Counters created inside
+        // are invisible outside and vice versa, and so is the quote state — measured on the
+        // reference engine, a 'contain: style' box whose child increments an outer counter by
+        // 89 renders its own '[89]' and the next sibling still reads '[98]'.
+        bool seals = element.ComputedStyle?.HasStyleContainment == true;
+        counters.Push(seals);
+        if (seals) quoteDepth = 0;
 
         if (element.ComputedStyle != null)
         {
@@ -187,9 +193,11 @@ public class LayoutEngine
             {
                 counters.ApplyStyle(element.ComputedStyle);
                 // The 'list-item' counter belongs to the item's own scope, so an item's
-                // generated content reads its own ordinal and a sibling list restarts.
+                // generated content reads its own ordinal and a sibling list restarts —
+                // unlike an author 'counter-reset', whose scope reaches the following
+                // siblings (CSS Lists 4 §4.2, see CounterScope.Reset).
                 if (element.ComputedStyle.Display == DisplayType.ListItem)
-                    counters.Reset("list-item", List.ListItemNumbering.CounterValue(element));
+                    counters.ResetInOwnScope("list-item", List.ListItemNumbering.CounterValue(element));
             }
 
             var dummy = new LayoutBox();
@@ -256,11 +264,12 @@ public class LayoutEngine
         host.Data = host.Data.Remove(letterIndex, 1);
 
         // A floating box is blockified, and the pseudo-element declarations win over
-        // the block's own inherited values.
+        // the block's own inherited values. The reset has to come first: it writes the
+        // non-inherited properties back to their initial values, 'float' among them.
         var letterStyle = style.Clone();
+        ResetNonInheritedBoxProperties(letterStyle);
         letterStyle.Float = isLeft ? FloatType.Left : FloatType.Right;
         letterStyle.Display = DisplayType.Block;
-        ResetNonInheritedBoxProperties(letterStyle);
         foreach (var kv in props)
         {
             if (kv.Key.Equals("float", StringComparison.OrdinalIgnoreCase))
@@ -272,6 +281,7 @@ public class LayoutEngine
         {
             ComputedStyle = letterStyle,
             Parent = element,
+            IsGeneratedPseudoElement = true,
         };
         letterElement.Children.Add(new TextNode(letter) { Parent = letterElement });
 
@@ -295,12 +305,45 @@ public class LayoutEngine
     /// </summary>
     private static void ResetNonInheritedBoxProperties(ComputedStyle style)
     {
-        style.Width = null;
-        style.Height = null;
+        // CSS Pseudo-Elements 4 §3.1: a generated box takes the *initial* value of every
+        // non-inherited property its own rule does not declare. Measured against the reference
+        // engine, a ::before inside 'margin:20px; border:5px solid; background:red;
+        // position:relative; top:3px; z-index:5; opacity:.5' computes every one of those to
+        // its initial value — but the style is built by cloning the originating element, so
+        // each has to be written back by hand or it leaks into the generated box.
+        //
+        // 'auto' is the initial value of width/height, and the rest of the engine tests for
+        // AutoLength (not for null) to decide whether a size is definite — writing null made an
+        // auto-sized generated box look definite, so it stretched to its containing block
+        // instead of shrinking to fit.
+        style.Width = AutoLength.Instance;
+        style.Height = AutoLength.Instance;
         style.MinWidth = null;
         style.MaxWidth = null;
         style.MinHeight = null;
         style.MaxHeight = null;
+
+        style.MarginTop = style.MarginRight = style.MarginBottom = style.MarginLeft = new PixelLength(0);
+        style.PaddingTop = style.PaddingRight = style.PaddingBottom = style.PaddingLeft = new PixelLength(0);
+
+        style.BorderTopWidth = style.BorderRightWidth = style.BorderBottomWidth = style.BorderLeftWidth = 0;
+        style.BorderTopStyle = style.BorderRightStyle = style.BorderBottomStyle = style.BorderLeftStyle = BorderStyle.None;
+
+        style.Position = PositionType.Static;
+        style.Top = style.Right = style.Bottom = style.Left = AutoLength.Instance;
+        style.Float = FloatType.None;
+        style.Clear = ClearType.None;
+        style.ZIndex = null;
+        style.Opacity = 1f;
+        style.Overflow = style.OverflowX = style.OverflowY = OverflowType.Visible;
+        style.BackgroundColor = null;
+        style.BackgroundImage = null;
+        style.OutlineWidth = 0;
+        style.OutlineStyle = BorderStyle.None;
+        style.Transform = null;
+        style.BoxShadow = null;
+        style.TextShadow = new();
+        style.Contain = ContainType.None;
     }
 
     /// <summary>Drops the boxes of the previous pass. The converter rebuilds the whole box
@@ -430,6 +473,12 @@ public class LayoutEngine
             ApplyPseudoProperty(pseudoStyle, kv.Key, kv.Value);
         }
 
+        // The generated box never goes through the cascade, so the adjustments it would
+        // have received have to be applied here: 'position: absolute' on a ::before blockifies
+        // its initial 'inline' display (CSS Display 3 §3.2), and without that the box has
+        // geometry but is painted as if it were still inline content.
+        Acrux.Core.Css.Cascade.StyleAdjuster.BlockifyFloatAndAbsolute(pseudoStyle);
+
         // Create the Element. Even for inline content we need a real Element
         // so that the pseudo-element's own styles (color, font-weight, etc.) are
         // applied — a bare TextNode would inherit the parent's style and ignore
@@ -441,6 +490,9 @@ public class LayoutEngine
         {
             ComputedStyle = pseudoStyle,
             Parent = parent,
+            // The generated box takes pointer events for its originating element, never
+            // for itself — see Element.IsGeneratedPseudoElement.
+            IsGeneratedPseudoElement = true,
         };
         if (isImageContent)
             pseudoEl.SetAttribute("src", imageUrl);
@@ -511,7 +563,7 @@ public class LayoutEngine
                 case "opacity": style.Opacity = float.TryParse(value, out var op) ? op : 1; break;
                 case "overflow": style.Overflow = ParsePseudoOverflow(value); break;
                 case "text-align": style.TextAlign = ParsePseudoTextAlign(value); break;
-                case "font-size": style.FontSize = ParsePseudoFontSize(value); break;
+                case "font-size": Css.Resolver.CssPropertyApplier.SetFontSize(style, value, ParsePseudoFontSize(value)); break;
                 case "line-height": Acrux.Core.Fonts.LineBoxMetrics.ApplyLineHeight(style, value); break;
                 case "font-family": style.FontFamily = value; break;
                 case "font-weight": style.FontWeight = (FontWeight)(int.TryParse(value, out var fw) ? fw : 400); break;

@@ -29,7 +29,7 @@ internal sealed class ScopedPaintState : IDisposable
         return CullRect.IntersectsWith(localRect);
     }
 
-    public void PushLayer(float opacity, SKImageFilter? imageFilter, SKPath? clipPath, SKRect bounds, SKImage? maskImage = null, SKBlendMode blendMode = SKBlendMode.SrcOver)
+    public void PushLayer(float opacity, SKImageFilter? imageFilter, SKPath? clipPath, SKRect bounds, SKImage? maskImage = null, SKBlendMode blendMode = SKBlendMode.SrcOver, float layerInflation = 0f)
     {
         var op = PaintOpPool.GetPushLayerOp();
         op.Opacity = opacity;
@@ -37,6 +37,7 @@ internal sealed class ScopedPaintState : IDisposable
         op.ClipPath = clipPath;
         op.MaskImage = maskImage;
         op.BlendMode = blendMode;
+        op.LayerInflation = layerInflation;
         op.Bounds = bounds;
         _displayList.Add(op);
         _states.Add(new LayerState(StateType.Layer, maskImage, bounds));

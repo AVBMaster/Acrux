@@ -9,6 +9,14 @@ public readonly struct AnimationUpdateResult
     /// <summary>At least one animation or transition is currently in effect.</summary>
     public bool HasActiveAnimations { get; init; }
 
+    /// <summary>
+    /// A live effect animates a geometry property (transform or a layout-affecting
+    /// one). Hosts that cache any verdict computed from the element's painted
+    /// geometry must drop the cache while this is set: a transform tick moves the
+    /// pixels without touching style or layout generations.
+    /// </summary>
+    public bool AnimatesGeometry { get; init; }
+
     /// <summary>A layout-affecting property moved, so boxes must be recomputed.</summary>
     public bool NeedsLayout { get; init; }
 
@@ -61,6 +69,7 @@ public sealed class CssAnimationEngine
     private List<Element>? _repaintTargets;
     private bool _repaintBleeds;
     private bool _suppressEvents;
+    private bool _tickAnimatesGeometry;
 
     /// <summary>Receives events queued this tick, after the whole tree is sampled.</summary>
     public Action<Element, Event>? EventSink { get; set; }
@@ -102,6 +111,23 @@ public sealed class CssAnimationEngine
 
     /// <summary>Total keyframe sets indexed for the last tick.</summary>
     public int IndexedKeyframeSets => _keyframesCache.Count;
+
+    // Diagnostics dump (used by the ACRUX_ANIM_LIVE heartbeat): which element carries
+    // each live effect — the fastest way to attribute a stuck "animating" page.
+    public string DescribeActiveEffectsForDiagnostics()
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var kv in _elements)
+        {
+            var el = kv.Key;
+            string ident = $"{el.TagName}#{el.GetAttribute("id")}.{el.GetAttribute("class")}";
+            foreach (var a in kv.Value.Animations)
+                sb.Append($"[anim {ident} '{a.Name}'] ");
+            foreach (var tr in kv.Value.Transitions)
+                sb.Append($"[trans {ident} '{tr.Property}' {tr.FromValue}->{tr.ToValue} start={tr.StartTimeMs:F0} dur={tr.DurationMs:F0}] ");
+        }
+        return sb.ToString();
+    }
 
     /// <summary>
     /// Advance every effect to the timeline's current time and write the
@@ -152,16 +178,32 @@ public sealed class CssAnimationEngine
         int animatedElements = 0;
         _repaintTargets = null;
         _repaintBleeds = false;
+        _tickAnimatesGeometry = false;
 
-        Walk(root, keyframeRules, ref anyActive, ref needsLayout, ref needsRepaint, ref animatedElements, time);
+        if (styleRecomputed)
+        {
+            Walk(root, keyframeRules, ref anyActive, ref needsLayout, ref needsRepaint, ref animatedElements, time);
 
-        // Forget elements that left the document, then deliver the events.
-        PruneDetached();
+            // Forget elements that left the document, then deliver the events.
+            PruneDetached();
+        }
+        else
+        {
+            // A pure animation frame advances running occurrences only. New
+            // transitions and animations can only come from the cascade, so on a
+            // frame whose styles did not change, walking the whole document just
+            // re-derives "nothing new" at every element — cost proportional to
+            // document size, not to how much is actually animating. Detached
+            // elements are pruned by the next cascade pass instead; a dead effect
+            // advancing one extra frame is invisible either way.
+            AdvanceLiveOccurrences(keyframeRules, time, ref anyActive, ref needsLayout, ref needsRepaint, ref animatedElements);
+        }
         FlushEvents();
 
         return new AnimationUpdateResult
         {
             HasActiveAnimations = anyActive,
+            AnimatesGeometry = _tickAnimatesGeometry,
             NeedsLayout = needsLayout,
             NeedsRepaint = needsRepaint,
             AnimatedElements = animatedElements,
@@ -172,6 +214,40 @@ public sealed class CssAnimationEngine
 
     private void Walk(Element element, IReadOnlyList<StyleRuleKeyframes>? rules,
         ref bool anyActive, ref bool needsLayout, ref bool needsRepaint, ref int animatedElements, double time)
+    {
+        SampleElement(element, rules, time, createIfMissing: true,
+            ref anyActive, ref needsLayout, ref needsRepaint, ref animatedElements);
+
+        foreach (var child in element.Children)
+        {
+            if (child is Element childElement)
+                Walk(childElement, rules, ref anyActive, ref needsLayout, ref needsRepaint, ref animatedElements, time);
+        }
+    }
+
+    private readonly List<Element> _liveScratch = new();
+
+    /// <summary>
+    /// Advance the running occurrences without touching the document tree: the
+    /// elements are already known — they are exactly the ones holding live effects.
+    /// </summary>
+    private void AdvanceLiveOccurrences(IReadOnlyList<StyleRuleKeyframes>? rules, double time,
+        ref bool anyActive, ref bool needsLayout, ref bool needsRepaint, ref int animatedElements)
+    {
+        if (_elements.Count == 0) return;
+
+        _liveScratch.Clear();
+        foreach (var kv in _elements)
+            if (kv.Value.LiveEffectCount > 0) _liveScratch.Add(kv.Key);
+
+        for (int i = 0; i < _liveScratch.Count; i++)
+            SampleElement(_liveScratch[i], rules, time, createIfMissing: false,
+                ref anyActive, ref needsLayout, ref needsRepaint, ref animatedElements);
+    }
+
+    private void SampleElement(Element element, IReadOnlyList<StyleRuleKeyframes>? rules, double time,
+        bool createIfMissing,
+        ref bool anyActive, ref bool needsLayout, ref bool needsRepaint, ref int animatedElements)
     {
         var style = element.ComputedStyle;
 
@@ -184,6 +260,7 @@ public sealed class CssAnimationEngine
 
             if (!_elements.TryGetValue(element, out var state))
             {
+                if (!createIfMissing) return;
                 state = new ElementAnimations();
                 _elements[element] = state;
             }
@@ -209,18 +286,35 @@ public sealed class CssAnimationEngine
                 animatedElements++;
                 anyActive = true;
                 needsRepaint = true;
+                if (!_tickAnimatesGeometry)
+                    _tickAnimatesGeometry = LiveEffectsMoveGeometry(state);
                 // Which boxes this tick actually touched, so a host can decide whether
                 // the change can reach its visible area at all.
                 (_repaintTargets ??= new List<Element>()).Add(element);
                 ApplyEffects(element, style, state, time, ref needsLayout);
             }
         }
+    }
 
-        foreach (var child in element.Children)
+    /// <summary>
+    /// Whether any live effect on this element animates a property that moves
+    /// painted pixels without a layout generation — see AnimationUpdateResult.
+    /// AnimatesGeometry. Keyframe property sets are static per keyframe block,
+    /// so this is a few set lookups per animated element.
+    /// </summary>
+    private static bool LiveEffectsMoveGeometry(ElementAnimations state)
+    {
+        foreach (var tr in state.Transitions)
+            if (AnimatableProperties.GeometryAffecting(tr.Property)) return true;
+        foreach (var an in state.Animations)
         {
-            if (child is Element childElement)
-                Walk(childElement, rules, ref anyActive, ref needsLayout, ref needsRepaint, ref animatedElements, time);
+            var frames = an.Keyframes?.Frames;
+            if (frames == null) continue;
+            foreach (var frame in frames)
+                foreach (var property in frame.Declarations.Keys)
+                    if (AnimatableProperties.GeometryAffecting(property)) return true;
         }
+        return false;
     }
 
     // ------------------------------------------------------------------ animations
@@ -865,7 +959,13 @@ public sealed class CssAnimationEngine
                     float px = Length.Parse(value) is { } l && !float.IsNaN(l.ToPixels(style.FontSize, style.FontSize, 0, 0))
                         ? l.ToPixels(style.FontSize, style.FontSize, 0, 0)
                         : float.NaN;
-                    if (!float.IsNaN(px) && px > 0) { style.FontSize = px; return true; }
+                    if (!float.IsNaN(px) && px > 0)
+                    {
+                        // An animated size is a specified size: it blocks the monospace generic's
+                        // default-size substitution (see ComputedStyle.FontSizeIsDefault).
+                        Css.Resolver.CssPropertyApplier.SetFontSize(style, "0px", px);
+                        return true;
+                    }
                     return false;
                 }
                 case "font-weight":

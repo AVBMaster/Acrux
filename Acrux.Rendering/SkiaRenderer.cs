@@ -814,6 +814,13 @@ public class SkiaRenderer : IDisposable
         canvas.DrawText(info, boxX + pad + 2, boxY + boxH * 0.72f, SKTextAlign.Left, font, textPaint);
     }
 
+    private byte[] _pixelBuffer = Array.Empty<byte>();
+
+    /// <summary>
+    /// Reads the current surface into a reusable BGRA buffer. The array is
+    /// overwritten by the next call — consumers must use it before then
+    /// (the shell hands it straight to the window blit).
+    /// </summary>
     public byte[] GetPixelData()
     {
         int pw = PhysicalWidth;
@@ -821,7 +828,11 @@ public class SkiaRenderer : IDisposable
         if (pw <= 0 || ph <= 0) return Array.Empty<byte>();
 
         int stride = pw * 4;
-        byte[] pixels = new byte[ph * stride];
+        // A full-window byte[] per frame is an LOH allocation every redraw —
+        // at 60Hz that alone keeps the GC busy. Reuse until the size changes.
+        if (_pixelBuffer.Length != ph * stride)
+            Array.Resize(ref _pixelBuffer, ph * stride);
+        byte[] pixels = _pixelBuffer;
 
         if (_useGpu && _gpuSurface != null)
         {

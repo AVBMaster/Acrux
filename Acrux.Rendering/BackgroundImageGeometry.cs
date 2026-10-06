@@ -640,6 +640,17 @@ public sealed class BackgroundImageGeometry
         return step > 0 ? IntMod(-phase, step) : 0;
     }
 
+    /// <summary>Layer <paramref name="index"/> of a comma list, cycling as CSS
+    /// Backgrounds 3 §2 requires ("if background-image has three layers and
+    /// background-position has two, the position list repeats"). A missing list
+    /// returns null so the caller falls back to the scalar field, which keeps every
+    /// single-layer background on the code path it has always used.</summary>
+    private static T? Pick<T>(List<T>? list, int index) where T : class
+        => list is { Count: > 0 } ? list[index % list.Count] : null;
+
+    private static string? PickString(List<string>? list, int index)
+        => list is { Count: > 0 } ? list[index % list.Count] : null;
+
     /// <summary>Build a FillLayer chain from a ComputedStyle.</summary>
 public static FillLayer? FromStyle(ComputedStyle style, bool isMask = false)
     {
@@ -662,48 +673,63 @@ public static FillLayer? FromStyle(ComputedStyle style, bool isMask = false)
                 var img = images[i];
                 if (string.IsNullOrEmpty(img) || img == "none")
                     continue;
+
+                // Each geometry longhand is its own comma list and cycles against the
+                // image count INDEPENDENTLY (CSS Backgrounds 3 §2): with three images,
+                // two positions and one size, position 3 wraps to position 1 while all
+                // three share the size. When no list was authored the scalar field is
+                // used, which is what every single-layer background does.
+                var pos = Pick(style.BackgroundPositionLayers, i);
+                var size = Pick(style.BackgroundSizeLayers, i);
+                var rep = Pick(style.BackgroundRepeatLayers, i);
+                var attachments = style.BackgroundAttachmentLayers;
+                Acrux.Core.Dom.BackgroundAttachment attachValue =
+                    attachments is { Count: > 0 } ? attachments[i % attachments.Count] : style.BackgroundAttachment;
+                string origin = PickString(style.BackgroundOriginLayers, i) ?? style.BackgroundOrigin;
+                string clip = PickString(style.BackgroundClipLayers, i) ?? style.BackgroundClip;
+
                 var layer = new FillLayer
                 {
                     Image = img,
                     Color = hasColor && i == images.Count - 1 ? style.BackgroundColor : null,
-                    Attachment = style.BackgroundAttachment switch
+                    Attachment = attachValue switch
                     {
                         BackgroundAttachment.Fixed => FillAttachment.Fixed,
                         BackgroundAttachment.Local => FillAttachment.Local,
                         _ => FillAttachment.Scroll
                     },
-                    Clip = style.BackgroundClip switch
+                    Clip = clip switch
                     {
                         "content-box" => FillBox.Content,
                         "border-box" => FillBox.Border,
                         "text" => FillBox.Text,
                         _ => FillBox.Padding
                     },
-                    Origin = style.BackgroundOrigin switch
+                    Origin = origin switch
                     {
                         "content-box" => FillBoxOrigin.Content,
                         "border-box" => FillBoxOrigin.Border,
                         _ => FillBoxOrigin.Padding
                     },
-                    PositionX = style.BackgroundPositionX,
-                    PositionY = style.BackgroundPositionY,
-                    SizeType = style.BackgroundSize switch
+                    PositionX = pos?.X ?? style.BackgroundPositionX,
+                    PositionY = pos?.Y ?? style.BackgroundPositionY,
+                    SizeType = (size?.Type ?? style.BackgroundSize) switch
                     {
                         BackgroundSizeType.Cover => FillSizeType.Cover,
                         BackgroundSizeType.Contain => FillSizeType.Contain,
                         BackgroundSizeType.Length => FillSizeType.Length,
                         _ => FillSizeType.Auto
                     },
-                    SizeWidth = style.BackgroundSizeWidth,
-                    SizeHeight = style.BackgroundSizeHeight,
-                    RepeatX = style.BackgroundRepeat switch
+                    SizeWidth = size?.Width ?? style.BackgroundSizeWidth,
+                    SizeHeight = size?.Height ?? style.BackgroundSizeHeight,
+                    RepeatX = (rep?.X ?? style.BackgroundRepeat) switch
                     {
                         BackgroundRepeat.NoRepeat or BackgroundRepeat.RepeatY => FillRepeat.NoRepeat,
                         BackgroundRepeat.Round => FillRepeat.Round,
                         BackgroundRepeat.Space => FillRepeat.Space,
                         _ => FillRepeat.Repeat,
                     },
-                    RepeatY = style.BackgroundRepeat switch
+                    RepeatY = (rep?.Y ?? style.BackgroundRepeat) switch
                     {
                         BackgroundRepeat.NoRepeat or BackgroundRepeat.RepeatX => FillRepeat.NoRepeat,
                         BackgroundRepeat.Round => FillRepeat.Round,

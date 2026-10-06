@@ -126,11 +126,22 @@ public class ReplacedLayoutAlgorithm : LayoutAlgorithm
             // HTML size/cols attributes drive it - not the 150x22 guess that used
             // to live here. The helper returns the border box, so hand it over as
             // the content box and let the caller add its own border/padding back.
-            if (Forms.FormControlDefaults.TryGetDefaultInlineSize(element, style, bp.HorizontalSum, out float widgetW)
-                && Forms.FormControlDefaults.TryGetDefaultBlockSize(element, style, bp.VerticalSum, out float widgetH))
+            // The two axes are solved <b>independently</b>: authoring only a width must not
+            // cost the control its widget height. The old single '&&' fell back to the guess
+            // as soon as one axis was specified, and the auto height then resolved from the
+            // *available* block size — a 21px field measured 57.6px tall with width:200px.
+            float widgetW = 0f, widgetH = 0f;
+            bool hasW = Forms.FormControlDefaults.TryGetDefaultInlineSize(element, style, bp.HorizontalSum, out widgetW);
+            bool hasH = Forms.FormControlDefaults.TryGetDefaultBlockSize(element, style, bp.VerticalSum, out widgetH);
+            if (hasW || hasH)
             {
-                var content = new PhysicalSize(Math.Max(0, widgetW - bp.HorizontalSum), Math.Max(0, widgetH - bp.VerticalSum));
-                return new IntrinsicSizingInfo(content, content, true, true);
+                var content = new PhysicalSize(
+                    hasW ? Math.Max(0, widgetW - bp.HorizontalSum) : 0f,
+                    hasH ? Math.Max(0, widgetH - bp.VerticalSum) : 0f);
+                // Only a box with both axes from the widget has a usable ratio: handing the
+                // size over as the ratio would let the known axis scale the unknown one.
+                var ratio = hasW && hasH && content.Height > 0 ? content : PhysicalSize.Zero;
+                return new IntrinsicSizingInfo(content, ratio, hasW, hasH);
             }
 
             string t = element is HTMLInputElement typedInput ? (typedInput.Type?.ToLowerInvariant() ?? "text") : "text";
