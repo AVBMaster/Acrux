@@ -62,6 +62,15 @@
                mask-size: 25% 100%; mask-repeat: repeat-x; }
   #m6 .inner { mask-image: linear-gradient(to right, rgb(0,0,0), rgba(0,0,0,0.2));
                mask-size: 33.333% 100%; mask-repeat: round; }
+  /* C: layers that each carry their OWN geometry. Before the longhands were modelled per
+     layer, every layer reused the first layer's position, so only the top-left tile survived. */
+  #c1 .inner { mask-image: linear-gradient(#000, #000), linear-gradient(#000, #000);
+               mask-size: 40px 20px, 40px 20px; mask-position: left top, right bottom;
+               mask-repeat: no-repeat; }
+  /* cycling: three layers with two positions -> the third layer reuses the FIRST position */
+  #c2 .inner { mask-image: linear-gradient(#000, #000), linear-gradient(#000, #000), linear-gradient(#000, #000);
+               mask-size: 30px 12px; mask-position: left top, right bottom;
+               mask-repeat: no-repeat; }
 </style>
 </head>
 <body>
@@ -104,6 +113,12 @@
   <div class="cell"><div class="box" id="m4"><div class="inner"></div></div><div class="lbl">m4 clip content-box</div></div>
   <div class="cell"><div class="box" id="m5"><div class="inner"></div></div><div class="lbl">m5 25% repeat-x</div></div>
   <div class="cell"><div class="box" id="m6"><div class="inner"></div></div><div class="lbl">m6 33.33% round</div></div>
+</div>
+
+<div class="lbl">C. layers with their own geometry (c1 two tiles; c2 three layers, two positions)</div>
+<div class="row">
+  <div class="cell"><div class="box" id="c1"><div class="inner"></div></div><div class="lbl">c1 TL + BR</div></div>
+  <div class="cell"><div class="box" id="c2"><div class="inner"></div></div><div class="lbl">c2 TL + BR + TL</div></div>
 </div>
 
 </body>

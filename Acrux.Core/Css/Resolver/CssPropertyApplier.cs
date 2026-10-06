@@ -593,24 +593,46 @@ public static class CssPropertyApplier
             case "clip-path": style.ClipPath = value; break;
             case "mask": style.Mask = value; break;
             case "mask-image": style.MaskImage = value; break;
+            // Each of these is a comma list of layers ('<layer>#'), so one bad layer
+            // invalidates the WHOLE declaration — and the list is kept per layer so a mask with
+            // three images and two positions can cycle them independently.
             case "mask-clip":
-                if (IsMaskBoxList(value, allowNoClip: true)) style.MaskClip = value.Trim().ToLowerInvariant();
+                ApplyMaskLayers(style, value, allowNoClip: true,
+                    (v, one) => { v.MaskClip = one; }, (v, list) => { v.MaskClipLayers = list; },
+                    entry => IsMaskBoxList(entry, allowNoClip: true));
                 break;
             case "mask-origin":
-                if (IsMaskBoxList(value, allowNoClip: false)) style.MaskOrigin = value.Trim().ToLowerInvariant();
+                ApplyMaskLayers(style, value, allowNoClip: false,
+                    (v, one) => { v.MaskOrigin = one; }, (v, list) => { v.MaskOriginLayers = list; },
+                    entry => IsMaskBoxList(entry, allowNoClip: false));
                 break;
             case "mask-composite":
-                if (IsKeywordList(value, "add", "subtract", "intersect", "exclude")) style.MaskComposite = value.Trim().ToLowerInvariant();
+                ApplyMaskLayers(style, value, allowNoClip: false,
+                    (v, one) => { v.MaskComposite = one; }, (v, list) => { v.MaskCompositeLayers = list; },
+                    entry => IsKeywordList(entry, "add", "subtract", "intersect", "exclude"));
                 break;
             case "mask-mode":
-                if (IsKeywordList(value, "match-source", "alpha", "luminance")) style.MaskMode = value.Trim().ToLowerInvariant();
+                ApplyMaskLayers(style, value, allowNoClip: false,
+                    (v, one) => { v.MaskMode = one; }, (v, list) => { v.MaskModeLayers = list; },
+                    entry => IsKeywordList(entry, "match-source", "alpha", "luminance"));
                 break;
-            case "mask-position": style.MaskPosition = value; break;
+            case "mask-position":
+                // Position entries are validated loosely (the grammar is the background one);
+                // what matters here is that the list survives, and the serializer resolves the
+                // keywords to the percentages the reference engine reports.
+                ApplyMaskLayers(style, value, allowNoClip: false,
+                    (v, one) => { v.MaskPosition = one; }, (v, list) => { v.MaskPositionLayers = list; },
+                    entry => entry.Length > 0 && !entry.Contains(","));
+                break;
             case "mask-repeat":
-                if (IsMaskRepeat(value)) style.MaskRepeat = value.Trim().ToLowerInvariant();
+                ApplyMaskLayers(style, value, allowNoClip: false,
+                    (v, one) => { v.MaskRepeat = one; }, (v, list) => { v.MaskRepeatLayers = list; },
+                    entry => IsMaskRepeat(entry));
                 break;
             case "mask-size":
-                if (IsMaskSize(value)) style.MaskSize = value.Trim().ToLowerInvariant();
+                ApplyMaskLayers(style, value, allowNoClip: false,
+                    (v, one) => { v.MaskSize = one; }, (v, list) => { v.MaskSizeLayers = list; },
+                    entry => IsMaskSize(entry));
                 break;
             case "isolation": style.Isolation = value.ToLowerInvariant() == "isolate" ? IsolationType.Isolate : IsolationType.Auto; break;
             case "mix-blend-mode": style.MixBlendMode = ParseMixBlendMode(value); break;
@@ -1096,6 +1118,26 @@ public static class CssPropertyApplier
         "collapse" => VisibilityType.Collapse,
         _ => VisibilityType.Visible
     };
+
+    /// <summary>
+    /// Store one of the comma-list mask longhands: validate every layer, keep the first layer in
+    /// the scalar field (so single-layer masks keep their existing path) and the whole list when
+    /// there is more than one. A single invalid layer rejects the entire declaration, which is
+    /// what the '&lt;layer&gt;#' grammar means.
+    /// </summary>
+    private static void ApplyMaskLayers(ComputedStyle style, string value, bool allowNoClip,
+        Action<ComputedStyle, string> setScalar, Action<ComputedStyle, List<string>?>? setList,
+        Func<string, bool> validEntry)
+    {
+        var entries = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(value, ',');
+        if (entries.Count == 0) return;
+        foreach (var entry in entries)
+            if (!validEntry(entry)) return;
+
+        var normalized = entries.Select(e => e.Trim().ToLowerInvariant()).ToList();
+        setScalar(style, normalized[0]);
+        if (setList != null) setList(style, normalized.Count > 1 ? normalized : null);
+    }
 
     /// <summary>'mask-size' (CSS Masking 1 §9): 'auto', one of the two fit keywords, or one or
     /// two lengths/percentages. Anything else is an invalid declaration and leaves the property

@@ -54,4 +54,31 @@ public static class MaskKeywordSerializer
         string x = tokens[0].ToLowerInvariant(), y = tokens[1].ToLowerInvariant();
         return x == y ? x : $"{x} {y}";
     }
+
+    /// <summary>
+    /// A mask layer list as the reference engine reports it: expanded to one entry per mask
+    /// IMAGE, cycling each property's own list independently (CSS Backgrounds 3 §2, which
+    /// 'mask' inherits). Measured on a three-image mask: 'mask-size: 50% 50%, 20px' →
+    /// '50% 50%, 20px, 50% 50%', and a single 'mask-origin: padding-box' → 'padding-box,
+    /// padding-box, padding-box'. Without this expansion a script reading a multi-layer mask
+    /// cannot line the lists up with the images at all.
+    /// </summary>
+    public static string LayerList(System.Collections.Generic.IReadOnlyList<string>? layers,
+        string? scalar, int imageCount, Func<string, string>? normalize = null)
+    {
+        var source = layers is { Count: > 0 }
+            ? layers
+            : string.IsNullOrEmpty(scalar) ? null : new[] { scalar };
+        if (source == null) return string.Empty;
+        if (imageCount < 1) imageCount = source.Count;
+
+        var parts = new string[imageCount];
+        for (int i = 0; i < imageCount; i++)
+        {
+            var entry = source[i % source.Count];
+            parts[i] = normalize != null ? normalize(entry) : entry;
+        }
+        return string.Join(", ", parts);
+    }
+
 }

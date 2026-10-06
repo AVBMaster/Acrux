@@ -173,6 +173,28 @@ internal static class CssValueTokenizer
         return value.ToString("0.######", CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// An 8-bit alpha as the shortest decimal that maps back to the same byte. The reference
+    /// engine keeps the authored fraction, so 'rgba(0 0 0 / 50%)' reads back as '0.5'; a naive
+    /// 128/255 division prints '0.501961' instead. Trying 1, 2 then 3 decimals and taking the
+    /// first that round-trips reproduces '0.5', '0.333' and '0' the way the browser does.
+    /// </summary>
+    public static string AlphaText(int alphaByte)
+    {
+        if (alphaByte <= 0) return "0";
+        if (alphaByte >= 255) return "1";
+        for (int decimals = 1; decimals <= 3; decimals++)
+        {
+            double rounded = Math.Round(alphaByte / 255.0, decimals, MidpointRounding.AwayFromZero);
+            if ((int)Math.Round(rounded * 255.0, MidpointRounding.AwayFromZero) == alphaByte)
+                return rounded.ToString("0." + new string('#', decimals), CultureInfo.InvariantCulture)
+                    .TrimEnd('0').TrimEnd('.').Length == 0 ? "0"
+                    : rounded.ToString("0." + new string('#', decimals), CultureInfo.InvariantCulture)
+                        .TrimEnd('0').TrimEnd('.');
+        }
+        return (alphaByte / 255.0).ToString("0.###", CultureInfo.InvariantCulture);
+    }
+
     public static bool TryParseNumber(string text, out double value) =>
         double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
 

@@ -87,18 +87,21 @@ internal sealed class MaskPainter
             var layer = layers[i];
             bool isBottom = i == layers.Count - 1;
             var composite = isBottom ? "add"
-                : layer.Composite ?? CompositeAt(style.MaskComposite, i);
+                : layer.Composite ?? At(style.MaskCompositeLayers, i) ?? CompositeAt(style.MaskComposite, i);
+
+            static string? At(List<string>? list, int index)
+                => list is { Count: > 0 } ? list[index % list.Count] : null;
 
             if (isBottom && composite == "add")
             {
-                PaintLayerOnto(surface.Canvas, layer, style, boxes, width, height);
+                PaintLayerOnto(surface.Canvas, layer, style, boxes, width, height, i, layers.Count);
                 continue;
             }
 
             using var scratch = SKSurface.Create(info);
             if (scratch == null) return null;
             scratch.Canvas.Clear(SKColors.Transparent);
-            PaintLayerOnto(scratch.Canvas, layer, style, boxes, width, height);
+            PaintLayerOnto(scratch.Canvas, layer, style, boxes, width, height, i, layers.Count);
 
             if (composite != "subtract")
             {
@@ -134,23 +137,30 @@ internal sealed class MaskPainter
     /// (CSS Masking 1 §7.1, §9; the geometry is the background algorithm).
     /// </summary>
     private void PaintLayerOnto(SKCanvas canvas, Acrux.Core.Css.MaskLayer layer, ComputedStyle style,
-        Boxes boxes, int surfaceWidth, int surfaceHeight)
+        Boxes boxes, int surfaceWidth, int surfaceHeight, int layerIndex, int layerCount)
     {
         if (layer.Image == "none") return;
 
+        // A part the layer text did not name comes from the corresponding longhand, cycled
+        // against the layer count exactly as the computed value cycles it (CSS Backgrounds 3 §2
+        /// inherited by 'mask'): three images and two positions means image three uses position
+        // one again. The scalar field is the first layer, so a single-layer mask is unaffected.
+        string? Longhand(List<string>? layers, string? scalar) =>
+            layers is { Count: > 0 } ? layers[layerIndex % layers.Count] : scalar;
+
         // 'mask-mode' may be named per layer or once for the element; 'match-source' means
         // alpha for a gradient and for a raster image (there is no SVG <mask> here).
-        var mode = layer.Mode ?? style.MaskMode ?? string.Empty;
+        var mode = layer.Mode ?? Longhand(style.MaskModeLayers, style.MaskMode) ?? string.Empty;
         _luminance = mode.Contains("luminance", StringComparison.OrdinalIgnoreCase);
 
-        var origin = boxes.Resolve(layer.Origin ?? style.MaskOrigin, isClip: false);
-        var clip = boxes.Resolve(layer.Clip ?? style.MaskClip, isClip: true);
+        var origin = boxes.Resolve(layer.Origin ?? Longhand(style.MaskOriginLayers, style.MaskOrigin), isClip: false);
+        var clip = boxes.Resolve(layer.Clip ?? Longhand(style.MaskClipLayers, style.MaskClip), isClip: true);
         var area = new SKSize(Math.Max(0, origin.Width), Math.Max(0, origin.Height));
 
         var intrinsic = TryIntrinsicSize(layer.Image);
-        var tile = MaskGeometry.TileSize(layer.Size ?? style.MaskSize, area, intrinsic);
-        var anchor = MaskGeometry.Position(layer.Position ?? style.MaskPosition, area, tile);
-        var repeat = MaskGeometry.Repeat(layer.Repeat ?? style.MaskRepeat);
+        var tile = MaskGeometry.TileSize(layer.Size ?? Longhand(style.MaskSizeLayers, style.MaskSize), area, intrinsic);
+        var anchor = MaskGeometry.Position(layer.Position ?? Longhand(style.MaskPositionLayers, style.MaskPosition), area, tile);
+        var repeat = MaskGeometry.Repeat(layer.Repeat ?? Longhand(style.MaskRepeatLayers, style.MaskRepeat));
         var tiles = MaskGeometry.Tiles(area, tile, anchor, repeat);
         if (tiles.Count == 0) return;
 

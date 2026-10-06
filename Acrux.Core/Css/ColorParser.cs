@@ -29,6 +29,26 @@ public static class ColorParser
 
     /// <param name="context">The style the color is being resolved for; needed by
     /// light-dark(), which depends on the element's used color scheme.</param>
+    /// <summary>Whether a token is a colour at all — needed because Parse is forgiving by
+    /// design (an unknown word comes back as a zero-alpha colour rather than failing), so a
+    /// caller that rewrites colour tokens inside a gradient cannot use Parse's success as a
+    /// signal. Recognises the CSS named colours, any #rgb/#rrggbb/#rrggbbaa form, and the
+    /// colour functions of Color 3/4 plus 'color-mix'.</summary>
+    public static bool IsColorToken(string token)
+    {
+        token = (token ?? string.Empty).Trim();
+        if (token.Length == 0) return false;
+        if (token[0] == '#')
+            return token.Length is 4 or 5 or 7 or 9;
+        if (token.Equals("transparent", StringComparison.OrdinalIgnoreCase)
+            || token.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
+            return true;
+        foreach (var prefix in new[] { "rgb(", "rgba(", "hsl(", "hsla(", "hwb(", "lab(", "lch(",
+                                       "oklab(", "oklch(", "color(", "color-mix(" })
+            if (token.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
+        return IsColorName(token);
+    }
+
     public static SKColor Parse(string value, ComputedStyle? context = null)
     {
         if (string.IsNullOrEmpty(value) || value == "inherit")

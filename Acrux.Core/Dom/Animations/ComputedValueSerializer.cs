@@ -192,18 +192,19 @@ public static class ComputedValueSerializer
             case "counter-reset": return string.IsNullOrEmpty(style.CounterReset) ? "none" : style.CounterReset;
             case "counter-increment": return string.IsNullOrEmpty(style.CounterIncrement) ? "none" : style.CounterIncrement;
             case "quotes": return style.Quotes;
-            case "mask-image": return string.IsNullOrEmpty(style.MaskImage) ? "none" : style.MaskImage;
-            case "mask-size": return style.MaskSize is { Length: > 0 } msz && msz != "auto" ? msz : "auto";
+            case "mask-image": return Css.ImageValueCanonicalizer.Canonicalize(
+                string.IsNullOrEmpty(style.MaskImage) ? (style.Mask ?? "none") : style.MaskImage);
+            case "mask-size": return MaskLayerList(style, style.MaskSizeLayers, style.MaskSize, "auto", null);
             // 'mask-position' is stored as authored; the reference engine resolves the
             // keywords to their percentage of the positioning area (measured: 'right bottom'
             // serializes as '100% 100%', 'center' as '50% 50%'), and an omitted y is 'center'.
-            case "mask-position": return MaskKeywordSerializer.Position(style.MaskPosition);
+                        case "mask-position": return MaskLayerList(style, style.MaskPositionLayers, style.MaskPosition, "0% 0%", Css.MaskKeywordSerializer.Position);
             // 'mask-repeat' collapses two identical axes to one keyword ('round round' → 'round').
-            case "mask-repeat": return MaskKeywordSerializer.Repeat(style.MaskRepeat);
-            case "mask-clip": return string.IsNullOrEmpty(style.MaskClip) ? "border-box" : style.MaskClip;
-            case "mask-origin": return string.IsNullOrEmpty(style.MaskOrigin) ? "border-box" : style.MaskOrigin;
-            case "mask-mode": return string.IsNullOrEmpty(style.MaskMode) ? "match-source" : style.MaskMode;
-            case "mask-composite": return string.IsNullOrEmpty(style.MaskComposite) ? "add" : style.MaskComposite;
+                        case "mask-repeat": return MaskLayerList(style, style.MaskRepeatLayers, style.MaskRepeat, "repeat", Css.MaskKeywordSerializer.Repeat);
+                        case "mask-clip": return MaskLayerList(style, style.MaskClipLayers, style.MaskClip, "border-box", null);
+                        case "mask-origin": return MaskLayerList(style, style.MaskOriginLayers, style.MaskOrigin, "border-box", null);
+                        case "mask-mode": return MaskLayerList(style, style.MaskModeLayers, style.MaskMode, "match-source", null);
+                        case "mask-composite": return MaskLayerList(style, style.MaskCompositeLayers, style.MaskComposite, "add", null);
             case "cursor": return style.Cursor ?? "auto";
             case "resize": return style.Resize == ResizeType.Both ? "both"
                 : style.Resize == ResizeType.Vertical ? "vertical"
@@ -235,7 +236,10 @@ public static class ComputedValueSerializer
             case "background-repeat": return CssEnumFormatter.CssKeywordFromEnum(style.BackgroundRepeat.ToString());
             case "background-attachment": return style.BackgroundAttachment == BackgroundAttachment.Fixed ? "fixed"
                 : style.BackgroundAttachment == BackgroundAttachment.Local ? "local" : "scroll";
-            case "background-image": return style.BackgroundImage is { Count: > 0 } ? style.BackgroundImage[0] : "none";
+            // The whole list, colours canonicalised: reporting only the first layer made a
+            // multi-layer background look like a single-image one to any script reading it.
+            case "background-image": return Css.ImageValueCanonicalizer.Canonicalize(
+                style.BackgroundImage is { Count: > 0 } ? string.Join(", ", style.BackgroundImage) : "none");
             case "background-clip": return style.BackgroundClip;
             case "background-origin": return style.BackgroundOrigin;
             case "filter": return string.IsNullOrWhiteSpace(style.Filter) ? "none" : style.Filter!;
@@ -278,11 +282,23 @@ public static class ComputedValueSerializer
 
     private static string Px(float value) => CssValueTokenizer.Num(value) + "px";
 
+    /// <summary>One mask layer list, cycled to the number of mask images (see
+    /// Css.MaskKeywordSerializer.LayerList). Shared by all seven geometry longhands so the
+    /// image count is derived in exactly one place.</summary>
+    private static string MaskLayerList(ComputedStyle style, System.Collections.Generic.IReadOnlyList<string>? layers,
+        string? scalar, string initial, System.Func<string, string>? normalize)
+    {
+        var images = Css.MaskLayerParser.SplitTopLevel(
+            string.IsNullOrEmpty(style.MaskImage) ? (style.Mask ?? string.Empty) : style.MaskImage, ',');
+        var text = Css.MaskKeywordSerializer.LayerList(layers, scalar, images.Count, normalize);
+        return text.Length > 0 ? text : initial;
+    }
+
     private static string ColorText(SkiaSharp.SKColor c)
     {
         if (c.Alpha == 255) return $"rgb({c.Red}, {c.Green}, {c.Blue})";
         if (c.Alpha == 0) return "transparent";
-        return $"rgba({c.Red}, {c.Green}, {c.Blue}, {CssValueTokenizer.Num(c.Alpha / 255.0)})";
+        return $"rgba({c.Red}, {c.Green}, {c.Blue}, {CssValueTokenizer.AlphaText(c.Alpha)})";
     }
 
     /// <summary>Text form of an optional color, resolving keywords through the parser.</summary>

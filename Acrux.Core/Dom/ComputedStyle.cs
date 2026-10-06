@@ -1137,6 +1137,20 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public string? MaskPosition { get; set; }
     public string? MaskRepeat { get; set; }
     public string? MaskSize { get; set; }
+
+    /// <summary>Per-layer values of the mask geometry longhands, the same shape the background
+    /// longhands use: the scalar above holds the FIRST layer (so every single-layer mask keeps
+    /// its existing path), and the list carries the rest. A mask with three images and two
+    /// positions cycles the positions independently — CSS Backgrounds 3 §2, which 'mask'
+    /// inherits verbatim (measured: 'mask-size: 50% 50%, 20px' on three layers computes back as
+    /// '50% 50%, 20px, 50% 50%').</summary>
+    public List<string>? MaskPositionLayers { get; set; }
+    public List<string>? MaskSizeLayers { get; set; }
+    public List<string>? MaskRepeatLayers { get; set; }
+    public List<string>? MaskClipLayers { get; set; }
+    public List<string>? MaskOriginLayers { get; set; }
+    public List<string>? MaskModeLayers { get; set; }
+    public List<string>? MaskCompositeLayers { get; set; }
     public LineBreakType LineBreak { get; set; } = LineBreakType.Auto;
     public TextJustifyType TextJustify { get; set; } = TextJustifyType.Auto;
     public ResizeType Resize { get; set; } = ResizeType.None;
@@ -1235,6 +1249,13 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             BackgroundRepeat = BackgroundRepeat, BackgroundAttachment = BackgroundAttachment,
             // The per-layer lists are copied (the entries themselves are written once by
             // the parser and treated as immutable afterwards).
+            MaskPositionLayers = CopyLayerList(MaskPositionLayers),
+            MaskSizeLayers = CopyLayerList(MaskSizeLayers),
+            MaskRepeatLayers = CopyLayerList(MaskRepeatLayers),
+            MaskClipLayers = CopyLayerList(MaskClipLayers),
+            MaskOriginLayers = CopyLayerList(MaskOriginLayers),
+            MaskModeLayers = CopyLayerList(MaskModeLayers),
+            MaskCompositeLayers = CopyLayerList(MaskCompositeLayers),
             BackgroundPositionLayers = CopyLayerList(BackgroundPositionLayers),
             BackgroundSizeLayers = CopyLayerList(BackgroundSizeLayers),
             BackgroundRepeatLayers = CopyLayerList(BackgroundRepeatLayers),
