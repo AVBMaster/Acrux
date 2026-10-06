@@ -1375,6 +1375,15 @@ public class GridLayoutAlgorithm
         var alignItems = ParseAlignItems(containerStyle.AlignItems.ToString());
 
         // Position each item
+        // CSS Writing Modes 3 §4.1 / CSS Display 3 §3: with 'direction: rtl' the
+        // columns run right-to-left. The track SIZING algorithm is unaffected — only
+        // the placement is, so everything below stays in logical (inline-start-based)
+        // coordinates and the whole track group is flipped once, when the item's
+        // physical x is written. 'justify-content' therefore needs no special case:
+        // packing tracks against the logical start edge *is* the right edge in RTL.
+        bool rtl = _space.Direction == Acrux.Core.Layout.Geometry.TextDirection.Rtl;
+        float contentLeft = containerBox.ContentBox.Left;
+        float contentRight = containerBox.ContentBox.Right;
         foreach (var item in items)
         {
             int col = item.ColumnStart - 1;
@@ -1382,10 +1391,13 @@ public class GridLayoutAlgorithm
             int colEnd = Math.Min(item.ColumnEnd - 1, columns.Count);
             int rowEnd = Math.Min(item.RowEnd - 1, rows.Count);
 
-            float cellX = colOffsets[col];
+            float logicalCellX = colOffsets[col];
             float cellY = rowOffsets[row];
             float cellW = GetTrackSpanSize(columns, col, colEnd, columnGap);
             float cellH = GetTrackSpanSize(rows, row, rowEnd, rowGap);
+            float cellX = !rtl
+                ? logicalCellX
+                : contentRight - (logicalCellX - contentLeft) - cellW;
 
             // A grid item's margin-box occupies the grid area; the border box is the
             // area minus the margins and starts at the start margin. Percentage
@@ -1429,7 +1441,15 @@ public class GridLayoutAlgorithm
             float alignW = stretchInline ? availW : itemW;
             float alignH = stretchBlock ? availH : itemH;
 
-            float finalX = cellX + itemMargins.Left + GetAlignmentOffset(availW, alignW, justifySelf);
+            // 'margin-inline-start' is the RIGHT margin in RTL, and the alignment
+            // offsets above are already logical (start = 0), so the item's distance
+            // from its area's inline-start edge is marginStart + alignOffset and the
+            // physical x is that distance measured from the mirrored edge.
+            float marginStart = rtl ? itemMargins.Right : itemMargins.Left;
+            float offsetFromStart = marginStart + GetAlignmentOffset(availW, alignW, justifySelf);
+            float finalX = !rtl
+                ? cellX + offsetFromStart
+                : cellX + cellW - offsetFromStart - itemW;
             float finalY = cellY + itemMargins.Top + GetAlignmentOffset(availH, alignH, alignSelf);
 
             // Translate the child box and its subtree (lines, runs, children)
