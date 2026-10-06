@@ -1873,7 +1873,11 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             }
         }
 
-        float staticInlineOffset = _borderPadding.InlineStartFor(Space.Direction);
+        // The consumer reads the static inline offset as a LEFT-based coordinate from
+        // this box's border-box origin, so in rtl — where the inline-start edge is the
+        // content box's RIGHT edge — that is the edge to record.
+        float staticInlineOffset = _borderPadding.Left
+            + (Space.Direction == TextDirection.Rtl ? ChildrenInlineSize : 0f);
         float staticBlockOffset = previousInflowPosition.logical_block_offset;
 
         // We only include the margin strut in the OOF static-position if we know we
@@ -1905,7 +1909,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             new LogicalStaticPosition(new LogicalOffset(staticInlineOffset, staticBlockOffset),
                 LogicalStaticPosition.StaticInlinePosition.Left,
                 LogicalStaticPosition.StaticBlockPosition.Top,
-                WritingDirectionMode.HorizontalLtr))
+                Space.GetWritingDirection()))
         {
             IsAbsolute = style.Position == PositionType.Absolute,
             IsFixed = style.Position == PositionType.Fixed,
@@ -2873,7 +2877,12 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
     private LogicalOffset CalculateLogicalOffset(BoxFragment fragment, float childBfcLineOffset, float? childBfcBlockOffset)
     {
-        float containerInlineSize = _inlineSize;
+        // The mirror that turns a start-relative offset into a physical one needs the width of
+        // the box the child's constraint line lives in — THIS box's content width. _inlineSize
+        // is only assigned once the children have been laid out (it is recomputed from the
+        // content), so reading it here gave 0 and every RTL child ended up at
+        // -margin-start-minus-its-own-width, i.e. off the canvas.
+        float containerInlineSize = OwnContentInlineSize();
         TextDirection direction = Space.Direction;
 
         float fragmentInlineSize = LogicalInlineSize(fragment);
@@ -3236,9 +3245,15 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
                 () => childInlineSize);
         }
 
-        if (isRtl)
-            additionalLineOffset = ChildAvailableInlineSize - additionalLineOffset - childInlineSize - margins.HorizontalSum;
-
+        // No direction-dependent conversion happens here. 'additionalLineOffset' is a LOGICAL
+        // (inline-start) offset and 'LineLeft(margins, direction)' is the start margin, so the
+        // pair is already what the caller's mirror needs: CalculateLogicalOffset turns a
+        // start-relative offset into a physical one once, via
+        // LogicalFromBfcLineOffset (parentInlineSize - relative - childInlineSize).
+        // Mirroring it a second time here put every RTL block child off-canvas, and made the
+        // left margin — the over-constrained side in RTL — move the box instead of the right
+        // one (CSS 2.1 §10.3.2, measured: 400px container, 100px child, margin-right 20 →
+        // x = 280; margin-left 20 → x = 300 unchanged).
         return margins;
     }
 

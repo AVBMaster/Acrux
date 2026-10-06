@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>probe text-indent rtl</title>
+<style>
+  html,body{margin:0;padding:0;font:16px/20px Arial}
+  .w{width:300px;background:#eee;margin-bottom:6px;padding:0}
+  .r{direction:rtl}
+  .i1{text-indent:30px}
+  .i2{text-indent:30px; text-align:end}
+  .i3{text-indent:-30px}
+  .i4{text-indent:30px hanging each-line}
+  .i5{text-indent:50%}
+  .i6{text-indent:30px; text-align:center}
+</style></head><body>
+<div class="w r i1" id="t1">rtl indent 30 first line only and some more words to wrap the box</div>
+<div class="w i1" id="t2">ltr indent 30 first line only and some more words to wrap the box</div>
+<div class="w r i2" id="t3">rtl indent 30 align end</div>
+<div class="w r i3" id="t4">rtl negative indent 30</div>
+<div class="w r i4" id="t5">rtl hanging indent each line and some more words to wrap the box</div>
+<div class="w r i5" id="t6">rtl percent indent</div>
+<div class="w r i6" id="t7">rtl indent 30 align center</div>
+</body></html>

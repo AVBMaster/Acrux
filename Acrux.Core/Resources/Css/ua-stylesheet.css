@@ -733,6 +733,18 @@ plaintext {
   margin: 1em 0;
 }
 
+/* The 'dir' attribute maps to the CSS 'direction' property as a presentational hint
+   (HTML rendering section), so any author declaration wins — measured: a container with
+   class 'direction:ltr' AND dir='rtl' stays LTR. Without this rule RTL pages never reach
+   the direction-dependent layout at all, which is why the block-placement bug stayed
+   invisible for so long. 'dir=auto' (direction from content) is not implemented. */
+[dir=rtl] {
+  direction: rtl;
+}
+[dir=ltr] {
+  direction: ltr;
+}
+
 /* Bidirectional. 'bdi' isolates its content from the surrounding text (it is
    direction-agnostic by definition); only 'bdo' overrides, and its direction comes from the
    'dir' attribute. Measured against the reference engine, bdi computes to 'isolate'. */

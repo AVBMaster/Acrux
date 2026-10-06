@@ -473,6 +473,17 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             float cellInlineSize = columnLocations[endColumn].Offset + columnLocations[endColumn].Size - columnLocations[start].Offset;
             cellInlineSize = Math.Max(0, cellInlineSize);
 
+            // CSS 2.1 §17.5.2 / CSS Writing Modes 3 §4.1: with 'direction: rtl' the
+            // column order is reversed — the first cell of a row occupies the LAST
+            // column box. The columns keep their own widths, so this is a mirror of
+            // the placement, not a re-run of the sizing algorithm.
+            if (Space.Direction == TextDirection.Rtl && columnLocations.Count > 1)
+            {
+                float columnsExtent = columnLocations[^1].Offset + columnLocations[^1].Size
+                    - columnLocations[0].Offset;
+                cellInlineOffset = columnsExtent - cellInlineSize - cellInlineOffset;
+            }
+
             // Assigned block size: the sum of the spanned rows' block sizes,
             // plus border spacing between them.
             float cellBlockSize = 0;

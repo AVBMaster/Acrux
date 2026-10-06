@@ -90,6 +90,13 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         var style = Style;
         bool isRow = style.FlexDirection == FlexDirectionType.Row || style.FlexDirection == FlexDirectionType.RowReverse;
         bool isReverse = style.FlexDirection == FlexDirectionType.RowReverse || style.FlexDirection == FlexDirectionType.ColumnReverse;
+        // CSS Flexbox 1 §3.1: the main axis runs in the 'direction' order for row
+        // flow, so an RTL row container starts packing at the RIGHT edge, and
+        // 'row-reverse' in an LTR container starts at the left... i.e. the inline
+        // axis is mirrored when exactly one of the two reverses it. For column flow
+        // the main axis is the block axis (never mirrored by 'direction'), but the
+        // CROSS axis is the inline one, so RTL mirrors the cross positions instead.
+        bool rtl = Space.Direction == TextDirection.Rtl;
         bool isMultiline = style.FlexWrap != FlexWrapType.NoWrap;
         bool wrapReverse = style.FlexWrap == FlexWrapType.WrapReverse;
 
@@ -199,14 +206,30 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                 ? itemBorder.VerticalSum + itemPadding.VerticalSum
                 : itemBorder.HorizontalSum + itemPadding.HorizontalSum;
 
-            item.MarginMainStart = ResolveMargin(isRow ? item.Style.MarginLeft : item.Style.MarginTop, item.Style.FontSize);
-            item.MarginMainEnd = ResolveMargin(isRow ? item.Style.MarginRight : item.Style.MarginBottom, item.Style.FontSize);
-            item.MarginCrossStart = ResolveMargin(isRow ? item.Style.MarginTop : item.Style.MarginLeft, item.Style.FontSize);
-            item.MarginCrossEnd = ResolveMargin(isRow ? item.Style.MarginBottom : item.Style.MarginRight, item.Style.FontSize);
-            var mainMarginStartLen = isRow ? item.Style.MarginLeft : item.Style.MarginTop;
-            var mainMarginEndLen = isRow ? item.Style.MarginRight : item.Style.MarginBottom;
-            item.MarginMainStartIsAuto = mainMarginStartLen is AutoLength;
-            item.MarginMainEndIsAuto = mainMarginEndLen is AutoLength;
+            // Logical -> physical margin mapping (CSS Flexbox 1 §3.1, §4.1, §9.1). The
+            // main axis is the inline axis for row flow and its START side is the right
+            // one when exactly one of 'direction: rtl' / 'row-reverse' applies; for
+            // column flow the main axis is the block axis ('column-reverse' puts its
+            // start at the bottom) and the cross axis is the inline one, mirrored by
+            // 'direction' alone. Getting this wrong makes 'margin-left: auto' absorb
+            // free space on the wrong side of an RTL line.
+            var marginMainStartLen = isRow
+                ? (isReverse == rtl ? item.Style.MarginLeft : item.Style.MarginRight)
+                : (isReverse ? item.Style.MarginBottom : item.Style.MarginTop);
+            var marginMainEndLen = isRow
+                ? (isReverse == rtl ? item.Style.MarginRight : item.Style.MarginLeft)
+                : (isReverse ? item.Style.MarginTop : item.Style.MarginBottom);
+            var marginCrossStartLen = isRow ? item.Style.MarginTop
+                : (rtl ? item.Style.MarginRight : item.Style.MarginLeft);
+            var marginCrossEndLen = isRow ? item.Style.MarginBottom
+                : (rtl ? item.Style.MarginLeft : item.Style.MarginRight);
+
+            item.MarginMainStart = ResolveMargin(marginMainStartLen, item.Style.FontSize);
+            item.MarginMainEnd = ResolveMargin(marginMainEndLen, item.Style.FontSize);
+            item.MarginCrossStart = ResolveMargin(marginCrossStartLen, item.Style.FontSize);
+            item.MarginCrossEnd = ResolveMargin(marginCrossEndLen, item.Style.FontSize);
+            item.MarginMainStartIsAuto = marginMainStartLen is AutoLength;
+            item.MarginMainEndIsAuto = marginMainEndLen is AutoLength;
         }
 
         // Compute flex base size and hypothetical sizes
@@ -300,11 +323,11 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                     + item.MarginMainStart + item.MarginMainEnd + mainGap;
             }
 
-            if (isReverse && !float.IsInfinity(availableMain) && !float.IsNaN(availableMain))
-            {
-                foreach (var item in line.Items)
-                    item.MainOffset = availableMain - (item.MainOffset + item.UsedMainSize + item.MainAxisBorderPadding + item.MarginMainEnd);
-            }
+            // MainOffset/CrossOffset stay LOGICAL from here on (measured away from
+            // main-start / cross-start); the physical mirror happens once, when the
+            // fragments are placed. Doing it here instead made 'justify-content'
+            // distribute free space in physical coordinates, so a reversed line
+            // packed against the wrong edge (CSS Flexbox 1 §8.1, §9.1).
 
             // Apply justify-content per line.
             ApplyJustifyContent(line.Items, availableMain, style, mainGap);
@@ -454,12 +477,6 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         foreach (var (line, item, fragment) in laidOut)
         {
             {
-                float lineCrossStart = line.CrossStart;
-                float mainPos = isRow ? item.MainOffset : lineCrossStart + item.CrossOffset;
-                float crossPos = isRow ? lineCrossStart + item.CrossOffset : item.MainOffset;
-
-                fragment.InlineOffset = mainPos;
-                fragment.BlockOffset = crossPos;
                 // Fragment outer size = content (used flex size) + border/padding.
                 // Stretched items keep their border box equal to the line cross
                 // size (the content box shrinks inside the border/padding). Map the
@@ -468,12 +485,40 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                     ? Math.Max(0, line.CrossSize - item.MarginCrossStart - item.MarginCrossEnd)
                     : item.UsedCrossSize + item.CrossAxisBorderPadding;
                 float mainBorderBox = item.UsedMainSize + item.MainAxisBorderPadding;
+
+                // Mirror each logical coordinate into the physical one. The margins
+                // that sit beyond the border box stay on their own logical side, so
+                // they have to be subtracted from the mirrored edge.
+                bool mirrorMain = isRow ? (isReverse != rtl) : isReverse;
+                bool mirrorCross = !isRow && rtl;
+                float logicalMain = item.MainOffset;
+                float logicalCross = line.CrossStart + item.CrossOffset;
+                float mainPos = !mirrorMain
+                    ? logicalMain
+                    : availableMain - (logicalMain + mainBorderBox + item.MarginMainEnd);
+                float crossPos = !mirrorCross
+                    ? logicalCross
+                    : availableCross - (logicalCross + crossBorderBox + item.MarginCrossEnd);
+
+                fragment.InlineOffset = isRow ? mainPos : crossPos;
+                fragment.BlockOffset = isRow ? crossPos : mainPos;
                 fragment.InlineSize = isRow ? mainBorderBox : crossBorderBox;
                 fragment.BlockSize = isRow ? crossBorderBox : mainBorderBox;
-                fragment.MarginLeft = isRow ? item.MarginMainStart : item.MarginCrossStart;
-                fragment.MarginTop = isRow ? item.MarginCrossStart : item.MarginMainStart;
-                fragment.MarginRight = isRow ? item.MarginMainEnd : item.MarginCrossEnd;
-                fragment.MarginBottom = isRow ? item.MarginCrossEnd : item.MarginMainEnd;
+                // The item's LOGICAL start/end margins have to be written back to the
+                // physical sides they were read from, or a mirrored line reports its
+                // margins swapped to anything downstream reads them.
+                bool mainStartIsLeft = !isRow || (isReverse == rtl);
+                bool crossStartIsLeft = isRow || !rtl;
+                fragment.MarginLeft = isRow
+                    ? (mainStartIsLeft ? item.MarginMainStart : item.MarginMainEnd)
+                    : (crossStartIsLeft ? item.MarginCrossStart : item.MarginCrossEnd);
+                fragment.MarginRight = isRow
+                    ? (mainStartIsLeft ? item.MarginMainEnd : item.MarginMainStart)
+                    : (crossStartIsLeft ? item.MarginCrossEnd : item.MarginCrossStart);
+                fragment.MarginTop = isRow ? item.MarginCrossStart
+                    : (isReverse ? item.MarginMainEnd : item.MarginMainStart);
+                fragment.MarginBottom = isRow ? item.MarginCrossEnd
+                    : (isReverse ? item.MarginMainStart : item.MarginMainEnd);
 
                 Builder.AddChild(fragment);
                 maxMainSize = Math.Max(maxMainSize, item.MainOffset + item.UsedMainSize + item.MainAxisBorderPadding
@@ -531,14 +576,19 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         if (oofCandidates.Count > 0)
         {
             var oofPart = new OutOfFlowLayoutPart(Builder, Space);
+            // Same convention as the block/inline paths: the static inline offset is a
+            // LEFT-based coordinate from the container's border-box origin, and in rtl
+            // the inline-start edge is the content box's right edge.
+            float staticInlineOffset = bp.Left
+                + (rtl ? Math.Max(0f, Builder.InlineSize - bp.HorizontalSum) : 0f);
             foreach (var el in oofCandidates)
             {
                 var candidate = new OutOfFlowChildCandidate(
                     new LayoutBox { Dimensions = new BoxDimensions { Style = el.ComputedStyle, Element = el } },
-                    new LogicalStaticPosition(new LogicalOffset(bp.Left, 0),
+                    new LogicalStaticPosition(new LogicalOffset(staticInlineOffset, 0),
                         LogicalStaticPosition.StaticInlinePosition.Left,
                         LogicalStaticPosition.StaticBlockPosition.Top,
-                        WritingDirectionMode.HorizontalLtr))
+                        Space.GetWritingDirection()))
                 {
                     IsAbsolute = el.ComputedStyle!.Position == PositionType.Absolute,
                     IsFixed = el.ComputedStyle!.Position == PositionType.Fixed,

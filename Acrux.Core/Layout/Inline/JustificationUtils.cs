@@ -68,7 +68,9 @@ public static class JustificationUtils
                 break;
 
             case TextAlignType.Justify when ShouldJustifyLine(info):
-                ApplyJustifyExpansion(items, contentBoxInlineSize - info.TextIndent(), naturalExtent, expansion, lastMeaningful);
+                // 'contentBoxInlineSize' is already the line box minus the first
+                // line's inline-start indent (see InlineLayoutAlgorithm).
+                ApplyJustifyExpansion(items, contentBoxInlineSize, naturalExtent, expansion, lastMeaningful);
                 break;
         }
     }

@@ -1189,12 +1189,18 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
             }
         }
 
-        // An outside marker's box is right-aligned with the item's content edge.
+        // The marker sits on the list item's INLINE-START side, which is the right
+        // one when the item's own 'direction' is rtl (CSS Lists 3 §4.1 — it is the
+        // item's direction, not its parent list's, that governs).
+        bool markerRtl = string.Equals(style.Direction, "rtl", StringComparison.OrdinalIgnoreCase);
+        // An outside marker's box is right-aligned with the item's content edge: in
+        // ltr it hangs to the LEFT of the content edge, in rtl to the RIGHT of it.
         // The text branch below re-places it using the measured box width (which
         // includes the suffix space); this is the image/estimate position.
         float markerX = markerInside
-            ? box.ContentBox.Left
-            : parentBox!.ContentBox.Left - markerWidth;
+            ? (markerRtl ? box.ContentBox.Right - markerWidth : box.ContentBox.Left)
+            : (markerRtl ? box.ContentBox.Right
+                         : parentBox!.ContentBox.Left - markerWidth);
 
         float markerY;
         if (box.Lines != null && box.Lines.Count > 0 && box.Lines[0].Baseline > 0)
@@ -1265,7 +1271,16 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
                 string boxText = Core.Layout.List.ListMarker.MarkerBoxText(
                     style, ordinal, markerContent, markerDocument);
                 float boxWidth = MeasureTextWidth(boxText, markerFontSize, markerFamily, style.FontWeight);
-                markerX = parentBox!.ContentBox.Left - (boxWidth > 0 ? boxWidth : measuredMarkerWidth);
+                float extent = boxWidth > 0 ? boxWidth : measuredMarkerWidth;
+                markerX = markerRtl
+                    ? box.ContentBox.Right
+                    : parentBox!.ContentBox.Left - extent;
+            }
+            else if (markerRtl)
+            {
+                // The reserved inside slot hangs off the item's right edge, and the
+                // glyph itself is at that slot's inline-start (right) end.
+                markerX = box.ContentBox.Right - markerWidth;
             }
         }
 

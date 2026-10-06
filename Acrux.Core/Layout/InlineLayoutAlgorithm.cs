@@ -191,16 +191,23 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         if (oof == null) return;
 
         var oofPart = new OutOfFlowLayoutPart(Builder, Space);
+        // Same convention as the block path: the static inline offset is a LEFT-based
+        // coordinate from this box's border-box origin, and in rtl the inline-start
+        // edge is the content box's right edge.
+        bool staticRtl = Space.Direction == TextDirection.Rtl;
+        float contentInline = float.IsNaN(Builder.InlineSize)
+            ? 0f : Math.Max(0f, Builder.InlineSize - bp.HorizontalSum);
+        float staticInline = bp.Left + (staticRtl ? contentInline : 0f);
         foreach (var el in oof)
         {
             // Static position: the content-box origin (inline offset recorded
             // border-box relative, block offset content relative).
             var candidate = new OutOfFlowChildCandidate(
                 new LayoutBox { Dimensions = new BoxDimensions { Style = el.ComputedStyle, Element = el } },
-                new LogicalStaticPosition(new LogicalOffset(bp.Left, 0),
+                new LogicalStaticPosition(new LogicalOffset(staticInline, 0),
                     LogicalStaticPosition.StaticInlinePosition.Left,
                     LogicalStaticPosition.StaticBlockPosition.Top,
-                    WritingDirectionMode.HorizontalLtr))
+                    Space.GetWritingDirection()))
             {
                 IsAbsolute = el.ComputedStyle!.Position == PositionType.Absolute,
                 IsFixed = el.ComputedStyle!.Position == PositionType.Fixed,
@@ -393,12 +400,27 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
                 clampReached = true;
             }
 
+            // The line breaker already gates 'text-indent' (including the hanging and
+            // each-line variants) to the lines it applies to, and an inside marker
+            // reserves the first line's inline-start slot (CSS 2.1 §10.7.1). Both
+            // shrink the line box on its INLINE-START side (CSS Text 3 §5.1), so the
+            // free space that text-align distributes has to be measured against what
+            // is left; in rtl the start side is the right one, which means the box
+            // keeps its left origin and simply gets shorter.
+            float startIndent = info.TextIndent()
+                + (info.IsFirstFormattedLine()
+                    ? List.ListMarker.InsideMarkerIndent(Style, List.ListItemNumbering.Ordinal(Node),
+                        List.ListMarker.MarkerContentOf(Node), Node)
+                    : 0f);
+            bool lineIsRtl = info.BaseDirection() == TextDirection.Rtl;
+            float alignableInlineSize = MathF.Max(0f, lineWidth - startIndent);
+
             // Apply text-align (end/center/justify). Justify distributes the
             // free inline space into word-spacing expansion opportunities on every
             // line except the last. LTR 'start' needs no work, but RTL 'start' is
             // the right edge, so it goes through the same shift path.
-            if (info.TextAlign() is not TextAlignType.Start || info.BaseDirection() == TextDirection.Rtl)
-                JustificationUtils.ApplyTextAlignment(info, logicalLineItems, lineWidth);
+            if (info.TextAlign() is not TextAlignType.Start || lineIsRtl)
+                JustificationUtils.ApplyTextAlignment(info, logicalLineItems, alignableInlineSize);
 
             // The line box height is the united strut of the inline boxes on the
             // line; fall back to this container's own strut when the line breaker
@@ -409,13 +431,10 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
 
             var boxLine = new BoxLine
             {
-                // The line breaker already gates 'text-indent' (including the
-                // hanging variant) to the lines it applies to. A float on the line's
-                // left moves the whole line box right (info.LeftInset).
-                InlineOffset = contentInlineOrigin + info.LeftInset + info.TextIndent()
-                    + (info.IsFirstFormattedLine()
-                        ? List.ListMarker.InsideMarkerIndent(Style, List.ListItemNumbering.Ordinal(Node),
-                            List.ListMarker.MarkerContentOf(Node), Node) : 0),
+                // A float on the line's left moves the whole line box right
+                // (info.LeftInset); the indent moves it right only in ltr.
+                InlineOffset = contentInlineOrigin + info.LeftInset
+                    + (lineIsRtl ? 0f : startIndent),
                 BlockOffset = _currentLineBlockOffset,
                 InlineSize = info.InlineSize,
                 BlockSize = lineBlockSize,

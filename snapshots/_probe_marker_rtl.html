@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>probe list marker rtl</title>
+<style>
+  html,body{margin:0;padding:0;font:16px Arial}
+  .wrap{width:300px;padding:20px;background:#eee;margin-bottom:6px}
+  .r{direction:rtl}
+  ul{margin:0;padding:0}
+  li{margin:0}
+  .inside{list-style-position:inside}
+  .outside{list-style-position:outside;padding-right:30px}
+  .outsideL{list-style-position:outside;padding-left:30px}
+</style></head><body>
+<div class="wrap r"><ul id="u1"><li id="i1">rtl ul, rtl li, outside</li></ul></div>
+<div class="wrap"><ul id="u2"><li id="i2" class="r">ltr ul, rtl li, outside</li></ul></div>
+<div class="wrap r"><ul id="u3"><li id="i3" style="direction:ltr">rtl ul, ltr li, outside</li></ul></div>
+<div class="wrap r"><ul class="outside" id="u4"><li id="i4">rtl ul padding-right 30, outside</li></ul></div>
+<div class="wrap"><ul class="outsideL" id="u5"><li id="i5">ltr ul padding-left 30, outside</li></ul></div>
+<div class="wrap r"><ul class="inside" id="u6"><li id="i6">rtl inside marker</li></ul></div>
+<div class="wrap"><ul class="inside" id="u7"><li id="i7">ltr inside marker</li></ul></div>
+<div class="wrap r"><ul class="inside" id="u8"><li id="i8" style="list-style-type:decimal">rtl inside decimal</li></ul></div>
+</body></html>

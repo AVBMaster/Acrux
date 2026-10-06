@@ -192,50 +192,100 @@ public class OutOfFlowLayoutPart
 
     /// <summary>
     /// Resolve the OOF box's border-box origin relative to the container's
-    /// CONTENT box. Explicit insets win (start side first); when both insets on
-    /// an axis are auto the static position applies. The static inline offset is
-    /// recorded border-box relative (border + padding = the content origin), the
-    /// static block offset is content-box relative.
+    /// CONTENT box. This is CSS 2.1 §10.3.7 / §10.3.8 solved on each axis:
+    /// auto margins are 0 unless the axis is over-constrained, an auto inset is
+    /// whatever the equation leaves, a fully over-constrained axis drops 'right'
+    /// in ltr and 'left' in rtl, and an axis with both insets auto falls back to
+    /// the static position. Margins always count.
     /// </summary>
     private static (float x, float y) ComputePosition(ComputedStyle style, float inlineSize, float blockSize,
         LogicalSize paddingBoxSize, OutOfFlowChildCandidate candidate, BoxFragmentBuilder builder)
     {
         float padL = builder.PaddingLeft, padT = builder.PaddingTop;
-        float x, y;
+        // The static position and the over-constrained tie-break follow the CONTAINING
+        // block's 'direction', not the box's own: an 'ltr' abspos child of an 'rtl'
+        // container still starts at the container's inline-start (right) edge.
+        bool rtl = candidate.StaticPosition.WritingDirection.Direction == TextDirection.Rtl;
+        float cbInline = paddingBoxSize.InlineSize;
+        float cbBlock = paddingBoxSize.BlockSize;
+        float fontSize = style.FontSize;
 
-        if (style.Left is not AutoLength)
-        {
-            x = ResolveInset(style.Left, paddingBoxSize.InlineSize, style.FontSize) - padL;
-            // CSS 2.1 §10.3.7: with a definite width and both left & right resolved,
-            // auto margins absorb the leftover inline space (e.g. 'margin:0 auto'
-            // horizontally centers a fixed-width abspos box).
-            if (style.Width is not AutoLength && style.Right is not AutoLength)
-            {
-                float leftInset = ResolveInset(style.Left, paddingBoxSize.InlineSize, style.FontSize);
-                float rightInset = ResolveInset(style.Right, paddingBoxSize.InlineSize, style.FontSize);
-                float surplus = paddingBoxSize.InlineSize - leftInset - rightInset - inlineSize;
-                if (surplus > 0)
-                {
-                    bool mlAuto = style.MarginLeft is AutoLength;
-                    bool mrAuto = style.MarginRight is AutoLength;
-                    if (mlAuto && mrAuto) x += surplus / 2f;
-                    else if (mlAuto) x += surplus;
-                }
-            }
-        }
-        else if (style.Right is not AutoLength)
-            x = paddingBoxSize.InlineSize - ResolveInset(style.Right, paddingBoxSize.InlineSize, style.FontSize) - inlineSize - padL;
-        else
-            x = candidate.StaticPosition.Offset.InlineOffset - builder.BorderLeft - padL;
-
-        if (style.Top is not AutoLength)
-            y = ResolveInset(style.Top, paddingBoxSize.BlockSize, style.FontSize) - padT;
-        else if (style.Bottom is not AutoLength)
-            y = paddingBoxSize.BlockSize - ResolveInset(style.Bottom, paddingBoxSize.BlockSize, style.FontSize) - blockSize - padT;
-        else
-            y = candidate.StaticPosition.Offset.BlockOffset;
-
+        float x = ResolveInlineAxis(style, rtl, inlineSize, cbInline, fontSize, padL, candidate, builder);
+        float y = ResolveBlockAxis(style, blockSize, cbBlock, fontSize, padT, candidate);
         return (x, y);
+    }
+
+    private static float ResolveInlineAxis(ComputedStyle style, bool rtl, float inlineSize,
+        float cbInline, float fontSize, float padL, OutOfFlowChildCandidate candidate,
+        BoxFragmentBuilder builder)
+    {
+        bool leftAuto = style.Left is AutoLength, rightAuto = style.Right is AutoLength;
+        bool widthAuto = style.Width is AutoLength;
+        bool mlAuto = style.MarginLeft is AutoLength, mrAuto = style.MarginRight is AutoLength;
+        float ml = mlAuto ? 0f : ResolveInset(style.MarginLeft, cbInline, fontSize);
+        float mr = mrAuto ? 0f : ResolveInset(style.MarginRight, cbInline, fontSize);
+        float left = leftAuto ? 0f : ResolveInset(style.Left, cbInline, fontSize);
+        float right = rightAuto ? 0f : ResolveInset(style.Right, cbInline, fontSize);
+
+        if (leftAuto && rightAuto)
+        {
+            // Static position: the recorded offset is the container's inline-start edge
+            // as a left-based coordinate, so in rtl the box hangs to its left.
+            float start = candidate.StaticPosition.Offset.InlineOffset - builder.BorderLeft - padL;
+            return rtl ? start - inlineSize - mr : start + ml;
+        }
+
+        if (!leftAuto && !rightAuto && !widthAuto)
+        {
+            // Over-constrained: auto margins absorb what the equation leaves over,
+            // then one inset is dropped depending on the direction.
+            float surplus = cbInline - left - right - inlineSize - ml - mr;
+            if (surplus > 0f)
+            {
+                if (mlAuto && mrAuto) { ml += surplus / 2f; mr += surplus / 2f; }
+                else if (mlAuto) ml += surplus;
+                else if (mrAuto) mr += surplus;
+            }
+            return rtl
+                ? cbInline - right - mr - inlineSize - padL
+                : left + ml - padL;
+        }
+
+        // Exactly one inset is auto: it absorbs the remaining space, so the box is
+        // pinned by the definite side (plus that side's margin).
+        return leftAuto
+            ? cbInline - right - mr - inlineSize - padL
+            : left + ml - padL;
+    }
+
+    private static float ResolveBlockAxis(ComputedStyle style, float blockSize,
+        float cbBlock, float fontSize, float padT, OutOfFlowChildCandidate candidate)
+    {
+        bool topAuto = style.Top is AutoLength, bottomAuto = style.Bottom is AutoLength;
+        bool heightAuto = style.Height is AutoLength;
+        bool mtAuto = style.MarginTop is AutoLength, mbAuto = style.MarginBottom is AutoLength;
+        float mt = mtAuto ? 0f : ResolveInset(style.MarginTop, cbBlock, fontSize);
+        float mb = mbAuto ? 0f : ResolveInset(style.MarginBottom, cbBlock, fontSize);
+        float top = topAuto ? 0f : ResolveInset(style.Top, cbBlock, fontSize);
+        float bottom = bottomAuto ? 0f : ResolveInset(style.Bottom, cbBlock, fontSize);
+
+        if (topAuto && bottomAuto)
+            return candidate.StaticPosition.Offset.BlockOffset + mt;
+
+        if (!topAuto && !bottomAuto && !heightAuto)
+        {
+            float surplus = cbBlock - top - bottom - blockSize - mt - mb;
+            if (surplus > 0f)
+            {
+                if (mtAuto && mbAuto) { mt += surplus / 2f; mb += surplus / 2f; }
+                else if (mtAuto) mt += surplus;
+                else if (mbAuto) mb += surplus;
+            }
+            // §10.3.8: a vertical over-constrained equation drops 'bottom'.
+            return top + mt - padT;
+        }
+
+        return topAuto ? cbBlock - bottom - mb - blockSize - padT : top + mt - padT;
     }
 
     // For a calc() inset, MathLength.ToPixels treats its first argument as the

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>probe rtl flex grid</title>
+<style>
+  html,body{margin:0;padding:0;font:12px Arial}
+  .r{direction:rtl}
+  .f{display:flex;width:400px;height:40px;background:#eee;margin-bottom:8px}
+  .f div{width:80px;height:20px;background:#4a4}
+  .f2{display:flex;justify-content:flex-end;width:400px;height:40px;background:#eee;margin-bottom:8px}
+  .f2 div{width:80px;height:20px;background:#4a4}
+  .f3{display:flex;justify-content:center;width:400px;height:40px;background:#eee;margin-bottom:8px}
+  .f3 div{width:80px;height:20px;background:#4a4}
+  .f4{display:flex;flex-direction:column;align-items:flex-end;width:400px;height:80px;background:#eee;margin-bottom:8px}
+  .f4 div{width:80px;height:20px;background:#4a4}
+  .f5{display:flex;width:400px;height:40px;background:#eee;margin-bottom:8px}
+  .f5 .a{margin-left:auto;width:80px;height:20px;background:#4a4}
+  .f5 .b{width:80px;height:20px;background:#a44}
+  .g{display:grid;grid-template-columns:100px 100px 100px;width:300px;background:#eee;margin-bottom:8px}
+  .g div{height:20px;background:#4a4}
+  .t{border-collapse:collapse;direction:rtl}
+  .t td{width:60px;height:20px;border:1px solid #333}
+  .f6{display:flex;flex-direction:row-reverse;width:400px;height:40px;background:#eee;margin-bottom:8px}
+  .f6 div{width:80px;height:20px;background:#4a4}
+  .f7{display:flex;flex-direction:row-reverse;justify-content:flex-end;width:400px;height:40px;background:#eee;margin-bottom:8px}
+  .f7 div{width:80px;height:20px;background:#4a4}
+  .f8{display:flex;flex-direction:row-reverse;align-items:flex-end;width:400px;height:40px;background:#eee;margin-bottom:8px}
+  .f8 div{width:80px;height:20px;background:#4a4}
+  .f9{display:flex;flex-direction:column-reverse;width:400px;height:60px;background:#eee;margin-bottom:8px}
+  .f9 div{width:80px;height:20px;background:#4a4}
+  .f10{display:flex;flex-direction:column;width:400px;height:60px;background:#eee;margin-bottom:8px;align-items:flex-end}
+  .f10 div{width:80px;height:20px;background:#4a4}
+</style></head><body>
+<div class="f6" id="p6"><div></div><div></div><div></div></div>
+<div class="f7" id="p7"><div></div><div></div></div>
+<div class="f8" id="p8"><div></div></div>
+<div class="f9" id="p9"><div></div><div></div></div>
+<div class="f10 r" id="p10"><div></div></div>
+<div class="f r"><div></div><div></div><div></div></div>
+<div class="f"><div></div><div></div><div></div></div>
+<div class="f2 r"><div></div><div></div></div>
+<div class="f3 r"><div></div><div></div></div>
+<div class="f4 r"><div></div><div></div></div>
+<div class="f5 r"><div class="a"></div><div class="b"></div></div>
+<div class="g r"><div>g1</div><div>g2</div><div>g3</div><div>g4</div><div>g5</div><div>g6</div></div>
+<table class="t" id="tb"><tr><td>c1</td><td>c2</td><td>c3</td></tr></table>
+</body></html>

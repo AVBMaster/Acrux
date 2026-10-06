@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>probe oof rtl</title>
+<style>
+  html,body{margin:0;padding:0;font:12px Arial}
+  .box{position:relative;width:400px;height:40px;margin:0 0 4px 0;background:#eee}
+  .r{direction:rtl}.l{direction:ltr}
+  .k{position:absolute;width:100px;height:20px;background:#4a4}
+  #k2{direction:ltr}#k3{direction:rtl}
+  #k4{left:10px;right:20px}
+  #k5{left:10px;right:20px}
+  #k6{margin-left:auto;margin-right:auto;width:100px;left:0;right:0}
+  #k7{left:auto;right:auto;margin-left:20px}
+  #k8{left:auto;right:auto;margin-right:20px}
+  #k9{width:auto;left:0;right:0}
+  #k10{width:auto;left:0;right:0}
+  #k11{margin-left:20px}
+  #k12{margin-right:20px}
+  #k13{margin-left:20px;margin-top:15px}
+  #k14{left:0;right:auto;margin-right:30px;width:100px}
+  #k15{right:0;left:auto;margin-left:30px;width:100px}
+  #k16{left:0;right:auto;margin-left:30px;width:100px}
+  #k17{right:0;left:auto;margin-right:30px;width:100px}
+  #k18{top:0;margin-top:15px}
+  #k19{bottom:0;margin-bottom:15px}
+  #k20{top:5px;bottom:5px;height:auto;background:#44a}
+  #k21{top:5px;bottom:10px;height:20px;background:#44a}
+  #k22{top:auto;bottom:auto;margin-top:15px}
+  #k23{top:0;bottom:0;margin-top:auto;margin-bottom:auto;background:#44a}
+  #k24{top:0;bottom:0;margin-bottom:auto;background:#44a}
+  #k25{top:0;bottom:0;margin-top:auto;background:#44a}
+</style></head><body>
+<div class="box l" id="b23"><div class="k" id="k23">23 T0 B0 h20 m both auto</div></div>
+<div class="box l" id="b24"><div class="k" id="k24">24 T0 B0 h20 mb auto</div></div>
+<div class="box l" id="b25"><div class="k" id="k25">25 T0 B0 h20 mt auto</div></div>
+<div class="box l" id="b18"><div class="k" id="k18">18 top0 mt15</div></div>
+<div class="box l" id="b19"><div class="k" id="k19">19 bottom0 mb15</div></div>
+<div class="box l" id="b20"><div class="k" id="k20">20 T5 B5 h auto</div></div>
+<div class="box l" id="b21"><div class="k" id="k21">21 T5 B10 h20 over</div></div>
+<div class="box l" id="b22"><div class="k" id="k22">22 static + mt15</div></div>
+<div class="box l" id="b11"><div class="k" id="k11">11 ltr static + ml20</div></div>
+<div class="box l" id="b12"><div class="k" id="k12">12 ltr static + mr20</div></div>
+<div class="box l" id="b13"><div class="k" id="k13">13 ltr static + ml20 mt15</div></div>
+<div class="box l" id="b14"><div class="k" id="k14">14 ltr L0 mr30 w100</div></div>
+<div class="box r" id="b15"><div class="k" id="k15">15 rtl R0 ml30 w100</div></div>
+<div class="box l" id="b16"><div class="k" id="k16">16 ltr L0 ml30 w100</div></div>
+<div class="box r" id="b17"><div class="k" id="k17">17 rtl R0 mr30 w100</div></div>
+<div class="box r" id="b1"><div class="k" id="k1">1 rtl parent auto:auto</div></div>
+<div class="box r" id="b2"><div class="k l" id="k2">2 rtl parent, child ltr</div></div>
+<div class="box l" id="b3"><div class="k r" id="k3">3 ltr parent, child rtl</div></div>
+<div class="box l" id="b4"><div class="k" id="k4">4 ltr L10 R20 w100</div></div>
+<div class="box r" id="b5"><div class="k" id="k5">5 rtl L10 R20 w100</div></div>
+<div class="box r" id="b6"><div class="k" id="k6">6 rtl ml/mr auto L0 R0</div></div>
+<div class="box r" id="b7"><div class="k" id="k7">7 rtl static + ml20</div></div>
+<div class="box r" id="b8"><div class="k" id="k8">8 rtl static + mr20</div></div>
+<div class="box l" id="b9"><div class="k" id="k9">9 ltr auto w L0R0</div></div>
+<div class="box r" id="b10"><div class="k" id="k10">10 rtl auto w L0R0</div></div>
+</body></html>

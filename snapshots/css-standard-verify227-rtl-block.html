@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<!--
+  b227 — RTL block-level child placement (CSS 2.1 §10.3.2 / §10.3.7) and the HTML 'dir'
+  attribute's mapping to the CSS 'direction' property (#206 + #207, which must land together).
+
+  The container is always 400px wide at a known x, so every answer is arithmetic:
+  in RTL the constraint line is margin-right + width + margin-left = containing block,
+  the START edge is the right one, and the over-constrained side (left margin) is dropped.
+  Expected x = W - margin-right - width.
+
+  Containing block content box is 400px wide and starts at x=0 in every case except #r9,
+  where the 5px border + 25px padding shift it to x=30, right edge 430.
+  Rule Edge follows: in RTL the START margin (margin-right) is honoured and the END margin
+  (margin-left) is the value dropped when the equation is over-constrained (§10.3.2).
+
+  EDGE TRUTH (2026-10-06, Edge 141 / dpr=1, getBoundingClientRect().left of each child):
+    r1  x=300  width:100 only                        400 - 0 - 100
+    r2  x=280  margin-right 20 (start)               400 - 20 - 100
+    r3  x=300  margin-left 20 (end, dropped)         400 - 0 - 100
+    r4  x=260  ml 30 + mr 40                         400 - 40 - 100
+    r5  x=0    width:auto                            fills 400
+    r6  x=150  ml auto + mr auto                     (400-100)/2 = 150 each
+    r7  x=0    margin-right auto                     absorbs 300 -> pushed to left edge
+    r8  x=300  margin-left auto                      end side, box stays at start
+    r9  x=320  cb 30..430, mr 10                     430 - 10 - 100
+    r10 x=60   width:auto mr 20 ml 60                w = 400-20-60 = 320, x = 400-20-320
+    r11 x=270  margin-inline-start 30, -end 10       400 - 30 - 100
+    r12 x=0    direction:ltr control (mr 20)         left edge, mr does not shift in LTR
+    d1  x=0    dir="rtl" + author direction:ltr      author rule beats the UA hint
+    d2  x=300  direction:rtl                         start edge is the right one
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>b227 rtl block placement</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 12px Arial, sans-serif; }
+  .cb { position: relative; width: 400px; height: 40px; margin: 0 0 6px 0; background: #eee;
+        direction: rtl; }
+  .ltr { direction: ltr; }
+  .kid { height: 20px; background: #4a4; }
+  .w100 { width: 100px; }
+  #r1 .kid { width: 100px; }
+  #r2 .kid { width: 100px; margin-right: 20px; }
+  #r3 .kid { width: 100px; margin-left: 20px; }
+  #r4 .kid { width: 100px; margin-left: 30px; margin-right: 40px; }
+  #r5 .kid { width: auto; }
+  #r6 .kid { width: 100px; margin-left: auto; margin-right: auto; }
+  #r7 .kid { width: 100px; margin-right: auto; }
+  #r8 .kid { width: 100px; margin-left: auto; }
+  /* padding/border on the containing block move the right edge the start margin offsets from */
+  #r9 { box-sizing: content-box; border: 5px solid #999; padding: 0 25px; }
+  #r9 .kid { width: 100px; margin-right: 10px; }
+  /* auto width with margins: the child shrinks, and the box still starts at the right edge */
+  #r10 .kid { width: auto; margin-right: 20px; margin-left: 60px; }
+  /* logical properties in RTL: inline-start is the RIGHT side */
+  #r11 .kid { width: 100px; margin-inline-start: 30px; margin-inline-end: 10px; }
+  /* LTR control */
+  #r12 { direction: ltr; }
+  #r12 .kid { width: 100px; margin-right: 20px; }
+  /* the dir attribute must drive CSS direction (#207) */
+  #d1 div { width: 100px; height: 20px; background: #44a; }
+  #d2 { direction: rtl; }
+  #d2 div { width: 100px; height: 20px; background: #44a; }
+</style></head>
+<body>
+<div class="cb" id="r1"><div class="kid"></div></div>
+<div class="cb" id="r2"><div class="kid"></div></div>
+<div class="cb" id="r3"><div class="kid"></div></div>
+<div class="cb" id="r4"><div class="kid"></div></div>
+<div class="cb" id="r5"><div class="kid"></div></div>
+<div class="cb" id="r6"><div class="kid"></div></div>
+<div class="cb" id="r7"><div class="kid"></div></div>
+<div class="cb" id="r8"><div class="kid"></div></div>
+<div class="cb" id="r9"><div class="kid"></div></div>
+<div class="cb" id="r10"><div class="kid"></div></div>
+<div class="cb" id="r11"><div class="kid"></div></div>
+<div class="cb" id="r12"><div class="kid"></div></div>
+<div class="cb ltr" id="d1" dir="rtl"><div></div></div>
+<div class="cb" id="d2"><div></div></div>
+</body></html>
