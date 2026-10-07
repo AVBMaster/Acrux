@@ -1,0 +1,117 @@
+<!doctype html>
+<!-- css-standard-verify249: transform-style, the 'inherit'/'all: initial' routes through the
+  CSS Transforms family, and the ASCII case-insensitivity of a unit and a keyword.
+
+  What each row asserts:
+   * 'transform-style' is 'flat | preserve-3d', initial 'flat'; a keyword is case-insensitive and
+     a second token, a comma or 'auto' takes the declaration down with it.
+   * 'inherit' answers with the parent's COMPUTED value, so a parent written 'transform-origin:
+     10px 20px' hands down the canonical pair, and 'all: initial' puts every property of the
+     family back on its initial value -- which is 'none' for the four that hold a length or a
+     list, 'visible'/'flat'/'view-box' for the three keywords, and '50% 50%' for an origin.
+   * a dimension's unit is matched without case ('10PX', '1Q', '1IN', '1PC', '1E2DEG'), so is a
+     keyword ('LEFT TOP', 'HiDdEn', 'Border-Box'), and a scientific-notation number is a number.
+   * the origin of a 200x100 box is reported in pixels, so a zero depth is dropped, 'top' is the
+     vertical axis moving on its own, and a third token on 'perspective-origin' is not in the
+     grammar at all.
+
+  The four painted boxes prove the same values are what the renderer used: a unit written in
+  capitals, an angle written in scientific notation, a scale written in percentages and an origin
+  written as keywords all have to arrive at the same pixels the reference engine draws.
+--><style>
+  html, body { margin: 0; padding: 0; background: rgb(255,255,255); }
+  #report div { white-space: pre; font: 12px Consolas, monospace; color: rgb(0,0,0); }
+  .c { width: 200px; height: 100px; font: 16px/16px Arial, sans-serif; color: rgb(17,17,17); }
+  #stage { position: absolute; left: 20px; top: 20px; width: 280px; height: 260px; }
+  .frame { position: absolute; width: 60px; height: 60px; border: 1px dotted rgb(0,0,0); }
+  .box { position: absolute; width: 60px; height: 60px; background: rgb(255,0,0); }
+  #k1 { left: 100px; top: 10px; }
+  #b1 { left: 100px; top: 10px; translate: 40PX 30PX; }
+  #k2 { left: 10px; top: 100px; }
+  #b2 { left: 10px; top: 100px; rotate: 1e2deg; }
+  #k3 { left: 100px; top: 100px; }
+  #b3 { left: 100px; top: 100px; scale: 50% 1e2%; }
+  #k4 { left: 10px; top: 10px; }
+  #b4 { left: 10px; top: 10px; transform-origin: LEFT TOP; rotate: 45deg; }
+</style></head><body>
+<div id="stage">
+  <div class="frame" id="k1"></div><div class="box" id="b1"></div>
+  <div class="frame" id="k2"></div><div class="box" id="b2"></div>
+  <div class="frame" id="k3"></div><div class="box" id="b3"></div>
+  <div class="frame" id="k4"></div><div class="box" id="b4"></div>
+</div>
+<div id="report" style="position:absolute;left:320px;top:20px;width:560px"></div>
+<div id="cases" style="position:absolute;left:890px;top:0;width:1px;height:1px;overflow:hidden">
+<div class="c" style="transform-style: flat" id="ts01" data-p="transform-style"></div>
+<div class="c" style="transform-style: preserve-3d" id="ts02" data-p="transform-style"></div>
+<div class="c" style="transform-style: PRESERVE-3D" id="ts03" data-p="transform-style"></div>
+<div class="c" style="transform-style: preserve-flat" id="ts04" data-p="transform-style"></div>
+<div class="c" style="transform-style: auto" id="ts05" data-p="transform-style"></div>
+<div class="c" style="transform-style: none" id="ts06" data-p="transform-style"></div>
+<div class="c" style="transform-style: flat flat" id="ts07" data-p="transform-style"></div>
+<div class="c" style="transform-style: preserve-3d, flat" id="ts08" data-p="transform-style"></div>
+<div class="c" style="all:initial" id="ts10" data-p="transform-style"></div>
+<div class="c" style="translate: 10PX" id="u01" data-p="translate"></div>
+<div class="c" style="translate: 1Q" id="u02" data-p="translate"></div>
+<div class="c" style="translate: 1IN" id="u03" data-p="translate"></div>
+<div class="c" style="translate: 10pt 1PC" id="u04" data-p="translate"></div>
+<div class="c" style="transform-origin: LEFT TOP" id="u05" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: Center" id="u06" data-p="transform-origin"></div>
+<div class="c" style="backface-visibility: HiDdEn" id="u07" data-p="backface-visibility"></div>
+<div class="c" style="transform-box: Border-Box" id="u08" data-p="transform-box"></div>
+<div class="c" style="rotate: 1E2DEG" id="u09" data-p="rotate"></div>
+<div class="c" style="scale: 1e2" id="u10" data-p="scale"></div>
+<div class="c" style="perspective: 1E3px" id="u11" data-p="perspective"></div>
+<div class="c" style="transform-origin: 10px 20px 0px" id="g01" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: 0 0" id="g02" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: center center" id="g03" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: left" id="g04" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: top" id="g05" data-p="transform-origin"></div>
+<div class="c" style="perspective-origin: 10px 20px 30px" id="g06" data-p="perspective-origin"></div>
+<div class="c" style="transform-origin: right bottom" id="g07" data-p="transform-origin"></div>
+<div class="c" style="translate: min(10px, 20px)" id="g08" data-p="translate"></div>
+<div class="c" style="translate: 10px, 20px" id="g09" data-p="translate"></div>
+<div class="c" style="rotate: 45deg 0 0 0" id="g10" data-p="rotate"></div>
+<div class="c" style="scale: 2 3 4 5" id="g11" data-p="scale"></div>
+<div class="c" style="translate: -0" id="g12" data-p="translate"></div>
+<div class="c" style="rotate: 0.7071 0.7071 0 45deg" id="g13" data-p="rotate"></div>
+<div class="c" style="rotate: 2 0 0 -45deg" id="g14" data-p="rotate"></div>
+<div class="c" style="rotate: 0 0 0.5 1.5turn" id="g15" data-p="rotate"></div>
+<div class="c" style="translate: 10px 20px 0" id="g16" data-p="translate"></div>
+<div class="c" style="transform-origin: 10px 10px 10px 10px" id="g17" data-p="transform-origin"></div>
+<div class="c" style="scale: 50% 1e2%" id="g18" data-p="scale"></div>
+<div class="c" style="perspective: calc(100px + 1cm)" id="g19" data-p="perspective"></div>
+<div class="c" style="translate: 1e2px" id="g20" data-p="translate"></div>
+<div class="c" style="translate: 0 0 0" id="g21" data-p="translate"></div>
+<div class="c" style="transform-origin: 50% 50% 0" id="g22" data-p="transform-origin"></div>
+<div class="c" style="rotate: 0deg" id="g23" data-p="rotate"></div>
+<div class="c" style="scale: 0" id="g24" data-p="scale"></div>
+<div class="c" style="translate: calc(10px)" id="g25" data-p="translate"></div></div>
+<div id="inh" style="position:absolute;left:890px;top:300px;width:1px;height:1px;overflow:hidden;;translate: 7px 8px; rotate: 12deg; scale: 3; perspective: 400px; perspective-origin: 30px 40px; transform-origin: 10px 20px; transform-box: content-box; backface-visibility: hidden; transform-style: preserve-3d">
+<div class="c" style="transform-style: inherit" id="ts09" data-p="transform-style"></div>
+<div class="c" style="all:initial" id="a01" data-p="translate"></div>
+<div class="c" style="all:initial" id="a02" data-p="rotate"></div>
+<div class="c" style="all:initial" id="a03" data-p="scale"></div>
+<div class="c" style="all:initial" id="a04" data-p="perspective"></div>
+<div class="c" style="all:initial" id="a05" data-p="transform-box"></div>
+<div class="c" style="all:initial" id="a06" data-p="backface-visibility"></div>
+<div class="c" style="all:initial" id="a07" data-p="transform-style"></div>
+<div class="c" style="translate: inherit" id="h01" data-p="translate"></div>
+<div class="c" style="rotate: inherit" id="h02" data-p="rotate"></div>
+<div class="c" style="scale: inherit" id="h03" data-p="scale"></div>
+<div class="c" style="perspective: inherit" id="h04" data-p="perspective"></div>
+<div class="c" style="perspective-origin: inherit" id="h05" data-p="perspective-origin"></div>
+<div class="c" style="transform-origin: inherit" id="h06" data-p="transform-origin"></div>
+<div class="c" style="transform-box: inherit" id="h07" data-p="transform-box"></div>
+<div class="c" style="backface-visibility: inherit" id="h08" data-p="backface-visibility"></div></div>
+<script>
+const WANTS = {"ts01": "flat", "ts02": "preserve-3d", "ts03": "preserve-3d", "ts04": "flat", "ts05": "flat", "ts06": "flat", "ts07": "flat", "ts08": "flat", "ts09": "preserve-3d", "ts10": "flat", "a01": "none", "a02": "none", "a03": "none", "a04": "none", "a05": "view-box", "a06": "visible", "a07": "flat", "h01": "7px 8px", "h02": "12deg", "h03": "3", "h04": "400px", "h05": "30px 40px", "h06": "10px 20px", "h07": "content-box", "h08": "hidden", "u01": "10px", "u02": "0.944882px", "u03": "96px", "u04": "13.3333px 16px", "u05": "0px 0px", "u06": "100px 50px", "u07": "hidden", "u08": "border-box", "u09": "100deg", "u10": "100", "u11": "1000px", "g01": "10px 20px", "g02": "0px 0px", "g03": "100px 50px", "g04": "0px 50px", "g05": "100px 0px", "g06": "100px 50px", "g07": "200px 100px", "g08": "10px", "g09": "none", "g10": "0 0 0 45deg", "g11": "none", "g12": "0px", "g13": "0.7071 0.7071 0 45deg", "g14": "x -45deg", "g15": "540deg", "g16": "10px 20px", "g17": "100px 50px", "g18": "0.5 1", "g19": "137.795px", "g20": "100px", "g21": "0px", "g22": "100px 50px", "g23": "0deg", "g24": "0", "g25": "10px"};
+const out = [];
+for (const n of document.querySelectorAll('#cases .c, #inh .c')) {
+  const p = n.getAttribute('data-p');
+  const v = getComputedStyle(n).getPropertyValue(p);
+  const w = WANTS[n.id];
+  out.push(`${n.id}=${JSON.stringify(v)} want=${JSON.stringify(w)} ok=${v === w}`);
+}
+document.getElementById('report').innerHTML = out.map(l => '<div>' + l + '</div>').join('');
+</script></body></html>

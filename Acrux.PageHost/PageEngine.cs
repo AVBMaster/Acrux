@@ -186,6 +186,7 @@ public sealed class PageEngine : IDisposable
         PageEnvironment.Initialize();
         _js = new JavaScriptEngine(id);
         _js.ShowDialog = (msg, type) => _sink.RequestDialog(msg ?? "", type ?? "");
+        _js.ForceUpdateStyleAndLayout = ForceStyleAndLayoutForScript;
         _animations.EventSink = DispatchAnimationEvent;
 
         // Page-compat: window metrics + JS-driven scrolling live with the document.
@@ -1953,6 +1954,49 @@ public sealed class PageEngine : IDisposable
     private void MarkLayout() { _styleDirty = true; _layoutDirty = true; _dlDirty = true; _paintVisible = true; _animOffscreen = false; _sink.RequestFrame(); }
 
     /// <summary>
+    /// Runs style, animation and layout for a synchronous DOM read from script —
+    /// getComputedStyle, getBoundingClientRect, offsetWidth and friends. The frame
+    /// pipeline is lazy, so a page that changes a style and measures the box in the
+    /// same tick would otherwise read the previous frame's numbers.
+    ///
+    /// The three stages keep the frame's order (style, then the animation sample that
+    /// compares against it, then layout), so a transition started by a measured change
+    /// still starts. JavaScriptEngine calls this at most once per DOM mutation version,
+    /// which is why it does not need to test the dirty flags itself.
+    /// </summary>
+    private void ForceStyleAndLayoutForScript()
+    {
+        if (_document == null) return;
+
+        if (_styleComputer == null)
+        {
+            _styleComputer = new StyleComputer();
+            _styleComputer.AddStylesheet(_docManager.GetUaStylesheet(), Acrux.Core.Css.Resolver.CascadeOrigin.UserAgent);
+        }
+        _styleComputer.ComputeStyles(_document, _viewportW, _viewportH);
+        _stStylePass++;
+        _layoutGeneration++;
+
+        AdvanceAnimations(styleRecomputed: true);
+
+        _stLayout++;
+        _incremental ??= new IncrementalLayoutEngine(_layoutEngine, _layoutCache);
+        _incremental.Layout(_document, _viewportW, _viewportH, _dpi, 16f);
+        _layoutGeneration++;
+
+        var bodyBox = _document.Body?.LayoutBox;
+        _contentW = bodyBox?.BorderBox.Width ?? _viewportW;
+        _contentH = bodyBox?.BorderBox.Height ?? _viewportH;
+
+        // Nothing is pending any more, but the display list was built from the values
+        // this pass replaced, so the next frame has to walk it again.
+        _styleDirty = false;
+        _layoutDirty = false;
+        _dlDirty = true;
+        _paintVisible = true;
+    }
+
+    /// <summary>
     /// Sample every CSS animation and transition for this pass and write the
     /// results into the elements' computed styles.
     ///
@@ -1972,7 +2016,7 @@ public sealed class PageEngine : IDisposable
             // Keyframe rules come from the cascade, so they can only change on a pass
             // whose styles were re-resolved; collecting them walks every rule group.
             if (styleRecomputed || _keyframeRules == null)
-                _keyframeRules = _styleComputer.CollectKeyframeRules();
+                _keyframeRules = _styleComputer.CollectKeyframeRules(_document);
 
             long sT = Stopwatch.GetTimestamp();
             var result = _animations.Update(root, _keyframeRules, styleRecomputed: styleRecomputed);
@@ -2011,7 +2055,7 @@ public sealed class PageEngine : IDisposable
                 {
                     File.AppendAllText("acrux_anim_live.log",
                         $"tab{_id} t={_animations.Timeline.CurrentTimeMs:F1}ms " +
-                        $"kf={_styleComputer.CollectKeyframeRules().Count} " +
+                        $"kf={_styleComputer.CollectKeyframeRules(_document).Count} " +
                         $"active={result.HasActiveAnimations} effects={_animations.ActiveEffectCount} " +
                         $"animated={result.AnimatedElements} layout={result.NeedsLayout} " +
                         $"live={_animations.DescribeActiveEffectsForDiagnostics()}\n");

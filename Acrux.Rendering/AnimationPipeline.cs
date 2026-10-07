@@ -30,7 +30,7 @@ public static class AnimationPipeline
         double timeMs)
     {
         engine.Timeline.SetCurrentTime(timeMs);
-        return engine.Update(root, styleComputer?.CollectKeyframeRules());
+        return engine.Update(root, styleComputer?.CollectKeyframeRules(root.OwnerDocument));
     }
 
     /// <summary>

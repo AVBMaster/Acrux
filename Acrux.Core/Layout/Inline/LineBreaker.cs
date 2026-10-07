@@ -963,7 +963,7 @@ public class LineBreaker
         mr = Math.Max(0, mr);
         mt = Math.Max(0, mt);
 
-        bool isLeft = style.Float != FloatType.Right;
+        bool isLeft = style.PhysicalFloat != FloatType.Right;
         float lineStart = context.ContentLineStart + _lineLeftInset;
         float lineEnd = context.ContentLineStart + _inlineBaseWidth - _lineRightInset;
         float marginInlineStart = isLeft

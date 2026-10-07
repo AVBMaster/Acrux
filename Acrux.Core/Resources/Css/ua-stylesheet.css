@@ -315,7 +315,6 @@ fieldset {
 button {
   display: inline-block;
   appearance: auto;
-  -webkit-appearance: button;
   padding: 1px 6px;
   border: 2px outset;
   border-color: buttonborder;
@@ -339,7 +338,6 @@ button:active {
 input {
   display: inline-block;
   appearance: auto;
-  -webkit-appearance: textfield;
   /* A text field never shows content outside its box (reference engine computes
      overflow: clip on both axes, which unlike 'hidden' also keeps it out of the
      scroll-container business). */
@@ -364,11 +362,9 @@ input {
 input[type="hidden" i] {
   display: none;
   appearance: none;
-  -webkit-appearance: none;
 }
 input[type="checkbox" i] {
   appearance: auto;
-  -webkit-appearance: checkbox;
   box-sizing: border-box;
   overflow: visible;
   cursor: default;
@@ -381,7 +377,6 @@ input[type="checkbox" i] {
 }
 input[type="radio" i] {
   appearance: auto;
-  -webkit-appearance: radio;
   box-sizing: border-box;
   overflow: visible;
   cursor: default;
@@ -392,7 +387,6 @@ input[type="radio" i] {
 }
 input[type="button" i], input[type="submit" i], input[type="reset" i] {
   appearance: auto;
-  -webkit-appearance: push-button;
   border: 2px outset;
   border-color: buttonborder;
   background-color: buttonface;
@@ -405,14 +399,12 @@ input[type="button" i]:active, input[type="submit" i]:active, input[type="reset"
 }
 input[type="file" i] {
   appearance: auto;
-  -webkit-appearance: file-upload-button;
   cursor: default;
   border: initial;
   background-color: transparent;
 }
 input[type="image" i] {
   appearance: auto;
-  -webkit-appearance: -webkit-image-control;
   cursor: pointer;
   border: none;
   background-color: transparent;
@@ -420,7 +412,6 @@ input[type="image" i] {
 }
 input[type="range" i] {
   appearance: auto;
-  -webkit-appearance: slider-horizontal;
   cursor: default;
   border: none;
   padding: 0;
@@ -428,7 +419,6 @@ input[type="range" i] {
 }
 input[type="color" i] {
   appearance: auto;
-  -webkit-appearance: square-button;
   width: 44px;
   height: 23px;
   cursor: default;
@@ -439,7 +429,6 @@ input[type="color" i] {
 }
 input[type="date" i], input[type="datetime-local" i], input[type="month" i], input[type="time" i], input[type="week" i] {
   appearance: auto;
-  -webkit-appearance: -webkit-datetime-edit;
   display: inline-flex;
   cursor: default;
   overflow: hidden;
@@ -454,12 +443,10 @@ input[type="date" i], input[type="datetime-local" i], input[type="month" i], inp
 }
 input[type="search" i] {
   appearance: auto;
-  -webkit-appearance: searchfield;
   box-sizing: border-box;
 }
 input[type="number" i] {
   appearance: auto;
-  -webkit-appearance: textfield;
   box-sizing: border-box;
 }
 input[type="password" i] {
@@ -473,7 +460,6 @@ input[type="email" i], input[type="url" i] {
 textarea {
   display: inline-block;
   appearance: auto;
-  -webkit-appearance: textarea;
   overflow: auto;
   padding: 2px;
   border: 1px solid;
@@ -501,7 +487,6 @@ textarea {
 select {
   display: inline-block;
   appearance: auto;
-  -webkit-appearance: menulist;
   padding: 3px 4px;
   border: 1px solid;
   border-color: -webkit-focus-ring-color;
@@ -550,18 +535,15 @@ option {
 }
 select[size="0" i], select[size="1" i] {
   appearance: auto;
-  -webkit-appearance: menulist;
 }
 select[size]:not([size="0" i]):not([size="1" i]) {
   appearance: auto;
-  -webkit-appearance: listbox;
 }
 
 /* Progress */
 progress {
   display: inline-block;
   appearance: auto;
-  -webkit-appearance: progress-bar;
   box-sizing: border-box;
   width: 160px;
   height: 16px;
@@ -574,7 +556,6 @@ progress {
 meter {
   display: inline-block;
   appearance: auto;
-  -webkit-appearance: meter;
   box-sizing: border-box;
   width: 160px;
   height: 16px;

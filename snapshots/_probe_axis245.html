@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body { margin:0; font: 12px Consolas, monospace; }
+.b { width: 60px; height: 12px;
+     background-position: 7px 9px; background-size: 5px 6px; background-repeat: round;
+     background-attachment: local; }
+#report div { white-space: pre; }
+</style></head><body>
+<div class="b" id="t01" style="background-position-x: right 10%"></div>
+<div class="b" id="t02" style="background-position-x: right 10px"></div>
+<div class="b" id="t03" style="background-position-x: center"></div>
+<div class="b" id="t04" style="background-position-y: bottom 20px"></div>
+<div class="b" id="t05" style="background-position: bottom 20px"></div>
+<div class="b" id="t06" style="background-position: 50% bottom 20px"></div>
+<div class="b" id="t07" style="background-position: right 10% bottom 20%"></div>
+<div class="b" id="t08" style="background-position: left 10px bottom 20%"></div>
+<div class="b" id="t09" style="background-repeat: repeat-x repeat"></div>
+<div class="b" id="t10" style="background-size: none"></div>
+<div class="b" id="t11" style="background-attachment: auto"></div>
+<div class="b" id="t12" style="background-position-x: 10px 20px"></div>
+<div class="b" id="t13" style="background-position: 0"></div>
+<div class="b" id="t14" style="background-position: 0 0"></div>
+<div class="b" id="t15" style="background-position: right"></div>
+<div class="b" id="t16" style="background-position-x: calc(100% - 10px)"></div>
+<div class="b" id="t18" style="background-position: right 10px bottom"></div>
+<div class="b" id="t19" style="background-position: bottom 20px left"></div>
+<div class="b" id="t20" style="background-size: 50%"></div>
+<div class="b" id="t21" style="background-position-x: left 10px, right 20px"></div>
+<div class="b" id="t22" style="background-position: 10PX 20px"></div>
+<div class="b" id="t23" style="background-position: TOP 10px"></div>
+<div class="b" id="t24" style="background-position-x: RIGHT"></div>
+<div class="b" id="t25" style="background-size: 10PX 20px"></div>
+<div class="b" id="t26" style="background-position-y: 20%"></div>
+<div class="b" id="t27" style="background-position-x: 20%"></div>
+<div id="report"></div>
+<script>
+const out = [];
+const el = id => document.getElementById(id);
+const props = ['background-position', 'background-position-x', 'background-position-y',
+               'background-size', 'background-repeat', 'background-attachment'];
+for (const id of ['t01','t02','t03','t04','t05','t06','t07','t08','t09','t10','t11','t12','t13',
+                  't14','t15','t16','t18','t19','t20','t21','t22','t23','t24','t25','t26','t27']) {
+  const cs = getComputedStyle(el(id));
+  const parts = [];
+  for (const p of props) { const v = cs.getPropertyValue(p); if (v !== '') parts.push(p.replace('background-','') + '=' + v); }
+  out.push(id + ' | ' + parts.join(' ; '));
+}
+const rep = document.getElementById('report');
+for (const line of out) { const d = document.createElement('div'); d.textContent = line; rep.appendChild(d); }
+</script>
+</body></html>

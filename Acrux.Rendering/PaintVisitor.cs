@@ -1308,6 +1308,49 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
         return trimmed[(open + 1)..close].Trim().Trim('"', '\'');
     }
 
+    /// <summary>One of the boxes a background can be clipped to, counted from the element's own
+    /// border and padding rects. A keyword the grammar does not take — including a comma list,
+    /// which the per-layer geometry reads entry by entry — is the initial 'border-box'.</summary>
+    private static SKRect BackgroundClipRect(string? clip, ComputedStyle style, SKRect borderRect, SKRect paddingRect)
+    {
+        switch (clip?.Trim().ToLowerInvariant())
+        {
+            case "content-box":
+            {
+                float padL = style.PaddingLeft is PixelLength pl ? pl.Value : 0;
+                float padT = style.PaddingTop is PixelLength pt ? pt.Value : 0;
+                float padR = style.PaddingRight is PixelLength pr ? pr.Value : 0;
+                float padB = style.PaddingBottom is PixelLength pb ? pb.Value : 0;
+                var rect = new SKRect(paddingRect.Left + padL, paddingRect.Top + padT,
+                                      paddingRect.Right - padR, paddingRect.Bottom - padB);
+                if (rect.Width <= 0) rect.Right = rect.Left;
+                if (rect.Height <= 0) rect.Bottom = rect.Top;
+                return rect;
+            }
+            case "padding-box":
+                return paddingRect;
+            default:
+                // The initial value of background-clip is border-box, so the fill has to
+                // reach the outer rounded rect; clipping it to the padding box leaves
+                // white slivers between the fill and a rounded border.
+                return borderRect;
+        }
+    }
+
+    /// <summary>The clip of the layer a 'background-color' sits in: the last one. Its list is read
+    /// the way the geometry reads every per-layer list — truncated to the layer count, cycled when
+    /// it is short of it (CSS Backgrounds 3 §2) — and an element with no image layer at all has the
+    /// colour as its only layer.</summary>
+    private static string LastBackgroundClipLayer(ComputedStyle style)
+    {
+        int count = style.BackgroundImage is { Count: > 0 } images ? images.Count : 1;
+        var clips = style.BackgroundClipLayers;
+        if (clips is { Count: > 0 }) return clips[(count - 1) % clips.Count];
+        var text = style.BackgroundClip ?? "";
+        int comma = text.LastIndexOf(',');
+        return comma < 0 ? text : text[(comma + 1)..];
+    }
+
     private void DrawElementBackground(Element element, LayoutBox box, ComputedStyle style, SKRect borderRect, bool skipBackgroundLayers = false)
     {
         var paddingRect = new SKRect(borderRect.Left + style.BorderLeftWidth, borderRect.Top + style.BorderTopWidth,
@@ -1315,32 +1358,12 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
         if (paddingRect.Width <= 0 || paddingRect.Height <= 0) return;
 
         // Determine the background clip rect based on background-clip property
-        SKRect bgClipRect;
-        switch (style.BackgroundClip?.ToLowerInvariant())
-        {
-            case "border-box":
-                bgClipRect = borderRect;
-                break;
-            case "content-box":
-                float padL = style.PaddingLeft is PixelLength pl ? pl.Value : 0;
-                float padT = style.PaddingTop is PixelLength pt ? pt.Value : 0;
-                float padR = style.PaddingRight is PixelLength pr ? pr.Value : 0;
-                float padB = style.PaddingBottom is PixelLength pb ? pb.Value : 0;
-                bgClipRect = new SKRect(paddingRect.Left + padL, paddingRect.Top + padT,
-                                        paddingRect.Right - padR, paddingRect.Bottom - padB);
-                if (bgClipRect.Width <= 0) bgClipRect.Right = bgClipRect.Left;
-                if (bgClipRect.Height <= 0) bgClipRect.Bottom = bgClipRect.Top;
-                break;
-            case "padding-box":
-                bgClipRect = paddingRect;
-                break;
-            default:
-                // The initial value of background-clip is border-box, so the fill has to
-                // reach the outer rounded rect; clipping it to the padding box leaves
-                // white slivers between the fill and a rounded border.
-                bgClipRect = borderRect;
-                break;
-        }
+        var bgClipRect = BackgroundClipRect(style.BackgroundClip, style, borderRect, paddingRect);
+        // 'background-color' is not a layer of its own but the bottom of the LAST one, so the box
+        // it obeys is that layer's clip (CSS Backgrounds 3 §4.1.1, §4.3). Reading the property as
+        // a single keyword painted the colour of 'background-clip: border-box, content-box' into
+        // the border box, where the reference engine fills the content box only.
+        var colorClipRect = BackgroundClipRect(LastBackgroundClipLayer(style), style, borderRect, paddingRect);
 
         // Push clip to background clip rect
         bool needsClip = style.BackgroundClip != null && style.BackgroundClip != "" &&
@@ -1387,7 +1410,10 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
         }
 
         bool hasBackgroundColor = style.BackgroundColor.HasValue && style.BackgroundColor.Value.Alpha > 0;
-        bool hasBackgroundImage = style.BackgroundImage is { Count: > 0 };
+        // A layer list can carry a layer that names no image ('background: url(a), red' is two
+        // layers, the second 'none'), so the list being long is not the same as there being
+        // something to paint.
+        bool hasBackgroundImage = style.BackgroundImage is { Count: > 0 } images && images.Any(s => s != "none");
 
         // 'background-blend-mode' mixes the element's own layers together and only
         // the result reaches the page, so the group must be isolated
@@ -1411,10 +1437,10 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
             SKColor bgColor = style.BackgroundColor.Value;
 
             var op = PaintOpPool.GetDrawRectOp();
-            op.Rect = bgClipRect;
+            op.Rect = colorClipRect;
             op.FillColor = bgColor;
             op.BorderRadius = Math.Max(style.BorderTopLeftRadius, Math.Max(style.BorderTopRightRadius, Math.Max(style.BorderBottomLeftRadius, style.BorderBottomRightRadius)));
-            op.CornerRadii = ResolveBackgroundCornerRadii(style, bgClipRect);
+            op.CornerRadii = ResolveBackgroundCornerRadii(style, colorClipRect);
             op.Bounds = borderRect;
             // The BODY background belongs at the very bottom of the page z-order
             // (just above the canvas), so negative-z-index content such as outset
@@ -1556,32 +1582,12 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
         if (paddingRect.Width <= 0 || paddingRect.Height <= 0) return;
 
         // Determine the background clip rect based on background-clip property
-        SKRect bgClipRect;
-        switch (style.BackgroundClip?.ToLowerInvariant())
-        {
-            case "border-box":
-                bgClipRect = borderRect;
-                break;
-            case "content-box":
-                float padL = style.PaddingLeft is PixelLength pl ? pl.Value : 0;
-                float padT = style.PaddingTop is PixelLength pt ? pt.Value : 0;
-                float padR = style.PaddingRight is PixelLength pr ? pr.Value : 0;
-                float padB = style.PaddingBottom is PixelLength pb ? pb.Value : 0;
-                bgClipRect = new SKRect(paddingRect.Left + padL, paddingRect.Top + padT,
-                                        paddingRect.Right - padR, paddingRect.Bottom - padB);
-                if (bgClipRect.Width <= 0) bgClipRect.Right = bgClipRect.Left;
-                if (bgClipRect.Height <= 0) bgClipRect.Bottom = bgClipRect.Top;
-                break;
-            case "padding-box":
-                bgClipRect = paddingRect;
-                break;
-            default:
-                // The initial value of background-clip is border-box, so the fill has to
-                // reach the outer rounded rect; clipping it to the padding box leaves
-                // white slivers between the fill and a rounded border.
-                bgClipRect = borderRect;
-                break;
-        }
+        var bgClipRect = BackgroundClipRect(style.BackgroundClip, style, borderRect, paddingRect);
+        // 'background-color' is not a layer of its own but the bottom of the LAST one, so the box
+        // it obeys is that layer's clip (CSS Backgrounds 3 §4.1.1, §4.3). Reading the property as
+        // a single keyword painted the colour of 'background-clip: border-box, content-box' into
+        // the border box, where the reference engine fills the content box only.
+        var colorClipRect = BackgroundClipRect(LastBackgroundClipLayer(style), style, borderRect, paddingRect);
 
         // Push clip to background clip rect
         bool needsClip = style.BackgroundClip != null && style.BackgroundClip != "" &&
@@ -1595,17 +1601,20 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
         }
 
         bool hasBackgroundColor = style.BackgroundColor.HasValue && style.BackgroundColor.Value.Alpha > 0;
-        bool hasBackgroundImage = style.BackgroundImage is { Count: > 0 };
+        // A layer list can carry a layer that names no image ('background: url(a), red' is two
+        // layers, the second 'none'), so the list being long is not the same as there being
+        // something to paint.
+        bool hasBackgroundImage = style.BackgroundImage is { Count: > 0 } images && images.Any(s => s != "none");
 
         if (hasBackgroundColor)
         {
             SKColor bgColor = style.BackgroundColor.Value;
 
             var op = PaintOpPool.GetDrawRectOp();
-            op.Rect = bgClipRect;
+            op.Rect = colorClipRect;
             op.FillColor = bgColor;
             op.BorderRadius = Math.Max(style.BorderTopLeftRadius, Math.Max(style.BorderTopRightRadius, Math.Max(style.BorderBottomLeftRadius, style.BorderBottomRightRadius)));
-            op.CornerRadii = ResolveBackgroundCornerRadii(style, bgClipRect);
+            op.CornerRadii = ResolveBackgroundCornerRadii(style, colorClipRect);
             op.Bounds = borderRect;
             _displayList.Add(op);
         }
@@ -1923,7 +1932,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         SKImageFilter? elementFilter = null;
         float filterInflation = 0f;
         if (hasFilter)
-            elementFilter = FilterRenderer.ParseAndChain(style.Filter, out filterInflation);
+            elementFilter = FilterRenderer.ParseAndChain(style.Filter, style.Color, out filterInflation);
 
         if (hasFilter || hasOpacityLayer || hasBlendMode || hasClipPath || hasMask)
         {
@@ -2038,9 +2047,15 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         float stepY = tileSize.Height + geometry.SpaceSize.Height;
         if (stepX <= 0 || stepY <= 0) return;
 
-        for (float y = destRect.Top + phase.Y; y < destRect.Bottom; y += stepY)
+        // The phase locates the tile that sits AT 'background-position', which is not the
+        // first tile to touch the box: a repeat fills the whole positioning area, so when
+        // the position is not flush with its edge a part of the previous tile reaches in
+        // under it (CSS Backgrounds 3 §4.1). Starting one step early is what paints that
+        // part; a tile that falls entirely outside — which is what it is for 'no-repeat',
+        // for 'round' and for a flush position — is dropped by the clip below.
+        for (float y = destRect.Top + phase.Y - stepY; y < destRect.Bottom; y += stepY)
         {
-            for (float x = destRect.Left + phase.X; x < destRect.Right; x += stepX)
+            for (float x = destRect.Left + phase.X - stepX; x < destRect.Right; x += stepX)
             {
                 var tileRect = new SKRect(x, y, x + tileSize.Width, y + tileSize.Height);
                 var clipRect = tileRect;
@@ -2138,74 +2153,12 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         // clip box, so the gradient outline matches the element's rounded corner shape.
         var cornerRadii = ResolveBackgroundCornerRadii(style, rect);
 
-        // Resolve background-size into a concrete image size, then background-position
-        // into an offset within the element box. The gradient is painted into that
-        // sized/positioned rectangle, clipped to the element bounds.
-        float fs = style.FontSize > 0 ? style.FontSize : 16;
-        var (gw, gh) = ResolveBackgroundImageSize(style, rect.Width, rect.Height, fs);
-        bool sized = style.BackgroundSize != BackgroundSizeType.Auto || gw < rect.Width || gh < rect.Height;
-
-        // A sized gradient repeats (or is spaced/rounded/positioned), so it needs the
-        // same tile geometry an image background gets.
-        if (sized)
-        {
-            DrawSizedGradientTiles(style, rect, cornerRadii);
-            return;
-        }
-
-        // CSS paints background layers from last (bottom) to first (top).
-        for (int i = images.Count - 1; i >= 0; i--)
-        {
-            var shader = GradientRenderer.CreateGradient(images[i], rect);
-            if (shader == null) continue;
-
-            var path = new SKPath();
-            AddCornerRadiiToPath(path, rect, cornerRadii);
-
-            var op = PaintOpPool.GetDrawPathOp();
-            op.Path.Dispose();
-            op.Path = path;
-            op.FillPaint = new SKPaint
-            {
-                Style = SKPaintStyle.Fill,
-                Shader = shader,
-                IsAntialias = true,
-                BlendMode = BackgroundBlendModeToSkBlendMode(style.BackgroundBlendMode),
-            };
-            op.Bounds = rect;
-            _displayList.Add(op);
-        }
-    }
-
-    // Resolve background-size into concrete pixel dimensions for the image.
-    private static (float w, float h) ResolveBackgroundImageSize(ComputedStyle style, float boxW, float boxH, float fs)
-    {
-        float w = boxW, h = boxH;
-        bool hasW = style.BackgroundSizeWidth is not null and not AutoLength;
-        bool hasH = style.BackgroundSizeHeight is not null and not AutoLength;
-
-        switch (style.BackgroundSize)
-        {
-            case BackgroundSizeType.Length:
-                if (hasW) w = style.BackgroundSizeWidth!.ToPixels(fs, fs, boxW, boxH);
-                if (hasH) h = style.BackgroundSizeHeight!.ToPixels(fs, fs, boxW, boxH);
-                if (!hasW && hasH) w = h;           // auto width scales with height
-                else if (hasW && !hasH) h = w;      // auto height scales with width
-                break;
-            case BackgroundSizeType.Cover:
-            {
-                float s = Math.Max(boxW / w, boxH / h);
-                w *= s; h *= s;
-                break;
-            }
-            case BackgroundSizeType.Contain:
-            {
-                float s = Math.Min(boxW / w, boxH / h);
-                w *= s; h *= s;
-                break;
-            }
-        }
-        return (Math.Max(1, w), Math.Max(1, h));
+        // Every layer — sized or not — goes through the same tile geometry, because that is the
+        // only place where its own origin, clip, position and repeat are read. 'auto' is not a
+        // special case that paints the box: the tile is the LAYER's positioning area, which under
+        // the default 'border-box' clip is smaller than the painting area, and the strip left
+        // over in the border shows the start of the next tile (CSS Backgrounds 3 §4.1.1, §4.3).
+        DrawSizedGradientTiles(style, rect, cornerRadii);
     }
 
     /// <summary>

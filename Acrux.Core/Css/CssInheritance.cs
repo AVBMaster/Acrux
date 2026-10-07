@@ -66,6 +66,8 @@ public static class CssInheritance
         child.TextTransform = parent.TextTransform;
         child.LetterSpacing = parent.LetterSpacing;
         child.WordSpacing = parent.WordSpacing;
+        child.LetterSpacingIsNormal = parent.LetterSpacingIsNormal;
+        child.WordSpacingIsNormal = parent.WordSpacingIsNormal;
         child.TextIndent = parent.TextIndent;
         child.TextIndentPercent = parent.TextIndentPercent;
         child.TextIndentHanging = parent.TextIndentHanging;

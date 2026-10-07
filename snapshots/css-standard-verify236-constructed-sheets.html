@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<!--
+  b236 — constructed stylesheets and the document's adopted list (CSSOM §5.2.2/§5.2.4/§5.2.5,
+  measured Edge 151 / dpr=1 / iw=445).
+
+  What was missing: there was no 'CSSStyleSheet' at all. A page that builds a sheet in script —
+  the way every component library and every bundled stylesheet pipeline does — got nothing, and
+  the sheet a page cannot construct is also a sheet it cannot 'replace', so 'replaceSync' was
+  refusing a call no script could legitimately reach.
+
+  Measured in the reference engine, and implemented to match:
+  §A shape of a constructed sheet: type "text/css"; ownerNode, parentStyleSheet, href and title
+     null; disabled false; String(media) ""; cssRules starts empty. replaceSync PARSES, it does
+     not append: a second call leaves one rule. Text the grammar rejects is not an error here —
+     replaceSync('}}}bad{{') clears the sheet and answers nothing (contrast §E insertRule, which
+     is a rule parse and does throw SyntaxError).
+  §B an adopted sheet is applied, a non-adopted one is not: building a sheet changes no box.
+  §C 'document.adoptedStyleSheets = [sheet]' applies it. The very object put in comes back out
+     (identity), the list is a real Array, and the sheet is NOT added to document.styleSheets —
+     the adopted list and the stylesheet list are different things. An adopted sheet also wins
+     over a <style> element appended AFTER the adoption, which fixes its cascade position: last,
+     after every sheet an element owns. Writing through the sheet after adoption reaches the
+     next recompute, and 'sheet.disabled = true' takes it out again without a rewrite.
+  §D two adopted sheets: the later in the list wins; assigning [] un-applies both and the box
+     returns to what the document's own sheets say.
+  §E the refusals: insertRule with a bad rule text throws SyntaxError; with an index greater
+     than the number of rules it throws IndexSizeError ("maximum index" is the rule count, so
+     an index equal to it appends); replaceSync on a sheet an ELEMENT owns throws NotAllowedError
+     (CSSOM §5.2.4 restricts it to constructed sheets); adopting a sheet an element owns is
+     refused the same way, because the element already contributes it.
+  §F 'await sheet.replace(css)' resolves with the sheet itself and installs the rules — the
+     asynchronous twin of replaceSync, built in the shim out of a Promise.
+  §G a rule of an adopted sheet is mutated through 'cssRules[i].style' exactly like a rule of an
+     element's sheet, because both views stand for the rule list the resolver walks.
+
+  Recorded divergence: 'sheet.media' answers the empty string rather than a MediaList object, as
+  everywhere else in this sheet API (a constructed sheet has no medium to carry, so what is
+  observed — String(media) === "" and no rules filtered — agrees; only the object type differs).
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>b236 constructed stylesheets</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 11px/13px Arial, sans-serif; color: #111; }
+  .sw { height: 12px; width: 40px; background: #ddd; }
+  .row { margin-bottom: 1px; }
+  .k { display: inline-block; width: 158px; color: #555; }
+</style>
+</head><body>
+<div class="row"><span class="k">t adopted target</span><div class="sw" id="t"></div></div>
+<div class="row"><span class="k">u element sheet</span><div class="sw" id="u"></div></div>
+<h3 style="margin:6px 0 2px;font-size:12px">report</h3>
+<div id="report"></div>
+<script>
+(async () => {
+const out = [];
+const rep = document.getElementById('report');
+// Row by row, so a throw in the middle still leaves what the engine had already answered.
+const ok = (name, got, want) => {
+  out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${got === want}`);
+  rep.textContent = out.join('\n');
+};
+const cs = id => getComputedStyle(document.getElementById(id));
+const bg = id => cs(id).backgroundColor;
+const ERR = 'threw ';
+
+// §A the object a script builds.
+const s = new CSSStyleSheet();
+ok('ctorType', typeof CSSStyleSheet, 'function');
+ok('rules0', s.cssRules.length, 0);
+ok('type', s.type, 'text/css');
+ok('ownerNode', s.ownerNode, null);
+ok('parentStyleSheet', s.parentStyleSheet, null);
+ok('href', s.href, null);
+ok('title', s.title, null);
+ok('disabled0', s.disabled, false);
+ok('media0', String(s.media), '');
+s.replaceSync('#t{background-color:rgb(200,0,0)}');
+ok('rules1', s.cssRules.length, 1);
+ok('rule1Text', s.cssRules[0].cssText, '#t { background-color: rgb(200, 0, 0); }');
+s.replaceSync('#t{background-color:rgb(0,200,0)}');
+ok('replaceIsNotAppend', s.cssRules.length, 1);
+ok('replaceBadSilent', (() => { let e = ''; try { s.replaceSync('}}}bogus{{'); } catch (x) { e = ERR + x.name; } return e; })(), '');
+ok('rulesAfterBad', s.cssRules.length, 0);
+
+// §B building it changes nothing: not adopted yet.
+s.replaceSync('#t{background-color:rgb(0,0,200)}');
+ok('beforeAdopt', bg('t'), 'rgb(221, 221, 221)');
+
+// §C adoption.
+const sheetsBefore = document.styleSheets.length;
+document.adoptedStyleSheets = [s];
+ok('adoptLen', document.adoptedStyleSheets.length, 1);
+ok('adoptIdentity', document.adoptedStyleSheets[0] === s, true);
+ok('adoptIsArray', Array.isArray(document.adoptedStyleSheets), true);
+ok('adoptApplied', bg('t'), 'rgb(0, 0, 200)');
+ok('notInStyleSheets', document.styleSheets.length, sheetsBefore);
+const later = document.createElement('style');
+later.textContent = '#t{background-color:rgb(9,9,9)}';
+document.head.appendChild(later);
+ok('adoptedBeatsLaterElement', bg('t'), 'rgb(0, 0, 200)');
+s.replaceSync('#t{background-color:rgb(30,40,50)}');
+ok('rewriteAfterAdopt', bg('t'), 'rgb(30, 40, 50)');
+s.disabled = true;
+ok('disabledFallsThrough', bg('t'), 'rgb(9, 9, 9)');
+s.disabled = false;
+ok('reenabled', bg('t'), 'rgb(30, 40, 50)');
+
+// §D order of the adopted list, and clearing it.
+const s2 = new CSSStyleSheet();
+s2.replaceSync('#t{background-color:rgb(60,60,60)}');
+document.adoptedStyleSheets = [s, s2];
+ok('laterSheetWins', bg('t'), 'rgb(60, 60, 60)');
+document.adoptedStyleSheets = [];
+ok('clearedLen', document.adoptedStyleSheets.length, 0);
+ok('clearedUnapplied', bg('t'), 'rgb(9, 9, 9)');
+
+// §E the refusals.
+let e = '';
+try { s.insertRule('}}}bad{{'); } catch (x) { e = ERR + x.name; }
+ok('insertBadThrows', e, ERR + 'SyntaxError');
+e = '';
+try { s.insertRule('#a{color:red}', 5); } catch (x) { e = ERR + x.name; }
+ok('insertIndexThrows', e, ERR + 'IndexSizeError');
+ok('insertAtEndAppends', s.insertRule('#u{background-color:rgb(70,80,90)}', s.cssRules.length), 1);
+ok('insertAppendsCount', s.cssRules.length, 2);
+const elSheet = later.sheet;
+e = '';
+try { elSheet.replaceSync('#u{color:red}'); } catch (x) { e = ERR + x.name; }
+ok('replaceSyncOnElementSheet', e, ERR + 'NotAllowedError');
+e = '';
+try { document.adoptedStyleSheets = [elSheet]; } catch (x) { e = ERR + x.name; }
+ok('adoptElementSheet', e, ERR + 'NotAllowedError');
+
+// §F the asynchronous form.
+const s3 = new CSSStyleSheet();
+const resolved = await s3.replace('#t{background-color:rgb(100,110,120)}');
+ok('replaceResolvesWithSheet', resolved === s3, true);
+ok('replaceRules', s3.cssRules.length, 1);
+document.adoptedStyleSheets = [s3];
+ok('replaceApplied', bg('t'), 'rgb(100, 110, 120)');
+
+// §G a rule of an adopted sheet is a rule like any other.
+const target = s3.cssRules[0];
+target.style.backgroundColor = 'rgb(1, 2, 3)';
+ok('mutateAdoptedRule', bg('t'), 'rgb(1, 2, 3)');
+ok('mutateAdoptedRuleText', target.cssText, '#t { background-color: rgb(1, 2, 3); }');
+document.adoptedStyleSheets = [s, s3];
+ok('bothSheetsAgain', bg('t'), 'rgb(1, 2, 3)');
+})();
+</script>
+</body></html>

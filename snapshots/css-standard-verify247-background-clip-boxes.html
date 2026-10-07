@@ -1,0 +1,125 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>b247 background clip boxes</title><!--
+  Which box a background paints into (CSS Backgrounds 3 §4.1.1, §4.3, §4.7).
+
+  Every box below is 200x100 of content with a 6px TRANSPARENT border and 12px of padding, so
+  its border box is x 20..256, its padding box x 26..250 and its content box x 38..238 — the same
+  numbers down the page, one box per 160px. A transparent border is what makes the 'border-box'
+  clip observable at all: only a fill reaching into the border shows there.
+
+  Three rules are recorded here, each of which the engine had wrong:
+   * 'background-clip' is a PER-LAYER list, and it bounds the tiles that are positioned in the
+     layer's own 'background-origin' box — clipping is not a re-positioning (p4).
+   * the 'background-color' belongs to the LAST layer, so it obeys that layer's clip; reading the
+     property as a single keyword filled the wrong box (p2, p3).
+   * an auto-sized gradient is a TILE the size of the positioning area, and the painting area is
+     usually bigger: the strip left over in the border shows the start of the NEXT tile, not the
+     tail of the first (p5, and p6 where 'background-origin: border-box' makes it agree).
+   * the '<box>' part of the 'background' shorthand: one keyword goes to BOTH longhands, 'text'
+     is a clip only, and the shorthand resets the pair it does not carry (p11..p17).
+
+  The rows the script prints assert the CSSOM side; the painted side is checked pixel by pixel
+  against the reference engine's own rendering of this document.
+--><style>
+  html, body { margin: 0; padding: 0; background: rgb(255,255,255); }
+  #report div { white-space: pre; font: 12px Consolas, monospace; color: rgb(0,0,0); }
+  .box { position: absolute; left: 20px; width: 200px; height: 100px; padding: 12px;
+         border: 6px solid rgba(0,0,0,0); background-color: rgb(255,255,255); }
+  .T { background-image: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0)),
+                       linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0)); }
+  #p1 { top: 20px; background-color: rgb(255,0,0); background-clip: content-box; }
+  #p2 { top: 180px; background-color: rgb(255,0,0); background-clip: border-box, content-box; }
+  #p3 { top: 340px; background-color: rgb(255,0,0); background-clip: content-box, border-box; }
+  #p4 { top: 500px; background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0)),
+        linear-gradient(rgb(0,200,0), rgb(0,200,0));
+        background-origin: padding-box, border-box; background-clip: content-box, border-box;
+        background-size: 100% 100%, 40px 100%; background-position: 0 0, 0 0;
+        background-repeat: no-repeat, no-repeat; }
+  #p5 { top: 660px; background-image: linear-gradient(rgb(255,0,0), rgb(0,200,0)); }
+  #p6 { top: 820px; background-image: linear-gradient(rgb(255,0,0), rgb(0,200,0));
+        background-origin: border-box; }
+  #p7 { top: 980px; background-color: rgb(255,0,0); background-clip: padding-box; }
+  #p8 { top: 1140px; background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0));
+        background-origin: content-box; background-clip: border-box; background-repeat: no-repeat; }
+  #p9 { top: 1300px; background-image: linear-gradient(rgb(0,200,0), rgb(0,200,0));
+        background-position: 10px 10px; background-size: 30px 30px; background-repeat: repeat;
+        background-origin: content-box; background-clip: content-box; }
+  #p10 { top: 1460px; background: linear-gradient(rgb(255,0,0), rgb(255,0,0)) rgb(0,200,0) content-box; }
+
+  /* The '<box>' part of the 'background' shorthand, measured keyword by keyword: ONE non-'text'
+     keyword is given to both properties, 'text' is a clip only, a pair keeps the non-'text' one as
+     the origin whichever order they were written in, and the shorthand RESETS both longhands it
+     does not carry (p12). Three box keywords — or 'text' twice — is a parse error that takes the
+     whole declaration with it, which a preceding longhand makes visible (p15, p17). */
+  #p11 { top: 1620px; background: linear-gradient(rgb(255,0,0), rgb(255,0,0)) text; }
+  #p12 { top: 1780px; background-clip: content-box;
+         background: linear-gradient(rgb(255,0,0), rgb(255,0,0)); }
+  #p13 { top: 1940px; background: linear-gradient(rgb(255,0,0), rgb(255,0,0)) content-box text; }
+  #p14 { top: 2100px; background: linear-gradient(rgb(255,0,0), rgb(255,0,0)) text content-box; }
+  #p15 { top: 2260px; background-clip: content-box;
+         background: linear-gradient(rgb(255,0,0), rgb(255,0,0)) text text; }
+  #p16 { top: 2420px; background: linear-gradient(rgb(255,0,0), rgb(255,0,0)) border-box border-box; }
+  #p17 { top: 2580px; background-clip: content-box;
+         background: linear-gradient(rgb(255,0,0), rgb(255,0,0)) border-box content-box text; }
+  /* 'background-clip: text' paints the fill through the glyph outlines only, so the box shows
+     colour exactly where its text is and nothing elsewhere (css-backgrounds-3 §4.7). */
+  #p18 { top: 2740px; background: linear-gradient(rgb(255,0,0), rgb(255,0,0)) text;
+         color: rgba(0,0,0,0); font: 40px/100px Consolas, monospace; }
+</style></head><body>
+<div class="box T" id="p2"></div><div class="box T" id="p3"></div>
+<div class="box" id="p1"></div><div class="box" id="p4"></div><div class="box" id="p5"></div>
+<div class="box" id="p6"></div><div class="box" id="p7"></div><div class="box" id="p8"></div>
+<div class="box" id="p9"></div><div class="box" id="p10"></div>
+<div class="box" id="p11"></div><div class="box" id="p12"></div><div class="box" id="p13"></div>
+<div class="box" id="p14"></div><div class="box" id="p15"></div><div class="box" id="p16"></div>
+<div class="box" id="p17"></div><div class="box" id="p18">TEXT</div>
+<div id="report" style="position:absolute;left:280px;top:2900px;width:600px"></div>
+<script>
+const out = [];
+const g = (id, prop) => getComputedStyle(document.getElementById(id)).getPropertyValue(prop);
+const ok = (name, got, want) => { out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${got === want}`); };
+const layers = (id) => (g(id, 'background-image').match(/linear-gradient/g) || []).length;
+
+ok('p1_clip', g('p1', 'background-clip'), "content-box");
+ok('p1_layers', layers('p1'), 0);
+ok('p2_clip', g('p2', 'background-clip'), "border-box, content-box");
+ok('p2_layers', layers('p2'), 2);
+ok('p3_clip', g('p3', 'background-clip'), "content-box, border-box");
+ok('p4_clip', g('p4', 'background-clip'), "content-box, border-box");
+ok('p4_origin', g('p4', 'background-origin'), "padding-box, border-box");
+ok('p4_size', g('p4', 'background-size'), "100% 100%, 40px 100%");
+ok('p4_repeat', g('p4', 'background-repeat'), "no-repeat, no-repeat");
+ok('p4_position', g('p4', 'background-position'), "0px 0px, 0px 0px");
+ok('p5_origin', g('p5', 'background-origin'), "padding-box");
+ok('p5_clip', g('p5', 'background-clip'), "border-box");
+ok('p5_size', g('p5', 'background-size'), "auto");
+ok('p6_origin', g('p6', 'background-origin'), "border-box");
+ok('p7_clip', g('p7', 'background-clip'), "padding-box");
+ok('p8_origin', g('p8', 'background-origin'), "content-box");
+ok('p8_clip', g('p8', 'background-clip'), "border-box");
+ok('p9_origin', g('p9', 'background-origin'), "content-box");
+ok('p9_clip', g('p9', 'background-clip'), "content-box");
+ok('p9_size', g('p9', 'background-size'), "30px 30px");
+ok('p9_position', g('p9', 'background-position'), "10px 10px");
+ok('p10_clip', g('p10', 'background-clip'), "content-box");
+ok('p10_origin', g('p10', 'background-origin'), "content-box");
+ok('p10_color', g('p10', 'background-color'), "rgb(0, 200, 0)");
+ok('p11_origin', g('p11', 'background-origin'), "padding-box");
+ok('p11_clip', g('p11', 'background-clip'), "text");
+ok('p12_origin', g('p12', 'background-origin'), "padding-box");
+ok('p12_clip', g('p12', 'background-clip'), "border-box");
+ok('p13_origin', g('p13', 'background-origin'), "content-box");
+ok('p13_clip', g('p13', 'background-clip'), "text");
+ok('p14_origin', g('p14', 'background-origin'), "content-box");
+ok('p14_clip', g('p14', 'background-clip'), "text");
+ok('p15_origin', g('p15', 'background-origin'), "padding-box");
+ok('p15_clip', g('p15', 'background-clip'), "content-box");
+ok('p15_image', g('p15', 'background-image'), "none");
+ok('p16_origin', g('p16', 'background-origin'), "border-box");
+ok('p16_clip', g('p16', 'background-clip'), "border-box");
+ok('p17_origin', g('p17', 'background-origin'), "padding-box");
+ok('p17_clip', g('p17', 'background-clip'), "content-box");
+ok('p17_image', g('p17', 'background-image'), "none");
+ok('p18_clip', g('p18', 'background-clip'), "text");
+
+document.getElementById('report').innerHTML = out.map(l => '<div>' + l + '</div>').join('');
+</script></body></html>

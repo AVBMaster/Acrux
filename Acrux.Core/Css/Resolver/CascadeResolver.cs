@@ -562,7 +562,7 @@ public class CascadeResolver
     private void CollectNonDefaultProperties(ComputedStyle style, Dictionary<string, string> props)
     {
         var def = new ComputedStyle();
-        if (style.Display != def.Display) props["display"] = style.Display.ToCssString();
+        if (style.Display != def.Display || style.DisplayIsFlowRoot != def.DisplayIsFlowRoot) props["display"] = style.DisplayCssText;
         if (style.FontSize != def.FontSize) props["font-size"] = $"{style.FontSize}px";
         if (style.FontWeight != def.FontWeight) props["font-weight"] = ((int)style.FontWeight).ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (style.FontStyle != def.FontStyle) props["font-style"] = style.FontStyle == FontStyleType.Italic ? "italic" : "normal";
@@ -907,6 +907,10 @@ public class CascadeResolver
         dest.MinWidth = src.MinWidth; dest.MinHeight = src.MinHeight;
         dest.MaxWidth = src.MaxWidth; dest.MaxHeight = src.MaxHeight;
         dest.Display = src.Display; dest.Position = src.Position;
+        // 'display' is two fields now: the layout type plus the flow-root marker that
+        // carries the keyword the enum cannot express. Copying one without the other
+        // silently drops the formatting context.
+        dest.DisplayIsFlowRoot = src.DisplayIsFlowRoot;
         dest.Float = src.Float; dest.Clear = src.Clear;
         dest.MarginTop = src.MarginTop; dest.MarginRight = src.MarginRight;
         dest.MarginBottom = src.MarginBottom; dest.MarginLeft = src.MarginLeft;
@@ -1002,6 +1006,12 @@ public class CascadeResolver
         dest.ListStyleImage = src.ListStyleImage;
         dest.Cursor = src.Cursor;
         dest.Transform = src.Transform; dest.TransformOrigin = src.TransformOrigin;
+        // The individual transforms and the properties around them belong to this copy as much
+        // as 'transform' does; leaving them out made this path drop them from the resolved style.
+        dest.Translate = src.Translate; dest.Rotate = src.Rotate; dest.Scale = src.Scale;
+        dest.Perspective = src.Perspective; dest.PerspectiveOrigin = src.PerspectiveOrigin;
+        dest.BackfaceVisibility = src.BackfaceVisibility; dest.TransformBox = src.TransformBox;
+        dest.TransformStyle = src.TransformStyle;
         dest.Transition = src.Transition; dest.TransitionDelay = src.TransitionDelay;
         dest.TransitionDuration = src.TransitionDuration; dest.TransitionProperty = src.TransitionProperty;
         dest.TransitionTimingFunction = src.TransitionTimingFunction;
@@ -1016,6 +1026,8 @@ public class CascadeResolver
         dest.WritingMode = src.WritingMode;
         dest.LetterSpacing = src.LetterSpacing;
         dest.WordSpacing = src.WordSpacing;
+        dest.LetterSpacingIsNormal = src.LetterSpacingIsNormal;
+        dest.WordSpacingIsNormal = src.WordSpacingIsNormal;
         dest.TextIndent = src.TextIndent;
         dest.TextTransform = src.TextTransform;
         dest.TextRendering = src.TextRendering;
@@ -1314,36 +1326,70 @@ public class CascadeMap
 {
     private readonly Dictionary<string, (string value, LegacyCascadePriority priority)> _map = new();
 
-    public void Clear() => _map.Clear();
+    /// <summary>
+    /// The declaration each 'revert' / 'revert-layer' has to fall back to. Such a declaration
+    /// carries no value of its own: it hands the property back to the cascade below it
+    /// (CSS Cascading 4 §6.4.2, §6.4.3). Declarations are inserted in ascending priority, so the
+    /// one a revert displaces is exactly the next-lower candidate, which means remembering it
+    /// answers the query without keeping a candidate list per property.
+    /// </summary>
+    private readonly Dictionary<string, (string value, LegacyCascadePriority priority)> _belowRevert = new();
+
+    public void Clear()
+    {
+        _map.Clear();
+        _belowRevert.Clear();
+    }
 
     public void Insert(string property, string value, LegacyCascadePriority priority)
     {
-        if (_map.TryGetValue(property, out var existing))
+        var hasExisting = _map.TryGetValue(property, out var existing);
+        if (hasExisting && priority.CompareTo(existing.priority) < 0) return;
+
+        var reverting = CssPropertyTraits.IsRevertKeyword(value, out _);
+        if (reverting)
         {
-            if (priority.CompareTo(existing.priority) >= 0)
-                _map[property] = (value, priority);
+            // The value the revert steps back to: the best declaration it beats. One that is
+            // itself a revert cannot answer, so the previous candidate stays.
+            if (hasExisting && !CssPropertyTraits.IsRevertKeyword(existing.value, out _))
+                _belowRevert[property] = existing;
         }
-        else
-        {
-            _map[property] = (value, priority);
-        }
+        else _belowRevert.Remove(property);
+
+        _map[property] = (value, priority);
     }
 
     public bool TryGetValue(string property, out string value)
     {
         if (_map.TryGetValue(property, out var entry))
-        {
-            value = entry.value;
-            return true;
-        }
+            return Resolve(property, entry, out value);
         value = string.Empty;
         return false;
+    }
+
+    /// <summary>Maps a winning declaration onto the value it stands for, which for a revert is
+    /// a lower-ranked one rather than its own text.</summary>
+    private bool Resolve(string property, (string value, LegacyCascadePriority priority) entry, out string value)
+    {
+        value = entry.value;
+        if (!CssPropertyTraits.IsRevertKeyword(entry.value, out var revertLayer)) return true;
+        // 'revert' skips the layers and lands in the next origin down; 'revert-layer' only
+        // steps back one declaration, so a candidate in the same origin answers it too.
+        // With nothing below to answer, the keyword stays and the property applies its own
+        // fallback (inherit when inherited, the initial value otherwise, CSS Cascading 4 §6.4).
+        if (_belowRevert.TryGetValue(property, out var lower)
+            && (revertLayer || (int)lower.priority.Origin < (int)entry.priority.Origin))
+            value = lower.value;
+        return true;
     }
 
     public IEnumerable<KeyValuePair<string, string>> GetAll()
     {
         foreach (var kv in _map)
-            yield return new KeyValuePair<string, string>(kv.Key, kv.Value.value);
+        {
+            if (Resolve(kv.Key, kv.Value, out var value))
+                yield return new KeyValuePair<string, string>(kv.Key, value);
+        }
     }
 }
 

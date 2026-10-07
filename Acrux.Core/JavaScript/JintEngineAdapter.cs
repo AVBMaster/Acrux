@@ -2,6 +2,7 @@
 using Jint;
 using Jint.Native;
 using Jint.Runtime;
+using Jint.Runtime.Descriptors;
 using Jint.Runtime.Interop;
 
 namespace Acrux.Core.JavaScript;
@@ -32,7 +33,61 @@ public class JintEngineAdapter : IJavaScriptEngineAdapter, IDisposable
         _engine = new Engine(options =>
         {
             options.Strict(false);
+            // A host method that refuses — an index outside the rule list, a rule text the
+            // grammar rejects, a replaceSync on a sheet the page did not construct — has to
+            // reach the page as a JavaScript error it can catch, the way a DOMException does.
+            // Jint's default bubbles the CLR exception to the host instead, which aborts the
+            // whole script: one refused call silently took every later statement with it.
+            options.Interop.ExceptionHandler = _ => true;
+            // The host values whose platform interface is a sequence — 'object?[]', which is how
+            // DocumentHost exposes document.adoptedStyleSheets — have to reach the page as an
+            // Array: a plain CLR array arrives as an array-like, so 'Array.isArray' answers
+            // false on a value the specification calls a sequence.
+            options.Interop.ObjectConverters.Add(new SheetSequenceConverter());
+            options.Interop.ClrExceptionErrorDecorator = (engine, error, ex) =>
+            {
+                // Host errors carry their DOMException name at the front of the message
+                // ("IndexSizeError: …"); lift it onto error.name so a script that switches on
+                // the name sees what a browser would give it.
+                var message = ex.Message ?? "";
+                int cut = message.IndexOf(": ", StringComparison.Ordinal);
+                if (cut <= 1 || cut > 24) return;
+                var name = message.Substring(0, cut);
+                if (!IsDomExceptionName(name)) return;
+                error.FastSetProperty("name", new PropertyDescriptor(
+                    JsValue.FromObject(engine, name),
+                    PropertyFlag.ConfigurableEnumerableWritable));
+            };
         });
+    }
+
+    private static bool IsDomExceptionName(string name) => name switch
+    {
+        "IndexSizeError" or "HierarchyRequestError" or "NotFoundError" or "NotSupportedError"
+        or "NotAllowedError" or "InvalidStateError" or "SyntaxError" or "TypeMismatchError"
+        or "NetworkError" or "AbortError" or "SecurityError" or "InvalidAccessError" => true,
+        _ => false,
+    };
+
+    /// <summary>Turns the host's sheet sequences into JavaScript arrays. Only a value that is
+    /// an <c>object?[]</c> of sheet views is claimed, so the list interfaces the engine hands
+    /// out as array-likes — a live collection, a rule list — keep the shape the page measures
+    /// them with, and the identity of each sheet object is the one interop gives it.</summary>
+    private sealed class SheetSequenceConverter : IObjectConverter
+    {
+        public bool TryConvert(Engine engine, object value, out JsValue? result)
+        {
+            result = null;
+            if (value is not object?[] items) return false;
+            foreach (var item in items)
+                if (item is not null and not CssStyleSheetHost) return false;
+
+            var values = new JsValue[items.Length];
+            for (int i = 0; i < items.Length; i++)
+                values[i] = JsValue.FromObject(engine, items[i]!);
+            result = engine.Intrinsics.Array.ConstructFast(values);
+            return true;
+        }
     }
 
     public void Execute(string code)

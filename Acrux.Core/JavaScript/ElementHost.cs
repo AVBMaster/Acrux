@@ -22,6 +22,11 @@ public class ElementHost
 
     public Element NativeElement => _element;
 
+    /// <summary>Style and layout have to be current before a synchronous geometry
+    /// read answers, so each accessor below starts with this (see
+    /// <see cref="JavaScriptEngine.FlushForRead"/>).</summary>
+    private void FlushForRead() => (Engine ?? JavaScriptEngine.Current)?.FlushForRead();
+
     public string id
     {
         get => _element.Id ?? "";
@@ -73,6 +78,26 @@ public class ElementHost
     public string? outerHTML => BuildOuterHtml();
 
     public CssStyleDeclaration style => _styleHost ??= new CssStyleDeclaration(_element);
+
+    /// <summary>The CSSOM view of the sheet this element contributes (HTML §4.8.6). Only a
+    /// <c>style</c>/<c>link</c> the style engine actually loaded owns one, and the list it
+    /// exposes is the very one the cascade walks, so a rule inserted here is applied rather
+    /// than merely remembered by the object the script is holding.</summary>
+    public CssStyleSheetHost? sheet
+    {
+        get
+        {
+            // A style element only owns a sheet once the style engine has looked at it, so
+            // the read forces the pending pass first — the same rule that makes
+            // getComputedStyle and the geometry getters see the page's own changes. Without
+            // it a script that appends a <style> and asks for its sheet in the next statement
+            // gets nothing, because nothing has parsed it yet.
+            FlushForRead();
+            return _element.AssociatedStyleSheet == null
+                ? null
+                : new CssStyleSheetHost(_element, WrapWithCache);
+        }
+    }
 
     public string? value
     {
@@ -380,6 +405,7 @@ public class ElementHost
 
     public DomRect getBoundingClientRect()
     {
+        FlushForRead();
         var box = _element.LayoutBox;
         if (box == null)
             return new DomRect(0, 0, 0, 0);
@@ -397,6 +423,7 @@ public class ElementHost
     {
         get 
         {
+            FlushForRead();
             var box = _element.LayoutBox;
             if (box == null) return 0;
             return box.BorderBox.Width;
@@ -407,6 +434,7 @@ public class ElementHost
     {
         get 
         {
+            FlushForRead();
             var box = _element.LayoutBox;
             if (box == null) return 0;
             return box.BorderBox.Height;
@@ -417,6 +445,7 @@ public class ElementHost
     {
         get 
         {
+            FlushForRead();
             var box = _element.LayoutBox;
             if (box == null) return 0;
             return box.ContentBox.Width;
@@ -427,6 +456,7 @@ public class ElementHost
     {
         get 
         {
+            FlushForRead();
             var box = _element.LayoutBox;
             if (box == null) return 0;
             return box.ContentBox.Height;
@@ -456,6 +486,7 @@ public class ElementHost
     {
         get 
         {
+            FlushForRead();
             var box = _element.LayoutBox;
             if (box == null) return 0;
             return box.ContentBox.Width;
@@ -466,6 +497,7 @@ public class ElementHost
     {
         get 
         {
+            FlushForRead();
             var box = _element.LayoutBox;
             if (box == null) return 0;
             return box.ContentBox.Height;
@@ -474,13 +506,13 @@ public class ElementHost
 
     public double scrollLeft
     {
-        get => _element.LayoutBox?.ScrollX ?? 0;
+        get { FlushForRead(); return _element.LayoutBox?.ScrollX ?? 0; }
         set { if (_element.LayoutBox != null) _element.LayoutBox.ScrollX = (float)value; }
     }
 
     public double scrollTop
     {
-        get => _element.LayoutBox?.ScrollY ?? 0;
+        get { FlushForRead(); return _element.LayoutBox?.ScrollY ?? 0; }
         set { if (_element.LayoutBox != null) _element.LayoutBox.ScrollY = (float)value; }
     }
 
@@ -488,6 +520,7 @@ public class ElementHost
     {
         get 
         {
+            FlushForRead();
             var box = _element.LayoutBox;
             if (box == null) return 0;
             return box.BorderBox.Top;
@@ -498,6 +531,7 @@ public class ElementHost
     {
         get 
         {
+            FlushForRead();
             var box = _element.LayoutBox;
             if (box == null) return 0;
             return box.BorderBox.Left;
@@ -1230,15 +1264,31 @@ public class ElementHost
         set => _element.SetAttribute("name", value);
     }
 
+    /// <summary>'disabled' on the elements that own a stylesheet is sheet state the engine
+    /// reads, not a reflected attribute (measured: setting it leaves hasAttribute('disabled')
+    /// false), so it goes through the style engine instead of the attribute store. Every other
+    /// element keeps the attribute-backed form-control behaviour.</summary>
     public bool disabled
     {
-        get => _element.HasAttribute("disabled");
+        get => IsSheetOwner ? _element.SheetDisabled : _element.HasAttribute("disabled");
         set
         {
-            if (value) _element.SetAttribute("disabled", "");
+            if (IsSheetOwner)
+            {
+                _element.SheetDisabledState = value;
+                Acrux.Core.Performance.DirtyState.AddSelf(_element,
+                    Acrux.Core.Performance.DirtyFlags.Style | Acrux.Core.Performance.DirtyFlags.Layout |
+                    Acrux.Core.Performance.DirtyFlags.Paint);
+                DomMutationTracker.Notify();
+            }
+            else if (value) _element.SetAttribute("disabled", "");
             else _element.RemoveAttribute("disabled");
         }
     }
+
+    private bool IsSheetOwner =>
+        string.Equals(_element.TagName, "STYLE", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(_element.TagName, "LINK", StringComparison.OrdinalIgnoreCase);
 
     public bool readOnly
     {

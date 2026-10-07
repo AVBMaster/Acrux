@@ -1,0 +1,49 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe 247 clip boxes and the auto-size gradient tile</title>
+<style>
+  /* Every box is 200x100 content with a 6px transparent border and 12px padding, so its
+     border box is x 20..256, its padding box x 26..250 and its content box x 38..238 — and the
+     same numbers hold down the page, one box per 160px. A transparent border is what makes the
+     'border-box' clip observable at all: the background shows through it. */
+  html, body { margin: 0; padding: 0; background: rgb(255,255,255); }
+  .box { position: absolute; left: 20px; width: 200px; height: 100px; padding: 12px;
+         border: 6px solid rgba(0,0,0,0); background-color: rgb(255,255,255); }
+  .T { background-image: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0)),
+                       linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0)); }
+  #p1 { top: 20px; background-color: rgb(255,0,0); background-clip: content-box; }
+  #p2 { top: 180px; background-color: rgb(255,0,0); background-clip: border-box, content-box; }
+  #p3 { top: 340px; background-color: rgb(255,0,0); background-clip: content-box, border-box; }
+  #p4 { top: 500px; background-color: rgb(255,255,255);
+        background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0)),
+                          linear-gradient(rgb(0,200,0), rgb(0,200,0));
+        background-origin: padding-box, border-box;
+        background-clip: content-box, border-box;
+        background-size: 100% 100%, 40px 100%;
+        background-position: 0 0, 0 0;
+        background-repeat: no-repeat, no-repeat; }
+  #p5 { top: 660px; background-image: linear-gradient(rgb(255,0,0), rgb(0,200,0)); }
+  #p6 { top: 820px; background-image: linear-gradient(rgb(255,0,0), rgb(0,200,0));
+        background-origin: border-box; }
+  #p7 { top: 980px; background-image: linear-gradient(rgb(255,0,0), rgb(0,200,0));
+        background-clip: text; color: rgba(0,0,0,0); font: 12px Arial; }
+  #p8 { top: 1140px; background-color: rgb(255,0,0); background-clip: padding-box; }
+  #p9 { top: 1300px; background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0));
+        background-origin: content-box; background-clip: border-box;
+        background-repeat: no-repeat; }
+  #p10 { top: 1460px; background-image: linear-gradient(rgb(0,200,0), rgb(0,200,0));
+         background-position: 10px 10px; background-size: 30px 30px; background-repeat: repeat;
+         background-origin: content-box; background-clip: content-box; }
+</style></head><body>
+<div class="box T" id="p2"></div><div class="box T" id="p3"></div>
+<div class="box" id="p1"></div><div class="box" id="p4"></div><div class="box" id="p5"></div>
+<div class="box" id="p6"></div><div class="box" id="p7">text</div><div class="box" id="p8"></div>
+<div class="box" id="p9"></div><div class="box" id="p10"></div>
+<div id="report" style="position:absolute;left:300px;top:20px;font:12px Arial;color:#000"></div>
+<script>
+const names = ['p1','p2','p3','p4','p5','p6','p7','p8','p9','p10'];
+const out = [];
+for (const n of names) {
+  const el = document.getElementById(n), cs = getComputedStyle(el), r = el.getBoundingClientRect();
+  out.push(`<div>${n}=${JSON.stringify(`x=${Math.round(r.x)} y=${Math.round(r.y)} clip=${cs.backgroundClip} ori=${cs.backgroundOrigin} sz=${cs.backgroundSize} rep=${cs.backgroundRepeat} col=${cs.backgroundColor}`)}</div>`);
+}
+document.getElementById('report').innerHTML = out.join('');
+</script></body></html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body { margin:0; font: 12px Consolas, monospace; }
+.b { width: 60px; height: 12px; background-color: rgb(0,0,255); }
+#report div { white-space: pre; }
+</style></head><body>
+<div class="b" id="s01" style="background-size: 30px auto"></div>
+<div class="b" id="s02" style="background-size: auto 30px"></div>
+<div class="b" id="s03" style="background-size: auto auto"></div>
+<div class="b" id="s04" style="background: linear-gradient(red, blue) left 10px top 20px"></div>
+<div class="b" id="s05" style="background: linear-gradient(red, blue) 10px 20px 30px"></div>
+<div class="b" id="s06" style="background: linear-gradient(red, blue) center 10px"></div>
+<div class="b" id="s07" style="background-position: left 10px top 20px"></div>
+<div class="b" id="s08" style="background: linear-gradient(red, blue) 10px, linear-gradient(green, blue) 20px"></div>
+<div class="b" id="s09" style="background: linear-gradient(red, blue) 10px 20px, linear-gradient(green, blue)"></div>
+<div class="b" id="s10" style="background: linear-gradient(red, blue), linear-gradient(green, blue) red"></div>
+<div class="b" id="s11" style="background: linear-gradient(red, blue) left 10px"></div>
+<div class="b" id="s12" style="background: linear-gradient(red, blue) 10px left"></div>
+<div class="b" id="s13" style="background: linear-gradient(red, blue) 10px 20px 30px 40px"></div>
+<div class="b" id="s14" style="background: linear-gradient(red, blue) center center center"></div>
+<div class="b" id="s15" style="background-size: cover auto"></div>
+<div class="b" id="s16" style="background: linear-gradient(red, blue) 10px / 20px auto"></div>
+<div id="report"></div>
+<script>
+const out = [];
+const g = (id, prop) => getComputedStyle(document.getElementById(id)).getPropertyValue(prop);
+const add = (name, val) => out.push(name + '=' + val);
+add('s01Size30Auto', g('s01','background-size'));
+add('s02SizeAuto30', g('s02','background-size'));
+add('s03SizeAutoAuto', g('s03','background-size'));
+add('s04ShorthandFourValuePosition', g('s04','background-position'));
+add('s04bShorthandFourValueColor', g('s04','background-color'));
+add('s05ThreeLengthColor', g('s05','background-color'));
+add('s06CenterTenPosition', g('s06','background-position'));
+add('s07LonghandFourValue', g('s07','background-position'));
+add('s08TwoLayersPosition', g('s08','background-position'));
+add('s08bTwoLayersSize', g('s08','background-size'));
+add('s09SecondLayerBarePosition', g('s09','background-position'));
+add('s10ColorInLastLayerColor', g('s10','background-color'));
+add('s11LeftTenPosition', g('s11','background-position'));
+add('s12TenLeftColor', g('s12','background-color'));
+add('s13FourLengthsColor', g('s13','background-color'));
+add('s14ThreeCentersColor', g('s14','background-color'));
+add('s15CoverAutoSize', g('s15','background-size'));
+add('s16PosSlashTwoSize', g('s16','background-size'));
+const rep = document.getElementById('report');
+for (const line of out) { const d = document.createElement('div'); d.textContent = line; rep.appendChild(d); }
+</script>
+</body></html>

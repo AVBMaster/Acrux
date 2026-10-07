@@ -325,7 +325,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     {
         if (adjoiningObjectTypes == AdjoiningObjectTypes.None)
             return false;
-        var clear = ToAdjoiningObjectTypes(childStyle.Clear);
+        var clear = ToAdjoiningObjectTypes(childStyle.PhysicalClear);
         return ((uint)clear & (uint)adjoiningObjectTypes) != 0;
     }
 
@@ -2019,7 +2019,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         float childInlineSize = LogicalInlineSize(fragment);
         float childBlockSize = LogicalBlockSize(fragment);
 
-        bool isLeft = style.Float == FloatType.Left;
+        bool isLeft = style.PhysicalFloat == FloatType.Left;
 
         // A float's auto margins are treated as zero (CSS 2.1 §10.3.3). Negative
         // margins are legal and shift the float / shrink the line box it reserves,
@@ -2085,7 +2085,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         float bfcBlockEnd = bfcBlockStart + marginTopBlock + childBlockSize + marginBottomBlock;
         _exclusionSpace.Add(ExclusionArea.Create(
             new BfcRect(new BfcOffset(bfcLineStart, bfcBlockStart), new BfcOffset(bfcLineEnd, bfcBlockEnd)),
-            style.Float, /* is_hidden_for_paint */ false));
+            style.PhysicalFloat, /* is_hidden_for_paint */ false));
 
         // Later in-flow children with 'clear' only get clearance when they know an
         // adjoining float exists; without this registration the clear property is
@@ -2276,7 +2276,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         {
             // The origin offset is where we should start looking for layout
             // opportunities. It needs to be adjusted by the child's clearance.
-            AdjustToClearance(_exclusionSpace.ClearanceOffsetIncludingInitialLetter(childStyle.Clear), ref originOffset);
+            AdjustToClearance(_exclusionSpace.ClearanceOffsetIncludingInitialLetter(childStyle.PhysicalClear), ref originOffset);
         }
 
         var opportunities = _exclusionSpace.AllLayoutOpportunities(originOffset, ChildrenInlineSize);
@@ -2450,7 +2450,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
             // If we had clearance past any adjoining floats, we already know where
             // the child is going to be (the child's margins won't have any effect).
-            forcedBfcBlockOffset = _exclusionSpace.ClearanceOffset(childStyle.Clear);
+            forcedBfcBlockOffset = _exclusionSpace.ClearanceOffset(childStyle.PhysicalClear);
             isPushedByFloats = true;
         }
 
@@ -3372,7 +3372,7 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             if (!Space.IsNewFormattingContext)
                 clearanceOffset = Space.ClearanceOffset;
             if (IsBlockChild(child))
-                clearanceOffset = Math.Max(clearanceOffset, _exclusionSpace.ClearanceOffset(childStyle.Clear));
+                clearanceOffset = Math.Max(clearanceOffset, _exclusionSpace.ClearanceOffset(childStyle.PhysicalClear));
         }
         builder.SetClearanceOffset(clearanceOffset);
 
@@ -3563,6 +3563,11 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         if (s == null) return false;
         if (s.Float != FloatType.None)
             return true;
+        // CSS Display 3 §3.3: 'flow-root' is a block box that establishes a new
+        // formatting context - the only thing it adds over 'block'. Layout therefore
+        // keeps seeing DisplayType.Block and this marker carries the difference.
+        if (s.DisplayIsFlowRoot)
+            return true;
         if (s.Position is PositionType.Absolute or PositionType.Fixed)
             return true;
         // CSS 2.1 §9.4.1: a box with a computed 'overflow' other than 'visible'
@@ -3678,6 +3683,9 @@ internal static class BlockLayoutAlgorithmNodeExtensions
                 selfIsBfc = BlockLayoutAlgorithm.IsBfcFormingOverflow(ns.Overflow)
                     || BlockLayoutAlgorithm.IsBfcFormingOverflow(ns.OverflowX)
                     || BlockLayoutAlgorithm.IsBfcFormingOverflow(ns.OverflowY)
+                    // 'display: flow-root' is a block box that establishes a formatting
+                    // context (CSS Display 3 §3.3), so it too must contain its floats.
+                    || ns.DisplayIsFlowRoot
                     || ns.CreatesContainmentContext;
         }
         foreach (var child in node.Children)

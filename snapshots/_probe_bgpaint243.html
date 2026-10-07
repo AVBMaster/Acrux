@@ -1,0 +1,29 @@
+<!DOCTYPE html><html><head><style>
+body { margin: 0; }
+div { width: 100px; height: 60px; border: 2px solid rgb(0,255,0); margin: 0;
+      background-color: rgb(255,255,255);
+      background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0));
+      background-size: 20px 20px; background-repeat: no-repeat;
+      background-position: left 20px top 30px; }
+/* p2: the 'background' shorthand before the other longhands, as b69 spells it */
+#p2 { background: rgb(238,238,255);
+      background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0));
+      background-size: 20px 20px; background-repeat: no-repeat; }
+#p3 { background: rgb(238,238,255); background-position: left 20px top 30px;
+      background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0));
+      background-size: 20px 20px; background-repeat: no-repeat; }
+/* p4: a later rule sets the position, as b69's .bg/.bg2 pair does */
+#p5 { background-position: left 20px top 30px; }
+/* p5: 200x80 like b69 */
+#p6 { width: 200px; height: 80px; }
+</style></head><body>
+<div id="p1"></div>
+<div id="p2"></div>
+<div id="p3"></div>
+<div id="p4"></div>
+<div id="p5" class=""></div>
+<div id="p6"></div>
+<script>
+// p4 keeps the base rule; p5 gets its position from a rule that comes after the shorthand one.
+</script>
+</body></html>

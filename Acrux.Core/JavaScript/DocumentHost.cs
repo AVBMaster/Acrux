@@ -452,12 +452,92 @@ public class DocumentHost
 
     public string? currentScript => null;
 
-    public string? styleSheets => null;
+    /// <summary>The sheets the document contributes, in document order (CSSOM §5.2).
+    /// Only the elements whose sheet the style engine actually loaded own one, so a
+    /// <c>style</c> a script appended appears here once the next recompute has collected
+    /// it, and a disabled or removed one disappears with it.</summary>
+    public object[] styleSheets
+    {
+        get
+        {
+            // A sheet a script just created only exists once the style engine has parsed the
+            // element, so the list forces the pending pass first — otherwise the <style> that
+            // is three statements old is missing from the very list that is supposed to hold it.
+            Engine?.FlushForRead();
+            var sheets = new List<object>();
+            var stack = new Stack<DomElement>();
+            var root = _document.DocumentElement;
+            if (root != null) stack.Push(root);
+            while (stack.Count > 0)
+            {
+                var element = stack.Pop();
+                if (element.AssociatedStyleSheet != null)
+                    sheets.Add(new CssStyleSheetHost(element, WrapElement));
+                var children = element.Children;
+                for (int i = children.Count - 1; i >= 0; i--)
+                    if (children[i] is DomElement child)
+                        stack.Push(child);
+            }
+            return sheets.ToArray();
+        }
+    }
 
     public string? fonts => null;
 
+    /// <summary>The document's adopted style sheets (CSSOM §5.2.2). A page installs the
+    /// constructed sheets it made with <c>document.adoptedStyleSheets = [sheet]</c>, and they
+    /// cascade after the sheets its own elements contribute. Measured in the reference engine:
+    /// the very sheet object that went in comes back out, and the adopted list is <em>not</em>
+    /// part of <c>document.styleSheets</c>.</summary>
+    public object?[] adoptedStyleSheets
+    {
+        get
+        {
+            var contents = _document.AdoptedStyleSheets;
+            var views = new object?[contents.Count];
+            for (int i = 0; i < contents.Count; i++)
+                views[i] = contents[i].CssomView ?? new CssStyleSheetHost(contents[i]);
+            return views;
+        }
+        set
+        {
+            var adopted = new List<Acrux.Core.Css.Rules.StyleSheetContents>();
+            if (value != null)
+            {
+                for (int i = 0; i < value.Length; i++)
+                {
+                    var host = value[i] as CssStyleSheetHost;
+                    if (host == null) continue;
+                    // Only a sheet the script constructed itself can be adopted; a sheet an
+                    // element owns is already in the cascade through that element, and the
+                    // reference engine refuses the duplicate (measured: NotAllowedError).
+                    if (!host.IsConstructed)
+                        throw new InvalidOperationException(
+                            "NotAllowedError: Can't adopt a non-constructed stylesheet.");
+                    var sheet = host.NativeSheet;
+                    if (sheet != null) adopted.Add(sheet);
+                }
+            }
+            _document.AdoptedStyleSheets = adopted;
+            // The adopted list is style input for the whole document, so the next read has to
+            // recompute — including when the new list is empty, which un-applies the sheets the
+            // old one held. Marking the root covers the live pipeline, where no element of the
+            // page changed and nothing else would notice.
+            var root = _document.DocumentElement;
+            if (root != null)
+                Acrux.Core.Performance.DirtyState.AddSelf(root,
+                    Acrux.Core.Performance.DirtyFlags.Style | Acrux.Core.Performance.DirtyFlags.Layout |
+                    Acrux.Core.Performance.DirtyFlags.Paint);
+            DomMutationTracker.Notify();
+        }
+    }
     public object getComputedStyle(ElementHost element)
     {
+        // A computed style read is a style change event in disguise: whatever the
+        // script did to the DOM earlier in the same tick has to be resolved first,
+        // or the page reads the previous frame's values.
+        Engine?.FlushForRead();
+
         var computedStyle = element.NativeElement.ComputedStyle;
         Dictionary<string, string> props;
         if (computedStyle == null)
@@ -470,18 +550,21 @@ public class DocumentHost
             props = new Dictionary<string, string>
             {
                     ["box-sizing"] = computedStyle.BoxSizing.ToCssString(),
-                ["width"] = computedStyle.Width.ToString(),
-                ["height"] = computedStyle.Height.ToString(),
-                ["display"] = computedStyle.Display.ToCssString(),
+                // A length is resolved at computed-value time (CSS Values 3 §7), so a box
+                // authored 'width: 10em' answers in pixels against its own 12px font. A box
+                // size additionally clamps: nothing is never narrower than nothing.
+                ["width"] = computedStyle.ComputedSizeCss(computedStyle.Width),
+                ["height"] = computedStyle.ComputedSizeCss(computedStyle.Height),
+                ["display"] = computedStyle.DisplayCssText,
                 ["position"] = computedStyle.Position.ToCssString(),
                 ["float"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Float.ToString()),
                 ["clear"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Clear.ToString()),
-                ["color"] = $"rgb({computedStyle.Color.Red}, {computedStyle.Color.Green}, {computedStyle.Color.Blue})",
+                ["color"] = CssColorText.FromColor(computedStyle.Color),
                 ["font-family"] = computedStyle.FontFamily ?? "",
                 ["font-size"] = $"{computedStyle.FontSize}px",
                 ["font-weight"] = ((int)computedStyle.FontWeight).ToString(),
                 ["font-style"] = computedStyle.FontStyleCssText,
-                ["line-height"] = computedStyle.LineHeight == 1.2f ? "normal" : computedStyle.LineHeight.ToString(),
+                ["line-height"] = computedStyle.LineHeightCssText,
                 ["text-align"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.TextAlign.ToString()),
                 ["text-decoration"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.TextDecoration.ToString()),
                 ["white-space"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.WhiteSpace.ToString()),
@@ -492,16 +575,16 @@ public class DocumentHost
                 ["opacity"] = computedStyle.Opacity.ToString(),
                 ["z-index"] = computedStyle.ZIndex?.ToString() ?? "auto",
                 ["background-color"] = computedStyle.BackgroundColor.HasValue
-                    ? $"rgba({computedStyle.BackgroundColor.Value.Red}, {computedStyle.BackgroundColor.Value.Green}, {computedStyle.BackgroundColor.Value.Blue}, {computedStyle.BackgroundColor.Value.Alpha / 255f})"
-                    : "transparent",
-                ["margin-top"] = computedStyle.MarginTop.ToCssString(),
-                ["margin-right"] = computedStyle.MarginRight.ToCssString(),
-                ["margin-bottom"] = computedStyle.MarginBottom.ToCssString(),
-                ["margin-left"] = computedStyle.MarginLeft.ToCssString(),
-                ["padding-top"] = computedStyle.PaddingTop.ToCssString(),
-                ["padding-right"] = computedStyle.PaddingRight.ToCssString(),
-                ["padding-bottom"] = computedStyle.PaddingBottom.ToCssString(),
-                ["padding-left"] = computedStyle.PaddingLeft.ToCssString(),
+                    ? CssColorText.FromColor(computedStyle.BackgroundColor.Value)
+                    : CssColorText.Transparent,
+                ["margin-top"] = computedStyle.ComputedLengthCss(computedStyle.MarginTop),
+                ["margin-right"] = computedStyle.ComputedLengthCss(computedStyle.MarginRight),
+                ["margin-bottom"] = computedStyle.ComputedLengthCss(computedStyle.MarginBottom),
+                ["margin-left"] = computedStyle.ComputedLengthCss(computedStyle.MarginLeft),
+                ["padding-top"] = computedStyle.ComputedLengthCss(computedStyle.PaddingTop),
+                ["padding-right"] = computedStyle.ComputedLengthCss(computedStyle.PaddingRight),
+                ["padding-bottom"] = computedStyle.ComputedLengthCss(computedStyle.PaddingBottom),
+                ["padding-left"] = computedStyle.ComputedLengthCss(computedStyle.PaddingLeft),
                 ["border-top-width"] = $"{computedStyle.BorderTopWidth}px",
                 ["border-right-width"] = $"{computedStyle.BorderRightWidth}px",
                 ["border-bottom-width"] = $"{computedStyle.BorderBottomWidth}px",
@@ -513,7 +596,7 @@ public class DocumentHost
             };
         }
 
-        return new ComputedStyleHost(props, element.NativeElement.ComputedStyle);
+        return new ComputedStyleHost(props, element.NativeElement.ComputedStyle, element.NativeElement);
     }
 
     private static Dictionary<string, string> CreateDefaultComputedStyleForElement(ElementHost element)
@@ -697,26 +780,238 @@ public class ComputedStyleHost
 {
     private readonly Dictionary<string, string> _properties;
     private readonly ComputedStyle? _style;
+    private readonly Acrux.Core.Dom.Element? _owner;
 
-    public ComputedStyleHost(Dictionary<string, string> properties, ComputedStyle? style = null)
+    public ComputedStyleHost(Dictionary<string, string> properties, ComputedStyle? style = null,
+        Acrux.Core.Dom.Element? owner = null)
     {
         _properties = properties ?? new Dictionary<string, string>();
         _style = style;
+        _owner = owner;
     }
 
     public string? getProperty(string name) => getPropertyValue(name);
 
-    /// <summary>The hand-written list above answers the properties it covers; everything else
-    /// falls through to the serializer the animation engine already uses, so a property does
-    /// not have to be added to two places before scripts can read it. Without this, a
-    /// property that is fully modelled still reports the empty string to JS.</summary>
-    public string? getPropertyValue(string name)
+    /// <summary>CSSOM: a property the declaration block does not carry reads back as the
+    /// empty string, never as null.</summary>
+    public string getPropertyValue(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "";
+        var lower = Acrux.Core.Css.Properties.CssPropertyIdExtensions.CanonicalName(name.ToLowerInvariant());
+        // The serialiser is the measured surface for every property it knows, so it answers
+        // first; the hand-written map is only a fallback for a name it leaves out. Reading the
+        // map first would keep its older spellings ('align-items: flex-end' for an authored
+        // 'end', a border width that ignores 'border-style: none') alive.
+        if (_style != null)
+        {
+            var serialized = Acrux.Core.Dom.Animations.ComputedValueSerializer.Get(_style, lower, includeShorthands: true);
+            if (serialized != null) return UsedValue(lower, serialized) ?? serialized;
+        }
+        return _properties.TryGetValue(lower, out var value) ? value : "";
+    }
+
+    /// <summary>The value as the reference engine would print it: the serialiser's text, put onto
+    /// the box it belongs to. Two kinds of change happen here. Addresses are absolute (see
+    /// <see cref="ResolveUrls"/>), which needs the document but no layout. And a few values are
+    /// reported as the box's <c>used</c> value rather than the value the page wrote (measured): a
+    /// box size left 'auto' answers with the size layout gave it — the content box, so a padded
+    /// box still reports its authored content width — and 'transform-origin' answers in pixels
+    /// from the border box's top-left corner, the only box a percentage of the origin resolves
+    /// against. Those need a layout object, which an inline, a detached element or a read before
+    /// the first layout does not have; they keep the serialiser's text.</summary>
+    private string? UsedValue(string name, string text)
+    {
+        var withAddresses = ResolveUrls(text);
+        var box = _owner?.LayoutBox;
+        if (box == null) return withAddresses == text ? null : withAddresses;
+        switch (name)
+        {
+            // A box size is the one number the computed surface reports in layout units, and in
+            // pixels even when the page wrote a percentage (measured: 'width: 33.3px' reads back
+            // '33.2969px', 'width: 25%' of a 400px box reads '100px', and 'width: auto' reads the
+            // content box the layout produced). A percentage we cannot resolve yet — the box the
+            // reference engine measures it against is the containing block's, which this surface
+            // does not look at — stays the authored percentage.
+            case "width": return SizeUsed(text, box.ContentBox.Width);
+            case "height": return SizeUsed(text, box.ContentBox.Height);
+            case "transform-origin":
+            case "perspective-origin":
+                return TransformOriginUsed(text, LayoutUnit(box.BorderBox.Width),
+                    LayoutUnit(box.BorderBox.Height)) ?? withAddresses;
+            default:
+                return withAddresses == text ? null : withAddresses;
+        }
+    }
+
+    /// <summary>One box size on the computed surface: the used value where the authored value was
+    /// 'auto', the authored pixel value snapped to a layout unit otherwise.</summary>
+    private static string? SizeUsed(string text, float used)
+    {
+        if (text == "auto") return Px(LayoutUnit(used));
+        if (text.EndsWith("px") && TryNumber(text.Substring(0, text.Length - 2), out var px))
+            return Px(LayoutUnit((float)px));
+        return null;
+    }
+
+    /// <summary>The reference engine's layout works in units of 1/64 of a CSS pixel and every
+    /// used value it prints is one of those, truncated (measured: a box authored 'width: 33.3px'
+    /// answers '33.2969px' — 2131/64 — and 'height: 9.7px' answers '9.6875px' — 620/64). Putting
+    /// our float sizes through the same quantisation makes the same box answer the same number.</summary>
+    private static double LayoutUnit(float value) => Math.Floor(value * 64) / 64;
+
+    private static string Px(double value) =>
+        Acrux.Core.Dom.Animations.CssValueTokenizer.Num(value) + "px";
+
+    /// <summary>Rewrites every url() in a value onto the address it resolves to, in the quoted
+    /// spelling the reference engine prints (measured: a layer written 'url(a.png)' reads back
+    /// as 'url("file:///…/a.png")' — the address the fetch will use, not the token the page
+    /// typed). A value that mentions no url() is returned untouched, so the scan is free for
+    /// everything else.
+    ///
+    /// An address that is only a fragment is the one exception: it names something inside this
+    /// document — a '&lt;filter&gt;' or a '&lt;mask&gt;' element — and resolving it against the
+    /// page's own URL would describe a different resource to a script that compares the two
+    /// (measured, and the same for background-image, mask-image and filter: 'url(#ff)' reads
+    /// back as 'url("#ff")', while 'url(a.svg#ff)' is made absolute like any other).</summary>
+    private string ResolveUrls(string text)
+    {
+        if (text.IndexOf("url(", StringComparison.OrdinalIgnoreCase) < 0) return text;
+        string? baseText = _owner?.OwnerDocument?.Url;
+        if (string.IsNullOrEmpty(baseText)) return text;
+        if (!System.Uri.TryCreate(baseText, UriKind.Absolute, out var baseUri)) return text;
+        var sb = new System.Text.StringBuilder(text.Length + 32);
+        int i = 0;
+        while (i < text.Length)
+        {
+            int at = text.IndexOf("url(", i, StringComparison.OrdinalIgnoreCase);
+            if (at < 0) { sb.Append(text, i, text.Length - i); break; }
+            sb.Append(text, i, at - i);
+            int close = IndexMatchingParen(text, at + 3);
+            if (close < 0) { sb.Append(text, at, text.Length - at); break; }
+            var inner = text.Substring(at + 4, close - at - 4).Trim();
+            if (inner.Length >= 2 && (inner[0] == '"' || inner[0] == '\'') && inner[^1] == inner[0])
+                inner = inner.Substring(1, inner.Length - 2);
+            sb.Append("url(\"")
+              .Append(inner.StartsWith('#') ? inner : Absolute(inner, baseUri))
+              .Append("\")");
+            i = close + 1;
+        }
+        return sb.ToString();
+    }
+
+    private static string Absolute(string address, System.Uri baseUri)
+    {
+        if (string.IsNullOrEmpty(address)) return address;
+        return System.Uri.TryCreate(baseUri, address, out var resolved)
+            ? resolved.AbsoluteUri : address;
+    }
+
+    /// <summary>The index of the ')' that closes the '(' at <paramref name="open"/>, or -1.</summary>
+    private static int IndexMatchingParen(string text, int open)
+    {
+        int depth = 0;
+        for (int i = open; i < text.Length; i++)
+        {
+            if (text[i] == '(') depth++;
+            else if (text[i] == ')' && --depth == 0) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>The origin as pixels: '50%' of the border box's width, a length unchanged. The
+    /// serialiser has already put the value into its positional form with the keywords folded onto
+    /// percentages. A third value is the depth, which belongs to no axis and therefore to no box —
+    /// it is only re-spelled, never resolved. Each endpoint is a layout unit of its own, so a
+    /// percentage of a quantised width is quantised again on the way out (measured: '11.0879px' =
+    /// 33.296875 × 33.3%).</summary>
+    private static string? TransformOriginUsed(string text, double width, double height)
+    {
+        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2 && parts.Length != 3) return null;
+        var x = OriginEndpointUsed(parts[0], width);
+        var y = OriginEndpointUsed(parts[1], height);
+        if (x == null || y == null) return null;
+        if (parts.Length == 3)
+        {
+            // The depth is a <length> by grammar, so a percentage here is somebody else's value
+            // and the whole used value falls back to what the serialiser printed.
+            var z = OriginEndpointUsed(parts[2], 0);
+            return z == null ? null : $"{x} {y} {z}";
+        }
+        return $"{x} {y}";
+    }
+
+    private static string? OriginEndpointUsed(string token, double size)
+    {
+        // The box it resolves against is a layout unit; the product of the percentage is not
+        // snapped again (measured: 33.296875 × 33.3% reads back '11.0879px', not '11.0781px').
+        if (token.EndsWith("%"))
+        {
+            if (!TryNumber(token.Substring(0, token.Length - 1), out var percent)) return null;
+            return Px(percent / 100.0 * size);
+        }
+        if (token.EndsWith("px"))
+        {
+            return TryNumber(token.Substring(0, token.Length - 2), out var px)
+                ? Px(LayoutUnit((float)px)) : null;
+        }
+        return null;
+    }
+
+    private static bool TryNumber(string text, out double value) =>
+        double.TryParse(text, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out value);
+
+    /// <summary>Backs the wrapper the shim installs over a computed style: every longhand is
+    /// readable as a camelCase property too, and this object only has hand-written members
+    /// for the ones the C# side spelled out. Null means the name is not a CSS property at
+    /// all, which the wrapper reports as undefined — as distinct from the empty string a
+    /// real property with no value gives.</summary>
+    public string? __resolve(string name)
     {
         if (string.IsNullOrEmpty(name)) return null;
-        var lower = name.ToLowerInvariant();
-        return _properties.TryGetValue(lower, out var value)
-            ? value
-            : _style != null ? Acrux.Core.Dom.Animations.ComputedValueSerializer.Get(_style, lower) : null;
+        var dashed = Acrux.Core.Css.Properties.CssPropertyIdExtensions
+            .CanonicalName(Hyphenate(name));
+        // Same precedence as getPropertyValue: the serialiser is the surface that knows the
+        // computed-value model, and a camelCase read must not fall back onto the older
+        // spellings the hand-built map still carries.
+        if (_style != null)
+        {
+            var serialized = Acrux.Core.Dom.Animations.ComputedValueSerializer.Get(_style, dashed, includeShorthands: true);
+            if (serialized != null) return UsedValue(dashed, serialized) ?? serialized;
+        }
+        return _properties.TryGetValue(dashed, out var value) ? value : null;
+    }
+
+    /// <summary>'borderTopColor' to 'border-top-color'. A name that already contains a dash
+    /// is either dashed or prefixed, and for both the dash is meaningful, so only its case
+    /// needs fixing.</summary>
+    private static string Hyphenate(string name)
+    {
+        if (name.IndexOf('-') >= 0) return name.ToLowerInvariant();
+        // Two spellings the IDL gives a property that the dashed form cannot express. 'float'
+        // is a reserved word, so the declaration object calls it 'cssFloat'; and a legacy
+        // prefixed property is reached as 'webkitAppearance', which hyphenating would put on
+        // the wrong side of the dash entirely (measured: both answer the property's value).
+        if (name.Equals("cssFloat", StringComparison.OrdinalIgnoreCase)) return "float";
+        foreach (var prefix in new[] { "webkit", "moz", "ms", "o" })
+        {
+            if (name.Length > prefix.Length + 1
+                && name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && char.IsUpper(name[prefix.Length]))
+                return "-" + prefix + "-" + name.Substring(prefix.Length).ToLowerInvariant();
+        }
+        var sb = new System.Text.StringBuilder(name.Length + 8);
+        foreach (var ch in name)
+        {
+            if (char.IsUpper(ch))
+            {
+                if (sb.Length > 0) sb.Append('-');
+                sb.Append(char.ToLowerInvariant(ch));
+            }
+            else sb.Append(ch);
+        }
+        return sb.ToString();
     }
 
     // Common camelCase shortcuts for JS consumers

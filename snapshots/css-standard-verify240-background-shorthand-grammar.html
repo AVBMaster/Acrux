@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b240 background shorthand grammar</title>
+<!--
+  The grammar of the 'background' shorthand (CSS Backgrounds 3 §4), row by row.
+
+  Each row is one box that carries a base rule ('background-color: rgb(0, 0, 255)') plus the
+  declaration under test, and prints the computed values the declaration decides. Because a
+  shorthand either produces ALL of its longhands or none of them, the base colour is the
+  tell-tale of a rejected declaration: it survives only when the value failed to parse.
+
+  Rows are named bg_* and print the property the reference engine is measured against.
+-->
+<style>
+  body { margin: 0; padding: 0; font: 12px Consolas, monospace; color: #111; background: #fff; }
+  .b { width: 60px; height: 12px; background-color: rgb(0, 0, 255); }
+  #report div { white-space: pre; }
+</style>
+</head>
+<body>
+
+<div class="b" id="r01" style="background: invert"></div>
+<div class="b" id="r02" style="background: none"></div>
+<div class="b" id="r03" style="background: url()"></div>
+<div class="b" id="r04" style="background: linear-gradient(red, blue) auto"></div>
+<div class="b" id="r05" style="background: image-set(linear-gradient(red, blue) 1x)"></div>
+<div class="b" id="r06" style="background: foo(2px)"></div>
+<div class="b" id="r07" style="background: red blue"></div>
+<div class="b" id="r08" style="background: 10% 20% 30%"></div>
+<div class="b" id="r09" style="background: 50%"></div>
+<div class="b" id="r10" style="background: linear-gradient(red, blue) 10px"></div>
+<div class="b" id="r11" style="background: linear-gradient(red, blue) calc(10px + 5px) 20px"></div>
+<div class="b" id="r12" style="background: linear-gradient(red, blue) min(10px, 20px)"></div>
+<div class="b" id="r13" style="background: linear-gradient(red, blue) -20px 30%"></div>
+<div class="b" id="r14" style="background: border-box"></div>
+<div class="b" id="r15" style="background: linear-gradient(red, blue) content-box padding-box"></div>
+<div class="b" id="r16" style="background: fixed"></div>
+<div class="b" id="r17" style="background: local"></div>
+<div class="b" id="r18" style="background: scroll"></div>
+<div class="b" id="r19" style="background: linear-gradient(red, blue) center / cover no-repeat"></div>
+<div class="b" id="r20" style="background: linear-gradient(red, blue) repeat repeat"></div>
+<div class="b" id="r21" style="background: linear-gradient(red, blue) left / auto auto"></div>
+<div class="b" id="r22" style="background: transparent"></div>
+<div class="b" id="r23" style="background: linear-gradient(red, blue) center center"></div>
+<div class="b" id="r24" style="background: linear-gradient(red, blue) 10px 20px, linear-gradient(green, yellow)"></div>
+<div class="b" id="r25" style="background: red"></div>
+<div class="b" id="r26" style="background: linear-gradient(red, blue) 10%"></div>
+<div class="b" id="r27" style="background: top"></div>
+<div class="b" id="r28" style="background: linear-gradient(red, blue) repeat-x"></div>
+<div class="b" id="r29" style="background: url(nope.png)"></div>
+<div class="b" id="r30" style="background: linear-gradient(red, blue) padding-box content-box"></div>
+<div class="b" id="r31" style="background: linear-gradient(red, blue) 10px 20px / 30px"></div>
+<div class="b" id="r32" style="background: radial-gradient(circle, red, blue)"></div>
+<div class="b" id="r33" style="background: linear-gradient(red, blue) right bottom"></div>
+<div class="b" id="r34" style="background: linear-gradient(red, blue) bottom right"></div>
+<div class="b" id="r35" style="background: url(nope.png) no-repeat fixed center"></div>
+
+<div id="report"></div>
+
+<script>
+const out = [];
+const cs = id => getComputedStyle(document.getElementById(id));
+const g = (id, prop) => cs(id).getPropertyValue(prop);
+const short = id => {
+  const image = g(id, 'background-image');
+  return image === 'none' ? 'none' : image.indexOf('url(') === 0 ? 'url'
+       : image.indexOf('linear-gradient') === 0 ? 'lin' : image.indexOf('radial-gradient') === 0 ? 'rad' : image;
+};
+const ok = (name, got, want) => { out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${got === want}`); };
+
+ok('bg01InvertColor', g('r01', 'background-color'), "rgb(0, 0, 255)");
+ok('bg02NoneColor', g('r02', 'background-color'), "rgba(0, 0, 0, 0)");
+ok('bg03EmptyUrlColor', g('r03', 'background-color'), "rgba(0, 0, 0, 0)");
+ok('bg04StrayAutoColor', g('r04', 'background-color'), "rgb(0, 0, 255)");
+ok('bg05ImageSetColor', g('r05', 'background-color'), "rgba(0, 0, 0, 0)");
+ok('bg06UnknownFnColor', g('r06', 'background-color'), "rgb(0, 0, 255)");
+ok('bg07TwoColorsColor', g('r07', 'background-color'), "rgb(0, 0, 255)");
+ok('bg08ThreePositionsColor', g('r08', 'background-color'), "rgb(0, 0, 255)");
+ok('bg09OnePercentPosition', g('r09', 'background-position'), "50% 50%");
+ok('bg10OneLengthPosition', g('r10', 'background-position'), "10px 50%");
+ok('bg11CalcPosition', g('r11', 'background-position'), "15px 20px");
+ok('bg12MinPosition', g('r12', 'background-position'), "10px 50%");
+ok('bg13NegativePosition', g('r13', 'background-position'), "-20px 30%");
+ok('bg14OneBoxOrigin', g('r14', 'background-origin'), "border-box");
+ok('bg14bOneBoxClip', g('r14', 'background-clip'), "border-box");
+ok('bg14cOneBoxColor', g('r14', 'background-color'), "rgba(0, 0, 0, 0)");
+ok('bg15TwoBoxesOrigin', g('r15', 'background-origin'), "content-box");
+ok('bg15bTwoBoxesClip', g('r15', 'background-clip'), "padding-box");
+ok('bg16FixedAttachment', g('r16', 'background-attachment'), "fixed");
+ok('bg16bFixedColor', g('r16', 'background-color'), "rgba(0, 0, 0, 0)");
+ok('bg17LocalAttachment', g('r17', 'background-attachment'), "local");
+ok('bg18ScrollColor', g('r18', 'background-color'), "rgba(0, 0, 0, 0)");
+ok('bg19CenterCoverPosition', g('r19', 'background-position'), "50% 50%");
+ok('bg19bCenterCoverSize', g('r19', 'background-size'), "cover");
+ok('bg19cCenterCoverRepeat', g('r19', 'background-repeat'), "no-repeat");
+ok('bg20RepeatTwice', g('r20', 'background-repeat'), "repeat");
+ok('bg21LeftAutoSize', g('r21', 'background-size'), "auto");
+ok('bg21bLeftAutoPosition', g('r21', 'background-position'), "0% 50%");
+ok('bg22TransparentColor', g('r22', 'background-color'), "rgba(0, 0, 0, 0)");
+ok('bg23CenterCenterPosition', g('r23', 'background-position'), "50% 50%");
+ok('bg24LayeredPosition', g('r24', 'background-position'), "10px 20px, 0% 0%");
+ok('bg24bLayeredSize', g('r24', 'background-size'), "auto, auto");
+ok('bg25RedColor', g('r25', 'background-color'), "rgb(255, 0, 0)");
+ok('bg26TenPercentPosition', g('r26', 'background-position'), "10% 50%");
+ok('bg27TopPosition', g('r27', 'background-position'), "50% 0%");
+ok('bg28RepeatX', g('r28', 'background-repeat'), "repeat-x");
+ok('bg29UrlImage', short('r29'), "url");
+ok('bg30BoxesReversedOrigin', g('r30', 'background-origin'), "padding-box");
+ok('bg30bBoxesReversedClip', g('r30', 'background-clip'), "content-box");
+ok('bg31PosSlashSizePosition', g('r31', 'background-position'), "10px 20px");
+ok('bg31bPosSlashSizeSize', g('r31', 'background-size'), "30px");
+ok('bg32RadialImage', short('r32'), "rad");
+ok('bg33RightBottomPosition', g('r33', 'background-position'), "100% 100%");
+ok('bg34BottomRightPosition', g('r34', 'background-position'), "100% 100%");
+ok('bg35UrlNoRepeatFixedPosition', g('r35', 'background-position'), "50% 50%");
+ok('bg35bUrlNoRepeatFixedRepeat', g('r35', 'background-repeat'), "no-repeat");
+ok('bg35cUrlNoRepeatFixedAttachment', g('r35', 'background-attachment'), "fixed");
+
+const rep = document.getElementById('report');
+rep.innerHTML = '';
+for (const line of out) { const d = document.createElement('div'); d.textContent = line; rep.appendChild(d); }
+</script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+<!DOCTYPE html><html><head><style>
+/* Paint truth for background-origin / background-clip / background-repeat. Every box is
+   the same size with a TRANSPARENT border, so the border area the background reaches into
+   is visible instead of hidden under the border. Measured with
+   python3 snapshots/color_bbox.py snapshots/_probe_bgclip244.html 255,0,0 200 1200 */
+body { margin: 0; }
+.b { width: 120px; height: 60px; margin-bottom: 20px;
+     border: 10px solid rgba(0, 0, 0, 0);
+     background-color: rgb(255, 255, 255);
+     background-image: linear-gradient(rgb(255, 0, 0), rgb(255, 0, 0));
+     background-size: 30px 30px; }
+#c2 { background-clip: padding-box; }
+#c3 { background-clip: content-box; padding: 5px; }
+#c4 { background-origin: content-box; background-clip: content-box; padding: 5px; }
+#c5 { background-origin: border-box; }
+#c6 { background-repeat: no-repeat; }
+#c7 { background-repeat: no-repeat; background-position: -5px -5px; }
+#c8 { background-repeat: repeat-x; }
+#c9 { background-repeat: repeat-y; }
+#c10 { background-size: 36px 36px; background-repeat: space; }
+#c11 { background-size: 34px 34px; background-repeat: round; }
+#c12 { background-position: right 10px bottom 10px; background-repeat: repeat; }
+#c13 { background-origin: border-box; background-position: 5px 5px; background-repeat: repeat-x; }
+#c14 { background-clip: border-box; background-position: -20px; background-size: 20px 20px; }
+</style></head><body>
+<div class="b" id="c1"></div><div class="b" id="c2"></div><div class="b" id="c3"></div>
+<div class="b" id="c4"></div><div class="b" id="c5"></div><div class="b" id="c6"></div>
+<div class="b" id="c7"></div><div class="b" id="c8"></div><div class="b" id="c9"></div>
+<div class="b" id="c10"></div><div class="b" id="c11"></div><div class="b" id="c12"></div>
+<div class="b" id="c13"></div><div class="b" id="c14"></div>
+</body></html>

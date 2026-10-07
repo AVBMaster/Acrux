@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<!--
+  b237 — the spelling a declaration keeps, and what a control says about its appearance
+  (CSS Syntax 3 / CSSOM §5.3 / CSS Values 3 §3.1 / CSS UI 4 §4.3, measured Edge 151 / dpr=1).
+
+  Two things were wrong at once, and they shared a cause.
+
+  §A The CSSOM prints the value it STORED, and the engine stored the characters the parser had
+     consumed. A reference engine prints a specified value in its own spelling: one space between
+     components, no space before a comma, one after it, and a function tight against its name.
+     That spelling is what 'rule.style.getPropertyValue(...)', 'removeProperty()' and
+     'rule.cssText' hand back, so a page that compares what it wrote with what it reads sees a
+     different string. The canonical text is now produced once, where the declaration is parsed,
+     which is also where it did the damage: the space in front of a function name belongs to the
+     PREVIOUS component, and swallowing it turned 'border: 1em solid rgb(1,2,3)' into
+     '1em solidrgb(1, 2, 3)' — the shorthand splitter then read one long token, the colour
+     grammar was never reached, and the border fell back to currentcolor. Same for a two-colour
+     'scrollbar-color', whose second colour disappeared.
+
+  §B 'appearance' is one property, not two. Writing '-webkit-appearance' changes the computed
+     'appearance' and the CSSOM normalises the name (measured: after
+     'style.setProperty("-webkit-appearance","none")', 'style.length' is 1, 'style.appearance'
+     reads 'none' and cssText prints 'appearance: none;'). But what a form control PAINTS as is
+     not a CSS value at all: every control computes 'appearance' to 'auto' — input, button,
+     textarea, select, range (measured) — even though the engine draws a text field, a tick box,
+     a menu list. So the user-agent sheet may not name a theme in the property, and the widget
+     identity is carried next to it (ComputedStyle.NativeThemeFamily), which is what the theme
+     painter reads. 'appearance: none' still strips the widget, and a compat keyword a page names
+     ('appearance: textfield') still paints that widget.
+
+  §C A name the property's grammar rejects is dropped when the declaration is RECORDED (CSS
+     Values 3 §3.1), so it never wins its place in the cascade — the gate the CSSOM writes
+     through is the same one the parser uses.
+
+  §D Two IDL spellings a dashed conversion cannot reach: 'float' is a reserved word so the
+     declaration object calls it 'cssFloat' (measured: cs.cssFloat === cs.float), and a legacy
+     prefixed property is reached as 'webkitAppearance', whose dash is in front of the prefix.
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>b237 specified value spelling and appearance</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 11px/13px Arial, sans-serif; color: #111; background: #fff; }
+  .row { margin-bottom: 1px; }
+  .k { display: inline-block; width: 170px; color: #555; }
+  #fl { float: left; width: 30px; height: 10px; background: #eee; }
+  #wk { -webkit-appearance: checkbox; }
+</style>
+<style id="sheetA">
+  #bx { border: 1em solid rgb(1,2,3); width: 20px; height: 6px; }
+  #sb { scrollbar-color: rgb(7,8,9) rgb(10,11,12); scrollbar-width: thin; }
+  #bg { background: url("a b.png")rgb(1,2,3) no-repeat; }
+  #tf { transform: translate(4px,5px)rotate(30deg); }
+  #fn { font: 12px/1.5 Arial,sans-serif; letter-spacing: 1px; }
+  #gr { width: calc(10px  +  4em); margin: 0 auto; }
+</style>
+</head><body>
+<div class="row"><span class="k">bx bordered box</span><div id="bx"></div></div>
+<div class="row"><span class="k">sb scrollbar box</span><div id="sb">sb</div></div>
+<div class="row"><span class="k">bg background box</span><div id="bg">bg</div></div>
+<div class="row"><span class="k">tf transform box</span><div id="tf">tf</div></div>
+<div class="row"><span class="k">fn font box</span><div id="fn">fn</div></div>
+<div class="row"><span class="k">gr calc box</span><div id="gr">gr</div></div>
+<div class="row"><span class="k">fl floated</span><div id="fl"></div></div>
+<div class="row"><span class="k">wk prefixed ap</span><div id="wk">wk</div></div>
+<div class="row"><span class="k">i1 text input</span><input id="i1" type="text" value="txt"></div>
+<div class="row"><span class="k">ck1 checkbox</span><input id="ck1" type="checkbox"></div>
+<div class="row"><span class="k">ck2 none checkbox</span><input id="ck2" type="checkbox" style="appearance:none"></div>
+<div class="row"><span class="k">bt1 button</span><button id="bt1">bt</button></div>
+<div class="row"><span class="k">se1 select</span><select id="se1"><option>a</option></select></div>
+<h3 style="margin:6px 0 2px;font-size:12px">report</h3>
+<div id="report"></div>
+<script>
+(async () => {
+const out = [];
+const rep = document.getElementById('report');
+const ok = (name, got, want) => {
+  out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${got === want}`);
+};
+const cs = id => getComputedStyle(document.getElementById(id));
+const g = (id, prop) => cs(id).getPropertyValue(prop);
+
+// §A the canonical spelling, printed by the CSSOM out of a parsed sheet.
+const sheet = [...document.styleSheets].find(s => s.ownerNode && s.ownerNode.id === 'sheetA');
+const ruleOf = sel => {
+  if (!sheet) return null;
+  for (const r of sheet.cssRules) {
+    if (r.selectorText && r.selectorText.indexOf(sel) >= 0) return r;
+  }
+  return null;
+};
+const bxRule = ruleOf('#bx');
+ok('a0sheetFound', !!sheet, true);
+ok('a1borderText', bxRule.style.getPropertyValue('border'), 'x');
+ok('a2computedColor', g('bx', 'border-top-color'), 'x');
+ok('a3computedWidth', g('bx', 'border-top-width'), 'x');
+ok('a4scrollbar', g('sb', 'scrollbar-color'), 'x');
+const bgRule = ruleOf('#bg');
+ok('a5backgroundText', bgRule.style.getPropertyValue('background'), 'x');
+ok('a6backgroundImage', g('bg', 'background-image'), 'x');
+ok('a7backgroundColor', g('bg', 'background-color'), 'x');
+const tfRule = ruleOf('#tf');
+ok('a8transformText', tfRule.style.getPropertyValue('transform'), 'x');
+const fnRule = ruleOf('#fn');
+ok('a9fontText', fnRule.style.getPropertyValue('font'), 'x');
+ok('a10fontFamily', g('fn', 'font-family'), 'x');
+const grRule = ruleOf('#gr');
+ok('a11calcText', grRule.style.getPropertyValue('width'), 'x');
+ok('a12marginText', grRule.style.getPropertyValue('margin'), 'x');
+ok('a13ruleCssText', grRule.cssText, 'x');
+
+// §C grammar: a rejected value never enters the block.
+const bxStyle = bxRule.style;
+bxStyle.fontSize = 'nonsense';
+ok('c1fontsizeRejected', bxStyle.fontSize, 'x');
+bxStyle.setProperty('width', 'garbage');
+ok('c2widthRejected', bxStyle.width, 'x');
+bxStyle.setProperty('letter-spacing', 'huge');
+ok('c3spacingRejected', bxStyle.letterSpacing, 'x');
+bxStyle.setProperty('color', 'notacolor');
+ok('c4colorRejected', bxStyle.color, 'x');
+bxStyle.setProperty('width', '7ch');
+ok('c5unknownUnitKept', bxStyle.width, 'x');
+bxStyle.setProperty('display', 'flex');
+ok('c6displayKept', bxStyle.display, 'x');
+
+// §B what a control says about its appearance.
+ok('b1input', g('i1', 'appearance'), 'x');
+ok('b2checkbox', g('ck1', 'appearance'), 'x');
+ok('b3button', g('bt1', 'appearance'), 'x');
+ok('b4select', g('se1', 'appearance'), 'x');
+ok('b5div', g('gr', 'appearance'), 'x');
+ok('b6webkitAlias', g('ck1', '-webkit-appearance'), 'x');
+ok('b7authorNone', g('ck2', 'appearance'), 'x');
+ok('b8prefixedAuthor', g('wk', 'appearance'), 'x');
+ok('b9prefixedAlias', g('wk', '-webkit-appearance'), 'x');
+
+// §D the CSSOM's own view of the alias, and the IDL spellings.
+const gr = document.getElementById('gr');
+gr.style.setProperty('-webkit-appearance', 'none');
+ok('d1inlineLength', gr.style.length, 'x');
+ok('d2inlineCanonical', gr.style.getPropertyValue('appearance'), 'x');
+ok('d3inlineCssText', gr.style.cssText, 'x');
+ok('d4computedAfter', g('gr', 'appearance'), 'x');
+ok('d5webkitMember', cs('gr').webkitAppearance, 'x');
+const fl = cs('fl');
+ok('d6float', fl.getPropertyValue('float'), 'x');
+ok('d7cssFloat', fl.cssFloat, 'x');
+
+rep.textContent = out.join('\n');
+})();
+</script>
+</body></html>

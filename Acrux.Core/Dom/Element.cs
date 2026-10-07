@@ -118,6 +118,22 @@ public abstract class Element : Node
     public ComputedStyle? ComputedStyle { get; set; }
     public LayoutBox? LayoutBox { get; set; }
 
+    /// <summary>The sheet a <style> or <link> element contributes to the cascade, and the
+    /// object the cascade itself resolves from. Keeping the reference on the element is what
+    /// lets <c>element.sheet</c> (CSSOM §5.2) hand out the live sheet: a rule inserted
+    /// through it is in the cascade on the next recompute, not in a copy.</summary>
+    public Acrux.Core.Css.Rules.StyleSheetContents? AssociatedStyleSheet { get; set; }
+
+    /// <summary>'disabled' set through the DOM (CSSOM §5.2). The reference engine keeps it as
+    /// element state that the content attribute initialises but the IDL setter never mirrors
+    /// back, so <c>styleEl.disabled = true</c> hides the sheet while
+    /// <c>hasAttribute('disabled')</c> stays false (measured). Null means the attribute alone
+    /// decides, which is also what a sheet authored with the attribute looks like.</summary>
+    public bool? SheetDisabledState { get; set; }
+
+    /// <summary>Whether the element's sheet is currently out of the cascade.</summary>
+    public bool SheetDisabled => SheetDisabledState ?? HasAttribute("disabled");
+
     public Dictionary<string, string> Style { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string>? BeforeStyles { get; set; }
     public Dictionary<string, string>? AfterStyles { get; set; }

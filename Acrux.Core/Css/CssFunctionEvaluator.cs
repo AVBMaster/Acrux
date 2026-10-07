@@ -197,7 +197,13 @@ public static class CssFunctionEvaluator
             {
                 result = 0;
             }
-            value = value[..match.Value.StartIndex] + $"{result:F1}px" + value[(match.Value.StartIndex + match.Value.Length)..];
+            // Six significant digits, which is the precision a reference engine carries a
+            // computed length at (measured: 'calc(100px + 1cm)' is '137.795px'). Rounding the
+            // fold to one decimal made every calc() answer in 0.1px steps, so a third of a
+            // hundred pixels came out '33.3px' and a millimetre came out '3.8px'.
+            value = value[..match.Value.StartIndex]
+                + Acrux.Core.Dom.Animations.CssValueTokenizer.Num(result) + "px"
+                + value[(match.Value.StartIndex + match.Value.Length)..];
         }
         return value;
     }
@@ -624,11 +630,14 @@ public static class CssFunctionEvaluator
             // handed the percentage base as parentFontSize, so the context wins.
             if (unit == "em") return value * fontStyle.FontSize;
         }
+        // The absolute units come from Length's table rather than from factors written here, so
+        // that 'calc(1cm)' and a bare '1cm' cannot answer two different numbers — and so that
+        // 'q', which this switch never had and which therefore resolved as a pixel, resolves.
+        if (Acrux.Core.Dom.Length.TryAbsoluteUnitPixels(unit, out var pixelsPerUnit))
+            return (float)(value * pixelsPerUnit);
         return unit switch
         {
-            "px" => value,
-            "em" => value * parentFontSize,
-            "rem" => value * rootFontSize,
+            "em" => value * parentFontSize,            "rem" => value * rootFontSize,
             "%" => value / 100f * (_percentageBase > 0 ? _percentageBase : parentFontSize),
             "vw" => value * viewportWidth / 100f,
             "vh" => value * viewportHeight / 100f,
@@ -648,11 +657,6 @@ public static class CssFunctionEvaluator
             "cqb" => value * viewportHeight / 100f,
             "cqmin" => value * Math.Min(viewportWidth, viewportHeight) / 100f,
             "cqmax" => value * Math.Max(viewportWidth, viewportHeight) / 100f,
-            "pt" => value * 1.33333f,
-            "pc" => value * 16f,
-            "in" => value * 96f,
-            "cm" => value * 37.7953f,
-            "mm" => value * 3.77953f,
             "ex" => value * parentFontSize * 0.5f,
             "ch" => value * parentFontSize * 0.5f,
             "ic" => value * parentFontSize,

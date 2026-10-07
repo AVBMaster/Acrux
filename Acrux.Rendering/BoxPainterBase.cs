@@ -90,7 +90,15 @@ public sealed class FillLayer
     /// Whether this layer's clip fully occludes all layers beneath it, in which
     /// case traversal of lower layers can stop (occlusion culling).
     /// </summary>
-    public bool ClipOccludesNextLayers => Clip == FillBox.Border;
+    /// <summary>
+    /// Whether this layer leaves nothing under it worth painting. Its clip being the border
+    /// box says only how far the layer reaches, not what it covers: a 30px tile with
+    /// 'background-clip: border-box' — the default clip of every layer — hides none of the
+    /// layers below it (measured: a two-layer background whose top layer is a small tile still
+    /// shows the layer under it). Only an opaque colour painted across the whole box does.
+    /// </summary>
+    public bool ClipOccludesNextLayers =>
+        Clip == FillBox.Border && Image == null && Color is { } color && color.Alpha == 255;
 
     public FillLayer? NextOrSelf => Next ?? this;
 }

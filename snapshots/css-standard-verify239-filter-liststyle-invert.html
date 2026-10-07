@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b239 drop-shadow grammar, list-style reset, the invert colour</title>
+<!--
+  Three findings from this round's marker-gate triage, each recorded as a row the
+  engine can be checked against:
+
+  §A drop-shadow() grammar (CSS Filters 1 §29.1). The spec writes the grammar as
+     <length>{2,3} <color>?, but a colour written FIRST is accepted, a second colour
+     or a fourth length invalidates the WHOLE filter list ('none'), and a missing
+     colour is the element's used color rather than black.
+     The colour is serialised first and the blur is always present, so every accepted
+     form reads back identically.
+
+  §B 'list-style' resets the position it was not given (CSS Lists 3 §3.3). The list
+     carries 'list-style-position: inside'; an item written 'list-style: lower-greek'
+     computes back to 'outside', while 'list-style: inside square' keeps 'inside'.
+
+  §C 'invert' is not a <color> outside forced-colours mode (CSS Color 4 §14.1), so a
+     declaration carrying it is dropped whole: the shorthand's other parts go with it.
+
+  Truth measured in Edge 130 on 2026-10-07.
+-->
+<style>
+  body { margin: 0; padding: 0; font: 14px/18px "Segoe UI", Arial, sans-serif; color: #111; background: #fff; }
+  .stage { width: 120px; height: 40px; background: rgb(0,0,255); }
+  #s2 { color: rgb(200,0,0); }
+  ul { margin: 0; padding: 0 0 0 90px; list-style-position: inside; }
+  .greek { list-style: lower-greek; }
+  .squareset { list-style: inside square; }
+  .noset { list-style: none; }
+  .onlypos { list-style: outside; }
+  .o1 { outline: 3px solid invert; }
+  .o2 { outline: 3px solid invert; outline-style: solid; }
+  .o3 { outline-color: invert; outline-style: solid; outline-width: 5px; color: rgb(200,0,0); }
+  .o4 { outline: 3px solid rgb(0,128,0); }
+  .c1 { color: invert; }
+  .c2 { background: invert; }
+  #report { font: 12px Consolas, monospace; white-space: pre; }
+</style>
+</head>
+<body>
+
+<div class="stage" id="f1" style="filter:drop-shadow(green 6px 6px)"></div>
+<div class="stage" id="f2" style="filter:drop-shadow(6px 6px green)"></div>
+<div class="stage" id="f3" style="filter:drop-shadow(6px 6px)"></div>
+<div class="stage" id="s2" style="filter:drop-shadow(6px 6px)"></div>
+<div class="stage" id="f4" style="filter:drop-shadow(green 6px 6px 2px red)"></div>
+<div class="stage" id="f5" style="filter:drop-shadow(6px 6px 2px 2px green)"></div>
+<div class="stage" id="f6" style="filter:drop-shadow(6px 6px 0 hsl(120,100%,50%))"></div>
+<div class="stage" id="f7" style="filter:drop-shadow(6px 6px 0 rgb(0 255 0 / 50%))"></div>
+<div class="stage" id="f8" style="filter:drop-shadow(6px 6px 0 rgb(0,128,0))"></div>
+<div class="stage" id="f9" style="filter:drop-shadow(10% 10% 0 green)"></div>
+<div class="stage" id="f10" style="filter:drop-shadow(6px 6px 0 currentcolor)"></div>
+<div class="stage" id="f11" style="filter:drop-shadow(6px 6px 0 green) blur(1px)"></div>
+<div class="stage" id="f12" style="filter:drop-shadow(6px 6px 0 green) drop-shadow(1px 1px red)"></div>
+<div class="stage" id="f13" style="filter:drop-shadow(6px)"></div>
+<div class="stage" id="f14" style="filter:drop-shadow(6px 6px 0 invert)"></div>
+
+<ul>
+  <li class="greek" id="L1">lower-greek via shorthand</li>
+  <li class="greek" id="L2">second greek</li>
+  <li class="squareset" id="L3">inside square</li>
+  <li class="noset" id="L4">none</li>
+  <li class="onlypos" id="L5">outside only</li>
+  <li id="L6">plain item</li>
+</ul>
+
+<div class="o1 stage" id="O1">o1</div>
+<div class="o2 stage" id="O2">o2</div>
+<div class="o3 stage" id="O3">o3</div>
+<div class="o4 stage" id="O4">o4</div>
+<div class="c1 stage" id="C1">c1</div>
+<div class="c2 stage" id="C2">c2</div>
+
+<div id="report"></div>
+
+<script>
+const out = [];
+const ok = (name, got, want) => { out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${got === want}`); };
+const cs = id => getComputedStyle(document.getElementById(id));
+const g = (id, prop) => cs(id).getPropertyValue(prop);
+
+// §A drop-shadow grammar
+ok('f1LeadColor', g('f1', 'filter'), "drop-shadow(rgb(0, 128, 0) 6px 6px 0px)");
+ok('f2TrailColor', g('f2', 'filter'), "drop-shadow(rgb(0, 128, 0) 6px 6px 0px)");
+ok('f3NoColorIsCurrentColor', g('f3', 'filter'), "drop-shadow(rgb(17, 17, 17) 6px 6px 0px)");
+ok('f4NoColorRedElement', g('s2', 'filter'), "drop-shadow(rgb(200, 0, 0) 6px 6px 0px)");
+ok('f5TwoColorsInvalid', g('f4', 'filter'), "none");
+ok('f6FourLengthsInvalid', g('f5', 'filter'), "none");
+ok('f7HslColor', g('f6', 'filter'), "drop-shadow(rgb(0, 255, 0) 6px 6px 0px)");
+ok('f8SpaceSeparatedRgb', g('f7', 'filter'), "drop-shadow(rgba(0, 255, 0, 0.5) 6px 6px 0px)");
+ok('f9CommaRgb', g('f8', 'filter'), "drop-shadow(rgb(0, 128, 0) 6px 6px 0px)");
+ok('f10PercentageInvalid', g('f9', 'filter'), "none");
+ok('f11CurrentColorKeyword', g('f10', 'filter'), "drop-shadow(rgb(17, 17, 17) 6px 6px 0px)");
+ok('f12Chain', g('f11', 'filter'), "drop-shadow(rgb(0, 128, 0) 6px 6px 0px) blur(1px)");
+ok('f13TwoInChain', g('f12', 'filter'), "drop-shadow(rgb(0, 128, 0) 6px 6px 0px) drop-shadow(rgb(255, 0, 0) 1px 1px 0px)");
+ok('f14OneLengthInvalid', g('f13', 'filter'), "none");
+ok('f15InvertInvalid', g('f14', 'filter'), "none");
+
+// §B list-style resets its position
+ok('b1GreekPosition', g('L1', 'list-style-position'), "outside");
+ok('b2GreekType', g('L1', 'list-style-type'), "lower-greek");
+ok('b3GreekImage', g('L1', 'list-style-image'), "none");
+ok('b4InsideSquarePosition', g('L3', 'list-style-position'), "inside");
+ok('b5InsideSquareType', g('L3', 'list-style-type'), "square");
+ok('b6NonePosition', g('L4', 'list-style-position'), "outside");
+ok('b7NoneImage', g('L4', 'list-style-image'), "none");
+ok('b8NoneType', g('L4', 'list-style-type'), "none");
+ok('b9OutsideOnlyType', g('L5', 'list-style-type'), "disc");
+ok('b10OutsideOnlyImage', g('L5', 'list-style-image'), "none");
+ok('b11InheritedPosition', g('L6', 'list-style-position'), "inside");
+
+// §C invert is not a colour
+ok('c1OutlineShorthandDropped', g('O1', 'outline-style'), "none");
+ok('c2OutlineShorthandWidth', g('O1', 'outline-width'), "3px");
+ok('c3StyleSurvivesLonghand', g('O2', 'outline-style'), "solid");
+ok('c4StyleSurvivesColor', g('O2', 'outline-color'), "rgb(17, 17, 17)");
+ok('c5LonghandColorDropped', g('O3', 'outline-color'), "rgb(200, 0, 0)");
+ok('c6LonghandColorWidth', g('O3', 'outline-width'), "5px");
+ok('c7RealColorStillWorks', g('O4', 'outline-color'), "rgb(0, 128, 0)");
+ok('c8ColorDropped', g('C1', 'color'), "rgb(17, 17, 17)");
+ok('c9BackgroundDropped', g('C2', 'background-color'), "rgb(0, 0, 255)");
+
+const rep = document.getElementById('report');
+rep.innerHTML = '';
+for (const line of out) { const d = document.createElement('div'); d.textContent = line; rep.appendChild(d); }
+</script>
+</body>
+</html>

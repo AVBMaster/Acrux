@@ -349,6 +349,17 @@ public class StyleSheetContents
     public bool HasFontFaceRule { get; set; }
     public bool HasMediaQueries { get; set; }
 
+    /// <summary>The CSSOM "disabled" flag of the sheet itself. A sheet an element owns keeps
+    /// its state on the element (HTML puts <c>disabled</c> there); this is the one a
+    /// constructed sheet carries, and the cascade leaves either of them out.</summary>
+    public bool Disabled { get; set; }
+
+    /// <summary>The script-facing view of this sheet, remembered so that the object a page
+    /// holds and the one <c>document.adoptedStyleSheets</c> hands back are the same object
+    /// (CSSOM identity), and so that mutating either reaches the rules the cascade walks.
+    /// Typed <c>object</c> to keep the CSS layer free of JS-host types.</summary>
+    public object? CssomView { get; set; }
+
     public void AddRule(StyleRuleBase rule)
     {
         ChildRules.Add(rule);

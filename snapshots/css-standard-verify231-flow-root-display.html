@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<!--
+  b231 — display:flow-root as a formatting context, the 'display' multi-keyword grammar
+  (CSS Display 3 §3) and the declaration-level value check (CSS Values 3 §3.1).
+
+  Three defects:
+  1. 'display: flow-root' was not a keyword at all: it computed as 'block' and, unlike
+     'block', it had to establish a new formatting context — contain its floats (CSS Display
+     3 §3.3/§4) and stop margin collapsing through its edges.
+  2. The 'display' grammar stopped at the single legacy keyword. The modern form is
+     [ external ] [ internal ] [ list-item ] in any order ('inline flow-root',
+     'block list-item', 'flow-root list-item'); every one of them parsed to the catch-all
+     'block' fallback.
+  3. A value the grammar rejects has to be dropped with the whole declaration. The old
+     fallback applied it as 'block', so 'span{display:garbage}' won its cascade slot, then
+     blockified the span; the UA rule's 'inline' never got to speak again.
+
+  EDGE TRUTH (2026-10-07, Edge 141 / dpr=1, getBoundingClientRect + getComputedStyle):
+  §A float containment, 120px-wide boxes, one 50x30 float inside each:
+       a (display:block)      [0,0   120x0]   float escapes, box collapses
+       b (display:flow-root)  [0,10  120x30]  contains the float
+       c (overflow:hidden)    [0,50  120x30]  same, by CSS 2.1 §9.4.1
+  §B margin collapsing through a parent's top edge, child margin-top:20px:
+       p1 (display:block)     [0,0   200x40]  margins collapse through: child y=0
+       p2 (display:flow-root) [0,60  200x60]  no collapsing: child y=20, box grows 20px
+  §C computed values (Edge reports exactly these strings):
+       block flow -> "block"        inline flow -> "inline"
+       flow-root -> "flow-root"     inline flow-root -> "inline-block"
+       flow-root inline -> "inline-block"
+       block flex -> "flex"         block list-item -> "list-item"
+       inline list-item -> "inline list-item"
+       flow-root list-item -> "flow-root list-item"
+       block flow-root list-item -> "flow-root list-item"
+       flex list-item -> declaration dropped ("block" for a div) — 'list-item' needs an
+       outer display type of 'flow' (CSS Display 3 §3.2)
+       flex flow -> dropped; two internal keywords is not a value
+       garbage -> dropped, the box keeps the UA display
+  §D a span with 'display:garbage' stays inline: the two spans of §D share one line box
+     (Edge: both at y=0, widths 20 and 21).
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>b231 flow-root, display grammar and invalid values</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 12px/16px Arial, sans-serif; }
+  .col { float: left; width: 120px; margin: 0 2px 0 0; }
+  .lbl { font: 10px/12px Arial, sans-serif; color: #444; }
+
+  /* §A — float containment */
+  .box { width: 100px; margin: 0 0 6px 0; background: #e8e8e8; }
+  .fl  { float: left; width: 40px; height: 24px; background: #2a8; }
+
+  /* §B — margin collapsing through the parent edge */
+  .wrap { width: 116px; margin: 0 0 6px 0; background: #eee; }
+  .kid  { height: 20px; margin-top: 20px; background: #c33; }
+
+  /* §C — grammar forms, sized so the layout class shows in the picture */
+  .g { width: 60px; height: 14px; margin: 0 0 4px 0; background: #36c; }
+  .pair { width: 116px; background: #f4f4f4; margin: 0 0 6px 0; padding: 2px 0; }
+  .inlinetxt { font: 10px/12px Arial, sans-serif; }
+  .sibling { display: inline; width: 40px; height: 14px; background: #939; }
+  .badspan { display: garbage; }
+  .goodspan { display: inline-block; width: 30px; height: 14px; background: #939; }
+</style></head>
+<body>
+
+<div class="col">
+  <div class="lbl">A1 block</div>
+  <div class="box" id="a"><div class="fl"></div></div>
+  <div class="lbl">A2 flow-root</div>
+  <div class="box" id="b" style="display:flow-root"><div class="fl"></div></div>
+  <div class="lbl">A3 overflow:hidden</div>
+  <div class="box" id="c" style="overflow:hidden"><div class="fl"></div></div>
+
+  <div class="lbl">D1 two inline spans</div>
+  <div class="pair" id="d"><span class="sibling" id="d1">one</span><span class="sibling badspan" id="d2">two</span></div>
+  <div class="lbl">D2 blockified (wrong)</div>
+  <div class="pair" id="e"><span class="goodspan" id="e1"></span><span class="goodspan" id="e2"></span></div>
+</div>
+
+<div class="col">
+  <div class="lbl">B1 block parent</div>
+  <div class="wrap" id="p1"><div class="kid" id="k1"></div></div>
+  <div class="lbl">B2 flow-root parent</div>
+  <div class="wrap" id="p2" style="display:flow-root"><div class="kid" id="k2"></div></div>
+  <div class="lbl">B3 flow-root + list-item</div>
+  <div class="wrap" id="p3" style="display:flow-root list-item"><div class="kid" id="k3"></div></div>
+</div>
+
+<div class="col">
+  <div class="lbl">C forms (all valid)</div>
+  <div id="c1" class="g" style="display:inline flow-root"> </div><div id="c2" class="g" style="display:inline flow-root"> </div>
+  <div id="c3" class="g" style="display:flow-root list-item"></div>
+  <div id="c4" class="g" style="display:block flow-root list-item"></div>
+  <div id="c5" class="g" style="display:block flex"></div>
+  <div class="lbl">C dropped (invalid)</div>
+  <div id="c6" class="g" style="display:flex list-item"></div>
+  <div id="c7" class="g" style="display:flex flow"></div>
+  <div id="c8" class="g" style="display:garbage"></div>
+  <div id="c9" class="g" style="display:block list-item"></div>
+</div>
+
+
+</body>
+</html>

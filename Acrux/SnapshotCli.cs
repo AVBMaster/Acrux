@@ -98,7 +98,7 @@ internal static class SnapshotCli
             (el, evt) => events.Add(evt.Type + " " + Describe(evt)));
 
         var engine = page.Animations!;
-        var keyframes = page.Load.StyleComputer?.CollectKeyframeRules();
+        var keyframes = page.Load.StyleComputer?.CollectKeyframeRules(page.Load.Document);
         var result = page.UpdateResult;
 
         Console.WriteLine($"[anim] time={timeMs}ms active={result.HasActiveAnimations} " +
@@ -308,7 +308,7 @@ internal static class SnapshotCli
             id = $"{element.ParentElement?.GetAttribute("id") ?? "?"}:{element.TagName.ToLowerInvariant().Replace("pseudo-", "::")}";
         if (style != null && !string.IsNullOrEmpty(id))
         {
-            Console.WriteLine($"{id} display={style.Display} boxSizing={style.BoxSizing} position={style.Position}");
+            Console.WriteLine($"{id} display={style.DisplayCssText} boxSizing={style.BoxSizing} position={style.Position}");
             Console.WriteLine($"{id} border={Fmt(style.BorderTopWidth)}/{style.BorderTopStyle}/{Color(style.BorderTopColor)} " +
                 $"{Fmt(style.BorderRightWidth)}/{style.BorderRightStyle}/{Color(style.BorderRightColor)} " +
                 $"{Fmt(style.BorderBottomWidth)}/{style.BorderBottomStyle}/{Color(style.BorderBottomColor)} " +
@@ -322,6 +322,10 @@ internal static class SnapshotCli
             Console.WriteLine($"{id} inset={Fmt(style.Top)}/{Fmt(style.Right)}/{Fmt(style.Bottom)}/{Fmt(style.Left)} z={style.ZIndex?.ToString() ?? "auto"} opacity={Fmt(style.Opacity)}");
             Console.WriteLine($"{id} font={Fmt(style.FontSize)}/{style.FontWeight}/{style.FontStyle}/{style.FontFamily} lh={Fmt(style.LineHeight)}({style.LineHeightIsNormal}) variant={style.FontVariant} transform={style.TextTransform} synthesis={Acrux.Core.Css.Resolver.CssPropertyApplier.FormatFontSynthesis(style.FontSynthesis)}");
             Console.WriteLine($"{id} color={Color(style.Color)} bg={Color(style.BackgroundColor)} bgImg={style.BackgroundImage?.Count ?? 0} bgSize={style.BackgroundSize} bgRepeat={style.BackgroundRepeat} bgPos={style.BackgroundPositionX}|{style.BackgroundPositionY} bgClip={style.BackgroundClip} bgOrigin={style.BackgroundOrigin}");
+            // The background layer model as the CSSOM reports it: the scalar fields above can only
+            // hold the first layer, so a list that was clamped, cycled or short of a silent layer
+            // is only diagnosable here — and this is the text a page's own script reads.
+            Console.WriteLine($"{id} bgLayers[i={Bgl(style, "background-image")} rep={Bgl(style, "background-repeat")} sz={Bgl(style, "background-size")} pos={Bgl(style, "background-position")} px={Bgl(style, "background-position-x")} py={Bgl(style, "background-position-y")} ori={Bgl(style, "background-origin")} clp={Bgl(style, "background-clip")} att={Bgl(style, "background-attachment")}]");
             Console.WriteLine($"{id} boxShadow={ShadowList(style.BoxShadow)} textShadow={ShadowList(style.TextShadow)}");
             Console.WriteLine($"{id} flex={Fmt(style.FlexGrow)}/{Fmt(style.FlexShrink)}/{Fmt(style.FlexBasis)} dir={style.FlexDirection} wrap={style.FlexWrap} jc={style.JustifyContent} ai={style.AlignItems} ac={style.AlignContent} gap={Fmt(style.RowGap)}/{Fmt(style.ColumnGap)}");
             Console.WriteLine($"{id} listStyle={style.ListStyleType}/{style.ListStylePosition}/{style.ListStyleImage} custom='{style.ListStyleTypeString}'");
@@ -331,7 +335,7 @@ internal static class SnapshotCli
             Console.WriteLine($"{id} contain={Acrux.Core.Css.Resolver.CssPropertyApplier.FormatContain(style.Contain)} contentVisibility={style.ContentVisibility} containIntrinsic={Acrux.Core.Css.Resolver.CssPropertyApplier.FormatContainIntrinsic(style)} fieldSizing={style.FieldSizing}");
             Console.WriteLine($"{id} transition={Or(style.TransitionProperty, "all")}/{Or(style.TransitionDuration, "0s")}/{Or(style.TransitionDelay, "0s")}/{Or(style.TransitionTimingFunction, "ease")}");
             Console.WriteLine($"{id} animation={Or(style.AnimationName, "none")}/{Or(style.AnimationDuration, "0s")}/{Or(style.AnimationIterationCount, "1")}/{Or(style.AnimationFillMode, "none")}");
-            Console.WriteLine($"{id} pe={Or(style.PointerEvents, "auto")} visibility={style.Visibility} contentVisibility={style.ContentVisibility} caret={Color(style.CaretColor)} accent={Color(style.AccentColor)} imgRendering:{style.ImageRendering} scroll:{style.ScrollBehavior} overscroll:{style.OverscrollBehaviorX}/{style.OverscrollBehaviorY} tab:{Fmt(style.TabSizePx)} filter:{style.Filter}");
+            Console.WriteLine($"{id} pe={Or(style.PointerEvents, "auto")} visibility={style.Visibility} contentVisibility={style.ContentVisibility} caret={Color(style.CaretColor)} accent={Color(style.AccentColor)} float={Acrux.Core.Dom.CssFloatKeywords.ToCssString(style.Float)} clear={Acrux.Core.Dom.CssFloatKeywords.ToCssString(style.Clear)} usedFloat={Acrux.Core.Dom.CssFloatKeywords.ToCssString(style.PhysicalFloat)} imgRendering:{style.ImageRendering} scroll:{style.ScrollBehavior} overscroll:{style.OverscrollBehaviorX}/{style.OverscrollBehaviorY} tab:{Fmt(style.TabSizePx)} filter:{style.Filter}");
             // The pseudo-element side-car is what the layout engine actually receives, so a
             // declaration that never reaches a generated box is only diagnosable by reading
             // it here (generated boxes have no ComputedStyle of their own in this dump).
@@ -366,6 +370,11 @@ internal static class SnapshotCli
             : color.Value.Alpha == 255
                 ? $"rgb({color.Value.Red},{color.Value.Green},{color.Value.Blue})"
                 : $"rgba({color.Value.Red},{color.Value.Green},{color.Value.Blue},{color.Value.Alpha / 255f:0.###})";
+
+    // A background layer list exactly as the CSSOM reads it back, so the dump and a browser's
+    // getComputedStyle line up without a second tool.
+    private static string Bgl(Acrux.Core.Dom.ComputedStyle style, string property) =>
+        Acrux.Core.Dom.Animations.ComputedValueSerializer.Get(style, property, includeShorthands: true) ?? "?";
 
     private static string ShadowList(System.Collections.Generic.List<Acrux.Core.Dom.BoxShadowValue>? shadows) =>
         shadows is not { Count: > 0 } ? "none"
@@ -566,8 +575,10 @@ internal static class SnapshotCli
             if (op is DrawTextOp t && t.Text.Length > 0)
             {
                 // Long runs used to be dropped from the dump entirely, which made the
-                // tool look like the text was missing from the display list.
-                string shown = t.Text.Length <= 60 ? t.Text : t.Text[..60] + $"…(+{t.Text.Length - 60})";
+                // tool look like the text was missing from the display list. The limit has to
+                // clear a whole verification row ('name="value" want="value" ok=true' is
+                // routinely longer than a sentence), or the dump cannot be read back.
+                string shown = t.Text.Length <= 240 ? t.Text : t.Text[..240] + $"…(+{t.Text.Length - 240})";
                 string decorations = "";
                 if (t.Underline || t.Overline || t.LineThrough)
                 {

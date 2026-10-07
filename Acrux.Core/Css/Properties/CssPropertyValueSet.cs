@@ -99,6 +99,12 @@ public class CssPropertyValueSet
     /// <summary>The central setter, mirroring MutableCSSPropertyValueSet::SetLonghandProperty.</summary>
     public SetResult SetLonghandProperty(CssPropertyValue property)
     {
+        // A declaration whose value the property's grammar rejects is dropped here rather
+        // than at application time, so it never occupies the cascade slot that the
+        // next-lower rule (the UA stylesheet, for 'display') should have won.
+        if (!CssValueGrammar.ValueIsValidFor(property.Name, property.Value))
+            return SetResult.ParseError;
+
         int index = property.Name.IsCustom
             ? FindPropertyIndex(property.Name.CustomName!)
             : FindPropertyIndex(property.Name.Id);
@@ -119,6 +125,16 @@ public class CssPropertyValueSet
     public bool RemoveProperty(CssPropertyId id)
     {
         int idx = FindPropertyIndex(id);
+        if (idx < 0) return false;
+        _properties.RemoveAt(idx);
+        return true;
+    }
+
+    /// <summary>Removes a custom property, which the set keys by its '--' name rather than by
+    /// an id (CSS Properties and Variables 1 §2).</summary>
+    public bool RemoveProperty(string customName)
+    {
+        int idx = FindPropertyIndex(customName);
         if (idx < 0) return false;
         _properties.RemoveAt(idx);
         return true;

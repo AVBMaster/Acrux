@@ -1,0 +1,280 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>b241 background grammar, longhands and edge forms</title><!--
+  The grammars of the background longhands and of the &lt;bg-position&gt;/&lt;bg-size&gt; pair
+  (CSS Backgrounds 3 §4.1, CSS Position 3 §5.2), row by row, against the reference engine.
+
+  Every box carries the base rule below, so a declaration the parser rejects is still readable:
+  the base value survives only when the declaration was dropped.  The base values are chosen so
+  that none of them can be produced by a row's own value.
+-->
+<style>
+  body { margin: 0; padding: 0; font: 12px Consolas, monospace; color: #111; background: #fff; }
+  .b { width: 60px; height: 12px; background-color: rgb(0, 0, 255);
+       background-position: 7px 9px; background-size: 5px 6px; background-repeat: round;
+       background-origin: content-box; background-clip: content-box; }
+  #report div { white-space: pre; }
+</style>
+</head>
+<body>
+<div class="b" id="r_pos01TopOffset" style="background-position: top 10px"></div>
+<div class="b" id="r_pos02OffsetTop" style="background-position: 10px top"></div>
+<div class="b" id="r_pos03LeftOffTop" style="background-position: left 10px top"></div>
+<div class="b" id="r_pos04LeftOffCenter" style="background-position: left 10px center"></div>
+<div class="b" id="r_pos05CenterOffTop" style="background-position: center 10px top"></div>
+<div class="b" id="r_pos06LeftTopOff" style="background-position: left top 10px"></div>
+<div class="b" id="r_pos07CenterTop" style="background-position: center top"></div>
+<div class="b" id="r_pos08TopCenter" style="background-position: top center"></div>
+<div class="b" id="r_pos09Bottom" style="background-position: bottom"></div>
+<div class="b" id="r_pos10LeftRight" style="background-position: left right"></div>
+<div class="b" id="r_pos11TopBottom" style="background-position: top bottom"></div>
+<div class="b" id="r_pos12LeftOffRight" style="background-position: left 10px right"></div>
+<div class="b" id="r_pos13CenterOffOff" style="background-position: center 10px 20px"></div>
+<div class="b" id="r_pos14LeftOffOff" style="background-position: left 10px 20px"></div>
+<div class="b" id="r_pos15OffOffTop" style="background-position: 10px 20px top"></div>
+<div class="b" id="r_pos16ThreeLengths" style="background-position: 10px 20px 30px"></div>
+<div class="b" id="r_pos17FourLengths" style="background-position: 10px 20px 30px 40px"></div>
+<div class="b" id="r_pos18LeftOffTopOff" style="background-position: left 10px top 20px"></div>
+<div class="b" id="r_pos19RightOffBotOff" style="background-position: right 10px bottom 20px"></div>
+<div class="b" id="r_pos20TopOffLeftOff" style="background-position: top 10px left 20px"></div>
+<div class="b" id="r_pos21LeftOffBotOff" style="background-position: left 10px bottom 20px"></div>
+<div class="b" id="r_pos22ListInvalid" style="background-position: 10px 20px, top 10px"></div>
+<div class="b" id="r_pos23ListOk" style="background-position: 10px 20px, 30px 40px"></div>
+<div class="b" id="r_pos24Case" style="background-position: CENTER TOP"></div>
+<div class="b" id="r_pos25CaseLength" style="background-position: 10PX TOP"></div>
+<div class="b" id="r_pos26LeftOffset" style="background-position: left 10px"></div>
+<div class="b" id="r_pos27CenterOffset" style="background-position: center 10px"></div>
+<div class="b" id="r_pos28OffsetLeft" style="background-position: 10px left"></div>
+<div class="b" id="r_pos29CenterCenterC" style="background-position: center center center"></div>
+<div class="b" id="r_pos30CalcZero" style="background-position: calc(100% - 10px) 0"></div>
+<div class="b" id="r_size01ThreeTerms" style="background-size: 30px 40px 50px"></div>
+<div class="b" id="r_size02CoverTwice" style="background-size: cover cover"></div>
+<div class="b" id="r_size03ContainAuto" style="background-size: contain auto"></div>
+<div class="b" id="r_size04AutoCover" style="background-size: auto cover"></div>
+<div class="b" id="r_size05None" style="background-size: none"></div>
+<div class="b" id="r_size06AutoAuto" style="background-size: auto auto"></div>
+<div class="b" id="r_size07LengthAuto" style="background-size: 30px auto"></div>
+<div class="b" id="r_size08AutoLength" style="background-size: auto 30px"></div>
+<div class="b" id="r_size09TwoLengths" style="background-size: 10px 20px"></div>
+<div class="b" id="r_size10Calc" style="background-size: calc(10px + 5px) 20px"></div>
+<div class="b" id="r_size11PercentAuto" style="background-size: 50% auto"></div>
+<div class="b" id="r_size12ListInvalid" style="background-size: 10px 20px, 30px 40px 50px"></div>
+<div class="b" id="r_size13ListTwo" style="background-size: cover, contain"></div>
+<div class="b" id="r_size14ListLengths" style="background-size: 10px 20px, 30px"></div>
+<div class="b" id="r_size15ThreeAuto" style="background-size: auto auto auto"></div>
+<div class="b" id="r_rep01XY" style="background-repeat: repeat no-repeat"></div>
+<div class="b" id="r_rep02YX" style="background-repeat: no-repeat repeat"></div>
+<div class="b" id="r_rep03RepeatTwice" style="background-repeat: repeat repeat"></div>
+<div class="b" id="r_rep04RepeatXPair" style="background-repeat: repeat-x no-repeat"></div>
+<div class="b" id="r_rep05NoRepeatY" style="background-repeat: no-repeat repeat-y"></div>
+<div class="b" id="r_rep06SpaceY" style="background-repeat: space repeat-y"></div>
+<div class="b" id="r_rep07ThreeValues" style="background-repeat: repeat repeat repeat"></div>
+<div class="b" id="r_rep08SpaceRound" style="background-repeat: space round"></div>
+<div class="b" id="r_rep09RoundSpace" style="background-repeat: round space"></div>
+<div class="b" id="r_rep10List" style="background-repeat: repeat, no-repeat"></div>
+<div class="b" id="r_rep11Case" style="background-repeat: REPEAT NO-REPEAT"></div>
+<div class="b" id="r_org01Pair" style="background-origin: padding-box border-box"></div>
+<div class="b" id="r_org02Duplicate" style="background-origin: content-box content-box"></div>
+<div class="b" id="r_org03List" style="background-origin: padding-box, border-box"></div>
+<div class="b" id="r_org04MarginBox" style="background-origin: margin-box"></div>
+<div class="b" id="r_org05Auto" style="background-origin: auto"></div>
+<div class="b" id="r_org06Three" style="background-origin: border-box, padding-box, content-box"></div>
+<div class="b" id="r_clip01Pair" style="background-clip: padding-box content-box"></div>
+<div class="b" id="r_clip02Duplicate" style="background-clip: border-box border-box"></div>
+<div class="b" id="r_clip03List" style="background-clip: border-box, padding-box"></div>
+<div class="b" id="r_clip04Margin" style="background-clip: margin-box"></div>
+<div class="b" id="r_clip05Three" style="background-clip: padding-box, border-box, content-box"></div>
+<div class="b" id="r_axis01XTop" style="background-position-x: top"></div>
+<div class="b" id="r_axis02XLeft" style="background-position-x: left"></div>
+<div class="b" id="r_axis03XPair" style="background-position-x: 10px 20px"></div>
+<div class="b" id="r_axis04XList" style="background-position-x: 10px, 20px"></div>
+<div class="b" id="r_axis05XUnitless" style="background-position-x: 0"></div>
+<div class="b" id="r_axis06XCalc" style="background-position-x: calc(10px + 5px)"></div>
+<div class="b" id="r_axis07XStart" style="background-position-x: start"></div>
+<div class="b" id="r_axis08YLeft" style="background-position-y: left"></div>
+<div class="b" id="r_axis09YTop" style="background-position-y: top"></div>
+<div class="b" id="r_axis10YPair" style="background-position-y: 10px 20px"></div>
+<div class="b" id="r_axis11YList" style="background-position-y: 10px, 20px"></div>
+<div class="b" id="r_axis12YBottom" style="background-position-y: bottom"></div>
+<div class="b" id="r_sh01SizeNoPosition" style="background: url(a.png) / 30px"></div>
+<div class="b" id="r_sh02PositionSize" style="background: url(a.png) 10px / 30px"></div>
+<div class="b" id="r_sh03RepeatBetween" style="background: url(a.png) 10px repeat / 30px"></div>
+<div class="b" id="r_sh04RepeatBefore" style="background: url(a.png) repeat 10px / 30px"></div>
+<div class="b" id="r_sh05SizeThenRepeat" style="background: url(a.png) / 30px repeat"></div>
+<div class="b" id="r_sh06SizeThree" style="background: url(a.png) 10px / 30px 40px 50px"></div>
+<div class="b" id="r_sh07CoverAuto" style="background: url(a.png) 10px / cover auto"></div>
+<div class="b" id="r_sh08SizeNone" style="background: url(a.png) 10px / none"></div>
+<div class="b" id="r_sh09SizeEmpty" style="background: url(a.png) 10px /"></div>
+<div class="b" id="r_sh10SlashAttached" style="background: url(a.png) 10px/30px"></div>
+<div class="b" id="r_sh11BoxAfterSize" style="background: url(a.png) 10px / 30px content-box"></div>
+<div class="b" id="r_sh12CoverNoRepeat" style="background: url(a.png) 10px / cover no-repeat"></div>
+<div class="b" id="r_sh13TopOffset" style="background: url(a.png) top 10px"></div>
+<div class="b" id="r_sh14OffsetTop" style="background: url(a.png) 10px top"></div>
+<div class="b" id="r_sh15EdgePair" style="background: url(a.png) left 10px top 20px"></div>
+<div class="b" id="r_sh16EdgePairRight" style="background: url(a.png) right 10px bottom 20px"></div>
+<div class="b" id="r_sh17ThreePosition" style="background: url(a.png) 10% 20% 30%"></div>
+<div class="b" id="r_sh18Case" style="background: URL(a.png) FIXED NO-REPEAT CENTER TOP"></div>
+<div class="b" id="r_sh19LayeredSizes" style="background: linear-gradient(red,blue) 10px / 30px, linear-gradient(red,blue) 20px / 40px"></div>
+<div class="b" id="r_sh20LayeredSizeNoPos" style="background: linear-gradient(red,blue) 10px / 30px, linear-gradient(red,blue) / 40px"></div>
+<div class="b" id="r_sh21LayeredRepeat" style="background: linear-gradient(red,blue) 10px 20px repeat-x, linear-gradient(red,blue) 30% center no-repeat"></div>
+<div class="b" id="r_sh22LayeredOrigin" style="background: linear-gradient(red,blue) content-box, linear-gradient(red,blue) padding-box border-box"></div>
+<div class="b" id="r_sh23LayeredAttach" style="background: linear-gradient(red,blue) fixed, linear-gradient(red,blue) local"></div>
+<div class="b" id="r_sh24ThreeLayers" style="background: linear-gradient(red,blue) 10px 20px, linear-gradient(red,blue) 30px 40px, linear-gradient(red,blue)"></div>
+<div class="b" id="r_sh25LayeredRound" style="background: linear-gradient(red,blue) round, linear-gradient(red,blue) space repeat"></div>
+<div class="b" id="r_sh26LayeredKeywords" style="background: linear-gradient(red,blue) top, linear-gradient(red,blue) bottom, linear-gradient(red,blue) center"></div>
+
+<div id="report"></div>
+
+<script>
+const out = [];
+const cs = id => getComputedStyle(document.getElementById(id));
+const g = (id, prop) => cs(id).getPropertyValue(prop);
+// A url() prints its resolved address, which the two engines spell differently, so the image
+// is read as 'none' or 'img' — the shorthand either produced a layer or it produced none.
+const img = id => g(id, 'background-image') === 'none' ? 'none' : 'img';
+const ok = (name, got, want) => { out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${got === want}`); };
+ok('pos01TopOffset_position', g('r_pos01TopOffset', 'background-position'), "7px 9px");
+ok('pos02OffsetTop_position', g('r_pos02OffsetTop', 'background-position'), "10px 0%");
+ok('pos03LeftOffTop_position', g('r_pos03LeftOffTop', 'background-position'), "10px 0%");
+ok('pos04LeftOffCenter_position', g('r_pos04LeftOffCenter', 'background-position'), "10px 50%");
+ok('pos05CenterOffTop_position', g('r_pos05CenterOffTop', 'background-position'), "7px 9px");
+ok('pos06LeftTopOff_position', g('r_pos06LeftTopOff', 'background-position'), "0% 10px");
+ok('pos07CenterTop_position', g('r_pos07CenterTop', 'background-position'), "50% 0%");
+ok('pos08TopCenter_position', g('r_pos08TopCenter', 'background-position'), "50% 0%");
+ok('pos09Bottom_position', g('r_pos09Bottom', 'background-position'), "50% 100%");
+ok('pos10LeftRight_position', g('r_pos10LeftRight', 'background-position'), "7px 9px");
+ok('pos11TopBottom_position', g('r_pos11TopBottom', 'background-position'), "7px 9px");
+ok('pos12LeftOffRight_position', g('r_pos12LeftOffRight', 'background-position'), "7px 9px");
+ok('pos13CenterOffOff_position', g('r_pos13CenterOffOff', 'background-position'), "7px 9px");
+ok('pos14LeftOffOff_position', g('r_pos14LeftOffOff', 'background-position'), "7px 9px");
+ok('pos15OffOffTop_position', g('r_pos15OffOffTop', 'background-position'), "7px 9px");
+ok('pos16ThreeLengths_position', g('r_pos16ThreeLengths', 'background-position'), "7px 9px");
+ok('pos17FourLengths_position', g('r_pos17FourLengths', 'background-position'), "7px 9px");
+ok('pos18LeftOffTopOff_position', g('r_pos18LeftOffTopOff', 'background-position'), "10px 20px");
+ok('pos19RightOffBotOff_position', g('r_pos19RightOffBotOff', 'background-position'), "calc(100% - 10px) calc(100% - 20px)");
+ok('pos20TopOffLeftOff_position', g('r_pos20TopOffLeftOff', 'background-position'), "20px 10px");
+ok('pos21LeftOffBotOff_position', g('r_pos21LeftOffBotOff', 'background-position'), "10px calc(100% - 20px)");
+ok('pos22ListInvalid_position', g('r_pos22ListInvalid', 'background-position'), "7px 9px");
+ok('pos23ListOk_position', g('r_pos23ListOk', 'background-position'), "10px 20px");
+ok('pos24Case_position', g('r_pos24Case', 'background-position'), "50% 0%");
+ok('pos25CaseLength_position', g('r_pos25CaseLength', 'background-position'), "10px 0%");
+ok('pos26LeftOffset_position', g('r_pos26LeftOffset', 'background-position'), "0% 10px");
+ok('pos27CenterOffset_position', g('r_pos27CenterOffset', 'background-position'), "50% 10px");
+ok('pos28OffsetLeft_position', g('r_pos28OffsetLeft', 'background-position'), "7px 9px");
+ok('pos29CenterCenterC_position', g('r_pos29CenterCenterC', 'background-position'), "7px 9px");
+ok('pos30CalcZero_position', g('r_pos30CalcZero', 'background-position'), "calc(100% - 10px) 0px");
+ok('size01ThreeTerms_size', g('r_size01ThreeTerms', 'background-size'), "5px 6px");
+ok('size02CoverTwice_size', g('r_size02CoverTwice', 'background-size'), "5px 6px");
+ok('size03ContainAuto_size', g('r_size03ContainAuto', 'background-size'), "5px 6px");
+ok('size04AutoCover_size', g('r_size04AutoCover', 'background-size'), "5px 6px");
+ok('size05None_size', g('r_size05None', 'background-size'), "5px 6px");
+ok('size06AutoAuto_size', g('r_size06AutoAuto', 'background-size'), "auto");
+ok('size07LengthAuto_size', g('r_size07LengthAuto', 'background-size'), "30px");
+ok('size08AutoLength_size', g('r_size08AutoLength', 'background-size'), "auto 30px");
+ok('size09TwoLengths_size', g('r_size09TwoLengths', 'background-size'), "10px 20px");
+ok('size10Calc_size', g('r_size10Calc', 'background-size'), "15px 20px");
+ok('size11PercentAuto_size', g('r_size11PercentAuto', 'background-size'), "50%");
+ok('size12ListInvalid_size', g('r_size12ListInvalid', 'background-size'), "5px 6px");
+ok('size13ListTwo_size', g('r_size13ListTwo', 'background-size'), "cover");
+ok('size14ListLengths_size', g('r_size14ListLengths', 'background-size'), "10px 20px");
+ok('size15ThreeAuto_size', g('r_size15ThreeAuto', 'background-size'), "5px 6px");
+ok('rep01XY_repeat', g('r_rep01XY', 'background-repeat'), "repeat-x");
+ok('rep02YX_repeat', g('r_rep02YX', 'background-repeat'), "repeat-y");
+ok('rep03RepeatTwice_repeat', g('r_rep03RepeatTwice', 'background-repeat'), "repeat");
+ok('rep04RepeatXPair_repeat', g('r_rep04RepeatXPair', 'background-repeat'), "round");
+ok('rep05NoRepeatY_repeat', g('r_rep05NoRepeatY', 'background-repeat'), "round");
+ok('rep06SpaceY_repeat', g('r_rep06SpaceY', 'background-repeat'), "round");
+ok('rep07ThreeValues_repeat', g('r_rep07ThreeValues', 'background-repeat'), "round");
+ok('rep08SpaceRound_repeat', g('r_rep08SpaceRound', 'background-repeat'), "space round");
+ok('rep09RoundSpace_repeat', g('r_rep09RoundSpace', 'background-repeat'), "round space");
+ok('rep10List_repeat', g('r_rep10List', 'background-repeat'), "repeat");
+ok('rep11Case_repeat', g('r_rep11Case', 'background-repeat'), "repeat-x");
+ok('org01Pair_origin', g('r_org01Pair', 'background-origin'), "content-box");
+ok('org02Duplicate_origin', g('r_org02Duplicate', 'background-origin'), "content-box");
+ok('org03List_origin', g('r_org03List', 'background-origin'), "padding-box");
+ok('org04MarginBox_origin', g('r_org04MarginBox', 'background-origin'), "content-box");
+ok('org05Auto_origin', g('r_org05Auto', 'background-origin'), "content-box");
+ok('org06Three_origin', g('r_org06Three', 'background-origin'), "border-box");
+ok('clip01Pair_clip', g('r_clip01Pair', 'background-clip'), "content-box");
+ok('clip02Duplicate_clip', g('r_clip02Duplicate', 'background-clip'), "content-box");
+ok('clip03List_clip', g('r_clip03List', 'background-clip'), "border-box");
+ok('clip04Margin_clip', g('r_clip04Margin', 'background-clip'), "content-box");
+ok('clip05Three_clip', g('r_clip05Three', 'background-clip'), "padding-box");
+ok('axis01XTop_positionx', g('r_axis01XTop', 'background-position-x'), "7px");
+ok('axis02XLeft_positionx', g('r_axis02XLeft', 'background-position-x'), "0%");
+ok('axis03XPair_positionx', g('r_axis03XPair', 'background-position-x'), "7px");
+ok('axis04XList_positionx', g('r_axis04XList', 'background-position-x'), "10px");
+ok('axis05XUnitless_positionx', g('r_axis05XUnitless', 'background-position-x'), "0px");
+ok('axis06XCalc_positionx', g('r_axis06XCalc', 'background-position-x'), "15px");
+ok('axis07XStart_positionx', g('r_axis07XStart', 'background-position-x'), "7px");
+ok('axis08YLeft_positiony', g('r_axis08YLeft', 'background-position-y'), "9px");
+ok('axis09YTop_positiony', g('r_axis09YTop', 'background-position-y'), "0%");
+ok('axis10YPair_positiony', g('r_axis10YPair', 'background-position-y'), "9px");
+ok('axis11YList_positiony', g('r_axis11YList', 'background-position-y'), "10px");
+ok('axis12YBottom_positiony', g('r_axis12YBottom', 'background-position-y'), "100%");
+ok('sh01SizeNoPosition_size', g('r_sh01SizeNoPosition', 'background-size'), "5px 6px");
+ok('sh01SizeNoPosition_position', g('r_sh01SizeNoPosition', 'background-position'), "7px 9px");
+ok('sh01SizeNoPosition_image', img('r_sh01SizeNoPosition'), "none");
+ok('sh02PositionSize_size', g('r_sh02PositionSize', 'background-size'), "30px");
+ok('sh02PositionSize_position', g('r_sh02PositionSize', 'background-position'), "10px 50%");
+ok('sh02PositionSize_image', img('r_sh02PositionSize'), "img");
+ok('sh03RepeatBetween_size', g('r_sh03RepeatBetween', 'background-size'), "5px 6px");
+ok('sh03RepeatBetween_position', g('r_sh03RepeatBetween', 'background-position'), "7px 9px");
+ok('sh03RepeatBetween_image', img('r_sh03RepeatBetween'), "none");
+ok('sh04RepeatBefore_size', g('r_sh04RepeatBefore', 'background-size'), "30px");
+ok('sh04RepeatBefore_position', g('r_sh04RepeatBefore', 'background-position'), "10px 50%");
+ok('sh04RepeatBefore_image', img('r_sh04RepeatBefore'), "img");
+ok('sh05SizeThenRepeat_size', g('r_sh05SizeThenRepeat', 'background-size'), "5px 6px");
+ok('sh05SizeThenRepeat_position', g('r_sh05SizeThenRepeat', 'background-position'), "7px 9px");
+ok('sh05SizeThenRepeat_image', img('r_sh05SizeThenRepeat'), "none");
+ok('sh06SizeThree_size', g('r_sh06SizeThree', 'background-size'), "5px 6px");
+ok('sh06SizeThree_position', g('r_sh06SizeThree', 'background-position'), "7px 9px");
+ok('sh06SizeThree_image', img('r_sh06SizeThree'), "none");
+ok('sh07CoverAuto_size', g('r_sh07CoverAuto', 'background-size'), "5px 6px");
+ok('sh07CoverAuto_position', g('r_sh07CoverAuto', 'background-position'), "7px 9px");
+ok('sh07CoverAuto_image', img('r_sh07CoverAuto'), "none");
+ok('sh08SizeNone_size', g('r_sh08SizeNone', 'background-size'), "5px 6px");
+ok('sh08SizeNone_position', g('r_sh08SizeNone', 'background-position'), "7px 9px");
+ok('sh08SizeNone_image', img('r_sh08SizeNone'), "none");
+ok('sh09SizeEmpty_size', g('r_sh09SizeEmpty', 'background-size'), "5px 6px");
+ok('sh09SizeEmpty_position', g('r_sh09SizeEmpty', 'background-position'), "7px 9px");
+ok('sh09SizeEmpty_image', img('r_sh09SizeEmpty'), "none");
+ok('sh10SlashAttached_size', g('r_sh10SlashAttached', 'background-size'), "30px");
+ok('sh10SlashAttached_position', g('r_sh10SlashAttached', 'background-position'), "10px 50%");
+ok('sh10SlashAttached_image', img('r_sh10SlashAttached'), "img");
+ok('sh11BoxAfterSize_size', g('r_sh11BoxAfterSize', 'background-size'), "30px");
+ok('sh11BoxAfterSize_position', g('r_sh11BoxAfterSize', 'background-position'), "10px 50%");
+ok('sh11BoxAfterSize_origin', g('r_sh11BoxAfterSize', 'background-origin'), "content-box");
+ok('sh12CoverNoRepeat_size', g('r_sh12CoverNoRepeat', 'background-size'), "cover");
+ok('sh12CoverNoRepeat_position', g('r_sh12CoverNoRepeat', 'background-position'), "10px 50%");
+ok('sh12CoverNoRepeat_repeat', g('r_sh12CoverNoRepeat', 'background-repeat'), "no-repeat");
+ok('sh13TopOffset_position', g('r_sh13TopOffset', 'background-position'), "7px 9px");
+ok('sh13TopOffset_image', img('r_sh13TopOffset'), "none");
+ok('sh14OffsetTop_position', g('r_sh14OffsetTop', 'background-position'), "10px 0%");
+ok('sh14OffsetTop_image', img('r_sh14OffsetTop'), "img");
+ok('sh15EdgePair_position', g('r_sh15EdgePair', 'background-position'), "10px 20px");
+ok('sh15EdgePair_image', img('r_sh15EdgePair'), "img");
+ok('sh16EdgePairRight_position', g('r_sh16EdgePairRight', 'background-position'), "calc(100% - 10px) calc(100% - 20px)");
+ok('sh16EdgePairRight_image', img('r_sh16EdgePairRight'), "img");
+ok('sh17ThreePosition_position', g('r_sh17ThreePosition', 'background-position'), "7px 9px");
+ok('sh17ThreePosition_image', img('r_sh17ThreePosition'), "none");
+ok('sh18Case_position', g('r_sh18Case', 'background-position'), "50% 0%");
+ok('sh18Case_repeat', g('r_sh18Case', 'background-repeat'), "no-repeat");
+ok('sh18Case_image', img('r_sh18Case'), "img");
+ok('sh19LayeredSizes_size', g('r_sh19LayeredSizes', 'background-size'), "30px, 40px");
+ok('sh19LayeredSizes_position', g('r_sh19LayeredSizes', 'background-position'), "10px 50%, 20px 50%");
+ok('sh20LayeredSizeNoPos_size', g('r_sh20LayeredSizeNoPos', 'background-size'), "5px 6px");
+ok('sh20LayeredSizeNoPos_position', g('r_sh20LayeredSizeNoPos', 'background-position'), "7px 9px");
+ok('sh21LayeredRepeat_position', g('r_sh21LayeredRepeat', 'background-position'), "10px 20px, 30% 50%");
+ok('sh21LayeredRepeat_repeat', g('r_sh21LayeredRepeat', 'background-repeat'), "repeat-x, no-repeat");
+ok('sh22LayeredOrigin_origin', g('r_sh22LayeredOrigin', 'background-origin'), "content-box, padding-box");
+ok('sh22LayeredOrigin_clip', g('r_sh22LayeredOrigin', 'background-clip'), "content-box, border-box");
+ok('sh23LayeredAttach_repeat', g('r_sh23LayeredAttach', 'background-repeat'), "repeat, repeat");
+ok('sh23LayeredAttach_image', img('r_sh23LayeredAttach'), "img");
+ok('sh24ThreeLayers_position', g('r_sh24ThreeLayers', 'background-position'), "10px 20px, 30px 40px, 0% 0%");
+ok('sh24ThreeLayers_size', g('r_sh24ThreeLayers', 'background-size'), "auto, auto, auto");
+ok('sh25LayeredRound_repeat', g('r_sh25LayeredRound', 'background-repeat'), "round, space repeat");
+ok('sh26LayeredKeywords_position', g('r_sh26LayeredKeywords', 'background-position'), "50% 0%, 50% 100%, 50% 50%");
+
+const rep = document.getElementById('report');
+for (const line of out) { const d = document.createElement('div'); d.textContent = line; rep.appendChild(d); }
+</script>
+</body></html>

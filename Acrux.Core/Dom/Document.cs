@@ -45,7 +45,12 @@ public class Document : Node
     public Acrux.Core.Css.CounterStyleRegistry CounterStyles { get; set; } = new();
     public DocumentTimeline Timeline { get; } = new();
     public StyleSheetList StyleSheets { get; } = new();
-    public List<CSSStyleSheet> AdoptedStyleSheets { get; set; } = new();
+    /// <summary>The document's adopted style sheets (CSSOM "adopted style sheets") — the
+    /// constructed sheets a page installed with <c>document.adoptedStyleSheets = […]</c>.
+    /// They hold the same rule list the sheet object exposes, so a rule inserted after
+    /// adoption is applied rather than remembered, and they cascade after the sheets the
+    /// document's own elements contribute, in adoption order.</summary>
+    public List<Acrux.Core.Css.Rules.StyleSheetContents> AdoptedStyleSheets { get; set; } = new();
     public HtmlCollection Images => new(GetElementsByTagName("img").Cast<Element>().ToList());
     public HtmlCollection Embeds => new(GetElementsByTagName("embed").Cast<Element>().ToList());
     public HtmlCollection Plugins => Embeds;

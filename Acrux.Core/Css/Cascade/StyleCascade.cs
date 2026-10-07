@@ -124,9 +124,82 @@ public class StyleCascade
         // expansion's default must not shadow an explicit longhand that follows it).
         var prop = matchedEntry.Properties.Properties
             .LastOrDefault(p => p.Name.Id == id && !p.Name.IsCustom);
-        if (prop.Value != null)
-            ApplyProperty(id, prop.Value);
+        if (prop.Value == null) return;
+
+        // 'revert' is the one CSS-wide keyword that cannot be resolved while applying a
+        // value: it names the declaration the cascade would have chosen without the ones
+        // above it, and only the cascade has those. inherit/initial/unset are functions of
+        // the property alone, so they stay in CssPropertyTraits.
+        if (CssPropertyTraits.IsRevertKeyword(prop.Value.CssText(), out var revertLayer))
+        {
+            // 'revert' skips its whole cascade origin; 'revert-layer' steps back through
+            // the cascade one declaration at a time.
+            var lower = FindLowerPriorityValue(id, priority, skipWholeOriginGroup: !revertLayer);
+            if (lower != null)
+            {
+                ApplyProperty(id, lower);
+                return;
+            }
+        }
+        ApplyProperty(id, prop.Value);
     }
+
+    /// <summary>
+    /// The value of the strongest declaration of |id| that the winning declaration beat.
+    /// |skipWholeOriginGroup| is set by 'revert', which removes every declaration of the
+    /// winning declaration's origin group (CSS Cascading 4 6.4.2) so only a lower origin
+    /// can answer; 'revert-layer' leaves the restriction out, so the previous layer or rule
+    /// of the same origin comes first (6.4.3). Null when no declaration is left below,
+    /// which is where the keyword's unset-like fallback applies.
+    /// </summary>
+    private CssValue? FindLowerPriorityValue(CssPropertyId id, CascadePriority winner, bool skipWholeOriginGroup)
+    {
+        CssValue? best = null;
+        CascadePriority bestPriority = default;
+        bool found = false;
+
+        foreach (var entry in _state.MatchedRules)
+        {
+            foreach (var p in entry.Properties.Properties)
+            {
+                if (p.Name.IsCustom || p.Name.Id != id || p.Value == null) continue;
+                // A declaration that reverts again has nothing to offer here: the search
+                // stops at the first real value, exactly as the cascade would.
+                if (CssPropertyTraits.IsRevertKeyword(p.Value.CssText(), out _)) continue;
+
+                var priority = p.IsImportant ? entry.Priority.WithImportant() : entry.Priority;
+                if (priority.Equals(winner)) continue;
+                // Compare is the cascade order: a positive result means |a| wins.
+                if (CascadePriority.Compare(priority, winner) > 0) continue;
+                if (skipWholeOriginGroup
+                    && OriginGroup(priority.Origin) >= OriginGroup(winner.Origin)) continue;
+
+                if (!found || CascadePriority.Compare(priority, bestPriority) >= 0)
+                {
+                    best = p.Value;
+                    bestPriority = priority;
+                    found = true;
+                }
+            }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// The four origins the cascade reverts between. The style attribute and the CSSOM
+    /// declarations that write into it are not an origin of their own — they are the top of
+    /// the author origin — so a 'revert' written in either one skips the author rules too.
+    /// </summary>
+    private static int OriginGroup(CascadeOrigin origin) => origin switch
+    {
+        CascadeOrigin.UserAgent => 0,
+        CascadeOrigin.User => 1,
+        CascadeOrigin.Author => 2,
+        CascadeOrigin.JsModified => 2,
+        CascadeOrigin.Animation => 3,
+        CascadeOrigin.Transition => 4,
+        _ => -1,
+    };
 
     private void ApplyCustomIfPresent(string customName)
     {
@@ -473,19 +546,6 @@ public class CascadeResolverState
         _ => Dom.BorderStyle.None
     };
 
-    private static Dom.DisplayType ParseDisplay(string text) => text.ToLowerInvariant() switch
-    {
-        "none" => Dom.DisplayType.None, "block" => Dom.DisplayType.Block,
-        "inline" => Dom.DisplayType.Inline, "inline-block" => Dom.DisplayType.InlineBlock,
-        "flex" => Dom.DisplayType.Flex, "inline-flex" => Dom.DisplayType.InlineFlex,
-        "grid" => Dom.DisplayType.Grid, "inline-grid" => Dom.DisplayType.InlineGrid,
-        "table" => Dom.DisplayType.Table,
-        "table-row" => Dom.DisplayType.TableRow, "table-cell" => Dom.DisplayType.TableCell,
-        "table-column" => Dom.DisplayType.TableColumn, "table-caption" => Dom.DisplayType.TableCaption,
-        "list-item" => Dom.DisplayType.ListItem,
-        "contents" => Dom.DisplayType.Contents, _ => Dom.DisplayType.Inline
-    };
-
     private static Dom.PositionType ParsePosition(string text) => text.ToLowerInvariant() switch
     {
         "static" => Dom.PositionType.Static, "relative" => Dom.PositionType.Relative,
@@ -493,16 +553,13 @@ public class CascadeResolverState
         "sticky" => Dom.PositionType.Sticky, _ => Dom.PositionType.Static
     };
 
-    private static Dom.FloatType ParseFloatType(string text) => text.ToLowerInvariant() switch
-    {
-        "left" => Dom.FloatType.Left, "right" => Dom.FloatType.Right, _ => Dom.FloatType.None
-    };
+    // Both keyword sets come from CssFloatKeywords: a second copy of the grammar is how
+    // 'float: inline-start' ended up accepted by one path and dropped by another.
+    private static Dom.FloatType ParseFloatType(string text) =>
+        Dom.CssFloatKeywords.TryParseFloat(text, out var f) ? f : Dom.FloatType.None;
 
-    private static Dom.ClearType ParseClearType(string text) => text.ToLowerInvariant() switch
-    {
-        "left" => Dom.ClearType.Left, "right" => Dom.ClearType.Right,
-        "both" => Dom.ClearType.Both, _ => Dom.ClearType.None
-    };
+    private static Dom.ClearType ParseClearType(string text) =>
+        Dom.CssFloatKeywords.TryParseClear(text, out var c) ? c : Dom.ClearType.None;
 
     private static Dom.OverflowType ParseOverflow(string text) => text.ToLowerInvariant() switch
     {

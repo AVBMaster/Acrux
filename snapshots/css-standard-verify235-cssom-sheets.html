@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<!--
+  b235 — the CSSOM view of a stylesheet, and a stylesheet the page changes after load
+  (CSSOM §5.2/§5.3, HTML §4.8.6, measured Edge 151).
+
+  What was missing:
+  1. Sheets were collected once at document load, so a <style> a script appended — or rewrote,
+     or removed — never reached the cascade, and a sheet the page disabled stayed applied.
+     The style engine now syncs the document's own style elements on every recompute
+     (StyleComputer.SyncStyleElements) and leaves a disabled element's sheet out of the list
+     the resolver walks.
+  2. There was no sheet API at all: 'element.sheet' and 'document.styleSheets' answered
+     nothing, so a script could read a stylesheet only as text. 'element.sheet' now hands out
+     the SAME rule list the cascade resolves from, which is what makes insertRule/deleteRule/
+     rule.style.color do something rather than decorate an object.
+  3. 'rule.style' did not exist. It is the path scripts use most to change a rule, so the
+     camelCase member surface the inline block already had was lifted onto a shared base
+     (CssStyleDeclarationBase) and backed by the rule's own property set; a shorthand written
+     through it expands into longhands exactly as it does when the sheet is parsed.
+
+  EDGE TRUTH (2026-10-07, Edge 151 / dpr=1, this page; iw=445). Every ok= row below is what the
+  reference engine answered — the page was measured row by row and the wants corrected to it —
+  and each colour row is also visible in the PNG through the swatches:
+  §A the sheet object: document.styleSheets is in document order and counts every style
+     element that owns a sheet (an empty one included); ownerNode IS the element; type is
+     "text/css"; href and title are null for a <style>; media stringifies to ""; disabled is
+     false; the sheet's own <style> holds 6 rules and its last one serialises with a space
+     before the brace and a semicolon after the last declaration:
+     '#v1 { color: rgb(1, 2, 3); }'; the swatch behind it is grey because the class rule
+     '.sw { background: #ddd }' is what paints it, so v1bg is rgb(221, 221, 221).
+  §B an appended <style> is in the list and applied by the next computed read; an inserted rule
+     is applied too, and the element's textContent is left alone (the sheet and the source text
+     are different things).
+  §C insertRule: with no index the IDL default is 0, so the rule goes to the FRONT (measured:
+     the return value is 0 and the previous first rule moves to 1); with an index it lands
+     there; a text the grammar rejects throws SyntaxError ('}}}bogus{{') while an unclosed
+     block does not; deleteRule with an index outside the list throws IndexSizeError (-1 and
+     one past the end); replaceSync throws NotAllowedError on a sheet an element owns
+     (CSSOM §5.2.4 restricts it to constructed sheets).
+  §D rule.style: length counts declarations, item(i) reads the name and answers "" past the
+     end, getPropertyValue/setProperty/removeProperty behave as they do on an element, and
+     removeProperty returns the value it removed ("" when there was nothing). A value the
+     grammar rejects leaves the rule untouched. 'setProperty("font-weight","700","important")'
+     shows up in getPropertyPriority AND in the rule text as 'font-weight: 700 !important'.
+     A '@media' rule is type 4 and carries its children both in cssRules and inside its own
+     text: '@media screen {\n  #q2 { color: rgb(3, 4, 5); }\n}'.
+  §E disabled: 'styleEl.disabled = true' hides the sheet without creating an attribute
+     (measured: hasAttribute('disabled') stays false), the sheet object stays non-null and in
+     document.styleSheets, and the rules underneath take effect again — the swatch goes from
+     blue back to green.
+  §F removing the element takes its sheet out of the cascade and out of the list.
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>b235 CSSOM sheets and runtime sheet changes</title>
+<style id="s0">
+  html, body { margin: 0; padding: 0; }
+  body { font: 11px/13px Arial, sans-serif; color: #111; }
+  .sw { height: 12px; width: 40px; background: #ddd; }
+  .row { margin-bottom: 1px; }
+  .k { display: inline-block; width: 150px; color: #555; }
+  #v1 { color: rgb(1, 2, 3); }
+</style>
+</head><body>
+<div class="row"><span class="k">v1 sheet s0</span><div class="sw" id="v1"></div></div>
+<div class="row"><span class="k">v2 appended</span><div class="sw" id="v2"></div></div>
+<div class="row"><span class="k">v3 lower sheet</span><div class="sw" id="v3"></div></div>
+<div class="row"><span class="k">q1 inserted rule</span><div class="sw" id="q1"></div></div>
+<div class="row"><span class="k">q2 media rule</span><div class="sw" id="q2"></div></div>
+<h3 style="margin:6px 0 2px;font-size:12px">report</h3>
+<div id="report"></div>
+<script>
+const out = [];
+// Written row by row: a page that throws half-way should still show what it had learned,
+// otherwise the record says nothing about where the engine stopped.
+const rep = document.getElementById('report');
+const ok = (name, got, want) => {
+  out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${got === want}`);
+  rep.textContent = out.join('\n');
+};
+const cs = id => getComputedStyle(document.getElementById(id));
+const bg = id => cs(id).backgroundColor;
+
+// §A the sheet the page was authored with.
+ok('nSheets', document.styleSheets.length, 1);
+const sh0 = document.styleSheets[0];
+ok('ownerIsElement', sh0.ownerNode === document.getElementById('s0'), true);
+ok('type', sh0.type, 'text/css');
+ok('href', sh0.href, null);
+ok('title', sh0.title, null);
+ok('disabled', sh0.disabled, false);
+ok('mediaText', String(sh0.media), '');
+ok('s0rules', sh0.cssRules.length, 6);
+ok('ruleType', sh0.cssRules[5].type, 1);
+ok('selector', sh0.cssRules[5].selectorText, '#v1');
+ok('ruleText', sh0.cssRules[5].cssText, '#v1 { color: rgb(1, 2, 3); }');
+ok('ruleStyleLen', sh0.cssRules[5].style.length, 1);
+ok('ruleStyleColor', sh0.cssRules[5].style.color, 'rgb(1, 2, 3)');
+ok('v1bg', bg('v1'), 'rgb(221, 221, 221)');
+
+// §B a sheet a script appends.
+const s1 = document.createElement('style');
+s1.textContent = '#v2{background-color:rgb(200,0,0)} #v3{background-color:rgb(0,200,0)}';
+document.head.appendChild(s1);
+ok('appendApplied', bg('v2'), 'rgb(200, 0, 0)');
+ok('appendLower', bg('v3'), 'rgb(0, 200, 0)');
+ok('nSheets2', document.styleSheets.length, 2);
+ok('s1rules', s1.sheet.cssRules.length, 2);
+const empty = document.createElement('style');
+document.head.appendChild(empty);
+ok('emptySheetNonNull', empty.sheet !== null, true);
+ok('emptyRules', empty.sheet.cssRules.length, 0);
+ok('nSheets3', document.styleSheets.length, 3);
+empty.remove();
+
+// §C insertRule / deleteRule.
+const s2 = document.createElement('style');
+s2.textContent = '#v3{background-color:rgb(0,0,200)}';
+document.head.appendChild(s2);
+ok('upperWins', bg('v3'), 'rgb(0, 0, 200)');
+ok('insertDefault', s2.sheet.insertRule('#q1{color:rgb(7,7,7)}'), 0);
+ok('insertOrder', s2.sheet.cssRules[1].selectorText, '#v3');
+ok('insertApplied', cs('q1').color, 'rgb(7, 7, 7)');
+ok('textContentKept', s2.textContent, '#v3{background-color:rgb(0,0,200)}');
+ok('insertAt', s2.sheet.insertRule('#q2{color:rgb(8,8,8)}', 1), 1);
+ok('insertAtOrder', s2.sheet.cssRules[1].selectorText, '#q2');
+let threw = '';
+try { s2.sheet.insertRule('}}}bogus{{', 0); } catch (e) { threw = 'yes'; }
+ok('insertBadThrows', threw, 'yes');
+threw = '';
+try { s2.sheet.deleteRule(99); } catch (e) { threw = 'yes'; }
+ok('deleteOutOfRangeThrows', threw, 'yes');
+threw = '';
+try { s2.sheet.replaceSync('#v3{color:red}'); } catch (e) { threw = 'yes'; }
+ok('replaceSyncThrows', threw, 'yes');
+// Delete the plain '#q2' rule (index 1), not '#v3': §E needs a rule left in this sheet that
+// the sheet below also styles, and §D needs '#q1' to stay the first rule.
+s2.sheet.deleteRule(1);
+ok('afterDelete', s2.sheet.cssRules.length, 2);
+
+// §D mutating a rule through its declaration block.
+const q1rule = s2.sheet.cssRules[0];
+ok('q1bgSet', (() => { q1rule.style.backgroundColor = 'rgb(11, 12, 13)'; return bg('q1'); })(), 'rgb(11, 12, 13)');
+ok('q1ruleText', q1rule.cssText, '#q1 { color: rgb(7, 7, 7); background-color: rgb(11, 12, 13); }');
+q1rule.style.setProperty('font-size', '20px');
+q1rule.style.setProperty('font-weight', '700', 'important');
+ok('q1size', cs('q1').fontSize, '20px');
+ok('q1weight', cs('q1').fontWeight, '700');
+ok('q1priority', q1rule.style.getPropertyPriority('font-weight'), 'important');
+ok('q1len', q1rule.style.length, 4);
+ok('q1item0', q1rule.style.item(0), 'color');
+ok('q1itemOOR', q1rule.style.item(9), '');
+ok('q1badValueKept', (() => { q1rule.style.fontSize = 'nonsense'; return q1rule.style.fontSize; })(), '20px');
+ok('q1removed', q1rule.style.removeProperty('color'), 'rgb(7, 7, 7)');
+ok('q1removeAgain', q1rule.style.removeProperty('color'), '');
+ok('q1cssTextAfter', q1rule.cssText, '#q1 { background-color: rgb(11, 12, 13); font-size: 20px; font-weight: 700 !important; }');
+ok('q1custom', (() => { q1rule.style.setProperty('--foo', '42px'); return q1rule.style.getPropertyValue('--foo'); })(), '42px');
+// a group rule keeps its children visible in both forms
+const mediaIdx = s2.sheet.insertRule('@media screen { #q2 { color: rgb(3, 4, 5) } }', 1);
+const mediaRule = s2.sheet.cssRules[mediaIdx];
+ok('mediaType', mediaRule.type, 4);
+ok('mediaChildren', mediaRule.cssRules.length, 1);
+ok('mediaChildText', mediaRule.cssRules[0].cssText, '#q2 { color: rgb(3, 4, 5); }');
+ok('mediaText2', mediaRule.cssText, '@media screen {\n  #q2 { color: rgb(3, 4, 5); }\n}');
+ok('q2color', cs('q2').color, 'rgb(3, 4, 5)');
+
+// §E disabled.
+s2.disabled = true;
+ok('disabledProp', s2.sheet.disabled, true);
+ok('disabledNoAttr', s2.hasAttribute('disabled'), false);
+ok('disabledKeepsObject', s2.sheet !== null, true);
+ok('disabledStillListed', document.styleSheets.length, 3);
+ok('disabledFallsThrough', bg('v3'), 'rgb(0, 200, 0)');
+s2.disabled = false;
+ok('reenabled', bg('v3'), 'rgb(0, 0, 200)');
+
+// §F rewriting and removing the element.
+s1.textContent = '#v2{background-color:rgb(6,6,6)}';
+ok('rewriteApplied', bg('v2'), 'rgb(6, 6, 6)');
+ok('rewriteOldGone', (() => { const c = cs('v3'); return c.backgroundColor; })(), 'rgb(0, 0, 200)');
+s2.remove();
+ok('removedFromList', document.styleSheets.length, 2);
+// Every swatch carries class 'sw', so dropping the last sheet that styled #v3 leaves the
+// grey of that rule, not a transparent box.
+ok('removedRules', bg('v3'), 'rgb(221, 221, 221)');
+ok('nSheetsFinal', document.styleSheets.length, 2);
+
+document.getElementById('report').textContent = out.join('\n');
+</script>
+</body></html>

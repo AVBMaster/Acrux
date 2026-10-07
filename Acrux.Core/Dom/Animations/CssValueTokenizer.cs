@@ -166,11 +166,21 @@ internal static class CssValueTokenizer
         return items;
     }
 
-    /// <summary>Format a number the way CSS serialization does (no trailing zeros).</summary>
+    /// <summary>Format a number the way CSS serialization does (no trailing zeros). Six
+    /// significant digits is the precision the reference engine prints at (measured: '222.5px',
+    /// '23.2969px'), and it is also what hides the travel of a value through a float: a length
+    /// the page wrote '33.3' arrives here as 33.299999237, and printing all nine of those digits
+    /// would tell a script the page had typed them. Never exponential — a CSS number is.</summary>
     public static string Num(double value)
     {
         if (Math.Abs(value) < 1e-7) return "0";
-        return value.ToString("0.######", CultureInfo.InvariantCulture);
+        int exponent = (int)Math.Floor(Math.Log10(Math.Abs(value)));
+        int decimals = Math.Clamp(5 - exponent, 0, 12);
+        double rounded = Math.Round(value, decimals, MidpointRounding.ToEven);
+        return decimals == 0
+            ? rounded.ToString("0", CultureInfo.InvariantCulture)
+            : rounded.ToString("0." + new string('#', decimals), CultureInfo.InvariantCulture)
+                .TrimEnd('.');
     }
 
     /// <summary>

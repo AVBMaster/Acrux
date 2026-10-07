@@ -1,0 +1,145 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>b242 background axis grammars and layer cycling</title><!--
+  The single-axis position longhands, the far-edge offsets they and the position shorthand take,
+  and the way a background geometry list is reported against the image layers
+  (CSS Position 3 §5.2, CSS Backgrounds 3 §2, §4.1.1.1).
+
+  Every box carries the base rule below, so a declaration the grammar rejects is still readable:
+  the base value survives only when the declaration was dropped.  The base values are chosen so
+  that none of them can be produced by a row's own value.
+-->
+<style>
+  body { margin: 0; padding: 0; font: 12px Consolas, monospace; color: #111; background: #fff; }
+  .b { width: 60px; height: 12px; background-color: rgb(0, 0, 255);
+       background-position: 7px 9px; background-size: 5px 6px; background-repeat: round;
+       background-origin: content-box; background-clip: content-box; }
+  #report div { white-space: pre; }
+</style>
+</head>
+<body>
+<div class="b" id="r_ax01XRightPct" style="background-position-x: right 10%"></div>
+<div class="b" id="r_ax02XRightPx" style="background-position-x: right 10px"></div>
+<div class="b" id="r_ax03XCenter" style="background-position-x: center"></div>
+<div class="b" id="r_ax04YBottomPx" style="background-position-y: bottom 20px"></div>
+<div class="b" id="r_ax05PosBottomOff" style="background-position: bottom 20px"></div>
+<div class="b" id="r_ax06PosLenBottom" style="background-position: 50% bottom 20px"></div>
+<div class="b" id="r_ax07FarBothPct" style="background-position: right 10% bottom 20%"></div>
+<div class="b" id="r_ax08NearFarPct" style="background-position: left 10px bottom 20%"></div>
+<div class="b" id="r_ax09XPairLens" style="background-position-x: 10px 20px"></div>
+<div class="b" id="r_ax10XZero" style="background-position-x: 0"></div>
+<div class="b" id="r_ax11XCalc" style="background-position-x: calc(100% - 10px)"></div>
+<div class="b" id="r_ax12PosZero" style="background-position: 0"></div>
+<div class="b" id="r_ax13PosZeroZero" style="background-position: 0 0"></div>
+<div class="b" id="r_ax14PosRight" style="background-position: right"></div>
+<div class="b" id="r_ax15RightBottom" style="background-position: right 10px bottom"></div>
+<div class="b" id="r_ax16BottomLeft" style="background-position: bottom 20px left"></div>
+<div class="b" id="r_ax17CaseUnit" style="background-position: 10PX 20px"></div>
+<div class="b" id="r_ax18CaseKeyword" style="background-position: CENTER BOTTOM"></div>
+<div class="b" id="r_ax19XCaseRight" style="background-position-x: RIGHT"></div>
+<div class="b" id="r_ax20XList" style="background-position-x: left 10px, right 20px"></div>
+<div class="b" id="r_ax21YPercent" style="background-position-y: 20%"></div>
+<div class="b" id="r_ax22PosTopOff" style="background-position: TOP 10px"></div>
+<div class="b" id="r_ax23YLeft" style="background-position-y: left"></div>
+<div class="b" id="r_ax24XCenterOff" style="background-position-x: center 10px"></div>
+<div class="b" id="r_ly01TwoPosition" style="background-image: url(a.png), url(b.png); background-position: 10px 20px"></div>
+<div class="b" id="r_ly02ThreeTwo" style="background-image: url(a.png), url(b.png); background-position: 10px, 20px, 30px"></div>
+<div class="b" id="r_ly03TwoThree" style="background-image: url(a.png), url(b.png), url(c.png); background-position: 10px, 20px"></div>
+<div class="b" id="r_ly04XListOnly" style="background-image: url(a.png), url(b.png); background-position-x: 10px"></div>
+<div class="b" id="r_ly05YListTwo" style="background-image: url(a.png), url(b.png); background-position-y: 10px, 20px"></div>
+<div class="b" id="r_ly06XAndYLists" style="background-image: url(a.png), url(b.png); background-position-x: 10px, 20px; background-position-y: 5px"></div>
+<div class="b" id="r_ly07SizeOneThree" style="background-image: url(a.png), url(b.png), url(c.png); background-size: 30px"></div>
+<div class="b" id="r_ly08RepeatCycle" style="background-image: url(a.png), url(b.png); background-repeat: repeat, no-repeat, space"></div>
+<div class="b" id="r_ly09OriginCycle" style="background-image: url(a.png), url(b.png); background-origin: border-box"></div>
+<div class="b" id="r_ly10AttachCycle" style="background-image: url(a.png), url(b.png); background-attachment: fixed"></div>
+<div class="b" id="r_ly11PositionThenAxis" style="background-position: 10px 20px; background-position-x: 30px"></div>
+<div class="b" id="r_ly12AxisThenPosition" style="background-position-x: 30px; background-position: 10px 20px"></div>
+<div class="b" id="r_ly13FarTwoLayers" style="background-image: url(a.png), url(b.png); background-position: right 10px bottom 20px"></div>
+<div class="b" id="r_ly14SizeListCycle" style="background-image: url(a.png), url(b.png); background-size: cover, contain, 30px"></div>
+<div class="b" id="r_ly15ClipTextCycle" style="background-image: url(a.png), url(b.png); background-clip: text, border-box"></div>
+
+<div id="report"></div>
+
+<script>
+const out = [];
+const cs = id => getComputedStyle(document.getElementById(id));
+const g = (id, prop) => cs(id).getPropertyValue(prop);
+// A url() prints its resolved address, which the two engines spell differently, so the image
+// list is read as its layer count — the geometry lists are reported against that number.
+const img = id => g(id, 'background-image') === 'none'
+  ? 'none' : g(id, 'background-image').split(/,(?![^(]*\))/g).length;
+const ok = (name, got, want) => { out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${got === want}`); };
+ok('ax01XRightPct_position', g('r_ax01XRightPct', 'background-position'), "90% 9px");
+ok('ax01XRightPct_positionx', g('r_ax01XRightPct', 'background-position-x'), "90%");
+ok('ax02XRightPx_position', g('r_ax02XRightPx', 'background-position'), "calc(100% - 10px) 9px");
+ok('ax02XRightPx_positionx', g('r_ax02XRightPx', 'background-position-x'), "calc(100% - 10px)");
+ok('ax03XCenter_position', g('r_ax03XCenter', 'background-position'), "50% 9px");
+ok('ax03XCenter_positionx', g('r_ax03XCenter', 'background-position-x'), "50%");
+ok('ax04YBottomPx_position', g('r_ax04YBottomPx', 'background-position'), "7px calc(100% - 20px)");
+ok('ax04YBottomPx_positiony', g('r_ax04YBottomPx', 'background-position-y'), "calc(100% - 20px)");
+ok('ax05PosBottomOff_position', g('r_ax05PosBottomOff', 'background-position'), "7px 9px");
+ok('ax06PosLenBottom_position', g('r_ax06PosLenBottom', 'background-position'), "7px 9px");
+ok('ax07FarBothPct_position', g('r_ax07FarBothPct', 'background-position'), "90% 80%");
+ok('ax07FarBothPct_positionx', g('r_ax07FarBothPct', 'background-position-x'), "90%");
+ok('ax07FarBothPct_positiony', g('r_ax07FarBothPct', 'background-position-y'), "80%");
+ok('ax08NearFarPct_position', g('r_ax08NearFarPct', 'background-position'), "10px 80%");
+ok('ax09XPairLens_positionx', g('r_ax09XPairLens', 'background-position-x'), "7px");
+ok('ax10XZero_positionx', g('r_ax10XZero', 'background-position-x'), "0px");
+ok('ax11XCalc_positionx', g('r_ax11XCalc', 'background-position-x'), "calc(100% - 10px)");
+ok('ax12PosZero_position', g('r_ax12PosZero', 'background-position'), "0px 50%");
+ok('ax12PosZero_positionx', g('r_ax12PosZero', 'background-position-x'), "0px");
+ok('ax12PosZero_positiony', g('r_ax12PosZero', 'background-position-y'), "50%");
+ok('ax13PosZeroZero_position', g('r_ax13PosZeroZero', 'background-position'), "0px 0px");
+ok('ax14PosRight_position', g('r_ax14PosRight', 'background-position'), "100% 50%");
+ok('ax14PosRight_positionx', g('r_ax14PosRight', 'background-position-x'), "100%");
+ok('ax14PosRight_positiony', g('r_ax14PosRight', 'background-position-y'), "50%");
+ok('ax15RightBottom_position', g('r_ax15RightBottom', 'background-position'), "calc(100% - 10px) 100%");
+ok('ax16BottomLeft_position', g('r_ax16BottomLeft', 'background-position'), "0% calc(100% - 20px)");
+ok('ax17CaseUnit_position', g('r_ax17CaseUnit', 'background-position'), "10px 20px");
+ok('ax18CaseKeyword_position', g('r_ax18CaseKeyword', 'background-position'), "50% 100%");
+ok('ax19XCaseRight_positionx', g('r_ax19XCaseRight', 'background-position-x'), "100%");
+ok('ax20XList_positionx', g('r_ax20XList', 'background-position-x'), "10px");
+ok('ax21YPercent_positiony', g('r_ax21YPercent', 'background-position-y'), "20%");
+ok('ax22PosTopOff_position', g('r_ax22PosTopOff', 'background-position'), "7px 9px");
+ok('ax23YLeft_positiony', g('r_ax23YLeft', 'background-position-y'), "9px");
+ok('ax24XCenterOff_positionx', g('r_ax24XCenterOff', 'background-position-x'), "7px");
+ok('ly01TwoPosition_image', img('r_ly01TwoPosition'), 2);
+ok('ly01TwoPosition_position', g('r_ly01TwoPosition', 'background-position'), "10px 20px, 10px 20px");
+ok('ly01TwoPosition_positionx', g('r_ly01TwoPosition', 'background-position-x'), "10px, 10px");
+ok('ly01TwoPosition_positiony', g('r_ly01TwoPosition', 'background-position-y'), "20px, 20px");
+ok('ly01TwoPosition_size', g('r_ly01TwoPosition', 'background-size'), "5px 6px, 5px 6px");
+ok('ly01TwoPosition_repeat', g('r_ly01TwoPosition', 'background-repeat'), "round, round");
+ok('ly01TwoPosition_origin', g('r_ly01TwoPosition', 'background-origin'), "content-box, content-box");
+ok('ly01TwoPosition_clip', g('r_ly01TwoPosition', 'background-clip'), "content-box, content-box");
+ok('ly01TwoPosition_attachment', g('r_ly01TwoPosition', 'background-attachment'), "scroll, scroll");
+ok('ly02ThreeTwo_position', g('r_ly02ThreeTwo', 'background-position'), "10px 50%, 20px 50%");
+ok('ly02ThreeTwo_positionx', g('r_ly02ThreeTwo', 'background-position-x'), "10px, 20px");
+ok('ly03TwoThree_position', g('r_ly03TwoThree', 'background-position'), "10px 50%, 20px 50%, 10px 50%");
+ok('ly03TwoThree_positionx', g('r_ly03TwoThree', 'background-position-x'), "10px, 20px, 10px");
+ok('ly04XListOnly_position', g('r_ly04XListOnly', 'background-position'), "10px 9px, 10px 9px");
+ok('ly04XListOnly_positionx', g('r_ly04XListOnly', 'background-position-x'), "10px, 10px");
+ok('ly04XListOnly_positiony', g('r_ly04XListOnly', 'background-position-y'), "9px, 9px");
+ok('ly05YListTwo_position', g('r_ly05YListTwo', 'background-position'), "7px 10px, 7px 20px");
+ok('ly05YListTwo_positionx', g('r_ly05YListTwo', 'background-position-x'), "7px, 7px");
+ok('ly05YListTwo_positiony', g('r_ly05YListTwo', 'background-position-y'), "10px, 20px");
+ok('ly06XAndYLists_position', g('r_ly06XAndYLists', 'background-position'), "10px 5px, 20px 5px");
+ok('ly06XAndYLists_positionx', g('r_ly06XAndYLists', 'background-position-x'), "10px, 20px");
+ok('ly06XAndYLists_positiony', g('r_ly06XAndYLists', 'background-position-y'), "5px, 5px");
+ok('ly07SizeOneThree_size', g('r_ly07SizeOneThree', 'background-size'), "30px, 30px, 30px");
+ok('ly08RepeatCycle_repeat', g('r_ly08RepeatCycle', 'background-repeat'), "repeat, no-repeat");
+ok('ly09OriginCycle_origin', g('r_ly09OriginCycle', 'background-origin'), "border-box, border-box");
+ok('ly09OriginCycle_clip', g('r_ly09OriginCycle', 'background-clip'), "content-box, content-box");
+ok('ly10AttachCycle_attachment', g('r_ly10AttachCycle', 'background-attachment'), "fixed, fixed");
+ok('ly11PositionThenAxis_position', g('r_ly11PositionThenAxis', 'background-position'), "30px 20px");
+ok('ly11PositionThenAxis_positionx', g('r_ly11PositionThenAxis', 'background-position-x'), "30px");
+ok('ly11PositionThenAxis_positiony', g('r_ly11PositionThenAxis', 'background-position-y'), "20px");
+ok('ly12AxisThenPosition_position', g('r_ly12AxisThenPosition', 'background-position'), "10px 20px");
+ok('ly12AxisThenPosition_positionx', g('r_ly12AxisThenPosition', 'background-position-x'), "10px");
+ok('ly12AxisThenPosition_positiony', g('r_ly12AxisThenPosition', 'background-position-y'), "20px");
+ok('ly13FarTwoLayers_position', g('r_ly13FarTwoLayers', 'background-position'), "calc(100% - 10px) calc(100% - 20px), 10px 20px");
+ok('ly14SizeListCycle_size', g('r_ly14SizeListCycle', 'background-size'), "cover, contain");
+ok('ly15ClipTextCycle_clip', g('r_ly15ClipTextCycle', 'background-clip'), "text, border-box");
+ok('ly15ClipTextCycle_origin', g('r_ly15ClipTextCycle', 'background-origin'), "content-box, content-box");
+
+const rep = document.getElementById('report');
+for (const line of out) { const d = document.createElement('div'); d.textContent = line; rep.appendChild(d); }
+</script>
+</body></html>

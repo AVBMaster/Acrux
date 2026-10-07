@@ -83,6 +83,9 @@ public enum CssValueId
     StrictV, Content,
     SvgText,
     All,
+    // float/clear's logical keywords (CSS Logical Properties 1 §8). Appended before
+    // MaxValue so nothing that sizes an array by the enum range shifts.
+    InlineStart, InlineEnd,
     MaxValue
 }
 
@@ -241,6 +244,8 @@ public sealed class CssIdentifierValue : CssValue
         "color" => CssValueId.Color,
         "luminosity" => CssValueId.Luminosity,
         "isolate" => CssValueId.Isolate,
+        "inline-start" => CssValueId.InlineStart,
+        "inline-end" => CssValueId.InlineEnd,
         "capitalize" => CssValueId.Capitalize,
         "uppercase" => CssValueId.Uppercase,
         "lowercase" => CssValueId.Lowercase,
@@ -463,14 +468,71 @@ public sealed class CssIdentifierValue : CssValue
         CssValueId.Legacy => "legacy",
         CssValueId.Invert => "invert",
         CssValueId.IsolateOverride => "isolate-override",
+        // Without these two cases the default branch below yields 'inlinestart', and
+        // the cascade hands that text to the property applier — which is how
+        // 'float: inline-start' was dropped even though the parser accepted it.
+        CssValueId.InlineStart => "inline-start",
+        CssValueId.InlineEnd => "inline-end",
         CssValueId.Plaintext => "plaintext",
         CssValueId.LightV => "light",
         CssValueId.Dark => "dark",
         CssValueId.PlusLighter => "plus-lighter",
         CssValueId.PlusDarker => "plus-darker",
+        // --- members whose CSS text is NOT the kebab-cased member name -------------
+        // The default branch below derives the keyword from the identifier, which is
+        // right for e.g. FlowRoot -> "flow-root" and RepeatX -> "repeat-x". These are
+        // the exceptions, and each one used to serialise as a mangled single word
+        // ("inlinestart", "visiblesstroke", "simsun", "nresize"), which is what made
+        // 'float: inline-start' vanish on the declaration round trip through the
+        // property-value store.
+        CssValueId.VisibleStroke => "visibleStroke",
+        CssValueId.VisibleFill => "visibleFill",
+        CssValueId.VisiblePainted => "visiblePainted",
+        CssValueId.NorthResize => "n-resize",
+        CssValueId.NorthEastResize => "ne-resize",
+        CssValueId.NorthWestResize => "nw-resize",
+        CssValueId.SouthResize => "s-resize",
+        CssValueId.SouthEastResize => "se-resize",
+        CssValueId.SouthWestResize => "sw-resize",
+        CssValueId.EastResize => "e-resize",
+        CssValueId.WestResize => "w-resize",
+        CssValueId.ExtraLight => "extralight",
+        CssValueId.SemiBold => "semibold",
+        CssValueId.ExtraBold => "extrabold",
+        CssValueId.CjkIdeographic => "@cjk-ideographic",
+        CssValueId.MathDiff => "-",
+        CssValueId.NaN => "NaN",
+        CssValueId.SimSun => "SimSun",
+        CssValueId.SimHei => "SimHei",
+        CssValueId.MicrosoftYaHei => "Microsoft YaHei",
+        CssValueId.KaiTi => "KaiTi",
+        CssValueId.FangSong => "FangSong",
+        CssValueId.YouYuan => "YouYuan",
+        CssValueId.STSong => "STSong",
+        CssValueId.STHeiti => "STHeiti",
+        CssValueId.STKaiti => "STKaiti",
+        CssValueId.STFangsong => "STFangsong",
+        // The '*V' members are disambiguated duplicates of keywords that another
+        // grammar already owns; their CSS text is the plain keyword.
+        CssValueId.TopV => "top",
+        CssValueId.BottomV => "bottom",
+        CssValueId.MiddleV => "middle",
+        CssValueId.BaselineV => "baseline",
+        CssValueId.SpaceBetweenV => "space-between",
+        CssValueId.SpaceAroundV => "space-around",
+        CssValueId.SpaceEvenlyV => "space-evenly",
+        CssValueId.StretchV => "stretch",
+        CssValueId.SizeV => "size",
+        CssValueId.LayoutV => "layout",
+        CssValueId.StyleV => "style",
+        CssValueId.PaintV => "paint",
         CssValueId.MathRound => "round",
         CssValueId.Mod => "mod",
         CssValueId.Rem => "rem",
-        _ => id.ToString().ToLowerInvariant()
+        // One derivation instead of a hand-maintained list: the kebab-case rule the
+        // rest of the engine already uses (CssEnumFormatter). Before this, every
+        // multi-word keyword needed two entries (parse table + format table) and the
+        // format side was missing ~80 of them.
+        _ => Acrux.Core.Dom.CssEnumFormatter.CssKeywordFromEnum(id.ToString())
     };
 }

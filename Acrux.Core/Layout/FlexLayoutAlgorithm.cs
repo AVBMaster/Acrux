@@ -1233,11 +1233,14 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         if (extra <= 0)
             return;
 
-        string mode = (style.AlignContent ?? "stretch").Trim().ToLowerInvariant();
+        string mode = (style.AlignContent ?? "normal").Trim().ToLowerInvariant();
 
         if (lines.Count == 1)
         {
-            if (mode == "stretch")
+            // 'normal' is the initial value and, for a wrapping container with one line, it
+            // behaves as 'stretch' (CSS Flexbox 1 §5.1) — only an explicit keyword that asks
+            // for positioning ('center', 'end') leaves the line its own cross size.
+            if (mode is "stretch" or "normal")
                 lines[0].CrossSize = availableCross;
             else
                 lines[0].CrossStart += mode switch

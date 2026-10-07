@@ -1,0 +1,136 @@
+<!doctype html>
+<!-- css-standard-verify250: the &lt;length&gt; of a media feature (CSS Media Queries 4 §6).
+
+  What each row asserts. A query is not attached to a box, so it has no font of its own:
+   * 'em' and 'rem' are the INITIAL value of 'font-size' — 16px — and not the document's root
+     font size. '(min-width: 27em)' matches a 445px viewport and '(min-width: 28em)' does not
+     whether the page sets 'html { font-size: 10px | 16px | 30px }' or nothing at all (q04, q05,
+     q40, q41 are the same query under three different root font sizes and answer the same way).
+   * every other unit is read by the same parser a property on the page uses: the absolute
+     units through the inch at 96px (q14..q25), the viewport units through the viewport
+     (q10..q13), the font-metric units through the initial font (q26, q27), a unit spelled in
+     capitals (q34, q35) and a bare zero (q36) included.
+   * 'q' is a quarter of a millimetre, not a hundredth of one (q24, q25 and the #m4 bar):
+     470q is 444.097px, which fits, and 471q is 445.04px, which does not.
+   * a percentage is not a &lt;length&gt; in a media query, so neither '(min-width: 50%)' nor
+     '(max-width: 50%)' matches (q28, q29) and the #m6 bar keeps its base width.
+   * a unitless number that is not zero is not a &lt;length&gt; either (q37).
+   * 'dpi', 'dpcm' and 'dppx' are one resolution written three ways (q30..q33): 96dpi and
+     1dppx are the same thing, and 37dpcm is below it while 39dpcm is above.
+   * the media query viewport is the whole window width including a classic scrollbar
+     (q01 matches at 445px while documentElement.clientWidth is 430), so the calibration rows
+     q01..q03 pin the number every other row is compared against.
+
+  The seven bars prove the same parser is what @media used: each has a rule that matches and a
+  rule that must not, and the dotted frame marks the width the matching rule gives.
+
+  Two more things the page reaches for, because both were broken beside the length parser:
+   * 'window.matchMedia' is the SAME evaluator an @media rule is filtered through (s6 pairs the
+     two queries the calibration rows q01/q02 pin down, so a script cannot disagree with a rule).
+     Its MediaQueryList keeps 'media' and 'matches' on the prototype, non-enumerable (s2), reads
+     'media' back with one space after the colon of a feature (s1), exposes the legacy
+     'addListener' without calling it at registration time (s4) and reports 'matches' live (s3).
+   * a 'min-'/'max-' prefixed feature takes no comparison operator of its own: the prefix IS the
+     comparison, so q46, q47, q49 and q50 match nothing, while the unprefixed range form q48
+     '(width >= 445px)' does (CSS Media Queries 4 §4.4).
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: rgb(255,255,255); }
+  #report div { white-space: pre; font: 11px Consolas, monospace; color: rgb(0,0,0); }
+  #bars { position: absolute; left: 20px; top: 20px; width: 200px; height: 170px; }
+  .bar { position: absolute; left: 0; height: 14px; background: rgb(255,0,0); }
+  .frame { position: absolute; left: 0; height: 14px; border: 1px dotted rgb(0,0,0); }
+  #m1 { top: 0; width: 4px; }   #k1 { top: 0; width: 100px; }
+  #m2 { top: 24px; width: 4px; } #k2 { top: 24px; width: 60px; }
+  #m3 { top: 48px; width: 4px; } #k3 { top: 48px; width: 40px; }
+  #m4 { top: 72px; width: 4px; } #k4 { top: 72px; width: 24px; }
+  #m5 { top: 96px; width: 4px; } #k5 { top: 96px; width: 30px; }
+  #m6 { top: 120px; width: 4px; } #k6 { top: 120px; width: 4px; }
+  #m7 { top: 144px; width: 4px; } #k7 { top: 144px; width: 18px; }
+</style>
+<style>
+  @media (min-width: 27em) { #m1 { width: 100px; } }
+  @media (min-width: 28em) { #m1 { width: 20px; } }
+  @media (min-width: 10rem) { #m2 { width: 60px; } }
+  @media (max-width: 10rem) { #m2 { width: 6px; } }
+  @media (min-width: 11cm) { #m3 { width: 40px; } }
+  @media (min-width: 118mm) { #m3 { width: 8px; } }
+  @media (min-width: 470q) { #m4 { width: 24px; } }
+  @media (min-width: 471q) { #m4 { width: 90px; } }
+  @media (min-resolution: 37dpcm) { #m5 { width: 30px; } }
+  @media (min-resolution: 39dpcm) { #m5 { width: 70px; } }
+  @media (max-width: 50%) { #m6 { width: 55px; } }
+  @media (min-width: 100vmin) { #m7 { width: 18px; } }
+  @media (min-width: 101vmin) { #m7 { width: 99px; } }
+</style></head><body>
+<div id="bars">
+  <div class="frame" id="k1"></div><div class="bar" id="m1"></div>
+  <div class="frame" id="k2"></div><div class="bar" id="m2"></div>
+  <div class="frame" id="k3"></div><div class="bar" id="m3"></div>
+  <div class="frame" id="k4"></div><div class="bar" id="m4"></div>
+  <div class="frame" id="k5"></div><div class="bar" id="m5"></div>
+  <div class="frame" id="k6"></div><div class="bar" id="m6"></div>
+  <div class="frame" id="k7"></div><div class="bar" id="m7"></div>
+</div>
+<div id="report" style="position:absolute;left:240px;top:20px;width:200px"></div>
+<script>
+const QUERIES = {
+  q01: "(min-width: 445px)", q02: "(min-width: 446px)", q03: "(max-width: 445px)",
+  q04: "(min-width: 27em)", q05: "(min-width: 28em)",
+  q06: "(min-width: 27.8em)", q07: "(min-width: 27.9em)",
+  q08: "(min-width: 27rem)", q09: "(max-width: 27rem)",
+  q10: "(min-width: 100vw)", q11: "(min-width: 101vw)",
+  q12: "(min-width: 100vmin)", q13: "(min-width: 101vmin)",
+  q14: "(min-width: 4in)", q15: "(min-width: 5in)",
+  q16: "(min-width: 11cm)", q17: "(min-width: 12cm)",
+  q18: "(min-width: 117mm)", q19: "(min-width: 118mm)",
+  q20: "(min-width: 333pt)", q21: "(min-width: 334pt)",
+  q22: "(min-width: 27pc)", q23: "(min-width: 28pc)",
+  q24: "(min-width: 470q)", q25: "(min-width: 471q)",
+  q26: "(min-width: 40ch)", q27: "(min-width: 40ex)",
+  q28: "(min-width: 50%)", q29: "(max-width: 50%)",
+  q30: "(min-resolution: 1dppx)", q31: "(min-resolution: 96dpi)",
+  q32: "(min-resolution: 37dpcm)", q33: "(min-resolution: 39dpcm)",
+  q34: "(min-width: 10PX)", q35: "(min-width: 1e2EM)",
+  q36: "(min-width: 0)", q37: "(min-width: 12)",
+  q38: "(min-width: 1cm)", q39: "(max-width: 1cm)",
+  q42: "(min-width: calc(20em + 100px))", q43: "(min-width: calc(20em + 200px))",
+  q44: "(min-width: 27EM)", q45: "(max-width: 471Q)",
+  // The range form of a prefixed feature asks the question about the threshold, not the
+  // viewport, which is the other comparison (CSS MQ 4 §4.1).
+  q46: "(min-width: >= 400px)", q47: "(min-width: <= 400px)",
+  q48: "(width >= 445px)", q49: "(max-width: >= 400px)",
+  q50: "(min-resolution: <= 1dppx)", q51: "(max-resolution: 2dppx)",
+};
+const WANTS = {"q01": "T", "q02": "F", "q03": "T", "q04": "T", "q05": "F", "q06": "T", "q07": "F", "q08": "T", "q09": "F", "q10": "T", "q11": "F", "q12": "T", "q13": "F", "q14": "T", "q15": "F", "q16": "T", "q17": "F", "q18": "T", "q19": "F", "q20": "T", "q21": "F", "q22": "T", "q23": "F", "q24": "T", "q25": "F", "q26": "T", "q27": "T", "q28": "F", "q29": "F", "q30": "T", "q31": "T", "q32": "T", "q33": "F", "q34": "T", "q35": "F", "q36": "T", "q37": "F", "q38": "T", "q39": "F", "q42": "T", "q43": "F", "q44": "T", "q45": "T", "q46": "F", "q47": "F", "q48": "T", "q49": "F", "q50": "F", "q51": "T", "s1": "(min-width: 445px) and (max-width: 900px)", "s2": 0, "s3": true, "s4": 0, "s5": "function,function,true,function", "s6": true, "zq04": "T", "zq05": "F", "zq08": "T", "zq26": "T", "zq27": "T", "m1": 100, "m2": 60, "m3": 40, "m4": 24, "m5": 30, "m6": 4, "m7": 18};
+const out = [];
+const row = (name, got) => {
+  const w = WANTS[name];
+  out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(w)} ok=${w !== undefined && String(got) === String(w)}`);
+};
+const probe = () => { for (const k in QUERIES) row(k, matchMedia(QUERIES[k]).matches ? "T" : "F"); };
+probe();
+// The same queries under three root font sizes: a media query must not move.
+for (const fs of ["10px", "30px"]) {
+  document.documentElement.style.fontSize = fs;
+  out.push(`-- html{font-size:${fs}} --`);
+  for (const k of ["q04", "q05", "q08", "q26", "q27"]) row("z" + k, matchMedia(QUERIES[k]).matches ? "T" : "F");
+}
+document.documentElement.style.fontSize = "";
+// The widths the bars arrived at, which is the same parser seen through @media.
+for (const id of ["m1", "m2", "m3", "m4", "m5", "m6", "m7"])
+  row(id, document.getElementById(id).getBoundingClientRect().width);
+// The MediaQueryList object's own surface (CSSOM View §7.1).
+const one = matchMedia("(min-width:445px) and (max-width: 900px)");
+row("s1", one.media);
+row("s2", Object.keys(one).length);
+row("s3", one.matches);
+let fired = 0;
+one.addListener(() => fired++);
+row("s4", fired);
+row("s5", [typeof one.addEventListener, typeof one.addListener, "onchange" in one, typeof one.dispatchEvent].join(","));
+row("s6", matchMedia("(min-width: 445px)").matches && !matchMedia("(min-width: 446px)").matches);
+out.push(`innerWidth=${window.innerWidth}`);
+out.push(`clientWidth=${document.documentElement.clientWidth}`);
+document.getElementById('report').innerHTML = out.map(l => '<div>' + l + '</div>').join('');
+</script></body></html>

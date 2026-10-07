@@ -1,0 +1,180 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>b248 individual transforms</title><!--
+  The individual transform properties and their neighbours (CSS Transforms 2 &sect;4&ndash;&sect;6, &sect;5). Every case
+  is a div that carries ONE declaration inline and names the property in a data-p attribute; the
+  script at the bottom reads the computed value of exactly that property for every case and prints
+  one assertion per row, so the whole grammar of the four properties is gated through the CSSOM
+  rather than through screenshots.
+
+  The rules recorded here were each measured against a reference engine:
+   * 'translate' is 'none | <length-percentage> [<length-percentage> <length>?]?' -- the third
+     component is NOT a percentage, and the computed value is the shortest list that still means the
+     same thing: a zero z is dropped, then a zero y, so 'translate: 0 0' computes '0px' while
+     'translate: 0%% 0%%' keeps both, because a percentage and a length are different values.
+   * 'rotate' normalises a coordinate axis onto the x/y/z keyword and folds the sign of the vector
+     component into the angle, and only keeps the three-number spelling for an axis that is not one
+     of the three; angles always compute to 'deg'.
+   * 'scale' takes numbers (percentages become numbers) and serialises the shortest list: a z of one
+     is dropped, then a y equal to x.
+   * 'perspective' is a non-negative length only -- no percentage, no 'auto' -- resolved to px at
+     computed-value time.
+   * 'transform-box' and 'backface-visibility' keyword grammars, and the initial value of all eight.
+   * 'transform-origin' / 'perspective-origin' are asserted on a 200x100 box, because a reference
+     engine resolves the percentages of an origin against the border box at computed-value time
+     ('50% 25%' of that box is '100px 25px') -- the keywords resolve to the same thing ('center' is
+     50%, 'right' is 100% of the width), and a one-component origin leaves the other at its initial
+     'center'.
+
+  The painted boxes above the report prove the engine draws with those same values: a red 60x60 box
+  inside a dotted frame, so the frame is where the box WAS and the fill is where it got to.
+--><style>
+  html, body { margin: 0; padding: 0; background: rgb(255,255,255); }
+  #report div { white-space: pre; font: 12px Consolas, monospace; color: rgb(0,0,0); }
+  .c { width: 200px; height: 100px; font: 16px/16px Arial, sans-serif; color: rgb(17,17,17); }
+  #stage { position: absolute; left: 20px; top: 20px; width: 280px; height: 260px; }
+  .frame { position: absolute; width: 60px; height: 60px; border: 1px dotted rgb(0,0,0); }
+  .box { position: absolute; width: 60px; height: 60px; background: rgb(255,0,0); }
+  #k1 { left: 100px; top: 10px; }
+  #b1 { left: 100px; top: 10px; translate: 40px 30px; }
+  #k2 { left: 10px; top: 100px; }
+  #b2 { left: 10px; top: 100px; rotate: 45deg; }
+  #k3 { left: 100px; top: 100px; }
+  #b3 { left: 100px; top: 100px; scale: 0.5; }
+  #k4 { left: 10px; top: 10px; }
+  #b4 { left: 10px; top: 10px; perspective: 200px; rotate: y 45deg; }
+</style></head><body>
+<div id="stage">
+  <div class="frame" id="k1"></div><div class="box" id="b1"></div>
+  <div class="frame" id="k2"></div><div class="box" id="b2"></div>
+  <div class="frame" id="k3"></div><div class="box" id="b3"></div>
+  <div class="frame" id="k4"></div><div class="box" id="b4"></div>
+</div>
+<div id="report" style="position:absolute;left:320px;top:20px;width:560px"></div>
+<div id="cases" style="position:absolute;left:890px;top:0;width:1px;height:1px;overflow:hidden">
+<div class="c" style="translate: none" id="t01" data-p="translate"></div>
+<div class="c" style="translate: 10px" id="t02" data-p="translate"></div>
+<div class="c" style="translate: 10px 20px" id="t03" data-p="translate"></div>
+<div class="c" style="translate: 10px 20px 30px" id="t04" data-p="translate"></div>
+<div class="c" style="translate: 0 0" id="t05" data-p="translate"></div>
+<div class="c" style="translate: 10px 0" id="t06" data-p="translate"></div>
+<div class="c" style="translate: 0% 0%" id="t07" data-p="translate"></div>
+<div class="c" style="translate: 0 0 10px" id="t08" data-p="translate"></div>
+<div class="c" style="translate: 1cm" id="t09" data-p="translate"></div>
+<div class="c" style="translate: 1em; font-size:20px" id="t10" data-p="translate"></div>
+<div class="c" style="translate: calc(10px + 1em); font-size:20px" id="t11" data-p="translate"></div>
+<div class="c" style="translate: 50% 25%" id="t12" data-p="translate"></div>
+<div class="c" style="translate: 0" id="t13" data-p="translate"></div>
+<div class="c" style="translate: 10px none" id="t14" data-p="translate"></div>
+<div class="c" style="translate: 50% 50% 50%" id="t15" data-p="translate"></div>
+<div class="c" style="translate: 10px 10px 10px 10px" id="t16" data-p="translate"></div>
+<div class="c" style="translate: 10px 20px 0px" id="t17" data-p="translate"></div>
+<div class="c" style="translate: -10px -20px" id="t18" data-p="translate"></div>
+<div class="c" style="translate: 5px 5px 0%" id="t19" data-p="translate"></div>
+<div class="c" style="translate: 10" id="t20" data-p="translate"></div>
+<div class="c" style="translate: 10pt" id="t21" data-p="translate"></div>
+<div class="c" style="translate: 1.5rem" id="t22" data-p="translate"></div>
+<div class="c" style="rotate: none" id="r01" data-p="rotate"></div>
+<div class="c" style="rotate: 45deg" id="r02" data-p="rotate"></div>
+<div class="c" style="rotate: 0.25turn" id="r03" data-p="rotate"></div>
+<div class="c" style="rotate: 1turn" id="r04" data-p="rotate"></div>
+<div class="c" style="rotate: -30grad" id="r05" data-p="rotate"></div>
+<div class="c" style="rotate: 3.14159rad" id="r06" data-p="rotate"></div>
+<div class="c" style="rotate: x 45deg" id="r07" data-p="rotate"></div>
+<div class="c" style="rotate: X 90deg" id="r08" data-p="rotate"></div>
+<div class="c" style="rotate: y -45deg" id="r09" data-p="rotate"></div>
+<div class="c" style="rotate: z 45deg" id="r10" data-p="rotate"></div>
+<div class="c" style="rotate: -1 0 0 90deg" id="r11" data-p="rotate"></div>
+<div class="c" style="rotate: 0 -2 0 90deg" id="r12" data-p="rotate"></div>
+<div class="c" style="rotate: 0 0 -1 45deg" id="r13" data-p="rotate"></div>
+<div class="c" style="rotate: 2 0 0 45deg" id="r14" data-p="rotate"></div>
+<div class="c" style="rotate: 0 0 2 45deg" id="r15" data-p="rotate"></div>
+<div class="c" style="rotate: 1 1 0 90deg" id="r16" data-p="rotate"></div>
+<div class="c" style="rotate: 0 0 0 90deg" id="r17" data-p="rotate"></div>
+<div class="c" style="rotate: 45deg 45deg" id="r18" data-p="rotate"></div>
+<div class="c" style="rotate: foo 90deg" id="r19" data-p="rotate"></div>
+<div class="c" style="rotate: 1 0 0 90deg 45deg" id="r20" data-p="rotate"></div>
+<div class="c" style="rotate: 0" id="r21" data-p="rotate"></div>
+<div class="c" style="rotate: 45" id="r22" data-p="rotate"></div>
+<div class="c" style="rotate: 180deg" id="r23" data-p="rotate"></div>
+<div class="c" style="rotate: -0.5turn" id="r24" data-p="rotate"></div>
+<div class="c" style="scale: none" id="s01" data-p="scale"></div>
+<div class="c" style="scale: 2" id="s02" data-p="scale"></div>
+<div class="c" style="scale: 2 3" id="s03" data-p="scale"></div>
+<div class="c" style="scale: 2 2" id="s04" data-p="scale"></div>
+<div class="c" style="scale: 2 2 1" id="s05" data-p="scale"></div>
+<div class="c" style="scale: 1 2 1" id="s06" data-p="scale"></div>
+<div class="c" style="scale: 50% 1 1" id="s07" data-p="scale"></div>
+<div class="c" style="scale: 0 0 0" id="s08" data-p="scale"></div>
+<div class="c" style="scale: 2 2 2" id="s09" data-p="scale"></div>
+<div class="c" style="scale: 1 1 1" id="s10" data-p="scale"></div>
+<div class="c" style="scale: 50%" id="s11" data-p="scale"></div>
+<div class="c" style="scale: 2, 3" id="s12" data-p="scale"></div>
+<div class="c" style="scale: 1 1 1 1" id="s13" data-p="scale"></div>
+<div class="c" style="scale: 0.5 1" id="s14" data-p="scale"></div>
+<div class="c" style="scale: 1 0.5" id="s15" data-p="scale"></div>
+<div class="c" style="scale: -1" id="s16" data-p="scale"></div>
+<div class="c" style="scale: 50% 25%" id="s17" data-p="scale"></div>
+<div class="c" style="scale: 2 auto" id="s18" data-p="scale"></div>
+<div class="c" style="perspective: none" id="p01" data-p="perspective"></div>
+<div class="c" style="perspective: 100px" id="p02" data-p="perspective"></div>
+<div class="c" style="perspective: 0" id="p03" data-p="perspective"></div>
+<div class="c" style="perspective: 1in" id="p04" data-p="perspective"></div>
+<div class="c" style="perspective: calc(10px + 1em); font-size:14px" id="p05" data-p="perspective"></div>
+<div class="c" style="perspective: 50%" id="p06" data-p="perspective"></div>
+<div class="c" style="perspective: -10px" id="p07" data-p="perspective"></div>
+<div class="c" style="perspective: 100" id="p08" data-p="perspective"></div>
+<div class="c" style="perspective: 1m" id="p09" data-p="perspective"></div>
+<div class="c" style="perspective: 1.5cm" id="p10" data-p="perspective"></div>
+<div class="c" style="perspective: auto" id="p11" data-p="perspective"></div>
+<div class="c" style="perspective-origin: 10px 20px" id="po01" data-p="perspective-origin"></div>
+<div class="c" style="perspective-origin: 50% 25%" id="po02" data-p="perspective-origin"></div>
+<div class="c" style="perspective-origin: left top" id="po03" data-p="perspective-origin"></div>
+<div class="c" style="perspective-origin: center" id="po04" data-p="perspective-origin"></div>
+<div class="c" style="perspective-origin: right 20px" id="po05" data-p="perspective-origin"></div>
+<div class="c" style="perspective-origin: 10px" id="po06" data-p="perspective-origin"></div>
+<div class="c" style="perspective-origin: 0 0" id="po07" data-p="perspective-origin"></div>
+<div class="c" style="perspective-origin: foo" id="po08" data-p="perspective-origin"></div>
+<div class="c" style="perspective-origin: 25% 75%" id="po09" data-p="perspective-origin"></div>
+<div class="c" style="perspective-origin: bottom" id="po10" data-p="perspective-origin"></div>
+<div class="c" style="transform-origin: 10px 20px" id="to01" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: 50% 25%" id="to02" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: top left" id="to03" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: center" id="to04" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: 10px" id="to05" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: 10px 20px 30px" id="to06" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: right 10px" id="to07" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: 50% 50% 50%" id="to08" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: bottom right" id="to09" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: left 10px bottom" id="to10" data-p="transform-origin"></div>
+<div class="c" style="transform-origin: 10px 20px 30px 40px" id="to11" data-p="transform-origin"></div>
+<div class="c" style="backface-visibility: hidden" id="bv01" data-p="backface-visibility"></div>
+<div class="c" style="backface-visibility: HIDDEN" id="bv02" data-p="backface-visibility"></div>
+<div class="c" style="backface-visibility: visible" id="bv03" data-p="backface-visibility"></div>
+<div class="c" style="backface-visibility: foo" id="bv04" data-p="backface-visibility"></div>
+<div class="c" style="transform-box: content-box" id="tb01" data-p="transform-box"></div>
+<div class="c" style="transform-box: border-box" id="tb02" data-p="transform-box"></div>
+<div class="c" style="transform-box: fill-box" id="tb03" data-p="transform-box"></div>
+<div class="c" style="transform-box: stroke-box" id="tb04" data-p="transform-box"></div>
+<div class="c" style="transform-box: view-box" id="tb05" data-p="transform-box"></div>
+<div class="c" style="transform-box: FILL-BOX" id="tb06" data-p="transform-box"></div>
+<div class="c" style="transform-box: auto" id="tb07" data-p="transform-box"></div>
+<div class="c" style="transform-box: margin-box" id="tb08" data-p="transform-box"></div>
+<div class="c" style="transform-box: fill-box border-box" id="tb09" data-p="transform-box"></div>
+<div class="c" id="i01" data-p="translate"></div>
+<div class="c" id="i02" data-p="rotate"></div>
+<div class="c" id="i03" data-p="scale"></div>
+<div class="c" id="i04" data-p="perspective"></div>
+<div class="c" id="i05" data-p="perspective-origin"></div>
+<div class="c" id="i06" data-p="transform-origin"></div>
+<div class="c" id="i07" data-p="backface-visibility"></div>
+<div class="c" id="i08" data-p="transform-box"></div></div>
+<script>
+const WANTS = {"t01": "none", "t02": "10px", "t03": "10px 20px", "t04": "10px 20px 30px", "t05": "0px", "t06": "10px", "t07": "0% 0%", "t08": "0px 0px 10px", "t09": "37.7953px", "t10": "20px", "t11": "30px", "t12": "50% 25%", "t13": "0px", "t14": "none", "t15": "none", "t16": "none", "t17": "10px 20px", "t18": "-10px -20px", "t19": "none", "t20": "none", "t21": "13.3333px", "t22": "24px", "r01": "none", "r02": "45deg", "r03": "90deg", "r04": "360deg", "r05": "-27deg", "r06": "180deg", "r07": "x 45deg", "r08": "x 90deg", "r09": "y -45deg", "r10": "45deg", "r11": "x -90deg", "r12": "y -90deg", "r13": "-45deg", "r14": "x 45deg", "r15": "45deg", "r16": "1 1 0 90deg", "r17": "0 0 0 90deg", "r18": "none", "r19": "none", "r20": "none", "r21": "none", "r22": "none", "r23": "180deg", "r24": "-180deg", "s01": "none", "s02": "2", "s03": "2 3", "s04": "2", "s05": "2", "s06": "1 2", "s07": "0.5 1", "s08": "0 0 0", "s09": "2 2 2", "s10": "1", "s11": "0.5", "s12": "none", "s13": "none", "s14": "0.5 1", "s15": "1 0.5", "s16": "-1", "s17": "0.5 0.25", "s18": "none", "p01": "none", "p02": "100px", "p03": "0px", "p04": "96px", "p05": "24px", "p06": "none", "p07": "none", "p08": "none", "p09": "none", "p10": "56.6929px", "p11": "none", "po01": "10px 20px", "po02": "100px 25px", "po03": "0px 0px", "po04": "100px 50px", "po05": "200px 20px", "po06": "10px 50px", "po07": "0px 0px", "po08": "100px 50px", "po09": "50px 75px", "po10": "100px 100px", "to01": "10px 20px", "to02": "100px 25px", "to03": "0px 0px", "to04": "100px 50px", "to05": "10px 50px", "to06": "10px 20px 30px", "to07": "200px 10px", "to08": "100px 50px", "to09": "200px 100px", "to10": "100px 50px", "to11": "100px 50px", "bv01": "hidden", "bv02": "hidden", "bv03": "visible", "bv04": "visible", "tb01": "content-box", "tb02": "border-box", "tb03": "fill-box", "tb04": "stroke-box", "tb05": "view-box", "tb06": "fill-box", "tb07": "view-box", "tb08": "view-box", "tb09": "view-box", "i01": "none", "i02": "none", "i03": "none", "i04": "none", "i05": "100px 50px", "i06": "100px 50px", "i07": "visible", "i08": "view-box"};
+const out = [];
+for (const n of document.querySelectorAll('#cases .c')) {
+  const p = n.getAttribute('data-p');
+  const v = getComputedStyle(n).getPropertyValue(p);
+  const w = WANTS[n.id];
+  out.push(`${n.id}=${JSON.stringify(v)} want=${JSON.stringify(w)} ok=${v === w}`);
+}
+document.getElementById('report').innerHTML = out.map(l => '<div>' + l + '</div>').join('');
+</script></body></html>

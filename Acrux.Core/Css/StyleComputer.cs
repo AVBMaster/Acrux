@@ -16,16 +16,43 @@ public class StyleComputer
 {
     private readonly List<Stylesheet> _stylesheets = new();
     private StyleSheetContents? _uaSheet;
-    private readonly List<StyleSheetContents> _authorSheets = new();
+    private readonly List<AuthorSheet> _authorSheets = new();
+
+    /// <summary>An author stylesheet, and — for one that came from a <style> or <link>
+    /// element — that element plus the text its sheet was parsed from. The element is what
+    /// lets a later recompute find the sheet again instead of adding a second copy of it
+    /// (see <see cref="SyncStyleElements"/>).</summary>
+    private sealed class AuthorSheet
+    {
+        public StyleSheetContents Contents = null!;
+        public Stylesheet Legacy = null!;
+        public Element? Owner;
+        public string? OwnerText;
+    }
 
     /// <summary>The UA sheet as token rules, for read-only inspection (DevTools matched
     /// rules). Same object the cascade resolved from; callers must not mutate it.</summary>
     public StyleSheetContents? UaSheet => _uaSheet;
 
-    /// <summary>Author sheets in insertion order — the order the cascade applied them.</summary>
-    public IReadOnlyList<StyleSheetContents> AuthorSheets => _authorSheets;
+    /// <summary>Author sheets in insertion order — the order the cascade applied them. A sheet
+    /// whose element is disabled is left out here but keeps its object and its place in the
+    /// list, so 'element.sheet' still answers and re-enabling puts the same rules back in the
+    /// same cascade position without a re-parse (measured in Edge).</summary>
+    public IReadOnlyList<StyleSheetContents> AuthorSheets
+    {
+        get
+        {
+            var list = new List<StyleSheetContents>(_authorSheets.Count);
+            foreach (var sheet in _authorSheets)
+            {
+                if (sheet.Owner != null && sheet.Owner.SheetDisabled) continue;
+                list.Add(sheet.Contents);
+            }
+            return list;
+        }
+    }
 
-    public void AddStylesheet(Stylesheet stylesheet, CascadeOrigin origin = CascadeOrigin.Author)
+    public void AddStylesheet(Stylesheet stylesheet, CascadeOrigin origin = CascadeOrigin.Author, Element? owner = null)
     {
         _stylesheets.Add(stylesheet);
 
@@ -37,16 +64,141 @@ public class StyleComputer
         if (origin == CascadeOrigin.UserAgent)
             _uaSheet = modern;
         else
-            _authorSheets.Add(modern);
+        {
+            _authorSheets.Add(new AuthorSheet
+            {
+                Contents = modern,
+                Legacy = stylesheet,
+                Owner = owner,
+                OwnerText = owner?.TextContent,
+            });
+            if (owner != null) owner.AssociatedStyleSheet = modern;
+        }
     }
 
     public void ComputeStyles(Document document, float viewportWidth = 1024f, float viewportHeight = 768f, string colorScheme = "light")
     {
+        SyncStyleElements(document);
         var resolver = new StyleResolver(uaSheet: _uaSheet);
-        resolver.AddStyleSheets(_authorSheets);
+        resolver.AddStyleSheets(EffectiveAuthorSheets(document));
         resolver.SetViewport(viewportWidth, viewportHeight, colorScheme);
         CollectCounterStyles(document);
         resolver.ResolveDocument(document);
+    }
+
+    /// <summary>The author sheets the resolver has to walk: the ones the document's elements
+    /// contribute, followed by the sheets the page adopted. An adopted sheet beats an element's
+    /// sheet with the same selector and a later adoption beats an earlier one (measured), which
+    /// is exactly what appending in this order gives; a disabled sheet of either kind is left
+    /// out — an element's on its own state, a constructed one on the sheet's flag.</summary>
+    public IReadOnlyList<StyleSheetContents> EffectiveAuthorSheets(Document document)
+    {
+        var adopted = document.AdoptedStyleSheets;
+        if (adopted.Count == 0) return AuthorSheets;
+        var list = new List<StyleSheetContents>(AuthorSheets);
+        foreach (var sheet in adopted)
+            if (!sheet.Disabled) list.Add(sheet);
+        return list;
+    }
+
+    /// <summary>
+    /// Bring the document's own <style> elements into the author-sheet list.
+    ///
+    /// A style element contributes its sheet for as long as it is in the document and
+    /// carries its text, so a script that appends one — or rewrites it — has to be visible
+    /// on the next recompute. The load-time pass cannot promise that: it runs once, before
+    /// any script has executed. Sheets are matched by their element, so an unchanged
+    /// element is not re-parsed, an edited one is re-parsed in place (keeping its position
+    /// in the list, hence its cascade order) and one that left the document takes its sheet
+    /// with it. A <style> added after load may reference <c>@import</c> sheets; those are
+    /// not fetched here, because fetching is an async step the document loader owns.
+    /// </summary>
+    private void SyncStyleElements(Document document)
+    {
+        var root = document.DocumentElement;
+        if (root == null) return;
+
+        var inDocument = new HashSet<Element>();
+        var styleElements = new List<Element>();
+        var stack = new Stack<Element>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var element = stack.Pop();
+            inDocument.Add(element);
+            if (string.Equals(element.TagName, "STYLE", StringComparison.OrdinalIgnoreCase))
+                styleElements.Add(element);
+            var children = element.Children;
+            for (int i = children.Count - 1; i >= 0; i--)
+                if (children[i] is Element child)
+                    stack.Push(child);
+        }
+
+        foreach (var element in styleElements)
+        {
+            var text = element.TextContent;
+            var existing = _authorSheets.FirstOrDefault(s => ReferenceEquals(s.Owner, element));
+            // A 'disabled' element keeps its sheet object — 'element.sheet' still answers and
+            // re-enabling costs no re-parse — and is left out of the cascade by the projection
+            // the resolver reads (see AuthorSheets).
+
+            if (existing == null)
+            {
+                var parsed = ParseStyleElement(text);
+                // An element owns a sheet even when the text parsed to nothing: the reference
+                // engine hands out a sheet with zero rules for an empty or rejected 'style'
+                // (measured), and 'document.styleSheets' counts it.
+                var contents = parsed?.ModernContents ?? new StyleSheetContents();
+                if (parsed != null) _stylesheets.Add(parsed);
+                _authorSheets.Add(new AuthorSheet
+                {
+                    Contents = contents,
+                    Legacy = parsed ?? new Stylesheet(),
+                    Owner = element,
+                    OwnerText = text,
+                });
+                element.AssociatedStyleSheet = contents;
+                continue;
+            }
+
+            if (string.Equals(existing.OwnerText, text, StringComparison.Ordinal)) continue;
+            var reparsed = ParseStyleElement(text);
+            if (reparsed == null) continue;
+            _stylesheets.Remove(existing.Legacy);
+            _stylesheets.Add(reparsed);
+            existing.Legacy = reparsed;
+            existing.OwnerText = text;
+            // The cascade reads the sheet object it was handed at parse time, so a re-parse
+            // has to replace it in place: the element keeps pointing at the same list the
+            // resolver walks, and 'element.sheet' never becomes a stale second copy.
+            existing.Contents = reparsed.ModernContents ?? new StyleSheetContents();
+            element.AssociatedStyleSheet = existing.Contents;
+        }
+
+        foreach (var stale in _authorSheets.Where(s => s.Owner != null && !inDocument.Contains(s.Owner)).ToList())
+        {
+            stale.Owner!.AssociatedStyleSheet = null;
+            RemoveAuthorSheet(stale);
+        }
+    }
+
+    private void RemoveAuthorSheet(AuthorSheet sheet)
+    {
+        _authorSheets.Remove(sheet);
+        _stylesheets.Remove(sheet.Legacy);
+    }
+
+    private static Stylesheet? ParseStyleElement(string? cssText)
+    {
+        if (string.IsNullOrWhiteSpace(cssText)) return null;
+        try
+        {
+            return new CssParser().Parse(cssText);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>Rebuilds the document's @counter-style registry. The rules are global
@@ -60,7 +212,7 @@ public class StyleComputer
 
         var rules = new List<StyleRuleCounterStyle>();
         if (_uaSheet != null) CollectCounterStyles(_uaSheet.ChildRules, rules);
-        foreach (var sheet in _authorSheets)
+        foreach (var sheet in EffectiveAuthorSheets(document))
             CollectCounterStyles(sheet.ChildRules, rules);
 
         foreach (var rule in rules)
@@ -90,11 +242,14 @@ public class StyleComputer
     /// does not, so an animation always has a clean underlying value to blend
     /// from.
     /// </summary>
-    public List<StyleRuleKeyframes> CollectKeyframeRules()
+    public List<StyleRuleKeyframes> CollectKeyframeRules(Document? document = null)
     {
         var rules = new List<StyleRuleKeyframes>();
         if (_uaSheet != null) CollectKeyframes(_uaSheet.ChildRules, rules);
-        foreach (var sheet in _authorSheets)
+        // With the document in hand the adopted sheets are included: a @keyframes a page
+        // installed through a constructed sheet animates just like one in a <style>.
+        var sheets = document != null ? EffectiveAuthorSheets(document) : AuthorSheets;
+        foreach (var sheet in sheets)
             CollectKeyframes(sheet.ChildRules, rules);
         return rules;
     }

@@ -333,6 +333,10 @@ public class LayoutEngine
         style.Top = style.Right = style.Bottom = style.Left = AutoLength.Instance;
         style.Float = FloatType.None;
         style.Clear = ClearType.None;
+        // The flow-root marker belongs to the same property as 'display' and has to be
+        // reset with it, or a generated box inside a flow-root parent keeps the parent's
+        // formatting context.
+        style.DisplayIsFlowRoot = false;
         style.ZIndex = null;
         style.Opacity = 1f;
         style.Overflow = style.OverflowX = style.OverflowY = OverflowType.Visible;
@@ -446,25 +450,18 @@ public class LayoutEngine
         // Build a ComputedStyle by cloning the parent and applying ::before/::after props.
         var pseudoStyle = parentStyle.Clone();
 
-        // Apply display (default for ::before/::after is 'inline').
-        string displayStr = "inline";
-        if (props.TryGetValue("display", out var d))
-            displayStr = d;
-        pseudoStyle.Display = displayStr.ToLowerInvariant() switch
-        {
-            "block" => DisplayType.Block,
-            "flex" => DisplayType.Flex,
-            "inline-flex" => DisplayType.InlineFlex,
-            "grid" => DisplayType.Grid,
-            "inline-grid" => DisplayType.InlineGrid,
-            "table" => DisplayType.Table,
-            "inline-block" => DisplayType.InlineBlock,
-            "list-item" => DisplayType.ListItem,
-            _ => DisplayType.Inline,
-        };
-
         // The parent's used box properties are not inherited by the generated box.
         ResetNonInheritedBoxProperties(pseudoStyle);
+
+        // Apply display (the initial value for ::before/::after is 'inline'). A value the
+        // grammar rejects is dropped, which leaves that initial 'inline' — the shared
+        // 'display' parser is the only keyword list here, as for float and clear.
+        string displayStr = props.TryGetValue("display", out var d) ? d : "inline";
+        if (Acrux.Core.Css.Resolver.CssPropertyApplier.TryParseDisplay(displayStr, out var displayType, out var displayFlowRoot))
+        {
+            pseudoStyle.Display = displayType;
+            pseudoStyle.DisplayIsFlowRoot = displayFlowRoot;
+        }
 
         // Apply the remaining pseudo-element properties.
         foreach (var kv in props)
@@ -592,14 +589,10 @@ public class LayoutEngine
         "relative" => PositionType.Relative, "sticky" => PositionType.Sticky,
         _ => PositionType.Static
     };
-    private static FloatType ParsePseudoFloat(string v) => v.ToLowerInvariant() switch
-    {
-        "left" => FloatType.Left, "right" => FloatType.Right, _ => FloatType.None
-    };
-    private static ClearType ParsePseudoClear(string v) => v.ToLowerInvariant() switch
-    {
-        "left" => ClearType.Left, "right" => ClearType.Right, "both" => ClearType.Both, _ => ClearType.None
-    };
+    private static FloatType ParsePseudoFloat(string v) =>
+        CssFloatKeywords.TryParseFloat(v, out var f) ? f : FloatType.None;
+    private static ClearType ParsePseudoClear(string v) =>
+        CssFloatKeywords.TryParseClear(v, out var c) ? c : ClearType.None;
     private static OverflowType ParsePseudoOverflow(string v) => v.ToLowerInvariant() switch
     {
         "hidden" => OverflowType.Hidden, "scroll" => OverflowType.Scroll, "auto" => OverflowType.Auto, _ => OverflowType.Visible

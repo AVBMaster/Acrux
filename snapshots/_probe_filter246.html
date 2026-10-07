@@ -1,0 +1,67 @@
+<!DOCTYPE html><html><head><style>
+/* Harvest page: computed value of 'filter' for every spelling the grammar takes. Read with
+   getComputedStyle in the reference engine, then written into the record batch. */
+body { margin: 0; }
+div { width: 20px; height: 20px; }
+</style></head><body>
+<div id="f01" style="filter: blur(4px)"></div>
+<div id="f02" style="filter: blur(4pt)"></div>
+<div id="f03" style="filter: blur(0)"></div>
+<div id="f04" style="filter: blur()"></div>
+<div id="f05" style="filter: brightness(2)"></div>
+<div id="f06" style="filter: brightness(200%)"></div>
+<div id="f07" style="filter: contrast(0.5)"></div>
+<div id="f08" style="filter: contrast(50%)"></div>
+<div id="f09" style="filter: drop-shadow(2px 3px)"></div>
+<div id="f10" style="filter: drop-shadow(2px 3px 4px 5px red)"></div>
+<div id="f11" style="filter: drop-shadow(red 2px 3px)"></div>
+<div id="f12" style="filter: grayscale(0.5)"></div>
+<div id="f13" style="filter: hue-rotate(0.5turn)"></div>
+<div id="f14" style="filter: hue-rotate(200grad)"></div>
+<div id="f15" style="filter: hue-rotate(3.14159rad)"></div>
+<div id="f16" style="filter: invert(1)"></div>
+<div id="f17" style="filter: opacity(0.5)"></div>
+<div id="f18" style="filter: sepia(1e-07)"></div>
+<div id="f19" style="filter: saturate(1.23457e+06)"></div>
+<div id="f20" style="filter: blur(-2px)"></div>
+<div id="f21" style="filter: brightness(-1)"></div>
+<div id="f22" style="filter: url(#ff)"></div>
+<div id="f23" style="filter: url(&quot;#ff&quot;)"></div>
+<div id="f24" style="filter: none, blur(2px)"></div>
+<div id="f25" style="filter: blur(2px), brightness(2)"></div>
+<div id="f26" style="filter: progid:DXImageTransform.Microsoft.Blur()"></div>
+<div id="f27" style="filter: blur(2px) blur(3px)"></div>
+<div id="f28" style="filter: drop-shadow(2px 3px 4px 5px)"></div>
+<div id="f29" style="filter: grayscale()"></div>
+<div id="f30" style="filter: invert(200%)"></div>
+<div id="f31" style="filter: opacity(-1)"></div>
+<div id="f32" style="filter: blur(2px) brightness()"></div>
+<div id="f33" style="filter: blur(2PX)"></div>
+<div id="f34" style="filter: BLUR(2px)"></div>
+<div id="f35" style="filter: drop-shadow(2px 3px 4px 5px rgb(1 2 3 / 40%))"></div>
+<div id="f36" style="filter: hue-rotate(45deg) hue-rotate(45deg)"></div>
+<div id="f37" style="filter: saturate(0.5)  ;"></div>
+<div id="f38" style="filter: blur(2px) drop-shadow(1px 2px green) brightness(1.5)"></div>
+<div id="f39" style="filter: contrast(120%) brightness(1.05) grayscale(0.3)"></div>
+<div id="f40" style="filter: url(#a) blur(2px)"></div>
+<div id="b01" style="backdrop-filter: blur(4pt)"></div>
+<div id="b02" style="backdrop-filter: blur(2px), brightness(2)"></div>
+<div id="b03" style="backdrop-filter: drop-shadow(2px 3px)"></div>
+<div id="b04" style="backdrop-filter: none"></div>
+<div id="b05" style="backdrop-filter: invert(200%)"></div>
+<div id="c01" style="filter: blur(2px)"></div>
+<div id="c02" style="filter: brightness(0.000001234)"></div>
+<div id="c03" style="filter: brightness(1000000.2)"></div>
+<div id="c04" style="filter: hue-rotate(-30deg)"></div>
+<div id="c05" style="filter: hue-rotate(390deg)"></div>
+<div id="c06" style="filter: drop-shadow(2px 3px 4px)"></div>
+<div id="c07" style="filter: drop-shadow(2px 3px currentcolor)"></div>
+<div id="c08" style="filter: blur(2px) none"></div>
+<div id="c09" style="filter: saturate(0)"></div>
+<div id="c10" style="filter: opacity(50%)"></div>
+<div id="c11" style="filter: grayscale(120%)"></div>
+<div id="c12" style="filter: blur(1in)"></div>
+<div id="c13" style="filter: blur(50%)"></div>
+<div id="c14" style="filter: brightness(1e3)"></div>
+<div id="c15" style="filter: hue-rotate(100grad)"></div>
+</body></html>

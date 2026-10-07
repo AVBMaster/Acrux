@@ -279,7 +279,48 @@ public class ExclusionSpace
                 var rightEnd = new BfcOffset(offset.LineOffset + availableInlineSize, float.MaxValue);
                 opportunities.Add(new LayoutOpportunity(new BfcRect(rightOff, rightEnd)));
             }
+
+            AddOpportunitiesBelowFloats(offset, availableInlineSize, main, maxClear, opportunities);
         }
         return opportunities;
+    }
+
+    /// <summary>
+    /// Bands that start below the floats cutting the primary opportunity, in ascending
+    /// block order. A box that establishes a new formatting context and is too wide for
+    /// the inline room left beside the floats is pushed below them (CSS 2.1 §9.5.2:
+    /// "if a line box ... would be too narrow, it is reduced to zero width and pushes
+    /// the block down"), and the consumer retries each band until one is wide enough.
+    /// The last band always starts at |maxClear| - the bottom of the lowest float - so
+    /// it is full-width and the ladder can't run out.
+    /// </summary>
+    private void AddOpportunitiesBelowFloats(BfcOffset offset, float availableInlineSize,
+        LayoutOpportunity main, float maxClear, List<LayoutOpportunity> opportunities)
+    {
+        float bandLineStart = main.Rect.LineStartOffset;
+        float bandLineEnd = main.Rect.LineEndOffset;
+        if (bandLineEnd - bandLineStart >= availableInlineSize)
+            return; // Nothing narrows the primary band; there is nothing to step below.
+
+        var blockStarts = new SortedSet<float>();
+        foreach (var e in _exclusions)
+        {
+            float end = e.Rect.BlockEndOffset;
+            if (end > offset.BlockOffset && end <= maxClear)
+                blockStarts.Add(end);
+        }
+
+        foreach (float blockStart in blockStarts)
+        {
+            var band = FindLayoutOpportunity(new BfcOffset(offset.LineOffset, blockStart), availableInlineSize);
+            if (band.Rect.LineEndOffset - band.Rect.LineStartOffset > bandLineEnd - bandLineStart)
+            {
+                opportunities.Add(band);
+                bandLineStart = band.Rect.LineStartOffset;
+                bandLineEnd = band.Rect.LineEndOffset;
+            }
+            if (bandLineStart <= offset.LineOffset && bandLineEnd >= offset.LineOffset + availableInlineSize)
+                break; // A full-width band: every later band is at least as wide.
+        }
     }
 }

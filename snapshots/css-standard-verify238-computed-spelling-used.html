@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<!--
+  b238 — what getComputedStyle PRINTS: the spelling of a computed value, and the
+  used value of a box-sizing property (CSSOM §5.3, CSS Backgrounds 3 §4.1/§4.2,
+  CSS Sizing 4 §7, CSS Overflow 3 §4, CSS UI 4 §3.1, measured Edge 151 / dpr=1).
+
+  Four things were wrong at once.
+
+  §A A two-sided shorthand that repeats itself is folded. Measured across 'gap',
+     'overflow', 'margin-block'/'-inline', 'padding-block'/'-inline',
+     'border-block'/'-inline' and the 'place-*' properties, every pair the engine
+     prints agrees or collapses — 'gap: 4px 4px' reads back '4px', never the
+     repeat. Our serialiser kept both halves.
+
+  §B A colour is printed as rgba()/rgb(), never as a keyword. 'transparent' is
+     'rgba(0, 0, 0, 0)' with the channels preserved; 'currentcolor' is resolved
+     to the inherited colour, so 'text-emphasis-color' and 'column-rule-color'
+     with no declaration print the text colour, not the keyword.
+
+  §C The 'background' shorthand is the whole layer: colour, absolute url, repeat,
+     attachment, position, SIZE (with '/ auto' when it was never written), origin
+     and clip — and a single box keyword sets BOTH origin and clip. The size list
+     collapses to 'auto' when both sides are auto, and a position keyword is a
+     percentage ('left top' is '0% 0%').
+
+  §D getComputedStyle returns the USED value for the properties that depend on
+     the box: 'width'/'height'/'inset' come back in layout units — 1/64 px,
+     truncated, so 33.3px is '33.2969px' — and 'auto' becomes the content box.
+     'transform-origin' percentages multiply against the border box, and only the
+     box size is quantised, not the product. Track sizes ('grid-template-columns')
+     and percentage insets against a containing block are NOT yet in this shape;
+     measured gaps recorded in the round notes.
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>b238 computed value spelling and used values</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 11px/13px Arial, sans-serif; color: #111; background: #fff; }
+  .row { margin-bottom: 1px; }
+  .k { display: inline-block; width: 170px; color: #555; }
+  /* The url is relative on purpose: a reference engine prints the layer with the
+     address resolved against the document, so the shorthand reading shows a
+     file:// address even though the author wrote a bare name. */
+  #b2 { background: #0f0 url(leaf.png) no-repeat left top / 50% 30% padding-box; width: 60px; height: 8px; }
+  #l4 { line-height: normal; width: 60px; background: #eee; }
+</style>
+</head><body>
+<div class="row"><span class="k">p1 gap pair</span><div id="p1" style="display:flex;gap:4px 4px;width:60px;height:8px;background:#eee">p1</div></div>
+<div class="row"><span class="k">p2 overflow pair</span><div id="p2" style="overflow:visible visible;width:60px;height:8px;background:#eee">p2</div></div>
+<div class="row"><span class="k">p3 margin-block</span><div id="p3" style="margin-block:0px 0px;width:60px;height:8px;background:#eee">p3</div></div>
+<div class="row"><span class="k">p4 place-content</span><div id="p4" style="display:flex;place-content:normal normal;width:60px;height:8px;background:#eee">p4</div></div>
+<div class="row"><span class="k">p5 place-self</span><div id="p5" style="display:flex"><span id="p5s" style="place-self:end end">p5</span></div></div>
+<div class="row"><span class="k">p6 border-block</span><div id="p6" style="border-block:2px solid rgb(255,0,0);width:60px;height:8px;background:#eee">p6</div></div>
+<div class="row"><span class="k">c1 transparent bg</span><div id="c1" style="background-color:rgba(255,128,128,.4);width:60px;height:8px">c1</div></div>
+<div class="row"><span class="k">c2 keyword transparent</span><div id="c2" style="background:transparent;color:transparent;width:60px;height:8px">c2</div></div>
+<div class="row"><span class="k">c3 currentcolor prop</span><div id="c3" style="width:60px;height:8px">c3</div></div>
+<div class="row"><span class="k">g1 grid initial</span><div id="g1" style="display:grid;width:60px;height:8px;background:#eee">g1</div></div>
+<div class="row"><span class="k">g2 grid authored</span><div id="g2" style="display:grid;grid-template-columns:20px 40px 1fr;grid-template-rows:5px;width:80px;height:8px;background:#eee">g2</div></div>
+<div class="row"><span class="k">b1 bg initial</span><div id="b1" style="width:60px;height:8px">b1</div></div>
+<div class="row"><span class="k">b2 bg shorthand</span><div id="b2">b2</div></div>
+<div class="row"><span class="k">b3 bg size auto</span><div id="b3" style="background-size:auto auto;width:60px;height:8px">b3</div></div>
+<div class="row"><span class="k">s1 column-rule</span><div id="s1" style="column-rule:3px;width:60px;height:8px;background:#eee">s1</div></div>
+<div class="row"><span class="k">s2 outline initial</span><div id="s2" style="width:60px;height:8px">s2</div></div>
+<div class="row"><span class="k">s3 scroll-margin</span><div id="s3" style="scroll-margin:4px 5px;scroll-padding:1px;width:60px;height:8px;background:#eee">s3</div></div>
+<div class="row"><span class="k">s4 caret-shape</span><input id="s4" style="caret-shape:auto" value="s4"></div>
+<div class="row"><span class="k">u1 used width</span><div id="u1" style="width:33.3px;height:9.7px;background:#eee">u1</div></div>
+<div class="row"><span class="k">u2 used auto</span><div id="u2w" style="width:220px;padding:10px"><div id="u2" style="background:#eee">u2</div></div></div>
+<div class="row"><span class="k">u3 origin percent</span><div id="u3" style="width:445px;height:20px;transform-origin:50% 50%;background:#eee">u3</div></div>
+<div class="row"><span class="k">u4 origin keyword</span><div id="u4" style="width:445px;height:20px;transform-origin:left center;background:#eee">u4</div></div>
+<div class="row"><span class="k">l1 line-height</span><div id="l1" style="font-size:11px;line-height:1.2;width:60px;background:#eee">l1</div></div>
+<div class="row"><span class="k">l2 line-height em</span><div id="l2" style="font-size:11px;line-height:2em;width:60px;background:#eee">l2</div></div>
+<div class="row"><span class="k">l3 line-height zero</span><div id="l3" style="font-size:11px;line-height:0;width:60px;background:#eee">l3</div></div>
+<div class="row"><span class="k">l4 line-height normal</span><div id="l4">l4</div></div>
+<div class="row"><span class="k">k1 fr tracks</span><div id="k1" style="display:grid;width:101px;grid-template-columns:1fr 1fr 1fr;background:#eee"><span>a</span><span>b</span><span>c</span></div></div>
+<div class="row"><span class="k">k2 named tracks</span><div id="k2" style="display:grid;width:100px;grid-template-columns:[a] 1fr [b] 1fr [c];background:#eee"><span>d</span><span>e</span></div></div>
+<div class="row"><span class="k">k3 repeat tracks</span><div id="k3" style="display:grid;width:120px;grid-template-columns:repeat(3, 20px);background:#eee"><span>f</span><span>g</span><span>h</span></div></div>
+<div class="row"><span class="k">k4 named areas</span><div id="k4" style="display:grid;width:100px;height:60px;grid-template-areas:'a' 'b';background:#eee"><span>i</span><span>j</span></div></div>
+<div class="row"><span class="k">k5 gap tracks</span><div id="k5" style="display:grid;width:100px;height:60px;grid-template-columns:1fr 2fr;gap:10px;background:#eee"><span>k</span><span>l</span></div></div>
+<div class="row"><span class="k">k6 not a grid</span><div id="k6" style="display:block;width:100px;grid-template-columns:20px 40px;background:#eee">k6</div></div>
+<div class="row"><span class="k">k7 text only grid</span><div id="k7" style="display:grid;width:100px;height:60px;background:#eee">k7</div></div>
+<h3 style="margin:6px 0 2px;font-size:12px">report</h3>
+<div id="report"></div>
+<script>
+(() => {
+const out = [];
+const ok = (name, got, want) => {
+  out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${got === want}`);
+};
+const cs = id => getComputedStyle(document.getElementById(id));
+const g = (id, prop) => cs(id).getPropertyValue(prop);
+
+// §A a two-sided shorthand collapses when both halves agree.
+ok('a1gap', g('p1', 'gap'), "4px");
+ok('a2gapRow', g('p1', 'row-gap'), '4px');
+ok('a3overflow', g('p2', 'overflow'), "visible");
+ok('a4marginBlock', g('p3', 'margin-block'), "0px");
+ok('a5marginBlockEnd', g('p3', 'margin-block-end'), '0px');
+ok('a6placeContent', g('p4', 'place-content'), "normal");
+ok('a7placeSelf', g('p5s', 'place-self'), "end");
+ok('a8alignSelf', g('p5s', 'align-self'), "end");
+ok('a9justifySelf', g('p5s', 'justify-self'), "end");
+ok('a10borderBlock', g('p6', 'border-block'), "2px solid rgb(255, 0, 0)");
+ok('a11borderBlockStart', g('p6', 'border-block-start'), "2px solid rgb(255, 0, 0)");
+
+// §B colour spelling.
+ok('b1rgbaKept', g('c1', 'background-color'), "rgba(255, 128, 128, 0.4)");
+ok('b2transparentBg', g('c2', 'background-color'), "rgba(0, 0, 0, 0)");
+ok('b3transparentColor', g('c2', 'color'), "rgba(0, 0, 0, 0)");
+ok('b4caretColor', g('c2', 'caret-color'), "rgba(0, 0, 0, 0)");
+ok('b5emphasisDefault', g('c3', 'text-emphasis-color'), "rgb(17, 17, 17)");
+ok('b6columnRuleColor', g('c3', 'column-rule-color'), "rgb(17, 17, 17)");
+ok('b7outlineColorDefault', g('c3', 'outline-color'), "rgb(17, 17, 17)");
+
+// §C the grid and background shorthands.
+ok('c1columnsInitial', g('g1', 'grid-template-columns'), "60px");
+ok('c2rowsInitial', g('g1', 'grid-template-rows'), "13px");
+ok('c3areasInitial', g('g1', 'grid-template-areas'), "none");
+ok('c4templateInitial', g('g1', 'grid-template'), "13px / 60px");
+ok('c5columnsAuthored', g('g2', 'grid-template-columns'), "20px 40px 20px");
+ok('c6templateAuthored', g('g2', 'grid-template'), "5px / 20px 40px 1fr");
+ok('c7bgInitial', g('b1', 'background'), "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box");
+ok('c8bgInitialSize', g('b1', 'background-size'), "auto");
+ok('c9bgShorthand', g('b2', 'background'), 'rgb(0, 255, 0) url("file:///home/master/Acrux/snapshots/leaf.png") no-repeat scroll 0% 0% / 50% 30% padding-box padding-box');
+ok('c10bgSize', g('b2', 'background-size'), "50% 30%");
+ok('c11bgPosition', g('b2', 'background-position'), "0% 0%");
+ok('c12bgOrigin', g('b2', 'background-origin'), "padding-box");
+ok('c13bgClip', g('b2', 'background-clip'), "padding-box");
+ok('c14bgSizeAutoCollapse', g('b3', 'background-size'), "auto");
+
+// §D spelling of the remaining shorthands and initial values.
+ok('d1columnRule', g('s1', 'column-rule'), "3px rgb(17, 17, 17)");
+ok('d2outlineInitial', g('s2', 'outline'), "rgb(17, 17, 17) none 3px");
+ok('d3scrollMargin', g('s3', 'scroll-margin'), "4px 5px");
+ok('d4scrollMarginTop', g('s3', 'scroll-margin-top'), "4px");
+ok('d5scrollMarginLeft', g('s3', 'scroll-margin-left'), "5px");
+ok('d6scrollPadding', g('s3', 'scroll-padding'), "1px");
+ok('d7caretShape', g('s4', 'caret-shape'), "auto");
+ok('d8caretShapeInitial', g('c3', 'caret-shape'), "auto");
+
+// §E used values.
+const u1 = document.getElementById('u1');
+ok('e1usedWidth', g('u1', 'width'), "33.2969px");
+ok('e2usedHeight', g('u1', 'height'), "9.6875px");
+const u2 = document.getElementById('u2');
+ok('e3autoWidth', g('u2', 'width'), '220px');
+ok('e4autoMatchesClient', cs('u2').getPropertyValue('width') === u2.clientWidth + 'px', true);
+const u3 = document.getElementById('u3');
+ok('e5originPercent', g('u3', 'transform-origin'), "222.5px 10px");
+ok('e6originKeyword', g('u4', 'transform-origin'), "0px 10px");
+ok('e7originZDropped', g('u3', 'transform-origin').split(' ').length, 2);
+
+// §F line-height is a length once it is not 'normal'.
+ok('f1lhNumber', g('l1', 'line-height'), "13.2px");
+ok('f2lhEm', g('l2', 'line-height'), "22px");
+ok('f3lhZero', g('l3', 'line-height'), "0px");
+ok('f4lhNormal', g('l4', 'line-height'), "normal");
+
+// §G a track list reports the sizes layout gave the tracks, with the author's line
+// names and area strings kept between them.
+ok('g1frColumns', g('k1', 'grid-template-columns'), '33.6562px 33.6719px 33.6719px');
+ok('g2frTemplate', g('k1', 'grid-template'), '13px / 1fr 1fr 1fr');
+ok('g3namedColumns', g('k2', 'grid-template-columns'), '[a] 50px [b] 50px [c]');
+ok('g4namedTemplate', g('k2', 'grid-template'), '13px / [a] 1fr [b] 1fr [c]');
+ok('g5repeatColumns', g('k3', 'grid-template-columns'), '20px 20px 20px');
+ok('g6repeatTemplate', g('k3', 'grid-template'), '13px / repeat(3, 20px)');
+ok('g7areasRows', g('k4', 'grid-template-rows'), '30px 30px');
+ok('g8areasTemplate', g('k4', 'grid-template'), '"a" 30px "b" 30px / 100px');
+ok('g9areasLonghand', g('k4', 'grid-template-areas'), '"a" "b"');
+ok('g10gapColumns', g('k5', 'grid-template-columns'), '30px 60px');
+ok('g11gapRows', g('k5', 'grid-template-rows'), '60px');
+ok('g12notGrid', g('k6', 'grid-template-columns'), '20px 40px');
+ok('g13notGridTemplate', g('k6', 'grid-template'), 'none / 20px 40px');
+ok('g14textOnlyColumns', g('k7', 'grid-template-columns'), '100px');
+ok('g15textOnlyRows', g('k7', 'grid-template-rows'), '60px');
+
+const rep = document.getElementById('report');
+rep.innerHTML = '';
+for (const line of out) { const d = document.createElement('div'); d.textContent = line; rep.appendChild(d); }
+})();
+</script>
+</body></html>

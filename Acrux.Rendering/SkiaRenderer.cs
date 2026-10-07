@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Reflection;
 using SkiaSharp;
 using Acrux.Core.Dom;
 using Acrux.Core.Performance;
@@ -55,6 +56,13 @@ public class SkiaRenderer : IDisposable
     private IntPtr _glDummyWindow;
     private IntPtr _glDC;
     private IntPtr _glRC;
+
+    // EGL state (Linux)
+    private IntPtr _eglDisplay = IntPtr.Zero;
+    private IntPtr _eglConfig = IntPtr.Zero;
+    private IntPtr _eglContext = IntPtr.Zero;
+    private IntPtr _eglSurface = IntPtr.Zero;
+    private GRGlInterface? _glInterface;
 
     // FPS counter
     private long _lastFrameTick = Environment.TickCount64;
@@ -207,15 +215,23 @@ public class SkiaRenderer : IDisposable
         if (_useGpu) return true;
         try
         {
+            bool enabled;
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                return TryEnableGpuWindows();
+                enabled = TryEnableGpuWindows();
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                return TryEnableGpuLinux();
+                enabled = TryEnableGpuLinux();
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                return TryEnableGpuMac();
+                enabled = TryEnableGpuMac();
+            else
+            {
+                Console.WriteLine("[GPU] No GPU support for this platform");
+                return false;
+            }
 
-            Console.WriteLine("[GPU] No GPU support for this platform");
-            return false;
+            // The render surface belongs to the GL context, so build it now that one is
+            // current — otherwise a re-enable would keep drawing into the CPU bitmap.
+            if (enabled) RecreateSurface();
+            return enabled;
         }
         catch (Exception ex)
         {
@@ -305,8 +321,118 @@ public class SkiaRenderer : IDisposable
 
     private bool TryEnableGpuLinux()
     {
-        Console.WriteLine("[GPU] GPU acceleration on Linux not yet implemented, using CPU");
+        // Offscreen GL context: the renderer always reads the GPU surface back into a
+        // BGRA buffer for the shell blit, so a 1x1 EGL pbuffer is enough — no X window
+        // is needed, so this works on X11 and Wayland alike and in headless hosts.
+        if (_eglHandle == IntPtr.Zero)
+        {
+            Console.WriteLine("[GPU] libEGL not available on this system, using CPU");
+            return false;
+        }
+
+        _eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+        if (_eglDisplay == IntPtr.Zero)
+        {
+            Console.WriteLine("[GPU] eglGetDisplay failed, using CPU");
+            return false;
+        }
+        if (!eglInitialize(_eglDisplay, out int major, out int minor))
+        {
+            Console.WriteLine($"[GPU] eglInitialize failed (err 0x{(long)eglGetError():X}), using CPU");
+            _eglDisplay = IntPtr.Zero;
+            return false;
+        }
+        Console.WriteLine($"[GPU] EGL {major}.{minor} display initialised");
+
+        // Skia's own native GL interface is GLX-based and finds no context under EGL, so
+        // assemble it ourselves from eglGetProcAddress. Desktop GL first, then GLES: some
+        // drivers (ARM boards, Wayland-only stacks) expose ES configs only.
+        if (TryCreateEglGlContext(EGL_OPENGL_API, GRGlInterface.CreateOpenGl)
+            || TryCreateEglGlContext(EGL_OPENGL_ES_API, GRGlInterface.CreateGles))
+        {
+            _useGpu = true;
+            Console.WriteLine("[GPU] OpenGL GPU acceleration enabled (Linux/EGL)");
+            return true;
+        }
+
+        Console.WriteLine("[GPU] No usable EGL GL context, using CPU");
+        CleanupGlContext();
         return false;
+    }
+
+    private bool TryCreateEglGlContext(int api, Func<GRGlGetProcedureAddressDelegate, GRGlInterface?> assembleInterface)
+    {
+        // The API must be bound before the config query: eglChooseConfig filters by the
+        // currently bound client API. EGL_RENDERABLE_TYPE is left out because Mesa answers
+        // it with EGL_BAD_ATTRIBUTE on several drivers.
+        if (!eglBindAPI(api)) return false;
+
+        int[] configAttribs =
+        {
+            EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+            EGL_RED_SIZE, 8,
+            EGL_GREEN_SIZE, 8,
+            EGL_BLUE_SIZE, 8,
+            EGL_ALPHA_SIZE, 8,
+            EGL_DEPTH_SIZE, 16,
+            EGL_STENCIL_SIZE, 8,
+            EGL_NONE
+        };
+        if (!eglChooseConfig(_eglDisplay, configAttribs, out IntPtr config, 1, out int numConfig)
+            || config == IntPtr.Zero || numConfig == 0)
+        {
+            Console.WriteLine($"[GPU] eglChooseConfig found no pbuffer config for api 0x{api:X} (err 0x{(long)eglGetError():X})");
+            return false;
+        }
+
+        IntPtr context = eglCreateContext(_eglDisplay, config, IntPtr.Zero, new[] { EGL_NONE });
+        if (context == IntPtr.Zero)
+        {
+            Console.WriteLine($"[GPU] eglCreateContext failed for api 0x{api:X} (err 0x{(long)eglGetError():X})");
+            return false;
+        }
+
+        int[] pbufferAttribs = { EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE };
+        IntPtr surface = eglCreatePbufferSurface(_eglDisplay, config, pbufferAttribs);
+        if (surface == IntPtr.Zero)
+        {
+            Console.WriteLine($"[GPU] eglCreatePbufferSurface failed (err 0x{(long)eglGetError():X})");
+            eglDestroyContext(_eglDisplay, context);
+            return false;
+        }
+
+        if (!eglMakeCurrent(_eglDisplay, surface, surface, context))
+        {
+            Console.WriteLine($"[GPU] eglMakeCurrent failed (err 0x{(long)eglGetError():X})");
+            eglDestroySurface(_eglDisplay, surface);
+            eglDestroyContext(_eglDisplay, context);
+            return false;
+        }
+
+        _eglConfig = config;
+        _eglContext = context;
+        _eglSurface = surface;
+
+        _glInterface = assembleInterface(GetGlProcAddress);
+        if (_glInterface == null || !_glInterface.Validate())
+        {
+            Console.WriteLine($"[GPU] GL interface assembly failed for api 0x{api:X}");
+            _glInterface?.Dispose();
+            _glInterface = null;
+            return false;
+        }
+
+        // The context refs the interface, but keep it alive for the lifetime of the
+        // GRContext rather than relying on SkiaSharp's ownership here.
+        _grContext = GRContext.CreateGl(_glInterface);
+        if (_grContext == null)
+        {
+            Console.WriteLine($"[GPU] GRContext.CreateGl returned null for api 0x{api:X}");
+            _glInterface.Dispose();
+            _glInterface = null;
+            return false;
+        }
+        return true;
     }
 
     private bool TryEnableGpuMac()
@@ -390,7 +516,15 @@ public class SkiaRenderer : IDisposable
         int ph = (int)(height * _dpiScale);
         var info = new SKImageInfo(pw, ph, SKColorType.Bgra8888, SKAlphaType.Premul);
         _gpuSurface = SKSurface.Create(_grContext!, false, info);
-        _canvas = _gpuSurface!.Canvas;
+        if (_gpuSurface == null)
+        {
+            // No current GL context on this thread (or a lost device): keep drawing on
+            // the CPU bitmap instead of taking the whole renderer down.
+            Console.WriteLine("[GPU] GPU surface creation failed, falling back to CPU");
+            CreateCpuBitmap(width, height);
+            return;
+        }
+        _canvas = _gpuSurface.Canvas;
         _canvas.Scale(_dpiScale, _dpiScale);
     }
 
@@ -405,6 +539,12 @@ public class SkiaRenderer : IDisposable
 
     private void MakeGlCurrent()
     {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            if (_eglDisplay != IntPtr.Zero && _eglContext != IntPtr.Zero && _eglSurface != IntPtr.Zero)
+                eglMakeCurrent(_eglDisplay, _eglSurface, _eglSurface, _eglContext);
+            return;
+        }
         if (_glRC != IntPtr.Zero && _glDC != IntPtr.Zero)
             wglMakeCurrent(_glDC, _glRC);
     }
@@ -926,10 +1066,114 @@ public class SkiaRenderer : IDisposable
     [DllImport("kernel32.dll", CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Unicode)]
     private static extern IntPtr GetModuleHandleW(string? lpModuleName);
 
+    // ── EGL P/Invoke (Linux) ──
+
+    // .NET probes "EGL" as EGL.so / libEGL.so only, while Mesa installs just libEGL.so.1,
+    // so the SONAME is resolved explicitly and handed to the runtime by the resolver below.
+    private const string EglLibraryName = "EGL";
+    private static readonly IntPtr _eglHandle = OpenNativeLibrary("libEGL.so.1", "libEGL.so", "EGL");
+    private static IntPtr _glHandle;
+
+    static SkiaRenderer()
+    {
+        NativeLibrary.SetDllImportResolver(typeof(SkiaRenderer).Assembly, ResolveNativeLibrary);
+    }
+
+    private static IntPtr ResolveNativeLibrary(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+        => libraryName == EglLibraryName ? _eglHandle : IntPtr.Zero;
+
+    private static IntPtr OpenNativeLibrary(params string[] names)
+    {
+        foreach (var name in names)
+            if (NativeLibrary.TryLoad(name, out var handle)) return handle;
+        return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// GL entry point lookup for Skia's GRGlInterface: EGL returns modern and extension
+    /// functions, GL 1.x ones only live in libGL, and small non-zero values are EGL's
+    /// "not supported" markers rather than addresses.
+    /// </summary>
+    private static IntPtr GetGlProcAddress(string name)
+    {
+        var addr = eglGetProcAddress(name);
+        if ((long)addr > 0x7FFF) return addr;
+
+        if (_glHandle == IntPtr.Zero && !NativeLibrary.TryLoad("libGL.so.1", out _glHandle))
+            NativeLibrary.TryLoad("libGL.so", out _glHandle);
+        return _glHandle != IntPtr.Zero
+            && NativeLibrary.TryGetExport(_glHandle, name, out var sym) ? sym : IntPtr.Zero;
+    }
+
+    private const nint EGL_DEFAULT_DISPLAY = 0;
+    private const int EGL_NONE = 0x3038;
+    private const int EGL_SURFACE_TYPE = 0x3033;
+    private const int EGL_PBUFFER_BIT = 0x0001;
+    private const int EGL_OPENGL_API = 0x30A2;
+    private const int EGL_OPENGL_ES_API = 0x30A0;
+    private const int EGL_RED_SIZE = 0x3024;
+    private const int EGL_GREEN_SIZE = 0x3023;
+    private const int EGL_BLUE_SIZE = 0x3022;
+    private const int EGL_ALPHA_SIZE = 0x3021;
+    private const int EGL_DEPTH_SIZE = 0x3025;
+    private const int EGL_STENCIL_SIZE = 0x3026;
+    private const int EGL_WIDTH = 0x3057;
+    private const int EGL_HEIGHT = 0x3056;
+
+    [DllImport(EglLibraryName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr eglGetDisplay(IntPtr nativeDisplayType);
+
+    // EGLBoolean is an 8-bit unsigned char, not a 4-byte int.
+    [DllImport(EglLibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static extern bool eglInitialize(IntPtr dpy, out int major, out int minor);
+
+    [DllImport(EglLibraryName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr eglGetError();
+
+    [DllImport(EglLibraryName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr eglGetProcAddress([MarshalAs(UnmanagedType.LPUTF8Str)] string procName);
+
+    [DllImport(EglLibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static extern bool eglBindAPI(int api);
+
+    [DllImport(EglLibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static extern bool eglChooseConfig(IntPtr dpy, int[] attribList, out IntPtr config,
+        int configSize, out int numConfig);
+
+    [DllImport(EglLibraryName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr eglCreateContext(IntPtr dpy, IntPtr config, IntPtr shareCtx, int[] attribList);
+
+    [DllImport(EglLibraryName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr eglCreatePbufferSurface(IntPtr dpy, IntPtr config, int[] attribList);
+
+    [DllImport(EglLibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static extern bool eglMakeCurrent(IntPtr dpy, IntPtr draw, IntPtr read, IntPtr ctx);
+
+    [DllImport(EglLibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static extern bool eglDestroySurface(IntPtr dpy, IntPtr surface);
+
+    [DllImport(EglLibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static extern bool eglDestroyContext(IntPtr dpy, IntPtr ctx);
+
+    [DllImport(EglLibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static extern bool eglTerminate(IntPtr dpy);
+
     // ── Cleanup helpers ──
 
     private void CleanupGlContext()
     {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            CleanupEglContext();
+            return;
+        }
         if (_glRC != IntPtr.Zero)
         {
             wglMakeCurrent(IntPtr.Zero, IntPtr.Zero);
@@ -937,6 +1181,27 @@ public class SkiaRenderer : IDisposable
             _glRC = IntPtr.Zero;
         }
         CleanupGlWindow();
+    }
+
+    private void CleanupEglContext()
+    {
+        // The GRContext references the interface, so it is disposed by the caller first.
+        _glInterface?.Dispose();
+        _glInterface = null;
+
+        if (_eglDisplay != IntPtr.Zero && _eglContext != IntPtr.Zero)
+            eglMakeCurrent(_eglDisplay, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        if (_eglDisplay != IntPtr.Zero && _eglSurface != IntPtr.Zero)
+            eglDestroySurface(_eglDisplay, _eglSurface);
+        if (_eglDisplay != IntPtr.Zero && _eglContext != IntPtr.Zero)
+            eglDestroyContext(_eglDisplay, _eglContext);
+        if (_eglDisplay != IntPtr.Zero)
+            eglTerminate(_eglDisplay);
+
+        _eglSurface = IntPtr.Zero;
+        _eglContext = IntPtr.Zero;
+        _eglConfig = IntPtr.Zero;
+        _eglDisplay = IntPtr.Zero;
     }
 
     private void CleanupGlWindow()

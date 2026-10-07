@@ -14,26 +14,29 @@ public static class FilterRenderer
     private const int MaxChainCacheSize = 64;
 
     public static SKImageFilter? ParseAndChain(string? filterString) =>
-        ParseAndChain(filterString, out _);
+        ParseAndChain(filterString, default, out _);
 
-    public static SKImageFilter? ParseAndChain(string? filterString, out float inflationPx)
+    /// <param name="currentColor">The element's used color: a <c>drop-shadow()</c> written
+    /// without a colour takes it rather than black (CSS Filters 1 §29.1, measured).</param>
+    public static SKImageFilter? ParseAndChain(string? filterString, SKColor currentColor, out float inflationPx)
     {
+        inflationPx = 0f;
         if (string.IsNullOrWhiteSpace(filterString) || filterString == "none")
-        {
-            inflationPx = 0f;
             return null;
-        }
+
+        // The cache key carries the colour because two elements sharing 'drop-shadow(2px 2px)'
+        // do not share a filter once their colors differ.
+        var key = $"{filterString}\u0000{currentColor.Red},{currentColor.Green},{currentColor.Blue},{currentColor.Alpha}";
 
         lock (_chainCacheLock)
         {
-            if (_chainCache.TryGetValue(filterString, out var hit))
+            if (_chainCache.TryGetValue(key, out var hit))
             {
                 inflationPx = hit.Inflation;
                 return hit.Filter;
             }
         }
 
-        float inflation = 0f;
         SKImageFilter? result = null;
         bool invalid = false;
 
@@ -43,10 +46,10 @@ public static class FilterRenderer
         {
             foreach (var filter in filters)
             {
-                var f = CreateFilter(filter);
+                var f = CreateFilter(filter, currentColor);
                 if (f == null) { invalid = true; break; }
 
-                inflation += EntryInflation(filter);
+                inflationPx += EntryInflation(filter);
 
                 // CreateCompose(outer, inner) evaluates inner first, so the next function in
                 // the list has to become the outer one. Each stage renders through an 8-bit
@@ -55,14 +58,13 @@ public static class FilterRenderer
             }
         }
 
-        if (invalid) { result = null; inflation = 0f; }
+        if (invalid) { result = null; inflationPx = 0f; }
 
         lock (_chainCacheLock)
         {
             if (_chainCache.Count >= MaxChainCacheSize) _chainCache.Clear();
-            _chainCache[filterString] = (result, inflation);
+            _chainCache[key] = (result, inflationPx);
         }
-        inflationPx = inflation;
         return result;
     }
 
@@ -78,15 +80,16 @@ public static class FilterRenderer
             }
             case "drop-shadow":
             {
-                // Re-parse the tokens the same way CreateDropShadow does: dx dy [blur] color.
-                var tokens = new List<string>();
-                foreach (var a in entry.Args)
-                    tokens.AddRange(a.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+                // Re-read the tokens the same way CreateDropShadow does, so the two cannot
+                // disagree about which length is the blur radius.
                 float dx = 0, dy = 0, blur = 0;
-                int idx = 0;
-                if (tokens.Count > idx) { float.TryParse(tokens[idx].Replace("px", "").Trim(), out dx); idx++; }
-                if (tokens.Count > idx) { float.TryParse(tokens[idx].Replace("px", "").Trim(), out dy); idx++; }
-                if (tokens.Count > idx && float.TryParse(tokens[idx].Replace("px", "").Trim(), out var b)) { blur = b; }
+                var lengths = DropShadowTokens(entry.Args)
+                    .Where(t => !Acrux.Core.Css.ColorParser.IsColorToken(t))
+                    .Select(t => TryFilterLength(t, out var v) ? v : float.NaN)
+                    .ToList();
+                if (lengths.Count < 2) return 0f;
+                dx = lengths[0]; dy = lengths[1];
+                if (lengths.Count > 2 && !float.IsNaN(lengths[2])) blur = lengths[2];
                 return blur * 3f + Math.Max(Math.Abs(dx), Math.Abs(dy));
             }
             default:
@@ -159,7 +162,7 @@ public static class FilterRenderer
         return args.Where(s => !string.IsNullOrEmpty(s)).ToArray();
     }
 
-    private static SKImageFilter? CreateFilter(FilterEntry entry)
+    private static SKImageFilter? CreateFilter(FilterEntry entry, SKColor currentColor)
     {
         return entry.Name switch
         {
@@ -172,13 +175,16 @@ public static class FilterRenderer
             "invert" => CreateInvert(entry.Args),
             "hue-rotate" => CreateHueRotate(entry.Args),
             "opacity" => CreateOpacity(entry.Args),
-            "drop-shadow" => CreateDropShadow(entry.Args),
+            "drop-shadow" => CreateDropShadow(entry.Args, currentColor),
             _ => null
         };
     }
 
     /// <summary>CSS Filters 1: effect amounts accept a &lt;number&gt; (0..1) or a
-    /// &lt;percentage&gt;; the unitless form is the fraction itself, not a percent.</summary>
+    /// &lt;percentage&gt;; the unitless form is the fraction itself, not a percent. A negative
+    /// amount is outside the value range, so it rejects the function — and with it the whole
+    /// list — rather than clamping to zero (measured: 'grayscale(-1)', 'opacity(-1)',
+    /// 'contrast(-2)' and 'saturate(-1)' all compute as 'none' and paint nothing).</summary>
     internal static bool TryFilterAmount(string? value, out float amount)
     {
         amount = 0;
@@ -193,7 +199,7 @@ public static class FilterRenderer
             return false;
         if (isPercent)
             amount /= 100f;
-        return true;
+        return amount >= 0f;
     }
 
     private static SKImageFilter? CreateBlur(string[] args)
@@ -226,17 +232,12 @@ public static class FilterRenderer
         float amount = defaultAmount;
         if (args.Length >= 1)
         {
-            var valStr = args[0].Trim();
-            bool isPercent = valStr.EndsWith("%");
-            valStr = valStr.Replace("%", "").Trim();
-            if (!float.TryParse(valStr, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out amount))
+            // The argument is a fraction or a percentage of one, and the matrices below are
+            // built in the percent space — hence the ×100 that the shared amount reader does
+            // not do.
+            if (!TryFilterAmount(args[0], out var fraction))
                 return null;
-
-            // CSS: brightness(2) = 200% brightness, brightness(50%) = 50% brightness
-            // If no % sign, treat as multiplier (e.g., 2 → 200%)
-            if (!isPercent)
-                amount *= 100f;
+            amount = fraction * 100f;
         }
 
         var matrix = matrixFunc(amount);
@@ -413,41 +414,69 @@ public static class FilterRenderer
         return SKImageFilter.CreateColorFilter(colorMatrix);
     }
 
-    private static SKImageFilter? CreateDropShadow(string[] args)
+    private static SKImageFilter? CreateDropShadow(string[] args, SKColor currentColor)
     {
-        float offsetX = 0, offsetY = 0, blur = 0;
-        SKColor color = SKColors.Black;
-
         // Split all args by spaces (drop-shadow uses space-separated values)
-        var tokens = new List<string>();
-        foreach (var a in args)
-        {
-            var parts = a.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            tokens.AddRange(parts);
-        }
+        var tokens = DropShadowTokens(args);
 
         // drop-shadow() requires at least the two offsets.
         if (tokens.Count < 2) return null;
-        int idx = 0;
-        if (tokens.Count > idx) float.TryParse(tokens[idx].Replace("px", "").Trim(), out offsetX); idx++;
-        if (tokens.Count > idx) float.TryParse(tokens[idx].Replace("px", "").Trim(), out offsetY); idx++;
-        if (tokens.Count > idx)
+
+        float offsetX = 0, offsetY = 0, blur = 0;
+        SKColor? color = null;
+        var lengths = new List<float>();
+        foreach (var token in tokens)
         {
-            var blurStr = tokens[idx].Replace("px", "").Trim();
-            if (float.TryParse(blurStr, out var b)) { blur = b; idx++; }
-        }
-        if (tokens.Count > idx)
-        {
-            var col = tokens[idx].Trim();
-            // If it looks like a color function, join remaining tokens
-            if (col.StartsWith("rgb") || col.StartsWith('#'))
+            var text = token.Trim();
+            if (Acrux.Core.Css.ColorParser.IsColorToken(text))
             {
-                color = ParseFilterColor(col) ?? SKColors.Black;
+                // A second colour is a parse error for the whole function.
+                if (color != null) return null;
+                color = ParseFilterColor(text);
+                continue;
             }
+            if (!TryFilterLength(text, out var length)) return null;
+            lengths.Add(length);
         }
+        if (lengths.Count < 2 || lengths.Count > 3) return null;
+
+        // Filters 1 §29.1 writes the grammar as <length>{2,3} <color>?, but a colour written
+        // first is accepted by every shipping engine and is what pages author.
+        offsetX = lengths[0];
+        offsetY = lengths[1];
+        if (lengths.Count > 2) blur = lengths[2];
 
         // drop-shadow() takes a blur radius; the Gaussian standard deviation is half of it.
-        return SKImageFilter.CreateDropShadow(offsetX, offsetY, blur / 2f, blur / 2f, color);
+        return SKImageFilter.CreateDropShadow(offsetX, offsetY, blur / 2f, blur / 2f,
+            color ?? currentColor);
+    }
+
+    /// <summary>The whitespace-separated components of a drop-shadow(): <dx> <dy> [<blur>]
+    /// [<color>]. A split on ' ' is not enough — the CSSOM rewrites 'rgb(0,128,0)' to
+    /// 'rgb(0, 128, 0)' before the value reaches the painter, and a bare split cut the colour
+    /// in half, which silently turned every drop-shadow black. Whitespace inside a function is
+    /// part of the argument, so it is only a separator at paren depth 0.</summary>
+    private static List<string> DropShadowTokens(string[] args)
+    {
+        var tokens = new List<string>();
+        foreach (var a in args)
+        {
+            int depth = 0;
+            int start = 0;
+            for (int i = 0; i < a.Length; i++)
+            {
+                char c = a[i];
+                if (c == '(') depth++;
+                else if (c == ')') depth--;
+                else if (c == ' ' && depth == 0)
+                {
+                    if (i > start) tokens.Add(a[start..i]);
+                    start = i + 1;
+                }
+            }
+            if (start < a.Length) tokens.Add(a[start..]);
+        }
+        return tokens;
     }
 
     private static SKColor? ParseFilterColor(string s)
@@ -471,7 +500,12 @@ public static class FilterRenderer
             }
             catch { }
         }
-        return null;
+        // Everything else — a named colour, hsl(), the space-separated rgb() grammar, a
+        // color-mix() — is the core parser's job. Reaching here with a token it does not
+        // recognise as a colour means there is no colour to read.
+        return Acrux.Core.Css.ColorParser.IsColorToken(s)
+            ? Acrux.Core.Css.ColorParser.Parse(s)
+            : null;
     }
 
     private class FilterEntry

@@ -245,8 +245,11 @@ public sealed class BackgroundImageGeometry
         // geometry for mask-clip: no-clip, so avoid clipping.
         if (fillLayer.Clip != FillBox.NoClip)
         {
-            UnsnappedDestRect = Intersect(UnsnappedDestRect, paintRect);
-            SnappedDestRect = Intersect(SnappedDestRect, paintRect);
+            // The bound has to be the clip box rather than the rect that came in, or the
+            // border-box widening above would be intersected straight back away again.
+            SKRect bound = ClipBoxRect(fillLayer, paintContext, paintRect);
+            UnsnappedDestRect = Intersect(UnsnappedDestRect, bound);
+            SnappedDestRect = Intersect(SnappedDestRect, bound);
             HasClippedToPaintRect = true;
         }
         // Re-snap the dest rect as we may have adjusted it with unsnapped values.
@@ -307,54 +310,31 @@ public sealed class BackgroundImageGeometry
     private SnappedAndUnsnappedOutsets ComputeDestRectAdjustments(FillLayer fillLayer, BoxBackgroundPaintContext paintContext,
         SKRect unsnappedPositioningArea, bool disallowBorderDerivedAdjustment)
     {
-        SnappedAndUnsnappedOutsets destAdjust;
-        switch (paintContext.EffectiveClip(fillLayer))
+        // The outsets the destination rect is contracted by, which is the clip box counted from
+        // the rect the painters hand in — and that rect is the PADDING box (CSS Backgrounds 3
+        // §4.1.1). So the default 'border-box' clip does not contract anything: it reaches OUT
+        // over the border, which is what shows a background through a transparent one. Reading
+        // 'border-box' as a contraction instead pulled the painting area in by the border on top
+        // of the inset the caller had already made, and a repeating background stopped one
+        // border-width short of every edge (measured: a 224px box with a 2px border and 30px
+        // tiles painted x 4-219 where the reference engine paints x 2-221).
+        var border = paintContext.BorderOutsets;
+        return paintContext.EffectiveClip(fillLayer) switch
         {
-            case FillBox.NoClip:
-                destAdjust = SnappedAndUnsnappedOutsets.From(VisualOverflowOutsets());
-                break;
-            case FillBox.FillBox:
-            case FillBox.Content:
-                destAdjust = SnappedAndUnsnappedOutsets.From(paintContext.PaddingOutsets);
-                if (!destAdjust.Unsnapped.IsZero)
+            // 'no-clip' is a mask saying its painting area is not the box at all; there is no
+            // visual overflow tracking here, so the box is left exactly as it came in.
+            FillBox.NoClip => default,
+            FillBox.Border => disallowBorderDerivedAdjustment
+                ? SnappedAndUnsnappedOutsets.From(-border)
+                : new SnappedAndUnsnappedOutsets
                 {
-                    destAdjust.Unsnapped += paintContext.BorderOutsets;
-                    destAdjust.Snapped = destAdjust.Unsnapped;
-                    break;
-                }
-                goto case FillBox.Padding;
-            case FillBox.Padding:
-                destAdjust.Unsnapped = paintContext.BorderOutsets;
-                if (disallowBorderDerivedAdjustment)
-                {
-                    destAdjust.Snapped = destAdjust.Unsnapped;
-                }
-                else
-                {
-                    // Force the snapped dest rect to match the inner border to
-                    // avoid gaps between the background and border.
-                    destAdjust.Snapped = paintContext.InnerBorderOutsets(UnsnappedDestRect, unsnappedPositioningArea);
-                }
-                break;
-            case FillBox.StrokeBox:
-            case FillBox.ViewBox:
-            case FillBox.Border:
-                if (disallowBorderDerivedAdjustment)
-                {
-                    // All adjustments remain 0.
-                    destAdjust = default;
-                    break;
-                }
-                destAdjust = paintContext.ObscuredBorderOutsets(UnsnappedDestRect, unsnappedPositioningArea);
-                break;
-            case FillBox.Text:
-                destAdjust = default;
-                break;
-            default:
-                destAdjust = default;
-                break;
-        }
-        return destAdjust;
+                    Unsnapped = -border,
+                    Snapped = -paintContext.InnerBorderOutsets(UnsnappedDestRect, unsnappedPositioningArea)
+                },
+            FillBox.Padding => default,
+            FillBox.Content => SnappedAndUnsnappedOutsets.From(paintContext.PaddingOutsets),
+            _ => default,
+        };
     }
 
     private SnappedAndUnsnappedOutsets ComputePositioningAreaAdjustments(FillLayer fillLayer, BoxBackgroundPaintContext paintContext,
@@ -392,6 +372,24 @@ public sealed class BackgroundImageGeometry
     {
         // No overflow tracking; return zero outsets.
         return new PhysicalBoxStrut();
+    }
+
+    /// <summary>The rect the painting area is limited to: the clip box, counted from the padding
+    /// box the painters hand in — so 'border-box' is larger than the rect that came in and
+    /// 'content-box' is smaller by the padding.</summary>
+    private static SKRect ClipBoxRect(FillLayer fillLayer, BoxBackgroundPaintContext paintContext, SKRect paintRect)
+    {
+        // The dest rect is where the tiles are drawn, and a tile that reaches past it is cut, so
+        // this bound IS the clip — leaving 'content-box' out let a layer positioned in the padding
+        // box but clipped to the content one paint its tile over the padding (measured: a 200x100
+        // content box with 12px padding and 'background-clip: content-box; background-size: 100%
+        // 100%' painted to x 238 where the reference engine stops at 226).
+        return paintContext.EffectiveClip(fillLayer) switch
+        {
+            FillBox.Border => Contract(paintRect, -paintContext.BorderOutsets),
+            FillBox.Content => Contract(paintRect, paintContext.PaddingOutsets),
+            _ => paintRect,
+        };
     }
 
     private void CalculateFillTileSize(FillLayer fillLayer, ComputedStyle style, SKSize unsnappedPositioningAreaSize, SKSize snappedPositioningAreaSize, SKSize? intrinsicSize)
@@ -688,6 +686,13 @@ public static FillLayer? FromStyle(ComputedStyle style, bool isMask = false)
                 string origin = PickString(style.BackgroundOriginLayers, i) ?? style.BackgroundOrigin;
                 string clip = PickString(style.BackgroundClipLayers, i) ?? style.BackgroundClip;
 
+                // An offset measured from the far edge ('right 10px') is carried in the model as
+                // the arithmetic it reads back as, but this geometry resolves the far edge through
+                // the origin field, which is what measures the offset inwards from that edge
+                // (CSS Position 3 §5.2).
+                Length? positionX = pos?.X ?? style.BackgroundPositionX;
+                Length? positionY = pos?.Y ?? style.BackgroundPositionY;
+
                 var layer = new FillLayer
                 {
                     Image = img,
@@ -711,8 +716,10 @@ public static FillLayer? FromStyle(ComputedStyle style, bool isMask = false)
                         "border-box" => FillBoxOrigin.Border,
                         _ => FillBoxOrigin.Padding
                     },
-                    PositionX = pos?.X ?? style.BackgroundPositionX,
-                    PositionY = pos?.Y ?? style.BackgroundPositionY,
+                    PositionX = positionX is FarEdgeLength farX ? farX.Offset : positionX,
+                    PositionY = positionY is FarEdgeLength farY ? farY.Offset : positionY,
+                    XOrigin = positionX is FarEdgeLength ? BackgroundEdgeOrigin.Right : BackgroundEdgeOrigin.Left,
+                    YOrigin = positionY is FarEdgeLength ? BackgroundEdgeOrigin.Bottom : BackgroundEdgeOrigin.Top,
                     SizeType = (size?.Type ?? style.BackgroundSize) switch
                     {
                         BackgroundSizeType.Cover => FillSizeType.Cover,

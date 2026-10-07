@@ -797,7 +797,11 @@ namespace Acrux;
         _skiaRenderer.DpiScale = _dpiScale;
 
         // Attempt GPU acceleration (OpenGL via SkiaSharp GRContext)
-        if (_skiaRenderer.TryEnableGpu())
+        if (!_renderingSettings.GpuAcceleration)
+        {
+            Console.WriteLine("GPU acceleration off in settings, using CPU rendering");
+        }
+        else if (_skiaRenderer.TryEnableGpu())
         {
             _skiaRenderer.Initialize(1024, 768, enableDirtyRegions: false);
             _skiaRenderer.DpiScale = _dpiScale;
@@ -2857,12 +2861,12 @@ namespace Acrux;
                 _animationTimelineBaseMs = now;
             }
 
-            var result = _animations.Update(root, _currentLoad.StyleComputer?.CollectKeyframeRules(),
+            var result = _animations.Update(root, _currentLoad.StyleComputer?.CollectKeyframeRules(_currentLoad.Document),
                 styleRecomputed: styleRecomputed);
             _animationsRunning = result.HasActiveAnimations;
             if (_animTrace)
                 Console.WriteLine($"[anim] t={_animations.Timeline.CurrentTimeMs:F1}ms " +
-                                  $"kf={_currentLoad.StyleComputer?.CollectKeyframeRules().Count ?? -1} " +
+                                  $"kf={_currentLoad.StyleComputer?.CollectKeyframeRules(_currentLoad.Document).Count ?? -1} " +
                                   $"active={result.HasActiveAnimations} effects={_animations.ActiveEffectCount} " +
                                   $"animated={result.AnimatedElements}");
             return result.HasActiveAnimations;

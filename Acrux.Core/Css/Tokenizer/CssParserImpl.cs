@@ -775,15 +775,24 @@ public class CssParserImpl
 
     private CssValue? ParseCssValue(string propertyName, string valueText)
     {
-        var wideKeyword = CssWideKeywordParser.Parse(valueText);
+        // One spelling for every declaration. A reference engine prints the value it parsed
+        // rather than the characters it was handed, whether that value is a single number or a
+        // whole layer list, so the text is canonicalised first and everything below reads the
+        // canonical text — otherwise 'padding: 0' takes the simple-value path and keeps the
+        // bare zero, while 'margin: 0 auto' prints the '0px' the same engine prints.
+        var text = Acrux.Core.Css.CssValueText.Canonicalize(valueText, propertyName.ToLowerInvariant());
+
+        var wideKeyword = CssWideKeywordParser.Parse(text);
         if (wideKeyword != null) return wideKeyword;
 
         // Simple value parsing for common types
-        var parsed = TryParseSimpleValue(valueText);
+        var parsed = TryParseSimpleValue(text);
         if (parsed != null) return parsed;
 
-        // For complex values, store as the raw text for now
-        return new CssUnparsedValue(valueText);
+        // For complex values, store as the raw text for now — in the spelling a reference
+        // engine prints a specified value in, because this text is also what the CSSOM hands
+        // back for the declaration ('rgb(7,7,7)' has to read out as 'rgb(7, 7, 7)').
+        return new CssUnparsedValue(text);
     }
 
     private static CssValue? TryParseSimpleValue(string text)

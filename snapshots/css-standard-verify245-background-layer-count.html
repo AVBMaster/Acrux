@@ -1,0 +1,100 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>b245 background layer count and list cycling</title><!--
+  How many layers a background has, and what every per-layer list reports against that number
+  (CSS Backgrounds 3 §2, §4, §4.1).
+
+  The layer count comes from the image list alone — a layer that names no image is still a layer,
+  and a shorthand writes one image entry for every layer it wrote. A geometry list the box carries
+  is then cycled round to that count and its extras dropped, each list independently.
+  The <color> of a multi-layer 'background' belongs to the FINAL layer and to no other; anywhere
+  else it makes the whole declaration a parse error.
+
+  Every url() is unresolved here (no such file), so the image list is read as its layer count —
+  the two engines spell a resolved address differently, the number of layers is not ambiguous.
+-->
+<style>
+  body { margin: 0; padding: 0; font: 12px Consolas, monospace; color: #111; background: #fff; }
+  #report div { white-space: pre; }
+</style>
+</head>
+<body>
+<div id="r_lc01Img" style="background-color: red, blue; background-image: url(x.png)"></div>
+<div id="r_lc02NoImgPos" style="background-image: none; background-position: 10px, 20px"></div>
+<div id="r_lc03RepeatCycle" style="background-image: url(a.png), url(b.png); background-repeat: no-repeat"></div>
+<div id="r_lc04SizeCycle" style="background-image: url(a.png), url(b.png), url(c.png); background-size: 10px, 20px"></div>
+<div id="r_lc05SilentLayer" style="background: url(a.png) 10px 20px, red"></div>
+<div id="r_lc06ColorLast" style="background: url(a.png), url(b.png) red"></div>
+<div id="r_lc07NoneKeepsRepeat" style="background-repeat: no-repeat; background-image: none"></div>
+<div id="r_lc08OriginClamp" style="background-origin: content-box, border-box; background-image: url(a.png)"></div>
+<div id="r_lc09ClipCycle" style="background-image: url(a.png), url(b.png); background-clip: padding-box"></div>
+<div id="r_lc10NoImageAtAll" style="background-position: 10px 20px, 30px 40px"></div>
+<div id="r_lc11MiddleNone" style="background-image: url(a.png), none, url(b.png)"></div>
+<div id="r_lc12ShorthandTwoNone" style="background: none, red"></div>
+<div id="r_lc13SizeClamp" style="background-image: url(a.png); background-size: 10px, 20px, 30px"></div>
+<div id="r_lc14PosOneTwoImg" style="background-image: url(a.png), url(b.png); background-position: 10px"></div>
+<div id="r_lc15PosMixedPair" style="background-image: url(a.png), url(b.png); background-position: 10px, 20px 30px"></div>
+<div id="r_lc16RepeatClamp" style="background-image: url(a.png), url(b.png); background-repeat: repeat-x, repeat-y, no-repeat"></div>
+<div id="r_x1ShorthandAfter" style="background-image: url(a.png), url(b.png); background: none"></div>
+<div id="r_x2ThreeLayers" style="background: url(a.png) 10px, url(b.png) 20px, url(c.png)"></div>
+<div id="r_x3ColorInFirst" style="background: url(a.png) red, blue"></div>
+<div id="r_x4ColorWithTwoImg" style="background-image: url(a.png), url(b.png); background-color: red"></div>
+<div id="r_x5SizesPerLayer" style="background: url(a.png) 0 0 / 10px, url(b.png) 20px 20px / 30px 40px"></div>
+<div id="r_x6SizeCycle" style="background-image: url(a.png), url(b.png); background-size: 10px"></div>
+
+<div id="report"></div>
+<script>
+const out = [];
+const cs = id => getComputedStyle(document.getElementById(id));
+const g = (id, prop) => cs(id).getPropertyValue(prop);
+const layers = id => g(id, 'background-image') === 'none'
+  ? 1 : g(id, 'background-image').split(/,(?![^(]*\))/g).length;
+const ok = (name, got, want) => { out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${got === want}`); };
+
+ok('lc01Img_layers', layers('r_lc01Img'), 1);
+ok('lc01Img_color', g('r_lc01Img', 'background-color'), "rgba(0, 0, 0, 0)");
+ok('lc02NoImgPos_position', g('r_lc02NoImgPos', 'background-position'), "10px 50%");
+ok('lc02NoImgPos_positionx', g('r_lc02NoImgPos', 'background-position-x'), "10px");
+ok('lc02NoImgPos_positiony', g('r_lc02NoImgPos', 'background-position-y'), "50%");
+ok('lc03RepeatCycle_repeat', g('r_lc03RepeatCycle', 'background-repeat'), "no-repeat, no-repeat");
+ok('lc03RepeatCycle_position', g('r_lc03RepeatCycle', 'background-position'), "0% 0%, 0% 0%");
+ok('lc04SizeCycle_size', g('r_lc04SizeCycle', 'background-size'), "10px, 20px, 10px");
+ok('lc04SizeCycle_repeat', g('r_lc04SizeCycle', 'background-repeat'), "repeat, repeat, repeat");
+ok('lc05SilentLayers_layers', layers('r_lc05SilentLayer'), 2);
+ok('lc05SilentLayers_color', g('r_lc05SilentLayer', 'background-color'), "rgb(255, 0, 0)");
+ok('lc05SilentLayers_position', g('r_lc05SilentLayer', 'background-position'), "10px 20px, 0% 0%");
+ok('lc05SilentLayers_positionx', g('r_lc05SilentLayer', 'background-position-x'), "10px, 0%");
+ok('lc05SilentLayers_size', g('r_lc05SilentLayer', 'background-size'), "auto, auto");
+ok('lc06ColorLast_color', g('r_lc06ColorLast', 'background-color'), "rgb(255, 0, 0)");
+ok('lc06ColorLast_layers', layers('r_lc06ColorLast'), 2);
+ok('lc07NoneKeepsRepeat_repeat', g('r_lc07NoneKeepsRepeat', 'background-repeat'), "no-repeat");
+ok('lc07NoneKeepsRepeat_layers', layers('r_lc07NoneKeepsRepeat'), 1);
+ok('lc08OriginClamp_origin', g('r_lc08OriginClamp', 'background-origin'), "content-box");
+ok('lc08OriginClamp_clip', g('r_lc08OriginClamp', 'background-clip'), "border-box");
+ok('lc09ClipCycle_clip', g('r_lc09ClipCycle', 'background-clip'), "padding-box, padding-box");
+ok('lc10NoImageAtAll_position', g('r_lc10NoImageAtAll', 'background-position'), "10px 20px");
+ok('lc10NoImageAtAll_layers', layers('r_lc10NoImageAtAll'), 1);
+ok('lc11MiddleNone_layers', layers('r_lc11MiddleNone'), 3);
+ok('lc11MiddleNone_size', g('r_lc11MiddleNone', 'background-size'), "auto, auto, auto");
+ok('lc12ShorthandTwoNone_layers', layers('r_lc12ShorthandTwoNone'), 2);
+ok('lc12ShorthandTwoNone_image', g('r_lc12ShorthandTwoNone', 'background-image'), "none, none");
+ok('lc12ShorthandTwoNone_color', g('r_lc12ShorthandTwoNone', 'background-color'), "rgb(255, 0, 0)");
+ok('lc13SizeClamp_size', g('r_lc13SizeClamp', 'background-size'), "10px");
+ok('lc14PosOneTwoImg_position', g('r_lc14PosOneTwoImg', 'background-position'), "10px 50%, 10px 50%");
+ok('lc14PosOneTwoImg_positiony', g('r_lc14PosOneTwoImg', 'background-position-y'), "50%, 50%");
+ok('lc15PosMixedPair_position', g('r_lc15PosMixedPair', 'background-position'), "10px 50%, 20px 30px");
+ok('lc16RepeatClamp_repeat', g('r_lc16RepeatClamp', 'background-repeat'), "repeat-x, repeat-y");
+ok('x1ShorthandAfter_layers', layers('r_x1ShorthandAfter'), 1);
+ok('x1ShorthandAfter_image', g('r_x1ShorthandAfter', 'background-image'), "none");
+ok('x1ShorthandAfter_color', g('r_x1ShorthandAfter', 'background-color'), "rgba(0, 0, 0, 0)");
+ok('x2ThreeLayers_layers', layers('r_x2ThreeLayers'), 3);
+ok('x2ThreeLayers_position', g('r_x2ThreeLayers', 'background-position'), "10px 50%, 20px 50%, 0% 0%");
+ok('x3ColorInFirst_layers', layers('r_x3ColorInFirst'), 1);
+ok('x3ColorInFirst_image', g('r_x3ColorInFirst', 'background-image'), "none");
+ok('x3ColorInFirst_color', g('r_x3ColorInFirst', 'background-color'), "rgba(0, 0, 0, 0)");
+ok('x4ColorWithTwoImg_color', g('r_x4ColorWithTwoImg', 'background-color'), "rgb(255, 0, 0)");
+ok('x5SizesPerLayer_size', g('r_x5SizesPerLayer', 'background-size'), "10px, 30px 40px");
+ok('x5SizesPerLayer_position', g('r_x5SizesPerLayer', 'background-position'), "0px 0px, 20px 20px");
+ok('x6SizeCycle_size', g('r_x6SizeCycle', 'background-size'), "10px, 10px");
+
+document.getElementById('report').innerHTML = out.map(l => '<div>' + l + '</div>').join('');
+</script>
+</body></html>

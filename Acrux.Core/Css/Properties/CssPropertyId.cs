@@ -461,6 +461,9 @@ public enum CssPropertyId
     /// before it could ever run: with no ID the cascade dropped every 'unicode-bidi'
     /// declaration — even an inline style — before reaching it.</summary>
     UnicodeBidi,
+    /// <summary>CSS Transforms 1 §3: which box a transform's percentages and origin resolve
+    /// against. It had no ID, so the cascade dropped every declaration before the applier.</summary>
+    TransformBox,
     MaxProperties
 }
 
@@ -507,5 +510,18 @@ public static class CssPropertyIdExtensions
         if (IdToName.TryGetValue(id, out var name))
             return name;
         return id.ToString();
+    }
+
+    /// <summary>The name a declaration is stored under. A vendor prefix is an alias, not a
+    /// property of its own: measured in the reference engine,
+    /// <c>style.setProperty('-webkit-appearance', 'none')</c> leaves <c>'appearance'</c> reading
+    /// back 'none' and <c>cssText</c> printing 'appearance: none;'. A name this engine has no
+    /// id for is somebody else's property and keeps its own spelling, and a custom property is
+    /// never an alias of anything.</summary>
+    public static string CanonicalName(string name)
+    {
+        if (string.IsNullOrEmpty(name) || name.StartsWith("--", StringComparison.Ordinal)) return name;
+        var id = FromString(name);
+        return id == CssPropertyId.Invalid || id == CssPropertyId.Variable ? name : ToString(id);
     }
 }

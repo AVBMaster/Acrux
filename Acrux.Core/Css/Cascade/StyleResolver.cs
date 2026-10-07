@@ -56,6 +56,11 @@ public class StyleResolver
     public ComputedStyle? ResolveStyle(Element element, ComputedStyle? parentStyle)
     {
         var style = new ComputedStyle();
+        // The viewport belongs to the style, not to the property: a computed value that has to
+        // print a 'vh' as pixels needs the number the cascade was given, and it is the same
+        // number the layout will use.
+        style.ComputedViewportWidth = _viewportWidth;
+        style.ComputedViewportHeight = _viewportHeight;
         if (parentStyle != null)
             InheritProperties(style, parentStyle);
 
@@ -166,6 +171,13 @@ public class StyleResolver
 
         var props = new CssPropertyValueSet(CssParserMode.UACSS);
         CollectNonDefaultProperties(uaStyle, props);
+
+        // 'display' is emitted even when the registry agrees with the ComputedStyle
+        // default, because that default is not a declaration: a div's block-ness has to
+        // be something 'display: revert' can land on, and the CSS initial value ('inline')
+        // is not it (CSS Cascading 4 6.4.2, measured: revert on a div computes to 'block').
+        if (!props.HasProperty(CssPropertyId.Display))
+            props.SetProperty(CssPropertyId.Display, CssIdentifierValue.Create(DisplayToId(uaStyle.Display)));
 
         if (props.PropertyCount > 0)
         {
@@ -546,6 +558,12 @@ public class StyleResolver
             }
 
             var expanded = ShorthandExpander.ExpandProperty(name, text);
+            // An expansion with nothing in it is not a shorthand that described no longhand —
+            // it is a value the grammar rejected ('background: url(a) text text'). A declaration
+            // the grammar rejects might as well not have been written, so it resets nothing
+            // either: wiping the controlled longhands below took a 'background-clip' the same
+            // rule had put in front of the shorthand with it (measured).
+            if (expanded.Count == 0) continue;
             // A shorthand resets every longhand it controls: declarations that
             // were already in the set (from earlier rules) must be removed before
             // the expansion is written, otherwise a later shorthand would merge
@@ -576,9 +594,16 @@ public class StyleResolver
         "margin" or "padding" or "border-width" or "border-style" or "border-color" or "border-radius" or
         "border-top" or "border-right" or "border-bottom" or "border-left" or "border" or "margin-block" or
         "margin-inline" or "padding-block" or "padding-inline" or "inset" or "gap" or "background" or
+        "background-position" or
         "font" or "font-variant" or "flex" or "flex-flow" or "outline" or "text-decoration" or "text-emphasis" or "columns" or
         "column-rule" or "animation" or "transition" or "grid-area" or "grid-column" or "grid-row" or "mask" or
-        "white-space" or "text-wrap" or "overflow" or "contain-intrinsic-size" => true,
+        "white-space" or "text-wrap" or "overflow" or "contain-intrinsic-size" or
+        "place-content" or "place-items" or "place-self" or "list-style" or
+        "scroll-margin" or "scroll-padding" or
+        "border-block" or "border-inline" or "border-block-start" or "border-block-end" or
+        "border-inline-start" or "border-inline-end" or "border-block-width" or
+        "border-block-style" or "border-block-color" or "border-inline-width" or
+        "border-inline-style" or "border-inline-color" => true,
         _ => false
     };
 
@@ -753,6 +778,8 @@ public class StyleResolver
             {
                 Dom.FloatType.Left => CssValueId.Left,
                 Dom.FloatType.Right => CssValueId.Right,
+                Dom.FloatType.InlineStart => CssValueId.InlineStart,
+                Dom.FloatType.InlineEnd => CssValueId.InlineEnd,
                 _ => CssValueId.None
             }));
         if (source.TextTransform != def.TextTransform)

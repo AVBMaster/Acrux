@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body { margin:0; font: 12px Consolas, monospace; }
+.b { width: 60px; height: 12px; }
+#report div { white-space: pre; }
+</style></head><body>
+<!-- two image layers: the geometry lists have to be cycled to the layer count -->
+<div class="b" id="q01" style="background-image: url(a.png), url(b.png); background-position: 10px 20px"></div>
+<div class="b" id="q02" style="background-image: url(a.png), url(b.png); background-position: 10px 20px, 30px 40px, 50px 60px"></div>
+<div class="b" id="q03" style="background-image: url(a.png), url(b.png); background-size: 10px 20px"></div>
+<div class="b" id="q04" style="background-image: url(a.png), url(b.png); background-repeat: round"></div>
+<div class="b" id="q05" style="background-image: url(a.png), url(b.png); background-origin: padding-box"></div>
+<div class="b" id="q06" style="background-image: url(a.png), url(b.png); background-clip: border-box"></div>
+<div class="b" id="q07" style="background-image: url(a.png), url(b.png), url(c.png); background-position: 10px 20px, 30px 40px"></div>
+<div class="b" id="q08" style="background-image: url(a.png), url(b.png); background-position-x: 10px"></div>
+<div class="b" id="q09" style="background-image: url(a.png), url(b.png); background-position-y: 10px, 20px"></div>
+<div class="b" id="q10" style="background-image: url(a.png), url(b.png); background-attachment: fixed"></div>
+<!-- far-edge offsets written as percentages, and the mixed keyword/length shapes -->
+<div class="b" id="q11" style="background-position: right 10% bottom 20%"></div>
+<div class="b" id="q12" style="background-position: 50% bottom 20px"></div>
+<div class="b" id="q13" style="background-position: center bottom 20px"></div>
+<div class="b" id="q14" style="background-position: right 10px"></div>
+<div class="b" id="q15" style="background-position: bottom 20px"></div>
+<div class="b" id="q16" style="background-position: left calc(10px + 5px) top 20%"></div>
+<!-- repeat pairs that are not expressible as one keyword -->
+<div class="b" id="q17" style="background-repeat: round no-repeat"></div>
+<div class="b" id="q18" style="background-repeat: no-repeat round"></div>
+<div class="b" id="q19" style="background-repeat: space space"></div>
+<div class="b" id="q20" style="background-repeat: round round"></div>
+<div class="b" id="q21" style="background-repeat: repeat space"></div>
+<div class="b" id="q22" style="background-repeat: no-repeat space"></div>
+<div id="report"></div>
+<script>
+const out = [];
+const el = id => document.getElementById(id);
+const props = ['background-position', 'background-size', 'background-repeat',
+               'background-origin', 'background-clip', 'background-attachment',
+               'background-position-x', 'background-position-y'];
+for (let i = 1; i <= 22; i++) {
+  const id = 'q' + String(i).padStart(2, '0');
+  const cs = getComputedStyle(el(id));
+  const parts = [];
+  for (const p of props) { const v = cs.getPropertyValue(p); if (v !== '' ) parts.push(p.replace('background-','')+'='+v); }
+  out.push(id + ' | ' + parts.join(' ; '));
+}
+const rep = document.getElementById('report');
+for (const line of out) { const d = document.createElement('div'); d.textContent = line; rep.appendChild(d); }
+</script>
+</body></html>

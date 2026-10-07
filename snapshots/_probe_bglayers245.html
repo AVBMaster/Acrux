@@ -1,0 +1,24 @@
+<!DOCTYPE html><html><head><style>
+/* Layer-count truth for the background longhand lists (CSS Backgrounds 3 4.1).
+   Each case is one element; its computed lists are read through --computed and
+   through a browser's getComputedStyle, then compared. */
+body { margin: 0; }
+div { width: 100px; height: 20px; }
+</style></head><body>
+<div id="l1" style="background-color: red, blue; background-image: url(x.png)"></div>
+<div id="l2" style="background-image: none; background-position: 10px, 20px"></div>
+<div id="l3" style="background-image: url(a.png), url(b.png); background-repeat: no-repeat"></div>
+<div id="l4" style="background-image: url(a.png), url(b.png), url(c.png); background-size: 10px, 20px"></div>
+<div id="l5" style="background: url(a.png) 10px 20px, red"></div>
+<div id="l6" style="background: url(a.png), url(b.png) red"></div>
+<div id="l7" style="background-repeat: no-repeat; background-image: none"></div>
+<div id="l8" style="background-origin: content-box, border-box; background-image: url(a.png)"></div>
+<div id="l9" style="background-image: url(a.png), url(b.png); background-clip: padding-box"></div>
+<div id="l10" style="background-position: 10px 20px, 30px 40px"></div>
+<div id="l11" style="background-image: url(a.png), none, url(b.png)"></div>
+<div id="l12" style="background: none, red"></div>
+<div id="l13" style="background-image: url(a.png); background-size: 10px, 20px, 30px"></div>
+<div id="l14" style="background-image: url(a.png), url(b.png); background-position: 10px"></div>
+<div id="l15" style="background-image: url(a.png), url(b.png); background-position: 10px, 20px 30px"></div>
+<div id="l16" style="background-image: url(a.png), url(b.png); background-repeat: repeat-x, repeat-y, no-repeat"></div>
+</body></html>

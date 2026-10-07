@@ -1,0 +1,277 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 251 — media query environment features, range grammar, MediaQueryList</title>
+<!--
+  Media queries ask about the environment rather than about a box, so every rule below was
+  measured in a reference engine (Edge, 445x481 viewport, screen 1024x768 at dpr 1) instead of
+  being guessed from the specification text. The rules this batch records:
+
+  DEVICE FEATURES (CSS Media Queries 4 §7.4) measure the display, not the viewing area:
+    - '(device-width: <screen.width>px)' is true while '(device-width: <screen.width+1>px)' is
+      false, so the feature reads the same number 'window.screen.width' does. Our engine takes
+      both from one source (Acrux.Core.Display.ScreenMetrics) for that reason.
+    - the device features are a different measurement from 'width': the reference screen is
+      1024x768 and the viewport 445x481, and both are reported for their own feature.
+    - 'device-aspect-ratio' accepts a reduced ratio ('1024/768' matches '4/3') and a decimal.
+    - 'device-pixel-ratio' and 'dpr' are NOT media features: both are false at any value, while
+      '-webkit-device-pixel-ratio', '-webkit-min-device-pixel-ratio' and
+      '-webkit-max-device-pixel-ratio' measure exactly what 'resolution' does.
+
+  'color' COUNTS BITS PER COLOUR COMPONENT, not per pixel: a normal 24-bit display answers
+    '(color: 8)' true and '(color: 24)' false; '(color)' true; '(color: 0)' false. This is not
+    'screen.colorDepth', which is 24 on the same machine.
+
+  INTEGER FEATURES as booleans and as thresholds: '(monochrome)' false and '(monochrome: 0)'
+    true; '(grid)' false, '(grid: 0)' true, '(grid: 1)' false; '(color-index)' false,
+    '(color-index: 0)' true, and '(min-color-index: 0)'/'(max-color-index: 0)' both true.
+    'min-'/'max-' prefixed integers are thresholds, not equalities.
+
+  KEYWORD FEATURES: '(update)' true with '(update: fast)' (a desktop rendering changes on every
+    frame request); '(overflow-block)' and '(overflow-inline)' true with 'scroll' and false with
+    'paged'/'none'; '(color-gamut)' true with 'srgb' only, since the display covers no wider
+    space ('p3', 'dci-p3', 'rec2020' all false); '(display-mode: browser)' and
+    '(scripting: enabled)' true; '(scan: progressive)' false — the reference engine has no
+    'scan'; '(prefers-color-scheme)' is true and exactly one of 'light'/'dark' matches;
+    '(prefers-reduced-motion)' and '(prefers-contrast)' are false because their value,
+    'no-preference', is the falsy keyword of each list; '(forced-colors: none)' true.
+
+  CASE: a feature name AND a keyword value are ASCII case-insensitive — '(COLOR-GAMUT: SRGB)',
+    '(MIN-WIDTH: 400px)', '(orientation: PORTRAIT)' and '(update: FAST)' all match.
+
+  RANGE GRAMMAR (CSS Media Queries 4 §4.1): the chained form needs both comparisons to point the
+    same way, so '400px <= width <= 900px' and '400px <= width < 900px' match, while
+    '900px > width < 1000px' and 'width >= 400px <= 900px' match nothing. Inside ONE pair of
+    parentheses every operand of 'and'/'or' must itself be parenthesised:
+    '(width >= 400px and width <= 900px)' matches nothing, '((width >= 400px) and
+    (width <= 900px))' matches, and even '(hover and pointer)' matches nothing while
+    '(hover) and (pointer)' — at the top level — does.
+
+  MediaQueryList: 'media' and 'matches' are accessors on the prototype, so 'Object.keys(mql)' is
+    empty; 'addListener' does not fire at registration; 'MediaQueryList.media' is the query
+    RE-SERIALISED — whitespace collapsed, parentheses tight, one space after a feature colon,
+    spaces around a comparison operator, ratios as '1 / 2', a leading 'all and ' dropped, all in
+    lowercase — and an empty query reads back as an empty string.
+
+  Finally the bars under the stage ask the same questions through an @media block, which is the
+  only way to show that a script and a stylesheet are answering one question once, not twice.
+-->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 11px monospace; color: #111; background: #fff; }
+  #stage { padding: 6px; background: #f2f2f2; }
+  .bar { height: 12px; width: 20px; background: #bbb; outline: 1px dotted #444; margin: 2px 0; }
+  #report div { white-space: pre; line-height: 13px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="bar" id="n1"></div>
+  <div class="bar" id="n2"></div>
+  <div class="bar" id="n3"></div>
+  <div class="bar" id="n4"></div>
+  <div class="bar" id="n5"></div>
+  <div class="bar" id="n6"></div>
+  <div class="bar" id="n7"></div>
+  <div class="bar" id="n8"></div>
+</div>
+<div id="report"></div>
+<style>
+  /* Each rule widens its bar to 50px. Conditions 1-6 are true in this environment, 7 and 8 are
+     not, so a bar that disagrees with the same query read through matchMedia means the cascade
+     and the script have two different answers to one question. */
+  @media (update: fast) { #n1 { width: 50px } }
+  @media (color: 8) { #n2 { width: 50px } }
+  @media (overflow-block: scroll) { #n3 { width: 50px } }
+  @media (color-gamut: srgb) { #n4 { width: 50px } }
+  @media (min-device-width: 1px) { #n5 { width: 50px } }
+  @media (400px <= width <= 500px) { #n6 { width: 50px } }
+  @media (grid: 1) { #n7 { width: 50px } }
+  @media (hover and pointer) { #n8 { width: 50px } }
+</style>
+<script>
+const iw = window.innerWidth, ih = window.innerHeight;
+const sw = window.screen.width, sh = window.screen.height;
+const dpr = window.devicePixelRatio;
+const portrait = ih >= iw;
+// Queries whose answer follows from the environment are written from the environment, so the
+// same row is true in a 445x481 window and in any other; queries whose answer is a rule of the
+// standard are written as literals and are the cross-engine assertions.
+const QUERIES = {
+  dev01: `(device-width: ${sw}px)`,
+  dev02: `(device-width: ${sw + 1}px)`,
+  dev03: `(min-device-width: ${sw}px)`,
+  dev04: `(min-device-width: ${sw + 1}px)`,
+  dev05: `(max-device-width: ${sw}px)`,
+  dev06: `(max-device-width: ${sw - 1}px)`,
+  dev07: `(device-height: ${sh}px)`,
+  dev08: `(min-device-height: ${sh + 1}px)`,
+  dev09: `(max-device-height: ${sh}px)`,
+  dev10: `(device-aspect-ratio: ${sw}/${sh})`,
+  dev11: `(device-aspect-ratio: 1000/1)`,
+  dev12: `(device-aspect-ratio: 1/1000)`,
+  dev13: `(min-device-aspect-ratio: 1/1000)`,
+  dev14: `(max-device-aspect-ratio: 1000/1)`,
+  dev15: `(min-device-aspect-ratio: 1000/1)`,
+  dev16: `(max-device-aspect-ratio: 1/1000)`,
+  dev17: `(device-width)`,
+  dev18: `(device-height)`,
+  dev19: `(min-device-width: >= ${sw}px)`,
+  dev20: `(device-width > 1px)`,
+  dev21: `(device-width: 1cm)`,
+  dev22: `(device-aspect-ratio: ${sw / sh})`,
+
+  vp01: `(width: ${iw}px)`,
+  vp02: `(height: ${ih}px)`,
+  vp03: `(min-height: ${ih}px)`,
+  vp04: `(max-height: ${ih - 1}px)`,
+  vp05: `(aspect-ratio: ${iw}/${ih})`,
+  vp06: `(orientation: ${portrait ? 'portrait' : 'landscape'})`,
+  vp07: `(orientation: ${portrait ? 'landscape' : 'portrait'})`,
+  // The two prefixed ratio features compare, they do not match exactly: the threshold on either
+  // side of the viewport's own ratio separates a comparison from an equality.
+  vp08: `(min-aspect-ratio: ${iw}/${ih + 1})`,
+  vp09: `(min-aspect-ratio: ${iw + 1}/${ih})`,
+  vp10: `(max-aspect-ratio: ${iw + 1}/${ih})`,
+  vp11: `(max-aspect-ratio: ${iw}/${ih + 1})`,
+  vp12: `(aspect-ratio >= ${iw}/${ih})`,
+  vp13: `(aspect-ratio > ${iw}/${ih})`,
+  vp14: `(min-height: ${ih + 1}px)`,
+
+  rg01: `(${iw - 50}px <= width <= ${iw + 50}px)`,
+  rg02: `(${iw - 50}px <= width < ${iw + 50}px)`,
+  rg03: `(${iw + 10}px <= width <= ${iw + 50}px)`,
+  rg04: `(${iw + 50}px > width < ${iw + 100}px)`,
+  rg05: `(width >= ${iw - 50}px <= ${iw + 50}px)`,
+  rg06: `(width >= ${iw - 50}px and width <= ${iw + 50}px)`,
+  rg07: `((width >= ${iw - 50}px) and (width <= ${iw + 50}px))`,
+  rg08: `(hover and pointer)`,
+  rg09: `((hover) and (pointer))`,
+  rg10: `(hover) and (pointer)`,
+  rg11: `(WIDTH >= ${iw}px)`,
+  rg12: `(orientation: ${portrait ? 'PORTRAIT' : 'LANDSCAPE'})`,
+  rg13: `(color-gamut: SRGB)`,
+  rg14: `(update: FAST)`,
+  rg15: `(${ih - 50}px <= height <= ${ih + 50}px)`,
+  rg16: `(min-width: ${iw}px) and (max-width: ${iw}px)`,
+  rg17: `(not (min-width: 99999px))`,
+  rg18: `(nonexistent-feature)`,
+  rg19: `(nonexistent-feature: 1)`,
+  rg20: `(device-pixel-ratio: ${dpr})`,
+  rg21: `(dpr)`,
+  rg22: `(scrollbar-gutter: classic)`,
+  rg23: `(-webkit-transform-3d)`,
+  rg24: `(scan: progressive)`,
+
+  env01: `(update)`, env02: `(update: fast)`, env03: `(update: slow)`, env04: `(update: none)`,
+  env05: `(overflow-block)`, env06: `(overflow-block: scroll)`, env07: `(overflow-block: paged)`,
+  env08: `(overflow-inline)`, env09: `(overflow-inline: scroll)`, env10: `(overflow-inline: none)`,
+  env11: `(color-gamut)`, env12: `(color-gamut: srgb)`, env13: `(color-gamut: p3)`,
+  env14: `(color-gamut: rec2020)`, env15: `(color-gamut: dci-p3)`,
+  env16: `(color)`, env17: `(color: 8)`, env18: `(color: 24)`, env19: `(color >= 1)`,
+  env20: `(min-color: 1)`, env21: `(min-color: 100)`, env22: `(max-color: 100)`, env23: `(color: 0)`,
+  env24: `(monochrome)`, env25: `(monochrome: 0)`, env26: `(min-monochrome: 0)`,
+  env27: `(max-monochrome: 100)`, env28: `(monochrome: 1)`,
+  env29: `(color-index)`, env30: `(color-index: 0)`, env31: `(min-color-index: 0)`,
+  env32: `(color-index: 1)`,
+  env33: `(grid)`, env34: `(grid: 0)`, env35: `(grid: 1)`,
+  env36: `(hover)`, env37: `(any-hover)`, env38: `(pointer)`, env39: `(any-pointer)`,
+  env40: `(hover: none)`, env41: `(pointer: coarse)`, env42: `(any-pointer: none)`,
+  env43: `(hover: hover)`, env44: `(pointer: fine)`,
+  env45: `(scripting)`, env46: `(scripting: enabled)`, env47: `(scripting: none)`,
+  env48: `(display-mode)`, env49: `(display-mode: browser)`, env50: `(display-mode: standalone)`,
+  env51: `(prefers-color-scheme)`, env53: `(prefers-reduced-motion)`,
+  env54: `(prefers-reduced-motion: no-preference)`,
+  env55: `(prefers-reduced-transparency: no-preference)`,
+  env56: `(prefers-contrast: no-preference)`, env57: `(prefers-contrast)`,
+  env58: `(forced-colors: none)`,
+  env59: `(resolution: ${96 * dpr}dpi)`, env60: `(resolution: ${dpr}dppx)`,
+  env61: `(min-resolution: ${dpr}dppx)`, env62: `(max-resolution: 1000dpi)`,
+  env63: `(-webkit-device-pixel-ratio: ${dpr})`,
+  env64: `(-webkit-min-device-pixel-ratio: ${dpr})`,
+  env65: `(-webkit-min-device-pixel-ratio: ${dpr + 1})`,
+  env66: `(-webkit-max-device-pixel-ratio: ${dpr})`,
+  env67: `(-webkit-device-pixel-ratio >= ${dpr})`,
+  env68: `(min-resolution: 37dpcm)`, env69: `(min-resolution: 39dpcm)`
+};
+const BARS = {
+  n1: "(update: fast)", n2: "(color: 8)", n3: "(overflow-block: scroll)",
+  n4: "(color-gamut: srgb)", n5: "(min-device-width: 1px)",
+  n6: "(400px <= width <= 500px)", n7: "(grid: 1)", n8: "(hover and pointer)"
+};
+const WANTS = {"dev01": "T", "dev02": "F", "dev03": "T", "dev04": "F", "dev05": "T", "dev06": "F",
+  "dev07": "T", "dev08": "F", "dev09": "T", "dev10": "T", "dev11": "F", "dev12": "F",
+  "dev13": "T", "dev14": "T", "dev15": "F", "dev16": "F", "dev17": "T", "dev18": "T",
+  "dev19": "F", "dev20": "T", "dev21": "F", "dev22": "T",
+  "vp01": "T", "vp02": "T", "vp03": "T", "vp04": "F", "vp05": "T", "vp06": "T", "vp07": "F",
+  "vp08": "T", "vp09": "F", "vp10": "T", "vp11": "F", "vp12": "T", "vp13": "F", "vp14": "F",
+  "rg01": "T", "rg02": "T", "rg03": "F", "rg04": "F", "rg05": "F", "rg06": "F", "rg07": "T",
+  "rg08": "F", "rg09": "T", "rg10": "T", "rg11": "T", "rg12": "T", "rg13": "T", "rg14": "T",
+  "rg15": "T", "rg16": "T", "rg17": "T", "rg18": "F", "rg19": "F", "rg20": "F", "rg21": "F",
+  "rg22": "F", "rg23": "T", "rg24": "F",
+  "env01": "T", "env02": "T", "env03": "F", "env04": "F", "env05": "T", "env06": "T", "env07": "F",
+  "env08": "T", "env09": "T", "env10": "F", "env11": "T", "env12": "T", "env13": "F",
+  "env14": "F", "env15": "F", "env16": "T", "env17": "T", "env18": "F", "env19": "T",
+  "env20": "T", "env21": "F", "env22": "T", "env23": "F", "env24": "F", "env25": "T",
+  "env26": "T", "env27": "T", "env28": "F", "env29": "F", "env30": "T", "env31": "T",
+  "env32": "F", "env33": "F", "env34": "T", "env35": "F", "env36": "T", "env37": "T",
+  "env38": "T", "env39": "T", "env40": "F", "env41": "F", "env42": "F", "env43": "T",
+  "env44": "T", "env45": "T", "env46": "T", "env47": "F", "env48": "T", "env49": "T",
+  "env50": "F", "env51": "T", "env53": "F", "env54": "T", "env55": "T", "env56": "T",
+  "env57": "F", "env58": "T", "env59": "T", "env60": "T", "env61": "T", "env62": "T",
+  "env63": "T", "env64": "T", "env65": "F", "env66": "T", "env67": "T",
+  "env68": "T", "env69": "F",
+  "env52": "T",
+  "mql01": "0", "mql02": "T", "mql03": "boolean", "mql04": "0", "mql05": "T",
+  "ser01": "(min-width: 400px)", "ser02": "(min-width: 400px)",
+  "ser03": "screen and (min-width: 400px)",
+  "ser04": "(max-width: 900px), (min-width: 100px)", "ser05": "(width >= 400px)",
+  "ser06": "(min-aspect-ratio: 1 / 2)", "ser07": "(min-width: 1px)",
+  "ser08": "(color-gamut: p3)", "ser09": "(orientation: landscape)",
+  "ser10": "(width <= 900px and width >= 100px)", "ser11": "not (hover)",
+  "ser12": "(min-width: 400px) and (max-width: 900px)", "ser13": "",
+  "n1": "50", "n2": "50", "n3": "50", "n4": "50", "n5": "50", "n6": "50", "n7": "20", "n8": "20"};
+const out = [];
+const row = (name, got, want) => out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${String(got) === String(want)}`);
+const yn = b => (b ? "T" : "F");
+
+for (const k in QUERIES) row(k, yn(matchMedia(QUERIES[k]).matches), WANTS[k]);
+
+// Exactly one preferred colour scheme matches: a query for 'light' and one for 'dark' cannot
+// both be true and cannot both be false.
+row("env52", yn(matchMedia("(prefers-color-scheme: light)").matches !==
+                matchMedia("(prefers-color-scheme: dark)").matches), WANTS["env52"]);
+
+// The MediaQueryList object itself.
+const mql = matchMedia("(min-width: 1px)");
+row("mql01", Object.keys(mql).length, WANTS["mql01"]);
+row("mql02", yn("media" in mql), WANTS["mql02"]);
+row("mql03", typeof mql.matches, WANTS["mql03"]);
+let calls = 0;
+mql.addListener(function () { calls++; });
+row("mql04", calls, WANTS["mql04"]);           // registration does not invoke the listener
+row("mql05", yn(typeof mql.addEventListener === "function"), WANTS["mql05"]);
+
+// 'media' is the re-serialised query.
+row("ser01", matchMedia("(min-width:400px)").media, WANTS["ser01"]);
+row("ser02", matchMedia("( MIN-WIDTH : 400px )").media, WANTS["ser02"]);
+row("ser03", matchMedia("SCREEN and (min-width: 400px)").media, WANTS["ser03"]);
+row("ser04", matchMedia("(max-width:900px),(min-width:100px)").media, WANTS["ser04"]);
+row("ser05", matchMedia("(width>=400px)").media, WANTS["ser05"]);
+row("ser06", matchMedia("(min-aspect-ratio:1/2)").media, WANTS["ser06"]);
+row("ser07", matchMedia("all and (min-width: 1px)").media, WANTS["ser07"]);
+row("ser08", matchMedia("(color-gamut:P3)").media, WANTS["ser08"]);
+row("ser09", matchMedia("(orientation:LANDSCAPE)").media, WANTS["ser09"]);
+row("ser10", matchMedia("(width <= 900px and width >= 100px)").media, WANTS["ser10"]);
+row("ser11", matchMedia("not (hover)").media, WANTS["ser11"]);
+row("ser12", matchMedia("(min-width:  400px)  and  (max-width:  900px)").media, WANTS["ser12"]);
+row("ser13", matchMedia("").media, WANTS["ser13"]);
+
+// The bars: the same eight questions, answered by an @media block instead of by a script.
+for (const id in BARS) {
+  const expected = matchMedia(BARS[id]).matches ? 50 : 20;
+  row(id, document.getElementById(id).getBoundingClientRect().width, String(expected));
+}
+
+out.push(`innerWidth=${iw} innerHeight=${ih} screen=${sw}x${sh} dpr=${dpr}`);
+document.getElementById("report").innerHTML = out.map(l => "<div>" + l + "</div>").join("");
+</script></body></html>

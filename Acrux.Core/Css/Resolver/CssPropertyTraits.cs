@@ -31,6 +31,73 @@ public static class CssPropertyTraits
     /// <summary>True when the property inherits its value by default.</summary>
     public static bool IsInherited(string property) => Inherited.Contains(property);
 
+    /// <summary>
+    /// Properties whose value is (or contains) a length, so that a unitless zero is really a
+    /// length of nothing and a reference engine prints it with the unit: measured,
+    /// <c>margin: 0 auto</c> reads back as <c>0px auto</c>, <c>border: 0 solid red</c> as
+    /// <c>0px solid red</c>, <c>background-position: 0</c> as <c>0px</c>. The properties this
+    /// table does not name keep the author's characters, which is what makes the list safe to
+    /// maintain: <c>line-height: 0</c>, <c>opacity: 0</c>, <c>flex: 0 1 auto</c>,
+    /// <c>order</c>, <c>z-index</c>, <c>tab-size</c>, <c>scale</c> and SVG's
+    /// <c>stroke-width</c> all keep the bare number in the reference engine too, so leaving
+    /// them out of a length table is the same decision as putting them in a 'never add a unit'
+    /// table, but a length property added later cannot pick up a unit it does not take.
+    /// </summary>
+    private static readonly HashSet<string> LengthValued = new(StringComparer.Ordinal)
+    {
+        // Sizes and the box axes.
+        "width", "height", "min-width", "min-height", "max-width", "max-height",
+        "inline-size", "block-size", "min-inline-size", "min-block-size",
+        "max-inline-size", "max-block-size", "flex-basis", "columns", "column-width",
+        "contain-intrinsic-size", "contain-intrinsic-width", "contain-intrinsic-height",
+        // Margins, paddings, insets and the logical spellings of both.
+        "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
+        "margin-inline", "margin-inline-start", "margin-inline-end",
+        "margin-block", "margin-block-start", "margin-block-end",
+        "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
+        "padding-inline", "padding-inline-start", "padding-inline-end",
+        "padding-block", "padding-block-start", "padding-block-end",
+        "inset", "inset-inline", "inset-inline-start", "inset-inline-end",
+        "inset-block", "inset-block-start", "inset-block-end",
+        "top", "right", "bottom", "left",
+        "scroll-margin", "scroll-margin-top", "scroll-margin-right", "scroll-margin-bottom",
+        "scroll-margin-left", "scroll-margin-inline", "scroll-margin-inline-start",
+        "scroll-margin-inline-end", "scroll-margin-block", "scroll-margin-block-start",
+        "scroll-margin-block-end", "scroll-padding", "scroll-padding-top",
+        "scroll-padding-right", "scroll-padding-bottom", "scroll-padding-left",
+        "scroll-padding-inline", "scroll-padding-inline-start", "scroll-padding-inline-end",
+        "scroll-padding-block", "scroll-padding-block-start", "scroll-padding-block-end",
+        // Borders, outlines and corners.
+        "border", "border-top", "border-right", "border-bottom", "border-left",
+        "border-width", "border-top-width", "border-right-width", "border-bottom-width",
+        "border-left-width", "border-inline", "border-inline-width",
+        "border-inline-start", "border-inline-end", "border-inline-start-width",
+        "border-inline-end-width", "border-block", "border-block-width", "border-block-start",
+        "border-block-end", "border-block-start-width", "border-block-end-width",
+        "outline", "outline-width", "outline-offset", "column-rule", "column-rule-width",
+        "border-spacing",
+        "border-radius", "border-top-left-radius", "border-top-right-radius",
+        "border-bottom-right-radius", "border-bottom-left-radius",
+        "border-start-start-radius", "border-start-end-radius",
+        "border-end-start-radius", "border-end-end-radius",
+        // Positioning within a box.
+        "background-position", "background-position-x", "background-position-y",
+        "object-position", "mask-position", "mask-position-x", "mask-position-y",
+        "transform-origin", "translate", "perspective",
+        // Text metrics.
+        "font", "font-size", "letter-spacing", "word-spacing", "text-indent",
+        "text-decoration-thickness", "text-underline-offset", "text-emphasis-offset",
+        // Shadows and the lists that carry offsets.
+        "box-shadow", "text-shadow", "filter", "backdrop-filter", "background", "mask",
+        // Tracks, gaps and shapes.
+        "gap", "row-gap", "column-gap", "grid-gap", "grid-row-gap", "grid-column-gap",
+        "grid-template-columns", "grid-template-rows", "grid-auto-columns", "grid-auto-rows",
+        "shape-margin", "overflow-clip-margin",
+    };
+
+    /// <summary>True when a unitless zero in this property's value is a length.</summary>
+    public static bool TakesLength(string property) => LengthValued.Contains(property);
+
     /// <summary>Whether the cascade recognizes this property at all.</summary>
     /// <summary>Whether the cascade can resolve CSS-wide keywords for a property.
     /// Derived from the property-id table (which is generated from the enum) rather
@@ -66,7 +133,10 @@ public static class CssPropertyTraits
         "grid-gap", "grid-row-gap", "grid-column-gap",
         "cursor", "flex", "flex-direction", "flex-wrap", "flex-grow", "flex-shrink",
         "flex-basis", "justify-content", "align-items", "align-self", "order", "gap",
-        "transform", "transform-origin", "transition", "animation", "filter",
+        "transform", "transform-origin", "translate", "rotate", "scale",
+        "perspective", "perspective-origin", "backface-visibility", "transform-box",
+        "transform-style",
+        "transition", "animation", "filter",
         "content", "word-break", "overflow-wrap", "letter-spacing", "word-spacing",
         "text-indent", "text-transform", "direction", "writing-mode", "list-style",
         "list-style-type", "list-style-position", "list-style-image",
@@ -92,7 +162,7 @@ public static class CssPropertyTraits
             case "min-height": to.MinHeight = from.MinHeight; break;
             case "max-width": to.MaxWidth = from.MaxWidth; break;
             case "max-height": to.MaxHeight = from.MaxHeight; break;
-            case "display": to.Display = from.Display; break;
+            case "display": to.Display = from.Display; to.DisplayIsFlowRoot = from.DisplayIsFlowRoot; break;
             case "position": to.Position = from.Position; break;
             case "float": to.Float = from.Float; break;
             case "clear": to.Clear = from.Clear; break;
@@ -224,18 +294,32 @@ public static class CssPropertyTraits
             case "column-gap": to.ColumnGap = from.ColumnGap; break;
             case "transform": to.Transform = from.Transform; break;
             case "transform-origin": to.TransformOrigin = from.TransformOrigin; break;
+            // The individual transforms and the properties that surround them. 'inherit' and
+            // 'initial' (and the 'all' shorthand, which enumerates this set) have to reach them
+            // like any other property, and each one's initial value is the fresh ComputedStyle's
+            // field default that SetInitial reads off of.
+            case "translate": to.Translate = from.Translate; break;
+            case "rotate": to.Rotate = from.Rotate; break;
+            case "scale": to.Scale = from.Scale; break;
+            case "perspective": to.Perspective = from.Perspective; break;
+            case "perspective-origin": to.PerspectiveOrigin = from.PerspectiveOrigin; break;
+            case "backface-visibility": to.BackfaceVisibility = from.BackfaceVisibility; break;
+            case "transform-box": to.TransformBox = from.TransformBox; break;
+            case "transform-style": to.TransformStyle = from.TransformStyle; break;
             case "transition": to.Transition = from.Transition; break;
             case "animation": to.Animation = from.Animation; break;
             case "filter": to.Filter = from.Filter; break;
             case "content": to.Content = from.Content; break;
             case "word-break": to.WordBreak = from.WordBreak; break;
             case "overflow-wrap": to.OverflowWrap = from.OverflowWrap; break;
-            case "letter-spacing": to.LetterSpacing = from.LetterSpacing; break;
+            case "letter-spacing": to.LetterSpacing = from.LetterSpacing;
+                to.LetterSpacingIsNormal = from.LetterSpacingIsNormal; break;
             // 'hyphens' had no Copy case at all, so 'hyphens: inherit' and
             // 'initial' silently kept whatever the element already had.
             case "hyphens": to.Hyphens = from.Hyphens; break;
             case "hyphenate-character": to.HyphenateCharacter = from.HyphenateCharacter; break;
-            case "word-spacing": to.WordSpacing = from.WordSpacing; break;
+            case "word-spacing": to.WordSpacing = from.WordSpacing;
+                to.WordSpacingIsNormal = from.WordSpacingIsNormal; break;
             case "text-indent": to.TextIndent = from.TextIndent; to.TextIndentHanging = from.TextIndentHanging;
                 to.TextIndentEachLine = from.TextIndentEachLine;
                 to.TextIndentPercent = from.TextIndentPercent; break;
@@ -278,9 +362,36 @@ public static class CssPropertyTraits
         if (property == "display")
         {
             to.Display = DisplayType.Inline;
+            to.DisplayIsFlowRoot = false;
             return;
         }
         Copy(to, new ComputedStyle(), property);
+    }
+
+    /// <summary>The CSS-wide keywords (CSS Values 3 §2.1). Every property accepts them, so a
+    /// value check against one property's own grammar must not reject them. Keyword matching
+    /// is ASCII case-insensitive (CSS 2.1 §3.1), which is why these comparisons are not
+    /// ordinal: 'Display: Inherit' is the same declaration as 'display: inherit'.</summary>
+    public static bool IsCssWideKeyword(string value) =>
+        value.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("initial", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("unset", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("revert", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("revert-layer", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True for 'revert' and 'revert-layer'; |revertLayer| says which. These two are
+    /// the only CSS-wide keywords whose meaning depends on what the cascade holds *below* the
+    /// declaration, so StyleCascade resolves them there and the value reached here is the
+    /// fallback for when there is nothing lower left to revert to.</summary>
+    public static bool IsRevertKeyword(string? value, out bool revertLayer)
+    {
+        revertLayer = false;
+        if (value == null) return false;
+        var text = value.Trim();
+        if (text.Equals("revert", StringComparison.OrdinalIgnoreCase)) return true;
+        if (!text.Equals("revert-layer", StringComparison.OrdinalIgnoreCase)) return false;
+        revertLayer = true;
+        return true;
     }
 
     /// <summary>
@@ -290,10 +401,12 @@ public static class CssPropertyTraits
     /// </summary>
     public static bool TryApplyCssWideKeyword(ComputedStyle style, string name, string value, ComputedStyle? parentStyle)
     {
+        var keyword = value.Trim();
         if (name == "all")
-            return TryApplyAll(style, value.Trim(), parentStyle);
+            return TryApplyAll(style, keyword, parentStyle);
+        if (!IsCssWideKeyword(keyword)) return false;
 
-        switch (value.Trim())
+        switch (keyword.ToLowerInvariant())
         {
             case "inherit":
                 if (IsKnown(name))
@@ -311,7 +424,9 @@ public static class CssPropertyTraits
                 return true;
             case "revert":
             case "revert-layer":
-                // Best effort: treat as unset (author layer history is not tracked).
+                // Nothing below the declaration to revert to: 'revert' then behaves like
+                // 'unset' (CSS Cascade 4 § revert), which is what StyleCascade leaves for
+                // the case where no lower-origin declaration exists.
                 if (IsInherited(name))
                     Copy(style, parentStyle ?? new ComputedStyle(), name);
                 else if (IsKnown(name))
@@ -328,7 +443,7 @@ public static class CssPropertyTraits
         // 'all' also addresses the logical properties, whose queued re-mapping pass
         // would otherwise re-assert a logical value that 'all' has just reset.
         style.PendingBoxEdgeProperties = null;
-        switch (value)
+        switch (value.ToLowerInvariant())
         {
             case "inherit":
                 foreach (var property in AllResetProperties)

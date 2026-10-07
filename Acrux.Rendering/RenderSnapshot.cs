@@ -132,7 +132,7 @@ public static class RenderSnapshot
 
         var styleComputer = load.StyleComputer;
         var root = load.Document.DocumentElement ?? load.Document.Body;
-        var keyframes = styleComputer?.CollectKeyframeRules();
+        var keyframes = styleComputer?.CollectKeyframeRules(load.Document);
 
         // Style resolution and layout are two separate halves of a frame.
         void ResolveStyles()
@@ -189,7 +189,7 @@ public static class RenderSnapshot
         // host costs a process spawn we don't need for static markup.
         bool hasScripts = runScripts && CollectScriptElements(load.Document).Count > 0;
         var jsEngine = hasScripts
-            ? RunPageScripts(load.Document, baseUrl, width, height, dpiScale)
+            ? RunPageScripts(load.Document, baseUrl, width, height, dpiScale, () => { ResolveStyles(); RunLayout(); })
             : null;
 
         // Once a page has a script engine, animation events also reach its
@@ -316,7 +316,8 @@ public static class RenderSnapshot
     /// adapter is started synchronously here; on any failure we fall back to the
     /// null adapter, matching how the shell degrades when no host is available.
     /// </remarks>
-    private static JavaScriptEngine? RunPageScripts(Document document, string? baseUrl, int width, int height, float dpiScale)
+    private static JavaScriptEngine? RunPageScripts(Document document, string? baseUrl, int width, int height, float dpiScale,
+        Action? forceUpdateStyleAndLayout = null)
     {
         JavaScriptEngine jsEngine;
         try
@@ -330,6 +331,12 @@ public static class RenderSnapshot
         }
 
         jsEngine.SetWindowSize(width, height);
+
+        // A page that changes a style and measures the box in the same script has to
+        // get its own change back, so the two passes the snapshot runs on the shell's
+        // behalf are exposed to the engine for forced reads (CSSOM getComputedStyle /
+        // getBoundingClientRect).
+        jsEngine.ForceUpdateStyleAndLayout = forceUpdateStyleAndLayout;
 
         // Same window-property wiring the app shell installs so pages querying
         // innerWidth / innerHeight / devicePixelRatio observe the snapshot's

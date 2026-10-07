@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<!--
+  b233 — 'revert' / 'revert-layer' against a real UA declaration (CSS Cascading 4 §6.4.2/§6.4.3,
+  CSS 2.1 §10.8, HTML §4.8.6, measured Edge 141).
+
+  Three defects:
+  1. 'display' was only ever emitted by the UA *registry* when the keyword differed from the
+     ComputedStyle default, so a div had no UA 'display' declaration at all. 'revert' then had
+     nothing to land on and fell back to the CSS initial value: a div with
+     el.style.display='revert' computed 'inline' instead of 'block' (§A a1/a2/a9). A default
+     field is not a declaration, and a cascade fallback has to be a declaration.
+  2. 'revert' compared cascade *origins* instead of origin *groups*, so a declaration in the
+     author origin was skipped one declaration at a time: 'revert' written in a style attribute
+     stopped at the stylesheet rule above it instead of stepping over the whole author origin.
+     The reference engine treats the inline style attribute and the CSSOM as author-origin
+     declarations, so a <p style="margin:revert"> lands on the UA 'margin: 1em 0' (11px at an
+     11px font, §A a3) and a <ul> with an author 'ul{padding:0}' rule plus a revert inline
+     padding lands on the UA 40px (§A a6).
+  3. 'revert-layer' has to do the opposite — step back through the cascade one layer at a time
+     (§B), which the same helper now distinguishes with a flag.
+
+  EDGE TRUTH (2026-10-07, Edge 141 / dpr=1, file:///home/master/Acrux/snapshots/
+  css-standard-verify233-revert-display.html, same page as the probe in
+  snapshots/out/_probe_revert2.html). Every §A row prints ok=true in Edge:
+    a1 div display           revert -> "block"      (UA declaration, not the initial 'inline')
+    a2 li display            revert -> "list-item"
+    a3 p margin              revert -> 11px/11px    (UA 'margin: 1em 0' at 11px)
+    a4 h1 font-size          revert -> 22px         (UA 'font-size: 2em')
+    a5 b font-weight         revert -> 700
+    a6 ul padding/list-style revert -> 40px/disc    (the author 'ul{padding:0}' is skipped)
+    a7 div background-color  revert -> rgba(0, 0, 0, 0)   (initial: nothing below the author origin)
+    a8 div border-color      revert -> rgb(0, 128, 128)   (initial currentcolor resolves at
+                                                            computed-value time to the inherited colour)
+    a9 custom-element display revert -> "inline"   (no UA rule at all -> the real initial value)
+    a10 input display        revert -> "inline-block", appearance -> "auto"
+    a11 div line-height      revert -> 13px         (inherited from 'font: 11px/13px')
+    a12 div text-align       revert -> "start"
+    a13 div letter-spacing   revert -> "normal"
+  §B layers: '@layer layerA {#la{display:flex}}' with no revert answers "flex"; a
+    '#lb{display:revert-layer}' in layerB steps back over layerB, finds nothing in layerA and
+    lands on the UA block box -> "block" (the box is full-width, unlike the flex row above it).
+  §C the picture: the reverted values are also what draws — the 11px paragraph gap, the 22px
+  heading, the 40px list indent and the teal (not black) border are all visible in the PNG.
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>b233 revert and the UA display declaration</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 11px/13px Arial, sans-serif; color: teal; }
+  h2 { font: 12px/16px Arial, sans-serif; margin: 6px 0 2px 0; color: #333; }
+  .k { display: inline-block; width: 150px; color: #555; }
+  /* An author rule that 'revert' has to skip: without the skip the list would sit flush left. */
+  ul { margin: 0; padding: 0; }
+  .box { border: 2px solid; padding: 1px 3px; margin: 0; }
+  #la { background: #36c; }
+  #la span { display: block; width: 30px; height: 10px; background: #c33; }
+  #lb { background: #36c; height: 10px; }
+  @layer layerA, layerB;
+  @layer layerA { #la { display: flex } }
+  @layer layerB { #lb { display: revert-layer } }
+</style>
+</head><body>
+<h2>A computed values through 'revert' in an inline declaration</h2>
+<div id="sA">
+  <div class="k">a1 div display</div><div class="box" id="a1">a1</div>
+  <div class="k">a2 li display</div><ul><li class="box" id="a2">a2 marker</li></ul>
+  <div class="k">a3 p margin</div><p class="box" id="a3">a3 paragraph</p>
+  <div class="k">a4 h1 font-size</div><h1 class="box" id="a4">a4 heading</h1>
+  <div class="k">a5 b font-weight</div><div><b class="box" id="a5">a5 bold</b></div>
+  <div class="k">a6 ul padding</div><ul class="box" id="a6"><li>a6 item</li></ul>
+  <div class="k">a7 div background</div><div class="box" id="a7">a7</div>
+  <div class="k">a8 div border-color</div><div class="box" id="a8">a8</div>
+  <div class="k">a9 custom display</div><custom-el class="box" id="a9">a9</custom-el>
+  <div class="k">a10 input display</div><input id="a10">
+  <div class="k">a11 div line-height</div><div class="box" id="a11">a11 a11 a11</div>
+  <div class="k">a12 div text-align</div><div class="box" id="a12" style="width:120px;background:#eee">a12</div>
+  <div class="k">a13 div letter-spacing</div><div class="box" id="a13">a13 tracking</div>
+</div>
+<h2>B layers: revert-layer steps one layer back</h2>
+<div id="la"><span></span><span></span><span></span></div>
+<div id="lb"></div>
+<h2>C report</h2>
+<div id="report"></div>
+<script>
+// [id, property, the property to read, the value Edge answers for the same element]
+const cases = [
+  ['a1', 'display', 'display', 'block'],
+  ['a2', 'display', 'display', 'list-item'],
+  ['a3', 'margin-top', 'margin-top', '11px'],
+  ['a4', 'font-size', 'font-size', '22px'],
+  ['a5', 'font-weight', 'font-weight', '700'],
+  ['a6', 'padding-left', 'padding-left', '40px'],
+  ['a6', 'list-style-type', 'list-style-type', 'disc'],
+  ['a7', 'background-color', 'background-color', 'rgba(0, 0, 0, 0)'],
+  ['a8', 'border-color', 'border-top-color', 'rgb(0, 128, 128)'],
+  ['a9', 'display', 'display', 'inline'],
+  ['a10', 'display', 'display', 'inline-block'],
+  ['a10', 'appearance', 'appearance', 'auto'],
+  ['a11', 'line-height', 'line-height', '13px'],
+  ['a12', 'text-align', 'text-align', 'start'],
+  ['a13', 'letter-spacing', 'letter-spacing', 'normal'],
+];
+const out = [];
+cases.forEach(([id, written, read, want]) => {
+  const key = read.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  const el = document.getElementById(id);
+  el.style.setProperty(written, 'revert');
+  const got = getComputedStyle(el).getPropertyValue(read);
+  out.push(`${id} ${written}:revert -> ${read}=${JSON.stringify(got)} want=${JSON.stringify(want)} ` +
+    `member=${JSON.stringify(getComputedStyle(el)[key])} ok=${got === want}`);
+});
+// a3 reads both edges: the .box rule author-declares 'margin: 0', so the bottom edge has to be
+// reverted too before the UA 'margin: 1em 0' shows through it.
+const p = document.getElementById('a3');
+p.style.setProperty('margin-bottom', 'revert');
+out.push(`a3 bottom=${JSON.stringify(getComputedStyle(p).getPropertyValue('margin-bottom'))} ` +
+  `member=${JSON.stringify(getComputedStyle(p).marginBottom)} ` +
+  `ok=${getComputedStyle(p).marginBottom === '11px'}`);
+// §B the two layer cases.
+out.push(`la display=${JSON.stringify(getComputedStyle(document.getElementById('la')).display)} want="flex" ` +
+  `ok=${getComputedStyle(document.getElementById('la')).display === 'flex'}`);
+out.push(`lb display=${JSON.stringify(getComputedStyle(document.getElementById('lb')).display)} want="block" ` +
+  `ok=${getComputedStyle(document.getElementById('lb')).display === 'block'}`);
+document.getElementById('report').textContent = out.join('\n');
+</script>
+</body></html>

@@ -1,0 +1,36 @@
+<!DOCTYPE html><html><head><style>
+/* Paint truth for MULTI-LAYER backgrounds: which layer paints where, what a layer that names no
+   image does to the layers under it, and how each layer's own origin/clip/size/position/repeat
+   are applied. Every box is the same size with a TRANSPARENT border so the area each layer's
+   clip leaves open is visible. Compared pixel by pixel against a reference engine. */
+body { margin: 0; }
+.b { width: 120px; height: 60px; margin-bottom: 20px;
+     border: 10px solid rgba(0, 0, 0, 0); }
+#g { background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0)); background-size: 30px 30px; }
+#m1 { background: linear-gradient(rgb(255,0,0), rgb(255,0,0)) 10px 20px / 30px 30px, rgb(0,255,0); }
+#m2 { background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0)), linear-gradient(rgb(0,0,255), rgb(0,0,255));
+      background-size: 30px 30px, 20px 20px; background-position: 10px, 40px 20px; }
+#m3 { background: linear-gradient(rgb(255,0,0), rgb(255,0,0)) 0 0 / 30px 30px, none, rgb(0,0,255); }
+#m4 { background-image: none, linear-gradient(rgb(255,0,0), rgb(255,0,0)); background-size: 30px 30px; }
+#m5 { background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0)), linear-gradient(rgb(0,0,255), rgb(0,0,255));
+      background-size: 30px 30px; background-origin: border-box, content-box;
+      background-clip: border-box, content-box; padding: 10px; }
+#m6 { background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0)), linear-gradient(rgb(0,0,255), rgb(0,0,255));
+      background-size: 30px 30px; background-repeat: repeat-x, repeat-y; }
+#m7 { background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0)), linear-gradient(rgb(0,255,255), rgb(0,255,255));
+      background-size: 40px 100%; background-position: 0 0, 20px 0; background-blend-mode: multiply; }
+#m8 { background: rgb(0,255,0); }
+#m9 { background: none; }
+#m10 { background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0)), linear-gradient(rgb(0,0,255), rgb(0,0,255));
+       background-size: 30px 30px; background-repeat: no-repeat, space; background-position: 40px 10px, 0 0; }
+#m11 { background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0)); background-size: 30px 30px;
+       background-repeat: space; background-position: 15px 5px; }
+#m12 { background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0)), linear-gradient(rgb(0,0,255), rgb(0,0,255));
+       background-size: 30px 30px, 25px 25px; background-position: right 10px bottom 5px, 0 0;
+       background-repeat: repeat, no-repeat; }
+</style></head><body>
+<div class="b" id="m1"></div><div class="b" id="m2"></div><div class="b" id="m3"></div>
+<div class="b" id="m4"></div><div class="b" id="m5"></div><div class="b" id="m6"></div>
+<div class="b" id="m7"></div><div class="b" id="m8"></div><div class="b" id="m9"></div>
+<div class="b" id="m10"></div><div class="b" id="m11"></div><div class="b" id="m12"></div>
+</body></html>

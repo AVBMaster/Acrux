@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<!--
+  b230 — logical float/clear (CSS Logical Properties 1 §8) and the multi-word keyword
+  round trip through the property-value store.
+
+  Two defects, one root shape:
+  1. float/clear only accepted the physical keywords, so 'float: inline-start' computed
+     as 'none' and floated nowhere.
+  2. Every CssValueId whose CSS text is a hyphenated keyword had to be listed by hand in
+     ValueIdToString, and ~80 of them were not. An unlisted member serialised as its
+     lower-cased name ("inline-start" -> "inlinestart"), and because the cascade stores
+     declarations as values and hands the RE-SERIALISED text to the property applier,
+     that mangling silently dropped the declaration. 'display: flow-root',
+     'list-style-type: decimal-leading-zero', 'background-repeat: repeat-x',
+     'align-self: self-end', 'cursor: ne-resize' were all on the same cliff.
+
+  EDGE TRUTH (2026-10-07, Edge 141 / dpr=1):
+  §A float/clear, containers 300px wide at x=0, items 80x20 (getBoundingClientRect):
+       f1 (ltr): .fl float:inline-start -> [0..80];  .fl2 float:inline-end -> [220..300]
+       f2 (rtl): .fl float:inline-start -> [220..300]; .fl2 inline-end    -> [0..80]
+       f3 (ltr): float:inline-start then clear:inline-start -> float [0..80],
+                 cleared box [0,20..120,32]  (clears the LEFT float)
+       f4 (rtl): float:inline-end then clear:inline-start  -> float [0..80],
+                 cleared box [180,0..300,12] (nothing to clear: no RIGHT float exists)
+  §B computed values keep the authored logical keyword — Edge answers
+       float: inline-start / clear: inline-end  (NOT the physical side it will be used as)
+     and the physical keywords stay physical.
+  §C multi-word keyword computed values (Edge):
+       display:flow-root, display:table-column-group, list-style-type:decimal-leading-zero,
+       background-repeat:repeat-x, align-self:self-end, cursor:ne-resize,
+       text-transform:full-size-kana, mask-repeat:no-repeat round, font-weight:275
+       (extralight computes to the numeric weight 275 in Edge).
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>b230 logical float and keyword round trip</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 12px/16px Arial, sans-serif; }
+  .cb { position: relative; width: 300px; height: 60px; margin: 0 0 6px 0; background: #eee; }
+  .cb.r { direction: rtl; }
+  .fl { width: 80px; height: 20px; background: rgb(74, 170, 68); float: inline-start; }
+  .fl2 { width: 80px; height: 20px; background: rgb(170, 68, 68); float: inline-end; }
+  .clr { width: 120px; height: 12px; background: rgb(68, 68, 170); clear: inline-start; }
+  .k { width: 40px; height: 12px; }
+</style></head>
+<body>
+<h2>1. logical float / clear</h2>
+<div class="cb" id="f1"><div class="fl" id="k1"></div><div class="fl2" id="k2"></div></div>
+<div class="cb r" id="f2"><div class="fl" id="k3"></div><div class="fl2" id="k4"></div></div>
+<div class="cb" id="f3"><div class="fl" id="k5"></div><div class="clr" id="k6"></div></div>
+<div class="cb r" id="f4"><div class="fl2" id="k7"></div><div class="clr" id="k8"></div></div>
+<h2>2. multi-word keyword round trip (computed values must survive re-serialisation)</h2>
+<div id="c1" style="display:flow-root;width:120px;height:20px;background:#ddd">flow-root</div>
+<ul id="c2" style="list-style-position:inside"><li style="list-style-type:decimal-leading-zero">dlz</li></ul>
+<div id="c3" style="width:60px;height:20px;background:#f00;background-image:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==);background-repeat:repeat-x"></div>
+<div style="display:flex;width:200px;height:30px;background:#eee">
+  <div id="c4" style="align-self:self-end;width:40px;height:10px;background:#0a0"></div></div>
+<div id="c5" style="cursor:ne-resize;width:20px;height:20px;background:#eee"></div>
+<div id="c6" style="text-transform:full-size-kana;width:120px;height:16px;background:#eee">かキ</div>
+<div id="c7" style="font-weight:extralight;width:120px;height:16px;background:#eee">weight</div>
+<div id="c8" style="width:60px;height:30px;background:#00f;
+     mask-image:linear-gradient(#000,#000);mask-size:20px 15px;mask-repeat:no-repeat round"></div>
+<div id="c9" style="float:inline-start;width:80px;height:20px;background:#44a">float</div>
+<div id="c10" style="clear:inline-end;width:80px;height:20px;background:#a4a">clear</div>
+</body></html>

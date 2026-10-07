@@ -1,0 +1,116 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>b246 filter computed value</title><!--
+  The computed value of a <filter-value-list> (CSS Filter Effects 1 §29.1, §6.1) and of
+  'backdrop-filter', for every spelling the grammar takes.
+
+  A filter list is SPACE separated — a comma voids the whole declaration rather than skipping one
+  item — and one function the grammar rejects voids it the same way. At computed-value time a
+  length has lost the unit it was written in, an angle is printed in degrees, an amount that only
+  means a fraction has had its upper bound applied, a colour has replaced 'currentcolor', and a
+  number is printed with six significant digits (so 1000000.2 reads back as 1e+06).
+
+  Every want below was read from a reference engine's getComputedStyle on the same document.
+-->
+<style>
+  body { margin: 0; padding: 0; font: 12px Consolas, monospace; color: #111; background: #fff; }
+  #report div { white-space: pre; }
+</style>
+</head>
+<body>
+<div id="r_f01" style="filter: blur(4px)"></div>
+<div id="r_f02" style="filter: blur(4pt)"></div>
+<div id="r_f03" style="filter: blur(0)"></div>
+<div id="r_f04" style="filter: blur()"></div>
+<div id="r_f05" style="filter: brightness(2)"></div>
+<div id="r_f06" style="filter: brightness(200%)"></div>
+<div id="r_f07" style="filter: contrast(0.5)"></div>
+<div id="r_f08" style="filter: contrast(50%)"></div>
+<div id="r_f09" style="filter: drop-shadow(2px 3px)"></div>
+<div id="r_f10" style="filter: drop-shadow(2px 3px 4px 5px red)"></div>
+<div id="r_f11" style="filter: drop-shadow(red 2px 3px)"></div>
+<div id="r_f12" style="filter: grayscale(0.5)"></div>
+<div id="r_f13" style="filter: hue-rotate(0.5turn)"></div>
+<div id="r_f14" style="filter: hue-rotate(200grad)"></div>
+<div id="r_f15" style="filter: hue-rotate(3.14159rad)"></div>
+<div id="r_f16" style="filter: invert(1)"></div>
+<div id="r_f17" style="filter: opacity(0.5)"></div>
+<div id="r_f18" style="filter: sepia(1e-07)"></div>
+<div id="r_f19" style="filter: saturate(1.23457e+06)"></div>
+<div id="r_f20" style="filter: blur(-2px)"></div>
+<div id="r_f21" style="filter: brightness(-1)"></div>
+<div id="r_f22" style="filter: url(#ff)"></div>
+<div id="r_f23" style="filter: url(&quot;#ff&quot;)"></div>
+<div id="r_f24" style="filter: none, blur(2px)"></div>
+<div id="r_f25" style="filter: blur(2px), brightness(2)"></div>
+<div id="r_f26" style="filter: progid:DXImageTransform.Microsoft.Blur()"></div>
+<div id="r_f27" style="filter: blur(2px) blur(3px)"></div>
+<div id="r_f28" style="filter: drop-shadow(2px 3px 4px 5px)"></div>
+<div id="r_f29" style="filter: grayscale()"></div>
+<div id="r_f30" style="filter: invert(200%)"></div>
+<div id="r_f31" style="filter: opacity(-1)"></div>
+<div id="r_f32" style="filter: blur(2px) brightness()"></div>
+<div id="r_f33" style="filter: blur(2PX)"></div>
+<div id="r_f34" style="filter: BLUR(2px)"></div>
+<div id="r_f35" style="filter: drop-shadow(2px 3px 4px 5px rgb(1 2 3 / 40%))"></div>
+<div id="r_f36" style="filter: hue-rotate(45deg) hue-rotate(45deg)"></div>
+<div id="r_f37" style="filter: saturate(0.5)  ;"></div>
+<div id="r_f38" style="filter: blur(2px) drop-shadow(1px 2px green) brightness(1.5)"></div>
+<div id="r_f39" style="filter: contrast(120%) brightness(1.05) grayscale(0.3)"></div>
+<div id="r_f40" style="filter: url(#a) blur(2px)"></div>
+<div id="r_b01" style="backdrop-filter: blur(4pt)"></div>
+<div id="r_b02" style="backdrop-filter: blur(2px), brightness(2)"></div>
+<div id="r_b03" style="backdrop-filter: drop-shadow(2px 3px)"></div>
+<div id="r_b04" style="backdrop-filter: none"></div>
+<div id="r_b05" style="backdrop-filter: invert(200%)"></div>
+<div id="r_c01" style="filter: blur(2px)"></div>
+<div id="r_c02" style="filter: brightness(0.000001234)"></div>
+<div id="r_c03" style="filter: brightness(1000000.2)"></div>
+<div id="r_c04" style="filter: hue-rotate(-30deg)"></div>
+<div id="r_c05" style="filter: hue-rotate(390deg)"></div>
+<div id="r_c06" style="filter: drop-shadow(2px 3px 4px)"></div>
+<div id="r_c07" style="filter: drop-shadow(2px 3px currentcolor)"></div>
+<div id="r_c08" style="filter: blur(2px) none"></div>
+<div id="r_c09" style="filter: saturate(0)"></div>
+<div id="r_c10" style="filter: opacity(50%)"></div>
+<div id="r_c11" style="filter: grayscale(120%)"></div>
+<div id="r_c12" style="filter: blur(1in)"></div>
+<div id="r_c13" style="filter: blur(50%)"></div>
+<div id="r_c14" style="filter: brightness(1e3)"></div>
+<div id="r_c15" style="filter: hue-rotate(100grad)"></div>
+
+<div id="report"></div>
+<script>
+const out = [];
+const g = (id, prop) => getComputedStyle(document.getElementById(id)).getPropertyValue(prop);
+const ok = (name, got, want) => { out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${got === want}`); };
+
+const F = {
+  f01: "blur(4px)", f02: "blur(5.33333px)", f03: "blur(0px)", f04: "blur(0px)",
+  f05: "brightness(2)", f06: "brightness(2)", f07: "contrast(0.5)", f08: "contrast(0.5)",
+  f09: "drop-shadow(rgb(17, 17, 17) 2px 3px 0px)", f10: "none",
+  f11: "drop-shadow(rgb(255, 0, 0) 2px 3px 0px)", f12: "grayscale(0.5)",
+  f13: "hue-rotate(180deg)", f14: "hue-rotate(180deg)", f15: "hue-rotate(180deg)",
+  f16: "invert(1)", f17: "opacity(0.5)", f18: "sepia(1e-07)", f19: "saturate(1.23457e+06)",
+  f20: "none", f21: "none", f22: 'url("#ff")', f23: 'url("#ff")', f24: "none", f25: "none",
+  f26: "none", f27: "blur(2px) blur(3px)", f28: "none", f29: "grayscale(1)", f30: "invert(1)",
+  f31: "none", f32: "blur(2px) brightness(1)", f33: "blur(2px)", f34: "blur(2px)", f35: "none",
+  f36: "hue-rotate(45deg) hue-rotate(45deg)", f37: "saturate(0.5)",
+  f38: "blur(2px) drop-shadow(rgb(0, 128, 0) 1px 2px 0px) brightness(1.5)",
+  f39: "contrast(1.2) brightness(1.05) grayscale(0.3)", f40: 'url("#a") blur(2px)',
+  c01: "blur(2px)", c02: "brightness(1.234e-06)", c03: "brightness(1e+06)",
+  c04: "hue-rotate(-30deg)", c05: "hue-rotate(390deg)",
+  c06: "drop-shadow(rgb(17, 17, 17) 2px 3px 4px)",
+  c07: "drop-shadow(rgb(17, 17, 17) 2px 3px 0px)", c08: "none", c09: "saturate(0)",
+  c10: "opacity(0.5)", c11: "grayscale(1)", c12: "blur(96px)", c13: "none",
+  c14: "brightness(1000)", c15: "hue-rotate(90deg)",
+};
+for (const k in F) ok(k + '_filter', g('r_' + k, 'filter'), F[k]);
+
+const B = {
+  b01: "blur(5.33333px)", b02: "none",
+  b03: "drop-shadow(rgb(17, 17, 17) 2px 3px 0px)", b04: "none", b05: "invert(1)",
+};
+for (const k in B) ok(k + '_backdrop', g('r_' + k, 'backdrop-filter'), B[k]);
+
+document.getElementById('report').innerHTML = out.map(l => '<div>' + l + '</div>').join('');
+</script>
+</body></html>

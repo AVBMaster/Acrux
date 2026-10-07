@@ -72,6 +72,18 @@ public class GridLayoutAlgorithm
         var explicitRows = ParseTrackList("grid-template-rows", _containerHeight);
         var areas = ParseTemplateAreas(_containerStyle.GridTemplateAreas);
 
+        // 'grid-template-areas' declares explicit tracks of its own (CSS Grid §7.3): one row per
+        // string, and as many columns as the widest string has names. They are auto-sized, like a
+        // row the author wrote as 'auto', and they exist even when no item is placed in them.
+        if (areas.Count > 0)
+        {
+            while (explicitRows.Count < areas.Count)
+                explicitRows.Add(new GridTrack { SizeType = TrackSizeType.Auto });
+            int areaColumns = areas.Max(row => row.Length);
+            while (explicitColumns.Count < areaColumns)
+                explicitColumns.Add(new GridTrack { SizeType = TrackSizeType.Auto });
+        }
+
         var items = CollectAndPlaceItems(gridContainer, explicitColumns.Count, explicitRows.Count, areas, columnGap, rowGap);
 
         ExpandImplicitTracks(items, ref explicitColumns, ref explicitRows);
@@ -102,6 +114,85 @@ public class GridLayoutAlgorithm
         ResolveTracks(explicitRows, items, _containerHeight, rowGap, isColumn: false);
 
         PositionItems(items, explicitColumns, explicitRows, containerBox, columnGap, rowGap);
+
+        RecordUsedTrackSizes(gridContainer, explicitColumns, explicitRows, columnGap, rowGap);
+    }
+
+    /// <summary>Publish the resolved track list for the CSSOM. A reference engine answers
+    /// 'grid-template-columns' with the sizes layout gave the tracks rather than the list the
+    /// author wrote (measured: 'grid-template-columns: 1fr 2fr' in a 100px grid reads back
+    /// '33.3281px 66.6719px'), so the numbers have to survive the algorithm.</summary>
+    private void RecordUsedTrackSizes(Element container, List<GridTrack> columns, List<GridTrack> rows,
+        float columnGap, float rowGap)
+    {
+        if (_containerStyle == null) return;
+        var usedColumns = UsedTrackSizes(columns, columnGap);
+        var usedRows = UsedTrackSizes(rows, rowGap);
+        // Loose text is an anonymous grid item, so a grid that holds only text still has one
+        // track on each axis even though no element was placed. Its size is the track the
+        // 'grid-auto-*' keyword named, or the axis the container itself resolved when that is
+        // 'auto' — the single anonymous cell fills it.
+        if ((usedColumns == null || usedColumns.Length == 0) && HasAnonymousTextItem(container))
+            usedColumns = new[] { ImplicitTrackSize(_containerStyle.GridAutoColumns, _containerWidth, isColumn: true) };
+        if ((usedRows == null || usedRows.Length == 0) && HasAnonymousTextItem(container))
+            usedRows = new[] { ImplicitTrackSize(_containerStyle.GridAutoRows, _containerHeight, isColumn: false) };
+        _containerStyle.GridUsedColumnSizes = usedColumns;
+        _containerStyle.GridUsedRowSizes = usedRows;
+    }
+
+    /// <summary>The size of the single track a text-only grid container gets: what
+    /// 'grid-auto-columns'/'grid-auto-rows' names when the author named it, and otherwise the
+    /// axis the container resolved — an 'auto' track is the one that stretches to fill.</summary>
+    private float ImplicitTrackSize(string? autoValue, float containerSize, bool isColumn)
+    {
+        if (!string.IsNullOrWhiteSpace(autoValue) && !autoValue.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            var tracks = new List<GridTrack>();
+            ParseTrackListValue(autoValue.Replace(',', ' '), containerSize, tracks);
+            if (tracks.Count > 0)
+            {
+                tracks[0].Initialize(containerSize, _containerStyle?.FontSize ?? 16, _viewportWidth, _viewportHeight);
+                return Math.Max(0, tracks[0].BaseSize);
+            }
+        }
+        if (isColumn) return containerSize;
+        float lineHeight = _containerStyle!.LineHeightPx ?? _containerStyle.LineHeight * _containerStyle.FontSize;
+        return Math.Max(lineHeight, containerSize);
+    }
+
+    /// <summary>True when the container's own children include text that is not just the
+    /// whitespace between element items.</summary>
+    private static bool HasAnonymousTextItem(Element container)
+    {
+        foreach (var child in container.ChildNodes)
+        {
+            if (child is TextNode && !string.IsNullOrWhiteSpace(child.TextContent)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Track sizes as the CSSOM reports them: every track EDGE is snapped to a layout
+    /// unit (1/64 px, truncated) and the size is the difference between the track's own two
+    /// edges. Snapping the sizes themselves would give a different answer — three 1fr tracks in a
+    /// 101px box read back '33.6562px 33.6719px 33.6719px' (measured), and the last two are not
+    /// what rounding each size on its own produces. The gap sits between the edges of the group,
+    /// never inside one, which is why it is added after the second edge is taken.</summary>
+    private static float[]? UsedTrackSizes(List<GridTrack> tracks, float gap)
+    {
+        if (tracks.Count == 0) return null;
+        var sizes = new float[tracks.Count];
+        double position = 0;
+        for (int i = 0; i < tracks.Count; i++)
+        {
+            float size = tracks[i].BaseSize;
+            if (!float.IsFinite(size) || size < 0) size = 0;
+            double start = Math.Floor(position * 64) / 64;
+            position += size;
+            double end = Math.Floor(position * 64) / 64;
+            sizes[i] = (float)(end - start);
+            position += gap;
+        }
+        return sizes;
     }
 
     private List<string[]> ParseTemplateAreas(string? areasStr)
@@ -218,6 +309,16 @@ public class GridLayoutAlgorithm
             }
 
             int endIdx = i;
+            if (value[endIdx] == '[')
+            {
+                // A line-name group (CSS Grid §7.1) says what the line is called; it is
+                // not a track, and treating it as one gave every named list a phantom
+                // zero-sized track between each real one.
+                int close = value.IndexOf(']', endIdx);
+                if (close < 0) break;
+                i = close + 1;
+                continue;
+            }
             while (endIdx < value.Length && !char.IsWhiteSpace(value[endIdx]) && value[endIdx] != ',')
             {
                 if (value[endIdx] == '(')
@@ -1027,13 +1128,14 @@ public class GridLayoutAlgorithm
             // with an intrinsic min sizing function; fr tracks wait for §12.7).
             // Collapsed auto-fit tracks stay frozen at zero and must not absorb any
             // of this space, or the fr tracks would never expand.
-            int nonFrCount = tracks.Count(t => !IsFlexible(t) && !t.Collapsed);
+            bool hasFlexible = tracks.Any(IsFlexible);
+            int nonFrCount = tracks.Count(t => !IsFlexible(t) && !t.Collapsed && Maximizable(t, hasFlexible));
             if (nonFrCount > 0)
             {
                 float perTrack = freeSpace / nonFrCount;
                 foreach (var t in tracks)
                 {
-                    if (!IsFlexible(t) && !t.Collapsed)
+                    if (!IsFlexible(t) && !t.Collapsed && Maximizable(t, hasFlexible))
                     {
                         float growLimit = t.GrowLimit > 0 ? t.GrowLimit : float.MaxValue;
                         float add = Math.Min(perTrack, growLimit - t.BaseSize);
@@ -1143,6 +1245,16 @@ public class GridLayoutAlgorithm
     private static bool IsFlexible(GridTrack track) =>
         track.SizeType == TrackSizeType.Fraction
         || (track.SizeType == TrackSizeType.MinMax && track.MaxSize?.SizeType == TrackSizeType.Fraction);
+
+    /// <summary>Whether the maximize step may grow this track. A track with no growth limit
+    /// measured — an 'auto' whose content never reached the sizing algorithm — has nowhere
+    /// sensible to stop, so it must not drink the free space an 'fr' track in the same list is
+    /// waiting for (measured: 'grid-template-rows: auto 1fr' in a 60px box is '0px 60px').</summary>
+    private static bool Maximizable(GridTrack track, bool hasFlexible)
+    {
+        if (!hasFlexible) return true;
+        return track.GrowLimit > 0 && float.IsFinite(track.GrowLimit);
+    }
 
     private static float FrFactor(GridTrack track) =>
         track.SizeType == TrackSizeType.Fraction ? track.Fraction : (track.MaxSize?.Fraction ?? 0f);

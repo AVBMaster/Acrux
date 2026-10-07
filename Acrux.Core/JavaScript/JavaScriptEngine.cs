@@ -512,6 +512,38 @@ public class JavaScriptEngine : IDisposable
         DirtyTrace = null;
     }
 
+    /// <summary>
+    /// Runs the pending style and layout work. Installed by whoever owns the frame
+    /// pipeline (the snapshot helper, the page engine) because only they can re-run
+    /// those two passes.
+    /// </summary>
+    public Action? ForceUpdateStyleAndLayout { get; set; }
+
+    private long _forcedUpdateVersion = -1;
+    private bool _inForcedUpdate;
+
+    /// <summary>
+    /// Flushes style and layout before a synchronous DOM read. A page that changes a
+    /// style and then measures the box in the same script has to see its own change:
+    /// getComputedStyle, getBoundingClientRect and the offset, client and scroll
+    /// accessors all force the pending work first (CSSOM "update the rendering",
+    /// "getClientRects() for an element"). Without it every such read returns the
+    /// numbers of the previous frame.
+    /// </summary>
+    public void FlushForRead()
+    {
+        var hook = ForceUpdateStyleAndLayout;
+        if (hook == null || _inForcedUpdate) return;
+
+        long version = DomMutationTracker.Version;
+        if (version == _forcedUpdateVersion) return;
+
+        _forcedUpdateVersion = version;
+        _inForcedUpdate = true;
+        try { hook(); }
+        finally { _inForcedUpdate = false; }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -672,6 +704,23 @@ public class JavaScriptEngine : IDisposable
                 return __acrux.createURLSearchParams(query || '');
             }
 
+            // 'new CSSStyleSheet()' — a sheet the script owns (CSSOM §5.2.2). The rules and the
+            // disabled flag live in the engine; 'replace' is the async twin of 'replaceSync',
+            // so it is built here out of a Promise rather than reaching into the host.
+            function CSSStyleSheet() {
+                var sheet = __acrux.createCSSStyleSheet();
+                try {
+                    sheet.replace = function (text) {
+                        var self = this;
+                        return new Promise(function (resolve, reject) {
+                            try { self.replaceSync(text); resolve(self); }
+                            catch (e) { reject(e); }
+                        });
+                    };
+                } catch (e) { }
+                return sheet;
+            }
+
             function Image(width, height) {
                 var img = document.createElement('img');
                 if (width !== undefined) img.width = width;
@@ -703,8 +752,71 @@ public class JavaScriptEngine : IDisposable
             window.scrollTo = function(x, y) { __acrux.scrollTo(x || 0, y || 0); };
             window.scrollBy = function(x, y) { __acrux.scrollBy(x || 0, y || 0); };
             window.scroll = window.scrollTo;
-            window.getComputedStyle = function(el) { return document.getComputedStyle(el); };
-            window.matchMedia = function(query) { return { matches: true, media: query, addEventListener: function(){}, removeEventListener: function(){} }};
+            // CSSOM: every longhand of a computed style reads as a camelCase property as
+            // well as through getPropertyValue('dashed-name'). The host object only carries
+            // members for the properties the C# side wrote out by hand, so the rest are
+            // answered from its __resolve; a name that is not a CSS property stays undefined.
+            function __wrapComputedStyle(cs) {
+                if (cs === null || cs === undefined || typeof Proxy !== 'function') return cs;
+                return new Proxy(cs, {
+                    get: function (target, name) {
+                        if (typeof name !== 'string') return target[name];
+                        var own = target[name];
+                        if (own !== undefined) return own;
+                        var resolved = target.__resolve(name);
+                        return resolved == null ? undefined : resolved;
+                    },
+                    has: function (target, name) {
+                        if (typeof name === 'string' && target.__resolve(name) != null) return true;
+                        return typeof target[name] !== 'undefined';
+                    }
+                });
+            }
+            window.getComputedStyle = function (el) { return __wrapComputedStyle(document.getComputedStyle(el)); };
+            // 'MediaQueryList.media' is the query re-serialised rather than the text handed in:
+            // whitespace runs collapse to one space, parentheses sit tight against their content,
+            // a list separates with ', ', a comparison operator is spaced on both sides, a feature
+            // colon is followed by exactly one space, a ratio is written '1 / 2', a leading
+            // 'all and ' goes away, and the whole thing comes back in lowercase — every identifier
+            // in a media query is case-insensitive, so the canonical form has no capitals in it
+            // (measured: '(MIN-WIDTH: 400px)' reads as '(min-width: 400px)', 'SCREEN' as 'screen',
+            // '(width>=400px)' as '(width >= 400px)', '(min-aspect-ratio:1/2)' as
+            // '(min-aspect-ratio: 1 / 2)', 'all and (min-width: 1px)' as '(min-width: 1px)' and
+            // '(color-gamut:P3)' as '(color-gamut: p3)'). A query the grammar rejects is returned
+            // as it was written instead, which the engine does not detect here.
+            function __serializeMediaQuery(q) {
+                if (!q) return '';
+                var s = q.replace(/\s+/g, ' ').trim();
+                s = s.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
+                s = s.replace(/(<=|>=|<|>)/g, ' $1 ');
+                s = s.replace(/\s*,\s*/g, ', ');
+                s = s.replace(/([a-zA-Z0-9_-])\s*:\s*/g, '$1: ');
+                s = s.replace(/:\s*(\d*\.?\d+)\s*\/\s*(\d*\.?\d+)/g, ': $1 / $2');
+                s = s.replace(/\s+/g, ' ').trim();
+                s = s.replace(/^all\s+and\s+/i, '');
+                return s.toLowerCase();
+            }
+            window.matchMedia = function(query) {
+                var q = String(query === undefined ? '' : query).trim();
+                // The same evaluator an @media rule is filtered through, so a script and a
+                // stylesheet cannot disagree about the viewport (CSSOM View §7.1).
+                var matches = function() { return !!__acrux.mediaQueryMatches(q); };
+                var listeners = [];
+                var list = {};
+                // A MediaQueryList reads its own properties off the prototype and keeps them
+                // non-enumerable, so 'Object.keys(mql)' is empty and a spread of it is too.
+                Object.defineProperties(list, {
+                    media: { get: function() { return __serializeMediaQuery(q); } },
+                    matches: { get: matches },   // live: the list follows the viewport
+                    onchange: { value: null, writable: true },
+                    addListener: { value: function(cb) { if (typeof cb === 'function') listeners.push(cb); } },
+                    removeListener: { value: function(cb) { var i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); } },
+                    addEventListener: { value: function(t, cb) { if (t === 'change' && typeof cb === 'function') listeners.push(cb); } },
+                    removeEventListener: { value: function(t, cb) { var i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); } },
+                    dispatchEvent: { value: function() { return true; } }
+                });
+                return list;
+            };
             window.open = function(url, name, features) {
                 if (url) location.href = url;
                 return window;
@@ -924,6 +1036,29 @@ public class AcruxBuiltins
     public int innerWidth() => GetInnerWidth?.Invoke() ?? 1024;
     public int innerHeight() => GetInnerHeight?.Invoke() ?? 768;
     public double devicePixelRatio() => GetDevicePixelRatio?.Invoke() ?? 1.0;
+
+    /// <summary>Which preferred colour scheme the environment reports to
+    /// 'prefers-color-scheme'. The shell has one; a page that never sets it stays 'light'.</summary>
+    public Func<string>? GetColorScheme { get; set; }
+
+    /// <summary>'window.matchMedia(query)': the query is evaluated by the same code that filters
+    /// @media rules, which is the only way the two can be made to answer one question the same
+    /// way. The viewport is the window's, the resolution the device pixel ratio, and the font
+    /// units inside the query are the initial font's (CSS Media Queries 4 §6) — none of which a
+    /// page can influence from a style sheet.</summary>
+    public bool mediaQueryMatches(string query)
+    {
+        float w = innerWidth(), h = innerHeight();
+        string scheme = GetColorScheme?.Invoke() ?? "light";
+        var env = new Acrux.Core.Css.MediaQueryEnvironment
+        {
+            ViewportWidth = w,
+            ViewportHeight = h,
+            ColorScheme = scheme,
+            ResolutionDppx = devicePixelRatio(),
+        };
+        return Acrux.Core.Css.MediaQueryEvaluator.Evaluate(query ?? "", w, h, scheme, env);
+    }
     public int scrollX() => GetScrollX?.Invoke() ?? 0;
     public int scrollY() => GetScrollY?.Invoke() ?? 0;
     public void scrollTo(int x, int y) { OnScrollTo?.Invoke(x, y); }
@@ -931,6 +1066,11 @@ public class AcruxBuiltins
     public XMLHttpRequestHost createXMLHttpRequest() => new XMLHttpRequestHost(_engine);
     public URLHost createURL(string url, string? baseUrl) => new URLHost(url, baseUrl);
     public URLSearchParamsHost createURLSearchParams(string query) => new URLSearchParamsHost(query);
+
+    /// <summary>'new CSSStyleSheet()' (CSSOM §5.2.2): a sheet the script owns. It applies to a
+    /// document only once the page adopts it, and unlike a sheet an element owns it may be
+    /// replaced wholesale through replaceSync/replace.</summary>
+    public CssStyleSheetHost createCSSStyleSheet() => new CssStyleSheetHost(new Acrux.Core.Css.Rules.StyleSheetContents());
 
     // ── JS Engine Management ──────────────────────────────────
 
@@ -1359,16 +1499,18 @@ public class HistoryHost
 
 public class ScreenHost
 {
-    public int width => 1920;
-    public int height => 1080;
-    public int availWidth => 1920;
-    public int availHeight => 1040;
+    // The device media features read the same numbers this object hands to a page, so
+    // '(device-width: screen.width + "px")' cannot be false (CSS Media Queries 4 §7.4).
+    public int width => Acrux.Core.Display.ScreenMetrics.Width;
+    public int height => Acrux.Core.Display.ScreenMetrics.Height;
+    public int availWidth => Acrux.Core.Display.ScreenMetrics.AvailableWidth;
+    public int availHeight => Acrux.Core.Display.ScreenMetrics.AvailableHeight;
     public int availTop => 0;
     public int availLeft => 0;
-    public int colorDepth => 24;
-    public int pixelDepth => 24;
-    public int top => 0;
-    public int left => 0;
+    public int colorDepth => Acrux.Core.Display.ScreenMetrics.ColorDepth;
+    public int pixelDepth => Acrux.Core.Display.ScreenMetrics.ColorDepth;
+    public int top => Acrux.Core.Display.ScreenMetrics.Top;
+    public int left => Acrux.Core.Display.ScreenMetrics.Left;
     public object? orientation => new ScreenOrientationHost();
 }
 

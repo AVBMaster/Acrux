@@ -39,6 +39,11 @@ public static class FormElements
             case "input":
                 style.Display = DisplayType.InlineBlock;
                 style.Appearance = "auto";
+                // The widget a control paints as is not a CSS value (measured: every form
+                // control computes 'appearance' to 'auto', even one the reference engine draws
+                // as a text field), so it is carried beside the property instead of in it.
+                // The type overrides below rename it, as the user-agent rules used to.
+                style.NativeThemeFamily = "textfield";
                 style.PaddingTop = new PixelLength(1);
                 style.PaddingBottom = new PixelLength(1);
                 style.PaddingLeft = new PixelLength(2);
@@ -68,6 +73,7 @@ public static class FormElements
                 switch (inputType)
                 {
                     case "checkbox":
+                        style.NativeThemeFamily = "checkbox";
                         style.Width = new PixelLength(13);
                         style.Height = new PixelLength(13);
                         style.BorderTopWidth = 0;
@@ -82,6 +88,7 @@ public static class FormElements
                         style.BackgroundColor = SKColors.Transparent;
                         break;
                     case "radio":
+                        style.NativeThemeFamily = "radio";
                         style.Width = new PixelLength(13);
                         style.Height = new PixelLength(13);
                         style.BorderTopWidth = 0;
@@ -98,6 +105,7 @@ public static class FormElements
                     case "button":
                     case "submit":
                     case "reset":
+                        style.NativeThemeFamily = "push-button";
                         style.BorderTopStyle = BorderStyle.Outset;
                         style.BorderRightStyle = BorderStyle.Outset;
                         style.BorderBottomStyle = BorderStyle.Outset;
@@ -111,9 +119,11 @@ public static class FormElements
                         style.WhiteSpace = WhiteSpaceMode.Nowrap;
                         break;
                     case "file":
+                        style.NativeThemeFamily = "file-upload-button";
                         style.Cursor = "default";
                         break;
                     case "image":
+                        style.NativeThemeFamily = "-webkit-image-control";
                         style.Cursor = "pointer";
                         style.BorderTopWidth = 0;
                         style.BorderRightWidth = 0;
@@ -126,9 +136,11 @@ public static class FormElements
                         style.BackgroundColor = SKColors.Transparent;
                         break;
                     case "hidden":
+                        style.NativeThemeFamily = "none";
                         style.Display = DisplayType.None;
                         break;
                     case "range":
+                        style.NativeThemeFamily = "slider-horizontal";
                         style.BorderTopWidth = 0;
                         style.BorderRightWidth = 0;
                         style.BorderBottomWidth = 0;
@@ -141,6 +153,7 @@ public static class FormElements
                         style.BackgroundColor = SKColors.Transparent;
                         break;
                     case "color":
+                        style.NativeThemeFamily = "square-button";
                         style.Width = new PixelLength(44);
                         style.Height = new PixelLength(23);
                         style.BorderTopWidth = 1;
@@ -159,6 +172,14 @@ public static class FormElements
                         style.Cursor = "default";
                         break;
                     case "search":
+                        style.NativeThemeFamily = "searchfield";
+                        break;
+                    case "date":
+                    case "datetime-local":
+                    case "month":
+                    case "time":
+                    case "week":
+                        style.NativeThemeFamily = "-webkit-datetime-edit";
                         break;
                     case "password":
                         style.Cursor = "text";
@@ -169,6 +190,7 @@ public static class FormElements
             case "textarea":
                 style.Display = DisplayType.InlineBlock;
                 style.Appearance = "auto";
+                style.NativeThemeFamily = "textarea";
                 style.BoxSizing = BoxSizingType.BorderBox;
                 style.BorderTopWidth = 1;
                 style.BorderRightWidth = 1;
@@ -195,6 +217,12 @@ public static class FormElements
             case "select":
                 style.Display = DisplayType.InlineBlock;
                 style.Appearance = "auto";
+                // A sized or multiple select is a list box, which gets no widget drawn for it;
+                // the closed menu list is the one that carries an arrow.
+                style.NativeThemeFamily = element != null
+                    && (element.HasAttribute("multiple")
+                        || (int.TryParse(element.GetAttribute("size"), out var selectRows) && selectRows > 1))
+                    ? "listbox" : "menulist";
                 style.BoxSizing = BoxSizingType.BorderBox;
                 style.BorderTopWidth = 1;
                 style.BorderRightWidth = 1;
@@ -218,6 +246,7 @@ public static class FormElements
             case "button":
                 style.Display = DisplayType.InlineBlock;
                 style.Appearance = "auto";
+                style.NativeThemeFamily = "button";
                 style.BoxSizing = BoxSizingType.BorderBox;
                 style.BorderTopWidth = 2;
                 style.BorderRightWidth = 2;
@@ -296,6 +325,7 @@ public static class FormElements
             case "progress":
                 style.Display = DisplayType.InlineBlock;
                 style.Appearance = "auto";
+                style.NativeThemeFamily = "progress-bar";
                 style.BoxSizing = BoxSizingType.BorderBox;
                 style.VerticalAlign = VerticalAlignType.Middle;
                 style.Width = new PixelLength(160);
@@ -310,6 +340,7 @@ public static class FormElements
             case "meter":
                 style.Display = DisplayType.InlineBlock;
                 style.Appearance = "auto";
+                style.NativeThemeFamily = "meter";
                 style.BoxSizing = BoxSizingType.BorderBox;
                 style.VerticalAlign = VerticalAlignType.Middle;
                 style.Width = new PixelLength(160);

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<!--
+  b232 — the CSSOM's specified value for 'display', and the 'style' attribute as the inline
+  declaration block (CSS Display 3 §3, CSSOM §2, CSS Values 3 §2.1, CSS Cascading 4 §6.4).
+
+  Four defects:
+  1. 'el.style.display' handed back the characters that were written. The reference engine
+     stores the parsed value, so a multi-keyword 'display' reads back in canonical keywords
+     and collapses to the legacy keyword whenever one spells the same box: 'block flow' is
+     'block', 'inline flow-root' is 'inline-block', 'block flow list-item' is 'list-item',
+     'list-item flow-root' is 'flow-root list-item', and 'inline flow-root list-item' stays
+     three words because no single keyword says it.
+  2. A bare internal keyword was not a value at all: 'display: flow' is 'block' (measured).
+  3. 'el.style' was a separate store from the 'style' attribute, so a block written into the
+     attribute was invisible to the CSSOM and a CSSOM write never reached the attribute. They
+     are one declaration block: reads see the attribute, writes serialise back into it.
+  4. Two keyword-level gaps found on the way: 'revert'/'revert-layer' written through the
+     CSSOM applied their unset-like fallback instead of stepping down to the declaration
+     below (a div with el.style.display='revert' computed 'inline' instead of the UA 'block'),
+     and a property the block does not carry read back as null instead of the empty string.
+
+  EDGE TRUTH (2026-10-07, Edge 141 / dpr=1, same page; the scratch probe's full table is in
+  snapshots/out/_r24_edge.txt). Every row the page prints carries ok=true in Edge, i.e. the
+  CSSOM text and the computed value both equal the two columns the forms table expects.
+  §A cssom / comp, the pairs that are not the trivial identity:
+       flow / FLOW / BLOCK FLOW / "  block   flow  "->"block"/block
+       inline flow-root and flow-root inline -> "inline-block"
+       block flow-root and flow-root block -> "flow-root"
+       block list-item, list-item block, flow list-item -> "list-item"
+       inline flow list-item -> "inline list-item"
+       flow-root list-item and list-item flow-root -> "flow-root list-item"
+       inline flow-root list-item -> "inline flow-root list-item" (no keyword spells it)
+       block inline / table flow / block block / run-in -> "" (dropped), box keeps "block"
+       inherit -> "inherit" with comp "block" (the parent .pair box)
+       INITIAL -> "initial", UnSeT -> "unset", both compute "inline"
+       ReVeRt -> "revert", computes "block": the UA declaration, not the initial value
+  §B the attribute keeps what was authored ("display: block flow list-item") while the CSSOM
+     reads "list-item"; after el.style.display='block flow' the attribute is "display: block;";
+     removeProperty('color') returns "red", leaves length 1 and the attribute
+     "font-size: 12px;", and the box then inherits body's color rgb(17, 17, 17); a property the
+     block does not carry reads "" (typeof string), not null;
+     cssText='content: "a;b"; color: rgb(7, 8, 9)' is two declarations, not three.
+  §C setAttribute('style', …) replaces the whole block: a color the script had written is
+     gone and cssom answers the new "rgb(1, 2, 3)".
+  §D the same values through a stylesheet: '#s{display:ReVeRt}' computes "block" for a div,
+     'display:UnSeT' / 'display:INITIAL' compute "inline", '#s{display:Flow}' computes
+     "block", and 'display:list-item flow-root' computes "flow-root list-item". A
+     'color:revert' with nothing in a lower origin falls back to the inherited
+     rgb(1, 2, 3) (CSS Cascading 4 §6.4).
+  §E the picture: every .g box is 40x12 in #36c next to a 10x12 grey marker. A block-level
+     value puts #36c on its own line under the marker; an inline-level value
+     ('inline', 'inline list-item', 'contents') leaves the line collapsed, and a dropped
+     value keeps the UA block box.
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>b232 CSSOM display canonicalisation and the inline block</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 11px/13px Arial, sans-serif; color: #111; }
+  h2 { font: 12px/16px Arial, sans-serif; margin: 6px 0 2px 0; color: #333; }
+  .row { height: 15px; }
+  .k { display: inline-block; width: 128px; color: #555; }
+  /* The §A boxes: 40x12 in #36c. A block box makes its own line, an inline-level box shares
+     the line with the grey marker, so the picture shows the box type the value produced. */
+  .g { width: 40px; height: 12px; margin: 0; background: #36c; }
+  .m { display: inline-block; width: 10px; height: 12px; background: #999; vertical-align: top; }
+  .pair { background: #f2f2f2; margin-bottom: 2px; }
+  /* KNOWN GAP, recorded here so the picture is read correctly: 'display: contents' computes
+     the right string but still generates a box here, so the a26 row shows #36c where the
+     reference engine shows nothing. There is no inline-level list-item box type either, so
+     'inline list-item' (a15) lays out block-level while reporting the right value. */
+</style>
+</head><body>
+<h2>A specified value / computed value / box type</h2>
+<div id="a"></div>
+<h2>B–D the inline declaration block</h2>
+<div id="b"></div>
+<script>
+// authored value, the text the CSSOM reads back, the computed value — all three measured in
+// Edge (a rejected value leaves the CSSOM empty, so its second column is "").
+const forms = [
+  ['flow', 'block', 'block'], ['block', 'block', 'block'], ['inline', 'inline', 'inline'],
+  ['block flow', 'block', 'block'], ['flow block', 'block', 'block'], ['inline flow', 'inline', 'inline'],
+  ['flow-root', 'flow-root', 'flow-root'], ['block flow-root', 'flow-root', 'flow-root'],
+  ['flow-root block', 'flow-root', 'flow-root'],
+  ['inline flow-root', 'inline-block', 'inline-block'], ['flow-root inline', 'inline-block', 'inline-block'],
+  ['list-item', 'list-item', 'list-item'], ['block list-item', 'list-item', 'list-item'],
+  ['flow list-item', 'list-item', 'list-item'],
+  ['inline flow list-item', 'inline list-item', 'inline list-item'],
+  ['flow-root list-item', 'flow-root list-item', 'flow-root list-item'],
+  ['list-item flow-root', 'flow-root list-item', 'flow-root list-item'],
+  ['inline flow-root list-item', 'inline flow-root list-item', 'inline flow-root list-item'],
+  ['BLOCK FLOW', 'block', 'block'], ['FLOW', 'block', 'block'], ['  block   flow  ', 'block', 'block'],
+  ['block inline', '', 'block'], ['table flow', '', 'block'], ['block block', '', 'block'],
+  ['run-in', '', 'block'], ['contents', 'contents', 'contents'],
+  ['inherit', 'inherit', 'block'], ['INITIAL', 'initial', 'inline'],
+  ['UnSeT', 'unset', 'inline'], ['ReVeRt', 'revert', 'block']
+];
+let html = '';
+forms.forEach(([authored], i) => {
+  html += `<div class="pair"><span class="k">a${i + 1} ${JSON.stringify(authored)}</span>` +
+    `<span class="m"></span><div class="g" id="a${i + 1}"></div></div>`;
+});
+document.getElementById('a').innerHTML = html;
+
+const out = [];
+forms.forEach(([authored, wantCssom, wantComp], i) => {
+  const el = document.getElementById('a' + (i + 1));
+  el.style.display = authored;
+  const cssom = el.style.display, comp = getComputedStyle(el).display;
+  out.push(`a${i + 1} ${JSON.stringify(authored)} | cssom=${JSON.stringify(cssom)}` +
+    ` comp=${JSON.stringify(comp)} want=${JSON.stringify(wantCssom)}/${JSON.stringify(wantComp)}` +
+    ` ok=${cssom === wantCssom && comp === wantComp}`);
+});
+
+// §B the CSSOM and the attribute are one block.
+const b = document.createElement('div'); b.id = 'b1'; document.body.appendChild(b);
+b.setAttribute('style', 'display: block flow list-item');
+out.push(`b1 authored-attr=${JSON.stringify(b.getAttribute('style'))}` +
+  ` cssom=${JSON.stringify(b.style.display)} comp=${getComputedStyle(b).display}`);
+const c = document.createElement('div'); c.id = 'b2'; document.body.appendChild(c);
+c.style.display = 'block flow';
+out.push(`b2 writeback attr=${JSON.stringify(c.getAttribute('style'))}` +
+  ` cssom=${JSON.stringify(c.style.display)} comp=${getComputedStyle(c).display}`);
+const d = document.createElement('div'); d.id = 'b3'; document.body.appendChild(d);
+d.setAttribute('style', 'color: red; font-size: 12px');
+const removed = d.style.removeProperty('color');
+out.push(`b3 removed=${JSON.stringify(removed)} cssom=${JSON.stringify(d.style.color)}` +
+  ` len=${d.style.length} attr=${JSON.stringify(d.getAttribute('style'))}` +
+  ` comp=${getComputedStyle(d).color}`);
+const e = document.createElement('div'); e.id = 'b4'; document.body.appendChild(e);
+out.push(`b4 unset-prop cssom=${JSON.stringify(e.style.color)} typeof=${typeof e.style.color}` +
+  ` get=${JSON.stringify(e.style.getPropertyValue('color'))}`);
+const f = document.createElement('div'); f.id = 'b5'; document.body.appendChild(f);
+f.style.cssText = 'content: "a;b"; color: rgb(7, 8, 9)';
+out.push(`b5 cssText-semi len=${f.style.length}` +
+  ` content=${JSON.stringify(f.style.getPropertyValue('content'))}` +
+  ` color=${JSON.stringify(f.style.getPropertyValue('color'))}`);
+// §C a setAttribute after a CSSOM write replaces the whole block.
+const g = document.createElement('div'); g.id = 'b6'; document.body.appendChild(g);
+g.style.color = 'rgb(9, 9, 9)';
+g.setAttribute('style', 'color: rgb(1, 2, 3)');
+out.push(`b6 replace cssom=${JSON.stringify(g.style.color)} comp=${getComputedStyle(g).color}`);
+// §D revert through a stylesheet, and revert of an inherited property with nothing below it.
+const holder = document.createElement('div');
+holder.setAttribute('style', 'color: rgb(1, 2, 3)');
+document.body.appendChild(holder);
+const st = document.createElement('style');
+st.textContent = '#s1{display:ReVeRt} #s2{display:list-item flow-root}' +
+  ' #s3{color:revert} #s4{display:UnSeT}';
+document.head.appendChild(st);
+for (const id of ['s1', 's2', 's3', 's4']) {
+  const el = document.createElement('div'); el.id = id; holder.appendChild(el);
+}
+out.push(`d1 sheet-revert display=${getComputedStyle(document.getElementById('s1')).display}` +
+  ` d2 sheet-canonical display=${getComputedStyle(document.getElementById('s2')).display}` +
+  ` d3 sheet-revert-color color=${getComputedStyle(document.getElementById('s3')).color}` +
+  ` d4 sheet-unset display=${getComputedStyle(document.getElementById('s4')).display}`);
+
+document.getElementById('b').textContent = out.join('\n');
+</script>
+</body></html>

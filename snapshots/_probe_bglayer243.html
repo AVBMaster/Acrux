@@ -1,0 +1,24 @@
+<!DOCTYPE html><html><head><style>
+  body { margin: 0; font: 12px monospace; }
+  .box { width: 220px; height: 100px; border: 2px solid rgb(0,255,0); margin: 0;
+         background-repeat: no-repeat; }
+  /* q1: the shorthand, one image layer plus a final colour layer */
+  #q1 { background: right 20px bottom 10px / 30px 30px linear-gradient(rgb(255,0,0), rgb(255,0,0)), rgb(238,238,255); }
+  /* q2: the same thing spelled with longhands */
+  #q2 { background-color: rgb(238,238,255);
+        background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0));
+        background-position: right 20px bottom 10px; background-size: 30px 30px; }
+  /* q3: two image layers, longhands */
+  #q3 { background-color: rgb(238,238,255);
+        background-image: linear-gradient(rgb(255,0,0), rgb(255,0,0)), linear-gradient(rgb(0,0,255), rgb(0,0,255));
+        background-position: right 20px bottom 10px, left top;
+        background-size: 30px 30px, 50px 50px; }
+  /* q4: two image layers, shorthand */
+  #q4 { background: right 20px bottom 10px / 30px 30px linear-gradient(rgb(255,0,0), rgb(255,0,0)),
+                  left top / 50px 50px linear-gradient(rgb(0,0,255), rgb(0,0,255)), rgb(238,238,255); }
+</style></head><body>
+<div class="box" id="q1"></div>
+<div class="box" id="q2"></div>
+<div class="box" id="q3"></div>
+<div class="box" id="q4"></div>
+</body></html>

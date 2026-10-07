@@ -233,7 +233,7 @@ public static class DevToolsInspector
             {
                 computed.Add(new DtDeclaration("font-size", $"{cs.FontSize}", false, false));
                 computed.Add(new DtDeclaration("color", $"#{cs.Color.Red:X2}{cs.Color.Green:X2}{cs.Color.Blue:X2}", false, false));
-                computed.Add(new DtDeclaration("display", $"{cs.Display}", false, false));
+                computed.Add(new DtDeclaration("display", cs.DisplayCssText, false, false));
                 computed.Add(new DtDeclaration("position", $"{cs.Position}", false, false));
             }
         }

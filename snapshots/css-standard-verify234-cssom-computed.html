@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<!--
+  b234 — the CSSOM computed-value snapshot (CSSOM §3 getComputedStyle, CSS Values 3 §7,
+  CSS 2.1 §10.8, CSS Transitions 1 §5.3, measured Edge 141).
+
+  Four defects:
+  1. getComputedStyle handed out only the ~135 longhands its serializer happened to know, so
+     every other property read as undefined through both getPropertyValue and the member
+     access, and getPropertyValue returned null instead of the empty string the spec asks for.
+     The snapshot has to answer every longhand the engine models, including the shorthand
+     lists (transition-*, animation-*) whose computed value is the first item of the list.
+  2. A computed length kept the unit it was authored in: 'margin: 1em 2em' read back as "1em"
+     and 'line-height: 1.5' as "1.5". At computed-value time a length resolves to px
+     (CSS Values 3 §7) and line-height resolves a number/percentage against the box's own
+     font-size (CSS 2.1 §10.8), so the page's rows check '12px', '24px', '18px', '14.4px'.
+  3. The camelCase member access the CSSOM requires was missing on the host object: Edge
+     answers both cs.getPropertyValue('border-top-color') and cs.borderTopColor, and the same
+     object is indexable by property name.
+  4. An unknown name was not a CSS property at all, so it has to read as the empty string
+     through getPropertyValue and as undefined as a member.
+
+  KNOWN, RECORDED DIVERGENCE (not fixed here — these are used-value, not computed-value,
+  answers and our layout does not run a used-value pass before the snapshot is taken):
+    - 'margin: 0 auto' reads "auto" here; the reference engine reports the used value "0px".
+    - a percentage margin reads "5%"; the reference engine reports the used value in px.
+  Everything else in §A/§B matches Edge character for character.
+
+  EDGE TRUTH (2026-10-07, Edge 151 / dpr=1, this page measured through the built-in browser;
+  every §B row below carries the value it answered, and ok=true in Edge). The shapes that took
+  measuring, because each one is a rule of its own:
+    - a declaration list is the WHOLE list, not its first item: 'transition: color 1s linear 2s,
+      width 3s ease' answers transition-property "color, width", -duration "1s, 3s",
+      -timing-function "linear, ease", -delay "2s, 0s" (the missing second delay is the initial
+      0s, not the first item's 2s); will-change "transform, opacity".
+    - two equal axes collapse to one keyword, a declared axis pair keeps both:
+      'overscroll-behavior: contain' → "contain", 'overscroll-behavior-x: contain' → "contain
+      auto", 'mask-repeat: repeat repeat' → "repeat", 'border-spacing: 5px 5px' → "5px".
+    - 'grid-auto-flow: row dense' → "dense" ('row' is the initial direction, so it is not
+      repeated); 'column dense' keeps both.
+    - 'font-feature-settings: "liga" 0, "dlig" 1' → '"dlig", "liga" 0' — sorted by tag, and a
+      value of 1 is dropped.
+    - 'ruby-align: distribute-letter' (and the 'distribute-all-letter' spelling) → "space-around".
+    - 'contain-intrinsic-size: 33px 44px' → "33px 44px", but with 'content-visibility: auto' on
+      the same box → "auto 33px auto 44px" (CSS Containment 2 §3.1).
+    - lengths resolve at computed-value time: 'width: 10em' → "120px", 'margin: 1em 2em' →
+      "12px"/"24px", 'text-indent: 3em' → "36px", 'vertical-align: 1em' → "12px" while a
+      percentage stays a percentage ('50%'), 'column-width: 12em' → "144px";
+      'line-height: 1.5' → "18px", '150%' → "18px", '2em' → "24px", '1.2' → "14.4px",
+      'normal' → "normal".
+    - a table's 'border-spacing' computes to the CSS 2.1 2px, a div's to "0px".
+    - an unknown name: getPropertyValue answers "" and the member access is undefined. The two
+      are deliberately different, so this one is checked by its own row below rather than by the
+      loop, which asserts that the accessor and the member agree.
+  §Divergences, recorded rather than hidden:
+    - 'hanging-punctuation': Edge has no such property and answers "" / undefined; our engine
+      models it and answers the authored keyword. want=null here (nothing to compare against).
+    - 'margin: 0 auto' and a percentage margin are USED values in the reference engine ("0px",
+      "22.25px" at this width) and stay "auto"/"5%" here, because the snapshot is taken before
+      any used-value pass exists in our layout.
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>b234 CSSOM computed values</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font: 12px/16px Arial, sans-serif; color: #111; }
+  h2 { font: 12px/16px Arial, sans-serif; margin: 6px 0 2px 0; color: #333; }
+  .k { display: inline-block; width: 150px; color: #555; }
+  .row { margin-bottom: 1px; }
+  #u { width: 10em; height: 12px; background: #36c; }
+  #m { margin: 1em 2em; width: 40px; height: 10px; background: #c36; }
+  #t { text-indent: 3em; background: #eee; }
+  #lh { line-height: 1.5; background: #eee; }
+  #bd { border: 1em solid rgb(1, 2, 3); width: 20px; height: 6px; }
+  #ls { list-style-type: square; padding-left: 40px; }
+  #ap { appearance: auto; }
+  #tr { transition: color 1s linear 2s, width 3s ease; color: rgb(4, 5, 6); }
+  #an { animation: 4s ease-in-out 1s 3 alternate forwards running spin; }
+  #co { contain: layout paint; }
+  #cw { column-width: 12em; column-fill: balance; }
+  #gf { grid-auto-flow: column dense; }
+  #op { object-position: 25% 75%; }
+  #sc { scrollbar-width: thin; scrollbar-color: rgb(7, 8, 9) rgb(10, 11, 12); }
+  #cs { color-scheme: dark; }
+  #rp { ruby-position: under; ruby-align: distribute-letter; }
+  #fv { font-variant: small-caps; font-feature-settings: "liga" 1; font-variation-settings: "wght" 600; }
+  #wc { will-change: transform, opacity; }
+  #cv { content-visibility: auto; contain-intrinsic-size: 33px 44px; }
+  #bd2 { box-decoration-break: clone; }
+  #tt { text-transform: capitalize; text-align-last: justify; text-justify: inter-ideograph; }
+  #va { vertical-align: 1em; white-space-collapse: collapse; }
+  #hp { hanging-punctuation: first; hyphenate-character: "--"; }
+  #os { overscroll-behavior: contain none; }
+  #zs { zoom: 1.5; }
+  #cf { counter-set: c 3; }
+  #bs { border-spacing: 4px 6px; }
+  #mi { mask-image: linear-gradient(red, blue); mask-repeat: repeat space; }
+  #fo { forced-color-adjust: none; }
+</style>
+</head><body>
+<h2>A lengths resolve at computed-value time</h2>
+<div class="row"><span class="k">width 10em</span><div id="u"></div></div>
+<div class="row"><span class="k">margin 1em 2em</span><div id="m"></div></div>
+<div class="row"><span class="k">border 1em</span><div id="bd"></div></div>
+<div class="row"><span class="k">text-indent 3em</span><div id="t">indent</div></div>
+<div class="row"><span class="k">line-height 1.5</span><div id="lh">lh</div></div>
+<h2>B computed value of every longhand</h2>
+<div id="sB">
+  <i id="ls">ls</i><input id="ap"><div id="tr">tr</div><div id="an">an</div>
+  <div id="co">co</div><div id="cw">cw</div><div id="gf">gf</div><div id="op">op</div>
+  <div id="sc">sc</div><div id="cs">cs</div><div id="rp">rp</div><div id="fv">fv</div>
+  <div id="wc">wc</div><div id="cv">cv</div><span id="bd2">bd2</span><div id="tt">tt</div>
+  <div id="va">va</div><div id="hp">hp</div><div id="os">os</div><div id="zs">zs</div>
+  <div id="cf">cf</div><table id="bs"><tr><td>bs</td></tr></table><div id="mi">mi</div>
+  <div id="fo">fo</div>
+</div>
+<h2>C report</h2>
+<div id="report"></div>
+<script>
+// [id, property, the value Edge answers]
+const cases = [
+  ['u', 'width', '120px'], ['u', 'fontSize', '12px'], ['m', 'marginTop', '12px'], ['m', 'marginRight', '24px'],
+  ['t', 'textIndent', '36px'], ['lh', 'lineHeight', '18px'], ['bd', 'borderTopWidth', '12px'],
+  ['bd', 'borderTopColor', 'rgb(1, 2, 3)'], ['ls', 'listStyleType', 'square'], ['ap', 'appearance', 'auto'],
+  ['tr', 'transitionProperty', 'color, width'], ['tr', 'transitionDuration', '1s, 3s'],
+  ['tr', 'transitionTimingFunction', 'linear, ease'], ['tr', 'transitionDelay', '2s, 0s'],
+  ['an', 'animationName', 'spin'], ['an', 'animationDuration', '4s'],
+  ['an', 'animationIterationCount', '3'], ['an', 'animationDirection', 'alternate'],
+  ['an', 'animationFillMode', 'forwards'], ['an', 'animationPlayState', 'running'],
+  ['an', 'animationTimingFunction', 'ease-in-out'],
+  ['co', 'contain', 'layout paint'], ['cw', 'columnWidth', '144px'], ['cw', 'columnFill', 'balance'],
+  ['gf', 'gridAutoFlow', 'column dense'], ['op', 'objectPosition', '25% 75%'],
+  ['sc', 'scrollbarWidth', 'thin'], ['sc', 'scrollbarColor', 'rgb(7, 8, 9) rgb(10, 11, 12)'],
+  ['cs', 'colorScheme', 'dark'],
+  ['rp', 'rubyPosition', 'under'], ['rp', 'rubyAlign', 'space-around'],
+  ['fv', 'fontVariant', 'small-caps'], ['fv', 'fontFeatureSettings', '"liga"'],
+  ['fv', 'fontVariationSettings', '"wght" 600'],
+  ['wc', 'willChange', 'transform, opacity'], ['cv', 'contentVisibility', 'auto'],
+  ['cv', 'containIntrinsicSize', 'auto 33px auto 44px'],
+  ['bd2', 'boxDecorationBreak', 'clone'], ['tt', 'textTransform', 'capitalize'],
+  ['tt', 'textAlignLast', 'justify'], ['tt', 'textJustify', 'auto'],
+  ['va', 'verticalAlign', '12px'], ['va', 'whiteSpaceCollapse', 'collapse'],
+  // Edge has no 'hanging-punctuation' at all, so it answers the empty string; our engine
+  // models the property and answers the authored keyword, which is the more standards-following
+  // of the two. Recorded as a divergence, not a defect: want stays null.
+  ['hp', 'hangingPunctuation', null],
+  ['hp', 'hyphenateCharacter', '"--"'],
+  ['os', 'overscrollBehavior', 'contain none'], ['zs', 'zoom', '1.5'], ['cf', 'counterSet', 'c 3'],
+  ['bs', 'borderSpacing', '4px 6px'], ['mi', 'maskImage', 'linear-gradient(rgb(255, 0, 0), rgb(0, 0, 255))'],
+  ['mi', 'maskRepeat', 'repeat space'],
+  ['fo', 'forcedColorAdjust', 'none'],
+];
+const out = [];
+for (const [id, name, want] of cases) {
+  const dashed = name.replace(/([A-Z])/g, (_, c) => '-' + c.toLowerCase());
+  const cs = getComputedStyle(document.getElementById(id));
+  const viaGet = cs.getPropertyValue(dashed);
+  const viaMember = cs[name];
+  const line = `${id} ${dashed} get=${JSON.stringify(viaGet)} member=${JSON.stringify(viaMember)}` +
+    (want === null ? '' : ` want=${JSON.stringify(want)} ok=${viaGet === want && viaMember === want}`);
+  out.push(line);
+}
+// getPropertyValue of a name that is not a property has to answer the empty string, and a
+// member access on it has to be undefined (CSSOM §2.1 / WebIDL).
+const any = getComputedStyle(document.getElementById('u'));
+out.push(`unknown get=${JSON.stringify(any.getPropertyValue('no-such-property'))} ` +
+  `typeof=${typeof any.getPropertyValue('no-such-property')} member=${typeof any.noSuchProperty} ` +
+  `ok=${any.getPropertyValue('no-such-property') === '' && typeof any.noSuchProperty === 'undefined'}`);
+// the snapshot is enumerable by index too (CSSOM §2.1 legacy behaviour is not required, but
+// length + item() are what scripts use).
+out.push(`item=${typeof any.item} length=${typeof any.length} ` +
+  `borderTopColorOf=${JSON.stringify(getComputedStyle(document.getElementById('bd')).borderTopColor)}`);
+document.getElementById('report').textContent = out.join('\n');
+</script>
+</body></html>

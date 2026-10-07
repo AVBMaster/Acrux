@@ -1,11 +1,20 @@
+using Acrux.Core.Css;
+using Acrux.Core.Css.Properties;
 using Acrux.Core.Dom;
 using Acrux.Core.Performance;
 
 namespace Acrux.Core.JavaScript;
 
-public class CssStyleDeclaration
+public class CssStyleDeclaration : CssStyleDeclarationBase
 {
     private readonly Element _element;
+
+    /// <summary>The text of the 'style' attribute the declaration map was last mirrored from.
+    /// The attribute is the inline declaration block and the map is only a view of it, so both
+    /// reads and writes go through <see cref="SyncWithAttribute"/> first: that way a block
+    /// parsed from HTML is visible through 'el.style', and a setAttribute('style', ...) that
+    /// replaces the block takes the script's own declarations with it.</summary>
+    private string? _mirroredAttribute;
 
     public CssStyleDeclaration(Element element)
     {
@@ -14,55 +23,208 @@ public class CssStyleDeclaration
 
     public string cssText
     {
-        get => string.Join("; ", _element.Style.Select(kv => $"{kv.Key}: {kv.Value}"));
+        get => Serialize(Declarations());
         set
         {
+            // Assigning cssText replaces the block wholesale, so the map starts empty rather
+            // than being merged with the attribute it is about to be overwritten with.
             _element.Style.Clear();
-            if (!string.IsNullOrEmpty(value))
-            {
-                foreach (var part in value.Split(';', StringSplitOptions.RemoveEmptyEntries))
-                {
-                    var colon = part.IndexOf(':');
-                    if (colon > 0)
-                    {
-                        var prop = part[..colon].Trim();
-                        var val = part[(colon + 1)..].Trim();
-                        if (!string.IsNullOrEmpty(prop))
-                            _element.Style[prop] = val;
-                    }
-                }
-            }
+            foreach (var kv in Parse(value))
+                WriteIfValid(kv.Key, kv.Value);
+            SyncAttribute();
             DirtyState.AddSelf(_element, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
             DomMutationTracker.Notify();
         }
     }
 
-    public int length => _element.Style.Count;
+    public int length => Declarations().Count;
 
-    public string? item(int index)
+    /// <summary>An index past the end reads back the empty string rather than null: the IDL
+    /// returns a DOMString (CSSOM §2.1, measured: item(9) on a two-declaration block is "").</summary>
+    public string item(int index)
     {
-        if (index < 0 || index >= _element.Style.Count) return null;
-        return _element.Style.ElementAt(index).Key;
+        var declarations = Declarations();
+        if (index < 0 || index >= declarations.Count) return "";
+        return declarations[index].Key;
     }
 
-    public string getPropertyValue(string propertyName) =>
-        _element.Style.TryGetValue(propertyName, out var val) ? val : "";
+    public string getPropertyValue(string propertyName) => GetStyle(propertyName) ?? "";
 
     public void setProperty(string propertyName, string value)
     {
-        _element.Style[propertyName] = value;
-        DirtyState.AddSelf(_element, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
-        DomMutationTracker.Notify();
+        // Same rules as the named setters: parse first, store only what the grammar takes.
+        SetStyle(propertyName, value);
     }
 
     public string removeProperty(string propertyName)
     {
-        _element.Style.Remove(propertyName, out var old);
+        propertyName = CssPropertyIdExtensions.CanonicalName(propertyName);
+        SyncWithAttribute();
+        var old = GetStyle(propertyName);
+        if (!_element.Style.Remove(propertyName)) return "";
+        SyncAttribute();
         DirtyState.AddSelf(_element, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
+        DomMutationTracker.Notify();
         return old ?? "";
     }
 
     // ===== Common CSS properties as direct getter/setter (JS camelCase names) =====
+
+
+    protected override string? GetStyle(string name)
+    {
+        // A property the block does not carry reads back as the empty string, not as null
+        // (CSSOM): 'el.style.color' is '' on an element with no color declaration.
+        name = CssPropertyIdExtensions.CanonicalName(name);
+        SyncWithAttribute();
+        var direct = _element.Style.TryGetValue(name, out var val) ? val : null;
+        // A longhand the block only carries inside a shorthand still answers, because writing a
+        // shorthand writes its parts: 'style="margin: 4px"' gives 'marginTop' as '4px'
+        // (measured, CSSOM §5.3.1). The declaration the page wrote directly always wins, so a
+        // block that names the longhand itself is never read through the shorthand beside it.
+        return direct ?? ReadThroughShorthand(name,
+            shorthand => _element.Style.TryGetValue(shorthand, out var text) ? text : null) ?? "";
+    }
+
+    protected override void SetStyle(string name, string? value)
+    {
+        // An empty value removes the property, and a value the property's grammar rejects
+        // leaves the declaration untouched: the reference engine parses before it stores,
+        // so in both cases nothing changes and nothing is invalidated.
+        name = CssPropertyIdExtensions.CanonicalName(name);
+        var remove = string.IsNullOrEmpty(value);
+        if (!remove && !CssValueGrammar.TextIsValidFor(name, value)) return;
+        SyncWithAttribute();
+        if (remove)
+        {
+            if (!_element.Style.Remove(name)) return;
+        }
+        else _element.Style[name] = CanonicalSpecifiedValue(name, value!);
+        SyncAttribute();
+        DirtyState.AddSelf(_element, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
+        DomMutationTracker.Notify();
+    }
+
+    private void WriteIfValid(string name, string value)
+    {
+        if (CssValueGrammar.TextIsValidFor(name, value))
+            _element.Style[name] = CanonicalSpecifiedValue(name, value);
+    }
+
+    /// <summary>The inline declaration block, which is the 'style' attribute: the map is kept
+    /// as its canonicalised mirror (see <see cref="SyncWithAttribute"/>), so the CSSOM's own
+    /// view is what the attribute carries plus whatever a script has since written.</summary>
+    private List<KeyValuePair<string, string>> Declarations()
+    {
+        SyncWithAttribute();
+        return _element.Style.ToList();
+    }
+
+    /// <summary>
+    /// Brings the map up to date with the attribute before the block is read or written. The
+    /// attribute is the inline declaration block, so it wins whenever it no longer matches
+    /// what the CSSOM last wrote: 'setAttribute("style", …)' replaces the whole block,
+    /// declarations the script had made and all, and a block parsed from HTML has to be
+    /// visible through 'el.style' as well (measured: after
+    /// 'el.setAttribute("style", "display: block flow list-item")', 'el.style.display' is
+    /// 'list-item' while the attribute keeps the authored text).
+    /// </summary>
+    private void SyncWithAttribute()
+    {
+        var text = _element.GetAttribute("style") ?? "";
+        if (string.Equals(text, _mirroredAttribute, StringComparison.Ordinal)) return;
+        _element.Style.Clear();
+        foreach (var kv in Parse(text))
+            _element.Style[kv.Key] = CanonicalSpecifiedValue(kv.Key, kv.Value);
+        _mirroredAttribute = text;
+    }
+
+    /// <summary>Writes the block back into the attribute the way the reference engine does
+    /// once the CSSOM mutates it (measured: after 'el.style.display = "block flow"', the
+    /// attribute reads 'display: block;'). A mutation that only re-serialises what is already
+    /// there leaves the attribute alone.</summary>
+    private void SyncAttribute()
+    {
+        var text = Serialize(_element.Style);
+        _mirroredAttribute = text;
+        if (!string.Equals(_element.GetAttribute("style") ?? "", text, StringComparison.Ordinal))
+            _element.SetAttribute("style", text);
+    }
+
+    private static Dictionary<string, string> Parse(string? styleText) =>
+        string.IsNullOrWhiteSpace(styleText)
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Acrux.Core.Css.CssParser().ParseInlineStyle(styleText!);
+
+    private static string Serialize(IEnumerable<KeyValuePair<string, string>> declarations) =>
+        string.Join(" ", declarations.Select(d => $"{d.Key}: {d.Value};"));
+
+    /// <summary>The reference engine stores the parsed value rather than the characters that
+    /// were written, so a declaration read back out of the CSSOM is in canonical keywords:
+    /// 'display: block flow list-item' reads back as 'list-item' (CSS Display 3 §3) and
+    /// 'INITIAL' as 'initial' (CSS Values 3 §2.1). Custom properties keep their text
+    /// verbatim, and anything the engine cannot decode is stored as authored.
+    ///
+    /// <para>
+    /// The re-spelling of the value itself happens in <see cref="CssValueText"/>, which is the
+    /// same choke point the sheet parser writes through: a script that sets a declaration and a
+    /// page that authors one in a <c>&lt;style&gt;</c> block must read back the same text, and
+    /// measured against the reference engine both print 'rgb(7, 7, 7)', '12px / 1.5' and
+    /// 'margin: 0px auto' however the author typed them.
+    /// </para></summary>
+    private static string CanonicalSpecifiedValue(string name, string value)
+    {
+        if (name.StartsWith("--", StringComparison.Ordinal)) return value;
+        var text = value.Trim();
+        if (Acrux.Core.Css.Resolver.CssPropertyTraits.IsCssWideKeyword(text))
+            return text.ToLowerInvariant();
+        if (name.Equals("display", StringComparison.OrdinalIgnoreCase)
+            && Acrux.Core.Css.Resolver.CssPropertyApplier.TryCanonicalDisplayText(text, out var canonical))
+            return canonical;
+        return Acrux.Core.Css.CssValueText.Canonicalize(text, name.ToLowerInvariant());
+    }
+}
+
+
+/// <summary>The camelCase member surface both CSSOM declaration blocks share: the
+/// inline style of an element and the declarations of a style rule are the same object
+/// model (CSSOM 5.3.1), so the property list lives here and each subclass supplies the
+/// storage. The list is the set pages actually reach for; anything else is read through
+/// getPropertyValue.</summary>
+public abstract class CssStyleDeclarationBase
+{
+    protected abstract string? GetStyle(string name);
+
+    protected abstract void SetStyle(string name, string? value);
+
+    /// <summary>Reads a longhand out of the shorthands the block carries (see
+    /// <see cref="Acrux.Core.Css.ShorthandExpander.ShorthandsFor"/>). <paramref name="block"/>
+    /// looks one property up in the declaration block; the answer is the longhand the
+    /// shorthand expands to, or null when no shorthand in the block carries it.</summary>
+    protected static string? ReadThroughShorthand(string name, Func<string, string?> block)
+    {
+        foreach (var shorthand in Acrux.Core.Css.ShorthandExpander.ShorthandsFor(name))
+        {
+            var text = block(shorthand);
+            if (string.IsNullOrEmpty(text)) continue;
+            if (Acrux.Core.Css.ShorthandExpander.ExpandProperty(shorthand, text)
+                .TryGetValue(name, out var value) && !string.IsNullOrEmpty(value))
+                return value;
+        }
+        // A shorthand that is itself a shorthand of longhands has nothing of its own left to
+        // read once it has been expanded, so it is rebuilt from the parts it controls:
+        // 'background-position' is one layer of <background-position-x> followed by one of
+        // <background-position-y> (CSS Backgrounds 3 §4.1.1.1), which is how
+        // 'style="background: url(x.png) 10px 20px"' answers '10px 20px' for it (measured).
+        if (name.Equals("background-position", StringComparison.OrdinalIgnoreCase))
+        {
+            var x = ReadThroughShorthand("background-position-x", block);
+            var y = ReadThroughShorthand("background-position-y", block);
+            if (x != null && y != null)
+                return Acrux.Core.Css.ShorthandExpander.BackgroundPositionPairText(x, y);
+        }
+        return null;
+    }
 
     public string? accentColor { get => GetStyle("accent-color"); set => SetStyle("accent-color", value); }
     public string? alignContent { get => GetStyle("align-content"); set => SetStyle("align-content", value); }
@@ -226,6 +388,12 @@ public class CssStyleDeclaration
     public string? touchAction { get => GetStyle("touch-action"); set => SetStyle("touch-action", value); }
     public string? transform { get => GetStyle("transform"); set => SetStyle("transform", value); }
     public string? transformOrigin { get => GetStyle("transform-origin"); set => SetStyle("transform-origin", value); }
+    public string? transformBox { get => GetStyle("transform-box"); set => SetStyle("transform-box", value); }
+    public string? translate { get => GetStyle("translate"); set => SetStyle("translate", value); }
+    public string? rotate { get => GetStyle("rotate"); set => SetStyle("rotate", value); }
+    public string? scale { get => GetStyle("scale"); set => SetStyle("scale", value); }
+    public string? perspectiveOrigin { get => GetStyle("perspective-origin"); set => SetStyle("perspective-origin", value); }
+    public string? backfaceVisibility { get => GetStyle("backface-visibility"); set => SetStyle("backface-visibility", value); }
     public string? transition { get => GetStyle("transition"); set => SetStyle("transition", value); }
     public string? transitionDelay { get => GetStyle("transition-delay"); set => SetStyle("transition-delay", value); }
     public string? transitionDuration { get => GetStyle("transition-duration"); set => SetStyle("transition-duration", value); }
@@ -244,19 +412,4 @@ public class CssStyleDeclaration
     public string? wordWrap { get => GetStyle("word-wrap"); set => SetStyle("word-wrap", value); }
     public string? writingMode { get => GetStyle("writing-mode"); set => SetStyle("writing-mode", value); }
     public string? zIndex { get => GetStyle("z-index"); set => SetStyle("z-index", value); }
-
-    private string? GetStyle(string name)
-    {
-        return _element.Style.TryGetValue(name, out var val) ? val : null;
-    }
-
-    private void SetStyle(string name, string? value)
-    {
-        if (value == null)
-            _element.Style.Remove(name);
-        else
-            _element.Style[name] = value;
-        DirtyState.AddSelf(_element, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
-        DomMutationTracker.Notify();
-    }
 }

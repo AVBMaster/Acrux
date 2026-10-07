@@ -20,7 +20,9 @@ internal sealed class ThemePainter
 
     public bool Paint(Element element, ComputedStyle style, LayoutBox box, float contentOffsetY)
     {
-        var appearance = style.Appearance;
+        // An author 'appearance: none' strips the widget; 'auto' paints the element's own
+        // control, and a compat keyword ('textfield', 'button') paints whatever the page named.
+        var appearance = style.PaintAppearance;
         if (string.IsNullOrEmpty(appearance) || appearance == "none" || appearance == "auto")
             return false;
 

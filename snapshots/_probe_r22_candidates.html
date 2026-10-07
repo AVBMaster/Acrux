@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>probe round22 candidates</title>
+<style>
+  html,body{margin:0;padding:0;font:12px/16px Arial,sans-serif;color:#000;background:#fff}
+  .sec{margin:0 0 8px 0}
+  .b{background:#ddd}
+  /* 1. logical float / clear */
+  .cb{position:relative;width:300px;height:60px;background:#eee;margin:0 0 6px 0}
+  .cb.r{direction:rtl}
+  .fl{width:80px;height:20px;background:#4a4;float:inline-start}
+  .fl2{width:80px;height:20px;background:#a44;float:inline-end}
+  .clr{width:120px;height:12px;background:#44a;clear:inline-start}
+  /* 2. accent-color */
+  .acc{accent-color:#e00}
+  /* 3. line-clamp standard */
+  .lc{width:150px;font:16px/20px Arial;background:#fee}
+  .lc1{line-clamp:2;-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
+  .lc2{line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
+  .lc3{line-clamp:2 auto;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
+  .lc4{line-clamp:none;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
+  /* 4. text-wrap: pretty */
+  .pw{width:150px;font:16px/20px Arial;background:#ddf;text-wrap:pretty}
+  /* 5. border-image */
+  .bi{width:120px;height:40px;border:10px solid #000;margin:0 0 10px 0;
+      border-image:linear-gradient(#f00,#00f) 10 / 14px round}
+  .bi2{width:120px;height:40px;border:10px solid #000;border-image-source:linear-gradient(#f00,#00f);
+       border-image-slice:5;border-image-repeat:repeat}
+  /* 6. box-shadow */
+  .bs{width:60px;height:30px;background:#fff;margin:20px;
+      box-shadow:5px 5px 0 #f80, -5px -5px 0 3px #08f}
+  .bsi{width:60px;height:30px;background:#fff;margin:20px;
+      box-shadow:inset 4px 4px 0 #0a0}
+  /* 7. drop-shadow filter */
+  .ds{width:60px;height:30px;background:#f0f;margin:20px;filter:drop-shadow(6px 6px 0 #000)}
+  /* 8. initial-letter */
+  .il{width:200px;font:16px/20px Arial;background:#eee}
+  .il span{initial-letter:2;-webkit-initial-letter:2}
+</style></head><body>
+<h2 class="sec">1. logical float / clear (LTR then RTL)</h2>
+<div class="cb" id="f1"><div class="fl" id="k1"></div><div class="fl2" id="k2"></div></div>
+<div class="cb r" id="f2"><div class="fl" id="k3"></div><div class="fl2" id="k4"></div></div>
+<div class="cb" id="f3"><div class="fl" id="k5"></div><div class="clr" id="k6"></div></div>
+<div class="cb r" id="f4"><div class="fl2" id="k7"></div><div class="clr" id="k8"></div></div>
+<h2 class="sec">2. accent-color</h2>
+<div class="sec"><input class="acc" type="checkbox" checked id="ac1"><input type="checkbox" id="ac2">
+<input class="acc" type="radio" name="r" checked id="ac3">
+<input class="acc" type="range" id="ac4" style="width:120px"></div>
+<h2 class="sec">3. line-clamp forms</h2>
+<div class="lc lc1" id="lc1">one two three four five six seven eight nine ten</div>
+<div class="lc lc2" id="lc2">one two three four five six seven eight nine ten</div>
+<div class="lc lc3" id="lc3">one two three four five six seven eight nine ten</div>
+<div class="lc lc4" id="lc4">one two three four five six seven eight nine ten</div>
+<h2 class="sec">4. text-wrap: pretty</h2>
+<div class="pw" id="pw1">The quick brown fox jumps over the lazy dog today</div>
+<h2 class="sec">5. border-image</h2>
+<div class="bi" id="bi1"></div>
+<div class="bi2" id="bi2"></div>
+<h2 class="sec">6. box-shadow layers and inset</h2>
+<div class="bs" id="bs1"></div>
+<div class="bsi" id="bs2"></div>
+<h2 class="sec">7. filter: drop-shadow</h2>
+<div class="ds" id="ds1"></div>
+<h2 class="sec">8. initial-letter</h2>
+<div class="il" id="il1"><span>A</span>bc def ghi jkl mno pqr stu vwx yz 012 345 678</div>
+</body></html>

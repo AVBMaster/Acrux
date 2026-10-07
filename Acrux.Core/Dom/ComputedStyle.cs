@@ -36,87 +36,92 @@ public abstract class Length
 
         try
         {
-            // Check longest units first to avoid false matches
-            if (value.EndsWith("cqmin"))
+            // Check longest units first to avoid false matches. A dimension's unit is
+            // ASCII case-insensitive (CSS Values 3 §6.7), so '10PX' and '1Q' are the same
+            // lengths as '10px' and '1q' — and every factor below is the exact one the
+            // reference engine uses, because a computed length is printed to six
+            // significant digits and a rounded factor shows up there ('1.5cm' is
+            // '56.6929px', not '56.693px').
+            if (HasUnit(value, "cqmin"))
                 return new CqMinLength(SafeFloat(value[..^5]));
-            if (value.EndsWith("cqmax"))
+            if (HasUnit(value, "cqmax"))
                 return new CqMaxLength(SafeFloat(value[..^5]));
-            if (value.EndsWith("cqw"))
+            if (HasUnit(value, "cqw"))
                 return new CqWLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("cqh"))
+            if (HasUnit(value, "cqh"))
                 return new CqHLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("cqi"))
+            if (HasUnit(value, "cqi"))
                 return new CqILength(SafeFloat(value[..^3]));
-            if (value.EndsWith("cqb"))
+            if (HasUnit(value, "cqb"))
                 return new CqBLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("dvw"))
+            if (HasUnit(value, "dvw"))
                 return new DVwLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("dvh"))
+            if (HasUnit(value, "dvh"))
                 return new DVhLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("svw"))
+            if (HasUnit(value, "svw"))
                 return new SVwLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("svh"))
+            if (HasUnit(value, "svh"))
                 return new SVhLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("lvw"))
+            if (HasUnit(value, "lvw"))
                 return new LVwLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("lvh"))
+            if (HasUnit(value, "lvh"))
                 return new LVhLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("vmin"))
+            if (HasUnit(value, "vmin"))
                 return new VminLength(SafeFloat(value[..^4]));
-            if (value.EndsWith("vmax"))
+            if (HasUnit(value, "vmax"))
                 return new VmaxLength(SafeFloat(value[..^4]));
-            if (value.EndsWith("vw"))
+            if (HasUnit(value, "vw"))
                 return new VwLength(SafeFloat(value[..^2]));
-            if (value.EndsWith("vh"))
+            if (HasUnit(value, "vh"))
                 return new VhLength(SafeFloat(value[..^2]));
-            if (value.EndsWith("vi"))
+            if (HasUnit(value, "vi"))
                 return new ViLength(SafeFloat(value[..^2]));
-            if (value.EndsWith("vb"))
+            if (HasUnit(value, "vb"))
                 return new VbLength(SafeFloat(value[..^2]));
-            if (value.EndsWith("rem"))
+            if (HasUnit(value, "rem"))
                 return new RemLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("rex"))
+            if (HasUnit(value, "rex"))
                 return new RexLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("ric"))
+            if (HasUnit(value, "ric"))
                 return new RicLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("rlh"))
+            if (HasUnit(value, "rlh"))
                 return new RlhLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("cap"))
+            if (HasUnit(value, "cap"))
                 return new CapLength(SafeFloat(value[..^3]));
-            if (value.EndsWith("rcap"))
+            if (HasUnit(value, "rcap"))
                 return new RcapLength(SafeFloat(value[..^4]));
-            if (value.EndsWith("lh"))
+            if (HasUnit(value, "lh"))
                 return new LhLength(SafeFloat(value[..^2]));
-            if (value.EndsWith("px"))
+            if (HasUnit(value, "px"))
                 return new PixelLength(SafeFloat(value[..^2]));
-            if (value.EndsWith("em"))
+            if (HasUnit(value, "em"))
                 return new EmLength(SafeFloat(value[..^2]));
-            if (value.EndsWith("ex"))
+            if (HasUnit(value, "ex"))
                 return new ExLength(SafeFloat(value[..^2]));
-            if (value.EndsWith("ch"))
+            if (HasUnit(value, "ch"))
                 return new ChLength(SafeFloat(value[..^2]));
-            if (value.EndsWith("%"))
+            if (value.EndsWith("%", StringComparison.Ordinal))
                 return new PercentLength(SafeFloat(value[..^1]) / 100f);
-            if (value.EndsWith("pt"))
-                return new PixelLength(SafeFloat(value[..^2]) * 1.33333f);
-            if (value.EndsWith("pc"))
-                return new PixelLength(SafeFloat(value[..^2]) * 16f);
-            if (value.EndsWith("in"))
-                return new PixelLength(SafeFloat(value[..^2]) * 96f);
-            if (value.EndsWith("cm"))
-                return new PixelLength(SafeFloat(value[..^2]) * 37.7953f);
-            if (value.EndsWith("mm"))
-                return new PixelLength(SafeFloat(value[..^2]) * 3.77953f);
-            // CSS Values 3 §6.7: 1q = 0.25mm. Checked after the longer units so
-            // it cannot swallow another suffix.
-            if (value.EndsWith("q"))
-                return new PixelLength(SafeFloat(value[..^1]) * 0.9448819f);
-            if (value.EndsWith("ic"))
+            // The absolute units all go through the inch, and the inch is 96px (CSS Values 3
+            // §6.7). They are one table rather than six numbers written where they are used,
+            // because a computed length is printed to six significant digits and a rounded
+            // factor shows up there: '1.5cm' is '56.6929px', not '56.693px'.
+            foreach (var (unit, perUnit) in AbsoluteUnits)
+                if (HasUnit(value, unit))
+                    return new PixelLength((float)(SafeFloat(value[..^unit.Length]) * perUnit));
+            if (HasUnit(value, "ic"))
                 return new IcLength(SafeFloat(value[..^2]));
-            if (value == "0")
+            // A &lt;length&gt; may drop its unit only when it is zero (CSS Values 3 §8.6), and a
+            // signed or written-out zero is still that same zero: '-0', '+0', '0.0' and '0e7' are
+            // all 0px. Anything else that is only a number is not a length.
+            if (IsBareZero(value))
                 return new PixelLength(0);
 
-            if (value.StartsWith("calc(") || value.StartsWith("min(") || value.StartsWith("max(") || value.StartsWith("clamp(") || value.StartsWith("fit-content("))
+            if (value.StartsWith("calc(", StringComparison.OrdinalIgnoreCase)
+                || value.StartsWith("min(", StringComparison.OrdinalIgnoreCase)
+                || value.StartsWith("max(", StringComparison.OrdinalIgnoreCase)
+                || value.StartsWith("clamp(", StringComparison.OrdinalIgnoreCase)
+                || value.StartsWith("fit-content(", StringComparison.OrdinalIgnoreCase))
             {
                 return new MathLength(value);
             }
@@ -131,6 +136,52 @@ public abstract class Length
         }
 
         return AutoLength.Instance;
+    }
+
+    /// <summary>True when <paramref name="value"/> ends in the dimension unit
+    /// <paramref name="unit"/>, whose matching is ASCII case-insensitive and which has to
+    /// have something in front of it — the unit alone is not a length.</summary>
+    private static bool HasUnit(string value, string unit)
+        => value.Length > unit.Length && value.EndsWith(unit, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The seven absolute length units and their pixels per unit, all of them defined
+    /// through the inch and the inch defined as 96px (CSS Values 3 §6.7). <c>q</c> is last so a
+    /// longer suffix is never cut short of it. <see cref="CssFunctionEvaluator"/>, the media
+    /// query evaluator and the filter parser read this same table, which is the only way a bare
+    /// '1cm', a 'calc(1cm)' and a 'blur(1cm)' can be made to answer one number. The factors are
+    /// doubles: written as integer divisions, <c>96 / 72</c> is the number 1 and a point is priced
+    /// at a pixel.</summary>
+    public static readonly (string Unit, double PixelsPerUnit)[] AbsoluteUnits =
+    [
+        ("pt", 96.0 / 72.0),
+        ("pc", 16.0),
+        ("in", 96.0),
+        ("cm", 96.0 / 2.54),
+        ("mm", 96.0 / 25.4),
+        ("q", 96.0 / 101.6),
+    ];
+
+    /// <summary>Pixels per unit for an absolute unit name, which has to be lowercase — the caller
+    /// has already folded a CSS keyword's case. False for a font- or viewport-relative unit.</summary>
+    public static bool TryAbsoluteUnitPixels(string lowerUnit, out double pixelsPerUnit)
+    {
+        foreach (var entry in AbsoluteUnits)
+            if (entry.Unit == lowerUnit)
+            {
+                pixelsPerUnit = entry.PixelsPerUnit;
+                return true;
+            }
+        pixelsPerUnit = 0;
+        return false;
+    }
+
+    /// <summary>True for a token that is nothing but a CSS number whose value is zero.</summary>
+    private static bool IsBareZero(string value)
+    {
+        if (value.Length == 0 || value.Length > 8) return false;
+        if (!float.TryParse(value, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var number)) return false;
+        return number == 0f;
     }
 
     private static float SafeFloat(string s)
@@ -191,30 +242,35 @@ public abstract class Length
     /// (9 / 10 / 13.33 / 16 / 18 / 24 / 32 / 48 for a 16px medium).</summary>
     public const float FontSizeMedium = 16f;
 
-    public static float ParseFontSize(string value, float parentFontSize)
+    /// <summary>The viewport a font size is measured against when the caller has none: the
+    /// same 1024×768 the cascade state and <c>MediaQueryEnvironment</c> assume. Without it a
+    /// viewport unit would be priced at nothing and the text would vanish.</summary>
+    private const float DefaultViewportWidth = 1024f;
+    private const float DefaultViewportHeight = 768f;
+
+    /// <summary>Resolves a 'font-size' token to px. The unit part goes through the one length
+    /// parser the engine has, because 'font-size' used to carry its own table: it had no
+    /// viewport units at all, and a '5vh' on the root element was a fraction of 16px rather
+    /// than a fraction of the viewport height (measured: '5vh' is <c>38.4px</c> on a 768px
+    /// viewport, not <c>0.8px</c>). A percentage is relative to the parent's font size, and so
+    /// is 'em', which is what the reference argument carries (CSS Fonts 4 §7.1).</summary>
+    public static float ParseFontSize(string value, float parentFontSize,
+        float rootFontSize = FontSizeMedium, float viewportWidth = 0f, float viewportHeight = 0f)
     {
         value = value?.Trim() ?? "";
-        // The unit has to be stripped with its own length: slicing two characters
-        // off "2rem" left a stray 'r' behind and made the parse fail silently.
-        if (TryLength(value, "rem", out var rem)) return rem * FontSizeMedium;
-        if (TryLength(value, "px", out var px)) return px;
-        if (TryLength(value, "pt", out var pt)) return pt * 96f / 72f;
-        if (TryLength(value, "pc", out var pc)) return pc * 16f;
-        if (TryLength(value, "in", out var inch)) return inch * 96f;
-        if (TryLength(value, "cm", out var cm)) return cm * 96f / 2.54f;
-        if (TryLength(value, "mm", out var mm)) return mm * 96f / 25.4f;
-        if (TryLength(value, "q", out var q)) return q * 96f / 101.6f;
-        if (TryLength(value, "em", out var em)) return em * parentFontSize;
-        if (TryLength(value, "ex", out var ex)) return ex * parentFontSize * 0.5f;
-        if (TryLength(value, "ch", out var ch)) return ch * parentFontSize * 0.5f;
-        if (TryLength(value, "vh", out var vh)) return vh / 100f * FontSizeMedium;
-        if (TryLength(value, "vw", out var vw)) return vw / 100f * FontSizeMedium;
-        if (value.EndsWith("%") && float.TryParse(value[..^1], System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var pct))
-            return pct / 100f * parentFontSize;
+        if (IsLength(value))
+        {
+            float px = Parse(value).ToPixels(parentFontSize,
+                rootFontSize > 0 ? rootFontSize : FontSizeMedium,
+                viewportWidth > 0 ? viewportWidth : DefaultViewportWidth,
+                viewportHeight > 0 ? viewportHeight : DefaultViewportHeight);
+            if (!float.IsNaN(px) && px >= 0) return px;
+        }
+        // A unitless number is not a valid CSS font size, but pages write one and treating it
+        // as px is what every engine has done for years; a bare zero still has to stay zero.
         if (float.TryParse(value, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var bare))
-            return bare > 0 ? bare : parentFontSize;
+            return bare > 0 ? bare : bare == 0 ? 0f : parentFontSize;
 
         float medium = FontSizeMedium;
         return value.ToLowerInvariant() switch
@@ -324,6 +380,20 @@ public class PercentLength : Length
     public PercentLength(float value) => Value = value;
     public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight) => Value * reference;
     public override string ToString() => $"{Value * 100}%";
+}
+
+/// <summary>An offset measured inwards from the far edge of the box — the &lt;length&gt; of the
+/// 'right 10px' / 'bottom 20px' form of &lt;position&gt; (CSS Position 3 §5.2). It resolves against
+/// the same free space a percentage does, and the reference engine reports it as the arithmetic
+/// it is: 'calc(100% - 10px)'. A percentage in that position is folded onto the near edge while
+/// it is still a fraction ('right 10%' is '90%'), so it never reaches this type.</summary>
+public class FarEdgeLength : Length
+{
+    public Length Offset { get; }
+    public FarEdgeLength(Length offset) => Offset = offset;
+    public override float ToPixels(float reference, float rootFontSize, float viewportWidth, float viewportHeight)
+        => reference - Offset.ToPixels(reference, rootFontSize, viewportWidth, viewportHeight);
+    public override string ToString() => $"calc(100% - {Offset})";
 }
 
 public class VwLength : Length
@@ -676,6 +746,17 @@ public class ComputedStyle
 
     public string FontFamily { get; set; } = Fonts.FontManager.StandardFontFamily;
     public float FontSize { get; set; } = 16;
+    /// <summary>The viewport this style was computed against, recorded by the resolver that
+    /// produced it. A viewport-relative length loses its unit at computed-value time in every
+    /// property that carries one: 'blur(10vh)', 'translate(50vw)', 'background-position: 10vw'
+    /// and a 'font-size: 2vh' all answer in pixels of the viewport, not of the box (measured on
+    /// a 445x481 window: 48.1px, 222.5px, 44.5px and 9.62px). Without the number the cascade
+    /// had, every one of those printers says '0px'.
+    /// A property the layout already resolves has its own route to the viewport and is not
+    /// affected; zero here means no viewport was given, which leaves a caller's argument in
+    /// charge.</summary>
+    public float ComputedViewportWidth { get; set; }
+    public float ComputedViewportHeight { get; set; }
     /// <summary>True while 'font-size' has never been given a real value anywhere up
     /// the chain — nothing declared, or only the initial keyword 'medium' (and
     /// descendants inheriting that). The generic 'monospace' carries its own size in a
@@ -739,6 +820,11 @@ public class ComputedStyle
     // overwhelming majority — are bit-identical either way.
 
     public List<BackgroundPositionLayer>? BackgroundPositionLayers { get; set; }
+    // The two axes of a position are longhands of their own (CSS Backgrounds 3 §4.1.1.1) and each
+    // keeps its own list, because 'background-position-x: 10px, 20px' cycles against
+    // 'background-position-y' independently of it. 'background-position' writes both.
+    public List<Length?>? BackgroundPositionXLayers { get; set; }
+    public List<Length?>? BackgroundPositionYLayers { get; set; }
     public List<BackgroundSizeLayer>? BackgroundSizeLayers { get; set; }
     public List<BackgroundRepeatPair>? BackgroundRepeatLayers { get; set; }
     public List<BackgroundAttachment>? BackgroundAttachmentLayers { get; set; }
@@ -795,6 +881,21 @@ public class ComputedStyle
     public OverflowClipMarginBox OverflowClipMarginBox { get; set; } = OverflowClipMarginBox.PaddingBox;
     public OverflowType OverflowX { get; set; } = OverflowType.Visible;
     public OverflowType OverflowY { get; set; } = OverflowType.Visible;
+    // CSS Scroll Snap 1 §6.1: the scroll-orientation margins are a four-sided box of lengths
+    // whose initial is zero, and 'auto' is accepted as that zero. Nothing is stored for a side
+    // the page never mentioned, so the computed value prints '0px' from the null.
+    public Length? ScrollMarginTop { get; set; }
+    public Length? ScrollMarginRight { get; set; }
+    public Length? ScrollMarginBottom { get; set; }
+    public Length? ScrollMarginLeft { get; set; }
+    public Length? ScrollPaddingTop { get; set; }
+    public Length? ScrollPaddingRight { get; set; }
+    public Length? ScrollPaddingBottom { get; set; }
+    public Length? ScrollPaddingLeft { get; set; }
+    /// <summary>'caret-shape' (CSS UI 4 §4.3): 'auto' asks for the platform caret, 'bar' and
+    /// 'block' ask for a specific shape. The engine draws one caret style, so the value is
+    /// carried for the computed surface and for scripts, not for painting.</summary>
+    public string CaretShape { get; set; } = "auto";
     public VisibilityType Visibility { get; set; } = VisibilityType.Visible;
     public int? ZIndex { get; set; }
     public string? Cursor { get; set; } = "auto";
@@ -841,6 +942,18 @@ public class ComputedStyle
     public string? Translate { get; set; }
     public string? Rotate { get; set; }
     public string? Scale { get; set; }
+    /// <summary>'perspective' (CSS Transforms 1 §5) is a single non-negative length, kept in the
+    /// canonical pixel spelling the cascade produced; 'none' is the initial value.</summary>
+    public string? Perspective { get; set; }
+    /// <summary>Both origins (CSS Transforms 1 §3/§5) are kept in the two- or three-token form the
+    /// canonicaliser emits: keywords folded onto percentages, lengths in pixels.</summary>
+    public string? PerspectiveOrigin { get; set; }
+    public string? BackfaceVisibility { get; set; } = "visible";
+    /// <summary>CSS Transforms 2 §5, initial 'flat'.</summary>
+    public string? TransformStyle { get; set; } = "flat";
+    /// <summary>CSS Transforms 1 §3, initial 'view-box' — the value the spec gives a
+    /// non-SVG element, which is also the box its percentages resolve against.</summary>
+    public string? TransformBox { get; set; } = "view-box";
     public string? Transition { get; set; }
     public string? TransitionDelay { get; set; }
     public string? TransitionDuration { get; set; }
@@ -857,7 +970,48 @@ public class ComputedStyle
     public string? AnimationPlayState { get; set; }
     public string? PointerEvents { get; set; } = "auto";
     public string? UserSelect { get; set; } = "auto";
+    /// <summary>Set when the authored 'display' keyword was 'flow-root'. Layout keeps
+    /// seeing <see cref="DisplayType.Block"/> (that is exactly what flow-root is
+    /// block-wise), so this only has to answer two questions: does the box establish a
+    /// formatting context, and what does its computed value read back as
+    /// (CSS Display 3 §3.3, measured: getComputedStyle().display === "flow-root").</summary>
+    public bool DisplayIsFlowRoot { get; set; }
+
+    /// <summary>The computed 'display' text, including the flow-root keyword that the
+    /// layout-facing <see cref="DisplayType"/> cannot express.</summary>
+    public string DisplayCssText => DisplayIsFlowRoot
+        // The multi-keyword form keeps its 'list-item' addition after the internal keyword
+        // (measured: 'display:flow-root list-item' reads back exactly that way).
+        ? (Display == DisplayType.ListItem ? "flow-root list-item" : "flow-root")
+        : Display.ToCssString();
+
+    /// <summary>'line-height' as a computed style reports it: 'normal', or a length. A
+    /// multiplier or percentage is resolved against this element's own font size, which is
+    /// what the reference engine answers for '1.5', '150%' and '2em' alike.</summary>
+    public string LineHeightCssText
+    {
+        get
+        {
+            if (LineHeightIsNormal) return "normal";
+            var px = LineHeightPx ?? LineHeight * (FontSize > 0 ? FontSize : 16f);
+            return Acrux.Core.Dom.Animations.CssValueTokenizer.Num(px) + "px";
+        }
+    }
+
     public string Direction { get; set; } = "ltr";
+
+    /// <summary>Whether this style's inline axis runs right-to-left. Vertical writing modes
+    /// also flip the inline axis, but they resolve through <c>Space.Direction</c> in layout;
+    /// this is the horizontal-tb case that CSS Logical Properties 1 §8 defines.</summary>
+    public bool IsInlineRightToLeft =>
+        string.Equals(Direction, "rtl", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The used float side. Layout must read this, never <c>Float</c> directly,
+    /// whenever it has to know which physical edge a float hugs.</summary>
+    public FloatType PhysicalFloat => CssFloatKeywords.ToPhysical(Float, IsInlineRightToLeft);
+
+    /// <summary>The used clear side; see <see cref="PhysicalFloat"/>.</summary>
+    public ClearType PhysicalClear => CssFloatKeywords.ToPhysical(Clear, IsInlineRightToLeft);
     /// <summary>Logical box properties as authored, queued for a second mapping pass
     /// in <c>StyleAdjuster</c>. A logical edge addresses an edge, not a side, so it
     /// resolves against the element's <i>final</i> computed 'direction' (CSS Logical
@@ -867,6 +1021,11 @@ public class ComputedStyle
     public System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, string>>? PendingBoxEdgeProperties { get; set; }
     public float LetterSpacing { get; set; }
     public float WordSpacing { get; set; }
+    /// <summary>'letter-spacing' / 'word-spacing' are 'normal' until a length is declared for
+    /// them (CSS Text 4 §5.1). The effect of 'normal' and of '0px' on the glyphs is the same,
+    /// but they are different computed values, and the CSSOM has to tell them apart.</summary>
+    public bool LetterSpacingIsNormal { get; set; } = true;
+    public bool WordSpacingIsNormal { get; set; } = true;
     public float TextIndent { get; set; }
     /// <summary>'text-indent: hanging' inverts the indent: the first line stays at
     /// the start edge and the remaining lines are indented (CSS Text 3 §5.2).</summary>
@@ -964,6 +1123,12 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
 
     public Length RowGap { get; set; } = new PixelLength(0);
     public Length ColumnGap { get; set; } = new PixelLength(0);
+    /// <summary>'row-gap'/'column-gap' are 'normal' until a length or percentage is authored
+    /// (CSS Box Alignment 3 §3.1, measured: a box that never mentions a gap reports 'normal',
+    /// and 'gap: 0px' reports '0px'). The layout uses zero for 'normal', so the lengths above
+    /// stay as they are and only the spelling is tracked here.</summary>
+    public bool RowGapIsNormal { get; set; } = true;
+    public bool ColumnGapIsNormal { get; set; } = true;
     public int ColumnCount { get; set; }
     public Length? ColumnWidth { get; set; }
     // 'column-fill: balance | auto'. Balance (the initial value) equalises column
@@ -1015,13 +1180,37 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
         AllBorders = BorderTop | BorderRight | BorderBottom | BorderLeft,
     }
     public float AspectRatio { get; set; }
+
+    /// <summary>'aspect-ratio' in the form it prints in: the pair the author wrote, or the
+    /// single number with 1 as its denominator (CSS Box Sizing 4 §6; measured, '1/2' reads back
+    /// as '1 / 2' and '0.5' as '0.5 / 1', because the property's value is a ratio of two
+    /// numbers rather than a quotient). Null when the property is 'auto'.</summary>
+    public string? AspectRatioPair { get; set; }
     public ObjectFitType ObjectFit { get; set; } = ObjectFitType.Fill;
     public Length? ObjectPositionX { get; set; }
     public Length? ObjectPositionY { get; set; }
     public string FlexFlow { get; set; } = "row nowrap";
-    public string AlignContent { get; set; } = "stretch";
-    public string JustifyItems { get; set; } = "legacy";
+    /// <summary>CSS Box Alignment 3 §3: 'normal' is the initial value of the content-distribution
+    /// properties, and it behaves as 'stretch' in a flex container and as 'start' in a block
+    /// flow. The layout consumers map every keyword they do not know onto that same fallback,
+    /// so the field carries the authored keyword and the initial is spelled as the standard
+    /// spells it (measured: a plain box reports <c>align-content: normal</c>).</summary>
+    public string AlignContent { get; set; } = "normal";
+    public string JustifyItems { get; set; } = "normal";
     public string JustifySelf { get; set; } = "auto";
+    /// <summary>The authored spelling of 'align-items' and 'justify-content'. The engine's own
+    /// alignment enums fold the CSS 2.1 keywords ('start', 'end', 'left', 'right') onto the
+    /// legacy flex ones, which is enough to lay the box out but is not what the property reads
+    /// back: a reference engine keeps the keyword the page wrote (measured:
+    /// <c>align-items: end</c> computes to 'end', not to 'flex-end', and the initial value is
+    /// the keyword 'normal', which no enum member expresses). Empty means the property was never
+    /// authored, so the computed value is 'normal'.</summary>
+    public string AlignItemsCssText { get; set; } = "";
+    public string JustifyContentCssText { get; set; } = "";
+    /// <summary>The authored spelling of 'align-self', for the same reason as the two above: its
+    /// initial 'auto' inherits the parent's 'align-items', so the enum alone could not tell an
+    /// authored 'end' from the 'flex-end' it lays out as (measured: 'end' reads back as 'end').</summary>
+    public string AlignSelfCssText { get; set; } = "";
     public string PlaceContent { get; set; } = "normal";
     public string PlaceItems { get; set; } = "normal";
     public string PlaceSelf { get; set; } = "auto";
@@ -1029,6 +1218,13 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public string? GridTemplateColumns { get; set; }
     public string? GridTemplateRows { get; set; }
     public string? GridTemplateAreas { get; set; }
+    /// <summary>The track sizes the grid algorithm settled on, written by layout and read back by
+    /// the CSSOM: a reference engine answers <see cref="grid-template-columns"/> with the USED
+    /// track list, not the authored one (measured: 'grid-template-columns: 1fr 2fr' in a 100px
+    /// grid reads back '33.3281px 66.6719px'). They are a layout result, so unlike every other
+    /// field here they are not inherited and not cloned.</summary>
+    public float[]? GridUsedColumnSizes { get; set; }
+    public float[]? GridUsedRowSizes { get; set; }
     public string? GridAutoColumns { get; set; } = "auto";
     public string? GridAutoRows { get; set; } = "auto";
     public GridAutoFlowType GridAutoFlow { get; set; } = GridAutoFlowType.Row;
@@ -1112,7 +1308,34 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public SKColor? AccentColor { get; set; }
     public SKColor? CaretColor { get; set; }
     public string ColorScheme { get; set; } = "normal";
-    public string Appearance { get; set; } = "auto";
+
+    /// <summary>CSS UI 4 §4.3 'appearance'. The initial value is 'none' — only a box the
+    /// user-agent stylesheet puts a widget on reports 'auto', so a plain element answers
+    /// 'none' even though the engine has no widget to remove. The reference engine folds
+    /// <c>-webkit-appearance</c> into this one property: writing
+    /// <c>-webkit-appearance: checkbox</c> changes the computed <c>appearance</c> to
+    /// 'checkbox'. What a control PAINTS as is not in this value at all — a text field, a
+    /// tick box and a menu list all compute 'auto' — it is carried beside it in
+    /// <see cref="NativeThemeFamily"/>.</summary>
+    public string Appearance { get; set; } = "none";
+
+    /// <summary>Which native widget a box with <c>appearance: auto</c> draws. This is not a CSS
+    /// property: the reference engine derives it from the element (a checkbox input, a button, a
+    /// text field), which is why the 'appearance' a page reads back stays 'auto'. Null means the
+    /// box has no widget of its own.</summary>
+    public string? NativeThemeFamily { get; set; }
+
+    /// <summary>The appearance to paint with: an author-named compat keyword wins, otherwise
+    /// <c>auto</c> falls back to the element's own widget, and <c>none</c> paints no widget.</summary>
+    public string PaintAppearance
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Appearance) || Appearance == "auto")
+                return NativeThemeFamily ?? "auto";
+            return Appearance;
+        }
+    }
 
     /// <summary>CSS 'field-sizing' (shipped by the reference engine as
     /// <c>normal | content</c>): 'content' replaces a text control's rendered size with the
@@ -1216,15 +1439,52 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
         return $"{px:F1}px";
     }
 
+    /// <summary>
+    /// The text a computed style reports for a length: an absolute or font-relative unit
+    /// is resolved to pixels (CSS Values 3 §7 — a computed value has no font left to be
+    /// relative to), while 'auto', percentages and the intrinsic keywords stay as authored,
+    /// which is what their computed value is. Numbers are trimmed the way a reference
+    /// engine prints them ("12px", not "12.0px").
+    /// </summary>
+    public string ComputedLengthCss(Length length, float viewportWidth = 0, float viewportHeight = 0)
+    {
+        if (length is AutoLength) return "auto";
+        if (length is PercentLength percent)
+            // The engine keeps a percentage as the fraction it multiplies by, so the printed
+            // form has to scale it back to the percent the author wrote ('5%', not '0.05%').
+            return Acrux.Core.Dom.Animations.CssValueTokenizer.Num((double)percent.Value * 100) + "%";
+        if (length is IntrinsicLength intrinsic) return intrinsic.ToString();
+        // A caller that has no viewport of its own gets the one the style was computed against;
+        // either way a 'vh' has to become a pixel count before it is printed.
+        var px = length.ToPixels(FontSize > 0 ? FontSize : 16f, FontSize,
+            viewportWidth > 0 ? viewportWidth : ComputedViewportWidth,
+            viewportHeight > 0 ? viewportHeight : ComputedViewportHeight);
+        return float.IsNaN(px) ? length.ToString()
+            : Acrux.Core.Dom.Animations.CssValueTokenizer.Num(px) + "px";
+    }
+
     /// <summary>Copy a per-layer background list so a cloned style never shares a
     /// mutable list with its source. Null stays null (= "no list was authored").</summary>
     private static List<T>? CopyLayerList<T>(List<T>? list) =>
         list == null ? null : new List<T>(list);
 
+    /// <summary>The text a computed style reports for a box size. Same resolution as
+    /// <see cref="ComputedLengthCss"/>, plus the clamp a box cannot escape: a negative width
+    /// or height has no meaning, so the used value is nothing wide and the reference engine
+    /// answers '0px' (measured: 'width: calc(10px - 4em)' computes as '0px'), while a negative
+    /// margin keeps its sign because an overlap does mean something.</summary>
+    public string ComputedSizeCss(Length length, float viewportWidth = 0, float viewportHeight = 0)
+    {
+        var text = ComputedLengthCss(length, viewportWidth, viewportHeight);
+        return text.StartsWith("-", StringComparison.Ordinal) ? "0px" : text;
+    }
+
     public ComputedStyle Clone()
     {
         return new ComputedStyle
         {
+            ComputedViewportWidth = ComputedViewportWidth,
+            ComputedViewportHeight = ComputedViewportHeight,
             Width = Width, Height = Height,
             Top = Top, Left = Left, Right = Right, Bottom = Bottom,
             MarginTop = MarginTop, MarginRight = MarginRight, MarginBottom = MarginBottom, MarginLeft = MarginLeft,
@@ -1240,7 +1500,8 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             BorderBottomRightRadius = BorderBottomRightRadius, BorderBottomLeftRadius = BorderBottomLeftRadius,
             BorderTopLeftRadiusY = BorderTopLeftRadiusY, BorderTopRightRadiusY = BorderTopRightRadiusY,
             BorderBottomRightRadiusY = BorderBottomRightRadiusY, BorderBottomLeftRadiusY = BorderBottomLeftRadiusY,
-            Display = Display, Position = Position, Float = Float, Clear = Clear,
+            Display = Display, DisplayIsFlowRoot = DisplayIsFlowRoot,
+            Position = Position, Float = Float, Clear = Clear,
             FontFamily = FontFamily, FontSize = FontSize, FontSizeIsDefault = FontSizeIsDefault, FontWeight = FontWeight,
             FontStyle = FontStyle, FontStyleObliqueDegrees = FontStyleObliqueDegrees, LineHeight = LineHeight,
             LineHeightIsNormal = LineHeightIsNormal, LineHeightPx = LineHeightPx,
@@ -1257,6 +1518,8 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             MaskModeLayers = CopyLayerList(MaskModeLayers),
             MaskCompositeLayers = CopyLayerList(MaskCompositeLayers),
             BackgroundPositionLayers = CopyLayerList(BackgroundPositionLayers),
+            BackgroundPositionXLayers = CopyLayerList(BackgroundPositionXLayers),
+            BackgroundPositionYLayers = CopyLayerList(BackgroundPositionYLayers),
             BackgroundSizeLayers = CopyLayerList(BackgroundSizeLayers),
             BackgroundRepeatLayers = CopyLayerList(BackgroundRepeatLayers),
             BackgroundAttachmentLayers = CopyLayerList(BackgroundAttachmentLayers),
@@ -1268,6 +1531,12 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             ScrollbarWidth = ScrollbarWidth, ScrollbarThumbColor = ScrollbarThumbColor,
             ScrollbarTrackColor = ScrollbarTrackColor, ScrollbarCustom = ScrollbarCustom,
             Overflow = Overflow, OverflowX = OverflowX, OverflowY = OverflowY,
+            OverflowClipMargin = OverflowClipMargin, OverflowClipMarginBox = OverflowClipMarginBox,
+            ScrollMarginTop = ScrollMarginTop, ScrollMarginRight = ScrollMarginRight,
+            ScrollMarginBottom = ScrollMarginBottom, ScrollMarginLeft = ScrollMarginLeft,
+            ScrollPaddingTop = ScrollPaddingTop, ScrollPaddingRight = ScrollPaddingRight,
+            ScrollPaddingBottom = ScrollPaddingBottom, ScrollPaddingLeft = ScrollPaddingLeft,
+            CaretShape = CaretShape,
             Visibility = Visibility, ZIndex = ZIndex, Cursor = Cursor, Opacity = Opacity,
             BoxShadow = BoxShadow, BackgroundSize = BackgroundSize,
             BackgroundSizeWidth = BackgroundSizeWidth, BackgroundSizeHeight = BackgroundSizeHeight,
@@ -1282,6 +1551,9 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             ListStyleImage = ListStyleImage, ListStylePosition = ListStylePosition,
             Transform = Transform, TransformOrigin = TransformOrigin,
             Translate = Translate, Rotate = Rotate, Scale = Scale,
+            Perspective = Perspective, PerspectiveOrigin = PerspectiveOrigin,
+            BackfaceVisibility = BackfaceVisibility, TransformBox = TransformBox,
+            TransformStyle = TransformStyle,
             Transition = Transition, TransitionDelay = TransitionDelay, TransitionDuration = TransitionDuration,
             TransitionProperty = TransitionProperty, TransitionTimingFunction = TransitionTimingFunction,
             Animation = Animation, AnimationName = AnimationName, AnimationDuration = AnimationDuration,
@@ -1290,6 +1562,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             AnimationFillMode = AnimationFillMode, AnimationPlayState = AnimationPlayState,
             PointerEvents = PointerEvents, UserSelect = UserSelect,
             Direction = Direction, LetterSpacing = LetterSpacing, WordSpacing = WordSpacing,
+            LetterSpacingIsNormal = LetterSpacingIsNormal, WordSpacingIsNormal = WordSpacingIsNormal,
             // Carried so a style cloned before adjustment still gets its logical
             // properties re-mapped; replaying an already-mapped pair is idempotent.
             PendingBoxEdgeProperties = PendingBoxEdgeProperties == null
@@ -1309,15 +1582,19 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             TextEmphasis = TextEmphasis, TextEmphasisColor = TextEmphasisColor, TextEmphasisStyle = TextEmphasisStyle,
             TextEmphasisPosition = TextEmphasisPosition,
             RowGap = RowGap, ColumnGap = ColumnGap,
+            RowGapIsNormal = RowGapIsNormal, ColumnGapIsNormal = ColumnGapIsNormal,
             ColumnCount = ColumnCount, ColumnWidth = ColumnWidth, ColumnFill = ColumnFill,
             ColumnRuleWidth = ColumnRuleWidth, ColumnRuleStyle = ColumnRuleStyle,
             ColumnRuleColor = ColumnRuleColor,
             OutlineWidth = OutlineWidth, OutlineColor = OutlineColor, OutlineStyle = OutlineStyle, OutlineOffset = OutlineOffset,
             TableLayout = TableLayout, CaptionSide = CaptionSide, EmptyCells = EmptyCells, Content = Content,
             CounterIncrement = CounterIncrement, CounterReset = CounterReset, CounterSet = CounterSet, Quotes = Quotes,
-            Order = Order, CurrentColorSlots = CurrentColorSlots, AspectRatio = AspectRatio, ObjectFit = ObjectFit,
+            Order = Order, CurrentColorSlots = CurrentColorSlots, AspectRatio = AspectRatio,
+            AspectRatioPair = AspectRatioPair, ObjectFit = ObjectFit,
             ObjectPositionX = ObjectPositionX, ObjectPositionY = ObjectPositionY,
             FlexFlow = FlexFlow, AlignContent = AlignContent, JustifyItems = JustifyItems, JustifySelf = JustifySelf,
+            AlignItemsCssText = AlignItemsCssText, JustifyContentCssText = JustifyContentCssText,
+            AlignSelfCssText = AlignSelfCssText,
             PlaceContent = PlaceContent, PlaceItems = PlaceItems, PlaceSelf = PlaceSelf,
             GridTemplateColumns = GridTemplateColumns, GridTemplateRows = GridTemplateRows, GridTemplateAreas = GridTemplateAreas,
             GridAutoColumns = GridAutoColumns, GridAutoRows = GridAutoRows, GridAutoFlow = GridAutoFlow,
@@ -1332,7 +1609,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             ContainIntrinsicWidth = ContainIntrinsicWidth, ContainIntrinsicHeight = ContainIntrinsicHeight,
             ContainIntrinsicWidthIsAuto = ContainIntrinsicWidthIsAuto,
             ContainIntrinsicHeightIsAuto = ContainIntrinsicHeightIsAuto,
-            WillChange = WillChange, Appearance = Appearance, FieldSizing = FieldSizing, AccentColor = AccentColor, CaretColor = CaretColor,
+            WillChange = WillChange, Appearance = Appearance, NativeThemeFamily = NativeThemeFamily, FieldSizing = FieldSizing, AccentColor = AccentColor, CaretColor = CaretColor,
             ColorScheme = ColorScheme, ForcedColorAdjust = ForcedColorAdjust,
             ImageRendering = ImageRendering, Isolation = Isolation, MixBlendMode = MixBlendMode,
             Filter = Filter, BackdropFilter = BackdropFilter, ClipPath = ClipPath,
@@ -1371,9 +1648,11 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
         if (IsTransformPropertySet(Translate))
         {
             var tokens = Translate!.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            float x = ResolveTranslateComponent(tokens.Length > 0 ? tokens[0] : null, borderBoxWidth);
-            float y = ResolveTranslateComponent(tokens.Length > 1 ? tokens[1] : null, borderBoxHeight);
-            float z = ResolveTranslateComponent(tokens.Length > 2 ? tokens[2] : null, borderBoxHeight);
+            float x = ResolveTranslateComponent(tokens.Length > 0 ? tokens[0] : null, borderBoxWidth, FontSize);
+            float y = ResolveTranslateComponent(tokens.Length > 1 ? tokens[1] : null, borderBoxHeight, FontSize);
+            // The depth is a <length>, never a <length-percentage>, so it has no box to resolve
+            // a percentage against; 0 is passed rather than a side that would be meaningless.
+            float z = ResolveTranslateComponent(tokens.Length > 2 ? tokens[2] : null, 0f, FontSize);
             string xs = x.ToString(ci), ys = y.ToString(ci), zs = z.ToString(ci);
             parts.Add(z != 0 ? $"translate3d({xs}px,{ys}px,{zs}px)" : $"translate({xs}px,{ys}px)");
         }
@@ -1419,7 +1698,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     private static bool IsTransformPropertySet(string? value) =>
         !string.IsNullOrWhiteSpace(value) && !value.Trim().Equals("none", StringComparison.OrdinalIgnoreCase);
 
-    private static float ResolveTranslateComponent(string? token, float reference)
+    private static float ResolveTranslateComponent(string? token, float reference, float fontSize)
     {
         if (string.IsNullOrEmpty(token))
             return 0;
@@ -1427,7 +1706,10 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             float.TryParse(token[..^1], System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var pct))
             return pct / 100f * reference;
-        var px = Length.Parse(token).ToPixels(16f, 16f, 0f, 0f);
+        // A font-relative unit resolves against the box's own font, not against a default
+        // someone guessed at: 'translate: 1em' moves a 20px-text box by 20px.
+        float medium = fontSize > 0f && !float.IsNaN(fontSize) ? fontSize : Length.FontSizeMedium;
+        var px = Length.Parse(token).ToPixels(medium, Length.FontSizeMedium, 0f, 0f);
         return float.IsNaN(px) ? 0 : px;
     }
 
@@ -1448,8 +1730,80 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
 
 public enum DisplayType { Block, Inline, InlineBlock, Flex, InlineFlex, Grid, InlineGrid, ListItem, Table, TableRow, TableRowGroup, TableHeaderGroup, TableFooterGroup, TableCell, TableCaption, TableColumnGroup, TableColumn, Ruby, Contents, None }
 public enum PositionType { Static, Relative, Absolute, Fixed, Sticky }
-public enum FloatType { None, Left, Right }
-public enum ClearType { None, Left, Right, Both }
+public enum FloatType { None, Left, Right, InlineStart, InlineEnd }
+public enum ClearType { None, Left, Right, Both, InlineStart, InlineEnd }
+
+/// <summary>
+/// The float/clear keyword grammar and the logical-to-physical resolution.
+/// <para>
+/// CSS Logical Properties 1 §8 adds <c>inline-start</c> / <c>inline-end</c> to both
+/// properties. They are <em>computed</em> as authored — the reference engine reports
+/// <c>float: inline-start</c> from <c>getComputedStyle</c> — and only the <em>used</em>
+/// value is physical, resolved against the element's own inline direction. So the
+/// computed style keeps the logical keyword and every layout consumer has to go
+/// through <see cref="ToPhysical(FloatType,bool)"/> / <see cref="ToPhysical(ClearType,bool)"/>.
+/// </para>
+/// <para>
+/// The keyword sets live here because float and clear were parsed in three separate
+/// places (applier, legacy cascade, pseudo-element style application); a fourth list
+/// would be the same bug again.
+/// </para>
+/// </summary>
+public static class CssFloatKeywords
+{
+    public static bool TryParseFloat(string value, out FloatType result)
+    {
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "left": result = FloatType.Left; return true;
+            case "right": result = FloatType.Right; return true;
+            case "inline-start": result = FloatType.InlineStart; return true;
+            case "inline-end": result = FloatType.InlineEnd; return true;
+            default: result = FloatType.None; return false;
+        }
+    }
+
+    public static bool TryParseClear(string value, out ClearType result)
+    {
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "left": result = ClearType.Left; return true;
+            case "right": result = ClearType.Right; return true;
+            case "both": result = ClearType.Both; return true;
+            case "inline-start": result = ClearType.InlineStart; return true;
+            case "inline-end": result = ClearType.InlineEnd; return true;
+            default: result = ClearType.None; return false;
+        }
+    }
+
+    public static FloatType ToPhysical(this FloatType value, bool rightToLeft) => value switch
+    {
+        FloatType.InlineStart => rightToLeft ? FloatType.Right : FloatType.Left,
+        FloatType.InlineEnd => rightToLeft ? FloatType.Left : FloatType.Right,
+        _ => value,
+    };
+
+    public static ClearType ToPhysical(this ClearType value, bool rightToLeft) => value switch
+    {
+        ClearType.InlineStart => rightToLeft ? ClearType.Right : ClearType.Left,
+        ClearType.InlineEnd => rightToLeft ? ClearType.Left : ClearType.Right,
+        _ => value,
+    };
+
+    public static string ToCssString(this FloatType value) => value switch
+    {
+        FloatType.Left => "left", FloatType.Right => "right",
+        FloatType.InlineStart => "inline-start", FloatType.InlineEnd => "inline-end",
+        _ => "none",
+    };
+
+    public static string ToCssString(this ClearType value) => value switch
+    {
+        ClearType.Left => "left", ClearType.Right => "right", ClearType.Both => "both",
+        ClearType.InlineStart => "inline-start", ClearType.InlineEnd => "inline-end",
+        _ => "none",
+    };
+}
 public enum BorderStyle { None, Solid, Dashed, Dotted, Double, Groove, Ridge, Inset, Outset }
 public enum FontWeight
 {

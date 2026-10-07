@@ -56,7 +56,7 @@ public static class CssPropertyApplier
             case "min-block-size": style.MinHeight = Length.Parse(value); break;
             case "max-inline-size": style.MaxWidth = Length.Parse(value); break;
             case "max-block-size": style.MaxHeight = Length.Parse(value); break;
-            case "display": style.Display = ParseDisplay(value); break;
+            case "display": ApplyDisplay(style, value); break;
             case "position": style.Position = ParsePosition(value); break;
             case "float": style.Float = ParseFloat(value); break;
             case "clear": style.Clear = ParseClear(value); break;
@@ -91,6 +91,20 @@ public static class CssPropertyApplier
             case "color": style.Color = ColorParser.Parse(value, style); break;
             case "accent-color": style.AccentColor = value == "auto" ? null : ColorParser.Parse(value, style); break;
             case "caret-color": style.CaretColor = value == "auto" ? null : ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.Caret, value); break;
+            // CSS UI 4 §4.3: 'caret-shape' is the keyword pair, and a platform that draws one
+            // caret still keeps the authored one for the computed surface and for scripts.
+            case "caret-shape": { var caretShape = value.Trim().ToLowerInvariant();
+                    if (caretShape is "auto" or "bar" or "block") style.CaretShape = caretShape; break; }
+            // CSS Scroll Snap 1 §6.1: the two four-sided scroll insets, whose initial is zero and
+            // which take negative lengths but no percentages.
+            case "scroll-margin-top": SetScrollInset(style, value, 0); break;
+            case "scroll-margin-right": SetScrollInset(style, value, 1); break;
+            case "scroll-margin-bottom": SetScrollInset(style, value, 2); break;
+            case "scroll-margin-left": SetScrollInset(style, value, 3); break;
+            case "scroll-padding-top": SetScrollInset(style, value, 4); break;
+            case "scroll-padding-right": SetScrollInset(style, value, 5); break;
+            case "scroll-padding-bottom": SetScrollInset(style, value, 6); break;
+            case "scroll-padding-left": SetScrollInset(style, value, 7); break;
 
             // Standard scrollbar properties.
             case "scrollbar-width":
@@ -108,7 +122,13 @@ public static class CssPropertyApplier
                 var cs = value.ToLowerInvariant();
                 style.ColorScheme = cs switch { "light" => "light", "dark" => "dark", "light dark" => "light dark", _ => "normal" };
                 break;
-            case "appearance": case "-webkit-appearance": style.Appearance = value.ToLowerInvariant(); break;
+            // '-webkit-appearance' is an alias, not a second property: measured in the reference
+            // engine, writing it changes the computed 'appearance' and the CSSOM normalises
+            // cssText to the unprefixed name. What a control paints as is not in CSS at all —
+            // it comes from ComputedStyle.NativeThemeFamily, which the element itself carries.
+            case "appearance": case "-webkit-appearance":
+                style.Appearance = value.ToLowerInvariant();
+                break;
             case "forced-color-adjust": style.ForcedColorAdjust = value.ToLowerInvariant() == "none" ? ForcedColorAdjustType.None : ForcedColorAdjustType.Auto; break;
             case "background": ParseBackgroundShorthand(value, style); break;
             case "background-color": style.BackgroundColor = ColorParser.Parse(value, style); break;
@@ -116,28 +136,46 @@ public static class CssPropertyApplier
                 style.BackgroundImage = ParseImageLayerList(value);
                 break;
             case "background-repeat":
-                style.BackgroundRepeat = ParseBackgroundRepeat(FirstBackgroundLayer(value));
-                style.BackgroundRepeatLayers = ParseBackgroundLayerList(value, ParseOneBackgroundRepeatPair);
+                // The grammars of the background longhands are checked before anything is
+                // written: a value the grammar does not read is a parse error, and a parse
+                // error leaves the element on the value the cascade gave it before (measured:
+                // 'background-repeat: repeat-x no-repeat' keeps the earlier 'round').
+                if (!ShorthandExpander.IsBackgroundRepeatValue(value)) break;
+                // Always a list, even for one layer: the two axes of 'space round' survive only in
+                // a pair, and the scalar field has room for one axis (measured: the reference
+                // engine reads that value back as 'space round', not as 'space').
+                style.BackgroundRepeatLayers = ParseBackgroundLayerList(value, ParseOneBackgroundRepeatPair, always: true);
+                style.BackgroundRepeat = FoldRepeatPair(ParseOneBackgroundRepeatPair(FirstBackgroundLayer(value)));
                 break;
             case "background-position":
-                ParseBackgroundPosition(FirstBackgroundLayer(value), style);
-                style.BackgroundPositionLayers = ParseBackgroundLayerList(value, ParseOneBackgroundPosition);
+                if (!ShorthandExpander.IsBackgroundPositionValue(value)) break;
+                ApplyBackgroundPositionLonghand(value, style);
                 break;
-            case "background-position-x": style.BackgroundPositionX = ParsePositionKeywordOrLength(value); break;
-            case "background-position-y": style.BackgroundPositionY = ParsePositionKeywordOrLength(value); break;
+            case "background-position-x":
+                if (!ShorthandExpander.IsBackgroundPositionAxisValue(value, horizontal: true)) break;
+                ApplyBackgroundPositionAxisLonghand(value, style, horizontal: true);
+                break;
+            case "background-position-y":
+                if (!ShorthandExpander.IsBackgroundPositionAxisValue(value, horizontal: false)) break;
+                ApplyBackgroundPositionAxisLonghand(value, style, horizontal: false);
+                break;
             case "background-size":
+                if (!ShorthandExpander.IsBackgroundSizeValue(value)) break;
                 ParseBackgroundSize(FirstBackgroundLayer(value), style);
                 style.BackgroundSizeLayers = ParseBackgroundLayerList(value, ParseOneBackgroundSize);
                 break;
             case "background-attachment":
+                if (!ShorthandExpander.IsBackgroundAttachmentValue(value)) break;
                 style.BackgroundAttachment = ParseBackgroundAttachment(FirstBackgroundLayer(value));
                 style.BackgroundAttachmentLayers = ParseBackgroundLayerList(value, ParseBackgroundAttachment);
                 break;
             case "background-clip":
+                if (!ShorthandExpander.IsBackgroundBoxValue(value, allowText: true)) break;
                 style.BackgroundClip = value.ToLowerInvariant();
                 style.BackgroundClipLayers = ParseBackgroundLayerList(value, s => s.ToLowerInvariant());
                 break;
             case "background-origin":
+                if (!ShorthandExpander.IsBackgroundBoxValue(value, allowText: false)) break;
                 style.BackgroundOrigin = value.ToLowerInvariant();
                 style.BackgroundOriginLayers = ParseBackgroundLayerList(value, s => s.ToLowerInvariant());
                 break;
@@ -248,7 +286,7 @@ public static class CssPropertyApplier
                 break;
             case "overflow-y": style.OverflowY = ParseOverflow(value); break;
             case "overflow-anchor": style.OverflowAnchor = value.ToLowerInvariant() == "none" ? OverflowAnchorType.None : OverflowAnchorType.Auto; break;
-            case "overscroll-behavior": style.OverscrollBehavior = ParseOverscrollBehavior(value); style.OverscrollBehaviorX = style.OverscrollBehavior; style.OverscrollBehaviorY = style.OverscrollBehavior; break;
+            case "overscroll-behavior": ApplyOverscrollBehavior(style, value); break;
             case "overscroll-behavior-x": style.OverscrollBehaviorX = ParseOverscrollBehavior(value); break;
             // Logical axes (CSS Overscroll Behavior 1 §3): for the horizontal writing
             // modes the engine supports, block maps to the y axis and inline to x.
@@ -257,12 +295,8 @@ public static class CssPropertyApplier
             // Legacy grid aliases (CSS Grid 1 §2.1.1, renamed by Grid 2): 'grid-gap'
             // takes <row-gap> <column-gap>, the same order as today's 'gap'.
             case "grid-gap": ParseGap(value, style); break;
-            case "grid-row-gap":
-                if (Length.TryParse(value, out var grg)) style.RowGap = grg;
-                break;
-            case "grid-column-gap":
-                if (Length.TryParse(value, out var gcg)) style.ColumnGap = gcg;
-                break;
+            case "grid-row-gap": SetGap(style, value, row: true); break;
+            case "grid-column-gap": SetGap(style, value, row: false); break;
             case "overscroll-behavior-y": style.OverscrollBehaviorY = ParseOverscrollBehavior(value); break;
             case "z-index": if (value != "auto") style.ZIndex = int.TryParse(value, out var z) ? z : null; break;
             case "border": ParseBorderShorthand(value, style); break;
@@ -343,27 +377,75 @@ public static class CssPropertyApplier
             case "flex": ParseFlexShorthand(value, style); break;
             case "flex-flow": style.FlexFlow = value; ParseFlexFlow(value, style); break;
             case "order": if (int.TryParse(value, out var ord)) style.Order = ord; break;
-            case "justify-content": style.JustifyContent = ParseJustifyContent(value); break;
-            case "justify-items": style.JustifyItems = value.ToLowerInvariant(); break;
-            case "justify-self": style.JustifySelf = value.ToLowerInvariant(); break;
-            case "align-items": style.AlignItems = ParseAlignItems(value); break;
-            case "align-self": style.AlignSelf = ParseAlignSelf(value); break;
-            case "align-content": style.AlignContent = value.ToLowerInvariant(); break;
+            case "justify-content":
+                {
+                    var jc = CanonicalAlignmentValue(value);
+                    if (jc == null) break;
+                    style.JustifyContent = ParseJustifyContent(jc);
+                    style.JustifyContentCssText = jc;
+                }
+                break;
+            case "justify-items":
+                {
+                    var ji = CanonicalAlignmentValue(value);
+                    if (ji != null) style.JustifyItems = ji;
+                }
+                break;
+            case "justify-self":
+                {
+                    var js = CanonicalAlignmentValue(value);
+                    if (js != null) style.JustifySelf = js;
+                }
+                break;
+            case "align-items":
+                {
+                    var ai = CanonicalAlignmentValue(value);
+                    if (ai == null) break;
+                    style.AlignItems = ParseAlignItems(ai);
+                    style.AlignItemsCssText = ai;
+                }
+                break;
+            case "align-self":
+                {
+                    var asf = CanonicalAlignmentValue(value);
+                    if (asf == null) break;
+                    style.AlignSelf = ParseAlignSelf(asf);
+                    style.AlignSelfCssText = asf;
+                }
+                break;
+            case "align-content":
+                {
+                    var ac = CanonicalAlignmentValue(value);
+                    if (ac != null) style.AlignContent = ac;
+                }
+                break;
             case "place-content":
-                style.PlaceContent = value.ToLowerInvariant();
-                ApplyPlace(value, v => style.AlignContent = v, v => style.JustifyContent = ParseJustifyContent(v));
+                {
+                    style.PlaceContent = value.ToLowerInvariant();
+                    var (block, inline) = PlacePair(value);
+                    ApplyPlace(v => { style.AlignContent = v; },
+                        v => { style.JustifyContent = ParseJustifyContent(v); style.JustifyContentCssText = v; },
+                        block, inline);
+                }
                 break;
             case "place-items":
-                style.PlaceItems = value.ToLowerInvariant();
-                ApplyPlace(value, v => style.AlignItems = ParseAlignItems(v), v => style.JustifyItems = v);
+                {
+                    style.PlaceItems = value.ToLowerInvariant();
+                    var (block, inline) = PlacePair(value);
+                    ApplyPlace(v => { style.AlignItems = ParseAlignItems(v); style.AlignItemsCssText = v; },
+                        v => style.JustifyItems = v, block, inline);
+                }
                 break;
             case "place-self":
-                style.PlaceSelf = value.ToLowerInvariant();
-                ApplyPlace(value, v => style.AlignSelf = ParseAlignSelf(v), v => style.JustifySelf = v);
+                {
+                    style.PlaceSelf = value.ToLowerInvariant();
+                    var (block, inline) = PlacePair(value);
+                    ApplyPlace(v => style.AlignSelf = ParseAlignSelf(v), v => style.JustifySelf = v, block, inline);
+                }
                 break;
             case "gap": ParseGap(value, style); break;
-            case "row-gap": if (Length.TryParse(value, out var rg)) style.RowGap = rg; break;
-            case "column-gap": if (Length.TryParse(value, out var cg)) style.ColumnGap = cg; break;
+            case "row-gap": SetGap(style, value, row: true); break;
+            case "column-gap": SetGap(style, value, row: false); break;
             case "column-count": if (int.TryParse(value, out var cc)) style.ColumnCount = cc; break;
             case "column-fill": { var cf = value.Trim().ToLowerInvariant(); if (cf == "auto" || cf == "balance") style.ColumnFill = cf; break; }
             case "column-span":
@@ -388,7 +470,7 @@ public static class CssPropertyApplier
             case "grid-template": ParseGridTemplateShorthand(value, style); break;
             case "grid-template-columns": style.GridTemplateColumns = value == "none" ? null : value; break;
             case "grid-template-rows": style.GridTemplateRows = value == "none" ? null : value; break;
-            case "grid-template-areas": style.GridTemplateAreas = value == "none" ? null : value; break;
+            case "grid-template-areas": style.GridTemplateAreas = CanonicalGridTemplateAreas(value); break;
             case "grid-auto-columns": style.GridAutoColumns = value; break;
             case "grid-auto-rows": style.GridAutoRows = value; break;
             case "grid-auto-flow": style.GridAutoFlow = ParseGridAutoFlow(value); break;
@@ -424,12 +506,51 @@ public static class CssPropertyApplier
             case "list-style": ParseListStyle(value, style); break;
             case "cursor": style.Cursor = value; break;
             case "transform": style.Transform = value; break;
-            case "transform-origin": style.TransformOrigin = value; break;
-            // Independent transform properties (CSS Transforms 2 §3): stored raw
-            // and composed with 'transform' at paint time by ComputedStyle.
-            case "translate": style.Translate = value; break;
-            case "rotate": style.Rotate = value; break;
-            case "scale": style.Scale = value; break;
+            // Both origins are canonicalised to the two- (or three-)token form the reference
+            // engine reports: each keyword is filed on its own axis as the percentage it stands
+            // for, lengths become pixels, an unnamed axis keeps '50%', and a zero depth is
+            // dropped. A percentage stays a percentage here — the box it resolves against
+            // belongs to layout, which is what the CSSOM reports as the used value.
+            case "transform-origin":
+                if (IndividualTransforms.CanonicalOrigin(value, style, allowDepth: true) is { } originText)
+                    style.TransformOrigin = originText;
+                break;
+            case "perspective-origin":
+                if (IndividualTransforms.CanonicalOrigin(value, style, allowDepth: false) is { } perspectiveOriginText)
+                    style.PerspectiveOrigin = perspectiveOriginText;
+                break;
+            // Individual transform properties (CSS Transforms 2 §4). Canonicalised once, here,
+            // so that the paint path and the CSSOM read the same text rather than each re-reading
+            // what the page typed; and a declaration the grammar rejects stores nothing, which is
+            // how the reference engine treats it — it resets nothing.
+            case "translate":
+                if (IndividualTransforms.CanonicalTranslate(value, style) is { } translateText)
+                    style.Translate = translateText;
+                break;
+            case "rotate":
+                if (IndividualTransforms.CanonicalRotate(value) is { } rotateText)
+                    style.Rotate = rotateText;
+                break;
+            case "scale":
+                if (IndividualTransforms.CanonicalScale(value) is { } scaleText)
+                    style.Scale = scaleText;
+                break;
+            case "perspective":
+                if (IndividualTransforms.CanonicalPerspective(value, style) is { } perspectiveText)
+                    style.Perspective = perspectiveText;
+                break;
+            case "backface-visibility":
+                if (IndividualTransforms.TryBackfaceVisibility(value, out var backfaceKeyword))
+                    style.BackfaceVisibility = backfaceKeyword;
+                break;
+            case "transform-style":
+                if (IndividualTransforms.TryTransformStyle(value, out var styleKeyword))
+                    style.TransformStyle = styleKeyword;
+                break;
+            case "transform-box":
+                if (IndividualTransforms.TryTransformBox(value, out var boxKeyword))
+                    style.TransformBox = boxKeyword;
+                break;
             case "transition": style.Transition = value; break;
             case "transition-delay": style.TransitionDelay = value; break;
             case "transition-duration": style.TransitionDuration = value; break;
@@ -496,14 +617,30 @@ public static class CssPropertyApplier
                 }
                 break;
             case "letter-spacing":
-                if (value == "normal") style.LetterSpacing = 0;
+                // 'normal' is a value of its own, not a zero length: the two shape the text the
+                // same but read back differently (CSS Text 4 §5.1).
+                if (value.Equals("normal", StringComparison.OrdinalIgnoreCase))
+                {
+                    style.LetterSpacing = 0;
+                    style.LetterSpacingIsNormal = true;
+                }
                 else if (Length.TryParse(value, out var ls))
+                {
                     style.LetterSpacing = ls.ToPixels(style.FontSize, style.FontSize, 0, 0);
+                    style.LetterSpacingIsNormal = false;
+                }
                 break;
             case "word-spacing":
-                if (value == "normal") style.WordSpacing = 0;
+                if (value.Equals("normal", StringComparison.OrdinalIgnoreCase))
+                {
+                    style.WordSpacing = 0;
+                    style.WordSpacingIsNormal = true;
+                }
                 else if (Length.TryParse(value, out var ws))
+                {
                     style.WordSpacing = ws.ToPixels(style.FontSize, style.FontSize, 0, 0);
+                    style.WordSpacingIsNormal = false;
+                }
                 break;
             case "direction": style.Direction = value.ToLowerInvariant() == "rtl" ? "rtl" : "ltr"; break;
             case "unicode-bidi": style.UnicodeBidi = value.ToLowerInvariant(); break;
@@ -577,14 +714,24 @@ public static class CssPropertyApplier
             case "counter-set": style.CounterSet = value; break;
             case "quotes": style.Quotes = value; break;
             case "aspect-ratio":
-                if (value == "auto") style.AspectRatio = 0;
+                // The value is a ratio of two numbers, and both are kept: a box sized from
+                // '1 / 2' and one sized from '0.5' lay out the same, but a script reading the
+                // computed value gets the pair back, in the author's own numbers.
+                if (value == "auto") { style.AspectRatio = 0; style.AspectRatioPair = null; }
                 else if (value.Contains('/'))
                 {
                     var parts = value.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                     if (parts.Length == 2 && float.TryParse(parts[0], out var aw) && float.TryParse(parts[1], out var ah) && ah > 0)
+                    {
                         style.AspectRatio = aw / ah;
+                        style.AspectRatioPair = $"{Acrux.Core.Dom.Animations.CssValueTokenizer.Num(aw)} / {Acrux.Core.Dom.Animations.CssValueTokenizer.Num(ah)}";
+                    }
                 }
-                else if (float.TryParse(value, out var ar)) style.AspectRatio = ar;
+                else if (float.TryParse(value, out var ar))
+                {
+                    style.AspectRatio = ar;
+                    style.AspectRatioPair = ar > 0 ? $"{Acrux.Core.Dom.Animations.CssValueTokenizer.Num(ar)} / 1" : null;
+                }
                 break;
             case "object-fit": style.ObjectFit = ParseObjectFit(value); break;
             case "object-position": ParsePosition(value, out var opx, out var opy); style.ObjectPositionX = opx; style.ObjectPositionY = opy; break;
@@ -661,6 +808,17 @@ public static class CssPropertyApplier
                 }
                 break;
             case "hyphens": style.Hyphens = ParseHyphens(value); break;
+            case "ruby-position":
+                // CSS Ruby 1 §4.3: the annotation sits over, under or between base and text;
+                // 'left'/'right' are the vertical-writing-mode spellings. Any other keyword is
+                // not a value here, so the declaration is dropped and the inherited position
+                // stays.
+                {
+                    string rp = value.Trim().ToLowerInvariant();
+                    if (rp is "over" or "under" or "inter-character" or "left" or "right")
+                        style.RubyPosition = rp;
+                }
+                break;
             case "line-break": style.LineBreak = ParseLineBreak(value); break;
             case "text-justify": style.TextJustify = ParseTextJustify(value); break;
             case "hanging-punctuation": style.HangingPunctuation = value.ToLowerInvariant(); break;
@@ -773,18 +931,29 @@ public static class CssPropertyApplier
         string v = value?.Trim() ?? "";
         // Font-relative units (cap/ex/ch/ic/lh and root variants) resolve against
         // the parent font's real metrics; viewport units (vw/vh/svh/lvh/dvh/…)
-        // against the viewport. Both go through the general Length path, which the
-        // string-slicing ParseFontSize does not cover. The element's own font-size
-        // is not known yet, so the unit context is the parent style.
-        if (parentStyle != null && IsMetricOrViewportLength(v))
+        // against the viewport; and a deferred math expression against the parent's
+        // font size, which is the percentage base a 'font-size' has (CSS Fonts 4 §7.1).
+        // Both go through the general Length path, which the string-slicing
+        // ParseFontSize does not cover. The element's own font-size is not known yet,
+        // so the unit context is the parent style.
+        if ((IsMetricOrViewportLength(v) || IsMathFunction(v)) && parentStyle != null)
         {
             using var _scope = FontUnitContext.Use(parentStyle);
             float px = Length.Parse(v).ToPixels(parentFontSize, rootFontSize, viewportWidth, viewportHeight);
             if (!float.IsNaN(px) && px > 0)
                 return px;
         }
-        return Length.ParseFontSize(v, parentFontSize);
+        return Length.ParseFontSize(v, parentFontSize, rootFontSize, viewportWidth, viewportHeight);
     }
+
+    /// <summary>True for a value whose arithmetic has to be evaluated before the unit is
+    /// known — 'calc()', 'min()', 'max()', 'clamp()'. The cascade folds most of these itself;
+    /// one that still carries a percentage reaches here, where the parent font size is the base.</summary>
+    private static bool IsMathFunction(string v)
+        => v.StartsWith("calc(", StringComparison.OrdinalIgnoreCase)
+        || v.StartsWith("min(", StringComparison.OrdinalIgnoreCase)
+        || v.StartsWith("max(", StringComparison.OrdinalIgnoreCase)
+        || v.StartsWith("clamp(", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsMetricOrViewportLength(string v)
     {
@@ -871,13 +1040,17 @@ public static class CssPropertyApplier
 
     public static string ParseFontFamily(string value)
     {
-        // Keep the FULL font-family list (cleaned) so the renderer can fall back
-        // through every specified family instead of only the first one. Consumers
-        // that need a single family use the first entry (PrimaryFamily /
-        // FontFamily.Split(',')[0]).
-        var families = value.Split(',', StringSplitOptions.RemoveEmptyEntries);
-        if (families.Length == 0) return Acrux.Core.Fonts.FontManager.StandardFontFamily;
-        return string.Join(",", families.Select(f => f.Trim().Trim('"', '\'')));
+        // Keep the FULL font-family list so the renderer can fall back through every specified
+        // family instead of only the first one. Consumers that need a single family take the
+        // first entry and strip the quotes themselves.
+        //
+        // The list is kept in the author's own spelling — case and quotes included, the
+        // families separated by ', ' — because that is what a reference engine prints back out
+        // of getComputedStyle (measured: font-family: "Times New Roman", Georgia) and because a
+        // family name is a name: lowering it is not a harmless normalisation when the platform
+        // matcher is looking for the string a face was installed under.
+        var list = ShorthandExpander.JoinFamilyList(value);
+        return list.Length > 0 ? list : Acrux.Core.Fonts.FontManager.StandardFontFamily;
     }
 
     public static float ParseLineHeight(string value, float fontSize)
@@ -887,32 +1060,209 @@ public static class CssPropertyApplier
         return 1.2f;
     }
 
-    public static DisplayType ParseDisplay(string value) => value.ToLowerInvariant() switch
+    /// <summary>
+    /// The one place 'display' is written, so the flow-root marker can never drift from the
+    /// display type it was parsed with (three call sites used to assign style.Display
+    /// straight from the keyword list). A value the grammar rejects drops the whole
+    /// declaration (CSS Values 3 §3.1): 'display: garbage' has to leave a span inline instead
+    /// of silently blockifying it, which is what the old catch-all 'block' fallback did.
+    /// </summary>
+    public static void ApplyDisplay(ComputedStyle style, string value)
     {
-        "block" => DisplayType.Block,
-        "inline" => DisplayType.Inline,
-        "inline-block" => DisplayType.InlineBlock,
-        "flex" => DisplayType.Flex,
-        "inline-flex" => DisplayType.InlineFlex,
-        "grid" => DisplayType.Grid,
-        "inline-grid" => DisplayType.InlineGrid,
-        "list-item" => DisplayType.ListItem,
-        "table" => DisplayType.Table,
-        // inline-table is laid out as a table box (block-level approximation;
-        // the engine has no separate inline-table display type).
-        "inline-table" => DisplayType.Table,
-        "table-row" => DisplayType.TableRow,
-        "table-cell" => DisplayType.TableCell,
-        "table-header-group" => DisplayType.TableHeaderGroup,
-        "table-row-group" => DisplayType.TableRowGroup,
-        "table-footer-group" => DisplayType.TableFooterGroup,
-        "table-caption" => DisplayType.TableCaption,
-        "table-column-group" => DisplayType.TableColumnGroup,
-        "table-column" => DisplayType.TableColumn,
-        "none" => DisplayType.None,
-        "contents" => DisplayType.Contents,
-        _ => DisplayType.Block
-    };
+        if (!TryParseDisplay(value, out var display, out var flowRoot)) return;
+        style.Display = display;
+        style.DisplayIsFlowRoot = flowRoot;
+    }
+
+    /// <summary>
+    /// The 'display' grammar (CSS Display 3 §3). A single legacy keyword is still accepted;
+    /// the modern form is an external keyword ('block' / 'inline'), one internal keyword
+    /// ('flow', 'flow-root', 'table', 'flex', 'grid', 'ruby') and the 'list-item' addition,
+    /// written in any order and with either the external or the internal one left out —
+    /// 'block list-item', 'list-item block' and 'flow list-item' are the same box, and a bare
+    /// 'flow' is 'block' (measured against the reference engine).
+    /// </summary>
+    /// <param name="flowRoot">
+    /// 'flow-root' is reported as a marker next to the DisplayType instead of as a member of
+    /// its own: ~70 layout sites test for DisplayType.Block, and 'display: inline flow-root'
+    /// is an inline-block box in the reference engine anyway. The marker carries the distinct
+    /// computed value and the new-formatting-context behaviour (CSS Display 3 §4).
+    /// </param>
+    public static bool TryParseDisplay(string value, out DisplayType display, out bool flowRoot)
+    {
+        if (TryParseDisplayParts(value, out var parts))
+        {
+            DisplayFromParts(parts, out display, out flowRoot);
+            return true;
+        }
+        display = default;
+        flowRoot = false;
+        var tokens = SplitDisplayTokens(value);
+        // The hyphenated legacy keywords ('none', 'contents', 'inline-block', 'table-row',
+        // ...) have no modern spelling, so they are the only single-token values left.
+        return tokens.Length == 1 && DisplayKeywords.TryGetValue(tokens[0], out display);
+    }
+
+    /// <summary>The three axes the modern grammar (CSS Display 3 §3) is written on: an
+    /// external keyword, an internal keyword and the 'list-item' addition. The layout type
+    /// and the canonical text are both derived from this, so they cannot drift apart.</summary>
+    public readonly struct DisplayParts
+    {
+        public readonly bool InlineLevel;
+        /// <summary>1 flow, 2 flow-root, 3 table, 4 flex, 5 grid, 6 ruby; never 0.</summary>
+        public readonly int Internal;
+        public readonly bool ListItem;
+
+        public DisplayParts(bool inlineLevel, int @internal, bool listItem)
+        {
+            InlineLevel = inlineLevel;
+            Internal = @internal;
+            ListItem = listItem;
+        }
+    }
+
+    /// <summary>Decodes the modern multi-keyword form. A single legacy keyword is not a
+    /// parts value and is left to <see cref="TryParseDisplay"/>.</summary>
+    public static bool TryParseDisplayParts(string value, out DisplayParts parts)
+    {
+        parts = default;
+        var tokens = SplitDisplayTokens(value);
+        if (tokens.Length == 0) return false;
+
+        // 'run-in' has no box model in this engine, so it is not accepted.
+        int external = 0;    // 1 = block, 2 = inline
+        int internal_ = 0;   // 0 = absent, fills in 'flow' below
+        bool listItem = false;
+        foreach (var raw in tokens)
+        {
+            switch (raw.ToLowerInvariant())
+            {
+                case "block": if (external != 0) return false; external = 1; break;
+                case "inline": if (external != 0) return false; external = 2; break;
+                case "flow": if (internal_ != 0) return false; internal_ = 1; break;
+                case "flow-root": if (internal_ != 0) return false; internal_ = 2; break;
+                case "table": if (internal_ != 0) return false; internal_ = 3; break;
+                case "flex": if (internal_ != 0) return false; internal_ = 4; break;
+                case "grid": if (internal_ != 0) return false; internal_ = 5; break;
+                case "ruby": if (internal_ != 0) return false; internal_ = 6; break;
+                case "list-item": if (listItem) return false; listItem = true; break;
+                default: return false;
+            }
+        }
+        // An external keyword on its own is a legacy value, and two of anything the grammar
+        // only allows once ('block block', 'flow flow-root') never reaches here. 'list-item'
+        // needs an outer display type of 'flow' (CSS Display 3 §3.2), so it pairs with
+        // 'flow'/'flow-root' only — 'flex list-item' is dropped, as the reference engine does.
+        if (listItem && internal_ != 0 && internal_ != 1 && internal_ != 2) return false;
+        if (internal_ == 0 && !listItem) return false;
+        // Without an internal keyword the grammar fills in 'flow'; without an external one the
+        // box is block-level.
+        parts = new DisplayParts(external == 2, internal_ == 0 ? 1 : internal_, listItem);
+        return true;
+    }
+
+    private static void DisplayFromParts(DisplayParts parts, out DisplayType display, out bool flowRoot)
+    {
+        flowRoot = parts.Internal == 2;
+        // 'inline flow-root' is an inline-level atomic box that establishes a formatting
+        // context, which is exactly 'inline-block'; the reference engine reports it as such.
+        if (parts.InlineLevel && parts.Internal == 2)
+        {
+            display = DisplayType.InlineBlock;
+            flowRoot = false;
+            return;
+        }
+        display = parts.Internal switch
+        {
+            1 => parts.ListItem ? DisplayType.ListItem
+                : parts.InlineLevel ? DisplayType.Inline : DisplayType.Block,
+            2 => parts.ListItem ? DisplayType.ListItem : DisplayType.Block,
+            3 => DisplayType.Table,
+            4 => parts.InlineLevel ? DisplayType.InlineFlex : DisplayType.Flex,
+            5 => parts.InlineLevel ? DisplayType.InlineGrid : DisplayType.Grid,
+            6 => DisplayType.Ruby,
+            _ => DisplayType.Block
+        };
+    }
+
+    /// <summary>
+    /// The text the reference engine serialises a 'display' declaration back as. It stores
+    /// the parsed value rather than the author's characters, so keywords that were left out
+    /// or written in another order come back in their canonical place, and a value a legacy
+    /// keyword already spells stays spelled that one word (measured: 'display: block flow
+    /// list-item' reads back as 'list-item', 'display: list-item flow-root' as
+    /// 'flow-root list-item', 'display: FLOW' as 'block').
+    /// </summary>
+    public static bool TryCanonicalDisplayText(string value, out string text)
+    {
+        if (TryParseDisplayParts(value, out var parts))
+        {
+            text = CanonicalDisplayText(parts);
+            return true;
+        }
+        var tokens = SplitDisplayTokens(value);
+        if (tokens.Length == 1 && DisplayKeywords.TryGetValue(tokens[0], out _))
+        {
+            text = tokens[0].ToLowerInvariant();
+            return true;
+        }
+        text = value;
+        return false;
+    }
+
+    private static string CanonicalDisplayText(DisplayParts parts)
+    {
+        // 'block' is the default external type, so it never appears in the canonical text.
+        bool inline = parts.InlineLevel;
+        return parts.Internal switch
+        {
+            1 => parts.ListItem
+                ? (inline ? "inline list-item" : "list-item")
+                : (inline ? "inline" : "block"),
+            2 => parts.ListItem
+                ? (inline ? "inline flow-root list-item" : "flow-root list-item")
+                : (inline ? "inline-block" : "flow-root"),
+            3 => inline ? "inline-table" : "table",
+            4 => inline ? "inline-flex" : "flex",
+            5 => inline ? "inline-grid" : "grid",
+            // 'ruby' has no inline-level spelling (measured: 'display: inline ruby' reads
+            // back as 'ruby'), and 'list-item' cannot pair with it.
+            _ => "ruby"
+        };
+    }
+
+    private static string[] SplitDisplayTokens(string value) =>
+        value.Split(new[] { ' ', '\t', '\r', '\n', '\f' }, StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>Single-keyword 'display' values, the set the legacy grammar accepts.</summary>
+    private static readonly Dictionary<string, DisplayType> DisplayKeywords =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["block"] = DisplayType.Block,
+            ["inline"] = DisplayType.Inline,
+            ["inline-block"] = DisplayType.InlineBlock,
+            ["flex"] = DisplayType.Flex,
+            ["inline-flex"] = DisplayType.InlineFlex,
+            ["grid"] = DisplayType.Grid,
+            ["inline-grid"] = DisplayType.InlineGrid,
+            ["list-item"] = DisplayType.ListItem,
+            ["table"] = DisplayType.Table,
+            // inline-table is laid out as a table box (block-level approximation;
+            // the engine has no separate inline-table display type).
+            ["inline-table"] = DisplayType.Table,
+            ["table-row"] = DisplayType.TableRow,
+            ["table-cell"] = DisplayType.TableCell,
+            ["table-header-group"] = DisplayType.TableHeaderGroup,
+            ["table-row-group"] = DisplayType.TableRowGroup,
+            ["table-footer-group"] = DisplayType.TableFooterGroup,
+            ["table-caption"] = DisplayType.TableCaption,
+            ["table-column-group"] = DisplayType.TableColumnGroup,
+            ["table-column"] = DisplayType.TableColumn,
+            ["flow-root"] = DisplayType.Block,
+            ["ruby"] = DisplayType.Ruby,
+            ["none"] = DisplayType.None,
+            ["contents"] = DisplayType.Contents,
+        };
 
     public static PositionType ParsePosition(string value) => value.ToLowerInvariant() switch
     {
@@ -923,20 +1273,11 @@ public static class CssPropertyApplier
         _ => PositionType.Static
     };
 
-    public static FloatType ParseFloat(string value) => value.ToLowerInvariant() switch
-    {
-        "left" => FloatType.Left,
-        "right" => FloatType.Right,
-        _ => FloatType.None
-    };
+    public static FloatType ParseFloat(string value) =>
+        Acrux.Core.Dom.CssFloatKeywords.TryParseFloat(value, out var f) ? f : FloatType.None;
 
-    public static ClearType ParseClear(string value) => value.ToLowerInvariant() switch
-    {
-        "left" => ClearType.Left,
-        "right" => ClearType.Right,
-        "both" => ClearType.Both,
-        _ => ClearType.None
-    };
+    public static ClearType ParseClear(string value) =>
+        Acrux.Core.Dom.CssFloatKeywords.TryParseClear(value, out var c) ? c : ClearType.None;
 
     public static TextAlignType ParseTextAlign(string value) => value.ToLowerInvariant() switch
     {
@@ -1313,33 +1654,132 @@ public static class CssPropertyApplier
 
     public static void ParseBackgroundPosition(string value, ComputedStyle style)
     {
-        // Split respecting parentheses: a naive Split(' ') shreds 'calc(100% - 10px)'
-        // into fragments that fail Length.Parse, silently dropping the offset.
-        var parts = ShorthandExpander.SplitShorthand(value);
-        if (parts.Count > 0)
+        // CSS Position 3 §5.2 through the one matcher the shorthand's <bg-position> uses as
+        // well, so the two cannot drift: 'left 10px' is the pair (0%, 10px) while
+        // 'left 10px top 20px' is an edge with the offset measured from it. A token list the
+        // grammar does not read leaves the box on the position it already had.
+        if (!ShorthandExpander.TryMatchBackgroundPosition(
+                ShorthandExpander.SplitShorthand(value), out var x, out var y))
+            return;
+        style.BackgroundPositionX = ResolvePositionAxis(x, horizontal: true);
+        style.BackgroundPositionY = ResolvePositionAxis(y, horizontal: false);
+    }
+
+    /// <summary>The offset one matched axis of a &lt;position&gt; carries. An axis the value never
+    /// mentions is the middle of the box, a near edge without an offset is its start, a far edge
+    /// without one is 100%, and a far edge with an offset is the distance measured inwards from
+    /// it — which the reference engine prints as the arithmetic it is ('right 10px' is
+    /// 'calc(100% - 10px)') except when the offset is a percentage, which folds onto the near
+    /// edge while it is still a fraction ('right 10%' is '90%', measured).</summary>
+    private static Length? ResolvePositionAxis(ShorthandExpander.PositionAxis axis, bool horizontal)
+    {
+        if (!axis.Present) return new PercentLength(0.5f);
+        if (axis.Edge == null) return ParseLengthToken(axis.Offset!);
+        if (IsPositionKeyword(axis.Edge, "center")) return new PercentLength(0.5f);
+        var far = horizontal
+            ? IsPositionKeyword(axis.Edge, "right")
+            : IsPositionKeyword(axis.Edge, "bottom");
+        if (!far) return axis.Offset == null ? new PercentLength(0) : ParseLengthToken(axis.Offset);
+        if (axis.Offset == null) return new PercentLength(1);
+        var offset = ParseLengthToken(axis.Offset);
+        return offset is PercentLength percent
+            ? new PercentLength(1f - percent.Value)
+            : new FarEdgeLength(offset);
+    }
+
+    private static bool IsPositionKeyword(string token, string keyword) =>
+        token.Equals(keyword, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A &lt;length-percentage&gt; the position grammar has already accepted. CSS units are
+    /// case-insensitive — '10PX' is the 10px the reference engine reports — and this engine's
+    /// length parser reads only the lowercase spellings, so the token is put into that shape
+    /// first; a math function keeps its own spelling, which is what it reads back as.</summary>
+    private static Length ParseLengthToken(string token) => Length.Parse(token.ToLowerInvariant());
+
+    /// <summary>'background-position' as the longhand it is: a list with one entry per layer,
+    /// and it writes BOTH axis lists, because the two axes are longhands of their own that the
+    /// position shorthand fills (CSS Backgrounds 3 §4.1.1.1).</summary>
+    private static void ApplyBackgroundPositionLonghand(string value, ComputedStyle style)
+    {
+        var xs = new List<Length?>();
+        var ys = new List<Length?>();
+        foreach (var layer in SplitCommaOutsideParens(value))
         {
-            style.BackgroundPositionX = parts[0].ToLowerInvariant() switch
-            {
-                "left" => new PixelLength(0),
-                "center" => new PercentLength(0.5f),
-                "right" => new PercentLength(1),
-                _ => Length.Parse(parts[0])
-            };
-            style.BackgroundPositionY = parts.Count > 1 ? Length.Parse(parts[1]) : new PixelLength(0);
+            var scratch = new ComputedStyle();
+            ParseBackgroundPosition(layer.Trim(), scratch);
+            xs.Add(scratch.BackgroundPositionX);
+            ys.Add(scratch.BackgroundPositionY);
         }
+        if (xs.Count == 0) return;
+        style.BackgroundPositionXLayers = xs.Count > 1 ? xs : null;
+        style.BackgroundPositionYLayers = ys.Count > 1 ? ys : null;
+        style.BackgroundPositionX = xs[0];
+        style.BackgroundPositionY = ys[0];
+        SyncBackgroundPositionLayers(style);
+    }
+
+    /// <summary>'background-position-x' / '-y': one axis's own list, leaving the other axis of
+    /// every layer exactly as the box had it (measured: a box positioned '7px 9px' that is then
+    /// given 'background-position-x: 90%' reads back as '90% 9px').</summary>
+    private static void ApplyBackgroundPositionAxisLonghand(string value, ComputedStyle style, bool horizontal)
+    {
+        var axisValues = new List<Length?>();
+        foreach (var layer in SplitCommaOutsideParens(value))
+        {
+            if (!ShorthandExpander.TryMatchBackgroundPositionAxis(layer.Trim(), horizontal, out var axis))
+                return;
+            axisValues.Add(ResolvePositionAxis(axis, horizontal));
+        }
+        if (axisValues.Count == 0) return;
+        var list = axisValues.Count > 1 ? axisValues : null;
+        if (horizontal)
+        {
+            style.BackgroundPositionXLayers = list;
+            style.BackgroundPositionX = axisValues[0];
+        }
+        else
+        {
+            style.BackgroundPositionYLayers = list;
+            style.BackgroundPositionY = axisValues[0];
+        }
+        SyncBackgroundPositionLayers(style);
+    }
+
+    /// <summary>The per-layer pairs the painter indexes, rebuilt from the two axis lists: each
+    /// axis cycles against the other on its own (CSS Backgrounds 3 §2), so a box with
+    /// 'background-position-x: 10px, 20px' and 'background-position-y: 5px' positions its layers
+    /// '10px 5px, 20px 5px'.</summary>
+    private static void SyncBackgroundPositionLayers(ComputedStyle style)
+    {
+        var xs = style.BackgroundPositionXLayers;
+        var ys = style.BackgroundPositionYLayers;
+        int count = Math.Max(xs?.Count ?? 1, ys?.Count ?? 1);
+        if (count < 2)
+        {
+            style.BackgroundPositionLayers = null;
+            return;
+        }
+        var layers = new List<BackgroundPositionLayer>(count);
+        for (int i = 0; i < count; i++)
+            layers.Add(new BackgroundPositionLayer
+            {
+                X = xs == null ? style.BackgroundPositionX : xs[i % xs.Count],
+                Y = ys == null ? style.BackgroundPositionY : ys[i % ys.Count],
+            });
+        style.BackgroundPositionLayers = layers;
     }
 
     public static void ParseBackgroundSize(string value, ComputedStyle style)
     {
-        if (value == "cover") { style.BackgroundSize = BackgroundSizeType.Cover; return; }
-        if (value == "contain") { style.BackgroundSize = BackgroundSizeType.Contain; return; }
-        if (value == "auto") { style.BackgroundSize = BackgroundSizeType.Auto; return; }
+        if (IsPositionKeyword(value, "cover")) { style.BackgroundSize = BackgroundSizeType.Cover; return; }
+        if (IsPositionKeyword(value, "contain")) { style.BackgroundSize = BackgroundSizeType.Contain; return; }
+        if (IsPositionKeyword(value, "auto")) { style.BackgroundSize = BackgroundSizeType.Auto; return; }
 
         var parts = ShorthandExpander.SplitShorthand(value).ToArray();
-        if (parts.Length > 0 && parts[0] != "auto")
-            style.BackgroundSizeWidth = Length.Parse(parts[0]);
-        if (parts.Length > 1 && parts[1] != "auto")
-            style.BackgroundSizeHeight = Length.Parse(parts[1]);
+        if (parts.Length > 0 && !IsPositionKeyword(parts[0], "auto"))
+            style.BackgroundSizeWidth = ParseLengthToken(parts[0]);
+        if (parts.Length > 1 && !IsPositionKeyword(parts[1], "auto"))
+            style.BackgroundSizeHeight = ParseLengthToken(parts[1]);
         style.BackgroundSize = BackgroundSizeType.Length;
     }
 
@@ -1374,143 +1814,43 @@ public static class CssPropertyApplier
         return inner.Length == 0;
     }
 
+    /// <summary>
+    /// 'background' as the cascade applies it: the longhands the shorthand expands to, written
+    /// through the same applier a longhand declaration goes through. The layer model — one
+    /// position, size, repeat and box per image layer, each cycling against the others — lives
+    /// in those appliers, so a shorthand parsed by a second grammar of its own can only drift
+    /// from it. Measured: 'background: right 20px bottom 10px / 30px 30px …' used to paint the
+    /// layer at the position its size had been read into, with the size itself lost.
+    /// </summary>
     public static void ParseBackgroundShorthand(string value, ComputedStyle style)
     {
-        // Split by commas outside parentheses to get individual layers.
-        var layers = SplitCommaOutsideParens(value);
-
-        // Pass 1 — split each layer into its <image> and the tokens left over. Nothing
-        // is written to the style yet: a single malformed layer voids the whole
-        // declaration, and by then half of it would already have landed.
-        var parsed = new List<(string? Image, string Remaining, bool HasColor)>();
-        foreach (var layer in layers)
-        {
-            var trimmed = layer.Trim();
-            if (string.IsNullOrEmpty(trimmed)) continue;
-
-            string? image = null;
-            string remaining = trimmed;
-
-            int gradIdx = FindGradientStart(trimmed);
-            if (gradIdx >= 0)
-            {
-                int end = FindMatchingParenEnd(trimmed, gradIdx);
-                if (end > gradIdx)
-                {
-                    image = trimmed[gradIdx..(end + 1)];
-                    remaining = (trimmed[..gradIdx] + " " + trimmed[(end + 1)..]).Trim();
-                }
-            }
-            else
-            {
-                int urlIdx = trimmed.IndexOf("url(", StringComparison.OrdinalIgnoreCase);
-                if (urlIdx >= 0)
-                {
-                    int end = FindMatchingParenEnd(trimmed, urlIdx + 4);
-                    if (end > urlIdx)
-                    {
-                        image = ParseUrl(trimmed[urlIdx..(end + 1)]);
-                        // Empty address: the layer is invalid at computed-value
-                        // time, so it contributes no image.
-                        if (string.IsNullOrEmpty(image))
-                            image = null;
-                        remaining = (trimmed[..urlIdx] + " " + trimmed[(end + 1)..]).Trim();
-                    }
-                }
-                else if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)
-                         || trimmed.StartsWith("none ", StringComparison.OrdinalIgnoreCase))
-                {
-                    remaining = trimmed[4..].Trim();
-                }
-            }
-
-            bool hasColor = false;
-            foreach (var part in ShorthandExpander.SplitShorthand(remaining))
-            {
-                // 'none' is an <image>, not a <color>; only the colour is restricted.
-                if (part.Equals("transparent", StringComparison.OrdinalIgnoreCase)
-                    || ColorParser.LooksLikeColor(part))
-                {
-                    hasColor = true;
-                    break;
-                }
-            }
-            parsed.Add((image, remaining, hasColor));
-        }
-
-        // CSS Backgrounds 3 §4: the <color> is only allowed in the FINAL layer — in any
-        // other one the whole declaration is invalid, so not a single longhand may
-        // change. Measured against a reference browser on
-        // snapshots/css-standard-verify197-multilayer-background.html §9: accepting it
-        // instead leaked the last layer's colour into background-color and painted a
-        // box the reference browser leaves white.
-        for (int i = 0; i < parsed.Count - 1; i++)
-            if (parsed[i].HasColor)
-                return;
-
-        // A shorthand resets every longhand it does not set (CSS 2.1 §14.3), so
-        // "background: url(a)" drops the colour the cascade had before it.
-        style.BackgroundColor = SKColors.Transparent;
-
-        var images = new List<string>();
-        foreach (var (image, remaining, _) in parsed)
-        {
-            if (image != null)
-                images.Add(image);
-
-            // Parse remaining tokens for color, repeat, position, size. The split
-            // is parenthesis-aware so functional colors keep their inner spaces.
-            var parts = ShorthandExpander.SplitShorthand(remaining);
-            var positionTokens = new List<string>();
-            foreach (var part in parts)
-            {
-                var lower = part.ToLowerInvariant();
-                if (lower == "none" || lower == "transparent")
-                {
-                    if (lower == "transparent")
-                        style.BackgroundColor = SKColors.Transparent;
-                }
-                else if (ColorParser.LooksLikeColor(part))
-                {
-                    style.BackgroundColor = ColorParser.Parse(part, style);
-                }
-                else if (lower is "repeat" or "repeat-x" or "repeat-y" or "no-repeat" or "round" or "space")
-                {
-                    style.BackgroundRepeat = ParseBackgroundRepeat(part);
-                }
-                else if (lower is "scroll" or "fixed" or "local")
-                {
-                    style.BackgroundAttachment = ParseBackgroundAttachment(part);
-                }
-                else if (lower is "cover" or "contain")
-                {
-                    style.BackgroundSize = lower == "cover" ? BackgroundSizeType.Cover : BackgroundSizeType.Contain;
-                }
-                else if (lower is "padding-box" or "border-box" or "content-box")
-                {
-                    // One box keyword sets 'background-origin'; a second one (or the
-                    // one after '/') sets 'background-clip' (CSS Backgrounds 3 §4.1).
-                    if (style.BackgroundOrigin == "padding-box")
-                        style.BackgroundOrigin = lower;
-                    else
-                        style.BackgroundClip = lower;
-                }
-                else if (lower.StartsWith("exclusion") || lower.StartsWith("blend"))
-                {
-                    // handled by background-blend-mode; ignore here
-                }
-                else if (lower is "left" or "right" or "center" or "top" or "bottom" ||
-                         lower.EndsWith("%") || lower.EndsWith("px") || lower.StartsWith("calc("))
-                {
-                    positionTokens.Add(part);
-                }
-            }
-            if (positionTokens.Count > 0)
-                ParseBackgroundPosition(string.Join(" ", positionTokens), style);
-        }
-
-        style.BackgroundImage = images.Count > 0 ? images : null;
+        var expanded = ShorthandExpander.ExpandProperty("background", value);
+        // Nothing came out because the value's grammar rejected it, and a declaration the
+        // grammar rejects never existed: it resets none of the longhands either.
+        if (expanded.Count == 0) return;
+        for (int i = 0; i < BackgroundLonghands.Length; i++)
+            Apply(style, BackgroundLonghands[i],
+                expanded.TryGetValue(BackgroundLonghands[i], out var text) ? text : BackgroundInitials[i]);
     }
+
+    /// <summary>The longhands 'background' owns (CSS Backgrounds 3 §4), in the order they are
+    /// applied — the two position axes before the box properties, which do not read them. The
+    /// axes are what the shorthand writes, never the pair: 'background-position' is itself a
+    /// shorthand of them (§4.1.1.1) and applying the pair here would let a
+    /// 'background-position-x' from anywhere in the same block be overwritten by it.</summary>
+    private static readonly string[] BackgroundLonghands =
+    {
+        "background-image", "background-color", "background-repeat", "background-attachment",
+        "background-position-x", "background-position-y", "background-size",
+        "background-origin", "background-clip",
+    };
+
+    /// <summary>The initial value of each of them, which is what the shorthand leaves behind for
+    /// a layer it does not describe (CSS 2.1 §14.3).</summary>
+    private static readonly string[] BackgroundInitials =
+    {
+        "none", "transparent", "repeat", "scroll", "0%", "0%", "auto", "padding-box", "border-box",
+    };
 
     /// <summary>
     /// Take the first layer of a comma-separated background longhand. The scalar
@@ -1536,13 +1876,15 @@ public static class CssPropertyApplier
     /// Parse a comma-separated background longhand into one entry per layer.
     /// Returns null for a single-value list on purpose: the scalar fields already hold
     /// that value, so one-layer backgrounds (nearly all of them) keep using the exact
-    /// same code path and allocate nothing.
+    /// same code path and allocate nothing. A property whose single value the scalar cannot
+    /// hold — 'background-repeat' keeps two axes — asks for the list whatever its length.
     /// </summary>
-    private static List<T>? ParseBackgroundLayerList<T>(string value, Func<string, T> parseOne)
+    private static List<T>? ParseBackgroundLayerList<T>(string value, Func<string, T> parseOne,
+        bool always = false)
     {
-        if (string.IsNullOrEmpty(value) || value.IndexOf(',') < 0)
-            return null;
-        var layers = SplitCommaOutsideParens(value);
+        if (string.IsNullOrEmpty(value)) return null;
+        var layers = SplitCommaOutsideParens(value).ToArray();
+        if (!always && layers.Length < 2 && value.IndexOf(',') < 0) return null;
         List<T>? list = null;
         foreach (var layer in layers)
         {
@@ -1551,14 +1893,7 @@ public static class CssPropertyApplier
             list ??= new List<T>();
             list.Add(parseOne(entry));
         }
-        return list is { Count: > 1 } ? list : null;
-    }
-
-    private static BackgroundPositionLayer ParseOneBackgroundPosition(string value)
-    {
-        var scratch = new ComputedStyle();
-        ParseBackgroundPosition(value, scratch);
-        return new BackgroundPositionLayer { X = scratch.BackgroundPositionX, Y = scratch.BackgroundPositionY };
+        return list is { Count: > 1 } || always ? list : null;
     }
 
     private static BackgroundSizeLayer ParseOneBackgroundSize(string value)
@@ -1582,9 +1917,30 @@ public static class CssPropertyApplier
                 X = ParseBackgroundRepeat(parts[0]),
                 Y = ParseBackgroundRepeat(parts[1]),
             };
+        // 'repeat-x' and 'repeat-y' name the PAIR they stand for rather than a mode each axis
+        // repeats, so a pair kept as (RepeatX, RepeatX) could not be told apart from 'repeat'.
         var single = ParseBackgroundRepeat(value);
-        return new BackgroundRepeatPair { X = single, Y = single };
+        return single switch
+        {
+            BackgroundRepeat.RepeatX => new BackgroundRepeatPair
+            { X = BackgroundRepeat.Repeat, Y = BackgroundRepeat.NoRepeat },
+            BackgroundRepeat.RepeatY => new BackgroundRepeatPair
+            { X = BackgroundRepeat.NoRepeat, Y = BackgroundRepeat.Repeat },
+            _ => new BackgroundRepeatPair { X = single, Y = single },
+        };
     }
+
+    /// <summary>The one keyword the scalar field carries for a pair of axes: two axes that agree
+    /// collapse to that mode, and the pair 'repeat no-repeat' is what 'repeat-x' means (CSS
+    /// Backgrounds 3 §4.1.1); a mixed pair that no single word describes keeps the horizontal
+    /// mode, which is the tiling the painter can still act on.</summary>
+    private static BackgroundRepeat FoldRepeatPair(BackgroundRepeatPair pair) => (pair.X, pair.Y) switch
+    {
+        (var x, var y) when x == y => x,
+        (BackgroundRepeat.Repeat, BackgroundRepeat.NoRepeat) => BackgroundRepeat.RepeatX,
+        (BackgroundRepeat.NoRepeat, BackgroundRepeat.Repeat) => BackgroundRepeat.RepeatY,
+        _ => pair.X,
+    };
 
     private static int FindGradientStart(string s)
     {
@@ -1838,17 +2194,77 @@ public static class CssPropertyApplier
         _ => TextAlignLastType.Auto,
     };
 
-    /// <summary>`place-*` shorthands take `<block-axis> <inline-axis>`, with the
-    /// inline-axis value defaulting to the block-axis one (CSS Box Alignment §6).</summary>
-    private static void ApplyPlace(string value, Action<string> setBlockAxis, Action<string> setInlineAxis)
+    /// <summary>The alignment keywords the six alignment properties share (CSS Box Alignment 3
+    /// §4, §6, §7), with the <c>safe</c>/<c>unsafe</c> overflow qualifier a position keyword may
+    /// carry. Anything else — a length, a typo — is not a value these properties have, and the
+    /// declaration must then be dropped rather than stored as the box's alignment.</summary>
+    private static readonly HashSet<string> AlignmentKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "normal", "auto", "stretch", "start", "end", "flex-start", "flex-end", "center",
+        "left", "right", "baseline", "first baseline", "last baseline",
+        "space-between", "space-around", "space-evenly",
+        // The legacy family is 'justify-items' only (CSS Box Alignment 3 §8), but the six
+        // properties share one keyword table here.
+        "legacy", "legacy-left", "legacy-right", "legacy-center",
+    };
+
+    /// <summary>The canonical spelling of an alignment value: lower-case, whitespace collapsed,
+    /// and null when the token is not an alignment keyword. The property stores this text because
+    /// its computed value is the keyword the page used — 'end' answers 'end' and an authored
+    /// 'flex-end' answers 'flex-end' (measured), which a single enum could not tell apart.</summary>
+    private static string? CanonicalAlignmentValue(string value)
+    {
+        // Collapse the runs of space a multi-word keyword may be written with, so that
+        // 'first  baseline' and 'first baseline' are the same value.
+        var sb = new System.Text.StringBuilder(value.Length);
+        foreach (var c in value)
+        {
+            if (char.IsWhiteSpace(c))
+            {
+                if (sb.Length > 0 && sb[^1] != ' ') sb.Append(' ');
+            }
+            else sb.Append(c);
+        }
+        if (sb.Length > 0 && sb[^1] == ' ') sb.Length--;
+        var text = sb.ToString();
+        if (text.Length == 0) return null;
+        // The qualifier is only legal in front of a position keyword, so it is split off and the
+        // remainder checked on its own.
+        foreach (var qualifier in new[] { "safe ", "unsafe " })
+        {
+            if (text.StartsWith(qualifier, StringComparison.OrdinalIgnoreCase))
+            {
+                var rest = text[qualifier.Length..];
+                return AlignmentKeywords.Contains(rest) && rest is not ("normal" or "auto" or "stretch")
+                    ? text.ToLowerInvariant()
+                    : null;
+            }
+        }
+        return AlignmentKeywords.Contains(text) ? text.ToLowerInvariant() : null;
+    }
+
+    /// <summary>Splits a 'place-*' value into its block and inline side, the inline side
+    /// defaulting to the block one (CSS Box Alignment 3 §6). A side that is not an alignment
+    /// keyword makes the whole declaration invalid.</summary>
+    private static (string? block, string? inlineAxis) PlacePair(string value)
     {
         var parts = ShorthandExpander.SplitShorthand(value).ToArray();
-        if (parts.Length == 0) return;
-        var block = parts[0].ToLowerInvariant();
-        var inlineAxis = (parts.Length > 1 ? parts[1] : parts[0]).ToLowerInvariant();
-        // `normal`/`stretch` are per-property keywords; only forward real values.
-        if (block != "normal") setBlockAxis(block);
-        if (inlineAxis != "normal") setInlineAxis(inlineAxis);
+        if (parts.Length == 0) return (null, null);
+        var block = CanonicalAlignmentValue(parts[0]);
+        var inlineAxis = parts.Length > 1 ? CanonicalAlignmentValue(parts[1]) : block;
+        return block == null || inlineAxis == null ? (null, null) : (block, inlineAxis);
+    }
+
+    /// <summary>Writes the two sides of a 'place-*' value onto the pair of longhands it stands
+    /// for. Both sides are forwarded as written, because 'normal' means something different to
+    /// each of them: it is the initial of the block axis, while the inline axis of 'place-items'
+    /// reads it as 'legacy' (CSS Box Alignment 3 §6).</summary>
+    private static void ApplyPlace(Action<string> setBlockAxis, Action<string> setInlineAxis,
+        string? block, string? inlineAxis)
+    {
+        if (block == null || inlineAxis == null) return;
+        setBlockAxis(block);
+        setInlineAxis(inlineAxis);
     }
 
     public static void ParseBorderSide(ComputedStyle style, string side, string value)
@@ -2512,10 +2928,7 @@ public static class CssPropertyApplier
         }
 
         if (i < parts.Length)
-        {
-            var family = string.Join(" ", parts.Skip(i));
-            style.FontFamily = family.Trim().Trim('"', '\'');
-        }
+            style.FontFamily = ParseFontFamily(string.Join(" ", parts.Skip(i)));
     }
 
     public static void ParseOutlineShorthand(string value, ComputedStyle style)
@@ -2563,9 +2976,12 @@ public static class CssPropertyApplier
 
     public static Length? ParsePositionKeywordOrLength(string value)
     {
+        // The edge keywords are the percentages they lay out as (CSS Backgrounds 3 §4.1.1), not
+        // pixel offsets: 'left' reads back as '0%' on the computed surface (measured), and a pixel
+        // zero would print as '0px' instead.
         return value.ToLowerInvariant() switch
         {
-            "left" or "top" => new PixelLength(0),
+            "left" or "top" => new PercentLength(0),
             "center" => new PercentLength(0.5f),
             "right" or "bottom" => new PercentLength(1),
             _ => Length.TryParse(value, out var l) ? l : null
@@ -2909,27 +3325,37 @@ public static class CssPropertyApplier
         style.TextDecoration = LegacyTextDecorationOf(style.TextDecorationLine);
     }
 
+    /// <summary>'text-shadow' is none | &lt;shadow&gt;# with
+    /// <c>[ &lt;color&gt;? &amp;&amp; &lt;length&gt;{2,3} ]</c> (CSS Text Decoration 4 §4.1). Each
+    /// comma-separated shadow is classified on its own, so a colour may lead or trail the two
+    /// or three lengths and a list of shadows keeps all of its members.</summary>
     public static List<TextShadowValue> ParseTextShadow(string value)
     {
         var shadows = new List<TextShadowValue>();
-        if (string.IsNullOrEmpty(value) || value == "none") return shadows;
+        if (string.IsNullOrEmpty(value) || value.Trim() == "none") return shadows;
 
-        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
-        if (parts.Length < 2) return shadows;
-
-        float offsetX = float.TryParse(parts[0].TrimEnd('p', 'x'), out var ox) ? ox : 0;
-        float offsetY = float.TryParse(parts[1].TrimEnd('p', 'x'), out var oy) ? oy : 0;
-        float blurRadius = 0;
-        int index = 2;
-        // Third length (blur) may be unitless ("0") or carry a unit.
-        if (index < parts.Length &&
-            (parts[index].Contains("px") || float.TryParse(parts[index], out _)))
+        foreach (var component in SplitCommaOutsideParens(value))
         {
-            float.TryParse(parts[index].TrimEnd('p', 'x'), out blurRadius);
-            index++;
+            var parts = ShorthandExpander.SplitShorthand(component.Trim()).ToArray();
+            var lengths = new List<float>(3);
+            var color = new List<string>(4);
+            foreach (var raw in parts)
+            {
+                var token = raw.Trim();
+                if (!ColorParser.LooksLikeColor(token) && ParseSize(token) is float px)
+                {
+                    if (lengths.Count < 3) lengths.Add(px);
+                    continue;
+                }
+                color.Add(token);
+            }
+            if (lengths.Count is < 2 or > 3 || color.Count > 1) continue;
+            var shadowColor = color.Count > 0
+                ? ColorParser.Parse(string.Join(" ", color))
+                : new SKColor(0, 0, 0, 255);
+            shadows.Add(new TextShadowValue(shadowColor, lengths[0], lengths[1],
+                lengths.Count > 2 ? lengths[2] : 0f));
         }
-        var color = index < parts.Length ? ColorParser.Parse(string.Join(" ", parts.Skip(index))) : new SKColor(0, 0, 0, 255);
-        shadows.Add(new TextShadowValue(color, offsetX, offsetY, blurRadius));
         return shadows;
     }
 
@@ -3090,7 +3516,7 @@ public static class CssPropertyApplier
                         rowSizes.Add(extra);
                 }
             }
-            style.GridTemplateAreas = string.Join(",", areaRows);
+            style.GridTemplateAreas = CanonicalGridTemplateAreas(string.Join(",", areaRows));
             style.GridTemplateRows = string.Join(" ", rowSizes);
         }
         else
@@ -3422,6 +3848,21 @@ public static class CssPropertyApplier
         _ => OverscrollBehaviorType.Auto
     };
 
+    /// <summary>'overscroll-behavior' is the two-axis shorthand (CSS Overscroll Behavior 1 §3):
+    /// one keyword sets both axes, two set the x axis and then the y axis. Reading the whole
+    /// value as a single keyword left 'contain none' at the initial 'auto' on both.</summary>
+    public static void ApplyOverscrollBehavior(ComputedStyle style, string value)
+    {
+        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
+        var x = parts.Length > 0 ? ParseOverscrollBehavior(parts[0]) : OverscrollBehaviorType.Auto;
+        var y = parts.Length > 1 ? ParseOverscrollBehavior(parts[1]) : x;
+        style.OverscrollBehaviorX = x;
+        style.OverscrollBehaviorY = y;
+        // The scalar the engine carried before the axes were modelled stays the x axis, which
+        // is what one keyword always meant for it.
+        style.OverscrollBehavior = x;
+    }
+
     public static float ParseZoom(string value)
     {
         if (value.EndsWith("%") && float.TryParse(value[..^1], out var pct)) return pct / 100f;
@@ -3432,12 +3873,73 @@ public static class CssPropertyApplier
     public static void ParseGap(string value, ComputedStyle style)
     {
         var parts = ShorthandExpander.SplitShorthand(value).ToArray();
-        if (parts.Length > 0 && Length.TryParse(parts[0], out var gap))
+        if (parts.Length == 0) return;
+        // 'gap' is <'row-gap'> <'column-gap'>?, and each side is 'normal' | <length-percentage>
+        // (CSS Box Alignment 3 §3.1). One bad side discards the whole declaration, so both sides
+        // are checked before either is written.
+        if (parts.Length > 1 && !IsGapValue(parts[1])) return;
+        if (!IsGapValue(parts[0])) return;
+        SetGap(style, parts[0], row: true);
+        SetGap(style, parts.Length > 1 ? parts[1] : parts[0], row: false);
+    }
+
+    private static bool IsGapValue(string token) =>
+        IsNormalGapKeyword(token) || Length.TryParse(token, out _);
+
+    /// <summary>Writes one gap side, keeping the 'normal' spelling next to the zero it lays out
+    /// as so that the computed value can report the keyword back.</summary>
+    private static void SetGap(ComputedStyle style, string token, bool row)
+    {
+        if (IsNormalGapKeyword(token))
         {
-            style.RowGap = gap;
-            style.ColumnGap = parts.Length > 1 ? Length.Parse(parts[1]) : gap;
+            if (row) { style.RowGap = new PixelLength(0); style.RowGapIsNormal = true; }
+            else { style.ColumnGap = new PixelLength(0); style.ColumnGapIsNormal = true; }
+            return;
+        }
+        if (!Length.TryParse(token, out _)) return;
+        var length = Length.Parse(token);
+        if (row) { style.RowGap = length; style.RowGapIsNormal = false; }
+        else { style.ColumnGap = length; style.ColumnGapIsNormal = false; }
+    }
+
+    /// <summary>Writes one side of the two scroll insets (CSS Scroll Snap 1 §6.1). The sides are
+    /// numbered in the order the box shorthands fill them — top, right, bottom, left of
+    /// 'scroll-margin', then the same four of 'scroll-padding'. 'auto' is the zero the property
+    /// starts at, a percentage is not a value of it, and anything the length parser rejects
+    /// leaves the side on its initial value.</summary>
+    private static void SetScrollInset(ComputedStyle style, string value, int side)
+    {
+        var token = value.Trim().ToLowerInvariant();
+        Length? length;
+        if (token == "auto") length = new PixelLength(0);
+        else if (!Length.TryParse(token, out _)) return;
+        else
+        {
+            var parsed = Length.Parse(token);
+            // A percentage would have to resolve against the scrollport, which the inset is
+            // measured from, and the grammar does not allow one at all.
+            if (parsed is PercentLength) return;
+            length = parsed;
+        }
+        switch (side)
+        {
+            case 0: style.ScrollMarginTop = length; break;
+            case 1: style.ScrollMarginRight = length; break;
+            case 2: style.ScrollMarginBottom = length; break;
+            case 3: style.ScrollMarginLeft = length; break;
+            case 4: style.ScrollPaddingTop = length; break;
+            case 5: style.ScrollPaddingRight = length; break;
+            case 6: style.ScrollPaddingBottom = length; break;
+            case 7: style.ScrollPaddingLeft = length; break;
         }
     }
+
+    /// <summary>'normal' is a legal value of 'row-gap', 'column-gap' and 'gap' and is also
+    /// their initial value (CSS Box Alignment 3 §3.1). It lays out as zero, which is why the
+    /// engine can keep the length it parsed and only remember the spelling — but the computed
+    /// value of a box that was told 'normal' is 'normal', not '0px' (measured).</summary>
+    private static bool IsNormalGapKeyword(string token) =>
+        token.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Parses a 'box-shadow' value into a list of shadows. Supports the 'inset'
@@ -3459,6 +3961,40 @@ public static class CssPropertyApplier
         return list.Count > 0 ? list : null;
     }
 
+    /// <summary>Canonical form of 'grid-template-areas' (CSS Grid 1 §7.2): one row per quoted
+    /// string, cells separated by a single space, rows separated by a single space — the shape
+    /// the computed value has. It is stored like this because both spellings reach the same
+    /// property: the authored '"a a" "b c"', and the bare rows the 'grid-template' parser hands
+    /// over as 'a a,b c'.</summary>
+    public static string? CanonicalGridTemplateAreas(string value)
+    {
+        var text = value.Trim();
+        if (text.Length == 0 || text.Equals("none", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var rows = new List<string>();
+        if (text.Contains('"'))
+        {
+            int i = 0;
+            while (i < text.Length)
+            {
+                if (text[i] != '"') { i++; continue; }
+                int end = text.IndexOf('"', i + 1);
+                if (end < 0) break;
+                rows.Add(CanonicalAreaRow(text[(i + 1)..end]));
+                i = end + 1;
+            }
+        }
+        else
+        {
+            foreach (var row in text.Split(',')) rows.Add(CanonicalAreaRow(row));
+        }
+        return rows.Count == 0 ? null : string.Join(" ", rows.Select(r => $"\"{r}\""));
+    }
+
+    /// <summary>The cells of one area row, collapsed to a single space between them.</summary>
+    private static string CanonicalAreaRow(string row) =>
+        string.Join(' ', row.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
     /// <summary>Splits a value on commas that are not inside parentheses, so that
     /// multiple box-shadows separate correctly while rgba()/rgb() color functions
     /// stay intact.</summary>
@@ -3479,53 +4015,37 @@ public static class CssPropertyApplier
         yield return value[start..];
     }
 
+    /// <summary>One layer of 'box-shadow': <c>[inset? &amp;&amp; &lt;length&gt;{2,4} &amp;&amp; &lt;color&gt;?]</c>
+    /// (CSS Backgrounds 3 §4.3). The grammar is unordered — the keyword, the lengths and the
+    /// colour may come in any order — so each token is classified first and the lengths are
+    /// then assigned in their grammatical order offset-x, offset-y, blur, spread. A layer with
+    /// fewer than two or more than four lengths is not a shadow and is dropped.</summary>
     public static BoxShadowValue? ParseBoxShadowComponent(string component)
     {
         var parts = ShorthandExpander.SplitShorthand(component.Trim()).ToArray();
-        if (parts.Length < 2)
-            return null;
+        if (parts.Length == 0) return null;
 
         bool inset = false;
-        int index = 0;
-        if (parts[0].Equals("inset", StringComparison.OrdinalIgnoreCase))
+        var lengths = new List<float>(4);
+        var color = new List<string>(4);
+        foreach (var raw in parts)
         {
-            inset = true;
-            index++;
-        }
-        else if (parts.Length > 1 && parts[1].Equals("inset", StringComparison.OrdinalIgnoreCase))
-        {
-            // 'inset' may legally appear after the lengths.
-            inset = true;
-        }
-
-        // The first two tokens are offsets.
-        if (!TryParseLength(parts[index], out float offsetX) ||
-            !TryParseLength(parts[index + 1], out float offsetY))
-        {
-            return null;
-        }
-        index += 2;
-
-        float blurRadius = 0, spread = 0;
-        if (index < parts.Length && TryParseLength(parts[index], out float br))
-        {
-            blurRadius = br;
-            index++;
-        }
-        if (index < parts.Length && TryParseLength(parts[index], out float sp))
-        {
-            spread = sp;
-            index++;
+            var token = raw.Trim();
+            if (token.Equals("inset", StringComparison.OrdinalIgnoreCase)) { inset = true; continue; }
+            if (!ColorParser.LooksLikeColor(token) && ParseSize(token) is float px)
+            {
+                if (lengths.Count < 4) lengths.Add(px);
+                continue;
+            }
+            color.Add(token);
         }
 
-        SKColor color;
-        if (index < parts.Length)
-        {
-            color = ColorParser.Parse(string.Join(" ", parts.Skip(index)));
-        }
-        else
-            color = new SKColor(0, 0, 0, 80); // default currentColor鈮坆lack with standard shadow alpha
-        return new BoxShadowValue(color, offsetX, offsetY, blurRadius, spread, inset);
+        if (lengths.Count is < 2 or > 4 || color.Count > 1) return null;
+        var shadowColor = color.Count > 0
+            ? ColorParser.Parse(string.Join(" ", color))
+            : new SKColor(0, 0, 0, 80); // default currentColor≈black with standard shadow alpha
+        return new BoxShadowValue(shadowColor, lengths[0], lengths[1],
+            lengths.Count > 2 ? lengths[2] : 0f, lengths.Count > 3 ? lengths[3] : 0f, inset);
     }
 
     public static bool TryParseLength(string token, out float value)
@@ -3595,7 +4115,7 @@ public static class CssPropertyApplier
 
         return propName switch
         {
-            "display" => propValue is "flex" or "inline-flex" or "grid" or "inline-grid" or "block" or "inline-block" or "inline" or "list-item" or "none" or "table" or "table-cell" or "table-row",
+            "display" => TryParseDisplay(propValue, out _, out _),
             "position" => propValue is "static" or "relative" or "absolute" or "fixed" or "sticky",
             "transform" or "-webkit-transform" => propValue is not "none" || true,
             "transition" => true,
@@ -3624,8 +4144,10 @@ public static class CssPropertyApplier
             "margin" or "padding" => true,
             "width" or "height" or "min-width" or "max-width" or "min-height" or "max-height" => true,
             "top" or "right" or "bottom" or "left" => true,
-            "float" => propValue is "none" or "left" or "right",
-            "clear" => propValue is "none" or "left" or "right" or "both",
+            // Validity comes from the same keyword table the parsers use; the fifth
+            // hand-written copy of this list is what silently dropped 'inline-start'.
+            "float" => Acrux.Core.Dom.CssFloatKeywords.TryParseFloat(propValue, out _),
+            "clear" => Acrux.Core.Dom.CssFloatKeywords.TryParseClear(propValue, out _),
             "object-fit" => propValue is "fill" or "contain" or "cover" or "none" or "scale-down",
             "cursor" => true,
             "user-select" or "-webkit-user-select" => true,

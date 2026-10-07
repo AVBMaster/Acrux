@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body { margin:0; font: 12px Consolas, monospace; }
+.b { width: 60px; height: 12px; }
+#report div { white-space: pre; }
+</style></head><body>
+<div class="b" id="u01" style="background-image: url(a.png), url(b.png); background-position: right 10px"></div>
+<div class="b" id="u02" style="background-image: url(a.png), url(b.png); background-position: right 10px, left 20px"></div>
+<div class="b" id="u03" style="background-image: url(a.png), url(b.png), url(c.png); background-position-x: right 10px"></div>
+<div class="b" id="u04" style="background-image: url(a.png), url(b.png); background-position: center bottom 20px"></div>
+<div class="b" id="u05" style="background-image: url(a.png), url(b.png); background-position: right 10%"></div>
+<div class="b" id="u06" style="background-image: url(a.png), url(b.png); background-position: 10px 20px, right 30px"></div>
+<div class="b" id="u07" style="background-image: url(a.png), url(b.png), url(c.png); background-position: right 10px bottom 20px, left"></div>
+<div class="b" id="u08" style="background-image: url(a.png), url(b.png); background-position-x: right 10px, left 20px"></div>
+<div id="report"></div>
+<script>
+const out = [];
+const g = (id, prop) => getComputedStyle(document.getElementById(id)).getPropertyValue(prop);
+for (let i = 1; i <= 8; i++) {
+  const id = 'u' + String(i).padStart(2, '0');
+  out.push(id + ' | position=' + g(id, 'background-position')
+    + ' ; x=' + g(id, 'background-position-x') + ' ; y=' + g(id, 'background-position-y'));
+}
+const rep = document.getElementById('report');
+for (const line of out) { const d = document.createElement('div'); d.textContent = line; rep.appendChild(d); }
+</script>
+</body></html>

@@ -132,7 +132,9 @@ public class DocumentManager
                 {
                     var stylesheet = _cssParser.Parse(cssText);
                     ProcessImports(stylesheet, styleComputer, baseUrl);
-                    styleComputer.AddStylesheet(stylesheet);
+                    // The owning element is remembered so the style engine can tell a
+                    // sheet the document already contributed from one a script added later.
+                    styleComputer.AddStylesheet(stylesheet, owner: styleElement);
                 }
                 catch (Exception ex)
                 {
@@ -157,7 +159,9 @@ public class DocumentManager
                 var cssText = await client.GetStringAsync(url);
                 var stylesheet = _cssParser.Parse(cssText);
                 await ProcessImports(stylesheet, styleComputer, url);
-                styleComputer.AddStylesheet(stylesheet);
+                // Owned by the link element: taking the link out of the document takes its
+                // sheet out too.
+                styleComputer.AddStylesheet(stylesheet, owner: link);
             }
             catch (Exception ex)
             {
