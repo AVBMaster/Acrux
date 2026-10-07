@@ -143,7 +143,7 @@ public static class RenderSnapshot
             // laying out again (RenderFrame's _pendingRelayout branch).
             try
             {
-                styleComputer.ComputeStyles(load.Document, width, height);
+                styleComputer.ComputeStyles(load.Document, width, height, resolutionDppx: dpiScale);
             }
             catch (Exception ex)
             {

@@ -76,12 +76,17 @@ public class StyleComputer
         }
     }
 
-    public void ComputeStyles(Document document, float viewportWidth = 1024f, float viewportHeight = 768f, string colorScheme = "light")
+    /// <param name="resolutionDppx">The device pixel ratio the page is being rasterised at. It
+    /// belongs to the media-query environment and not to the layout: 'resolution' measures the
+    /// output device (CSS Media Queries 4 §7.9), so an '@media (min-resolution: …)' rule has to
+    /// be filtered against the same number 'window.matchMedia' reports.</param>
+    public void ComputeStyles(Document document, float viewportWidth = 1024f, float viewportHeight = 768f, string colorScheme = "light",
+        float resolutionDppx = 1f)
     {
         SyncStyleElements(document);
         var resolver = new StyleResolver(uaSheet: _uaSheet);
         resolver.AddStyleSheets(EffectiveAuthorSheets(document));
-        resolver.SetViewport(viewportWidth, viewportHeight, colorScheme);
+        resolver.SetViewport(viewportWidth, viewportHeight, colorScheme, resolutionDppx);
         CollectCounterStyles(document);
         resolver.ResolveDocument(document);
     }

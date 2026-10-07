@@ -24,6 +24,11 @@ public class StyleResolver
     private float _viewportWidth = 1024;
     private float _viewportHeight = 768;
     private string _colorScheme = "light";
+    /// <summary>The one environment every '@media' condition in this resolve is asked against.
+    /// It is rebuilt by <see cref="SetViewport"/> rather than read per rule, so a rule and
+    /// 'window.matchMedia' cannot drift apart mid-document, and so that the device scale the page
+    /// is being rasterised at reaches 'resolution' (CSS Media Queries 4 §7.9).</summary>
+    private MediaQueryEnvironment _mediaEnv = MediaQueryEnvironment.Default(1024, 768, "light");
 
     public StyleResolver(StyleSheetContents? authorSheet = null, StyleSheetContents? uaSheet = null)
     {
@@ -43,11 +48,12 @@ public class StyleResolver
             if (s != null) _authorSheets.Add(s);
     }
 
-    public void SetViewport(float width, float height, string colorScheme = "light")
+    public void SetViewport(float width, float height, string colorScheme = "light", float resolutionDppx = 1f)
     {
         _viewportWidth = width;
         _viewportHeight = height;
         _colorScheme = colorScheme;
+        _mediaEnv = MediaQueryEnvironment.Default(width, height, colorScheme, resolutionDppx);
     }
 
     /// <summary>
@@ -152,7 +158,7 @@ public class StyleResolver
                     MatchStyleRule(styleRule, element, state, CascadeOrigin.UserAgent, 0, uaTreeOrder, ref uaPosition);
                 else if (rule is StyleRuleMedia media)
                 {
-                    if (MediaQueryEvaluator.Evaluate(media.ConditionText, _viewportWidth, _viewportHeight, _colorScheme))
+                    if (MediaQueryEvaluator.Evaluate(media.ConditionText, _viewportWidth, _viewportHeight, _colorScheme, _mediaEnv))
                         MatchGroupRules(media.ChildRules, element, state, CascadeOrigin.UserAgent, 0, uaTreeOrder, ref uaPosition);
                 }
                 else if (rule is StyleRuleSupports supports)
@@ -365,7 +371,7 @@ public class StyleResolver
                 }
                 else if (rule is StyleRuleMedia media)
                 {
-                    if (MediaQueryEvaluator.Evaluate(media.ConditionText, _viewportWidth, _viewportHeight, _colorScheme))
+                    if (MediaQueryEvaluator.Evaluate(media.ConditionText, _viewportWidth, _viewportHeight, _colorScheme, _mediaEnv))
                     {
                         MatchGroupRules(media.ChildRules, element, state, CascadeOrigin.Author, 0, treeOrder, ref position);
                     }
@@ -400,7 +406,7 @@ public class StyleResolver
             }
             else if (rule is StyleRuleMedia media)
             {
-                if (MediaQueryEvaluator.Evaluate(media.ConditionText, _viewportWidth, _viewportHeight, _colorScheme))
+                if (MediaQueryEvaluator.Evaluate(media.ConditionText, _viewportWidth, _viewportHeight, _colorScheme, _mediaEnv))
                     MatchGroupRules(media.ChildRules, element, state, origin, layerOrder, treeOrder, ref position);
             }
             else if (rule is StyleRuleSupports supports)

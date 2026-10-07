@@ -24,12 +24,17 @@ public class CascadeResolver
     private float _viewportWidth = 1024f;
     private float _viewportHeight = 768f;
     private string _colorScheme = "light";
+    /// <summary>The environment every '@media' condition of this resolve is asked against, so the
+    /// device scale the page is rasterised at reaches 'resolution' (CSS Media Queries 4 §7.9) and
+    /// an @media rule answers what 'window.matchMedia' answers.</summary>
+    private MediaQueryEnvironment _mediaEnv = MediaQueryEnvironment.Default(1024f, 768f, "light");
 
-    public void SetViewport(float width, float height, string colorScheme = "light")
+    public void SetViewport(float width, float height, string colorScheme = "light", float resolutionDppx = 1f)
     {
         _viewportWidth = width;
         _viewportHeight = height;
         _colorScheme = colorScheme;
+        _mediaEnv = MediaQueryEnvironment.Default(width, height, colorScheme, resolutionDppx);
     }
 
     public void AddStylesheet(Stylesheet stylesheet, CascadeOrigin origin = CascadeOrigin.Author)
@@ -38,14 +43,13 @@ public class CascadeResolver
         _stylesheetOrigins.Add(origin);
     }
 
-    public void ResolveStyles(Document document, float viewportWidth = 1024f, float viewportHeight = 768f, string colorScheme = "light")
+    public void ResolveStyles(Document document, float viewportWidth = 1024f, float viewportHeight = 768f, string colorScheme = "light",
+        float resolutionDppx = 1f)
     {
         var sw = Acrux.Core.Performance.Clock.NowNanos();
         _treeOrderCounter = 0;
         _cache.Clear();
-        _viewportWidth = viewportWidth;
-        _viewportHeight = viewportHeight;
-        _colorScheme = colorScheme;
+        SetViewport(viewportWidth, viewportHeight, colorScheme, resolutionDppx);
 
         _rootStyle = CreateUserAgentStyle("html");
         _rootStyle.FontSize = 16;
@@ -64,14 +68,13 @@ public class CascadeResolver
     /// </summary>
     public void ResolveStylesIncremental(Document document,
         Acrux.Core.Performance.Rendering.SharedStyleCache sharedCache,
-        float viewportWidth = 1024f, float viewportHeight = 768f, string colorScheme = "light")
+        float viewportWidth = 1024f, float viewportHeight = 768f, string colorScheme = "light",
+        float resolutionDppx = 1f)
     {
         var sw = Acrux.Core.Performance.Clock.NowNanos();
         _treeOrderCounter = 0;
         _cache.Clear();
-        _viewportWidth = viewportWidth;
-        _viewportHeight = viewportHeight;
-        _colorScheme = colorScheme;
+        SetViewport(viewportWidth, viewportHeight, colorScheme, resolutionDppx);
 
         _rootStyle = CreateUserAgentStyle("html");
         _rootStyle.FontSize = 16;
@@ -87,7 +90,7 @@ public class CascadeResolver
     {
         int stylesheetCount = _stylesheets.Count;
         var signature = Acrux.Core.Performance.Rendering.StyleSignature.ComputeSignature(
-            element, stylesheetCount, _viewportWidth, _colorScheme);
+            element, stylesheetCount, _viewportWidth, _colorScheme, (float)_mediaEnv.ResolutionDppx);
 
         if (parentStyle is not null && element.ComputedStyle is not null
             && element.ComputedStyle.GetType() == typeof(ComputedStyle))
@@ -317,7 +320,7 @@ public class CascadeResolver
 
             foreach (var mediaRule in stylesheet.MediaRules)
             {
-                if (MediaQueryEvaluator.Evaluate(mediaRule.Condition, _viewportWidth, _viewportHeight, _colorScheme))
+                if (MediaQueryEvaluator.Evaluate(mediaRule.Condition, _viewportWidth, _viewportHeight, _colorScheme, _mediaEnv))
                     ProcessGroup(element, mediaRule, origin, treeOrder, ref sourceOrder);
             }
 
@@ -355,7 +358,7 @@ public class CascadeResolver
 
         foreach (var media in group.SubMediaRules)
         {
-            if (MediaQueryEvaluator.Evaluate(media.Condition, _viewportWidth, _viewportHeight, _colorScheme))
+            if (MediaQueryEvaluator.Evaluate(media.Condition, _viewportWidth, _viewportHeight, _colorScheme, _mediaEnv))
                 ProcessGroup(element, media, origin, treeOrder, ref sourceOrder);
         }
         foreach (var supports in group.SubSupportsRules)
@@ -395,7 +398,7 @@ public class CascadeResolver
         // Container conditions are evaluated against named containers which the
         // layout engine does not yet expose; resolve against the viewport size as
         // a fallback so content is not spuriously dropped.
-        return MediaQueryEvaluator.Evaluate(condition, _viewportWidth, _viewportHeight, _colorScheme);
+        return MediaQueryEvaluator.Evaluate(condition, _viewportWidth, _viewportHeight, _colorScheme, _mediaEnv);
     }
 
     /// <summary>Analyzes a single matched rule into the cascade map.</summary>

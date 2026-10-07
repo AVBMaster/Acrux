@@ -785,6 +785,18 @@ public class MediaQueryEnvironment
     public enum HoverCapabilities { None, Hover }
     public enum PointerCapabilities { None, Coarse, Fine }
 
-    public static MediaQueryEnvironment Default(float viewportWidth, float viewportHeight, string colorScheme)
-        => new() { ViewportWidth = viewportWidth, ViewportHeight = viewportHeight, ColorScheme = colorScheme };
+    /// <summary>The environment a page that never tells the engine anything gets: the viewport it
+    /// is viewed at, the light colour scheme, and ONE device pixel per CSS pixel. A caller that
+    /// knows the real display scale must pass it here, because 'resolution' and
+    /// '-webkit-*-device-pixel-ratio' measure the output device (CSS Media Queries 4 §7.9) and
+    /// would otherwise answer a different question from 'window.matchMedia'.</summary>
+    public static MediaQueryEnvironment Default(float viewportWidth, float viewportHeight, string colorScheme,
+        float resolutionDppx = 1f)
+        => new()
+        {
+            ViewportWidth = viewportWidth,
+            ViewportHeight = viewportHeight,
+            ColorScheme = colorScheme,
+            ResolutionDppx = resolutionDppx > 0 ? resolutionDppx : 1f,
+        };
 }

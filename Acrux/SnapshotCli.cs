@@ -538,8 +538,13 @@ internal static class SnapshotCli
         string inputPath = args[1];
         int width = args.Length > 2 ? int.Parse(args[2]) : 1024;
         int height = args.Length > 3 ? int.Parse(args[3]) : 768;
-        double timeMs = args.Length > 4
-            ? double.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture)
+        // The device scale belongs to this channel as much as to --dumplayout: a page whose rows
+        // depend on 'resolution' has to be readable at any scale, not only at one.
+        float dpiScale = args.Length > 4
+            ? float.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture)
+            : 1f;
+        double timeMs = args.Length > 5
+            ? double.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture)
             : 0;
 
         if (!File.Exists(inputPath))
@@ -554,7 +559,7 @@ internal static class SnapshotCli
 
         // Same preparation as the PNG path, so the ops listed here are the ops
         // the snapshot executed at the same animation instant.
-        var page = RenderSnapshot.Prepare(html, width, height, baseUrl, 1f, true, timeMs);
+        var page = RenderSnapshot.Prepare(html, width, height, baseUrl, dpiScale, true, timeMs);
 
         var visitor = new PaintVisitor(
             contentOffsetY: 0,
@@ -684,7 +689,8 @@ internal static class SnapshotCli
         Console.Error.WriteLine("usage:");
         Console.Error.WriteLine("  Acrux --snapshot <input.html> <output.png> [width] [height] [dpiScale] [timeMs]");
         Console.Error.WriteLine("  Acrux --diff <expected.png> <actual.png> [diff.png] [tolerance]");
-        Console.Error.WriteLine("  Acrux --dumplayout <input.html> [width] [height]");
+        Console.Error.WriteLine("  Acrux --dumplayout <input.html> [width] [height] [dpiScale] [timeMs]");
+        Console.Error.WriteLine("  Acrux --textops <input.html> [width] [height] [dpiScale] [timeMs]");
         Console.Error.WriteLine("  Acrux --computed <input.html> [width] [height] [dpiScale]");
         Console.Error.WriteLine("  Acrux --hittest <input.html> [width] [height] [dpiScale] [x,y ...]");
         Console.Error.WriteLine("  Acrux --anim <input.html> [width] [height] [timeMs]");

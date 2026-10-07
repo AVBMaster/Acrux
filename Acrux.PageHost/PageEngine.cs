@@ -1973,7 +1973,7 @@ public sealed class PageEngine : IDisposable
             _styleComputer = new StyleComputer();
             _styleComputer.AddStylesheet(_docManager.GetUaStylesheet(), Acrux.Core.Css.Resolver.CascadeOrigin.UserAgent);
         }
-        _styleComputer.ComputeStyles(_document, _viewportW, _viewportH);
+        _styleComputer.ComputeStyles(_document, _viewportW, _viewportH, resolutionDppx: _dpi * _res);
         _stStylePass++;
         _layoutGeneration++;
 
@@ -2281,7 +2281,7 @@ public sealed class PageEngine : IDisposable
                     _styleComputer = new StyleComputer();
                     _styleComputer.AddStylesheet(_docManager.GetUaStylesheet(), Acrux.Core.Css.Resolver.CascadeOrigin.UserAgent);
                 }
-                _styleComputer.ComputeStyles(_document, _viewportW, _viewportH);
+                _styleComputer.ComputeStyles(_document, _viewportW, _viewportH, resolutionDppx: _dpi * _res);
                 _stStylePass++;
                 _styleDirty = false;
                 // Style can change transforms and box-affecting values without a

@@ -3494,11 +3494,11 @@ namespace Acrux;
                 if (_perfHub is { Enabled: true })
                 {
                     _perfHub.LongTasks.Observe("StyleCompute", TaskPriority.High,
-                        () => styleComputer.ComputeStyles(_currentLoad.Document, windowWidth, contentViewportHeight));
+                        () => styleComputer.ComputeStyles(_currentLoad.Document, windowWidth, contentViewportHeight, resolutionDppx: _dpiScale));
                 }
                 else
                 {
-                    styleComputer.ComputeStyles(_currentLoad.Document, windowWidth, contentViewportHeight);
+                    styleComputer.ComputeStyles(_currentLoad.Document, windowWidth, contentViewportHeight, resolutionDppx: _dpiScale);
                 }
                 _jsEngine.ClearDirty();
                 _pendingRelayout = false;

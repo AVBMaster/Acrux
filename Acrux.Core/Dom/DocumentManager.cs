@@ -66,7 +66,7 @@ public class DocumentManager
         try
         {
             await LoadStylesFromHtml(doc, styleComputer, baseUrl);
-            styleComputer.ComputeStyles(doc, viewportWidth, viewportHeight);
+            styleComputer.ComputeStyles(doc, viewportWidth, viewportHeight, resolutionDppx: dpiScale);
         }
         catch (Exception ex)
         {

@@ -1,0 +1,132 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 252 — resolution media features and the device scale</title>
+<!--
+  'resolution' measures the OUTPUT DEVICE (CSS Media Queries 4 §7.9), so an '@media' rule and
+  'window.matchMedia' have to be filtered against the same device pixel ratio the page is being
+  rasterised at. This page is therefore rendered TWICE, at dpi 1.0 and at dpi 2.0, and every want
+  below is derived from 'window.devicePixelRatio' rather than written as a literal: the same file
+  must be fully green at both scales, which is what makes a cascade that ignores the scale (it read
+  one device pixel per CSS pixel no matter what) fail loudly instead of quietly.
+
+  The rules recorded here, each measured or cross-checked:
+   * 'dppx', 'dpi' and 'dpcm' are one measurement written three ways: 1dppx = 96dpi, and a
+     centimetre is 37.7952px, so 37dpcm is 0.979dppx. 'x' is a synonym for 'dppx'.
+   * 'min-resolution'/'max-resolution' are thresholds on the same number; the plain 'resolution'
+     form is an equality and only matches the device's own ratio.
+   * '-webkit-device-pixel-ratio', '-webkit-min-device-pixel-ratio' and
+     '-webkit-max-device-pixel-ratio' measure exactly what 'resolution' does, while
+     '(device-pixel-ratio: N)' and '(dpr: N)' are not media features at all and match nothing.
+   * the media-query viewport is in CSS pixels, not device pixels: at dpi 2.0 a 445px-wide window
+     is still 445 (so '(min-width: 800px)' must NOT start matching just because the raster is
+     890px wide), while 'resolution' does follow the raster.
+   * a zero threshold: '(min-resolution: 0dppx)' matches anything, '(max-resolution: 0dppx)'
+     matches nothing.
+
+  The bars are the rule side and the rows are the script side of the same 23 questions; a bar that
+  disagrees with its own matchMedia row means the two channels were fed different environments.
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: rgb(255,255,255); }
+  #report div { white-space: pre; font: 11px Consolas, monospace; color: rgb(0,0,0); }
+  #stage { margin: 20px 0 0 20px; width: 80px; }
+  .bar { width: 20px; height: 14px; margin-bottom: 2px; background: rgb(200,200,200);
+         outline: 1px dotted rgb(68,68,68); }
+  #report { margin: 10px 0 0 8px; }
+</style>
+<style id="media">
+  /* One rule per question. A rule that matches widens its bar to 50px, and the script below
+     expects exactly the width the device's own ratio implies. */
+  @media (resolution: 1dppx)     { #q01 { width: 50px } }
+  @media (min-resolution: 1dppx) { #q02 { width: 50px } }
+  @media (min-resolution: 1.5dppx) { #q03 { width: 50px } }
+  @media (min-resolution: 2dppx) { #q04 { width: 50px } }
+  @media (max-resolution: 1.5dppx) { #q05 { width: 50px } }
+  @media (resolution: 2dppx)     { #q06 { width: 50px } }
+  @media (min-resolution: 96dpi) { #q07 { width: 50px } }
+  @media (min-resolution: 192dpi) { #q08 { width: 50px } }
+  @media (max-resolution: 100dpi) { #q09 { width: 50px } }
+  @media (resolution: 96dpi)       { #q10 { width: 50px } }
+  @media (min-resolution: 37dpcm)  { #q11 { width: 50px } }
+  @media (max-resolution: 38dpcm)  { #q12 { width: 50px } }
+  @media (-webkit-device-pixel-ratio: 1)     { #q13 { width: 50px } }
+  @media (-webkit-min-device-pixel-ratio: 2) { #q14 { width: 50px } }
+  @media (-webkit-max-device-pixel-ratio: 1) { #q15 { width: 50px } }
+  @media (device-pixel-ratio: 1)  { #q16 { width: 50px } }
+  @media (dpr: 1)                 { #q17 { width: 50px } }
+  @media (min-resolution: 0dppx)  { #q18 { width: 50px } }
+  @media (max-resolution: 0dppx)  { #q19 { width: 50px } }
+  @media (resolution: 1x)         { #q20 { width: 50px } }
+  @media (min-resolution: 3dppx)  { #q21 { width: 50px } }
+  @media (min-width: 800px)       { #q22 { width: 50px } }
+  @media (max-width: 400px)       { #q23 { width: 50px } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="bar" id="q01"></div><div class="bar" id="q02"></div><div class="bar" id="q03"></div>
+  <div class="bar" id="q04"></div><div class="bar" id="q05"></div><div class="bar" id="q06"></div>
+  <div class="bar" id="q07"></div><div class="bar" id="q08"></div><div class="bar" id="q09"></div>
+  <div class="bar" id="q10"></div><div class="bar" id="q11"></div><div class="bar" id="q12"></div>
+  <div class="bar" id="q13"></div><div class="bar" id="q14"></div><div class="bar" id="q15"></div>
+  <div class="bar" id="q16"></div><div class="bar" id="q17"></div><div class="bar" id="q18"></div>
+  <div class="bar" id="q19"></div><div class="bar" id="q20"></div><div class="bar" id="q21"></div>
+  <div class="bar" id="q22"></div><div class="bar" id="q23"></div>
+</div>
+<div id="report"></div>
+<script>
+const dppx = window.devicePixelRatio;
+const iw = window.innerWidth, ih = window.innerHeight;
+const PX_PER_CM = 37.7952;                 // the centimetre's own CSS pixel length
+// Each condition as the stylesheet writes it, and each answer as the standard derives it from
+// the device's ratio. Nothing here knows what the engine does; that is the point.
+const CASES = [
+  ["q01", "(resolution: 1dppx)",           dppx === 1],
+  ["q02", "(min-resolution: 1dppx)",       dppx >= 1],
+  ["q03", "(min-resolution: 1.5dppx)",     dppx >= 1.5],
+  ["q04", "(min-resolution: 2dppx)",       dppx >= 2],
+  ["q05", "(max-resolution: 1.5dppx)",     dppx <= 1.5],
+  ["q06", "(resolution: 2dppx)",           dppx === 2],
+  ["q07", "(min-resolution: 96dpi)",       dppx >= 96 / 96],
+  ["q08", "(min-resolution: 192dpi)",      dppx >= 192 / 96],
+  ["q09", "(max-resolution: 100dpi)",      dppx <= 100 / 96],
+  ["q10", "(resolution: 96dpi)",           dppx === 96 / 96],
+  ["q11", "(min-resolution: 37dpcm)",      dppx >= 37 / PX_PER_CM],
+  ["q12", "(max-resolution: 38dpcm)",      dppx <= 38 / PX_PER_CM],
+  ["q13", "(-webkit-device-pixel-ratio: 1)",     dppx === 1],
+  ["q14", "(-webkit-min-device-pixel-ratio: 2)", dppx >= 2],
+  ["q15", "(-webkit-max-device-pixel-ratio: 1)", dppx <= 1],
+  ["q16", "(device-pixel-ratio: 1)",       false],   // not a media feature
+  ["q17", "(dpr: 1)",                      false],   // not a media feature
+  ["q18", "(min-resolution: 0dppx)",       dppx >= 0],
+  ["q19", "(max-resolution: 0dppx)",       dppx <= 0],
+  ["q20", "(resolution: 1x)",              dppx === 1],
+  ["q21", "(min-resolution: 3dppx)",       dppx >= 3],
+  ["q22", "(min-width: 800px)",            iw >= 800],   // the viewport is CSS px, not device px
+  ["q23", "(max-width: 400px)",            iw <= 400],
+];
+
+const out = [];
+const row = (name, got, want) => out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${String(got) === String(want)}`);
+const yn = b => (b ? "T" : "F");
+
+for (const [id, cond, expect] of CASES) {
+  // The script side: matchMedia must answer what the standard says for this device.
+  row(id + "_mql", yn(matchMedia(cond).matches), yn(expect));
+  // The rule side: the bar widened only if the cascade was told the same thing.
+  const width = document.getElementById(id).getBoundingClientRect().width;
+  row(id + "_rule", width, expect ? 50 : 20);
+  // And the two must not disagree with each other either way.
+  row(id + "_same", yn(matchMedia(cond).matches === (width === 50)), "T");
+}
+
+// A MediaQueryList has to answer live: the same object re-read after a resize reports the new
+// value, so the environment is not frozen at creation time.
+const live = matchMedia("(min-resolution: 0dppx)");
+row("live01", yn(live.matches), "T");
+row("live02", yn(typeof live.addEventListener === "function"), "T");
+row("live03", yn(matchMedia("(min-resolution: 999dppx)").matches), "F");
+
+out.push(`devicePixelRatio=${dppx} innerWidth=${iw} innerHeight=${ih}`);
+document.getElementById("report").innerHTML = out.map(l => "<div>" + l + "</div>").join("");
+</script></body></html>

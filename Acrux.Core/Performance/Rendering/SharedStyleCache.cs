@@ -122,7 +122,8 @@ public static class StyleSignature
     /// share a resolved style, but only if the surrounding context (ancestor style) also
     /// matches — the caller is responsible for the inheritance check.
     /// </summary>
-    public static SharedStyleCache.Key ComputeSignature(Element element, int stylesheetCount, float viewportWidth, string colorScheme)
+    public static SharedStyleCache.Key ComputeSignature(Element element, int stylesheetCount, float viewportWidth, string colorScheme,
+        float resolutionDppx = 1f)
     {
         int tagHash = StringComparer.OrdinalIgnoreCase.GetHashCode(element.TagName ?? "");
         int idHash = element.Id is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(element.Id);
@@ -136,7 +137,10 @@ public static class StyleSignature
         if (element.HasAttribute("href")) attrHash = HashCode.Combine(attrHash, "href-frag", GetFragment(element.GetAttribute("href") ?? ""));
 
         int viewportBucket = (int)Math.Round(viewportWidth / 16f);
-        int stateHash = StringComparer.OrdinalIgnoreCase.GetHashCode(colorScheme ?? "light");
+        // The state has to carry everything an '@media' condition may read, or a style resolved
+        // at one device scale would be handed to a page rasterised at another.
+        int stateHash = HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(colorScheme ?? "light"),
+                                         (int)Math.Round(resolutionDppx * 1000));
         return new SharedStyleCache.Key(tagHash, idHash, classHash, attrHash, viewportBucket, stylesheetCount, stateHash);
     }
 
