@@ -157,7 +157,13 @@ public struct CssParserToken
             case CssTokenType.SubstringMatchToken: return "*=";
             case CssTokenType.ColumnToken: return "||";
             case CssTokenType.UnicodeRangeToken:
-                return "U+" + UnicodeRangeStart.ToString("X") + "-" + UnicodeRangeEnd.ToString("X");
+                // The two numbers the range stands for, not the characters it was written with:
+                // 'u+0-7f' prints 'U+0-7F', and a wildcard, which has no literal spelling that
+                // means the same thing, prints the span it covers — 'U+??' is 'U+0-FF'. A range
+                // that names one codepoint prints that codepoint alone.
+                return UnicodeRangeStart == UnicodeRangeEnd
+                    ? "U+" + UnicodeRangeStart.ToString("X")
+                    : "U+" + UnicodeRangeStart.ToString("X") + "-" + UnicodeRangeEnd.ToString("X");
             case CssTokenType.CommentToken: return "/*" + Value + "*/";
             case CssTokenType.EofToken: return "";
             default: return Value;

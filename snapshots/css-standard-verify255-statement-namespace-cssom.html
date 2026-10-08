@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 255 — statement at-rules, namespaces and CSSOM insertion</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,80); }
+.row, #report { white-space: pre-wrap; }
+#stage { position: absolute; left: -4000px; top: 0; width: 300px; height: 10px; overflow: hidden; }
+</style>
+</head>
+<body>
+<h4>b255 — CSS Namespaces 3 §4, CSSOM §5.2.4/§5.3, statement at-rules, @counter-style descriptors. Every want is a value the reference engine answered for the same document.</h4>
+<pre id="report"></pre>
+<div id="stage"></div>
+<script>
+// Every case is measured in a fresh tree and a fresh sheet, and a case that throws still reports a
+// row: a missing line is the difference between "refused" and "the probe did not run".
+const out = [];
+const XHTML = 'http://www.w3.org/1999/xhtml';
+const OTHER = '@namespace url(other); ';
+const XH = '@namespace url(' + XHTML + '); ';
+const Q = '@namespace q url(' + XHTML + '); ';
+// The reference engine prints colours with a space after each comma and this engine is not
+// required to; spacing is not what any of these rows is about.
+const norm = v => String(v).replace(/,\s*/g, ',');
+function row(name, got, want) {
+  const g = norm(got), w = norm(want);
+  out.push({ n: name, got: g, want: w, ok: g === w });
+}
+function check(name, fn, want) {
+  let got;
+  try { got = fn(); } catch (e) { got = 'ERR[' + e.name + ']'; }
+  row(name, got, want);
+}
+
+function stage() {
+  const host = document.getElementById('stage');
+  host.innerHTML = '';
+  const div = document.createElement('div');
+  div.id = 'p'; div.className = 'c'; div.setAttribute('data-x', '1'); div.setAttribute('a', '1');
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.id = 's'; s.setAttribute('class', 'c'); s.setAttribute('data-x', '1');
+  div.appendChild(s);
+  host.appendChild(div);
+  return { div: div, svg: s };
+}
+function paints(sheetText, which, colour) {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = sheetText;
+  document.head.appendChild(st);
+  const v = getComputedStyle(which === 'svg' ? els.svg : els.div).color;
+  st.remove();
+  return v;
+}
+// The rules a text leaves in a sheet, with the text the CSSOM prints for each of them.
+// The rules a text leaves in a sheet, with the selector text the CSSOM prints for each rule that
+// has one. '#0' is therefore the answer to 'did the grammar take the rule at all?' — a bad member
+// of a comma list takes the whole rule down, so nothing survives to be printed.
+function keeps(sheetText) {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = sheetText;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const names = [];
+  for (let k = 0; k < r.length; k++)
+    if (r[k].selectorText !== undefined && r[k].selectorText !== null) names.push(r[k].selectorText);
+  st.remove();
+  return '#' + r.length + (names.length ? ' ' + names.join(', ') : '');
+}
+function inserted(sheetText, ruleText) {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = sheetText;
+  document.head.appendChild(st);
+  let err = '';
+  try { st.sheet.insertRule(ruleText, st.sheet.cssRules.length); }
+  catch (e) { err = '[' + e.name + ']'; }
+  const n = st.sheet.cssRules.length;
+  const texts = [];
+  for (let k = 0; k < n; k++) texts.push('"' + st.sheet.cssRules[k].cssText + '"');
+  const v = getComputedStyle(els.div).color;
+  st.remove();
+  return norm(v) + '#' + n + err + ' ' + texts.join(' ');
+}
+
+// §1 a written prefix is one decision for the whole compound: the class, the id and the attribute
+// beside a prefixed type selector follow it, and a compound that writes nothing takes the default.
+// The sheet's default here is 'other' and the element is in XHTML, so a bare name answers 'no'.
+check('n01_starStar',  () => paints(OTHER + '*|* { color: rgb(1, 1, 1) }'), 'rgb(1,1,1)');
+check('n02_starType',  () => paints(OTHER + '*|div { color: rgb(2, 2, 2) }'), 'rgb(2,2,2)');
+check('n07_starTypeCls', () => paints(OTHER + '*|div.c { color: rgb(7, 7, 7) }'), 'rgb(7,7,7)');
+check('n12_starSvg',   () => paints(OTHER + '*|* { color: rgb(12, 12, 12) }', 'svg'), 'rgb(12,12,12)');
+check('n15_xhtmlId',   () => paints(XH + '#p { color: rgb(15, 15, 15) }'), 'rgb(15,15,15)');
+check('n19_starCompound', () => paints(OTHER + '*|*[data-x] { color: rgb(19, 19, 19) }'), 'rgb(19,19,19)');
+check('n21_attrAny',   () => paints('[*|data-x] { color: rgb(21, 21, 21) }'), 'rgb(21,21,21)');
+check('n22_attrNone',  () => paints('[|data-x] { color: rgb(22, 22, 22) }'), 'rgb(22,22,22)');
+check('n23_attrNamed', () => paints(Q + '[q|data-x] { color: rgb(23, 23, 23) }'), 'rgb(0,0,0)');
+check('a02_typeId',    () => paints(OTHER + Q + '*|div#p { color: rgb(60, 60, 60) }'), 'rgb(60,60,60)');
+check('a03_prefixedId',() => paints(OTHER + Q + 'q|div#p { color: rgb(60, 60, 60) }'), 'rgb(60,60,60)');
+check('a08_prefixedAttr', () => paints(OTHER + Q + 'q|*[data-x] { color: rgb(60, 60, 60) }'), 'rgb(60,60,60)');
+check('a10_isInherits',() => paints(OTHER + Q + '*|div:is(#p) { color: rgb(60, 60, 60) }'), 'rgb(60,60,60)');
+check('d02_isDefault', () => paints(OTHER + Q + ':is(.c) { color: rgb(60, 60, 60) }'), 'rgb(0,0,0)');
+check('d04_isPrefixedId', () => paints(OTHER + Q + ':is(*|#p) { color: rgb(60, 60, 60) }'), 'rgb(0,0,0)');
+check('d12_notCompound', () => paints(OTHER + Q + ':not(.c) { color: rgb(60, 60, 60) }'), 'rgb(0,0,0)');
+check('d19_prefixedIs', () => paints(OTHER + Q + 'q|div:is(.c) { color: rgb(60, 60, 60) }'), 'rgb(60,60,60)');
+check('b11_otherAttrBar', () => paints(OTHER + '[|data-x] { color: rgb(9, 9, 9) }'), 'rgb(0,0,0)');
+check('b11_qAttrBar',  () => paints(Q + '[|data-x] { color: rgb(9, 9, 9) }'), 'rgb(9,9,9)');
+
+// §2 the text the CSSOM prints. An any-prefix is only printed when the sheet gives its bare
+// selectors a default to differ from; the empty prefix in front of an attribute is never printed.
+check('k03_starStar',  () => keeps('*|* { color: red }'), '#1 *');
+check('k01_barStar',   () => keeps('|* { color: red }'), '#1 |*');
+check('k02_barType',   () => keeps('|div { color: red }'), '#1 |div');
+check('k04_starAlone', () => keeps('*| { color: red }'), '#0');
+check('k05_starClass', () => keeps('*|.c { color: red }'), '#0');
+check('k06_starId',    () => keeps('*|#p { color: red }'), '#0');
+check('k08_prefixedAlone', () => keeps(Q + 'q| { color: red }'), '#1');
+check('k09_starAttrOut', () => keeps('*|[a] { color: red }'), '#0');
+check('k10_barAttrOut',  () => keeps('|[a] { color: red }'), '#0');
+check('k11_starStarAttr', () => keeps('*|*[a] { color: red }'), '#1 [a]');
+check('k12_paren',     () => keeps('(*|div) { color: red }'), '#0');
+check('k13_child',     () => keeps('div>*|svg { color: red }'), '#1 div > svg');
+check('k14_spaceBar',  () => keeps('* | div { color: red }'), '#0');
+check('k15_doubleBar', () => keeps('q||div { color: red }'), '#0');
+check('k16_junkSibling', () => keeps('#p, bogus!!! { color: red }'), '#0');
+check('k17_prefixSibling', () => keeps('#p, *| { color: red }'), '#0');
+check('k18_starList',  () => keeps('#p, *|* { color: red }'), '#1 #p, *');
+check('k20_pseudoIn',  () => keeps(':is(*|div) { color: red }'), '#1 :is(div)');
+check('k21_notIn',     () => keeps(':not(*|div) { color: red }'), '#1 :not(div)');
+check('k23_attrNamed', () => keeps(Q + '[q|a] { color: red }'), '#2 [q|a]');
+check('k24_attrUndecl',() => keeps('[zz|a] { color: red }'), '#0');
+check('c12_attrLateType', () => keeps('[a]* { color: red }'), '#0');
+check('c13_twoSpaces', () => keeps('*  [a] { color: red }'), '#1 * [a]');
+check('c14_descPrefix',() => keeps('div *|p { color: red }'), '#1 div p');
+check('c15_starPseudo',() => keeps('*|:not(a) { color: red }'), '#0');
+check('c16_isPair',    () => keeps(':is(*|div, |p) { color: red }'), '#1 :is(div, |p)');
+check('c17_barTypeCls',() => keeps('|div.c { color: red }'), '#1 |div.c');
+check('c18_barTypeAttr',() => keeps('|div[data-x] { color: red }'), '#1 |div[data-x]');
+check('c19_prefixedId',() => keeps(Q + 'q|div#c { color: red }'), '#2 q|div#c');
+check('c02_attrPair',  () => keeps('[a][b] { color: red }'), '#1 [a][b]');
+check('c03_barUnivAttr',() => keeps('|*[a] { color: red }'), '#1 |*[a]');
+check('c05_prefixedUniv',() => keeps(Q + 'q|*[a] { color: red }'), '#2 q|*[a]');
+check('b01_otherPrint', () => keeps(OTHER + '*|div { color: red }'), '#2 *|div');
+check('b02_otherPrint', () => keeps(OTHER + '*|* { color: red }'), '#2 *|*');
+check('b05_otherCls',  () => keeps(OTHER + '*|div.c { color: red }'), '#2 *|div.c');
+check('b06_otherId',   () => keeps(OTHER + '*|div#p { color: red }'), '#2 *|div#p');
+check('b07_otherUniv', () => keeps(OTHER + '*|*[data-x] { color: red }'), '#2 *|*[data-x]');
+check('b11_otherAttrBar', () => keeps(OTHER + '[|data-x] { color: red }'), '#2 [data-x]');
+check('b16_otherBare', () => keeps(OTHER + '* { color: red }'), '#2 *');
+check('b01_qPrint',    () => keeps(Q + '*|div { color: red }'), '#2 div');
+check('b10_attrAnyPrint', () => keeps('[*|data-x] { color: red }'), '#1 [*|data-x]');
+check('s05_spaceAfterBar', () => keeps(Q + 'q| div { color: red }'), '#1');
+check('s06_barWithSpace',  () => keeps(Q + '| * { color: red }'), '#1');
+check('s07_descBarSpace',  () => keeps(Q + '* |div { color: red }'), '#2 * |div');
+check('s08_adjacentBar',   () => keeps(Q + 'q|* { color: red }'), '#2 q|*');
+
+// §3 insertRule: what it refuses, and the sheet it leaves behind when it does.
+check('i03_prefixed',  () => inserted(Q, 'q|div { color: rgb(32, 32, 32) }'),
+      'rgb(32,32,32)#2 "@namespace q url(\"http://www.w3.org/1999/xhtml\");" "q|div { color: rgb(32, 32, 32); }"');
+check('i04_badPrefix', () => inserted(Q, 'zz|div { color: rgb(33, 33, 33) }'),
+      'rgb(0,0,0)#1[SyntaxError] "@namespace q url(\"http://www.w3.org/1999/xhtml\");"');
+check('i05_anyPrefix', () => inserted(OTHER, '*|div { color: rgb(34, 34, 34) }'),
+      'rgb(34,34,34)#2 "@namespace url(\"other\");" "*|div { color: rgb(34, 34, 34); }"');
+check('i12_twoRules',  () => inserted('', '#p { color: rgb(40, 40, 40) } #q { color: red }'),
+      'rgb(0,0,0)#0[SyntaxError] ');
+check('i13_nsAfterStyle', () => inserted('#p { color: red }', '@namespace url(other);'),
+      'rgb(255,0,0)#1[InvalidStateError] "#p { color: red; }"');
+check('i14_importAfterNs', () => inserted(OTHER, '@import url(z3.css);'),
+      'rgb(0,0,0)#1[HierarchyRequestError] "@namespace url(\"other\");"');
+check('i15_importAfterStyle', () => inserted('#p { color: red }', '@import url(z1.css);'),
+      'rgb(255,0,0)#1[HierarchyRequestError] "#p { color: red; }"');
+check('i16_nsAfterImport', () => inserted('@import url(z4.css);', '@namespace url(z5);'),
+      'rgb(0,0,0)#2 "@import url(\"z4.css\");" "@namespace url(\"z5\");"');
+check('i18_emptyText', () => inserted('', ''), 'rgb(0,0,0)#0[SyntaxError] ');
+check('i19_charset',   () => inserted('', '@charset "UTF-8";'), 'rgb(0,0,0)#0[SyntaxError] ');
+check('i24_semicolon', () => inserted('', '#p { color: rgb(44, 44, 44) };'), 'rgb(0,0,0)#0[SyntaxError] ');
+check('c09_indexBeyond', () => {
+  const st = document.createElement('style'); document.head.appendChild(st);
+  let errs = '';
+  try { st.sheet.insertRule('#p { color: red }', 5); } catch (e) { errs += '[' + e.name + ']'; }
+  try { st.sheet.insertRule('#p { color: red }', -1); } catch (e) { errs += '[' + e.name + ']'; }
+  const n = st.sheet.cssRules.length; st.remove();
+  return '#' + n + errs;
+}, '#0[IndexSizeError][IndexSizeError]');
+check('c08_importFirst', () => {
+  const st = document.createElement('style'); document.head.appendChild(st);
+  let errs = '';
+  try { st.sheet.insertRule('#p { color: rgb(64, 64, 64) }', 0); } catch (e) { errs += '[A' + e.name + ']'; }
+  try { st.sheet.insertRule('@import url(c.css);', 0); } catch (e) { errs += '[B' + e.name + ']'; }
+  const n = st.sheet.cssRules.length; st.remove();
+  return '#' + n + errs;
+}, '#2');
+check('c07_nsThenRule', () => {
+  const els = stage();
+  const st = document.createElement('style'); document.head.appendChild(st);
+  st.sheet.insertRule('@namespace url(other);', 0);
+  st.sheet.insertRule('#p { color: rgb(63, 63, 63) }', 1);
+  const v = getComputedStyle(els.div).color;
+  const n = st.sheet.cssRules.length; st.remove();
+  return norm(v) + '#' + n;
+}, 'rgb(0,0,0)#2');
+// The reference engine also lowercases a keyword value the page wrote in caps: 'COLOR: RED'
+// reads back 'color: red'. Ours keeps the author's spelling, which is registered as gap #252, so
+// no row here depends on either answer.
+
+// §4 custom properties survive a style rule and a var() reads them back — the row that the pixel
+// gate caught: a name with no property id is a custom property, not an unknown property.
+check('v01_ruleKeepsVar', () => {
+  const st = document.createElement('style'); st.textContent = '#a{--v:10px; color: red; --W:20px}';
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules[0];
+  const t = r.cssText + '|' + r.style.length + '|' + r.style.getPropertyValue('--v') +
+            '|' + r.style.getPropertyValue('--W') + '|' + r.style.getPropertyValue('--w');
+  st.remove(); return t;
+}, '#a { --v: 10px; color: red; --W: 20px; }|3|10px|20px|');
+check('v02_sheetVarPadding', () => {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = '#p{--sp:10px; padding: var(--sp)}';
+  document.head.appendChild(st);
+  const v = getComputedStyle(els.div).paddingTop;
+  st.remove(); return v;
+}, '10px');
+check('v03_rootVar', () => {
+  const host = document.getElementById('stage'); host.innerHTML = '';
+  const outer = document.createElement('div'); outer.id = 'zz'; host.appendChild(outer);
+  const inner = document.createElement('div'); inner.id = 'qq'; outer.appendChild(inner);
+  const st = document.createElement('style');
+  st.textContent = ':root{--z:7px} #zz>#qq{padding: var(--z)}';
+  document.head.appendChild(st);
+  const v = getComputedStyle(inner).paddingLeft;
+  st.remove(); return v;
+}, '7px');
+
+// §5 @counter-style descriptors: a symbol list of any length survives, 'fallback' survives, and
+// the block prints its descriptors in the engine's own order.
+function counterText(sheetText) {
+  const st = document.createElement('style');
+  st.textContent = sheetText;
+  document.head.appendChild(st);
+  // The row itself quotes what it prints, so the text goes out as the engine answers it.
+  const t = st.sheet.cssRules[0].cssText;
+  st.remove();
+  return t;
+}
+function ruleFallback(sheetText) {
+  const st = document.createElement('style');
+  st.textContent = sheetText;
+  document.head.appendChild(st);
+  const t = st.sheet.cssRules[0].fallback;
+  st.remove();
+  return t;
+}
+check('s01_numericEleven', () => counterText("@counter-style n11 { system: numeric; symbols: \"a\" \"b\" \"c\" \"d\" \"e\" \"f\" \"g\" \"h\" \"i\" \"j\" \"k\"; }"),
+      '@counter-style n11 { system: numeric; symbols: "a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k"; }');
+check('s02_fallbackOrder', () => counterText('@counter-style o1 { fallback: decimal; additive-symbols: 1 "x"; negative: "(" ")"; system: additive; symbols: "a"; prefix: "<"; suffix: ">"; range: 1 2; speak-as: words; pad: 3; }'),
+      '@counter-style o1 { system: additive; symbols: "a"; additive-symbols: 1 "x"; negative: "(" ")"; prefix: "<"; suffix: ">"; range: 1 2; fallback: decimal; speak-as: words; }');
+// 'fallback: none' is not a style name, so no descriptor comes of it and the accessor reads empty.
+check('s03_fallbackNone', () => counterText('@counter-style o2 { fallback: none; system: cyclic; symbols: "a"; }') + '|' + JSON.stringify(ruleFallback('@counter-style o2 { fallback: none; system: cyclic; symbols: "a"; }')),
+      '@counter-style o2 { system: cyclic; symbols: "a"; }|""');
+check('s04_fontFeatureValues', () => {
+  const st = document.createElement('style');
+  st.textContent = '@font-feature-values x { @styleset { a { font-variant: 1 } } }';
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const t = '#' + r.length + ' ' + r[0].type + ' ' + JSON.stringify(r[0].cssText);
+  st.remove(); return t;
+}, '#1 14 "@font-feature-values x { }"');
+
+const report = document.getElementById('report');
+report.textContent = out.map(r => r.n + '="' + r.got + '" want="' + r.want + '" ok=' + r.ok).join('\n');
+const bad = out.filter(r => !r.ok).length;
+report.textContent += '\nSUMMARY rows=' + out.length + ' failures=' + bad + ' ok=' + (bad === 0);
+</script>
+</body>
+</html>

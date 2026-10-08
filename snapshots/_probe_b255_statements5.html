@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Probe b255 part 5 — where a '@supports' condition stops</title>
+</head><body><pre id="report" style="font:10px monospace;white-space:pre-wrap"></pre>
+<script>
+const out = [];
+const emit = (n, v) => out.push(n + '=' + String(v).replace(/\n/g, '\\n'));
+const f = v => (v === undefined ? 'U' : v === null ? 'N' : '"' + v + '"');
+function imp(text) {
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const parts = ['#' + r.length];
+  for (let k = 0; k < r.length; k++)
+    parts.push(f(r[k].cssText) + ' sup=' + f(r[k].supportsText));
+  st.remove();
+  return parts.join(' ~ ');
+}
+const CONDITIONS = [
+  'not (display: flex) and (color)', 'not (display: flex) not (color)',
+  'not (display: flex) (color)', '(display: flex) not (color)',
+  'not (display: flex) not', 'not not (color)',
+  'bogus: 1 or color: red', 'color: red or bogus: 1', 'display: flex and (color)',
+  'display: flex and bogus', '--x: red and (color)', 'color: red !important',
+  'color: red !important extra', 'display: flex !important', 'color: red;',
+  'selector(a) or selector(b)', 'selector(a) selector(b)',
+  '((display: flex) and (color))', '((display: flex) (color))',
+  '(color) and (bogus)', '(color) or (bogus)',
+  'display: flex and display: grid', 'color: red and color: blue',
+  '[color]', '{color}', 'color/', 'a b: c', ': red', 'bogus (1)',
+  '(display: flex) and (color) and (width: 1px)',
+];
+// An index leads each name: two conditions can collapse onto the same 'a_b_c' spelling once every
+// character is a '_', and a case that never made it into the record reads as one that passed.
+let tIndex = 0;
+for (const c of CONDITIONS) emit('t' + (++tIndex < 10 ? '0' : '') + tIndex + '_' +
+                                 c.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30),
+                                 imp('@import url(v.css) supports(' + c + ');'));
+document.getElementById('report').textContent = out.join('\n');
+</script></body></html>

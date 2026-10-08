@@ -1,0 +1,158 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Probe b255 part 7 — a written namespace prefix, and a rule inserted into a sheet that has one</title>
+</head><body><pre id="report" style="font:10px monospace;white-space:pre-wrap"></pre>
+<div id="stage"></div>
+<script>
+const out = [];
+const emit = (n, fn) => { try { out.push(n + '=' + String(fn()).replace(/\n/g, '\\n')); }
+                          catch (e) { out.push(n + '=ERR[' + e.name + ']'); } };
+const f = v => (v === undefined ? 'U' : v === null ? 'N' : '"' + v + '"');
+const XHTML = 'http://www.w3.org/1999/xhtml';
+const SVG = 'http://www.w3.org/2000/svg';
+const OTHER = '@namespace url(other); ';
+const XH = '@namespace url(' + XHTML + '); ';
+const Q = '@namespace q url(' + XHTML + '); ';
+
+// A fresh tree for every case: an HTML div, an SVG child inside it, and a div carrying two
+// attributes. A written prefix has three different answers to give — an element in the default
+// namespace, an element in another one, and an attribute, which has no namespace at all.
+function stage() {
+  const host = document.getElementById('stage');
+  host.innerHTML = '';
+  const div = document.createElement('div');
+  div.id = 'p'; div.className = 'c'; div.setAttribute('data-x', '1'); div.setAttribute('a', '1');
+  const s = document.createElementNS(SVG, 'svg');
+  s.id = 's';
+  div.appendChild(s);
+  host.appendChild(div);
+  return { div: div, svg: s };
+}
+
+function paints(text, which, prop) {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const el = (which === 'svg') ? els.svg : els.div;
+  const v = getComputedStyle(el)[prop || 'color'];
+  st.remove();
+  return v;
+}
+
+// The rules a text leaves in a sheet, and the text the CSSOM prints for them. A selector the
+// grammar refuses takes its whole rule down, so '#0' is the answer to 'was this accepted?' even
+// where the rule would have matched nothing.
+function keeps(text) {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const parts = ['#' + r.length];
+  for (let k = 0; k < r.length; k++)
+    parts.push(f(r[k].type) + ' "' + r[k].cssText + '" sel=' + f(r[k].selectorText));
+  const v = getComputedStyle(els.div).color;
+  st.remove();
+  return parts.join(' ~ ') + ' paint=' + v;
+}
+
+// The same question asked of a rule a script inserts into a sheet that already declares a
+// namespace: the sheet's own declarations have to govern the new text.
+function inserted(sheetText, ruleText, at) {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = sheetText;
+  document.head.appendChild(st);
+  let err = '';
+  try { st.sheet.insertRule(ruleText, at === undefined ? st.sheet.cssRules.length : at); }
+  catch (e) { err = '[' + e.name + ']'; }
+  const n = st.sheet.cssRules.length;
+  const texts = [];
+  for (let k = 0; k < n; k++) texts.push('"' + st.sheet.cssRules[k].cssText + '"');
+  const v = getComputedStyle(els.div).color;
+  st.remove();
+  return v + '#' + n + err + ' ' + texts.join(' ');
+}
+
+// §A a prefix written in front of each kind of simple selector.
+emit('n01_starStar',    () => paints(OTHER + '*|* { color: rgb(1, 1, 1) }'));
+emit('n02_starType',    () => paints(OTHER + '*|div { color: rgb(2, 2, 2) }'));
+emit('n03_starClass',   () => paints(OTHER + '*|.c { color: rgb(3, 3, 3) }'));
+emit('n04_starId',      () => paints(OTHER + '*|#p { color: rgb(4, 4, 4) }'));
+emit('n05_starAttr',    () => paints(OTHER + '*|[data-x] { color: rgb(5, 5, 5) }'));
+emit('n06_starPseudo',  () => paints(OTHER + '*|:is(div) { color: rgb(6, 6, 6) }'));
+emit('n07_starTypeCls', () => paints(OTHER + '*|div.c { color: rgb(7, 7, 7) }'));
+emit('n08_bareStar',    () => paints(OTHER + '*| { color: rgb(8, 8, 8) }'));
+emit('n09_barStar',     () => paints(OTHER + '|* { color: rgb(9, 9, 9) }'));
+emit('n10_undeclared',  () => paints(OTHER + 'zz|* { color: rgb(10, 10, 10) }'));
+emit('n11_declared',    () => paints(OTHER + '@namespace q url(other); q|* { color: rgb(11, 11, 11) }'));
+emit('n12_starSvg',     () => paints(OTHER + '*|* { color: rgb(12, 12, 12) }', 'svg'));
+emit('n13_svgDefault',  () => paints(XH + 'svg { color: rgb(13, 13, 13) }', 'svg'));
+emit('n14_svgAny',      () => paints(XH + '*|svg { color: rgb(14, 14, 14) }', 'svg'));
+emit('n15_xhtmlId',     () => paints(XH + '#p { color: rgb(15, 15, 15) }'));
+emit('n16_noNsStar',    () => paints('*|* { color: rgb(16, 16, 16) }'));
+emit('n17_noNsType',    () => paints('*|div { color: rgb(17, 17, 17) }'));
+emit('n18_barType',     () => paints('|div { color: rgb(18, 18, 18) }'));
+emit('n19_starCompound',() => paints(OTHER + '*|*[data-x] { color: rgb(19, 19, 19) }'));
+emit('n20_starDesc',    () => paints(OTHER + '*|div *|svg { color: rgb(20, 20, 20) }', 'svg'));
+emit('n21_attrAny',     () => paints('[*|data-x] { color: rgb(21, 21, 21) }'));
+emit('n22_attrNone',    () => paints('[|data-x] { color: rgb(22, 22, 22) }'));
+emit('n23_attrNamed',   () => paints(Q + '[q|data-x] { color: rgb(23, 23, 23) }'));
+emit('n24_attrUndecl',  () => paints('[zz|data-x] { color: rgb(24, 24, 24) }'));
+
+// §B the text the CSSOM prints. An any-namespace prefix on an element is never printed, and a
+// no-namespace bar in front of an attribute is never printed — the two inversions of one rule.
+emit('k01_barStar',     () => keeps('|* { color: red }'));
+emit('k02_barType',     () => keeps('|div { color: red }'));
+emit('k03_starStar',    () => keeps('*|* { color: red }'));
+emit('k04_starAlone',   () => keeps('*| { color: red }'));
+emit('k05_starClass',   () => keeps('*|.c { color: red }'));
+emit('k06_starId',      () => keeps('*|#p { color: red }'));
+emit('k07_prefixedStar',() => keeps(Q + 'q|* { color: red }'));
+emit('k08_prefixedAlone',() => keeps(Q + 'q| { color: red }'));
+emit('k09_starAttrOut', () => keeps('*|[a] { color: red }'));
+emit('k10_barAttrOut',  () => keeps('|[a] { color: red }'));
+emit('k11_starStarAttr',() => keeps('*|*[a] { color: red }'));
+emit('k12_paren',       () => keeps('(*|div) { color: red }'));
+emit('k13_child',       () => keeps('div>*|svg { color: red }'));
+emit('k14_spaceBar',    () => keeps('* | div { color: red }'));
+emit('k15_doubleBar',   () => keeps('q||div { color: red }'));
+emit('k16_junkSibling',  () => keeps('#p, bogus!!! { color: red }'));
+emit('k17_prefixSibling',() => keeps('#p, *| { color: red }'));
+emit('k18_starList',    () => keeps('#p, *|* { color: red }'));
+emit('k19_prefixedList', () => keeps(Q + '#p, q|div { color: red }'));
+emit('k20_pseudoIn',    () => keeps(':is(*|div) { color: red }'));
+emit('k21_notIn',       () => keeps(':not(*|div) { color: red }'));
+emit('k22_mediaIn',     () => keeps('@media screen { *|div { color: red } }'));
+emit('k23_attrNamed',   () => keeps(Q + '[q|a] { color: red }'));
+emit('k24_attrUndecl',  () => keeps('[zz|a] { color: red }'));
+
+// §C a rule written into a sheet that declares a namespace, and the refusals that come with it.
+emit('i01_xhtmlType',   () => inserted(XH, 'div { color: rgb(30, 30, 30) }'));
+emit('i02_otherId',     () => inserted(OTHER, '#p { color: rgb(31, 31, 31) }'));
+emit('i03_prefixed',    () => inserted(Q, 'q|div { color: rgb(32, 32, 32) }'));
+emit('i04_badPrefix',   () => inserted(Q, 'zz|div { color: rgb(33, 33, 33) }'));
+emit('i05_anyPrefix',   () => inserted(OTHER, '*|div { color: rgb(34, 34, 34) }'));
+emit('i06_barPrefix',   () => inserted(OTHER, '|div { color: rgb(35, 35, 35) }'));
+emit('i07_nsIntoEmpty', () => inserted('', '@namespace url(other);'));
+emit('i08_thenId',      () => inserted('@namespace url(other);', '#p { color: rgb(36, 36, 36) }'));
+emit('i09_mediaChild',  () => inserted(OTHER, '@media screen { div { color: rgb(37, 37, 37) } }'));
+emit('i10_starInside',  () => inserted(XH, '*|div { color: rgb(38, 38, 38) }'));
+emit('i11_prefixedAttr',() => inserted(Q, 'q|[a] { color: rgb(39, 39, 39) }'));
+emit('i12_twoRules',    () => inserted('', '#p { color: rgb(40, 40, 40) } #q { color: red }'));
+emit('i13_nsAfterStyle',() => inserted('#p { color: red }', '@namespace url(other);'));
+emit('i14_importAfterNs', () => inserted(OTHER, '@import url(z3.css);'));
+emit('i15_importAfterStyle', () => inserted('#p { color: red }', '@import url(z1.css);'));
+emit('i16_nsAfterImport', () => inserted('@import url(z4.css);', '@namespace url(z5);'));
+emit('i17_importIntoEmpty', () => inserted('', '@import url(z6.css);'));
+emit('i18_emptyText',   () => inserted('', ''));
+emit('i19_charset',     () => inserted('', '@charset "UTF-8";'));
+emit('i20_groupTwoKids', () => inserted('', '@media screen { #a { color: red } #b { color: blue } }'));
+emit('i21_pageInsert',  () => inserted('', '@page { margin: 1cm }'));
+emit('i22_keyframes',   () => inserted('', '@keyframes k { 0% { opacity: 1 } }'));
+emit('i23_fontFace',    () => inserted('', '@font-face { font-family: q }'));
+emit('i24_semicolon',   () => inserted('', '#p { color: rgb(44, 44, 44) };'));
+
+document.getElementById('report').textContent = out.join('\n');
+</script></body></html>

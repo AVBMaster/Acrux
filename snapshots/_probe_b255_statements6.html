@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Probe b255 part 6 — how a group rule indents the rules it holds</title>
+</head><body><pre id="report" style="font:10px monospace;white-space:pre-wrap"></pre>
+<script>
+const out = [];
+const emit = (n, fn) => { try { out.push(n + '=' + String(fn()).replace(/\n/g, '\\n')); }
+                          catch (e) { out.push(n + '=ERR ' + e.message); } };
+const f = v => (v === undefined ? 'U' : v === null ? 'N' : '"' + v + '"');
+const show = () => document.getElementById('report').textContent = out.join('\n');
+
+// The whole sheet's rules, printed as the CSSOM prints them, newlines shown as \n so one case is
+// one line of the report.
+function sheet(text) {
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const parts = ['#' + r.length];
+  for (let k = 0; k < r.length; k++) parts.push(f(r[k].type) + ' ' + f(r[k].cssText).replace(/\n/g, '\\n'));
+  st.remove();
+  return parts.join(' ~ ');
+}
+
+const CASES = [
+  ['g01', '@media screen { #a { color: red } }'],
+  ['g02', '@media screen { @media print { #a { color: red } } }'],
+  ['g03', '@supports (display: flex) { @media screen { #a { color: red } } }'],
+  ['g04', '@media screen { @keyframes k { 0% { opacity: 1 } } }'],
+  ['g05', '@keyframes k { 0% { opacity: 1 } }'],
+  ['g06', '@media screen { @font-face { font-family: f } }'],
+  ['g07', '@media screen { @page { margin: 1cm } }'],
+  ['g08', '@media screen { @layer a { #a { color: red } } }'],
+  ['g09', '@layer a { @media screen { #a { color: red } } }'],
+  ['g10', '@media screen { }'],
+  ['g11', '@supports (display: flex) { }'],
+  ['g12', '@layer a { }'],
+  ['g13', '@media screen { /* only a comment */ }'],
+  ['g14', '@media screen { #a { color: red } #b { color: blue } }'],
+  ['g15', '@media screen { @media print { @media all { #a { color: red } } } }'],
+  ['g16', '@scope (x) { #a { color: red } }'],
+  ['g17', '@starting-style { #a { color: red } }'],
+  ['g18', '@media screen { #a { } }'],
+  ['g19', '@media screen { #a { color: red; background: blue } }'],
+  ['g20', '@property --x { syntax: "*"; inherits: false }'],
+  ['g21', '@layer a { #a { color: red } }'],
+  ['g22', '@media screen { @supports (display: flex) { #a { color: red } } }'],
+  ['g23', '@font-feature-values x { @styleset { a { font-variant: 1 } } }'],
+];
+for (const [n, t] of CASES) emit(n, () => sheet(t));
+
+// A rule read back after it has been changed through the CSSOM, and an empty block read back.
+function mutate(text, k, write) {
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules[k];
+  const before = r.cssText;
+  write(r);
+  const after = r.cssText;
+  st.remove();
+  return f(before.replace(/\n/g, '\\n')) + ' -> ' + f(after.replace(/\n/g, '\\n'));
+}
+emit('m01_styleWrite', () => mutate('#a { color: red }', 0, r => { r.style.color = 'blue'; }));
+emit('m02_emptyWrite', () => mutate('#a { color: red }', 0, r => { r.style.color = ''; }));
+emit('m03_mediaWrite', () => mutate('@media screen { #a { color: red } }', 0,
+                                    r => { r.media.mediaText = 'print'; r.cssRules[0].style.color = 'blue'; }));
+emit('m04_pageWrite', () => mutate('@page { margin: 1cm }', 0, r => { r.style.margin = '2cm'; }));
+emit('m05_fontWrite', () => mutate('@font-face { font-family: f }', 0, r => { r.style['font-size'] = '10px'; }));
+emit('m06_keyframeWrite', () => mutate('@keyframes k { 0% { opacity: 1 } }', 0,
+                                       r => { r.cssRules[0].style.opacity = '0'; }));
+show();
+</script></body></html>

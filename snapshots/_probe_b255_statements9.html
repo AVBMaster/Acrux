@@ -1,0 +1,109 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Probe b255 part 9 — which part of a compound takes the default namespace, and what an inserted rule prints</title>
+</head><body><pre id="report" style="font:10px monospace;white-space:pre-wrap"></pre>
+<div id="stage"></div>
+<script>
+const out = [];
+const emit = (n, fn) => { try { out.push(n + '=' + String(fn()).replace(/\n/g, '\\n')); }
+                          catch (e) { out.push(n + '=ERR[' + e.name + ']'); } };
+const f = v => (v === undefined ? 'U' : v === null ? 'N' : '"' + v + '"');
+const XHTML = 'http://www.w3.org/1999/xhtml';
+const OTHER = '@namespace url(other); ';
+const Q = '@namespace q url(' + XHTML + '); ';
+
+function stage() {
+  const host = document.getElementById('stage');
+  host.innerHTML = '';
+  const div = document.createElement('div');
+  div.id = 'p'; div.className = 'c'; div.setAttribute('data-x', '1');
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.id = 's'; s.setAttribute('class', 'c'); s.setAttribute('data-x', '1');
+  div.appendChild(s);
+  host.appendChild(div);
+  return { div: div, svg: s };
+}
+
+// §A does a compound part that names no element type at all — a class, an id, an attribute — take
+// the sheet's default namespace? If it does, the same part in a compound whose type selector was
+// written with a prefix of its own has to follow that prefix instead, and the two answers tell
+// apart 'the namespace belongs to the simple selector' from 'it belongs to the compound'.
+function paints(text, which) {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const v = getComputedStyle(which === 'svg' ? els.svg : els.div).color;
+  st.remove();
+  return v;
+}
+const A = [
+  '.c', '#p', '[data-x]', 'div', '*', 'div.c', '*|div.c', '*|div#c', '*|*[data-x]',
+  '*|div *|p', ':is(.c)', ':where(.c)', '|div.c', 'q|div.c', 'q|div#c', 'q|*[data-x]',
+  '*|svg', 'svg', '*|svg.c', '.c svg', '*|div .c', '*|div > .c', '*|div:is(.c)',
+];
+A.forEach((sel, i) => emit('a' + (i + 1 < 10 ? '0' : '') + (i + 1) + '_x',
+                           () => paints(OTHER + Q + sel + ' { color: rgb(60, 60, 60) }')));
+
+// §B the text a group rule prints when it holds nothing, and the text one that holds a rule prints.
+function keeps(text) {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const parts = ['#' + r.length];
+  for (let k = 0; k < r.length; k++) parts.push(f(r[k].cssText) + ' sel=' + f(r[k].selectorText));
+  st.remove();
+  return parts.join(' ~ ');
+}
+const B = ['@media screen {}', '@media screen { }', '@supports (color: red) {}',
+           '@layer a {}', '@container (min-width: 1px) {}', '@media screen { #p { color: red } }',
+           '@media screen { @media print { #p { color: red } } }', '@page {}', '@font-face {}',
+           '@keyframes k {}', '@media screen { #p {} #q {} }', '@scope { #p { color: red } }'];
+B.forEach((text, i) => emit('b' + (i + 1 < 10 ? '0' : '') + (i + 1) + '_x', () => keeps(text)));
+
+// §C what a rule a script inserts prints. An authored selector that the printer would canonicalise
+// (upper case, spaces, a prefix) says whether the inserted text is echoed or re-serialised.
+function inserted(sheetText, ruleText) {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = sheetText;
+  document.head.appendChild(st);
+  let err = '';
+  try { st.sheet.insertRule(ruleText, st.sheet.cssRules.length); }
+  catch (e) { err = '[' + e.name + ']'; }
+  const n = st.sheet.cssRules.length;
+  const texts = [];
+  for (let k = 0; k < n; k++) texts.push('"' + st.sheet.cssRules[k].cssText + '"');
+  const v = getComputedStyle(els.div).color;
+  st.remove();
+  return v + '#' + n + err + ' ' + texts.join(' ');
+}
+const C = [
+  ['', 'DIV   .c { COLOR: RED }'],
+  ['', '*|div { color: rgb(1, 1, 1) }'],
+  [OTHER, '*|div { color: rgb(2, 2, 2) }'],
+  ['', 'div,  p   >   .c { color: rgb(3, 3, 3) }'],
+  ['', '*[data-x] { color: rgb(4, 4, 4) }'],
+  ['', '[|data-x] { color: rgb(5, 5, 5) }'],
+  ['', '@media screen { *|div { color: rgb(6, 6, 6) } }'],
+  [Q, 'q|DIV#c { color: rgb(7, 7, 7) }'],
+  ['', '#p { color: rgb(8, 8, 8) } ;'],
+  ['', '#p { color: rgb(9, 9, 9) } @media screen {}'],
+  ['', 'div { color: rgb(10, 10, 10) }'],
+  ['', '@import url(i1.css) screen;'],
+  ['', '@import url(i2.css) ;'],
+  ['', '@namespace url(i3.css);'],
+  ['', '@page :left { margin: 1cm }'],
+  ['', '@media screen {}'],
+  ['', '@media {}'],
+  ['', '@supports (color: red) {}'],
+  ['', 'bogus { color: red }'],
+  ['', '@keyframes k { from { opacity: 0 } }'],
+];
+C.forEach(([sheet, rule], i) => emit('c' + (i + 1 < 10 ? '0' : '') + (i + 1) + '_x',
+                                     () => inserted(sheet, rule)));
+
+document.getElementById('report').textContent = out.join('\n');
+</script></body></html>

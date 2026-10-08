@@ -1,0 +1,88 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Probe b255 part 2 — layer/supports order, style.cssText, namespace matching</title>
+</head><body>
+<div id="a" style="color: rgb(1, 2, 3)">a</div><div id="b">b</div>
+<pre id="report" style="font:10px monospace;white-space:pre-wrap"></pre>
+<script>
+const out = [];
+const emit = (n, v) => out.push(n + '=' + String(v).replace(/\n/g, '\\n'));
+const f = v => (v === undefined ? 'U' : v === null ? 'N' : '"' + v + '"');
+function imp(text) {
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const parts = ['#' + r.length];
+  for (let k = 0; k < r.length; k++)
+    parts.push(f(r[k].type) + ' ' + f(r[k].cssText) + ' layer=' + f(r[k].layerName) +
+               ' sup=' + f(r[k].supportsText) + ' media=' + f(r[k].media && r[k].media.mediaText) +
+               '#' + (r[k].media ? r[k].media.length : 'none'));
+  st.remove();
+  return parts.join(' ~ ');
+}
+const CASES = [
+  ['q01', '@import url(a.css) layer supports(display: flex);'],
+  ['q02', '@import url(b.css) supports(display: flex) layer(b);'],
+  ['q03', '@import url(c.css) supports(display: flex) layer;'],
+  ['q04', '@import url(d.css) supports(display: flex) print;'],
+  ['q05', '@import url(e.css) layer(a) supports(display: flex) print;'],
+  ['q06', '@import url(f.css) supports(color: bogus);'],
+  ['q07', '@import url(g.css) supports(bogus: 1);'],
+  ['q08', '@import url(h.css) supports((display: flex) and (color));'],
+  ['q09', '@import url(i.css) supports(display: );'],
+  ['q10', '@import url(j.css) supports();'],
+  ['q11', '@import url(k.css) supports(var(--x): red);'],
+  ['q12', '@import url(l.css) supports(selector(a));'],
+  ['q13', '@import url(m.css) supports(NOT (display: flex));'],
+  ['q14', '@import url(n.css) supports(display: flex ) print;'],
+  ['q15', '@import url(o.css) LAYER(p);'],
+  ['q16', '@import url(q.css) layer(--a);'],
+  ['q17', '@import url(r.css) layer(a.b.c);'],
+  ['q18', '@import url(s.css) layer(a . b);'],
+  ['q19', '@import url(t.css) supports(display:flex)screen;'],
+  ['q20', '@import url(u.css) layer(x) (min-width: 1px) print;'],
+];
+for (const [n, t] of CASES) emit(n, imp(t));
+
+// 'style.cssText' as the CSSOM prints it, in the three places a page can read it.
+const el = document.getElementById('a');
+emit('s01_inline', '"' + el.style.cssText + '"');
+const st2 = document.createElement('style');
+st2.textContent = '#b { color: red; border: 1px solid rgb(0, 0, 0) } @page { margin: 1cm } ' +
+                  '@font-face { font-family: f }';
+document.head.appendChild(st2);
+const rr = st2.sheet.cssRules;
+emit('s02_ruleStyle', '"' + rr[0].style.cssText + '"');
+emit('s03_pageStyle', '"' + rr[1].style.cssText + '"');
+emit('s04_fontStyle', '"' + rr[2].style.cssText + '"');
+emit('s05_ruleText', '"' + rr[0].cssText + '"');
+rr[0].style.setProperty('color', 'blue');
+emit('s06_afterWrite', '"' + rr[0].style.cssText + '" ~ "' + rr[0].cssText + '"');
+rr[0].style.cssText = 'margin: 0; padding: 0';
+emit('s07_cssTextWrite', '"' + rr[0].style.cssText + '"');
+st2.remove();
+
+// Does a declared default namespace take an ID selector away from the element?
+function ns(text, selector) {
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const d = document.createElement('div');
+  d.setAttribute('data-x', '1');
+  if (selector.startsWith('#')) d.id = 'nsid';
+  host.appendChild(d);
+  const v = getComputedStyle(d).color;
+  st.remove(); host.remove();
+  return v;
+}
+emit('x01_nsId', ns('@namespace url(n.css); #nsid { color: rgb(2, 2, 2) }', '#'));
+emit('x02_nsType', ns('@namespace url(n.css); div { color: rgb(3, 3, 3) }', 'div'));
+emit('x03_nsUniversal', ns('@namespace url(n.css); * { color: rgb(4, 4, 4) }', '*'));
+emit('x04_nsAttr', ns('@namespace url(n.css); [data-x] { color: rgb(5, 5, 5) }', '['));
+emit('x05_prefixed', ns('@namespace p url(n.css); p|div { color: rgb(6, 6, 6) }', 'div'));
+emit('x06_noNamespace', ns('div { color: rgb(7, 7, 7) }', 'div'));
+document.getElementById('report').textContent = out.join('\n');
+</script></body></html>

@@ -31,6 +31,22 @@ public class CssParserTokenStream
 
     public CssParserToken Current => _current;
     public int Offset => _currentOffset;
+
+    /// <summary>Tell the tokenizer to read 'U+41' as one token. CSS Syntax 3 §4.3.14 allows a
+    /// unicode range in the declarations of an '@font-face' block and nowhere else, so a stream
+    /// that is not inside one leaves the same characters an ident and a number.</summary>
+    public void SetUnicodeRangesAllowed(bool allowed) => _tokenizer.SetUnicodeRangesAllowed(allowed);
+
+    /// <summary>Where the current token begins in the source. The tokenizer keeps this for the token
+    /// it last produced, which is the current one as long as nothing has been looked ahead at, so
+    /// a caller that wants the text between two tokens can cut it out verbatim — the spelling a
+    /// CSS '@import' 'supports()' keeps is the page's own, spaces and all.</summary>
+    public int TokenStart => _tokenizer.PreviousOffset;
+
+    /// <summary>The source text between two offsets, exactly as the page wrote it.</summary>
+    public string RawRange(int start, int end) =>
+        end > start ? _tokenizer.StringRangeAt(start, end - start) : "";
+
     public int Line => _currentLine;
     public int Column => _currentColumn;
     public bool HasLookahead => _hasLookahead;

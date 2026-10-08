@@ -191,11 +191,41 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
 /// model (CSSOM 5.3.1), so the property list lives here and each subclass supplies the
 /// storage. The list is the set pages actually reach for; anything else is read through
 /// getPropertyValue.</summary>
-public abstract class CssStyleDeclarationBase
+public abstract class CssStyleDeclarationBase : System.Dynamic.DynamicObject
 {
     protected abstract string? GetStyle(string name);
 
     protected abstract void SetStyle(string name, string? value);
+
+    /// <summary>The hyphenated spelling of every property. A declaration carries its camelCase names
+    /// as real members and a script that reads a property name out of data writes the other one:
+    /// <c>style['font-size'] = '10px'</c> is the same write as <c>style.fontSize = '10px'</c>
+    /// (measured). A name no member answers for is looked up as the CSS property it names, so the
+    /// object's own properties — 'cssText', 'length', the methods — keep their own meaning.</summary>
+    public override bool TryGetMember(System.Dynamic.GetMemberBinder binder, out object? result)
+    {
+        result = GetStyle(ToCssName(binder.Name));
+        return true;
+    }
+
+    public override bool TrySetMember(System.Dynamic.SetMemberBinder binder, object? value)
+    {
+        SetStyle(ToCssName(binder.Name), value?.ToString());
+        return true;
+    }
+
+    private static string ToCssName(string jsName)
+    {
+        var sb = new System.Text.StringBuilder(jsName.Length + 4);
+        foreach (var ch in jsName)
+            if (char.IsUpper(ch))
+            {
+                sb.Append('-');
+                sb.Append(char.ToLowerInvariant(ch));
+            }
+            else sb.Append(ch);
+        return sb.ToString();
+    }
 
     /// <summary>Reads a longhand out of the shorthands the block carries (see
     /// <see cref="Acrux.Core.Css.ShorthandExpander.ShorthandsFor"/>). <paramref name="block"/>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Probe b255 part 8 — a bar written with spaces, and what a compound prints</title>
+</head><body><pre id="report" style="font:10px monospace;white-space:pre-wrap"></pre>
+<script>
+const out = [];
+const emit = (n, fn) => { try { out.push(n + '=' + String(fn()).replace(/\n/g, '\\n')); }
+                          catch (e) { out.push(n + '=ERR[' + e.name + ']'); } };
+const f = v => (v === undefined ? 'U' : v === null ? 'N' : '"' + v + '"');
+const XHTML = 'http://www.w3.org/1999/xhtml';
+const Q = '@namespace q url(' + XHTML + '); ';
+
+function keeps(text) {
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const parts = ['#' + r.length];
+  for (let k = 0; k < r.length; k++) parts.push(f(r[k].selectorText));
+  st.remove();
+  return parts.join(' ~ ');
+}
+
+// A bar is a namespace separator, not a combinator, so the spaces around it should decide whether
+// the grammar can read the selector at all. Each shape is asked twice: as the first compound and
+// as one that follows a combinator.
+const SHAPES = [
+  's01', '|*', 's02', '| *', 's03', '|* ', 's04', '* | div', 's05', '* |div',
+  's06', '*| div', 's07', 'div | *', 's08', 'div |*', 's09', 'div| *',
+  's10', 'div|*', 's11', 'div >|*', 's12', 'div > |*', 's13', 'div > * | svg',
+  's14', 'q| div', 's15', 'q |div', 's16', 'q|*', 's17', 'q | *',
+];
+for (let k = 0; k < SHAPES.length; k += 2) emit(SHAPES[k] + '_' + SHAPES[k + 1].replace(/[^a-zA-Z0-9|*]/g, '_'),
+                                                () => keeps(Q + SHAPES[k + 1] + ' { color: red }'));
+
+// A universal in a compound with another part: does the printer keep it, and does an attribute
+// prefix print? The element answer and the attribute answer were measured to be opposite.
+const COMPOUNDS = ['*[a]', '*[a][b]', '|*[a]', '*|*[a]', 'q|*[a]', '*|*', '|*', '*|div',
+                   '[*|a]', '[|a]', '[q|a]', '[a]*', '*  [a]', 'div *|p', '*|:not(a)',
+                   ':is(*|div, |p)', '|div.c', '|div[data-x]', 'q|div#c'];
+COMPOUNDS.forEach((c, i) => emit('c' + (i + 1 < 10 ? '0' : '') + (i + 1) + '_x', () => keeps(Q + c + ' { color: red }')));
+
+// The paint answer for the shapes the grammar keeps, on an HTML div carrying 'a' plus an svg child.
+function paints(text, which) {
+  const host = document.getElementById('stage');
+  host.innerHTML = '';
+  const div = document.createElement('div');
+  div.id = 'p'; div.className = 'c'; div.setAttribute('data-x', '1'); div.setAttribute('a', '1');
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.id = 's'; div.appendChild(s); host.appendChild(div);
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const v = getComputedStyle(which === 'svg' ? s : div).color;
+  st.remove();
+  return v;
+}
+emit('stage', () => { document.body.insertAdjacentHTML('beforeend', '<div id="stage"></div>'); return 'ok'; });
+const PAINTS = ['*[a]', '|*[a]', '*|*[a]', 'q|*[a]', '[*|a]', '[|a]', '[q|a]', 'q|div',
+                'q|div#c', 'q|div.c', 'q|div[data-x]', '|div', '|#p', '|.c', '|[data-x]',
+                '*|div', '*|#p', '*|.c', '*|[data-x]', '*|*', 'q|*', '|*', 'div|*', 'div >|*'];
+PAINTS.forEach((c, i) => emit('p' + (i + 1 < 10 ? '0' : '') + (i + 1) + '_x', () => paints(Q + c + ' { color: rgb(60, 60, 60) }')));
+
+document.getElementById('report').textContent = out.join('\n');
+</script></body></html>

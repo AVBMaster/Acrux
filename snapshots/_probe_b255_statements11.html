@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Probe b255 part 11 — an id inside a functional pseudo</title>
+</head><body><pre id="report" style="font:10px monospace;white-space:pre-wrap"></pre>
+<div id="stage"></div>
+<script>
+const out = [];
+const emit = (n, fn) => { try { out.push(n + '=' + String(fn()).replace(/\n/g, '\\n')); }
+                          catch (e) { out.push(n + '=ERR[' + e.name + ']'); } };
+const XHTML = 'http://www.w3.org/1999/xhtml';
+const OTHER = '@namespace url(other); ';
+
+function paints(text) {
+  const host = document.getElementById('stage');
+  host.innerHTML = '';
+  const div = document.createElement('div');
+  div.id = 'p'; div.className = 'c'; div.setAttribute('data-x', '1');
+  host.appendChild(div);
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const v = getComputedStyle(div).color;
+  st.remove();
+  return v;
+}
+
+// The compound in front of the functional pseudo has no namespace of its own ('div' takes the
+// default, so the rule is dead either way) — every case here therefore asks only about what the
+// list itself does: an id, a class, an attribute, and the same three written with a prefix.
+const CASES = [':is(#p)', ':is(.c)', ':is([data-x])', ':is(*|#p)', ':is(*|.c)', ':is(q|#p)',
+               '#p', '.c', '[data-x]', 'div:is(#p)', 'div:is(.c)', ':not(.c)', ':not(#p)',
+               ':where(#p)', ':is(:is(#p))', ':is(#p, .c)', ':has(#p)', ':is(#p)', 'q|div:is(.c)',
+               '*|div:is(.c)', '*|div:where(.c)', '*|div#p', '*|div.c'];
+CASES.forEach((sel, i) => emit('d' + (i + 1 < 10 ? '0' : '') + (i + 1) + '_' + sel.replace(/[^a-zA-Z0-9|*]/g, '_'),
+                               () => paints(OTHER + '@namespace q url(' + XHTML + '); ' +
+                                            sel + ' { color: rgb(60, 60, 60) }')));
+
+document.getElementById('report').textContent = out.join('\n');
+</script></body></html>

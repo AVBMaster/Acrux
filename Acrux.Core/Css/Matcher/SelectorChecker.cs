@@ -122,6 +122,12 @@ public class SelectorChecker
 
     private bool CheckOne(CssSelector selector, Element element)
     {
+        // The namespace part is settled when the sheet its '@namespace' rules are read, and it
+        // decides whether this element can be the one the selector names before any name is
+        // compared: an id selector in a sheet whose default namespace is a foreign one matches
+        // nothing at all (measured, and the same for a class, an attribute, a type and the '*').
+        if (!MatchesNamespace(selector, element)) return false;
+
         switch (selector.MatchType)
         {
             case CssSelectorMatchType.Tag:
@@ -199,21 +205,29 @@ public class SelectorChecker
         if (selector.TagName == null || selector.TagName == "*")
             return true;
 
-        if (!element.TagName.Equals(selector.TagName, StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        if (selector.Namespace != null)
-        {
-            var elNs = element.NamespaceUri ?? "";
-            if (selector.Namespace == "*")
-                return true;
-            if (selector.Namespace == "ns")
-                return elNs == "http://www.w3.org/2000/svg" ||
-                       elNs == "http://www.w3.org/1998/Math/MathML";
-            return elNs.EndsWith(selector.Namespace, StringComparison.OrdinalIgnoreCase);
-        }
-        return true;
+        // The namespace part is already settled by the time a selector reaches the checker; what is
+        // left is the name, which an HTML document compares without regard to case.
+        return element.TagName.Equals(selector.TagName, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>Whether the element the selector is tried against is in the namespace the selector
+    /// asks for, as the sheet's declarations settled it. A selector that was never part of a sheet
+    /// with any '@namespace' rule in it is matched by name alone, which is what an HTML document
+    /// needs of a plain 'div': its elements are in the XHTML namespace, and a default of 'no
+    /// namespace' would leave every type selector in the document matching nothing.</summary>
+    /// <summary>Whether the element the compound names lives where the compound was written to live.
+    /// The decision belongs to the compound, so an attribute part asks it of the element as much as a
+    /// type selector does: '[data-x]' matches nothing in a sheet whose default is another namespace
+    /// (measured), while 'q|*[data-x]' styles an element that carries that prefix.</summary>
+    private static bool MatchesNamespace(CssSelector selector, Element element) =>
+        selector.NamespaceRequirement switch
+        {
+            CssNamespaceRequirement.CannotMatch => false,
+            CssNamespaceRequirement.Any => true,
+            CssNamespaceRequirement.None => string.IsNullOrEmpty(element.NamespaceUri),
+            CssNamespaceRequirement.Uri => element.NamespaceUri == selector.NamespaceUri,
+            _ => true,
+        };
 
     private bool CheckPseudoClass(CssSelector selector, Element element)
     {

@@ -1,0 +1,143 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Probe b255 part 10 — whose namespace a compound part takes, and when an any-prefix has to be printed</title>
+</head><body><pre id="report" style="font:10px monospace;white-space:pre-wrap"></pre>
+<div id="stage"></div>
+<script>
+const out = [];
+const emit = (n, fn) => { try { out.push(n + '=' + String(fn()).replace(/\n/g, '\\n')); }
+                          catch (e) { out.push(n + '=ERR[' + e.name + ']'); } };
+const f = v => (v === undefined ? 'U' : v === null ? 'N' : '"' + v + '"');
+const XHTML = 'http://www.w3.org/1999/xhtml';
+const OTHER = '@namespace url(other); ';
+const Q = '@namespace q url(' + XHTML + '); ';
+
+function stage() {
+  const host = document.getElementById('stage');
+  host.innerHTML = '';
+  const div = document.createElement('div');
+  div.id = 'p'; div.className = 'c'; div.setAttribute('data-x', '1');
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.id = 's'; s.setAttribute('class', 'c'); s.setAttribute('data-x', '1');
+  div.appendChild(s);
+  host.appendChild(div);
+  return { div: div, svg: s };
+}
+
+function paints(text, which) {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const v = getComputedStyle(which === 'svg' ? els.svg : els.div).color;
+  st.remove();
+  return v;
+}
+
+// §A a compound whose type selector was written with a prefix of its own: does the class, the id
+// and the attribute beside it follow that prefix, or the sheet's default? The element carries an id
+// that exists this time, so a black answer is a namespace answer and not a typo.
+const A = [
+  ['div#p', 0], ['*|div#p', 0], ['q|div#p', 0], ['|div#p', 0], ['*|div#c', 0], ['*|div#p', 1],
+  ['q|div.c', 0], ['q|*[data-x]', 0], ['*|*[data-x]', 0], ['*|div:is(#p)', 0],
+  ['*|*#p', 0], ['*|div', 0], ['*|svg', 1], ['q|svg', 1], ['|div#p', 1],
+];
+A.forEach(([sel, which], i) => emit('a' + (i + 1 < 10 ? '0' : '') + (i + 1) + '_x',
+  () => paints(sel === '#p' ? OTHER + sel + ' { color: rgb(60, 60, 60) }'
+                            : OTHER + Q + sel + ' { color: rgb(60, 60, 60) }', which ? 'svg' : 'div')));
+
+// The same compounds in a sheet that declares the prefix but no default: the element is in the
+// namespace 'q' names, so an inherited prefix answers and a default does not exist to disagree.
+A.forEach(([sel, which], i) => emit('e' + (i + 1 < 10 ? '0' : '') + (i + 1) + '_x',
+  () => paints(Q + sel + ' { color: rgb(61, 61, 61) }', which ? 'svg' : 'div')));
+
+// §B the text a parsed sheet prints. An any-prefix has to be printed when the sheet gives its
+// selectors a default to differ from, and can disappear when it does not.
+function keeps(text) {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const parts = ['#' + r.length];
+  for (let k = 0; k < r.length; k++) parts.push(f(r[k].cssText) + ' sel=' + f(r[k].selectorText));
+  // Read the paint before the sheet goes: a colour asked after the removal is black whatever the
+  // rule said, and a black answer in a probe that means 'the namespace did not match' is worth
+  // nothing when it can also mean 'the sheet was already gone'.
+  const v = getComputedStyle(els.div).color;
+  st.remove();
+  return parts.join(' ~ ') + ' paint=' + v;
+}
+const B = [
+  '*|div { color: red }', '*|* { color: red }', '|div { color: red }', 'q|div { color: red }',
+  '*|div.c { color: red }', '*|div#p { color: red }', '*|*[data-x] { color: red }',
+  'div *|p { color: red }', '*|div, #p { color: red }', '[*|data-x] { color: red }',
+  '[|data-x] { color: red }', '[q|data-x] { color: red }', 'q|* { color: red }',
+  '|* { color: red }', '*|div:is(.c) { color: red }', '* { color: red }',
+];
+B.forEach((sel, i) => emit('b' + (i + 1 < 10 ? '0' : '') + (i + 1) + '_plain',
+                           () => keeps(sel)));
+B.forEach((sel, i) => emit('b' + (i + 1 < 10 ? '0' : '') + (i + 1) + '_other',
+                           () => keeps(OTHER + sel)));
+B.forEach((sel, i) => emit('b' + (i + 1 < 10 ? '0' : '') + (i + 1) + '_q',
+                           () => keeps(Q + sel)));
+
+// §C a rule inserted into a sheet whose default the insertion has to answer to.
+function inserted(sheetText, ruleText) {
+  const els = stage();
+  const st = document.createElement('style');
+  st.textContent = sheetText;
+  document.head.appendChild(st);
+  let err = '';
+  try { st.sheet.insertRule(ruleText, st.sheet.cssRules.length); }
+  catch (e) { err = '[' + e.name + ']'; }
+  const n = st.sheet.cssRules.length;
+  const texts = [];
+  for (let k = 0; k < n; k++) texts.push('"' + st.sheet.cssRules[k].cssText + '"');
+  const v = getComputedStyle(els.div).color;
+  st.remove();
+  return v + '#' + n + err + ' ' + texts.join(' ');
+}
+emit('c01_otherAny', () => inserted(OTHER, '*|div { color: rgb(62, 62, 62) }'));
+emit('c02_plainAny', () => inserted('', '*|div { color: rgb(62, 62, 62) }'));
+emit('c03_qOnly', () => inserted(Q, '*|div { color: rgb(62, 62, 62) }'));
+emit('c04_xhtmlDefault', () => inserted('@namespace url(' + XHTML + ');',
+                                        '*|div { color: rgb(62, 62, 62) }'));
+emit('c05_nsRefresh', () => inserted('', '@namespace url(' + XHTML + ');'));
+emit('c07_afterNs', () => {
+  const els = stage();
+  const st = document.createElement('style');
+  document.head.appendChild(st);
+  st.sheet.insertRule('@namespace url(other);', 0);
+  st.sheet.insertRule('#p { color: rgb(63, 63, 63) }', 1);
+  const texts = [];
+  for (const r of st.sheet.cssRules) texts.push('"' + r.cssText + '"');
+  const v = getComputedStyle(els.div).color;
+  st.remove();
+  return v + '#' + texts.length + ' ' + texts.join(' ');
+});
+emit('c08_importFirst', () => {
+  const els = stage();
+  const st = document.createElement('style');
+  document.head.appendChild(st);
+  let errs = '';
+  try { st.sheet.insertRule('#p { color: rgb(64, 64, 64) }', 0); } catch (e) { errs += '[A' + e.name + ']'; }
+  try { st.sheet.insertRule('@import url(c.css);', 0); } catch (e) { errs += '[B' + e.name + ']'; }
+  const n = st.sheet.cssRules.length;
+  const v = getComputedStyle(els.div).color;
+  st.remove();
+  return v + '#' + n + errs;
+});
+emit('c09_indexBeyond', () => inserted('', '#p { color: rgb(65, 65, 65) }') + ' ' + (() => {
+  const st = document.createElement('style');
+  document.head.appendChild(st);
+  let e2 = '';
+  try { st.sheet.insertRule('#p { color: red }', 5); } catch (e) { e2 = '[' + e.name + ']'; }
+  try { st.sheet.insertRule('#p { color: red }', -1); } catch (e) { e2 += '[' + e.name + ']'; }
+  st.remove();
+  return e2;
+})());
+emit('c10_replaceId', () => inserted('#p { color: rgb(66, 66, 66) }', '#p { color: rgb(67, 67, 67) }'));
+
+document.getElementById('report').textContent = out.join('\n');
+</script></body></html>

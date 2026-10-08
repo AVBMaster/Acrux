@@ -582,8 +582,10 @@ internal static class SnapshotCli
                 // Long runs used to be dropped from the dump entirely, which made the
                 // tool look like the text was missing from the display list. The limit has to
                 // clear a whole verification row ('name="value" want="value" ok=true' is
-                // routinely longer than a sentence), or the dump cannot be read back.
-                string shown = t.Text.Length <= 240 ? t.Text : t.Text[..240] + $"…(+{t.Text.Length - 240})";
+                // routinely longer than a sentence), or the dump cannot be read back — and a
+                // probe that prints one rule record of a multi-rule sheet per line says more
+                // than a sentence does, so a truncated tail is the part that held the answer.
+                string shown = t.Text.Length <= 2000 ? t.Text : t.Text[..2000] + $"…(+{t.Text.Length - 2000})";
                 string decorations = "";
                 if (t.Underline || t.Overline || t.LineThrough)
                 {

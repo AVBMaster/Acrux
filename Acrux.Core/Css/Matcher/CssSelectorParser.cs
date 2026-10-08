@@ -7,23 +7,186 @@ namespace Acrux.Core.Css.Matcher;
 /// </summary>
 public class CssSelectorParser
 {
-    public static List<CssSelector> ParseSelectorList(string selectorText)
+    public static List<CssSelector> ParseSelectorList(string selectorText) =>
+        ParseSelectorList(new CssParserTokenStream(selectorText));
+
+    /// <summary>Parse a comma-separated selector list out of a stream the caller is already
+    /// reading. A list in which any member is a selector the grammar refuses is refused as a whole:
+    /// the reference engine does not keep the siblings of a bad one, it drops the rule (measured:
+    /// '#p, bogus!!!' and '#p, *|' both leave a sheet with nothing in it).</summary>
+    public static List<CssSelector> ParseSelectorList(CssParserTokenStream stream)
     {
-        var stream = new CssParserTokenStream(selectorText);
         var selectors = new List<CssSelector>();
-        var current = ParseComplexSelector(stream);
-        if (current != null)
-        {
-            selectors.Add(current);
-            while (stream.Current.Type == CssTokenType.CommaToken)
-            {
-                stream.Next();
-                var next = ParseComplexSelector(stream);
-                if (next != null)
-                    selectors.Add(next);
-            }
-        }
+        if (!ReadSelectorList(stream, selectors))
+            selectors.Clear();
         return selectors;
+    }
+
+    /// <summary>Read a selector list and say whether all of it was read. The answer has to include
+    /// the tokens that were left behind and not just the members: a list read from inside an
+    /// at-rule prelude cannot otherwise tell a trailing '!!!' from the '{' of the rule body,
+    /// and both have to be distinguishable because one of them drops the rule.</summary>
+    public static bool ReadSelectorList(CssParserTokenStream stream, List<CssSelector> selectors)
+    {
+        selectors.Clear();
+        var first = ParseComplexSelector(stream);
+        if (first == null) return false;
+        selectors.Add(first);
+        while (stream.Current.Type == CssTokenType.CommaToken)
+        {
+            stream.Next();
+            var next = ParseComplexSelector(stream);
+            if (next == null) return false;
+            selectors.Add(next);
+        }
+        return IsSelectorListBoundary(stream.Current.Type);
+    }
+
+    private static bool IsSelectorListBoundary(CssTokenType type) => type switch
+    {
+        CssTokenType.EofToken or CssTokenType.CommaToken or CssTokenType.LeftBraceToken or
+            CssTokenType.RightBraceToken or CssTokenType.SemicolonToken or
+            CssTokenType.WhitespaceToken or CssTokenType.CommentToken => true,
+        _ => false,
+    };
+
+    /// <summary>Settle the namespace part of every simple selector a sheet holds against that
+    /// sheet's '@namespace' declarations, the way CSS Namespaces 3 asks and the reference engine
+    /// was measured to do. One compound makes one decision: the prefix its type selector was
+    /// written with governs the class, the id and the plain attribute beside it and the list inside
+    /// its <c>:is()</c>, while a compound that writes nothing takes the sheet's default address —
+    /// and a sheet with no default leaves its selectors settled by name alone, which is what an HTML
+    /// document needs (measured: with a default of 'other', '<c>*|div.c</c>' styles an HTML element
+    /// and 'div.c', '.c' and 'div:is(.c)' do not). Returns whether any selector names a prefix the
+    /// sheet never declared — such a selector takes its whole rule down, the other selectors of its
+    /// list with it (measured: 'zz|div, #x { ... }' leaves the sheet with nothing in it).</summary>
+    public static bool ApplyNamespaces(IEnumerable<CssSelector> selectors, string? defaultUri,
+        IReadOnlyDictionary<string, string>? prefixes)
+    {
+        bool invalid = false;
+        foreach (var head in selectors) invalid |= ApplyChain(head, null, defaultUri, prefixes);
+        return invalid;
+    }
+
+    /// <summary>Walk one complex selector from the compound the rule applies to toward its
+    /// ancestors, settling each compound. 'inherited' is the prefix the enclosing compound was
+    /// written with: it reaches the lists inside that compound's functional pseudos, and stops at
+    /// the combinator, so 'div .c' asks the class for the default even after '*|div:is(...)'.
+    /// A written prefix never carries over a combinator (measured: '*|div .c' matches nothing in a
+    /// sheet whose default is another namespace).</summary>
+    private static bool ApplyChain(CssSelector? node, string? inherited, string? defaultUri,
+        IReadOnlyDictionary<string, string>? prefixes)
+    {
+        bool invalid = false;
+        for (var head = node; head != null;)
+        {
+            var compound = new List<CssSelector>();
+            var cursor = head;
+            // The members of one compound are joined by 'SubSelector', and the link that leaves a
+            // compound has had its own relation overwritten by the combinator that follows it.
+            while (true)
+            {
+                compound.Add(cursor);
+                if (cursor.Relation != CssSelectorRelation.SubSelector || cursor.Next == null) break;
+                cursor = cursor.Next;
+            }
+            head = cursor.Next;
+            invalid |= ApplyCompound(compound, inherited, defaultUri, prefixes);
+        }
+        return invalid;
+    }
+
+    private static bool ApplyCompound(List<CssSelector> compound, string? inherited,
+        string? defaultUri, IReadOnlyDictionary<string, string>? prefixes)
+    {
+        bool invalid = false;
+        var typePart = compound.Find(m => m.MatchType == CssSelectorMatchType.Tag);
+        string? written = typePart?.Namespace ?? inherited;
+        var (requirement, uri, bad) = ResolveNamespace(written, false, defaultUri, prefixes);
+        invalid |= bad;
+        // An any-prefix only has to be printed when the sheet gives its bare selectors a default to
+        // differ from: '*|div' reads 'div' from a sheet that declares no default and ' *|div' — with
+        // the bar — from one that does, because dropping it there would name another element
+        // (measured both, parsed and inserted alike).
+        if (typePart != null && written == "*" && defaultUri != null)
+            typePart.PrintsAnyNamespacePrefix = true;
+
+        foreach (var member in compound)
+        {
+            if (member.SelectorList != null)
+                foreach (var inner in member.SelectorList)
+                    invalid |= ApplyChain(inner, written, defaultUri, prefixes);
+
+            if (!IsNamespaceGated(member.MatchType)) continue;
+            if (member.MatchType == CssSelectorMatchType.Tag)
+            {
+                member.NamespaceRequirement = requirement;
+                member.NamespaceUri = uri;
+                continue;
+            }
+
+            // An attribute written with a prefix of its own answers for itself; every other part of
+            // the compound takes the answer the type selector wrote.
+            if (IsAttribute(member.MatchType) && member.Namespace != null)
+            {
+                var (attrReq, attrUri, attrBad) =
+                    ResolveNamespace(member.Namespace, true, defaultUri, prefixes);
+                member.NamespaceRequirement = attrReq;
+                member.NamespaceUri = attrUri;
+                invalid |= attrBad;
+                continue;
+            }
+            member.NamespaceRequirement = requirement;
+            member.NamespaceUri = uri;
+        }
+        return invalid;
+    }
+
+    /// <summary>Which simple selectors a namespace decision is recorded on. Every part of a
+    /// compound takes it, and a compound whose only part is a pseudo-class or a pseudo-element is
+    /// gated just as one that starts with a type selector is: in a sheet that gives its selectors a
+    /// default, ':not(.c)' matches nothing at all in an HTML document (measured), because the
+    /// element the compound names has to live in that default.</summary>
+    private static bool IsNamespaceGated(CssSelectorMatchType matchType) => true;
+
+    private static bool IsAttribute(CssSelectorMatchType matchType) =>
+        matchType is >= CssSelectorMatchType.AttributeExact and <= CssSelectorMatchType.AttributeEnd;
+
+    /// <summary>Settle one written namespace part: null for nothing written (the sheet's default,
+    /// or nothing at all when the sheet declares none), <c>"*"</c> for the any-namespace bar,
+    /// <c>""</c> for a bare bar and a name for a prefix. Say, as well, whether the answer is one
+    /// the sheet cannot support — a prefix it never declares — which takes the rule down.</summary>
+    private static (CssNamespaceRequirement Requirement, string? Uri, bool Invalid) ResolveNamespace(
+        string? written, bool attribute, string? defaultUri,
+        IReadOnlyDictionary<string, string>? prefixes)
+    {
+        if (written == null)
+            return defaultUri == null
+                ? (CssNamespaceRequirement.Unchecked, null, false)
+                : (CssNamespaceRequirement.Uri, defaultUri, false);
+
+        if (written == "*") return (CssNamespaceRequirement.Any, null, false);
+
+        if (written.Length == 0)
+            // The bar with nothing in front of it says 'no namespace'. An HTML element always has
+            // one, so a type selector written that way matches nothing; an HTML attribute never has
+            // one, so the same part in front of an attribute is the address the attribute has
+            // (measured both, in a document whose elements are in the XHTML namespace).
+            return attribute ? (CssNamespaceRequirement.Any, null, false)
+                             : (CssNamespaceRequirement.None, null, false);
+
+        bool declared = prefixes != null && prefixes.ContainsKey(written);
+        if (attribute)
+            // An attribute has no namespace of its own, so a name in front of one says something no
+            // attribute can be: the selector survives only when the sheet declares the name, and
+            // then it matches nothing (measured: '[q|a]' in a sheet declaring q is kept, prints as
+            // written and leaves the element unstyled; '[zz|a]' takes its rule down).
+            return (CssNamespaceRequirement.CannotMatch, null, !declared);
+
+        if (prefixes != null && prefixes.TryGetValue(written, out var uri))
+            return (CssNamespaceRequirement.Uri, uri, false);
+
+        return (CssNamespaceRequirement.CannotMatch, null, true);
     }
 
     public static CssSelector? ParseComplexSelector(CssParserTokenStream stream)
@@ -41,7 +204,11 @@ public class CssSelectorParser
             if (combinator == CssSelectorRelation.SubSelector)
                 break;
 
-            var nextCompound = ParseCompoundSelector(stream);
+            var nextCompound = ParseCompoundSelector(stream, out bool broke);
+            // A compound that read tokens and produced nothing is a selector the grammar does not
+            // have: '* | div' reads the bar of '| div', finds a space after it, and stops — and the
+            // rule goes, rather than surviving as the descendant selector '*' (measured).
+            if (broke) return null;
             if (nextCompound == null) break;
 
             compounds.Add(nextCompound);
@@ -113,8 +280,16 @@ public class CssSelectorParser
         return cursor;
     }
 
-    private static CssSelector? ParseCompoundSelector(CssParserTokenStream stream)
+    private static CssSelector? ParseCompoundSelector(CssParserTokenStream stream) =>
+        ParseCompoundSelector(stream, out _);
+
+    /// <summary>Read one compound selector. 'broke' says the compound was not merely absent but
+    /// unreadable: tokens were consumed before the parse stopped, which is the difference between
+    /// the end of a complex selector and a selector the grammar refuses.</summary>
+    private static CssSelector? ParseCompoundSelector(CssParserTokenStream stream, out bool broke)
     {
+        int start = stream.Offset;
+        broke = false;
         SkipWhitespace(stream);
 
         if (stream.Current.Type == CssTokenType.CommaToken ||
@@ -128,6 +303,10 @@ public class CssSelectorParser
 
         while (true)
         {
+            // A compound starts with its type selector (CSS Selectors 4 §9): '[a]div' and '[a]*' are
+            // not compounds the grammar has, and the rule goes with them (measured).
+            if (result != null && StartsTypeSelector(stream)) break;
+
             var simple = ParseSimpleSelector(stream);
             if (simple == null) break;
 
@@ -144,6 +323,7 @@ public class CssSelectorParser
             }
         }
 
+        broke = result == null && stream.Offset > start;
         return result;
     }
 
@@ -166,6 +346,30 @@ public class CssSelectorParser
 
         if (token.Type == CssTokenType.DelimiterToken && token.Value == "*")
         {
+            // A star in front of a bar is not a universal selector but the namespace prefix that
+            // means 'any' (CSS Namespaces 3 §4), so the pair has to be read together: '*|div' is
+            // a type of any namespace and '*|*' a universal of any namespace, which is what lets
+            // '*|*' paint an HTML element from a sheet that declares another default (measured).
+            if (IsBar(stream.LookAhead()))
+            {
+                stream.Next();
+                stream.Next();
+                string localName = "*";
+                if (stream.Current.Type == CssTokenType.IdentToken)
+                {
+                    localName = stream.Current.Value;
+                    stream.Next();
+                }
+                else if (stream.Current.Type == CssTokenType.DelimiterToken && stream.Current.Value == "*")
+                    stream.Next();
+                else return null;
+                return new CssSelector
+                {
+                    MatchType = CssSelectorMatchType.Tag,
+                    TagName = localName.ToLowerInvariant(),
+                    Namespace = "*"
+                };
+            }
             stream.Next();
             return new CssSelector { MatchType = CssSelectorMatchType.Tag, TagName = "*" };
         }
@@ -206,14 +410,21 @@ public class CssSelectorParser
             return ParseAttributeSelector(stream);
         }
 
-        if (token.Type == CssTokenType.IdentToken || token.Type == CssTokenType.DelimiterToken)
+        // Only an ident, or a bar that opens the 'no namespace' spelling, can start a type selector.
+        // Reading any other delimiter as a name made 'bogus!!!' a selector of four parts and left a
+        // rule like '#p, bogus!!!' in the sheet, where the reference engine drops the whole rule.
+        if (token.Type == CssTokenType.IdentToken ||
+            (token.Type == CssTokenType.DelimiterToken && token.Value == "|"))
         {
             string tagName = token.Value;
             string? ns = null;
 
             if (token.Type == CssTokenType.DelimiterToken && token.Value == "|")
             {
-                ns = "*";
+                // The bar on its own says 'no namespace', which is not the same thing as any
+                // namespace: an HTML element is always in one, so '|div' matches nothing here
+                // (measured, with and without an '@namespace' in front of it).
+                ns = "";
                 stream.Next();
                 if (stream.Current.Type == CssTokenType.IdentToken)
                 {
@@ -227,8 +438,14 @@ public class CssSelectorParser
                 }
                 else return null;
             }
-            else if (stream.LookAhead().Type == CssTokenType.ColumnToken)
+            else if (stream.LookAhead().Type == CssTokenType.DelimiterToken &&
+                     stream.LookAhead().Value == "|")
             {
+                // A single bar is a delimiter token; the column token is the '||' of a failed
+                // selector, so this is the only shape a written prefix can arrive in. Nothing after
+                // the bar is not a universal selector but a selector the grammar refuses: 'q|' and
+                // 'q| div' take their whole rule down (measured — and the space matters, because
+                // 'q |div' is the type 'q' followed by the compound '|div', which parses).
                 ns = token.Value;
                 stream.Next();
                 stream.Next();
@@ -242,7 +459,7 @@ public class CssSelectorParser
                     tagName = "*";
                     stream.Next();
                 }
-                else tagName = "*";
+                else return null;
             }
             else
             {
@@ -391,6 +608,13 @@ public class CssSelectorParser
     {
         stream.Next();
         SkipSelectorWhitespace(stream);
+
+        // The namespace part an attribute selector may open with: '[*|att]' and '[|att]' are the two
+        // that mean anything in an HTML document, and the second loses its empty prefix on the way
+        // back out (measured: 'style[|type]' reads as 'style[type]'). A named prefix in front of an
+        // attribute is kept here and settled against the sheet's declarations by the caller, which
+        // makes the whole rule invalid when the name was never declared.
+        string? attributeNamespace = ReadAttributeNamespace(stream);
         if (stream.Current.Type != CssTokenType.IdentToken)
             return null;
 
@@ -456,9 +680,54 @@ public class CssSelectorParser
             MatchType = matchType,
             AttributeName = attrName,
             AttributeValue = attrValue,
-            AttributeCaseSensitive = caseSensitive
+            AttributeCaseSensitive = caseSensitive,
+            Namespace = attributeNamespace
         };
     }
+
+    /// <summary>Read the <c>[ns|…]</c>, <c>[*|…]</c> or <c>[|…]</c> opening of an attribute
+    /// selector, if it has one, and give back the part as it was written: the empty string for a bar
+    /// with nothing in front of it, <c>"*"</c> for the any-namespace bar, a name for a prefix, and
+    /// null when the bracket holds a plain name.</summary>
+    private static string? ReadAttributeNamespace(CssParserTokenStream stream)
+    {
+        if (IsBar(stream.Current))
+        {
+            // A bar with nothing in front of it says 'no namespace', and an attribute has none, so
+            // the part says nothing: '[|att]' reads as a plain '[att]' — which is what the printer
+            // shows — and it then follows the same rule as a bare one, taking the namespace its
+            // compound was written with or the sheet's default (measured: '[|data-x]' styles an HTML
+            // element in a sheet that declares no default and stops styling it once the sheet gives
+            // its selectors another one).
+            stream.Next();
+            SkipSelectorWhitespace(stream);
+            return null;
+        }
+
+        if (stream.Current.Type != CssTokenType.IdentToken && !IsStar(stream.Current)) return null;
+        var next = stream.LookAhead();
+        if (!IsBar(next)) return null;
+        string prefix = stream.Current.Value;
+        stream.Next();
+        stream.Next();
+        SkipSelectorWhitespace(stream);
+        return prefix;
+    }
+
+    /// <summary>Whether the next token opens a type selector — an ident, the bar that says 'no
+    /// namespace', or the universal star. A compound may hold only one, and only at its front.</summary>
+    private static bool StartsTypeSelector(CssParserTokenStream stream) => stream.Current switch
+    {
+        { Type: CssTokenType.IdentToken } => true,
+        { Type: CssTokenType.DelimiterToken, Value: "*" or "|" } => true,
+        _ => false,
+    };
+
+    private static bool IsBar(CssParserToken token) =>
+        token.Type == CssTokenType.DelimiterToken && token.Value == "|";
+
+    private static bool IsStar(CssParserToken token) =>
+        token.Type == CssTokenType.DelimiterToken && token.Value == "*";
 
     /// <summary>Advance past the whitespace and comments that are legal inside a
     /// bracketed attribute selector.</summary>

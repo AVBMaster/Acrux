@@ -1,0 +1,329 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 253 — math functions in media feature values</title>
+<!--
+  A media feature value is a CSS value, and since CSS Values 4 §10.8 a math function is a value,
+  so '(min-width: calc(100px * 4 + 45px))' is a question about 445px and not a syntax error. Every
+  rule below was measured in a reference engine (Edge, 445x481 viewport at dpr 1) in BOTH channels
+  — an '@media' rule in a sheet and 'window.matchMedia' — and the two always answered the same, so
+  this page drives one bar and one matchMedia call per question and requires them to agree.
+
+  WHAT A REFERENCE ENGINE ACCEPTS (CSS Media Queries 4 §6 + Values 4 §10.8):
+   * 'calc()', 'min()', 'max()', 'clamp()' and 'round()' are evaluated in a feature value, and so
+     is a math function nested inside another: 'calc(445px + (446px - 1px))' is 890px and
+     'calc(calc(446px - 2px))' is 444px.
+   * a sum written OUTSIDE a function is not a value at all: '446px - 2px' and '446px-2px' match
+     nothing. Reading one as '0px' — because the string ends in 'px' and its head parses as a
+     number — is the bug this batch closes.
+   * the type algebra is the same as it is in a property: 'calc(445px + 1)' (length + number),
+     'calc(445px + 1s)', 'calc(1px + 1dppx)', 'calc(50% + 10px)' and 'calc(1% * 2)' are all
+     invalid and match nothing; 'calc(445px / 0px)' is invalid while 'calc(445px / 0)' is
+     infinity, which is a value no viewport reaches.
+   * 'clamp(min, val, max)' clamps rather than picks: 'clamp(446px, 100px, 900px)' is 446px.
+     'min()' and 'max()' take any number of arguments: 'min(446px, 900px, 100px)' is 100px.
+   * 'round(down, 446.7px, 1px)' is 446px; a one-argument 'round(445.5px)' is not a value.
+   * a unitless '0' is a &lt;length&gt; wherever one is asked for — '(min-width: 0)' and
+     '(min-width: calc(2 - 2))' are questions about a threshold of nothing — but no other unitless
+     number is, so '(min-width: 12)' and '(width: 445)' match nothing, and a zero percentage is not
+     a length either ('(min-width: 0%)' is as dead as '(min-width: 50%)'). A resolution and a
+     number each keep their own kind at zero: '(min-resolution: 0)' and
+     '(-webkit-min-device-pixel-ratio: 0px)' both match nothing.
+   * units price themselves the way a property does: 'calc(1cm)' is 37.7953px, 'calc(96dpi)' is
+     1dppx, 'calc(37.7952dpcm)' is 0.999998dppx, and an 'em' inside a query is the INITIAL font's
+     16px, so 'calc(27.8em + 0px)' is 444.8px (see batch 250).
+   * viewport units keep the expression unevaluated: 'calc(100vw)' is a value that depends on the
+     viewport the query is asked about, so it is evaluated but not folded.
+   * a feature that reads a NUMBER does not read a dimension, even when both measure the same
+     thing: '(-webkit-min-device-pixel-ratio: 1)' matches and '…: 1dppx)' does not, while
+     '(min-resolution: 1)' matches nothing and '(min-resolution: 1dppx)' matches.
+   * a <ratio> is two number tokens and no part of it may be a function: '(min-aspect-ratio:
+     calc(1 / 2))' and '(aspect-ratio: calc(445 / 481))' match at no viewport, and a bare
+     '(aspect-ratio: 1)' matches only a square one.
+   * the media-query grammar is unchanged by any of this: 'width = calc(445px)' is not a range
+     comparison ('=' is not an operator), '400px < calc(446px)' has no feature to compare, and a
+     'calc(445px)' written where the whole value must be one feature value does not make
+     '(min-width: calc(445px) and (max-width: calc(445px)))' into a conjunction.
+
+  TOLERANCE, because a viewport is a whole number of pixels and a threshold is any real: a
+  comparison is satisfied within one sixty-fourth of a pixel of the threshold (measured at 445px:
+  'min-width: 445.015px' and 'width >= calc(445.001px)' match, 'min-width: 445.02px' and
+  'width >= calc(445.5px)' do not). The strict operators are not fuzzed — 'width > 445px' is false
+  — and neither is a resolution: 'min-resolution: calc(1dppx + 0.001dppx)' does not match a device
+  ratio of exactly one.
+
+  SERIALISATION, which is the second half of the batch: 'MediaQueryList.media' re-prints the query
+  instead of echoing it. A function that reduces to one ABSOLUTE term comes back as a 'calc()' of
+  that term in the term's own unit — 'min(446px, 900px)' becomes 'calc(446px)', 'calc(1cm)' becomes
+  'calc(37.7953px)', 'calc(96dpi)' becomes 'calc(1dppx)', 'calc(445px / 0)' becomes
+  'calc(infinity * 1px)' — while an expression that keeps a relative unit is printed as it was
+  written; a function that keeps one is not folded even when the viewport would resolve it —
+  'clamp(445px, 100vw, 900px)' reads back exactly as it was typed. Numbers are re-printed to six
+  significant digits, so a plain '445.0px' reads '445px'.
+  Three documented divergences, none of them a conformance question:
+   - the reference engine reorders and refactors commutative terms ('calc(100vw - 1px)' comes back
+     as 'calc(-1px + 100vw)', 'calc(100vw / 2 + 100px)' as 'calc(100px + 50vw)'); this one keeps
+     the page's order.
+   - a ratio is printed with its second term ('(aspect-ratio: 1)' reads '1 / 1'); this one prints
+     what the page typed.
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: rgb(255,255,255); }
+  #report div { white-space: pre; font: 11px Consolas, monospace; color: rgb(0,0,0); }
+  /* The bars are packed three to a line so that a 445px-wide window shows every one of them. */
+  #stage { margin: 16px 0 0 16px; width: 380px; display: flex; flex-wrap: wrap; }
+  .bar { width: 118px; height: 14px; margin: 0 2px 2px 0; background: rgb(255,255,255);
+         outline: 1px dotted rgb(68,68,68); }
+  /* A matching rule fills its bar; a non-matching one leaves it white. */
+  #report { margin: 10px 0 0 8px; }
+</style>
+<style id="media">
+  /* One rule per question; the script below derives each expectation from the device it runs on. */
+  @media (min-width: calc(446px - 2px))            { #q01 { background: rgb(255,128,128) } }
+  @media (min-width: calc(100px * 4 + 45px))       { #q02 { background: rgb(255,128,128) } }
+  @media (min-width: min(446px, 900px))            { #q03 { background: rgb(255,128,128) } }
+  @media (max-width: max(446px, 100px))            { #q04 { background: rgb(255,128,128) } }
+  @media (max-width: clamp(100px, 446px, 900px))   { #q05 { background: rgb(255,128,128) } }
+  @media (max-width: clamp(446px, 100px, 900px))   { #q06 { background: rgb(255,128,128) } }
+  @media (max-width: min(446px, 900px, 100px))     { #q07 { background: rgb(255,128,128) } }
+  @media (min-width: round(down, 446.7px, 1px))    { #q08 { background: rgb(255,128,128) } }
+  @media (min-width: round(445.5px))               { #q09 { background: rgb(255,128,128) } }
+  @media (min-width: calc(445.5px - 0.5px))        { #q10 { background: rgb(255,128,128) } }
+  @media (min-width: calc(445px / 2))              { #q11 { background: rgb(255,128,128) } }
+  @media (min-width: calc(1cm))                    { #q12 { background: rgb(255,128,128) } }
+  @media (min-resolution: calc(96dpi))             { #q13 { background: rgb(255,128,128) } }
+  @media (min-width: calc(445px / 0))              { #q14 { background: rgb(255,128,128) } }
+  @media (min-width: calc(100vw))                  { #q15 { background: rgb(255,128,128) } }
+  @media (min-width: calc(27.8em + 0px))           { #q16 { background: rgb(255,128,128) } }
+  @media (min-width: calc(444px + 1vw))            { #q17 { background: rgb(255,128,128) } }
+  @media (min-width: CALC(446PX - 2PX))            { #q18 { background: rgb(255,128,128) } }
+  @media (min-width: calc( 446px   -   2px ))      { #q19 { background: rgb(255,128,128) } }
+  @media (min-width: calc(-1px + 446px))           { #q20 { background: rgb(255,128,128) } }
+  @media (min-width: calc(446px - -1px))           { #q21 { background: rgb(255,128,128) } }
+  @media (min-width: calc(+445px))                 { #q22 { background: rgb(255,128,128) } }
+  @media (min-width: 445.0px)                      { #q23 { background: rgb(255,128,128) } }
+  @media (min-width: calc(444px + 0.5px))          { #q24 { background: rgb(255,128,128) } }
+  @media (min-width: calc(1e3px / 2 - 55px))       { #q25 { background: rgb(255,128,128) } }
+  @media (min-width: calc(445px * 2 / 2))          { #q26 { background: rgb(255,128,128) } }
+  @media (min-width: calc(1px * 445))              { #q27 { background: rgb(255,128,128) } }
+  @media (min-width: calc(445px + (446px - 1px)))  { #q28 { background: rgb(255,128,128) } }
+  @media (min-width: calc(calc(446px - 2px)))      { #q29 { background: rgb(255,128,128) } }
+  @media (min-width: calc((445px)))                { #q30 { background: rgb(255,128,128) } }
+  @media (min-resolution: calc(37.7952dpcm))       { #q31 { background: rgb(255,128,128) } }
+  @media (min-resolution: calc(1dppx * 2 - 1dppx)) { #q32 { background: rgb(255,128,128) } }
+  @media (min-resolution: calc(2 * 1dppx))         { #q33 { background: rgb(255,128,128) } }
+  @media (min-width: 446px - 2px)                  { #q34 { background: rgb(255,128,128) } }
+  @media (min-width: 446px-2px)                    { #q35 { background: rgb(255,128,128) } }
+  @media (min-width: calc(446px -2px))             { #q36 { background: rgb(255,128,128) } }
+  @media (min-width: calc())                       { #q37 { background: rgb(255,128,128) } }
+  @media (min-width: calc(var(--x)))               { #q38 { background: rgb(255,128,128) } }
+  @media (min-width: calc(50% + 10px))             { #q39 { background: rgb(255,128,128) } }
+  @media (min-width: calc(1% * 2))                 { #q40 { background: rgb(255,128,128) } }
+  @media (min-width: 50%)                          { #q41 { background: rgb(255,128,128) } }
+  @media (min-width: calc(1px + 1dppx))            { #q42 { background: rgb(255,128,128) } }
+  @media (min-width: calc(445px + 1))              { #q43 { background: rgb(255,128,128) } }
+  @media (min-width: calc(445px + 1s))             { #q44 { background: rgb(255,128,128) } }
+  @media (min-resolution: 1)                       { #q45 { background: rgb(255,128,128) } }
+  @media (-webkit-min-device-pixel-ratio: 1)       { #q46 { background: rgb(255,128,128) } }
+  @media (-webkit-min-device-pixel-ratio: 1dppx)   { #q47 { background: rgb(255,128,128) } }
+  @media (-webkit-min-device-pixel-ratio: calc(1 + 1 - 1)) { #q48 { background: rgb(255,128,128) } }
+  @media (-webkit-device-pixel-ratio: calc(1dppx)) { #q49 { background: rgb(255,128,128) } }
+  @media (-webkit-min-device-pixel-ratio: min(1, 2)) { #q50 { background: rgb(255,128,128) } }
+  @media (400px <= width <= calc(500px))           { #q51 { background: rgb(255,128,128) } }
+  @media (calc(400px) <= width)                    { #q52 { background: rgb(255,128,128) } }
+  @media (width >= calc(445.5px))                  { #q53 { background: rgb(255,128,128) } }
+  @media (width = calc(445px))                     { #q54 { background: rgb(255,128,128) } }
+  @media (400px < calc(446px))                     { #q55 { background: rgb(255,128,128) } }
+  @media (min-width: calc(445px) and (max-width: calc(445px))) { #q56 { background: rgb(255,128,128) } }
+  @media (min-aspect-ratio: calc(1 / 2))           { #q57 { background: rgb(255,128,128) } }
+  @media (aspect-ratio: calc(445 / 481))           { #q58 { background: rgb(255,128,128) } }
+  @media (min-aspect-ratio: min(1 / 2, 1 / 1))     { #q59 { background: rgb(255,128,128) } }
+  @media (aspect-ratio: 1)                         { #q60 { background: rgb(255,128,128) } }
+  @media (min-width: calc(445px + 0.001px))        { #q61 { background: rgb(255,128,128) } }
+  @media (min-width: calc(1in * 4 + 49px))         { #q62 { background: rgb(255,128,128) } }
+  @media (min-width: calc(445px - 1px * 0))        { #q63 { background: rgb(255,128,128) } }
+  @media (min-width: calc(1px + 444px))            { #q64 { background: rgb(255,128,128) } }
+  @media (max-width: calc(100vw / 2 + 100px))      { #q65 { background: rgb(255,128,128) } }
+  @media (min-width: clamp(445px, 100vw, 900px))   { #q66 { background: rgb(255,128,128) } }
+  @media (min-resolution: calc(1dppx / 1))         { #q67 { background: rgb(255,128,128) } }
+  @media (min-width: calc(444.999px))              { #q68 { background: rgb(255,128,128) } }
+  @media (min-width: 0)                            { #q69 { background: rgb(255,128,128) } }
+  @media (min-width: calc(2 - 2))                  { #q70 { background: rgb(255,128,128) } }
+  @media (min-width: 0%)                           { #q71 { background: rgb(255,128,128) } }
+  @media (min-width: 12)                           { #q72 { background: rgb(255,128,128) } }
+  @media (min-resolution: 0)                       { #q73 { background: rgb(255,128,128) } }
+  @media (-webkit-min-device-pixel-ratio: 0px)     { #q74 { background: rgb(255,128,128) } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="bar" id="q01"></div><div class="bar" id="q02"></div><div class="bar" id="q03"></div>
+  <div class="bar" id="q04"></div><div class="bar" id="q05"></div><div class="bar" id="q06"></div>
+  <div class="bar" id="q07"></div><div class="bar" id="q08"></div><div class="bar" id="q09"></div>
+  <div class="bar" id="q10"></div><div class="bar" id="q11"></div><div class="bar" id="q12"></div>
+  <div class="bar" id="q13"></div><div class="bar" id="q14"></div><div class="bar" id="q15"></div>
+  <div class="bar" id="q16"></div><div class="bar" id="q17"></div><div class="bar" id="q18"></div>
+  <div class="bar" id="q19"></div><div class="bar" id="q20"></div><div class="bar" id="q21"></div>
+  <div class="bar" id="q22"></div><div class="bar" id="q23"></div><div class="bar" id="q24"></div>
+  <div class="bar" id="q25"></div><div class="bar" id="q26"></div><div class="bar" id="q27"></div>
+  <div class="bar" id="q28"></div><div class="bar" id="q29"></div><div class="bar" id="q30"></div>
+  <div class="bar" id="q31"></div><div class="bar" id="q32"></div><div class="bar" id="q33"></div>
+  <div class="bar" id="q34"></div><div class="bar" id="q35"></div><div class="bar" id="q36"></div>
+  <div class="bar" id="q37"></div><div class="bar" id="q38"></div><div class="bar" id="q39"></div>
+  <div class="bar" id="q40"></div><div class="bar" id="q41"></div><div class="bar" id="q42"></div>
+  <div class="bar" id="q43"></div><div class="bar" id="q44"></div><div class="bar" id="q45"></div>
+  <div class="bar" id="q46"></div><div class="bar" id="q47"></div><div class="bar" id="q48"></div>
+  <div class="bar" id="q49"></div><div class="bar" id="q50"></div><div class="bar" id="q51"></div>
+  <div class="bar" id="q52"></div><div class="bar" id="q53"></div><div class="bar" id="q54"></div>
+  <div class="bar" id="q55"></div><div class="bar" id="q56"></div><div class="bar" id="q57"></div>
+  <div class="bar" id="q58"></div><div class="bar" id="q59"></div><div class="bar" id="q60"></div>
+  <div class="bar" id="q61"></div><div class="bar" id="q62"></div><div class="bar" id="q63"></div>
+  <div class="bar" id="q64"></div><div class="bar" id="q65"></div><div class="bar" id="q66"></div>
+  <div class="bar" id="q67"></div><div class="bar" id="q68"></div>
+  <div class="bar" id="q69"></div><div class="bar" id="q70"></div><div class="bar" id="q71"></div>
+  <div class="bar" id="q72"></div><div class="bar" id="q73"></div><div class="bar" id="q74"></div>
+</div>
+<div id="report"></div>
+<script>
+const dppx = window.devicePixelRatio;
+const iw = window.innerWidth, ih = window.innerHeight;
+const PX = 1, EM = 16, VW = iw / 100, PX_PER_CM = 37.7952, PX_PER_IN = 96;
+// A threshold is met within one sixty-fourth of a pixel of it, which is how far a reference
+// engine lets a whole-pixel viewport agree with an arbitrary real (measured at a 445px viewport:
+// '(min-width: 445.015px)' and '(width >= 445.001px)' match, '(min-width: 445.02px)' does not).
+// The strict operators are not fuzzed: '(width > 445px)' is false and '(width < 445px)' is false.
+const EPS = 1 / 64;
+const minW = t => iw >= t - EPS, maxW = t => iw <= t + EPS;
+const FILL = "rgb(255,128,128)";
+const fill_of = id => getComputedStyle(document.getElementById(id)).backgroundColor.replace(/\s/g, "");
+
+// [id, query, whether the reference engine answers true here, the 'media' string it prints back
+// (null when the batch does not assert that spelling)]. The arithmetic is written twice on purpose:
+// once as CSS and once as JavaScript, so a disagreement is the engine's fault and not a literal
+// copied from a screenshot.
+const CASES = [
+  ["q01", "(min-width: calc(446px - 2px))",            minW(444),      "(min-width: calc(444px))"],
+  ["q02", "(min-width: calc(100px * 4 + 45px))",       minW(445),      "(min-width: calc(445px))"],
+  ["q03", "(min-width: min(446px, 900px))",            minW(446),      "(min-width: calc(446px))"],
+  ["q04", "(max-width: max(446px, 100px))",            maxW(446),      "(max-width: calc(446px))"],
+  ["q05", "(max-width: clamp(100px, 446px, 900px))",   maxW(446),      "(max-width: calc(446px))"],
+  ["q06", "(max-width: clamp(446px, 100px, 900px))",   maxW(446),      "(max-width: calc(446px))"],
+  ["q07", "(max-width: min(446px, 900px, 100px))",     maxW(100),      "(max-width: calc(100px))"],
+  ["q08", "(min-width: round(down, 446.7px, 1px))",    minW(446),      "(min-width: calc(446px))"],
+  ["q09", "(min-width: round(445.5px))",               false,          "(min-width: round(445.5px))"],
+  ["q10", "(min-width: calc(445.5px - 0.5px))",        minW(445),      "(min-width: calc(445px))"],
+  ["q11", "(min-width: calc(445px / 2))",              minW(222.5),    "(min-width: calc(222.5px))"],
+  ["q12", "(min-width: calc(1cm))",                    minW(PX_PER_CM), "(min-width: calc(37.7953px))"],
+  ["q13", "(min-resolution: calc(96dpi))",             dppx >= 1,      "(min-resolution: calc(1dppx))"],
+  ["q14", "(min-width: calc(445px / 0))",              false,          "(min-width: calc(infinity * 1px))"],
+  ["q15", "(min-width: calc(100vw))",                  true,           "(min-width: calc(100vw))"],
+  ["q16", "(min-width: calc(27.8em + 0px))",           minW(27.8 * EM), "(min-width: calc(27.8em + 0px))"],
+  ["q17", "(min-width: calc(444px + 1vw))",            minW(444 + VW), "(min-width: calc(444px + 1vw))"],
+  ["q18", "(min-width: CALC(446PX - 2PX))",            minW(444),      "(min-width: calc(444px))"],
+  ["q19", "(min-width: calc( 446px   -   2px ))",      minW(444),      "(min-width: calc(444px))"],
+  ["q20", "(min-width: calc(-1px + 446px))",           minW(445),      "(min-width: calc(445px))"],
+  ["q21", "(min-width: calc(446px - -1px))",           minW(447),      "(min-width: calc(447px))"],
+  ["q22", "(min-width: calc(+445px))",                 minW(445),      "(min-width: calc(445px))"],
+  ["q23", "(min-width: 445.0px)",                      minW(445),      "(min-width: 445px)"],
+  ["q24", "(min-width: calc(444px + 0.5px))",          minW(444.5),    "(min-width: calc(444.5px))"],
+  ["q25", "(min-width: calc(1e3px / 2 - 55px))",       minW(445),      "(min-width: calc(445px))"],
+  ["q26", "(min-width: calc(445px * 2 / 2))",          minW(445),      "(min-width: calc(445px))"],
+  ["q27", "(min-width: calc(1px * 445))",              minW(445),      "(min-width: calc(445px))"],
+  ["q28", "(min-width: calc(445px + (446px - 1px)))",  minW(890),      "(min-width: calc(890px))"],
+  ["q29", "(min-width: calc(calc(446px - 2px)))",      minW(444),      "(min-width: calc(444px))"],
+  ["q30", "(min-width: calc((445px)))",                minW(445),      "(min-width: calc(445px))"],
+  ["q31", "(min-resolution: calc(37.7952dpcm))",       dppx >= 37.7952 / PX_PER_CM,
+                                                        "(min-resolution: calc(0.999998dppx))"],
+  ["q32", "(min-resolution: calc(1dppx * 2 - 1dppx))", dppx >= 1,      "(min-resolution: calc(1dppx))"],
+  ["q33", "(min-resolution: calc(2 * 1dppx))",         dppx >= 2,      "(min-resolution: calc(2dppx))"],
+  // Not values at all: a sum outside a function, an empty function, a function that is not a
+  // math function, and every mixing of types the algebra forbids.
+  ["q34", "(min-width: 446px - 2px)",                  false,          "(min-width: 446px - 2px)"],
+  ["q35", "(min-width: 446px-2px)",                    false,          "(min-width: 446px-2px)"],
+  ["q36", "(min-width: calc(446px -2px))",             false,          "(min-width: calc(446px -2px))"],
+  ["q37", "(min-width: calc())",                       false,          "(min-width: calc())"],
+  ["q38", "(min-width: calc(var(--x)))",               false,          "(min-width: calc(var(--x)))"],
+  ["q39", "(min-width: calc(50% + 10px))",             false,          "(min-width: calc(50% + 10px))"],
+  ["q40", "(min-width: calc(1% * 2))",                 false,          "(min-width: calc(1% * 2))"],
+  ["q41", "(min-width: 50%)",                          false,          "(min-width: 50%)"],
+  ["q42", "(min-width: calc(1px + 1dppx))",            false,          "(min-width: calc(1px + 1dppx))"],
+  ["q43", "(min-width: calc(445px + 1))",              false,          "(min-width: calc(445px + 1))"],
+  ["q44", "(min-width: calc(445px + 1s))",             false,          "(min-width: calc(445px + 1s))"],
+  // A resolution feature wants a dimension; a ratio feature wants a number.
+  ["q45", "(min-resolution: 1)",                       false,          "(min-resolution: 1)"],
+  ["q46", "(-webkit-min-device-pixel-ratio: 1)",       dppx >= 1,      "(-webkit-min-device-pixel-ratio: 1)"],
+  ["q47", "(-webkit-min-device-pixel-ratio: 1dppx)",   false,          "(-webkit-min-device-pixel-ratio: 1dppx)"],
+  ["q48", "(-webkit-min-device-pixel-ratio: calc(1 + 1 - 1))", dppx >= 1,
+           "(-webkit-min-device-pixel-ratio: calc(1))"],
+  ["q49", "(-webkit-device-pixel-ratio: calc(1dppx))", false,
+           "(-webkit-device-pixel-ratio: calc(1dppx))"],
+  ["q50", "(-webkit-min-device-pixel-ratio: min(1, 2))", dppx >= 1,
+           "(-webkit-min-device-pixel-ratio: calc(1))"],
+  // The range grammar with a function on either side of the operator.
+  ["q51", "(400px <= width <= calc(500px))",           minW(400) && maxW(500), null],
+  ["q52", "(calc(400px) <= width)",                   minW(400),    null],
+  // The strict operators are NOT fuzzed, so a range that begins above the viewport does not
+  // match it just because it is close (measured: '(width >= calc(445.5px))' is false at 445).
+  ["q53", "(width >= calc(445.5px))",                  iw >= 445.5,    null],
+  ["q54", "(width = calc(445px))",                     false,           null],
+  ["q55", "(400px < calc(446px))",                     false,           null],
+  ["q56", "(min-width: calc(445px) and (max-width: calc(445px)))", false, null],
+  // A <ratio> is two number tokens: no function may stand in either of them.
+  ["q57", "(min-aspect-ratio: calc(1 / 2))",           false,           null],
+  ["q58", "(aspect-ratio: calc(445 / 481))",           false,           null],
+  ["q59", "(min-aspect-ratio: min(1 / 2, 1 / 1))",     false,           null],
+  ["q60", "(aspect-ratio: 1)",                         iw === ih,       null],
+  // Sub-pixel: a threshold is met within the tolerance above, so '(min-width: 445.001px)' matches
+  // a 445px viewport even though 445 is not greater than 445.001 (measured true).
+  ["q61", "(min-width: calc(445px + 0.001px))",        minW(445.001),
+                                                        "(min-width: calc(445.001px))"],
+  ["q62", "(min-width: calc(1in * 4 + 49px))",         minW(4 * PX_PER_IN + 49), "(min-width: calc(433px))"],
+  ["q63", "(min-width: calc(445px - 1px * 0))",        minW(445),       "(min-width: calc(445px))"],
+  ["q64", "(min-width: calc(1px + 444px))",            minW(445),       "(min-width: calc(445px))"],
+  ["q65", "(max-width: calc(100vw / 2 + 100px))",      maxW(VW * 50 + 100),
+                                                        "(max-width: calc(100vw / 2 + 100px))"],
+  ["q66", "(min-width: clamp(445px, 100vw, 900px))",   minW(445),
+          "(min-width: clamp(445px, 100vw, 900px))"],
+  ["q67", "(min-resolution: calc(1dppx / 1))",         dppx >= 1,       "(min-resolution: calc(1dppx))"],
+  ["q68", "(min-width: calc(444.999px))",              minW(444.999),   "(min-width: calc(444.999px))"],
+  // A unitless ZERO is a length — a threshold of nothing has no unit to be wrong about — while
+  // every other unitless number, and every zero that still carries a percentage, is not.
+  ["q69", "(min-width: 0)",                             true,            "(min-width: 0)"],
+  ["q70", "(min-width: calc(2 - 2))",                   true,            "(min-width: calc(0))"],
+  ["q71", "(min-width: 0%)",                            false,           "(min-width: 0%)"],
+  ["q72", "(min-width: 12)",                            false,           "(min-width: 12)"],
+  ["q73", "(min-resolution: 0)",                        false,           "(min-resolution: 0)"],
+  ["q74", "(-webkit-min-device-pixel-ratio: 0px)",      false,
+            "(-webkit-min-device-pixel-ratio: 0px)"],
+];
+
+const out = [];
+const row = (name, got, want) => out.push(`${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${String(got) === String(want)}`);
+const yn = b => (b ? "T" : "F");
+const style_of = id => getComputedStyle(document.getElementById(id)).backgroundColor.replace(/\s+/g, " ");
+
+for (const [id, query, expect, mediaWant] of CASES) {
+  const mql = matchMedia(query);
+  const filled = fill_of(id) === FILL;
+  row(id + "_mql", yn(mql.matches), yn(expect));
+  row(id + "_rule", yn(filled), yn(expect));
+  row(id + "_same", yn(mql.matches === filled), "T");
+  if (mediaWant !== null) row(id + "_media", mql.media, mediaWant);
+}
+
+// The rest of the MediaQueryList surface, re-read at the queries this batch is about (CSSOM View
+// §7.1): the list is live, its properties are not its own enumerable ones, and both channels must
+// still agree after the root font size changes, because a query is measured against the INITIAL
+// font and not against the page's (see batch 250).
+const one = matchMedia("(min-width: calc(100px * 4 + 45px))");
+row("s01", one.media, "(min-width: calc(445px))");
+row("s02", Object.keys(one).length, 0);
+row("s03", yn(one.matches), yn(iw >= 445));
+row("s04", [typeof one.addEventListener, typeof one.addListener, "onchange" in one,
+            typeof one.dispatchEvent].join(","), "function,function,true,function");
+document.documentElement.style.fontSize = "30px";
+row("s05", yn(matchMedia("(min-width: calc(27.8em + 0px))").matches), yn(iw >= 444.8));
+document.documentElement.style.fontSize = "";
+row("s06", out.filter(l => l.endsWith("ok=false")).length, 0);
+out.push(`innerWidth=${iw} innerHeight=${ih} devicePixelRatio=${dppx}`);
+document.getElementById("report").innerHTML = out.map(l => "<div>" + l + "</div>").join("");
+</script></body></html>

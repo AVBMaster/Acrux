@@ -472,7 +472,7 @@ public class DocumentHost
             {
                 var element = stack.Pop();
                 if (element.AssociatedStyleSheet != null)
-                    sheets.Add(new CssStyleSheetHost(element, WrapElement));
+                    sheets.Add(CssStyleSheetHost.ViewOf(element, WrapElement));
                 var children = element.Children;
                 for (int i = children.Count - 1; i >= 0; i--)
                     if (children[i] is DomElement child)

@@ -33,6 +33,10 @@ public static class MediaQueryEvaluator
     {
         env ??= MediaQueryEnvironment.Default(viewportWidth, viewportHeight, colorScheme);
 
+        // A medium that is empty once its comments are gone is an empty medium — '/*x*/' says
+        // nothing about where the style applies, so it applies everywhere just as '' does
+        // (measured: matchMedia('/*x*/').matches is true).
+        condition = MediaFeatureValue.StripComments(condition);
         if (string.IsNullOrWhiteSpace(condition)) return true;
 
         // A comma-separated list of media queries: true if ANY query matches.
@@ -44,8 +48,27 @@ public static class MediaQueryEvaluator
         return false;
     }
 
-    /// <summary>Parses a comma-separated media query list, honoring parentheses.</summary>
-    public static List<string> SplitQueryList(string condition)
+    /// <summary>One query of the list, before the grammar is applied to it. A text the media-query
+    /// grammar does not read matches nothing whatever the environment is, which is the other half of
+    /// what the serialiser already shows: the same query that reads back 'not all' is one that never
+    /// applies (measured: <c>matchMedia('print or (min-width: 1px)').matches</c> is false on a wide
+    /// screen, and <c>matchMedia('screen 123')</c> false whatever the viewport). A parenthesis the
+    /// page left off is closed here for the same reading, since the reference engine completes the
+    /// query rather than dropping it (measured: <c>matchMedia('(min-width: 100px'</c> matches).</summary>
+    private static bool EvaluateQuery(string query, MediaQueryEnvironment env)
+    {
+        query = query.Trim();
+        if (query.Length == 0) return true;
+        if (!MediaFeatureValue.IsMediaQuery(query, out var unclosed)) return false;
+        if (unclosed > 0) query += new string(')', unclosed);
+        return EvaluateParsedQuery(query, env);
+    }
+
+    /// <summary>Parses a comma-separated media query list, honoring parentheses. An evaluation
+    /// drops the empty queries a stray comma leaves behind, since nothing there can match; the
+    /// serialiser keeps them, because the reference engine writes each of them out as 'not all'
+    /// and a script reads them back through 'length'.</summary>
+    public static List<string> SplitQueryList(string condition, bool keepEmpty = false)
     {
         var queries = new List<string>();
         int depth = 0;
@@ -58,16 +81,16 @@ public static class MediaQueryEvaluator
             else if (c == ',' && depth == 0)
             {
                 var q = condition[start..i].Trim();
-                if (q.Length > 0) queries.Add(q);
+                if (q.Length > 0 || keepEmpty) queries.Add(q);
                 start = i + 1;
             }
         }
         var last = condition[start..].Trim();
-        if (last.Length > 0) queries.Add(last);
+        if (last.Length > 0 || keepEmpty) queries.Add(last);
         return queries;
     }
 
-    private static bool EvaluateQuery(string query, MediaQueryEnvironment env)
+    private static bool EvaluateParsedQuery(string query, MediaQueryEnvironment env)
     {
         query = query.Trim();
         if (query.Length == 0) return true;
@@ -92,7 +115,7 @@ public static class MediaQueryEvaluator
             // "not (cond)" is a negation of the whole condition.
             if (query.StartsWith('(') && query.EndsWith(')'))
             {
-                var inner = EvaluateQuery(query, env);
+                var inner = EvaluateParsedQuery(query, env);
                 return !inner;
             }
         }
@@ -108,7 +131,7 @@ public static class MediaQueryEvaluator
             var leftText = query[..orIndex].Trim();
             var rightText = query[(orIndex + 4)..].Trim();
             if (!IsBooleanOperand(leftText, insideParens) || !IsBooleanOperand(rightText, insideParens)) return false;
-            return EvaluateQuery(leftText, env) || EvaluateQuery(rightText, env);
+            return EvaluateParsedQuery(leftText, env) || EvaluateParsedQuery(rightText, env);
         }
 
         // Split on top-level "and"
@@ -118,7 +141,7 @@ public static class MediaQueryEvaluator
             var leftText = query[..andIndex].Trim();
             var rightText = query[(andIndex + 5)..].Trim();
             if (!IsBooleanOperand(leftText, insideParens) || !IsBooleanOperand(rightText, insideParens)) return false;
-            bool result = EvaluateQuery(leftText, env) && EvaluateQuery(rightText, env);
+            bool result = EvaluateParsedQuery(leftText, env) && EvaluateParsedQuery(rightText, env);
             return negate ? !result : result;
         }
 
@@ -235,9 +258,13 @@ public static class MediaQueryEvaluator
 
     private static int FindRangeOperator(string s)
     {
+        int depth = 0;
         for (int i = 0; i < s.Length; i++)
         {
-            if (s[i] == '<' || s[i] == '>')
+            char c = s[i];
+            if (c == '(') depth++;
+            else if (c == ')' && depth > 0) depth--;
+            else if (depth == 0 && (c == '<' || c == '>'))
                 return i;
         }
         return -1;
@@ -306,11 +333,14 @@ public static class MediaQueryEvaluator
 
     /// <summary>Cuts a range expression into words and comparison operators. An operator is one
     /// token, '&lt;=' and '&gt;=' included: spacing the two characters apart would read '400px
-    /// &lt;= width' as three comparisons and lose the query.</summary>
+    /// &lt;= width' as three comparisons and lose the query. A math function is one word, however
+    /// many spaces it carries inside it, so '(400px &lt;= width &lt;= calc(1000px / 2))' is still
+    /// the three words the chained range needs.</summary>
     private static List<string> TokenizeRange(string text)
     {
         var tokens = new List<string>();
         var word = new StringBuilder();
+        int depth = 0;
         for (int i = 0; i < text.Length; i++)
         {
             char c = text[i];
@@ -321,11 +351,16 @@ public static class MediaQueryEvaluator
                 if (i + 1 < text.Length && text[i + 1] == '=') { op += "="; i++; }
                 tokens.Add(op);
             }
-            else if (char.IsWhiteSpace(c))
+            else if (char.IsWhiteSpace(c) && depth == 0)
             {
                 if (word.Length > 0) { tokens.Add(word.ToString()); word.Clear(); }
             }
-            else word.Append(c);
+            else
+            {
+                if (c == '(') depth++;
+                else if (c == ')' && depth > 0) depth--;
+                word.Append(c);
+            }
         }
         if (word.Length > 0) tokens.Add(word.ToString());
         return tokens;
@@ -336,11 +371,17 @@ public static class MediaQueryEvaluator
     private static bool IsGreater(string op) => op is ">" or ">=";
 
     /// <summary>A media feature name never begins with a digit, and a value of a measurable
-    /// feature always does — which is how the two sides of a chained range tell apart.</summary>
-    private static bool LooksLikeValue(string token) =>
-        token.Length > 0
-        && (char.IsAsciiDigit(token[0])
-            || (token.Length > 1 && (token[0] == '.' || token[0] == '-' || token[0] == '+') && char.IsAsciiDigit(token[1])));
+    /// feature always does — which is how the two sides of a chained range tell apart. A math
+    /// function is a value too, so '(400px &lt;= width &lt;= calc(1000px / 2))' is a chained range
+    /// and matches a 445px viewport (measured).</summary>
+    private static bool LooksLikeValue(string token)
+    {
+        if (token.Length == 0) return false;
+        int open = token.IndexOf('(');
+        if (open > 0 && token[^1] == ')' && MediaFeatureValue.IsMathFunctionName(token[..open])) return true;
+        return char.IsAsciiDigit(token[0])
+            || (token.Length > 1 && (token[0] == '.' || token[0] == '-' || token[0] == '+') && char.IsAsciiDigit(token[1]));
+    }
 
     /// <summary>A feature with no value: '(hover)', '(color)', '(device-width)'. A keyword feature
     /// is false only when its value is the falsy keyword — the first one its definition lists,
@@ -480,8 +521,7 @@ public static class MediaQueryEvaluator
                 return false;
             case "resolution":
             {
-                double res = ParseResolution(value);
-                if (res < 0) return false;
+                if (!TryParseResolution(value, env, out var res)) return false;
                 return CompareDouble(env.ResolutionDppx, op, res);
             }
             // 'min-resolution' / 'max-resolution' are the same measurement as 'resolution' with
@@ -489,9 +529,11 @@ public static class MediaQueryEvaluator
             // engine answers all three (measured at a device pixel ratio of 1: '(min-resolution:
             // 37dpcm)' matches, '(min-resolution: 39dpcm)' does not — 37dpcm is 0.979dppx).
             case "min-resolution":
-                return ComparePrefixedDouble(env.ResolutionDppx, op, ParseResolution(value), atLeast: true);
+                return TryParseResolution(value, env, out var minRes)
+                    && ComparePrefixedDouble(env.ResolutionDppx, op, minRes, atLeast: true);
             case "max-resolution":
-                return ComparePrefixedDouble(env.ResolutionDppx, op, ParseResolution(value), atLeast: false);
+                return TryParseResolution(value, env, out var maxRes)
+                    && ComparePrefixedDouble(env.ResolutionDppx, op, maxRes, atLeast: false);
             // 'color' counts the bits per colour component, not per pixel: an ordinary 24-bit
             // display answers 8, so '(color: 8)' matches and '(color: 24)' does not (measured).
             case "color":
@@ -577,17 +619,20 @@ public static class MediaQueryEvaluator
             // The vendor spellings of the device pixel ratio measure exactly what 'resolution'
             // does, and they are what most stylesheets in the wild ask for. The plain
             // 'device-pixel-ratio' and 'dpr' are not media features at all and stay unknown, which
-            // is how a reference engine answers them (measured false).
+            // is how a reference engine answers them (measured false). What they take, though, is a
+            // <number> and not a <resolution>: '(-webkit-min-device-pixel-ratio: 1)' matches while
+            // the same feature with '1dppx' does not (measured).
             case "-webkit-device-pixel-ratio":
             {
-                double webkitRes = ParseResolution(value);
-                if (webkitRes < 0) return false;
+                if (!TryParseNumber(value, env, out var webkitRes)) return false;
                 return CompareDouble(env.ResolutionDppx, op, webkitRes);
             }
             case "-webkit-min-device-pixel-ratio":
-                return ComparePrefixedDouble(env.ResolutionDppx, op, ParseResolution(value), atLeast: true);
+                return TryParseNumber(value, env, out var webkitMin)
+                    && ComparePrefixedDouble(env.ResolutionDppx, op, webkitMin, atLeast: true);
             case "-webkit-max-device-pixel-ratio":
-                return ComparePrefixedDouble(env.ResolutionDppx, op, ParseResolution(value), atLeast: false);
+                return TryParseNumber(value, env, out var webkitMax)
+                    && ComparePrefixedDouble(env.ResolutionDppx, op, webkitMax, atLeast: false);
             case "display-mode":
                 if (op != "=") return false;
                 return env.DisplayMode.Equals(value, StringComparison.OrdinalIgnoreCase);
@@ -601,26 +646,40 @@ public static class MediaQueryEvaluator
         }
     }
 
+    /// <summary>How far a media-query length may miss its threshold and still count as reaching
+    /// it. A viewport is a whole number of CSS pixels while a threshold is an arbitrary real, so a
+    /// comparison at the boundary is decided by the representation rather than by the question; a
+    /// reference engine therefore reads a threshold as met when the measurement is within one
+    /// sixty-fourth of a pixel of it (measured: at a 445px viewport '(min-width: 445.015px)'
+    /// matches and '(min-width: 445.02px)' does not, and '(width: 445.01px)' matches while
+    /// '(width: 445.02px)' does not — which brackets the tolerance to 1/64 = 0.015625). The strict
+    /// operators are not fuzzed, because they are already correct: '(width > 444.999px)' is true
+    /// and '(width > 445px)' is false. A resolution is not fuzzed at all (measured:
+    /// '(min-resolution: 1.001dppx)' does not match a device ratio of exactly one).</summary>
+    private const float LengthTolerance = 1f / 64f;
+
     private static bool CompareLength(float actual, string op, float target)
     {
         if (float.IsNaN(target)) return false;
         return op switch
         {
-            ">=" => actual >= target,
-            "<=" => actual <= target,
+            ">=" => actual >= target - LengthTolerance,
+            "<=" => actual <= target + LengthTolerance,
             ">" => actual > target,
             "<" => actual < target,
-            _ => Math.Abs(actual - target) < 0.01f
+            _ => Math.Abs(actual - target) < LengthTolerance
         };
     }
 
     /// <summary>A 'min-'/'max-' prefixed length feature. The prefix IS the comparison, so the
     /// feature takes no operator of its own and '(min-width: &lt;= 400px)' is not a query at all
-    /// — it matches nothing whatever the viewport is (CSS Media Queries 4 §4.4; measured).</summary>
+    /// — it matches nothing whatever the viewport is (CSS Media Queries 4 §4.4; measured). The
+    /// threshold is met within <see cref="LengthTolerance"/> of it, the same way an unprefixed
+    /// comparison is (measured: '(max-width: 444.999px)' matches a 445px viewport).</summary>
     private static bool ComparePrefixedLength(float actual, string op, float threshold, bool atLeast)
     {
         if (float.IsNaN(threshold) || op != "=") return false;
-        return atLeast ? actual >= threshold : actual <= threshold;
+        return atLeast ? actual >= threshold - LengthTolerance : actual <= threshold + LengthTolerance;
     }
 
     /// <summary>The same for a prefixed double-valued feature; a negative reading is
@@ -664,26 +723,27 @@ public static class MediaQueryEvaluator
     /// sets 'html { font-size: … }' to, so the basis is 16px and not 30px or 10px). The absolute
     /// and viewport units come from the same parser a property on the page uses, so a feature
     /// cannot price a centimetre, a 'q' or a 'PX' differently from a 'width'. A percentage is
-    /// not a &lt;length&gt; here at all: '(max-width: 50%)' never matches (measured).</summary>
+    /// not a &lt;length&gt; here at all: '(max-width: 50%)' never matches (measured). The value may
+    /// also be a math function over lengths, which is evaluated against the same environment
+    /// (measured: '(min-width: calc(100px * 4 + 45px))' matches a 445px viewport), but it may not
+    /// be a sum written outside one: '446px - 2px' is not a &lt;length&gt;.</summary>
     private static float ParseLength(string value, MediaQueryEnvironment env)
-    {
-        const float initialFontSize = Acrux.Core.Dom.Length.FontSizeMedium;
-        var text = value.Trim();
-        if (text.EndsWith("%", StringComparison.Ordinal)) return float.NaN;
-        // A comparison operator inside the 'length' means the range splitter handed over the
-        // tail of a malformed query — 'width >= 400px <= 900px' is not a query, and the
-        // property-side parser is lenient enough to read a number out of '400px <= 900px'.
-        if (text.IndexOf('<') >= 0 || text.IndexOf('>') >= 0) return float.NaN;
-        if (!Acrux.Core.Dom.Length.IsLength(text)) return float.NaN;
-        // No element's font may leak in from the cascade pass that is evaluating the rule.
-        using var _scope = Acrux.Core.Dom.FontUnitContext.Use(null);
-        float px = Acrux.Core.Dom.Length.Parse(text)
-            .ToPixels(initialFontSize, initialFontSize, env.ViewportWidth, env.ViewportHeight);
-        return float.IsNaN(px) ? float.NaN : px;
-    }
+        => MediaFeatureValue.TryLength(value, env, out var pixels) ? (float)pixels : float.NaN;
 
-    private static float ParseFloat(string s) =>
-        float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : float.NaN;
+    /// <summary>A media feature resolution in dots per CSS pixel, which — like the length above it
+    /// — has to be one dimension or one math function over them. The features defined on a
+    /// resolution are defined on a <em>dimension</em>, so the unitless '1' that the vendor
+    /// spellings of the same measurement take is not a value for them (measured:
+    /// '(min-resolution: 1)' matches nothing while '(min-resolution: 1dppx)' matches at one).</summary>
+    private static bool TryParseResolution(string value, MediaQueryEnvironment env, out double dppx)
+        => MediaFeatureValue.TryResolution(value, env, out dppx);
+
+    /// <summary>The number the vendor spellings of the device pixel ratio take. A resolution is not
+    /// a number for them either way (measured: '(-webkit-min-device-pixel-ratio: 1)' matches at a
+    /// device pixel ratio of one and '…: 1dppx)' does not), which is why they do not share
+    /// <see cref="TryParseResolution"/> despite measuring the same thing.</summary>
+    private static bool TryParseNumber(string value, MediaQueryEnvironment env, out double number)
+        => MediaFeatureValue.TryNumber(value, env, out number);
 
     private static bool TryParseInt(string s, out int v) =>
         int.TryParse(s.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out v);
@@ -691,6 +751,11 @@ public static class MediaQueryEvaluator
     private static bool TryParseRatio(string value, out double ratio)
     {
         ratio = 0;
+        // A &lt;ratio&gt; is two number tokens, and no part of it may be a math function. The
+        // reference engine parses 'calc(1 / 2)' well enough to print it back folded and then
+        // answers 'false' for the query at any viewport (measured), because the comparison wants
+        // the tokens rather than the value they would have stood for.
+        if (value.Contains('(') || value.Contains(')')) return false;
         var parts = value.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         // Both sides are read as doubles. A ratio is compared for equality against a viewport
         // that is itself a quotient, and a float's 7 digits are not enough for that: '445/1600'
@@ -710,26 +775,6 @@ public static class MediaQueryEvaluator
             return true;
         }
         return false;
-    }
-
-    private static double ParseResolution(string value)
-    {
-        value = value.Trim();
-        if (value.EndsWith("dppx", StringComparison.OrdinalIgnoreCase))
-            return ParseFloat(value[..^4]);
-        if (value.EndsWith("dpi", StringComparison.OrdinalIgnoreCase))
-            return ParseFloat(value[..^3]) / 96.0;
-        // Dots per centimetre become dots per inch by the centimetre's own px length, taken
-        // from the shared unit table rather than from a rounded copy of it (CSS Values 3 §6.6).
-        if (value.EndsWith("dpcm", StringComparison.OrdinalIgnoreCase))
-        {
-            Acrux.Core.Dom.Length.TryAbsoluteUnitPixels("cm", out var pixelsPerCm);
-            return ParseFloat(value[..^4]) / pixelsPerCm;
-        }
-        if (value.EndsWith("x", StringComparison.OrdinalIgnoreCase) && value.Length > 1)
-            return ParseFloat(value[..^1]);
-        var f = ParseFloat(value);
-        return float.IsNaN(f) ? -1 : f;
     }
 }
 

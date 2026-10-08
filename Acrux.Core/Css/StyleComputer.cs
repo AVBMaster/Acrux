@@ -28,6 +28,14 @@ public class StyleComputer
         public Stylesheet Legacy = null!;
         public Element? Owner;
         public string? OwnerText;
+        /// <summary>The <c>media</c> attribute the sheet's own media list was last seeded from,
+        /// kept so that an attribute the page has not touched does not overwrite a list the page
+        /// wrote through <c>sheet.media</c>.</summary>
+        public string? OwnerMedia;
+        /// <summary>The value <c>Element.MediaAttributeWrites</c> had at that seeding. A sheet
+        /// re-reads its medium on every write of the attribute, including one that leaves the same
+        /// text in it, which the text alone cannot tell from a page that never touched it.</summary>
+        public int OwnerMediaWrites;
     }
 
     /// <summary>The UA sheet as token rules, for read-only inspection (DevTools matched
@@ -65,15 +73,30 @@ public class StyleComputer
             _uaSheet = modern;
         else
         {
-            _authorSheets.Add(new AuthorSheet
+            var sheet = new AuthorSheet
             {
                 Contents = modern,
                 Legacy = stylesheet,
                 Owner = owner,
                 OwnerText = owner?.TextContent,
-            });
+            };
+            SeedMedia(sheet);
+            _authorSheets.Add(sheet);
             if (owner != null) owner.AssociatedStyleSheet = modern;
         }
+    }
+
+    /// <summary>Seeding a sheet's media list from its element's attribute (HTML §4.8.6): the
+    /// attribute is the list's first and only outside source, and the text the cascade compares is
+    /// the one the serialiser prints. The write count is remembered with it so that a later sync
+    /// tells an attribute the page touched from one it did not.</summary>
+    private static void SeedMedia(AuthorSheet sheet)
+    {
+        var element = sheet.Owner;
+        if (element == null) return;
+        sheet.OwnerMedia = element.GetAttribute("media");
+        sheet.OwnerMediaWrites = element.MediaAttributeWrites;
+        sheet.Contents.MediaText = Acrux.Core.Css.MediaFeatureValue.Canonicalize(sheet.OwnerMedia);
     }
 
     /// <param name="resolutionDppx">The device pixel ratio the page is being rasterised at. It
@@ -155,16 +178,27 @@ public class StyleComputer
                 // (measured), and 'document.styleSheets' counts it.
                 var contents = parsed?.ModernContents ?? new StyleSheetContents();
                 if (parsed != null) _stylesheets.Add(parsed);
-                _authorSheets.Add(new AuthorSheet
+                var added = new AuthorSheet
                 {
                     Contents = contents,
                     Legacy = parsed ?? new Stylesheet(),
                     Owner = element,
                     OwnerText = text,
-                });
+                };
+                SeedMedia(added);
+                _authorSheets.Add(added);
                 element.AssociatedStyleSheet = contents;
                 continue;
             }
+
+            // A 'media' attribute the page wrote re-seeds the sheet's own list — every write of
+            // it does, even one that leaves the same text, because the attribute is what the list
+            // mirrors. One the page has not written does not, which is what lets a list it changed
+            // through 'sheet.media' outlive the recompute that changed it (HTML §4.8.6).
+            var media = element.GetAttribute("media");
+            if (element.MediaAttributeWrites != existing.OwnerMediaWrites
+                || !string.Equals(existing.OwnerMedia, media, StringComparison.Ordinal))
+                SeedMedia(existing);
 
             if (string.Equals(existing.OwnerText, text, StringComparison.Ordinal)) continue;
             var reparsed = ParseStyleElement(text);
@@ -175,9 +209,16 @@ public class StyleComputer
             existing.OwnerText = text;
             // The cascade reads the sheet object it was handed at parse time, so a re-parse
             // has to replace it in place: the element keeps pointing at the same list the
-            // resolver walks, and 'element.sheet' never becomes a stale second copy.
+            // resolver walks, and 'element.sheet' never becomes a stale second copy. The
+            // script-facing view moves over with it for the same reason — the page holds one
+            // sheet object across a rewrite of the text.
+            var previousView = existing.Contents.CssomView;
             existing.Contents = reparsed.ModernContents ?? new StyleSheetContents();
+            existing.Contents.CssomView ??= previousView;
             element.AssociatedStyleSheet = existing.Contents;
+            // Replacing the sheet replaces its list too, which is what the reference engine does
+            // with a 'text' rewrite: the attribute is read again and the used value is its own.
+            SeedMedia(existing);
         }
 
         foreach (var stale in _authorSheets.Where(s => s.Owner != null && !inDocument.Contains(s.Owner)).ToList())

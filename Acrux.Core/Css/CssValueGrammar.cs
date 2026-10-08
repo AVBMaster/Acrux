@@ -119,8 +119,88 @@ public static class CssValueGrammar
             => static text => ShorthandExpander.IsBackgroundPositionAxisValue(text, horizontal: true),
         CssPropertyId.BackgroundPositionY
             => static text => ShorthandExpander.IsBackgroundPositionAxisValue(text, horizontal: false),
+        // CSS Paged Media 4 §3.4, as the reference engine reads it: the size of a page is one named
+        // paper, one or two lengths, or 'auto' — and a direction keyword beside a named paper. Two
+        // papers, a percentage, a quoted name and a direction written on 'auto' are no size
+        // (measured: '@page { size: B5 JIS-B4 }' and '@page { size: 50% }' both read back empty).
+        CssPropertyId.Size
+            => static text => CssPageSizeValue.TryCanonicalize(text, out _),
+        // CSS UI 4 §9: a cursor is a list of addresses, each with its hot spot, and one keyword to
+        // fall back on. The keyword has to come last and there has to be one — 'cursor: url(a.png)
+        // 4 6' names no cursor at all, and one coordinate of a hot spot is not a hot spot
+        // (measured; 'url(a.png) 4 6, pointer' and 'url(a.png), pointer' both are).
+        CssPropertyId.Cursor
+            => static text => CssCursorValue.IsValid(text),
+        // CSS Fonts 4 §11.1: a family list is a list of names, and a name is a quoted string or the
+        // sequence of identifiers a reference engine joins into one. The number that is nobody's
+        // name makes no declaration (measured: '#a { font-family: 3 }' reads back an empty rule,
+        // while 'font-family: My Font' and 'font-family: serif, "My Font"' both read back their
+        // list with the multi-word name quoted).
+        CssPropertyId.FontFamily => IsFamilyNameList,
+        // An <image> is an address, a gradient or one of the image functions; 'local()' names a
+        // font on the user's machine and is none of them. A list that carries one is not an image
+        // list and the whole declaration goes with it, in the longhand and in the shorthand alike
+        // (measured: 'background-image: url(a.png), local(x)', 'mask-image: local(x)' and
+        // 'background: local(x)' all read back an empty rule).
+        CssPropertyId.BackgroundImage or CssPropertyId.MaskImage
+            or CssPropertyId.Background or CssPropertyId.Mask
+            => static text => !NamesAFontLocal(text),
         _ => null,
     };
+
+    /// <summary>A family list: one name per comma, each name a quoted string or the identifiers
+    /// that stand for one family. A component that is a number, a dimension or an empty slot is not
+    /// a name, and the declaration that carries one names no font.</summary>
+    private static bool IsFamilyNameList(string text)
+    {
+        if (ContainsAnyStructural(text)) return true;
+        foreach (var item in text.Split(','))
+        {
+            var trimmed = item.Trim();
+            if (trimmed.Length == 0) return false;
+            if (trimmed[0] is '"' or '\'') continue;   // a string's characters are data, not syntax
+            foreach (var word in SplitWords(trimmed))
+                if (!IsFamilyIdentifier(word)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>One family name written as identifiers: it does not begin with a digit and every
+    /// character of it is a name character.</summary>
+    private static bool IsFamilyIdentifier(string text)
+    {
+        if (text.Length == 0 || char.IsAsciiDigit(text[0])) return false;
+        foreach (var c in text)
+            if (!char.IsLetter(c) && !char.IsAsciiDigit(c) && c is not ('-' or '_') && c <= '\u007F')
+                return false;
+        return true;
+    }
+
+    /// <summary>Whether the value calls 'local()' — a font on the user's machine, which no
+    /// &lt;image&gt; grammar has a place for. The search skips the characters inside a quoted
+    /// string, where they are an address rather than a function call.</summary>
+    private static bool NamesAFontLocal(string text)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c is '"' or '\'')
+            {
+                i++;
+                while (i < text.Length)
+                {
+                    if (text[i] == '\\' && i + 1 < text.Length) { i += 2; continue; }
+                    if (text[i] == c) break;
+                    i++;
+                }
+                continue;
+            }
+            if ((c is 'L' or 'l') && i + 6 <= text.Length &&
+                string.Compare(text, i, "local(", 0, 6, StringComparison.OrdinalIgnoreCase) == 0)
+                return true;
+        }
+        return false;
+    }
 
     private static bool TextIsValid(string text, Func<string, bool> grammar)
     {

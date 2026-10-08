@@ -1,0 +1,472 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 254 — the media-query grammar, media lists and sheet media</title>
+<!--
+  A media query is a GRAMMAR (CSS Media Queries 4 §4), and until now this engine read a query it
+  could not parse as a query about an unknown feature — which let 'print screen' apply to the page
+  and let '123' print itself back to a script. Batch 254 closes that: a text the grammar does not
+  read is the one query the grammar makes of an absent medium, 'not all', in EVERY channel, and it
+  matches nothing. Every rule below was measured in a reference engine (Edge, 445x481 viewport at
+  dpr 1) through three channels at once — a <style>'s media list, an '@media' rule's
+  conditionText and 'matchMedia().media' — and the three always answered the same text, so this
+  page drives one table and reads it three ways.
+
+  WHAT THE GRAMMAR ACCEPTS, and what a reference engine therefore prints (measured):
+   * a media TYPE is joined to what follows by 'and' and by nothing else, and the word comes before
+     the first group: 'screen and (min-width: 5px)' and 'screen and (g) and (g)' are queries, while
+     'print (min-width: 100px)' (no 'and'), 'print and', 'all and', 'screen and (g) and',
+     'screen 123', 'print screen' and 'screen and (g) and print' are not;
+   * inside one group-list the joiner is 'and' OR 'or' and is not mixed at one level:
+     '(g) and (g)' and '(g) or (g)' are queries, '(g) and (g) or (g)' and '(g) or (g) and (g)' are
+     not, and a media TYPE never appears as a joiner's operand, so '(g) and print' and
+     '(g) or print' are not either;
+   * 'not' may lead the whole query, in front of a media type ('not screen and (g)') or in front of
+     ONE group and nothing more ('not (g)', but 'not (g) and (g)' is not a query). 'only' may lead a
+     media type but never a group ('only screen' is, 'only (g)' is not). Inside the type production
+     a group may be negated — 'screen and not (g)' is a query — while inside a group-list it may not
+     ('(g) and not (g)' is not);
+   * a media type the engine cannot read as a name is kept whole and never completed:
+     'bogus((((', 'a(b)' and 'unknown-feature(min-width: 1px)' read back exactly as written and
+     match nothing. A number, a hash, a URL, a string or a bare keyword cannot start a query at all;
+   * a parenthesis the page left off is CLOSED, not dropped (measured: '(min-width: 100px' reads
+     '(min-width: 100px)', '((min-width: 1px)' reads '((min-width: 1px))' and
+     'screen and (min-width: 446px' reads 'screen and (min-width: 446px)'). One extra parenthesis is
+     not closed at all — 'screen and (min-width: 1px))' is no query;
+   * that closing is the MEDIA LIST's doing, and a list is read from a 'media' attribute and from
+     'matchMedia'. An '@media' RULE is read by the sheet parser first (CSS Syntax 3 §5.2.1), and
+     there an unclosed parenthesis never reaches the media grammar at all: the '{' that was meant to
+     open the block sits inside the query, so the prelude stays open to the end of the sheet and the
+     rule is dropped — along with every rule written after it (measured: the same text gives
+     '(min-width: 100px)' through a list and no rule whatever through an '@media').
+   * an empty item of a list is the same 'not all' (', print' reads 'not all, print',
+     'print, screen,' reads 'print, screen, not all') while a list that is empty ALL THE WAY through
+     is no medium at all and reads '' with no items — which includes a medium that is only a comment
+     ('/*x*/' reads ''), because CSS Syntax 3 §4 throws comments away before anything is parsed.
+     A comment inside a query goes with the space it stood on ('screen /*c*/ and (min-width: 1px)'
+     reads 'screen and (min-width: 1px)');
+   * an empty group is a query and is false: '()', '(())', '(min-width:)' and 'screen and ()' all
+     read back as they are written and match nothing, and a feature the engine does not know inside
+     a group is kept and is false too ('(bogus: 1)') — CSS Media Queries 4 §11;
+   * an absent medium is the one that always applies: a sheet with media='', with media='/*x*/' or
+     with no attribute at all styles the page, an '@media' with an empty prelude styles it too
+     (measured: 'matchMedia("").matches' is true, 'media=""' reads '' with no items, and
+     '@media /*x*/ { … }' keeps a conditionText of its own which is the empty string, not 'not
+     all').
+
+  THE SAME GRAMMAR DECIDES WHETHER A SHEET APPLIES. A <style>'s or <link>'s own 'media' attribute is
+  the medium of the whole sheet (CSSOM §5.2.1, HTML §4.8.6), so a sheet written <style media='print'>
+  does not apply on a screen at all and a sheet whose medium is 'print screen' — no query — never
+  applies. '@media' inside the sheet is a second, narrower test and does not replace it. The sheet
+  re-reads the attribute on EVERY write, including a write of the text it already carried (measured:
+  writing mediaText and then setAttribute with the attribute's own text leaves the attribute's
+  medium in force).
+
+  A MediaList (CSSOM §5.2) is a live view of one of those texts: 'item(i)' answers null past the end
+  where 'list[i]' answers undefined, appending an empty or multi-query medium does nothing,
+  appending the word already in the list does nothing (it compares the CANONICAL text, so 'PRINT'
+  does not join a list holding 'print'), deleting removes EVERY item equal to it and throws a
+  NotFoundError when none is, and assigning 'mediaText' re-reads the whole list — duplicates and all,
+  since a list is a list and not a set. Writing the property itself goes through the IDL's
+  [PutForwards=mediaText], which is why 'rule.media = 123' stores 'not all' and 'rule.media = null'
+  stores the empty text. The ELEMENT attribute behind a sheet is a plain DOMString and is converted
+  the Web IDL way, so 'style.media = null' writes the attribute 'null' — a media type nobody knows —
+  and 'style.media = 123' writes '123', which the grammar refuses (all measured).
+
+  '@import' (CSSOM §5.3.11, Cascade 5 §6.1, Conditional 4 §4) carries four things: an address read
+  back exactly as the page wrote it (NOT resolved against the document), a layer — an unnamed
+  'layer' reads the empty string and a dotted 'layer(a.b)' reads 'a.b' as one name — a 'supports()'
+  condition, which is NOT part of the medium and reads back with the page's own spacing inside
+  ('supports( display :   flex )' reads 'display :   flex '), and finally the medium. Its cssText
+  prints the address in the 'url("")' form even when the page wrote a bare string, then the layer,
+  then the supports condition, then the CANONICAL medium.
+
+  Two documented divergences, neither of them a conformance question: a property the rule does not
+  carry answers null where the reference engine answers undefined ('href' on a style rule,
+  'conditionText' on an '@import'), and the wrapper objects report 'constructor.name' as 'Object'
+  rather than 'CSSImportRule' or 'MediaList'.
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: rgb(255,255,255); }
+  #report div { white-space: pre; font: 10px Consolas, monospace; color: rgb(0,0,0); }
+  #stage { margin: 10px 0 0 10px; width: 420px; display: flex; flex-wrap: wrap; }
+  .bar { width: 40px; height: 14px; margin: 0 2px 2px 0; background: rgb(255,255,255);
+         outline: 1px dotted rgb(68,68,68); }
+  #report { margin: 8px 0 0 6px; }
+</style>
+<!-- Sheet-level media: a whole sheet is switched off by the medium on the element. -->
+<style media="print screen" id="m1">#g11 { background: rgb(255,128,128) }</style>
+<style media="screen and (min-width: 444px)" id="m2">#g12 { background: rgb(255,128,128) }</style>
+<style media="/*x*/" id="m3">#g13 { background: rgb(255,128,128) }</style>
+<style media="bogus((((" id="m4">#g14 { background: rgb(255,128,128) }</style>
+<style media="" id="m5">#g15 { background: rgb(255,128,128) }</style>
+<style media="print" id="m6">@media screen { #g16 { background: rgb(255,128,128) } }</style>
+</head><body>
+<div id="stage">
+  <div class="bar" id="g1"></div><div class="bar" id="g2"></div><div class="bar" id="g3"></div>
+  <div class="bar" id="g4"></div><div class="bar" id="g5"></div><div class="bar" id="g6"></div>
+  <div class="bar" id="g7"></div><div class="bar" id="g8"></div><div class="bar" id="g9"></div>
+  <div class="bar" id="g10"></div><div class="bar" id="g11"></div><div class="bar" id="g12"></div>
+  <div class="bar" id="g13"></div><div class="bar" id="g14"></div><div class="bar" id="g15"></div>
+  <div class="bar" id="g16"></div><div class="bar" id="g17"></div>
+</div>
+<div id="report"></div>
+<script>
+const out = [];
+const row = (name, got, want) => out.push(
+  `${name}=${JSON.stringify(got)} want=${JSON.stringify(want)} ok=${String(got) === String(want)}`);
+const yn = b => (b ? "T" : "F");
+const J = v => { try { return JSON.stringify(v); } catch (e) { return "ERR"; } };
+const iw = window.innerWidth, ih = window.innerHeight;
+const FILL = "rgb(255, 128, 128)";
+const WHITE = "rgb(255, 255, 255)";
+const fill_of = id => getComputedStyle(document.getElementById(id)).backgroundColor;
+const T = true, F = false;
+
+// [name, the query as written, the text all three channels print, its items, whether it matches].
+const G = [
+  ["01", '(min-width: 100px) and (bogus: 1)', '(min-width: 100px) and (bogus: 1)', 1, F],
+  ["02", '(bogus: 1)', '(bogus: 1)', 1, F],
+  ["03", 'bogus((((', 'bogus((((', 1, F, 'dropped'],
+  ["04", 'screen and ()', 'screen and ()', 1, F],
+  ["05", '()', '()', 1, F],
+  ["06", '(())', '(())', 1, F],
+  ["07", '(min-width:)', '(min-width:)', 1, F],
+  ["08", '(min-width: 100px', '(min-width: 100px)', 1, iw >= 100, 'dropped'],
+  ["09", 'screen and (min-width: 446px', 'screen and (min-width: 446px)', 1, F, 'dropped'],
+  ["10", '(min-width: calc(446px - 2px))', '(min-width: calc(444px))', 1, T],
+  ["11", 'print screen', 'not all', 1, F],
+  ["12", '123', 'not all', 1, F],
+  ["13", 'not all', 'not all', 1, F],
+  ["14", 'a(b)', 'a(b)', 1, F],
+  ["15", 'unknown-feature(min-width: 1px)', 'unknown-feature(min-width: 1px)', 1, F],
+  ["16", 'screen, 123', 'screen, not all', 2, T],
+  ["17", 'not (min-width: 1px)', 'not (min-width: 1px)', 1, F],
+  ["18", 'not (min-width: 900px)', 'not (min-width: 900px)', 1, T],
+  ["19", 'screen and not (min-width: 900px)', 'screen and not (min-width: 900px)', 1, T],
+  ["20", 'aural', 'aural', 1, F],
+  ["21", 'http://x', 'not all', 1, F],
+  ["22", '/*x*/', '', 0, T],
+  ["23", 'screen /*c*/ and (min-width: 1px)', 'screen and (min-width: 1px)', 1, T],
+  ["24", '(min-width: 1px) and not (max-width: 2px)', 'not all', 1, F],
+  ["25", 'screen and (min-width: 5px)', 'screen and (min-width: 5px)', 1, T],
+  ["26", 'not (min-width: 1px) and (max-width: 2px)', 'not all', 1, F],
+  ["27", 'only (min-width: 1px)', 'not all', 1, F],
+  ["28", 'only screen', 'only screen', 1, T],
+  ["29", 'not screen and (min-width: 1px)', 'not screen and (min-width: 1px)', 1, F],
+  ["30", '(min-width: 1px) and print', 'not all', 1, F],
+  ["31", '(min-width: 1px) or print', 'not all', 1, F],
+  ["32", '(min-width: 1px) or (max-width: 2px)', '(min-width: 1px) or (max-width: 2px)', 1, T],
+  ["33", '(min-width: 900px) or (max-width: 2px)', '(min-width: 900px) or (max-width: 2px)', 1, F],
+  ["34", 'screen and (min-width: 1px) or (max-width: 2px)', 'not all', 1, F],
+  ["35", '(min-width: 1px) and (max-width: 900px) or (height: 1px)', 'not all', 1, F],
+  ["36", 'screen and and (min-width: 1px)', 'not all', 1, F],
+  ["37", 'screen and (min-width: 1px))', 'not all', 1, F],
+  ["38", '((min-width: 1px)', '((min-width: 1px))', 1, T, 'dropped'],
+  ["39", 'screen and ((min-width: 1px)', 'screen and ((min-width: 1px))', 1, T, 'dropped'],
+  ["40", 'print, screen,', 'print, screen, not all', 3, T],
+  ["41", ', print', 'not all, print', 2, F],
+  ["42", '#bad', 'not all', 1, F],
+  ["43", 'not', 'not all', 1, F],
+  ["44", 'not not', 'not all', 1, F],
+  ["45", 'and print', 'not all', 1, F],
+  ["46", 'screen 123', 'not all', 1, F],
+  ["47", 'all and', 'not all', 1, F],
+  ["48", 'print or screen', 'not all', 1, F],
+  ["49", 'screen and (min-width: 1px) and', 'not all', 1, F],
+  ["50", 'print (min-width: 100px)', 'not all', 1, F],
+  ["51", 'NOT ALL', 'not all', 1, F],
+  ["52", '   ', '', 0, T],
+  ["53", 'screen, /*c*/ print', 'screen, print', 2, T],
+  ["54", 'print, bogus((((', 'print, bogus((((', 2, F, 'dropped'],
+  ["55", 'screen and (min-width: 1px) and (max-width: 900px)',
+          'screen and (min-width: 1px) and (max-width: 900px)', 1, T],
+];
+for (const [n, q, wantText, wantLen, wantMatches, wantRule = wantText] of G) {
+  // Channel one: the medium of a whole sheet, read through its media list.
+  const st = document.createElement('style');
+  st.setAttribute('media', q);
+  st.textContent = '#q { color: red }';
+  document.head.appendChild(st);
+  const list = st.sheet.media;
+  const items = [];
+  for (let k = 0; k < list.length; k++) items.push(list.item(k));
+  row('g' + n + '_list', list.mediaText, wantText);
+  row('g' + n + '_len', list.length, wantLen);
+  row('g' + n + '_items', J(items), J(wantLen ? wantText.split(', ') : []));
+  st.remove();
+  // Channel two: an '@media' condition, read through the rule's conditionText.
+  const st2 = document.createElement('style');
+  st2.textContent = '@media ' + q + ' { #q { color: red } }';
+  document.head.appendChild(st2);
+  const rule = st2.sheet.cssRules.length ? st2.sheet.cssRules[0] : null;
+  row('g' + n + '_cond', rule ? rule.conditionText : 'dropped', wantRule);
+  row('g' + n + '_ruleMedia', rule ? rule.media.mediaText : 'dropped', wantRule);
+  st2.remove();
+  // Channel three: 'matchMedia', which answers the same text and a match against this device.
+  const mql = matchMedia(q);
+  row('g' + n + '_mql', mql.media, wantText);
+  row('g' + n + '_match', yn(mql.matches), yn(wantMatches));
+}
+
+// The prelude of an '@media' rule is read by the sheet parser, and a parenthesis the page left open
+// is not a query that ends at the block — it is a block that never left the query (CSS Syntax 3
+// §5.2.1). The rule goes, and so does everything written after it, because the parser was still
+// inside the query when the sheet ended. Closing the parenthesis leaves both rules standing.
+const swallow = document.createElement('style');
+swallow.textContent = '@media (min-width: 1px { #q { color: red } } #r { color: red }' +
+                      '@media screen { #s { color: red } }';
+document.head.appendChild(swallow);
+row('r01_unclosedSwallowsSheet', [swallow.sheet.cssRules.length,
+      swallow.sheet.cssRules.length ? 'kept' : 'dropped'].join('|'), '0|dropped');
+swallow.remove();
+const closed = document.createElement('style');
+closed.textContent = '@media (min-width: 1px) { #q { color: red } } #r { color: red }' +
+                     '@media screen { #s { color: red } }';
+document.head.appendChild(closed);
+row('r02_closedKeepsSheet', [closed.sheet.cssRules.length,
+      closed.sheet.cssRules[1].selectorText, closed.sheet.cssRules[2].conditionText].join('|'),
+      '3|#r|screen');
+closed.remove();
+
+// A group rule needs a block. A ';' where the block should be — or the '}' of the rule the
+// '@media' was nested in — ends the attempt, the at-rule is dropped, and the sheet carries on
+// after it (CSS Conditional 3 §3.1, CSS Syntax 3 §5.2.1).
+const stmt = (text) => {
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const parts = [r.length];
+  // 'type' and the two texts, not 'constructor.name': the wrapper objects do not carry the
+  // reference engine's class names (a documented divergence), and 'conditionText' on a rule that
+  // has none is null here where it is undefined there, so '!= null' is the test both agree on.
+  for (let k = 0; k < r.length; k++)
+    parts.push(r[k].type + '[' + (r[k].conditionText != null ? '@' + r[k].conditionText
+                                                              : r[k].selectorText) + ']');
+  st.remove();
+  return parts.join(' ');
+};
+row('a01_mediaSemicolon', stmt('@media screen; #a { color: red }'), '1 1[#a]');
+row('a02_nestedSemicolon', stmt('.x { @media screen; } #b { color: red }'), '2 1[.x] 1[#b]');
+row('a03_nestedBrace', stmt('.x { @media screen } #c { color: red }'), '2 1[.x] 1[#c]');
+row('a04_supportsSemicolon', stmt('@supports (display: flex); #d { color: red }'), '1 1[#d]');
+row('a05_containerSemicolon', stmt('@container (min-width: 1px); #g { color: red }'), '1 1[#g]');
+row('a06_mediaNoBlockEof', stmt('@media screen'), '0');
+row('a07_mediaBlockKept', stmt('@media screen { #h { color: red } }'), '1 4[@screen]');
+
+// The media list as a LIST (CSSOM §5.2). Every step below was measured through the same object.
+const ml = (() => {
+  const st = document.createElement('style');
+  st.setAttribute('media', 'print');
+  st.textContent = '#q { color: red }';
+  document.head.appendChild(st);
+  return st.sheet.media;
+})();
+row('m01_item', [ml.item(0), ml.item(1), ml.item(9)].map(String).join('|'), 'print|null|null');
+row('m02_index', [ml[0], typeof ml[9]].join('|'), 'print|undefined');
+row('m03_appendEmpty', (ml.appendMedium(''), ml.mediaText), 'print');
+row('m04_appendNull', (ml.appendMedium(null), ml.mediaText), 'print, null');
+row('m05_appendMulti', (ml.appendMedium('aural, embossed'), ml.mediaText), 'print, null');
+row('m06_appendDup', (ml.appendMedium('PRINT'), ml.mediaText), 'print, null');
+row('m07_appendCanon', (ml.mediaText = 'screen', ml.appendMedium('(MIN-WIDTH: 50PX)'), ml.mediaText),
+    'screen, (min-width: 50px)');
+row('m08_deleteEmpty', (ml.deleteMedium(''), ml.mediaText), 'screen, (min-width: 50px)');
+row('m09_deleteCanon', (ml.deleteMedium('(min-width:50px)'), ml.mediaText), 'screen');
+row('m10_deleteMissing', (() => { try { ml.deleteMedium('nothing'); return 'silent'; }
+                               catch (e) { return e.name; } })(), 'NotFoundError');
+row('m11_deleteAll', (ml.mediaText = 'print, print, screen', ml.deleteMedium('print'), ml.mediaText),
+    'screen');
+row('m12_textSetterDup', (ml.mediaText = 'screen, print, print', [ml.mediaText, ml.length].join('|')),
+    'screen, print, print|3');
+row('m13_textSetterBlank', (ml.mediaText = '   ', [ml.mediaText, ml.length].join('|')), '|0');
+row('m14_textSetterCommas', (ml.mediaText = ',,screen,,', [ml.mediaText, ml.length].join('|')),
+    'not all, not all, screen, not all, not all|5');
+row('m15_coercion', [String(ml), '' + ml, `${ml}`, ml.toString()].join('|'),
+    Array(4).fill('not all, not all, screen, not all, not all').join('|'));
+const stId = document.createElement('style');
+stId.setAttribute('media', 'screen');
+stId.textContent = '#q { color: red }';
+document.head.appendChild(stId);
+row('m16_identity', [stId.sheet === stId.sheet, stId.sheet.media === stId.sheet.media,
+  document.styleSheets[document.styleSheets.length - 1] === stId.sheet].join(','), 'true,true,true');
+row('m17_live', (() => { const l = stId.sheet.media; stId.setAttribute('media', 'print');
+  return [l.mediaText, l.length].join('|'); })(), 'print|1');
+stId.remove();
+
+// The sheet's own medium: writing it every way a page can, and the cascade reading it back.
+const mk = document.createElement('div');
+mk.id = 't1';
+document.body.appendChild(mk);
+const c_of = () => getComputedStyle(mk).color;
+const s1 = document.createElement('style');
+s1.setAttribute('media', 'print');
+s1.textContent = '#t1 { color: rgb(1, 1, 1) }';
+document.head.appendChild(s1);
+row('s01_printSheet', [s1.media, s1.sheet.media.mediaText, s1.sheet.media.length, c_of()].join('|'),
+    'print|print|1|rgb(0, 0, 0)');
+s1.sheet.media.mediaText = 'screen';
+row('s02_mediaTextWrite', [s1.sheet.media.mediaText, s1.getAttribute('media'), c_of()].join('|'),
+    'screen|print|rgb(1, 1, 1)');
+s1.setAttribute('media', 'print');
+row('s03_attrRewrite', [s1.sheet.media.mediaText, c_of()].join('|'), 'print|rgb(0, 0, 0)');
+s1.setAttribute('media', 'print');
+row('s04_attrSame', [s1.sheet.media.mediaText, c_of()].join('|'), 'print|rgb(0, 0, 0)');
+s1.removeAttribute('media');
+row('s05_attrRemoved', [s1.media, s1.sheet.media.mediaText, s1.sheet.media.length, c_of()].join('|'),
+    '||0|rgb(1, 1, 1)');
+s1.setAttribute('media', '');
+row('s06_attrEmpty', [s1.sheet.media.mediaText, s1.sheet.media.length, c_of()].join('|'),
+    '|0|rgb(1, 1, 1)');
+s1.media = 'print';
+row('s07_idlSet', [s1.getAttribute('media'), s1.sheet.media.mediaText, c_of()].join('|'),
+    'print|print|rgb(0, 0, 0)');
+s1.media = '';
+row('s08_idlEmpty', [s1.hasAttribute('media'), s1.getAttribute('media'), s1.media,
+                     s1.sheet.media.mediaText, c_of()].join('|'), 'true||||rgb(1, 1, 1)');
+s1.media = null;
+row('s09_idlNull', [s1.getAttribute('media'), s1.sheet.media.mediaText, s1.sheet.media.length,
+                    c_of()].join('|'), 'null|null|1|rgb(0, 0, 0)');
+s1.media = 123;
+row('s10_idlNumber', [s1.getAttribute('media'), s1.sheet.media.mediaText, c_of()].join('|'),
+    '123|not all|rgb(0, 0, 0)');
+s1.media = 'print screen';
+row('s11_idlBadGrammar', [s1.sheet.media.mediaText, c_of()].join('|'), 'not all|rgb(0, 0, 0)');
+s1.media = 'screen and (min-width: 5px)';
+row('s12_idlGoodGrammar', [s1.sheet.media.mediaText, c_of()].join('|'),
+    'screen and (min-width: 5px)|rgb(1, 1, 1)');
+// A sheet's own medium gates everything inside it, an '@media' included, so the inner rule about
+// a screen never reaches the page from a print sheet — and putting the sheet's medium right lets it
+// through, because the inner query is then the only test left. 's1' has to go first: its own rule
+// for #t1 would otherwise be the last word whatever this sheet said.
+s1.remove();
+const s2 = document.createElement('style');
+s2.setAttribute('media', 'print');
+s2.textContent = '@media screen { #t1 { color: rgb(2, 2, 2) } }';
+document.head.appendChild(s2);
+row('s13_innerAtMedia', c_of(), 'rgb(0, 0, 0)');
+s2.media = 'screen';
+row('s14_innerAtMediaAdmitted', [s2.sheet.media.mediaText, c_of()].join('|'),
+    'screen|rgb(2, 2, 2)');
+s2.remove(); mk.remove();
+
+// PutForwards on the rule and the sheet (CSSOM §5.2, Conditional 3 §4.1).
+const pStyle = document.createElement('style');
+pStyle.textContent = '@media print { #p1 { color: rgb(3, 3, 3) } }' +
+                     '@media screen { #p1 { color: rgb(4, 4, 4) } }';
+document.head.appendChild(pStyle);
+const pd = document.createElement('div');
+pd.id = 'p1';
+document.body.appendChild(pd);
+const pRule = pStyle.sheet.cssRules[0];
+const pOther = pStyle.sheet.cssRules[1];
+row('p01_before', [String(pRule.media), pRule.media.mediaText, pRule.type].join('|'), 'print|print|4');
+pRule.media = 'screen';
+row('p02_written', [pRule.conditionText, pRule.media.mediaText, getComputedStyle(pd).color].join('|'),
+    'screen|screen|rgb(4, 4, 4)');
+pRule.media = 123;
+row('p03_number', [pRule.media.mediaText, pRule.media.length].join('|'), 'not all|1');
+pRule.media = null;
+row('p04_null', [pRule.media.mediaText, pRule.media.length].join('|'), '|0');
+pRule.media = pOther.media;
+row('p05_listAssigned', [pRule.conditionText, pRule.media.mediaText].join('|'), 'screen|screen');
+const pSheet = document.createElement('style');
+pSheet.setAttribute('media', 'print');
+pSheet.textContent = '#p2 { color: rgb(5, 5, 5) }';
+document.head.appendChild(pSheet);
+const p2 = document.createElement('div');
+p2.id = 'p2';
+document.body.appendChild(p2);
+pSheet.sheet.media = 'screen';
+row('p06_sheetPutForwards', [pSheet.sheet.media.mediaText, getComputedStyle(p2).color].join('|'),
+    'screen|rgb(5, 5, 5)');
+pSheet.remove(); pStyle.remove(); pd.remove(); p2.remove();
+
+// The '@import' surface (CSSOM §5.3.11, Cascade 5 §6.1, Conditional 4 §4).
+const importSheet = document.createElement('style');
+importSheet.textContent =
+  '@import url(a.css) layer(one) print screen;' +
+  ' @import url(b.css) supports(display: flex);' +
+  ' @import url(c.css) layer;' +
+  ' @import url(d.css) PRINT, Print;' +
+  ' @import url(e.css) (min-width: calc(446px - 2px));' +
+  ' @import "f.css" print;' +
+  ' @import url(g.css) layer(a.b) supports(selector(:hover)) screen;' +
+  ' @import url(h.css) supports( display :   flex ) print;' +
+  ' #k { color: red }';
+document.head.appendChild(importSheet);
+const imported = importSheet.sheet.cssRules;
+row('i00_count', imported.length, 9);
+const wantImport = [
+  ['@import url("a.css") layer(one) not all;', 'a.css', 'one', null, 'not all', 1],
+  ['@import url("b.css") supports(display: flex);', 'b.css', null, 'display: flex', '', 0],
+  ['@import url("c.css") layer;', 'c.css', '', null, '', 0],
+  ['@import url("d.css") print, print;', 'd.css', null, null, 'print, print', 2],
+  ['@import url("e.css") (min-width: calc(444px));', 'e.css', null, null,
+   '(min-width: calc(444px))', 1],
+  ['@import url("f.css") print;', 'f.css', null, null, 'print', 1],
+  ['@import url("g.css") layer(a.b) supports(selector(:hover)) screen;', 'g.css', 'a.b',
+   'selector(:hover)', 'screen', 1],
+  ['@import url("h.css") supports(display :   flex ) print;', 'h.css', null, 'display :   flex ',
+   'print', 1],
+];
+for (let k = 0; k < wantImport.length; k++) {
+  const r = imported[k], w = wantImport[k], tag = 'i0' + (k + 1);
+  row(tag + '_type', r.type, 3);
+  row(tag + '_css', r.cssText, w[0]);
+  row(tag + '_href', r.href, w[1]);
+  row(tag + '_layer', r.layerName, w[2]);
+  row(tag + '_supports', r.supportsText, w[3]);
+  row(tag + '_media', [r.media.mediaText, r.media.length].join('|'), w[4] + '|' + w[5]);
+}
+// A property the rule does not carry. 'href == null' is the test rather than the printed value
+// because the two engines spell absence differently — the reference engine gives 'undefined', this
+// one 'null' (a documented wrapper divergence, see the header) — and the rule itself has to read
+// the same either way.
+row('i09_plain', [imported[8].type, imported[8].cssText].join('|'), '1|#k { color: red; }');
+row('i09b_hrefAbsent', String(imported[8].href == null), 'true');
+importSheet.remove();
+
+// The paint: a sheet the grammar refuses cannot fill its bar, and a query that matches must. One
+// sheet per bar, for the reason given above: a query whose parenthesis stays open takes the rules
+// after it down with it, so shared sheets would tell the story of their position in the sheet and
+// not of their own query.
+const PAINT = [
+  ['g1',  '(min-width: calc(446px - 2px))'],
+  ['g2',  'print or (min-width: 1px)'],
+  ['g3',  '(bogus: 1) and (min-width: 1px)'],
+  ['g4',  'screen and ()'],
+  ['g5',  'screen and (min-width: 444px'],
+  ['g6',  'not (min-width: 900px)'],
+  ['g7',  '(min-width: 1px) or (max-width: 2px)'],
+  ['g8',  '(min-width: 1px) and not (max-width: 2px)'],
+  ['g9',  'only screen'],
+  ['g10', 'aural'],
+  ['g17', '/*x*/'],
+];
+for (const [id, q] of PAINT) {
+  const st = document.createElement('style');
+  st.textContent = '@media ' + q + ' { #' + id + ' { background: ' + FILL + ' } }';
+  document.head.appendChild(st);
+}
+row('b01_math', fill_of('g1'), FILL);
+row('b02_orType', fill_of('g2'), WHITE);
+row('b03_unknownFeature', fill_of('g3'), WHITE);
+row('b04_emptyGroup', fill_of('g4'), WHITE);
+row('b05_unclosedRuleDropped', fill_of('g5'), WHITE);
+row('b06_notGroup', fill_of('g6'), FILL);
+row('b07_orGroups', fill_of('g7'), FILL);
+row('b08_andNot', fill_of('g8'), WHITE);
+row('b09_only', fill_of('g9'), FILL);
+row('b10_aural', fill_of('g10'), WHITE);
+row('b11_sheetBadQuery', fill_of('g11'), WHITE);
+row('b12_sheetGoodQuery', fill_of('g12'), FILL);
+row('b13_sheetComment', fill_of('g13'), FILL);
+row('b14_sheetUnknownType', fill_of('g14'), WHITE);
+row('b15_sheetEmpty', fill_of('g15'), FILL);
+row('b16_sheetPrintAtScreen', fill_of('g16'), WHITE);
+row('b17_emptyAtMedia', fill_of('g17'), FILL);
+row('z00_failures', out.filter(l => l.endsWith('ok=false')).length, 0);
+out.push(`innerWidth=${iw} innerHeight=${ih} devicePixelRatio=${window.devicePixelRatio}`);
+document.getElementById('report').innerHTML =
+    out.map(l => '<div>' + l.replace(/</g, '&lt;') + '</div>').join('');
+</script></body></html>

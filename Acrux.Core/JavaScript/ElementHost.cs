@@ -95,9 +95,32 @@ public class ElementHost
             FlushForRead();
             return _element.AssociatedStyleSheet == null
                 ? null
-                : new CssStyleSheetHost(_element, WrapWithCache);
+                : CssStyleSheetHost.ViewOf(_element, WrapWithCache);
         }
     }
+
+    /// <summary>The legacy 'media' IDL of a style and link element (HTML §4.8.6, §4.2.5): it is
+    /// the attribute, so writing it changes which medium the sheet applies to on the next
+    /// recompute. Any other element has no such member in the reference engine, and answers
+    /// nothing here for it. The IDL type is a plain DOMString and not a nullable one, so a null
+    /// written to it is the WORD 'null' and not the absence of a value — which is a media type
+    /// nobody knows and therefore a sheet that never applies (measured:
+    /// <c>style.media = null</c> leaves the attribute reading 'null' while
+    /// <c>style.media = ''</c> leaves it present and empty, and an empty medium applies
+    /// everywhere).</summary>
+    public object? media
+    {
+        get => IsMediaElement(_element) ? _element.GetAttribute("media") ?? "" : null;
+        set
+        {
+            if (!IsMediaElement(_element)) return;
+            _element.SetAttribute("media", CssMediaListHost.DomString(value));
+        }
+    }
+
+    private static bool IsMediaElement(Element element) =>
+        string.Equals(element.TagName, "STYLE", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(element.TagName, "LINK", StringComparison.OrdinalIgnoreCase);
 
     public string? value
     {

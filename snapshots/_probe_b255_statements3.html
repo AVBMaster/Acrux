@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Probe b255 part 3 — namespace matching, bare layer in a medium</title>
+</head><body>
+<pre id="report" style="font:10px monospace;white-space:pre-wrap"></pre>
+<script>
+const out = [];
+const emit = (n, v) => out.push(n + '=' + String(v).replace(/\n/g, '\\n'));
+const f = v => (v === undefined ? 'U' : v === null ? 'N' : '"' + v + '"');
+
+// --- a declared default namespace and what it does to each selector shape.
+function paints(text, build) {
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const d = build(host);
+  const v = getComputedStyle(d).color;
+  st.remove(); host.remove();
+  return v;
+}
+const mkId = h => { const d = document.createElement('div'); d.id = 'xid'; d.setAttribute('data-x', '1'); h.appendChild(d); return d; };
+const XHTML = 'http://www.w3.org/1999/xhtml';
+emit('x01_nsXhtmlId',        paints('@namespace url(' + XHTML + '); #xid { color: rgb(1, 1, 1) }', mkId));
+emit('x02_nsXhtmlType',      paints('@namespace url(' + XHTML + '); div { color: rgb(2, 2, 2) }', mkId));
+emit('x03_nsXhtmlStar',      paints('@namespace url(' + XHTML + '); * { color: rgb(3, 3, 3) }', mkId));
+emit('x04_nsOtherId',        paints('@namespace url(other); #xid { color: rgb(4, 4, 4) }', mkId));
+emit('x05_nsOtherAnyStar',   paints('@namespace url(other); *|* { color: rgb(5, 5, 5) }', mkId));
+emit('x06_nsOtherBarStar',   paints('@namespace url(other); |* { color: rgb(6, 6, 6) }', mkId));
+emit('x07_nsNoneStar',       paints('* { color: rgb(7, 7, 7) }', mkId));
+emit('x08_nsOtherTypeStar',  paints('@namespace url(other); div|* { color: rgb(8, 8, 8) }', mkId));
+emit('x09_prefixedMatch',    paints('@namespace p url(' + XHTML + '); p|div { color: rgb(9, 9, 9) }', mkId));
+emit('x10_prefixedOther',    paints('@namespace p url(other); p|div { color: rgb(10, 10, 10) }', mkId));
+emit('x11_classAfterNs',     paints('@namespace url(other); .c { color: rgb(11, 11, 11) }',
+                                    h => { const d = document.createElement('div'); d.className = 'c'; h.appendChild(d); return d; }));
+emit('x12_sheetMediaPlusNs', paints('@namespace url(other); @media print { #xid { color: rgb(12, 12, 12) } }', mkId));
+
+// --- which bare words the medium of an '@import' keeps and which it refuses.
+function imp(text) {
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const parts = ['#' + r.length];
+  for (let k = 0; k < r.length; k++)
+    parts.push(f(r[k].layerName) + ' sup=' + f(r[k].supportsText) +
+               ' media=' + f(r[k].media && r[k].media.mediaText) + '#' + r[k].media.length);
+  st.remove();
+  return parts.join(' ~ ');
+}
+const CASES = [
+  ['w01', '@import url(a.css) supports(display: flex) bogus;'],
+  ['w02', '@import url(b.css) supports(display: flex) layer;'],
+  ['w03', '@import url(c.css) supports(display: flex) screen;'],
+  ['w04', '@import url(d.css) supports(display: flex) print;'],
+  ['w05', '@import url(e.css) supports(display: flex) aural;'],
+  ['w06', '@import url(f.css) supports(display: flex) only;'],
+  ['w07', '@import url(g.css) supports(display: flex) not;'],
+  ['w08', '@import url(h.css) supports(display: flex) and;'],
+  ['w09', '@import url(i.css) supports(display: flex) or;'],
+  ['w10', '@import url(j.css) supports(display: flex) layer();'],
+  ['w11', '@import url(k.css) layer supports(display: flex) bogus;'],
+  ['w12', '@import url(l.css) supports(display:flex) bogus(((('],
+  ['w13', '@import url(m.css) supports(selector(a)) screen;'],
+  ['w14', '@import url(n.css) supports(display: flex) screen print;'],
+  ['w15', '@import url(o.css) ;@import url(p2.css) ;'],
+];
+for (const [n, t] of CASES) emit(n, imp(t));
+
+document.getElementById('report').textContent = out.join('\n');
+</script></body></html>

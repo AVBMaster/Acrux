@@ -64,6 +64,33 @@ public enum CssPseudoType
     ScrollPrevButton
 }
 
+/// <summary>How the namespace part of a simple selector is settled once the sheet's '@namespace'
+/// declarations have been read. A selector written with no namespace part takes the sheet's default
+/// address; written with <c>*|</c> it takes any address; written with <c>|</c> or a prefix it takes
+/// the one it names — and a prefix the sheet never declared leaves the whole selector unable to
+/// match anything at all.</summary>
+public enum CssNamespaceRequirement
+{
+    /// <summary>No '@namespace' was read for the sheet, so nothing is decided about namespaces and
+    /// the selector is matched by name alone.</summary>
+    Unchecked,
+
+    /// <summary>Any namespace, written as <c>*|E</c>.</summary>
+    Any,
+
+    /// <summary>No namespace at all, written as <c>|E</c>. No element of an HTML document has one,
+    /// so such a selector matches nothing there (measured).</summary>
+    None,
+
+    /// <summary>Exactly the address in <see cref="CssSelector.NamespaceUri"/>: the one a declared
+    /// prefix names, or the sheet's default for a selector written bare.</summary>
+    Uri,
+
+    /// <summary>The selector names a prefix the sheet never declares, or puts a namespace on an
+    /// attribute — neither of which the reference engine lets match anything (measured both).</summary>
+    CannotMatch,
+}
+
 /// <summary>
 /// A single CSS simple selector, with optional chaining to form compound/complex selectors.
 /// Mirrors Blink's CSSSelector class.
@@ -81,6 +108,22 @@ public class CssSelector
 
     public string? Namespace { get; set; }
     public string? TagName { get; set; }
+
+    /// <summary>Which namespace the element the selector names has to live in, as the sheet's
+    /// '@namespace' declarations settle it. Left at <see cref="CssNamespaceRequirement.Unchecked"/>
+    /// for a selector that was never read as part of a sheet.</summary>
+    public CssNamespaceRequirement NamespaceRequirement { get; set; } = CssNamespaceRequirement.Unchecked;
+
+    /// <summary>The address to compare an element's own against, meaningful only when
+    /// <see cref="NamespaceRequirement"/> is <see cref="CssNamespaceRequirement.Uri"/>.</summary>
+    public string? NamespaceUri { get; set; }
+
+    /// <summary>Whether the any-namespace bar an element selector was written with has to be printed
+    /// back. The sheet's settle pass raises it when that sheet gives its bare selectors a default to
+    /// differ from, because dropping the bar there would name a different element (measured:
+    /// '@namespace url(other); *|div' reads 'the div written with its bar', while the same rule in a
+    /// sheet that declares nothing reads plain 'div').</summary>
+    public bool PrintsAnyNamespacePrefix { get; set; }
 
     public string? Argument { get; set; }
     public List<CssSelector>? SelectorList { get; set; }
@@ -189,21 +232,43 @@ public class CssSelector
         }
     }
 
-    public override string ToString()
+    public override string ToString() => SimpleText(hasCompanions: false);
+
+    /// <summary>The text this one simple selector prints, told whether the compound it sits in says
+    /// anything else as well. Two of the answers are inversions of each other (measured): a universal
+    /// that carries no namespace decision disappears from a compound that has another part —
+    /// <c>*[a]</c> reads <c>[a]</c> — while a prefix written in front of a type selector is kept for
+    /// <c>|*</c> and <c>q|*</c> and dropped for the any-namespace one, which reads as a bare <c>*</c>.
+    /// In front of an attribute it is the empty prefix that disappears: <c>[|a]</c> reads <c>[a]</c>,
+    /// <c>[*|a]</c> and <c>[q|a]</c> read as written.</summary>
+    public string SimpleText(bool hasCompanions)
     {
         if (MatchType == CssSelectorMatchType.PseudoClass && PseudoType == CssPseudoType.Not && SelectorList != null)
-            return $":not({string.Join(",", SelectorList.Select(s => s.ToString()))})";        if (MatchType == CssSelectorMatchType.PseudoClass && PseudoType == CssPseudoType.Is && SelectorList != null)
-            return $":is({string.Join(",", SelectorList.Select(s => s.ToString()))})";
+            return $":not({string.Join(", ", SelectorList.Select(s => s.ToComplexText()))})";
+        if (MatchType == CssSelectorMatchType.PseudoClass && PseudoType == CssPseudoType.Is && SelectorList != null)
+            return $":is({string.Join(", ", SelectorList.Select(s => s.ToComplexText()))})";
         if (MatchType == CssSelectorMatchType.PseudoClass && PseudoType == CssPseudoType.Where && SelectorList != null)
-            return $":where({string.Join(",", SelectorList.Select(s => s.ToString()))})";
+            return $":where({string.Join(", ", SelectorList.Select(s => s.ToComplexText()))})";
         if (MatchType == CssSelectorMatchType.PseudoClass && PseudoType == CssPseudoType.Has && SelectorList != null)
-            return $":has({string.Join(",", SelectorList.Select(s => s.ToString()))})";
+            return $":has({string.Join(", ", SelectorList.Select(s => s.ToComplexText()))})";
         if (MatchType == CssSelectorMatchType.Id && Value != null)
             return $"#{Value}";
         if (MatchType == CssSelectorMatchType.Class && Value != null)
             return $".{Value}";
         if (MatchType == CssSelectorMatchType.Tag)
-            return TagName ?? "*";
+        {
+            // An any-namespace prefix is never spelled on the way out, and a plain universal is
+            // spelled only when the compound has nothing else to say.
+            string prefix = Namespace switch
+            {
+                null => "",
+                "*" => PrintsAnyNamespacePrefix ? "*|" : "",
+                "" => "|",
+                var name => name + "|",
+            };
+            if (prefix.Length == 0 && TagName == "*" && hasCompanions) return "";
+            return prefix + (TagName ?? "*");
+        }
         if (MatchType == CssSelectorMatchType.PseudoClass)
             return $":{PseudoType.ToString().ToLowerInvariant()}({Argument})" is var s && Argument != null ? s : $":{PseudoType.ToString().ToLowerInvariant()}";
         if (MatchType == CssSelectorMatchType.PseudoElement)
@@ -225,7 +290,12 @@ public class CssSelector
                 _ => ""
             };
             string val = AttributeValue != null ? $"\"{AttributeValue}\"" : "";
-            return $"[{AttributeName}{op}{val}]";
+            string prefix = Namespace switch
+            {
+                null or "" => "",
+                var name => name + "|",
+            };
+            return $"[{prefix}{AttributeName}{op}{val}]";
         }
         return "?";
     }
@@ -245,26 +315,28 @@ public class CssSelector
 
         while (current != null)
         {
-            // Collect the whole compound: head ... tail via SubSelector links.
-            var compound = new System.Text.StringBuilder();
-            var cursor = current;
-            while (cursor != null)
+            // Collect the whole compound: head ... tail via SubSelector links. The members are
+            // counted before any of them is printed because a universal disappears when the
+            // compound has something else to say.
+            var members = new List<CssSelector>();
+            CssSelector cursor = current!;
+            members.Add(cursor);
+            // A simple selector carries the relation it is joined to the chain by, so the link from
+            // a member to the next one of the same compound is the one whose PARENT is still a plain
+            // sub-selector; the tail of a compound has had its own relation overwritten by the
+            // combinator that leads to the ancestor.
+            while (cursor.Relation == CssSelectorRelation.SubSelector && cursor.Next != null)
             {
-                string text = cursor.ToString();
-                if (text != "?")
-                    compound.Append(text);
-                if (cursor.Next != null && cursor.Next.Relation == CssSelectorRelation.SubSelector)
-                {
-                    cursor = cursor.Next;
-                }
-                else
-                {
-                    // The tail carries the combinator to the ancestor compound.
-                    combinators.Add(RelationToText(cursor.Relation));
-                    current = cursor.Next;
-                    break;
-                }
+                cursor = cursor.Next;
+                members.Add(cursor);
             }
+            var compound = new System.Text.StringBuilder();
+            foreach (var member in members)
+                compound.Append(member.SimpleText(members.Count > 1));
+
+            // The tail carries the combinator to the ancestor compound.
+            combinators.Add(RelationToText(cursor.Relation));
+            current = cursor.Next;
             compounds.Add(compound.ToString());
         }
 

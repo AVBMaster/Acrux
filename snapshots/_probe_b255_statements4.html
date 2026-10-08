@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Probe b255 part 4 — which '@supports' conditions the grammar takes</title>
+</head><body><pre id="report" style="font:10px monospace;white-space:pre-wrap"></pre>
+<script>
+const out = [];
+const emit = (n, v) => out.push(n + '=' + String(v).replace(/\n/g, '\\n'));
+const f = v => (v === undefined ? 'U' : v === null ? 'N' : '"' + v + '"');
+
+// One '@import' per case: the rule survives only if its 'supports()' condition is a condition the
+// grammar can read, so '#0' is the answer to 'is this text a supports condition?' and the printed
+// 'sup=' is the text the engine keeps for it.
+function imp(text) {
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const parts = ['#' + r.length];
+  for (let k = 0; k < r.length; k++)
+    parts.push(f(r[k].type) + ' ' + f(r[k].cssText) + ' sup=' + f(r[k].supportsText) +
+               ' media=' + f(r[k].media && r[k].media.mediaText) + '#' + r[k].media.length);
+  st.remove();
+  return parts.join(' ~ ');
+}
+
+const CONDITIONS = [
+  'color: red', 'COLOR: RED', 'color:red', ' color :  red ', 'color',
+  'bogus: 1', 'bogus', '--x: red', '--bogus', '-webkit-color: red',
+  'display: flex', 'display: bogus', 'display:', 'display: flex extra',
+  'width: bogus', 'width: calc(1px)', 'width: calc(bogus)',
+  'transition: all 1s', 'transition: bogus bogus',
+  'transform: bogus', 'background: url(x)', 'font-family: bogus',
+  'padding: 1px 2px', 'padding: 1px bogus', 'margin: auto',
+  'min-width: 100px', '(color)', '(color: red)', '((color))', '(bogus)',
+  '(display: flex) and (color)', '(display: flex) or (color)',
+  '(display: flex) and (color) or (width: 1px)',
+  '(display: flex) and (display: bogus)', '(display: bogus) and (color)',
+  '(display: flex) (color)', 'not (display: flex)', 'not(display: flex)',
+  'NOT (color)', 'not bogus', 'not', 'or (color)', 'and (color)',
+  '(display: flex) and', '(display: flex) or',
+  'selector(a)', 'selector(*)', 'selector(a)|b', 'selector(:hover)',
+  'selector(bogus syntax !!!)', 'var(--x): red', 'var(--x)', 'attr(data-x)',
+  'calc(1px)', 'url(x)', 'image-set(url(x) 1x)', 'calc(1px): red',
+  '(min-width: calc(1px + 2px))', '(444px)', '(1)', '()', '( )',
+  'selector(a) and (color)', 'selector(a) bogus', '(selector(a))',
+];
+// The name carries its index as well as a spelling of the condition: two conditions can collapse
+// onto the same 'a_b_c' text once every character is a '_', and a lost case reads as a passing one.
+let sIndex = 0;
+for (const c of CONDITIONS) emit('s' + (++sIndex < 10 ? '0' : '') + sIndex + '_' +
+                                 c.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 34),
+                                 imp('@import url(v.css) supports(' + c + ');'));
+
+// A '@supports' rule answers the same grammar question, and its prelude text is readable too.
+function rule(text) {
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const r = st.sheet.cssRules;
+  const parts = ['#' + r.length];
+  for (let k = 0; k < r.length; k++) parts.push(f(r[k].type) + ' ' + f(r[k].cssText));
+  st.remove();
+  return parts.join(' ~ ');
+}
+emit('r01', rule('@supports (display: flex) { #x { color: red } }'));
+emit('r02', rule('@supports bogus: 1 { #x { color: red } }'));
+emit('r03', rule('@supports selector(a) { #x { color: red } }'));
+emit('r04', rule('@supports (display: flex) { @media screen { #x { color: red } } }'));
+emit('r05', rule('@supports not (display: flex) { #x { color: red } }'));
+emit('r06', rule('@supports (color: red) and (bogus: 1) { #x { color: red } }'));
+
+document.getElementById('report').textContent = out.join('\n');
+</script></body></html>

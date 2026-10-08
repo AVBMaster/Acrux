@@ -363,6 +363,11 @@ public class StyleResolver
         int position = 0;
         foreach (var sheet in _authorSheets)
         {
+            // A sheet's own medium gates the whole thing before any rule in it is looked at
+            // (CSSOM §5.2.1, HTML §4.8.6 for the 'media' attribute behind it). '@media' inside
+            // the sheet is a second, narrower test and does not replace this one.
+            if (!MediaQueryEvaluator.Evaluate(sheet.MediaText, _viewportWidth, _viewportHeight, _colorScheme, _mediaEnv))
+                continue;
             foreach (var rule in sheet.ChildRules)
             {
                 if (rule is StyleRule styleRule)

@@ -46,14 +46,24 @@ public class JintEngineAdapter : IJavaScriptEngineAdapter, IDisposable
             options.Interop.ObjectConverters.Add(new SheetSequenceConverter());
             options.Interop.ClrExceptionErrorDecorator = (engine, error, ex) =>
             {
-                // Host errors carry their DOMException name at the front of the message
-                // ("IndexSizeError: …"); lift it onto error.name so a script that switches on
-                // the name sees what a browser would give it.
+                // A DOMException names itself; the older hosts that refuse through a plain CLR
+                // exception carry their DOMException name at the front of the message
+                // ("IndexSizeError: …"). Either way it has to be lifted onto error.name, so a
+                // script that switches on the name sees what a browser would give it.
                 var message = ex.Message ?? "";
-                int cut = message.IndexOf(": ", StringComparison.Ordinal);
-                if (cut <= 1 || cut > 24) return;
-                var name = message.Substring(0, cut);
-                if (!IsDomExceptionName(name)) return;
+                string? name;
+                if (ex is Acrux.Core.Dom.DOMException dom)
+                {
+                    name = dom.Name;
+                }
+                else
+                {
+                    int cut = message.IndexOf(": ", StringComparison.Ordinal);
+                    if (cut <= 1 || cut > 24) return;
+                    var head = message.Substring(0, cut);
+                    if (!IsDomExceptionName(head)) return;
+                    name = head;
+                }
                 error.FastSetProperty("name", new PropertyDescriptor(
                     JsValue.FromObject(engine, name),
                     PropertyFlag.ConfigurableEnumerableWritable));

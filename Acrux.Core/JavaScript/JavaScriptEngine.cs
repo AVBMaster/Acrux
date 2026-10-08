@@ -773,29 +773,14 @@ public class JavaScriptEngine : IDisposable
                 });
             }
             window.getComputedStyle = function (el) { return __wrapComputedStyle(document.getComputedStyle(el)); };
-            // 'MediaQueryList.media' is the query re-serialised rather than the text handed in:
-            // whitespace runs collapse to one space, parentheses sit tight against their content,
-            // a list separates with ', ', a comparison operator is spaced on both sides, a feature
-            // colon is followed by exactly one space, a ratio is written '1 / 2', a leading
-            // 'all and ' goes away, and the whole thing comes back in lowercase — every identifier
-            // in a media query is case-insensitive, so the canonical form has no capitals in it
-            // (measured: '(MIN-WIDTH: 400px)' reads as '(min-width: 400px)', 'SCREEN' as 'screen',
-            // '(width>=400px)' as '(width >= 400px)', '(min-aspect-ratio:1/2)' as
-            // '(min-aspect-ratio: 1 / 2)', 'all and (min-width: 1px)' as '(min-width: 1px)' and
-            // '(color-gamut:P3)' as '(color-gamut: p3)'). A query the grammar rejects is returned
-            // as it was written instead, which the engine does not detect here.
-            function __serializeMediaQuery(q) {
-                if (!q) return '';
-                var s = q.replace(/\s+/g, ' ').trim();
-                s = s.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
-                s = s.replace(/(<=|>=|<|>)/g, ' $1 ');
-                s = s.replace(/\s*,\s*/g, ', ');
-                s = s.replace(/([a-zA-Z0-9_-])\s*:\s*/g, '$1: ');
-                s = s.replace(/:\s*(\d*\.?\d+)\s*\/\s*(\d*\.?\d+)/g, ': $1 / $2');
-                s = s.replace(/\s+/g, ' ').trim();
-                s = s.replace(/^all\s+and\s+/i, '');
-                return s.toLowerCase();
-            }
+            // 'MediaQueryList.media' is the query re-serialised rather than the text handed in, and
+            // the engine does the whole of it (see mediaQuerySerialize): whitespace and casing are
+            // canonical, comparison operators and feature colons get their spacing, a leading
+            // 'all and ' goes away, and every math function that reduces to one absolute term comes
+            // back folded — the query 'min-width: CALC(100PX * 4 + 45PX)' reads as
+            // '(min-width: calc(445px))'. The same function answers 'CSSRule.conditionText' and
+            // 'CSSRule.media.mediaText', so the three spellings of one query cannot drift apart.
+            function __serializeMediaQuery(q) { return q ? __acrux.mediaQuerySerialize(q) : ''; }
             window.matchMedia = function(query) {
                 var q = String(query === undefined ? '' : query).trim();
                 // The same evaluator an @media rule is filtered through, so a script and a
@@ -1048,16 +1033,34 @@ public class AcruxBuiltins
     /// page can influence from a style sheet.</summary>
     public bool mediaQueryMatches(string query)
     {
+        var env = MediaEnvironment();
+        return Acrux.Core.Css.MediaQueryEvaluator.Evaluate(query ?? "", env.ViewportWidth, env.ViewportHeight,
+                                                            env.ColorScheme, env);
+    }
+
+    /// <summary>The string a MediaQueryList's 'media' property reads as, and the same one a '@media'
+    /// rule reads through 'conditionText' and 'media.mediaText'. A reference engine does not hand
+    /// back what the page typed: it canonicalises the spelling of the grammar, resolves every math
+    /// function that reduces to one absolute term and re-prints the numbers it keeps to the
+    /// precision it uses (measured: 'matchMedia("(min-width: calc(100px * 4 + 45px)")' reads as
+    /// '(min-width: calc(445px))' and '(min-width: 445.0px)' as '(min-width: 445px)'). See
+    /// <see cref="Acrux.Core.Css.MediaFeatureValue.Canonicalize"/>.</summary>
+    public string mediaQuerySerialize(string query)
+        => Acrux.Core.Css.MediaFeatureValue.Canonicalize(query, MediaEnvironment());
+
+    /// <summary>The viewport a query is answered against: the window's own size, its colour scheme
+    /// and its device pixel ratio, with the font units measured from the initial font because a
+    /// query is not attached to a box (CSS Media Queries 4 §6).</summary>
+    private Acrux.Core.Css.MediaQueryEnvironment MediaEnvironment()
+    {
         float w = innerWidth(), h = innerHeight();
-        string scheme = GetColorScheme?.Invoke() ?? "light";
-        var env = new Acrux.Core.Css.MediaQueryEnvironment
+        return new Acrux.Core.Css.MediaQueryEnvironment
         {
             ViewportWidth = w,
             ViewportHeight = h,
-            ColorScheme = scheme,
+            ColorScheme = GetColorScheme?.Invoke() ?? "light",
             ResolutionDppx = devicePixelRatio(),
         };
-        return Acrux.Core.Css.MediaQueryEvaluator.Evaluate(query ?? "", w, h, scheme, env);
     }
     public int scrollX() => GetScrollX?.Invoke() ?? 0;
     public int scrollY() => GetScrollY?.Invoke() ?? 0;

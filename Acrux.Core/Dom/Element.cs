@@ -36,6 +36,11 @@ public abstract class Element : Node
         var oldValue = Attributes.GetValueOrDefault(name);
         Attributes[name] = value;
         _classListCache = null;
+        if (name.Equals("media", StringComparison.OrdinalIgnoreCase))
+        {
+            MediaAttributeWrites++;
+            SyncSheetMedium();
+        }
 
         OnAttributeChanged(name, oldValue, value);
 
@@ -51,6 +56,11 @@ public abstract class Element : Node
         var oldValue = Attributes.GetValueOrDefault(name);
         Attributes.Remove(name);
         _classListCache = null;
+        if (name.Equals("media", StringComparison.OrdinalIgnoreCase))
+        {
+            MediaAttributeWrites++;
+            SyncSheetMedium();
+        }
 
         OnAttributeChanged(name, oldValue, null);
 
@@ -133,6 +143,29 @@ public abstract class Element : Node
 
     /// <summary>Whether the element's sheet is currently out of the cascade.</summary>
     public bool SheetDisabled => SheetDisabledState ?? HasAttribute("disabled");
+
+    /// <summary>Counts the writes this element's <c>media</c> attribute has taken, whatever the
+    /// text was before or after. A style or link sheet re-reads its medium on every one of them
+    /// — including a write of the very text it already carried — because the attribute is what
+    /// the sheet's own list mirrors (HTML §4.8.6), and a page that put the attribute back has to
+    /// lose a list another script changed through <c>sheet.media</c> (measured: writing
+    /// <c>mediaText</c> and then <c>setAttribute('media', …)</c> with the original value leaves
+    /// the attribute's medium in force).</summary>
+    public int MediaAttributeWrites { get; internal set; }
+
+    /// <summary>Bring the sheet this element owns back in line with its <c>media</c> attribute.
+    /// The list a script reads through <c>sheet.media</c> is the sheet's own, and the attribute is
+    /// what seeds it, so the two have to agree the moment the attribute is written and not only
+    /// once the next style pass has run (measured: <c>el.setAttribute('media', 'print')</c>
+    /// followed on the next line by <c>sheet.media.mediaText</c> answers 'print'). An element with
+    /// no sheet — anything that is not a style or a link, or one whose sheet has not been collected
+    /// yet — has nothing to bring round; the recompute seeds whatever sheet it finds.</summary>
+    private void SyncSheetMedium()
+    {
+        var sheet = AssociatedStyleSheet;
+        if (sheet == null) return;
+        sheet.MediaText = Acrux.Core.Css.MediaFeatureValue.Canonicalize(GetAttribute("media"));
+    }
 
     public Dictionary<string, string> Style { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string>? BeforeStyles { get; set; }

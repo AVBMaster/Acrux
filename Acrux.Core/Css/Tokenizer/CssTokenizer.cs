@@ -367,12 +367,40 @@ public class CssTokenizer
                 char next = Peek(1);
                 if (next != '\'' && next != '"')
                     return ConsumeUrlToken();
+                // A quoted address is still one url token, so the string is only the first half of
+                // it: 'url("a.png")' is an address, 'url('a'b.png)' is a bad-url token and the
+                // declaration that carried it (CSS Syntax 3 §4.3.3).
+                if (!QuotedUrlIsClosed())
+                    return ConsumeUrlToken();
             }
             Consume();
             _blockStack.Add(CssTokenType.RightParenthesisToken);
             return CssParserToken.CreateFunction(name);
         }
         return CssParserToken.CreateIdent(name);
+    }
+
+    /// <summary>Whether the '(' the cursor is on opens a url token whose quoted address closes
+    /// before the ')'. Nothing but whitespace may stand between the string and the parenthesis;
+    /// anything else is swept by the url token as a bad one.</summary>
+    private bool QuotedUrlIsClosed()
+    {
+        char quote = Peek(1);
+        int p = _pos + 2;
+        while (p < _input.Length)
+        {
+            char c = _input[p];
+            if (c == '\n') return false;
+            if (c == '\\')
+            {
+                p += 2;
+                continue;
+            }
+            if (c == quote) { p++; break; }
+            p++;
+        }
+        while (p < _input.Length && IsWhitespace(_input[p])) p++;
+        return p < _input.Length && _input[p] == ')';
     }
 
     private CssParserToken ConsumeStringTokenUntil(char endChar)
@@ -500,26 +528,33 @@ public class CssTokenizer
         }
     }
 
+    /// <summary>CSS Syntax 3 §4.3.15: 'U+' and one to six hexadecimal digits, a run of '?' that
+    /// stands for the digits it does not name, or a '-' and the last digits of a second number. The
+    /// two numbers are what the range means and what a reference engine prints, so a wildcard is
+    /// read as the span it covers — 'U+??' is the range 0x00 to 0xFF and prints 'U+0-FF' (measured)
+    /// — and a range that names one codepoint prints that codepoint alone.</summary>
     private CssParserToken ConsumeUnicodeRange()
     {
         Consume();
+        Consume();
+
         string hex = "";
         while (hex.Length < 6 && IsHexDigit(Peek()))
             hex += Consume();
 
-        uint start = hex.Length > 0 ? uint.Parse(hex, NumberStyles.HexNumber) : 0;
-        uint end = start;
+        uint from = hex.Length > 0 ? uint.Parse(hex, NumberStyles.HexNumber) : 0;
+        uint to = from;
 
-        if (Peek() == '?' && hex.Length > 0)
+        if (Peek() == '?')
         {
             int wildcards = 0;
-            while (Peek() == '?')
+            while (wildcards < 6 - hex.Length && Peek() == '?')
             {
                 Consume();
                 wildcards++;
             }
-            start = start & ~((1u << (wildcards * 4)) - 1);
-            end = start | ((1u << (wildcards * 4)) - 1);
+            from = from & ~((1u << (wildcards * 4)) - 1);
+            to = from | ((1u << (wildcards * 4)) - 1);
         }
         else if (Peek() == '-' && IsHexDigit(Peek(1)))
         {
@@ -528,10 +563,10 @@ public class CssTokenizer
             while (endHex.Length < 6 && IsHexDigit(Peek()))
                 endHex += Consume();
             if (endHex.Length > 0)
-                end = uint.Parse(endHex, NumberStyles.HexNumber);
+                to = uint.Parse(endHex, NumberStyles.HexNumber);
         }
 
-        return CssParserToken.CreateUnicodeRange(start, end);
+        return CssParserToken.CreateUnicodeRange(from, to);
     }
 
     private CssParserToken HyphenMinus()
@@ -568,15 +603,13 @@ public class CssTokenizer
 
     private CssParserToken LetterU()
     {
-        if (_unicodeRangesAllowed && Peek() == 'u' || _unicodeRangesAllowed && Peek() == 'U')
-        {
-            if (Peek(1) == '+')
-            {
-                char c3 = Peek(2);
-                if (IsHexDigit(c3) || c3 == '?')
-                    return ConsumeUnicodeRange();
-            }
-        }
+        // CSS Syntax 3 §4.3.14: only a stream that was told unicode ranges are allowed — which is
+        // a '@font-face' block and nothing else — reads 'U+41' as one token. Elsewhere the same
+        // characters are an ident and a number, and the '+' of a range that starts with a wildcard
+        // ('U+??') still makes it a range rather than an ident.
+        if (_unicodeRangesAllowed && (Peek() is 'u' or 'U') && Peek(1) == '+' &&
+            (IsHexDigit(Peek(2)) || Peek(2) == '?'))
+            return ConsumeUnicodeRange();
         return ConsumeIdentLikeToken();
     }
 

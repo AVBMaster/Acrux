@@ -1,3 +1,5 @@
+using System;
+
 namespace Acrux.Core.Css;
 
 /// <summary>
@@ -14,8 +16,9 @@ namespace Acrux.Core.Css;
 /// </para>
 /// <para>
 /// Only insignificant whitespace is touched, and nothing the property's type cannot carry. A
-/// quoted string and a <c>url()</c> are copied verbatim, because inside them the spaces and
-/// commas are data, not syntax; a value that carries a <c>var()</c> reference is left exactly
+/// quoted string is copied verbatim, because inside it the spaces and commas are data, not
+/// syntax; a <c>url()</c> keeps its own characters but gains the quotes a reference engine prints
+/// an address with. A value that carries a <c>var()</c> reference is left exactly
 /// as authored, since its tokens are somebody else's. A unitless <c>0</c> is the one character
 /// a reference engine rewrites rather than merely re-spaced: a length parser turns it into a
 /// length of zero pixels and the specified value then carries the unit, so
@@ -101,14 +104,16 @@ public static class CssValueText
                 int start = i;
                 while (i < value.Length && IsIdentPart(value[i])) i++;
                 var word = value.Substring(start, i - start);
-                if (word.Equals("url", StringComparison.OrdinalIgnoreCase)
-                    && i < value.Length && value[i] == '(')
+                if (IsQuotedArgument(word) && i < value.Length && value[i] == '(')
                 {
                     int end = MatchingParen(value, i);
                     if (end > i)
                     {
                         if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
-                        sb.Append(value, start, end - start + 1);
+                        // The name of the function is a keyword, so it prints in the one spelling
+                        // however the author cased it: 'URL( a.png )' is 'url("a.png")'.
+                        sb.Append(word.ToLowerInvariant()).Append('(')
+                          .Append(QuotedArgument(value, i + 1, end)).Append(')');
                         // The address is a component, so a component written straight after its
                         // closing parenthesis is separated from it in the printed form.
                         pendingSpace = true;
@@ -144,7 +149,153 @@ public static class CssValueText
             i++;
             afterSlash = false;
         }
-        return sb.ToString().TrimEnd();
+        var result = sb.ToString().TrimEnd();
+
+        // Two properties print their value as something other than the components they were
+        // written with, and both do it the same way in a style rule and in the descriptor of an
+        // at-rule (measured for each).
+        if (property != null)
+        {
+            if (property.Equals("font-family", StringComparison.OrdinalIgnoreCase))
+                result = FoldFamilyNames(result);
+            else if (property.Equals("font-feature-settings", StringComparison.OrdinalIgnoreCase))
+                result = ElideDefaultFeatureValues(result);
+        }
+        return result;
+    }
+
+    /// <summary>One family name as the reference engine prints it. A name that is a sequence of
+    /// identifiers is one string and is quoted — <c>font-family: My Font</c> reads back
+    /// <c>"My Font"</c> — and a name that is written as a string and could have been written as one
+    /// identifier loses its quotes: <c>font-family: "FFF"</c> reads back <c>FFF</c> (measured both,
+    /// in a style rule and in an '@font-face').</summary>
+    private static string FoldFamilyNames(string text)
+    {
+        var items = SplitTopLevelCommas(text);
+        for (int i = 0; i < items.Count; i++)
+        {
+            var item = items[i].Trim();
+            items[i] = item;
+            if (item.Length == 0) continue;
+            if (item.Length >= 2 && item[0] is '"' or '\'' && item[^1] == item[0])
+            {
+                var name = DecodeStringBody(item[1..^1]);
+                items[i] = IsBareIdentifier(name) ? name : AsDoubleQuoted(name);
+                continue;
+            }
+            var words = item.Split(new[] { ' ', '\t', '\n', '\r', '\f' },
+                StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length == 0) continue;
+            bool everyWordIsName = true;
+            foreach (var word in words)
+                if (!IsBareIdentifier(word)) { everyWordIsName = false; break; }
+            if (!everyWordIsName) continue;
+            // One identifier is the name itself; several are a name that no parser would find if it
+            // were not quoted, because it reads as two values.
+            items[i] = words.Length == 1 ? words[0] : AsDoubleQuoted(string.Join(" ", words));
+        }
+        return string.Join(", ", items);
+    }
+
+    /// <summary>The value a feature tag takes when nothing is written after it, so a tag written
+    /// with its default is printed without it: <c>"liga" 1</c> reads back <c>"liga"</c> while
+    /// <c>"liga" 0</c> and <c>"liga" 2</c> keep the number (measured, in a style rule and in an
+    /// '@font-face' alike).</summary>
+    private static string ElideDefaultFeatureValues(string text)
+    {
+        var items = SplitTopLevelCommas(text);
+        for (int i = 0; i < items.Count; i++)
+        {
+            var item = items[i].Trim();
+            items[i] = item;
+            if (item.Length == 0) continue;
+            // The tag is the string and the number is the only thing that may follow it.
+            int space = item.LastIndexOf(' ');
+            if (space <= 0 || item[(space + 1)..] != "1") continue;
+            var tag = item[..space].TrimEnd();
+            if (tag.Length >= 2 && tag[0] is '"' or '\'' && tag[^1] == tag[0]) items[i] = tag;
+        }
+        return string.Join(", ", items);
+    }
+
+    /// <summary>Split a list at its commas, ignoring the ones inside a quoted string or a
+    /// parenthesis.</summary>
+    private static List<string> SplitTopLevelCommas(string text)
+    {
+        var parts = new List<string>();
+        var current = new System.Text.StringBuilder();
+        int depth = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c is '"' or '\'')
+            {
+                int end = i;
+                while (end < text.Length)
+                {
+                    char q = text[end];
+                    end++;
+                    if (q == '\\' && end < text.Length) end++;
+                    else if (q == c) break;
+                }
+                current.Append(text, i, end - i);
+                i = end - 1;
+                continue;
+            }
+            if (c == '(') depth++;
+            else if (c == ')' && depth > 0) depth--;
+            if (c == ',' && depth == 0)
+            {
+                parts.Add(current.ToString());
+                current.Clear();
+                continue;
+            }
+            current.Append(c);
+        }
+        parts.Add(current.ToString());
+        return parts;
+    }
+
+    /// <summary>Whether the text is one identifier: what a family name may be printed as without
+    /// quotes, and what a string that begins with a digit or carries a space can never be.</summary>
+    private static bool IsBareIdentifier(string text)
+    {
+        if (text.Length == 0 || char.IsAsciiDigit(text[0])) return false;
+        foreach (char c in text)
+            if (!IsIdentPart(c)) return false;
+        return true;
+    }
+
+    /// <summary>The characters of a string token with its escapes undone.</summary>
+    private static string DecodeStringBody(string body)
+    {
+        var raw = new System.Text.StringBuilder(body.Length);
+        for (int i = 0; i < body.Length; i++)
+        {
+            char c = body[i];
+            if (c != '\\' || i + 1 >= body.Length)
+            {
+                raw.Append(c);
+                continue;
+            }
+            char next = body[++i];
+            if (next is '\\' or '"' or '\'') raw.Append(next);
+            else { raw.Append(c); raw.Append(next); }
+        }
+        return raw.ToString();
+    }
+
+    /// <summary>The text as a double-quoted string token.</summary>
+    private static string AsDoubleQuoted(string raw)
+    {
+        var printed = new System.Text.StringBuilder(raw.Length + 2).Append('"');
+        for (int i = 0; i < raw.Length; i++)
+        {
+            char c = raw[i];
+            if (c is '"' or '\\') printed.Append('\\');
+            printed.Append(c);
+        }
+        return printed.Append('"').ToString();
     }
 
     /// <summary>Copies the string token that starts at <paramref name="start"/> (quotes and
@@ -194,6 +345,52 @@ public static class CssValueText
             }
         }
         return -1;
+    }
+
+    /// <summary>The functions whose one argument is a string and is printed as one: an address
+    /// written <c>url(a.png)</c>, <c>URL( a.png )</c> or <c>url('a.png')</c> reads back
+    /// <c>url("a.png")</c> from the reference engine — the name in lower case, the argument in
+    /// double quotes, and the whitespace an unquoted address may stand around itself gone
+    /// (measured). The font source spells its family name and its format the same way, and an
+    /// empty address still prints its quotes: <c>url()</c> is a call that names nothing rather
+    /// than no call at all.</summary>
+    private static bool IsQuotedArgument(string word) =>
+        word.Equals("url", StringComparison.OrdinalIgnoreCase) ||
+        word.Equals("local", StringComparison.OrdinalIgnoreCase) ||
+        word.Equals("format", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The text between <paramref name="from"/> and <paramref name="to"/> re-written as a
+    /// double-quoted string. Its escapes are decoded first and re-encoded after, so a single-quoted
+    /// argument loses the escapes only its own quote needed and a bare one gains the escapes a
+    /// string requires.</summary>
+    private static string QuotedArgument(string text, int from, int to)
+    {
+        var inner = text.Substring(from, to - from).Trim();
+        bool quoted = inner.Length >= 2 && (inner[0] is '"' or '\'') && inner[^1] == inner[0];
+        var body = quoted ? inner[1..^1] : inner;
+
+        var raw = new System.Text.StringBuilder(body.Length);
+        for (int i = 0; i < body.Length; i++)
+        {
+            char c = body[i];
+            if (c != '\\' || i + 1 >= body.Length)
+            {
+                raw.Append(c);
+                continue;
+            }
+            char next = body[++i];
+            if (next is '\\' or '"' or '\'') raw.Append(next);
+            else { raw.Append(c); raw.Append(next); }
+        }
+
+        var printed = new System.Text.StringBuilder(raw.Length + 2).Append('"');
+        for (int i = 0; i < raw.Length; i++)
+        {
+            char c = raw[i];
+            if (c is '"' or '\\') printed.Append('\\');
+            printed.Append(c);
+        }
+        return printed.Append('"').ToString();
     }
 
     private static bool IsWhitespace(char c) => c is ' ' or '\t' or '\n' or '\r' or '\f';

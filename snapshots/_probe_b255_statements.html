@@ -1,0 +1,152 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Probe b255 — statement at-rules through the parser and the CSSOM</title>
+</head><body><pre id="report" style="font:10px monospace;white-space:pre-wrap"></pre>
+<script>
+const out = [];
+const emit = (name, value) => out.push(name + '=' + String(value).replace(/\n/g, '\\n'));
+// A rule record of one fixed shape, so the two engines cannot disagree about how many fields a
+// rule has: an absent value prints 'U' (undefined) or 'N' (null) and a present one prints its text.
+const f = v => (v === undefined ? 'U' : v === null ? 'N' : '"' + v + '"');
+function record(r) {
+  const media = (r.media === undefined || r.media === null) ? 'none'
+                : f(r.media.mediaText) + '#' + r.media.length;
+  return [f(r.type), f(r.cssText), 'href=' + f(r.href), 'ns=' + f(r.namespaceURI),
+          'prefix=' + f(r.prefix), 'layer=' + f(r.layerName), 'sup=' + f(r.supportsText),
+          'media=' + media, 'cond=' + f(r.conditionText), 'sel=' + f(r.selectorText),
+          'style=' + ((r.style === undefined || r.style === null) ? 'none' : '"' + r.style.cssText + '"')
+         ].join(' ');
+}
+function sheet(text) {
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const rules = st.sheet.cssRules;
+  const parts = ['#' + rules.length];
+  for (let k = 0; k < rules.length; k++) parts.push(record(rules[k]));
+  st.remove();
+  return parts.join(' ~ ');
+}
+
+const CASES = [
+  ['i01', '@import url(a.css);'],
+  ['i02', '@import "str.css" print;'],
+  ['i03', '@import url(c.css) layer;'],
+  ['i04', '@import url(b.css) layer(n1);'],
+  ['i05', '@import url(c.css) layer(a.b) print;'],
+  ['i06', '@import url(d.css) supports(display: flex);'],
+  ['i07', '@import url(e.css) supports(display: flex) screen;'],
+  ['i08', '@charset "UTF-8"; @import url(f.css);'],
+  ['i09', '@layer a; @import url(g.css); #x { color: red }'],
+  ['i10', '@media screen {} @import url(h.css);'],
+  ['i11', '@font-face { font-family: f } @import url(i.css);'],
+  ['i12', '@namespace url(n); @import url(j.css);'],
+  ['i13', '@import;'],
+  ['i14', '@import url();'],
+  ['i15', '@import url(k.css) #i { color: red } #j { color: green }'],
+  ['i16', '@import url(l.css), url(m.css);'],
+  ['i17', '@import url(o.css) screen, print;'],
+  ['i18', '@import url(p.css) 123;'],
+  ['i19', '@import url(q.css) not all;'],
+  ['i20', '@import url(r.css) PRINT;'],
+  ['i21', '@import url(s.css) bogus(((('],
+  ['i22', '@import url(t.css) (min-width: 1px'],
+  ['i23', '@media screen { @import url(u.css); #v { color: red } }'],
+  ['i24', '@import url(w.css) supports(display: bogus);'],
+  ['i25', '@import url(x2.css) layer(1);'],
+  ['i26', '@IMPORT url(y.css);'],
+  ['i27', '@import URL(z.css);'],
+  ['i28', '@import url(a2.css) layer;'],
+  ['i29', '@import url(a3.css) screen and (min-width: 1px);'],
+  ['i30', '@import url(a4.css) supports(display: flex) supports(color: red);'],
+  ['i31', '@import url(a5.css) supports((display: flex);'],
+  ['i32', '@layer base; @layer a, b; @import url(a6.css);'],
+  ['i33', '@import url(a7.css) ;'],
+  ['i34', '@import url("b1.css")'],
+  ['i35', '@import url(a8.css) layer(a.) ;'],
+  ['i36', '@import url(a9.css) layer(-a) ;'],
+  ['i37', '@import url(b0.css) supports(display:flex) layer;'],
+  ['n01', '@namespace url(n1.css); #x { color: red }'],
+  ['n02', '@namespace p url(n2.css);'],
+  ['n03', '@namespace "n3";'],
+  ['n04', '@namespace;'],
+  ['n05', '@namespace url();'],
+  ['n06', '#x {} @namespace url(n4.css);'],
+  ['n07', '@namespace p;'],
+  ['n08', '@namespace url(n5.css) extra;'],
+  ['n09', '@namespace url(n6.css); @namespace url(n7.css);'],
+  ['n10', '@namespace url(n8.css); @media screen {}'],
+  ['n11', '@media screen {} @namespace url(n9.css);'],
+  ['n12', '@import url(a8.css); @namespace url(n10.css);'],
+  ['n13', '@charset "UTF-8"; @namespace url(n11.css);'],
+  ['n14', '@NAMESPACE url(n12.css);'],
+  ['n15', '@media screen { @namespace url(n13.css); }'],
+  ['n16', '@namespace URL(n14.css);'],
+  ['n17', '@namespace url(n15.css) screen;'],
+  ['n18', '@layer a; @namespace url(n16.css);'],
+  ['n19', '@namespace url(n17.css) ;'],
+  ['n20', '@namespace url("n18.css");'],
+  ['n21', '@namespace @media screen{};'],
+  ['p01', '@page { margin: 1cm }'],
+  ['p02', '@page :left { margin: 2cm }'],
+  ['p03', '@page :right { }'],
+  ['p04', '@page first { }'],
+  ['p05', '@page :nth(2) { }'],
+  ['p06', '@page :blank { }'],
+  ['p07', '@page toc :first { }'],
+  ['p08', '@page :left, :right { }'],
+  ['p09', '@page :first { @top-center { content: "x" } }'],
+  ['p10', '@page { size: A4; margin: 1cm }'],
+  ['p11', '@page { size: 50% }'],
+  ['p12', '@page { marks: cross }'],
+  ['p13', '@page { bleed: 3px }'],
+  ['p14', '@page { border: 1px solid red }'],
+  ['p15', '@page :left:left { }'],
+  ['p16', '@page:right{ margin: 3px }'],
+  ['p17', '@page { color: red }'],
+  ['p18', '@page { } #after { color: red }'],
+  ['p19', '@page toc:right { }'],
+  ['p20', '@page :first { margin: 1cm } @page :left { margin: 2cm }'],
+  ['p21', '@page { size: landscape }'],
+  ['p22', '@page { size: inherit }'],
+  ['p23', '@page { @bottom-left { content: "z" } @bottom-left { content: "y" } }'],
+  ['p24', '@page { @bogus-corner { content: "z" } }'],
+  ['p25', '@page { margin: 1cm; @top-left { content: "a" } }'],
+  ['p26', '@media print { @page { margin: 1cm } }'],
+  ['p27', '@page :PAGE-BOTTOM-RIGHT-CORNER { }'],
+  ['p28', '@page { size: 20cm 30cm }'],
+  ['p29', '@page { background: red }'],
+  ['p30', '@page, @page :left { }'],
+  ['p31', '@page { }'],
+  ['p32', '@page :LEFT { margin: 1cm }'],
+  ['p33', '@page { margin: 1cm'],
+  ['p34', '@page toc { margin: 1cm }'],
+  ['z01', '@import url(c1.css); @import url(c2.css); #x { color: red }'],
+  ['z02', '#x { color: red } @import url(c3.css); @import url(c4.css);'],
+  ['z03', '@import url(c5.css) print screen;'],
+  ['z04', '@page { margin: 1cm } @import url(c6.css);'],
+  ['z05', '@page { margin: 1cm } @namespace url(n20.css);'],
+  ['z06', '@import url(c7.css) supports(bogus);'],
+  ['z07', '@import url(c8.css) and (min-width: 1px);'],
+  ['z08', '@layer a; @import url(c9.css) layer(b); @layer c;'],
+];
+for (const [name, text] of CASES) emit(name, sheet(text));
+
+function paints(text, id, prop) {
+  const div = document.createElement('div');
+  div.id = 'probe-' + id;
+  document.body.appendChild(div);
+  const st = document.createElement('style');
+  st.textContent = text;
+  document.head.appendChild(st);
+  const v = getComputedStyle(div)[prop];
+  st.remove(); div.remove();
+  return v;
+}
+emit('c01_mediaOnSheet', paints('@media screen { #probe-a { color: rgb(9, 9, 9) } }', 'a', 'color'));
+emit('c02_pageThenStyle', paints('@page { margin: 1cm } #probe-b { color: rgb(8, 8, 8) }', 'b', 'color'));
+emit('c03_namespaceId', paints('@namespace url(n.css); #probe-c { color: rgb(7, 7, 7) }', 'c', 'color'));
+emit('c04_namespaceType', paints('@namespace url(n.css); div#probe-d { color: rgb(6, 6, 6) }', 'd', 'color'));
+
+document.getElementById('report').textContent = out.join('\n');
+</script></body></html>
