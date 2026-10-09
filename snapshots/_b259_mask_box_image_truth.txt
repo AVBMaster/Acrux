@@ -1,0 +1,55 @@
+Reference-engine (Blink) answers for the '-webkit-mask-box-image' family, harvested
+2026-10-10 through evaluate_script: d.style.setProperty(name, value) on a div built by
+document.createElement, then style.cssText (the declarations the element kept) and
+style.getPropertyValue of the longhands. 'REFUSED' means cssText came back empty.
+
+The same probe is snapshots/_probe_b259_mask_box_image.html, which runs the identical
+list in this engine; the two outputs are the wants of section 3 of
+snapshots/css-standard-verify259-*.html.
+
+LONGHANDS
+mbi-source <linear-gradient(red,blue)> => mbi-source: linear-gradient(red, blue);
+mbi-source <url(a.png) none> => REFUSED
+mbi-source <url(a.png)> => mbi-source: url("a.png");
+mbi-source <none> => mbi-source: none;
+mbi-slice <2> => mbi-slice: 2;
+mbi-slice <2 fill> => mbi-slice: 2 fill;
+mbi-slice <fill 2> => mbi-slice: 2 fill;
+mbi-slice <1 2 3 4> => mbi-slice: 1 2 3 4;
+mbi-slice <2 30%> => mbi-slice: 2 30%;
+mbi-slice <-2> => REFUSED
+mbi-slice <fill> => REFUSED
+mbi-slice <3 fill 2> => REFUSED
+mbi-slice <2 2 2 2 fill fill> => REFUSED
+mbi-width <4px> => mbi-width: 4px;
+mbi-width <2> => mbi-width: 2;
+mbi-width <auto> => mbi-width: auto;
+mbi-width <2 3> => mbi-width: 2 3;
+mbi-width <4px auto> => mbi-width: 4px auto;
+mbi-width <40%> => mbi-width: 40%;
+mbi-width <none> => REFUSED
+mbi-outset <2px> => mbi-outset: 2px;
+mbi-outset <2> => mbi-outset: 2;
+mbi-outset <1px 2px 3px> => mbi-outset: 1px 2px 3px;
+mbi-outset <auto> => REFUSED
+mbi-repeat <round> => mbi-repeat: round;
+mbi-repeat <round stretch> => mbi-repeat: round stretch;
+mbi-repeat <repeat-x> => REFUSED
+
+SHORTHAND — always written as its five longhands, unset ones as 'initial', and
+getPropertyValue of the shorthand itself reads back the empty string.
+mbi <url(a.png) 3> => source url("a.png"); slice 3 fill; width initial; outset initial; repeat initial
+mbi <url(a.png) 3 / 4px> => source url("a.png"); slice 3 fill; width 4px; outset initial; repeat initial
+mbi <url(a.png) 3 / 4px / 2px> => source url("a.png"); slice 3 fill; width 4px; outset 2px; repeat initial
+mbi <url(a.png) 3 / 4px / 2px round> => ... outset 2px; repeat round
+mbi <url(a.png) 3 / 4px / 5px repeat space> => ... outset 5px; repeat repeat space
+mbi <url(a.png) 2 30% / 4px / 2px round> => slice 2 30% fill; width 4px; outset 2px; repeat round
+mbi <url(a.png) 1 2 3 4 fill / 5px 6px / 7px round stretch> => slice 1 2 3 4 fill; width 5px 6px; outset 7px; repeat round stretch
+mbi <url(a.png) 3 / / 2px> => slice 3 fill; width initial; outset 2px   (an empty section is legal)
+mbi <none> => source none; the other four initial
+mbi <url(a.png) / 4px> => REFUSED        (a slash with no slice in front of it)
+mbi <none / 4px> => REFUSED
+mbi <url(a.png) 3 fill / 4px / 2px / round> => REFUSED   (a fourth section)
+mbi <url(a.png) 3 fill 2 / 4px> => REFUSED               (fill inside the slice list)
+mbi <url(a.png) fill> => REFUSED                         (fill with no numbers)
+mbi <url(a.png) 3 4 5 6> => slice 3 4 5 6 fill

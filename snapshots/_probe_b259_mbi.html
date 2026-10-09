@@ -1,0 +1,20 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font:12px monospace;margin:0}#log{white-space:pre}</style></head>
+<body><div id="log"></div><script>
+var log=document.getElementById('log');
+function emit(t){log.textContent+=t+'\n';}
+var vals=['url(a.png) 3 fill / 4px / 2px round','none','url(a.png)','url(a.png) 2','url(a.png) 2 fill','url(a.png) 2 3 4 5 fill / 6px / round',
+ 'url(a.png) 0','url(a.png) 3 fill / 4px','url(a.png) 3 fill / 4px / 2px round stretch','bogus','url(a.png) -3 fill'];
+for (var i=0;i<vals.length;i++){
+ var d=document.createElement('div');
+ var ok=d.style.setProperty('-webkit-mask-box-image', vals[i]);
+ emit('SET ['+vals[i]+']\n  cssText=['+d.style.cssText+']\n  get=['+d.style.getPropertyValue('-webkit-mask-box-image')+'] len='+d.style.length);
+ var cs=getComputedStyle(d);
+ emit('  computed: shorthand=['+cs.getPropertyValue('-webkit-mask-box-image')+'] source=['+cs.getPropertyValue('-webkit-mask-box-image-source')+'] slice=['+cs.getPropertyValue('-webkit-mask-box-image-slice')+'] width=['+cs.getPropertyValue('-webkit-mask-box-image-width')+'] outset=['+cs.getPropertyValue('-webkit-mask-box-image-outset')+'] repeat=['+cs.getPropertyValue('-webkit-mask-box-image-repeat')+']');
+}
+// also the unprefixed mask-box-image and the standard mask-border
+var d2=document.createElement('div'); d2.style.setProperty('mask-box-image','url(a.png) 3 fill / 4px / 2px round');
+emit('unprefixed mask-box-image cssText=['+d2.style.cssText+']');
+var d3=document.createElement('div'); d3.style.setProperty('mask-border','url(a.png) 3 fill / 4px / 2px round');
+emit('mask-border cssText=['+d3.style.cssText+'] computed slice=['+getComputedStyle(d3).getPropertyValue('mask-border-slice')+']');
+console.log(log.textContent);
+</script></body></html>

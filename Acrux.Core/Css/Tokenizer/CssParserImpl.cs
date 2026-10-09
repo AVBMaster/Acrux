@@ -1312,14 +1312,16 @@ public class CssParserImpl
     private StyleRule? ConsumeStyleRule()
     {
         string selectorText = ConsumeSelectorText();
-        if (string.IsNullOrWhiteSpace(selectorText)) return null;
 
-        var selectors = CssSelectorParser.ParseSelectorList(selectorText);
-        if (selectors.Count == 0) return null;
-
+        // The block is read before the rule is judged, because a refused rule still has a block to
+        // consume: leaving its '{} in the stream makes the parser take that brace for the beginning
+        // of the next rule, and everything after it disappears from the sheet with it.
         var rule = new StyleRule();
-        rule.Selectors.AddRange(selectors);
-        rule.OriginalSelectorText = selectorText;
+        if (!string.IsNullOrWhiteSpace(selectorText))
+        {
+            rule.Selectors.AddRange(CssSelectorParser.ParseSelectorList(selectorText));
+            rule.OriginalSelectorText = selectorText;
+        }
 
         if (ExpectCss(CssTokenType.LeftBraceToken))
         {
@@ -1331,12 +1333,21 @@ public class CssParserImpl
             ExpectCss(CssTokenType.RightBraceToken);
         }
 
-        return rule;
+        // A selector list the grammar refuses is not a selector, and a rule with nothing to apply to
+        // is not a rule (measured: ':nth-child(abc)' and '#p, bogus!!!' each leave the reference
+        // engine's sheet with one rule fewer rather than one weaker rule).
+        return rule.Selectors.Count > 0 ? rule : null;
     }
 
     private string ConsumeSelectorText()
     {
-        var result = new System.Text.StringBuilder();
+        // The prelude of a style rule is cut out of the source and kept as the page wrote it, rather
+        // than rebuilt from the tokens it passes over. A rebuilt prelude loses what a token cannot
+        // hold: ':nth-child(2n+0)' arrives as the dimension '2n' followed by a *signed number*, and a
+        // number serialized from its value is '0' — '2n0' is no pattern at all. That text is not
+        // only what the CSSOM prints, it is what a re-match re-parses, so the loss reached matching
+        // as well as the echo (measured against the reference engine through insertRule).
+        int start = _stream.TokenStart;
         int depth = 0;
 
         while (!_stream.Current.IsEof)
@@ -1354,11 +1365,9 @@ public class CssParserImpl
                      t.Type == CssTokenType.RightSquareBracketToken)
                 depth--;
 
-            result.Append(t.ToCssText());
             _stream.Next();
         }
-
-        return result.ToString().Trim();
+        return _stream.RawRange(start, _stream.TokenStart).Trim();
     }
 
     private void ConsumeDeclarationList()

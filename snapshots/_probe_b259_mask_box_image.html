@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>body{font:12px monospace;margin:0}#log{white-space:pre}</style></head>
+<body><div id="log"></div><script>
+// The grammar and the CSSOM shape of the legacy '-webkit-mask-box-image' family (#259).
+// The reference engine's answers to this same list are snapshots/_b259_mask_box_image_truth.txt.
+const cases = [
+  ['-webkit-mask-box-image-source', 'url(a.png)'],
+  ['-webkit-mask-box-image-source', 'none'],
+  ['-webkit-mask-box-image-source', 'linear-gradient(red,blue)'],
+  ['-webkit-mask-box-image-source', 'url(a.png) none'],
+  ['-webkit-mask-box-image-slice', '2'],
+  ['-webkit-mask-box-image-slice', '2 fill'],
+  ['-webkit-mask-box-image-slice', 'fill 2'],
+  ['-webkit-mask-box-image-slice', '1 2 3 4'],
+  ['-webkit-mask-box-image-slice', '2 30%'],
+  ['-webkit-mask-box-image-slice', '-2'],
+  ['-webkit-mask-box-image-slice', 'fill'],
+  ['-webkit-mask-box-image-slice', '3 fill 2'],
+  ['-webkit-mask-box-image-slice', '2 2 2 2 fill fill'],
+  ['-webkit-mask-box-image-width', '4px'],
+  ['-webkit-mask-box-image-width', '2'],
+  ['-webkit-mask-box-image-width', 'auto'],
+  ['-webkit-mask-box-image-width', '2 3'],
+  ['-webkit-mask-box-image-width', '4px auto'],
+  ['-webkit-mask-box-image-width', '40%'],
+  ['-webkit-mask-box-image-width', 'none'],
+  ['-webkit-mask-box-image-outset', '2px'],
+  ['-webkit-mask-box-image-outset', '2'],
+  ['-webkit-mask-box-image-outset', '1px 2px 3px'],
+  ['-webkit-mask-box-image-outset', 'auto'],
+  ['-webkit-mask-box-image-repeat', 'round'],
+  ['-webkit-mask-box-image-repeat', 'round stretch'],
+  ['-webkit-mask-box-image-repeat', 'repeat-x'],
+  ['-webkit-mask-box-image', 'url(a.png) 3'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 / 4px'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 / 4px / 2px'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 / 4px / 2px round'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 / 4px / 5px repeat space'],
+  ['-webkit-mask-box-image', 'url(a.png) 2 30% / 4px / 2px round'],
+  ['-webkit-mask-box-image', 'url(a.png) 1 2 3 4 fill / 5px 6px / 7px round stretch'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 4 5 6'],
+  ['-webkit-mask-box-image', 'url(a.png) fill 3 / 4px'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 / / 2px'],
+  ['-webkit-mask-box-image', 'none'],
+  ['-webkit-mask-box-image', 'url(a.png) / 4px'],
+  ['-webkit-mask-box-image', 'none / 4px'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 fill / 4px / 2px / round'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 fill 2 / 4px'],
+  ['-webkit-mask-box-image', 'url(a.png) fill']
+];
+const lines = [];
+for (const c of cases) {
+  const d = document.createElement('div');
+  d.style.setProperty(c[0], c[1]);
+  const kept = d.style.cssText.replace(/-webkit-mask-box-image/g, 'mbi');
+  lines.push(c[0].replace('-webkit-mask-box-image', 'mbi') + ' <' + c[1] + '> => '
+    + (kept || 'REFUSED') + ' | shorthand reads [' + d.style.getPropertyValue(c[0]) + ']');
+}
+document.getElementById('log').textContent = lines.join('\n');
+console.log(lines.join('\n'));
+</script>
+</body></html>

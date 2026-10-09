@@ -711,12 +711,7 @@ public class DocumentHost
     private static List<Element> QuerySelectorAllInternal(Element root, string selector)
     {
         var result = new List<Element>();
-        foreach (var child in root.Children.OfType<Element>())
-        {
-            if (MatchesSelector(child, selector))
-                result.Add(child);
-            result.AddRange(QuerySelectorAllInternal(child, selector));
-        }
+        CssSelectorMatcher.CollectDescendants(root, selector, result);
         return result;
     }
 
@@ -757,23 +752,8 @@ public class DocumentHost
         return result;
     }
 
-    private static bool MatchesSelector(Element el, string selector)
-    {
-        try
-        {
-            return CssSelectorMatcher.Matches(selector, el);
-        }
-        catch
-        {
-            // Fallback to simple matching on parse failure
-            selector = selector.Trim();
-            if (selector.StartsWith('#'))
-                return el.Id == selector[1..];
-            if (selector.StartsWith('.'))
-                return el.HasClass(selector[1..]);
-            return el.TagName.Equals(selector, StringComparison.OrdinalIgnoreCase);
-        }
-    }
+    private static bool MatchesSelector(Element el, string selector) =>
+        CssSelectorMatcher.Matches(selector, el);
 }
 
 public class ComputedStyleHost

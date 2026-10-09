@@ -1,0 +1,18 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>FRAG7</title></head><body>
+<div id="stage"></div>
+<script>
+const stage = document.getElementById('stage');
+stage.style.cssText = 'position:absolute;left:-4000px;top:0;width:100px;font:16px/20px Arial';
+stage.innerHTML = '<div id="w"><span id="s" style="border:2px solid #333;padding:0 6px">ab<br>ab<br>ab</span></div>';
+const sp = stage.querySelector('#s');
+const rg = document.createRange();
+rg.selectNodeContents(sp.firstChild);
+const g = rg.getBoundingClientRect();
+const r = Array.from(sp.getClientRects());
+const out = 'glyph1=[' + (g.left + 4000).toFixed(2) + ' ' + g.width.toFixed(2) + ']'
+  + ' divrect=[' + (stage.querySelector('#w').getBoundingClientRect().left + 4000).toFixed(2) + ']'
+  + ' rects=' + r.map(x => ((x.left + 4000).toFixed(2) + '/' + x.width.toFixed(2))).join(' ');
+console.log(out);
+</script>
+</body></html>

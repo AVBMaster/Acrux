@@ -95,6 +95,12 @@ public class BoxLine
     public float InlineSize { get; set; }
     public float BlockSize { get; set; }
     public float BaselineOffset { get; set; }
+    /// <summary>The element whose forced break (a <c>&lt;br&gt;</c>) ended this line, when one did.
+    /// A break paints nothing but it is a box in the inline tree, and the reference engine reports
+    /// it as a zero-width fragment of its own at the end of the line it closes (CSSOM View §4,
+    /// measured: 'a&lt;br&gt;b&lt;br&gt;c' gives five rects, not three). The fact has to survive
+    /// to the geometry query, which runs long after the line breaker is gone.</summary>
+    public Element? ForcedBreakOwner { get; set; }
     public List<BoxRun> Runs { get; } = new();
 
     public float InlineEnd => InlineOffset + InlineSize;

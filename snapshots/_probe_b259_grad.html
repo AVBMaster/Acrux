@@ -1,0 +1,20 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{margin:0} .g{width:60px;height:20px;margin:2px}
+.bi{width:60px;height:20px;margin:2px;border:6px solid transparent}
+</style></head><body>
+<div class="g" style="background:linear-gradient(#e33,#33e)"></div>
+<div class="g" style="background:linear-gradient(rgb(238, 51, 51), rgb(51, 51, 238))"></div>
+<div class="g" style="background:linear-gradient(rgb(238,51,51),rgb(51,51,238))"></div>
+<div class="bi" style="border-image:linear-gradient(#e33,#33e) 10 / 20px"></div>
+<div class="bi" style="border-image:linear-gradient(rgb(238, 51, 51), rgb(51, 51, 238)) 10 / 20px"></div>
+<script>
+var out=[];
+var gs=document.querySelectorAll('.g');
+out.push('g1='+getComputedStyle(gs[0]).backgroundImage);
+out.push('g2='+getComputedStyle(gs[1]).backgroundImage);
+out.push('g3='+getComputedStyle(gs[2]).backgroundImage);
+var bs=document.querySelectorAll('.bi');
+out.push('bi1='+getComputedStyle(bs[0]).borderImageSource);
+out.push('bi2='+getComputedStyle(bs[1]).borderImageSource);
+console.log(out.join(' ||| '));
+</script></body></html>

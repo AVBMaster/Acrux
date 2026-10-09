@@ -1,0 +1,8 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;font:16px/20px Arial}#log{font:12px monospace;white-space:pre}</style></head>
+<body><div id="w" style="width:200px"><span id="s" style="padding:0 8px;border:2px solid #e33;background:#fee">aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa b</span></div>
+<div id="log"></div><script>
+var s=document.getElementById('s'),r=s.getClientRects();
+var out=[];for(var i=0;i<r.length;i++)out.push('rect'+i+' x='+Math.round(r[i].left)+'..'+Math.round(r[i].right)+' y='+Math.round(r[i].top)+'..'+Math.round(r[i].bottom));
+document.getElementById('log').textContent=out.join('\n');
+console.log(out.join(' | '));
+</script></body></html>

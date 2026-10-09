@@ -1,0 +1,48 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font:12px monospace;margin:0}#log{white-space:pre}</style></head>
+<body><div id="log"></div><script>
+var log=document.getElementById('log'),lines=[];
+function emit(t){lines.push(t);}
+function one(name,val){var d=document.createElement('div');d.style.setProperty(name,val);
+ emit(name+': ['+val+'] -> ['+d.style.getPropertyValue(name)+']');}
+one('-webkit-box-ordinal-group','1e2');
+one('-webkit-box-ordinal-group','2');
+one('-webkit-box-ordinal-group','+2');
+one('-webkit-box-ordinal-group','1.5');
+one('-webkit-box-flex','1e2');
+one('width','1E2PX');
+one('color','#00F');
+one('color','#F00');
+one('background','linear-gradient(#e33, #33e)');
+one('background','linear-gradient(RED, rgb(1 2 3 / 50%))');
+one('background','color-mix(in srgb, RED 50%, blue)');
+one('background','color-mix(in hsl, hsl(0 100% 50%), hsl(240 100% 50%))');
+one('border-top','1px solid CurrentColor');
+one('transition','ALL 2S EASE 0S');
+one('animation','3s 2s LINEAR BOGUS');
+one('padding','0px 0px');
+one('margin','1px 2px 1px 2px');
+one('outline','medium solid currentcolor');
+one('background','red blue');
+one('background','red, blue');
+one('color','hsl(0deg 100% 50%)');
+one('letter-spacing','-0px');
+one('font','16px SERIF');
+one('-webkit-mask-box-image','url(a.png) / 4px');
+// nth-child robustness: these must not throw and must match nothing / something as measured
+function nth(sel){var host=document.createElement('div');host.innerHTML='<i></i><i></i><i></i>';document.body.appendChild(host);
+ try{document.head.appendChild(Object.assign(document.createElement('style'),{textContent:sel+'{color:red}'}));
+  var hit=0;Array.prototype.forEach.call(host.children,function(c){if(getComputedStyle(c).color!='rgb(0, 0, 0)')hit++;});
+  var r='hits='+hit;host.remove();return r;}catch(e){return 'THREW '+e.message;}}
+emit('nth 0n+5 -> '+nth('i:nth-child(0n+5)'));
+emit('nth 5n+ -> '+nth('i:nth-child(5n+)'));
+emit('nth huge -> '+nth('i:nth-child(99999999999999n)'));
+emit('nth empty -> '+nth('i:nth-child()'));
+emit('nth junk -> '+nth('i:nth-child(abc)'));
+emit('nth 2 -> '+nth('i:nth-child(2)'));
+emit('nth -3 -> '+nth('i:nth-child(-3)'));
+emit('nth +2 -> '+nth('i:nth-child(+2)'));
+emit('nth 0n+2 -> '+nth('i:nth-child(0n+2)'));
+emit('nth 3 -> '+nth('i:nth-child(3n-1)'));
+log.textContent=lines.join('\n');
+console.log(lines.join(' ||| '));
+</script></body></html>

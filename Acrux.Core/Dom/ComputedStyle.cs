@@ -2288,6 +2288,10 @@ public class LineBox
     public float Height { get; set; }
     public float Baseline { get; set; }
     public float TextAlignOffsetX { get; set; }
+    /// <summary>The element whose forced break closed this line box; see <c>BoxLine.ForcedBreakOwner</c>.
+    /// Nothing paints from it — it exists so an inline element's client rects can report the
+    /// zero-width fragment the reference engine gives a break.</summary>
+    public Element? ForcedBreakOwner { get; set; }
     public List<InlineRun> Runs { get; } = new();
 }
 

@@ -1,0 +1,8 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{margin:0} .bi{width:60px;height:20px;margin:2px;border:6px solid transparent}
+#a{border-image:linear-gradient(#e33, #33e) 10 / 20px stretch}
+#b{border-image:linear-gradient(rgb(238, 51, 51), rgb(51, 51, 238)) 10 / 20px stretch}
+#c{border-image:linear-gradient(rgb(238,51,51),rgb(51,51,238)) 10 / 20px stretch}
+</style></head><body><div id="a" class="bi"></div><div id="b" class="bi"></div><div id="c" class="bi"></div>
+<script>console.log('a='+document.getElementById('a').style.borderImage+' | b='+document.getElementById('b').style.borderImage);</script>
+</body></html>

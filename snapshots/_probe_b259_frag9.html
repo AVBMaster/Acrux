@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>FRAG9</title></head><body>
+<div id="stage"></div>
+<script>
+const stage = document.getElementById('stage');
+stage.style.cssText = 'position:absolute;left:-4000px;top:0;width:100px;font:16px/20px Arial';
+const out = [];
+function run(label, style) {
+  stage.innerHTML = '<div id="w"><span id="s" style="' + style + '">ab<br>cd</span></div>';
+  const sp = stage.querySelector('#s');
+  const r = Array.from(sp.getClientRects());
+  const paint = sp.getBoundingClientRect();
+  out.push(label + ' n=' + r.length + ' ' + r.map(x => '[' + (x.left + 4000).toFixed(2) + ' w' + x.width.toFixed(2) + ']').join(' ')
+    + ' union=[' + (paint.left + 4000).toFixed(2) + ' w' + paint.width.toFixed(2) + ']'
+    + ' spanOffsetLeft=' + sp.offsetLeft);
+}
+run('pL10', 'padding-left:10px');
+run('pL10ml20', 'padding-left:10px;margin-left:20px');
+run('pL0', 'padding-left:0');
+console.log(out.join('\n'));
+</script>
+</body></html>

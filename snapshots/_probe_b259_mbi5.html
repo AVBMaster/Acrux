@@ -1,0 +1,12 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font:12px monospace;margin:0}#log{white-space:pre}</style></head>
+<body><div id="log"></div><script>
+const cases = [['-webkit-mask-box-image-source','linear-gradient(red,blue)'],['-webkit-mask-box-image-source','url(a.png) none'],['-webkit-mask-box-image-slice','-2'],['-webkit-mask-box-image-slice','fill'],['-webkit-mask-box-image-slice','3 fill 2'],['-webkit-mask-box-image-slice','2 30%'],['-webkit-mask-box-image-slice','2 2 2 2 fill fill'],['-webkit-mask-box-image-width','none'],['-webkit-mask-box-image-width','4px auto'],['-webkit-mask-box-image-outset','auto'],['-webkit-mask-box-image-repeat','repeat-x'],['-webkit-mask-box-image','url(a.png) / 4px'],['-webkit-mask-box-image','url(a.png) 3 / / 2px'],['-webkit-mask-box-image','none / 4px'],['-webkit-mask-box-image','url(a.png) 3 fill / 4px / 2px / round'],['-webkit-mask-box-image','url(a.png) 3 fill 2 / 4px'],['-webkit-mask-box-image','url(a.png) 2 30% / 4px / 2px round'],['-webkit-mask-box-image','url(a.png) fill'],['-webkit-mask-box-image','none'],['-webkit-mask-box-image','']];
+const l = [];
+for (const c of cases) {
+  const d = document.createElement('div');
+  d.style.setProperty(c[0], c[1]);
+  const kept = d.style.cssText.replace(/-webkit-mask-box-image/g,'mbi');
+  l.push(c[0].replace('-webkit-mask-box-image','mbi') + ' <' + c[1] + '> => ' + (kept || 'REFUSED'));
+}
+console.log(l.join('\n'));
+</script></body></html>

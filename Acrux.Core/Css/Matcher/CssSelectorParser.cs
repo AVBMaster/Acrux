@@ -307,7 +307,12 @@ public class CssSelectorParser
             // not compounds the grammar has, and the rule goes with them (measured).
             if (result != null && StartsTypeSelector(stream)) break;
 
-            var simple = ParseSimpleSelector(stream);
+            var simple = ParseSimpleSelector(stream, out bool refused);
+            // A simple selector that read its tokens and then found the grammar has no room for them
+            // refuses the whole compound: ':nth-child(abc)' is not 'q' with something unparseable
+            // beside it, and keeping the 'q' would style every q on the page (measured: the
+            // reference engine leaves the rule out of the sheet entirely).
+            if (refused) { result = null; break; }
             if (simple == null) break;
 
             if (result == null)
@@ -327,8 +332,12 @@ public class CssSelectorParser
         return result;
     }
 
-    private static CssSelector? ParseSimpleSelector(CssParserTokenStream stream)
+    /// <summary>Read one simple selector. 'refused' says a pseudo-class consumed its argument and the
+    /// argument is not one the grammar accepts — which is a different answer from 'there is no simple
+    /// selector here', because only the first one takes the rule down.</summary>
+    private static CssSelector? ParseSimpleSelector(CssParserTokenStream stream, out bool refused)
     {
+        refused = false;
         if (stream.Current.Type == CssTokenType.EofToken ||
             stream.Current.Type == CssTokenType.CommaToken ||
             stream.Current.Type == CssTokenType.RightBraceToken)
@@ -402,7 +411,7 @@ public class CssSelectorParser
 
         if (token.Type == CssTokenType.ColonToken)
         {
-            return ParsePseudoSelector(stream);
+            return ParsePseudoSelector(stream, out refused);
         }
 
         if (token.Type == CssTokenType.LeftSquareBracketToken)
@@ -477,8 +486,12 @@ public class CssSelectorParser
         return null;
     }
 
-    private static CssSelector? ParsePseudoSelector(CssParserTokenStream stream)
+    /// <summary>Read a pseudo-class or pseudo-element. 'refused' says the name was read, its argument
+    /// was read, and the argument is one the grammar does not have — the case that takes the whole
+    /// rule down rather than leaving the selector beside it.</summary>
+    private static CssSelector? ParsePseudoSelector(CssParserTokenStream stream, out bool refused)
     {
+        refused = false;
         stream.Next();
         bool isPseudoElement = false;
 
@@ -499,6 +512,7 @@ public class CssSelectorParser
         var pseudoType = StringToPseudoType(name, isPseudoElement);
         string? argument = null;
         List<CssSelector>? selectorList = null;
+        bool nthOfPresent = false;
 
             if (stream.Current.Type == CssTokenType.FunctionToken)
             {
@@ -506,33 +520,32 @@ public class CssSelectorParser
                 // Parse arguments
                 if (PseudoHasSelectorList(pseudoType))
                 {
-                    selectorList = new List<CssSelector>();
                     if (pseudoType is CssPseudoType.NthChild or CssPseudoType.NthLastChild)
                     {
-                        // Parse An+B [of selector-list]
-                        var argStream = new CssParserTokenStream(CollectTokensUntilParen(stream));
-                        argument = ParseAnPlusB(argStream);
-                        if (argStream.Current.Type == CssTokenType.IdentToken &&
-                            argStream.Current.Value.Equals("of", StringComparison.OrdinalIgnoreCase))
+                        // '<an-plus-b> [ of <complex-selector-list> ]?' (CSS Selectors 4 §6.6.2).
+                        // The pattern keeps the page's own spelling because that spelling is what
+                        // the grammar reads: see CollectRawUntilParen.
+                        var argText = CollectRawUntilParen(stream);
+                        var ofAt = IndexOfNthOfKeyword(argText);
+                        argument = CanonicalNthArgument((ofAt >= 0 ? argText[..ofAt] : argText).Trim());
+                        if (ofAt >= 0)
                         {
-                            // Parse selector list after "of"
-                            argStream.Next();
-                            var rest = new System.Text.StringBuilder();
-                            while (argStream.Current.Type != CssTokenType.EofToken &&
-                                   argStream.Current.Type != CssTokenType.RightParenthesisToken)
-                            {
-                                rest.Append(argStream.Current.ToCssText());
-                                argStream.Next();
-                            }
-                            selectorList = ParseSelectorList(rest.ToString());
+                            nthOfPresent = true;
+                            selectorList = ParseSelectorList(argText[(ofAt + "of".Length)..]);
                         }
                     }
                     else
                     {
+                        selectorList = new List<CssSelector>();
                         var argText = CollectTokensUntilParen(stream);
                         selectorList = ParseSelectorList(argText);
                     }
                 }
+            else if (pseudoType is CssPseudoType.NthOfType or CssPseudoType.NthLastOfType
+                     && stream.Current.Type != CssTokenType.RightParenthesisToken)
+            {
+                argument = CanonicalNthArgument(CollectRawUntilParen(stream).Trim());
+            }
             else
             {
                 if (stream.Current.Type == CssTokenType.RightParenthesisToken)
@@ -550,13 +563,115 @@ public class CssSelectorParser
             stream.Next();
         }
 
+        // An 'An+B' the integer grammar refuses is not a pattern, and a pseudo-class with no pattern
+        // in it is not a selector: the reference engine takes the whole rule down with it (measured,
+        // through insertRule, where each of ':nth-child(5n+)', ':nth-child(+ 3)', ':nth-child(3 n)',
+        // ':nth-child(2.5n)', ':nth-child()' and ':nth-child(2n+1 of (b))' is refused outright).
+        if (pseudoType is CssPseudoType.NthChild or CssPseudoType.NthLastChild
+            or CssPseudoType.NthOfType or CssPseudoType.NthLastOfType)
+        {
+            if (!SelectorChecker.TryParseAnPlusB(argument, out _, out _))
+            {
+                refused = true;
+                return null;
+            }
+            // An 'of' whose list reads as nothing is the same refusal (measured: '2n+1 of ' and
+            // ' of b' are both invalid, so the keyword is only kept with a list behind it).
+            if (nthOfPresent && selectorList is not { Count: > 0 })
+            {
+                refused = true;
+                return null;
+            }
+        }
+
         return new CssSelector
         {
             MatchType = isPseudoElement ? CssSelectorMatchType.PseudoElement : CssSelectorMatchType.PseudoClass,
             PseudoType = pseudoType,
             Argument = argument,
-            SelectorList = selectorList
+            SelectorList = selectorList,
+            NthOfPresent = nthOfPresent
         };
+    }
+
+    /// <summary>Where the 'of' of an ':nth-child(An+B of S)' begins in the argument, or -1 when the
+    /// argument is a pattern on its own. The keyword is a token, so '2n+1of' — which the tokenizer
+    /// reads as the single dimension '1of' — is not a pattern followed by a keyword, and a prefix
+    /// the integer grammar refuses is not a pattern either; both leave the whole argument to be
+    /// rejected together (measured: '2n+1of .c' and '+ 3' each take their rule down in the
+    /// reference engine).</summary>
+    private static int IndexOfNthOfKeyword(string argument)
+    {
+        var stream = new CssParserTokenStream(argument);
+        while (!stream.Current.IsEof)
+        {
+            var token = stream.Current;
+            if (token.Type == CssTokenType.WhitespaceToken)
+            {
+                stream.Next();
+                continue;
+            }
+            if (token.Type == CssTokenType.IdentToken)
+            {
+                // The keyword itself is only read in lower case. That is the reference engine's
+                // answer and not the spec's — measured: 'ODD of b' is a pattern with a list while
+                // 'odd OF b' is refused outright, so the pattern's own words stay
+                // case-insensitive and the separator does not.
+                if (token.Value == "of")
+                    return SelectorChecker.TryParseAnPlusB(argument[..stream.TokenStart], out _, out _)
+                        ? stream.TokenStart : -1;
+                // 'n', 'N', 'even' and 'odd' are the pattern's own words; any other name means this
+                // argument has no pattern in it at all.
+                var name = token.Value.ToLowerInvariant();
+                if (name is not ("n" or "even" or "odd")) return -1;
+                stream.Next();
+                continue;
+            }
+            if (token.Type is CssTokenType.NumberToken)
+            {
+                stream.Next();
+                continue;
+            }
+            if (token.Type == CssTokenType.DimensionToken
+                && token.Unit.Equals("n", StringComparison.OrdinalIgnoreCase))
+            {
+                stream.Next();
+                continue;
+            }
+            if (token.Type == CssTokenType.DelimiterToken && token.Value is "+" or "-")
+            {
+                stream.Next();
+                continue;
+            }
+            return -1;
+        }
+        return -1;
+    }
+
+    /// <summary>The argument of a functional pseudo-class, cut out of the source and kept exactly as
+    /// the page wrote it. Rebuilding it from tokens loses what a token cannot hold: the reference
+    /// engine reads ':nth-child(0n+3)' as a pattern with b=3, while the tokenizer hands that over as
+    /// the dimension '0n' followed by a *signed number*, and a number serialized from its value is
+    /// '3' — glued to '0n' it is '0n3', an argument that means nothing (measured: the spaced form
+    /// '0n + 3' was the one that worked, because there the sign arrives as its own token).</summary>
+    private static string CollectRawUntilParen(CssParserTokenStream stream)
+    {
+        int start = stream.TokenStart;
+        int depth = 1;
+        while (depth > 0)
+        {
+            if (stream.Current.IsEof) break;
+            if (stream.Current.Type == CssTokenType.RightParenthesisToken)
+            {
+                depth--;
+                if (depth == 0) break;
+            }
+            else if (stream.Current.Type == CssTokenType.LeftParenthesisToken) depth++;
+            stream.Next();
+        }
+        var text = stream.RawRange(start, stream.TokenStart);
+        stream.Next();
+        return text;
     }
 
     private static string CollectTokensUntilParen(CssParserTokenStream stream)
@@ -588,20 +703,6 @@ public class CssSelectorParser
         }
         stream.Next();
         return result.ToString();
-    }
-
-    private static string ParseAnPlusB(CssParserTokenStream stream)
-    {
-        var result = new System.Text.StringBuilder();
-        while (stream.Current.Type != CssTokenType.EofToken && stream.Current.Type != CssTokenType.RightParenthesisToken)
-        {
-            if (stream.Current.Type == CssTokenType.WhitespaceToken)
-                result.Append(' ');
-            else
-                result.Append(stream.Current.ToCssText());
-            stream.Next();
-        }
-        return result.ToString().Trim();
     }
 
     private static CssSelector? ParseAttributeSelector(CssParserTokenStream stream)
@@ -813,115 +914,145 @@ public class CssSelectorParser
         _ => false
     };
 
+    /// <summary>The pseudo-class names the selector grammar reads, in the spelling a page uses. One
+    /// table answers both directions — a name for a type and a type for a name — because the two
+    /// halves of that question drifting apart is a selector that parses and then prints as something
+    /// else, which is exactly what a hand-maintained second list produces.</summary>
+    private static readonly (string Name, CssPseudoType Type)[] PseudoClasses =
+    {
+        ("active", CssPseudoType.Active),
+        ("any-link", CssPseudoType.AnyLink),
+        ("autofill", CssPseudoType.Autofill),
+        ("blank", CssPseudoType.Blank),
+        ("checked", CssPseudoType.Checked),
+        ("corf", CssPseudoType.CorF),
+        ("current", CssPseudoType.Current),
+        ("default", CssPseudoType.Default),
+        ("defined", CssPseudoType.Defined),
+        ("disabled", CssPseudoType.Disabled),
+        ("done", CssPseudoType.Done),
+        ("drag", CssPseudoType.Drag),
+        ("empty", CssPseudoType.Empty),
+        ("enabled", CssPseudoType.Enabled),
+        ("first-child", CssPseudoType.FirstChild),
+        ("first-of-type", CssPseudoType.FirstOfType),
+        ("focus", CssPseudoType.Focus),
+        ("focus-visible", CssPseudoType.FocusVisible),
+        ("focus-within", CssPseudoType.FocusWithin),
+        ("fullscreen", CssPseudoType.Fullscreen),
+        ("future", CssPseudoType.Future),
+        ("has", CssPseudoType.Has),
+        ("host", CssPseudoType.Host),
+        ("host-context", CssPseudoType.HostContext),
+        ("hover", CssPseudoType.Hover),
+        ("in-range", CssPseudoType.InRange),
+        ("indeterminate", CssPseudoType.Indeterminate),
+        ("invalid", CssPseudoType.Invalid),
+        ("is", CssPseudoType.Is),
+        ("last-child", CssPseudoType.LastChild),
+        ("last-of-type", CssPseudoType.LastOfType),
+        ("left", CssPseudoType.Left),
+        ("link", CssPseudoType.Link),
+        ("modal", CssPseudoType.Modal),
+        ("not", CssPseudoType.Not),
+        ("nth-child", CssPseudoType.NthChild),
+        ("nth-last-child", CssPseudoType.NthLastChild),
+        ("nth-last-of-type", CssPseudoType.NthLastOfType),
+        ("nth-of-type", CssPseudoType.NthOfType),
+        ("only-child", CssPseudoType.OnlyChild),
+        ("only-of-type", CssPseudoType.OnlyOfType),
+        ("open", CssPseudoType.Open),
+        ("optional", CssPseudoType.Optional),
+        ("out-of-range", CssPseudoType.OutOfRange),
+        ("past", CssPseudoType.Past),
+        ("paused", CssPseudoType.Paused),
+        ("picture-in-picture", CssPseudoType.PictureInPicture),
+        ("placeholder-shown", CssPseudoType.PlaceholderShown),
+        ("playing", CssPseudoType.Playing),
+        ("popover-open", CssPseudoType.PopoverOpen),
+        ("read-only", CssPseudoType.ReadOnly),
+        ("read-write", CssPseudoType.ReadWrite),
+        ("required", CssPseudoType.Required),
+        ("right", CssPseudoType.Right),
+        ("root", CssPseudoType.Root),
+        ("scope", CssPseudoType.Scope),
+        ("state", CssPseudoType.State),
+        ("target", CssPseudoType.Target),
+        ("unresolved", CssPseudoType.Unresolved),
+        ("user-invalid", CssPseudoType.UserInvalid),
+        ("user-valid", CssPseudoType.UserValid),
+        ("valid", CssPseudoType.Valid),
+        ("visited", CssPseudoType.Visited),
+        ("where", CssPseudoType.Where),
+        ("window-inactive", CssPseudoType.WindowInactive),
+    };
+
+    /// <summary>The pseudo-element names, in the same table-for-both-directions shape as
+    /// <see cref="PseudoClasses"/>.</summary>
+    private static readonly (string Name, CssPseudoType Type)[] PseudoElements =
+    {
+        ("before", CssPseudoType.Before),
+        ("after", CssPseudoType.After),
+        ("backdrop", CssPseudoType.Backdrop),
+        ("file-selector-button", CssPseudoType.FileSelectorButton),
+        ("first-letter", CssPseudoType.FirstLetter),
+        ("first-line", CssPseudoType.FirstLine),
+        ("grammar-error", CssPseudoType.GrammarError),
+        ("marker", CssPseudoType.Marker),
+        ("placeholder", CssPseudoType.Placeholder),
+        ("selection", CssPseudoType.Selection),
+        ("spelling-error", CssPseudoType.SpellingError),
+        ("target-text", CssPseudoType.TargetText),
+        ("cue", CssPseudoType.Cue),
+        ("cue-region", CssPseudoType.CueRegion),
+        ("part", CssPseudoType.Part),
+        ("slotted", CssPseudoType.Slotted),
+        ("highlight", CssPseudoType.Highlight),
+        ("view-transition", CssPseudoType.ViewTransition),
+        ("view-transition-group", CssPseudoType.ViewTransitionGroup),
+        ("view-transition-image-pair", CssPseudoType.ViewTransitionImagePair),
+        ("view-transition-new", CssPseudoType.ViewTransitionNew),
+        ("view-transition-old", CssPseudoType.ViewTransitionOld),
+        ("scrollbar", CssPseudoType.Scrollbar),
+        ("scrollbar-button", CssPseudoType.ScrollbarButton),
+        ("scrollbar-corner", CssPseudoType.ScrollbarCorner),
+        ("scrollbar-thumb", CssPseudoType.ScrollbarThumb),
+        ("scrollbar-track", CssPseudoType.ScrollbarTrack),
+        ("scrollbar-track-piece", CssPseudoType.ScrollbarTrackPiece),
+        ("resizer", CssPseudoType.Resizer),
+        ("scroll-next-button", CssPseudoType.ScrollNextButton),
+        ("scroll-prev-button", CssPseudoType.ScrollPrevButton),
+    };
+
+    private static readonly Dictionary<string, CssPseudoType> PseudoClassByName =
+        PseudoClasses.ToDictionary(e => e.Name, e => e.Type, StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, CssPseudoType> PseudoElementByName =
+        PseudoElements.ToDictionary(e => e.Name, e => e.Type, StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<CssPseudoType, string> PseudoClassNameByType =
+        PseudoClasses.ToDictionary(e => e.Type, e => e.Name);
+    private static readonly Dictionary<CssPseudoType, string> PseudoElementNameByType =
+        PseudoElements.ToDictionary(e => e.Type, e => e.Name);
+
+    /// <summary>The name a pseudo-class or pseudo-element type is written with on the way out. A type
+    /// the grammar has no name for — an engine-internal one — keeps the old answer, which is its
+    /// enum's own lower-cased spelling.</summary>
+    public static string PseudoTypeToName(CssPseudoType type, bool isPseudoElement)
+    {
+        var table = isPseudoElement ? PseudoElementNameByType : PseudoClassNameByType;
+        return table.TryGetValue(type, out var name)
+            ? name : type.ToString().ToLowerInvariant();
+    }
+
+    /// <summary>The argument of an <c>An+B</c> pseudo-class in the one spelling the engine keeps: the
+    /// two numbers the pattern stands for. An argument the integer grammar refuses is left as the
+    /// page wrote it, because there is no pattern to print for it.</summary>
+    private static string CanonicalNthArgument(string argument) =>
+        SelectorChecker.TryParseAnPlusB(argument, out int a, out int b)
+            ? SelectorChecker.CanonicalAnPlusB(a, b) : argument;
+
     public static CssPseudoType StringToPseudoType(string name, bool isPseudoElement)
     {
-        if (isPseudoElement)
-        {
-            return name switch
-            {
-                "before" => CssPseudoType.Before,
-                "after" => CssPseudoType.After,
-                "backdrop" => CssPseudoType.Backdrop,
-                "file-selector-button" => CssPseudoType.FileSelectorButton,
-                "first-letter" => CssPseudoType.FirstLetter,
-                "first-line" => CssPseudoType.FirstLine,
-                "grammar-error" => CssPseudoType.GrammarError,
-                "marker" => CssPseudoType.Marker,
-                "placeholder" => CssPseudoType.Placeholder,
-                "selection" => CssPseudoType.Selection,
-                "spelling-error" => CssPseudoType.SpellingError,
-                "target-text" => CssPseudoType.TargetText,
-                "cue" => CssPseudoType.Cue,
-                "cue-region" => CssPseudoType.CueRegion,
-                "part" => CssPseudoType.Part,
-                "slotted" => CssPseudoType.Slotted,
-                "highlight" => CssPseudoType.Highlight,
-                "view-transition" => CssPseudoType.ViewTransition,
-                "view-transition-group" => CssPseudoType.ViewTransitionGroup,
-                "view-transition-image-pair" => CssPseudoType.ViewTransitionImagePair,
-                "view-transition-new" => CssPseudoType.ViewTransitionNew,
-                "view-transition-old" => CssPseudoType.ViewTransitionOld,
-                "scrollbar" => CssPseudoType.Scrollbar,
-                "scrollbar-button" => CssPseudoType.ScrollbarButton,
-                "scrollbar-corner" => CssPseudoType.ScrollbarCorner,
-                "scrollbar-thumb" => CssPseudoType.ScrollbarThumb,
-                "scrollbar-track" => CssPseudoType.ScrollbarTrack,
-                "scrollbar-track-piece" => CssPseudoType.ScrollbarTrackPiece,
-                "resizer" => CssPseudoType.Resizer,
-                "scroll-next-button" => CssPseudoType.ScrollNextButton,
-                "scroll-prev-button" => CssPseudoType.ScrollPrevButton,
-                _ => CssPseudoType.Unknown
-            };
-        }
-
-        return name switch
-        {
-            "active" => CssPseudoType.Active,
-            "any-link" => CssPseudoType.AnyLink,
-            "autofill" => CssPseudoType.Autofill,
-            "blank" => CssPseudoType.Blank,
-            "checked" => CssPseudoType.Checked,
-            "corf" => CssPseudoType.CorF,
-            "current" => CssPseudoType.Current,
-            "default" => CssPseudoType.Default,
-            "defined" => CssPseudoType.Defined,
-            "disabled" => CssPseudoType.Disabled,
-            "done" => CssPseudoType.Done,
-            "drag" => CssPseudoType.Drag,
-            "empty" => CssPseudoType.Empty,
-            "enabled" => CssPseudoType.Enabled,
-            "first-child" => CssPseudoType.FirstChild,
-            "first-of-type" => CssPseudoType.FirstOfType,
-            "focus" => CssPseudoType.Focus,
-            "focus-visible" => CssPseudoType.FocusVisible,
-            "focus-within" => CssPseudoType.FocusWithin,
-            "fullscreen" => CssPseudoType.Fullscreen,
-            "future" => CssPseudoType.Future,
-            "has" => CssPseudoType.Has,
-            "host" => CssPseudoType.Host,
-            "host-context" => CssPseudoType.HostContext,
-            "hover" => CssPseudoType.Hover,
-            "in-range" => CssPseudoType.InRange,
-            "indeterminate" => CssPseudoType.Indeterminate,
-            "invalid" => CssPseudoType.Invalid,
-            "is" => CssPseudoType.Is,
-            "last-child" => CssPseudoType.LastChild,
-            "last-of-type" => CssPseudoType.LastOfType,
-            "left" => CssPseudoType.Left,
-            "link" => CssPseudoType.Link,
-            "modal" => CssPseudoType.Modal,
-            "not" => CssPseudoType.Not,
-            "nth-child" => CssPseudoType.NthChild,
-            "nth-last-child" => CssPseudoType.NthLastChild,
-            "nth-last-of-type" => CssPseudoType.NthLastOfType,
-            "nth-of-type" => CssPseudoType.NthOfType,
-            "only-child" => CssPseudoType.OnlyChild,
-            "only-of-type" => CssPseudoType.OnlyOfType,
-            "open" => CssPseudoType.Open,
-            "optional" => CssPseudoType.Optional,
-            "out-of-range" => CssPseudoType.OutOfRange,
-            "past" => CssPseudoType.Past,
-            "paused" => CssPseudoType.Paused,
-            "picture-in-picture" => CssPseudoType.PictureInPicture,
-            "placeholder-shown" => CssPseudoType.PlaceholderShown,
-            "playing" => CssPseudoType.Playing,
-            "popover-open" => CssPseudoType.PopoverOpen,
-            "read-only" => CssPseudoType.ReadOnly,
-            "read-write" => CssPseudoType.ReadWrite,
-            "required" => CssPseudoType.Required,
-            "right" => CssPseudoType.Right,
-            "root" => CssPseudoType.Root,
-            "scope" => CssPseudoType.Scope,
-            "state" => CssPseudoType.State,
-            "target" => CssPseudoType.Target,
-            "unresolved" => CssPseudoType.Unresolved,
-            "user-invalid" => CssPseudoType.UserInvalid,
-            "user-valid" => CssPseudoType.UserValid,
-            "valid" => CssPseudoType.Valid,
-            "visited" => CssPseudoType.Visited,
-            "where" => CssPseudoType.Where,
-            "window-inactive" => CssPseudoType.WindowInactive,
-            _ => CssPseudoType.Unknown
-        };
+        var table = isPseudoElement ? PseudoElementByName : PseudoClassByName;
+        return table.TryGetValue(name, out var type) ? type : CssPseudoType.Unknown;
     }
 }

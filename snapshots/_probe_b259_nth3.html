@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+body { margin: 0; font: 12px monospace; }
+#wrap i { display: inline-block; width: 20px; }
+</style></head><body>
+<div id="wrap">
+  <i class="c">1</i><i class="d">2</i><i class="c">3</i><i>4</i><i class="c">5</i><i class="d">6</i>
+</div>
+<script>
+const cases = [
+  "i:nth-child(2n+1 of .c)",
+  "i:nth-child(2n+1 of .d)",
+  "i:nth-child(3 of .c)",
+  "i:nth-child(0 of .c)",
+  "i:nth-child(2n of bogus!!)",
+  "i:nth-child(2n+1 of )",
+  "i:nth-child( of .c)",
+  "i:nth-child(odd of .c)",
+  "i:nth-child(2n+1of .c)",
+  "i:nth-child(2n+1  of  .c)",
+  "i:nth-child(+ 3)",
+  "i:nth-child(n+ 3)",
+  "i:nth-child(n +3)",
+  "i:nth-child(n+3)",
+  "i:nth-child(2n+0)",
+  "i:nth-child(0n+3)",
+  "i:nth-child(-3)",
+  "i:nth-child(n-0)",
+  "i:nth-child(2N+1)",
+  "i:nth-of-type(2n+1)",
+  "i:nth-child(2n+1 of i)",
+  "i:nth-child(2n+1 of [class])"
+];
+function rule(sel) {
+  try { return Array.from(document.querySelectorAll(sel)).map(e => e.textContent).join(","); }
+  catch (e) { return "THROW"; }
+}
+const out = cases.map(c => c + " -> [" + rule(c) + "]").join("\n");
+document.title = "NTH3";
+window.__result = out;
+console.log(out);
+</script>
+</body></html>

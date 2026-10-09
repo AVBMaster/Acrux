@@ -241,8 +241,8 @@ public class SelectorChecker
             CssPseudoType.OnlyChild => element.ParentElement?.Children.OfType<Element>().Count() == 1,
             CssPseudoType.OnlyOfType => element.ParentElement?.Children.OfType<Element>()
                 .Count(e => e.TagName == element.TagName) == 1,
-            CssPseudoType.NthChild => MatchNth(selector.Argument, element, false),
-            CssPseudoType.NthLastChild => MatchNth(selector.Argument, element, true),
+            CssPseudoType.NthChild => MatchNth(selector, element, false),
+            CssPseudoType.NthLastChild => MatchNth(selector, element, true),
             CssPseudoType.NthOfType => MatchNthOfType(selector.Argument, element, false),
             CssPseudoType.NthLastOfType => MatchNthOfType(selector.Argument, element, true),
             CssPseudoType.Root => element.Parent is Document,
@@ -347,34 +347,47 @@ public class SelectorChecker
         _ => false
     };
 
-    private static bool MatchNth(string? argument, Element element, bool fromLast)
+    private static bool MatchNth(CssSelector selector, Element element, bool fromLast)
     {
-        if (string.IsNullOrEmpty(argument)) return false;
-        var (a, b) = ParseAnPlusB(argument);
+        if (!TryParseAnPlusB(selector.Argument, out int a, out int b)) return false;
+        // ':nth-child(An+B of S)' (CSS Selectors 4 §6.6.2) numbers the element among the siblings
+        // that match S, and an element the list leaves out is not numbered at all. An 'of' whose
+        // list the grammar refused is a selector the engine has no reading for, so it matches
+        // nothing — measured: '... of ' and ' of .c' each throw out of querySelectorAll and take
+        // their rule down in a sheet.
+        if (selector.NthOfPresent)
+        {
+            var parent = element.ParentElement;
+            var list = selector.SelectorList;
+            if (parent == null || list == null || list.Count == 0) return false;
+            var matched = parent.Children.OfType<Element>()
+                .Where(e => list.Any(sel => MatchChain(sel, e)))
+                .ToList();
+            return MatchAnPlusB(a, b, element, fromLast, matched);
+        }
         return MatchAnPlusB(a, b, element, fromLast, false);
     }
 
     private static bool MatchNthOfType(string? argument, Element element, bool fromLast)
     {
-        if (string.IsNullOrEmpty(argument)) return false;
-        var (a, b) = ParseAnPlusB(argument);
+        if (!TryParseAnPlusB(argument, out int a, out int b)) return false;
         return MatchAnPlusB(a, b, element, fromLast, true);
     }
 
     /// <summary>
     /// The An+B microsyntax of CSS Pseudo-classes 4 §6.6.2. A malformed argument is not an
     /// error and must never reach the caller as an exception — one bad selector in a sheet
-    /// would otherwise take the matcher down for every element — so it comes back as (0, 0),
-    /// the pattern that matches no 1-based index.
+    /// would otherwise take the matcher down for every element — so it says so instead, and
+    /// the caller treats a selector it cannot read as one that matches nothing.
     /// </summary>
-    private static (int a, int b) ParseAnPlusB(string argument)
+    internal static bool TryParseAnPlusB(string? argument, out int a, out int b)
     {
-        argument = argument.Trim();
-        if (argument == "odd") return (2, 1);
-        if (argument == "even") return (2, 0);
-        if (argument.Length == 0) return (0, 0);
+        a = 0; b = 0;
+        argument = argument?.Trim();
+        if (string.IsNullOrEmpty(argument)) return false;
+        if (argument.Equals("odd", StringComparison.OrdinalIgnoreCase)) { a = 2; b = 1; return true; }
+        if (argument.Equals("even", StringComparison.OrdinalIgnoreCase)) { a = 2; b = 0; return true; }
 
-        int a = 0, b = 0;
         int i = 0;
         bool negative = false;
 
@@ -384,7 +397,7 @@ public class SelectorChecker
         int numStart = i;
         while (i < argument.Length && char.IsDigit(argument[i])) i++;
         string numStr = argument[numStart..i];
-        if (numStr.Length > 0 && !TryInteger(numStr, out a)) return (0, 0);
+        if (numStr.Length > 0 && !TryInteger(numStr, out a)) return false;
         if (negative) a = -a;
 
         if (i < argument.Length && (argument[i] == 'n' || argument[i] == 'N'))
@@ -400,24 +413,57 @@ public class SelectorChecker
                 SkipWhitespace(argument, ref i);
                 int bStart = i;
                 while (i < argument.Length && char.IsDigit(argument[i])) i++;
-                if (!TryInteger(argument[bStart..i], out b)) return (0, 0);
+                if (!TryInteger(argument[bStart..i], out b)) return false;
                 if (bNeg) b = -b;
             }
         }
         else
         {
-            // No 'n' at all: the whole argument has to read as one signed integer.
+            // No 'n' at all: the whole argument has to read as one signed integer, and the sign
+            // stays on it — ':nth-child(-3)' numbers a 1-based list, so it reaches no element
+            // (measured: the reference engine matches nothing for '-3' and the third child for
+            // '+3'). The sign the prologue above consumed belongs to this same number, which is
+            // why it is not applied twice here.
             a = 0;
-            if (!TryInteger(argument, out b)) return (0, 0);
+            if (!TryInteger(argument, out b)) return false;
         }
 
-        return i == argument.Length ? (a, b) : (0, 0);
+        if (i != argument.Length) return false;
+        return true;
     }
 
-    /// <summary>An integer that fits: a selector written as ':nth-child(99999999999999n)' is
-    /// malformed, not a crash.</summary>
-    private static bool TryInteger(string text, out int value) =>
-        int.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out value);
+    /// <summary>An integer the pattern can hold. A selector written as
+    /// ':nth-child(99999999999999n)' is not a crash and, in the reference engine, not a refusal
+    /// either: it is read as far as an integer goes and saturates there (measured — it prints back
+    /// as <c>2147483647n</c>). Anything that is not a signed integer at all is malformed.</summary>
+    private static bool TryInteger(string text, out int value)
+    {
+        value = 0;
+        if (text.Length == 0) return false;
+        if (!long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long wide))
+            return false;
+        value = wide > int.MaxValue ? int.MaxValue : wide < int.MinValue ? int.MinValue : (int)wide;
+        return true;
+    }
+
+    /// <summary>What a pattern reads back as. The reference engine keeps the two numbers rather than
+    /// the words they were written with, so <c>even</c> prints <c>2n</c>, <c>1n</c> prints <c>n</c>,
+    /// <c>2n+0</c> prints <c>2n</c> and a pattern with no <c>n</c> prints its constant alone — each
+    /// measured. It is the one spelling a selector's serialiser and a page's round-trip can share,
+    /// which is why the parser canonicalises its argument through here.</summary>
+    internal static string CanonicalAnPlusB(int a, int b)
+    {
+        if (a == 0) return b.ToString(CultureInfo.InvariantCulture);
+        var text = a switch
+        {
+            1 => "n",
+            -1 => "-n",
+            _ => a.ToString(CultureInfo.InvariantCulture) + "n",
+        };
+        if (b == 0) return text;
+        return text + (b > 0 ? "+" : "-") +
+            Math.Abs(b).ToString(CultureInfo.InvariantCulture);
+    }
 
     private static void SkipWhitespace(string s, ref int i)
     {
@@ -432,8 +478,12 @@ public class SelectorChecker
         var siblings = parent.Children.OfType<Element>().ToList();
         if (ofType)
             siblings = siblings.Where(e => e.TagName == element.TagName).ToList();
-        if (fromLast)
-            siblings.Reverse();
+        return MatchAnPlusB(a, b, element, fromLast, siblings);
+    }
+
+    private static bool MatchAnPlusB(int a, int b, Element element, bool fromLast, List<Element> siblings)
+    {
+        if (fromLast) siblings.Reverse();
 
         int index = siblings.IndexOf(element);
         if (index < 0) return false;

@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body>
+<div id="c"><a class="k">1</a><b>b1</b><a>2</a><b>b2</b><a class="k">3</a></div>
+<script>
+const c = document.getElementById('c');
+const L = [];
+const q = (root, sel) => { try { return Array.from(root.querySelectorAll(sel)).map(e => e.textContent).join(','); } catch (e) { return 'THROW'; } };
+L.push('doc nth-of-type2: ' + q(document, '#c a:nth-of-type(2)'));
+L.push('doc nth-child3  : ' + q(document, '#c a:nth-child(3)'));
+L.push('el  nth-child3  : ' + q(c, 'a:nth-child(3)'));
+L.push('el  nth-child1  : ' + q(c, 'a:nth-child(1)'));
+L.push('el  .k          : ' + q(c, '.k'));
+L.push('el  a.k         : ' + q(c, 'a.k'));
+L.push('el  b:nth(1)    : ' + q(c, 'b:nth-of-type(1)'));
+L.push('doc b:nth(1)    : ' + q(document, '#c b:nth-of-type(1)'));
+L.push('doc a:nth(2n+1) : ' + q(document, '#c a:nth-of-type(2n+1)'));
+L.push('el  a:nth(2n+1) : ' + q(c, 'a:nth-of-type(2n+1)'));
+console.log(L.join('\n'));
+</script></body></html>

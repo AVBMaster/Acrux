@@ -37,6 +37,12 @@ public static class CssValueText
         if (string.IsNullOrEmpty(value)) return value ?? string.Empty;
         if (value!.IndexOf("var(", StringComparison.OrdinalIgnoreCase) >= 0) return value;
 
+        // '-webkit-mask-box-image-slice' prints its numbers ahead of its 'fill' flag, whichever end
+        // of the list the author put the flag on: 'fill 3' reads back as '3 fill' (measured).
+        if (property != null
+            && property.Equals("-webkit-mask-box-image-slice", StringComparison.OrdinalIgnoreCase))
+            value = MaskBoxImageShorthand.NormalizeSlice(value);
+
         // Whether a bare 0 in this value is a length. Known by the property, not by the text:
         // 'columns: 0' is a width and prints '0px', 'scale: 0' is a factor and prints '0'.
         bool lengths = property != null && Resolver.CssPropertyTraits.TakesLength(property);
@@ -113,7 +119,7 @@ public static class CssValueText
                 afterSlash = false;
                 continue;
             }
-            if (IsIdentStart(c))
+            if (IsIdentStart(c) && !(c is '-' or '+' && StartsNumber(value, i + 1)))
             {
                 int start = i;
                 while (i < value.Length && IsIdentPart(value[i])) i++;
@@ -466,7 +472,9 @@ public static class CssValueText
         if (token.Length == 0
             || !(char.IsAsciiDigit(token[0]) || token[0] == '.' || token[0] == '+' || token[0] == '-'))
             return token;
-        int i = 0;
+        // A leading sign belongs to the number, so the scan starts after it — otherwise the
+        // number part reads as empty and '-0px' survives instead of becoming '0px'.
+        int i = token[0] is '+' or '-' ? 1 : 0;
         while (i < token.Length && (char.IsAsciiDigit(token[i]) || token[i] == '.')) i++;
         // An exponent belongs to the number, so '1e3px' splits after the last digit, not at the 'e'.
         if (i < token.Length && (token[i] == 'e' || token[i] == 'E'))
@@ -511,7 +519,7 @@ public static class CssValueText
         return MapLayers(text, layer => FoldColorWordsInLayer(layer, property));
     }
 
-    private static string FoldColorWordsInLayer(string text, string property, bool insideFunction = false)
+    private static string FoldColorWordsInLayer(string text, string property)
     {
         var words = SplitTopLevelWords(text);
         for (int i = 0; i < words.Count; i++)
@@ -524,25 +532,20 @@ public static class CssValueText
                 // 'color-mix()' here would replace what the page wrote with a number no page asked
                 // for — but it does parse the arguments, so those print canonically:
                 // 'linear-gradient(45DEG, RED 10%, BLUE)' is 'linear-gradient(45deg, red 10%, blue)'
-                // and 'color-mix(in srgb, RED 50%, BLUE 50%)' has its colours lower-cased (measured).
-                if (ColorParser.IsColorToken(word) && IsPlainColorFunction(word) && !insideFunction)
+                // and 'color-mix(in hsl, hsl(0 100% 50%), …)' has its stops folded to rgb() the way
+                // the reference engine prints them (measured; and re-read: the expansion was checked
+                // against the background, border-image and color-mix parsers alike).
+                if (ColorParser.IsColorToken(word) && IsPlainColorFunction(word))
                     words[i] = CssColorText.FromColor(ColorParser.Parse(word));
                 else
                     words[i] = InsideFunction(word,
-                        inner => MapLayers(inner, layer => FoldColorWordsInLayer(layer, property, true)));
+                        inner => MapLayers(inner, layer => FoldColorWordsInLayer(layer, property)));
                 continue;
             }
             if (!ColorParser.IsColorToken(word)) continue;
-            // Inside a function's arguments a colour literal stays in the form the author chose.
-            // The reference engine does rewrite '#e33' to 'rgb(238, 51, 51)' there, but this
-            // engine's image parser reads a gradient's colour list by splitting on commas, and a
-            // colour that now carries commas inside it is no longer one stop — the echo would not
-            // survive being parsed again, and measured it does not: a border-image gradient lost
-            // both its colours when the literal was expanded (b27). The round-trip rule wins over
-            // the spelling rule.
             if (word[0] == '#')
             {
-                if (!insideFunction) words[i] = CssColorText.FromColor(ColorParser.Parse(word));
+                words[i] = CssColorText.FromColor(ColorParser.Parse(word));
                 continue;
             }
             if (ColorParser.IsColorName(word)
@@ -568,12 +571,7 @@ public static class CssValueText
     }
 
     private static readonly string[] OpaqueArgumentFunctions =
-        { "url", "src", "local", "format", "domain", "regexp", "prefix", "image-set",
-          // 'color-mix' resolves its arguments in a named colour space: rewriting
-          // 'color-mix(in hsl, hsl(0 100% 50%), …)' into rgb() arguments is not a spelling change
-          // but a different value, and this engine's mix reads the space back from the text.
-          // Folding its arguments properly means folding the colour space too — still open (#68).
-          "color-mix" };
+        { "url", "src", "local", "format", "domain", "regexp", "prefix", "image-set" };
 
     /// <summary>Print the words a property's grammar owns in their canonical spelling. The engine
     /// stores the value it parsed rather than the text it read, so a keyword comes back in lower

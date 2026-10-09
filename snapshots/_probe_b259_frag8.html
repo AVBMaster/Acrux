@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>FRAG8</title></head><body>
+<div id="stage"></div>
+<script>
+const stage = document.getElementById('stage');
+stage.style.cssText = 'position:absolute;left:-4000px;top:0;width:100px;font:16px/20px Arial';
+const out = [];
+function run(label, style) {
+  stage.innerHTML = '<div id="w"><span id="s" style="' + style + '">a<br>b</span></div>';
+  const sp = stage.querySelector('#s');
+  const rg = document.createRange(); rg.selectNodeContents(sp.firstChild);
+  const g = rg.getBoundingClientRect();
+  const r = Array.from(sp.getClientRects());
+  out.push(label + ' glyph=' + (g.left + 4000).toFixed(2) + '/' + g.width.toFixed(2) + ' n=' + r.length
+    + ' ' + r.map(x => '[' + (x.left + 4000).toFixed(2) + ' ' + x.width.toFixed(2) + ']').join(' '));
+}
+run('pL4', 'padding-left:4px');
+run('pR4', 'padding-right:4px');
+run('bL2', 'border-left:2px solid #333');
+run('pL4bR2', 'padding-left:4px;border-right:2px solid #333');
+run('pL4-clone', 'box-decoration-break:clone;padding-left:4px');
+console.log(out.join('\n'));
+</script>
+</body></html>

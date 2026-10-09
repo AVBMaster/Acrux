@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+q:nth-child(abc) { color: rgb(1,1,7); }
+q:nth-child(2n) { color: rgb(1,1,1); }
+q:nth-child( 2n of b ) { color: rgb(1,2,1); }
+q:nth-of-type(0n+3) { color: rgb(1,2,3); }
+</style></head><body>
+<div id="c"><q>1</q><b></b><q>2</q><b></b><q>3</q></div>
+<script>
+const s = document.styleSheets[0];
+const out = ['count=' + s.cssRules.length];
+for (let i = 0; i < s.cssRules.length; i++) out.push(i + ' <' + s.cssRules[i].selectorText + '>');
+window.__result = out.join("\n");
+console.log(window.__result);
+</script>
+</body></html>

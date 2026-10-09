@@ -128,6 +128,12 @@ public class CssSelector
     public string? Argument { get; set; }
     public List<CssSelector>? SelectorList { get; set; }
 
+    /// <summary>Whether an ':nth-child()' / ':nth-last-child()' argument wrote the 'of' keyword in
+    /// front of its selector list. The list itself cannot carry that answer: a pattern with no 'of'
+    /// and an 'of' whose list the grammar refused both end up with nothing in it, and only one of
+    /// them is meant to match an element that is not in the list.</summary>
+    public bool NthOfPresent { get; set; }
+
     public int A { get; set; }
     public int B { get; set; }
 
@@ -270,9 +276,22 @@ public class CssSelector
             return prefix + (TagName ?? "*");
         }
         if (MatchType == CssSelectorMatchType.PseudoClass)
-            return $":{PseudoType.ToString().ToLowerInvariant()}({Argument})" is var s && Argument != null ? s : $":{PseudoType.ToString().ToLowerInvariant()}";
+        {
+            // The name is the one the grammar reads, not the enum's spelling: 'FirstChild' has to
+            // come back out as 'first-child' (measured: the reference engine prints the hyphen).
+            var name = CssSelectorParser.PseudoTypeToName(PseudoType, isPseudoElement: false);
+            // 'An+B of S' keeps its keyword on the way out, with the list printed the way any other
+            // selector list prints (measured: 'nth-child(even of b)' reads 'nth-child(2n of b)').
+            if (NthOfPresent && SelectorList != null)
+                return $":{name}({Argument} of {string.Join(", ", SelectorList.Select(s => s.ToComplexText()))})";
+            return Argument != null ? $":{name}({Argument})" : $":{name}";
+        }
         if (MatchType == CssSelectorMatchType.PseudoElement)
-            return $"::{PseudoType.ToString().ToLowerInvariant()}";
+        {
+            var name = $"::{CssSelectorParser.PseudoTypeToName(PseudoType, isPseudoElement: true)}";
+            // '::part(tab)' and '::slotted(li)' say something a bare name does not.
+            return Argument != null ? $"{name}({Argument})" : name;
+        }
         if (MatchType is CssSelectorMatchType.AttributeExact or CssSelectorMatchType.AttributeSet or
             CssSelectorMatchType.AttributeHyphen or CssSelectorMatchType.AttributeList or
             CssSelectorMatchType.AttributeContain or CssSelectorMatchType.AttributeBegin or

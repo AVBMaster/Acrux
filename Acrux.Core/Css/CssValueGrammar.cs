@@ -155,50 +155,42 @@ public static class CssValueGrammar
         },
         "-webkit-font-smoothing" => static t =>
             IsOneWord(t, "auto", "none", "antialiased", "subpixel-antialiased"),
+        // The source is one image and nothing beside it: 'none' and a gradient read, while
+        // 'url(a.png) none' is refused (both measured) because the property's grammar has one
+        // <image> in it, not a list.
         "-webkit-mask-box-image-source" => static t => t.Trim().Equals("none", StringComparison.OrdinalIgnoreCase)
-            || IsImageFunction(t.Trim()),
-        // The slice is one to four numbers with an optional 'fill'; a bare 'fill' is no slice and
-        // five of anything is no list.
+            || IsOneImageFunction(t.Trim()),
+        // The slice is one to four non-negative numbers or percentages with an optional 'fill'. The
+        // flag rides either end of the list — '2 fill' and 'fill 2' both read — but never inside it
+        // ('3 fill 2' is refused), never on its own, and never twice. A negative number is refused
+        // while a percentage is not (all measured).
         "-webkit-mask-box-image-slice" => static t =>
         {
             var parts = SplitComponents(t).ToList();
-            if (parts.Count is < 1 or > 5) return false;
-            // 'fill' is the one word the slice list owns, and it may sit at either end; the
-            // numbers beside it are unitless, and a length among them is no slice either.
-            if (parts.Count > 1 && parts[^1].Equals("fill", StringComparison.OrdinalIgnoreCase))
+            if (parts.Count > 0 && parts[^1].Equals("fill", StringComparison.OrdinalIgnoreCase))
                 parts.RemoveAt(parts.Count - 1);
-            return parts.Count is >= 1 and <= 4 && parts.TrueForAll(IsNumber)
-                && parts.TrueForAll(p => !p.Contains('%'));
+            else if (parts.Count > 1 && parts[0].Equals("fill", StringComparison.OrdinalIgnoreCase))
+                parts.RemoveAt(0);
+            return parts.Count is >= 1 and <= 4
+                && parts.TrueForAll(MaskBoxImageShorthand.SlicePartIsValid);
         },
+        // The outset is one to four lengths, and a bare number is one of them (measured '2'
+        // stands); 'auto' is not.
         "-webkit-mask-box-image-outset" => static t =>
         {
             var parts = SplitComponents(t).ToList();
-            return parts.Count is >= 1 and <= 4 && parts.TrueForAll(IsPlainLength);
+            return parts.Count is >= 1 and <= 4 && parts.TrueForAll(MaskBoxImageShorthand.OutsetPartIsValid);
         },
         "-webkit-mask-box-image-width" => static t =>
         {
             var parts = SplitComponents(t).ToList();
-            if (parts.Count is < 1 or > 4) return false;
-            foreach (var part in parts)
-            {
-                if (part.Equals("auto", StringComparison.OrdinalIgnoreCase)) continue;
-                // Negative widths are refused while percentages are not (both measured).
-                if (part.StartsWith("-", StringComparison.Ordinal)) return false;
-                // The width is the one piece of the nine-patch that takes a bare number as well as
-                // a length and a percentage (measured: '1 2 3 4' and '50%' and '4px' all stand).
-                if (IsPlainLength(part) || IsPercentage(part) || IsNumber(part)) continue;
-                return false;
-            }
-            return true;
+            // Negative widths are refused while percentages and bare numbers are not (measured).
+            return parts.Count is >= 1 and <= 4 && parts.TrueForAll(MaskBoxImageShorthand.WidthPartIsValid);
         },
-        // The shorthand takes no gate beyond its first component: the five longhands it expands
-        // into are decided by the pieces, and a first piece that is no image is no value
-        // (measured 'red' and 'bogus' both read back empty while 'url(a.png) 3 fill / 4px' stands).
-        "-webkit-mask-box-image" => static t =>
-        {
-            var first = SplitComponents(t).FirstOrDefault();
-            return first.Equals("none", StringComparison.OrdinalIgnoreCase) || IsImageFunction(first);
-        },
+        // The shorthand has a grammar of its own because it is not a value the engine keeps: it
+        // expands into five longhands and reads back as nothing, so what it accepts has to be
+        // decided section by section (snapshots/_b259_mask_box_image_truth.txt).
+        "-webkit-mask-box-image" => static t => MaskBoxImageShorthand.TextIsValid(t),
         "-webkit-tap-highlight-color" => static t => IsOneColor(t),
         "-webkit-text-fill-color" => static t => IsOneColor(t),
         "-webkit-text-stroke-color" => static t => IsOneColor(t),
@@ -294,6 +286,29 @@ public static class CssValueGrammar
         if (name.Equals("url", StringComparison.OrdinalIgnoreCase)) return true;
         foreach (var image in ImageFunctionNames)
             if (name.Equals(image, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>True when the text is one image function and nothing else — the closing parenthesis
+    /// that ends it is the last character, so 'url(a.png) none' is not a single image.</summary>
+    private static bool IsOneImageFunction(string text)
+    {
+        if (!IsImageFunction(text)) return false;
+        int depth = 0;
+        char quote = '\0';
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (quote != '\0')
+            {
+                if (c == '\\' && i + 1 < text.Length) i++;
+                else if (c == quote) quote = '\0';
+                continue;
+            }
+            if (c is '"' or '\'') { quote = c; continue; }
+            if (c == '(') depth++;
+            else if (c == ')' && --depth == 0) return i == text.Length - 1;
+        }
         return false;
     }
 

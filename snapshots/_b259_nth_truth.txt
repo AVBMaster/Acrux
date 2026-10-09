@@ -1,0 +1,103 @@
+Reference-engine (Blink, Chromium 150 build behind browser-use) answers for
+snapshots/nth5-probe surface, harvested 2026-10-10 through evaluate_script:
+  * 'M' rows — Array.from(document.querySelectorAll(sel)).map(e => e.textContent)
+    over <div id=c> a.k b a b a.k c a b </div> (children 1..8)
+  * 'E' rows — the selectorText the engine keeps after insertRule('q:<case>{color:red}')
+    on a freshly appended <style>; INVALID means insertRule threw SyntaxError.
+
+M a:nth-child(3) -> [2]
+M a:nth-child(1n+3) -> [2,3,4]
+M a:nth-child(0n+3) -> [2]
+M a:nth-child(2n+1) -> [1,2,3,4]
+M a:nth-child(2n) -> []
+M a:nth-child(-n+2) -> [1]
+M a:nth-child(n+2) -> [2,3,4]
+M a:nth-child(odd) -> [1,2,3,4]
+M a:nth-child(even) -> []
+M a:nth-child(3n-1) -> [3]
+M a:nth-child(-3) -> []
+M a:nth-child(+3) -> [2]
+M a:nth-child(0n + 3) -> [2]
+M a:nth-child(2n + 1) -> [1,2,3,4]
+M a:nth-child(-n + 2) -> [1]
+M a:nth-child(2n+0) -> []
+M a:nth-child(n+ 3) -> [2,3,4]
+M a:nth-child(n +3) -> [2,3,4]
+M a:nth-child( 2n + 1 ) -> [1,2,3,4]
+M a:nth-child(2n+1 of b) -> []
+M a:nth-child(2n of b) -> []
+M a:nth-child(1 of b) -> []
+M a:nth-child(3 of b) -> []
+M a:nth-child(even of b) -> []
+M a:nth-child(odd of b) -> []
+M a:nth-child(2n+1 of .k) -> [1]
+M a:nth-child(2 of .k) -> [3]
+M a:nth-last-child(2n+1 of b) -> []
+M a:nth-child(2n+1 of a) -> [1,3]
+M a:nth-child(2n+1 of b, c) -> []
+M a:nth-last-child(1 of b) -> []
+M a:nth-child(n) -> [1,2,3,4]
+M a:nth-child(-n) -> []
+M a:nth-child(n-0) -> [1,2,3,4]
+M a:nth-child(0n+0) -> []
+M a:nth-child(0n-0) -> []
+M a:nth-child(-0n+2) -> []
+M a:nth-child(+0) -> []
+M a:nth-child(2N+1) -> [1,2,3,4]
+M a:nth-child(ODD) -> [1,2,3,4]
+M a:nth-child(0) -> []
+M a:nth-child(99999999999999n) -> []
+M a:nth-of-type(2n+1) -> [1,3]
+M a:nth-of-type(2) -> [2]
+M a:nth-last-of-type(1) -> [4]
+M a:nth-last-child(2n) -> [1,2,3,4]
+M a:nth-last-child(-n+2) -> [4]
+M a:nth-child(2 of c) -> []
+E nth-child(even) => q:nth-child(2n)
+E nth-child(odd) => q:nth-child(2n+1)
+E nth-child(2n) => q:nth-child(2n)
+E nth-child(2n+0) => q:nth-child(2n)
+E nth-child(n) => q:nth-child(n)
+E nth-child(N) => q:nth-child(n)
+E nth-child(1n) => q:nth-child(n)
+E nth-child(-n) => q:nth-child(-n)
+E nth-child(-n+2) => q:nth-child(-n+2)
+E nth-child(n-0) => q:nth-child(n)
+E nth-child(3n-1) => q:nth-child(3n-1)
+E nth-child(0) => q:nth-child(0)
+E nth-child(0n+0) => q:nth-child(0)
+E nth-child(0n-0) => q:nth-child(0)
+E nth-child(-0n+2) => q:nth-child(2)
+E nth-child(0n+3) => q:nth-child(3)
+E nth-child( 2n + 1 ) => q:nth-child(2n+1)
+E nth-child(n+ 3) => q:nth-child(n+3)
+E nth-child(n +3) => q:nth-child(n+3)
+E nth-child(+3) => q:nth-child(3)
+E nth-child(+ 3) => INVALID
+E nth-child(-3) => q:nth-child(-3)
+E nth-child(+0) => q:nth-child(0)
+E nth-child(5n+) => INVALID
+E nth-child() => INVALID
+E nth-child(abc) => INVALID
+E nth-child(3 n) => INVALID
+E nth-child(- 3) => INVALID
+E nth-child(99999999999999n) => q:nth-child(2147483647n)
+E nth-child(2.5n) => INVALID
+E nth-child(2n+1.5) => INVALID
+E nth-child(odd of b) => q:nth-child(2n+1 of b)
+E nth-child(ODD OF B) => INVALID
+E nth-child(ODD of b) => q:nth-child(2n+1 of b)
+E nth-child(Odd Of B) => INVALID
+E nth-child( 2n of b ) => q:nth-child(2n of b)
+E nth-child(2n+1 of b , c) => q:nth-child(2n+1 of b, c)
+E nth-child(2n+1 of (b)) => INVALID
+E nth-child(2n+1of b) => INVALID
+E nth-child(2n+1 of ) => INVALID
+E nth-child( of b) => INVALID
+E nth-child(even of b) => q:nth-child(2n of b)
+E nth-of-type(0n+3) => q:nth-of-type(3)
+E nth-last-child(2 of b) => q:nth-last-child(2 of b)
+E NTH-CHILD(2n) => q:nth-child(2n)
+E nth-child(2n+1 of b, c) => q:nth-child(2n+1 of b, c)
+E nth-child(2n+1 of .k) => q:nth-child(2n+1 of .k)
+E nth-last-child(n+2 of b) => q:nth-last-child(n+2 of b)

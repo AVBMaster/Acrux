@@ -1,0 +1,27 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;font:16px/20px Arial}#log{font:12px monospace;white-space:pre}</style></head>
+<body><div id="stage" style="position:absolute;left:-4000px;top:0"></div><div id="log"></div><script>
+var log=document.getElementById('log'),stage=document.getElementById('stage');
+function emit(t){log.textContent+=t+'\n';}
+var cases=[
+ ['color','<span id="s" style="color:red">a<br>b</span>'],
+ ['bg-transparent','<span id="s" style="background:transparent">a<br>b</span>'],
+ ['border-tp','<span id="s" style="border:1px solid transparent">a<br>b</span>'],
+ ['pad-left','<span id="s" style="padding-left:6px">a<br>b</span>'],
+ ['pad-right','<span id="s" style="padding-right:6px">a<br>b</span>'],
+ ['pad-top','<span id="s" style="padding-top:6px">a<br>b</span>'],
+ ['margin-left','<span id="s" style="margin-left:6px">a<br>b</span>'],
+ ['outline','<span id="s" style="outline:2px solid red">a<br>b</span>'],
+ ['br-child-bg','<span id="s">a<span style="background:#fee"><br></span>b</span>'],
+ ['soft-wrap','<span id="s" style="background:#fee">aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa b</span>'],
+ ['soft-wrap-plain','<span id="s">aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa b</span>'],
+ ['wbr','<span id="s">aaaaaa<wbr>aaaaaa</span>']
+];
+for(var i=0;i<cases.length;i++){
+ stage.innerHTML='<div style="width:300px">'+cases[i][1]+'</div>';
+ var s=stage.querySelector('#s'),r=s.getClientRects();
+ var parts=[];for(var j=0;j<r.length;j++)parts.push('['+Math.round(r[j].left+4000)+','+Math.round(r[j].top)+','+Math.round(r[j].width)+','+Math.round(r[j].height)+']');
+ emit(cases[i][0]+' n='+r.length+' '+parts.join(''));
+}
+stage.innerHTML='';
+console.log(log.textContent);
+</script></body></html>

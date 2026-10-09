@@ -12,6 +12,8 @@ public class CssParserTokenStream
     private bool _hasLookahead;
     private int _currentOffset;
     private int _lookaheadOffset;
+    private int _currentStart;
+    private int _lookaheadStart;
     private int _currentLine;
     private int _currentColumn;
 
@@ -25,6 +27,7 @@ public class CssParserTokenStream
         _tokenizer = tokenizer;
         _current = _tokenizer.TokenizeSingle();
         _currentOffset = _tokenizer.Offset;
+        _currentStart = _tokenizer.PreviousOffset;
         _currentLine = _tokenizer.Line;
         _currentColumn = _tokenizer.Column;
     }
@@ -37,11 +40,11 @@ public class CssParserTokenStream
     /// that is not inside one leaves the same characters an ident and a number.</summary>
     public void SetUnicodeRangesAllowed(bool allowed) => _tokenizer.SetUnicodeRangesAllowed(allowed);
 
-    /// <summary>Where the current token begins in the source. The tokenizer keeps this for the token
-    /// it last produced, which is the current one as long as nothing has been looked ahead at, so
+    /// <summary>Where the current token begins in the source. The stream keeps this for the token it
+    /// is holding, so it stays right even while a looked-ahead token is waiting, which is what lets
     /// a caller that wants the text between two tokens can cut it out verbatim — the spelling a
     /// CSS '@import' 'supports()' keeps is the page's own, spaces and all.</summary>
-    public int TokenStart => _tokenizer.PreviousOffset;
+    public int TokenStart => _currentStart;
 
     /// <summary>The source text between two offsets, exactly as the page wrote it.</summary>
     public string RawRange(int start, int end) =>
@@ -57,6 +60,7 @@ public class CssParserTokenStream
         {
             _lookahead = _tokenizer.TokenizeSingle();
             _lookaheadOffset = _tokenizer.Offset;
+            _lookaheadStart = _tokenizer.PreviousOffset;
             _hasLookahead = true;
         }
         return _lookahead;
@@ -68,6 +72,7 @@ public class CssParserTokenStream
         {
             _current = _lookahead;
             _currentOffset = _lookaheadOffset;
+            _currentStart = _lookaheadStart;
             _currentLine = _lookahead.Line;
             _currentColumn = _lookahead.Column;
             _hasLookahead = false;
@@ -76,6 +81,7 @@ public class CssParserTokenStream
         {
             _current = _tokenizer.TokenizeSingle();
             _currentOffset = _tokenizer.Offset;
+            _currentStart = _tokenizer.PreviousOffset;
             _currentLine = _tokenizer.Line;
             _currentColumn = _tokenizer.Column;
         }
@@ -125,6 +131,7 @@ public class CssParserTokenStream
                     {
                         _current = _tokenizer.TokenizeSingle();
                         _currentOffset = _tokenizer.Offset;
+                        _currentStart = _tokenizer.PreviousOffset;
                         return _tokenizer.StringRangeFrom(start);
                     }
                     break;

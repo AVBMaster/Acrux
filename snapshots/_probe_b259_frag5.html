@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>FRAG5</title></head><body>
+<div id="stage"></div>
+<script>
+const stage = document.getElementById('stage');
+stage.style.cssText = 'position:absolute;left:-4000px;top:0;width:300px;font:16px/20px Arial';
+const lines = [];
+function rects(html) {
+  stage.innerHTML = '<div id="w">' + html + '</div>';
+  return Array.from(stage.querySelector('#s').getClientRects());
+}
+function dump(tag, html) {
+  const r = rects(html);
+  lines.push(tag + ' n=' + r.length
+    + ' w=' + r.map(x => Math.round(x.width)).join(',')
+    + ' h=' + r.map(x => Math.round(x.height)).join(',')
+    + ' x=' + r.map(x => Math.round(x.left) + 4000).join(',')
+    + ' y=' + r.map(x => Math.round(x.top)).join(','));
+}
+dump('plain', '<span id="s">a<br>b<br>c</span>');
+dump('bg', '<span id="s" style="background:#fff">a<br>b<br>c</span>');
+dump('bgimage', '<span id="s" style="background:url(x.png)">a<br>b</span>');
+dump('outline1', '<span id="s" style="outline:1px solid red">a<br>b</span>');
+dump('border1', '<span id="s" style="border:1px solid red">a<br>b</span>');
+dump('pad4', '<span id="s" style="padding:0 4px">a<br>b</span>');
+dump('pad0', '<span id="s" style="padding:0">a<br>b</span>');
+dump('margin0', '<span id="s" style="margin:0">a<br>b</span>');
+dump('slice3', '<span id="s" style="padding:0 6px;border:2px solid #333">ab<br>ab<br>ab</span>');
+dump('clone3', '<span id="s" style="box-decoration-break:clone;padding:0 6px;border:2px solid #333">ab<br>ab<br>ab</span>');
+dump('outside', '<span id="s">a</span><br>x<br>y');
+dump('empty', '<span id="s"></span>');
+dump('wbr', '<span id="s">a<wbr>b</span>');
+dump('nested', '<span id="s">a<span>b</span>c</span>');
+dump('inlineblock', '<span id="s">a<span style="display:inline-block;width:20px;height:10px"></span>b</span>');
+dump('two', '<span id="s">a<br>b</span>');
+dump('trailing', '<span id="s">a<br>b<br></span>');
+dump('blockchild', '<span id="s">a<div style="width:10px;height:10px">d</div>b</span>');
+window.__result = lines.join('\n');
+console.log(window.__result);
+</script>
+</body></html>

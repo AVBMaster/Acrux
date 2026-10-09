@@ -915,27 +915,17 @@ public class ElementHost
         }
     }
 
-    private static bool MatchesSelector(Element el, string selector)
-    {
-        selector = selector.Trim();
-        if (selector == "*")
-            return true;
-        if (selector.StartsWith('#'))
-            return el.Id == selector[1..];
-        if (selector.StartsWith('.'))
-            return el.HasClass(selector[1..]);
-        return el.TagName.Equals(selector, StringComparison.OrdinalIgnoreCase);
-    }
+    // An element's own query methods have to answer the way the document's do, which means the
+    // engine's real selector matcher rather than a short list of shapes: 'a.k' and
+    // 'b:nth-of-type(1)' are queries an element's querySelectorAll used to return nothing for,
+    // while the same string through document.querySelectorAll found the element.
+    private static bool MatchesSelector(Element el, string selector) =>
+        Acrux.Core.Css.CssSelectorMatcher.Matches(selector, el);
 
     private static List<Element> QuerySelectorAllInternal(Element root, string selector)
     {
         var result = new List<Element>();
-        foreach (var child in root.Children.OfType<Element>())
-        {
-            if (MatchesSelector(child, selector))
-                result.Add(child);
-            result.AddRange(QuerySelectorAllInternal(child, selector));
-        }
+        Acrux.Core.Css.CssSelectorMatcher.CollectDescendants(root, selector, result);
         return result;
     }
 

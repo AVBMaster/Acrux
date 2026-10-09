@@ -61,7 +61,19 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         propertyName = CssPropertyIdExtensions.CanonicalName(propertyName);
         SyncWithAttribute();
         var old = GetStyle(propertyName);
-        if (!_element.Style.Remove(propertyName)) return "";
+        // A shorthand the block keeps as its longhands has to take those with it. The legacy
+        // '-webkit-mask-box-image' writes five longhands and stores nothing under its own name, so
+        // removing that name alone left all five in the block (measured: the reference engine is
+        // left with an empty block and every longhand reading back as the empty string).
+        bool removed;
+        if (Acrux.Core.Css.MaskBoxImageShorthand.IsShorthand(propertyName))
+        {
+            removed = _element.Style.Remove(propertyName);
+            foreach (var longhand in Acrux.Core.Css.MaskBoxImageShorthand.Longhands)
+                removed |= _element.Style.Remove(longhand);
+        }
+        else removed = _element.Style.Remove(propertyName);
+        if (!removed) return "";
         SyncAttribute();
         DirtyState.AddSelf(_element, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
         DomMutationTracker.Notify();
@@ -99,7 +111,7 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         {
             if (!_element.Style.Remove(name)) return;
         }
-        else _element.Style[name] = CanonicalSpecifiedValue(name, value!);
+        else StoreDeclaration(name, value!);
         SyncAttribute();
         DirtyState.AddSelf(_element, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
         DomMutationTracker.Notify();
@@ -108,7 +120,29 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
     private void WriteIfValid(string name, string value)
     {
         if (CssValueGrammar.TextIsValidFor(name, value))
-            _element.Style[name] = CanonicalSpecifiedValue(name, value);
+            StoreDeclaration(name, value);
+    }
+
+    /// <summary>Put one declaration into the block. One name is special: the reference engine keeps
+    /// no serialisation for the legacy <c>-webkit-mask-box-image</c> shorthand, so writing it
+    /// replaces the shorthand with its five longhands — the pieces the value left out printed as
+    /// <c>initial</c> — and the shorthand itself then reads back as the empty string (all measured,
+    /// snapshots/_b259_mask_box_image_truth.txt). The split therefore belongs to the block, not
+    /// to the printer.</summary>
+    private void StoreDeclaration(string name, string value)
+    {
+        if (Acrux.Core.Css.MaskBoxImageShorthand.IsShorthand(name)
+            && Acrux.Core.Css.MaskBoxImageShorthand.Parse(value) is { } parts)
+        {
+            _element.Style.Remove(name);
+            for (int i = 0; i < Acrux.Core.Css.MaskBoxImageShorthand.Longhands.Length; i++)
+            {
+                var longhand = Acrux.Core.Css.MaskBoxImageShorthand.Longhands[i];
+                _element.Style[longhand] = CanonicalSpecifiedValue(longhand, parts[i]);
+            }
+            return;
+        }
+        _element.Style[name] = CanonicalSpecifiedValue(name, value);
     }
 
     /// <summary>The inline declaration block, which is the 'style' attribute: the map is kept
@@ -135,7 +169,7 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         if (string.Equals(text, _mirroredAttribute, StringComparison.Ordinal)) return;
         _element.Style.Clear();
         foreach (var kv in Parse(text))
-            _element.Style[kv.Key] = CanonicalSpecifiedValue(kv.Key, kv.Value);
+            StoreDeclaration(kv.Key, kv.Value);
         _mirroredAttribute = text;
     }
 

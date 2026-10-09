@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>NTH5</title></head><body>
+<div id="c"><a class="k">1</a><b>b1</b><a>2</a><b>b2</b><a class="k">3</a><c>c1</c><a>4</a><b>b3</b></div>
+<script>
+const matchCases = [
+  "a:nth-child(3)", "a:nth-child(1n+3)", "a:nth-child(0n+3)", "a:nth-child(2n+1)",
+  "a:nth-child(2n)", "a:nth-child(-n+2)", "a:nth-child(n+2)", "a:nth-child(odd)",
+  "a:nth-child(even)", "a:nth-child(3n-1)", "a:nth-child(-3)", "a:nth-child(+3)",
+  "a:nth-child(0n + 3)", "a:nth-child(2n + 1)", "a:nth-child(-n + 2)", "a:nth-child(2n+0)",
+  "a:nth-child(n+ 3)", "a:nth-child(n +3)", "a:nth-child( 2n + 1 )",
+  "a:nth-child(2n+1 of b)", "a:nth-child(2n of b)", "a:nth-child(1 of b)",
+  "a:nth-child(3 of b)", "a:nth-child(even of b)", "a:nth-child(odd of b)",
+  "a:nth-child(2n+1 of .k)", "a:nth-child(2 of .k)", "a:nth-last-child(2n+1 of b)",
+  "a:nth-child(2n+1 of a)", "a:nth-child(2n+1 of b, c)", "a:nth-last-child(1 of b)",
+  "a:nth-child(n)", "a:nth-child(-n)", "a:nth-child(n-0)", "a:nth-child(0n+0)",
+  "a:nth-child(0n-0)", "a:nth-child(-0n+2)", "a:nth-child(+0)", "a:nth-child(2N+1)",
+  "a:nth-child(ODD)", "a:nth-child(0)", "a:nth-child(99999999999999n)",
+  "a:nth-of-type(2n+1)", "a:nth-of-type(2)", "a:nth-last-of-type(1)",
+  "a:nth-last-child(2n)", "a:nth-last-child(-n+2)", "a:nth-child(2 of c)"
+];
+const echoCases = [
+  "nth-child(even)", "nth-child(odd)", "nth-child(2n)", "nth-child(2n+0)", "nth-child(n)",
+  "nth-child(N)", "nth-child(1n)", "nth-child(-n)", "nth-child(-n+2)", "nth-child(n-0)",
+  "nth-child(3n-1)", "nth-child(0)", "nth-child(0n+0)", "nth-child(0n-0)", "nth-child(-0n+2)",
+  "nth-child(0n+3)", "nth-child( 2n + 1 )", "nth-child(n+ 3)", "nth-child(n +3)",
+  "nth-child(+3)", "nth-child(+ 3)", "nth-child(-3)", "nth-child(+0)", "nth-child(5n+)",
+  "nth-child()", "nth-child(abc)", "nth-child(3 n)", "nth-child(- 3)",
+  "nth-child(99999999999999n)", "nth-child(2.5n)", "nth-child(2n+1.5)",
+  "nth-child(odd of b)", "nth-child(ODD OF B)", "nth-child(ODD of b)", "nth-child(Odd Of B)",
+  "nth-child( 2n of b )", "nth-child(2n+1 of b , c)", "nth-child(2n+1 of (b))",
+  "nth-child(2n+1of b)", "nth-child(2n+1 of )", "nth-child( of b)", "nth-child(even of b)",
+  "nth-of-type(0n+3)", "nth-last-child(2 of b)", "NTH-CHILD(2n)", "nth-child(2n+1 of b, c)",
+  "nth-child(2n+1 of .k)", "nth-last-child(n+2 of b)"
+];
+const lines = [];
+for (const sel of matchCases) {
+  let list;
+  try { list = Array.from(document.querySelectorAll(sel)).map(e => e.textContent).join(","); }
+  catch (err) { list = "THROW"; }
+  lines.push("M " + sel + " -> [" + list + "]");
+}
+let sheet = null;
+try {
+  const st = document.createElement("style");
+  document.head.appendChild(st);
+  sheet = st.sheet;
+} catch (err) { sheet = null; }
+if (!sheet) lines.push("E NOSHEET");
+else for (const c of echoCases) {
+  try {
+    sheet.insertRule("q:" + c + "{color:red}", 0);
+    const echo = sheet.cssRules[0].selectorText;
+    sheet.deleteRule(0);
+    lines.push("E " + c + " => " + echo);
+  } catch (err) {
+    lines.push("E " + c + " => INVALID");
+  }
+}
+window.__result = lines.join("\n");
+console.log(window.__result);
+</script>
+</body></html>

@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 259 — the fragments a forced break leaves, where a sliced decoration goes, the legacy mask-box-image grammar, and what an An+B pattern reads as</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#markers { margin: 4px 0 0 4px; font: 16px/20px "Segoe UI", sans-serif; }
+#markers .brk { background: rgb(255,204,204); }
+#markers .slice { padding: 0 6px; border: 2px solid rgb(51,51,51); }
+#markers .clone { box-decoration-break: clone; padding: 0 6px; border: 2px solid rgb(51,51,51); }
+#markers .wrapit { width: 120px; }
+#stage { position: absolute; left: -4000px; top: 0; }
+#sheetProbe { position: absolute; left: -4000px; top: 0; }
+</style>
+</head>
+<body>
+<h4>b259 — CSSOM View 4 fragments again, this time the ones a &lt;br&gt; leaves behind (#262) and where box-decoration-break: slice puts the padding and border of a broken inline; the grammar and CSSOM shape of the legacy '-webkit-mask-box-image' family (#259); what an An+B pattern reads as and how it prints back, including ':nth-child(An+B of S)' (#265, #266); and the pseudo-class names a rule reads back with. Every want is what the reference engine answered for the same document. Geometry rows are written as differences between the fragments of one element, so neither the installed font nor the page's own origin can decide them.</h4>
+<div id="markers">
+  <div class="wrapit"><span class="brk" id="m1">ab<br>ab<br>ab</span></div>
+  <div class="wrapit"><span class="slice" id="m2">ab<br>ab<br>ab</span></div>
+  <div class="wrapit"><span class="clone" id="m3">ab<br>ab<br>ab</span></div>
+</div>
+<pre id="report"></pre>
+<div id="stage"></div>
+<div id="sheetProbe"></div>
+<script>
+const out = [];
+let failed = 0;
+function row(name, got, want) {
+  const ok = String(got) === String(want);
+  if (!ok) failed++;
+  out.push((ok ? 'ok   ' : 'FAIL ') + name.padEnd(34) + ' got=' + got + '   want=' + want);
+}
+function check(name, fn, want) {
+  let got;
+  // a row may hand in the value it already computed or a function that computes it lazily
+  try { got = typeof fn === 'function' ? fn() : fn; } catch (e) { got = 'ERR[' + e.name + ']'; }
+  row(name, got, want);
+}
+const stage = document.getElementById('stage');
+function html(markup) { stage.innerHTML = markup; }
+function byId(id) { return stage.querySelector('#' + id); }
+const f = (v) => Math.round(v * 100) / 100;
+// Everything below compares one fragment of an element against another fragment of the same
+// element, so the page's own origin and the glyph advances cancel out.
+function frag(htmlIn, fn) { html(htmlIn); return fn(byId('s').getClientRects()); }
+const R = (s) => Math.round(s);
+
+// ---- §1 the fragment a forced break leaves ---------------------------------
+// Each <br> inside an inline that paints nothing of its own leaves a zero-width fragment at the
+// point its content on that line stopped; the last line gets none (CSSOM View 4, #262).
+check('br-three-count', frag('<div style="width:300px"><span id="s">a<br>b<br>c</span></div>',
+  r => r.length), '5');
+check('br-breaks-are-zero-width', frag('<div style="width:300px"><span id="s">a<br>b<br>c</span></div>',
+  r => r[1].width + ',' + r[3].width), '0,0');
+check('br-break-at-text-end', frag('<div style="width:300px"><span id="s">a<br>b<br>c</span></div>',
+  r => R(r[1].left - r[0].right) + ',' + R(r[3].left - r[2].right)), '0,0');
+check('br-break-is-same-line', frag('<div style="width:300px"><span id="s">a<br>b<br>c</span></div>',
+  r => R(r[1].top - r[0].top) + ',' + R(r[1].height - r[0].height)), '0,0');
+check('br-line-order', frag('<div style="width:300px"><span id="s">a<br>b<br>c</span></div>',
+  r => (r[0].top === r[1].top) + ',' + (r[2].top === r[3].top) + ','
+    + (r[2].top > r[0].top) + ',' + (r[4].top > r[2].top)), 'true,true,true,true');
+check('br-two-count', frag('<div style="width:300px"><span id="s">a<br>b</span></div>',
+  r => r.length), '3');
+check('br-trailing-count', frag('<div style="width:300px"><span id="s">a<br>b<br></span></div>',
+  r => r.length + ',' + r[1].width + ',' + r[3].width), '4,0,0');
+check('br-outside-count', frag('<div style="width:300px"><span id="s">a</span><br>x<br>y</div>',
+  r => r.length), '1');
+// a nested inline box splits its parent's run; an atomic one does not (both measured)
+check('br-nested-owner', frag('<div style="width:300px"><span id="s">a<span>b</span>c</span></div>',
+  r => r.length), '3');
+check('br-child-span-count', frag('<div style="width:300px"><span id="s">a<br>b</span></div>',
+  r => r.length), '3');
+// A break adds nothing when the element paints a decoration of its own (measured over 27 cases).
+check('bg-breaks-suppressed', frag('<div style="width:300px"><span id="s" style="background:#fff">a<br>b<br>c</span></div>',
+  r => r.length), '3');
+check('bg-image-suppressed', frag('<div style="width:300px"><span id="s" style="background:url(x.png)">a<br>b</span></div>',
+  r => r.length), '2');
+check('outline-suppressed', frag('<div style="width:300px"><span id="s" style="outline:1px solid red">a<br>b</span></div>',
+  r => r.length), '2');
+check('border-suppressed', frag('<div style="width:300px"><span id="s" style="border:1px solid red">a<br>b</span></div>',
+  r => r.length + ',' + R(r[0].width - r[1].width)), '2,0');
+check('border-adds-both-vertical-edges', () => {
+  html('<div style="width:300px"><span id="s">a<br>b</span></div>');
+  const plain = byId('s').getClientRects()[0].height;
+  html('<div style="width:300px"><span id="s" style="border:1px solid red">a<br>b</span></div>');
+  const boxed = byId('s').getClientRects()[0].height;
+  return R(boxed - plain);
+}, '2');
+check('padding-suppressed', frag('<div style="width:300px"><span id="s" style="padding:0 4px">a<br>b</span></div>',
+  r => r.length), '2');
+check('zero-padding-keeps-breaks', frag('<div style="width:300px"><span id="s" style="padding:0">a<br>b</span></div>',
+  r => r.length), '3');
+check('zero-border-keeps-breaks', frag('<div style="width:300px"><span id="s" style="border:0 solid red">a<br>b</span></div>',
+  r => r.length), '3');
+check('zero-margin-keeps-breaks', frag('<div style="width:300px"><span id="s" style="margin:0">a<br>b</span></div>',
+  r => r.length), '3');
+check('zero-outline-keeps-breaks', frag('<div style="width:300px"><span id="s" style="outline:0 solid red">a<br>b</span></div>',
+  r => r.length), '3');
+// one fragment that surrounds the atomic box, whatever the glyphs on either side of it weigh
+check('inline-block-run', frag('<div style="width:300px"><span id="s">a<span id="ib" style="display:inline-block;width:20px;height:10px"></span>b</span></div>',
+  r => r.length + ',' + (r[0].left < byId('ib').getBoundingClientRect().left)
+    + ',' + (r[0].right > byId('ib').getBoundingClientRect().right)), '1,true,true');
+check('replaced-run', frag('<div style="width:300px"><span id="s">a<img id="im" src="x.png" width="20" height="10">b</span></div>',
+  r => r.length + ',' + (r[0].left < byId('im').getBoundingClientRect().left)
+    + ',' + (r[0].right > byId('im').getBoundingClientRect().right)), '1,true,true');
+check('empty-inline-one-rect', frag('<div style="width:300px">x <span id="s"></span><span id="t">y</span></div>',
+  r => r.length + ',' + R(r[0].width) + ','
+    + R(byId('t').getClientRects()[0].height - r[0].height)), '1,0,0');
+// #264: an empty inline child — a <wbr> — splits its parent's fragment into two, and is itself a
+// third zero-width one. This engine keeps the whole run as one fragment, so the row fails.
+check('wbr-splits', frag('<div style="width:300px"><span id="s">a<wbr>b</span></div>',
+  r => r.length), '3');
+// ---- §2 where a sliced decoration goes ------------------------------------
+// With the initial 'slice', the inline-start edges belong to the first fragment and the
+// inline-end edges to the last; the block-axis edges belong to every one of them. 'clone' repeats
+// the whole decoration. (CSS Fragmentation 3 §4.2.)
+const start = 6 + 2, end = 6 + 2;         // padding-left 6 + border-left 2, and the same at the end
+check('slice-three-count', frag('<div style="width:300px"><span id="s" style="padding:0 6px;border:2px solid #333">ab<br>ab<br>ab</span></div>',
+  r => r.length), '3');
+check('slice-first-has-start-edges', frag('<div style="width:300px"><span id="s" style="padding:0 6px;border:2px solid #333">ab<br>ab<br>ab</span></div>',
+  r => R(r[0].width - r[1].width)), String(start));
+check('slice-middle-has-nothing', frag('<div style="width:300px"><span id="s" style="padding:0 6px;border:2px solid #333">ab<br>ab<br>ab</span></div>',
+  r => R(r[2].width - r[1].width)), String(end));
+check('slice-fragments-share-left', frag('<div style="width:300px"><span id="s" style="padding:0 6px;border:2px solid #333">ab<br>ab<br>ab</span></div>',
+  r => R(r[1].left - r[0].left) + ',' + R(r[2].left - r[1].left)), '0,0');
+check('slice-heights-equal', frag('<div style="width:300px"><span id="s" style="padding:0 6px;border:2px solid #333">ab<br>ab<br>ab</span></div>',
+  r => R(r[0].height - r[1].height) + ',' + R(r[1].height - r[2].height)), '0,0');
+check('clone-every-fragment-full', frag('<div style="width:300px"><span id="s" style="box-decoration-break:clone;padding:0 6px;border:2px solid #333">ab<br>ab<br>ab</span></div>',
+  r => R(r[0].width - r[1].width) + ',' + R(r[1].width - r[2].width)), '0,0');
+check('clone-wider-than-slice', frag('<div style="width:300px"><span id="s" style="box-decoration-break:clone;padding:0 6px;border:2px solid #333">ab<br>ab<br>ab</span></div>',
+  r => { const c = R(r[1].width); html('<div style="width:300px"><span id="s" style="padding:0 6px;border:2px solid #333">ab<br>ab<br>ab</span></div>');
+    return R(c - byId('s').getClientRects()[1].width); }), String(start + end));
+check('slice-start-only-padding', frag('<div style="width:300px"><span id="s" style="padding-left:4px">a<br>b</span></div>',
+  r => R(r[0].width - r[1].width)), '4');
+check('slice-end-only-padding', frag('<div style="width:300px"><span id="s" style="padding-right:4px">a<br>b</span></div>',
+  r => R(r[1].width - r[0].width)), '4');
+check('slice-start-border', frag('<div style="width:300px"><span id="s" style="border-left:2px solid #333">a<br>b</span></div>',
+  r => R(r[0].width - r[1].width)), '2');
+check('slice-asymmetric-both', frag('<div style="width:300px"><span id="s" style="padding-left:4px;border-right:2px solid #333">a<br>b</span></div>',
+  r => R(r[0].width - r[1].width) + ',' + R(r[1].width - r[0].width)), '2,-2');
+check('slice-vertical-on-every', () => {
+  html('<div style="width:300px"><span id="s">a<br>b</span></div>');
+  const plain = byId('s').getClientRects();
+  const n = plain.length;
+  html('<div style="width:300px"><span id="s" style="border-top:3px solid #333;border-bottom:1px solid #333">a<br>b</span></div>');
+  const r = byId('s').getClientRects();
+  return n + ',' + R(r[0].height - r[1].height) + ',' + R(r[0].height - plain[0].height);
+}, '3,0,4');
+check('clone-start-only', frag('<div style="width:300px"><span id="s" style="box-decoration-break:clone;padding-left:4px">a<br>b</span></div>',
+  r => R(r[0].width - r[1].width) + ',' + R(r[0].width - 6 - 4)), '0,0');
+// a wrapped inline is the same rule, with the break in the middle of a word run
+check('wrap-slice-count', frag('<div style="width:120px"><span id="s" style="padding:0 6px;border:2px solid #333">aaaaaaaaaa aaaaaaaaaa</span></div>',
+  r => r.length + ',' + R(r[0].width - r[1].width)), '2,0');
+check('wrap-clone-count', frag('<div style="width:120px"><span id="s" style="box-decoration-break:clone;padding:0 6px;border:2px solid #333">aaaaaaaaaa aaaaaaaaaa</span></div>',
+  r => r.length + ',' + R(r[0].width - r[1].width)), '2,0');
+check('union-is-fragments', frag('<div style="width:300px"><span id="s" style="padding:0 6px;border:2px solid #333">ab<br>ab<br>ab</span></div>',
+  r => { const b = byId('s').getBoundingClientRect();
+    return R(b.left - r[0].left) + ',' + R(b.right - r[2].right) + ',' + R(b.top - r[0].top) + ',' + R(b.bottom - r[2].bottom); }),
+  '0,0,0,0');
+
+// ---- §3 the legacy '-webkit-mask-box-image' family (#259) ----------------
+// The shorthand has no serialisation of its own: it writes its five longhands, the ones its value
+// leaves out are written as 'initial', and the shorthand itself reads back as nothing.
+const mbiCases = [
+  ['-webkit-mask-box-image-source', 'url(a.png)', 'mbi-source: url("a.png");'],
+  ['-webkit-mask-box-image-source', 'none', 'mbi-source: none;'],
+  ['-webkit-mask-box-image-source', 'linear-gradient(red,blue)', 'mbi-source: linear-gradient(red, blue);'],
+  ['-webkit-mask-box-image-source', 'url(a.png) none', 'REFUSED'],
+  ['-webkit-mask-box-image-slice', '2', 'mbi-slice: 2;'],
+  ['-webkit-mask-box-image-slice', '2 fill', 'mbi-slice: 2 fill;'],
+  ['-webkit-mask-box-image-slice', 'fill 2', 'mbi-slice: 2 fill;'],
+  ['-webkit-mask-box-image-slice', '1 2 3 4', 'mbi-slice: 1 2 3 4;'],
+  ['-webkit-mask-box-image-slice', '2 30%', 'mbi-slice: 2 30%;'],
+  ['-webkit-mask-box-image-slice', '-2', 'REFUSED'],
+  ['-webkit-mask-box-image-slice', 'fill', 'REFUSED'],
+  ['-webkit-mask-box-image-slice', '3 fill 2', 'REFUSED'],
+  ['-webkit-mask-box-image-slice', '2 2 2 2 fill fill', 'REFUSED'],
+  ['-webkit-mask-box-image-width', '4px', 'mbi-width: 4px;'],
+  ['-webkit-mask-box-image-width', '2', 'mbi-width: 2;'],
+  ['-webkit-mask-box-image-width', 'auto', 'mbi-width: auto;'],
+  ['-webkit-mask-box-image-width', '2 3', 'mbi-width: 2 3;'],
+  ['-webkit-mask-box-image-width', '4px auto', 'mbi-width: 4px auto;'],
+  ['-webkit-mask-box-image-width', '40%', 'mbi-width: 40%;'],
+  ['-webkit-mask-box-image-width', 'none', 'REFUSED'],
+  ['-webkit-mask-box-image-outset', '2px', 'mbi-outset: 2px;'],
+  ['-webkit-mask-box-image-outset', '2', 'mbi-outset: 2;'],
+  ['-webkit-mask-box-image-outset', '1px 2px 3px', 'mbi-outset: 1px 2px 3px;'],
+  ['-webkit-mask-box-image-outset', 'auto', 'REFUSED'],
+  ['-webkit-mask-box-image-outset', '-1px', 'REFUSED'],
+  ['-webkit-mask-box-image-outset', '40%', 'REFUSED'],
+  ['-webkit-mask-box-image-repeat', 'round', 'mbi-repeat: round;'],
+  ['-webkit-mask-box-image-repeat', 'round stretch', 'mbi-repeat: round stretch;'],
+  ['-webkit-mask-box-image-repeat', 'repeat-x', 'REFUSED'],
+  ['-webkit-mask-box-image', 'url(a.png) 3',
+    'mbi-source: url("a.png"); mbi-slice: 3 fill; mbi-width: initial; mbi-outset: initial; mbi-repeat: initial;'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 / 4px',
+    'mbi-source: url("a.png"); mbi-slice: 3 fill; mbi-width: 4px; mbi-outset: initial; mbi-repeat: initial;'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 / 4px / 2px',
+    'mbi-source: url("a.png"); mbi-slice: 3 fill; mbi-width: 4px; mbi-outset: 2px; mbi-repeat: initial;'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 / 4px / 2px round',
+    'mbi-source: url("a.png"); mbi-slice: 3 fill; mbi-width: 4px; mbi-outset: 2px; mbi-repeat: round;'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 / 4px / 5px repeat space',
+    'mbi-source: url("a.png"); mbi-slice: 3 fill; mbi-width: 4px; mbi-outset: 5px; mbi-repeat: repeat space;'],
+  ['-webkit-mask-box-image', 'url(a.png) 2 30% / 4px / 2px round',
+    'mbi-source: url("a.png"); mbi-slice: 2 30% fill; mbi-width: 4px; mbi-outset: 2px; mbi-repeat: round;'],
+  ['-webkit-mask-box-image', 'url(a.png) 1 2 3 4 fill / 5px 6px / 7px round stretch',
+    'mbi-source: url("a.png"); mbi-slice: 1 2 3 4 fill; mbi-width: 5px 6px; mbi-outset: 7px; mbi-repeat: round stretch;'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 4 5 6',
+    'mbi-source: url("a.png"); mbi-slice: 3 4 5 6 fill; mbi-width: initial; mbi-outset: initial; mbi-repeat: initial;'],
+  ['-webkit-mask-box-image', 'url(a.png) fill 3 / 4px',
+    'mbi-source: url("a.png"); mbi-slice: 3 fill; mbi-width: 4px; mbi-outset: initial; mbi-repeat: initial;'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 / / 2px',
+    'mbi-source: url("a.png"); mbi-slice: 3 fill; mbi-width: initial; mbi-outset: 2px; mbi-repeat: initial;'],
+  ['-webkit-mask-box-image', 'none',
+    'mbi-source: none; mbi-slice: initial; mbi-width: initial; mbi-outset: initial; mbi-repeat: initial;'],
+  ['-webkit-mask-box-image', 'url(a.png) / 4px', 'REFUSED'],
+  ['-webkit-mask-box-image', 'none / 4px', 'REFUSED'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 fill / 4px / 2px / round', 'REFUSED'],
+  ['-webkit-mask-box-image', 'url(a.png) 3 fill 2 / 4px', 'REFUSED'],
+  ['-webkit-mask-box-image', 'url(a.png) fill', 'REFUSED'],
+  ['-webkit-mask-box-image', 'url(a.png) 1 2 3 4 5', 'REFUSED'],
+];
+function mbiShape(name, value) {
+  const d = document.createElement('div');
+  d.style.setProperty(name, value);
+  const text = d.style.cssText.replace(/-webkit-mask-box-image/g, 'mbi');
+  return text.length === 0 ? 'REFUSED' : text;
+}
+for (const c of mbiCases) {
+  let got;
+  try { got = mbiShape(c[0], c[1]); } catch (e) { got = 'ERR[' + e.name + ']'; }
+  row('mbi ' + c[0].replace('-webkit-mask-box-image', 'mbi') + ' ' + c[1], got, c[2]);
+}
+// the shorthand reads back as nothing, and each longhand keeps what the shorthand wrote for it
+check('mbi-shorthand-reads-empty', () => {
+  const d = document.createElement('div');
+  d.style.setProperty('-webkit-mask-box-image', 'url(a.png) 3 / 4px');
+  return d.style.getPropertyValue('-webkit-mask-box-image');
+}, '');
+check('mbi-shorthand-longhands', () => {
+  const d = document.createElement('div');
+  d.style.setProperty('-webkit-mask-box-image', 'url(a.png) 3 / 4px');
+  return [0, 1, 2, 3, 4].map(i => d.style.item(i).replace('-webkit-mask-box-image', 'mbi')).join(',');
+}, 'mbi-source,mbi-slice,mbi-width,mbi-outset,mbi-repeat');
+check('mbi-length-five', () => {
+  const d = document.createElement('div');
+  d.style.setProperty('-webkit-mask-box-image', 'url(a.png) 3');
+  return d.style.length;
+}, '5');
+check('mbi-remove-shorthand', () => {
+  const d = document.createElement('div');
+  d.style.setProperty('-webkit-mask-box-image', 'url(a.png) 3 / 4px');
+  d.style.removeProperty('-webkit-mask-box-image');
+  return [d.style.length, d.style.getPropertyValue('-webkit-mask-box-image-slice')].join('/');
+}, '0/');
+check('mbi-computed-source', () => {
+  const d = document.createElement('div');
+  d.style.setProperty('-webkit-mask-box-image-source', 'none');
+  document.body.appendChild(d);
+  const v = getComputedStyle(d).getPropertyValue('-webkit-mask-box-image-source');
+  d.remove();
+  return v;
+}, 'none');
+check('mbi-computed-slice', () => {
+  const d = document.createElement('div');
+  d.style.setProperty('-webkit-mask-box-image-slice', '3');
+  document.body.appendChild(d);
+  const v = getComputedStyle(d).getPropertyValue('-webkit-mask-box-image-slice');
+  d.remove();
+  return v;
+}, '3');
+check('mbi-supports', () => {
+  return CSS.supports('-webkit-mask-box-image', 'url(a.png) 3 / 4px') + ','
+    + CSS.supports('-webkit-mask-box-image', 'url(a.png) / 4px') + ','
+    + CSS.supports('-webkit-mask-box-image-slice', '-2');
+}, 'true,false,false');
+
+// ---- §4 an An+B pattern, and what it reads back as -----------------------
+const echoCases = [
+  ['nth-child(even)', 'q:nth-child(2n)'],
+  ['nth-child(odd)', 'q:nth-child(2n+1)'],
+  ['nth-child(2n)', 'q:nth-child(2n)'],
+  ['nth-child(2n+0)', 'q:nth-child(2n)'],
+  ['nth-child(n)', 'q:nth-child(n)'],
+  ['nth-child(N)', 'q:nth-child(n)'],
+  ['nth-child(1n)', 'q:nth-child(n)'],
+  ['nth-child(-n)', 'q:nth-child(-n)'],
+  ['nth-child(-n+2)', 'q:nth-child(-n+2)'],
+  ['nth-child(n-0)', 'q:nth-child(n)'],
+  ['nth-child(3n-1)', 'q:nth-child(3n-1)'],
+  ['nth-child(0)', 'q:nth-child(0)'],
+  ['nth-child(0n+0)', 'q:nth-child(0)'],
+  ['nth-child(0n-0)', 'q:nth-child(0)'],
+  ['nth-child(-0n+2)', 'q:nth-child(2)'],
+  ['nth-child(0n+3)', 'q:nth-child(3)'],
+  ['nth-child( 2n + 1 )', 'q:nth-child(2n+1)'],
+  ['nth-child(n+ 3)', 'q:nth-child(n+3)'],
+  ['nth-child(n +3)', 'q:nth-child(n+3)'],
+  ['nth-child(+3)', 'q:nth-child(3)'],
+  ['nth-child(+ 3)', 'INVALID'],
+  ['nth-child(-3)', 'q:nth-child(-3)'],
+  ['nth-child(+0)', 'q:nth-child(0)'],
+  ['nth-child(5n+)', 'INVALID'],
+  ['nth-child()', 'INVALID'],
+  ['nth-child(abc)', 'INVALID'],
+  ['nth-child(3 n)', 'INVALID'],
+  ['nth-child(- 3)', 'INVALID'],
+  ['nth-child(99999999999999n)', 'q:nth-child(2147483647n)'],
+  ['nth-child(2.5n)', 'INVALID'],
+  ['nth-child(2n+1.5)', 'INVALID'],
+  ['nth-child(odd of b)', 'q:nth-child(2n+1 of b)'],
+  ['nth-child(ODD of b)', 'q:nth-child(2n+1 of b)'],
+  ['nth-child(Odd Of B)', 'INVALID'],
+  ['nth-child( 2n of b )', 'q:nth-child(2n of b)'],
+  ['nth-child(2n+1 of b , c)', 'q:nth-child(2n+1 of b, c)'],
+  ['nth-child(2n+1 of (b))', 'INVALID'],
+  ['nth-child(2n+1of b)', 'INVALID'],
+  ['nth-child(2n+1 of )', 'INVALID'],
+  ['nth-child( of b)', 'INVALID'],
+  ['nth-child(even of b)', 'q:nth-child(2n of b)'],
+  ['nth-of-type(0n+3)', 'q:nth-of-type(3)'],
+  ['nth-last-child(2 of b)', 'q:nth-last-child(2 of b)'],
+  ['NTH-CHILD(2n)', 'q:nth-child(2n)'],
+  ['nth-child(2n+1 of .k)', 'q:nth-child(2n+1 of .k)'],
+  ['nth-last-child(n+2 of b)', 'q:nth-last-child(n+2 of b)'],
+  ['first-child', 'q:first-child'],
+  ['FIRST-CHILD', 'q:first-child'],
+  ['nth-last-of-type( 2n + 1 )', 'q:nth-last-of-type(2n+1)'],
+  ['read-only', 'q:read-only'],
+  ['any-link', 'q:any-link'],
+  ['focus-visible', 'q:focus-visible'],
+  ['picture-in-picture', 'q:picture-in-picture'],
+];
+function nthEcho(arg) {
+  const st = document.createElement('style');
+  document.head.appendChild(st);
+  try {
+    st.sheet.insertRule('q:' + arg + '{color:red}', 0);
+    const text = st.sheet.cssRules[0].selectorText;
+    return text;
+  } catch (e) { return 'INVALID'; }
+  finally { st.remove(); }
+}
+for (const c of echoCases) {
+  let got;
+  try { got = nthEcho(c[0]); } catch (e) { got = 'ERR[' + e.name + ']'; }
+  row('echo :' + c[0], got, c[1]);
+}
+
+// a refused pattern takes the whole rule down, and the rules beside it stay
+check('refused-rule-dropped', () => {
+  const st = document.createElement('style');
+  document.head.appendChild(st);
+  st.textContent = 'q:nth-child(abc) { color: red } q:nth-child(2n) { color: green } '
+    + 'q:nth-child( 2n of b ) { color: blue } q:not(a) { color: black }';
+  document.head.appendChild(st);
+  const rules = st.sheet.cssRules;
+  return rules.length + '/' + Array.from(rules).map(r => r.selectorText).join(',');
+}, '3/q:nth-child(2n),q:nth-child(2n of b),q:not(a)');
+check('refused-comma-list', () => {
+  const st = document.createElement('style');
+  document.head.appendChild(st);
+  st.textContent = 'q:nth-child(5n+), a { color: red } b { color: green }';
+  document.head.appendChild(st);
+  return st.sheet.cssRules.length;
+}, '1');
+check('insertRule-throws', () => {
+  const st = document.createElement('style');
+  document.head.appendChild(st);
+  document.head.appendChild(st);
+  try { st.sheet.insertRule('q:nth-child(3 n){color:red}', 0); return 'kept'; }
+  catch (e) { return 'threw'; }
+}, 'threw');
+
+// the pattern's meaning, over a fixed set of siblings
+const NTH_BODY = '<div id="c"><a class="k">1</a><b>b1</b><a>2</a><b>b2</b><a class="k">3</a><c>c1</c><a>4</a><b>b3</b></div>';
+function nthMatch(sel) {
+  html(NTH_BODY);
+  return Array.from(stage.querySelectorAll(sel)).map(e => e.textContent).join(',');
+}
+const nthRows = [
+  ['a:nth-child(3)', '2'],
+  ['a:nth-child(1n+3)', '2,3,4'],
+  ['a:nth-child(0n+3)', '2'],
+  ['a:nth-child(2n+1)', '1,2,3,4'],
+  ['a:nth-child(2n)', ''],
+  ['a:nth-child(-n+2)', '1'],
+  ['a:nth-child(n+2)', '2,3,4'],
+  ['a:nth-child(odd)', '1,2,3,4'],
+  ['a:nth-child(even)', ''],
+  ['a:nth-child(3n-1)', '3'],
+  ['a:nth-child(-3)', ''],
+  ['a:nth-child(+3)', '2'],
+  ['a:nth-child(0n + 3)', '2'],
+  ['a:nth-child(2n + 1)', '1,2,3,4'],
+  ['a:nth-child(-n + 2)', '1'],
+  ['a:nth-child(2n+0)', ''],
+  ['a:nth-child(n+ 3)', '2,3,4'],
+  ['a:nth-child(n +3)', '2,3,4'],
+  ['a:nth-child( 2n + 1 )', '1,2,3,4'],
+  ['a:nth-child(2n+1 of b)', ''],
+  ['a:nth-child(1 of b)', ''],
+  ['a:nth-child(3 of b)', ''],
+  ['a:nth-child(even of b)', ''],
+  ['a:nth-child(odd of b)', ''],
+  ['a:nth-child(2n+1 of .k)', '1'],
+  ['a:nth-child(2 of .k)', '3'],
+  ['a:nth-last-child(2n+1 of b)', ''],
+  ['a:nth-child(2n+1 of a)', '1,3'],
+  ['a:nth-child(2n+1 of b, c)', ''],
+  ['a:nth-last-child(1 of b)', ''],
+  ['a:nth-child(n)', '1,2,3,4'],
+  ['a:nth-child(-n)', ''],
+  ['a:nth-child(n-0)', '1,2,3,4'],
+  ['a:nth-child(0n+0)', ''],
+  ['a:nth-child(0n-0)', ''],
+  ['a:nth-child(-0n+2)', ''],
+  ['a:nth-child(+0)', ''],
+  ['a:nth-child(2N+1)', '1,2,3,4'],
+  ['a:nth-child(ODD)', '1,2,3,4'],
+  ['a:nth-child(0)', ''],
+  ['a:nth-child(99999999999999n)', ''],
+  ['a:nth-of-type(2n+1)', '1,3'],
+  ['a:nth-of-type(2)', '2'],
+  ['a:nth-last-of-type(1)', '4'],
+  ['a:nth-last-child(2n)', '1,2,3,4'],
+  ['a:nth-last-child(-n+2)', '4'],
+  ['a:nth-child(2 of c)', ''],
+  ['b:nth-child(odd of b)', 'b1,b3'],
+  ['b:nth-child(2 of b)', 'b2'],
+];
+for (const c of nthRows) {
+  let got;
+  try { got = nthMatch(c[0]); } catch (e) { got = 'ERR[' + e.name + ']'; }
+  row('match ' + c[0], got, c[1]);
+}
+
+const summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script>
+</body>
+</html>

@@ -277,6 +277,22 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
     /// convert to the existing BoxLine/BoxRun output model. Returns false when
     /// there is nothing to lay out (so callers can fall back).
     /// </summary>
+    /// <summary>The element whose forced break closed this line, or null when the line ended
+    /// softly. The line breaker keeps the break item on the line it terminates, so the owner is
+    /// read back from there rather than guessed from the block's children — a break outside the
+    /// measured element must not add a fragment to it.</summary>
+    private static Element? ForcedBreakOwnerOf(LineInfo info)
+    {
+        if (!info.HasForcedBreak()) return null;
+        var results = info.Results();
+        for (int i = results.Count - 1; i >= 0; i--)
+        {
+            var item = results[i].Item;
+            if (item != null && item.TextType == TextItemType.kForcedLineBreak) return item.Element;
+        }
+        return null;
+    }
+
     private bool TryLayoutLinesWithNgPipeline(float availInline, float contentInlineOrigin, float contentBlockOrigin)
     {
         var inlineNode = new InlineNode(Node, Style);
@@ -439,7 +455,8 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
                 InlineSize = info.InlineSize,
                 BlockSize = lineBlockSize,
                 BaselineOffset = _currentLineBlockOffset +
-                    Fonts.LineBoxMetrics.GetBaselineForLineHeight(Style, lineBlockSize)
+                    Fonts.LineBoxMetrics.GetBaselineForLineHeight(Style, lineBlockSize),
+                ForcedBreakOwner = ForcedBreakOwnerOf(info)
             };
 
             // Add a line item + content items to the FragmentItemsBuilder.

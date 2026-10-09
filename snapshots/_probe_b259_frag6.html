@@ -1,0 +1,23 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>FRAG6</title></head><body>
+<div id="stage"></div>
+<script>
+const stage = document.getElementById('stage');
+stage.style.cssText = 'position:absolute;left:-4000px;top:0;width:100px;font:16px/20px Arial';
+const out = [];
+function run(label, style, text) {
+  stage.innerHTML = '<div id="w"><span id="s" style="' + style + '">' + text + '</span></div>';
+  const r = Array.from(stage.querySelector('#s').getClientRects());
+  out.push(label + ' n=' + r.length + ' ' + r.map(x => '[' + (x.left + 4000).toFixed(2) + ' ' + x.top.toFixed(2) + ' ' + x.width.toFixed(2) + ' ' + x.height.toFixed(2) + ']').join(' '));
+}
+run('wrap-slice', 'padding:0 4px', 'aaaaaa aaaaaa');
+run('wrap-clone', 'box-decoration-break:clone;padding:0 4px', 'aaaaaa aaaaaa');
+run('br-slice', 'padding:0 4px', 'a<br>b');
+run('br-clone', 'box-decoration-break:clone;padding:0 4px', 'a<br>b');
+run('br-border-slice', 'border:2px solid #333;padding:0 6px', 'ab<br>ab<br>ab');
+run('br-border-clone', 'box-decoration-break:clone;border:2px solid #333;padding:0 6px', 'ab<br>ab<br>ab');
+run('wrap-border-slice', 'border:2px solid #333;padding:0 6px', 'aaaaaa aaaaaa');
+run('wrap-border-clone', 'box-decoration-break:clone;border:2px solid #333;padding:0 6px', 'aaaaaa aaaaaa');
+console.log(out.join('\n'));
+</script>
+</body></html>

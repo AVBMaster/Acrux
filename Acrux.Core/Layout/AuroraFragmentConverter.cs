@@ -97,6 +97,7 @@ public static class AuroraFragmentConverter
                     Width = boxLine.InlineSize,
                     Height = lineHeight,
                     Baseline = lineTop + baselineOffset,
+                    ForcedBreakOwner = boxLine.ForcedBreakOwner,
                 };
                 foreach (var run in boxLine.Runs)
                 {

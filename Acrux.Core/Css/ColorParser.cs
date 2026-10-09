@@ -514,13 +514,51 @@ public static class ColorParser
     /// </summary>
     private static SKColor? ParseLightDark(string value, ComputedStyle? context)
     {
-        var match = Regex.Match(value, @"^\s*light-dark\s*\(\s*([^,]+)\s*,\s*(.+)\s*\)$", RegexOptions.IgnoreCase);
+        var match = Regex.Match(value, @"^\s*light-dark\s*\(\s*(.+)\s*\)\s*$", RegexOptions.IgnoreCase);
         if (!match.Success) return null;
+        var inner = ExtractFunctionInner(value, match.Index);
+        if (inner == null) return null;
+        // Nothing may follow the function: 'light-dark(red, blue) green' is not a colour, and the
+        // balanced inner is the whole of the value only when its closing parenthesis is the last
+        // character in it.
+        int open = value.IndexOf('(');
+        if (open + inner.Length + 2 != value.TrimEnd().Length) return null;
+        // The two colours are divided by the first comma that sits outside every function. Splitting
+        // at any comma — which is what this used to match — reads 'light-dark(rgb(0, 255, 0),
+        // rgb(255, 0, 0))' as 'rgb(0' and paints nothing, and that is the form a page gets back when
+        // it writes 'light-dark(#0f0, #f00)' and reads its own declaration again (the reference
+        // engine expands a colour literal inside the function, measured).
+        int at = IndexOfTopLevelComma(inner);
+        if (at < 0) return null;
 
         string scheme = context?.ColorScheme ?? "normal";
         bool dark = scheme.Contains("dark", StringComparison.OrdinalIgnoreCase) &&
                     !scheme.Contains("light", StringComparison.OrdinalIgnoreCase);
-        return Parse((dark ? match.Groups[2] : match.Groups[1]).Value.Trim(), context);
+        string chosen = (dark ? inner[(at + 1)..] : inner[..at]).Trim();
+        return chosen.Length == 0 ? null : Parse(chosen, context);
+    }
+
+    /// <summary>The comma that separates two arguments of a function, or -1 when there is none: a
+    /// comma inside parentheses, brackets or a quoted string belongs to what it sits in.</summary>
+    private static int IndexOfTopLevelComma(string text)
+    {
+        int depth = 0;
+        char quote = '\0';
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (quote != '\0')
+            {
+                if (c == '\\' && i + 1 < text.Length) i++;
+                else if (c == quote) quote = '\0';
+                continue;
+            }
+            if (c is '"' or '\'') { quote = c; continue; }
+            if (c is '(' or '[') depth++;
+            else if (c is ')' or ']') depth = Math.Max(0, depth - 1);
+            else if (c == ',' && depth == 0) return i;
+        }
+        return -1;
     }
 
     /// <summary>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+i:nth-child(2n+1 of .c) { color: red; }
+i:nth-child(0n+3) { color: green; }
+i:nth-child( 2n + 1 ) { color: blue; }
+:FIRST-CHILD { color: olive; }
+p::FIRST-LINE { color: teal; }
+q:not(div , span) { color: navy; }
+s:is(div /*c*/ , span) { color: gray; }
+b:nth-last-child(1 of em) { color: brown; }
+u:lang("en-GB") { color: pink; }
+em:nth-of-type(+3) { color: plum; }
+strong:where(a, b) { color: gold; }
+small:nth-child(odd of :not(.x)) { color: silver; }
+</style></head><body>
+<i class="c">1</i><i>2</i><i class="c">3</i>
+<p>x</p><q>a</q><s>b</s><b>e</b><u>f</u><em>g</em><strong>h</strong><small>i</small>
+<script>
+const rows = [];
+for (const sheet of document.styleSheets) {
+  for (const rule of sheet.cssRules) {
+    if (rule.selectorText !== undefined)
+      rows.push(rule.selectorText + " | " + rule.style.color);
+  }
+}
+window.__result = rows.join("\n");
+console.log(window.__result);
+</script>
+</body></html>

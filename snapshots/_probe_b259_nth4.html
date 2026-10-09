@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style id="sh">
+a:nth-child(even) { color: rgb(1,1,1); }
+a:nth-child(odd) { color: rgb(1,1,1); }
+a:nth-child(2n) { color: rgb(1,1,1); }
+a:nth-child(2n+0) { color: rgb(1,1,1); }
+a:nth-child(n) { color: rgb(1,1,1); }
+a:nth-child(N) { color: rgb(1,1,1); }
+a:nth-child(1n) { color: rgb(1,1,1); }
+a:nth-child(-n) { color: rgb(1,1,1); }
+a:nth-child(-n+2) { color: rgb(1,1,1); }
+a:nth-child(n-0) { color: rgb(1,1,1); }
+a:nth-child(3n-1) { color: rgb(1,1,1); }
+a:nth-child(0) { color: rgb(1,1,1); }
+a:nth-child(0n+0) { color: rgb(1,1,1); }
+a:nth-child(0n-0) { color: rgb(1,1,1); }
+a:nth-child(-0n+2) { color: rgb(1,1,1); }
+a:nth-child(0n+3) { color: rgb(1,1,2); }
+a:nth-child( 2n + 1 ) { color: rgb(1,1,3); }
+a:nth-child(n+ 3) { color: rgb(1,1,4); }
+a:nth-child(n +3) { color: rgb(1,1,5); }
+a:nth-child(+3) { color: rgb(1,1,6); }
+a:nth-child(even of b) { color: rgb(1,2,1); }
+a:nth-child(ODD OF B) { color: rgb(1,2,2); }
+a:nth-child(2n of b) { color: rgb(1,2,3); }
+a:nth-child(1 of b) { color: rgb(1,2,4); }
+a:nth-child(2n+1of b) { color: rgb(1,2,5); }
+a:nth-child(2n+1 of ) { color: rgb(1,2,6); }
+a:nth-child( of b) { color: rgb(1,3,1); }
+a:nth-child(-3) { color: rgb(1,3,2); }
+a:nth-child(+0) { color: rgb(1,3,3); }
+a:nth-child(5n+) { color: rgb(1,3,4); }
+a:nth-child() { color: rgb(1,3,5); }
+a:nth-child(abc) { color: rgb(1,3,6); }
+a:nth-child(3 n) { color: rgb(1,4,1); }
+a:nth-child(- 3) { color: rgb(1,4,2); }
+a:nth-child(99999999999999n) { color: rgb(1,4,3); }
+:FIRST-CHILD { color: rgb(2,1,1); }
+a:nth-last-child(1) { color: rgb(2,1,2); }
+a:nth-last-child(2n+1 of b) { color: rgb(2,1,3); }
+</style></head><body>
+<div id="c"><a class="k">1</a><b></b><a>2</a><b></b><a class="k">3</a><b></b><a>4</a></div>
+<script>
+const matchCases = [
+  "a:nth-child(3)", "a:nth-child(1n+3)", "a:nth-child(0n+3)", "a:nth-child(2n+1)",
+  "a:nth-child(2n)", "a:nth-child(-n+2)", "a:nth-child(n+2)", "a:nth-child(odd)",
+  "a:nth-child(even)", "a:nth-child(3n-1)", "a:nth-child(-3)", "a:nth-child(+3)",
+  "a:nth-child(0n + 3)", "a:nth-child(2n + 1)", "a:nth-child(-n + 2)", "a:nth-child(2n+0)",
+  "a:nth-child(n+ 3)", "a:nth-child(n +3)", "a:nth-child(+ 3)", "a:nth-child( 2n + 1 )",
+  "a:nth-child(2n+1 of b)", "a:nth-child(2n of b)", "a:nth-child(1 of b)",
+  "a:nth-child(3 of b)", "a:nth-child(even of b)", "a:nth-child(odd of b)",
+  "a:nth-child(2n+1 of .k)", "a:nth-child(2 of .k)", "a:nth-last-child(2n+1 of b)",
+  "a:nth-child(2n+1of b)", "a:nth-child(2n+1 of )", "a:nth-child( of b)",
+  "a:nth-child(5n+)", "a:nth-child()", "a:nth-child(abc)", "a:nth-child(3 n)",
+  "a:nth-child(- 3)", "a:nth-child(99999999999999n)", "a:nth-child(0)",
+  "a:nth-of-type(2n+1)", "a:nth-of-type(2)", "a:nth-last-of-type(1)",
+  "a:nth-child(2n+1 of a)", "a:nth-child(n)", "a:nth-child(-n)", "a:nth-child(n-0)",
+  "a:nth-child(0n+0)", "a:nth-child(0n-0)", "a:nth-child(-0n+2)", "a:nth-child(+0)",
+  "a:nth-child(2N+1)", "a:nth-child(ODD)", "a:nth-child(2n+1 of b, a:nth-child(2))"
+];
+const lines = [];
+for (const sel of matchCases) {
+  let list;
+  try { list = Array.from(document.querySelectorAll(sel)).map(e => e.textContent).join(","); }
+  catch (err) { list = "THROW"; }
+  lines.push("M " + sel + " -> [" + list + "]");
+}
+const sheet = document.styleSheets[0];
+for (let i = 0; i < sheet.cssRules.length; i++)
+  lines.push("E " + sheet.cssRules[i].selectorText);
+window.__result = lines.join("\n");
+console.log(window.__result);
+</script>
+</body></html>

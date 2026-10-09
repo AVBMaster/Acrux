@@ -1,0 +1,21 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+a:nth-child(odd OF b) { color: rgb(1,1,1); }
+a:nth-child(ODD of b) { color: rgb(1,1,2); }
+a:nth-child(Odd Of B) { color: rgb(1,1,3); }
+a:nth-child(2n+1 OF B) { color: rgb(1,1,4); }
+a:NTH-CHILD(2n) { color: rgb(1,1,5); }
+a:nth-child( 2n of b ) { color: rgb(1,1,6); }
+a:nth-child(2n+1 of b , c) { color: rgb(1,1,7); }
+a:nth-child(2n+1 of (b)) { color: rgb(1,1,8); }
+</style></head><body>
+<div id="c"><a>1</a><b></b><a>2</a><b></b><a>3</a><c></c><a>4</a></div>
+<script>
+const sheet = document.styleSheets[0];
+const out = ['count=' + sheet.cssRules.length];
+for (let i = 0; i < sheet.cssRules.length; i++) out.push(i + ' <' + sheet.cssRules[i].selectorText + '>');
+out.push('oddOFb=' + document.querySelectorAll('a:nth-child(odd OF b)').length);
+window.__result = out.join("\n");
+console.log(window.__result);
+</script>
+</body></html>

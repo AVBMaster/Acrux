@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+a:nth-child(even) { color: rgb(1,1,1); }
+a:nth-child(odd) { color: rgb(1,1,1); }
+a:nth-child(2n) { color: rgb(1,1,1); }
+a:nth-child(2n+0) { color: rgb(1,1,1); }
+a:nth-child(n) { color: rgb(1,1,1); }
+a:nth-child(N) { color: rgb(1,1,1); }
+a:nth-child(1n) { color: rgb(1,1,1); }
+a:nth-child(-n) { color: rgb(1,1,1); }
+a:nth-child(-n+2) { color: rgb(1,1,1); }
+a:nth-child(n-0) { color: rgb(1,1,1); }
+a:nth-child(3n-1) { color: rgb(1,1,1); }
+a:nth-child(0) { color: rgb(1,1,1); }
+a:nth-child(0n+0) { color: rgb(1,1,1); }
+a:nth-child(0n-0) { color: rgb(1,1,1); }
+a:nth-child(-0n+2) { color: rgb(1,1,1); }
+a:nth-child(even of b) { color: rgb(2,2,2); }
+a:nth-child(ODD OF B) { color: rgb(2,2,2); }
+a:nth-child(-3) { color: rgb(3,3,3); }
+a:nth-child(+0) { color: rgb(4,4,4); }
+u:lang(en-GB) { color: rgb(5,5,5); }
+u:lang("en-GB") { color: rgb(6,6,6); }
+u:lang(en, "fr") { color: rgb(7,7,7); }
+</style></head><body>
+<a>x</a><b>y</b><u>z</u>
+<script>
+const s = document.styleSheets[0];
+const out = ['count=' + s.cssRules.length];
+for (let i = 0; i < s.cssRules.length; i++)
+  out.push('#' + i + ' <' + s.cssRules[i].selectorText + '> color=' + s.cssRules[i].style.color);
+window.__result = out.join("\n");
+console.log(window.__result);
+</script>
+</body></html>

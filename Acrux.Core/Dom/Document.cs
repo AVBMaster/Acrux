@@ -257,13 +257,9 @@ public class Document : Node
         }
     }
 
-    private static bool MatchesSimpleSelector(Element el, string selector)
-    {
-        selector = selector.Trim();
-        if (selector.StartsWith('#'))
-            return el.Id == selector[1..];
-        if (selector.StartsWith('.'))
-            return el.HasClass(selector[1..]);
-        return el.TagName.Equals(selector, StringComparison.OrdinalIgnoreCase);
-    }
+    // The engine's real matcher: a walk that recognizes only '#id', '.class' and a bare tag name
+    // answers 'a.k', ':nth-child(2)' and '[type=text]' as nothing at all, and the same string
+    // through the document's own querySelectorAll found the element.
+    private static bool MatchesSimpleSelector(Element el, string selector) =>
+        Acrux.Core.Css.CssSelectorMatcher.Matches(selector, el);
 }
