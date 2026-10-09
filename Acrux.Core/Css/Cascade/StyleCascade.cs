@@ -39,7 +39,11 @@ public class StyleCascade
                 if (prop.Name.IsCustom)
                     _map.Add(prop.Name.CustomName!, propPriority);
                 else
-                    _map.Add(prop.Name.Id, propPriority);
+                    // A '-webkit-' spelling that is a property of its own competes with its twin in
+                    // one cascade slot rather than in a parallel one: measured, the reference engine
+                    // gives both spellings one computed value, so the declaration that outranks the
+                    // other is the one that applies whichever name it was written under.
+                    _map.Add(CssPropertyIdExtensions.BehaviourId(prop.Name.Id), propPriority);
             }
         }
         _needsAnalyze = false;
@@ -88,6 +92,13 @@ public class StyleCascade
         // properties resolve against the current element's declarations.
         foreach (var customName in _map.CustomNames)
         {
+            // A declaration stored under its own name because this engine has no id for it (a
+            // legacy '-webkit-' spelling, a property from a module that is not implemented here)
+            // is stored in the same place a custom property is, but it is not one: it must not
+            // reach the map that var() reads, and the reference engine has no behaviour for it
+            // either.
+            if (!Acrux.Core.Css.Properties.CssPropertyIdExtensions.IsCustomPropertyName(customName))
+                continue;
             if (filter?.Rejects(new CssPropertyName(customName)) == true) continue;
             ApplyCustomIfPresent(customName);
         }
@@ -95,7 +106,8 @@ public class StyleCascade
         {
             if (filter?.Rejects(new CssPropertyName(id)) == true) continue;
             if (HighPriorityProperties.Contains(id)) continue;
-            if (id is CssPropertyId.Direction or CssPropertyId.WritingMode or CssPropertyId.Zoom) continue;
+            if (CssPropertyIdExtensions.BehaviourId(id)
+                is CssPropertyId.Direction or CssPropertyId.WritingMode or CssPropertyId.Zoom) continue;
             ApplyIfPresent(id);
         }
     }
@@ -107,7 +119,11 @@ public class StyleCascade
             foreach (var prop in entry.Properties.Properties)
             {
                 if (prop.Name.IsCustom)
-                    _state.ApplyCustomProperty(prop.Name.CustomName!, prop.Value);
+                {
+                    if (Acrux.Core.Css.Properties.CssPropertyIdExtensions
+                            .IsCustomPropertyName(prop.Name.CustomName!))
+                        _state.ApplyCustomProperty(prop.Name.CustomName!, prop.Value);
+                }
                 else
                     ApplyProperty(prop.Name.Id, prop.Value);
             }
@@ -123,7 +139,7 @@ public class StyleCascade
         // Within one declaration block the later declaration wins (a shorthand
         // expansion's default must not shadow an explicit longhand that follows it).
         var prop = matchedEntry.Properties.Properties
-            .LastOrDefault(p => p.Name.Id == id && !p.Name.IsCustom);
+            .LastOrDefault(p => CssPropertyIdExtensions.BehaviourId(p.Name.Id) == id && !p.Name.IsCustom);
         if (prop.Value == null) return;
 
         // 'revert' is the one CSS-wide keyword that cannot be resolved while applying a
@@ -162,7 +178,8 @@ public class StyleCascade
         {
             foreach (var p in entry.Properties.Properties)
             {
-                if (p.Name.IsCustom || p.Name.Id != id || p.Value == null) continue;
+                if (p.Name.IsCustom || CssPropertyIdExtensions.BehaviourId(p.Name.Id) != id
+                    || p.Value == null) continue;
                 // A declaration that reverts again has nothing to offer here: the search
                 // stops at the first real value, exactly as the cascade would.
                 if (CssPropertyTraits.IsRevertKeyword(p.Value.CssText(), out _)) continue;
@@ -266,8 +283,11 @@ public class CascadeResolverState
         // against this element's own font.
         using var _fontUnitScope = FontUnitContext.Use(style);
         // Delegate to the shared Prism engine property applier so every
-        // property supported by the string cascade is available here too.
-        var name = CssPropertyIdExtensions.ToString(id);
+        // property supported by the string cascade is available here too. The name a value is
+        // applied under is its twin's rather than the declaration's own: a '-webkit-' spelling
+        // that the reference engine keeps as a property of its own is stored and printed under the
+        // prefixed name but behaves exactly like the unprefixed one, and only the name differs.
+        var name = CssPropertyIdExtensions.BehaviourName(CssPropertyIdExtensions.ToString(id));
         var text = value.CssText();
         text = CssFunctionEvaluator.Evaluate(text, Element,
             FontSize, RootFontSize, ViewportWidth, ViewportHeight);

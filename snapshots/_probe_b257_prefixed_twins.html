@@ -1,0 +1,27 @@
+<!doctype html><html><head><style>
+#w2 { -webkit-writing-mode: vertical-rl; width: 100px; height: 60px; }
+#w1 { writing-mode: vertical-rl; width: 100px; height: 60px; }
+#c1 { -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; width: 120px; }
+#s1 { -webkit-text-security: disc; font: 16px monospace; display: inline-block; }
+</style></head><body>
+<div id=w1>abc</div><div id=w2>abc</div><div id=c1>line one line two line three</div><div id=s1>abcdefghij</div>
+<script>
+var out=[];
+function t(label, fn){ try { out.push(label+'='+fn()); } catch(e){ out.push(label+'=ERR '+e.message); } }
+var cs1=getComputedStyle(document.getElementById('w1'));
+var cs2=getComputedStyle(document.getElementById('w2'));
+t('w1wm', function(){return cs1.writingMode;});
+t('w2wm', function(){return cs2.writingMode;});
+t('w2pref', function(){return cs2['-webkit-writing-mode'];});
+var csc=getComputedStyle(document.getElementById('c1'));
+t('c1clamp', function(){return csc['-webkit-line-clamp'];});
+t('c1unpref', function(){return '['+csc.getPropertyValue('line-clamp')+']';});
+t('c1orient', function(){return csc['-webkit-box-orient'];});
+var css=getComputedStyle(document.getElementById('s1'));
+t('s1pref', function(){return css['-webkit-text-security'];});
+t('s1unpref', function(){return '['+css.getPropertyValue('text-security')+']';});
+t('s1member', function(){return String(css['text-security']);});
+t('s1camelMember', function(){return String(css.textSecurity);});
+t('s1webkitCamel', function(){return String(css.webkitTextSecurity);});
+var p=document.createElement('pre'); p.textContent=out.join('\n'); document.body.appendChild(p);
+</script></body></html>

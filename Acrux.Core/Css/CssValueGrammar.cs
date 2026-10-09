@@ -44,9 +44,254 @@ public static class CssValueGrammar
     public static bool TextIsValidFor(string propertyName, string value)
     {
         if (propertyName.StartsWith("--")) return true;
-        var grammar = GrammarFor(CssPropertyIdExtensions.FromString(propertyName));
+        // A '-webkit-' spelling that is a property of its own has its twin's grammar: the value
+        // set is the same, and only the name the declaration is stored under differs.
+        var id = CssPropertyIdExtensions.BehaviourId(CssPropertyIdExtensions.FromString(propertyName));
+        var grammar = id != CssPropertyId.Invalid ? GrammarFor(id) : LegacyPrefixedGrammar(propertyName);
         return grammar == null || TextIsValid(value, grammar);
     }
+
+    /// <summary>The legacy gate for the parser, which has the authored text in hand: a number this
+    /// engine folds before it prints it ('1e2' as '100') would otherwise pass an integer gate it
+    /// has to fail (measured: '-webkit-box-ordinal-group: 1e2' is dropped).</summary>
+    public static bool LegacyTextIsValidFor(string propertyName, string authoredValue)
+    {
+        var grammar = LegacyPrefixedGrammar(propertyName.ToLowerInvariant());
+        return grammar == null || TextIsValid(authoredValue, grammar);
+    }
+
+    /// <summary>The value sets measured for the <c>-webkit-</c> properties this engine has no id
+    /// for (snapshots/out/_b257_edge_legacy_grammar.txt: every accepted and every refused value
+    /// below is one the reference engine was asked about). None of them changes layout here, but
+    /// each still decides whether a declaration is made at all, which is what the CSSOM prints
+    /// back and what <c>CSS.supports</c> answers — and a property with no grammar in this engine
+    /// takes <c>bogus</c>, which the reference engine drops. The sets come in groups: the original
+    /// flex-box model, the nine-patch mask border, the text paint pair and the two interaction
+    /// properties.</summary>
+    private static Func<string, bool>? LegacyPrefixedGrammar(string name)
+    {
+        if (LegacyKeywordSets.TryGetValue(name, out var words))
+        {
+            // 'mask-box-image-repeat' is the one keyword property that takes a pair (one keyword
+            // per axis); the rest of the sets are a single keyword.
+            bool pairs = name.Equals("-webkit-mask-box-image-repeat", StringComparison.OrdinalIgnoreCase);
+            return text =>
+            {
+                var parts = SplitComponents(text);
+                return (pairs ? parts.Count is 1 or 2 : parts.Count == 1) && IsOneWordList(text, words);
+            };
+        }
+        return LegacyStructuredGrammar(name);
+    }
+
+    /// <summary>The closed keyword set of a legacy property, or null when its value is not a
+    /// single keyword of a measured set.</summary>
+    private static readonly Dictionary<string, string[]> LegacyKeywordSets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["-webkit-box-align"] = new[] { "start", "center", "end", "baseline", "stretch" },
+        ["-webkit-box-direction"] = new[] { "normal", "reverse" },
+        ["-webkit-box-orient"] = new[] { "horizontal", "vertical", "inline-axis", "block-axis" },
+        ["-webkit-box-pack"] = new[] { "start", "center", "end", "justify" },
+        ["-webkit-font-smoothing"] = new[] { "auto", "none", "antialiased", "subpixel-antialiased" },
+        ["-webkit-user-drag"] = new[] { "auto", "none", "element" },
+        ["-webkit-user-modify"] = new[] { "read-only", "read-write", "read-write-plaintext-only" },
+        ["-webkit-text-decorations-in-effect"] = new[] { "none", "underline" },
+        ["-webkit-mask-box-image-repeat"] = new[] { "stretch", "round", "repeat", "space" },
+    };
+
+    /// <summary>The keywords one legacy property owns, which are the only words of its value the
+    /// engine may re-spell (measured: 'END' is printed 'end' and '3 FILL' as '3 fill').</summary>
+    public static bool LegacyKeywordBelongs(string property, string word)
+    {
+        if (LegacyKeywordSets.TryGetValue(property, out var words) && IsOneOf(word, words)) return true;
+        return property switch
+        {
+            "-webkit-box-reflect" => IsOneOf(word, "above", "below", "left", "right"),
+            "-webkit-mask-box-image-slice" => word.Equals("fill", StringComparison.OrdinalIgnoreCase),
+            "-webkit-mask-box-image-source" => word.Equals("none", StringComparison.OrdinalIgnoreCase),
+            "-webkit-mask-box-image-width" => word.Equals("auto", StringComparison.OrdinalIgnoreCase),
+            // The colour-valued ones print their colour keywords in lower case, which is the
+            // spelling the reference engine prints them in (measured 'red' stays 'red').
+            "-webkit-text-fill-color" or "-webkit-text-stroke-color" or "-webkit-tap-highlight-color"
+                or "-webkit-text-stroke" => ColorParser.IsColorToken(word) || word == "currentcolor",
+            _ => false,
+        };
+    }
+
+    /// <summary>Whether a property name is one of the legacy <c>-webkit-</c> spellings whose value
+    /// set this class owns, which is also the set <see cref="Css.CssValueText"/> prints in the
+    /// reference engine's own spelling.</summary>
+    public static bool IsLegacyPrefixedName(string name) =>
+        !string.IsNullOrEmpty(name) && (LegacyKeywordSets.ContainsKey(name) || LegacyStructuredGrammar(name) != null);
+
+    private static Func<string, bool>? LegacyStructuredGrammar(string name) => name.ToLowerInvariant() switch
+    {
+        // A flex factor: any number, negative included (measured '-1' stands while 'calc(1+1)'
+        // does not), and an integer group number from one up.
+        "-webkit-box-flex" => static t => IsLegacyNumber(t.Trim()),
+        "-webkit-box-ordinal-group" => static t => IsLegacyInteger(t.Trim()),
+        // The reflection is a side, an optional distance and nothing else: a colour and a third
+        // component are both refused, and 'none' is not a value of this property at all
+        // (measured).
+        "-webkit-box-reflect" => static t =>
+        {
+            var parts = SplitComponents(t).ToList();
+            if (parts.Count is not (1 or 2)) return false;
+            if (!IsOneOf(parts[0], "above", "below", "left", "right")) return false;
+            return parts.Count == 1 || IsPlainLength(parts[1]);
+        },
+        "-webkit-font-smoothing" => static t =>
+            IsOneWord(t, "auto", "none", "antialiased", "subpixel-antialiased"),
+        "-webkit-mask-box-image-source" => static t => t.Trim().Equals("none", StringComparison.OrdinalIgnoreCase)
+            || IsImageFunction(t.Trim()),
+        // The slice is one to four numbers with an optional 'fill'; a bare 'fill' is no slice and
+        // five of anything is no list.
+        "-webkit-mask-box-image-slice" => static t =>
+        {
+            var parts = SplitComponents(t).ToList();
+            if (parts.Count is < 1 or > 5) return false;
+            // 'fill' is the one word the slice list owns, and it may sit at either end; the
+            // numbers beside it are unitless, and a length among them is no slice either.
+            if (parts.Count > 1 && parts[^1].Equals("fill", StringComparison.OrdinalIgnoreCase))
+                parts.RemoveAt(parts.Count - 1);
+            return parts.Count is >= 1 and <= 4 && parts.TrueForAll(IsNumber)
+                && parts.TrueForAll(p => !p.Contains('%'));
+        },
+        "-webkit-mask-box-image-outset" => static t =>
+        {
+            var parts = SplitComponents(t).ToList();
+            return parts.Count is >= 1 and <= 4 && parts.TrueForAll(IsPlainLength);
+        },
+        "-webkit-mask-box-image-width" => static t =>
+        {
+            var parts = SplitComponents(t).ToList();
+            if (parts.Count is < 1 or > 4) return false;
+            foreach (var part in parts)
+            {
+                if (part.Equals("auto", StringComparison.OrdinalIgnoreCase)) continue;
+                // Negative widths are refused while percentages are not (both measured).
+                if (part.StartsWith("-", StringComparison.Ordinal)) return false;
+                // The width is the one piece of the nine-patch that takes a bare number as well as
+                // a length and a percentage (measured: '1 2 3 4' and '50%' and '4px' all stand).
+                if (IsPlainLength(part) || IsPercentage(part) || IsNumber(part)) continue;
+                return false;
+            }
+            return true;
+        },
+        // The shorthand takes no gate beyond its first component: the five longhands it expands
+        // into are decided by the pieces, and a first piece that is no image is no value
+        // (measured 'red' and 'bogus' both read back empty while 'url(a.png) 3 fill / 4px' stands).
+        "-webkit-mask-box-image" => static t =>
+        {
+            var first = SplitComponents(t).FirstOrDefault();
+            return first.Equals("none", StringComparison.OrdinalIgnoreCase) || IsImageFunction(first);
+        },
+        "-webkit-tap-highlight-color" => static t => IsOneColor(t),
+        "-webkit-text-fill-color" => static t => IsOneColor(t),
+        "-webkit-text-stroke-color" => static t => IsOneColor(t),
+        "-webkit-text-stroke-width" => static t => IsPlainLength(t.Trim()),
+        // Width first, colour second, either one optional and never two of a kind (measured:
+        // 'green 2px' is stored reordered as '2px green', '2px 2px' and 'red green' are dropped).
+        "-webkit-text-stroke" => static t =>
+        {
+            var parts = SplitComponents(t).ToList();
+            if (parts.Count is not (1 or 2)) return false;
+            if (parts.Count == 1) return IsPlainLength(parts[0]) || IsLegacyColor(parts[0]);
+            return (IsPlainLength(parts[0]) && IsLegacyColor(parts[1]))
+                || (IsLegacyColor(parts[0]) && IsPlainLength(parts[1]));
+        },
+        _ => null,
+    };
+
+    /// <summary>One word, or a list of words each from one set.</summary>
+    private static bool IsOneWord(string text, params string[] words)
+    {
+        var parts = SplitComponents(text);
+        return parts.Count == 1 && IsOneOf(parts[0], words);
+    }
+
+    private static bool IsOneWordList(string text, params string[] words)
+    {
+        foreach (var part in SplitComponents(text))
+            if (!IsOneOf(part, words)) return false;
+        return true;
+    }
+
+    private static bool IsOneColor(string text)
+    {
+        var parts = SplitComponents(text);
+        return parts.Count == 1 && (ColorParser.IsColorToken(parts[0])
+            || parts[0].Equals("currentcolor", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>A &lt;length&gt; with no percentage in sight: the outset and the stroke width are
+    /// lengths and a percentage is refused by the reference engine (measured both). A bare number
+    /// is refused too except for the unitless zero, which both properties take and print as they
+    /// were handed it (measured: '-webkit-text-stroke-width: 0' stands while '2' is dropped).</summary>
+    private static bool IsPlainLength(string token)
+    {
+        if (token.Length == 0 || token.EndsWith("%", StringComparison.Ordinal)) return false;
+        if (!IsLengthOrPercentage(token)) return false;
+        if (HasUnit(token)) return true;
+        return decimal.TryParse(token, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var bare) && bare == 0;
+    }
+
+    private static bool HasUnit(string token)
+    {
+        int i = token.Length - 1;
+        while (i >= 0 && (char.IsLetter(token[i]) || token[i] == '%')) i--;
+        return i < token.Length - 1;
+    }
+
+    /// <summary>The group number as &lt;integer&gt; spells it — an optional sign and digits, with no
+    /// fraction and no exponent, and from one up (measured: '1e2' and '1.5' and '0' are all dropped
+    /// where '2' and '+2' stand).</summary>
+    private static bool IsLegacyInteger(string token)
+    {
+        int i = 0;
+        if (i < token.Length && token[i] is '+' or '-') i++;
+        if (i == token.Length) return false;
+        for (; i < token.Length; i++)
+            if (!char.IsAsciiDigit(token[i])) return false;
+        return int.TryParse(token.TrimStart('+'), out var value) && value >= 1;
+    }
+
+    /// <summary>&lt;number&gt; as the grammar spells it, exponent included: the flex factor is the
+    /// one legacy property that takes it (measured: '1e3' stands and reads back '1000').</summary>
+    private static bool IsLegacyNumber(string token)
+    {
+        return double.TryParse(token, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out _);
+    }
+
+    private static bool IsPercentage(string token) =>
+        token.EndsWith("%", StringComparison.Ordinal) && IsLengthOrPercentage(token);
+
+    private static bool IsLegacyColor(string token) =>
+        ColorParser.IsColorToken(token) || token.Equals("currentcolor", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>An image function, which is what a mask border source and a mask border shorthand
+    /// open with.</summary>
+    private static bool IsImageFunction(string token)
+    {
+        int open = token.IndexOf('(');
+        if (open <= 0) return false;
+        var name = token[..open];
+        if (name.Equals("url", StringComparison.OrdinalIgnoreCase)) return true;
+        foreach (var image in ImageFunctionNames)
+            if (name.Equals(image, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static readonly string[] ImageFunctionNames =
+    {
+        "-webkit-linear-gradient", "-webkit-repeating-linear-gradient",
+        "-webkit-radial-gradient", "-webkit-repeating-radial-gradient",
+        "linear-gradient", "repeating-linear-gradient", "radial-gradient",
+        "repeating-radial-gradient", "conic-gradient", "repeating-conic-gradient",
+        "cross-fade", "image-set", "element", "paint",
+    };
 
     /// <summary>The grammar to gate a declaration by, or null when this engine cannot decide
     /// the property's value set from its text.</summary>
@@ -189,6 +434,36 @@ public static class CssValueGrammar
         CssPropertyId.OffsetPath => IsOffsetPathValue,
         // CSS Values 4 §11.2 as the reference engine ships it: the two keywords, either alone or
         // together. A third spelling is nothing ('interpolate-size: numeric-keywords', measured).
+        // The keyword family the engine declares without acting on. Each arm is the same matcher
+        // the applier canonicalises with, so a value that would be stored is a value the grammar
+        // accepts and the two cannot disagree about what a page wrote.
+        CssPropertyId.TouchAction
+            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.CanonicalTouchAction(text) != null,
+        CssPropertyId.PaintOrder
+            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.CanonicalPaintOrder(text) != null,
+        CssPropertyId.VectorEffect
+            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
+                text, "none", "non-scaling-stroke"),
+        CssPropertyId.ShapeRendering
+            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
+                text, "auto", "optimizeSpeed", "crispEdges", "geometricPrecision"),
+        CssPropertyId.ColorRendering
+            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
+                text, "auto", "optimizeSpeed", "optimizeQuality"),
+        CssPropertyId.ColorInterpolation or CssPropertyId.ColorInterpolationFilters
+            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
+                text, "auto", "sRGB", "linearRGB"),
+        CssPropertyId.ImageOrientation
+            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
+                text, "from-image", "none") || Acrux.Core.Css.Resolver.CssPropertyApplier.IsImageOrientationAngle(text),
+        CssPropertyId.TextSecurity
+            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
+                text, "none", "disc", "circle", "square"),
+        // The clamp takes one integer or 'none'; the two-value form a draft proposed is no value
+        // here either (measured: '-webkit-line-clamp: 2 1.5em' reads back 'none').
+        CssPropertyId.LineClamp or CssPropertyId.WebkitLineClamp
+            => static text => text.Equals("none", StringComparison.OrdinalIgnoreCase)
+                || (int.TryParse(text.Trim(), out var lines) && lines >= 0),
         CssPropertyId.InterpolateSize
             => static text => IsOneOf(text, "numeric-only")
                 || IsOneOf(text, "allow-keywords")

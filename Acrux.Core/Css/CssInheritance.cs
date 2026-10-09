@@ -88,6 +88,11 @@ public static class CssInheritance
         child.ListStyleTypeString = parent.ListStyleTypeString;
         child.ListStylePosition = parent.ListStylePosition;
 
+        // CSS Text Security: the mask is a property of the text, and the text of a descendant is
+        // its parent's text (measured: a span inside a masked element reads 'disc' and draws
+        // bullets).
+        child.TextSecurity = parent.TextSecurity;
+
         // Box, direction and interaction.
         child.Visibility = parent.Visibility;
         child.Cursor = parent.Cursor;

@@ -797,6 +797,11 @@ public class ComputedStyleHost
     public string getPropertyValue(string name)
     {
         if (string.IsNullOrEmpty(name)) return "";
+        // A name the reference engine does not declare has no value to read, whatever this engine
+        // stores under it: the prefix is part of the property's identity here, and folding it away
+        // (as the canonicaliser does for the cascade) would make 'text-security' answer for a page
+        // that wrote '-webkit-text-security'. Measured: the unprefixed read is the empty string.
+        if (Acrux.Core.Css.Resolver.CssPropertyTraits.IsEngineOnlyName(name)) return "";
         var lower = Acrux.Core.Css.Properties.CssPropertyIdExtensions.CanonicalName(name.ToLowerInvariant());
         // The serialiser is the measured surface for every property it knows, so it answers
         // first; the hand-written map is only a fallback for a name it leaves out. Reading the
@@ -972,6 +977,11 @@ public class ComputedStyleHost
         if (string.IsNullOrEmpty(name)) return null;
         var dashed = Acrux.Core.Css.Properties.CssPropertyIdExtensions
             .CanonicalName(Hyphenate(name));
+        // The same refusal the dashed read makes: a name the reference engine does not declare is
+        // not a member of a computed style at all, so 'getComputedStyle(el).textSecurity' and
+        // 'getComputedStyle(el)["text-security"]' are undefined rather than the value the prefixed
+        // property carries (measured both).
+        if (Acrux.Core.Css.Resolver.CssPropertyTraits.IsEngineOnlyName(dashed)) return null;
         // Same precedence as getPropertyValue: the serialiser is the surface that knows the
         // computed-value model, and a camelCase read must not fall back onto the older
         // spellings the hand-built map still carries.
@@ -999,7 +1009,10 @@ public class ComputedStyleHost
             if (name.Length > prefix.Length + 1
                 && name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
                 && char.IsUpper(name[prefix.Length]))
-                return "-" + prefix + "-" + name.Substring(prefix.Length).ToLowerInvariant();
+                // The rest of the member name is camelCase like any other, so it hyphenates the
+                // same way: 'webkitTextSecurity' is '-webkit-text-security' and not
+                // '-webkit-textsecurity' (measured: the member answers the property's value).
+                return "-" + prefix + "-" + Hyphenate(name[prefix.Length..]);
         }
         var sb = new System.Text.StringBuilder(name.Length + 8);
         foreach (var ch in name)

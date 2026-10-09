@@ -865,6 +865,27 @@ public class ComputedStyle
 
     /// <summary>The space CSS Overflow 3 §3.5 reserves for a scrollbar that may not appear.</summary>
     public ScrollbarGutterType ScrollbarGutter { get; set; } = ScrollbarGutterType.Auto;
+
+    // The keyword properties the reference engine declares and a page can read back, for which
+    // this engine has no visual model yet (docs §4 #256). Each holds the canonical keyword text the
+    // declaration settled to — the grammar has already run, so what is stored here is what the
+    // reference engine prints — and null means nothing was declared, which is the initial value the
+    // serializer answers from. They are strings rather than enums because the value they print is
+    // the authored list in its canonical order, not a state the engine acts on.
+    public string? TouchAction { get; set; }
+    public string? PaintOrder { get; set; }
+    public string? VectorEffect { get; set; }
+    public string? ShapeRendering { get; set; }
+    public string? ColorRendering { get; set; }
+    public string? ColorInterpolation { get; set; }
+    public string? ColorInterpolationFilters { get; set; }
+    public string? ImageOrientation { get; set; }
+
+    /// <summary>-webkit-text-security: the glyph each character of the element's text is replaced
+    /// with. Null and 'none' both mean no masking; 'disc', 'circle' and 'square' name the three
+    /// mask glyphs (CSS Text Security has the custom-character form, which the reference engine
+    /// does not accept — measured, '-webkit-text-security: "X"' is no declaration at all).</summary>
+    public string? TextSecurity { get; set; }
     /// <summary>scrollbar-color first value (thumb). Null = UA default.</summary>
     public SKColor? ScrollbarThumbColor { get; set; }
     /// <summary>scrollbar-color second value (track).</summary>
@@ -1532,6 +1553,10 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             VerticalAlignIsAuthored = VerticalAlignIsAuthored,
             WhiteSpace = WhiteSpace, WordBreak = WordBreak, OverflowWrap = OverflowWrap,
             ScrollbarWidth = ScrollbarWidth, ScrollbarGutter = ScrollbarGutter,
+            TouchAction = TouchAction, PaintOrder = PaintOrder, VectorEffect = VectorEffect,
+            ShapeRendering = ShapeRendering, ColorRendering = ColorRendering,
+            ColorInterpolation = ColorInterpolation, ColorInterpolationFilters = ColorInterpolationFilters,
+            ImageOrientation = ImageOrientation, TextSecurity = TextSecurity,
             ScrollbarThumbColor = ScrollbarThumbColor,
             ScrollbarTrackColor = ScrollbarTrackColor, ScrollbarCustom = ScrollbarCustom,
             Overflow = Overflow, OverflowX = OverflowX, OverflowY = OverflowY,

@@ -508,9 +508,34 @@ public class InlineItemsBuilder
             && (style.FontSynthesis & FontSynthesisType.SmallCaps) != 0;
         ComputedStyle? smallStyle = null;
 
+        // The element's own mask, if it has one, replaces each character at the point where the
+        // text is read. Doing it here — before the switch below sorts the white space out — is what
+        // makes a masked space un-collapsible and a masked line end un-breaking, which is how the
+        // reference engine measures them.
+        char mask = MaskGlyph(style);
+
         for (int i = 0; i < length; i++)
         {
             char c = text[i];
+            if (mask != '\0')
+            {
+                if (c == '\r')
+                {
+                    // CRLF is one line end and therefore one glyph.
+                    if (i + 1 < length && text[i + 1] == '\n') i++;
+                }
+                else if (char.IsHighSurrogate(c))
+                {
+                    // An astral character is one character, so it masks to one glyph and its
+                    // trailing code unit goes with it.
+                    if (i + 1 < length && char.IsLowSurrogate(text[i + 1])) i++;
+                }
+                else if (char.IsLowSurrogate(c))
+                {
+                    continue;   // consumed with the high surrogate before it
+                }
+                c = mask;
+            }
             switch (c)
             {
                 case '\n':
@@ -582,8 +607,35 @@ public class InlineItemsBuilder
         }
     }
 
+    /// <summary>The mask glyph of a style, or 0 when the style shows its own characters. CSS Text
+    /// Security in the one spelling the reference engine ships replaces <b>every</b> character the
+    /// element shows — spaces, tabs, line ends, zero-width spaces, bidi controls and an astral
+    /// character (one glyph per character, not per code unit) alike — and does it before the
+    /// white-space machinery runs, so a masked run is exactly as wide as the same number of mask
+    /// glyphs written out by hand and a masked newline breaks no line (all measured: 'a  b' costs
+    /// four bullets in 'white-space: normal', 'a\tb' three in 'pre', 'a\r\nb' three, and
+    /// 'a\u200Bb' three).</summary>
+    private static char MaskGlyph(ComputedStyle? style)
+    {
+        var mode = style?.TextSecurity;
+        return mode switch
+        {
+            "disc" => '\u2022',
+            "circle" => '\u25E6',
+            "square" => '\u25A0',
+            _ => '\0',
+        };
+    }
+
+    private static char MaskCharacter(char c, ComputedStyle? style)
+    {
+        var glyph = MaskGlyph(style);
+        return glyph == '\0' ? c : glyph;
+    }
+
     private void AppendToRun(char c, LayoutText? layoutText, ComputedStyle? style = null)
     {
+        c = MaskCharacter(c, style ?? _pendingRunStyle);
         if (_startIndexText < 0)
         {
             _startIndexText = _text.Length;
@@ -629,8 +681,9 @@ public class InlineItemsBuilder
         if (!_pendingCollapsibleSpace)
             return;
         int offset = _text.Length;
-        _text.Append(' ');
-        _data.Items.Add(MakeTextItem(" ", 1, offset, _pendingSpaceStyle ?? _style, _lastLayoutText ?? new LayoutText(null, " ")));
+        var masked = MaskCharacter(' ', _pendingSpaceStyle ?? _style);
+        _text.Append(masked);
+        _data.Items.Add(MakeTextItem(masked.ToString(), 1, offset, _pendingSpaceStyle ?? _style, _lastLayoutText ?? new LayoutText(null, masked.ToString())));
         _pendingCollapsibleSpace = false;
         _pendingSpaceStyle = null;
         _hasContent = true;
@@ -643,8 +696,9 @@ public class InlineItemsBuilder
             // Emit the pending collapsible space as its own trailing space run,
             // shaped with the style in effect where the space occurred.
             int offset = _text.Length;
-            _text.Append(' ');
-            _data.Items.Add(MakeTextItem(" ", 1, offset, _pendingSpaceStyle ?? _style, _lastLayoutText ?? new LayoutText(null, " ")));
+            var maskedSpace = MaskCharacter(' ', _pendingSpaceStyle ?? _style);
+            _text.Append(maskedSpace);
+            _data.Items.Add(MakeTextItem(maskedSpace.ToString(), 1, offset, _pendingSpaceStyle ?? _style, _lastLayoutText ?? new LayoutText(null, maskedSpace.ToString())));
             _pendingCollapsibleSpace = false;
             _pendingSpaceStyle = null;
             _hasContent = true;

@@ -48,7 +48,8 @@ public static class ComputedValueSerializer
         // through, so a prefix that means something else keeps its own spelling.
         var canonical = CssPropertyName.FromString(property);
         if (canonical.Id == CssPropertyId.Invalid || canonical.Id == CssPropertyId.Variable) return null;
-        var dashed = canonical.ToCssString();
+        var dashed = Acrux.Core.Css.Properties.CssPropertyIdExtensions.BehaviourName(
+            canonical.ToCssString());
         return ValueOf(style, dashed)
             ?? (includeShorthands ? ShorthandValueOf(style, dashed) : null);
     }
@@ -501,6 +502,25 @@ public static class ComputedValueSerializer
                     style.OverscrollBehaviorY.ToString().ToLowerInvariant());
             case "content-visibility": return CssEnumFormatter.CssKeywordFromEnum(style.ContentVisibility.ToString());
             case "scrollbar-width": return CssEnumFormatter.CssKeywordFromEnum(style.ScrollbarWidth.ToString());
+            // The keyword family: the stored text is what the reference engine prints, and the
+            // fallback is its measured initial value. 'line-clamp' and 'text-security' without a
+            // prefix are not properties the reference engine declares at all, so they answer
+            // nothing — the name the page used is what decides, not the value it wrote.
+            case "touch-action": return style.TouchAction ?? "auto";
+            case "paint-order": return style.PaintOrder ?? "normal";
+            case "vector-effect": return style.VectorEffect ?? "none";
+            case "shape-rendering": return style.ShapeRendering ?? "auto";
+            case "color-rendering": return style.ColorRendering ?? "auto";
+            case "color-interpolation": return style.ColorInterpolation ?? "srgb";
+            case "color-interpolation-filters":
+                return style.ColorInterpolationFilters ?? "linearrgb";
+            case "image-orientation": return style.ImageOrientation ?? "from-image";
+            case "text-security": return style.TextSecurity ?? "none";
+            case "line-clamp":
+                // The reference engine has no unprefixed 'line-clamp'; the id this engine keeps for
+                // the prefixed spelling answers under the name the page wrote, which the CSSOM
+                // reader has already filtered by then.
+                return style.LineClamp > 0 ? style.LineClamp.ToString() : "none";
             // The one value of 'both-edges' is the pair, printed in the order the property
             // introduces them (measured: 'stable both-edges' reads back as written).
             case "scrollbar-gutter": return style.ScrollbarGutter switch

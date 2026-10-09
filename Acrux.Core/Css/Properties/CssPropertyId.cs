@@ -464,6 +464,28 @@ public enum CssPropertyId
     /// <summary>CSS Transforms 1 §3: which box a transform's percentages and origin resolve
     /// against. It had no ID, so the cascade dropped every declaration before the applier.</summary>
     TransformBox,
+    /// <summary>CSS SVG 2 §12.4 / Painting Order: the order a shape's fill, stroke and markers are
+    /// painted in. The reference engine declares it and a page reads it back, so it needs an id even
+    /// while this engine still paints every shape in the default order.</summary>
+    PaintOrder,
+    /// <summary>CSS Text 4 §4.7. This engine has no behaviour for it, but the reference engine
+    /// folds <c>-webkit-text-size-adjust</c> onto it, and folding is a lookup by id: without one
+    /// the declaration is stored under the prefixed spelling it was written with, which is not
+    /// what a reference engine prints for it (snapshots/out/_b257_edge_names.txt).</summary>
+    TextSizeAdjust,
+    // The seven properties below are the '-webkit-' spellings measured (snapshots/out/
+    // _b257_edge_names.txt) to be a property of their own rather than an alias: the reference
+    // engine stores the declaration under the prefixed name, prints it back under the prefixed
+    // name and reads the unprefixed name as nothing at all — '-webkit-writing-mode: vertical-rl'
+    // leaves 'getPropertyValue("writing-mode")' on the same block empty. They share their
+    // unprefixed twin's behaviour, which is what <see cref="CssPropertyIdExtensions.BehaviourId"/>
+    // is for; the id exists so the declaration has a place to be stored in.
+    WebkitBorderImage,
+    WebkitBoxDecorationBreak,
+    WebkitLineBreak,
+    WebkitTextOrientation,
+    WebkitTextSecurity,
+    WebkitWritingMode,
     MaxProperties
 }
 
@@ -485,6 +507,9 @@ public static class CssPropertyIdExtensions
             if (name == "s-v-g-height") name = "svg-height";
             if (name == "s-v-g-x") name = "svg-x";
             if (name == "s-v-g-y") name = "svg-y";
+            // An id named 'WebkitX' is one of the prefixed-only properties below, and the name it
+            // is stored and printed under carries the dash the enum cannot spell.
+            if (name.StartsWith("webkit-", StringComparison.Ordinal)) name = "-" + name;
             NameToId[name] = id;
             IdToName[id] = name;
         }
@@ -496,14 +521,60 @@ public static class CssPropertyIdExtensions
             foreach (var prefix in new[] { "-webkit-", "-moz-", "-ms-", "-o-" })
                 NameToId.TryAdd(prefix + entry.Key, entry.Value);
         }
+
+        // The four legacy logical edges, measured to be stored under the logical property they
+        // name rather than under either spelling of their own: 'setProperty('-webkit-margin-end',
+        // …)' leaves cssText printing 'margin-inline-end: …' (snapshots/out/_b257_edge_names.txt).
+        NameToId["-webkit-margin-start"] = CssPropertyId.MarginInlineStart;
+        NameToId["-webkit-margin-end"] = CssPropertyId.MarginInlineEnd;
+        NameToId["-webkit-padding-start"] = CssPropertyId.PaddingInlineStart;
+        NameToId["-webkit-padding-end"] = CssPropertyId.PaddingInlineEnd;
+    }
+
+    /// <summary>The id whose behaviour a declaration should be run through. The <c>-webkit-</c>
+    /// spellings that are properties of their own (see the ids above) share their twin's behaviour
+    /// entirely, so only their <i>name</i> is different: every code that decides what a value does
+    /// reads the twin, and every code that prints the declaration reads the id as authored.</summary>
+    public static CssPropertyId BehaviourId(CssPropertyId id) => id switch
+    {
+        CssPropertyId.WebkitBorderImage => CssPropertyId.BorderImage,
+        CssPropertyId.WebkitBoxDecorationBreak => CssPropertyId.BoxDecorationBreak,
+        CssPropertyId.WebkitLineBreak => CssPropertyId.LineBreak,
+        CssPropertyId.WebkitLineClamp => CssPropertyId.LineClamp,
+        CssPropertyId.WebkitTextOrientation => CssPropertyId.TextOrientation,
+        CssPropertyId.WebkitTextSecurity => CssPropertyId.TextSecurity,
+        CssPropertyId.WebkitWritingMode => CssPropertyId.WritingMode,
+        _ => id,
+    };
+
+    /// <summary>The name a value is applied under: the twin of a prefixed-only property, and the
+    /// name itself for every other one — including a prefixed name this engine has no id for,
+    /// which has no twin to fall back on. See <see cref="BehaviourId"/>.</summary>
+    public static string BehaviourName(string name)
+    {
+        var twin = BehaviourId(FromString(name));
+        return twin == FromString(name) ? name : ToString(twin);
     }
 
     public static CssPropertyId FromString(string name)
     {
         if (NameToId.TryGetValue(name, out var id))
             return id;
+        // A script that reaches a prefixed property through its IDL member spells it without the
+        // leading dash — 'style.webkitTextSecurity' is the same property as '-webkit-text-security'
+        // (measured: setting it prints '-webkit-text-security: disc;').
+        if (name.StartsWith("webkit-", StringComparison.Ordinal)
+            && NameToId.TryGetValue("-" + name, out id))
+            return id;
         return CssPropertyId.Invalid;
     }
+
+    /// <summary>Whether a name is a custom property, which is a prefix test and not a lookup: the
+    /// reference engine accepts one whatever follows the two dashes. A declaration stored under a
+    /// name this engine has no id for sits in the same map but is not one, and must not be read as
+    /// a place for <c>var()</c> to look things up in.</summary>
+    public static bool IsCustomPropertyName(string name) =>
+        name.StartsWith("--", StringComparison.Ordinal);
 
     public static string ToString(CssPropertyId id)
     {
@@ -512,15 +583,25 @@ public static class CssPropertyIdExtensions
         return id.ToString();
     }
 
-    /// <summary>The name a declaration is stored under. A vendor prefix is an alias, not a
-    /// property of its own: measured in the reference engine,
-    /// <c>style.setProperty('-webkit-appearance', 'none')</c> leaves <c>'appearance'</c> reading
-    /// back 'none' and <c>cssText</c> printing 'appearance: none;'. A name this engine has no
-    /// id for is somebody else's property and keeps its own spelling, and a custom property is
-    /// never an alias of anything.</summary>
+    /// <summary>The name a declaration is stored and printed under. Measured over the 105
+    /// <c>-webkit-</c> spellings the reference engine accepts
+    /// (snapshots/out/_b257_edge_names.txt), a prefix does three different things: 72 of them are
+    /// aliases of an existing property and are stored under the unprefixed name, so
+    /// <c>style.setProperty('-webkit-appearance', 'none')</c> leaves <c>'appearance'</c> reading back
+    /// 'none' and <c>cssText</c> printing 'appearance: none;'; 29 of them are a property of their
+    /// own, stored and printed under the prefixed name with the unprefixed name reading back empty
+    /// (<c>'-webkit-text-security'</c>, and the legacy box model's <c>'-webkit-box-flex'</c>); and
+    /// four of them rename to a logical property, which is what <c>'-webkit-margin-end'</c> is
+    /// stored as. A name this engine has no id for is somebody else's property and keeps its own
+    /// spelling, and a custom property is never an alias of anything.</summary>
     public static string CanonicalName(string name)
     {
         if (string.IsNullOrEmpty(name) || name.StartsWith("--", StringComparison.Ordinal)) return name;
+        // A prefixed property this engine has no id for is still somebody's property, and an IDL
+        // member names it without its leading dash: 'style.webkitBoxFlex = "1"' is stored as
+        // '-webkit-box-flex' (measured).
+        if (name.StartsWith("webkit-", StringComparison.Ordinal) && FromString(name) == CssPropertyId.Invalid)
+            name = "-" + name;
         var id = FromString(name);
         return id == CssPropertyId.Invalid || id == CssPropertyId.Variable ? name : ToString(id);
     }

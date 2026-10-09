@@ -479,35 +479,35 @@ public class StyleResolver
                 {
                     foreach (var p in rule.Properties.Properties)
                         (element.BeforeStyles ??= new Dictionary<string, string>())
-                            [p.Name.ToCssString()] = p.Value.CssText();
+                            [CssPropertyIdExtensions.BehaviourName(p.Name.ToCssString())] = p.Value.CssText();
                     return;
                 }
                 if (HasPseudoElement(selectorText, "after"))
                 {
                     foreach (var p in rule.Properties.Properties)
                         (element.AfterStyles ??= new Dictionary<string, string>())
-                            [p.Name.ToCssString()] = p.Value.CssText();
+                            [CssPropertyIdExtensions.BehaviourName(p.Name.ToCssString())] = p.Value.CssText();
                     return;
                 }
                 if (HasPseudoElement(selectorText, "marker"))
                 {
                     foreach (var p in rule.Properties.Properties)
                         (element.MarkerStyles ??= new Dictionary<string, string>())
-                            [p.Name.ToCssString()] = p.Value.CssText();
+                            [CssPropertyIdExtensions.BehaviourName(p.Name.ToCssString())] = p.Value.CssText();
                     return;
                 }
                 if (HasPseudoElement(selectorText, "first-line"))
                 {
                     foreach (var p in rule.Properties.Properties)
                         (element.FirstLineStyles ??= new Dictionary<string, string>())
-                            [p.Name.ToCssString()] = p.Value.CssText();
+                            [CssPropertyIdExtensions.BehaviourName(p.Name.ToCssString())] = p.Value.CssText();
                     return;
                 }
                 if (HasPseudoElement(selectorText, "first-letter"))
                 {
                     foreach (var p in rule.Properties.Properties)
                         (element.FirstLetterStyles ??= new Dictionary<string, string>())
-                            [p.Name.ToCssString()] = p.Value.CssText();
+                            [CssPropertyIdExtensions.BehaviourName(p.Name.ToCssString())] = p.Value.CssText();
                     return;
                 }
 
@@ -539,7 +539,7 @@ public class StyleResolver
         bool needsExpansion = false;
         foreach (var p in props.Properties)
         {
-            if (!p.Name.IsCustom && p.Name.Id != CssPropertyId.Variable && IsExpandableShorthand(p.Name.ToCssString()))
+            if (!p.Name.IsCustom && p.Name.Id != CssPropertyId.Variable && IsExpandableShorthand(CssPropertyIdExtensions.BehaviourName(p.Name.ToCssString())))
             {
                 needsExpansion = true;
                 break;
@@ -550,13 +550,13 @@ public class StyleResolver
         var result = new CssPropertyValueSet(props.ParserMode);
         foreach (var p in props.Properties)
         {
-            if (p.Name.IsCustom || !IsExpandableShorthand(p.Name.ToCssString()))
+            if (p.Name.IsCustom || !IsExpandableShorthand(CssPropertyIdExtensions.BehaviourName(p.Name.ToCssString())))
             {
                 result.SetLonghandProperty(p);
                 continue;
             }
 
-            string name = p.Name.ToCssString();
+            string name = CssPropertyIdExtensions.BehaviourName(p.Name.ToCssString());
             string text = p.Value.CssText();
 
             // Shorthand values containing var() cannot be expanded until the
@@ -642,7 +642,7 @@ public class StyleResolver
 
         foreach (var prop in properties.Properties)
         {
-            var name = prop.Name.ToCssString().ToLowerInvariant();
+            var name = CssPropertyIdExtensions.BehaviourName(prop.Name.ToCssString()).ToLowerInvariant();
             var value = prop.Value?.CssText().Trim() ?? "";
             try
             {

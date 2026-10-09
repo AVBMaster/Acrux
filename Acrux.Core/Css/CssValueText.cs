@@ -160,8 +160,58 @@ public static class CssValueText
                 result = FoldFamilyNames(result);
             else if (property.Equals("font-feature-settings", StringComparison.OrdinalIgnoreCase))
                 result = ElideDefaultFeatureValues(result);
+            else if (Acrux.Core.Css.CssValueGrammar.IsLegacyPrefixedName(property))
+                result = LegacyCanonical(result, property.ToLowerInvariant());
         }
         return result;
+    }
+
+    /// <summary>The value as the reference engine prints one of its legacy <c>-webkit-</c>
+    /// properties: the keyword in its own lower-case spelling, the width of a stroke ahead of its
+    /// colour, the offset of a reflection written even when the page left it out, and the leading
+    /// plus of a group number dropped (all measured, snapshots/out/_b257_edge_legacy_grammar.txt).
+    /// The words that are not keywords of that property keep their spelling, because a custom
+    /// name or a string inside a url() is not the engine's to re-spell.</summary>
+    private static string LegacyCanonical(string text, string property)
+    {
+        var words = System.Text.RegularExpressions.Regex.Split(text.Trim(), "\\s+");
+        switch (property)
+        {
+            case "-webkit-box-ordinal-group":
+                return words.Length == 1 && words[0].StartsWith("+", StringComparison.Ordinal)
+                    ? words[0][1..] : text;
+            case "-webkit-box-reflect" when words.Length is 1 or 2
+                && System.Array.BinarySearch(SideKeywords, words[0].ToLowerInvariant(),
+                    StringComparer.Ordinal) >= 0:
+                return words.Length == 1 ? words[0].ToLowerInvariant() + " 0px"
+                    : words[0].ToLowerInvariant() + " " + words[1];
+            case "-webkit-text-stroke" when words.Length == 2:
+            {
+                // The width is printed first whichever order the page wrote (measured: 'green 2px'
+                // reads back '2px green'), and a value that is not a two-word stroke never reaches
+                // here because the grammar has already refused it.
+                bool firstIsLength = char.IsDigit(words[0][0]) || words[0][0] is '+' or '-';
+                return firstIsLength ? words[0] + " " + words[1] : words[1] + " " + words[0];
+            }
+        }
+        // One word, or a number with one keyword beside it: every keyword of these properties is
+        // printed in lower case (measured 'END' and '3 FILL').
+        var lowered = new string[words.Length];
+        for (int i = 0; i < words.Length; i++)
+            lowered[i] = IsLegacyKeywordWord(property, words[i])
+                ? words[i].ToLowerInvariant() : words[i];
+        return string.Join(" ", lowered);
+    }
+
+    private static readonly string[] SideKeywords = { "above", "below", "left", "right" };
+
+    /// <summary>Whether a word of a legacy value is one of that property's own keywords, which is
+    /// the only kind of word the engine may re-spell.</summary>
+    private static bool IsLegacyKeywordWord(string property, string word)
+    {
+        if (word.Length == 0 || !(char.IsLetter(word[0]) || word[0] == '-')) return false;
+        if (word.IndexOf('(') >= 0) return false;   // a function keeps its own spelling
+        return Acrux.Core.Css.CssValueGrammar.LegacyKeywordBelongs(property, word.ToLowerInvariant());
     }
 
     /// <summary>One family name as the reference engine prints it. A name that is a sequence of

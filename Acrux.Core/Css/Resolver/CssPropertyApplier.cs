@@ -14,6 +14,74 @@ namespace Acrux.Core.Css.Resolver;
 /// </summary>
 public static class CssPropertyApplier
 {
+    /// <summary>Whether |value| is one of |allowed|, compared without case as CSS keywords are.</summary>
+    internal static bool IsOneOfLower(string value, params string[] allowed)
+    {
+        var text = value.Trim();
+        foreach (var word in allowed)
+            if (text.Equals(word, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>An &lt;angle&gt; written as a number with one of the four units CSS Values 4 gives
+    /// it — the shape 'image-orientation: 90deg' and 'flip' beside it are made of.</summary>
+    internal static bool IsImageOrientationAngle(string value)
+    {
+        var text = CollapseSpace(value).ToLowerInvariant();
+        foreach (var unit in new[] { "deg", "grad", "rad", "turn" })
+        {
+            if (!text.EndsWith(unit, StringComparison.Ordinal)) continue;
+            var number = text[..^unit.Length].Trim();
+            if (number.Length > 0 && double.TryParse(number, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out _)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>CSS Touch Action §6: 'auto', 'none' and 'manipulation' each stand alone, and the
+    /// pan keywords combine freely. The reference engine prints the authored list in the order it
+    /// was written (measured: 'pan-x pinch-zoom'), so this only checks the shape and re-spells it.</summary>
+    internal static string? CanonicalTouchAction(string value)
+    {
+        var words = CollapseSpace(value).ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0) return null;
+        string[] standalone = { "auto", "none", "manipulation" };
+        string[] combinable = { "pan-x", "pan-left", "pan-right", "pan-up", "pan-down", "pan-y", "pinch-zoom" };
+        if (words.Length == 1)
+            return standalone.Contains(words[0]) || combinable.Contains(words[0]) ? words[0] : null;
+        if (words.Any(w => standalone.Contains(w))) return null;
+        if (!words.All(w => combinable.Contains(w))) return null;
+        return words.Length != words.Distinct().Count() ? null : string.Join(' ', words);
+    }
+
+    /// <summary>CSS Painting Order: the three paint types in any order, each at most once. The
+    /// reference engine prints the shortest prefix of the authored list that leaves the rest in the
+    /// default order (fill, stroke, markers), and always keeps one word — so 'stroke fill markers'
+    /// prints 'stroke', 'markers stroke fill' prints 'markers stroke', the default written out
+    /// prints 'fill', and 'normal' prints 'normal' (measured, all four).</summary>
+    internal static string? CanonicalPaintOrder(string value)
+    {
+        var text = CollapseSpace(value).ToLowerInvariant();
+        if (text == "normal") return "normal";
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length is 0 or > 3) return null;
+        string[] order = { "fill", "stroke", "markers" };
+        if (words.Any(w => !order.Contains(w)) || words.Length != words.Distinct().Count())
+            return null;
+        int Rank(string w) => System.Array.IndexOf(order, w);
+        bool Ascending(List<string> list)
+        {
+            for (int i = 1; i < list.Count; i++)
+                if (Rank(list[i - 1]) > Rank(list[i])) return false;
+            return true;
+        }
+        // The tail that goes is the longest proper one already in the default order.
+        for (int take = words.Length - 1; take >= 1; take--)
+            if (Ascending(words.Skip(words.Length - take).ToList()))
+                return string.Join(' ', words.Take(words.Length - take));
+        return string.Join(' ', words);
+    }
+
     /// <summary>The value text with its runs of whitespace reduced to single spaces, which is how a
     /// two-word value is compared whatever spacing the page put between the words.</summary>
     private static string CollapseSpace(string value) =>
@@ -839,6 +907,50 @@ public static class CssPropertyApplier
             case "line-break": style.LineBreak = ParseLineBreak(value); break;
             case "text-justify": style.TextJustify = ParseTextJustify(value); break;
             case "hanging-punctuation": style.HangingPunctuation = value.ToLowerInvariant(); break;
+            // The keyword family the engine declares but does not act on. Each case canonicalises
+            // the way the reference engine prints the value and answers null when the text is no
+            // value at all, which leaves the property at its initial (measured per property; the
+            // grammars themselves are gated in CssValueGrammar, so these only re-order and re-spell).
+            case "touch-action": style.TouchAction = CanonicalTouchAction(value); break;
+            case "paint-order": style.PaintOrder = CanonicalPaintOrder(value); break;
+            case "vector-effect":
+                style.VectorEffect = IsOneOfLower(value, "none", "non-scaling-stroke") ? value.ToLowerInvariant() : null;
+                break;
+            case "shape-rendering":
+                style.ShapeRendering = IsOneOfLower(value, "auto", "optimizeSpeed", "crispEdges",
+                    "geometricPrecision") ? value.ToLowerInvariant() : null;
+                break;
+            case "color-rendering":
+                style.ColorRendering = IsOneOfLower(value, "auto", "optimizeSpeed", "optimizeQuality")
+                    ? value.ToLowerInvariant() : null;
+                break;
+            case "color-interpolation":
+            case "color-interpolation-filters":
+                {
+                    var canonical = IsOneOfLower(value, "auto", "sRGB", "linearRGB")
+                        ? value.ToLowerInvariant() : null;
+                    if (name == "color-interpolation-filters") style.ColorInterpolationFilters = canonical;
+                    else style.ColorInterpolation = canonical;
+                    break;
+                }
+            case "image-orientation":
+                // 'from-image' is the initial and 'none' the only other spelling this engine (and,
+                // measured, the reference engine on the boxes it draws) reports; an angle or 'flip'
+                // reads back 'from-image' there, so the declaration is kept and prints the initial.
+                style.ImageOrientation = IsOneOfLower(value, "none") ? "none"
+                    : IsImageOrientationAngle(value) ? "from-image"
+                    : IsOneOfLower(value, "from-image") ? "from-image" : null;
+                break;
+            case "text-security":
+            case "-webkit-text-security":
+                // Both spellings reach the applier — the cascade hands it the name the page wrote as
+                // well as the canonical one — and the unprefixed 'text-security' can only arrive
+                // from a sheet this engine wrote for itself, because a page's unprefixed declaration
+                // is dropped where declarations are read (the reference engine has no such
+                // property). The custom-character form is refused there too (measured).
+                style.TextSecurity = IsOneOfLower(value, "none", "disc", "circle", "square")
+                    ? value.ToLowerInvariant() : null;
+                break;
             case "resize": style.Resize = ParseResize(value); break;
             case "field-sizing":
                 // 'field-sizing: normal | content'. An unknown keyword (the draft's 'size'

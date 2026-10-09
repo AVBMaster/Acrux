@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 257 — the declared name of a '-webkit-' property, -webkit-text-security, the prefixed twins</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+.mask { font: 16px monospace; display: inline-block; background: rgb(238,238,255); }
+#sheet-disc { -webkit-text-security: disc; }
+#sheet-circle { -webkit-text-security: circle; }
+#unprefixed { text-security: disc; }
+.via-attr { -webkit-writing-mode: vertical-rl; width: 100px; height: 60px; background: rgb(255,128,128); }
+.via-base { writing-mode: vertical-rl; width: 100px; height: 60px; background: rgb(128,255,128); }
+#clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+         overflow: hidden; width: 120px; font: 16px monospace; background: rgb(255,255,180); }
+#stage { position: absolute; left: -4000px; top: 0; }
+#markers { margin: 4px 0 0 4px; }
+#markers > div { margin: 0 6px 6px 0; }
+</style>
+</head>
+<body>
+<h4>b257 — the name a declaration is stored under (the vendor-alias inventory), CSS Text Security, the seven '-webkit-' spellings that are properties of their own, and the legacy value sets. Every want is what the reference engine answered for the same document (snapshots/out/_b257_edge_names.txt and _b257_edge_legacy_echo.txt). The mask rows compare a masked run with the same run written out as bullets, because the advance belongs to the installed font and not to the grammar.</h4>
+<div id="markers">
+  <div id="sheet-disc" class="mask">abcdefghij</div>
+  <div id="sheet-circle" class="mask">abcdefghij</div>
+  <div id="unprefixed" class="mask">abcdefghij</div>
+  <div class="via-base" id="viaBase">abc</div>
+  <div class="via-attr" id="viaAttr">abc</div>
+  <div id="clamp">line one of the text line two of the text line three of the text</div>
+</div>
+<pre id="report"></pre>
+<div id="stage"></div>
+<script>
+const out = [];
+let failed = 0;
+function row(name, got, want) {
+  const ok = String(got) === String(want);
+  if (!ok) failed++;
+  out.push((ok ? 'ok   ' : 'FAIL ') + name.padEnd(30) + ' got=' + got + '   want=' + want);
+}
+function check(name, fn, want) {
+  let got;
+  try { got = fn(); } catch (e) { got = 'ERR[' + e.name + ']'; }
+  row(name, got, want);
+}
+const stage = document.getElementById('stage');
+function div(css, text) {
+  const d = document.createElement('div');
+  if (css) d.style.cssText = css;
+  if (text !== undefined) d.textContent = text;
+  stage.appendChild(d);
+  return d;
+}
+
+// §1 the alias inventory: every '-webkit-' spelling the reference engine declares, read three ways
+// — the text the block prints, the unprefixed read, the prefixed read. 72 fold onto the unprefixed
+// name, 29 keep the prefix in all three, 4 rename to a logical property.
+function triple(name) {
+  const d = div('');
+  d.style.setProperty('-webkit-' + name, 'inherit');
+  return d.style.cssText + '|' + d.style.getPropertyValue(name) + '|' +
+         d.style.getPropertyValue('-webkit-' + name);
+}
+const NAMES = [
+  ["align-content", "align-content: inherit;|inherit|inherit"],
+  ["align-items", "align-items: inherit;|inherit|inherit"],
+  ["align-self", "align-self: inherit;|inherit|inherit"],
+  ["animation", "animation: inherit;|inherit|inherit"],
+  ["animation-delay", "animation-delay: inherit;|inherit|inherit"],
+  ["animation-direction", "animation-direction: inherit;|inherit|inherit"],
+  ["animation-duration", "animation-duration: inherit;|inherit|inherit"],
+  ["animation-fill-mode", "animation-fill-mode: inherit;|inherit|inherit"],
+  ["animation-iteration-count", "animation-iteration-count: inherit;|inherit|inherit"],
+  ["animation-name", "animation-name: inherit;|inherit|inherit"],
+  ["animation-play-state", "animation-play-state: inherit;|inherit|inherit"],
+  ["animation-timing-function", "animation-timing-function: inherit;|inherit|inherit"],
+  ["appearance", "appearance: inherit;|inherit|inherit"],
+  ["backface-visibility", "backface-visibility: inherit;|inherit|inherit"],
+  ["background-clip", "background-clip: inherit;|inherit|inherit"],
+  ["background-origin", "background-origin: inherit;|inherit|inherit"],
+  ["background-size", "background-size: inherit;|inherit|inherit"],
+  ["border-bottom-left-radius", "border-bottom-left-radius: inherit;|inherit|inherit"],
+  ["border-bottom-right-radius", "border-bottom-right-radius: inherit;|inherit|inherit"],
+  ["border-image", "-webkit-border-image: inherit;||inherit"],
+  ["border-radius", "border-radius: inherit;|inherit|inherit"],
+  ["border-top-left-radius", "border-top-left-radius: inherit;|inherit|inherit"],
+  ["border-top-right-radius", "border-top-right-radius: inherit;|inherit|inherit"],
+  ["box-decoration-break", "-webkit-box-decoration-break: inherit;||inherit"],
+  ["box-shadow", "box-shadow: inherit;|inherit|inherit"],
+  ["box-sizing", "box-sizing: inherit;|inherit|inherit"],
+  ["clip-path", "clip-path: inherit;|inherit|inherit"],
+  ["column-count", "column-count: inherit;|inherit|inherit"],
+  ["column-gap", "column-gap: inherit;|inherit|inherit"],
+  ["column-rule", "column-rule: inherit;|inherit|inherit"],
+  ["column-rule-color", "column-rule-color: inherit;|inherit|inherit"],
+  ["column-rule-style", "column-rule-style: inherit;|inherit|inherit"],
+  ["column-rule-width", "column-rule-width: inherit;|inherit|inherit"],
+  ["column-span", "column-span: inherit;|inherit|inherit"],
+  ["column-width", "column-width: inherit;|inherit|inherit"],
+  ["columns", "columns: inherit;|inherit|inherit"],
+  ["filter", "filter: inherit;|inherit|inherit"],
+  ["flex", "flex: inherit;|inherit|inherit"],
+  ["flex-basis", "flex-basis: inherit;|inherit|inherit"],
+  ["flex-direction", "flex-direction: inherit;|inherit|inherit"],
+  ["flex-flow", "flex-flow: inherit;|inherit|inherit"],
+  ["flex-grow", "flex-grow: inherit;|inherit|inherit"],
+  ["flex-shrink", "flex-shrink: inherit;|inherit|inherit"],
+  ["flex-wrap", "flex-wrap: inherit;|inherit|inherit"],
+  ["font-feature-settings", "font-feature-settings: inherit;|inherit|inherit"],
+  ["hyphenate-character", "hyphenate-character: inherit;|inherit|inherit"],
+  ["justify-content", "justify-content: inherit;|inherit|inherit"],
+  ["line-break", "-webkit-line-break: inherit;||inherit"],
+  ["line-clamp", "-webkit-line-clamp: inherit;||inherit"],
+  ["mask", "mask: inherit;|inherit|inherit"],
+  ["mask-clip", "mask-clip: inherit;|inherit|inherit"],
+  ["mask-composite", "mask-composite: inherit;|inherit|inherit"],
+  ["mask-image", "mask-image: inherit;|inherit|inherit"],
+  ["mask-origin", "mask-origin: inherit;|inherit|inherit"],
+  ["mask-position", "mask-position: inherit;|inherit|inherit"],
+  ["mask-repeat", "mask-repeat: inherit;|inherit|inherit"],
+  ["mask-size", "mask-size: inherit;|inherit|inherit"],
+  ["opacity", "opacity: inherit;|inherit|inherit"],
+  ["order", "order: inherit;|inherit|inherit"],
+  ["perspective", "perspective: inherit;|inherit|inherit"],
+  ["perspective-origin", "perspective-origin: inherit;|inherit|inherit"],
+  ["print-color-adjust", "print-color-adjust: inherit;|inherit|inherit"],
+  ["text-emphasis", "text-emphasis: inherit;|inherit|inherit"],
+  ["text-emphasis-color", "text-emphasis-color: inherit;|inherit|inherit"],
+  ["text-emphasis-position", "text-emphasis-position: inherit;|inherit|inherit"],
+  ["text-emphasis-style", "text-emphasis-style: inherit;|inherit|inherit"],
+  ["text-orientation", "-webkit-text-orientation: inherit;||inherit"],
+  ["text-security", "-webkit-text-security: inherit;||inherit"],
+  ["transform", "transform: inherit;|inherit|inherit"],
+  ["transform-origin", "transform-origin: inherit;|inherit|inherit"],
+  ["transform-style", "transform-style: inherit;|inherit|inherit"],
+  ["transition", "transition: inherit;|inherit|inherit"],
+  ["transition-delay", "transition-delay: inherit;|inherit|inherit"],
+  ["transition-duration", "transition-duration: inherit;|inherit|inherit"],
+  ["transition-property", "transition-property: inherit;|inherit|inherit"],
+  ["transition-timing-function", "transition-timing-function: inherit;|inherit|inherit"],
+  ["user-select", "user-select: inherit;|inherit|inherit"],
+  ["writing-mode", "-webkit-writing-mode: inherit;||inherit"],
+  ["box-align", "-webkit-box-align: inherit;||inherit"],
+  ["box-direction", "-webkit-box-direction: inherit;||inherit"],
+  ["box-flex", "-webkit-box-flex: inherit;||inherit"],
+  ["box-ordinal-group", "-webkit-box-ordinal-group: inherit;||inherit"],
+  ["box-orient", "-webkit-box-orient: inherit;||inherit"],
+  ["box-pack", "-webkit-box-pack: inherit;||inherit"],
+  ["box-reflect", "-webkit-box-reflect: inherit;||inherit"],
+  ["font-smoothing", "-webkit-font-smoothing: inherit;||inherit"],
+  ["margin-end", "margin-inline-end: inherit;||inherit"],
+  ["margin-start", "margin-inline-start: inherit;||inherit"],
+  ["mask-box-image", "-webkit-mask-box-image: inherit;||inherit"],
+  ["mask-box-image-outset", "-webkit-mask-box-image-outset: inherit;||inherit"],
+  ["mask-box-image-repeat", "-webkit-mask-box-image-repeat: inherit;||inherit"],
+  ["mask-box-image-slice", "-webkit-mask-box-image-slice: inherit;||inherit"],
+  ["mask-box-image-source", "-webkit-mask-box-image-source: inherit;||inherit"],
+  ["mask-box-image-width", "-webkit-mask-box-image-width: inherit;||inherit"],
+  ["padding-end", "padding-inline-end: inherit;||inherit"],
+  ["padding-start", "padding-inline-start: inherit;||inherit"],
+  ["tap-highlight-color", "-webkit-tap-highlight-color: inherit;||inherit"],
+  ["text-decorations-in-effect", "-webkit-text-decorations-in-effect: inherit;||inherit"],
+  ["text-fill-color", "-webkit-text-fill-color: inherit;||inherit"],
+  ["text-size-adjust", "text-size-adjust: inherit;|inherit|inherit"],
+  ["text-stroke", "-webkit-text-stroke: inherit;||inherit"],
+  ["text-stroke-color", "-webkit-text-stroke-color: inherit;||inherit"],
+  ["text-stroke-width", "-webkit-text-stroke-width: inherit;||inherit"],
+  ["user-drag", "-webkit-user-drag: inherit;||inherit"],
+  ["user-modify", "-webkit-user-modify: inherit;||inherit"],
+];
+NAMES.forEach(([n, want], i) => check('nm' + (i + 1 < 10 ? '0' : '') + (i + 1) + ' ' + n, () => triple(n), want));
+
+// §2 -webkit-text-security replaces every character before shaping, so a masked run is exactly as
+// wide as the same number of bullets written out by hand.
+const GLYPH = { disc: '\u2022', circle: '\u25E6', square: '\u25A0' };
+function bulletRun(mode, n) { return GLYPH[mode].repeat(n || 10); }
+function runWidth(mode, text, extra) {
+  const d = div('font:16px monospace;display:inline-block;' +
+                (extra || 'white-space:pre') + ';-webkit-text-security:' + mode, text);
+  return d.getBoundingClientRect().width;
+}
+function controlWidth(text, ws) {
+  return div('font:16px monospace;display:inline-block;' + (ws || 'white-space:pre'), text).getBoundingClientRect().width;
+}
+function same(a, b) { return Math.abs(a - b) < 0.5 ? 'Y' : 'N'; }
+check('mask disc = bullets', () => same(runWidth('disc', 'abcdefghij'), controlWidth(bulletRun('disc'))), 'Y');
+check('mask circle = bullets', () => same(runWidth('circle', 'abcdefghij'), controlWidth(bulletRun('circle'))), 'Y');
+check('mask square = bullets', () => same(runWidth('square', 'abcdefghij'), controlWidth(bulletRun('square'))), 'Y');
+check('mask through a sheet', () => same(document.getElementById('sheet-disc').getBoundingClientRect().width,
+  controlWidth(bulletRun('disc'))), 'Y');
+check('unprefixed authoring', () => same(document.getElementById('unprefixed').getBoundingClientRect().width,
+  controlWidth(bulletRun('disc'))), 'N');
+// Every character is replaced, and replaced before the white-space machinery sees it, so the
+// collapsible ones collapse nothing (measured: 'a  b' costs four bullets in 'white-space: normal',
+// a masked line end breaks no line, and one astral character is one glyph).
+check('mask a space', () => same(runWidth('disc', 'a b'), controlWidth(bulletRun('disc', 3))), 'Y');
+check('mask an nbsp', () => same(runWidth('disc', 'a\u00A0b'), controlWidth(bulletRun('disc', 3))), 'Y');
+check('mask collapses nothing', () => same(runWidth('disc', 'a  b', 'white-space:normal'),
+  controlWidth(bulletRun('disc', 4), 'white-space:normal')), 'Y');
+check('mask keeps a leading space', () => same(runWidth('disc', ' ab', 'white-space:normal'),
+  controlWidth(bulletRun('disc', 3), 'white-space:normal')), 'Y');
+check('mask a tab', () => same(runWidth('disc', 'a\tb'), controlWidth(bulletRun('disc', 3))), 'Y');
+check('mask a line end', () => same(runWidth('disc', 'a\nb'), controlWidth(bulletRun('disc', 3))), 'Y');
+check('mask a CRLF once', () => same(runWidth('disc', 'a\r\nb'), controlWidth(bulletRun('disc', 3))), 'Y');
+check('mask a zero width space', () => same(runWidth('disc', 'a\u200Bb'), controlWidth(bulletRun('disc', 3))), 'Y');
+check('mask an astral character once', () => same(runWidth('disc', 'a\uD83D\uDE00b'),
+  controlWidth(bulletRun('disc', 3))), 'Y');
+check('masked line end breaks no line', () => {
+  const d = div('white-space:pre;font:16px monospace;-webkit-text-security:disc', 'a\nb');
+  return Math.round(d.getBoundingClientRect().height) <= 24 ? 'Y' : 'N';
+}, 'Y');
+check('mask off in a child', () => {
+  const p = div('-webkit-text-security:disc;font:16px monospace;display:inline-block');
+  const c = document.createElement('span'); c.style.cssText = 'display:inline-block';
+  c.style.webkitTextSecurity = 'none';
+  c.textContent = 'abc'; p.appendChild(c);
+  const q = div('font:16px monospace;display:inline-block', 'abc');
+  return same(c.getBoundingClientRect().width, q.getBoundingClientRect().width);
+}, 'Y');
+check('mask leaves an image alone', () => {
+  const p = div('-webkit-text-security:disc');
+  const img = document.createElement('img'); img.src = 'missing-b257.png';
+  img.width = 40; img.height = 20; p.appendChild(img);
+  const q = div(''); const img2 = document.createElement('img'); img2.src = 'missing-b257.png';
+  img2.width = 40; img2.height = 20; q.appendChild(img2);
+  return same(p.getBoundingClientRect().width, q.getBoundingClientRect().width);
+}, 'Y');
+check('mask survives a rewrite', () => {
+  const d = div('font:16px monospace;display:inline-block;-webkit-text-security:disc', 'abcdefghij');
+  d.style.color = 'rgb(1, 2, 3)';
+  return same(d.getBoundingClientRect().width, controlWidth(bulletRun('disc'))) + ' ' + d.style.cssText;
+}, 'Y font: 16px monospace; display: inline-block; -webkit-text-security: disc; color: rgb(1, 2, 3);');
+check('mask IDL member', () => {
+  const d = div('font:16px monospace;display:inline-block', 'abcdefghij');
+  d.style.webkitTextSecurity = 'disc';
+  return same(d.getBoundingClientRect().width, controlWidth(bulletRun('disc'))) + ' ' + d.style.cssText;
+}, 'Y font: 16px monospace; display: inline-block; -webkit-text-security: disc;');
+check('mask inherits', () => {
+  const p = div('-webkit-text-security: disc; font:16px monospace; display:inline-block');
+  const c = document.createElement('span'); c.style.display = 'inline-block';
+  c.textContent = 'abc'; p.appendChild(c);
+  // The control carries the bullets as text in the same unstyled box, so the comparison is
+  // between two runs of the same font rather than between two fonts.
+  const q = div('font:16px monospace;display:inline-block');
+  const qc = document.createElement('span'); qc.style.display = 'inline-block';
+  qc.textContent = bulletRun('disc', 3); q.appendChild(qc);
+  return getComputedStyle(c)['-webkit-text-security'] + ' ' +
+         same(c.getBoundingClientRect().width, qc.getBoundingClientRect().width);
+}, 'disc Y');
+
+// §3 the computed style answers the property's own name and nothing else.
+function pair(css, prefixed, bare) {
+  const cs = getComputedStyle(div(css));
+  return '[' + cs.getPropertyValue(prefixed) + '] [' + cs.getPropertyValue(bare) + '] ' +
+         String(cs[prefixed]) + ' ' + String(cs[bare]);
+}
+check('computed text-security', () => pair('-webkit-text-security: disc', '-webkit-text-security', 'text-security'), '[disc] [] disc undefined');
+check('computed line-clamp', () => pair('-webkit-line-clamp: 3', '-webkit-line-clamp', 'line-clamp'), '[3] [] 3 undefined');
+check('IDL member of a computed style', () => {
+  const cs = getComputedStyle(div('-webkit-text-security: circle'));
+  return String(cs.webkitTextSecurity) + ' ' + String(cs.textSecurity);
+}, 'circle undefined');
+
+// §4 a prefixed spelling that is a property of its own still drives its twin's behaviour.
+function rectOf(id) { const r = document.getElementById(id).getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); }
+check('prefixed writing mode lays out', () => rectOf('viaAttr') === rectOf('viaBase') ? 'Y' : 'N', 'Y');
+check('prefixed writing mode computed', () => {
+  const cs = getComputedStyle(document.getElementById('viaAttr'));
+  return cs.writingMode + ' ' + cs['-webkit-writing-mode'];
+}, 'vertical-rl vertical-rl');
+function shared(css, prefixed, bare) {
+  const cs = getComputedStyle(div(css));
+  return '[' + cs.getPropertyValue(prefixed) + '] [' + cs.getPropertyValue(bare) + ']';
+}
+check('line-break shares one value', () => shared('-webkit-line-break: loose', '-webkit-line-break', 'line-break'), '[loose] [loose]');
+check('box-decoration-break shares', () => shared('-webkit-box-decoration-break: clone', '-webkit-box-decoration-break', 'box-decoration-break'), '[clone] [clone]');
+check('border-image echo and read', () => {
+  const d = div('-webkit-border-image: none');
+  return '[' + d.style.cssText + '] [' + d.style.getPropertyValue('border-image') + ']';
+}, '[-webkit-border-image: none;] []');
+check('clamp stores and reads', () => {
+  const d = div('-webkit-line-clamp: 2');
+  const cs = getComputedStyle(d);
+  return '[' + d.style.getPropertyValue('-webkit-line-clamp') + '] ' + cs['-webkit-line-clamp'] +
+         ' [' + cs.getPropertyValue('line-clamp') + '] ' + String(cs['line-clamp']);
+}, '[2] 2 [] undefined');
+
+// §5 the value sets of the legacy properties — what stands, what is dropped, and how the block
+// prints what stands.
+const LEGACY = [
+  ["box-align", "start", "start;"],
+  ["box-align", "center", "center;"],
+  ["box-align", "end", "end;"],
+  ["box-align", "baseline", "baseline;"],
+  ["box-align", "stretch", "stretch;"],
+  ["box-align", "bogus", "DROP"],
+  ["box-align", "0", "DROP"],
+  ["box-align", "END", "end;"],
+  ["box-direction", "normal", "normal;"],
+  ["box-direction", "reverse", "reverse;"],
+  ["box-direction", "inherit", "inherit;"],
+  ["box-direction", "bogus", "DROP"],
+  ["box-flex", "1", "1;"],
+  ["box-flex", "0", "0;"],
+  ["box-flex", "2.5", "2.5;"],
+  ["box-flex", "-1", "-1;"],
+  ["box-flex", "bogus", "DROP"],
+  ["box-flex", "calc(1+1)", "DROP"],
+  ["box-flex", "1e3", "1000;"],
+  ["box-ordinal-group", "1", "1;"],
+  ["box-ordinal-group", "0", "DROP"],
+  ["box-ordinal-group", "-1", "DROP"],
+  ["box-ordinal-group", "3", "3;"],
+  ["box-ordinal-group", "bogus", "DROP"],
+  ["box-ordinal-group", "1.5", "DROP"],
+  ["box-ordinal-group", "+2", "2;"],
+  ["box-orient", "horizontal", "horizontal;"],
+  ["box-orient", "vertical", "vertical;"],
+  ["box-orient", "inline-axis", "inline-axis;"],
+  ["box-orient", "block-axis", "block-axis;"],
+  ["box-orient", "bogus", "DROP"],
+  ["box-pack", "start", "start;"],
+  ["box-pack", "center", "center;"],
+  ["box-pack", "end", "end;"],
+  ["box-pack", "justify", "justify;"],
+  ["box-pack", "bogus", "DROP"],
+  ["box-reflect", "above", "above 0px;"],
+  ["box-reflect", "below", "below 0px;"],
+  ["box-reflect", "left", "left 0px;"],
+  ["box-reflect", "right", "right 0px;"],
+  ["box-reflect", "below 2px", "below 2px;"],
+  ["box-reflect", "below 2px blue", "DROP"],
+  ["box-reflect", "none", "DROP"],
+  ["box-reflect", "bogus", "DROP"],
+  ["box-reflect", "below 2px 3px", "DROP"],
+  ["box-reflect", "BELOW", "below 0px;"],
+  ["font-smoothing", "auto", "auto;"],
+  ["font-smoothing", "none", "none;"],
+  ["font-smoothing", "antialiased", "antialiased;"],
+  ["font-smoothing", "subpixel-antialiased", "subpixel-antialiased;"],
+  ["font-smoothing", "bogus", "DROP"],
+  ["mask-box-image", "bogus", "DROP"],
+  ["mask-box-image", "red", "DROP"],
+  ["mask-box-image-outset", "0", "0;"],
+  ["mask-box-image-outset", "2px", "2px;"],
+  ["mask-box-image-outset", "1px 2px", "1px 2px;"],
+  ["mask-box-image-outset", "auto", "DROP"],
+  ["mask-box-image-outset", "bogus", "DROP"],
+  ["mask-box-image-outset", "50%", "DROP"],
+  ["mask-box-image-outset", "1 2 3 4 5", "DROP"],
+  ["mask-box-image-outset", "2em", "2em;"],
+  ["mask-box-image-repeat", "stretch", "stretch;"],
+  ["mask-box-image-repeat", "round", "round;"],
+  ["mask-box-image-repeat", "repeat", "repeat;"],
+  ["mask-box-image-repeat", "space", "space;"],
+  ["mask-box-image-repeat", "bogus", "DROP"],
+  ["mask-box-image-slice", "0", "0;"],
+  ["mask-box-image-slice", "3", "3;"],
+  ["mask-box-image-slice", "3 fill", "3 fill;"],
+  ["mask-box-image-slice", "1 2 3 4", "1 2 3 4;"],
+  ["mask-box-image-slice", "1 2 3 4 fill", "1 2 3 4 fill;"],
+  ["mask-box-image-slice", "bogus", "DROP"],
+  ["mask-box-image-slice", "1 2 3 4 5", "DROP"],
+  ["mask-box-image-slice", "fill", "DROP"],
+  ["mask-box-image-slice", "3 FILL", "3 fill;"],
+  ["mask-box-image-slice", "2.5", "2.5;"],
+  ["mask-box-image-source", "none", "none;"],
+  ["mask-box-image-source", "url(a.png)", "url(\"a.png\");"],
+  ["mask-box-image-source", "bogus", "DROP"],
+  ["mask-box-image-source", "linear-gradient(red,blue)", "linear-gradient(red, blue);"],
+  ["mask-box-image-source", "bogus()", "DROP"],
+  ["mask-box-image-source", "none none", "DROP"],
+  ["mask-box-image-width", "auto", "auto;"],
+  ["mask-box-image-width", "4px", "4px;"],
+  ["mask-box-image-width", "1 2 3 4", "1 2 3 4;"],
+  ["mask-box-image-width", "50%", "50%;"],
+  ["mask-box-image-width", "bogus", "DROP"],
+  ["mask-box-image-width", "1 2 3 4 5", "DROP"],
+  ["mask-box-image-width", "-4px", "DROP"],
+  ["tap-highlight-color", "red", "red;"],
+  ["tap-highlight-color", "transparent", "transparent;"],
+  ["tap-highlight-color", "rgba(1,2,3,0.5)", "rgba(1, 2, 3, 0.5);"],
+  ["tap-highlight-color", "bogus", "DROP"],
+  ["tap-highlight-color", "red red", "DROP"],
+  ["text-decorations-in-effect", "none", "none;"],
+  ["text-decorations-in-effect", "glow", "DROP"],
+  ["text-decorations-in-effect", "outline", "DROP"],
+  ["text-decorations-in-effect", "underline", "underline;"],
+  ["text-decorations-in-effect", "bogus", "DROP"],
+  ["text-fill-color", "red", "red;"],
+  ["text-fill-color", "currentcolor", "currentcolor;"],
+  ["text-fill-color", "transparent", "transparent;"],
+  ["text-fill-color", "bogus", "DROP"],
+  ["text-fill-color", "red red", "DROP"],
+  ["text-stroke", "2px green", "2px green;"],
+  ["text-stroke", "green", "green;"],
+  ["text-stroke", "2px", "2px;"],
+  ["text-stroke", "2px green 3px red", "DROP"],
+  ["text-stroke", "bogus", "DROP"],
+  ["text-stroke", "green 2px", "2px green;"],
+  ["text-stroke", "2px 2px", "DROP"],
+  ["text-stroke", "red green", "DROP"],
+  ["text-stroke-color", "red", "red;"],
+  ["text-stroke-color", "currentcolor", "currentcolor;"],
+  ["text-stroke-color", "bogus", "DROP"],
+  ["text-stroke-width", "0", "0px;"],
+  ["text-stroke-width", "2px", "2px;"],
+  ["text-stroke-width", "50%", "DROP"],
+  ["text-stroke-width", "bogus", "DROP"],
+  ["text-stroke-width", "2em", "2em;"],
+  ["text-stroke-width", "2", "DROP"],
+  ["user-drag", "auto", "auto;"],
+  ["user-drag", "none", "none;"],
+  ["user-drag", "element", "element;"],
+  ["user-drag", "bogus", "DROP"],
+  ["user-drag", "text", "DROP"],
+  ["user-modify", "read-only", "read-only;"],
+  ["user-modify", "read-write", "read-write;"],
+  ["user-modify", "read-write-plaintext-only", "read-write-plaintext-only;"],
+  ["user-modify", "write-only", "DROP"],
+  ["user-modify", "bogus", "DROP"],
+];
+function legacyEcho(name, value) {
+  const d = div('-webkit-' + name + ': ' + value);
+  return d.style.cssText === '' ? 'DROP' : d.style.cssText.replace('-webkit-' + name + ': ', '');
+}
+LEGACY.forEach(([n, v, want], i) => check('lg' + (i < 9 ? '00' : i < 99 ? '0' : '') + (i + 1) + ' ' + n + ':' + v, () => legacyEcho(n, v), want));
+
+// §6 a name the reference engine does not declare makes no declaration anywhere at all.
+[['text-security', 'disc'], ['line-clamp', '2'], ['hanging-punctuation', 'first'],
+ ['ime-mode', 'active'], ['max-lines', '2'], ['timing-function', 'linear'],
+ ['webkit-line-clamp', '2'], ['box-flex', '1'], ['box-orient', 'vertical']]
+ .forEach(([n, v], i) => check('eo' + (i + 1), () => {
+   const d = div(n + ': ' + v);
+   return '[' + d.style.cssText + '] ' + d.style.length;
+ }, '[] 0'));
+
+document.getElementById('report').textContent = out.join('\n') + '\nFAILURES ' + failed + '\n';
+</script>
+</body>
+</html>

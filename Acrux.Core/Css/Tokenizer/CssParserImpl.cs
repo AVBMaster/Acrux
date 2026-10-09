@@ -1387,6 +1387,13 @@ public class CssParserImpl
         }
 
         string propertyName = _stream.Current.Value;
+        // A name the reference engine does not declare makes no declaration anywhere at all — not
+        // in the cascade and not in the CSSOM text it would have been stored in.
+        if (Acrux.Core.Css.Resolver.CssPropertyTraits.IsEngineOnlyName(propertyName))
+        {
+            SkipUntilSemicolon();
+            return;
+        }
         _stream.Next();
         SkipWhitespaceAndComments();
 
@@ -1801,7 +1808,20 @@ public class CssParserImpl
         // A descriptor this engine has no id for is stored under the literal name, exactly as a
         // custom property is, so the CSSOM reads 'rule.style.src' back and the rule prints it.
         if (id == CssPropertyId.Invalid)
-            return inTable ? new CssPropertyName(propertyName.ToLowerInvariant()) : null;
+        {
+            if (inTable) return new CssPropertyName(propertyName.ToLowerInvariant());
+            // The same is true of a property the reference engine declares that this engine has no
+            // behaviour for. Measured over the 105 '-webkit-' names it accepts
+            // (snapshots/out/_b257_edge_names.txt): 33 of them are stored under their own spelling
+            // — '-webkit-box-flex: 1' prints '-webkit-box-flex: 1;', never 'box-flex' and never
+            // nothing — and a declaration the block simply loses is a declaration the reference
+            // engine has. Such a name has no id, so the cascade has nothing to run for it, which is
+            // what the reference engine does too: the value is stored and read back, and no layout
+            // changes.
+            if (Acrux.Core.Css.Resolver.CssPropertyTraits.IsDeclaredProperty(propertyName))
+                return new CssPropertyName(propertyName.ToLowerInvariant());
+            return null;
+        }
         return new CssPropertyName(id);
     }
 
@@ -1844,6 +1864,16 @@ public class CssParserImpl
         {
             var wideKeyword = CssWideKeywordParser.Parse(text);
             if (wideKeyword != null) return wideKeyword;
+
+            // A legacy '-webkit-' name has no id, so the grammar gate at the bottom of this
+            // method — which reads a declaration through the property table — would never reach it,
+            // and a value of more than one word would be stored unparsed without ever being
+            // measured. Its value set is decided here instead, in the same shape the reference
+            // engine refuses it in (snapshots/out/_b257_edge_legacy_grammar.txt).
+            if (Acrux.Core.Css.CssValueGrammar.IsLegacyPrefixedName(propertyName.ToLowerInvariant()))
+                return Acrux.Core.Css.CssValueGrammar.LegacyTextIsValidFor(propertyName, valueText.Trim())
+                    ? new CssUnparsedValue(text)
+                    : null;
         }
 
         // Simple value parsing for common types

@@ -24,6 +24,10 @@ public static class CssPropertyTraits
         "quotes", "tab-size", "text-align", "text-align-last", "text-indent", "text-justify",
         "text-rendering", "text-shadow", "text-transform",
         "visibility", "white-space", "white-space-collapse", "text-wrap-mode", "text-wrap-style", "widows", "word-break",
+        // CSS Text Security: the mask runs down the tree, so a child's text is masked with its
+        // parent's character (measured: 'getComputedStyle(child)["-webkit-text-security"]' is the
+        // parent's 'disc' and the child's run is bullets).
+        "text-security",
         "word-spacing", "writing-mode", "overflow-wrap", "color-scheme", "ruby-position",
         "text-emphasis", "text-emphasis-color", "text-emphasis-style", "text-emphasis-position",
     };
@@ -93,6 +97,8 @@ public static class CssPropertyTraits
         "gap", "row-gap", "column-gap", "grid-gap", "grid-row-gap", "grid-column-gap",
         "grid-template-columns", "grid-template-rows", "grid-auto-columns", "grid-auto-rows",
         "shape-margin", "overflow-clip-margin",
+        // The legacy stroke width is a length and prints a unitless zero as '0px' (measured).
+        "-webkit-text-stroke-width",
     };
 
     /// <summary>True when a unitless zero in this property's value is a length.</summary>
@@ -126,15 +132,31 @@ public static class CssPropertyTraits
 
     private static readonly string[] OtherVendorPrefixes = { "-moz-", "-ms-", "-o-" };
 
+    /// <summary>Whether |property| — as the page <b>wrote</b> it, before any prefix is folded away
+    /// — is one of this engine's private ids rather than a property the reference engine declares.
+    /// The cascade drops such a declaration where it reads it, which is what the reference engine
+    /// does with it: measured, <c>style.cssText</c> after <c>text-security:disc</c>,
+    /// <c>line-clamp:2</c>, <c>hanging-punctuation:first</c>, <c>ime-mode:active</c>,
+    /// <c>max-lines:2</c> and <c>timing-function:linear</c> is the empty string in each case, while
+    /// the <c>-webkit-</c> spelling of the first two is a real property and stays. The test is on
+    /// the authored name and not the canonical one because the canonicaliser has already thrown the
+    /// prefix away by the time a declaration reaches the cascade.</summary>
+    public static bool IsEngineOnlyName(string property) =>
+        !string.IsNullOrEmpty(property)
+        && !property.StartsWith("--", StringComparison.Ordinal)
+        && EngineOnlyNames.Contains(property.ToLowerInvariant());
+
     /// <summary>Properties the reference engine declares that this engine has no id for, so
     /// <see cref="IsKnown"/> cannot see them. Measured as above: each name answered true for at
     /// least one of eighteen values, and none of them is in this engine's property table. They are
-    /// declared only as far as a <c>@supports</c> test is concerned — the cascade still has no case
-    /// for them and drops the declaration — which is the difference between this set and the
-    /// property table, and the reason keeping it separate is honest rather than a whitelist of
-    /// wishes. The names come in groups: the scroll- and timeline-linked properties, the anchored-
-    /// positioning ones, the shapes a float excludes text around, and the font and text properties
-    /// of CSS Fonts 4 and CSS Text 4.</summary>
+    /// declared only as far as a <c>@supports</c> test is concerned — the cascade has no case for
+    /// them either, which is what the reference engine does with a property no layout step reads —
+    /// and the difference between this set and the property table is the reason keeping it separate
+    /// is honest rather than a whitelist of wishes. A name that gains an id leaves this set: the id
+    /// is what makes a <c>-webkit-</c> spelling of it fold, and a name in both places would say two
+    /// things about the same property. The names come in groups: the scroll- and timeline-linked
+    /// properties, the anchored-positioning ones, the shapes a float excludes text around, and the
+    /// font and text properties of CSS Fonts 4 and CSS Text 4.</summary>
     private static readonly HashSet<string> ReferenceDeclared = new(StringComparer.Ordinal)
     {
         "animation-composition", "animation-range", "animation-range-end", "animation-range-start",
@@ -142,7 +164,7 @@ public static class CssPropertyTraits
         "font-variant-emoji", "overflow-block", "overflow-inline", "overlay", "paint-order",
         "position-area", "position-try-fallbacks", "position-visibility", "scroll-timeline",
         "scroll-timeline-axis", "scroll-timeline-name", "shape-image-threshold", "shape-margin",
-        "shape-outside", "text-autospace", "text-size-adjust", "text-spacing-trim",
+        "shape-outside", "text-autospace", "text-spacing-trim",
         "transition-behavior", "x", "y",
     };
 
@@ -357,6 +379,19 @@ public static class CssPropertyTraits
                 to.ContainIntrinsicHeightIsAuto = from.ContainIntrinsicHeightIsAuto; break;
 
             case "tab-size": to.TabSize = from.TabSize; to.TabSizePx = from.TabSizePx; break;
+            // The keyword family the engine declares but does not yet act on: 'inherit' and
+            // 'initial' (and 'all', which enumerates them) have to reach the stored text like any
+            // other value, or a page that inherits 'paint-order' would read back the initial.
+            case "touch-action": to.TouchAction = from.TouchAction; break;
+            case "paint-order": to.PaintOrder = from.PaintOrder; break;
+            case "vector-effect": to.VectorEffect = from.VectorEffect; break;
+            case "shape-rendering": to.ShapeRendering = from.ShapeRendering; break;
+            case "color-rendering": to.ColorRendering = from.ColorRendering; break;
+            case "color-interpolation": to.ColorInterpolation = from.ColorInterpolation; break;
+            case "color-interpolation-filters":
+                to.ColorInterpolationFilters = from.ColorInterpolationFilters; break;
+            case "image-orientation": to.ImageOrientation = from.ImageOrientation; break;
+            case "text-security": to.TextSecurity = from.TextSecurity; break;
             case "visibility": to.Visibility = from.Visibility; break;
             case "overflow": to.Overflow = to.OverflowX = to.OverflowY = from.Overflow; break;
             case "overflow-x": to.OverflowX = from.OverflowX; break;
