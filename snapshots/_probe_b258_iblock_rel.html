@@ -1,0 +1,22 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font:16px Arial;margin:0}
+.wrap{position:relative;width:400px}
+b{display:inline-block;width:40px;height:20px;background:#ccc}
+#log div{font:12px Consolas,monospace;white-space:pre}
+</style></head><body>
+<div id="stage"></div><div id="log"></div>
+<script>
+var cases=[
+ ["ib ltr",'<div class="wrap"><b id="ref"></b><div id="t" style="position:relative;left:10px;right:30px;display:inline-block;width:40px;height:20px"></div></div>'],
+ ["ib rtl",'<div class="wrap"><b id="ref"></b><div id="t" style="position:relative;left:10px;right:30px;direction:rtl;display:inline-block;width:40px;height:20px"></div></div>'],
+ ["ib parent-rtl",'<div class="wrap" style="direction:rtl"><b id="ref"></b><div id="t" style="position:relative;left:10px;right:30px;display:inline-block;width:40px;height:20px"></div></div>'],
+ ["img rtl",'<div class="wrap"><b id="ref"></b><img id="t" src="x.png" width="40" height="20" style="position:relative;left:10px;right:30px;direction:rtl"></div>'],
+ ["span rtl",'<div class="wrap"><b id="ref"></b><span id="t" style="position:relative;left:10px;right:30px;direction:rtl">ab</span></div>']
+];
+var log=document.getElementById("log"),stage=document.getElementById("stage");
+function emit(t){var d=document.createElement("div");d.textContent=t;log.appendChild(d);}
+for(var i=0;i<cases.length;i++){stage.innerHTML=cases[i][1];
+ var r=document.getElementById("t").getBoundingClientRect();
+ emit(cases[i][0]+" | left="+r.left.toFixed(1)+" w="+r.width.toFixed(1));}
+stage.innerHTML="";
+</script></body></html>

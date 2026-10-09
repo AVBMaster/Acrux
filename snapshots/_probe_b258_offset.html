@@ -1,0 +1,17 @@
+<!doctype html><html><head><style>
+body { margin: 0; font: 16px monospace; }
+.pos { position: relative; left: 40px; top: 30px; padding: 10px; border: 3px solid rgb(0,0,0); }
+.pad { padding-left: 20px; }
+</style></head><body>
+<div class="pos" id="p">text<span id="in1">abc</span>more</div>
+<div id="q" class="pad"><span id="in2">xyz</span></div>
+<div id="r" style="position:absolute;left:200px;top:400px">abs<span id="in3">kk</span></div>
+<script>
+function fmt(el){ var r=el.getBoundingClientRect(); return [r.left,r.top,r.width,r.height].map(function(v){return Math.round(v*100)/100}).join(','); }
+var out=[];
+['in1','in2','in3'].forEach(function(id){ var el=document.getElementById(id);
+  out.push(id+' rect='+fmt(el)+' off='+el.offsetLeft+','+el.offsetTop+','+el.offsetWidth+','+el.offsetHeight+' parent='+(el.offsetParent?el.offsetParent.id||el.offsetParent.tagName:'null')); });
+var p=document.getElementById('p'); out.push('p rect='+fmt(p)+' off='+p.offsetLeft+','+p.offsetTop+' client='+p.clientLeft+','+p.clientTop);
+var q=document.getElementById('q'); out.push('q rect='+fmt(q)+' clientLeft='+q.clientLeft);
+var pre=document.createElement('pre'); pre.textContent=out.join('\n'); document.body.appendChild(pre);
+</script></body></html>

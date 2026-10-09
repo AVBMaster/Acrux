@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Acrux.Core.Dom;
 
@@ -540,7 +541,7 @@ public static class CssFunctionEvaluator
                     var numMatch = NumberRegex.Match(expr[i..]);
                     if (numMatch.Success)
                     {
-                        float num = float.Parse(numMatch.Value);
+                        float num = float.Parse(numMatch.Value, CultureInfo.InvariantCulture);
                         if (sign == '-') num = -num;
                         i += numMatch.Length;
 
@@ -567,7 +568,7 @@ public static class CssFunctionEvaluator
                 var numMatch = NumberRegex.Match(expr[i..]);
                 if (numMatch.Success)
                 {
-                    float num = float.Parse(numMatch.Value);
+                    float num = float.Parse(numMatch.Value, CultureInfo.InvariantCulture);
                     int consumed = numMatch.Length;
                     i += consumed;
 

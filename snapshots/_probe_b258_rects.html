@@ -1,0 +1,27 @@
+<!doctype html><html><head><style>
+body { margin: 0; font: 16px monospace; }
+.wrap { width: 120px; }
+.big { font-size: 24px; }
+.pad { padding: 4px 6px; border: 2px solid rgb(200,200,200); }
+</style></head><body>
+<div id="a">xx<span id="s1">abc</span>yy</div>
+<div id="b" class="wrap">one two three four <span id="s2">wrapped span text here</span> tail</div>
+<div id="c">base <span id="s3" class="big">bigger</span> base</div>
+<div id="d">x<span id="s4" class="pad">padded</span>y</div>
+<div id="e"><span id="s5">a<span id="s6">bc</span>d</span></div>
+<div id="f" style="direction:rtl"><span id="s7">שלום עולם</span></div>
+<div id="g">pre <span id="s8">   </span> post</div>
+<div id="h">ib <span id="s9" style="display:inline-block;width:30px;height:12px">i</span> end</div>
+<script>
+function fmt(el){ var r=el.getBoundingClientRect(); return [Math.round(r.left*100)/100,Math.round(r.top*100)/100,Math.round(r.width*100)/100,Math.round(r.height*100)/100].join(','); }
+function n(el){ return el.getClientRects().length; }
+var out=[];
+[['s1',1],['s2',1],['s3',1],['s4',1],['s6',1],['s5',1],['s7',1],['s8',1],['s9',1]].forEach(function(p){
+  var el=document.getElementById(p[0]); out.push(p[0]+' rect='+fmt(el)+' rects='+el.getClientRects().length); });
+var s2=document.getElementById('s2'); var rs=[]; for (var i=0;i<s2.getClientRects().length;i++){ var r=s2.getClientRects()[i]; rs.push([Math.round(r.left),Math.round(r.top),Math.round(r.width),Math.round(r.height)].join('/')); }
+out.push('s2 list='+rs.join(' | '));
+var s1=document.getElementById('s1');
+out.push('s1 offsetLeft='+s1.offsetLeft+' offsetTop='+s1.offsetTop+' offsetWidth='+s1.offsetWidth+' offsetHeight='+s1.offsetHeight+' offsetParent='+(s1.offsetParent&&s1.offsetParent.id));
+out.push('clientTop/Left a='+document.getElementById('a').clientTop+'/'+document.getElementById('a').clientLeft);
+var pre=document.createElement('pre'); pre.textContent=out.join('\n'); document.body.appendChild(pre);
+</script></body></html>

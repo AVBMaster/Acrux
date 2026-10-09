@@ -1,0 +1,7 @@
+<!doctype html><html><body><div id=stage style="position:absolute;left:-4000px;top:0"></div><script>
+var CASES=[['transition','all 1s'],['transition','ALL'],['transition','color 1s ease 2s'],['transition','1s all'],['transition','none 1s'],['transition','ALL 1S'],['box-shadow','inset 0 0 2px red'],['box-shadow','0 0 red, 1px 1px blue'],['outline','red'],['outline','2px dashed RGB(1, 2, 3)'],['outline','2px red dashed extra'],['width','1E3PX'],['margin','10Px AUTO'],['border-top','1PX SOLID RED'],['grid-area','SPAN 2'],['font-size','LARGE'],['color','#F00'],['color','rgb(1 2 3 / 0.5)'],['color','TRANSPARENT'],['color','currentColor'],['caret-color','#0FF'],['text-decoration-color','#AAA'],['background','url(a.png) no-repeat #F00'],['font-family','FOO'],['animation-name','BOGUS'],['content','"RED"'],['display','BLOCK'],['float','LEFT'],['text-transform','UPPERCASE'],['word-break','BREAK-ALL'],['list-style-type','UPPER-ROMAN'],['box-shadow','0 0 2px #F00'],['text-shadow','1px 1px #00F']];
+var out=[];
+CASES.forEach(function(c,i){ var st=document.createElement('style'); st.textContent='#t'+i+' { '+c[0]+': '+c[1]+' }'; document.head.appendChild(st);
+  var rule=st.sheet.cssRules[0]; out.push(c[0]+' | '+c[1]+' | '+(rule?rule.style.cssText:'NORULE')); });
+var pre=document.createElement('pre'); pre.textContent=out.join('\n'); document.body.appendChild(pre);
+</script></body></html>

@@ -2188,7 +2188,9 @@ public static class CssPropertyApplier
     /// A math function is a length as well, so 'border: calc(2px + 1px) solid' is
     /// not mistaken for a colour.</summary>
     internal static bool IsBorderWidthToken(string part) =>
-        part is "thin" or "medium" or "thick"
+        part.Equals("thin", StringComparison.OrdinalIgnoreCase)
+        || part.Equals("medium", StringComparison.OrdinalIgnoreCase)
+        || part.Equals("thick", StringComparison.OrdinalIgnoreCase)
         || (part.Length > 0 && (char.IsAsciiDigit(part[0]) || part[0] is '.' or '+' or '-'))
         || IsLengthFunction(part);
 
@@ -4191,6 +4193,81 @@ public static class CssPropertyApplier
         if (float.TryParse(t, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value))
             return true;
         return false;
+    }
+
+    /// <summary>
+    /// The computed value of a legacy property that no layout step reads. The reference engine
+    /// still resolves such a value the way it resolves any other of that type — a colour to its
+    /// <c>rgb()</c> form, a font-relative length to pixels, <c>currentcolor</c> to the element's
+    /// own colour — and it inherits the resolved text rather than the authored one (measured:
+    /// <c>-webkit-text-fill-color: red</c> computes to <c>rgb(255, 0, 0)</c>, and
+    /// <c>-webkit-text-stroke-width: 2em</c> on a 20px box to <c>40px</c>). Percentages, keywords
+    /// and plain numbers are already computed values and stay as they were written.
+    /// </summary>
+    public static string ComputeLegacyDeclaredValue(string name, string text, ComputedStyle style,
+        float viewportWidth, float viewportHeight)
+    {
+        switch (name.ToLowerInvariant())
+        {
+            case "-webkit-text-fill-color":
+            case "-webkit-text-stroke-color":
+            case "-webkit-tap-highlight-color":
+                return LegacyColorText(text, style);
+            case "-webkit-text-stroke-width":
+            case "-webkit-mask-box-image-outset":
+            case "-webkit-mask-box-image-width":
+                return string.Join(" ", SplitTopLevelWords(text).Select(word =>
+                    LegacyLengthText(word, style, viewportWidth, viewportHeight)));
+            case "-webkit-text-stroke":
+                // The canonical spelling puts the width first, so each word is resolved as
+                // whichever kind it is.
+                return string.Join(" ", SplitTopLevelWords(text).Select(word =>
+                    IsColorWord(word) ? LegacyColorText(word, style)
+                        : LegacyLengthText(word, style, viewportWidth, viewportHeight)));
+            default:
+                return text;
+        }
+    }
+
+    private static List<string> SplitTopLevelWords(string text)
+    {
+        var words = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth = Math.Max(0, depth - 1);
+            else if (depth == 0 && char.IsWhiteSpace(c))
+            {
+                if (i > start) words.Add(text[start..i]);
+                start = i + 1;
+            }
+        }
+        if (text.Length > start) words.Add(text[start..]);
+        return words;
+    }
+
+    private static bool IsColorWord(string word) => ColorParser.IsColorToken(word)
+        || word.Equals("currentcolor", StringComparison.OrdinalIgnoreCase);
+
+    private static string LegacyColorText(string word, ComputedStyle style)
+    {
+        if (word.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
+            return CssColorText.FromColor(style.Color);
+        if (!ColorParser.IsColorToken(word)) return word;
+        return CssColorText.FromColor(ColorParser.Parse(word, style));
+    }
+
+    private static string LegacyLengthText(string word, ComputedStyle style,
+        float viewportWidth, float viewportHeight)
+    {
+        if (word.Length == 0) return word;
+        if (word.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            || word.Equals("fill", StringComparison.OrdinalIgnoreCase)) return word;
+        var length = Length.Parse(word);
+        if (length is AutoLength) return word;
+        return style.ComputedLengthCss(length, viewportWidth, viewportHeight);
     }
 
     public static bool EvaluateSupportsCondition(string condition)

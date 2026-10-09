@@ -1,0 +1,18 @@
+<!doctype html><html><head><style>body{margin:0;font:16px monospace}
+#stage{position:fixed;left:0;top:0;width:200px;height:60px;overflow:scroll}
+#inner{width:400px;height:300px}
+</style></head><body>
+<div id="stage"><div id="inner">content<span id="sp">tail</span></div></div>
+<span id="ws">   </span>
+<span id="hid" style="display:none">h</span>
+<script>
+function f(el){ var r=el.getBoundingClientRect(); return [r.left,r.top,r.width,r.height].map(function(v){return Math.round(v*100)/100}).join(','); }
+var out=[]; var st=document.getElementById('st'+'age'), inner=document.getElementById('inner'), sp=document.getElementById('sp');
+st.scrollTop=25; st.scrollLeft=40;
+out.push('stage rect='+f(st)+' client='+st.clientWidth+'x'+st.clientHeight+' scroll='+st.scrollWidth+'x'+st.scrollHeight);
+out.push('inner rect='+f(inner)+' off='+inner.offsetLeft+','+inner.offsetTop+' ow='+inner.offsetWidth);
+out.push('span rect='+f(sp)+' n='+sp.getClientRects().length);
+var ws=document.getElementById('ws'); out.push('wsonly rect='+f(ws)+' n='+ws.getClientRects().length);
+var hid=document.getElementById('hid'); out.push('hidden rect='+f(hid)+' n='+hid.getClientRects().length+' ow='+hid.offsetWidth);
+var pre=document.createElement('pre'); pre.textContent=out.join('\n'); document.body.appendChild(pre);
+</script></body></html>

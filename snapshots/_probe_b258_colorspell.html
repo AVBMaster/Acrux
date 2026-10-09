@@ -1,0 +1,16 @@
+<!doctype html><html><body><div id=stage style="position:absolute;left:-4000px;top:0"></div><script>
+var CASES=[['color','#F00'],['color','#ff0000'],['color','RED'],['color','rgb(1 2 3 / 0.5)'],['color','rgba(1,2,3,.5)'],
+['color','hsl(0,100%,50%)'],['color','TRANSPARENT'],['color','currentColor'],['color','rebeccapurple'],['color','lightblue'],
+['background-color','#fff'],['border-top','1PX SOLID RED'],['border-left-color','#0F0'],['outline','2px dashed RGB(1, 2, 3)'],
+['box-shadow','0 0 2px #F00'],['text-shadow','1px 1px #00F'],['caret-color','#0FF'],['text-decoration-color','#AAA'],
+['font-family','FOO'],['animation-name','BOGUS'],['display','BLOCK'],['float','LEFT'],['font-size','LARGE'],
+['text-transform','UPPERCASE'],['word-break','BREAK-ALL'],['list-style-type','UPPER-ROMAN'],['grid-area','SPAN 2'],
+['transition','ALL 1S'],['width','1E3PX'],['margin','10Px AUTO'],['content','"RED"'],
+['background','url(a.png) no-repeat #F00'],['color','color-mix(in srgb, RED 50%, BLUE 50%)']];
+var out=[];
+for (var i=0;i<CASES.length;i++){ var st=document.createElement('style');
+ st.textContent='#c'+i+' { '+CASES[i][0]+': '+CASES[i][1]+' }'; document.head.appendChild(st);
+ var rule=st.sheet.cssRules[0];
+ out.push(CASES[i][0]+' | '+CASES[i][1]+' | '+(rule?rule.style.cssText.replace(/^ /,''):'NORULE')); }
+var pre=document.createElement('pre'); pre.textContent=out.join('\n'); document.body.appendChild(pre);
+</script></body></html>

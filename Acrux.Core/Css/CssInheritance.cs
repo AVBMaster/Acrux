@@ -93,6 +93,15 @@ public static class CssInheritance
         // bullets).
         child.TextSecurity = parent.TextSecurity;
 
+        // The legacy properties that inherit and that no layout step reads — the text paint pair,
+        // the font smoothing, the tap highlight and the edit mode (measured per name).
+        foreach (var legacyName in Css.Resolver.CssPropertyTraits.InheritedLegacyNames)
+        {
+            var inherited = parent.GetDeclaredOnlyValue(legacyName);
+            if (inherited != null && child.GetDeclaredOnlyValue(legacyName) == null)
+                child.SetDeclaredOnlyValue(legacyName, inherited);
+        }
+
         // Box, direction and interaction.
         child.Visibility = parent.Visibility;
         child.Cursor = parent.Cursor;

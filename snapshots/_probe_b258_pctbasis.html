@@ -1,0 +1,20 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;font:12px monospace}#log{white-space:pre}</style></head>
+<body><div id="stage" style="position:absolute;left:-4000px;top:0"></div><div id="log"></div><script>
+var log=document.getElementById('log'),stage=document.getElementById('stage');
+function emit(t){log.textContent+=t+'\n';}
+var cases=[
+ ["parent-h100-pos","<div style='position:relative;width:400px;height:100px'><div id='s' style='position:relative;left:25%;top:10%;width:10px;height:10px'></div></div>"],
+ ["parent-auto","<div style='position:relative;width:400px'><div id='s' style='position:relative;left:25%;top:10%;width:10px;height:10px'></div></div>"],
+ ["posanc-far-h100","<div id='p' style='position:relative;width:300px;height:100px;padding:20px'><div style='width:200px;padding:10px'><div id='s' style='position:relative;left:25%;top:10%;width:10px;height:10px'></div></div></div>"],
+ ["posanc-far-auto","<div id='p' style='position:relative;width:300px;padding:20px'><div style='width:200px;padding:10px'><div id='s' style='position:relative;left:25%;top:10%;width:10px;height:10px'></div></div></div>"],
+ ["abs-in-parent-h100","<div style='position:relative;width:400px;height:100px'><div id='s' style='position:absolute;left:25%;top:10%;width:10px;height:10px'></div></div>"],
+ ["inline-in-h100","<div style='position:relative;width:400px;height:100px'><span id='s' style='position:relative;left:25%;top:10%'>ab</span></div>"]
+];
+for(var i=0;i<cases.length;i++){
+ stage.innerHTML=cases[i][1];
+ var s=document.getElementById('s'),p=s.parentElement,r=s.getBoundingClientRect(),pr=p.getBoundingClientRect();
+ emit(cases[i][0]+' dx='+(r.left-pr.left).toFixed(1)+' dy='+(r.top-pr.top).toFixed(1));
+}
+stage.innerHTML='';
+console.log(log.textContent);
+</script></body></html>

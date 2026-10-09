@@ -243,35 +243,35 @@ public static class AuroraFragmentConverter
         if (style is null || style.Position != PositionType.Relative)
             return;
 
-        var (inlineBasis, blockBasis, rootFontSize, viewport) = RelativeContainingBlock(parent, box);
-        var offset = RelativeUtils.Offset(style, inlineBasis, blockBasis, rootFontSize, viewport.Width, viewport.Height);
+        var (inlineBasis, blockBasis, rootFontSize, viewport) = RelativeBasis(parent ?? box);
+        var offset = RelativeUtils.Offset(style, RelativeUtils.FlowIsRtl(box.Dimensions?.Element),
+            inlineBasis, blockBasis, rootFontSize, viewport.Width, viewport.Height);
         if (offset.Left != 0 || offset.Top != 0)
             TranslateBox(box, offset.Left, offset.Top);
     }
 
-    /// <summary>The box whose padding block sizes the percentage insets of a relative
-    /// offset: the nearest positioned ancestor, or the initial containing block when the
-    /// chain has none (CSS 2.1 §10.5).</summary>
+    /// <summary>The box whose content size gives a relative box's percentage insets. A relatively
+    /// positioned box never leaves its flow, so that containing block is the one it had as a static
+    /// box — its parent's content box — and not the nearest positioned ancestor's padding box,
+    /// which is what an absolute box measures against (CSS 2.1 §10.5). Measured: a 25% left offset
+    /// on a box whose parent is 200px wide and whose positioned ancestor is 300px wide with 20px
+    /// padding moves it 50px, not 85px. A block-axis percentage on a parent whose height is
+    /// <c>auto</c> resolves to nothing at all, which is the same clause's other half (measured:
+    /// <c>top:10%</c> inside an auto-height parent moves the box 0px).</summary>
     private static (float InlineBasis, float BlockBasis, float RootFontSize, PhysicalSize Viewport)
-        RelativeContainingBlock(Dom.LayoutBox? parent, Dom.LayoutBox? self)
+        RelativeBasis(Dom.LayoutBox? flowBox)
     {
-        Dom.LayoutBox? root = parent ?? self;
-        while (root?.Parent != null)
-            root = root.Parent;
+        var root = flowBox;
+        while (root?.Parent != null) root = root.Parent;
+        var rootStyle = root?.Dimensions?.Style;
+        var viewport = new PhysicalSize(root?.BorderBox.Width ?? 0, root?.BorderBox.Height ?? 0);
+        if (flowBox == null)
+            return (viewport.Width, viewport.Height, rootStyle?.FontSize ?? 16, viewport);
 
-        for (var node = parent; node != null; node = node.Parent)
-        {
-            var nodeStyle = node.Dimensions?.Style;
-            if (nodeStyle is { Position: PositionType.Relative or PositionType.Absolute or PositionType.Fixed })
-                return (node.PaddingBox.Width, node.PaddingBox.Height,
-                    root?.Dimensions?.Style?.FontSize ?? 16,
-                    new PhysicalSize(root?.BorderBox.Width ?? 0, root?.BorderBox.Height ?? 0));
-        }
-
-        // No positioned ancestor: the initial containing block, proxied by the root box.
-        float width = root?.BorderBox.Width ?? self?.BorderBox.Width ?? 0;
-        float height = root?.BorderBox.Height ?? self?.BorderBox.Height ?? 0;
-        return (width, height, root?.Dimensions?.Style?.FontSize ?? 16, new PhysicalSize(width, height));
+        var style = flowBox.Dimensions?.Style;
+        return (flowBox.ContentBox.Width,
+            style?.Height is AutoLength or null ? 0 : flowBox.ContentBox.Height,
+            rootStyle?.FontSize ?? 16, viewport);
     }
 
     private static bool IsScrollableOverflow(ComputedStyle style) =>
@@ -289,10 +289,11 @@ public static class AuroraFragmentConverter
         if (style is null || style.Position != PositionType.Relative)
             return PhysicalOffset.Zero;
 
-        // An inline box contributes no containing block of its own, so its percentages
-        // resolve against the containing block of its parent block chain.
-        var (inlineBasis, blockBasis, rootFontSize, viewport) = RelativeContainingBlock(containerBox.Parent, containerBox);
-        return RelativeUtils.Offset(style, inlineBasis, blockBasis, rootFontSize, viewport.Width, viewport.Height);
+        // An inline box contributes no containing block of its own: the block whose line boxes
+        // hold its fragments is the one its percentages resolve against.
+        var (inlineBasis, blockBasis, rootFontSize, viewport) = RelativeBasis(containerBox);
+        return RelativeUtils.Offset(style, RelativeUtils.FlowIsRtl(element),
+            inlineBasis, blockBasis, rootFontSize, viewport.Width, viewport.Height);
     }
 
     /// <summary>

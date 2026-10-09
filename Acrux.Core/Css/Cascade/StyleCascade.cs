@@ -92,15 +92,16 @@ public class StyleCascade
         // properties resolve against the current element's declarations.
         foreach (var customName in _map.CustomNames)
         {
-            // A declaration stored under its own name because this engine has no id for it (a
-            // legacy '-webkit-' spelling, a property from a module that is not implemented here)
-            // is stored in the same place a custom property is, but it is not one: it must not
-            // reach the map that var() reads, and the reference engine has no behaviour for it
-            // either.
-            if (!Acrux.Core.Css.Properties.CssPropertyIdExtensions.IsCustomPropertyName(customName))
-                continue;
             if (filter?.Rejects(new CssPropertyName(customName)) == true) continue;
-            ApplyCustomIfPresent(customName);
+            // A declaration stored under its own name because this engine has no id for it (a
+            // legacy '-webkit-' spelling, a property of a module that is not implemented here) sits
+            // in the same map a custom property does, but it is not one: it must never reach the
+            // table var() reads. What it does reach is the computed style, which answers the value
+            // the page wrote even though no layout step looks at it.
+            if (Acrux.Core.Css.Properties.CssPropertyIdExtensions.IsCustomPropertyName(customName))
+                ApplyCustomIfPresent(customName);
+            else
+                ApplyDeclaredOnlyIfPresent(customName);
         }
         foreach (var id in _map.NativeIds)
         {
@@ -218,6 +219,18 @@ public class StyleCascade
         _ => -1,
     };
 
+    private void ApplyDeclaredOnlyIfPresent(string name)
+    {
+        if (!_map.TryGetWinner(name, out var priority)) return;
+        if (!priority.IsRelevant) return;
+        var matchedEntry = FindMatchedEntry(priority);
+        if (matchedEntry == null) return;
+        var prop = matchedEntry.Properties.Properties
+            .LastOrDefault(p => p.Name.IsCustom && p.Name.CustomName == name);
+        if (prop.Value != null)
+            _state.ApplyDeclaredOnlyProperty(name, prop.Value);
+    }
+
     private void ApplyCustomIfPresent(string customName)
     {
         if (!_map.TryGetWinner(customName, out var priority)) return;
@@ -316,6 +329,33 @@ public class CascadeResolverState
                 return;
         }
         CssPropertyApplier.Apply(style, name, text);
+    }
+
+    /// <summary>Records the value of a property this engine has no behaviour for. A CSS-wide
+    /// keyword resolves the way the cascade resolves it for anything else — 'inherit' takes the
+    /// parent's value where the property inherits, and 'initial', 'unset' on a non-inherited
+    /// property and 'revert' all leave the element with nothing of its own, which is the measured
+    /// initial the serializer then answers (measured: '-webkit-box-flex: inherit' computes to
+    /// '0', the initial, because the property does not inherit).</summary>
+    public void ApplyDeclaredOnlyProperty(string name, CssValue value)
+    {
+        var style = Element?.ComputedStyle;
+        if (style == null) return;
+        var text = value.CssText();
+        text = CssFunctionEvaluator.Evaluate(text, Element,
+            FontSize, RootFontSize, ViewportWidth, ViewportHeight);
+        if (CssPropertyTraits.IsCssWideKeyword(text))
+        {
+            var keyword = text.Trim().ToLowerInvariant();
+            bool inherits = CssPropertyTraits.IsLegacyDeclaredOnly(name)
+                && keyword is "inherit" or "unset";
+            var inherited = inherits ? ParentStyle?.GetDeclaredOnlyValue(name) : null;
+            if (inherited != null) style.SetDeclaredOnlyValue(name, inherited);
+            else style.RemoveDeclaredOnlyValue(name);
+            return;
+        }
+        style.SetDeclaredOnlyValue(name, CssPropertyApplier.ComputeLegacyDeclaredValue(
+            name, text, style, ViewportWidth, ViewportHeight));
     }
 
     public void ApplyCustomProperty(string name, CssValue value)

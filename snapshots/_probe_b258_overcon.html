@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b258 over-constrained side: which direction governs</title>
+<style>
+body { font: 16px Arial, sans-serif; margin: 0; }
+#log div { font: 12px Consolas, monospace; white-space: pre; }
+.wrap { position: relative; width: 400px; height: 80px; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="log"></div>
+<script>
+// 'x' is the positioned box; its left is reported in document coordinates so the
+// winning side can be read off directly (left wins -> 10, right wins -> 330).
+var cases = [
+  ["abs  elem=rtl cb=ltr", '<div class="wrap"><div id="x" style="position:absolute;left:10px;right:30px;direction:rtl;width:40px;height:20px"></div></div>'],
+  ["abs  elem=ltr cb=rtl", '<div class="wrap" style="direction:rtl"><div id="x" style="position:absolute;left:10px;right:30px;width:40px;height:20px"></div></div>'],
+  ["abs  elem=rtl cb=rtl", '<div class="wrap" style="direction:rtl"><div id="x" style="position:absolute;left:10px;right:30px;direction:rtl;width:40px;height:20px"></div></div>'],
+  ["rel  elem=rtl cb=ltr", '<div class="wrap"><div id="x" style="position:relative;left:10px;right:30px;direction:rtl;width:40px;height:20px"></div></div>'],
+  ["rel  elem=ltr cb=rtl", '<div class="wrap" style="direction:rtl"><div id="x" style="position:relative;left:10px;right:30px;width:40px;height:20px"></div></div>'],
+  ["rel  elem=rtl cb=rtl", '<div class="wrap" style="direction:rtl"><div id="x" style="position:relative;left:10px;right:30px;direction:rtl;width:40px;height:20px"></div></div>'],
+  ["rel  auto-width elem=rtl cb=ltr", '<div class="wrap"><div id="x" style="position:relative;left:10px;right:30px;direction:rtl">text</div></div>'],
+  ["fixed elem=rtl", '<div class="wrap"><div id="x" style="position:fixed;left:10px;right:30px;direction:rtl;width:40px;height:20px"></div></div>']
+];
+var log = document.getElementById("log"), stage = document.getElementById("stage");
+function emit(t) { var d = document.createElement("div"); d.textContent = t; log.appendChild(d); }
+for (var i = 0; i < cases.length; i++) {
+  stage.innerHTML = cases[i][1];
+  var r = document.getElementById("x").getBoundingClientRect();
+  emit(cases[i][0] + " | left=" + r.left.toFixed(1) + " w=" + r.width.toFixed(1));
+}
+stage.innerHTML = "";
+</script>
+</body>
+</html>

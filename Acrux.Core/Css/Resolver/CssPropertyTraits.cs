@@ -104,6 +104,31 @@ public static class CssPropertyTraits
     /// <summary>True when a unitless zero in this property's value is a length.</summary>
     public static bool TakesLength(string property) => LengthValued.Contains(property);
 
+    /// <summary>
+    /// The properties whose value is a colour — the longhands that hold one and the shorthands
+    /// whose grammar carries it — and which therefore print it in the reference engine's form
+    /// (a hex or an <c>hsl()</c> as <c>rgb()</c>, a named colour lower-cased). Measured per name
+    /// against the reference engine's own CSSOM output.
+    /// </summary>
+    private static readonly HashSet<string> ColorValued = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "color", "background-color", "caret-color", "accent-color", "outline-color",
+        "column-rule-color", "text-decoration-color", "text-emphasis-color",
+        "border-color", "border-top-color", "border-right-color", "border-bottom-color",
+        "border-left-color", "border-block-color", "border-block-start-color",
+        "border-block-end-color", "border-inline-color", "border-inline-start-color",
+        "border-inline-end-color", "border-top", "border-right", "border-bottom", "border-left",
+        "border-block", "border-block-start", "border-block-end", "border-inline",
+        "border-inline-start", "border-inline-end", "border", "outline",
+        "-webkit-text-fill-color", "-webkit-text-stroke-color", "-webkit-tap-highlight-color",
+        "-webkit-text-stroke", "background", "box-shadow", "text-shadow",
+        // The reference engine prints a shadow list with its colour first, which this engine does
+        // not reorder yet; the colour itself is still folded to the same form.
+    };
+
+    public static bool TakesColorValue(string property) =>
+        !string.IsNullOrEmpty(property) && ColorValued.Contains(property);
+
     /// <summary>Whether a property name is one the reference engine declares: an unprefixed name
     /// from the property table that is not one of this engine's private ids, a custom property, or
     /// a <c>-webkit-</c> spelling of the names in <see cref="WebkitAliases"/>. The cross-product
@@ -125,12 +150,89 @@ public static class CssPropertyTraits
         foreach (var prefix in OtherVendorPrefixes)
             if (name.StartsWith(prefix, StringComparison.Ordinal)) return false;
         if (name.StartsWith("-webkit-", StringComparison.Ordinal))
-            return WebkitAliases.Contains(name["-webkit-".Length..]);
+            // Either an alias of an unprefixed property this table knows, or one of the legacy
+            // spellings that are properties of their own — the set behind the legacy value grammars
+            // and the declared-only table, both measured name by name.
+            return WebkitAliases.Contains(name["-webkit-".Length..])
+                || LegacyDeclaredOnly.ContainsKey(name)
+                || Css.CssValueGrammar.IsLegacyPrefixedName(name);
         if (EngineOnlyNames.Contains(name)) return false;
         return IsKnown(name) || ReferenceDeclared.Contains(name);
     }
 
     private static readonly string[] OtherVendorPrefixes = { "-moz-", "-ms-", "-o-" };
+
+    /// <summary>
+    /// The legacy <c>-webkit-</c> properties the reference engine still declares, still validates
+    /// and still answers a computed value for, and that this engine has no behaviour for at all.
+    /// Each entry is (the value an element with no declaration reports, whether that value runs
+    /// down the tree) — both measured per name over 22 properties and 100 values
+    /// (snapshots/out/_b257_edge_legacy_grammar.txt). The inherited group is the text paint pair,
+    /// the font smoothing, the tap highlight and the edit mode; the old flexbox and the mask border
+    /// are per-box.
+    /// </summary>
+    private static readonly Dictionary<string, (string Initial, bool Inherited)> LegacyDeclaredOnly =
+        new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["-webkit-box-align"] = ("stretch", false),
+        ["-webkit-box-direction"] = ("normal", false),
+        ["-webkit-box-flex"] = ("0", false),
+        ["-webkit-box-ordinal-group"] = ("1", false),
+        ["-webkit-box-orient"] = ("horizontal", false),
+        ["-webkit-box-pack"] = ("start", false),
+        ["-webkit-box-reflect"] = ("none", false),
+        ["-webkit-border-horizontal-spacing"] = ("0px", true),
+        ["-webkit-border-vertical-spacing"] = ("0px", true),
+        ["-webkit-font-smoothing"] = ("auto", true),
+        ["-webkit-mask-box-image-outset"] = ("0", false),
+        ["-webkit-mask-box-image-repeat"] = ("stretch", false),
+        ["-webkit-mask-box-image-slice"] = ("0 fill", false),
+        ["-webkit-mask-box-image-source"] = ("none", false),
+        ["-webkit-mask-box-image-width"] = ("auto", false),
+        ["-webkit-tap-highlight-color"] = ("rgba(0, 0, 0, 0.18)", true),
+        ["-webkit-text-decorations-in-effect"] = ("none", false),
+        ["-webkit-text-fill-color"] = ("rgb(0, 0, 0)", true),
+        ["-webkit-text-stroke"] = ("0px rgb(0, 0, 0)", true),
+        ["-webkit-text-stroke-color"] = ("rgb(0, 0, 0)", true),
+        ["-webkit-text-stroke-width"] = ("0px", true),
+        ["-webkit-user-drag"] = ("auto", false),
+        ["-webkit-user-modify"] = ("read-only", true),
+    };
+
+    /// <summary>Whether |name| is one of the legacy properties whose only surface is the computed
+    /// value, and what that value is when the page wrote nothing.</summary>
+    public static bool IsLegacyDeclaredOnly(string name) =>
+        !string.IsNullOrEmpty(name) && LegacyDeclaredOnly.ContainsKey(name);
+
+    public static string? LegacyDeclaredOnlyInitial(string name) =>
+        LegacyDeclaredOnly.TryGetValue(name, out var entry) ? entry.Initial : null;
+
+    /// <summary>The legacy properties whose computed value is the initial however the page wrote
+    /// them. Measured over one: <c>-webkit-text-decorations-in-effect</c> echoes 'underline' in the
+    /// CSSOM, refuses 'glow', and still answers 'none' from a computed read for every value it
+    /// takes. The declaration is real; only the computed surface ignores it.</summary>
+    private static readonly HashSet<string> LegacyComputedStaysInitial =
+        new(StringComparer.OrdinalIgnoreCase) { "-webkit-text-decorations-in-effect" };
+
+    public static bool IsLegacyComputedInitial(string name) =>
+        !string.IsNullOrEmpty(name) && LegacyComputedStaysInitial.Contains(name);
+
+    /// <summary>The computed text of a legacy property whose computed form prints more than the
+    /// author wrote. <c>-webkit-box-reflect</c> names its mask image even when the page left it out
+    /// (measured: 'below' echoes as 'below 0px' and computes as 'below 0px none'); the full mask
+    /// expansion — 'above 5px url(a.png)' with its slice, origin and repeat — is still open (#259).</summary>
+    public static string LegacyComputedText(string name, string declared)
+    {
+        if (!name.Equals("-webkit-box-reflect", StringComparison.OrdinalIgnoreCase)) return declared;
+        var words = declared.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+        bool direction = words.Length > 0 && words[0] is "above" or "below" or "left" or "right";
+        return direction && words.Length is >= 1 and <= 2 ? declared + " none" : declared;
+    }
+
+    /// <summary>The legacy properties that run down the tree (CSS Text Decorations and the old box
+    /// model's paint pair are inherited; the flex-box geometry is not).</summary>
+    public static IEnumerable<string> InheritedLegacyNames =>
+        LegacyDeclaredOnly.Where(entry => entry.Value.Inherited).Select(entry => entry.Key);
 
     /// <summary>Whether |property| — as the page <b>wrote</b> it, before any prefix is folded away
     /// — is one of this engine's private ids rather than a property the reference engine declares.

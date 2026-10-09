@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b258 relative inline rects</title>
+<style>
+body { font: 16px "Segoe UI", Arial, sans-serif; margin: 0; padding: 0; }
+#root { position: relative; width: 400px; height: 200px; }
+.box { position: static; width: 40px; height: 20px; background: rgb(200,200,200); }
+span.inl { background: rgb(180,220,180); }
+#log div { font: 12px Consolas, monospace; white-space: pre; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="log"></div>
+<script>
+var cases = [
+  ["inline", '<span id="ref" class="inl">ref</span><span id="t" class="inl" style="position:relative;left:15px;top:5px;">tgt</span>'],
+  ["rtl", '<span id="ref" class="inl">ref</span><span id="t" class="inl" style="position:relative;left:10px;right:30px;direction:rtl;">tgt</span>'],
+  ["inline-plain", '<span id="ref" class="inl">ref</span><span id="t" class="inl">tgt</span>'],
+  ["inline-wrap", '<span id="ref" class="inl">ref</span><span id="t" class="inl" style="position:relative;top:5px;">aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa tgt</span>'],
+  ["inline-block", '<span id="ref" class="inl">ref</span><span id="t" class="inl" style="position:relative;left:12px;top:8px;display:inline-block;width:30px;height:12px;"></span>'],
+  ["block", '<div id="ref" class="box"></div><div id="t" class="box" style="position:relative;top:20px;left:30px;"></div>']
+];
+var log = document.getElementById("log");
+var stage = document.getElementById("stage");
+function emit(t) { var d = document.createElement("div"); d.textContent = t; log.appendChild(d); }
+for (var i = 0; i < cases.length; i++) {
+  stage.innerHTML = '<div id="root">' + cases[i][1] + '</div>';
+  var t = document.getElementById("t"), r = document.getElementById("ref");
+  var tr = t.getBoundingClientRect(), rr = r.getBoundingClientRect();
+  emit(cases[i][0] + " dx=" + (tr.left - rr.left).toFixed(1) + " dy=" + (tr.top - rr.top).toFixed(1)
+       + " refW=" + rr.width.toFixed(1) + " tRects=" + t.getClientRects().length
+       + " tW=" + tr.width.toFixed(1) + " tH=" + tr.height.toFixed(1));
+}
+stage.innerHTML = "";
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b258 relative over-constrained direction</title>
+<style>
+body { font: 16px Arial, sans-serif; margin: 0; }
+#log div { font: 12px Consolas, monospace; white-space: pre; }
+.wrap { position: relative; width: 400px; }
+b { display: inline-block; width: 40px; height: 20px; background: #ccc; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="log"></div>
+<script>
+// Each case: a static reference box first, then the relatively positioned one, so
+// dx is the used horizontal offset. 'L'/'R' are physical left/right offsets.
+var cases = [
+  ["inline  elem=rtl  cb=ltr",  '<div class="wrap"><b id="ref"></b><span id="t" style="position:relative;left:10px;right:30px;direction:rtl;">x</span></div>'],
+  ["inline  elem=ltr  cb=rtl",  '<div class="wrap" style="direction:rtl"><b id="ref"></b><span id="t" style="position:relative;left:10px;right:30px;">x</span></div>'],
+  ["block   elem=rtl  cb=ltr",  '<div class="wrap"><b id="ref"></b><div id="t" style="position:relative;left:10px;right:30px;direction:rtl;width:40px;height:20px;background:#abc"></div></div>'],
+  ["block   elem=rtl  cb=rtl",  '<div class="wrap" style="direction:rtl"><b id="ref"></b><div id="t" style="position:relative;left:10px;right:30px;width:40px;height:20px;background:#abc"></div></div>'],
+  ["iblock  elem=rtl  cb=ltr",  '<div class="wrap"><b id="ref"></b><div id="t" style="position:relative;left:10px;right:30px;direction:rtl;display:inline-block;width:40px;height:20px;background:#abc"></div></div>'],
+  ["inline  elem=ltr  cb=ltr",  '<div class="wrap"><b id="ref"></b><span id="t" style="position:relative;left:10px;right:30px;">x</span></div>'],
+  ["inline  elem=rtl  wm=vr",   '<div class="wrap" style="writing-mode:vertical-rl"><b id="ref"></b><span id="t" style="position:relative;left:10px;right:30px;direction:rtl;">x</span></div>'],
+  ["abs     elem=rtl  cb=ltr",  '<div class="wrap" style="height:60px"><b id="ref"></b><div id="t" style="position:absolute;left:10px;right:30px;direction:rtl;width:40px;height:20px;background:#abc"></div></div>']
+];
+var log = document.getElementById("log"), stage = document.getElementById("stage");
+function emit(t) { var d = document.createElement("div"); d.textContent = t; log.appendChild(d); }
+for (var i = 0; i < cases.length; i++) {
+  stage.innerHTML = cases[i][1];
+  var t = document.getElementById("t"), r = document.getElementById("ref");
+  var tr = t.getBoundingClientRect(), rr = r.getBoundingClientRect();
+  emit(cases[i][0] + " | dx=" + (tr.left - rr.left).toFixed(1) + " w=" + tr.width.toFixed(1));
+}
+stage.innerHTML = "";
+</script>
+</body>
+</html>

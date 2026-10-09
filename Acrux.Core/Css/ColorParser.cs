@@ -17,7 +17,7 @@ public static class ColorParser
     public static readonly SKColor CssTransparent = new SKColor(0, 0, 0, 0);
     private static readonly Regex RgbFuncRegex = new(@"^\s*rgba?\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex HslFuncRegex = new(@"^\s*hsla?\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex HwbRegex = new(@"^\s*hwb\s*\(\s*([\d.]+)(?:deg|turn|rad|grad)?\s*[,\s]\s*([\d.]+)%\s*[,\s]\s*([\d.]+)%\s*(?:[/,]\s*([\d.]+%?))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex HwbRegex = new(@"^\s*hwb\s*\(\s*([\d.]+)(deg|turn|rad|grad)?\s*[,\s]\s*([\d.]+)%\s*[,\s]\s*([\d.]+)%\s*(?:[/,]\s*([\d.]+%?))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex LabRegex = new(@"^\s*lab\s*\(\s*([\d.]+)%?\s*([+-]?\s*[\d.]+)\s*([+-]?\s*[\d.]+)\s*(?:\s*/\s*([\d.]+%?))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex LchRegex = new(@"^\s*lch\s*\(\s*([\d.]+)%?\s*([\d.]+)\s*([\d.]+)\s*(?:\s*/\s*([\d.]+))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex OklabRegex = new(@"^\s*oklab\s*\(\s*([\d.]+%?)\s*([+-]?\s*[\d.]+)\s*([+-]?\s*[\d.]+)\s*(?:\s*/\s*([\d.]+))?\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -162,13 +162,17 @@ public static class ColorParser
         var parts = ParseColorFunctionArgs(inner);
         if (parts.Count < 3) return null;
 
-        byte r = ParseColorChannel(parts[0], 255);
-        byte g = ParseColorChannel(parts[1], 255);
-        byte b = ParseColorChannel(parts[2], 255);
+        if (!TryChannel(parts[0], 255, out byte r)
+            || !TryChannel(parts[1], 255, out byte g)
+            || !TryChannel(parts[2], 255, out byte b))
+            return null;
         byte alpha = 255;
 
         if (parts.Count >= 4)
-            alpha = (byte)Math.Clamp(MathF.Round(ParseAlpha(parts[3]) * 255), 0, 255);
+        {
+            if (!TryAlpha(parts[3], out var a)) return null;
+            alpha = (byte)Math.Clamp(MathF.Round(a * 255), 0, 255);
+        }
 
         return new SKColor(r, g, b, alpha);
     }
@@ -184,13 +188,11 @@ public static class ColorParser
         var parts = ParseColorFunctionArgs(inner);
         if (parts.Count < 3) return null;
 
-        float h = float.Parse(parts[0]);
-        float s = ParsePercent(parts[1]);
-        float l = ParsePercent(parts[2]);
+        if (!TryHue(parts[0], out float h)) return null;
+        if (!TryFraction(parts[1], out float s) || !TryFraction(parts[2], out float l)) return null;
         float alpha = 1.0f;
 
-        if (parts.Count >= 4)
-            alpha = ParseAlpha(parts[3]);
+        if (parts.Count >= 4 && !TryAlpha(parts[3], out alpha)) return null;
 
         return HslToRgb(h, s, l, alpha);
     }
@@ -243,32 +245,80 @@ public static class ColorParser
         return result;
     }
 
-    private static byte ParseColorChannel(string value, byte max)
+    private static bool TryChannel(string token, byte max, out byte value)
     {
-        value = value.Trim();
-        if (value.EndsWith("%"))
+        token = (token ?? string.Empty).Trim();
+        float scaled;
+        if (token.EndsWith('%'))
         {
-            float pct = float.Parse(value[..^1]);
-            return (byte)Math.Clamp(MathF.Round(pct / 100f * max), 0, max);
+            if (!TryNumber(token[..^1], out var pct)) { value = 0; return false; }
+            scaled = pct / 100f * max;
         }
-        return byte.Parse(value);
+        else if (!TryNumber(token, out scaled)) { value = 0; return false; }
+        value = (byte)Math.Clamp(MathF.Round(scaled), 0, max);
+        return true;
     }
 
-    private static float ParseAlpha(string value)
+    private static bool TryAlpha(string token, out float alpha)
     {
-        value = value.Trim();
-        if (value.EndsWith("%"))
-            return float.Parse(value[..^1]) / 100f;
-        return float.Parse(value);
+        if (!TryFraction(token, out alpha)) return false;
+        alpha = Math.Clamp(alpha, 0f, 1f);
+        return true;
     }
 
-    private static float ParsePercent(string value)
+    /// <summary>A colour component exactly as it was authored: a &lt;number&gt;, a
+    /// &lt;percentage&gt; or <c>none</c>. Authored text is untrusted input, so a component
+    /// that will not read rejects the colour instead of throwing out of the parser — and it
+    /// reads invariant-culturally, because a comma-decimal locale would otherwise turn
+    /// '50.5' into 505.</summary>
+    private static bool TryNumber(string token, out float value)
     {
-        value = value.Trim();
-        if (value.EndsWith("%"))
-            return float.Parse(value[..^1]) / 100f;
-        return float.Parse(value);
+        token = (token ?? string.Empty).Trim();
+        if (token.Length == 0) { value = 0f; return false; }
+        if (token.Equals("none", StringComparison.OrdinalIgnoreCase)) { value = 0f; return true; }
+        return float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+               && !float.IsNaN(value) && !float.IsInfinity(value);
     }
+
+    /// <summary>A number the calling regular expression has already fenced in. A percentage
+    /// reads as its 0-1 fraction, which is how the oklab lightness channel is written.</summary>
+    private static float Number(string token) => TryFraction(token, out var value) ? value : 0f;
+
+    /// <summary>A &lt;number&gt; or &lt;percentage&gt;; a percentage becomes a 0-1 fraction.</summary>
+    private static bool TryFraction(string token, out float value)
+    {
+        token = (token ?? string.Empty).Trim();
+        if (!token.EndsWith('%')) return TryNumber(token, out value);
+        if (!TryNumber(token[..^1], out value)) return false;
+        value /= 100f;
+        return true;
+    }
+
+    /// <summary>A &lt;hue&gt;: a bare number or any of the four &lt;angle&gt; units, which
+    /// Color 4 §3 allows in the hue position ('hsl(0.5turn 100% 50%)').</summary>
+    private static bool TryHue(string token, out float degrees)
+    {
+        token = (token ?? string.Empty).Trim();
+        foreach (var (unit, _) in AngleUnits)
+        {
+            if (!token.EndsWith(unit, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!TryNumber(token[..^unit.Length], out var n)) { degrees = 0f; return false; }
+            degrees = n * DegreesPerUnit(unit);
+            return true;
+        }
+        return TryNumber(token, out degrees);
+    }
+
+    private static float DegreesPerUnit(string unit) => unit.ToLowerInvariant() switch
+    {
+        "turn" => 360f,
+        "grad" => 0.9f,
+        "rad" => 57.29577951308232f,
+        _ => 1f,
+    };
+
+    private static readonly (string Unit, float Degrees)[] AngleUnits =
+        [("turn", 360f), ("grad", 0.9f), ("rad", 57.29577951308232f), ("deg", 1f)];
 
     private static SKColor HslToRgb(float h, float s, float l, float a)
     {
@@ -297,15 +347,11 @@ public static class ColorParser
         var match = HwbRegex.Match(value);
         if (!match.Success) return null;
 
-        float h = float.Parse(match.Groups[1].Value);
-        float w = float.Parse(match.Groups[2].Value) / 100f;
-        float b = float.Parse(match.Groups[3].Value) / 100f;
+        float h = Number(match.Groups[1].Value) * (match.Groups[2].Success ? DegreesPerUnit(match.Groups[2].Value) : 1f);
+        float w = Number(match.Groups[3].Value) / 100f;
+        float b = Number(match.Groups[4].Value) / 100f;
         float alpha = 1f;
-        if (match.Groups[4].Success)
-        {
-            var aVal = match.Groups[4].Value;
-            alpha = aVal.EndsWith("%") ? float.Parse(aVal[..^1]) / 100f : float.Parse(aVal);
-        }
+        if (match.Groups[5].Success && !TryAlpha(match.Groups[5].Value, out alpha)) return null;
 
         h = ((h % 360) + 360) % 360;
         w = MathF.Min(w, 1f);
@@ -342,12 +388,11 @@ public static class ColorParser
         var match = LabRegex.Match(value);
         if (!match.Success) return null;
 
-        float l = float.Parse(match.Groups[1].Value);
-        float a = float.Parse(match.Groups[2].Value);
-        float bb = float.Parse(match.Groups[3].Value);
+        float l = Number(match.Groups[1].Value);
+        float a = Number(match.Groups[2].Value);
+        float bb = Number(match.Groups[3].Value);
         float alpha = 1f;
-        if (match.Groups[4].Success)
-            alpha = float.Parse(match.Groups[4].Value);
+        if (match.Groups[4].Success && !TryAlpha(match.Groups[4].Value, out alpha)) return null;
 
         // Approximate Lab -> sRGB via simple conversion
         l = Math.Clamp(l, 0, 100);
@@ -367,12 +412,11 @@ public static class ColorParser
         var match = LchRegex.Match(value);
         if (!match.Success) return null;
 
-        float l = float.Parse(match.Groups[1].Value);
-        float c = float.Parse(match.Groups[2].Value);
-        float h = float.Parse(match.Groups[3].Value);
+        float l = Number(match.Groups[1].Value);
+        float c = Number(match.Groups[2].Value);
+        float h = Number(match.Groups[3].Value);
         float alpha = 1f;
-        if (match.Groups[4].Success)
-            alpha = float.Parse(match.Groups[4].Value);
+        if (match.Groups[4].Success && !TryAlpha(match.Groups[4].Value, out alpha)) return null;
 
         float a = c * MathF.Cos(h * MathF.PI / 180f);
         float bb = c * MathF.Sin(h * MathF.PI / 180f);
@@ -393,12 +437,11 @@ public static class ColorParser
         var match = OklabRegex.Match(value);
         if (!match.Success) return null;
 
-        float l = float.Parse(match.Groups[1].Value);
-        float a = float.Parse(match.Groups[2].Value);
-        float bb = float.Parse(match.Groups[3].Value);
+        float l = Number(match.Groups[1].Value);
+        float a = Number(match.Groups[2].Value);
+        float bb = Number(match.Groups[3].Value);
         float alpha = 1f;
-        if (match.Groups[4].Success)
-            alpha = float.Parse(match.Groups[4].Value);
+        if (match.Groups[4].Success && !TryAlpha(match.Groups[4].Value, out alpha)) return null;
 
         // OKLab -> linear sRGB conversion
         l = Math.Clamp(l, 0, 1);
@@ -430,12 +473,11 @@ public static class ColorParser
         var match = OklchRegex.Match(value);
         if (!match.Success) return null;
 
-        float l = float.Parse(match.Groups[1].Value);
-        float c = float.Parse(match.Groups[2].Value);
-        float h = float.Parse(match.Groups[3].Value);
+        float l = Number(match.Groups[1].Value);
+        float c = Number(match.Groups[2].Value);
+        float h = Number(match.Groups[3].Value);
         float alpha = 1f;
-        if (match.Groups[4].Success)
-            alpha = float.Parse(match.Groups[4].Value);
+        if (match.Groups[4].Success && !TryAlpha(match.Groups[4].Value, out alpha)) return null;
 
         float a = c * MathF.Cos(h * MathF.PI / 180f);
         float bb = c * MathF.Sin(h * MathF.PI / 180f);
@@ -802,14 +844,12 @@ public static class ColorParser
         if (parts.Count < 3) return null;
 
         // 'none' stands for the space's neutral/zero value.
-        float Channel(string token, float noneValue) => token.Equals("none", StringComparison.OrdinalIgnoreCase)
-            ? noneValue
-            : ParsePercent(token);
-
-        float c0 = Channel(parts[0], 0f);
-        float c1 = Channel(parts[1], 0f);
-        float c2 = Channel(parts[2], 0f);
-        float alpha = parts.Count > 3 ? ParseAlpha(parts[3]) : 1f;
+        if (!TryFraction(parts[0], out float c0)
+            || !TryFraction(parts[1], out float c1)
+            || !TryFraction(parts[2], out float c2))
+            return null;
+        float alpha = 1f;
+        if (parts.Count > 3 && !TryAlpha(parts[3], out alpha)) return null;
 
         return ColorInterpolation.FromColorSpace(space, c0, c1, c2, alpha);
     }

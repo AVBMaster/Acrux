@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>b258 matrix</title>
+<style>body{font:10px/1.2 monospace;margin:0}#log{white-space:pre}</style></head>
+<body><div id="stage" style="position:absolute;left:-4000px;top:0"></div><div id="log"></div>
+<script>
+var log=document.getElementById('log'),stage=document.getElementById('stage');
+function emit(t){log.textContent+=t+'\n';}
+function mk(css,text){var d=document.createElement('div');d.style.cssText=css||'';if(text!==undefined)d.textContent=text;stage.appendChild(d);return d;}
+function echo(prop,value){var d=document.createElement('div');d.style.setProperty(prop,value);return prop+': '+value+'  ->  ['+d.style.getPropertyValue(prop)+']';}
+
+emit('== A shorthand serialisation: is an initial-valued component dropped? ==');
+[['border-top','medium solid currentcolor'],['border-top','1px none currentcolor'],['border-top','1px solid currentcolor'],
+ ['border','1px solid currentcolor'],['background','transparent none repeat scroll 0% 0%'],['background','none'],
+ ['margin','0 auto'],['outline','medium solid currentcolor'],['text-decoration','none solid currentcolor'],
+ ['font','normal normal normal 16px/1 serif'],['transition','all 0s ease 0s 1'],['animation','none 1s ease 0s 1 normal none running'],
+ ['list-style','disc outside none'],['flex-flow','row nowrap'],['border-radius','0 0 0 0'],
+ ['overflow','visible visible'],['place-items','normal normal'],['text-outline','none'],
+ ['box-shadow','none'],['caret-color','auto currentcolor'],['column-rule','medium none currentcolor']
+].forEach(function(p){emit(echo(p[0],p[1]));});
+
+emit('');
+emit('== B keyword case across properties ==');
+[['align-items','FLEX-START','flex-start'],['justify-content','SPACE-BETWEEN','space-between'],['object-fit','COVER','cover'],
+ ['overflow','HIDDEN','hidden'],['position','STICKY','sticky'],['float','RIGHT','right'],['vertical-align','TOP','top'],
+ ['white-space','NOWRAP','nowrap'],['text-overflow','ELLIPSIS','ellipsis'],['border-collapse','COLLAPSE','collapse'],
+ ['caption-side','BOTTOM','bottom'],['empty-cells','SHOW','show'],['list-style-type','CIRCLE','circle'],
+ ['font-variant','SMALL-CAPS','small-caps'],['font-style','ITALIC','italic'],['font-weight','BOLD','bold'],
+ ['font-stretch','CONDENSED','condensed'],['text-decoration-line','UNDERLINE','underline'],['direction','RTL','rtl'],
+ ['writing-mode','VERTICAL-RL','vertical-rl'],['table-layout','FIXED','fixed'],['page-break-inside','AVOID','avoid'],
+ ['word-wrap','BREAK-WORD','break-word'],['image-rendering','PIXELATED','pixelated'],['appearance','NONE','none'],
+ ['user-select','NONE','none'],['resize','BOTH','both'],['align-content','STRETCH','stretch'],
+ ['align-self','BASELINE','baseline'],['flex-wrap','WRAP-REVERSE','wrap-reverse'],['box-sizing','BORDER-BOX','border-box'],
+ ['text-rendering','OPTIMIZELEGIBILITY','optimizeLegibility'],['shape-outside','NONE','none'],
+ ['counter-increment','NONE','none'],['will-change','AUTO','auto'],['content-visibility','AUTO','auto'],
+ ['contain','STRICT','strict'],['content','NONE','none'],['mask-type','LUMINANCE','luminance'],
+ ['scroll-snap-type','X MANDATORY','x mandatory'],['touch-action','NONE','none'],['fill-rule','EVENODD','evenodd'],
+ ['stroke-linecap','ROUND','round'],['vector-effect','NON-SCALING-STROKE','non-scaling-stroke'],
+ ['text-anchor','MIDDLE','middle'],['paint-order','STROKE','stroke'],['hyphens','AUTO','auto'],
+ ['letter-spacing','NORMAL','normal'],['unicode-bidi','BIDI-OVERRIDE','bidi-override'],
+ ['text-combine-upright','ALL','all'],['font-kerning','NORMAL','normal'],['font-feature-settings','NORMAL','normal'],
+ ['image-orientation','FROM-IMAGE','from-image'],['object-position','LEFT TOP','left top'],
+ ['caret-shape','BLOCK','block'],['block-size','AUTO','auto'],['inline-size','AUTO','auto'],
+ ['margin-inline-start','AUTO','auto'],['inset-block-end','AUTO','auto'],['aspect-ratio','AUTO','auto']
+].forEach(function(p){emit(echo(p[0],p[1])+'   want='+p[2]);});
+
+emit('');
+emit('== C number folding ==');
+[['width','1E2PX'],['width','.5em'],['width','1.50px'],['width','0.50CH'],['margin-top','+2PX'],
+ ['line-height','1E0'],['font-size','1e2%'],['letter-spacing','-0px'],['flex-grow','1.0'],['opacity','0.50'],
+ ['transition','opacity .5s'],['transition','opacity 1E2MS'],['padding','1E1PX 2PX'],['top','1e1rem'],
+ ['border-width','1E0PX solid red'],['text-shadow','1E0px 2PX 3px red']
+].forEach(function(p){emit(echo(p[0],p[1]));});
+
+emit('');
+emit('== D colour folding inside functions ==');
+[['background','linear-gradient(RED, blue)'],['background','linear-gradient(45DEG, RED 10%, BLUE)'],
+ ['background','radial-gradient(CIRCLE CLOSEST-SIDE, RED, BLUE)'],['background','conic-gradient(FROM 45DEG, RED, BLUE)'],
+ ['background','repeating-linear-gradient(TO TOP, RED, BLUE)'],['background','url(A.PNG)'],['background','image-set("A.PNG" 1x)'],
+ ['background','linear-gradient(to right, rgb(1 2 3 / 50%), RED)'],['color','hsl(120 100% 50%)'],
+ ['color','HWB(120 100% 0%)'],['color','LAB(50% 0 0)'],['color','OKLCH(0.5 0.1 120)'],
+ ['color','COLOR( Display-P3 1 0 0)'],['color','light-dark(RED, BLUE)'],
+ ['color','color-mix(in SRGB, RED 50%, BLUE 50%)'],['color','color-mix(in srgb, RED 30%, blue)'],
+ ['color','color-mix(in srgb, RED, BLUE 70%)'],['color','color-mix(in oklab, red 25%, blue)'],
+ ['color','red'],['color','RED'],['color','ReBeccaPurple'],['color','transparent'],['color','ACTIVECAPTION'],
+ ['color','rgb( 255 , 0 , 0 )'],['color','rgba(255,0,0,1)'],['color','#FF0000'],['color','#FFF'],['color','hsl(0deg 100% 50%)']
+].forEach(function(p){emit(echo(p[0],p[1]));});
+
+emit('');
+emit('== E legacy prefixed reads ==');
+function legacyRead(name,value,unprefixed){
+ var p=mk(name+':'+value);var c=mk('');p.appendChild(c);
+ var cs=getComputedStyle(p),cc=getComputedStyle(c);
+ emit(name+':'+value+' | self='+cs.getPropertyValue(name)+(unprefixed?' unprefixed='+cs.getPropertyValue(unprefixed):'')+' | child='+cc.getPropertyValue(name)+(unprefixed?'/'+cc.getPropertyValue(unprefixed):''));
+}
+legacyRead('-webkit-text-security','disc','text-security');
+legacyRead('-webkit-text-security','none','text-security');
+legacyRead('-webkit-line-break','loose','line-break');
+legacyRead('-webkit-writing-mode','vertical-rl','writing-mode');
+legacyRead('-webkit-box-decoration-break','clone','box-decoration-break');
+legacyRead('-webkit-line-clamp','2',null);
+legacyRead('-webkit-text-decorations-in-effect','underline',null);
+legacyRead('-webkit-text-decorations-in-effect','bogus',null);
+legacyRead('-webkit-text-decorations-in-effect','overline',null);
+legacyRead('-webkit-box-reflect','below',null);
+legacyRead('-webkit-box-reflect','above 5px url(a.png)',null);
+legacyRead('-webkit-border-horizontal-spacing','4px','border-spacing');
+legacyRead('-webkit-border-vertical-spacing','6px','border-spacing');
+legacyRead('-webkit-appearance','none','appearance');
+legacyRead('-webkit-text-fill-color','red','text-fill-color');
+legacyRead('-webkit-mask-box-image-width','2','mask-box-image-width');
+legacyRead('-webkit-box-flex-group','3',null);
+legacyRead('-webkit-box-lines','multiple',null);
+legacyRead('-webkit-margin-top-collapse','discard',null);
+legacyRead('-webkit-nbsp-mode','space',null);
+legacyRead('-webkit-text-orientation','upright','text-orientation');
+
+emit('');
+emit('== F inline fragment geometry ==');
+function rects(markup,label){
+ stage.innerHTML='<div id="cb" style="width:300px;font:16px/20px Arial">'+markup+'</div>';
+ var s=stage.querySelector('#s'),r=s.getClientRects(),b=s.getBoundingClientRect();
+ var parts=[];for(var i=0;i<r.length;i++)parts.push('['+Math.round(r[i].left+4000)+','+Math.round(r[i].top)+','+Math.round(r[i].width)+','+Math.round(r[i].height)+']');
+ emit(label+' n='+r.length+' union=['+Math.round(b.left+4000)+','+Math.round(b.top)+','+Math.round(b.width)+','+Math.round(b.height)+'] '+parts.join(''));
+}
+rects('<span id="s">a<br>b<br>c</span>','a-br-b-br-c');
+rects('<span id="s">ab<br>cd</span>','ab-br-cd');
+rects('<span id="s">aa  <br>bb</span>','aa-sp-br-bb');
+rects('<span id="s"></span>','empty');
+rects('<span id="s"> </span>','space-only');
+rects('<span id="s">P <span id="i">Q</span>R</span>','nested');
+rects('<span id="s"><br></span>','br-only');
+rects('<span id="s">a</span>','single');
+rects('<span id="s" style="padding:4px">a</span>','padded');
+
+emit('');
+emit('== G offset geometry ==');
+stage.innerHTML='<div id="cb" style="position:static;padding:4px;border:5px solid #ccc"><div id="s" style="margin:7px;width:20px;height:10px"></div></div>';
+var s=stage.querySelector('#s');
+emit('static-margin offsetLeft='+s.offsetLeft+' offsetTop='+s.offsetTop+' parent='+(s.offsetParent?s.offsetParent.id:'null'));
+stage.innerHTML='<div id="cb" style="position:static;padding:4px"><div id="s" style="position:relative;top:30px;left:20px;margin:5px;width:20px;height:10px"></div></div>';
+s=stage.querySelector('#s');
+emit('relative-margin offsetLeft='+s.offsetLeft+' offsetTop='+s.offsetTop);
+stage.innerHTML='<div id="cb" style="position:relative;padding:20px;width:200px"><div id="mid" style="width:200px;padding:10px"><div id="s" style="position:relative;left:25%;top:10%;width:40px;height:20px"></div></div></div>';
+s=stage.querySelector('#s');var cb=stage.querySelector('#cb'),mid=stage.querySelector('#mid');
+emit('percent-basis dx-mid='+(s.getBoundingClientRect().left-mid.getBoundingClientRect().left)+' dy-mid='+(s.getBoundingClientRect().top-mid.getBoundingClientRect().top)+' dx-cb='+(s.getBoundingClientRect().left-cb.getBoundingClientRect().left));
+stage.innerHTML='<div id="cb" style="width:100.5px;height:20.4px;border:1px solid #ccc"></div>';
+emit('rounding offsetWidth='+stage.querySelector('#cb').offsetWidth+' offsetHeight='+stage.querySelector('#cb').offsetHeight);
+stage.innerHTML='<div id="cb" style="width:99.5px;height:19.5px"></div>';
+emit('rounding2 offsetWidth='+stage.querySelector('#cb').offsetWidth+' offsetHeight='+stage.querySelector('#cb').offsetHeight);
+stage.innerHTML='<div id="cb" style="position:relative;padding:6px;border:4px solid #ccc;width:80px;height:60px;overflow:scroll"><div id="s" style="width:400px;height:400px"></div></div>';
+var c=stage.querySelector('#cb');s=stage.querySelector('#s');
+emit('client clientWidth='+c.clientWidth+' clientHeight='+c.clientHeight+' clientLeft='+c.clientLeft+' clientTop='+c.clientTop+' offsetParent='+(s.offsetParent?s.offsetParent.id:'null'));
+stage.innerHTML='<div id="cb" style="font:16px/20px Arial;width:300px"><span id="s">txt</span></div>';
+s=stage.querySelector('#s');
+emit('inline-offsets offsetLeft='+s.offsetLeft+' offsetTop='+s.offsetTop+' offsetWidth='+s.offsetWidth+' offsetHeight='+s.offsetHeight+' parent='+(s.offsetParent?s.offsetParent.id:'null'));
+stage.innerHTML='';
+console.log(log.textContent);
+
+</script></body></html>

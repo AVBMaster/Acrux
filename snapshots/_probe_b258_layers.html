@@ -1,0 +1,9 @@
+<!doctype html><html><body><div id=stage style="position:absolute;left:-4000px;top:0"></div><script>
+var V=['3px 3px 0 #e33','2px 2px 0 #e33, 4px 4px 0 #33e','inset 0 0 0 8px #36c, 5px 5px 0 4px #393','rgb(238, 51, 51) 2px 2px 0px, rgb(51, 51, 238) 4px 4px 0px'];
+var out=[];
+V.forEach(function(v,i){ var st=document.createElement('style'); st.textContent='#s'+i+'{text-shadow:'+v+'}'; document.head.appendChild(st);
+  out.push('TS ['+v+'] => ['+st.sheet.cssRules[0].style.cssText+']');
+  var st2=document.createElement('style'); st2.textContent='#b'+i+'{box-shadow:'+v+'}'; document.head.appendChild(st2);
+  out.push('BS ['+v+'] => ['+st2.sheet.cssRules[0].style.cssText+']'); });
+var pre=document.createElement('pre'); pre.textContent=out.join('\n'); document.body.appendChild(pre);
+</script></body></html>

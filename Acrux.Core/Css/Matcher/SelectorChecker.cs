@@ -1,3 +1,4 @@
+using System.Globalization;
 using Acrux.Core.Dom;
 
 namespace Acrux.Core.Css.Matcher;
@@ -360,11 +361,18 @@ public class SelectorChecker
         return MatchAnPlusB(a, b, element, fromLast, true);
     }
 
+    /// <summary>
+    /// The An+B microsyntax of CSS Pseudo-classes 4 §6.6.2. A malformed argument is not an
+    /// error and must never reach the caller as an exception — one bad selector in a sheet
+    /// would otherwise take the matcher down for every element — so it comes back as (0, 0),
+    /// the pattern that matches no 1-based index.
+    /// </summary>
     private static (int a, int b) ParseAnPlusB(string argument)
     {
         argument = argument.Trim();
         if (argument == "odd") return (2, 1);
         if (argument == "even") return (2, 0);
+        if (argument.Length == 0) return (0, 0);
 
         int a = 0, b = 0;
         int i = 0;
@@ -376,13 +384,14 @@ public class SelectorChecker
         int numStart = i;
         while (i < argument.Length && char.IsDigit(argument[i])) i++;
         string numStr = argument[numStart..i];
-        if (numStr.Length > 0)
-            a = int.Parse(numStr) * (negative ? -1 : 1);
+        if (numStr.Length > 0 && !TryInteger(numStr, out a)) return (0, 0);
+        if (negative) a = -a;
 
         if (i < argument.Length && (argument[i] == 'n' || argument[i] == 'N'))
         {
             i++;
-            if (a == 0) a = negative ? -1 : 1;
+            // '0n+5' really does mean a = 0; only an absent coefficient stands for one.
+            if (numStr.Length == 0) a = negative ? -1 : 1;
             SkipWhitespace(argument, ref i);
             if (i < argument.Length && (argument[i] == '+' || argument[i] == '-'))
             {
@@ -391,17 +400,24 @@ public class SelectorChecker
                 SkipWhitespace(argument, ref i);
                 int bStart = i;
                 while (i < argument.Length && char.IsDigit(argument[i])) i++;
-                b = int.Parse(argument[bStart..i]) * (bNeg ? -1 : 1);
+                if (!TryInteger(argument[bStart..i], out b)) return (0, 0);
+                if (bNeg) b = -b;
             }
         }
         else
         {
+            // No 'n' at all: the whole argument has to read as one signed integer.
             a = 0;
-            b = int.Parse(argument) * (negative ? -1 : 1);
+            if (!TryInteger(argument, out b)) return (0, 0);
         }
 
-        return (a, b);
+        return i == argument.Length ? (a, b) : (0, 0);
     }
+
+    /// <summary>An integer that fits: a selector written as ':nth-child(99999999999999n)' is
+    /// malformed, not a crash.</summary>
+    private static bool TryInteger(string text, out int value) =>
+        int.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out value);
 
     private static void SkipWhitespace(string s, ref int i)
     {

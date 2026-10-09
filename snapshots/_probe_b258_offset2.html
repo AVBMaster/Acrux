@@ -1,0 +1,20 @@
+<!doctype html><html><head><style>
+html { margin: 0; }
+body { margin: 0; padding: 15px; border: 5px solid rgb(0,0,0); font: 16px monospace; }
+.box { border: 2px solid rgb(128,128,128); padding: 7px; width: 100px; }
+.scroll { overflow: scroll; width: 80px; height: 40px; }
+.tall { height: 300px; }
+</style></head><body>
+<span id="s">abc</span>
+<div class="box" id="b">x<span id="s2">de</span></div>
+<div class="scroll" id="sc"><div class="tall">tall</div><span id="s3">in scrolled</span></div>
+<script>
+function f(el){ var r=el.getBoundingClientRect(); return [r.left,r.top,r.width,r.height].map(function(v){return Math.round(v*100)/100}).join(','); }
+var out=[];
+out.push('s rect='+f(document.getElementById('s'))+' off='+document.getElementById('s').offsetLeft+','+document.getElementById('s').offsetTop+' ow='+document.getElementById('s').offsetWidth+','+document.getElementById('s').offsetHeight+' op='+(document.getElementById('s').offsetParent||{tagName:'null'}).tagName);
+var b=document.getElementById('b'); out.push('b rect='+f(b)+' client='+b.clientWidth+'x'+b.clientHeight+' clientLeft='+b.clientLeft+','+b.clientTop+' off='+b.offsetLeft+','+b.offsetTop);
+var s2=document.getElementById('s2'); out.push('s2 rect='+f(s2)+' off='+s2.offsetLeft+','+s2.offsetTop);
+var sc=document.getElementById('sc'); sc.scrollLeft=20; sc.scrollTop=30;
+var s3=document.getElementById('s3'); out.push('after scroll s3 rect='+f(s3)+' sc rect='+f(sc)+' s3 off='+s3.offsetLeft+','+s3.offsetTop+' sc client='+sc.clientWidth+'x'+sc.clientHeight+' clientLeft='+sc.clientLeft);
+var pre=document.createElement('pre'); pre.textContent=out.join('\n'); document.body.appendChild(pre);
+</script></body></html>

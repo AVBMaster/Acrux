@@ -550,7 +550,13 @@ public static class ShorthandExpander
                         layerImage = p;
                 }
                 else if (ColorParser.LooksLikeColor(p))
+                {
+                    // <final-bg-layer> takes one <color> and no grammar says a second may replace
+                    // it (measured: 'background: red blue' is a parse error and the whole
+                    // declaration goes with it).
+                    if (finalColor != null) return;
                     finalColor = p;
+                }
                 else if (IsKeyword(p, "repeat") || IsKeyword(p, "no-repeat") || IsKeyword(p, "repeat-x")
                          || IsKeyword(p, "repeat-y") || IsKeyword(p, "round") || IsKeyword(p, "space"))
                 {
@@ -1154,8 +1160,9 @@ public static class ShorthandExpander
         return parts;
     }
 
-    private static bool IsFontStretch(string p) => p is "ultra-condensed" or "extra-condensed" or "semi-condensed"
-        or "condensed" or "semi-expanded" or "expanded" or "extra-expanded" or "ultra-expanded" or "wider" or "narrower";
+    private static bool IsFontStretch(string p) => IsOneOfKeyword(p, "ultra-condensed",
+        "extra-condensed", "semi-condensed", "condensed", "semi-expanded", "expanded",
+        "extra-expanded", "ultra-expanded", "wider", "narrower");
 
     private static bool IsFontSizeLength(string p)
     {
@@ -1405,7 +1412,7 @@ public static class ShorthandExpander
     }
 
     /// <summary>True for a &lt;time&gt; token: an optional sign, digits, and a s/ms unit.</summary>
-    private static bool IsTimeToken(string token)
+    internal static bool IsTimeToken(string token)
     {
         var t = token.Trim().ToLowerInvariant();
         if (t.Length < 2) return false;
@@ -1433,7 +1440,7 @@ public static class ShorthandExpander
     }
 
     /// <summary>True for a keyword easing or a <c>cubic-bezier()</c>/<c>steps()</c>/<c>linear()</c> call.</summary>
-    private static bool IsEasingToken(string token)
+    internal static bool IsEasingToken(string token)
     {
         var p = token.Trim().ToLowerInvariant();
         if (p is "linear" or "ease" or "ease-in" or "ease-out" or "ease-in-out"
@@ -1781,10 +1788,26 @@ public static class ShorthandExpander
         return parts;
     }
 
-    internal static bool IsBorderStyle(string p) => p is "none" or "hidden" or "dotted" or "dashed" or "solid" or "double" or "groove" or "ridge" or "inset" or "outset";
+    /// <summary>The &lt;border-style-keyword&gt; set. CSS keywords are ASCII case-insensitive and a
+    /// reference engine reads 'border-top: 1px SOLID red' as a solid border, so a test that compares
+    /// the authored spelling drops a working declaration whole (measured, and the reason this one
+    /// folds the case itself rather than trusting its callers).
+    /// </summary>
+    internal static bool IsBorderStyle(string p) => IsOneOfKeyword(p,
+        "none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset");
     private static bool IsBorderWidth(string p) => CssPropertyApplier.IsBorderWidthToken(p);
-    private static bool IsColor(string p) => p.StartsWith("#") || p.StartsWith("rgb") || p == "transparent" || p == "currentcolor" || IsNamedColor(p);
-    private static bool IsFontSize(string p) => p is "xx-small" or "x-small" or "small" or "medium" or "large" or "x-large" or "xx-large" or "larger" or "smaller";
+
+    /// <summary>Whether a token is one of a set of CSS keywords, compared the way CSS compares
+    /// them: ASCII-case-insensitively (CSS Syntax 3 §4).</summary>
+    private static bool IsOneOfKeyword(string token, params string[] keywords)
+    {
+        foreach (var keyword in keywords)
+            if (token.Equals(keyword, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+    private static bool IsColor(string p) => ColorParser.IsColorToken(p);
+    private static bool IsFontSize(string p) => IsOneOfKeyword(p, "xx-small", "x-small", "small",
+        "medium", "large", "x-large", "xx-large", "larger", "smaller");
     private static bool IsNamedColor(string p) => KnownColors.Get(p).HasValue;    /// <summary>
     /// 'mask' (CSS Masking 1 §5.1) into its longhands. The layer list is decomposed by
     /// <see cref="MaskLayerParser"/>, the same code the mask painter uses, so the cascade and

@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 
 namespace Acrux.Core.Css;
 
@@ -99,6 +100,19 @@ public static class CssValueText
                 afterSlash = false;
                 continue;
             }
+            if (c == '#')
+            {
+                // A hex colour is one token: its digits are not a number and its letters are not a
+                // unit, so letting the number branch read it would truncate '#00F' to '#0f'. The
+                // colour fold below re-spells it as an rgb() when the property prints colours at all.
+                int start = i;
+                i++;
+                while (i < value.Length && char.IsAsciiHexDigit(value[i])) i++;
+                if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
+                sb.Append(value, start, i - start);
+                afterSlash = false;
+                continue;
+            }
             if (IsIdentStart(c))
             {
                 int start = i;
@@ -131,16 +145,22 @@ public static class CssValueText
                 afterSlash = false;
                 continue;
             }
-            if (char.IsAsciiDigit(c) || (c == '.' && i + 1 < value.Length && char.IsAsciiDigit(value[i + 1])))
+            if (char.IsAsciiDigit(c) || (c == '.' && i + 1 < value.Length && char.IsAsciiDigit(value[i + 1]))
+                || ((c == '+' || c == '-') && StartsNumber(value, i + 1)))
             {
                 // Read the whole number, unit included: '0px' is one token, and printing it as
                 // '0' plus 'px' would leave the decision about the unit to nobody.
                 int start = i;
+                if (c == '+' || c == '-') i++;
                 while (i < value.Length && (char.IsAsciiDigit(value[i]) || value[i] == '.')) i++;
                 while (i < value.Length && (IsIdentPart(value[i]) || value[i] == '%')) i++;
                 var token = value.Substring(start, i - start);
                 if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
-                sb.Append(depth == 0 && !afterSlash && lengths && token == "0" ? "0px" : token);
+                if (depth == 0 && !afterSlash && lengths && token == "0") token = "0px";
+                // A unit is a keyword and CSS keywords are ASCII case-insensitive, so a reference
+                // engine prints the one spelling of it: 'border-top: 1PX solid red' and
+                // 'margin: 10Px auto' both read back with a lower-case unit (measured).
+                sb.Append(FoldNumberAndUnit(token));
                 afterSlash = false;
                 continue;
             }
@@ -162,6 +182,23 @@ public static class CssValueText
                 result = ElideDefaultFeatureValues(result);
             else if (Acrux.Core.Css.CssValueGrammar.IsLegacyPrefixedName(property))
                 result = LegacyCanonical(result, property.ToLowerInvariant());
+            else
+            {
+                // A colour-valued property prints its colour in the form the reference engine
+                // prints it, and a property whose grammar owns keywords prints those in their one
+                // spelling while leaving a custom name alone. Both decisions are made by the
+                // property and never by the shape of the word: 'animation-name: BOGUS' and
+                // 'font-family: FOO' keep the author's case (measured) because no grammar of
+                // theirs owns those words.
+                result = FoldColorWords(result, property);
+                result = FoldKeywordCase(result, property);
+                if (property.Equals("font", StringComparison.OrdinalIgnoreCase))
+                    result = FoldGenericFamilies(result);
+                result = PutColorFirst(result, property);
+                result = CanonicalizeTransition(result, property);
+                result = OmitInitialBorderParts(result, property);
+                result = CollapseBoxShorthandParts(result, property);
+            }
         }
         return result;
     }
@@ -214,6 +251,490 @@ public static class CssValueText
         return Acrux.Core.Css.CssValueGrammar.LegacyKeywordBelongs(property, word.ToLowerInvariant());
     }
 
+    /// <summary>
+    /// Print a shadow or an outline with its colour in front, which is the order a reference
+    /// engine serialises those shorthands in however the page wrote them (measured:
+    /// <c>outline: 2px dashed rgb(1, 2, 3)</c> reads back <c>rgb(1, 2, 3) dashed 2px</c>, and
+    /// <c>box-shadow: 0 0 2px #F00</c> reads <c>rgb(255, 0, 0) 0px 0px 2px</c>). A border side is
+    /// not one of them — the reference engine keeps <c>1px solid red</c> in the order it was
+    /// written (measured) — and a per-layer list re-orders each layer on its own.
+    /// </summary>
+    private static string PutColorFirst(string text, string property)
+    {
+        var name = property.ToLowerInvariant();
+        if (name != "outline" && name != "box-shadow" && name != "text-shadow") return text;
+        return MapLayers(text, layer => PutColorFirstInLayer(layer, name));
+    }
+
+    private static string PutColorFirstInLayer(string layer, string name)
+    {
+        var words = SplitTopLevelWords(layer);
+        // 'currentcolor' names no colour yet, so it is not a colour the fold re-spells — but it IS
+        // the colour component, and the reference engine moves it to the front with the rest
+        // (measured: 'outline: medium solid currentcolor' reads 'currentcolor solid medium').
+        int colour = words.FindIndex(w => IsColorWord(w)
+            || w.Equals("currentcolor", StringComparison.OrdinalIgnoreCase));
+        var head = colour >= 0 ? new List<string> { words[colour] } : new List<string>();
+        var rest = new List<string>();
+        for (int i = 0; i < words.Count; i++)
+            if (i != colour) rest.Add(words[i]);
+        if (name == "outline")
+        {
+            // The reference engine prints an outline as colour, style, width — the style is a
+            // keyword of its own set and the width is whatever is left (measured:
+            // 'outline: 2px dashed rgb(1, 2, 3)' reads back in that order).
+            var style = rest.FirstOrDefault(w =>
+                Acrux.Core.Css.ShorthandExpander.IsBorderStyle(w));
+            if (style != null)
+            {
+                rest.Remove(style);
+                head.Add(style);
+            }
+        }
+        else
+        {
+            // A shadow prints its 'inset' flag last, whatever order the page wrote it in
+            // (measured: 'box-shadow: inset 0 0 2px red' reads 'red 0px 0px 2px inset').
+            var flags = rest.Where(w => w.Equals("inset", StringComparison.OrdinalIgnoreCase)).ToList();
+            if (flags.Count > 0) rest.RemoveAll(w => w.Equals("inset", StringComparison.OrdinalIgnoreCase));
+            head.AddRange(rest);
+            head.AddRange(flags);
+            return string.Join(" ", head);
+        }
+        head.AddRange(rest);
+        return string.Join(" ", head);
+    }
+
+    /// <summary>Whether a word is a colour this layer may move to the front: a hex literal, a
+    /// plain colour function, or one of the colour names.</summary>
+    private static bool IsColorWord(string word) =>
+        ColorParser.IsColorToken(word)
+        && (word.Length > 0 && word[0] == '#'
+            || IsPlainColorFunction(word)
+            || ColorParser.IsColorName(word)
+            || word.Equals("transparent", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Drop the components of a border shorthand that repeat a longhand's initial value.
+    /// The engine stores the longhands, and CSSOM 5.5.2 prints a shorthand without a component that
+    /// says nothing (measured: 'border-top: medium solid currentcolor' reads 'solid',
+    /// '1px none currentcolor' reads '1px', and a shorthand whose every component is initial reads
+    /// as the empty string). Only the physical sides and 'border-inline' were measured this way;
+    /// 'border-block-start' still prints what the page wrote, so it stays out of this list rather
+    /// than being folded by analogy. Dropping an initial component cannot change what the expansion
+    /// means, because that is what an initial value is.</summary>
+    private static string OmitInitialBorderParts(string text, string property)
+    {
+        var name = property.ToLowerInvariant();
+        if (name is not ("border" or "border-top" or "border-right" or "border-bottom" or "border-left"
+            or "border-inline"))
+            return text;
+        var kept = new List<string>();
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            if (word.Equals("currentcolor", StringComparison.OrdinalIgnoreCase)
+                || word.Equals("medium", StringComparison.OrdinalIgnoreCase)
+                || word.Equals("none", StringComparison.OrdinalIgnoreCase))
+                continue;
+            kept.Add(word);
+        }
+        // When every component is initial there is nothing left to say, and the reference engine
+        // answers the empty string — but it then writes the shorthand's longhands into cssText
+        // rather than a declaration with no value. This engine has no longhand text to fall back
+        // on at that point, and 'border: ;' would not survive being parsed again, so the whole
+        // value stays written (measured, and left as a documented gap).
+        return kept.Count == 0 ? text : string.Join(" ", kept);
+    }
+
+    /// <summary>Collapse a four-value box shorthand to the shortest form that says the same thing,
+    /// the way the reference engine prints the sides it repeats (measured: 'padding: 0px 0px' reads
+    /// '0px'; the same rule gives '1px 2px' for a value with two distinct pairs and '1px 2px 3px'
+    /// when only the left repeats the top). Two-value logical shorthands have nothing to repeat, so
+    /// they are left alone.</summary>
+    private static string CollapseBoxShorthandParts(string text, string property)
+    {
+        var name = property.ToLowerInvariant();
+        if (name is not ("margin" or "padding" or "inset" or "border-width" or "border-style"
+            or "border-color" or "scroll-margin" or "scroll-padding"))
+            return text;
+        var w = SplitTopLevelWords(text);
+        bool Same(string x, string y) => x.Equals(y, StringComparison.OrdinalIgnoreCase);
+        return w.Count switch
+        {
+            2 when Same(w[0], w[1]) => w[0],
+            3 when Same(w[0], w[2]) && Same(w[0], w[1]) => w[0],
+            4 when Same(w[0], w[1]) && Same(w[0], w[2]) && Same(w[0], w[3]) => w[0],
+            4 when Same(w[0], w[2]) && Same(w[1], w[3]) && !Same(w[0], w[1]) => w[0] + " " + w[1],
+            4 when Same(w[1], w[3]) && !Same(w[0], w[1]) && !Same(w[1], w[2])
+                => w[0] + " " + w[1] + " " + w[2],
+            _ => text,
+        };
+    }
+
+    /// <summary>
+    /// Print a <c>transition</c> the way the reference engine does: property, duration, timing
+    /// function, delay, with the components that say nothing dropped — the initial property
+    /// <c>all</c>, the initial easing <c>ease</c> and a zero delay are all left out (measured:
+    /// <c>transition: all 1s</c> and <c>transition: 1s all</c> both read <c>1s</c>, and
+    /// <c>transition: color 1s ease 2s</c> reads <c>color 1s 2s</c>). A layer that names no
+    /// duration keeps its <c>all</c>, because then it is the only thing the declaration says
+    /// (measured: <c>transition: ALL</c> reads <c>all</c>).
+    /// </summary>
+    private static string CanonicalizeTransition(string text, string property)
+    {
+        if (!property.Equals("transition", StringComparison.OrdinalIgnoreCase)) return text;
+        var layers = new List<string>();
+        foreach (var layer in SplitTopLevel(text, ','))
+        {
+            var words = SplitTopLevelWords(layer.Trim());
+            if (words.Count == 0) { layers.Add(""); continue; }
+            string? name = null, duration = null, delay = null, easing = null;
+            foreach (var word in words)
+            {
+                if (Acrux.Core.Css.ShorthandExpander.IsTimeToken(word))
+                {
+                    if (duration == null) duration = word;
+                    else if (delay == null) delay = word;
+                    continue;
+                }
+                if (Acrux.Core.Css.ShorthandExpander.IsEasingToken(word))
+                {
+                    easing = word;
+                    continue;
+                }
+                name ??= word;
+            }
+            var parts = new List<string>();
+            if (name != null && !name.Equals("all", StringComparison.OrdinalIgnoreCase))
+                parts.Add(name);
+            if (duration != null) parts.Add(duration);
+            if (easing != null && !easing.Equals("ease", StringComparison.OrdinalIgnoreCase))
+                parts.Add(easing);
+            if (delay != null && !delay.Equals("0s", StringComparison.OrdinalIgnoreCase)
+                && !delay.Equals("0ms", StringComparison.OrdinalIgnoreCase))
+                parts.Add(delay);
+            if (parts.Count == 0) parts.Add(name != null ? name.ToLowerInvariant() : "all");
+            layers.Add(string.Join(" ", parts));
+        }
+        return string.Join(", ", layers);
+    }
+
+    /// <summary>Apply a fold to each comma-separated layer of a value and rejoin them. A list
+    /// property carries several shadows or gradients in one value, and a fold that walks the whole
+    /// text would read a layer's trailing comma as part of its last token — which is how
+    /// <c>'text-shadow: 2px 2px 0 #e33, 4px 4px 0 #33e'</c> came to lose a layer and gain a
+    /// black colour (a five-character '<c>#e33,</c>' is a valid hex alpha form to the parser).</summary>
+    private static string MapLayers(string text, Func<string, string> fold)
+    {
+        var layers = new List<string>();
+        foreach (var layer in SplitTopLevel(text, ','))
+            layers.Add(fold(layer.Trim()));
+        return string.Join(", ", layers);
+    }
+
+    /// <summary>Split on commas that are not inside a function.</summary>
+    private static IEnumerable<string> SplitTopLevel(string text, char separator)
+    {
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth = Math.Max(0, depth - 1);
+            else if (c == separator && depth == 0)
+            {
+                yield return text[start..i];
+                start = i + 1;
+            }
+        }
+        yield return text[start..];
+    }
+
+    /// <summary>Whether the text at |i| begins a number, which is what tells a leading sign
+    /// whether it belongs to one or is an operator between two.</summary>
+    private static bool StartsNumber(string value, int i) =>
+        i < value.Length && (char.IsAsciiDigit(value[i])
+            || (value[i] == '.' && i + 1 < value.Length && char.IsAsciiDigit(value[i + 1])));
+
+    /// <summary>The number token as the reference engine prints it: the value re-written shortest
+    /// and the unit in lower case. The engine stores what the number means, so '1E2PX' is
+    /// '100px', '1.50px' is '1.5px', '.5em' is '0.5em', '+2px' is '2px' and '-0px' is '0px'
+    /// (measured), and a unit is a keyword, so it has the one spelling. Only a token that begins
+    /// with a number is touched, so a hex colour, an identifier and a unicode range keep their
+    /// characters.</summary>
+    private static string FoldNumberAndUnit(string token)
+    {
+        if (token.Length == 0
+            || !(char.IsAsciiDigit(token[0]) || token[0] == '.' || token[0] == '+' || token[0] == '-'))
+            return token;
+        int i = 0;
+        while (i < token.Length && (char.IsAsciiDigit(token[i]) || token[i] == '.')) i++;
+        // An exponent belongs to the number, so '1e3px' splits after the last digit, not at the 'e'.
+        if (i < token.Length && (token[i] == 'e' || token[i] == 'E'))
+        {
+            int probe = i + 1;
+            if (probe < token.Length && (token[probe] == '+' || token[probe] == '-')) probe++;
+            int digits = probe;
+            while (probe < token.Length && char.IsAsciiDigit(token[probe])) probe++;
+            if (probe > digits) i = probe;
+        }
+        var number = token[..i];
+        int unitStart = i;
+        while (i < token.Length && (char.IsLetter(token[i]) || token[i] == '%')) i++;
+        if (i != token.Length) return token;
+        if (!double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            || double.IsNaN(value) || double.IsInfinity(value))
+            return token;
+        var unit = token[unitStart..].ToLowerInvariant();
+        return CanonicalNumber(value) + unit;
+    }
+
+    /// <summary>A number printed shortest-round-trip and never in exponent notation: the form the
+    /// reference engine writes into a specified value.</summary>
+    private static string CanonicalNumber(double value)
+    {
+        if (value == 0) value = 0;   // folds the negative zero that '-0px' carries
+        var text = value.ToString("R", CultureInfo.InvariantCulture);
+        if (text.Contains('E') || text.Contains('e'))
+            text = value.ToString("0.##########", CultureInfo.InvariantCulture);
+        return text;
+    }
+
+    /// <summary>Rewrite each colour a colour-valued property carries. A named colour prints as its
+    /// own lower-case name; anything else — a hex, an <c>hsl()</c>, a modern <c>rgb()</c> written
+    /// with spaces or a slash — prints as the canonical <c>rgb()</c>/<c>rgba()</c> the engine
+    /// parses it to (measured over 33 spellings: '#F00' and 'hsl(0,100%,50%)' both read
+    /// 'rgb(255, 0, 0)', 'rgb(1 2 3 / 0.5)' reads 'rgba(1, 2, 3, 0.5)', 'TRANSPARENT' reads
+    /// 'transparent', and 'currentColor' reads 'currentcolor' because it names no colour yet).</summary>
+    private static string FoldColorWords(string text, string property)
+    {
+        if (!Resolver.CssPropertyTraits.TakesColorValue(property)) return text;
+        return MapLayers(text, layer => FoldColorWordsInLayer(layer, property));
+    }
+
+    private static string FoldColorWordsInLayer(string text, string property, bool insideFunction = false)
+    {
+        var words = SplitTopLevelWords(text);
+        for (int i = 0; i < words.Count; i++)
+        {
+            var word = words[i];
+            if (word.Contains('(', StringComparison.Ordinal))
+            {
+                // A colour written as a function of numbers is the form the engine folds into
+                // rgb()/rgba(). Every other function it keeps as written — evaluating a
+                // 'color-mix()' here would replace what the page wrote with a number no page asked
+                // for — but it does parse the arguments, so those print canonically:
+                // 'linear-gradient(45DEG, RED 10%, BLUE)' is 'linear-gradient(45deg, red 10%, blue)'
+                // and 'color-mix(in srgb, RED 50%, BLUE 50%)' has its colours lower-cased (measured).
+                if (ColorParser.IsColorToken(word) && IsPlainColorFunction(word) && !insideFunction)
+                    words[i] = CssColorText.FromColor(ColorParser.Parse(word));
+                else
+                    words[i] = InsideFunction(word,
+                        inner => MapLayers(inner, layer => FoldColorWordsInLayer(layer, property, true)));
+                continue;
+            }
+            if (!ColorParser.IsColorToken(word)) continue;
+            // Inside a function's arguments a colour literal stays in the form the author chose.
+            // The reference engine does rewrite '#e33' to 'rgb(238, 51, 51)' there, but this
+            // engine's image parser reads a gradient's colour list by splitting on commas, and a
+            // colour that now carries commas inside it is no longer one stop — the echo would not
+            // survive being parsed again, and measured it does not: a border-image gradient lost
+            // both its colours when the literal was expanded (b27). The round-trip rule wins over
+            // the spelling rule.
+            if (word[0] == '#')
+            {
+                if (!insideFunction) words[i] = CssColorText.FromColor(ColorParser.Parse(word));
+                continue;
+            }
+            if (ColorParser.IsColorName(word)
+                || word.Equals("transparent", StringComparison.OrdinalIgnoreCase)
+                || word.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
+                words[i] = word.ToLowerInvariant();
+        }
+        return string.Join(" ", words);
+    }
+
+    /// <summary>Apply |fold| to the arguments of a function word and rebuild it with a lower-case
+    /// name. A <c>url()</c> and its siblings name a file or a string the page owns rather than a
+    /// value the engine parses, so those are left exactly as written.</summary>
+    private static string InsideFunction(string word, Func<string, string> fold)
+    {
+        int open = word.IndexOf('(');
+        if (open <= 0 || !word.EndsWith(")", StringComparison.Ordinal)) return word;
+        var name = word[..open];
+        if (!IsBareIdentifier(name)) return word;
+        foreach (var blocked in OpaqueArgumentFunctions)
+            if (name.Equals(blocked, StringComparison.OrdinalIgnoreCase)) return word;
+        return name.ToLowerInvariant() + "(" + fold(word[(open + 1)..^1]) + ")";
+    }
+
+    private static readonly string[] OpaqueArgumentFunctions =
+        { "url", "src", "local", "format", "domain", "regexp", "prefix", "image-set",
+          // 'color-mix' resolves its arguments in a named colour space: rewriting
+          // 'color-mix(in hsl, hsl(0 100% 50%), …)' into rgb() arguments is not a spelling change
+          // but a different value, and this engine's mix reads the space back from the text.
+          // Folding its arguments properly means folding the colour space too — still open (#68).
+          "color-mix" };
+
+    /// <summary>Print the words a property's grammar owns in their canonical spelling. The engine
+    /// stores the value it parsed rather than the text it read, so a keyword comes back in lower
+    /// case whatever the page wrote — <c>visibility: COLLAPSE</c> is 'collapse',
+    /// <c>text-rendering: OPTIMIZELEGIBILITY</c> even loses the camel case the author meant
+    /// (measured over sixty properties, and every one of them folded). Two things are left alone:
+    /// a property whose value can name something the page invented, and a word that is not a bare
+    /// identifier — a string, a <c>url()</c>, a <c>var()</c> and a function's arguments are the
+    /// page's own data, and only the folds above descend into those.</summary>
+    private static string FoldKeywordCase(string text, string property)
+    {
+        var keywords = SpecifiedKeywords(property);
+        if (keywords != null) return MapLayers(text, layer => FoldKeywordsInLayer(layer, keywords));
+        if (CustomIdentProperties.Contains(property)) return text;
+        return MapLayers(text, FoldBareIdentsInLayer);
+    }
+
+    private static string FoldBareIdentsInLayer(string layer)
+    {
+        var words = SplitTopLevelWords(layer);
+        for (int i = 0; i < words.Count; i++)
+        {
+            var word = words[i];
+            if (word.Contains('(', StringComparison.Ordinal))
+            {
+                words[i] = InsideFunction(word, inner => MapLayers(inner, FoldBareIdentsInLayer));
+                continue;
+            }
+            // A trailing comma belongs to the separator, not to the word.
+            var bare = word.EndsWith(",", StringComparison.Ordinal) ? word[..^1] : word;
+            if (IsBareIdentifier(bare)) words[i] = bare.ToLowerInvariant() + (word.Length - bare.Length == 1 ? "," : "");
+        }
+        return string.Join(" ", words);
+    }
+
+    /// <summary>The properties whose value space holds a name the page invented — a family, a
+    /// counter, a named grid line, an ident standing for an element, a timeline or a keyframe set.
+    /// No grammar of ours owns those words, so the engine prints them as written (measured:
+    /// <c>font-family: ARIA1</c> and <c>animation-name: BOGUS</c> both keep their case).</summary>
+    private static readonly HashSet<string> CustomIdentProperties = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "font-family", "src", "format", "unicode-range", "animation-name", "list-style-type",
+        "counter-reset", "counter-increment", "counter-set", "string-set", "bookmark-label",
+        "bookmark-level", "grid-template", "grid-template-areas", "grid-template-columns",
+        "grid-template-rows", "grid-area", "grid-row", "grid-column", "grid-row-start",
+        "grid-row-end", "grid-column-start", "grid-column-end", "anchor-name", "anchor-scope",
+        "position-anchor", "position-try-anchor", "view-transition-name", "view-transition-class",
+        "timeline-scope", "scroll-timeline-name", "view-timeline-name", "container-name",
+        "font-palette-values", "page", "export", "part",
+    };
+
+    private static string FoldKeywordsInLayer(string text, string[] keywords)
+    {
+        var words = SplitTopLevelWords(text);
+        for (int i = 0; i < words.Count; i++)
+            foreach (var keyword in keywords)
+                if (words[i].Equals(keyword, StringComparison.OrdinalIgnoreCase))
+                {
+                    words[i] = keyword;
+                    break;
+                }
+        return string.Join(" ", words);
+    }
+
+    private static readonly string[] BorderStyleKeywords =
+        { "none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset" };
+    private static readonly string[] FontSizeKeywords =
+        { "xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "xxx-large",
+          "larger", "smaller" };
+    private static readonly string[] BorderWidthKeywords = { "thin", "medium", "thick" };
+    private static readonly string[] BorderSideKeywords =
+        { "none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset",
+          "outset", "thin", "medium", "thick" };
+    private static readonly string[] AutoKeyword = { "auto" };
+    private static readonly string[] SpanAndAutoKeywords = { "span", "auto" };
+
+    /// <summary>The closed keyword sets of the animation grammar. Everything else an
+    /// <c>animation</c> shorthand holds is a keyframe-set name, and that one is case-sensitive:
+    /// measured, <c>animation: 3s 2s LINEAR BOGUS</c> reads back with 'linear' folded and 'BOGUS'
+    /// untouched, while <c>animation-name: BOGUS</c> keeps both spellings.</summary>
+    private static readonly string[] AnimationKeywords =
+        { "standard", "ease", "ease-in", "ease-out", "ease-in-out", "linear", "step-start",
+          "step-end", "reverse", "alternate", "alternate-reverse", "normal", "none", "forwards",
+          "backwards", "both", "running", "paused", "infinite" };
+
+    /// <summary>The keywords a property owns, or null when this layer has no measured set for it.</summary>
+    private static string[]? SpecifiedKeywords(string property)
+    {
+        var name = property.ToLowerInvariant();
+        if (name.EndsWith("-style", StringComparison.Ordinal)
+            && (name.StartsWith("border", StringComparison.Ordinal) || name == "outline-style"))
+            return BorderStyleKeywords;
+        // A side shorthand carries the style and the width keywords beside its colour, and both
+        // print in their one spelling (measured: 'border-top: 1PX SOLID RED' reads
+        // '1px solid red').
+        if (name == "border" || name == "outline"
+            || (name.StartsWith("border-", StringComparison.Ordinal)
+                && !name.EndsWith("-color", StringComparison.Ordinal)
+                && !name.EndsWith("-width", StringComparison.Ordinal)
+                && !name.EndsWith("-style", StringComparison.Ordinal)))
+            return BorderSideKeywords;
+        if (name == "border-width" || name.EndsWith("-width", StringComparison.Ordinal)
+            && name.StartsWith("border", StringComparison.Ordinal))
+            return BorderWidthKeywords;
+        // 'transition' and 'transition-property' are not listed: every word either of them takes
+        // is a keyword or a property name, and both print lower-cased (measured: 'WIDTH 1S' reads
+        // back 'width 1s'), which is the bare-ident fold rather than a set of its own.
+        if (name is "animation" or "animation-direction" or "animation-fill-mode"
+            or "animation-play-state" or "animation-timing-function")
+            return AnimationKeywords;
+        if (name == "font-size" || name == "font") return FontSizeKeywords;
+        if (name is "grid-area" or "grid-row" or "grid-column"
+            or "grid-row-start" or "grid-row-end" or "grid-column-start" or "grid-column-end")
+            return SpanAndAutoKeywords;
+        if (name is "margin" or "margin-top" or "margin-right" or "margin-bottom" or "margin-left"
+            or "margin-block" or "margin-block-start" or "margin-block-end"
+            or "margin-inline" or "margin-inline-start" or "margin-inline-end"
+            or "inset" or "inset-block" or "inset-inline" or "inset-block-start" or "inset-block-end"
+            or "inset-inline-start" or "inset-inline-end"
+            or "top" or "right" or "bottom" or "left"
+            or "scroll-margin" or "place-content" or "place-items" or "place-self")
+            return AutoKeyword;
+        return null;
+    }
+
+    /// <summary>A colour written as a function of numbers only — <c>rgb()</c>, <c>hsl()</c>,
+    /// <c>hwb()</c> and their legacy aliases. Those are the forms the reference engine folds into
+    /// <c>rgb()</c>/<c>rgba()</c>; the newer ones keep their own spelling.</summary>
+    private static bool IsPlainColorFunction(string word)
+    {
+        int open = word.IndexOf('(');
+        if (open <= 0) return false;
+        var name = word[..open];
+        return name.Equals("rgb", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("rgba", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("hsl", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("hsla", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("hwb", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Split a value into its top-level components: whitespace-separated words, with a
+    /// function and its arguments kept in one piece.</summary>
+    private static List<string> SplitTopLevelWords(string text)
+    {
+        var words = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth = Math.Max(0, depth - 1);
+            else if (depth == 0 && char.IsWhiteSpace(c))
+            {
+                if (i > start) words.Add(text[start..i]);
+                start = i + 1;
+            }
+        }
+        if (text.Length > start) words.Add(text[start..]);
+        return words;
+    }
+
     /// <summary>One family name as the reference engine prints it. A name that is a sequence of
     /// identifiers is one string and is quoted — <c>font-family: My Font</c> reads back
     /// <c>"My Font"</c> — and a name that is written as a string and could have been written as one
@@ -241,11 +762,39 @@ public static class CssValueText
                 if (!IsBareIdentifier(word)) { everyWordIsName = false; break; }
             if (!everyWordIsName) continue;
             // One identifier is the name itself; several are a name that no parser would find if it
-            // were not quoted, because it reads as two values.
-            items[i] = words.Length == 1 ? words[0] : AsDoubleQuoted(string.Join(" ", words));
+            // were not quoted, because it reads as two values. A generic family is a keyword rather
+            // than a name the page invented, so it prints in its one spelling however the author
+            // cased it (measured: 'font: 16px SERIF' reads '16px serif' beside a 'font-family: ARIA1'
+            // that keeps its case).
+            items[i] = words.Length == 1 ? CanonicalGenericFamily(words[0])
+                : AsDoubleQuoted(string.Join(" ", words));
         }
         return string.Join(", ", items);
     }
+
+    private static string CanonicalGenericFamily(string name)
+    {
+        foreach (var generic in GenericFamilies)
+            if (name.Equals(generic, StringComparison.OrdinalIgnoreCase)) return generic;
+        return name;
+    }
+
+    /// <summary>Lower-case only the generic family keywords of a <c>font</c> shorthand. The whole
+    /// value cannot go through the family fold, because its other components — 'bold 16px serif' —
+    /// are also bare identifiers and would be quoted into one family name. A generic family is a
+    /// keyword, so it prints in its one spelling (measured: 'font: 16px SERIF' reads '16px serif'),
+    /// while a name the page invented keeps its case.</summary>
+    private static string FoldGenericFamilies(string text)
+    {
+        var words = SplitTopLevelWords(text);
+        for (int i = 0; i < words.Count; i++) words[i] = CanonicalGenericFamily(words[i]);
+        return string.Join(" ", words);
+    }
+
+    private static readonly string[] GenericFamilies =
+        { "serif", "sans-serif", "cursive", "fantasy", "monospace", "system-ui", "ui-serif",
+          "ui-sans-serif", "ui-monospace", "ui-rounded", "math", "emoji", "fangsong", "standard",
+          "legacy-mac", "legacy-win", "legacy-compat" };
 
     /// <summary>The value a feature tag takes when nothing is written after it, so a tag written
     /// with its default is printed without it: <c>"liga" 1</c> reads back <c>"liga"</c> while

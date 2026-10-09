@@ -1,0 +1,8 @@
+<!doctype html><html><body><div id=stage style="position:absolute;left:-4000px;top:0"></div><script>
+var CASES=['1px solid red','1PX SOLID RED','1px SOLID red','1PX solid RED','2px SOLID','SOLID 2px red','thin SOLID red','1px dashed RED','1px solid RED extra'];
+var out=[];
+CASES.forEach(function(v,i){ var st=document.createElement('style'); st.textContent='#b'+i+' { border-top: '+v+' }'; document.head.appendChild(st);
+  var d=document.createElement('div'); d.style.cssText='border-top: '+v; document.getElementById('stage').appendChild(d);
+  out.push(v+' | sheet=['+(st.sheet.cssRules[0]?st.sheet.cssRules[0].style.cssText:'')+'] inline=['+d.style.cssText+'] w='+Math.round(d.offsetWidth)+'x'+Math.round(d.offsetHeight)); });
+var pre=document.createElement('pre'); pre.textContent=out.join('\n'); document.body.appendChild(pre);
+</script></body></html>

@@ -690,6 +690,22 @@ public class ComputedStyle
     public StyleReflection? BoxReflect { get; set; }
     private readonly Dictionary<string, string> _customProperties = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The values of properties the reference engine declares and this engine has no behaviour for
+    /// — the legacy <c>-webkit-</c> spellings of the old box model, the mask border and the text
+    /// paint pair. They change nothing about a box, which is exactly why they need a place of their
+    /// own: a computed style still has to answer them, and what it answers is the value the page
+    /// wrote (measured: '-webkit-box-flex: 3' computes to '3', and with no declaration at all to the
+    /// initial the reference engine reports for that property). They are kept apart from custom
+    /// properties because var() reads that map and must not find a property name in it.
+    /// </summary>
+    private readonly Dictionary<string, string> _declaredOnlyValues = new(StringComparer.OrdinalIgnoreCase);
+
+    public void SetDeclaredOnlyValue(string name, string value) => _declaredOnlyValues[name] = value;
+    public string? GetDeclaredOnlyValue(string name) => _declaredOnlyValues.GetValueOrDefault(name);
+    public void RemoveDeclaredOnlyValue(string name) => _declaredOnlyValues.Remove(name);
+    public IEnumerable<KeyValuePair<string, string>> GetDeclaredOnlyValues() => _declaredOnlyValues;
+
     public void SetCustomProperty(string name, string value) => _customProperties[name] = value;
     public string? GetCustomProperty(string name) => _customProperties.GetValueOrDefault(name);
     public bool HasCustomProperty(string name) => _customProperties.ContainsKey(name);
@@ -1505,7 +1521,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
 
     public ComputedStyle Clone()
     {
-        return new ComputedStyle
+        var clone = new ComputedStyle
         {
             ComputedViewportWidth = ComputedViewportWidth,
             ComputedViewportHeight = ComputedViewportHeight,
@@ -1657,6 +1673,8 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             FontVariationSettings = FontVariationSettings, FontFeatureSettings = FontFeatureSettings,
             FontSizeAdjust = FontSizeAdjust, TextRendering = TextRendering, UnicodeBidi = UnicodeBidi
         };
+        foreach (var entry in _declaredOnlyValues) clone._declaredOnlyValues[entry.Key] = entry.Value;
+        return clone;
     }
 
     public bool HasAnyTransform =>

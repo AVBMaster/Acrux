@@ -1,0 +1,11 @@
+<!doctype html><html><body><div id=stage style="position:absolute;left:-4000px;top:0">
+<div id="bare"></div>
+<div id="auth" style="-webkit-box-flex: 3; -webkit-text-fill-color: red; -webkit-text-stroke-width: 2em; -webkit-user-modify: read-write; -webkit-box-ordinal-group: 7; -webkit-mask-box-image-slice: 3 fill; -webkit-box-align: inherit; -webkit-font-smoothing: antialiased">x<div id="kid">y</div></div>
+</div><script>
+var out=[]; function g(id,name){ return getComputedStyle(document.getElementById(id)).getPropertyValue(name); }
+out.push('bare bf=['+g('bare','-webkit-box-flex')+'] tfc=['+g('bare','-webkit-text-fill-color')+'] tsw=['+g('bare','-webkit-text-stroke-width')+'] um=['+g('bare','-webkit-user-modify')+'] og=['+g('bare','-webkit-box-ordinal-group')+'] slice=['+g('bare','-webkit-mask-box-image-slice')+'] align=['+g('bare','-webkit-box-align')+'] fs=['+g('bare','-webkit-font-smoothing')+'] orient=['+g('bare','-webkit-box-orient')+'] outset=['+g('bare','-webkit-mask-box-image-outset')+'] tap=['+g('bare','-webkit-tap-highlight-color')+'] reflect=['+g('bare','-webkit-box-reflect')+']');
+out.push('auth bf=['+g('auth','-webkit-box-flex')+'] tfc=['+g('auth','-webkit-text-fill-color')+'] tsw=['+g('auth','-webkit-text-stroke-width')+'] um=['+g('auth','-webkit-user-modify')+'] og=['+g('auth','-webkit-box-ordinal-group')+'] slice=['+g('auth','-webkit-mask-box-image-slice')+'] align=['+g('auth','-webkit-box-align')+'] fs=['+g('auth','-webkit-font-smoothing')+']');
+out.push('kid bf=['+g('kid','-webkit-box-flex')+'] tfc=['+g('kid','-webkit-text-fill-color')+'] tsw=['+g('kid','-webkit-text-stroke-width')+'] fs=['+g('kid','-webkit-font-smoothing')+'] align=['+g('kid','-webkit-box-align')+']');
+out.push('unprefixed bf=['+g('auth','box-flex')+'] tfc=['+g('auth','text-fill-color')+']');
+var pre=document.createElement('pre'); pre.textContent=out.join('\n'); document.body.appendChild(pre);
+</script></body></html>

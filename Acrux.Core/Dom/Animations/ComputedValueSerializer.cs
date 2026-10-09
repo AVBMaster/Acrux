@@ -42,6 +42,18 @@ public static class ComputedValueSerializer
             var shorthand = ShorthandValueOf(style, property);
             if (shorthand != null) return shorthand;
         }
+        // A legacy '-webkit-' property that no layout step reads still has a computed value: the
+        // one the page wrote, or the one measured for an element that wrote nothing (both in
+        // snapshots/out/_b257_edge_legacy_grammar.txt). It is answered before the alias fold below
+        // because for these names the prefixed spelling IS the property's name.
+        if (Acrux.Core.Css.Resolver.CssPropertyTraits.IsLegacyDeclaredOnly(property))
+        {
+            var written = style.GetDeclaredOnlyValue(property);
+            if (written == null || Acrux.Core.Css.Resolver.CssPropertyTraits.IsLegacyComputedInitial(property))
+                return Acrux.Core.Css.Resolver.CssPropertyTraits.LegacyDeclaredOnlyInitial(property);
+            return Acrux.Core.Css.Resolver.CssPropertyTraits.LegacyComputedText(property, written);
+        }
+
         // A prefixed name is an alias of the property it is spelled without the prefix for, and
         // a reference engine answers it: 'getComputedStyle(el).getPropertyValue("-webkit-transform")'
         // gives the transform. Only a name this serializer has no case of its own for falls

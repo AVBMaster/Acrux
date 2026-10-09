@@ -429,16 +429,62 @@ public class ElementHost
     public DomRect getBoundingClientRect()
     {
         FlushForRead();
-        var box = _element.LayoutBox;
-        if (box == null)
-            return new DomRect(0, 0, 0, 0);
+        var rect = LayoutRect();
+        var (scrollX, scrollY) = AncestorScrollOf(ScrollBasisOf(_element));
+        return new DomRect(rect.left - scrollX, rect.top - scrollY, rect.width, rect.height);
+    }
 
-        return new DomRect(
-            box.BorderBox.Left,
-            box.BorderBox.Top,
-            box.BorderBox.Width,
-            box.BorderBox.Height
-        );
+    /// <summary>Where the element sits in the document, before any scroller above it has moved.
+    /// CSSOM View 4: an inline element has no box of its own, and its rectangle is the union of
+    /// the fragments it owns in the line boxes around it — a read that answered 0x0 made every
+    /// script that measures text see an empty page.</summary>
+    private (float left, float top, float width, float height) LayoutRect()
+    {
+        var box = _element.LayoutBox;
+        if (box != null)
+            return (box.BorderBox.Left, box.BorderBox.Top, box.BorderBox.Width, box.BorderBox.Height);
+        return Acrux.Core.Layout.InlineGeometry.TryGetBoundingRect(_element, out var union)
+            ? (union.Left, union.Top, union.Width, union.Height)
+            : (0, 0, 0, 0);
+    }
+
+    /// <summary>How far the scrollers above a box have moved it. The layout tree keeps the
+    /// unscrolled positions and the paint pass shifts them on screen, so a client rectangle has to
+    /// make the same shift (measured: a 400x300 box inside a scroller taken to (40, 25) reports
+    /// its rectangle at (-40, -25) while its offsetTop stays 0).</summary>
+    /// <summary>The box whose scroll chain moves an element: its own, or for an inline element the
+    /// block whose line boxes hold its fragments.</summary>
+    private static LayoutBox? ScrollBasisOf(Element element) =>
+        element.LayoutBox ?? Acrux.Core.Layout.InlineGeometry.ContainingBlockOf(element);
+
+    private static (float X, float Y) AncestorScrollOf(LayoutBox? box)
+    {
+        float x = 0, y = 0;
+        for (var b = box?.Parent; b != null; b = b.Parent)
+        {
+            x += b.ScrollX;
+            y += b.ScrollY;
+        }
+        return (x, y);
+    }
+
+    /// <summary>One rectangle per fragment: a box of its own answers one, an inline box answers
+    /// one per line it is broken across (plus one for each atomic inline it contains), and a box
+    /// that is not rendered answers none (CSSOM View 4).</summary>
+    public DomRect[] getClientRects()
+    {
+        FlushForRead();
+        var box = _element.LayoutBox;
+        var (scrollX, scrollY) = AncestorScrollOf(ScrollBasisOf(_element));
+        if (box != null)
+            return new[] { new DomRect(box.BorderBox.Left - scrollX, box.BorderBox.Top - scrollY,
+                box.BorderBox.Width, box.BorderBox.Height) };
+        var fragments = Acrux.Core.Layout.InlineGeometry.GetFragments(_element);
+        var rects = new DomRect[fragments.Count];
+        for (int i = 0; i < fragments.Count; i++)
+            rects[i] = new DomRect(fragments[i].Left - scrollX, fragments[i].Top - scrollY,
+                fragments[i].Width, fragments[i].Height);
+        return rects;
     }
 
     // Layout dimension properties
@@ -448,8 +494,11 @@ public class ElementHost
         {
             FlushForRead();
             var box = _element.LayoutBox;
-            if (box == null) return 0;
-            return box.BorderBox.Width;
+            if (box != null) return Round(box.BorderBox.Width);
+            // An inline element's offset box is the union of its fragments (measured: a run
+            // 24.02px wide reports 24).
+            return Acrux.Core.Layout.InlineGeometry.TryGetBoundingRect(_element, out var union)
+                ? Round(union.Width) : 0;
         }
     }
 
@@ -459,10 +508,16 @@ public class ElementHost
         {
             FlushForRead();
             var box = _element.LayoutBox;
-            if (box == null) return 0;
-            return box.BorderBox.Height;
+            if (box != null) return Round(box.BorderBox.Height);
+            return Acrux.Core.Layout.InlineGeometry.TryGetBoundingRect(_element, out var union)
+                ? Round(union.Height) : 0;
         }
     }
+
+    /// <summary>The reference engine reports these as integers, so a sub-pixel advance must not
+    /// leak out of them. It rounds half upward rather than to even: a 102.5px border box reports
+    /// 103, and a negative fraction moves toward positive infinity (measured both).</summary>
+    private static float Round(float value) => (float)Math.Floor(value + 0.5f);
 
     public float clientWidth 
     {
@@ -471,7 +526,10 @@ public class ElementHost
             FlushForRead();
             var box = _element.LayoutBox;
             if (box == null) return 0;
-            return box.ContentBox.Width;
+            // CSSOM View 1.5: the padding box, whatever of it the scrollbars take. The content box
+            // alone is too small by the element's own padding (measured: a 118px box with a 2px
+            // border and 7px padding reports 114, not 100).
+            return Round(ClientSizeOf(box, widthAxis: true));
         }
     }
 
@@ -482,17 +540,60 @@ public class ElementHost
             FlushForRead();
             var box = _element.LayoutBox;
             if (box == null) return 0;
-            return box.ContentBox.Height;
+            return Round(ClientSizeOf(box, widthAxis: false));
         }
     }
 
-    public float clientLeft => 0;
-    public float clientTop => 0;
+    public float clientLeft
+    {
+        get
+        {
+            FlushForRead();
+            var box = _element.LayoutBox;
+            if (box == null) return 0;
+            return Round(box.PaddingBox.Left - box.BorderBox.Left);
+        }
+    }
+
+    public float clientTop
+    {
+        get
+        {
+            FlushForRead();
+            var box = _element.LayoutBox;
+            if (box == null) return 0;
+            return Round(box.PaddingBox.Top - box.BorderBox.Top);
+        }
+    }
+
+    /// <summary>The padding a laid-out box was given, which is what turns its content box back
+    /// into the padding box <c>clientWidth</c> reports.</summary>
+    private static (float Left, float Top, float Right, float Bottom) PaddingOfStatic(
+        LayoutBox box, Element? fallbackOwner)
+    {
+        // Resolved the way the box itself was laid out — against the element's own font — so the
+        // number a page reads back is the padding the box actually took.
+        var style = box.Dimensions?.Style ?? fallbackOwner?.ComputedStyle;
+        if (style == null) return (0, 0, 0, 0);
+        float font = style.FontSize > 0 ? style.FontSize : 16;
+        float Edge(Acrux.Core.Dom.Length? length)
+        {
+            if (length == null) return 0;
+            float px = length.ToPixels(font, font, 0, 0);
+            return float.IsNaN(px) || px < 0 ? 0 : px;
+        }
+        return (Edge(style.PaddingLeft), Edge(style.PaddingTop),
+            Edge(style.PaddingRight), Edge(style.PaddingBottom));
+    }
 
     public ElementHost offsetParent
     {
         get
         {
+            // The walk tests each ancestor's computed position, so it has to see a styled tree:
+            // reading offsetParent straight after an innerHTML assignment would otherwise stop at
+            // a static parent whose style has not been resolved yet.
+            FlushForRead();
             var op = _element.OffsetParent;
             if (op != null)
                 return WrapWithCache(op);
@@ -512,7 +613,9 @@ public class ElementHost
             FlushForRead();
             var box = _element.LayoutBox;
             if (box == null) return 0;
-            return box.ContentBox.Width;
+            // CSSOM View 1.6: the scrollable width, which is the content that overflows or the
+            // client box, whichever is larger — never the content box alone.
+            return Round(Math.Max(ClientSizeOf(box, widthAxis: true), box.ScrollContentWidth));
         }
     }
 
@@ -523,8 +626,16 @@ public class ElementHost
             FlushForRead();
             var box = _element.LayoutBox;
             if (box == null) return 0;
-            return box.ContentBox.Height;
+            return Round(Math.Max(ClientSizeOf(box, widthAxis: false), box.ScrollContentHeight));
         }
+    }
+
+    private static float ClientSizeOf(LayoutBox box, bool widthAxis)
+    {
+        var pad = PaddingOfStatic(box, null);
+        return widthAxis
+            ? box.ContentBox.Width + pad.Left + pad.Right
+            : box.ContentBox.Height + pad.Top + pad.Bottom;
     }
 
     public double scrollLeft
@@ -544,9 +655,7 @@ public class ElementHost
         get 
         {
             FlushForRead();
-            var box = _element.LayoutBox;
-            if (box == null) return 0;
-            return box.BorderBox.Top;
+            return OffsetAxis(fromTop: true);
         }
     }
 
@@ -555,10 +664,27 @@ public class ElementHost
         get 
         {
             FlushForRead();
-            var box = _element.LayoutBox;
-            if (box == null) return 0;
-            return box.BorderBox.Left;
+            return OffsetAxis(fromTop: false);
         }
+    }
+
+    /// <summary>CSSOM View 2.4: the offset is measured from the <b>padding edge</b> of the offset
+    /// parent, not from the page origin — a box inside a positioned ancestor reports its place in
+    /// that ancestor. The body and a missing offset parent stand for the initial containing block,
+    /// which is not inset by the body's own border and padding (measured both: a span 20px into a
+    /// body with a 5px border reports 20, while the same span inside a positioned div reports the
+    /// distance from that div's padding edge).</summary>
+    private float OffsetAxis(bool fromTop)
+    {
+        // The layout position, not the client one: scrolling an ancestor moves what is seen and
+        // leaves the offset where it was (measured both).
+        var rect = LayoutRect();
+        var value = fromTop ? rect.top : rect.left;
+        var parent = _element.OffsetParent;
+        if (parent == null || parent.TagName is "BODY" or "HTML") return Round(value);
+        var box = parent.LayoutBox;
+        if (box == null) return Round(value);
+        return Round(value - (fromTop ? box.PaddingBox.Top : box.PaddingBox.Left));
     }
 
     public object[] classListValues => _element.ClassList.Select(c => (object)c).ToArray();
@@ -875,7 +1001,8 @@ public class ElementHost
         return new TextNodeWrapper((TextNode)node);
     }
 
-    public int getClientRects() => 1;
+    // 'getClientRects()' is the real list above; the name is kept off the stub that used to
+    // answer 1 for every element, which made '.length' look right and '[0]' undefined.
 
     public bool hasAttributes() => _element.Attributes.Count > 0;
 

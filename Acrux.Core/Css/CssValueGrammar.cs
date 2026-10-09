@@ -44,6 +44,15 @@ public static class CssValueGrammar
     public static bool TextIsValidFor(string propertyName, string value)
     {
         if (propertyName.StartsWith("--")) return true;
+        // The background shorthand's grammar IS its expansion: a colour outside the final layer, a
+        // token nothing in <bg-layer> reads and a position or size list the grammar refuses all leave
+        // the declaration out of the cascade, and the reference engine refuses it in the CSSOM echo
+        // too (measured: 'background: red, blue', 'background: red blue' and 'background: invert'
+        // each read back empty). Deciding the echo anywhere else would let it and the cascade
+        // disagree about one declaration.
+        if (propertyName.Equals("background", StringComparison.OrdinalIgnoreCase)
+            && !Resolver.CssPropertyTraits.IsCssWideKeyword(value.Trim()))
+            return ShorthandExpander.ExpandProperty("background", value).Count > 0;
         // A '-webkit-' spelling that is a property of its own has its twin's grammar: the value
         // set is the same, and only the name the declaration is stored under differs.
         var id = CssPropertyIdExtensions.BehaviourId(CssPropertyIdExtensions.FromString(propertyName));
@@ -130,6 +139,10 @@ public static class CssValueGrammar
         // does not), and an integer group number from one up.
         "-webkit-box-flex" => static t => IsLegacyNumber(t.Trim()),
         "-webkit-box-ordinal-group" => static t => IsLegacyInteger(t.Trim()),
+        // The two halves of a table's border-spacing, one plain length each (measured: '4px'
+        // stands and an element that wrote nothing reports '0px').
+        "-webkit-border-horizontal-spacing" or "-webkit-border-vertical-spacing"
+            => static t => IsPlainLength(t.Trim()),
         // The reflection is a side, an optional distance and nothing else: a colour and a third
         // component are both refused, and 'none' is not a value of this property at all
         // (measured).
@@ -426,6 +439,18 @@ public static class CssValueGrammar
             or CssPropertyId.BorderInlineStart or CssPropertyId.BorderInlineEnd
             or CssPropertyId.BorderBlock or CssPropertyId.BorderInline
             => IsBorderSideValue,
+        // 'outline' is <'outline-color'> || <'outline-style'> || <'outline-width'> (CSS UI 4 §5.1)
+        // — one of each, and the width is a single value rather than the four-side list a border
+        // side shorthand takes. Measured: 'outline: 2px dashed rgb(1, 2, 3)' and 'outline: red'
+        // both stand, while 'outline: 3px 3px 0 #e33' and 'outline: 2px red dashed extra' fall.
+        CssPropertyId.Outline => IsOutlineValue,
+        // CSS Text 3 §5.1.9: two or three lengths and an optional colour, and no 'inset' — that
+        // belongs to 'box-shadow' only (measured: 'text-shadow: inset 0 0 2px red' is dropped).
+        CssPropertyId.TextShadow => IsTextShadowValue,
+        // CSS Backgrounds 3 §5.6: two to four lengths, an optional colour and an optional 'inset',
+        // in any order (measured: 'box-shadow: inset 0 0 2px red' and 'box-shadow: 0 0 2px #F00'
+        // both stand, 'box-shadow: 2px dashed rgb(1, 2, 3)' does not).
+        CssPropertyId.BoxShadow => IsBoxShadowValue,
         // CSS Motion Path 1 §3: a path, a ray, an image, one of the basic shapes, or none, with the
         // reference box it resolves against written in front. A function this grammar has no reading
         // for is no path (measured: 'offset-path: bogus("M 0 0")' is not a declaration while
@@ -493,6 +518,80 @@ public static class CssValueGrammar
     /// <summary>The shorthand of one border side: a width, a style and a colour, each at most once
     /// and in any order, and nothing else beside them. The same matchers the applier and the
     /// shorthand expander use decide the parts, so the three cannot disagree about a declaration.</summary>
+    private static bool IsOutlineValue(string text)
+    {
+        var parts = SplitComponents(text);
+        if (parts.Count is < 1 or > 3) return false;
+        int width = 0, style = 0, colour = 0;
+        foreach (var part in parts)
+        {
+            if (ShorthandExpander.IsBorderStyle(part)) { style++; continue; }
+            if (Acrux.Core.Css.Resolver.CssPropertyApplier.IsBorderWidthToken(part)) { width++; continue; }
+            if (ColorParser.IsColorToken(part) || IsOtherFunctionCall(part)) { colour++; continue; }
+            return false;
+        }
+        return width <= 1 && style <= 1 && colour <= 1;
+    }
+
+    /// <summary>One layer of a shadow list: the lengths, at most one colour, and for a box shadow
+    /// at most one 'inset'. A word that is none of those — a style keyword, say — is no shadow
+    /// component at all (measured: 'text-shadow: 2px dashed rgb(1, 2, 3)' is dropped).</summary>
+    private static bool IsShadowLayer(string text, bool allowInset, int maxLengths)
+    {
+        int lengths = 0, colour = 0, inset = 0;
+        foreach (var part in SplitComponents(text))
+        {
+            if (allowInset && part.Equals("inset", StringComparison.OrdinalIgnoreCase))
+            {
+                if (++inset > 1) return false;
+                continue;
+            }
+            if (IsLengthOrPercentage(part) || IsNumber(part)) { lengths++; continue; }
+            // A colour function is one component; 'rgb(1, 2, 3)' has no top-level space in it.
+            if (IsLegacyColor(part) || IsOtherFunctionCall(part)) { colour++; continue; }
+            return false;
+        }
+        return lengths >= 2 && lengths <= maxLengths && colour <= 1;
+    }
+
+    private static bool IsTextShadowValue(string text) => EveryShadowLayer(text, allowInset: false, maxLengths: 3);
+
+    private static bool IsBoxShadowValue(string text) => EveryShadowLayer(text, allowInset: true, maxLengths: 4);
+
+    private static bool EveryShadowLayer(string text, bool allowInset, int maxLengths)
+    {
+        var layers = SplitTopLevel(text, ',');
+        if (layers.Count == 0) return false;
+        foreach (var layer in layers)
+        {
+            var trimmed = layer.Trim();
+            // 'none' is the initial of both shadow properties and is a value of its own.
+            if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) continue;
+            if (trimmed.Length == 0 || !IsShadowLayer(trimmed, allowInset, maxLengths)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>Split on commas that are not inside a function.</summary>
+    private static List<string> SplitTopLevel(string text, char separator)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth = Math.Max(0, depth - 1);
+            else if (c == separator && depth == 0)
+            {
+                parts.Add(text[start..i]);
+                start = i + 1;
+            }
+        }
+        parts.Add(text[start..]);
+        return parts;
+    }
+
     private static bool IsBorderSideValue(string text)
     {
         var parts = SplitComponents(text);

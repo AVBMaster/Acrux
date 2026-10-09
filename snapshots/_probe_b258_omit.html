@@ -1,0 +1,26 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;font:12px monospace}#log{white-space:pre}</style></head>
+<body><div id="stage" style="position:absolute;left:-4000px;top:0"></div><div id="log"></div><script>
+var log=document.getElementById('log'),stage=document.getElementById('stage');
+function emit(t){log.textContent+=t+'\n';}
+function echo(prop,value){var d=document.createElement('div');d.style.setProperty(prop,value);return prop+': '+value+'  ->  ['+d.style.getPropertyValue(prop)+']  cssText['+d.style.cssText+']';}
+[['border-top','medium solid currentcolor'],['border-top','1px none currentcolor'],['border-top','medium none currentcolor'],
+ ['border-top','none'],['border','none'],['border','medium'],['border','currentcolor'],
+ ['border-top-color','currentcolor'],['border-top-style','none'],['border-top-width','medium'],
+ ['outline','medium solid currentcolor'],['outline','currentcolor'],['outline','none'],
+ ['text-decoration','none solid currentcolor'],['text-decoration','underline'],
+ ['margin','0 auto'],['padding','0px 0px'],['background','none repeat scroll 0% 0% transparent'],
+ ['column-rule','medium none currentcolor'],['border-block-start','medium solid currentcolor'],
+ ['border-inline','1px solid currentcolor'],['flex-flow','row nowrap'],['grid-area','auto'],
+ ['transition-property','all'],['animation-name','none'],['font','16px SERIF'],['font','bold 16px serif']
+].forEach(function(p){emit(echo(p[0],p[1]));});
+
+// margin collapsing: does a child's top margin move its offsetTop?
+function m(css,child){stage.innerHTML='<div id="cb" style="'+css+'"><div id="s" style="'+child+'"></div></div>';
+ var s=document.getElementById('s');return 'offsetTop='+s.offsetTop+' offsetLeft='+s.offsetLeft;}
+emit('collapse-nopad '+m('position:relative;padding:0;border:0','margin:5px;width:10px;height:10px'));
+emit('collapse-pad '+m('position:relative;padding:4px;border:0','margin:5px;width:10px;height:10px'));
+emit('collapse-margin-parent '+m('position:relative;margin:3px;padding:0;border:0','margin:5px;width:10px;height:10px'));
+emit('collapse-relative-child '+m('position:relative;padding:0;border:0','position:relative;top:30px;left:20px;margin:5px;width:10px;height:10px'));
+emit('collapse-inline-child '+m('position:relative;padding:0;border:0','display:inline-block;margin:5px;width:10px;height:10px'));
+console.log(log.textContent);
+</script></body></html>

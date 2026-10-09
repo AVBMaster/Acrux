@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>b258 which direction governs relative insets</title>
+<style>
+body { font: 16px Arial, sans-serif; margin: 0; }
+#log div { font: 12px Consolas, monospace; white-space: pre; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="log"></div>
+<script>
+// .outer is the positioned ancestor (so it sizes the percentage insets) and its
+// direction differs from the direction of the flow the box actually sits in.
+// left wins -> 10, right wins -> 330 (width 40 inside a 400px chain).
+var cases = [
+  ["posAnc=rtl flow=ltr  block", '<div style="position:relative;direction:rtl;width:400px"><div style="direction:ltr;width:400px"><div id="x" style="position:relative;left:10px;right:30px;width:40px;height:20px"></div></div></div>'],
+  ["posAnc=ltr flow=rtl  block", '<div style="position:relative;direction:ltr;width:400px"><div style="direction:rtl;width:400px"><div id="x" style="position:relative;left:10px;right:30px;width:40px;height:20px"></div></div></div>'],
+  ["posAnc=rtl flow=ltr  inline", '<div style="position:relative;direction:rtl;width:400px"><div style="direction:ltr;width:400px"><span id="x" style="position:relative;left:10px;right:30px">ab</span></div></div>'],
+  ["elem=rtl only        block", '<div style="width:400px"><div id="x" style="position:relative;left:10px;right:30px;direction:rtl;width:40px;height:20px"></div></div>'],
+  ["posAnc=rtl flow=ltr  static", '<div style="position:relative;direction:rtl;width:400px"><div style="direction:ltr;width:400px"><div id="x" style="width:40px;height:20px"></div></div></div>']
+];
+var log = document.getElementById("log"), stage = document.getElementById("stage");
+function emit(t) { var d = document.createElement("div"); d.textContent = t; log.appendChild(d); }
+for (var i = 0; i < cases.length; i++) {
+  stage.innerHTML = cases[i][1];
+  var r = document.getElementById("x").getBoundingClientRect();
+  emit(cases[i][0] + " | left=" + r.left.toFixed(1) + " w=" + r.width.toFixed(1));
+}
+stage.innerHTML = "";
+</script>
+</body>
+</html>
