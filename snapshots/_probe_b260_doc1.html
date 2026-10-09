@@ -1,0 +1,12 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>T</title></head><body>
+<div id="box"><p id=a lang="en">a</p><p id=b lang="en-GB">b</p><p id=c>c</p></div>
+<script>
+const out = [];
+out.push('doc-html=' + document.querySelectorAll('html').length);
+out.push('doc-star=' + document.querySelectorAll('*').length);
+out.push('body-star=' + document.body.querySelectorAll('*').length);
+out.push('lang-pt=' + ['a','b','c'].filter(k => document.getElementById(k).matches(':lang(pt)')).join(','));
+out.push('lang-en=' + ['a','b','c'].filter(k => document.getElementById(k).matches(':lang(en)')).join(','));
+out.push('nav=' + (navigator.language || 'none') + ' htmlLang=' + (document.documentElement.getAttribute('lang') || 'none'));
+console.log(out.join('\n'));
+</script></body></html>

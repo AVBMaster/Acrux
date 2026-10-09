@@ -1,0 +1,35 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"></head><body>
+<div id="box"><p id=a lang="en">a</p><p id=b lang="en-GB">b</p><p id=c>c</p><p id=d lang="fr-FR">d</p></div>
+<script>
+const out = [];
+const t = (label, fn) => { try { out.push(label + ' = ' + fn()); } catch (e) { out.push(label + ' THROW ' + e.name); } };
+const q = (sel) => ['a','b','c','d'].filter(k => document.getElementById(k).matches(sel)).join(',');
+t('lang-pt', () => q(':lang(pt)'));
+t('lang-en', () => q(':lang(en)'));
+t('lang-en-GB', () => q(':lang(en-GB)'));
+t('lang-fr', () => q(':lang(fr)'));
+t('lang-gb', () => q(':lang(gb)'));
+t('lang-EN', () => q(':lang(EN)'));
+t('doc-html', () => document.querySelectorAll('html').length);
+t('doc-star', () => document.querySelectorAll('*').length);
+t('scope-child-p', () => Array.from(document.getElementById('box').querySelectorAll(':scope > p')).map(e => e.id).join(','));
+t('scope-alone', () => Array.from(document.getElementById('box').querySelectorAll(':scope')).map(e => e.id).join(','));
+t('matches-scope', () => document.getElementById('a').matches(':scope'));
+t('bad-bogus', () => document.getElementById('box').querySelectorAll('p:bogus').length);
+t('bad-lang-str', () => document.getElementById('box').querySelectorAll('p:lang("en")').length);
+t('bad-nth', () => document.getElementById('box').querySelectorAll('p:nth-child(3 n)').length);
+t('empty-sel', () => document.getElementById('box').querySelectorAll(' ').length);
+t('sheet-lang', () => { const st = document.createElement('style'); document.head.appendChild(st);
+  try { st.sheet.insertRule('p:lang(fr){color:red}', 0); return st.sheet.cssRules[0].selectorText; } catch (e) { return 'INVALID'; } });
+t('sheet-bogus', () => { const st = document.createElement('style'); document.head.appendChild(st);
+  try { st.sheet.insertRule('p:bogus{color:red}', 0); return 'kept ' + st.sheet.cssRules.length; } catch (e) { return 'INVALID'; } });
+t('sheet-forgive', () => { const st = document.createElement('style'); document.head.appendChild(st);
+  try { st.sheet.insertRule('p:is(a, bogus!!){color:red}', 0); return st.sheet.cssRules[0].selectorText; } catch (e) { return 'INVALID'; } });
+t('sheet-strict-not', () => { const st = document.createElement('style'); document.head.appendChild(st);
+  try { st.sheet.insertRule('p:not(a, bogus!!){color:red}', 0); return 'kept ' + st.sheet.cssRules.length; } catch (e) { return 'INVALID'; } });
+t('sheet-is-empty', () => { const st = document.createElement('style'); document.head.appendChild(st);
+  try { st.sheet.insertRule('p:is(:bogus){color:red}', 0); return st.sheet.cssRules[0].selectorText; } catch (e) { return 'INVALID'; } });
+t('sheet-lang-echo', () => { const st = document.createElement('style'); document.head.appendChild(st);
+  try { st.sheet.insertRule('p:lang(EN_gb){color:red}', 0); return st.sheet.cssRules[0].selectorText; } catch (e) { return 'INVALID'; } });
+console.log(out.join('\n'));
+</script></body></html>

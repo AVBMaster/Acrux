@@ -536,9 +536,23 @@ public class CssSelectorParser
                     }
                     else
                     {
-                        selectorList = new List<CssSelector>();
                         var argText = CollectTokensUntilParen(stream);
-                        selectorList = ParseSelectorList(argText);
+                        // ':is()' and ':where()' take a *forgiving* list: a member the grammar
+                        // refuses is dropped and the rest of the list stays, so 'p:is(a, bogus!!)'
+                        // keeps 'p:is(a)' and 'p:is(:bogus, :also-bogus)' keeps a rule with nothing
+                        // in the list (both measured). ':not()' and ':has()' are strict — one bad
+                        // member, or an empty list, takes the whole rule down.
+                        bool forgiving = pseudoType is CssPseudoType.Is or CssPseudoType.Where;
+                        selectorList = forgiving
+                            ? ParseForgivingSelectorList(argText)
+                            : pseudoType is CssPseudoType.Has
+                                ? ParseRelativeSelectorList(argText)
+                                : ParseSelectorList(argText);
+                        if (!forgiving && selectorList.Count == 0)
+                        {
+                            refused = true;
+                            return null;
+                        }
                     }
                 }
             else if (pseudoType is CssPseudoType.NthOfType or CssPseudoType.NthLastOfType
@@ -567,6 +581,24 @@ public class CssSelectorParser
         // in it is not a selector: the reference engine takes the whole rule down with it (measured,
         // through insertRule, where each of ':nth-child(5n+)', ':nth-child(+ 3)', ':nth-child(3 n)',
         // ':nth-child(2.5n)', ':nth-child()' and ':nth-child(2n+1 of (b))' is refused outright).
+        // ':lang()' takes one language range written as an identifier: no quotes, no comma list,
+        // no wildcard, nothing after it (each measured — 'lang("en")', 'lang(en, fr)' and
+        // 'lang(en.gb)' each take the rule down, while 'lang(en_gb)' and an escaped name are kept
+        // and printed with the escapes resolved).
+        if (pseudoType is CssPseudoType.Lang && !IsValidLanguageRange(argument))
+        {
+            refused = true;
+            return null;
+        }
+        // A pseudo-class the grammar has no name for is not a pseudo-class: the reference engine
+        // refuses the selector outright, which drops the rule in a sheet and throws out of
+        // querySelector (measured for ':bogus' and ':pseudo-element'). A pseudo-ELEMENT it does not
+        // know is left alone, because those are read by the paint pass rather than by the matcher.
+        if (pseudoType is CssPseudoType.Unknown && !isPseudoElement)
+        {
+            refused = true;
+            return null;
+        }
         if (pseudoType is CssPseudoType.NthChild or CssPseudoType.NthLastChild
             or CssPseudoType.NthOfType or CssPseudoType.NthLastOfType)
         {
@@ -588,10 +620,87 @@ public class CssSelectorParser
         {
             MatchType = isPseudoElement ? CssSelectorMatchType.PseudoElement : CssSelectorMatchType.PseudoClass,
             PseudoType = pseudoType,
+            PseudoText = name,
             Argument = argument,
             SelectorList = selectorList,
             NthOfPresent = nthOfPresent
         };
+    }
+
+    /// <summary>Parse the forgiving selector list of ':is()' and ':where()' (CSS Selectors 4 §6.8).
+    /// Each comma-separated member is read on its own and the ones the grammar refuses are left out,
+    /// which is the opposite of a list a sheet is matched from — there a bad member is a bad rule.</summary>
+    public static List<CssSelector> ParseForgivingSelectorList(string selectorText)
+    {
+        var result = new List<CssSelector>();
+        foreach (var part in SplitTopLevelCommas(selectorText))
+        {
+            if (string.IsNullOrWhiteSpace(part)) continue;
+            var parsed = ParseSelectorList(part);
+            if (parsed.Count > 0) result.AddRange(parsed);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Parse the list of a <c>:has()</c>, whose members may be <i>relative</i> selectors: a member
+    /// that opens with <c>&gt;</c>, <c>+</c> or <c>~</c> says where the element it names sits next to
+    /// the subject rather than merely that it is below it (CSS Selectors 4 §6.8.1, and measured —
+    /// <c>p:has(&gt; a)</c> is a rule the reference engine keeps). The combinator is carried on the
+    /// head of the parsed chain, which is where the matcher looks for it.
+    /// </summary>
+    public static List<CssSelector> ParseRelativeSelectorList(string selectorText)
+    {
+        var result = new List<CssSelector>();
+        foreach (var part in SplitTopLevelCommas(selectorText))
+        {
+            var text = part.Trim();
+            CssSelectorRelation relation = CssSelectorRelation.SubSelector;
+            while (text.Length > 0)
+            {
+                char first = text[0];
+                if (first == '>') relation = CssSelectorRelation.RelativeChild;
+                else if (first == '+') relation = CssSelectorRelation.RelativeDirectAdjacent;
+                else if (first == '~') relation = CssSelectorRelation.RelativeIndirectAdjacent;
+                else break;
+                text = text[1..].TrimStart();
+            }
+            if (text.Length == 0) return new List<CssSelector>();
+            var parsed = ParseSelectorList(text);
+            if (parsed.Count == 0) return new List<CssSelector>();
+            if (relation != CssSelectorRelation.SubSelector)
+                parsed[0].Relation = relation;
+            result.AddRange(parsed);
+        }
+        return result;
+    }
+
+    /// <summary>The text split at commas that are not inside a parenthesis, a bracket or a string.</summary>
+    private static List<string> SplitTopLevelCommas(string text)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = 0;
+        char quote = '\0';
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (quote != '\0')
+            {
+                if (c == '\\' && i + 1 < text.Length) i++;
+                else if (c == quote) quote = '\0';
+                continue;
+            }
+            if (c is '"' or '\'') { quote = c; continue; }
+            if (c is '(' or '[') depth++;
+            else if (c is ')' or ']') depth = Math.Max(0, depth - 1);
+            else if (c == ',' && depth == 0)
+            {
+                parts.Add(text[start..i]);
+                start = i + 1;
+            }
+        }
+        parts.Add(text[start..]);
+        return parts;
     }
 
     /// <summary>Where the 'of' of an ':nth-child(An+B of S)' begins in the argument, or -1 when the
@@ -949,6 +1058,8 @@ public class CssSelectorParser
         ("indeterminate", CssPseudoType.Indeterminate),
         ("invalid", CssPseudoType.Invalid),
         ("is", CssPseudoType.Is),
+        ("lang", CssPseudoType.Lang),
+        ("-webkit-any", CssPseudoType.Is),
         ("last-child", CssPseudoType.LastChild),
         ("last-of-type", CssPseudoType.LastOfType),
         ("left", CssPseudoType.Left),
@@ -1025,13 +1136,34 @@ public class CssSelectorParser
     };
 
     private static readonly Dictionary<string, CssPseudoType> PseudoClassByName =
-        PseudoClasses.ToDictionary(e => e.Name, e => e.Type, StringComparer.OrdinalIgnoreCase);
+        ByName(PseudoClasses);
     private static readonly Dictionary<string, CssPseudoType> PseudoElementByName =
-        PseudoElements.ToDictionary(e => e.Name, e => e.Type, StringComparer.OrdinalIgnoreCase);
+        ByName(PseudoElements);
+    // The reverse direction is built first-name-wins, because a type can answer to more than one
+    // spelling ('is' and its legacy '-webkit-any'), and the name it prints is the first one — the
+    // alias stays an alias. A dictionary that refused a repeated key would take the parser's type
+    // initializer down with it, and every sheet parse with it.
     private static readonly Dictionary<CssPseudoType, string> PseudoClassNameByType =
-        PseudoClasses.ToDictionary(e => e.Type, e => e.Name);
+        ByType(PseudoClasses);
     private static readonly Dictionary<CssPseudoType, string> PseudoElementNameByType =
-        PseudoElements.ToDictionary(e => e.Type, e => e.Name);
+        ByType(PseudoElements);
+
+    private static Dictionary<string, CssPseudoType> ByName(
+        (string Name, CssPseudoType Type)[] entries)
+    {
+        var map = new Dictionary<string, CssPseudoType>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in entries) map[entry.Name] = entry.Type;
+        return map;
+    }
+
+    private static Dictionary<CssPseudoType, string> ByType(
+        (string Name, CssPseudoType Type)[] entries)
+    {
+        var map = new Dictionary<CssPseudoType, string>();
+        foreach (var entry in entries)
+            if (!map.ContainsKey(entry.Type)) map[entry.Type] = entry.Name;
+        return map;
+    }
 
     /// <summary>The name a pseudo-class or pseudo-element type is written with on the way out. A type
     /// the grammar has no name for — an engine-internal one — keeps the old answer, which is its
@@ -1041,6 +1173,25 @@ public class CssSelectorParser
         var table = isPseudoElement ? PseudoElementNameByType : PseudoClassNameByType;
         return table.TryGetValue(type, out var name)
             ? name : type.ToString().ToLowerInvariant();
+    }
+
+    /// <summary>Whether a <c>:lang()</c> argument is one language range: a non-empty run of
+    /// identifier characters and nothing else. The tokenizer has already resolved any escape, so
+    /// <c>e\6e</c> arrives here as <c>en</c> and reads as the name it means (measured).</summary>
+    private static bool IsValidLanguageRange(string? argument)
+    {
+        var text = argument?.Trim();
+        if (string.IsNullOrEmpty(text)) return false;
+        for (int i = 0; i < text!.Length; i++)
+        {
+            char c = text[i];
+            // A dot is the first thing the test refuses, and the one that says the argument is read
+            // as a name rather than as a selector: 'lang(en.gb)' is refused (measured) while
+            // 'lang(en_gb)' and 'lang(é)' are kept.
+            if (char.IsLetterOrDigit(c) || c is '-' or '_' || c > 0x7F) continue;
+            return false;
+        }
+        return true;
     }
 
     /// <summary>The argument of an <c>An+B</c> pseudo-class in the one spelling the engine keeps: the

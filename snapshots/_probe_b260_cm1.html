@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><div id="d"></div>
+<script>
+const cases = [
+ ['color-mix(in srgb, RED 50%, blue)', 'color-mix(in srgb, red, blue)'],
+ ['color-mix(in srgb, red 30%, blue)', 'color-mix(in srgb, red 30%, blue)'],
+ ['color-mix(in srgb, red, blue)', 'color-mix(in srgb, red, blue)'],
+ ['color-mix(in oklab, red 100%, blue 0%)', 'color-mix(red 100%, blue)'],
+ ['color-mix(in oklab, red 40%, blue 60%)', 'color-mix(red 40%, blue)'],
+ ['color-mix(in srgb, red 25%, blue 75%)', 'color-mix(in srgb, red 25%, blue)'],
+ ['color-mix(in srgb, red 50%, blue 50%)', 'color-mix(in srgb, red, blue)'],
+ ['color-mix(in lab, red, blue)', 'color-mix(in lab, red, blue)'],
+ ['color-mix(in hsl, hsl(0 100% 50%), blue)', 'color-mix(in hsl, rgb(255, 0, 0), blue)'],
+ ['color-mix(in srgb, color(srgb 1 0 0) 40%, BLUE 60%)', 'color-mix(in srgb, color(srgb 1 0 0) 40%, blue)'],
+];
+const out = [];
+for (const c of cases) {
+  const d = document.createElement('div');
+  d.style.setProperty('color', c[0]);
+  const got = d.style.getPropertyValue('color');
+  out.push((got === c[1] ? 'ok   ' : 'FAIL ') + c[0] + ' => [' + got + '] want [' + c[1] + ']');
+}
+console.log(out.join('\n'));
+</script></body></html>

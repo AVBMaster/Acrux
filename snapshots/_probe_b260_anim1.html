@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><div id="d"></div>
+<script>
+const cases = [
+ ['3s 2s LINEAR BOGUS', '3s linear 2s 1 normal none running BOGUS'],
+ ['3s 2s linear', '3s linear 2s 1 normal none running none'],
+ ['linear 3s', '3s linear 0s 1 normal none running none'],
+ ['3s', '3s ease 0s 1 normal none running none'],
+ ['none', 'auto ease 0s 1 normal none running none'],
+ ['3s infinite', '3s ease 0s infinite normal none running none'],
+ ['slide 3s ease-in-out 2s 3 reverse both paused', '3s ease-in-out 2s 3 reverse both paused slide'],
+ ['ease', 'auto ease 0s 1 normal none running none'],
+ ['slide 1s, fade 2s', '1s ease 0s 1 normal none running slide, 2s ease 0s 1 normal none running fade'],
+ ['1s 1s', '1s ease 1s 1 normal none running none'],
+ ['infinite', 'auto ease 0s infinite normal none running none'],
+ ['normal', 'auto ease 0s 1 normal none running none'],
+ ['none none', 'auto ease 0s 1 normal none running none'],
+ ['auto 1s slide', 'auto ease 1s 1 normal none running slide'],
+ ['f 1s none', '1s ease 0s 1 normal none running f'],
+ ['500ms ease-in 250ms 2 alternate-reverse forwards paused x', '500ms ease-in 250ms 2 alternate-reverse forwards paused x'],
+];
+const out = [];
+for (const c of cases) {
+  const d = document.createElement('div');
+  d.style.setProperty('animation', c[0]);
+  const got = d.style.getPropertyValue('animation');
+  out.push((got === c[1] ? 'ok   ' : 'FAIL ') + '<' + c[0] + '> => [' + got + ']' + (got === c[1] ? '' : ' want [' + c[1] + ']'));
+}
+console.log(out.join('\n'));
+</script></body></html>

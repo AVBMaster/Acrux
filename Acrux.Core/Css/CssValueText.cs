@@ -37,6 +37,13 @@ public static class CssValueText
         if (string.IsNullOrEmpty(value)) return value ?? string.Empty;
         if (value!.IndexOf("var(", StringComparison.OrdinalIgnoreCase) >= 0) return value;
 
+        // The 'animation' shorthand prints all eight of its parts in their canonical order, written
+        // or not, so the reorder happens before anything else is folded and the parts it puts in are
+        // folded like any other text (measured: '3s 2s LINEAR BOGUS' reads back
+        // '3s linear 2s 1 normal none running BOGUS').
+        if (property != null && property.Equals("animation", StringComparison.OrdinalIgnoreCase))
+            value = CanonicalAnimationShorthand(value);
+
         // '-webkit-mask-box-image-slice' prints its numbers ahead of its 'fill' flag, whichever end
         // of the list the author put the flag on: 'fill 3' reads back as '3 fill' (measured).
         if (property != null
@@ -567,8 +574,100 @@ public static class CssValueText
         if (!IsBareIdentifier(name)) return word;
         foreach (var blocked in OpaqueArgumentFunctions)
             if (name.Equals(blocked, StringComparison.OrdinalIgnoreCase)) return word;
-        return name.ToLowerInvariant() + "(" + fold(word[(open + 1)..^1]) + ")";
+        var lowered = name.ToLowerInvariant();
+        var inner = fold(word[(open + 1)..^1]);
+        if (lowered == "color-mix") inner = CanonicalColorMix(inner);
+        return lowered + "(" + inner + ")";
     }
+
+    /// <summary>
+    /// An <c>animation</c> value in the order the engine prints it: duration, timing function,
+    /// delay, iteration count, direction, fill mode, play state, name — every part present, the ones
+    /// the page left out standing in with the initial the shorthand prints (a duration of
+    /// <c>auto</c>, which is not what the longhand starts at). A value that is one of the CSS-wide
+    /// keywords is left exactly as it is, because there is no list of parts in it to order.
+    /// </summary>
+    private static string CanonicalAnimationShorthand(string value)
+    {
+        var text = value.Trim();
+        if (text.Length == 0
+            || text.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("initial", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("unset", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("revert", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("revert-layer", StringComparison.OrdinalIgnoreCase))
+            return value;
+
+        var layers = new List<string>();
+        foreach (var part in ShorthandExpander.ClassifyAnimationEntries(text))
+        {
+            layers.Add(string.Join(" ", new[]
+            {
+                part[0].Length > 0 ? part[0] : "auto",
+                part[1].Length > 0 ? part[1] : "ease",
+                part[2].Length > 0 ? part[2] : "0s",
+                part[3].Length > 0 ? part[3] : "1",
+                part[4].Length > 0 ? part[4] : "normal",
+                part[5].Length > 0 ? part[5] : "none",
+                part[6].Length > 0 ? part[6] : "running",
+                part[7].Length > 0 ? part[7] : "none",
+            }));
+        }
+        return string.Join(", ", layers);
+    }
+
+    /// <summary>
+    /// Print a <c>color-mix()</c> with only what differs from the default (CSS Color 5 §5). The
+    /// interpolation space disappears when it is the initial <c>oklab</c>, and a component's
+    /// percentage disappears when it is the value the other component already implies — measured:
+    /// <c>in oklab, RED 50%, blue 50%</c> comes back as <c>red, blue</c>,
+    /// <c>in oklab, red 40%, blue 60%</c> as <c>red 40%, blue</c>, and
+    /// <c>in srgb, red 25%, blue 75%</c> as <c>in srgb, red 25%, blue</c>.
+    /// </summary>
+    private static string CanonicalColorMix(string inner)
+    {
+        var args = SplitTopLevelCommas(inner);
+        if (args.Count != 3) return inner;
+        var space = args[0].Trim();
+        if (space.Equals("in oklab", StringComparison.OrdinalIgnoreCase)) args[0] = string.Empty;
+
+        var first = TakePercentageOff(args[1], out float firstShare);
+        // The first component's own initial is half, and only that one goes unsaid.
+        if (firstShare >= 0 && Math.Abs(firstShare - 50f) < 0.0001f) firstShare = -1;
+        args[1] = first + (firstShare >= 0 ? " " + FormatShare(firstShare) : string.Empty);
+        var writtenFirst = firstShare >= 0 ? firstShare : 50f;
+        var second = TakePercentageOff(args[2], out float secondShare);
+        // The second share is implied by the first, and a written one that says the same thing
+        // adds nothing to print.
+        if (secondShare >= 0 && Math.Abs(secondShare - (100f - writtenFirst)) < 0.0001f) secondShare = -1;
+        args[2] = second + (secondShare >= 0 ? " " + FormatShare(secondShare) : string.Empty);
+
+        var kept = args.Where(a => a.Trim().Length > 0).Select(a => a.Trim()).ToList();
+        return string.Join(", ", kept);
+    }
+
+    /// <summary>The component with its trailing percentage removed, and the share it carried (-1
+    /// when there was none, or when it was not a plain percentage the printer can judge).</summary>
+    private static string TakePercentageOff(string component, out float share)
+    {
+        share = -1f;
+        var text = component.Trim();
+        if (text.Length == 0 || text[^1] != '%') return component;
+        var words = SplitTopLevelWords(text);
+        if (words.Count == 0) return component;
+        var last = words[^1];
+        if (last.Length < 2 || last[^1] != '%' ||
+            !float.TryParse(last[..^1], NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value))
+            return component;
+        share = value;
+        words.RemoveAt(words.Count - 1);
+        return string.Join(" ", words);
+    }
+
+    private static string FormatShare(float value) =>
+        Math.Abs(value - MathF.Round(value)) < 0.0001f
+            ? ((int)MathF.Round(value)).ToString(System.Globalization.CultureInfo.InvariantCulture) + "%"
+            : value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + "%";
 
     private static readonly string[] OpaqueArgumentFunctions =
         { "url", "src", "local", "format", "domain", "regexp", "prefix", "image-set" };

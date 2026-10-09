@@ -271,7 +271,12 @@ public class SelectorChecker
             CssPseudoType.PlaceholderShown => element.HasAttribute("placeholder") && string.IsNullOrEmpty(element.Value),
             CssPseudoType.ReadOnly => element.HasAttribute("readonly"),
             CssPseudoType.ReadWrite => !element.HasAttribute("readonly") && IsFormLike(element),
-            CssPseudoType.Scope => true,
+            // ':scope' is the element a query is anchored to, not a property of the element it is
+            // tried against: 'box.querySelectorAll(":scope > p")' asks about box's children while
+            // 'box.querySelectorAll(":scope")' finds nothing, because the anchor is never one of its
+            // own descendants (all measured).
+            CssPseudoType.Scope => ReferenceEquals(element, QueryScope),
+            CssPseudoType.Lang => MatchLang(selector.Argument, element),
             CssPseudoType.Defined => true,
             CssPseudoType.Target => false,
             CssPseudoType.Modal => false,
@@ -281,7 +286,7 @@ public class SelectorChecker
             CssPseudoType.Is => MatchSelectorList(selector.SelectorList, element, true),
             CssPseudoType.Where => MatchSelectorList(selector.SelectorList, element, true),
             CssPseudoType.Not => !MatchSelectorList(selector.SelectorList, element, true),
-            CssPseudoType.Has => MatchSelectorList(selector.SelectorList, element, false),
+            CssPseudoType.Has => MatchHas(selector.SelectorList, element),
             CssPseudoType.Host => element.ShadowRoot != null,
             CssPseudoType.HostContext => element.ShadowRoot != null,
             CssPseudoType.Slotted => element.AssignedSlot != null,
@@ -297,7 +302,10 @@ public class SelectorChecker
             CssPseudoType.FileSelectorButton => false,
             CssPseudoType.SpellingError => false,
             CssPseudoType.GrammarError => false,
-            _ => true
+            // A pseudo-class the engine has no reading for matches nothing. It used to answer 'true',
+            // which made every unknown ':xyz' a universal selector (measured: ':lang(en)' styled the
+            // whole document before ':lang' was known here).
+            _ => false
         };
     }
 
@@ -346,6 +354,53 @@ public class SelectorChecker
         "INPUT" or "TEXTAREA" or "SELECT" or "BUTTON" or "OPTION" or "OPTGROUP" => true,
         _ => false
     };
+
+    /// <summary>The element a running query is anchored to, for ':scope'. The matcher is re-entered
+    /// by nested lists (':is()', ':has()'), so a query that sets it hands the previous anchor back
+    /// when it finishes.</summary>
+    [ThreadStatic] private static Element? s_scope;
+
+    /// <summary>Run |match| with |scope| as the ':scope' anchor, restoring whatever was there before.</summary>
+    public static T WithScope<T>(Element? scope, Func<T> match)
+    {
+        var previous = s_scope;
+        s_scope = scope;
+        try { return match(); }
+        finally { s_scope = previous; }
+    }
+
+    private static Element? QueryScope => s_scope;
+
+    /// <summary>
+    /// <c>:lang(&lt;language-range&gt;)</c> (CSS Selectors 4 §6.7, HTML's element language). The
+    /// element's language is its own non-empty 'lang', else the nearest ancestor's, else the
+    /// document's; a range then matches when it is the whole tag or a leading subtag sequence —
+    /// 'en' reaches 'en-GB', 'gb' reaches nothing, and the test ignores case (all measured).
+    /// </summary>
+    private static bool MatchLang(string? range, Element element)
+    {
+        if (string.IsNullOrEmpty(range)) return false;
+        var language = LanguageOf(element);
+        if (language == null) return false;
+        return language.Equals(range, StringComparison.OrdinalIgnoreCase)
+            || language.StartsWith(range + "-", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The language declared for the element, following HTML: the nearest 'lang' attribute
+    /// that is not empty, and failing that the one on the root — which is what makes a child of
+    /// '<html lang="pt-BR">' answer ':lang(pt)' while a page that declares nothing gives its
+    /// elements no language at all (measured). An empty 'lang' stops the search rather than
+    /// inheriting past it.</summary>
+    private static string? LanguageOf(Element element)
+    {
+        for (Node? node = element; node is not null; node = node.Parent)
+        {
+            if (node is not Element el || !el.HasAttribute("lang")) continue;
+            var declared = el.GetAttribute("lang");
+            return string.IsNullOrEmpty(declared) ? null : declared;
+        }
+        return element.OwnerDocument?.DocumentElement?.GetAttribute("lang");
+    }
 
     private static bool MatchNth(CssSelector selector, Element element, bool fromLast)
     {
@@ -494,9 +549,50 @@ public class SelectorChecker
         return (n - b) / a >= 0;
     }
 
+    /// <summary>
+    /// <c>:has(S)</c> (CSS Selectors 4 §6.8.1): a member that was written relative looks in the
+    /// place its combinator names — <c>&gt;</c> the children, <c>+</c> the element right after it,
+    /// <c>~</c> any element after it — while a plain member searches every descendant.
+    /// </summary>
+    private static bool MatchHas(List<CssSelector>? list, Element element)
+    {
+        if (list == null || list.Count == 0) return false;
+        foreach (var sel in list)
+        {
+            bool hit = sel.Relation switch
+            {
+                CssSelectorRelation.RelativeChild =>
+                    element.Children.OfType<Element>().Any(child => MatchChain(sel, child)),
+                CssSelectorRelation.RelativeDirectAdjacent =>
+                    NextElementSibling(element) is Element next && MatchChain(sel, next),
+                CssSelectorRelation.RelativeIndirectAdjacent =>
+                    FollowingSiblings(element).Any(sibling => MatchChain(sel, sibling)),
+                _ => MatchHasDescendant(sel, element),
+            };
+            if (hit) return true;
+        }
+        return false;
+    }
+
+    private static Element? NextElementSibling(Element element)
+    {
+        for (var node = element.NextSibling; node != null; node = node.NextSibling)
+            if (node is Element el) return el;
+        return null;
+    }
+
+    private static IEnumerable<Element> FollowingSiblings(Element element)
+    {
+        for (var node = element.NextSibling; node != null; node = node.NextSibling)
+            if (node is Element el) yield return el;
+    }
+
     private static bool MatchSelectorList(List<CssSelector>? list, Element element, bool matchSelf)
     {
-        if (list == null || list.Count == 0) return true;
+        // An empty list matches nothing — that is what ':is()' with a list whose every member was
+        // refused means. ':not()' and ':has()' never reach it with an empty list, because the parser
+        // refuses those outright (measured).
+        if (list == null || list.Count == 0) return false;
         foreach (var sel in list)
         {
             if (matchSelf)

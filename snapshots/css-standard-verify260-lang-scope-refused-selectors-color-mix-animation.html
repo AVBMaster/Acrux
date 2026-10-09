@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 260 — :lang and :scope, what a refused selector costs, and the two shorthands that print more than they were given</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#markers { margin: 4px 0 0 4px; font: 16px/20px "Segoe UI", sans-serif; }
+#markers .lane { position: relative; width: 260px; height: 24px; background: rgb(238,238,238); margin-bottom: 4px; }
+#markers .run { position: absolute; left: 0; top: 2px; width: 20px; height: 20px; }
+#m1 { animation: slide-right 1s linear 0s 1 normal none running; }
+#m2 { animation: 500ms ease-in-out 0s 1 normal none running fade-box; }
+#m3 { animation: fade-box linear 800ms 2 alternate both paused; }
+#stage { position: absolute; left: -4000px; top: 0; }
+@keyframes slide-right { from { left: 0; } to { left: 200px; } }
+@keyframes fade-box { from { background: rgb(255,0,0); } to { background: rgb(0,0,255); } }
+</style>
+</head>
+<body>
+<h4>b260 — ':lang()' grammar and matching (with the language a document declares), ':scope' as the anchor of a query, what a selector the grammar refuses costs (a thrown SyntaxError in a query, a dropped rule in a sheet, and a forgiving list inside ':is()' and ':where()'), the name a pseudo reads back with, the two shorthands that print parts the page never wrote ('color-mix()' with its implied percentages and 'animation' with all eight components), and the document query that includes the root element. Every want is what the reference engine answered for the same document. The three animated markers above are frozen at t=500ms by the snapshot run, so the 'animation' expansion is guarded by pixels as well as by values.</h4>
+<div id="markers">
+  <div class="lane"><div class="run" id="m1"></div></div>
+  <div class="lane"><div class="run" id="m2"></div></div>
+  <div class="lane"><div class="run" id="m3"></div></div>
+</div>
+<pre id="report"></pre>
+<div id="stage"></div>
+<script>
+const out = [];
+let failed = 0;
+function row(name, got, want) {
+  const ok = String(got) === String(want);
+  if (!ok) failed++;
+  out.push((ok ? 'ok   ' : 'FAIL ') + name.padEnd(34) + ' got=' + got + '   want=' + want);
+}
+function check(name, fn, want) {
+  let got;
+  try { got = typeof fn === 'function' ? fn() : fn; } catch (e) { got = 'ERR[' + e.name + ']'; }
+  row(name, got, want);
+}
+const stage = document.getElementById('stage');
+function html(markup) { stage.innerHTML = markup; }
+function byId(id) { return stage.querySelector('#' + id); }
+function q(sel) { return Array.from(document.querySelectorAll(sel)).map(e => e.id).join(','); }
+function keepRule(selectorText) {
+  const st = document.createElement('style');
+  document.head.appendChild(st);
+  try {
+    st.sheet.insertRule(selectorText + '{color:red}', 0);
+    const echo = st.sheet.cssRules[0].selectorText;
+    return echo;
+  } catch (e) { return 'INVALID'; }
+  finally { st.remove(); }
+}
+function queryThrows(selectorText) {
+  try { document.querySelectorAll(selectorText); return 'no-throw'; }
+  catch (e) { return 'throws ' + e.name; }
+}
+
+// ---- §1 :lang() — what it takes, and what it matches ----------------------
+// The test document declares '<html lang="pt-BR">', so a child with no 'lang' of its own is
+// Portuguese and everything else answers for itself.
+const LANG_MARKUP = '<div id="box"><p id=la lang="en">a</p><p id=lb lang="en-GB">b</p>'
+  + '<p id=lc>c</p><p id=ld lang="fr-FR">d</p><p id=le lang="">e</p>'
+  + '<p id=lf lang="zh-Hans-CN">f</p></div>';
+function langMatches(sel) {
+  html(LANG_MARKUP);
+  return ['la','lb','lc','ld','le','lf']
+    .filter(k => byId(k).matches(sel)).join(',');
+}
+check('lang-en', () => langMatches(':lang(en)'), 'la,lb');
+check('lang-en-GB', () => langMatches(':lang(en-GB)'), 'lb');
+check('lang-pt', () => langMatches(':lang(pt)'), 'lc');
+check('lang-pt-BR', () => langMatches(':lang(pt-BR)'), 'lc');
+check('lang-fr', () => langMatches(':lang(fr)'), 'ld');
+check('lang-gb-subtag-alone', () => langMatches(':lang(gb)'), '');
+check('lang-zh-hans', () => langMatches(':lang(zh-Hans)'), 'lf');
+check('lang-ZH-hans-cn-case', () => langMatches(':lang(ZH-HANS-CN)'), 'lf');
+check('lang-star-matches-nothing', () => queryThrows(':lang(*)'), 'throws SyntaxError');
+
+// the grammar, read through insertRule (each answer measured)
+const langGrammar = [
+  ['p:lang(en)', 'p:lang(en)'],
+  ['p:lang(en-GB)', 'p:lang(en-GB)'],
+  ['p:lang(en_gb)', 'p:lang(en_gb)'],
+  ['p:lang(EN_gb)', 'p:lang(EN_gb)'],
+  ['p:lang(x-fr)', 'p:lang(x-fr)'],
+  ['p:lang(--)', 'p:lang(--)'],
+  ['p:lang(e\\6e)', 'p:lang(en)'],
+  ['p:lang(en gb)', 'INVALID'],
+  ['p:lang(en, fr)', 'INVALID'],
+  ['p:lang("en")', 'INVALID'],
+  ['p:lang("en-GB")', 'INVALID'],
+  ['p:lang(en.gb)', 'INVALID'],
+  ['p:lang()', 'INVALID'],
+  ['p:lang(en, "fr")', 'INVALID'],
+];
+for (const c of langGrammar) { let g; try { g = keepRule(c[0]); } catch (e) { g = 'ERR[' + e.name + ']'; } row('lang ' + c[0].slice(2), g, c[1]); }
+
+// ---- §2 :scope is the anchor of the query --------------------------------
+check('scope-child-p', () => Array.from(document.getElementById('markers')
+  .querySelectorAll(':scope > .lane')).map(e => e.className).join('|'), 'lane|lane|lane');
+check('scope-desc-p', () => Array.from(document.getElementById('markers')
+  .querySelectorAll(':scope .run')).length, '3');
+check('scope-alone', () => document.getElementById('markers').querySelectorAll(':scope').length, '0');
+check('matches-scope', () => document.getElementById('m1').matches(':scope'), 'true');
+check('doc-scope', () => document.querySelectorAll(':scope').length, '1');
+check('doc-html-count', () => document.querySelectorAll('html').length, '1');
+check('doc-star-includes-root', () => {
+  const all = document.querySelectorAll('*');
+  return all[0].tagName + ',' + document.documentElement.matches('*');
+}, 'HTML,true');
+check('element-excludes-itself', () => {
+  const m = document.getElementById('m1');
+  return m.querySelectorAll('div').length + ',' + m.querySelectorAll('#m1').length;
+}, '0,0');
+check('closest-scope-child', () => {
+  const m = document.getElementById('m1');
+  return m.closest(':scope') !== null;
+}, 'true');
+
+// ---- §3 a selector the grammar refuses ----------------------------------
+check('throw-nth-space', () => queryThrows('p:nth-child(3 n)'), 'throws SyntaxError');
+check('throw-nth-sign', () => queryThrows('p:nth-child(+ 3)'), 'throws SyntaxError');
+check('throw-bogus-pseudo', () => queryThrows('p:bogus'), 'throws SyntaxError');
+check('throw-empty', () => queryThrows('  '), 'throws SyntaxError');
+check('throw-comma-bad', () => queryThrows('p, bogus!!'), 'throws SyntaxError');
+check('throw-matches', () => {
+  try { document.getElementById('m1').matches('p:not()'); return 'no-throw'; }
+  catch (e) { return 'throws ' + e.name; }
+}, 'throws SyntaxError');
+check('throw-closest', () => {
+  try { document.getElementById('m1').closest('p:has()'); return 'no-throw'; }
+  catch (e) { return 'throws ' + e.name; }
+}, 'throws SyntaxError');
+check('unknown-pseudo-matches-nothing', () => {
+  html('<p id=la>x</p>');
+  return byId('la').matches('p:unknown-pseudo');
+}, 'ERR[SyntaxError]');
+
+// the lists: ':is()' and ':where()' forgive, ':not()' and ':has()' do not
+const listRules = [
+  ['p:is(a, bogus!!)', 'p:is(a)'],
+  ['p:where(:bogus, a)', 'p:where(a)'],
+  ['p:is(:bogus, :also-bogus)', 'p:is()'],
+  ['p:is()', 'p:is()'],
+  ['p:where()', 'p:where()'],
+  ['p:not(a, bogus!!)', 'INVALID'],
+  ['p:has(:bogus)', 'INVALID'],
+  ['p:not()', 'INVALID'],
+  ['p:has()', 'INVALID'],
+  ['p:has(> a)', 'p:has(> a)'],
+  ['p:bogus', 'INVALID'],
+  ['p:Bogus', 'INVALID'],
+];
+for (const c of listRules) { let g; try { g = keepRule(c[0]); } catch (e) { g = 'ERR[' + e.name + ']'; } row('list ' + c[0].slice(2), g, c[1]); }
+check('is-empty-matches-nothing', () => {
+  html('<p id=la>x</p>');
+  return byId('la').matches('p:is()');
+}, 'false');
+
+// ---- §4 the name a pseudo reads back with --------------------------------
+const nameEcho = [
+  ['p:first-child', 'p:first-child'],
+  ['p:FIRST-CHILD', 'p:first-child'],
+  ['p:any-link', 'p:any-link'],
+  ['p:focus-visible', 'p:focus-visible'],
+  ['p:read-only', 'p:read-only'],
+  ['p:nth-last-of-type(2n+1)', 'p:nth-last-of-type(2n+1)'],
+  ['p:picture-in-picture', 'p:picture-in-picture'],
+  ['p::first-line', 'p::first-line'],
+  ['p::part(tab)', 'p::part(tab)'],
+  ['p:-webkit-any(a)', 'p:-webkit-any(a)'],
+];
+for (const c of nameEcho) { let g; try { g = keepRule(c[0]); } catch (e) { g = 'ERR[' + e.name + ']'; } row('name ' + c[0].slice(2), g, c[1]); }
+
+// ---- §5 color-mix() prints only what differs ----------------------------
+function spell(value) {
+  const d = document.createElement('div');
+  d.style.setProperty('color', value);
+  return d.style.getPropertyValue('color');
+}
+const mixes = [
+  ['color-mix(in srgb, RED 50%, blue)', 'color-mix(in srgb, red, blue)'],
+  ['color-mix(in srgb, red 30%, blue)', 'color-mix(in srgb, red 30%, blue)'],
+  ['color-mix(in srgb, red, blue)', 'color-mix(in srgb, red, blue)'],
+  ['color-mix(in oklab, red 100%, blue 0%)', 'color-mix(red 100%, blue)'],
+  ['color-mix(in oklab, red 40%, blue 60%)', 'color-mix(red 40%, blue)'],
+  ['color-mix(in srgb, red 25%, blue 75%)', 'color-mix(in srgb, red 25%, blue)'],
+  ['color-mix(in srgb, red 50%, blue 50%)', 'color-mix(in srgb, red, blue)'],
+  ['color-mix(in lab, red, blue)', 'color-mix(in lab, red, blue)'],
+  ['color-mix(in hsl, hsl(0 100% 50%), blue)', 'color-mix(in hsl, rgb(255, 0, 0), blue)'],
+  ['color-mix(in srgb, color(srgb 1 0 0) 40%, BLUE 60%)',
+    'color-mix(in srgb, color(srgb 1 0 0) 40%, blue)'],
+];
+for (const c of mixes) { let g; try { g = spell(c[0]); } catch (e) { g = 'ERR[' + e.name + ']'; } row('mix ' + c[0].slice(10, 34), g, c[1]); }
+
+// ---- §6 the animation shorthand prints all eight parts ------------------
+function spellAnimation(value) {
+  const d = document.createElement('div');
+  d.style.setProperty('animation', value);
+  return d.style.getPropertyValue('animation');
+}
+const anims = [
+  ['3s 2s LINEAR BOGUS', '3s linear 2s 1 normal none running BOGUS'],
+  ['3s 2s linear', '3s linear 2s 1 normal none running none'],
+  ['linear 3s', '3s linear 0s 1 normal none running none'],
+  ['3s', '3s ease 0s 1 normal none running none'],
+  ['none', 'auto ease 0s 1 normal none running none'],
+  ['3s infinite', '3s ease 0s infinite normal none running none'],
+  ['slide 3s ease-in-out 2s 3 reverse both paused',
+    '3s ease-in-out 2s 3 reverse both paused slide'],
+  ['ease', 'auto ease 0s 1 normal none running none'],
+  ['slide 1s, fade 2s',
+    '1s ease 0s 1 normal none running slide, 2s ease 0s 1 normal none running fade'],
+  ['1s 1s', '1s ease 1s 1 normal none running none'],
+  ['infinite', 'auto ease 0s infinite normal none running none'],
+  ['normal', 'auto ease 0s 1 normal none running none'],
+  ['none none', 'auto ease 0s 1 normal none running none'],
+  ['auto 1s slide', 'auto ease 1s 1 normal none running slide'],
+  ['f 1s none', '1s ease 0s 1 normal none running f'],
+  ['500ms ease-in 250ms 2 alternate-reverse forwards paused x',
+    '500ms ease-in 250ms 2 alternate-reverse forwards paused x'],
+];
+for (const c of anims) { let g; try { g = spellAnimation(c[0]); } catch (e) { g = 'ERR[' + e.name + ']'; } row('anim ' + c[0].slice(0, 22), g, c[1]); }
+// the longhands the same value writes
+check('anim-longhands-name-case', () => {
+  const d = document.createElement('div');
+  d.style.setProperty('animation', 'BOGUS 3s');
+  return d.style.getPropertyValue('animation-name') + '|' + d.style.getPropertyValue('animation-duration');
+}, 'BOGUS|3s');
+check('anim-order-from-sheet', () => {
+  const st = document.createElement('style');
+  document.head.appendChild(st);
+  st.sheet.insertRule('#animTarget { animation: 2s linear 1s 3 reverse both paused bob }', 0);
+  document.head.appendChild(st);
+  const d = document.createElement('div');
+  d.id = 'animTarget';
+  document.body.appendChild(d);
+  const cs = getComputedStyle(d);
+  const text = ['animation-duration', 'animation-timing-function', 'animation-delay',
+    'animation-iteration-count', 'animation-direction', 'animation-fill-mode',
+    'animation-play-state', 'animation-name']
+    .map(p => cs.getPropertyValue(p)).join('|');
+  d.remove();
+  return text;
+}, '2s|linear|1s|3|reverse|both|paused|bob');
+
+// ---- §7 the markers the page shows --------------------------------------
+// Their positions at t=500ms are the pixel baseline's job: m1 is half way along its 1s linear
+// slide, m2 mid-way through its 500ms fade, and m3 paused before it starts — so an 'animation'
+// value the expansion mis-reads shows up in the image, not only in these rows.
+check('marker-lanes', () => document.querySelectorAll('.lane').length, '3');
+
+const summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script>
+</body>
+</html>

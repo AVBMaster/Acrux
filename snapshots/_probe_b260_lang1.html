@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body>
+<div id="box"><p id=a lang="en">a</p><p id=b lang="en-GB">b</p><p id=c lang="fr-FR">c</p><p id=d>d</p></div>
+<script>
+const box = document.getElementById('box');
+const s = box.querySelector('#a');
+const out = [];
+const t = (label, fn) => { try { out.push(label + ' = ' + fn()); } catch (e) { out.push(label + ' THROW ' + e.name); } };
+const q = (sel) => ['a','b','c','d'].filter(k => document.getElementById(k).matches(sel)).join(',');
+t('lang(en)', () => q(':lang(en)'));
+t('lang(en-GB)', () => q(':lang(en-GB)'));
+t('lang(fr)', () => q(':lang(fr)'));
+t('lang(x)', () => q(':lang(x)'));
+t('scope-child-p', () => Array.from(box.querySelectorAll(':scope > p')).map(e => e.id).join(','));
+t('scope-alone', () => Array.from(box.querySelectorAll(':scope')).map(e => e.id).join(','));
+t('matches-scope', () => s.matches(':scope'));
+t('bad-nth', () => box.querySelectorAll('p:nth-child(3 n)').length);
+t('bad-matches', () => s.matches(':lang(*)'));
+t('empty-sel', () => box.querySelectorAll('').length);
+t('bad-closest', () => s.closest('p:nth-child(3 n)'));
+t('sheet-lang', () => { const st = document.createElement('style'); document.head.appendChild(st);
+  try { st.sheet.insertRule('p:lang(fr){color:red}', 0); return st.sheet.cssRules[0].selectorText; } catch (e) { return 'THROW'; } });
+console.log(out.join('\n'));
+</script></body></html>

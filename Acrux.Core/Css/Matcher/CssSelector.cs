@@ -45,7 +45,7 @@ public enum CssPseudoType
     Empty, Enabled, FirstChild, FirstOfType, FirstPage, Focus, FocusVisible, 
     FocusWithin, Fullscreen, Future, Has, Host, HostContext, Hover, 
     InRange, Indeterminate, Invalid, Is, LastChild, LastOfType, Left, 
-    Link, Modal, MozAny, MozFocusRing, MozUIValid, MozUIInvalid, 
+    Lang, Link, Modal, MozAny, MozFocusRing, MozUIValid, MozUIInvalid, 
     NoOpen, Not, NthChild, NthLastChild, NthLastOfType, NthOfType, 
     OnlyChild, OnlyOfType, Open, Optional, OutOfRange, Past, 
     Paused, PictureInPicture, PlaceholderShown, Playing, PopoverOpen, 
@@ -127,6 +127,11 @@ public class CssSelector
 
     public string? Argument { get; set; }
     public List<CssSelector>? SelectorList { get; set; }
+
+    /// <summary>The name a pseudo-class or pseudo-element was written with, lower-cased. A selector
+    /// prints back the name the page used — a pseudo the engine does not model included, which is
+    /// why ':lang(fr)' reads 'lang(fr)' rather than the name of the type it settled to.</summary>
+    public string? PseudoText { get; set; }
 
     /// <summary>Whether an ':nth-child()' / ':nth-last-child()' argument wrote the 'of' keyword in
     /// front of its selector list. The list itself cannot carry that answer: a pattern with no 'of'
@@ -238,6 +243,22 @@ public class CssSelector
         }
     }
 
+    /// <summary>The name this pseudo carries on the way out: the spelling the page used when there
+    /// was one, and the name the grammar's table gives the type otherwise.</summary>
+    private string PrintedPseudoName =>
+        PseudoText ?? CssSelectorParser.PseudoTypeToName(PseudoType,
+            isPseudoElement: MatchType == CssSelectorMatchType.PseudoElement);
+
+    /// <summary>The bar a relative selector of ':has()' was written with, or nothing for a member
+    /// that names an ordinary descendant.</summary>
+    private static string RelationPrefix(CssSelectorRelation relation) => relation switch
+    {
+        CssSelectorRelation.RelativeChild => "> ",
+        CssSelectorRelation.RelativeDirectAdjacent => "+ ",
+        CssSelectorRelation.RelativeIndirectAdjacent => "~ ",
+        _ => "",
+    };
+
     public override string ToString() => SimpleText(hasCompanions: false);
 
     /// <summary>The text this one simple selector prints, told whether the compound it sits in says
@@ -249,14 +270,17 @@ public class CssSelector
     /// <c>[*|a]</c> and <c>[q|a]</c> read as written.</summary>
     public string SimpleText(bool hasCompanions)
     {
-        if (MatchType == CssSelectorMatchType.PseudoClass && PseudoType == CssPseudoType.Not && SelectorList != null)
-            return $":not({string.Join(", ", SelectorList.Select(s => s.ToComplexText()))})";
-        if (MatchType == CssSelectorMatchType.PseudoClass && PseudoType == CssPseudoType.Is && SelectorList != null)
-            return $":is({string.Join(", ", SelectorList.Select(s => s.ToComplexText()))})";
-        if (MatchType == CssSelectorMatchType.PseudoClass && PseudoType == CssPseudoType.Where && SelectorList != null)
-            return $":where({string.Join(", ", SelectorList.Select(s => s.ToComplexText()))})";
+        // The four list pseudos print with the name the page wrote, which for ':is()' may well be
+        // its legacy alias ':-webkit-any' — the reference engine keeps the alias in the echo even
+        // though it reads it as ':is()' (measured).
+        if (MatchType == CssSelectorMatchType.PseudoClass && SelectorList != null
+            && PseudoType is CssPseudoType.Not or CssPseudoType.Is or CssPseudoType.Where)
+            return $":{PrintedPseudoName}({string.Join(", ", SelectorList.Select(s => s.ToComplexText()))})";
         if (MatchType == CssSelectorMatchType.PseudoClass && PseudoType == CssPseudoType.Has && SelectorList != null)
-            return $":has({string.Join(", ", SelectorList.Select(s => s.ToComplexText()))})";
+            // A member that was written relative keeps its combinator on the way out —
+            // 'p:has(> a)' reads back with the bar (measured), and the parser put the relation on
+            // the head of the chain for exactly this moment.
+            return $":{PrintedPseudoName}({string.Join(", ", SelectorList.Select(s => RelationPrefix(s.Relation) + s.ToComplexText()))})";
         if (MatchType == CssSelectorMatchType.Id && Value != null)
             return $"#{Value}";
         if (MatchType == CssSelectorMatchType.Class && Value != null)
@@ -277,9 +301,7 @@ public class CssSelector
         }
         if (MatchType == CssSelectorMatchType.PseudoClass)
         {
-            // The name is the one the grammar reads, not the enum's spelling: 'FirstChild' has to
-            // come back out as 'first-child' (measured: the reference engine prints the hyphen).
-            var name = CssSelectorParser.PseudoTypeToName(PseudoType, isPseudoElement: false);
+            var name = PrintedPseudoName;
             // 'An+B of S' keeps its keyword on the way out, with the list printed the way any other
             // selector list prints (measured: 'nth-child(even of b)' reads 'nth-child(2n of b)').
             if (NthOfPresent && SelectorList != null)
@@ -288,7 +310,7 @@ public class CssSelector
         }
         if (MatchType == CssSelectorMatchType.PseudoElement)
         {
-            var name = $"::{CssSelectorParser.PseudoTypeToName(PseudoType, isPseudoElement: true)}";
+            var name = "::" + PrintedPseudoName;
             // '::part(tab)' and '::slotted(li)' say something a bare name does not.
             return Argument != null ? $"{name}({Argument})" : name;
         }

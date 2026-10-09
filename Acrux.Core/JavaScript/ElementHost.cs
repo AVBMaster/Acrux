@@ -247,24 +247,30 @@ public class ElementHost
 
     public object? closest(string selector)
     {
-        var el = _element;
-        while (el != null)
-        {
-            if (MatchesSelector(el, selector))
+        CssSelectorMatcher.ParseForQuery(selector);
+        for (var el = _element; el != null; el = el.ParentElement)
+            if (CssSelectorMatcher.Matches(selector, el, _element))
                 return WrapWithCache(el);
-            el = el.ParentElement;
-        }
         return null;
     }
 
     public object? querySelector(string selector)
     {
-        var result = QuerySelectorAllInternal(_element, selector).FirstOrDefault();
+        CssSelectorMatcher.ParseForQuery(selector);
+        var result = CssSelectorMatcher.FirstDescendant(_element, selector, _element);
         return result != null ? WrapWithCache(result) : null;
     }
 
-    public JsNodeList querySelectorAll(string selector) =>
-        new JsNodeList(_element, Engine, root => QuerySelectorAllInternal(root, selector));
+    public JsNodeList querySelectorAll(string selector)
+    {
+        CssSelectorMatcher.ParseForQuery(selector);
+        return new JsNodeList(_element, Engine, root =>
+        {
+            var list = new List<Element>();
+            CssSelectorMatcher.CollectDescendants(root, selector, list, root);
+            return list;
+        });
+    }
 
     public JsHtmlCollection getElementsByTagName(string tagName) =>
         new JsHtmlCollection(_element, Engine, tagName);
@@ -915,20 +921,6 @@ public class ElementHost
         }
     }
 
-    // An element's own query methods have to answer the way the document's do, which means the
-    // engine's real selector matcher rather than a short list of shapes: 'a.k' and
-    // 'b:nth-of-type(1)' are queries an element's querySelectorAll used to return nothing for,
-    // while the same string through document.querySelectorAll found the element.
-    private static bool MatchesSelector(Element el, string selector) =>
-        Acrux.Core.Css.CssSelectorMatcher.Matches(selector, el);
-
-    private static List<Element> QuerySelectorAllInternal(Element root, string selector)
-    {
-        var result = new List<Element>();
-        Acrux.Core.Css.CssSelectorMatcher.CollectDescendants(root, selector, result);
-        return result;
-    }
-
     private static List<Element> GetElementsByTagNameInternal(Element root, string tagName)
     {
         tagName = tagName.ToUpperInvariant();
@@ -1035,7 +1027,10 @@ public class ElementHost
 
     public bool matches(string selector)
     {
-        return CssSelectorMatcher.Matches(selector, _element);
+        // ':scope' inside an element's own query is that element, so 'el.matches(":scope")' is true
+        // while 'el.querySelectorAll(":scope")' finds nothing (measured).
+        CssSelectorMatcher.ParseForQuery(selector);
+        return CssSelectorMatcher.Matches(selector, _element, _element);
     }
 
     public void insertAdjacentHTML(string position, string text)

@@ -1298,9 +1298,7 @@ public static class ShorthandExpander
     /// </summary>
     private static void ExpandAnimation(Dictionary<string, string> result, string value)
     {
-        var entries = SplitTopLevel(value, ',');
-        if (entries.Count == 0) entries.Add("");
-
+        var entries = ClassifyAnimationEntries(value);
         var names = new List<string>(entries.Count);
         var durations = new List<string>(entries.Count);
         var easings = new List<string>(entries.Count);
@@ -1309,50 +1307,16 @@ public static class ShorthandExpander
         var directions = new List<string>(entries.Count);
         var fills = new List<string>(entries.Count);
         var plays = new List<string>(entries.Count);
-
-        foreach (var entry in entries)
+        foreach (var part in entries)
         {
-            string name = "none", duration = "0s", easing = "ease", delay = "0s";
-            string iteration = "1", direction = "normal", fill = "none", play = "running";
-            bool haveTime = false;
-            bool nameSeen = false;
-
-            foreach (var token in SplitShorthand(entry))
-            {
-                var p = token.Trim().ToLowerInvariant();
-                if (p.Length == 0) continue;
-
-                if (IsTimeToken(p))
-                {
-                    if (!haveTime) { duration = p; haveTime = true; }
-                    else delay = p;
-                }
-                else if (IsEasingToken(p)) easing = p;
-                else if (p == "infinite" || IsNumberToken(p)) iteration = p;
-                else if (p is "normal" or "reverse" or "alternate" or "alternate-reverse") direction = p;
-                else if (p is "running" or "paused") play = p;
-                // 'none' is both a fill-mode and the initial animation-name, so it
-                // is resolved by position: it is the name until a name is present,
-                // and the fill-mode afterwards. `animation: f 1s none` therefore
-                // means name=f fill=none, while `animation: none` means no
-                // animation at all (CSS Animations 1 §2.11).
-                else if (p == "none" && !nameSeen) { name = "none"; nameSeen = true; }
-                else if (p is "none" or "forwards" or "backwards" or "both")
-                {
-                    fill = p;
-                    nameSeen = true;
-                }
-                else { name = p; nameSeen = true; }
-            }
-
-            names.Add(name);
-            durations.Add(duration);
-            easings.Add(easing);
-            delays.Add(delay);
-            iterations.Add(iteration);
-            directions.Add(direction);
-            fills.Add(fill);
-            plays.Add(play);
+            durations.Add(part[0].Length > 0 ? part[0] : "0s");
+            easings.Add(part[1].Length > 0 ? part[1] : "ease");
+            delays.Add(part[2].Length > 0 ? part[2] : "0s");
+            iterations.Add(part[3].Length > 0 ? part[3] : "1");
+            directions.Add(part[4].Length > 0 ? part[4] : "normal");
+            fills.Add(part[5].Length > 0 ? part[5] : "none");
+            plays.Add(part[6].Length > 0 ? part[6] : "running");
+            names.Add(part[7].Length > 0 ? part[7] : "none");
         }
 
         result["animation-name"] = string.Join(", ", names);
@@ -1363,6 +1327,73 @@ public static class ShorthandExpander
         result["animation-direction"] = string.Join(", ", directions);
         result["animation-fill-mode"] = string.Join(", ", fills);
         result["animation-play-state"] = string.Join(", ", plays);
+    }
+
+    /// <summary>
+    /// The eight parts of every entry of an <c>animation</c> value, in the order the shorthand
+    /// prints them — duration, timing function, delay, iteration count, direction, fill mode,
+    /// play state, name — with an empty string where the page wrote nothing.
+    /// <para>
+    /// One classifier serves both readers: <see cref="ExpandAnimation"/> fills the gaps with the
+    /// longhand initials, while the specified-value printer fills them with the initials the
+    /// shorthand prints, which for the duration is <c>auto</c> and not <c>0s</c> (measured:
+    /// <c>animation: ease</c> reads back <c>auto ease 0s 1 normal none running none</c>). The name
+    /// keeps the case it was written with, because it is a custom identifier — <c>BOGUS</c> comes
+    /// back as <c>BOGUS</c> — while a keyword slot is lower-cased, which is how the engine reads it
+    /// either way.
+    /// </para>
+    /// <para>
+    /// The order inside one entry is free; the first <c>&lt;time&gt;</c> is the duration and the
+    /// second the delay, and a negative time is unambiguously a delay (a duration may not be
+    /// negative). <c>none</c> is both a fill mode and the initial name, so it is the name until a
+    /// name is present and the fill mode afterwards: <c>f 1s none</c> means name=f fill=none while
+    /// <c>none</c> alone means no animation at all (CSS Animations 1 §2.11).
+    /// </para>
+    /// </summary>
+    internal static List<string[]> ClassifyAnimationEntries(string value)
+    {
+        var entries = SplitTopLevel(value, ',');
+        if (entries.Count == 0) entries.Add("");
+        var parts = new List<string[]>(entries.Count);
+
+        foreach (var entry in entries)
+        {
+            // 0 duration, 1 easing, 2 delay, 3 iteration, 4 direction, 5 fill, 6 play, 7 name
+            var slot = new string[8];
+            for (int i = 0; i < slot.Length; i++) slot[i] = string.Empty;
+            bool haveTime = false;
+            bool nameSeen = false;
+
+            foreach (var token in SplitShorthand(entry))
+            {
+                var text = token.Trim();
+                var p = text.ToLowerInvariant();
+                if (p.Length == 0) continue;
+
+                if (IsTimeToken(p))
+                {
+                    if (!haveTime) { slot[0] = p; haveTime = true; }
+                    else slot[2] = p;
+                }
+                // 'auto' is a duration the page can write (CSS Animations 2 takes the initial value
+                // of 'animation-duration' out of hiding), and the reference engine reads it there —
+                // 'auto 1s slide' is duration auto, delay 1s, name slide (measured).
+                else if (p == "auto" && !haveTime) { slot[0] = p; haveTime = true; }
+                else if (IsEasingToken(p)) slot[1] = p;
+                else if (p == "infinite" || IsNumberToken(p)) slot[3] = p;
+                else if (p is "normal" or "reverse" or "alternate" or "alternate-reverse") slot[4] = p;
+                else if (p is "running" or "paused") slot[6] = p;
+                else if (p == "none" && !nameSeen) { slot[7] = p; nameSeen = true; }
+                else if (p is "none" or "forwards" or "backwards" or "both")
+                {
+                    slot[5] = p;
+                    nameSeen = true;
+                }
+                else { slot[7] = text; nameSeen = true; }
+            }
+            parts.Add(slot);
+        }
+        return parts;
     }
 
     /// <summary>

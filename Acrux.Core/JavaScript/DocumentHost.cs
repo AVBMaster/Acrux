@@ -160,15 +160,25 @@ public class DocumentHost
     public object? querySelector(string selector)
     {
         if (_document.DocumentElement == null) return null;
-        var el = QuerySelectorInternal(_document.DocumentElement, selector);
+        CssSelectorMatcher.ParseForQuery(selector);
+        // A document query is anchored at the root element and its candidate list starts with it:
+        // 'document.querySelectorAll("html")' answers with one element, and ':scope' inside such a
+        // query means that element (both measured).
+        var el = CssSelectorMatcher.FirstDescendant(_document.DocumentElement, selector,
+            _document.DocumentElement, includeRoot: true);
         return el != null ? WrapElement(el) : null;
     }
 
     public object querySelectorAll(string selector)
     {
         if (_document.DocumentElement == null) return new object[0];
-        return new JsNodeList(_document.DocumentElement, Engine,
-            root => QuerySelectorAllInternal(root, selector));
+        CssSelectorMatcher.ParseForQuery(selector);
+        return new JsNodeList(_document.DocumentElement, Engine, root =>
+        {
+            var list = new List<Element>();
+            CssSelectorMatcher.CollectDescendants(root, selector, list, root, includeRoot: true);
+            return list;
+        });
     }
 
     public object getElementsByTagName(string tagName)
@@ -696,25 +706,6 @@ public class DocumentHost
         return null;
     }
 
-    private static Element? QuerySelectorInternal(Element root, string selector)
-    {
-        foreach (var child in root.Children.OfType<Element>())
-        {
-            if (MatchesSelector(child, selector))
-                return child;
-            var found = QuerySelectorInternal(child, selector);
-            if (found != null) return found;
-        }
-        return null;
-    }
-
-    private static List<Element> QuerySelectorAllInternal(Element root, string selector)
-    {
-        var result = new List<Element>();
-        CssSelectorMatcher.CollectDescendants(root, selector, result);
-        return result;
-    }
-
     private static List<Element> GetElementsByTagNameInternal(Element root, string tagName)
     {
         tagName = tagName.ToUpperInvariant();
@@ -752,8 +743,6 @@ public class DocumentHost
         return result;
     }
 
-    private static bool MatchesSelector(Element el, string selector) =>
-        CssSelectorMatcher.Matches(selector, el);
 }
 
 public class ComputedStyleHost
