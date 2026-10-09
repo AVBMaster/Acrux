@@ -728,7 +728,11 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             || style.Overflow is OverflowType.Scroll or OverflowType.Auto;
         bool axisX = style.OverflowX is OverflowType.Scroll or OverflowType.Auto
             || style.Overflow is OverflowType.Scroll or OverflowType.Auto;
-        if (!axisY && !axisX)
+        // A 'hidden' box is a scroll container too, and CSS Overflow 3 §3.5 gives its gutter to
+        // any scroll container, not only to the ones whose bars can appear (measured: 'hidden' with
+        // 'stable' keeps the content off the bar's strip exactly as 'auto' does).
+        bool scrollerY = axisY || style.OverflowY == OverflowType.Hidden || style.Overflow == OverflowType.Hidden;
+        if (!axisY && !axisX && !(scrollerY && Dom.ScrollbarMetrics.ReservesGutter(style)))
             return r;
 
         float thickness = Dom.ScrollbarMetrics.ThicknessFor(style);
@@ -737,6 +741,12 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
         bool forceV = style.OverflowY == OverflowType.Scroll || style.Overflow == OverflowType.Scroll;
         bool forceH = style.OverflowX == OverflowType.Scroll || style.Overflow == OverflowType.Scroll;
+        // 'scrollbar-gutter: stable' reserves the bar's thickness on an axis of a box that can
+        // scroll even when nothing overflows — which includes 'overflow: hidden', a scroll container
+        // whose bars the user never sees (measured: a 120px box with 'hidden; stable' keeps
+        // clientWidth 105). Only an axis that is not 'visible' gets one, so a plain block with the
+        // property set costs nothing (measured: 'visible; stable' leaves the content whole).
+        bool gutter = scrollerY && Dom.ScrollbarMetrics.ReservesGutter(style);
 
         // Content extent in border-box coordinates (children/lines are placed
         // relative to the border-box origin).
@@ -757,16 +767,31 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         // branch skips the horizontal check rather than guess the content edge.
         float contentRightEdge = _inlineSize > 0 ? _inlineSize - _borderPadding.Right : float.MaxValue;
         float contentBottomEdge = frag.BlockSize - _borderPadding.Bottom;
-        bool needV = forceV || maxBottom > contentBottomEdge + 0.5f;
+        bool needV = forceV || gutter || maxBottom > contentBottomEdge + 0.5f;
         bool needH = forceH || maxRight > contentRightEdge + 0.5f;
         if (!needV && !needH)
             return r;
 
         // Only the vertical bar eats inline space; a horizontal bar reduces the
         // visible block extent (handled at conversion time).
-        var retrySpace = Space.WithScrollbarInline(needV ? thickness : 0);
+        // 'both-edges' costs the content the same strip twice; it is folded into the one inline
+        // reservation this space model has, so the available width shrinks by both while the start
+        // edge itself keeps its origin (the offset of the content by the start strip is registered
+        // as a gap, measured: a 120px box with a 15px bar has clientWidth 90 there).
+        float reserved = (needV ? thickness : 0) +
+            (gutter && needV && Dom.ScrollbarMetrics.ReservesGutterOnBothEdges(style) ? thickness : 0);
+        var retrySpace = Space.WithScrollbarInline(reserved);
         var retry = new BlockLayoutAlgorithm(Node, retrySpace);
-        return retry.Layout();
+        var retried = retry.Layout();
+        // The strip is a fact about this box's own content area, and the converter has to see it:
+        // 'overflow: hidden' shows no bar, yet a stable gutter still costs the content its width
+        // (measured: clientWidth 105 of a 120px box, and 90 with 'both-edges').
+        // Only the gutter is recorded, never the bar the ordinary scroll logic already knows
+        // about: the converter adds this strip to the ones it computes for itself, and a plain
+        // overflowing scroller would otherwise lose the width twice over.
+        if (gutter && retried.Status == EStatus.Success && retried.Fragment != null)
+            retried.Fragment.GutterInlineReservation = reserved;
+        return retried;
     }
 
     private LayoutResult HandleNonsuccessfulLayoutResult(LayoutResult result)

@@ -862,6 +862,9 @@ public class ComputedStyle
     // ---- Scrollbars (standard props + ::-webkit-scrollbar-* side-car) ----
     /// <summary>scrollbar-width: auto | thin | none.</summary>
     public ScrollbarWidthType ScrollbarWidth { get; set; } = ScrollbarWidthType.Auto;
+
+    /// <summary>The space CSS Overflow 3 §3.5 reserves for a scrollbar that may not appear.</summary>
+    public ScrollbarGutterType ScrollbarGutter { get; set; } = ScrollbarGutterType.Auto;
     /// <summary>scrollbar-color first value (thumb). Null = UA default.</summary>
     public SKColor? ScrollbarThumbColor { get; set; }
     /// <summary>scrollbar-color second value (track).</summary>
@@ -1528,7 +1531,8 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             TextAlign = TextAlign, TextAlignLast = TextAlignLast, TextDecoration = TextDecoration, VerticalAlign = VerticalAlign, VerticalAlignOffsetPx = VerticalAlignOffsetPx,
             VerticalAlignIsAuthored = VerticalAlignIsAuthored,
             WhiteSpace = WhiteSpace, WordBreak = WordBreak, OverflowWrap = OverflowWrap,
-            ScrollbarWidth = ScrollbarWidth, ScrollbarThumbColor = ScrollbarThumbColor,
+            ScrollbarWidth = ScrollbarWidth, ScrollbarGutter = ScrollbarGutter,
+            ScrollbarThumbColor = ScrollbarThumbColor,
             ScrollbarTrackColor = ScrollbarTrackColor, ScrollbarCustom = ScrollbarCustom,
             Overflow = Overflow, OverflowX = OverflowX, OverflowY = OverflowY,
             OverflowClipMargin = OverflowClipMargin, OverflowClipMarginBox = OverflowClipMarginBox,

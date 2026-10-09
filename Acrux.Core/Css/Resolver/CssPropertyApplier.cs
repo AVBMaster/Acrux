@@ -14,7 +14,13 @@ namespace Acrux.Core.Css.Resolver;
 /// </summary>
 public static class CssPropertyApplier
 {
+    /// <summary>The value text with its runs of whitespace reduced to single spaces, which is how a
+    /// two-word value is compared whatever spacing the page put between the words.</summary>
+    private static string CollapseSpace(string value) =>
+        string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
     /// <summary>Scrollbar-color &lt;thumb&gt; &lt;track&gt; ("auto" resets a slot).</summary>
+
     public static void ApplyScrollbarColors(ComputedStyle style, string value)
     {
         var parts = ShorthandExpander.SplitShorthand(value);
@@ -117,6 +123,17 @@ public static class CssPropertyApplier
                 break;
             case "scrollbar-color":
                 ApplyScrollbarColors(style, value);
+                break;
+            case "scrollbar-gutter":
+                // The grammar has already rejected anything but 'auto', 'stable' and
+                // 'stable both-edges'; the two words arrive in whatever spacing the page used, and a
+                // lone 'both-edges' never reaches here because it is no value at all (measured).
+                style.ScrollbarGutter = CollapseSpace(value).ToLowerInvariant() switch
+                {
+                    "stable" => ScrollbarGutterType.Stable,
+                    "stable both-edges" => ScrollbarGutterType.BothEdges,
+                    _ => ScrollbarGutterType.Auto,
+                };
                 break;
             case "color-scheme":
                 var cs = value.ToLowerInvariant();
@@ -4099,71 +4116,14 @@ public static class CssPropertyApplier
         return negate ? !eval : eval;
     }
 
-    public static bool EvaluateSingleSupportsCondition(string condition)
-    {
-        condition = condition.Trim();
-        // Remove outer parentheses
-        if (condition.StartsWith('(') && condition.EndsWith(')'))
-            condition = condition[1..^1].Trim();
-
-        // Parse property: value
-        var colonIdx = condition.IndexOf(':');
-        if (colonIdx < 0) return true;
-
-        var propName = condition[..colonIdx].Trim().ToLowerInvariant();
-        var propValue = condition[(colonIdx + 1)..].Trim().ToLowerInvariant();
-
-        return propName switch
-        {
-            "display" => TryParseDisplay(propValue, out _, out _),
-            "position" => propValue is "static" or "relative" or "absolute" or "fixed" or "sticky",
-            "transform" or "-webkit-transform" => propValue is not "none" || true,
-            "transition" => true,
-            "animation" => true,
-            "overflow" or "overflow-x" or "overflow-y" => propValue is "visible" or "hidden" or "scroll" or "auto",
-            "flex-wrap" => propValue is "nowrap" or "wrap" or "wrap-reverse",
-            "justify-content" => propValue is "flex-start" or "flex-end" or "center" or "space-between" or "space-around" or "space-evenly",
-            "align-items" => propValue is "flex-start" or "flex-end" or "center" or "baseline" or "stretch",
-            "align-content" => propValue is "flex-start" or "flex-end" or "center" or "space-between" or "space-around" or "stretch",
-            "gap" => true,
-            "flex" or "flex-grow" or "flex-shrink" or "flex-basis" => true,
-            "background" or "background-color" or "background-image" or "background-size" => true,
-            "color" => true,
-            "font-family" => true,
-            "font-size" => true,
-            "filter" or "-webkit-filter" => true,
-            "clip-path" or "-webkit-clip-path" => true,
-            "text-decoration" or "text-decoration-line" or "text-decoration-style" or "text-decoration-color" => true,
-            "box-shadow" => true,
-            "text-shadow" => true,
-            "opacity" => true,
-            "visibility" => propValue is "visible" or "hidden" or "collapse",
-            "z-index" => true,
-            "outline" or "outline-style" or "outline-width" or "outline-color" => true,
-            "border" or "border-radius" => true,
-            "margin" or "padding" => true,
-            "width" or "height" or "min-width" or "max-width" or "min-height" or "max-height" => true,
-            "top" or "right" or "bottom" or "left" => true,
-            // Validity comes from the same keyword table the parsers use; the fifth
-            // hand-written copy of this list is what silently dropped 'inline-start'.
-            "float" => Acrux.Core.Dom.CssFloatKeywords.TryParseFloat(propValue, out _),
-            "clear" => Acrux.Core.Dom.CssFloatKeywords.TryParseClear(propValue, out _),
-            "object-fit" => propValue is "fill" or "contain" or "cover" or "none" or "scale-down",
-            "cursor" => true,
-            "user-select" or "-webkit-user-select" => true,
-            "pointer-events" => propValue is "auto" or "none",
-            "white-space" => propValue is "normal" or "nowrap" or "pre" or "pre-wrap" or "pre-line",
-            "word-break" => propValue is "normal" or "break-all" or "keep-all" or "break-word",
-            "overflow-wrap" or "word-wrap" => propValue is "normal" or "break-word",
-            "text-overflow" => propValue is "clip" or "ellipsis",
-            "line-height" => true,
-            "letter-spacing" => true,
-            "list-style" or "list-style-type" or "list-style-position" or "list-style-image" => true,
-            // An unknown property is NOT supported: @supports must report false
-            // for declarations the engine has no handling for (CSS Conditional 3 §4).
-            _ => Acrux.Core.Css.Properties.CssPropertyIdExtensions.FromString(propName) != Acrux.Core.Css.Properties.CssPropertyId.Invalid
-        };
-    }
+    /// <summary>Evaluate the one condition of an <c>@supports</c> — a declaration, a parenthesised
+    /// group or a <c>selector()</c>-style function — as the parser reads it. This used to be a second,
+    /// hand-maintained list of which properties the engine supports, and it had drifted from the
+    /// grammar the declarations themselves are gated by: <c>@supports(transform: bogus)</c> answered
+    /// yes while <c>CSS.supports</c> said no. One predicate now decides all three channels
+    /// (CSS Conditional 5 §5.1).</summary>
+    public static bool EvaluateSingleSupportsCondition(string condition) =>
+        Acrux.Core.Css.Tokenizer.CssParserImpl.SupportsConditionMatches(condition);
 
     public static string GetOriginalShorthand(string longhand)
     {

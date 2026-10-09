@@ -4,6 +4,11 @@ namespace Acrux.Core.Dom;
 
 public enum ScrollbarWidthType { Auto, Thin, None }
 
+/// <summary>CSS Overflow 3 §3.5: the space a scroll container reserves for a scrollbar that may
+/// never appear. 'both-edges' is not a value on its own — a page that writes only it gets no gutter
+/// at all (measured) — so it is modelled as a third state of the one property rather than a flag.</summary>
+public enum ScrollbarGutterType { Auto, Stable, BothEdges }
+
 /// <summary>
 /// Per-part custom styling collected from ::-webkit-scrollbar-* pseudo-element
 /// rules (background / border / border-radius / bar thickness).
@@ -65,4 +70,14 @@ public static class ScrollbarMetrics
             return Math.Clamp(bar.Thickness, MinThickness, MaxThickness);
         return style.ScrollbarWidth == ScrollbarWidthType.Thin ? ThinThickness : DefaultThickness;
     }
+
+    /// <summary>Whether a scroll container has to reserve the bar's thickness on an axis even
+    /// though its content does not overflow — the whole of 'scrollbar-gutter: stable'.</summary>
+    public static bool ReservesGutter(ComputedStyle style) =>
+        style.ScrollbarGutter != ScrollbarGutterType.Auto && ThicknessFor(style) > 0;
+
+    /// <summary>Whether the reservation is also made on the start edge, which is what the
+    /// 'both-edges' keyword adds (measured: it costs the content a second bar's width).</summary>
+    public static bool ReservesGutterOnBothEdges(ComputedStyle style) =>
+        style.ScrollbarGutter == ScrollbarGutterType.BothEdges;
 }

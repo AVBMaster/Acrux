@@ -35,6 +35,14 @@ public class BoxFragment
     public List<BoxFragment> Children { get; } = new();
     public List<BoxLine> Lines { get; } = new();
 
+    /// <summary>The inline size a 'scrollbar-gutter' took off this box's content area at layout
+    /// time (CSS Overflow 3 §3.5), which is what the converter turns back into the scrollport's
+    /// width. Only the gutter is recorded here: the bar an overflowing scroller shows is computed
+    /// from the same fragment on the converter's side, and a number covering both would be
+    /// subtracted twice. Measured: a 120px box with a 15px bar and 'stable both-edges' reports
+    /// clientWidth 90 whether or not a bar can ever appear in it.</summary>
+    public float GutterInlineReservation { get; set; }
+
     // A5: resolved multicol geometry for column-rule painting (exported to
     // Dom.LayoutBox by AuroraFragmentConverter).
     public bool IsMultiColumn { get; set; }

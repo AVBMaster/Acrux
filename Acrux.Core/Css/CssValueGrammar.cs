@@ -77,17 +77,19 @@ public static class CssValueGrammar
             or CssPropertyId.MarginBottom or CssPropertyId.MarginLeft
             or CssPropertyId.MarginBlock or CssPropertyId.MarginBlockStart or CssPropertyId.MarginBlockEnd
             or CssPropertyId.MarginInline or CssPropertyId.MarginInlineStart or CssPropertyId.MarginInlineEnd
-            => static text => IsLengthList(text, "auto"),
+            // The four-edge shorthands take one to four values and no more: a fifth is no
+            // declaration at all (measured on 'margin:1px 1px 1px 1px 1px').
+            => static text => IsLengthListUpTo(text, 4, "auto"),
         CssPropertyId.Padding or CssPropertyId.PaddingTop or CssPropertyId.PaddingRight
             or CssPropertyId.PaddingBottom or CssPropertyId.PaddingLeft
             or CssPropertyId.PaddingBlock or CssPropertyId.PaddingBlockStart or CssPropertyId.PaddingBlockEnd
             or CssPropertyId.PaddingInline or CssPropertyId.PaddingInlineStart or CssPropertyId.PaddingInlineEnd
-            => static text => IsLengthList(text),
+            => static text => IsLengthListUpTo(text, 4),
         CssPropertyId.Inset or CssPropertyId.Top or CssPropertyId.Right
             or CssPropertyId.Bottom or CssPropertyId.Left
             or CssPropertyId.InsetBlock or CssPropertyId.InsetBlockStart or CssPropertyId.InsetBlockEnd
             or CssPropertyId.InsetInline or CssPropertyId.InsetInlineStart or CssPropertyId.InsetInlineEnd
-            => static text => IsLengthList(text, "auto"),
+            => static text => IsLengthListUpTo(text, 4, "auto"),
         CssPropertyId.BorderTopWidth or CssPropertyId.BorderRightWidth
             or CssPropertyId.BorderBottomWidth or CssPropertyId.BorderLeftWidth
             or CssPropertyId.OutlineWidth
@@ -145,8 +147,110 @@ public static class CssValueGrammar
         CssPropertyId.BackgroundImage or CssPropertyId.MaskImage
             or CssPropertyId.Background or CssPropertyId.Mask
             => static text => !NamesAFontLocal(text),
+        // CSS Transforms 2 §3: 'none' or a list of transform functions. A bare identifier names no
+        // transform, which is the whole of the difference between 'transform: bogus' — no condition
+        // at all — and 'transform: translateX(1px)' (measured through 'supports()').
+        CssPropertyId.Transform => IsTransformList,
+        // CSS Transitions 1 §2: a comma-separated list, each item a property name with a duration,
+        // an optional delay and an optional timing function, in any order. Two bare names in one
+        // item is the shape that has no reading, and it is what 'transition: bogus bogus' is
+        // (measured false), while 'transition: all 1s' is one (measured true).
+        CssPropertyId.Transition => IsTransitionList,
+        // Numbers and integers, with the keywords the property adds: 'opacity' takes any number
+        // (out of range is clamped later, not rejected now) and 'z-index' takes an integer or
+        // 'auto' (measured: 'opacity: bogus' and 'z-index: bogus' are both no condition).
+        CssPropertyId.Opacity => static text => IsNumberList(text, "initial", "inherit"),
+        CssPropertyId.ZIndex => static text => IsOneOf(text, "auto") || IsIntegerList(text),
+        CssPropertyId.LineHeight
+            => static text => IsLengthList(text, "normal") || IsNumberOnly(text),
+        CssPropertyId.ScrollbarGutter => IsScrollbarGutter,
+        // CSS Text 3 §3.5: one keyword per axis, and a string may stand in for the ellipsis. The
+        // reference engine takes 'clip ellipsis' and 'text-overflow: "…"' and refuses
+        // 'text-overflow: bogus' (measured, and 'text-overflow: bogus bogus' goes for the same reason
+        // as 'margin' with five values below).
+        CssPropertyId.TextOverflow
+            => static text => IsPairOf(text, IsTextOverflowKeyword),
+        // CSS Backgrounds 3 §4.2 and CSS Borders: a width, a style and a colour in any order. The
+        // width is itself a one-to-four list — 'border: 2px 8px 12px 4px solid #36c' sets the four
+        // sides at once — while the style and the colour each appear at most once.
+        // 'border: 1px bogus red' names no style and is no declaration (measured), and
+        // 'border: 1px solid red' and 'border: solid' both are.
+        CssPropertyId.Border or CssPropertyId.BorderTop or CssPropertyId.BorderRight
+            or CssPropertyId.BorderBottom or CssPropertyId.BorderLeft
+            or CssPropertyId.BorderBlockStart or CssPropertyId.BorderBlockEnd
+            or CssPropertyId.BorderInlineStart or CssPropertyId.BorderInlineEnd
+            or CssPropertyId.BorderBlock or CssPropertyId.BorderInline
+            => IsBorderSideValue,
+        // CSS Motion Path 1 §3: a path, a ray, an image, one of the basic shapes, or none, with the
+        // reference box it resolves against written in front. A function this grammar has no reading
+        // for is no path (measured: 'offset-path: bogus("M 0 0")' is not a declaration while
+        // 'offset-path: path("M 0 0")' is), which is the difference between naming a shape and
+        // naming anything at all.
+        CssPropertyId.OffsetPath => IsOffsetPathValue,
+        // CSS Values 4 §11.2 as the reference engine ships it: the two keywords, either alone or
+        // together. A third spelling is nothing ('interpolate-size: numeric-keywords', measured).
+        CssPropertyId.InterpolateSize
+            => static text => IsOneOf(text, "numeric-only")
+                || IsOneOf(text, "allow-keywords")
+                || (text.Equals("numeric-only allow-keywords", StringComparison.OrdinalIgnoreCase)
+                    || text.Equals("allow-keywords numeric-only", StringComparison.OrdinalIgnoreCase)),
         _ => null,
     };
+
+    /// <summary>A pair of values from one set — the shape of 'text-overflow', which takes one
+    /// keyword per axis and so never more than two.</summary>
+    private static bool IsPairOf(string text, Func<string, bool> one)
+    {
+        var parts = SplitComponents(text);
+        if (parts.Count == 0 || parts.Count > 2) return false;
+        foreach (var part in parts)
+            if (!one(part)) return false;
+        return true;
+    }
+
+    private static bool IsTextOverflowKeyword(string token) =>
+        token.Equals("clip", StringComparison.OrdinalIgnoreCase)
+        || token.Equals("ellipsis", StringComparison.OrdinalIgnoreCase)
+        || (token.Length >= 2 && (token[0] == '"' || token[0] == '\'')
+            && token[^1] == token[0])
+        || IsOtherFunctionCall(token);
+
+    /// <summary>The shorthand of one border side: a width, a style and a colour, each at most once
+    /// and in any order, and nothing else beside them. The same matchers the applier and the
+    /// shorthand expander use decide the parts, so the three cannot disagree about a declaration.</summary>
+    private static bool IsBorderSideValue(string text)
+    {
+        var parts = SplitComponents(text);
+        if (parts.Count == 0 || parts.Count > 6) return false;
+        int width = 0, style = 0, colour = 0;
+        foreach (var part in parts)
+        {
+            // The style is read first: 'none', 'hidden', 'dotted' … are border styles and, unlike a
+            // width or a colour, they are words a colour parser would not claim.
+            if (ShorthandExpander.IsBorderStyle(part)) { style++; continue; }
+            if (Acrux.Core.Css.Resolver.CssPropertyApplier.IsBorderWidthToken(part)) { width++; continue; }
+            if (ColorParser.IsColorToken(part) || IsOtherFunctionCall(part)) { colour++; continue; }
+            return false;
+        }
+        return width <= 4 && style <= 1 && colour <= 1;
+    }
+
+    /// <summary>The motion path's own set of shapes. The box keyword is a prefix, not the path, so
+    /// it is taken off before the shape is judged and one shape has to be left behind it.</summary>
+    private static bool IsOffsetPathValue(string text)
+    {
+        if (IsOneOf(text, "none", "normal")) return true;
+        var parts = SplitComponents(text);
+        if (parts.Count == 0) return false;
+        if (parts.Count > 1 && IsOneOf(parts[0], "content-box", "border-box", "padding-box",
+                "fill-box", "stroke-box", "view-box"))
+            parts = parts.Skip(1).ToList();
+        if (parts.Count != 1) return false;
+        string shape = parts[0];
+        foreach (var name in new[] { "path", "ray", "circle", "ellipse", "inset", "rect", "xywh", "url" })
+            if (shape.StartsWith(name + "(", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
 
     /// <summary>A family list: one name per comma, each name a quoted string or the identifiers
     /// that stand for one family. A component that is a number, a dimension or an empty slot is not
@@ -202,6 +306,373 @@ public static class CssValueGrammar
         return false;
     }
 
+    /// <summary>The components of a value: whitespace and commas separate them, but a function
+    /// call is one component — its own arguments are somebody else's separators.</summary>
+    private static List<string> SplitComponents(string text)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')' && depth > 0) depth--;
+            else if (c == '"' || c == '\'')
+            {
+                i = SkipString(text, i);
+                continue;
+            }
+            else if (depth == 0 && (char.IsWhiteSpace(c) || c == ','))
+            {
+                if (i > start) parts.Add(text[start..i]);
+                start = i + 1;
+            }
+        }
+        if (text.Length > start)
+        {
+            var last = text[start..];
+            if (last.Trim().Length > 0) parts.Add(last.Trim());
+        }
+        return parts;
+    }
+
+    private static int SkipString(string text, int quoteAt)
+    {
+        char quote = text[quoteAt];
+        for (int i = quoteAt + 1; i < text.Length; i++)
+        {
+            if (text[i] == '\\') { i++; continue; }
+            if (text[i] == quote) return i;
+        }
+        return text.Length;
+    }
+
+    /// <summary>The math functions of CSS Values 4 \u00a710.10-\u00a710.12: they take an arithmetic
+    /// expression, and an expression's operands are numbers, lengths, percentages, nested calls and
+    /// variables \u2014 never a bare identifier. That is what decides 'calc(bogus)' and 'calc(1px + )'.
+    /// 'round()', 'mod()' and the like take a keyword or a comma-separated list on top of that.</summary>
+    private static bool IsMathFunctionCall(string token, Func<string, bool> isOperand)
+    {
+        int open = token.IndexOf('(');
+        if (open <= 0 || !token.EndsWith(")")) return false;
+        string name = token[..open].ToLowerInvariant();
+        if (!MathFunctions.Contains(name)) return false;
+        string inner = token[(open + 1)..^1];
+        if (name == "clamp")
+        {
+            var args = SplitTopLevel(inner);
+            return args.Count == 3 && args.All(a => IsExpression(a, isOperand));
+        }
+        if (name is "round")
+        {
+            // 'round( [nearest|up|down|to-zero] , <value>, <resolution> )' — the strategy is the one
+            // argument that may be left out, so the call has two or three arguments and the last two
+            // are the ones that carry the numbers (measured on the b26 round family).
+            var args = SplitTopLevel(inner);
+            if (args.Count is not (2 or 3)) return false;
+            int first = args.Count == 3 ? 1 : 0;
+            if (args.Count == 3 && args[0].ToLowerInvariant()
+                is not ("nearest" or "up" or "down" or "to-zero")) return false;
+            return IsExpression(args[first], isOperand) && IsExpression(args[first + 1], isOperand);
+        }
+        if (name is "mod" or "rem")
+        {
+            var args = SplitTopLevel(inner);
+            return args.Count == 2 && IsExpression(args[0], isOperand) && IsExpression(args[1], isOperand);
+        }
+        // 'min()' and 'max()' take a comma-separated list of two or more expressions, which is the
+        // one place a comma belongs inside a math function; the single-argument forms take one.
+        if (name is "min" or "max")
+        {
+            var args = SplitTopLevel(inner);
+            return args.Count >= 2 && args.All(a => IsExpression(a, isOperand));
+        }
+        if (name is "abs" or "sign" or "sqrt" or "exp" or "log")
+        {
+            var args = SplitTopLevel(inner);
+            return args.Count == 1 && IsExpression(args[0], isOperand);
+        }
+        if (name is "pow" or "hypot")
+        {
+            var args = SplitTopLevel(inner);
+            return args.Count >= (name == "pow" ? 2 : 1) && args.All(a => IsExpression(a, isOperand));
+        }
+        return IsExpression(inner, isOperand);
+    }
+
+    /// <summary>An arithmetic expression: operands joined by + and -, or a single operand, with
+    /// multiplication and division allowed between a number and a dimension. Every + or - has to
+    /// have something on both sides of it, which is the whole of what 'calc(1px + )' fails.</summary>
+    private static bool IsExpression(string text, Func<string, bool> isOperand)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')' && depth > 0) depth--;
+            else if (c == '"' || c == '\'') { i = SkipString(text, i); continue; }
+            else if (depth == 0 && (c == '+' || c == '-'))
+            {
+                var before = text[start..i].Trim();
+                // A sign belongs to the number in front of it unless there is something to take it
+                // from: 'calc(-37px + 1px)' and 'calc(1px * -2)' are one operand each, while
+                // 'calc(1px + )' has an operator with nothing behind it and is no value at all
+                // (measured through 'supports(width: …)').
+                bool operatorHere = before.Length > 0 && !before.EndsWith("+") && !before.EndsWith("-")
+                    && !before.EndsWith("*") && !before.EndsWith("/");
+                if (!operatorHere) continue;
+                parts.Add(before);
+                parts.Add(c.ToString());
+                start = i + 1;
+            }
+        }
+        var tail = text[start..].Trim();
+        if (tail.Length > 0) parts.Add(tail);
+        if (parts.Count == 0) return false;
+
+        // Operators have to alternate with operands, and the list must start and end with an operand.
+        for (int i = 0; i < parts.Count; i++)
+        {
+            bool operatorSlot = i % 2 == 1;
+            if (operatorSlot)
+            {
+                if (parts[i] is not ("+" or "-" or "*" or "/")) return false;
+                continue;
+            }
+            if (parts[i] is "+" or "-" or "*" or "/") return false;
+            if (!IsOperandOrNested(parts[i], isOperand)) return false;
+        }
+        return parts.Count % 2 == 1;
+    }
+
+    private static bool IsOperandOrNested(string text, Func<string, bool> isOperand)
+    {
+        // An operand is a number, a dimension, a percentage, a nested function or a product of
+        // them ('2 * 3px'); a leading sign belongs to the number itself.
+        if (text.Length == 0) return false;
+        if (text.StartsWith("(", StringComparison.Ordinal) && text.EndsWith(")"))
+            text = text[1..^1].Trim();
+        // Split on the spaces that are outside every parenthesis: a nested 'calc(100px - 50px)' is
+        // one operand, and cutting it at its own spaces takes a working declaration down with it.
+        var pieces = SplitOutsideParentheses(text);
+        bool any = false;
+        foreach (var piece in pieces)
+        {
+            if (piece is "*" or "/") continue;
+            if (!IsOperandOrNestedOne(piece, isOperand)) return false;
+            any = true;
+        }
+        return any;
+    }
+
+    private static List<string> SplitOutsideParentheses(string text)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')' && depth > 0) depth--;
+            else if (c == '"' || c == '\'') { i = SkipString(text, i); continue; }
+            else if (depth == 0 && char.IsWhiteSpace(c))
+            {
+                if (i > start) parts.Add(text[start..i]);
+                start = i + 1;
+            }
+        }
+        if (text.Length > start) parts.Add(text[start..]);
+        return parts;
+    }
+
+    private static bool IsOperandOrNestedOne(string token, Func<string, bool> isOperand)
+    {
+        if (isOperand(token)) return true;
+        int open = token.IndexOf('(');
+        if (open > 0 && token.EndsWith(")"))
+        {
+            string name = token[..open].ToLowerInvariant();
+            if (MathFunctions.Contains(name)) return IsMathFunctionCall(token, isOperand);
+            return true;   // var(), attr(), env() \u2026: somebody else's argument, taken as written
+        }
+        return false;
+    }
+
+    /// <summary>A function call that is not a math function. Its arguments belong to the property's
+    /// own grammar, which this helper does not have, so the call is accepted \u2014 the point is that a
+    /// bare identifier is not a call at all, which is what separates 'path("M 0 0")' from 'bogus'.</summary>
+    private static bool IsOtherFunctionCall(string token)
+    {
+        int open = token.IndexOf('(');
+        return open > 0 && token.EndsWith(")") && !MathFunctions.Contains(token[..open].ToLowerInvariant());
+    }
+
+    private static readonly HashSet<string> MathFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "calc", "min", "max", "clamp", "round", "mod", "rem", "abs", "sign",
+        "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "pow", "sqrt", "hypot", "log", "exp"
+    };
+
+    private static List<string> SplitTopLevel(string text)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')' && depth > 0) depth--;
+            else if (c == ',' && depth == 0)
+            {
+                parts.Add(text[start..i].Trim());
+                start = i + 1;
+            }
+        }
+        parts.Add(text[start..].Trim());
+        return parts;
+    }
+
+    /// <summary>A &lt;transform-list&gt;: 'none' alone, or functions from the transform vocabulary, each
+    /// with its own argument list. A function this engine has not heard of is still a function call,
+    /// so the name is what is checked, not the arguments.</summary>
+    private static bool IsTransformList(string text)
+    {
+        var parts = SplitComponents(text);
+        if (parts.Count == 0) return false;
+        if (parts.Count == 1 && parts[0].Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
+        foreach (var part in parts)
+        {
+            int open = part.IndexOf('(');
+            if (open <= 0 || !part.EndsWith(")")) return false;
+            if (!TransformFunctions.Contains(part[..open].ToLowerInvariant())) return false;
+        }
+        return true;
+    }
+
+    private static readonly HashSet<string> TransformFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "matrix", "matrix3d", "translate", "translate3d", "translateX", "translateY", "translateZ",
+        "scale", "scale3d", "scaleX", "scaleY", "scaleZ", "rotate", "rotate3d", "rotateX", "rotateY",
+        "rotateZ", "skew", "skewX", "skewY", "perspective"
+    };
+
+    /// <summary>One comma-separated transition: a duration, an optional delay, an optional timing
+    /// function and the property it animates. Only one bare name may stand for the property, and a
+    /// second one has nothing left to be, so the item that carries two is no transition value.</summary>
+    private static bool IsTransitionList(string text)
+    {
+        foreach (var item in SplitTopLevel(text))
+        {
+            if (item.Length == 0) return false;
+            bool propertySeen = false;
+            foreach (var part in SplitComponents(item))
+            {
+                if (part.EndsWith(")"))
+                {
+                    int open = part.IndexOf('(');
+                    if (open <= 0 || !TimingFunctions.Contains(part[..open].ToLowerInvariant())) return false;
+                    continue;
+                }
+                if (IsTime(part) || IsOneOf(part, "none", "auto")) continue;
+                if (TimingKeywords.Contains(part.ToLowerInvariant())) continue;
+                if (propertySeen) return false;
+                // A property slot is a custom name, 'all' or a single identifier — the first bare
+                // word in the item is the property whatever it spells.
+                if (!IsIdentifierLike(part)) return false;
+                propertySeen = true;
+            }
+        }
+        return true;
+    }
+
+    private static readonly HashSet<string> TimingFunctions = new(StringComparer.OrdinalIgnoreCase)
+    { "cubic-bezier", "steps", "linear", "ease", "ease-in", "ease-out", "ease-in-out",
+      "step-start", "step-end" };
+
+    private static readonly HashSet<string> TimingKeywords = new(StringComparer.OrdinalIgnoreCase)
+    { "linear", "ease", "ease-in", "ease-out", "ease-in-out", "step-start", "step-end" };
+
+    private static bool IsTime(string token)
+    {
+        if (token.Length < 2) return false;
+        string unit = token[^1].ToString();
+        string rest = token[..^1];
+        if (!IsNumber(rest) || (unit != "s" && unit != "S")) return IsNumber(token[..^2]) &&
+            token[^2..].Equals("ms", StringComparison.OrdinalIgnoreCase);
+        return true;
+    }
+
+    private static bool IsNumber(string text)
+    {
+        if (text.Length == 0) return false;
+        int i = text[0] is '+' or '-' ? 1 : 0;
+        int digits = i;
+        while (i < text.Length && char.IsAsciiDigit(text[i])) i++;
+        bool any = i > digits;
+        if (i < text.Length && text[i] == '.')
+        {
+            i++;
+            int frac = i;
+            while (i < text.Length && char.IsAsciiDigit(text[i])) i++;
+            any |= i > frac;
+        }
+        return any && i == text.Length;
+    }
+
+    private static bool IsNumberList(string text, params string[] keywords)
+    {
+        foreach (var part in SplitComponents(text))
+        {
+            if (IsNumber(part) || IsMathFunctionCall(part, IsLengthOrPercentage) ||
+                IsOneOf(part, keywords)) continue;
+            return false;
+        }
+        return true;
+    }
+
+    private static bool IsNumberOnly(string text) =>
+        SplitComponents(text).Count == 1 && IsNumber(text.Trim());
+
+    private static bool IsIntegerList(string text)
+    {
+        foreach (var part in SplitComponents(text))
+        {
+            string token = part;
+            if (token.Length > 0 && (token[0] == '+' || token[0] == '-')) token = token[1..];
+            if (token.Length > 0 && token.All(char.IsAsciiDigit)) continue;
+            if (IsMathFunctionCall(part, IsLengthOrPercentage)) continue;
+            return false;
+        }
+        return true;
+    }
+
+    private static bool IsIdentifierLike(string text)
+    {
+        if (text.Length == 0) return false;
+        foreach (var c in text)
+            if (!char.IsLetter(c) && !char.IsAsciiDigit(c) && c is not ('-' or '_' or '\\')) return false;
+        return true;
+    }
+
+    /// <summary>CSS Scrollbars 1 \u00a73.4: 'auto', or 'stable' with an optional 'both-edges'. Nothing
+    /// else, and a value that carries a second word which is not 'both-edges' is no value at all
+    /// (measured: 'stable foo' and 'stable stable' both leave the declaration dropped and the
+    /// property at 'auto').</summary>
+    private static bool IsScrollbarGutter(string text)
+    {
+        var parts = SplitComponents(text);
+        return parts.Count switch
+        {
+            1 => parts[0].Equals("auto", StringComparison.OrdinalIgnoreCase) ||
+                 parts[0].Equals("stable", StringComparison.OrdinalIgnoreCase),
+            2 => parts[0].Equals("stable", StringComparison.OrdinalIgnoreCase) &&
+                 parts[1].Equals("both-edges", StringComparison.OrdinalIgnoreCase),
+            _ => false,
+        };
+    }
+
     private static bool TextIsValid(string text, Func<string, bool> grammar)
     {
         text = text.Trim();
@@ -214,13 +685,23 @@ public static class CssValueGrammar
     /// <summary>A &lt;length-percentage&gt; list, which is how a length-valued property is
     /// written whatever the arity of its grammar is: the keyword set is the one the property
     /// adds to the numeric values, and a value this helper cannot see through is accepted.</summary>
+    /// <summary>A &lt;length&gt; list with a ceiling on how many of them the property takes; the
+    /// count is part of the grammar, and a fifth value for a four-edge property is no
+    /// declaration (measured on 'margin').</summary>
+    private static bool IsLengthListUpTo(string text, int max, params string[] keywords) =>
+        SplitComponents(text).Count <= max && IsLengthList(text, keywords);
+
     private static bool IsLengthList(string text, params string[] keywords)
     {
-        if (ContainsAnyStructural(text)) return true;
-        foreach (var token in SplitWords(text))
+        foreach (var token in SplitComponents(text))
         {
             if (IsLengthOrPercentage(token)) continue;
             if (IsOneOf(token, keywords)) continue;
+            // A math function is the one parenthesis this grammar can decide: its arguments are
+            // numbers, lengths and percentages whatever the property, so 'calc(bogus)' is no
+            // length while 'calc(1px + 2px)' is (measured, both, through 'supports(width: …)').
+            if (IsMathFunctionCall(token, IsLengthOrPercentage)) continue;
+            if (IsOtherFunctionCall(token)) continue;
             return false;
         }
         return true;
@@ -233,11 +714,11 @@ public static class CssValueGrammar
     /// (measured: 'outline: 3px solid invert' leaves outline-style at its initial 'none').</summary>
     private static bool IsColorList(string text)
     {
-        if (ContainsAnyStructural(text)) return true;
-        foreach (var token in SplitWords(text))
+        foreach (var token in SplitComponents(text))
         {
             if (ColorParser.IsColorToken(token)) continue;
             if (token.Equals("auto", StringComparison.OrdinalIgnoreCase)) continue;
+            if (IsMathFunctionCall(token, IsLengthOrPercentage) || IsOtherFunctionCall(token)) continue;
             return false;
         }
         return true;
@@ -254,7 +735,7 @@ public static class CssValueGrammar
     private static IEnumerable<string> SplitWords(string text) =>
         text.Split(new[] { ' ', '\t', '\n', '\r', '\f' }, StringSplitOptions.RemoveEmptyEntries);
 
-    private static bool IsOneOf(string token, string[] keywords)
+    private static bool IsOneOf(string token, params string[] keywords)
     {
         foreach (var keyword in keywords)
             if (token.Equals(keyword, StringComparison.OrdinalIgnoreCase)) return true;

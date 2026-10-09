@@ -1,0 +1,177 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Probe b256 — motion path, scrollbar-gutter, text-security, and which values @supports takes</title>
+</head><body><pre id="report" style="font:10px monospace;white-space:pre-wrap"></pre>
+<div id="stage" style="position:relative;width:400px;height:200px;margin:0"></div>
+<script>
+const out = [];
+const emit = (n, fn) => { try { out.push(n + '=' + String(fn()).replace(/\n/g, '\\n')); }
+                          catch (e) { out.push(n + '=ERR[' + e.name + ']'); } };
+const f = v => (v === undefined ? 'U' : v === null ? 'N' : '"' + v + '"');
+const R = v => Math.round(v * 100) / 100;
+
+// A box of its own, positioned at a known place, with the given declarations. The answer is its
+// border-box rectangle in the page's coordinates — everything the motion path does is decided by
+// where that box lands, so the geometry is the whole test.
+function box(styleText, tag) {
+  const stage = document.getElementById('stage');
+  stage.innerHTML = '';
+  const host = document.createElement('div');
+  host.style.cssText = 'position:absolute;left:20px;top:30px;width:400px;height:200px';
+  const el = document.createElement(tag || 'div');
+  el.style.cssText = 'position:absolute;left:0;top:0;width:40px;height:20px;background:' +
+                     'rgb(255, 128, 128)' + (styleText ? ';' + styleText : '');
+  host.appendChild(el);
+  stage.appendChild(host);
+  const r = el.getBoundingClientRect();
+  const s = getComputedStyle(el);
+  const cs = tag === undefined ? [
+    'offset-path=' + f(s.offsetPath), 'offset-distance=' + f(s.offsetDistance),
+    'offset-rotate=' + f(s.offsetRotate), 'offset-anchor=' + f(s.offsetAnchor),
+    'offset-position=' + f(s.offsetPosition), 'offset=' + f(s.offset),
+  ].join(' ') : '';
+  return 'x=' + R(r.left) + ' y=' + R(r.top) + ' w=' + R(r.width) + ' h=' + R(r.height) +
+         ' scroll=' + s.overflow + (cs ? ' | ' + cs : '');
+}
+
+// §1 the motion path. A path of 'M 0 0 L 100 50' moves the box's anchor along a segment, and
+// 'offset-distance' is a percentage of the path length, so 0/50/100% land at 0,0 / 50,25 / 100,50.
+emit('m01_none',       () => box('offset-path:none'));
+emit('m02_path0',      () => box('offset-path:path("M 0 0 L 100 50");offset-distance:0%'));
+emit('m03_path50',     () => box('offset-path:path("M 0 0 L 100 50");offset-distance:50%'));
+emit('m04_path100',    () => box('offset-path:path("M 0 0 L 100 50");offset-distance:100%'));
+emit('m05_px',         () => box('offset-path:path("M 10px 5px L 60px 55px");offset-distance:10px'));
+emit('m06_anchor',     () => box('offset-path:path("M 0 0 L 100 50");offset-distance:100%;offset-anchor:top left'));
+emit('m07_anchorAuto', () => box('offset-path:path("M 0 0 L 100 50");offset-distance:100%;offset-anchor:auto'));
+emit('m08_rotate45',   () => box('offset-path:path("M 0 0 L 100 50");offset-distance:50%;offset-rotate:45deg'));
+emit('m09_rotateAuto', () => box('offset-path:path("M 0 0 L 100 50");offset-distance:50%;offset-rotate:auto'));
+emit('m10_rotRev',     () => box('offset-path:path("M 0 0 L 100 50");offset-distance:50%;offset-rotate:auto reverse'));
+emit('m11_rotAutoDeg', () => box('offset-path:path("M 0 0 L 100 50");offset-distance:50%;offset-rotate:auto 90deg'));
+emit('m12_curves',     () => box('offset-path:path("M 0 0 C 50 0 50 50 100 50");offset-distance:50%'));
+emit('m13_ray',        () => box('offset-path:ray(45deg)'));
+emit('m14_contentBox', () => box('offset-path:content-box path("M 0 0 L 100 50");offset-distance:100%'));
+emit('m15_position',   () => box('offset-path:circle(50%);offset-distance:100%'));
+emit('m16_ellipse',    () => box('offset-path:ellipse(40px 20px);offset-distance:0%'));
+emit('m17_inset',      () => box('offset-path:inset(0px);offset-distance:25%'));
+emit('m18_shorthand',  () => box('offset:path("M 0 0 L 100 50") 50% / 45deg;'));
+emit('m19_posAuto',    () => box('offset-position:auto;offset-path:path("M 0 0 L 100 50");offset-distance:100%'));
+emit('m20_posSet',     () => box('offset-position:10px 20px;offset-path:path("M 0 0 L 100 50");offset-distance:100%'));
+emit('m21_static',     () => box('offset-path:path("M 0 0 L 100 50");offset-distance:100%', 'span'));
+emit('m22_inline',     () => box('offset-path:path("M 0 0 L 100 50");offset-distance:100%', 'img'));
+emit('m23_bad',        () => box('offset-path:bogus("M 0 0");offset-distance:100%'));
+emit('m24_unitless',   () => box('offset-path:path("M 0 0 L 100 50");offset-distance:100'));
+emit('m25_neg',        () => box('offset-path:path("M 0 0 L 100 50");offset-distance:-50%'));
+emit('m26_over',       () => box('offset-path:path("M 0 0 L 100 50");offset-distance:150%'));
+emit('m27_rotatePct',  () => box('offset-path:path("M 0 0 L 100 50");offset-rotate:50%'));
+emit('m28_transform',  () => box('transform:translate(5px,5px);offset-path:path("M 0 0 L 100 50");offset-distance:100%'));
+
+// §2 the scrollbar gutter: a stable gutter keeps the space whether or not a bar is there.
+// Both the overflow and the gutter are written out because the gutter is decided by whether the
+// box is a scroll container at all, and by which axis.
+function gutter(overflow, gutterValue) {
+  const stage = document.getElementById('stage');
+  stage.innerHTML = '';
+  const el = document.createElement('div');
+  el.style.cssText = 'width:120px;height:60px;overflow:' + overflow +
+                     (gutterValue ? ';scrollbar-gutter:' + gutterValue : '');
+  el.innerHTML = '<div style="height:300px">tall</div>';
+  stage.appendChild(el);
+  const s = getComputedStyle(el);
+  return 'client=' + R(el.clientWidth) + ' offset=' + R(el.offsetWidth) +
+         ' scroll=' + R(el.scrollWidth) + ' gutter=' + f(s.scrollbarGutter) +
+         ' overflow=' + s.overflow;
+}
+function emptyBox(overflow, gutterValue) {
+  const stage = document.getElementById('stage');
+  stage.innerHTML = '';
+  const el = document.createElement('div');
+  el.style.cssText = 'width:120px;height:60px;overflow:' + overflow +
+                     (gutterValue ? ';scrollbar-gutter:' + gutterValue : '');
+  stage.appendChild(el);
+  return 'client=' + R(el.clientWidth) + ' offset=' + R(el.offsetWidth);
+}
+emit('g01_hidden',        () => gutter('hidden', ''));
+emit('g02_scroll',        () => gutter('scroll', ''));
+emit('g03_visible',       () => gutter('visible', ''));
+emit('g04_stableHid',     () => gutter('hidden', 'stable'));
+emit('g05_bothHid',       () => gutter('hidden', 'stable both-edges'));
+emit('g06_stableScr',     () => gutter('scroll', 'stable'));
+emit('g07_bothScr',       () => gutter('scroll', 'stable both-edges'));
+emit('g08_stableVis',     () => gutter('visible', 'stable'));
+emit('g09_bothVis',       () => gutter('visible', 'stable both-edges'));
+emit('g10_bad',           () => gutter('hidden', 'bogus'));
+emit('g11_bothEdgesAlone',() => gutter('hidden', 'both-edges'));
+emit('g12_stableAuto',    () => gutter('auto', 'stable'));
+emit('g13_emptyStableHid',() => emptyBox('hidden', 'stable'));
+emit('g14_emptyHidden',   () => emptyBox('hidden', ''));
+emit('g15_emptyScrStable',() => emptyBox('scroll', 'stable'));
+emit('g16_emptyBothEdges',() => emptyBox('hidden', 'stable both-edges'));
+emit('g17_emptyVisible',  () => emptyBox('visible', 'stable'));
+
+
+// §3 masking what a control shows. Both spellings, and what the text measures as.
+function masked(styleText) {
+  const stage = document.getElementById('stage'); stage.innerHTML = '';
+  const el = document.createElement('div');
+  el.style.cssText = 'display:inline-block;font:16px monospace;' + styleText;
+  el.textContent = 'abcdefghij';
+  stage.appendChild(el);
+  const r = el.getBoundingClientRect();
+  const s = getComputedStyle(el);
+  return 'w=' + R(r.width) + ' ts=' + f(s.textSecurity) + ' wts=' + f(s.webkitTextSecurity);
+}
+emit('t01_none',      () => masked('text-security:none'));
+emit('t02_disc',      () => masked('text-security:disc'));
+emit('t03_circle',    () => masked('text-security:circle'));
+emit('t04_square',    () => masked('text-security:square'));
+emit('t05_char',      () => masked('text-security:"*"'));
+emit('t06_bad',       () => masked('text-security:bogus'));
+emit('t07_webkitDisc',() => masked('-webkit-text-security:disc'));
+emit('t08_badPrefix', () => masked('-webkit-text-text-security:none'));
+emit('t09_plainNone', () => masked('text-security:disc;'));
+
+// §4 what @supports takes as a declaration: a known property whose value its own grammar accepts.
+const CONDITIONS = [
+  ['-webkit-color', 'red'], ['color', 'RED'], ['transform', 'bogus'], ['transform', 'translateX(1px)'],
+  ['transition', 'bogus bogus'], ['transition', 'all 1s'], ['width', 'calc(bogus)'], ['width', 'calc(1px)'],
+  ['width', 'calc(1px + )'], ['opacity', 'bogus'], ['display', 'flex'], ['margin', 'bogus'],
+  ['offset-path', 'bogus("M 0 0")'], ['offset-path', 'path("M 0 0")'], ['scrollbar-gutter', 'stable'],
+  ['scrollbar-gutter', 'bogus'], ['text-security', 'disc'], ['text-security', 'bogus'],
+  ['text-overflow', 'ellipsis'], ['text-overflow', 'bogus'], ['animation-timeline', 'scroll()'],
+  ['interpolate-size', 'numeric-keywords'], ['anchor-name', '--a'], ['position-try', 'left'],
+  ['touch-action', 'pan-x'], ['paint-order', 'stroke'], ['vector-effect', 'non-scaling-stroke'],
+  ['-webkit-transform', 'bogus'], ['-moz-transform', 'bogus'], ['-webkit-margin', '1px'],
+  ['image-rendering', 'pixelated'], ['color-rendering', 'auto'], ['shape-rendering', 'crispEdges'],
+  ['z-index', 'bogus'], ['line-height', 'bogus'], ['letter-spacing', 'bogus'],
+];
+CONDITIONS.forEach(([p, v], i) => emit('s' + (i + 1 < 10 ? '0' : '') + (i + 1) + '_' +
+  (p + '_' + v).replace(/[^a-zA-Z0-9]/g, '_').slice(0, 26), () =>
+  'paren=' + CSS.supports('(' + p + ':' + v + ')') + ' pair=' + CSS.supports(p, v) +
+  ' import=' + (() => {
+    const st = document.createElement('style');
+    st.textContent = '@import url(v.css) supports(' + p + ': ' + v + ');';
+    document.head.appendChild(st);
+    const n = st.sheet.cssRules.length; st.remove(); return '#' + n;
+  })()));
+
+// §5 the computed value of a few properties whose declaration this engine may not even know.
+function computed(prop, value) {
+  const stage = document.getElementById('stage'); stage.innerHTML = '';
+  const el = document.createElement('div');
+  el.style.cssText = prop + ':' + value;
+  stage.appendChild(el);
+  return f(getComputedStyle(el)[prop]);
+}
+emit('c01_touchAction', () => computed('touch-action', 'pan-x pinch-zoom'));
+emit('c02_touchAuto',   () => computed('touch-action', 'auto'));
+emit('c03_paintOrder',  () => computed('paint-order', 'stroke fill markers'));
+emit('c04_vectorEffect',() => computed('vector-effect', 'non-scaling-stroke'));
+emit('c05_shapeRend',   () => computed('shape-rendering', 'crispEdges'));
+emit('c06_colorInterp', () => computed('color-interpolation', 'sRGB'));
+emit('c07_imageOrient', () => computed('image-orientation', 'from-image'));
+emit('c08_inputSec',    () => computed('input-security', 'none'));
+emit('c09_maxLines',    () => computed('max-lines', '3'));
+emit('c10_lineClamp',   () => computed('-webkit-line-clamp', '3'));
+
+document.getElementById('report').textContent = out.join('\n');
+</script></body></html>

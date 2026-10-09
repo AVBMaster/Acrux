@@ -195,6 +195,7 @@ public class JavaScriptEngine : IDisposable
         _adapter.SetGlobal("__acrux", _builtins);
         _adapter.SetGlobal("__win", new WindowHost(this));
         _adapter.SetGlobal("navigator", new NavigatorHost());
+        _adapter.SetGlobal("CSS", new CssObjectHost());
         _locationHost = new LocationHost();
         _adapter.SetGlobal("location", _locationHost);
         _adapter.SetGlobal("history", new HistoryHost(_locationHost));
@@ -254,6 +255,7 @@ public class JavaScriptEngine : IDisposable
             _adapter.SetGlobal("__acrux", _builtins);
         _adapter.SetGlobal("__win", new WindowHost(this));
         _adapter.SetGlobal("navigator", new NavigatorHost());
+        _adapter.SetGlobal("CSS", new CssObjectHost());
         if (_locationHost != null)
             _adapter.SetGlobal("location", _locationHost);
         _adapter.SetGlobal("history", new HistoryHost(_locationHost ?? new LocationHost()));
@@ -1417,6 +1419,27 @@ public class ConsoleHost
         var indent = new string(' ', _groupLevel * 2);
         Console.WriteLine(indent + prefix + " " + string.Join(" ", args.Select(a => a?.ToString() ?? "undefined")));
     }
+}
+
+/// <summary>The <c>CSS</c> global (CSSOM §6.1.1 and CSS Conditional 5 §5.3): <c>supports()</c>
+/// asked one way takes a whole condition as the page would write it inside an <c>@supports</c>
+/// prelude, asked the other takes a property name and a value separately — and both spellings reach
+/// the same predicate the sheet parser reads a condition with, so a script cannot be told one thing
+/// and a rule another. The two-argument form keeps its own rule for a custom property, which is the
+/// one place the IDL does not read a grammar at all: any value at all, including none, is supported
+/// for a name that starts with two dashes (measured: <c>supports('--x', '1')</c> and
+/// <c>supports('--x', '')</c> are both true while <c>supports('--x')</c> is not). The rest of the
+/// interface — <c>escape</c>, <c>registerProperty</c>, <c>paintWorklet</c> — is not here, because a
+/// name that answers nothing is worse than no name.</summary>
+public class CssObjectHost
+{
+    public bool supports(string condition) =>
+        Acrux.Core.Css.Tokenizer.CssParserImpl.SupportsConditionIsWellFormed(condition);
+
+    public bool supports(string property, string value) =>
+        (property ?? "").StartsWith("--", StringComparison.Ordinal)
+        || Acrux.Core.Css.Tokenizer.CssParserImpl.SupportsConditionIsWellFormed(
+            $"{property}: {value}");
 }
 
 public class NavigatorHost

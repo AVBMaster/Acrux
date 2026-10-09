@@ -501,6 +501,14 @@ public static class ComputedValueSerializer
                     style.OverscrollBehaviorY.ToString().ToLowerInvariant());
             case "content-visibility": return CssEnumFormatter.CssKeywordFromEnum(style.ContentVisibility.ToString());
             case "scrollbar-width": return CssEnumFormatter.CssKeywordFromEnum(style.ScrollbarWidth.ToString());
+            // The one value of 'both-edges' is the pair, printed in the order the property
+            // introduces them (measured: 'stable both-edges' reads back as written).
+            case "scrollbar-gutter": return style.ScrollbarGutter switch
+            {
+                ScrollbarGutterType.Stable => "stable",
+                ScrollbarGutterType.BothEdges => "stable both-edges",
+                _ => "auto",
+            };
             case "scrollbar-color":
                 return style.ScrollbarThumbColor == null && style.ScrollbarTrackColor == null
                     ? "auto"

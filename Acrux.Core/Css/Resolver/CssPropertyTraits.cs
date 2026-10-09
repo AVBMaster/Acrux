@@ -98,7 +98,124 @@ public static class CssPropertyTraits
     /// <summary>True when a unitless zero in this property's value is a length.</summary>
     public static bool TakesLength(string property) => LengthValued.Contains(property);
 
-    /// <summary>Whether the cascade recognizes this property at all.</summary>
+    /// <summary>Whether a property name is one the reference engine declares: an unprefixed name
+    /// from the property table that is not one of this engine's private ids, a custom property, or
+    /// a <c>-webkit-</c> spelling of the names in <see cref="WebkitAliases"/>. The cross-product
+    /// alias registration in <c>CssPropertyIdExtensions</c> exists so a page written against a
+    /// prefix keeps working when the declaration is applied, but it must not be what
+    /// <c>@supports</c> or <c>CSS.supports</c> answers from — measured over the whole 447-name table
+    /// (snapshots/out/_b256_edge_props.txt), the reference engine refuses every <c>-moz-</c>,
+    /// <c>-ms-</c> and <c>-o-</c> spelling, refuses <c>-webkit-color</c>, <c>-webkit-hyphens</c>,
+    /// <c>-webkit-scrollbar</c> and <c>-webkit-box-reflect</c>, and accepts names no rule about
+    /// prefixes would predict (<c>-webkit-text-security</c>, <c>-webkit-line-clamp</c>,
+    /// <c>-webkit-user-modify</c>). The <c>--</c> test is a prefix test, not a lookup: a custom
+    /// property is any name that starts with two dashes, and the reference engine accepts one
+    /// whatever follows them.</summary>
+    public static bool IsDeclaredProperty(string property)
+    {
+        if (string.IsNullOrEmpty(property)) return false;
+        if (property.StartsWith("--", StringComparison.Ordinal)) return true;
+        string name = property.ToLowerInvariant();
+        foreach (var prefix in OtherVendorPrefixes)
+            if (name.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        if (name.StartsWith("-webkit-", StringComparison.Ordinal))
+            return WebkitAliases.Contains(name["-webkit-".Length..]);
+        if (EngineOnlyNames.Contains(name)) return false;
+        return IsKnown(name) || ReferenceDeclared.Contains(name);
+    }
+
+    private static readonly string[] OtherVendorPrefixes = { "-moz-", "-ms-", "-o-" };
+
+    /// <summary>Properties the reference engine declares that this engine has no id for, so
+    /// <see cref="IsKnown"/> cannot see them. Measured as above: each name answered true for at
+    /// least one of eighteen values, and none of them is in this engine's property table. They are
+    /// declared only as far as a <c>@supports</c> test is concerned — the cascade still has no case
+    /// for them and drops the declaration — which is the difference between this set and the
+    /// property table, and the reason keeping it separate is honest rather than a whitelist of
+    /// wishes. The names come in groups: the scroll- and timeline-linked properties, the anchored-
+    /// positioning ones, the shapes a float excludes text around, and the font and text properties
+    /// of CSS Fonts 4 and CSS Text 4.</summary>
+    private static readonly HashSet<string> ReferenceDeclared = new(StringComparer.Ordinal)
+    {
+        "animation-composition", "animation-range", "animation-range-end", "animation-range-start",
+        "baseline-source", "caret-shape", "font-palette", "font-variant-alternates",
+        "font-variant-emoji", "overflow-block", "overflow-inline", "overlay", "paint-order",
+        "position-area", "position-try-fallbacks", "position-visibility", "scroll-timeline",
+        "scroll-timeline-axis", "scroll-timeline-name", "shape-image-threshold", "shape-margin",
+        "shape-outside", "text-autospace", "text-size-adjust", "text-spacing-trim",
+        "transition-behavior", "x", "y",
+    };
+
+    /// <summary>Ids this engine keeps in its property table that are not properties the reference
+    /// engine declares. Four kinds: SVG presentation geometry the engine models as its own
+    /// properties (<c>svgwidth</c> and siblings), names that stand for something else in the engine
+    /// (<c>display-type</c> for the display keyword, <c>timing-function</c> for the shared
+    /// <c>transition</c>/<c>animation-timing-function</c> grammar, <c>webkit-line-clamp</c> for the
+    /// prefixed spelling, <c>max-lines</c>, <c>offset-position-normal</c>,
+    /// <c>content-visibility-auto-state</c>), names it parses for a platform that has no counterpart
+    /// here (<c>imemode</c>, <c>page-size</c>, <c>input-security</c>, <c>starting-style</c>,
+    /// <c>position-try-options</c>), and names a browser never shipped (<c>text-security</c> without
+    /// its prefix, <c>line-clamp</c> without its prefix, <c>highlight</c>, <c>anchor-default</c>,
+    /// <c>ruby-merge</c>, <c>hanging-punctuation</c>, <c>initial-letter-align</c>). Each was measured
+    /// with the value an author would write, so the list is not an artefact of a grammar the engine
+    /// happens not to implement.</summary>
+    private static readonly HashSet<string> EngineOnlyNames = new(StringComparer.Ordinal)
+    {
+        "display-type", "svgwidth", "svgheight", "svgx", "svgy", "timing-function", "imemode",
+        "page-size", "ruby-merge", "hanging-punctuation", "initial-letter-align", "max-lines",
+        "line-clamp", "webkit-line-clamp", "text-security", "highlight", "input-security",
+        "content-visibility-auto-state", "anchor-default", "position-try-options", "starting-style",
+        "offset-position-normal",
+    };
+
+    /// <summary>The names the reference engine accepts with a <c>-webkit-</c> prefix, that prefix
+    /// removed. Several have no unprefixed counterpart at all (<c>text-fill-color</c>,
+    /// <c>line-clamp</c>, <c>user-drag</c>, <c>box-orient</c>) and the set is not closed under
+    /// anything useful — <c>text-security</c> and <c>line-clamp</c> are in it, <c>hyphens</c> and
+    /// <c>color</c> are not — so it is a measured inventory rather than a rule about prefixes.
+    /// The first group is every name from this engine's own table that was measured accepted
+    /// (79 of 447); the second is the legacy spellings the table has no id for.</summary>
+    private static readonly HashSet<string> WebkitAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Measured accepted with the prefix, prefixed to a name this engine already carries.
+        "align-content", "align-items", "align-self", "animation", "animation-delay",
+        "animation-direction", "animation-duration", "animation-fill-mode",
+        "animation-iteration-count", "animation-name", "animation-play-state",
+        "animation-timing-function", "appearance", "backface-visibility", "background-clip",
+        "background-origin", "background-size", "border-bottom-left-radius",
+        "border-bottom-right-radius", "border-image", "border-radius", "border-top-left-radius",
+        "border-top-right-radius", "box-decoration-break", "box-shadow", "box-sizing", "clip-path",
+        "column-count", "column-gap", "column-rule", "column-rule-color", "column-rule-style",
+        "column-rule-width", "column-span", "column-width", "columns", "filter", "flex",
+        "flex-basis", "flex-direction", "flex-flow", "flex-grow", "flex-shrink", "flex-wrap",
+        "font-feature-settings", "hyphenate-character", "justify-content", "line-break",
+        "line-clamp", "mask", "mask-clip", "mask-composite", "mask-image", "mask-origin",
+        "mask-position", "mask-repeat", "mask-size", "opacity", "order", "perspective",
+        "perspective-origin", "print-color-adjust", "text-emphasis", "text-emphasis-color",
+        "text-emphasis-position", "text-emphasis-style", "text-orientation", "text-security",
+        "transform", "transform-origin", "transform-style", "transition", "transition-delay",
+        "transition-duration", "transition-property", "transition-timing-function", "user-select",
+        "writing-mode",
+        // Measured accepted with the prefix for a name this engine has no id for, so the ids above
+        // could never produce them: the legacy box model, the text-paint pair, the logical edges
+        // and the mask-image shorthand family.
+        "box-align", "box-direction", "box-flex", "box-ordinal-group", "box-orient", "box-pack",
+        "box-reflect", "font-smoothing", "margin-end", "margin-start", "mask-box-image",
+        "mask-box-image-outset",
+        "mask-box-image-repeat", "mask-box-image-slice", "mask-box-image-source",
+        "mask-box-image-width", "padding-end", "padding-start", "tap-highlight-color",
+        "text-decorations-in-effect", "text-fill-color", "text-size-adjust", "text-stroke",
+        "text-stroke-color", "text-stroke-width", "user-drag", "user-modify",
+        // Measured NOT accepted with the prefix, so they are absent on purpose: 'color', 'margin',
+        // 'padding', 'hyphens', 'overflow-scrolling', 'scrollbar', 'box-lines', 'box-flex-group',
+        // 'backup-display', 'dasharray', 'dashoffset', 'filter-function', 'highlight', 'locale',
+        // 'hyphenate-limit-chars', 'mask-source-type', 'nested-composite', 'orientation',
+        // 'vertical-position', 'color-adjust', 'border-image-slice', 'margin-collapse',
+        // 'logical-width-minimum', 'text-fill' and the '-webkit-flex-*' family
+        // (flex-negative, flex-order, flex-pack, flex-align, flex-line-pack, flex-item-pack) —
+        // and no '-moz-', '-ms-' or '-o-' name is ever accepted.
+    };
+
     /// <summary>Whether the cascade can resolve CSS-wide keywords for a property.
     /// Derived from the property-id table (which is generated from the enum) rather
     /// than from the hand-maintained 'Known' set below: that set had drifted, so

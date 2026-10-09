@@ -320,10 +320,13 @@ public class CssParserImpl
     {
         string condition = ConsumeAtRulePrelude(out bool unterminated);
         if (unterminated || !AtRuleBlockFollows()) return null;
-        // The same grammar the '@import' prelude is read with, and the same answer: a condition that
-        // is no condition makes no rule, and the block the page wrote for it goes with the rule
-        // ('@supports bogus: 1 { #x { color: red } }' leaves the sheet with nothing in it, measured).
-        if (!SupportsConditionWellFormed(condition, out _))
+        // The rule reads structure, not the declaration grammar: a group keeps the rule whatever is
+        // inside it, and the condition then answers no when the cascade reaches it. Measured on
+        // '@supports (color)', '@supports (bogus: 1)', '@supports (width: calc(bogus))' and
+        // '@supports ()', each of which leaves the block in the sheet with nothing inside it
+        // applying, while '@supports display: flex' — a declaration with nothing round it — and
+        // '@supports (display: flex) junk', which the read cannot finish, make no rule at all.
+        if (!SupportsConditionParsesAsRule(condition))
         {
             SkipStatementBlock();
             return null;
@@ -440,7 +443,7 @@ public class CssParserImpl
             // 'supports(selector(a))' and 'supports(NOT (display: flex))' are kept as written). What
             // the read does not reach is dropped from the text it keeps rather than left beside it:
             // 'supports(selector(a)|b)' reads back 'selector(a)' (measured).
-            if (!SupportsConditionWellFormed(rule.SupportsCondition, out int reached)) supportsInvalid = true;
+            if (!SupportsConditionParsesForImport(rule.SupportsCondition, out int reached)) supportsInvalid = true;
             else if (reached >= 0 && reached < (rule.SupportsCondition?.Length ?? 0))
                 rule.SupportsCondition = rule.SupportsCondition![..reached];
         }
@@ -2039,95 +2042,383 @@ public class CssParserImpl
     /// '(display: flex) (color)' reads back '(display: flex) ' with the space that stood in front of
     /// the group it stopped before (measured both), while a combinator with no group after it leaves
     /// no condition at all ('(display: flex) and' is dropped, measured).</summary>
-    private static bool SupportsConditionWellFormed(string? condition, out int reached)
+    /// <summary>Whether a <c>@supports</c> condition is one the grammar reads: the same decision an
+    /// '@supports' rule makes while a sheet is parsed, an '@import' makes for its <c>supports()</c>
+    /// condition, and <c>CSS.supports()</c> makes for a script, so the three cannot answer
+    /// differently (measured on 36 declarations, each through all three channels).</summary>
+    public static bool SupportsConditionIsWellFormed(string? condition) =>
+        SupportsConditionShapes(condition, ShapeBareDeclaration | ShapeValidateDeclaration, out int reached)
+        && string.IsNullOrWhiteSpace(TailOf(condition, reached));
+
+    /// <summary>Whether an '@supports' prelude is a condition the sheet parser keeps. This channel
+    /// reads structure only: a group holds whatever the page wrote in it, and a group whose
+    /// declaration the grammar would refuse still makes a rule — one that then answers no. Measured:
+    /// '@supports (color)', '@supports (bogus: 1)', '@supports (width: calc(bogus))' and even
+    /// '@supports ()' each keep their block in the sheet while nothing inside it applies, and
+    /// '@supports display: flex' — a declaration with nothing round it — is no condition at all,
+    /// nor is one the read has to leave words beside it ('@supports (display: flex) junk').</summary>
+    public static bool SupportsConditionParsesAsRule(string? condition) =>
+        SupportsConditionShapes(condition, ShapeAtom, out int reached)
+        && string.IsNullOrWhiteSpace(TailOf(condition, reached));
+
+    /// <summary>Whether an '@import' prelude's <c>supports( … )</c> is a condition the import keeps.
+    /// The import reads structure like the rule but is the forgiving reader of the three: a bare
+    /// declaration is a condition, what the read does not reach is dropped from the text instead of
+    /// refusing the rule, and — measured — <c>supports((color) (display:flex))</c> and
+    /// <c>supports((color:red)extra)</c> both survive while <c>supports(bogus: 1)</c> and
+    /// <c>supports(--x)</c> take the import down with them.</summary>
+    public static bool SupportsConditionParsesForImport(string? condition, out int reached) =>
+        SupportsConditionShapes(condition,
+            ShapeAtom | ShapeBareDeclaration | ShapeValidateDeclaration | ShapeTruncates, out reached);
+
+    private const int ShapeAtom = 1;
+    private const int ShapeBareDeclaration = 2;
+    private const int ShapeValidateDeclaration = 4;
+    private const int ShapeTruncates = 8;
+
+    private static string TailOf(string? condition, int reached) =>
+        string.IsNullOrEmpty(condition) ? "" : condition![Math.Min(reached, condition.Length)..];
+
+    private static bool SupportsConditionShapes(string? condition, int shapes, out int reached)
     {
         reached = 0;
         if (string.IsNullOrWhiteSpace(condition)) return false;
         var tokens = ConditionTokens(condition!, out var starts, out var ends);
         if (tokens.Count == 0) return false;
+        return SupportsConditionText(condition!, tokens, starts, ends, 0, tokens.Count,
+            topLevel: true, shapes, out reached);
+    }
 
-        int i = 0;
-        if (IsConditionWord(tokens, 0, "not"))
+    /// <summary>Whether a condition an '@supports' rule kept is one the engine answers yes to.
+    /// The rule is read as structure and the condition as grammar, which is why a group the grammar
+    /// refuses can sit in the sheet with nothing applying inside it: <c>@supports (color)</c>,
+    /// <c>@supports (bogus: 1)</c>, <c>@supports ()</c> and <c>@supports ((color))</c> each keep
+    /// their block and each answer no, and a negation of such a no is a yes
+    /// (measured: <c>@supports not (color)</c> and <c>@supports (not (color))</c> both apply what
+    /// is inside them). A chain is joined as it is written, and a read that cannot finish — junk
+    /// beside the groups, a combinator with nothing after it — matches nothing.</summary>
+    public static bool SupportsConditionMatches(string? condition)
+    {
+        if (string.IsNullOrWhiteSpace(condition)) return false;
+        var tokens = ConditionTokens(condition!, out var starts, out var ends);
+        if (tokens.Count == 0) return false;
+        return MatchesCondition(condition!, tokens, starts, ends, 0, tokens.Count);
+    }
+
+    private static bool MatchesCondition(string text, List<CssParserToken> tokens, List<int> starts,
+        List<int> ends, int lo, int hi)
+    {
+        if (lo >= hi) return false;
+        int i = lo;
+        if (IsConditionWord(tokens, i, "not"))
         {
-            // 'not' takes one group and nothing beside it: what follows that group is dropped rather
-            // than joined ('not (display: flex) and (color)' reads back 'not (display: flex) ',
-            // measured, and 'not not (color)' is no condition at all).
-            if (++i >= tokens.Count || !IsConditionGroupStart(tokens[i])) return false;
-            i = SkipConditionGroup(tokens, i);
-            reached = i >= tokens.Count ? condition!.Length : starts[i];
+            if (++i >= hi || !IsConditionGroupStart(tokens[i])) return false;
+            bool inner = MatchesGroup(text, tokens, starts, ends, i, hi);
+            return SkipConditionGroup(tokens, i, hi) >= hi && !inner;
+        }
+
+        if (i < hi && IsConditionGroupStart(tokens[i]))
+        {
+            string? joiner = null;
+            bool accumulator = false, started = false;
+            while (true)
+            {
+                bool value = MatchesGroup(text, tokens, starts, ends, i, hi);
+                accumulator = !started ? value
+                    : joiner == "and" ? accumulator && value : accumulator || value;
+                started = true;
+                i = SkipConditionGroup(tokens, i, hi);
+                if (i >= hi) return accumulator;
+                bool and = IsConditionWord(tokens, i, "and");
+                bool or = !and && IsConditionWord(tokens, i, "or");
+                if (!and && !or) return false;      // a read that does not finish matches nothing
+                joiner = and ? "and" : "or";
+                if (++i >= hi || !IsConditionGroupStart(tokens[i])) return false;
+            }
+        }
+
+        return MatchesDeclaration(text, tokens, starts, ends, i, hi);
+    }
+
+    private static bool MatchesGroup(string text, List<CssParserToken> tokens, List<int> starts,
+        List<int> ends, int i, int hi)
+    {
+        int close = GroupCloseIndex(tokens, i, hi);
+        int from = i + 1, to = close;
+        if (tokens[i].Type == CssTokenType.FunctionToken)
+        {
+            // The selector atomic is the one function form with a reading here: it is yes when the
+            // engine can parse the selector it carries.
+            if ((tokens[i].FunctionName ?? "").Equals("selector", StringComparison.OrdinalIgnoreCase))
+                return from < to && MatchesSelector(text[starts[from]..Math.Min(ends[to - 1], text.Length)]);
+            return false;
+        }
+        if (from >= to) return false;                      // '()' is a condition that answers no
+        if (tokens[from].Type == CssTokenType.IdentToken && from + 1 < to
+            && tokens[from + 1].Type == CssTokenType.ColonToken)
+            return MatchesDeclaration(text, tokens, starts, ends, from, to);
+        if (IsConditionGroupStart(tokens[from]) || IsConditionWord(tokens, from, "not"))
+            return MatchesCondition(text, tokens, starts, ends, from, to);
+        return false;                                      // an atom the grammar left out answers no
+    }
+
+    /// <summary>The grammar's own answer for one declaration of a matching condition — the same
+    /// predicate <c>CSS.supports()</c> is built from, so a condition the IDL calls true is a
+    /// condition that matches and nothing else is.</summary>
+    private static bool MatchesDeclaration(string text, List<CssParserToken> tokens,
+        List<int> starts, List<int> ends, int from, int to)
+    {
+        if (from >= to || tokens[from].Type != CssTokenType.IdentToken) return false;
+        var inner = text[starts[from]..ends[to - 1]];
+        return SupportsConditionShapes(inner,
+            ShapeBareDeclaration | ShapeValidateDeclaration, out int reached)
+            && string.IsNullOrWhiteSpace(TailOf(inner, reached));
+    }
+
+    /// <summary>Whether the engine can read a <c>selector()</c> argument as a selector list. The
+    /// reference engine answers for the selector grammar alone, and so does this: an argument it can
+    /// parse is a condition that holds, whether or not any element on the page matches it.</summary>
+    private static bool MatchesSelector(string argument)
+    {
+        try
+        {
+            var selectors = new List<Acrux.Core.Css.Matcher.CssSelector>();
+            return Acrux.Core.Css.Matcher.CssSelectorParser.ReadSelectorList(
+                new Acrux.Core.Css.Tokenizer.CssParserTokenStream(argument), selectors)
+                && selectors.Count > 0;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Whether the tokens <c>[lo, hi)</c> of <paramref name="text"/> read as a supports
+    /// condition (CSS Conditional 5 §4). The reference engine's answers split the shapes as
+    /// follows, all measured (snapshots/out/_b256_edge_supports.txt): a leading <c>not</c> takes one
+    /// group and never looks inside it — <c>not (bogus:1)</c> and <c>not (color:red)</c> both stand
+    /// while <c>not bogus</c> and <c>not</c> fall; otherwise the text is a chain of groups joined by
+    /// one repeated word, and every group is judged on its own; and what is left after the chain has
+    /// been read is dropped rather than refused, unless another group stands directly behind the
+    /// first with no space between them, which is refused outright
+    /// (<c>(color:red)(display:flex)</c> falls, <c>(color:red)extra</c> and
+    /// <c>(display: flex) (color)</c> stand). Outside any group a bare declaration is judged the same
+    /// way a group judges one.</summary>
+    private static bool SupportsConditionText(string text, List<CssParserToken> tokens,
+        List<int> starts, List<int> ends, int lo, int hi, bool topLevel, int shapes, out int reached)
+    {
+        // A general-enclosed atom ('(color)', '(bogus 1)') is a condition on its own, and the
+        // reference engine leaves it out of a nested condition that carries nothing else:
+        // '((bogus))' falls while '((bogus) and (color))' stands (measured).
+        reached = hi >= tokens.Count ? text.Length : starts[hi];
+        int i = lo;
+        // 'not' is a condition word only at the head of the condition: as the contents of a group
+        // it is nothing the grammar has a place for (measured: 'not (color:red)' is a condition and
+        // '(not (color:red))' is not).
+        if ((topLevel || (shapes & ShapeAtom) != 0) && IsConditionWord(tokens, i, "not"))
+        {
+            if (++i >= hi || !IsConditionGroupStart(tokens[i]))
+            {
+                reached = lo < tokens.Count ? starts[lo] : text.Length;
+                return false;
+            }
+            i = SkipConditionGroup(tokens, i, hi);
+            reached = i >= hi ? text.Length : starts[i];
             return true;
         }
 
-        if (IsConditionGroupStart(tokens[i]))
+        if (i < hi && IsConditionGroupStart(tokens[i]))
         {
             string? joiner = null;
             while (true)
             {
-                i = SkipConditionGroup(tokens, i);
-                if (i >= tokens.Count) break;
-                bool and = IsConditionWord(tokens, i, "and");
-                bool or = !and && IsConditionWord(tokens, i, "or");
-                if (!and && !or) { reached = starts[i]; return true; }   // juxtaposition ends the read
+                // Only a group that is the whole condition may be read as the general-enclosed
+                // atom, which is what makes '(bogus)' stand and '((bogus))' fall (measured).
+                if (!SupportsConditionGroupIsValid(text, tokens, starts, ends, i, hi, shapes))
+                    return false;
+                int after = SkipConditionGroup(tokens, i, hi);
+                if (after >= hi) break;
+                bool and = IsConditionWord(tokens, after, "and");
+                bool or = !and && IsConditionWord(tokens, after, "or");
+                if (!and && !or)
+                {
+                    // Two groups with nothing between them are not a condition; anything else
+                    // ends the read and the rest of the text is dropped (both measured).
+                    bool touching = starts[after] == ends[i] && IsConditionGroupStart(tokens[after]);
+                    if (touching || (shapes & ShapeTruncates) == 0) return false;
+                    reached = starts[after];
+                    return true;
+                }
                 var word = and ? "and" : "or";
-                if (joiner != null && joiner != word) { reached = starts[i]; return true; }
+                if (joiner != null && joiner != word)
+                {
+                    if ((shapes & ShapeTruncates) == 0) return false;
+                    reached = starts[after];
+                    return true;
+                }
                 joiner = word;
-                if (++i >= tokens.Count || !IsConditionGroupStart(tokens[i])) return false;
+                if (++after >= hi || !IsConditionGroupStart(tokens[after])) return false;
+                i = after;
             }
-            reached = condition!.Length;
+            reached = text.Length;
             return true;
         }
 
-        return WellFormedSupportsDeclaration(condition!, tokens, starts, ends, i, out reached);
+        // A declaration with nothing round it is a condition for the IDL and for an '@import', and
+        // for nobody else (measured: '@supports display: flex' is no rule).
+        if ((shapes & ShapeBareDeclaration) == 0) return false;
+        return SupportsGroupDeclarationIsValid(text, tokens, starts, ends, i, hi, shapes, out _);
     }
 
-    /// <summary>A declaration written with no parentheses round it — the one shape whose contents the
-    /// grammar reads. The name is a property this engine knows or a custom property (an unknown name
-    /// makes no declaration: 'supports(bogus: 1)' is dropped, measured, and '-webkit-color' with no
-    /// such property of its own likewise), and the value is everything from the ':' to the end of the
-    /// text, so a declaration that carries anything else in it fails to parse as a value and goes
-    /// ('supports(display: flex extra)' is dropped, measured). '!' 'important' is part of a
-    /// declaration and not part of its value ('color: red !important' is a condition, measured, and
-    /// 'color: red !important extra' is not). Where this engine has no grammar to decide a value from
-    /// its text the value is taken as read — the same policy that gates a declaration the CSSOM stores
-    /// — so a property whose spelling it cannot judge is kept.</summary>
-    private static bool WellFormedSupportsDeclaration(string condition, List<CssParserToken> tokens,
-        List<int> starts, List<int> ends, int i, out int reached)
+    /// <summary>One group of a condition: a <c>( … )</c> or a function group of its own. A function
+    /// group is the atomic form, and the reference engine refuses it when its own text carries a
+    /// top-level property name and colon — which takes <c>supports(color:red)</c> and
+    /// <c>not(color:red)</c> down and leaves <c>selector(a)</c> and <c>selector(:hover) and
+    /// (color:red)</c> standing, all measured; the <c>selector()</c> form is the selector atomic and
+    /// its text is never read here. A plain group is a declaration when its contents open with an
+    /// ident straight before a colon, a nested condition when they open with a parenthesis, and
+    /// otherwise the general-enclosed atom, which only the whole condition may be.</summary>
+    private static bool SupportsConditionGroupIsValid(string text, List<CssParserToken> tokens,
+        List<int> starts, List<int> ends, int i, int hi, int shapes)
     {
-        reached = condition.Length;
-        if (tokens[i].Type != CssTokenType.IdentToken) return false;
-        int colon = -1;
-        for (int k = i + 1; k < tokens.Count; k++)
-            if (tokens[k].Type == CssTokenType.ColonToken) { colon = k; break; }
-        if (colon < 0 || colon + 1 >= tokens.Count) return false;
+        int close = GroupCloseIndex(tokens, i, hi);        // index of the group's own ')'
+        int from = i + 1, to = close;                      // its contents, 'from' <= 'to'
+        if (tokens[i].Type == CssTokenType.FunctionToken)
+        {
+            // 'selector( … )' is the selector atomic and its text is a selector, not a declaration.
+            // 'supports( … )' and 'not( … )' are read as the words they spell rather than as atoms,
+            // and this engine has no conditional form to put them in (measured both down).
+            string fn = (tokens[i].FunctionName ?? "").ToLowerInvariant();
+            if (fn is "selector" or "url") return true;
+            if ((shapes & ShapeAtom) != 0) return true;
+            if (fn is "supports" or "not") return false;
+            return !HasTopLevelDeclaration(tokens, from, to);
+        }
+        // '()' and '( )' are nothing to the IDL — its reader reports a SyntaxError for them, measured
+        // — and a rule the sheet keeps to the parser, which reads structure only ('@supports ()'
+        // stays in the sheet with nothing applying inside it, measured).
+        if (from >= to) return (shapes & ShapeAtom) != 0;
 
-        var name = tokens[i].Value.ToLowerInvariant();
-        if (!name.StartsWith("--", StringComparison.Ordinal) &&
-            !Acrux.Core.Css.Resolver.CssPropertyTraits.IsKnown(name))
+        if (tokens[from].Type == CssTokenType.IdentToken && from + 1 < to
+            && tokens[from + 1].Type == CssTokenType.ColonToken)
+            return SupportsGroupDeclarationIsValid(text, tokens, starts, ends, from, to, shapes, out _);
+
+        bool operatorWord = tokens[from].Type == CssTokenType.IdentToken &&
+            (IsConditionWord(tokens, from, "not") || IsConditionWord(tokens, from, "and") ||
+             IsConditionWord(tokens, from, "or"));
+        if (operatorWord || IsConditionGroupStart(tokens[from]))
+        {
+            // A nested condition has to be read whole: '((color:red) bogus)' falls (measured).
+            if (!SupportsConditionText(text, tokens, starts, ends, from, to, false, shapes, out int read))
+                return false;
+            // The nested read has to have taken the group's last token; what it stopped before is
+            // text the group's own grammar has no place for.
+            return read >= ends[to - 1];
+        }
+
+        // The general-enclosed atom — '(color)', '(bogus 1)', '(-x)', '(url(a.png))', '()'. CSS
+        // Conditional 5 took the shape out of the grammar the IDL reads, measured on all of them
+        // as no condition; the sheet parser still keeps a rule for it, because the prelude is read
+        // as structure and the condition then answers no ('@supports (color)' and
+        // '@supports ((color))' both stay in the sheet, both inert).
+        return (shapes & ShapeAtom) != 0;
+    }
+
+    /// <summary>Whether a group's contents are a declaration the grammar reads: the name is an
+    /// ident straight before a colon that names a property the reference engine declares
+    /// (snapshots/out/_b256_edge_props.txt is what decides the names, and it is what says no to
+    /// <c>(bogus:1)</c>, <c>(-webkit-color:red)</c>, <c>(text-security:disc)</c> and
+    /// <c>(line-clamp:2)</c> while saying yes to their <c>-webkit-</c> spellings), and the value is
+    /// everything from that colon to the end of the group, which has to satisfy that property's own
+    /// grammar. '!' 'important' belongs to the declaration rather than to its value: a value that
+    /// carries it reads as the part in front of it stands, a '!' the word does not follow falls, and
+    /// a declaration whose value would be left empty by it falls (measured four). A custom property
+    /// takes any value at all. Where this engine has no grammar to decide a value from its text the
+    /// value is taken as read, so a property whose spelling it cannot judge is kept.</summary>
+    private static bool SupportsGroupDeclarationIsValid(string text, List<CssParserToken> tokens,
+        List<int> starts, List<int> ends, int from, int to, int shapes, out int stop)
+    {
+        stop = to;
+        // The rule channel stops here: a group that opens 'ident :' has the shape of a declaration,
+        // and what is inside it is somebody else's business — the condition answers no when the
+        // cascade reads it with the grammar the other two channels use.
+        if ((shapes & ShapeValidateDeclaration) == 0)
+            return tokens[from].Type == CssTokenType.IdentToken;
+        if (tokens[from].Type != CssTokenType.IdentToken) return false;
+        int colon = -1;
+        for (int k = from + 1; k < to; k++)
+            if (tokens[k].Type == CssTokenType.ColonToken) { colon = k; break; }
+        if (colon < 0 || colon + 1 >= to) return false;
+
+        var name = tokens[from].Value.ToLowerInvariant();
+        bool custom = name.StartsWith("--", StringComparison.Ordinal);
+        if (!custom && !Acrux.Core.Css.Resolver.CssPropertyTraits.IsDeclaredProperty(name))
             return false;
 
         var value = Acrux.Core.Css.MediaFeatureValue.StripComments(
-            condition[ends[colon]..ends[^1]]).Trim();
+            text[ends[colon]..ends[to - 1]]).Trim();
+        // A ';' in the value is a second declaration, and a group holds one declaration
+        // (measured: '(color: red; color: blue)' and '(background:red; color:blue)' are no
+        // condition, while a comma belongs to the value and '(transition:all 1s, color 2s)' is one).
+        if (value.IndexOf(';') >= 0) return false;
+        // A value that opens with a colon is a second name and no value: '(x: :)' is no condition
+        // either way, since the grammar has already lost the plot by then (measured).
+        if (value.StartsWith(":", StringComparison.Ordinal)) return false;
         int bang = value.LastIndexOf('!');
-        if (bang >= 0 && value[(bang + 1)..].Trim().Equals("important", StringComparison.OrdinalIgnoreCase))
+        if (bang >= 0)
+        {
+            var after = value[(bang + 1)..].TrimStart();
+            if (!after.Equals("important", StringComparison.OrdinalIgnoreCase)) return false;
             value = value[..bang].Trim();
+        }
         if (value.Length == 0) return false;
-        return Acrux.Core.Css.CssValueGrammar.TextIsValidFor(name, value);
+        return custom || (shapes & ShapeValidateDeclaration) == 0
+               || Acrux.Core.Css.CssValueGrammar.TextIsValidFor(name, value);
     }
+
+    /// <summary>Whether the tokens hold a property name straight before a colon at this group's own
+    /// depth — the shape that makes a function group a declaration rather than an atom.</summary>
+    private static bool HasTopLevelDeclaration(List<CssParserToken> tokens, int from, int to)
+    {
+        int depth = 0;
+        for (int k = from; k < to; k++)
+        {
+            var type = tokens[k].Type;
+            if (type is CssTokenType.FunctionToken or CssTokenType.LeftParenthesisToken) depth++;
+            else if (type == CssTokenType.RightParenthesisToken) depth--;
+            else if (depth == 0 && type == CssTokenType.IdentToken && k + 1 < to
+                     && tokens[k + 1].Type == CssTokenType.ColonToken)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>The index of the ')' that closes the group opening at <paramref name="i"/>, or
+    /// <paramref name="hi"/> when the text never closes it.</summary>
+    private static int GroupCloseIndex(List<CssParserToken> tokens, int i, int hi)
+    {
+        int depth = 0;
+        for (; i < hi; i++)
+        {
+            if (tokens[i].Type is CssTokenType.FunctionToken or CssTokenType.LeftParenthesisToken) depth++;
+            else if (tokens[i].Type == CssTokenType.RightParenthesisToken && --depth == 0) return i;
+        }
+        return hi;
+    }
+
 
     private static bool IsConditionGroupStart(CssParserToken token) =>
         token.Type is CssTokenType.FunctionToken or CssTokenType.LeftParenthesisToken;
 
     /// <summary>The index just past the group that begins at <paramref name="i"/>, whose own contents
     /// are not examined — a group is read as far as its closer and kept as it stands.</summary>
-    private static int SkipConditionGroup(List<CssParserToken> tokens, int i)
+    private static int SkipConditionGroup(List<CssParserToken> tokens, int i, int? limit = null)
     {
+        int hi = limit ?? tokens.Count;
         int depth = 0;
-        for (; i < tokens.Count; i++)
+        for (; i < hi; i++)
         {
             if (tokens[i].Type is CssTokenType.FunctionToken or CssTokenType.LeftParenthesisToken) depth++;
             else if (tokens[i].Type == CssTokenType.RightParenthesisToken && --depth == 0) return i + 1;
         }
-        return tokens.Count;
+        return hi;
     }
 
     private static bool IsConditionWord(List<CssParserToken> tokens, int i, string word) =>

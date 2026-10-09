@@ -1781,7 +1781,7 @@ public static class ShorthandExpander
         return parts;
     }
 
-    private static bool IsBorderStyle(string p) => p is "none" or "hidden" or "dotted" or "dashed" or "solid" or "double" or "groove" or "ridge" or "inset" or "outset";
+    internal static bool IsBorderStyle(string p) => p is "none" or "hidden" or "dotted" or "dashed" or "solid" or "double" or "groove" or "ridge" or "inset" or "outset";
     private static bool IsBorderWidth(string p) => CssPropertyApplier.IsBorderWidthToken(p);
     private static bool IsColor(string p) => p.StartsWith("#") || p.StartsWith("rgb") || p == "transparent" || p == "currentcolor" || IsNamedColor(p);
     private static bool IsFontSize(string p) => p is "xx-small" or "x-small" or "small" or "medium" or "large" or "x-large" or "xx-large" or "larger" or "smaller";

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 256 — @supports grammar, the declared-property inventory, scrollbar-gutter</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+.row, #report { white-space: pre-wrap; }
+.row::before { content: attr(data-mark); }
+#stage { position: absolute; left: 0; top: 0; width: 300px; height: 10px; }
+#gutter { position: absolute; left: -4000px; top: 0; width: 300px; height: 10px; overflow: hidden; }
+</style>
+</head>
+<body>
+<h4>b256 — CSS Conditional 5 §4/§5.1 supports grammar, the declared-property inventory (Namespaces of the property table), CSS Overflow 3 §3.5 scrollbar-gutter, the three supports channels agreeing. Every want is what the reference engine answered for the same document; the gutter rows are written against the bar thickness the reference engine itself reports, because the strip is a property of the device, not of the grammar.</h4>
+<pre id="report"></pre>
+<div id="stage"></div>
+<div id="zz"></div>
+<div id="gutter"></div>
+<script>
+// Rows are settled against the reference engine's own answers (snapshots/out/_b256_edge_supports.txt,
+// snapshots/out/_b256_supports_pairs.txt and snapshots/out/_b256_edge_props.txt), and every one of
+// them passes in both engines today. A row that throws still prints, so a missing line cannot be
+// read as a pass.
+const out = [];
+let failed = 0;
+function row(name, got, want) {
+  const ok = String(got) === String(want);
+  if (!ok) failed++;
+  out.push({ n: name, got: String(got), want: String(want), ok });
+}
+function check(name, fn, want) {
+  let got;
+  try { got = fn(); } catch (e) { got = 'ERR[' + e.name + ']'; }
+  row(name, got, want);
+}
+
+// §1 the supports grammar: 103 conditions, each as CSS.supports(text).
+const SUP = [
+  ["(color:RED)", true],
+  ["(transform:bogus)", false],
+  ["(-webkit-color:red)", false],
+  ["(display:flex)", true],
+  ["(text-overflow:bogus)", false],
+  ["(paint-order:stroke)", true],
+  ["(bogus: 1)", false],
+  ["()", false],
+  ["( )", false],
+  ["(color)", false],
+  ["(selector(a))", true],
+  ["(--x: 1)", true],
+  ["(--x)", false],
+  ["(width: calc(bogus))", false],
+  ["(!important)", false],
+  ["(display: flex extra)", false],
+  ["(color: red !important)", true],
+  ["(color: red !important extra)", false],
+  ["(not (color:red))", false],
+  ["((color:red) and (display:flex))", true],
+  ["(  color : red  )", true],
+  ["(background:red; color:blue)", false],
+  ["(offset-path:path(\"M 0 0\"))", true],
+  ["(line-clamp:2)", false],
+  ["(-webkit-line-clamp:2)", true],
+  ["(text-security:disc)", false],
+  ["(scrollbar-gutter:stable both-edges)", true],
+  ["selector(a)", true],
+  ["(vector-effect:non-scaling-stroke)", true],
+  ["(-webkit-text-security:disc)", true],
+  ["(opacity:1px)", false],
+  ["(z-index:1px)", false],
+  ["(margin:1px 1px 1px 1px 1px)", false],
+  ["(color: rgb(255 0 0))", true],
+  ["(color: rgb255,0,0)", false],
+  ["(display:)", false],
+  ["(: red)", false],
+  ["(color:red extra)", false],
+  ["1", false],
+  ["(transition:all 1s, color 2s)", true],
+  ["(font:bold 12px Arial)", true],
+  ["(transform:translateX(1px) bogus(2px))", false],
+  ["--x: 1", true],
+  ["--x", false],
+  ["(container: x / inline-size)", true],
+  ["(min-width: 10px)", true],
+  ["(url(a.png))", false],
+  ["(1)", false],
+  ["(-x)", false],
+  ["(x: )", false],
+  ["(x: :)", false],
+  ["(color: red; color: blue)", false],
+  ["(bogus 1)", false],
+  ["(color:red)extra", false],
+  ["((color:red))", true],
+  ["(selector(a) and (color))", false],
+  ["(display:intric-table)", false],
+  ["(position:sticky)", true],
+  ["(overflow:clip)", true],
+  ["(white-space:nowrap)", true],
+  ["(word-break:keep-all)", true],
+  ["(list-style-type:disc)", true],
+  ["(content:'x')", true],
+  ["(all:initial)", true],
+  ["(unicode-bidi:isolate)", true],
+  ["(writing-mode:vertical-rl)", true],
+  ["(image-orientation:none)", true],
+  ["(accent-color:red)", true],
+  ["(caret-shape:bar)", true],
+  ["(zoom:2)", true],
+  ["(vertical-align:top)", true],
+  ["(outline-style:dashed)", true],
+  ["(font-family:bogus)", true],
+  ["(border:1px bogus red)", false],
+  ["(height:calc(100% - 10px))", true],
+  ["(top:auto)", true],
+  ["(offset-path:bogus(\"M 0 0\"))", false],
+  ["(interpolate-size:numeric-keywords)", false],
+  ["(interpolate-size:numeric-only)", true],
+  ["(anchor-name:--a)", true],
+  ["(animation-timeline:scroll())", true],
+  ["(text-wrap:balance)", true],
+  ["(field-sizing:content)", true],
+  ["(-webkit-margin:1px)", false],
+  ["(-moz-transform:bogus)", false],
+  ["(paint-order:stroke fill markers)", true],
+  ["(shape-rendering:crispEdges)", true],
+  ["(color-rendering:auto)", true],
+  ["(image-rendering:pixelated)", true],
+  ["(touch-action:pan-x)", true],
+  ["(scrollbar-color:red blue)", true],
+  ["(scrollbar-width:thin)", true],
+  ["(text-orientation:sideways)", true],
+  ["(rotate:45deg)", true],
+  ["(scale:2)", true],
+  ["(translate:10px)", true],
+  ["(view-transition-name:x)", true],
+  ["(transition-behavior:normal)", true],
+  ["(overlay:auto)", true],
+  ["(position-anchor:--a)", true],
+  ["(inset-block-end:10px)", true],
+  ["(block-size:10px)", true],
+  ["(line-clamp:none)", false]
+];
+SUP.forEach(([text, want], i) => check('s' + (i + 1 < 100 ? (i + 1 < 10 ? '0' : '') : '') + (i + 1),
+  () => CSS.supports(text) ? 'T' : 'F', want ? 'T' : 'F'));
+
+// §2 the declared-property inventory: a name is a property only if the reference engine says so.
+const NAMES = [
+  ["text-security", "disc", false],
+  ["-webkit-text-security", "disc", true],
+  ["line-clamp", "2", false],
+  ["-webkit-line-clamp", "2", true],
+  ["webkit-line-clamp", "2", false],
+  ["-webkit-hyphens", "auto", false],
+  ["-webkit-color", "red", false],
+  ["-webkit-transform", "translateX(1px)", true],
+  ["-webkit-box-orient", "vertical", true],
+  ["-webkit-box-reflect", "below", true],
+  ["-webkit-flex-pack", "start", false],
+  ["-webkit-user-modify", "read-write", true],
+  ["-webkit-text-fill-color", "red", true],
+  ["-webkit-overflow-scrolling", "touch", false],
+  ["-webkit-scrollbar", "8px", false],
+  ["-webkit-font-smoothing", "antialiased", true],
+  ["-moz-transform", "translateX(1px)", false],
+  ["-ms-filter", "none", false],
+  ["-o-transform", "none", false],
+  ["paint-order", "stroke", true],
+  ["caret-shape", "bar", true],
+  ["transition-behavior", "normal", true],
+  ["overlay", "auto", true],
+  ["interpolate-size", "numeric-only", true],
+  ["interpolate-size", "numeric-keywords", false],
+  ["text-overflow", "ellipsis", true],
+  ["text-overflow", "bogus", false],
+  ["offset-path", "path(\"M 0 0\")", true],
+  ["offset-path", "bogus(\"M 0 0\")", false],
+  ["margin", "1px 1px 1px 1px", true],
+  ["margin", "1px 1px 1px 1px 1px", false],
+  ["border", "1px solid red", true],
+  ["border", "1px bogus red", false],
+  ["scrollbar-gutter", "stable both-edges", true],
+  ["scrollbar-gutter", "both-edges", false],
+  ["scrollbar-gutter", "bogus", false],
+  ["block-size", "10px", true],
+  ["zoom", "1", true],
+  ["position-anchor", "--a", true],
+  ["anchor-name", "--a", true]
+];
+NAMES.forEach(([p, v, want], i) => check('n' + (i + 1 < 10 ? '0' : '') + (i + 1),
+  () => CSS.supports(p, v) ? 'T' : 'F', want ? 'T' : 'F'));
+
+// §3 the same declaration through the '@import … supports()' channel: the import is created
+// exactly when the condition is well formed, which is the third reading of one grammar.
+function importCount(text) {
+  const st = document.createElement('style');
+  st.textContent = '@import url(v.css) supports(' + text + ');';
+  document.head.appendChild(st);
+  const n = st.sheet.cssRules.length;
+  st.remove();
+  return '#' + n;
+}
+[['display:flex', '#1'], ['transform:bogus', '#0'], ['text-security:disc', '#0'],
+ ['-webkit-text-security:disc', '#1'], ['line-clamp:2', '#0'], ['-webkit-line-clamp:2', '#1'],
+ ['-webkit-color:red', '#0'], ['scrollbar-gutter:stable', '#1'], ['scrollbar-gutter:bogus', '#0'],
+ ['text-overflow:bogus', '#0'], ['text-overflow:ellipsis', '#1'], ['opacity:1px', '#0'],
+ ['width:calc(bogus)', '#0'], ['width:calc(1px)', '#1'], ['margin:1px 1px 1px 1px 1px', '#0'],
+ ['border:1px bogus red', '#0'], ['offset-path:bogus("M 0 0")', '#0'],
+ ['interpolate-size:numeric-keywords', '#0'], ['(color)', '#1'], ['(color) (display:flex)', '#1'],
+ ['(color:red)extra', '#1'], ['color: red !important extra', '#0'], ['--x', '#0'],
+ ['selector(a)', '#1'], ['-webkit-margin:1px', '#0'], ['-moz-transform:none', '#0']]
+ .forEach(([text, want], i) => check('i' + (i + 1 < 10 ? '0' : '') + (i + 1),
+   () => importCount(text), want));
+
+// §4 an '@supports' rule is read as structure by the parser and as grammar by the cascade, which
+// is why a rule the IDL refuses can still sit in the sheet with nothing applying inside it. The want
+// is '#<rules> <conditionText> <colour the page ends up with>'.
+function ruleApply(text) {
+  const st = document.createElement('style');
+  st.textContent = '#zz { color: rgb(0,0,255) } @supports ' + text + ' { #zz { color: rgb(255,0,0) } }';
+  document.head.appendChild(st);
+  const zz = document.getElementById('zz');
+  const sheet = st.sheet, n = sheet ? sheet.cssRules.length : -1;
+  const rule = n > 1 ? sheet.cssRules[1] : null;
+  const cond = rule ? String(rule.conditionText) : '';
+  const col = getComputedStyle(zz).color.replace(/\s+/g, '');
+  st.remove();
+  return '#' + n + ' <' + cond + '> ' + col;
+}
+[['(display: flex)', '#2 <(display: flex)> rgb(255,0,0)'],
+ ['display: flex', '#1 <> rgb(0,0,255)'],
+ ['transform: bogus', '#1 <> rgb(0,0,255)'],
+ ['(text-security: disc)', '#2 <(text-security: disc)> rgb(0,0,255)'],
+ ['text-security: disc', '#1 <> rgb(0,0,255)'],
+ ['(selector(a))', '#2 <(selector(a))> rgb(255,0,0)'],
+ ['selector(a)', '#2 <selector(a)> rgb(255,0,0)'],
+ ['not (color)', '#2 <not (color)> rgb(255,0,0)'],
+ ['(color)', '#2 <(color)> rgb(0,0,255)'],
+ ['(bogus: 1)', '#2 <(bogus: 1)> rgb(0,0,255)'],
+ ['(display:flex) (color)', '#1 <> rgb(0,0,255)'],
+ ['(color:red)extra', '#1 <> rgb(0,0,255)'],
+ ['--x: 1', '#1 <> rgb(0,0,255)'],
+ ['(width: calc(bogus))', '#2 <(width: calc(bogus))> rgb(0,0,255)'],
+ ['()', '#2 <()> rgb(0,0,255)'],
+ ['( )', '#2 <( )> rgb(0,0,255)'],
+ ['(color: red !important extra)', '#2 <(color: red !important extra)> rgb(0,0,255)'],
+ ['(margin:1px 1px 1px 1px 1px)', '#2 <(margin:1px 1px 1px 1px 1px)> rgb(0,0,255)'],
+ ['(text-overflow: bogus)', '#2 <(text-overflow: bogus)> rgb(0,0,255)'],
+ ['(paint-order: stroke)', '#2 <(paint-order: stroke)> rgb(255,0,0)'],
+ ['', '#1 <> rgb(0,0,255)'],
+ ['(color:red)(display:flex)', '#1 <> rgb(0,0,255)'],
+ ['((color))', '#2 <((color))> rgb(0,0,255)'],
+ ['(not (color))', '#2 <(not (color))> rgb(255,0,0)'],
+ ['supports(display: flex)', '#2 <supports(display: flex)> rgb(0,0,255)'],
+ ['(display:flex) and (color)', '#2 <(display:flex) and (color)> rgb(0,0,255)'],
+ ['(display:flex) or (color)', '#2 <(display:flex) or (color)> rgb(255,0,0)'],
+ ['(display: flex) junk', '#1 <> rgb(0,0,255)'],
+ ['(url(a.png))', '#2 <(url(a.png))> rgb(0,0,255)']]
+ .forEach(([text, want], i) => check('r' + (i + 1 < 10 ? '0' : '') + (i + 1),
+   () => ruleApply(text), want));
+
+// §5 CSS Overflow 3 §3.5 scrollbar-gutter. The strip is the bar the device would draw, so the
+// wants are written against the reference engine's own measurement of it ('bar' below comes from a
+// box whose bars are always there), and every rule is a relationship the same device has to hold.
+function gutter(overflow, value) {
+  const host = document.getElementById('gutter');
+  host.innerHTML = '';
+  const el = document.createElement('div');
+  el.style.cssText = 'width:120px;height:60px;overflow:' + overflow +
+                     (value ? ';scrollbar-gutter:' + value : '');
+  const inner = document.createElement('div');
+  inner.style.cssText = 'height:300px';
+  inner.textContent = 't';
+  el.appendChild(inner);
+  host.appendChild(el);
+  return { offset: el.offsetWidth, client: el.clientWidth, scroll: el.scrollWidth,
+           text: getComputedStyle(el).scrollbarGutter ||
+                 getComputedStyle(el).getPropertyValue('scrollbar-gutter') };
+}
+const probe = gutter('scroll', '');
+const bar = probe.offset - probe.client;
+const G = [
+  ['g01_hidden_auto',      ['hidden', ''],        o => o.client === 120 && o.text === 'auto'],
+  ['g02_scroll_auto',      ['scroll', ''],        o => o.client === 120 - bar],
+  ['g03_visible',          ['visible', ''],       o => o.client === 120],
+  ['g04_stableHidden',     ['hidden', 'stable'],  o => o.client === 120 - bar && o.text === 'stable'],
+  ['g05_bothHidden',       ['hidden', 'stable both-edges'], o => o.client === 120 - 2 * bar],
+  ['g06_stableScroll',     ['scroll', 'stable'],  o => o.client === 120 - bar],
+  ['g07_bothScroll',       ['scroll', 'stable both-edges'], o => o.client === 120 - 2 * bar],
+  ['g08_stableVisible',    ['visible', 'stable'], o => o.client === 120],
+  ['g09_bothVisible',      ['visible', 'stable both-edges'], o => o.client === 120],
+  ['g10_badValue',         ['hidden', 'bogus'],   o => o.client === 120 && o.text === 'auto'],
+  ['g11_bothAlone',        ['hidden', 'both-edges'], o => o.client === 120 && o.text === 'auto'],
+  ['g12_stableAuto',       ['auto', 'stable'],    o => o.client === 120 - bar],
+  ['g13_textStable',       ['hidden', 'stable'],  o => o.text === 'stable'],
+  ['g14_textBoth',         ['hidden', 'stable both-edges'], o => o.text === 'stable both-edges'],
+  ['g15_textAuto',         ['hidden', ''],        o => o.text === 'auto'],
+];
+G.forEach(([name, args, test], i) => check(name, () => {
+  const o = gutter(args[0], args[1]);
+  return test(o) ? 'ok' : 'bad client=' + o.client + ' text=' + o.text + ' bar=' + bar;
+}, 'ok'));
+
+document.getElementById('report').textContent = out.map(r =>
+  (r.ok ? 'ok   ' : 'FAIL ') + r.n.padEnd(30, ' ') + ' got=' + r.got + ' want=' + r.want
+).join('\n') + '\nFAILED ' + failed + ' of ' + out.length + '\n';
+</script>
+</body>
+</html>

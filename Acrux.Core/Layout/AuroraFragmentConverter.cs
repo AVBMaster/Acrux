@@ -169,7 +169,8 @@ public static class AuroraFragmentConverter
         // CreateLayoutBox; the conversion here must do the same or overflow
         // containers never get scrollbars / wheel routing.
         var elStyle = fragment.Element?.ComputedStyle;
-        if (elStyle != null && IsScrollableOverflow(elStyle))
+        float gutterReserve = fragment.GutterInlineReservation;
+        if (elStyle != null && (IsScrollableOverflow(elStyle) || gutterReserve > 0f))
         {
             float bottom = 0, right = 0;
             foreach (var l in fragment.Lines)
@@ -202,10 +203,14 @@ public static class AuroraFragmentConverter
                 bool forceH = elStyle.OverflowX == OverflowType.Scroll || elStyle.Overflow == OverflowType.Scroll;
                 bool needV = forceV || box.ScrollContentHeight > box.ContentBox.Height + 0.5f;
                 bool needH = forceH || box.ScrollContentWidth > box.ContentBox.Width + 0.5f;
-                if (needV)
+                // The layout's own reservation wins when it is the wider of the two: a stable
+                // gutter reserves the strip even where no bar can ever be drawn, and 'both-edges'
+                // reserves a second one beside the bar that is.
+                float inlineStrip = Math.Max(needV ? barThickness : 0f, gutterReserve);
+                if (inlineStrip > 0f)
                 {
                     box.ContentBox = new SKRect(box.ContentBox.Left, box.ContentBox.Top,
-                        Math.Max(box.ContentBox.Left + 1, box.ContentBox.Right - barThickness),
+                        Math.Max(box.ContentBox.Left + 1, box.ContentBox.Right - inlineStrip),
                         box.ContentBox.Bottom);
                 }
                 if (needH)
