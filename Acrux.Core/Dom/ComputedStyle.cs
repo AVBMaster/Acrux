@@ -1157,6 +1157,20 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     /// <summary>The text decorations before applying ::first-line overrides.</summary>
     public System.Collections.Generic.List<AppliedTextDecoration> BaseAppliedTextDecorations() => AppliedTextDecorations();
     public string TextEmphasis { get; set; } = "none";
+    /// <summary>The values of the properties this engine reads, validates, inherits and echoes and
+    /// does not yet consume — scroll snapping, container queries, the SVG keyword family, the rest
+    /// of <c>font-variant</c>. One map, driven by the table in
+    /// <see cref="Acrux.Core.Css.Resolver.EchoedProperties"/>, so the cascade, inheritance and
+    /// <c>getComputedStyle</c> cannot disagree about a property none of them acts on. A property
+    /// leaves this map when it gains a real field with a consumer.</summary>
+    public Dictionary<string, string>? Echoed { get; set; }
+
+    public string? GetEchoed(string name)
+        => Echoed != null && Echoed.TryGetValue(name, out var value) ? value : null;
+
+    public void SetEchoed(string name, string value)
+        => (Echoed ??= new Dictionary<string, string>(StringComparer.Ordinal))[name] = value;
+
     public string TextEmphasisColor { get; set; } = "currentcolor";
     public string TextEmphasisStyle { get; set; } = "none";
     public string TextEmphasisPosition { get; set; } = "over right";
@@ -1625,6 +1639,9 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             TextUnderlinePosition = TextUnderlinePosition, TextDecorationSkipInk = TextDecorationSkipInk,
             BoxDecorationBreak = BoxDecorationBreak,
             TextEmphasis = TextEmphasis, TextEmphasisColor = TextEmphasisColor, TextEmphasisStyle = TextEmphasisStyle,
+            // The echo map is mutable state, so a clone gets its own copy — a cloned style that
+            // shared the parent's dictionary would inherit a declaration and then rewrite it.
+            Echoed = Echoed is null ? null : new Dictionary<string, string>(Echoed, StringComparer.Ordinal),
             TextEmphasisPosition = TextEmphasisPosition,
             RowGap = RowGap, ColumnGap = ColumnGap,
             RowGapIsNormal = RowGapIsNormal, ColumnGapIsNormal = ColumnGapIsNormal,
@@ -2010,7 +2027,11 @@ public enum LineBreakType { Auto, Loose, Normal, Strict, Anywhere }
 public enum TextJustifyType { Auto, InterWord, InterCharacter, None }
 public enum HyphensType { None, Manual, Auto }
 public enum WritingModeType { HorizontalTb, VerticalRl, VerticalLr }
-public enum ResizeType { None, Both, Horizontal, Vertical }
+/// <summary>'resize' (CSS UI 4 §7.2). The two logical directions are what a page writes in a
+/// bidirectional layout; the engine drags a handle along the physical axis the pair resolves to,
+/// which is what the four start/end spellings would have needed a direction for (measured: this
+/// engine's reference accepts only none/both/horizontal/vertical/block/inline).</summary>
+public enum ResizeType { None, Both, Horizontal, Vertical, Block, Inline }
 
 /// <summary>'field-sizing' (CSS Form Control sizing): 'normal' keeps the widget's rendered
 /// size, 'content' sizes the control from its own content.</summary>

@@ -1,0 +1,81 @@
+b262 measured truth — reference engine (Chromium 150 family), 186 property/value pairs.
+Every line is what the reference answered; nothing is derived from specification prose.
+S = the inline-style block's echo (getPropertyValue after setProperty)
+C = getComputedStyle of an element carrying the same declaration
+Pages: css-standard-verify262-echo-properties-keyword-sets-and-counter-printing.html (the 186 rows),
+_probe_b262_cand*.html (the probes that produced them).
+
+== 1. keyword sets the engine only has to say correctly ==
+scroll-snap-type  'none','x','y','block','inline','both' kept; 'x mandatory' kept;
+                  'both proximity' => 'both' (proximity is the pair's default);
+                  'inline mandatory proximity' refused => C 'none'
+scroll-snap-align 'center','start end','end center'; 'start start' => 'start';
+                  'auto' and 'center nearest' refused => C 'none'
+scroll-snap-stop  'normal','always'; 'normal always' refused
+text-orientation  'mixed','upright','sideways'; 'sideways-left' and 'vertical-rl' refused => C 'mixed'
+ruby-align        'start','center','space-between','space-around'; 'right' refused
+text-combine-upright 'none','all'; 'digits' and 'digits 2' refused => C 'none'
+font-variant-position 'normal','sub','super'
+font-variant-east-asian printed in the engine's group order
+                  [jis04|jis78|jis83|simplified|traditional] [full-width|proportional-width] [ruby]
+                  'full-width jis04' => 'jis04 full-width'; 'ruby full-width' => 'full-width ruby';
+                  'normal full-width' and 'jis04 simplified' refused => C 'normal'
+font-variant-numeric  printed as written; three either/or groups {oldstyle|lining}-nums,
+                  {proportional|tabular}-nums, {diagonal|stacked}-fractions, plus 'ordinal',
+                  'slashed-zero', a factor. 'tabular-nums ordinal slashed-zero' kept;
+                  'diagonal-fractions stacked-fractions' and 'normal ordinal' refused => 'normal'
+font-language-override 'normal' or a string; the string prints with double quotes whichever way it
+                  was written ("SIN" and 'SIN' => "SIN"); 'bogus' refused => C 'normal'
+print-color-adjust 'economy','exact'; 'auto' refused => C 'economy'; 'exact economy' refused
+hyphenate-limit-chars 'auto' or 1..3 integers each >= 1; '0' and '6 3 3 2' refused => C 'auto'
+mask-type         'luminance','alpha'; 'alpha luminance' refused => C 'luminance'
+math-depth        S 'auto-add' | 'add(<int>)' | <int>;  C is the integer it adds:
+                  'auto-add' => S 'auto-add' C '0'; 'add(2)' => S 'add(2)' C '2'; '1' => '1'
+text-anchor       'start','middle','end'
+dominant-baseline one of 'auto','alphabetic','hanging','ideographic','middle','mathematical',
+                  'central'; 'middle alphabetic' and 'mathematic' refused => C 'auto'
+stroke-linecap    'butt','round','square'
+fill-rule         'nonzero','evenodd'; 'bogus' refused => C 'nonzero'
+animation-timeline 'auto','none', a dashed ident, or scroll()/view() (echoed verbatim, also in a
+                  comma list '--t, scroll()'); a bare 't' is refused => C 'auto'
+view-transition-name 'none' or a custom ident; 'auto' is refused => C 'none'
+position-anchor   'auto','none','--x'
+container-type    'normal','size','inline-size'
+container-name    'none' or space-separated idents; 'a, b' refused => C 'none'
+interpolate-size  'numeric-only' only; 'allows-keywords' and 'auto' refused => C 'numeric-only'
+offset-path       'none','content-box',…; 'path("M0 0")' => 'path("M 0 0")' (the path data is
+                  re-printed command-then-numbers)
+offset-rotate     S keeps 'reverse'; C prints 'auto 180deg'; 'auto 45deg' and '45deg' both surfaces
+
+== 2. sets that refuse a second word, and the three printings that reorder ==
+word-break  'break-word' ok; 'normal break-word' refused
+user-select 'all' ok; 'contain' and 'none auto' refused => C 'auto'
+overscroll-behavior-x 'contain' ok; 'nodefault' refused => C 'auto'
+text-wrap   'balance' => S 'balance' C 'balance'; 'wrap balance' => 'balance'; 'nowrap stable' kept;
+            'wrap reverse' refused
+tab-size    '4' => '4'; '2.5' => '2.5'; '0' => '0'; '4px' => '4px'; 'normal'/'auto' refused => C '8'
+resize      'none','both','horizontal','vertical','block','inline'; 'inline-start' => C 'none'
+aspect-ratio '1 / 2'; '0.5' => '0.5 / 1'; 'auto 1 / 2' kept whole in BOTH surfaces
+text-indent printed length-first: 'each-line 20px' => '20px each-line',
+            '10px each-line hanging' => '10px hanging each-line';
+            C resolves the length and keeps the flags: '3em hanging' => '48px hanging';
+            'cap 2' refused => C '0px'
+list-style-type a quoted string is a marker and prints with double quotes ('"–"', "'x'" => '"x"');
+            'symbols("*")' refused => C 'disc'; two strings refused
+
+== 3. counters ==
+counter-reset 'c' => 'c 0' (the integer is always written); 'c 3' => 'c 3'; 'c 2 c 3' kept as two
+            pairs; 'c reverse' => 'c 0 reverse 0' — 'reverse' is a counter NAME here, not a keyword;
+            'c none' refused => C 'none'; 'none' => 'none'
+counter-set   same printing rules ('c' => 'c 0')
+
+== 4. where this engine still differs (the 13 sentinel rows) ==
+#271 content's computed value: the reference echoes the specified list — 'counter(x)' stays
+     'counter(x)', 'counters(x, "-")' stays whole, 'attr(data-x)' becomes its fallback string
+     ('""' with none, '"y"' with one), 'none' on a regular element reads 'normal', and url() is
+     absolute. This engine evaluates the counter ('0'), drops counters() and attr(), prints 'none',
+     and echoes the authored relative url.
+#272 four single values: 'offset-rotate: reverse' (S must keep the word, C expands it),
+     'text-decoration-skip-ink: all' (the engine holds a flag and prints 'auto'),
+     'font-language-override' with no property id (so the cascade never stores it and C says
+     'normal'), and 'offset-path' (same: the echo is right, the computed falls back to 'none').

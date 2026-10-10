@@ -32,8 +32,12 @@ public static class CssPropertyTraits
         "text-emphasis", "text-emphasis-color", "text-emphasis-style", "text-emphasis-position",
     };
 
-    /// <summary>True when the property inherits its value by default.</summary>
-    public static bool IsInherited(string property) => Inherited.Contains(property);
+    /// <summary>True when the property inherits its value by default. The echo-only properties
+    /// carry their own answer in the table that prints them, so the list above is not the last
+    /// word — 'font-language-override' and the SVG keyword family inherit from there.</summary>
+    public static bool IsInherited(string property) =>
+        Inherited.Contains(property)
+        || Acrux.Core.Css.Resolver.EchoedProperties.Find(property)?.Inherited == true;
 
     /// <summary>
     /// Properties whose value is (or contains) a length, so that a unitless zero is really a
@@ -157,6 +161,10 @@ public static class CssPropertyTraits
                 || LegacyDeclaredOnly.ContainsKey(name)
                 || Css.CssValueGrammar.IsLegacyPrefixedName(name);
         if (EngineOnlyNames.Contains(name)) return false;
+        // A property the engine echoes from its own table is a declared property even where this
+        // engine has no id for it ('font-language-override' is the one such name — the reference
+        // engine takes it, and a gate that consulted only the id table would drop the declaration).
+        if (Acrux.Core.Css.Resolver.EchoedProperties.Find(name) != null) return true;
         return IsKnown(name) || ReferenceDeclared.Contains(name);
     }
 
@@ -585,6 +593,15 @@ public static class CssPropertyTraits
                 to.ListStyleTypeName = from.ListStyleTypeName; break;
             case "list-style-position": to.ListStylePosition = from.ListStylePosition; break;
             case "list-style-image": to.ListStyleImage = from.ListStyleImage; break;
+        }
+        // The echo-only properties have no field to copy: their value lives in one map, and a
+        // source that says nothing clears the target's entry the way copying a default field
+        // would for any other property.
+        if (Acrux.Core.Css.Resolver.EchoedProperties.Find(property) is { } echo)
+        {
+            var echoedValue = from.GetEchoed(echo.Name);
+            if (echoedValue == null) to.Echoed?.Remove(echo.Name);
+            else to.SetEchoed(echo.Name, echoedValue);
         }
     }
 

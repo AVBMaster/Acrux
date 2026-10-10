@@ -406,13 +406,10 @@ public class CascadeResolverState
         _ => Dom.GridAutoFlowType.Row
     };
 
-    private static Dom.ResizeType ParseResizeType(string value) => value.ToLowerInvariant() switch
-    {
-        "both" => Dom.ResizeType.Both,
-        "horizontal" => Dom.ResizeType.Horizontal,
-        "vertical" => Dom.ResizeType.Vertical,
-        _ => Dom.ResizeType.None
-    };
+    /// <summary>The one resize parser is the applier's; a second table of the same keywords is how
+    /// the two paths drifted apart once before ('block' and 'inline' landed here only once).</summary>
+    private static Dom.ResizeType ParseResizeType(string value)
+        => Acrux.Core.Css.Resolver.CssPropertyApplier.ParseResize(value);
 
     private static Dom.MixBlendModeType ParseMixBlendMode(string value) => value.ToLowerInvariant() switch
     {

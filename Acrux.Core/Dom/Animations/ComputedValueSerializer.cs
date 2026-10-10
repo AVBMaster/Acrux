@@ -35,6 +35,16 @@ public static class ComputedValueSerializer
     public static string? Get(ComputedStyle style, string property, bool includeShorthands)
     {
         if (style == null || string.IsNullOrEmpty(property)) return null;
+        // The echo-only properties answer from their one table: the canonical text the page wrote,
+        // or the value the engine says when nothing was written. A property that gains a real field
+        // and consumer is taken out of that table, so it is never answered twice.
+        if (Acrux.Core.Css.Resolver.EchoedProperties.Find(property) is { } echo)
+        {
+            var written = style.GetEchoed(echo.Name) ?? echo.Initial;
+            return echo.Name == "math-depth"
+                ? Acrux.Core.Css.Resolver.EchoedProperties.MathDepthComputed(written)
+                : written;
+        }
         var value = ValueOf(style, property);
         if (value != null) return value;
         if (includeShorthands)
@@ -193,7 +203,12 @@ public static class ComputedValueSerializer
             // 'normal' is the zero of the property and reads back as '0px'. 'letter-spacing'
             // keeps its keyword, which is why the two do not share a line here.
             case "word-spacing": return style.WordSpacingIsNormal ? "0px" : Px(style.WordSpacing);
-            case "text-indent": return Px(style.TextIndent);
+            // The computed value of 'text-indent' is the resolved length with the two flags still
+            // attached, in the engine's own order (measured: '3em hanging' reads '48px hanging').
+            case "text-indent": return CssValueText.CanonicalizeTextIndent(
+                Px(style.TextIndent)
+                + (style.TextIndentHanging ? " hanging" : "")
+                + (style.TextIndentEachLine ? " each-line" : ""), "text-indent") ?? Px(style.TextIndent);
             case "font-weight": return ((int)style.FontWeight).ToString(CultureInfo.InvariantCulture);
             case "visibility": return style.Visibility switch
             {
@@ -260,11 +275,13 @@ public static class ComputedValueSerializer
             case "caret-shape": return string.IsNullOrWhiteSpace(style.CaretShape)
                 ? "auto" : style.CaretShape;
             case "box-sizing": return style.BoxSizing.ToCssString();
+            // A string marker is a value of 'list-style-type', and the engine says it as a string —
+            // with its quotes, whichever way the page wrote them (measured: "'x'" reads '"x"').
             case "list-style-type": return string.IsNullOrEmpty(style.ListStyleTypeString)
                 ? string.IsNullOrEmpty(style.ListStyleTypeName)
                     ? CssEnumFormatter.CssKeywordFromEnum(style.ListStyleType.ToString())
                     : style.ListStyleTypeName!
-                : style.ListStyleTypeString!;
+                : "\"" + style.ListStyleTypeString! + "\"";
             case "list-style-position": return style.ListStylePosition == ListStylePosition.Inside ? "inside" : "outside";
             case "table-layout": return style.TableLayout;
             case "caption-side": return style.CaptionSide;
@@ -312,15 +329,37 @@ public static class ComputedValueSerializer
                 : style.TextOverflow == TextOverflowType.Ellipsis ? "ellipsis" : "clip";
             case "line-break": return style.LineBreak.ToString().ToLowerInvariant();
             case "hyphens": return style.Hyphens.ToString().ToLowerInvariant();
-            case "tab-size": return (style.TabSizePx ?? 8f).ToString("0.###", CultureInfo.InvariantCulture);
+            // 'tab-size' keeps the form the page used: a number counts space advances and reads as
+            // a number, a length is a length and reads with its unit (both measured; the initial is
+            // the number 8).
+            case "tab-size": return style.TabSizePx is { } tabPx
+                ? Px(tabPx) : CssValueTokenizer.Num(style.TabSize);
             case "scroll-behavior": return style.ScrollBehavior.ToString().ToLowerInvariant();
             case "overscroll-behavior-x": return style.OverscrollBehaviorX.ToString().ToLowerInvariant();
             case "overscroll-behavior-y": return style.OverscrollBehaviorY.ToString().ToLowerInvariant();
-            case "text-wrap": return style.TextWrapStyle == TextWrapStyleType.Auto
-                ? style.TextWrapMode.ToString().ToLowerInvariant()
-                : $"{style.TextWrapMode.ToString().ToLowerInvariant()} {style.TextWrapStyle.ToString().ToLowerInvariant()}";
+            // 'text-wrap' prints as the shorthand the page wrote: a wrapping mode is what a style
+            // word alone means, so 'wrap balance' reads 'balance' while 'nowrap stable' says both
+            // (measured).
+            case "text-wrap": {
+                var mode = style.TextWrapMode.ToString().ToLowerInvariant();
+                // The enum member is 'Balanced' while the keyword is 'balance', so the words are
+                // named here rather than derived from the member (see CssEnumFormatter's rule).
+                var wrapStyle = style.TextWrapStyle switch {
+                    TextWrapStyleType.Stable => "stable",
+                    TextWrapStyleType.Balanced => "balance",
+                    TextWrapStyleType.Pretty => "pretty",
+                    _ => "auto",
+                };
+                if (wrapStyle == "auto") return mode;
+                return mode == "wrap" ? wrapStyle : mode + " " + wrapStyle;
+            }
             case "text-wrap-mode": return style.TextWrapMode.ToString().ToLowerInvariant();
-            case "text-wrap-style": return style.TextWrapStyle.ToString().ToLowerInvariant();
+            case "text-wrap-style": return style.TextWrapStyle switch {
+                TextWrapStyleType.Stable => "stable",
+                TextWrapStyleType.Balanced => "balance",
+                TextWrapStyleType.Pretty => "pretty",
+                _ => "auto",
+            };
             case "writing-mode": return style.WritingMode switch
             {
                 WritingModeType.VerticalRl => "vertical-rl",
@@ -347,9 +386,15 @@ public static class ComputedValueSerializer
                         case "mask-mode": return MaskLayerList(style, style.MaskModeLayers, style.MaskMode, "match-source", null);
                         case "mask-composite": return MaskLayerList(style, style.MaskCompositeLayers, style.MaskComposite, "add", null);
             case "cursor": return style.Cursor ?? "auto";
-            case "resize": return style.Resize == ResizeType.Both ? "both"
-                : style.Resize == ResizeType.Vertical ? "vertical"
-                : style.Resize == ResizeType.Horizontal ? "horizontal" : "none";
+            case "resize": return style.Resize switch
+            {
+                ResizeType.Both => "both",
+                ResizeType.Vertical => "vertical",
+                ResizeType.Horizontal => "horizontal",
+                ResizeType.Block => "block",
+                ResizeType.Inline => "inline",
+                _ => "none",
+            };
             // The ratio of two numbers, printed as the pair it was authored with (measured:
             // '1/2' reads back as '1 / 2', '0.5' as '0.5 / 1') — not as their quotient.
             case "aspect-ratio":
@@ -447,6 +492,9 @@ public static class ComputedValueSerializer
             case "border-left-style": return style.BorderLeftStyle.ToCssString();
             case "column-rule-style": return style.ColumnRuleStyle.ToCssString();
             case "column-rule-width": return Px(style.ColumnRuleWidth);
+            // The line painter reads 'text-decoration-skip-ink', so it is not one of the echoed
+            // properties: the engine keeps the flag and prints the two answers it can give.
+            case "text-decoration-skip-ink": return style.TextDecorationSkipInk ? "auto" : "none";
             case "text-decoration-style": return style.TextDecorationStyle switch
             {
                 TextDecorationStyleType.Double => "double",

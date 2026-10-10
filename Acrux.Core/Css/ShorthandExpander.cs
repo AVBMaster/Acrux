@@ -1454,7 +1454,7 @@ public static class ShorthandExpander
         return false;
     }
 
-    private static bool IsNumberToken(string token)
+    internal static bool IsNumberToken(string token)
     {
         var t = token.Trim();
         if (t.Length == 0) return false;

@@ -112,6 +112,16 @@ public static class CssPropertyApplier
     // Font-relative units inside these values resolve against this element's
     // own font (CSS Values 4 §6.3); the style argument carries it.
     using var _fontUnitScope = FontUnitContext.Use(style);
+    // The properties this engine reads, validates and echoes but does not consume are stored by
+    // one table (Acrux.Core.Css.Resolver.EchoedProperties), which is also their grammar: a value
+    // the table cannot read leaves the property exactly as it was, the way a refused declaration
+    // does everywhere else.
+    if (Acrux.Core.Css.Resolver.EchoedProperties.Find(name) is { } echoedProperty)
+    {
+        if (echoedProperty.Normalize(value) is { } echoed)
+            style.SetEchoed(echoedProperty.Name, echoed);
+        return;
+    }
     try
     {
         switch (name)
@@ -801,21 +811,33 @@ public static class CssPropertyApplier
             case "aspect-ratio":
                 // The value is a ratio of two numbers, and both are kept: a box sized from
                 // '1 / 2' and one sized from '0.5' lay out the same, but a script reading the
-                // computed value gets the pair back, in the author's own numbers.
-                if (value == "auto") { style.AspectRatio = 0; style.AspectRatioPair = null; }
-                else if (value.Contains('/'))
+                // computed value gets the pair back, in the author's own numbers. An 'auto'
+                // written beside the ratio is part of what the page said, so it stays in the text
+                // the engine prints (measured: 'auto 1 / 2' reads back 'auto 1 / 2') while layout
+                // still sees the ratio.
                 {
-                    var parts = value.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    if (parts.Length == 2 && float.TryParse(parts[0], out var aw) && float.TryParse(parts[1], out var ah) && ah > 0)
+                    var ratioText = value.Trim();
+                    bool ratioAuto = ratioText.StartsWith("auto", StringComparison.OrdinalIgnoreCase);
+                    if (ratioAuto) ratioText = ratioText[4..].Trim();
+                    var sides = ratioText.Split('/',
+                        StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    float? num = null, den = null;
+                    if (sides.Length == 1 && float.TryParse(sides[0], out var single))
+                    { num = single; den = 1f; }
+                    else if (sides.Length == 2 && float.TryParse(sides[0], out var av)
+                        && float.TryParse(sides[1], out var bv)) { num = av; den = bv; }
+                    if (num is > 0 && den is > 0)
                     {
-                        style.AspectRatio = aw / ah;
-                        style.AspectRatioPair = $"{Acrux.Core.Dom.Animations.CssValueTokenizer.Num(aw)} / {Acrux.Core.Dom.Animations.CssValueTokenizer.Num(ah)}";
+                        style.AspectRatio = num.Value / den.Value;
+                        var pair = $"{Acrux.Core.Dom.Animations.CssValueTokenizer.Num(num.Value)} / "
+                            + $"{Acrux.Core.Dom.Animations.CssValueTokenizer.Num(den.Value)}";
+                        style.AspectRatioPair = ratioAuto ? "auto " + pair : pair;
                     }
-                }
-                else if (float.TryParse(value, out var ar))
-                {
-                    style.AspectRatio = ar;
-                    style.AspectRatioPair = ar > 0 ? $"{Acrux.Core.Dom.Animations.CssValueTokenizer.Num(ar)} / 1" : null;
+                    else if (ratioText.Length == 0)
+                    {
+                        style.AspectRatio = 0;
+                        style.AspectRatioPair = null;
+                    }
                 }
                 break;
             case "object-fit": style.ObjectFit = ParseObjectFit(value); break;
@@ -3703,11 +3725,16 @@ public static class CssPropertyApplier
         _ => TextJustifyType.Auto
     };
 
+    /// <summary>CSS UI 4 §7.2 as this engine reads it: the four physical directions plus the two
+    /// logical ones the spec adds. The four start/end spellings are not values here (measured:
+    /// 'inline-start' computes 'none'), and neither is a pair of keywords.</summary>
     public static ResizeType ParseResize(string value) => value.ToLowerInvariant() switch
     {
         "both" => ResizeType.Both,
         "horizontal" => ResizeType.Horizontal,
         "vertical" => ResizeType.Vertical,
+        "block" => ResizeType.Block,
+        "inline" => ResizeType.Inline,
         _ => ResizeType.None
     };
 

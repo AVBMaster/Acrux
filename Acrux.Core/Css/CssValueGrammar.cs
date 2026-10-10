@@ -44,6 +44,12 @@ public static class CssValueGrammar
     public static bool TextIsValidFor(string propertyName, string value)
     {
         if (propertyName.StartsWith("--")) return true;
+        // A name the reference engine has no property for has no value either. This engine knows a
+        // handful of names only its own code paths use ('initial-letter-align', 'max-lines',
+        // 'imemode' …, see CssPropertyTraits.EngineOnlyNames), and echoing a declaration under one
+        // of them reads back a property the page could never have set (measured:
+        // 'setProperty("initial-letter-align","superscript")' then answers the empty string).
+        if (!Resolver.CssPropertyTraits.IsDeclaredProperty(propertyName)) return false;
         // The background shorthand's grammar IS its expansion: a colour outside the final layer, a
         // token nothing in <bg-layer> reads and a position or size list the grammar refuses all leave
         // the declaration out of the cascade, and the reference engine refuses it in the CSSOM echo
@@ -53,6 +59,12 @@ public static class CssValueGrammar
         if (propertyName.Equals("background", StringComparison.OrdinalIgnoreCase)
             && !Resolver.CssPropertyTraits.IsCssWideKeyword(value.Trim()))
             return ShorthandExpander.ExpandProperty("background", value).Count > 0;
+        // The properties this engine echoes without consuming are read by one table, and that table
+        // is the grammar too: a value whose canonical text does not exist is not a declaration on
+        // any surface (measured value by value — 'fill-rule: bogus', 'mask-type: alpha luminance',
+        // 'container-name: a, b', 'animation-timeline: t' and the rest).
+        if (Acrux.Core.Css.Resolver.EchoedProperties.Find(propertyName) is { } echo)
+            return TextIsValid(value, text => echo.Normalize(text) != null);
         // A '-webkit-' spelling that is a property of its own has its twin's grammar: the value
         // set is the same, and only the name the declaration is stored under differs.
         var id = CssPropertyIdExtensions.BehaviourId(CssPropertyIdExtensions.FromString(propertyName));
@@ -215,6 +227,30 @@ public static class CssValueGrammar
         return parts.Count == 1 && IsOneOf(parts[0], words);
     }
 
+    /// <summary>One word of a closed set — a second word is no value even when it is itself a
+    /// member ('word-break: normal break-word', 'user-select: none auto', both measured).</summary>
+    private static bool IsSingleKeywordWord(string text, string[] allowed)
+    {
+        var words = SplitComponents(text);
+        return words.Count == 1 && IsOneOf(words[0], allowed);
+    }
+
+    /// <summary><c>text-wrap</c> is the pair of its two longhands (CSS Text 4 §4): at most one
+    /// wrapping mode and at most one styling keyword, and 'reverse' — which an older draft carried
+    /// — is not one of them here (measured: 'wrap reverse' is dropped).</summary>
+    private static bool IsTextWrapValue(string text)
+    {
+        bool mode = false, style = false;
+        foreach (var word in SplitComponents(text))
+        {
+            var p = word.ToLowerInvariant();
+            if (p is "wrap" or "nowrap") { if (mode) return false; mode = true; }
+            else if (p is "auto" or "stable" or "balance" or "pretty") { if (style) return false; style = true; }
+            else return false;
+        }
+        return mode || style;
+    }
+
     private static bool IsOneWordList(string text, params string[] words)
     {
         foreach (var part in SplitComponents(text))
@@ -325,6 +361,36 @@ public static class CssValueGrammar
     /// the property's value set from its text.</summary>
     private static Func<string, bool>? GrammarFor(CssPropertyId id) => id switch
     {
+        // ===== The closed keyword sets measured value by value in b262. Each of these properties
+        // takes exactly one word, and a second word — even a word of its own vocabulary — is no
+        // value at all ('word-break: normal break-word', 'user-select: none auto',
+        // 'overscroll-behavior-x: nodefault').
+        CssPropertyId.UserSelect => static text => IsSingleKeywordWord(text,
+            new[] { "auto", "text", "none", "all" }),
+        CssPropertyId.OverscrollBehaviorX or CssPropertyId.OverscrollBehaviorY
+            => static text => IsSingleKeywordWord(text, new[] { "auto", "contain", "none" }),
+        CssPropertyId.WordBreak => static text => IsSingleKeywordWord(text,
+            new[] { "normal", "break-all", "keep-all", "break-word" }),
+        CssPropertyId.TextWrap => IsTextWrapValue,
+        // CSS Text 3 §3.4 as this engine reads it: a number or a length, and nothing else — neither
+        // 'normal' nor 'auto' is a value of 'tab-size' here (all three measured).
+        CssPropertyId.TabSize => static text => IsLengthList(text) && !SplitComponents(text).Any(
+            static w => w.Equals("normal", StringComparison.OrdinalIgnoreCase)
+                || w.Equals("auto", StringComparison.OrdinalIgnoreCase)),
+        // 'symbols()' is a @counter-style descriptor, not a value of 'list-style-type' here
+        // (measured: the declaration is dropped and the property stays 'disc'), while a quoted
+        // string is a marker the engine keeps.
+        CssPropertyId.ListStyleType => IsListStyleTypeValue,
+        // CSS Text 3 §5.2 as this engine reads it: the flags come with one length, and an alias
+        // word ('cap') is not one of them (measured).
+        CssPropertyId.TextIndent => static text =>
+            Acrux.Core.Css.CssValueText.CanonicalizeTextIndent(text, "text-indent") != null,
+        CssPropertyId.AspectRatio => static text =>
+            Acrux.Core.Css.CssValueText.CanonicalizeAspectRatio(text) != null,
+        // CSS Lists 3 §4.3/§4.4: a counter is a name plus an integer, and the integer is written
+        // even when the page left it out. 'none' is a value of the whole property, never of one
+        // counter, and 'reverse' is simply a name (both measured).
+        CssPropertyId.CounterReset or CssPropertyId.CounterSet => IsCounterList,
         // CSS Text Decoration 4 §2: any number of the four decoration lines (each at most once), at
         // most one style, at most one thickness and at most one colour, and the three lines that
         // stand alone ('none', 'spelling-error', 'grammar-error') stand alone. Every refusal named in
@@ -1125,6 +1191,53 @@ public static class CssValueGrammar
     private static bool IsUnitlessNonZero(string token) =>
         double.TryParse(token, System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var value) && value != 0;
+
+    /// <summary><c>list-style-type</c> is the keyword family of <c>@counter-style</c> plus a quoted
+    /// string used as the marker; an unknown name is a custom counter style the sheet may declare,
+    /// which the engine still echoes, while a function is not a type at all (measured:
+    /// <c>'symbols("*")'</c> is dropped and <c>'"–"'</c> is kept).</summary>
+    private static bool IsListStyleTypeValue(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count != 1) return false;
+        var one = words[0];
+        if (one.Length >= 2 && (one[0] == '"' || one[0] == '\'') && one[^1] == one[0]) return true;
+        if (one.Contains('(') || one.Contains('[')) return false;
+        return IsIdentifierLike(one);
+    }
+
+    /// <summary><c>counter-reset</c> and <c>counter-set</c> (CSS Lists 3 §4.3, §4.4): either the
+    /// single keyword <c>none</c>, or a list of <c>&lt;counter-name&gt; &lt;integer&gt;?</c> pairs.
+    /// A name may not be followed by another name's keyword — <c>'c none'</c> is refused, as is a
+    /// <c>normal</c> counter — and an integer that does not fit is no declaration either (all
+    /// measured; <c>'c reverse'</c> on the other hand is two counters, because 'reverse' is a name
+    /// like any other).</summary>
+    private static bool IsCounterList(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count == 0) return false;
+        if (words.Count == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+            return true;
+        int i = 0;
+        bool any = false;
+        while (i < words.Count)
+        {
+            var name = words[i];
+            if (name.Equals("none", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("normal", StringComparison.OrdinalIgnoreCase)
+                || !IsIdentifierLike(name)) return false;
+            i++;
+            if (i < words.Count)
+            {
+                // Only a number continues this counter; the next word starts a new one.
+                if (Acrux.Core.Css.ShorthandExpander.IsNumberToken(words[i])
+                    && int.TryParse(words[i], System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture, out _)) i++;
+            }
+            any = true;
+        }
+        return any;
+    }
 
     private static bool TextIsValid(string text, Func<string, bool> grammar)
     {

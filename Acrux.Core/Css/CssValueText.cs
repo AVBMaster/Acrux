@@ -207,6 +207,17 @@ public static class CssValueText
                 result = FoldKeywordCase(result, property);
                 if (property.Equals("font", StringComparison.OrdinalIgnoreCase))
                     result = FoldGenericFamilies(result);
+                // Three properties print a value the page did not literally write: the indent flags
+                // move behind the length, a ratio always says both sides, and a counter always says
+                // its integer. All three are decided here so a sheet, the CSSOM echo and
+                // getComputedStyle read the same text.
+                var indent = CanonicalizeTextIndent(result, property);
+                if (indent != null) result = indent;
+                else if (property.Equals("aspect-ratio", StringComparison.OrdinalIgnoreCase))
+                    result = CanonicalizeAspectRatio(result) ?? result;
+                else if (property.Equals("counter-reset", StringComparison.OrdinalIgnoreCase)
+                    || property.Equals("counter-set", StringComparison.OrdinalIgnoreCase))
+                    result = CanonicalizeCounterList(result) ?? result;
                 result = PutColorFirst(result, property);
                 result = CanonicalizeTransition(result, property);
                 result = OmitInitialBorderParts(result, property);
@@ -215,6 +226,12 @@ public static class CssValueText
                 result = CanonicalizeTextDecoration(result, property);
                 result = CanonicalizeColumnRule(result, property);
                 result = CanonicalizeListStyle(result, property);
+                // The properties that only have to be said correctly — scroll snapping, the SVG
+                // keyword family, the rest of the font-variant group — print what their one table
+                // says, so a sheet and a CSSOM write cannot disagree about the order of a keyword
+                // list the engine re-sorts ('font-variant-east-asian: full-width jis04').
+                if (Acrux.Core.Css.Resolver.EchoedProperties.Normalize(property, result) is { } echoed)
+                    result = echoed;
             }
         }
         return result;
@@ -580,6 +597,116 @@ public static class CssValueText
             parts.Add(color);
         if (parts.Count == 0) parts.Add("none");
         return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// Print <c>text-indent</c> the way the reference engine does: the length first, then
+    /// <c>hanging</c>, then <c>each-line</c>, whichever order the page wrote them in (measured:
+    /// 'each-line 20px' reads '20px each-line' and '10px each-line hanging' reads
+    /// '10px hanging each-line'). Each flag says itself once, and a word that is neither flag is
+    /// no alias this engine has — 'cap 2' is refused rather than printed.
+    /// Null means the text is not a value at all, which is also how the grammar reads it.
+    /// </summary>
+    public static string? CanonicalizeTextIndent(string text, string property)
+    {
+        if (!property.Equals("text-indent", StringComparison.OrdinalIgnoreCase)) return null;
+        bool? hanging = null, eachLine = null;
+        string? length = null;
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            var p = word.ToLowerInvariant();
+            if (p == "hanging") { if (hanging == true) return null; hanging = true; continue; }
+            if (p == "each-line") { if (eachLine == true) return null; eachLine = true; continue; }
+            if (length != null) return null;
+            // A length or percentage, with the one exception every length property shares: a bare
+            // number is a length only when it is zero, and then it is printed with its unit.
+            if (Dom.Length.IsLength(word)) length = word;
+            else if (IsBareZero(p)) length = "0px";
+            else return null;
+        }
+        if (length == null && hanging == null && eachLine == null) return null;
+        var parts = new List<string>();
+        if (length != null) parts.Add(length);
+        if (hanging == true) parts.Add("hanging");
+        if (eachLine == true) parts.Add("each-line");
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// Print <c>aspect-ratio</c>: the engine always says both sides of the ratio, so a lone number
+    /// gains its denominator (measured: '0.5' reads '0.5 / 1'), and an <c>auto</c> written beside a
+    /// ratio is kept in both the specified and the computed value (measured: 'auto 1 / 2' reads
+    /// 'auto 1 / 2' — the box's own ratio does not replace it).
+    /// </summary>
+    public static string? CanonicalizeAspectRatio(string text)
+    {
+        var trimmed = text.Trim();
+        string? auto = null;
+        if (trimmed.StartsWith("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            var rest = trimmed[4..].Trim();
+            if (rest.Length == 0) return "auto";
+            auto = "auto";
+            trimmed = rest;
+        }
+        var sides = SplitTopLevel(trimmed, '/').ToList();
+        string a, b;
+        if (sides.Count == 1)
+        {
+            if (!double.TryParse(sides[0].Trim(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var single) || single <= 0)
+                return null;
+            a = sides[0].Trim(); b = "1";
+        }
+        else
+        {
+            if (sides.Count != 2) return null;
+            a = sides[0].Trim(); b = sides[1].Trim();
+            if (!PositiveNumber(a) || !PositiveNumber(b)) return null;
+        }
+        var ratio = a + " / " + b;
+        return auto == null ? ratio : auto + " " + ratio;
+    }
+
+    private static bool PositiveNumber(string text) =>
+        double.TryParse(text, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var value) && value > 0;
+
+    /// <summary>
+    /// Print <c>counter-reset</c> and <c>counter-set</c>: every counter says its integer, whether
+    /// or not the page wrote one (measured: 'c' reads 'c 0', and 'c reverse' reads
+    /// 'c 0 reverse 0' because 'reverse' is a counter name and not a keyword here). A repeated
+    /// name is not folded away — the engine prints the pairs in the order they were written.
+    /// </summary>
+    public static string? CanonicalizeCounterList(string text)
+    {
+        var words = SplitTopLevelWords(text);
+        if (words.Count == 0) return null;
+        if (words.Count == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+            return "none";
+        var parts = new List<string>();
+        for (int i = 0; i < words.Count; i++)
+        {
+            var name = words[i];
+            if (name.Equals("none", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("normal", StringComparison.OrdinalIgnoreCase)
+                || !IsCounterNameToken(name)) return null;
+            string value = "0";
+            if (i + 1 < words.Count && ShorthandExpander.IsNumberToken(words[i + 1]))
+            {
+                value = words[i + 1];
+                i++;
+            }
+            parts.Add(name + " " + value);
+        }
+        return parts.Count == 0 ? null : string.Join(" ", parts);
+    }
+
+    private static bool IsCounterNameToken(string word)
+    {
+        foreach (var c in word)
+            if (!char.IsLetterOrDigit(c) && c is not ('-' or '_' or '\\')) return false;
+        return word.Length > 0;
     }
 
     private static int LineOrder(string line) => line switch

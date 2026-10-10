@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b262 candidate probe</title></head><body>
+<div id="live"></div>
+<script>
+// One broad candidate probe: property/value pairs this engine has never compared against the
+// reference. Each case is asked twice — once of the inline-style block (the specified echo) and
+// once of a live element (the computed value) — and answered as one short line.
+const CASES = [
+  ['float', 'inline-start'], ['float', 'inline-end'], ['clear', 'inline-start'],
+  ['counter-set', 'c 3'], ['counter-set', 'none'],
+  ['counter-reset', 'c none'], ['counter-reset', 'c reverse'], ['counter-reset', 'c 2 c 3'],
+  ['list-style-type', '"–"'], ['list-style-type', 'custom-name'], ['list-style-type', 'symbols("*")'],
+  ['text-indent', 'each-line 20px'], ['text-indent', 'hanging 20px'], ['text-indent', 'cap 2'],
+  ['word-break', 'break-word'], ['word-break', 'normal break-word'],
+  ['white-space', 'break-spaces'], ['white-space', 'pre-line'],
+  ['aspect-ratio', '1 / 2'], ['aspect-ratio', 'auto 1 / 2'], ['aspect-ratio', '0.5'],
+  ['image-rendering', 'pixelated'], ['image-rendering', 'crisp-edges'],
+  ['overscroll-behavior', 'contain'], ['overscroll-behavior-x', 'nodefault'],
+  ['scroll-snap-type', 'x mandatory'], ['scroll-snap-align', 'center'],
+  ['scroll-snap-align', 'start end'], ['scroll-snap-stop', 'always'],
+  ['caret-color', 'transparent'], ['accent-color', 'auto'],
+  ['user-select', 'all'], ['user-select', 'contain'], ['appearance', 'none'], ['appearance', 'auto'],
+  ['line-break', 'anywhere'], ['text-orientation', 'upright'], ['writing-mode', 'vertical-rl'],
+  ['font-optical-sizing', 'none'], ['font-variation-settings', '"wght" 500'],
+  ['font-language-override', 'normal'], ['will-change', 'transform'], ['will-change', 'auto'],
+  ['resize', 'inline'], ['quotes', 'auto'],
+  ['content', 'counter(x)'], ['content', 'counters(x, "-")'], ['content', 'attr(data-x)'],
+  ['content', 'open-quote'], ['content', 'normal'], ['content', 'url(a.png)'],
+  ['text-decoration-skip-ink', 'none'], ['tab-size', '4'], ['object-fit', 'contain'],
+  ['text-wrap', 'wrap reverse'], ['print-color-adjust', 'exact'],
+  ['text-combine-upright', 'all'], ['ruby-align', 'center'], ['mask-type', 'alpha'],
+  ['interpolate-size', 'allows-keywords'], ['math-depth', '1'],
+  ['hyphenate-limit-chars', '6 3 3'], ['initial-letter-align', 'superscript'],
+  ['text-anchor', 'middle'], ['dominant-baseline', 'middle'], ['stroke-linecap', 'round'],
+  ['fill-rule', 'evenodd'], ['animation-timeline', 'auto'], ['view-transition-name', 'none'],
+  ['offset-path', 'content-box'], ['offset-rotate', 'auto 45deg'],
+  ['position-anchor', 'none'], ['container-type', 'inline-size'], ['container-name', 'x'],
+  ['content-visibility', 'auto'], ['text-justify', 'inter-word'],
+  ['font-synthesis-weight', 'none'], ['font-variant-east-asian', 'full-width'],
+  ['font-variant-numeric', 'oldstyle-nums'], ['font-variant-position', 'super']
+];
+function specLine(p, v) {
+  const d = document.createElement('div');
+  d.style.setProperty(p, v);
+  return 'S ' + p + ' [' + v + '] => ' + JSON.stringify(d.style.getPropertyValue(p));
+}
+function compLine(p, v) {
+  const d = document.createElement('div');
+  d.setAttribute('style', p + ':' + v);
+  document.getElementById('live').appendChild(d);
+  const got = getComputedStyle(d).getPropertyValue(p);
+  d.remove();
+  return 'C ' + p + ' [' + v + '] => ' + JSON.stringify(got);
+}
+window.run = i => {
+  const p = CASES[i][0], v = CASES[i][1];
+  let a, b;
+  try { a = specLine(p, v); } catch (e) { a = 'S ' + p + ' [' + v + '] => ERR' + e.name; }
+  try { b = compLine(p, v); } catch (e) { b = 'C ' + p + ' [' + v + '] => ERR' + e.name; }
+  return a + '\n' + b;
+};
+window.total = CASES.length;
+// The tool transport eats escape sequences, so the joining happens here and a probe call is just
+// window.harvest(a,b) with no string literals of its own.
+window.harvest = (a, b) => {
+  const o = [];
+  for (let i = a; i < b && i < CASES.length; i++) o.push(run(i).replace(/\n/g, ' ~ '));
+  return 'n=' + CASES.length + ' @ ' + o.join(' @ ');
+};
+// ours.js is written by the same page running in the other engine: loading it lets this engine
+// report only the lines that disagree, which keeps every probe result small enough to trust.
+window.diff = () => {
+  if (!window.OURS) return 'no ours.js';
+  const bad = [];
+  for (let i = 0; i < CASES.length; i++) {
+    const mine = run(i).replace(/\n/g, ' ~ ').split(' ~ ');
+    const theirs = (window.OURS[i] || '').replace(/\n/g, ' ~ ').split(' ~ ');
+    const keep = [];
+    for (const half of [0, 1]) {
+      if (mine[half] !== theirs[half]) keep.push(mine[half] + ' |WE| ' + (theirs[half] || '?'));
+    }
+    if (keep.length) bad.push('#' + i + ' ' + keep.join(' ;; '));
+  }
+  window.D = bad;
+  return 'DIFF ' + bad.length + ' of ' + CASES.length;
+};
+window.dslice = (a, b) => (window.D || (window.diff(), window.D)).slice(a, b).join(' @@ ');
+for (let i = 0; i < CASES.length; i += 8) console.log(window.harvest(i, i + 8));
+</script>
+<script src="ours.js"></script>
+</body></html>

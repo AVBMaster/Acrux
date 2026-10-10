@@ -1,0 +1,32 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+#a { text-wrap: wrap balance; }
+#b { text-wrap: nowrap; }
+#c { text-wrap: stable; }
+#d { resize: inline-start; }
+#e { resize: block both; }
+#f::before { content: counter(x) attr(data-y) url(f.png); }
+#g { content: counter(x); }
+#h { list-style-type: 'ab' "c"; }
+#i { text-indent: 10px; }
+#j { text-indent: 3em hanging; }
+#k { tab-size: 4px; }
+#l { text-wrap: pretty; }
+</style></head><body>
+<div id="a"></div><div id="b"></div><div id="c"></div><div id="d"></div><div id="e"></div>
+<div id="f" data-y="v"></div><div id="g"></div><div id="h"></div><div id="i"></div>
+<div id="j"></div><div id="k"></div><div id="l"></div>
+<script>
+const ids = ['a','b','c','d','e','f','g','h','i','j','k','l'];
+const props = ['text-wrap','resize','content','list-style-type','text-indent','tab-size'];
+const out = [];
+for (const id of ids) {
+  const cs = getComputedStyle(document.getElementById(id));
+  for (const p of props) {
+    const v = cs.getPropertyValue(p);
+    if (v && v !== 'none' && v !== 'auto' && v !== 'normal') out.push(id + '.' + p + '=' + v);
+  }
+}
+window.RES = out;
+window.res = (a, b) => out.slice(a, b).join(' ; ');
+window.n = () => out.length;
+</script></body></html>
