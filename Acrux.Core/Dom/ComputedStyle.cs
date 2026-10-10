@@ -2189,7 +2189,7 @@ public sealed class AppliedTextDecoration
 public enum GridAutoFlowType { Row, Column, Dense, ColumnDense }
 public enum ZoomType { Normal, Reset }
 
-public record BoxShadowValue(SKColor Color, float OffsetX, float OffsetY, float BlurRadius, float Spread, bool Inset = false);
+public record BoxShadowValue(SKColor Color, float OffsetX, float OffsetY, float BlurRadius, float Spread, bool Inset = false, bool ColorIsCurrentColor = false);
 public record TextShadowValue(SKColor Color, float OffsetX, float OffsetY, float BlurRadius);
 
 public enum ReflectionDirectionType

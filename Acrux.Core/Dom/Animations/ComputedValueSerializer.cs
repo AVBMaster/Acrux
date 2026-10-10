@@ -1184,8 +1184,8 @@ public static class ComputedValueSerializer
         foreach (var s in style.BoxShadow)
         {
             if (sb.Length > 0) sb.Append(", ");
-            sb.Append(ShadowText(s.Color, s.OffsetX, s.OffsetY, s.BlurRadius, s.Spread, s.Inset,
-                withSpread: true));
+            sb.Append(ShadowText(s.ColorIsCurrentColor ? style.Color : s.Color, s.OffsetX, s.OffsetY,
+                s.BlurRadius, s.Spread, s.Inset, withSpread: true));
         }
         return sb.ToString();
     }

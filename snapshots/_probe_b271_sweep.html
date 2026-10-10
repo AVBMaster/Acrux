@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b271 computed sweep</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<pre id="report"></pre>
+<script>
+var CASES = [
+  ["box-shadow","1px 2px 3px 4px red inset"],
+  ["box-shadow","inset 0 0 0 2px, 5px 5px blue"],
+  ["box-shadow","0 0 0 red"],
+  ["box-shadow","5px 5px"],
+  ["text-shadow","1px 2px 3px red"],
+  ["text-shadow","none"],
+  ["filter","blur(2px) brightness(50%)"],
+  ["filter","none"],
+  ["backdrop-filter","blur(3px)"],
+  ["clip-path","inset(10px 20px round 5px)"],
+  ["clip-path","circle(50%)"],
+  ["clip-path","none"],
+  ["color-scheme","light dark"],
+  ["color-scheme","normal"],
+  ["caret-color","#ff000080"],
+  ["accent-color","rgb(1,2,3)"],
+  ["outline-offset","5px"],
+  ["text-underline-position","under left"],
+  ["text-decoration-skip-ink","none"],
+  ["scroll-behavior","smooth"],
+  ["scroll-margin","10px 20px"],
+  ["image-rendering","auto"],
+  ["object-fit","scale-down"],
+  ["transform","translate(10px, 20px) rotate(45deg)"],
+  ["transform-origin","10px 20px"],
+  ["will-change","auto"],
+  ["content","normal"],
+  ["counter-increment","a 1 b"],
+  ["quotes","\"a\" \"b\""],
+  ["tab-size","0"]
+];
+var host = document.createElement('div'); document.body.appendChild(host);
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+for (var i=0;i<CASES.length;i++){ var p=CASES[i][0],v=CASES[i][1];
+  out.push(i+'|'+p+'|'+v+'|S='+spec(p,v)+'|C='+comp(p,v)); }
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

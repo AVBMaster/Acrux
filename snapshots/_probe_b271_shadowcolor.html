@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b271 shadow color</title>
+<style>body{margin:0;font:12px monospace}
+.r{color:red;width:40px;height:20px;margin:6px;box-shadow:2px 2px 3px}
+.b{color:#00f;width:40px;height:20px;margin:6px;box-shadow:2px 2px 3px}
+</style></head><body>
+<div class="r" id="r"></div><div class="b" id="b"></div>
+<pre id="report"></pre>
+<script>
+function g(id,p){ return getComputedStyle(document.getElementById(id)).getPropertyValue(p); }
+var out=[];
+out.push('r color='+g('r','color')+' box-shadow='+g('r','box-shadow'));
+out.push('b color='+g('b','color')+' box-shadow='+g('b','box-shadow'));
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

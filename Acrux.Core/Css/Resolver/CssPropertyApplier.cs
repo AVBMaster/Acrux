@@ -4262,11 +4262,13 @@ public static class CssPropertyApplier
         }
 
         if (lengths.Count is < 2 or > 4 || color.Count > 1) return null;
-        var shadowColor = color.Count > 0
-            ? ColorParser.Parse(string.Join(" ", color))
-            : new SKColor(0, 0, 0, 80); // default currentColor≈black with standard shadow alpha
+        // A shadow with no colour paints in the element's own 'currentColor' (CSS Backgrounds 3 §5.3),
+        // fully opaque — not a fixed translucent black. The colour is resolved where the element's
+        // computed colour is known (paint and the computed surface), so the flag is what is stored.
+        var shadowColor = color.Count > 0 ? ColorParser.Parse(string.Join(" ", color)) : default;
         return new BoxShadowValue(shadowColor, lengths[0], lengths[1],
-            lengths.Count > 2 ? lengths[2] : 0f, lengths.Count > 3 ? lengths[3] : 0f, inset);
+            lengths.Count > 2 ? lengths[2] : 0f, lengths.Count > 3 ? lengths[3] : 0f, inset,
+            ColorIsCurrentColor: color.Count == 0);
     }
 
     public static bool TryParseLength(string token, out float value)

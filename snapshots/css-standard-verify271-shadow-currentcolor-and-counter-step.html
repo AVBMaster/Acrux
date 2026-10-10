@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 271 — a shadow with no colour is the element's own, and a counter says its step</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; padding: 10px; font-size: 16px; background: rgb(245,245,245); }
+#h { height: 0; }
+/* Three coloured boxes each carrying a colourless shadow: the pixel baseline guards that the shadow
+   paints in the element's own currentColor, not a fixed translucent black. */
+.sh { width: 60px; height: 24px; margin: 14px; display: inline-block; box-shadow: 4px 4px 6px; }
+.r { color: rgb(255,0,0); background: rgb(255,235,235); }
+.g { color: rgb(0,170,0); background: rgb(235,255,235); }
+.b { color: rgb(0,0,255); background: rgb(235,235,255); }
+</style></head><body>
+<h4>b271 — a box-shadow that names no colour paints and computes in the element's own currentColor, fully opaque; the engine had a fixed rgba(0,0,0,0.31) in its place, so a red element's shadow came out translucent black. And a counter list says its step whether or not the page wrote one: counter-increment defaults a bare name to 1 (counter-reset and counter-set default to 0), so 'a 1 b' reads 'a 1 b 1'. The three coloured boxes above carry colourless shadows so the pixel baseline guards the currentColor paint.</h4>
+<div id="cb"><span class="sh r"></span><span class="sh g"></span><span class="sh b"></span><div id="h"></div></div>
+<pre id="report"></pre>
+<script>
+var CASES = [["box-shadow","2px 2px 3px","r"],["box-shadow","1px 2px 3px 4px blue inset","b"],["box-shadow","5px 5px",""],["box-shadow","0 0 0 2px","g"],["box-shadow","2px 2px 3px, 4px 4px red","r"],["counter-increment","a 1 b",""],["counter-increment","a",""],["counter-increment","none",""],["counter-increment","a -1 b 2",""],["counter-increment","x 3 x",""],["counter-reset","a",""],["counter-reset","c reverse",""]];
+var WANTS = ["2px 2px 3px","blue 1px 2px 3px 4px inset","5px 5px","0px 0px 0px 2px","2px 2px 3px, red 4px 4px","a 1 b 1","a 1","none","a -1 b 2","x 3 x 1","a 0","c 0 reverse 0"];
+var WANTC = ["rgb(255, 0, 0) 2px 2px 3px 0px","rgb(0, 0, 255) 1px 2px 3px 4px inset","rgb(0, 0, 0) 5px 5px 0px 0px","rgb(0, 170, 0) 0px 0px 0px 2px","rgb(255, 0, 0) 2px 2px 3px 0px, rgb(255, 0, 0) 4px 4px 0px 0px","a 1 b 1","a 1","none","a -1 b 2","x 3 x 1","a 0","c 0 reverse 0"];
+var h = document.getElementById('h');
+function run(p,v,cls){ h.setAttribute('style',''); h.className = cls || ''; h.style.setProperty(p,v);
+  return [h.style.getPropertyValue(p), getComputedStyle(h).getPropertyValue(p)]; }
+var out = []; var failed = 0;
+function row(name, got, want) {
+  var ok = String(got) === String(want); if (!ok) failed++;
+  out.push((ok ? 'ok   ' : 'FAIL ') + name + '   got=' + JSON.stringify(got) + '   want=' + JSON.stringify(want));
+}
+for (var i = 0; i < CASES.length; i++) {
+  var p = CASES[i][0], v = CASES[i][1], cls = CASES[i][2];
+  var r = run(p, v, cls);
+  row('#' + i + ' ' + p + '[' + v + (cls ? ' /' + cls : '') + '] spec', r[0], WANTS[i]);
+  row('#' + i + ' ' + p + '[' + v + (cls ? ' /' + cls : '') + '] comp', r[1], WANTC[i]);
+}
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

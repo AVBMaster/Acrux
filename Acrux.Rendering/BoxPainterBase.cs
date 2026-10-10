@@ -33,6 +33,9 @@ public struct ShadowData
     public float Spread;
     public ShadowStyle Style;
     public SKColor Color;
+    // A shadow that named no colour paints in the element's currentColor; the resolved colour is
+    // only known where the element's computed colour is, so the flag travels with the shadow.
+    public bool ColorIsCurrentColor;
 
     public bool IsZeroOffset => X == 0 && Y == 0;
 }
@@ -385,7 +388,8 @@ public sealed class BoxPainterBase
                 Blur = sh.BlurRadius,
                 Spread = sh.Spread,
                 Style = sh.Inset ? ShadowStyle.Inset : ShadowStyle.Normal,
-                Color = sh.Color
+                Color = sh.Color,
+                ColorIsCurrentColor = sh.ColorIsCurrentColor
             });
         }
         return list;
@@ -413,7 +417,7 @@ public sealed class BoxPainterBase
             if (ShadowIsFullyObscured(shadow))
                 continue;
 
-            SKColor shadowColor = shadow.Color;
+            SKColor shadowColor = shadow.ColorIsCurrentColor ? style.Color : shadow.Color;
 
             var fillRect = border.Rect;
             fillRect = new SKRect(fillRect.Left - shadow.Spread, fillRect.Top - shadow.Spread, fillRect.Right + shadow.Spread, fillRect.Bottom + shadow.Spread);
@@ -507,7 +511,7 @@ public sealed class BoxPainterBase
             if (ShadowIsFullyObscured(shadow))
                 continue;
 
-            SKColor shadowColor = shadow.Color;
+            SKColor shadowColor = shadow.ColorIsCurrentColor ? style.Color : shadow.Color;
 
             // The inset shadow shape is the bounds shrunk by the spread (inset
             // shadows are drawn on the inside of the edge).

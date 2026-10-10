@@ -222,7 +222,9 @@ public static class CssValueText
                     result = CanonicalizeAspectRatio(result) ?? result;
                 else if (property.Equals("counter-reset", StringComparison.OrdinalIgnoreCase)
                     || property.Equals("counter-set", StringComparison.OrdinalIgnoreCase))
-                    result = CanonicalizeCounterList(result) ?? result;
+                    result = CanonicalizeCounterList(result, "0") ?? result;
+                else if (property.Equals("counter-increment", StringComparison.OrdinalIgnoreCase))
+                    result = CanonicalizeCounterList(result, "1") ?? result;
                 result = PutColorFirst(result, property);
                 result = CanonicalizeTransition(result, property);
                 result = OmitInitialBorderParts(result, property);
@@ -756,12 +758,13 @@ public static class CssValueText
     }
 
     /// <summary>
-    /// Print <c>counter-reset</c> and <c>counter-set</c>: every counter says its integer, whether
-    /// or not the page wrote one (measured: 'c' reads 'c 0', and 'c reverse' reads
-    /// 'c 0 reverse 0' because 'reverse' is a counter name and not a keyword here). A repeated
-    /// name is not folded away — the engine prints the pairs in the order they were written.
+    /// Print <c>counter-reset</c>, <c>counter-set</c> and <c>counter-increment</c>: every counter
+    /// says its integer, whether or not the page wrote one (measured: 'c' reads 'c 0' for reset but
+    /// 'c 1' for increment, and 'c reverse' reads 'c 0 reverse 0' because 'reverse' is a counter name
+    /// and not a keyword here). A repeated name is not folded away — the engine prints the pairs in
+    /// the order they were written.
     /// </summary>
-    public static string? CanonicalizeCounterList(string text)
+    public static string? CanonicalizeCounterList(string text, string defaultValue = "0")
     {
         var words = SplitTopLevelWords(text);
         if (words.Count == 0) return null;
@@ -774,7 +777,7 @@ public static class CssValueText
             if (name.Equals("none", StringComparison.OrdinalIgnoreCase)
                 || name.Equals("normal", StringComparison.OrdinalIgnoreCase)
                 || !IsCounterNameToken(name)) return null;
-            string value = "0";
+            string value = defaultValue;
             if (i + 1 < words.Count && ShorthandExpander.IsNumberToken(words[i + 1]))
             {
                 value = words[i + 1];
