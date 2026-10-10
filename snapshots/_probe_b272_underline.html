@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b272 underline probe</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<pre id="report"></pre>
+<script>
+var CASES = ["auto","under","left","right","alphabetic","from-font","under left","under right","left under","auto left","from-font left","under over","left right","under under"];
+var host = document.createElement('div'); document.body.appendChild(host);
+function spec(v){ host.setAttribute('style',''); host.style.setProperty('text-underline-position',v); return host.style.getPropertyValue('text-underline-position'); }
+function comp(v){ host.setAttribute('style',''); host.style.setProperty('text-underline-position',v); return getComputedStyle(host).getPropertyValue('text-underline-position'); }
+var out=[];
+for (var i=0;i<CASES.length;i++){ var v=CASES[i]; out.push(i+'|'+v+'|S='+spec(v)+'|C='+comp(v)); }
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

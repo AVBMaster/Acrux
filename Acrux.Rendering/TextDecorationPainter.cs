@@ -104,8 +104,8 @@ public static class TextDecorationPainter
         float authored = offsetIsFixed ? MathF.Round(g.UnderlineOffset) : 0f;
         float gap = g.UnderlinePosition switch
         {
-            TextUnderlinePositionType.Under => MathF.Max(0f, g.Descent) + 1f,
-            TextUnderlinePositionType.FromFont => g.FontUnderlinePosition > 0 ? g.FontUnderlinePosition : autoGap,
+            var p when (p & TextUnderlinePositionType.Under) != 0 => MathF.Max(0f, g.Descent) + 1f,
+            var p when (p & TextUnderlinePositionType.FromFont) != 0 => g.FontUnderlinePosition > 0 ? g.FontUnderlinePosition : autoGap,
             _ => offsetIsFixed ? 0f : autoGap,
         };
         return gap + authored;

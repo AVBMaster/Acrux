@@ -2136,10 +2136,12 @@ public enum TextDecorationStyleType { Solid, Double, Dotted, Dashed, Wavy }
 /// echoed as written, while 'space', 'leading' and 'trailing' are refused).</summary>
 public enum TextDecorationSkipInkType { Auto, None, All }
 
-/// <summary>'text-underline-position' (CSS Text Decoration 4 §3.2). 'auto' resolves to
-/// 'alphabetic' in horizontal writing modes; 'under' puts the line below the
-/// descender instead of at the font's underline position.</summary>
-public enum TextUnderlinePositionType { Auto, Alphabetic, Under, Left, Right, FromFont }
+/// <summary>'text-underline-position' (CSS Text Decoration 4 §3.2). A vertical choice
+/// (auto / under / from-font) and an optional horizontal one (left / right) combine, so the
+/// type is a set of flags: 'under left' is both. 'auto' is its own value and does not pair with
+/// a horizontal edge, and 'alphabetic' is not a value this reference engine takes.</summary>
+[Flags]
+public enum TextUnderlinePositionType { Auto = 1, Under = 2, FromFont = 4, Left = 8, Right = 16 }
 
 /// <summary>'box-decoration-break' values (CSS Fragmentation 3 §4.2).</summary>
 public enum BoxDecorationBreakType { Slice, Clone }

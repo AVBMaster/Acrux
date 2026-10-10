@@ -312,6 +312,7 @@ public static class ComputedValueSerializer
             case "scroll-padding-left": return ScrollInsetText(style, style.ScrollPaddingLeft);
             case "caret-shape": return string.IsNullOrWhiteSpace(style.CaretShape)
                 ? "auto" : style.CaretShape;
+            case "text-underline-position": return UnderlinePositionText(style.TextUnderlinePosition);
             case "box-sizing": return style.BoxSizing.ToCssString();
             // A string marker is a value of 'list-style-type', and the engine says it as a string —
             // with its quotes, whichever way the page wrote them (measured: "'x'" reads '"x"').
@@ -805,6 +806,19 @@ public static class ComputedValueSerializer
     }
 
     private static string ColorOrAuto(SkiaSharp.SKColor? color) => color.HasValue ? ColorText(color.Value) : "auto";
+
+    /// <summary>'text-underline-position' prints the vertical choice before the horizontal one
+    /// ('left under' reads 'under left'); 'auto' stands alone and nothing else pairs with it.</summary>
+    private static string UnderlinePositionText(Acrux.Core.Dom.TextUnderlinePositionType p)
+    {
+        if (p == Acrux.Core.Dom.TextUnderlinePositionType.Auto) return "auto";
+        var parts = new System.Collections.Generic.List<string>(2);
+        if ((p & Acrux.Core.Dom.TextUnderlinePositionType.Under) != 0) parts.Add("under");
+        if ((p & Acrux.Core.Dom.TextUnderlinePositionType.FromFont) != 0) parts.Add("from-font");
+        if ((p & Acrux.Core.Dom.TextUnderlinePositionType.Left) != 0) parts.Add("left");
+        if ((p & Acrux.Core.Dom.TextUnderlinePositionType.Right) != 0) parts.Add("right");
+        return parts.Count == 0 ? "auto" : string.Join(" ", parts);
+    }
 
     private static string ObjectPositionText(Length? length)
     {

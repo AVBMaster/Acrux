@@ -236,6 +236,7 @@ public static class CssValueText
                 result = CanonicalizeOffsetShorthand(result, property);
                 result = CanonicalizeFontSynthesis(result, property);
                 result = CanonicalizeColumns(result, property);
+                result = CanonicalizeTextUnderlinePosition(result, property);
                 // The properties that only have to be said correctly — scroll snapping, the SVG
                 // keyword family, the rest of the font-variant group — print what their one table
                 // says, so a sheet and a CSSOM write cannot disagree about the order of a keyword
@@ -668,6 +669,22 @@ public static class CssValueText
         var parts = new List<string>(2);
         if (width != null) parts.Add(width);
         if (count != null) parts.Add(count);
+        return parts.Count == 0 ? "auto" : string.Join(" ", parts);
+    }
+
+    /// <summary>'text-underline-position' prints its vertical choice before its horizontal one
+    /// (measured: 'left under' reads back 'under left'). A value the parser refuses is left exactly
+    /// as written, so the grammar/applier still drops it rather than the printer repairing it.</summary>
+    private static string CanonicalizeTextUnderlinePosition(string text, string property)
+    {
+        if (!property.Equals("text-underline-position", StringComparison.OrdinalIgnoreCase)) return text;
+        if (!Resolver.CssPropertyApplier.TryParseTextUnderlinePosition(text, out var p)) return text;
+        if (p == Acrux.Core.Dom.TextUnderlinePositionType.Auto) return "auto";
+        var parts = new List<string>(2);
+        if ((p & Acrux.Core.Dom.TextUnderlinePositionType.Under) != 0) parts.Add("under");
+        if ((p & Acrux.Core.Dom.TextUnderlinePositionType.FromFont) != 0) parts.Add("from-font");
+        if ((p & Acrux.Core.Dom.TextUnderlinePositionType.Left) != 0) parts.Add("left");
+        if ((p & Acrux.Core.Dom.TextUnderlinePositionType.Right) != 0) parts.Add("right");
         return parts.Count == 0 ? "auto" : string.Join(" ", parts);
     }
 

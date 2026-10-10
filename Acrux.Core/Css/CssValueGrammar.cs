@@ -714,6 +714,11 @@ public static class CssValueGrammar
         // CSS UI 4 §4.3: 'caret-shape' is exactly one keyword, and this reference engine takes only
         // 'auto', 'bar' and 'block' — 'underline' and 'none' are refused (measured via CSS.supports).
         CssPropertyId.CaretShape => static text => IsOneOf(text, "auto", "bar", "block"),
+        // CSS Text Decoration 4 §3.2: a vertical choice and an optional horizontal one. The parse
+        // that stores it is also the grammar — 'alphabetic', 'auto left', a repeated kind or an
+        // unknown word all drop the declaration (measured against the reference engine).
+        CssPropertyId.TextUnderlinePosition
+            => static text => CssPropertyApplier.TryParseTextUnderlinePosition(text, out _),
         _ => null,
     };
 

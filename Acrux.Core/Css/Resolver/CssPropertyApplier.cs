@@ -3477,17 +3477,44 @@ public static class CssPropertyApplier
 
     /// <summary>'text-underline-position: auto | from-font | alphabetic | under | left | right'.</summary>
     private static TextUnderlinePositionType ParseTextUnderlinePosition(string value)
+        => TryParseTextUnderlinePosition(value, out var result) ? result : TextUnderlinePositionType.Auto;
+
+    /// <summary>'text-underline-position' = a vertical choice (auto | under | from-font) and an
+    /// optional horizontal one (left | right). 'alphabetic' is refused (measured: the reference
+    /// engine drops it), 'auto' does not pair with a horizontal edge, and no kind may repeat. The
+    /// computed value prints the vertical first, so 'left under' reads back 'under left'.</summary>
+    public static bool TryParseTextUnderlinePosition(string value, out TextUnderlinePositionType result)
     {
-        var token = value.Trim().ToLowerInvariant();
-        // 'from-font' asks for the font's own underline position; 'auto' and
-        // 'alphabetic' keep the line near the alphabetic baseline.
-        if (token == "auto") return TextUnderlinePositionType.Auto;
-        if (token.Contains("from-font")) return TextUnderlinePositionType.FromFont;
-        if (token.Contains("left")) return TextUnderlinePositionType.Left;
-        if (token.Contains("right")) return TextUnderlinePositionType.Right;
-        if (token.Contains("under")) return TextUnderlinePositionType.Under;
-        if (token.Contains("alphabetic")) return TextUnderlinePositionType.Alphabetic;
-        return TextUnderlinePositionType.Auto;
+        result = 0;
+        int vertical = 0, horizontal = 0;
+        foreach (var token in (value ?? string.Empty).Trim()
+                     .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            int bit = token.ToLowerInvariant() switch
+            {
+                "auto" => (int)TextUnderlinePositionType.Auto,
+                "under" => (int)TextUnderlinePositionType.Under,
+                "from-font" => (int)TextUnderlinePositionType.FromFont,
+                "left" => (int)TextUnderlinePositionType.Left,
+                "right" => (int)TextUnderlinePositionType.Right,
+                _ => 0,
+            };
+            if (bit == 0) return false;
+            if (bit <= (int)TextUnderlinePositionType.FromFont)
+            {
+                if (vertical != 0) return false;
+                vertical = bit;
+            }
+            else
+            {
+                if (horizontal != 0) return false;
+                horizontal = bit;
+            }
+        }
+        if (vertical == 0 && horizontal == 0) return false;
+        if (vertical == (int)TextUnderlinePositionType.Auto && horizontal != 0) return false;
+        result = (TextUnderlinePositionType)(vertical | horizontal);
+        return true;
     }
 
     /// <summary>'text-decoration' = &lt;line&gt;* || &lt;style&gt; || &lt;color&gt; || &lt;thickness&gt;.

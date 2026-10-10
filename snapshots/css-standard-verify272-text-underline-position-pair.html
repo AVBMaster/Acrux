@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 272 — text-underline-position is a pair, not a single choice</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; padding: 8px; font-size: 16px; background: rgb(245,245,245); }
+#h { height: 0; }
+.u { text-decoration: underline; }
+.u1 { text-underline-position: under; }
+.u2 { text-underline-position: left; }
+.u3 { text-underline-position: under left; }
+.u4 { text-underline-position: from-font; }
+</style></head><body>
+<h4>b272 — text-underline-position is a vertical choice and an optional horizontal one, but the engine modelled it as a single value, so a pair like 'under left' collapsed to one keyword and the computed surface answered the empty string. It is a set of flags now: the vertical (auto / under / from-font) and the horizontal (left / right) combine, 'auto' does not pair with an edge, and 'alphabetic' — which this reference engine refuses — is gone. The specified echo prints the vertical first, so 'left under' reads 'under left'. The underlined words below carry the pairs, so the pixel baseline guards the same ground.</h4>
+<div id="cb"><span class="u u1">under</span> <span class="u u2">left</span> <span class="u u3">under-left</span> <span class="u u4">from-font</span><div id="h"></div></div>
+<pre id="report"></pre>
+<script>
+var CASES = ["auto","under","left","right","alphabetic","from-font","under left","under right","left under","auto left","from-font left","under over","left right","under under"];
+var WANTS = ["auto","under","left","right","","from-font","under left","under right","under left","","from-font left","","",""];
+var WANTC = ["auto","under","left","right","auto","from-font","under left","under right","under left","auto","from-font left","auto","auto","auto"];
+var h = document.getElementById('h');
+function spec(v){ h.setAttribute('style',''); h.style.setProperty('text-underline-position',v); return h.style.getPropertyValue('text-underline-position'); }
+function comp(v){ h.setAttribute('style',''); h.style.setProperty('text-underline-position',v); return getComputedStyle(h).getPropertyValue('text-underline-position'); }
+var out = []; var failed = 0;
+function row(name, got, want) {
+  var ok = String(got) === String(want); if (!ok) failed++;
+  out.push((ok ? 'ok   ' : 'FAIL ') + name + '   got=' + JSON.stringify(got) + '   want=' + JSON.stringify(want));
+}
+for (var i = 0; i < CASES.length; i++) {
+  row('#' + i + ' text-underline-position[' + CASES[i] + '] spec', spec(CASES[i]), WANTS[i]);
+  row('#' + i + ' text-underline-position[' + CASES[i] + '] comp', comp(CASES[i]), WANTC[i]);
+}
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>
