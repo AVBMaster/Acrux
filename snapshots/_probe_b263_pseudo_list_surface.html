@@ -1,0 +1,27 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+#h { font-family: Arial, sans-serif; color: rgb(1, 2, 3); line-height: 22px; }
+#h::before { content: "B"; font-size: 20px; }
+#h::after { }
+div { width: 30px; }
+</style></head><body><div id="h">x</div><div id="n">n</div><script>
+const h = document.getElementById('h'), n = document.getElementById('n');
+const o = [];
+const cs = (e, p) => getComputedStyle(e, p);
+o.push('single=' + JSON.stringify(cs(h, ':before').content));
+o.push('inheritFont=' + JSON.stringify(cs(h, '::before').fontFamily));
+o.push('inheritLine=' + JSON.stringify(cs(h, '::before').lineHeight));
+o.push('inheritWidth=' + JSON.stringify(cs(h, '::before').width));
+o.push('afterEmpty=' + JSON.stringify(cs(h, '::after').content));
+o.push('nBefore=' + JSON.stringify(cs(n, '::before').content));
+o.push('nBeforeColor=' + JSON.stringify(cs(n, '::before').color));
+o.push('len=' + cs(h).length + ' item0=' + JSON.stringify(cs(h).item(0))
+  + ' idx0=' + JSON.stringify(cs(h)[0]) + ' last=' + JSON.stringify(cs(h).item(cs(h).length - 1)));
+o.push('pseudoLen=' + cs(h, '::before').length);
+o.push('fl=' + JSON.stringify(cs(h, '::first-line').fontSize));
+o.push('markerOnDiv=' + JSON.stringify(cs(n, '::marker').content));
+o.push('cssText=' + JSON.stringify(cs(h).cssText));
+o.push('parent=' + JSON.stringify(cs(h).parent === null) + ' fill=' + cs(h, '::before').fill);
+document.body.appendChild(Object.assign(document.createElement('pre'), { textContent: o.join('\n') }));
+window.o = o;
+window.get = (a, b) => o.slice(a, b).join(' ; ');
+</script></body></html>

@@ -3332,6 +3332,9 @@ public static class CssPropertyApplier
                 case "underline": result |= TextDecorationLineType.Underline; break;
                 case "overline": result |= TextDecorationLineType.Overline; break;
                 case "line-through": result |= TextDecorationLineType.LineThrough; break;
+                case "blink": result |= TextDecorationLineType.Blink; break;
+                case "spelling-error": result |= TextDecorationLineType.SpellingError; break;
+                case "grammar-error": result |= TextDecorationLineType.GrammarError; break;
             }
         }
         return result;

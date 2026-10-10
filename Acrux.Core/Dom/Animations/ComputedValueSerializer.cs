@@ -503,7 +503,7 @@ public static class ComputedValueSerializer
                 TextDecorationStyleType.Wavy => "wavy",
                 _ => "solid",
             };
-            case "text-decoration-line": return CssEnumFormatter.CssKeywordFromEnum(style.TextDecorationLine.ToString());
+            case "text-decoration-line": return TextDecorationLineText(style.TextDecorationLine);
             case "text-decoration-thickness":
                 return style.TextDecorationThicknessFromFont || float.IsNaN(style.TextDecorationThickness)
                     ? "auto"
@@ -1213,6 +1213,21 @@ public static class ComputedValueSerializer
             case "mask": return MaskText(style);
             default: return null;
         }
+    }
+
+    /// <summary>The line list in the engine's own order — the three that draw, then the three that
+    /// only say themselves (measured: 'blink underline' computes 'underline blink', and
+    /// 'underline overline' keeps that order).</summary>
+    private static string TextDecorationLineText(TextDecorationLineType line)
+    {
+        var parts = new List<string>();
+        if (line.HasUnderline()) parts.Add("underline");
+        if (line.HasOverline()) parts.Add("overline");
+        if (line.HasLineThrough()) parts.Add("line-through");
+        if ((line & TextDecorationLineType.Blink) != 0) parts.Add("blink");
+        if ((line & TextDecorationLineType.SpellingError) != 0) parts.Add("spelling-error");
+        if ((line & TextDecorationLineType.GrammarError) != 0) parts.Add("grammar-error");
+        return parts.Count == 0 ? "none" : string.Join(" ", parts);
     }
 
     /// <summary>One longhand's computed text. An empty fallback rather than null: a shorthand

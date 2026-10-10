@@ -1,0 +1,66 @@
+b263 measured truth — the pseudo-element side of getComputedStyle, and the computed style as a list.
+All of it is the reference engine's own answer (Chromium 150 family), read with small
+evaluate_script calls over /tmp/b263/probe.html and probe2.html (copied here as
+_probe_b263_*.html). Nothing is implemented yet in this engine: today the second argument is
+ignored and every read falls back onto the element's own style (measured here: '::before' gave the
+element's color rgb(10,20,30), display 'block' and width '884px' where the reference answers the
+pseudo's own values).
+
+== 1. getComputedStyle(element, pseudoElt) ==
+The pseudo's own declarations win, and everything else inherits from the originating element.
+  #h { color: rgb(10,20,30) } #h::before { content:"B"; color: rgb(200,0,0); font-size:20px }
+  ::before .content  => '"B"'          .color => 'rgb(200, 0, 0)'
+  ::before .display  => 'inline'  (the pseudo's own initial, not the element's 'block')
+  ::before .font-size=> '20px'    .font-family => 'Arial, sans-serif' (inherited)
+  ::before .line-height => '22px' (inherited, resolved)
+  ::before .width    => 'auto'    — a pseudo has no used width to report, even though the
+                                    element's own 'width' answers its used box
+  ':before' (one colon) behaves exactly like '::before'
+  #h::after { } (an empty rule)      .content => 'none'
+  #plain::before (no rule at all)    .content => 'none'   .color => 'rgb(0, 0, 0)' (inherited)
+  ::first-line .color => the rule's colour; .font-size => '16px' (inherited)
+  ::marker  .color => the rule's colour; .content => 'normal' on a <li> and on a <div>
+  '::bogus' => an object that answers the EMPTY STRING for every property
+               (getComputedStyle(el,'::bogus').color === '')
+  null / undefined / omitted => the element's own style, unchanged
+  Object.prototype.toString.call(result) => '[object CSSStyleDeclaration]'
+  result.parent === null is FALSE (a computed style has a parent, the default view)
+  result.pseudoElement is UNDEFINED (it is not a member in this engine)
+
+== 2. a computed style is an array-like of property names ==
+  getComputedStyle(el).length        => 475
+  .item(0) and [0]                  => 'accent-color'
+  .item(length - 1)                 => '-webkit-writing-mode'
+  getComputedStyle(el,'::before').length => 475 (the same list for a pseudo)
+  getComputedStyle(el).cssText      => ''   (a computed style serialises to nothing)
+
+== 3. text-decoration's three "alone" lines, computed (gap #270) ==
+  style="text-decoration: blink"            => textDecorationLine 'blink'
+                                                textDecoration     'blink'
+  style="text-decoration: spelling-error"   => 'spelling-error'
+     its <span> child                        => 'none'   (these three do NOT propagate)
+  style="text-decoration: grammar-error"    => 'grammar-error'
+
+== 4. content's computed value echoes the specified list (gap #271) ==
+  content: "B"                  => '"B"'
+  content: counter(cn) attr(data-a) url(z.png)
+     on <div data-a="V">        => 'counter(cn) "V" url("file:///tmp/b263/z.png")'
+     — counter() is echoed unevaluated, attr() is RESOLVED to the attribute's value (and to its
+       fallback when the attribute is missing: 'attr(data-x)' => '""', 'attr(data-x,"y")' => '"y"'),
+       url() is absolute.
+  content: none on a regular element => 'normal'
+  content unset on a regular element => 'normal'
+
+== 5. what to build, in what order ==
+(a) the second argument: resolve ::before/::after/::first-line/::first-letter/::marker against the
+    element's collected pseudo declarations (Element.BeforeStyles/AfterStyles/FirstLineStyles/
+    FirstLetterStyles/MarkerStyles already exist), on top of the element's own computed style, with
+    the pseudo's own initials for the non-inherited ones and 'auto' for the box sizes;
+    an argument that names no pseudo => an empty block.
+    NOTE Acrux.Core/Css/PseudoStyleMerger.cs skips 'content' ("case \"content\": continue;"), so the
+    merged style carries no content of its own — that has to change with this feature, not around it.
+(b) content's computed value as the specified list with attr() resolved and url() absolute, kept
+    separate from the text the marker/layout pipeline generates (today the stored value is already
+    evaluated: 'counter(x)' reads '0' from BOTH an inline style and a sheet rule).
+(c) the list surface: length/item/index/cssText/toString tag over the engine's declared names.
+(d) #270's three line keywords, and #272's four single values.

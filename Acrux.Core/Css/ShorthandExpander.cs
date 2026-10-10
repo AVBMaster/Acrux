@@ -1653,7 +1653,8 @@ public static class ShorthandExpander
         foreach (var part in parts)
         {
             var p = part.Trim().ToLowerInvariant();
-            if (p is "underline" or "overline" or "line-through")
+            if (p is "underline" or "overline" or "line-through"
+                or "blink" or "spelling-error" or "grammar-error")
             {
                 // 'text-decoration-line' is a list, so several keywords may appear.
                 if (!lines.Contains(p)) lines.Add(p);

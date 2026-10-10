@@ -2045,7 +2045,17 @@ public enum BackgroundBlendModeType { Normal, Multiply, Screen, Overlay, Darken,
 /// <summary>'text-decoration-line' (CSS Text Decoration 4 §2.1). The property accepts a
 /// space-separated list, so the values are flags: 'underline overline' carries both bits.</summary>
 [Flags]
-public enum TextDecorationLineType { None = 0, Underline = 1 << 0, Overline = 1 << 1, LineThrough = 1 << 2 }
+/// <summary>'text-decoration-line' (CSS Text Decoration 4 §2.1). The last three are the lines a
+/// page asks for by name and that this engine paints no line for: <c>blink</c> is a line the
+/// reference engine computes and never draws, and <c>spelling-error</c>/<c>grammar-error</c> each
+/// stand alone (measured: 'underline spelling-error' is no value at all). None of the three
+/// propagates — a child of a 'spelling-error' element computes 'none' (measured), which follows
+/// from the painter having no line to draw for them.</summary>
+public enum TextDecorationLineType
+{
+    None = 0, Underline = 1 << 0, Overline = 1 << 1, LineThrough = 1 << 2,
+    Blink = 1 << 3, SpellingError = 1 << 4, GrammarError = 1 << 5,
+}
 
 public static class TextDecorationLineExtensions
 {

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b263 pseudo-element CSSOM probe</title><style>
+#host { color: rgb(10, 20, 30); }
+#host::before { content: "B"; color: rgb(200, 0, 0); font-size: 20px; }
+#host::after { content: counter(cn) attr(data-a) url(z.png); }
+#plain { color: rgb(1, 2, 3); }
+.line { text-decoration: underline; }
+ul { list-style: outside square; }
+p.fl { font-size: 16px; }
+p.fl::first-line { color: rgb(70, 70, 0); }
+li::marker { color: rgb(0, 0, 90); }
+</style></head><body>
+<div id="host" data-a="V">text</div>
+<div id="plain">plain</div>
+<ul><li id="li">item</li></ul>
+<p class="fl" id="fl">first line text here that is long enough to wrap in a narrow box maybe</p>
+<div id="d1" style="text-decoration: blink">b</div>
+<div id="d2" style="text-decoration: spelling-error">s<span id="d2kid">k</span></div>
+<div id="d3" style="text-decoration: grammar-error">g</div>
+<script>
+const CASES = [
+  () => { const c = getComputedStyle(document.getElementById('host'), '::before');
+          return 'before.content=' + JSON.stringify(c.content); },
+  () => { const c = getComputedStyle(document.getElementById('host'), '::before');
+          return 'before.color=' + JSON.stringify(c.color); },
+  () => { const c = getComputedStyle(document.getElementById('host'), '::before');
+          return 'before.display=' + JSON.stringify(c.display) + ' fs=' + c.fontSize; },
+  () => { const c = getComputedStyle(document.getElementById('host'), '::after');
+          return 'after.content=' + JSON.stringify(c.content); },
+  () => { const c = getComputedStyle(document.getElementById('plain'), '::before');
+          return 'nopseudo.before.content=' + JSON.stringify(c.content); },
+  () => { const c = getComputedStyle(document.getElementById('plain'), 'before');
+          return 'unprefixed.before.content=' + JSON.stringify(c.content); },
+  () => { const c = getComputedStyle(document.getElementById('fl'), '::first-line');
+          return 'first-line.color=' + JSON.stringify(c.color); },
+  () => { const c = getComputedStyle(document.getElementById('li'), '::marker');
+          return 'marker.color=' + JSON.stringify(c.color) + ' content=' + JSON.stringify(c.content); },
+  () => 'nullPseudo.color=' + getComputedStyle(document.getElementById('plain'), null).color,
+  () => 'undefPseudo.display=' + getComputedStyle(document.getElementById('plain'), undefined).display,
+  () => { const c = getComputedStyle(document.getElementById('plain'), '::bogus');
+          return 'bogus.color=' + (c ? JSON.stringify(c.color) : 'null'); },
+  () => 'ctorString=' + Object.prototype.toString.call(
+          getComputedStyle(document.getElementById('plain'), '::before')),
+  () => { const c = getComputedStyle(document.getElementById('plain'), '::before');
+          return 'pseudo.length=' + c.length; },
+  () => { const c = getComputedStyle(document.getElementById('plain'), '::before');
+          return 'pseudo.pseudoElement=' + JSON.stringify(c.pseudoElement); },
+  () => 'd1.line=' + getComputedStyle(document.getElementById('d1')).textDecorationLine,
+  () => 'd2.line=' + getComputedStyle(document.getElementById('d2')).textDecorationLine,
+  () => 'd2kid.line=' + getComputedStyle(document.getElementById('d2kid')).textDecorationLine,
+  () => 'd3.line=' + getComputedStyle(document.getElementById('d3')).textDecorationLine,
+  () => 'd1.deco=' + getComputedStyle(document.getElementById('d1')).textDecoration,
+  () => 'host.before.width=' + getComputedStyle(document.getElementById('host'), '::before').width,
+];
+window.run = i => '#' + i + ' ' + CASES[i]();
+window.harvest = (a, b) => { const o = []; for (let i = a; i < b && i < CASES.length; i++) o.push(window.run(i)); return 'n=' + CASES.length + ' @ ' + o.join(' @ '); };
+window.diff = () => {
+  if (!window.OURS) return 'no ours.js';
+  const bad = [];
+  for (let i = 0; i < CASES.length; i++) {
+    const mine = window.run(i);
+    if (mine !== window.OURS[i]) bad.push('#' + i + ' REF ' + mine + ' |WE| ' + (window.OURS[i] || '?'));
+  }
+  window.D = bad;
+  return 'DIFF ' + bad.length + ' of ' + CASES.length;
+};
+window.dslice = (a, b) => (window.D || (window.diff(), window.D)).slice(a, b).join(' @@ ');
+for (let i = 0; i < CASES.length; i += 6) console.log(window.harvest(i, i + 6));
+</script>
+<script src="ours_p.js"></script>
+</body></html>
