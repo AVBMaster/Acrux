@@ -41,6 +41,15 @@ for (var i = 0; i < CASES.length; i++) {
   row('#' + i + ' ' + p + '[' + v + '] spec', spec(p, v), WANTS[i]);
   row('#' + i + ' ' + p + '[' + v + '] comp', comp(p, v), WANTC[i]);
 }
+// The transition shorthand reads the same <time> pair positionally, but a literal negative can only
+// land in the delay slot (the duration stays '0s'); two negatives make the whole declaration invalid.
+var SH = [["all -2s","0s","-2s"],["all -2s 3s","3s","-2s"],["all 3s -2s","3s","-2s"],["all -2s -3s","",""],["all 2s 4s","2s","4s"],["2s","2s","0s"],["all ease -2s","0s","-2s"]];
+function shDur(v){ host.setAttribute('style',''); host.style.setProperty('transition',v); return host.style.getPropertyValue('transition-duration'); }
+function shDelay(v){ host.setAttribute('style',''); host.style.setProperty('transition',v); return host.style.getPropertyValue('transition-delay'); }
+for (var k = 0; k < SH.length; k++) {
+  row('#t' + k + ' transition[' + SH[k][0] + '] duration', shDur(SH[k][0]), SH[k][1]);
+  row('#t' + k + ' transition[' + SH[k][0] + '] delay', shDelay(SH[k][0]), SH[k][2]);
+}
 var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
 document.getElementById('report').textContent = summary;
 console.log(summary);

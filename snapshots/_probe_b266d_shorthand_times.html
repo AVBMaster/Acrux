@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b266d shorthand times</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<pre id="report"></pre>
+<script>
+var SH = ["all -2s","all -2s 3s","all 3s -2s","all -2s -3s","all 2s 4s","2s","-2s","all ease -2s","all -2s ease"];
+var host = document.createElement('div'); document.body.appendChild(host);
+function read(sh){ host.setAttribute('style',''); host.style.setProperty('transition',sh);
+  return 'dur='+host.style.getPropertyValue('transition-duration')+' delay='+host.style.getPropertyValue('transition-delay')+' prop='+host.style.getPropertyValue('transition-property')+' ease='+host.style.getPropertyValue('transition-timing-function'); }
+var out=[];
+for (var i=0;i<SH.length;i++) out.push(i+'|transition['+SH[i]+']|'+read(SH[i]));
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

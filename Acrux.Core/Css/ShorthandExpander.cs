@@ -1405,7 +1405,7 @@ public static class ShorthandExpander
             // 0 duration, 1 easing, 2 delay, 3 iteration, 4 direction, 5 fill, 6 play, 7 name
             var slot = new string[8];
             for (int i = 0; i < slot.Length; i++) slot[i] = string.Empty;
-            bool haveTime = false;
+            bool haveDuration = false, haveDelay = false;
             bool nameSeen = false;
 
             foreach (var token in SplitShorthand(entry))
@@ -1416,13 +1416,19 @@ public static class ShorthandExpander
 
                 if (IsTimeToken(p))
                 {
-                    if (!haveTime) { slot[0] = p; haveTime = true; }
-                    else slot[2] = p;
+                    // A negative literal can only be the delay; a non-negative one fills the
+                    // duration first, then the delay (measured, same as the transition shorthand).
+                    if (IsNegativeTimeLiteral(p))
+                    {
+                        if (!haveDelay) { slot[2] = p; haveDelay = true; }
+                    }
+                    else if (!haveDuration) { slot[0] = p; haveDuration = true; }
+                    else if (!haveDelay) { slot[2] = p; haveDelay = true; }
                 }
                 // 'auto' is a duration the page can write (CSS Animations 2 takes the initial value
                 // of 'animation-duration' out of hiding), and the reference engine reads it there —
                 // 'auto 1s slide' is duration auto, delay 1s, name slide (measured).
-                else if (p == "auto" && !haveTime) { slot[0] = p; haveTime = true; }
+                else if (p == "auto" && !haveDuration) { slot[0] = p; haveDuration = true; }
                 else if (IsEasingToken(p)) slot[1] = p;
                 else if (p == "infinite" || IsNumberToken(p)) slot[3] = p;
                 else if (p is "normal" or "reverse" or "alternate" or "alternate-reverse") slot[4] = p;
@@ -1458,7 +1464,8 @@ public static class ShorthandExpander
         foreach (var entry in entries)
         {
             string property = "all", duration = "0s", easing = "ease", delay = "0s";
-            bool haveTime = false;
+            bool haveDuration = false, haveDelay = false;
+            bool invalid = false;
 
             foreach (var token in SplitShorthand(entry))
             {
@@ -1467,12 +1474,24 @@ public static class ShorthandExpander
 
                 if (IsTimeToken(p))
                 {
-                    if (!haveTime) { duration = p; haveTime = true; }
-                    else delay = p;
+                    // A negative literal can only be the delay; a non-negative one fills the
+                    // duration first, then the delay (CSS Transitions 1 §2.2, measured). A time
+                    // that fits neither slot makes the whole declaration invalid — so two
+                    // negatives ('all -2s -3s') drops the shorthand entirely, as the reference does.
+                    if (IsNegativeTimeLiteral(p))
+                    {
+                        if (haveDelay) { invalid = true; break; }
+                        delay = p; haveDelay = true;
+                    }
+                    else if (!haveDuration) { duration = p; haveDuration = true; }
+                    else if (!haveDelay) { delay = p; haveDelay = true; }
+                    else { invalid = true; break; }
                 }
                 else if (IsEasingToken(p)) easing = p;
                 else property = p;
             }
+
+            if (invalid) return;
 
             properties.Add(property);
             durations.Add(duration);
@@ -1499,6 +1518,24 @@ public static class ShorthandExpander
         if (t.EndsWith("s", StringComparison.Ordinal))
             return IsNumberToken(t[..^1]);
         return IsMathTimeToken(t);
+    }
+
+    /// <summary>A plain negative time literal — the one case a shorthand cannot put in the duration
+    /// slot. A duration is a non-negative <c>&lt;time&gt;</c>, so 'transition: all -2s' reads the
+    /// negative as the delay and leaves the duration at its initial '0s' (measured); '-0s' is zero and
+    /// stays a duration, and a calc() is not a literal so it is left for the computed-value clamp.</summary>
+    private static bool IsNegativeTimeLiteral(string token)
+    {
+        var t = token.Trim();
+        if (t.Length < 2 || t[0] != '-') return false;
+        int i = 1;
+        bool nonZero = false;
+        for (; i < t.Length && (char.IsAsciiDigit(t[i]) || t[i] == '.'); i++)
+            if (char.IsAsciiDigit(t[i]) && t[i] != '0') nonZero = true;
+        var unit = t[i..];
+        bool timedUnit = unit.Equals("s", StringComparison.OrdinalIgnoreCase)
+            || unit.Equals("ms", StringComparison.OrdinalIgnoreCase);
+        return timedUnit && nonZero;
     }
 
     /// <summary>Whether the whole token is one call of a math function and what it comes out to is a
