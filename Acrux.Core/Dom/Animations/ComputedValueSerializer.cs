@@ -41,9 +41,9 @@ public static class ComputedValueSerializer
         if (Acrux.Core.Css.Resolver.EchoedProperties.Find(property) is { } echo)
         {
             var written = style.GetEchoed(echo.Name) ?? echo.Initial;
-            return echo.Name == "math-depth"
-                ? Acrux.Core.Css.Resolver.EchoedProperties.MathDepthComputed(written)
-                : written;
+            // Two of the entries say something in the computed value that the specified value does
+            // not: 'math-depth' answers the integer and 'offset-rotate' expands 'reverse'.
+            return echo.ComputedText is { } compute ? compute(written) : written;
         }
         var value = ValueOf(style, property);
         if (value != null) return value;
@@ -188,6 +188,11 @@ public static class ComputedValueSerializer
             case "flex-basis": return LengthText(style, style.FlexBasis);
 
             // --------------------------------------------------------- text
+            // The family list is the text the page wrote, resolved to a face only at paint time,
+            // so the computed value is the authored list (measured: 'Arial, sans-serif'). It is
+            // here rather than only in the hand-built map because a generated box reads through
+            // this serializer for everything the map does not carry.
+            case "font-family": return style.FontFamily ?? "";
             case "font-size": return Px(style.FontSize);
             case "font": return FontShorthandText(style);
             case "line-height":
@@ -515,6 +520,11 @@ public static class ComputedValueSerializer
             case "text-emphasis-style": return TextEmphasisStyleText(style.TextEmphasisStyle);
             case "text-emphasis-position": return style.TextEmphasisPosition;
             case "will-change": return style.WillChange ?? "auto";
+            // The computed value of 'content' is the list the page wrote, with the substitutions
+            // the property owns already made (see CssFunctionEvaluator.EvaluateForContent). A lone
+            // 'none' is left as it is here: whether it stands for a generated box that draws
+            // nothing or for an element, whose 'content' the reference engine reports as
+            // 'normal', is decided by the surface that knows which of the two it is reading.
             case "content": return style.Content ?? "normal";
 
             // ------------------------------------------------ time-controlled

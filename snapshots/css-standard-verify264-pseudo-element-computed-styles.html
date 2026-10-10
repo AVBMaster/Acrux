@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 264 — the style of a box the page never wrote</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#markers { margin: 4px 0 0 4px; font: 14px/18px "Segoe UI", sans-serif; }
+/* The measured shapes live here: a generated box with its own colour and size, an empty rule, a
+   pseudo the page never wrote, a first line, a marker, and the three lines that say themselves. */
+#host { color: rgb(10, 20, 30); font-family: Arial, sans-serif; line-height: 22px; width: 60px; }
+#host::before { content: "B"; color: rgb(200, 0, 0); font-size: 20px; background: rgb(238,238,238); }
+#host::after { content: ""; display: block; width: 40px; height: 8px; background: rgb(204, 255, 204); }
+#empty::after { color: rgb(0, 128, 0); }
+#plain { color: rgb(1, 2, 3); width: 40px; height: 12px; background: rgb(255,255,153); }
+p.fl { font-size: 16px; width: 120px; }
+p.fl::first-line { color: rgb(70, 70, 0); }
+ul { margin: 0; padding: 0 0 0 24px; list-style: outside square; }
+li::marker { color: rgb(0, 0, 90); }
+.b1 { text-decoration: blink; }
+.b2 { text-decoration: spelling-error; }
+.b3 { text-decoration: grammar-error; }
+</style>
+</head>
+<body>
+<h4>b264 — getComputedStyle's second argument. A generated box is a box the page never wrote, and a script can still ask for its style: it inherits from the element it came from, takes the initial value of everything non-inherited (so its 'display' is 'inline' inside a 'block' parent and its 'width' is 'auto' where the element reports its used box), and reports 'none' for a 'content' nobody declared. A name that is no pseudo-element answers an empty block instead of throwing. Every want is what the reference engine answered for the same document; the rows it answers differently from this one are the record of gaps #272 and #276.</h4>
+<div id="markers">
+  <div id="host">text</div>
+  <div id="empty">empty pseudo</div>
+  <div id="plain">plain</div>
+  <p class="fl" id="fl">first line text here that is long enough to wrap in a narrow box</p>
+  <ul><li id="li">item</li><li>second</li></ul>
+  <div class="b1" id="d1">blink</div>
+  <div class="b2" id="d2">spell<span id="d2kid">kid</span></div>
+  <div class="b3" id="d3">grammar</div>
+</div>
+<pre id="report"></pre>
+<script>
+const out = []; let failed = 0;
+function row(name, got, want) {
+  const ok = String(got) === String(want);
+  if (!ok) failed++;
+  out.push((ok ? 'ok   ' : 'FAIL ') + name.padEnd(30) + ' got=' + got + '   want=' + want);
+}
+function check(name, fn, want) {
+  let got;
+  try { got = typeof fn === 'function' ? fn() : fn; } catch (e) { got = 'ERR[' + e.name + ']'; }
+  row(name, got, want);
+}
+const id = s => document.getElementById(s);
+const cs = (el, pseudo) => getComputedStyle(el, pseudo);
+
+// ---- §1 the pseudo's own declarations, and what it inherits ----------------
+check('before.content', () => cs(id('host'), '::before').content, '"B"');
+check('before.color', () => cs(id('host'), '::before').color, 'rgb(200, 0, 0)');
+check('before.fontSize', () => cs(id('host'), '::before').fontSize, '20px');
+check('before.display', () => cs(id('host'), '::before').display, 'inline');
+check('before.fontFamily', () => cs(id('host'), '::before').fontFamily.includes('Arial'), 'true');
+check('before.lineHeight', () => cs(id('host'), '::before').lineHeight, '22px');
+// The element reports its used box; the generated box reports what the page wrote for it.
+check('before.width', () => cs(id('host'), '::before').width, 'auto');
+check('element.width', () => cs(id('host')).width, '60px');
+// One colon means the same box as two (measured).
+check('singleColon', () => cs(id('host'), ':before').content, '"B"');
+check('after.display', () => cs(id('host'), '::after').display, 'block');
+check('after.width', () => cs(id('host'), '::after').width, '40px');
+
+// ---- §2 a pseudo with no rule of its own, and one with an empty rule -------
+check('undeclared.content', () => cs(id('plain'), '::before').content, 'none');
+check('undeclared.color', () => cs(id('plain'), '::before').color, 'rgb(1, 2, 3)');
+check('undeclared.display', () => cs(id('plain'), '::before').display, 'inline');
+check('undeclared.width', () => cs(id('plain'), '::before').width, 'auto');
+check('emptyRule.content', () => cs(id('empty'), '::after').content, 'none');
+check('emptyRule.color', () => cs(id('empty'), '::after').color, 'rgb(0, 128, 0)');
+// A name that is no pseudo-element at all is not an error: the block is simply empty.
+check('bogus.color', () => cs(id('plain'), '::bogus').color, '');
+check('bogus.content', () => cs(id('plain'), '::bogus').content, '');
+check('bogus.display', () => cs(id('plain'), '::bogus').display, '');
+// null and an omitted argument are the element's own style.
+check('nullPseudo.color', () => cs(id('plain'), null).color, 'rgb(1, 2, 3)');
+check('omittedPseudo.display', () => cs(id('plain')).display, 'block');
+
+// ---- §3 a line fragment and a marker --------------------------------------
+check('firstLine.color', () => cs(id('fl'), '::first-line').color, 'rgb(70, 70, 0)');
+check('firstLine.fontSize', () => cs(id('fl'), '::first-line').fontSize, '16px');
+check('marker.color', () => cs(id('li'), '::marker').color, 'rgb(0, 0, 90)');
+// A marker is not a generated box in the same sense: its 'content' stays at 'normal'.
+check('marker.content', () => cs(id('li'), '::marker').content, 'normal');
+
+// ---- §4 the shape of the object -------------------------------------------
+check('toStringTag', () => Object.prototype.toString.call(cs(id('plain'), '::before')),
+  '[object CSSStyleDeclaration]');
+check('pseudoElementMember', () => cs(id('plain'), '::before').pseudoElement, 'undefined');
+check('cssText', () => cs(id('plain')).cssText, '');
+check('item0', () => cs(id('plain')).item(0), 'accent-color');
+check('index0', () => cs(id('plain'))[0], 'accent-color');
+check('itemPastEnd', () => cs(id('plain')).item(9999), '');
+// The reference engine lists 475 names; this engine lists its own set (#276), so the row asserts
+// the relation rather than the count.
+check('lengthShape', () => {
+  const s = cs(id('plain'));
+  return (s.length > 400 && s.item(s.length - 1) === s[s.length - 1]
+    && s.item(1) !== s.item(0)) + '';
+}, 'true');
+
+// ---- §5 the three lines that say themselves (CSS Text Decoration 4 §2.1) --
+check('blink.line', () => cs(id('d1')).textDecorationLine, 'blink');
+check('blink.shorthand', () => cs(id('d1')).textDecoration, 'blink');
+check('spell.line', () => cs(id('d2')).textDecorationLine, 'spelling-error');
+check('spell.kid', () => cs(id('d2kid')).textDecorationLine, 'none');
+check('grammar.line', () => cs(id('d3')).textDecorationLine, 'grammar-error');
+// The colour the shorthand did not write stays out of the shorthand's own text.
+check('spell.shorthand', () => cs(id('d2')).textDecoration, 'spelling-error');
+
+const summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script>
+</body>
+</html>

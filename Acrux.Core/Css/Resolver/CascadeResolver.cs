@@ -826,8 +826,13 @@ public class CascadeResolver
             if (name.StartsWith("--")) continue;
             if (IsHighPriorityProperty(name)) continue;
 
-            var evaluated = CssFunctionEvaluator.Evaluate(value, element,
-                style.FontSize, RootFontSize(), _viewportWidth, _viewportHeight);
+            // 'content' resolves only what its own value owns; a counter is left as written (see
+            // CssFunctionEvaluator.EvaluateForContent).
+            var evaluated = name.Equals("content", StringComparison.OrdinalIgnoreCase)
+                ? CssFunctionEvaluator.EvaluateForContent(value, element,
+                    style.FontSize, RootFontSize(), _viewportWidth, _viewportHeight)
+                : CssFunctionEvaluator.Evaluate(value, element,
+                    style.FontSize, RootFontSize(), _viewportWidth, _viewportHeight);
             if (TryApplyCssWideKeyword(style, name, evaluated, parentStyle))
                 continue;
             ApplyProperty(style, name, evaluated);

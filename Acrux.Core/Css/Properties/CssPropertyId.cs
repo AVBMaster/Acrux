@@ -21,6 +21,7 @@ public enum CssPropertyId
     FontVariantLigatures,
     FontVariantNumeric,
     FontVariantPosition,
+    FontLanguageOverride,
     FontFeatureSettings,
     FontVariationSettings,
     FontOpticalSizing,

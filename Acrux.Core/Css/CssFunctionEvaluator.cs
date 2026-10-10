@@ -65,6 +65,56 @@ public static class CssFunctionEvaluator
         return result;
     }
 
+    /// <summary>The cascade's read of <c>content</c>: substitutions that the property's own value
+    /// owns are resolved — <c>var()</c> and <c>attr()</c>, the second because a page that asks for
+    /// an attribute gets the attribute's value as the string it becomes (measured:
+    /// <c>content: attr(data-a)</c> on an element with <c>data-a="V"</c> computes <c>"V"</c>, and
+    /// with no such attribute its fallback, <c>""</c> when there is none) — while a counter stays
+    /// the function the page wrote. The reference engine's computed value echoes
+    /// <c>counter()</c>/<c>counters()</c> unevaluated (measured: <c>counter(x)</c> reads
+    /// <c>counter(x)</c>, not <c>0</c>), and the text a generated box actually paints is built from
+    /// the same declaration by the layout, which owns the counter scope
+    /// (<see cref="Layout.LayoutEngine.BuildPseudoElement"/>). Evaluating a counter here would
+    /// answer a script with a number the page never wrote and would do it before the counters had
+    /// been counted.</summary>
+    public static string EvaluateForContent(string value, Element? context,
+        float parentFontSize, float rootFontSize, float viewportWidth, float viewportHeight)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        var result = EvaluateVar(value, context, parentFontSize, rootFontSize,
+            viewportWidth, viewportHeight);
+        return EvaluateContentAttr(result, context);
+    }
+
+    /// <summary><c>attr()</c> inside <c>content</c>: the attribute's value becomes a STRING of the
+    /// content list, not bare text, and a missing attribute becomes the fallback the page wrote or
+    /// the empty string (measured: <c>attr(data-a)</c> with <c>data-a="V"</c> reads
+    /// <c>"V"</c>, and with no such attribute <c>""</c>). The generic attr pass substitutes the
+    /// value itself, which is right for <c>width: attr(w px)</c> and wrong here.</summary>
+    private static string EvaluateContentAttr(string value, Element? context)
+    {
+        if (string.IsNullOrEmpty(value)
+            || value.IndexOf("attr(", StringComparison.OrdinalIgnoreCase) < 0) return value;
+        var sb = new System.Text.StringBuilder(value.Length + 16);
+        int i = 0;
+        while (i < value.Length)
+        {
+            int at = value.IndexOf("attr(", i, StringComparison.OrdinalIgnoreCase);
+            if (at < 0) { sb.Append(value, i, value.Length - i); break; }
+            sb.Append(value, i, at - i);
+            int close = value.IndexOf(')', at + 5);
+            if (close < 0) { sb.Append(value, at, value.Length - at); break; }
+            var inner = value[(at + 5)..close];
+            int comma = inner.IndexOf(',');
+            var name = (comma < 0 ? inner : inner[..comma]).Trim();
+            var fallback = comma < 0 ? "\"\"" : inner[(comma + 1)..].Trim();
+            var attribute = context?.GetAttribute(name);
+            sb.Append(string.IsNullOrEmpty(attribute) ? fallback : "\"" + attribute + "\"");
+            i = close + 1;
+        }
+        return sb.ToString();
+    }
+
     /// <summary>True when a calc/min/max/clamp expression in the value contains a
     /// '%' token before its closing parenthesis.</summary>
     public static bool HasMathFunctionWithPercent(string value)

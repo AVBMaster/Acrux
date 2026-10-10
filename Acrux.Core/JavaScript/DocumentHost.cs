@@ -550,7 +550,42 @@ public class DocumentHost
             DomMutationTracker.Notify();
         }
     }
-    public object getComputedStyle(ElementHost? element)
+    /// <summary>What the second argument of <c>getComputedStyle</c> named.</summary>
+    private enum PseudoArgument { Element, Before, After, FirstLine, FirstLetter, Marker, Unknown }
+
+    /// <summary>The pseudo-element a page asked for, or <see cref="PseudoArgument.Unknown"/> when
+    /// the string names none. One or two colons both parse (measured), and a bare name parses too
+    /// — <c>'before'</c> answers like the pseudo-element it stands for rather than like a name that
+    /// matches nothing.</summary>
+    private static PseudoArgument ResolvePseudoArgument(string? pseudoElt)
+    {
+        var text = (pseudoElt ?? "").Trim().TrimStart(':');
+        if (text.Length == 0) return PseudoArgument.Element;
+        return text.ToLowerInvariant() switch
+        {
+            "before" => PseudoArgument.Before,
+            "after" => PseudoArgument.After,
+            "first-line" or "firstline" => PseudoArgument.FirstLine,
+            "first-letter" or "firstletter" => PseudoArgument.FirstLetter,
+            "marker" => PseudoArgument.Marker,
+            _ => PseudoArgument.Unknown,
+        };
+    }
+
+    /// <summary>The declarations the cascade collected for that pseudo-element, or null when the
+    /// page wrote none — a generated box with no rule of its own still has a style to report.</summary>
+    private static Dictionary<string, string>? PseudoDeclarations(Acrux.Core.Dom.Element element,
+        PseudoArgument pseudo) => pseudo switch
+        {
+            PseudoArgument.Before => element.BeforeStyles,
+            PseudoArgument.After => element.AfterStyles,
+            PseudoArgument.FirstLine => element.FirstLineStyles,
+            PseudoArgument.FirstLetter => element.FirstLetterStyles,
+            PseudoArgument.Marker => element.MarkerStyles,
+            _ => null,
+        };
+
+    public object getComputedStyle(ElementHost? element, string? pseudoElt = null)
     {
         // The IDL takes an Element, so anything else is a wrong argument rather than an element
         // with no styles — the reference engine answers with a TypeError whose message starts at
@@ -565,6 +600,30 @@ public class DocumentHost
         // script did to the DOM earlier in the same tick has to be resolved first,
         // or the page reads the previous frame's values.
         Engine?.FlushForRead();
+
+        // The second argument asks for the style of a generated box instead. One colon or two
+        // means the same pseudo-element (measured), and a name that is no pseudo-element at all
+        // answers an empty block — every property reads the empty string, which is how
+        // 'getComputedStyle(el, "::bogus").color' was measured.
+        var pseudo = ResolvePseudoArgument(pseudoElt);
+        if (pseudo == PseudoArgument.Unknown)
+            return new ComputedStyleHost(new Dictionary<string, string>(), null, null);
+        if (pseudo != PseudoArgument.Element
+            && element.NativeElement.ComputedStyle is { } origin)
+        {
+            // The generated box inherits from the element it came from and takes the initial
+            // value of everything else, including 'auto' for its own box sizes — which is also
+            // why no layout object is handed to the view (measured: '::before' of a 30px-wide
+            // element answers 'auto' where the element answers its used width).
+            bool generatesBox = pseudo is PseudoArgument.Before or PseudoArgument.After;
+            var generated = Acrux.Core.Css.PseudoStyleMerger.MergeForGeneratedBox(
+                origin, PseudoDeclarations(element.NativeElement, pseudo), element.NativeElement,
+                generatesBox);
+            // Only ::before and ::after are generated boxes: a marker and a line fragment report
+            // 'content' as the property's initial 'normal' (measured).
+            return new ComputedStyleHost(new Dictionary<string, string>(), generated,
+                element.NativeElement, generatedBox: generatesBox);
+        }
 
         var computedStyle = element.NativeElement.ComputedStyle;
         Dictionary<string, string> props;
@@ -768,16 +827,85 @@ public class ComputedStyleHost
     private readonly Dictionary<string, string> _properties;
     private readonly ComputedStyle? _style;
     private readonly Acrux.Core.Dom.Element? _owner;
+    /// <summary>True when this view reads a generated box rather than the element. A generated
+    /// box has no used geometry of its own to report (measured: '::before' of a 30px-wide element
+    /// answers 'auto' where the element answers its used width), and its 'content' says 'none'
+    /// where an element's says 'normal'.</summary>
+    private readonly bool _generatedBox;
 
     public ComputedStyleHost(Dictionary<string, string> properties, ComputedStyle? style = null,
-        Acrux.Core.Dom.Element? owner = null)
+        Acrux.Core.Dom.Element? owner = null, bool generatedBox = false)
     {
         _properties = properties ?? new Dictionary<string, string>();
         _style = style;
         _owner = owner;
+        _generatedBox = generatedBox;
+    }
+
+    /// <summary>The value as this surface reports it. Only 'content' differs: a regular element
+    /// that says 'none' is reported as 'normal', because on an element the property generates
+    /// nothing and that is the word the reference engine uses for it (measured), while a generated
+    /// box keeps the 'none' that says it draws no box at all.</summary>
+    private string? ForSurface(string dashed, string? value)
+    {
+        if (_style != null && !_generatedBox && dashed == "content"
+            && (value == null || value == "none"))
+            return "normal";
+        return value;
     }
 
     public string? getProperty(string name) => getPropertyValue(name);
+
+    /// <summary>The names a computed style lists, in the order the reference engine lists them:
+    /// every property this engine declares under its dashed name, unprefixed first and then the
+    /// prefixed spellings, each group in its own order (measured: <c>item(0)</c> is
+    /// <c>'accent-color'</c> and the last entry is <c>'-webkit-writing-mode'</c>, so a plain
+    /// alphabetical sort over both groups is not it). A computed style is an array-like of these
+    /// names rather than of the declarations a page wrote: it answers every property, and
+    /// <c>length</c> is the size of this list, not of the element's style attribute.</summary>
+    public static readonly string[] PropertyNames = BuildPropertyNames();
+
+    private static string[] BuildPropertyNames()
+    {
+        var plain = new List<string>();
+        var prefixed = new List<string>();
+        foreach (var id in System.Enum.GetValues<Acrux.Core.Css.Properties.CssPropertyId>())
+        {
+            // The enum carries its own bookkeeping members (MaxProperties and the like) at the
+            // end of the list; they are counts, not properties, and must not be listed.
+            if ((int)id <= 0
+                || id >= Acrux.Core.Css.Properties.CssPropertyId.MaxProperties) continue;
+            var name = Acrux.Core.Css.Properties.CssPropertyIdExtensions.ToString(id);
+            if (string.IsNullOrEmpty(name)) continue;
+            (name[0] == '-' ? prefixed : plain).Add(name);
+        }
+        plain.Sort(System.StringComparer.Ordinal);
+        prefixed.Sort(System.StringComparer.Ordinal);
+        // 'float' is a reserved word in JavaScript, and the IDL names the member 'cssFloat'.
+        plain.Add("float");
+        plain.AddRange(prefixed);
+        return System.Linq.Enumerable.Distinct(plain).ToArray();
+    }
+
+    /// <summary>How many properties a computed style reports.</summary>
+    public int length => PropertyNames.Length;
+
+    /// <summary>The name at an index; past either end the empty string, which is what the IDL's
+    /// DOMString return gives (measured for an inline block, and the same rule the declaration
+    /// object follows).</summary>
+    public string item(int index) =>
+        index < 0 || index >= PropertyNames.Length ? "" : PropertyNames[index];
+
+    /// <summary>Numeric indexing of a computed style: <c>getComputedStyle(el)[0]</c> is
+    /// <c>item(0)</c>. An integer indexer is what makes that work through the interop; a string
+    /// indexer would have swallowed every other member read, which is a mistake this engine has
+    /// made before.</summary>
+    public string this[int index] => item(index);
+
+    /// <summary>A computed style has no serialisation of its own (CSSOM §7): the reference engine
+    /// answers the empty string, whatever the element's style attribute holds (measured).</summary>
+    public string cssText => "";
+
 
     /// <summary>CSSOM: a property the declaration block does not carry reads back as the
     /// empty string, never as null.</summary>
@@ -797,9 +925,10 @@ public class ComputedStyleHost
         if (_style != null)
         {
             var serialized = Acrux.Core.Dom.Animations.ComputedValueSerializer.Get(_style, lower, includeShorthands: true);
-            if (serialized != null) return UsedValue(lower, serialized) ?? serialized;
+            if (serialized != null)
+                return ForSurface(lower, UsedValue(lower, serialized) ?? serialized) ?? "";
         }
-        return _properties.TryGetValue(lower, out var value) ? value : "";
+        return ForSurface(lower, _properties.TryGetValue(lower, out var value) ? value : null) ?? "";
     }
 
     /// <summary>The value as the reference engine would print it: the serialiser's text, put onto
@@ -813,6 +942,10 @@ public class ComputedStyleHost
     /// the first layout does not have; they keep the serialiser's text.</summary>
     private string? UsedValue(string name, string text)
     {
+        // Addresses are still absolute for a generated box, so the url pass runs; what it has no
+        // part in is the geometry — a generated box reports no used value, and its sizes are what
+        // the page wrote, which for 'width'/'height' is the initial 'auto' (measured).
+        if (_generatedBox) return ResolveUrls(text);
         var withAddresses = ResolveUrls(text);
         var box = _owner?.LayoutBox;
         if (box == null) return withAddresses == text ? null : withAddresses;
@@ -969,15 +1102,20 @@ public class ComputedStyleHost
         // 'getComputedStyle(el)["text-security"]' are undefined rather than the value the prefixed
         // property carries (measured both).
         if (Acrux.Core.Css.Resolver.CssPropertyTraits.IsEngineOnlyName(dashed)) return null;
+        // The empty block a pseudo-element read that matched nothing answers the empty string for
+        // every real property, exactly as its dashed twin does (measured); a name that is no
+        // property at all stays undefined.
+        if (_style == null && _properties.Count == 0)
+            return Acrux.Core.Css.Resolver.CssPropertyTraits.IsDeclaredProperty(dashed) ? "" : null;
         // Same precedence as getPropertyValue: the serialiser is the surface that knows the
         // computed-value model, and a camelCase read must not fall back onto the older
         // spellings the hand-built map still carries.
         if (_style != null)
         {
             var serialized = Acrux.Core.Dom.Animations.ComputedValueSerializer.Get(_style, dashed, includeShorthands: true);
-            if (serialized != null) return UsedValue(dashed, serialized) ?? serialized;
+            if (serialized != null) return ForSurface(dashed, UsedValue(dashed, serialized) ?? serialized);
         }
-        return _properties.TryGetValue(dashed, out var value) ? value : null;
+        return ForSurface(dashed, _properties.TryGetValue(dashed, out var value) ? value : null);
     }
 
     /// <summary>'borderTopColor' to 'border-top-color'. A name that already contains a dash

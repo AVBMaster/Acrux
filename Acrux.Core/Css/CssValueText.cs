@@ -191,6 +191,11 @@ public static class CssValueText
         {
             if (property.Equals("font-family", StringComparison.OrdinalIgnoreCase))
                 result = FoldFamilyNames(result);
+            else if (property.Equals("list-style-type", StringComparison.OrdinalIgnoreCase))
+                // A string marker is printed with double quotes whichever way the page wrote it
+                // (measured: "'x'" reads '"x"'). Only one string ever reaches here — two of them
+                // are no value, which the property's grammar has already refused.
+                result = FoldQuotedString(result);
             else if (property.Equals("font-feature-settings", StringComparison.OrdinalIgnoreCase))
                 result = ElideDefaultFeatureValues(result);
             else if (Acrux.Core.Css.CssValueGrammar.IsLegacyPrefixedName(property))
@@ -719,6 +724,15 @@ public static class CssValueText
 
     /// <summary>A number written with no unit and worth zero — the one length a page may write
     /// without saying what it is measured in.</summary>
+    /// <summary>A single quoted string, re-printed with double quotes; anything else is left as
+    /// written.</summary>
+    private static string FoldQuotedString(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length < 2 || trimmed[0] != '\'' || trimmed[^1] != '\'') return text;
+        return "\"" + trimmed[1..^1] + "\"";
+    }
+
     private static bool IsBareZero(string token) =>
         double.TryParse(token, System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var value) && value == 0;

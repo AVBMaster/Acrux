@@ -1646,7 +1646,11 @@ public static class ShorthandExpander
         // The shorthand resets every longhand it does not carry.
         result["text-decoration-line"] = "none";
         result["text-decoration-style"] = "solid";
-        result["text-decoration-color"] = "currentcolor";
+        // The reset writes the longhand's own initial 'auto', not the colour that stands behind
+        // it: the reference engine distinguishes the two (measured — after
+        // 'text-decoration: blink' the longhand's specified value reads 'initial' and the
+        // shorthand prints 'blink' with no colour, while the computed colour is the element's).
+        result["text-decoration-color"] = "auto";
         result["text-decoration-thickness"] = "auto";
 
         var lines = new List<string>();

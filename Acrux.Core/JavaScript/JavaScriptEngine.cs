@@ -762,19 +762,32 @@ public class JavaScriptEngine : IDisposable
                 if (cs === null || cs === undefined || typeof Proxy !== 'function') return cs;
                 return new Proxy(cs, {
                     get: function (target, name) {
-                        if (typeof name !== 'string') return target[name];
+                        // A computed style is an array-like of property names, so a numeric key
+                        // reads the same name item() gives for it.
+                        if (typeof name === 'string' && /^[0-9]+$/.test(name)) return target.item(+name);
+                        if (typeof name !== 'string') {
+                            if (name === Symbol.toStringTag) return 'CSSStyleDeclaration';
+                            return target[name];
+                        }
                         var own = target[name];
                         if (own !== undefined) return own;
                         var resolved = target.__resolve(name);
                         return resolved == null ? undefined : resolved;
                     },
                     has: function (target, name) {
+                        if (typeof name === 'string' && /^[0-9]+$/.test(name)) return true;
                         if (typeof name === 'string' && target.__resolve(name) != null) return true;
                         return typeof target[name] !== 'undefined';
                     }
                 });
             }
-            window.getComputedStyle = function (el) { return __wrapComputedStyle(document.getComputedStyle(el)); };
+            // The second argument names a pseudo-element whose style the page wants instead; the
+            // engine resolves it from the element's collected pseudo declarations (see
+            // DocumentHost.getComputedStyle). A name that is no pseudo-element answers an empty
+            // block, and null or omission leaves the element's own style.
+            window.getComputedStyle = function (el, pseudo) {
+                return __wrapComputedStyle(document.getComputedStyle(el, pseudo === undefined ? null : pseudo));
+            };
             // 'MediaQueryList.media' is the query re-serialised rather than the text handed in, and
             // the engine does the whole of it (see mediaQuerySerialize): whitespace and casing are
             // canonical, comparison operators and feature colons get their spacing, a leading

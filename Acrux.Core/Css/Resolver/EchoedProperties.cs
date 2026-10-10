@@ -32,6 +32,9 @@ public static class EchoedProperties
         public required string Initial { get; init; }
         public required Func<string, string?> Normalize { get; init; }
         public bool Inherited { get; init; }
+        /// <summary>Set when the computed value is not the text the specified value keeps — the
+        /// <c>math-depth</c> and <c>offset-rotate</c> shape, where the engine expands a keyword.</summary>
+        public Func<string, string>? ComputedText { get; init; }
     }
 
     /// <summary>The entry for a property name, or null when the property is not echo-only.</summary>
@@ -89,14 +92,16 @@ public static class EchoedProperties
             // ===== Masks 1 §3.3 and MathML 4 §3.3.2.
             new() { Name = "mask-type", Initial = "luminance",
                 Normalize = Single("luminance", "alpha") },
-            new() { Name = "math-depth", Initial = "0", Normalize = NormalizeMathDepth },
+            new() { Name = "math-depth", Initial = "0", Normalize = NormalizeMathDepth,
+                ComputedText = MathDepthComputed },
 
             // ===== Motion Path 1 §3. The path is echoed as the engine reads it — the command
             // letter, then its numbers, each separated (measured: 'path("M0 0")' reads
             // 'path("M 0 0")') — and 'reverse' is a rotation the engine prints as the angle it
             // means (measured: 'offset-rotate: reverse' computes 'auto 180deg').
             new() { Name = "offset-path", Initial = "none", Normalize = NormalizeOffsetPath },
-            new() { Name = "offset-rotate", Initial = "auto", Normalize = NormalizeOffsetRotate },
+            new() { Name = "offset-rotate", Initial = "auto", Normalize = NormalizeOffsetRotate,
+                ComputedText = OffsetRotateComputed },
 
             // ===== SVG 2 properties CSS inherits: each is one keyword of a closed set.
             new() { Name = "text-anchor", Initial = "start", Inherited = true,
@@ -422,7 +427,7 @@ public static class EchoedProperties
         {
             var one = words[0].ToLowerInvariant();
             if (one == "auto") return "auto";
-            if (one == "reverse") return "auto 180deg";
+            if (one == "reverse") return "reverse";
             return IsAngle(one) ? one : null;
         }
         if (words.Length == 2 && words[0].Equals("auto", StringComparison.OrdinalIgnoreCase)
@@ -430,6 +435,11 @@ public static class EchoedProperties
             return "auto " + words[1].ToLowerInvariant();
         return null;
     }
+
+    /// <summary>The computed text of <c>offset-rotate</c>: <c>reverse</c> is a rotation the engine
+    /// spells out, while the specified value keeps the word the page wrote (both measured).</summary>
+    public static string OffsetRotateComputed(string canonical) =>
+        canonical.Equals("reverse", StringComparison.OrdinalIgnoreCase) ? "auto 180deg" : canonical;
 
     private static bool IsAngle(string w)
     {

@@ -305,49 +305,9 @@ public class LayoutEngine
     /// </summary>
     private static void ResetNonInheritedBoxProperties(ComputedStyle style)
     {
-        // CSS Pseudo-Elements 4 §3.1: a generated box takes the *initial* value of every
-        // non-inherited property its own rule does not declare. Measured against the reference
-        // engine, a ::before inside 'margin:20px; border:5px solid; background:red;
-        // position:relative; top:3px; z-index:5; opacity:.5' computes every one of those to
-        // its initial value — but the style is built by cloning the originating element, so
-        // each has to be written back by hand or it leaks into the generated box.
-        //
-        // 'auto' is the initial value of width/height, and the rest of the engine tests for
-        // AutoLength (not for null) to decide whether a size is definite — writing null made an
-        // auto-sized generated box look definite, so it stretched to its containing block
-        // instead of shrinking to fit.
-        style.Width = AutoLength.Instance;
-        style.Height = AutoLength.Instance;
-        style.MinWidth = null;
-        style.MaxWidth = null;
-        style.MinHeight = null;
-        style.MaxHeight = null;
-
-        style.MarginTop = style.MarginRight = style.MarginBottom = style.MarginLeft = new PixelLength(0);
-        style.PaddingTop = style.PaddingRight = style.PaddingBottom = style.PaddingLeft = new PixelLength(0);
-
-        style.BorderTopWidth = style.BorderRightWidth = style.BorderBottomWidth = style.BorderLeftWidth = 0;
-        style.BorderTopStyle = style.BorderRightStyle = style.BorderBottomStyle = style.BorderLeftStyle = BorderStyle.None;
-
-        style.Position = PositionType.Static;
-        style.Top = style.Right = style.Bottom = style.Left = AutoLength.Instance;
-        style.Float = FloatType.None;
-        style.Clear = ClearType.None;
-        // The flow-root marker belongs to the same property as 'display' and has to be
-        // reset with it, or a generated box inside a flow-root parent keeps the parent's
-        // formatting context.
-        style.DisplayIsFlowRoot = false;
-        style.ZIndex = null;
-        style.Opacity = 1f;
-        style.Overflow = style.OverflowX = style.OverflowY = OverflowType.Visible;
-        style.BackgroundColor = null;
-        style.BackgroundImage = null;
-        style.OutlineWidth = 0;
-        style.OutlineStyle = BorderStyle.None;
-        style.Transform = null;
-        style.BoxShadow = null;
-        style.TextShadow = new();
-        style.Contain = ContainType.None;
+        // The same reset a script reading the generated box has to see, so it lives in
+        // PseudoStyleMerger and not here (CSS Pseudo-Elements 4 §3.1).
+        Acrux.Core.Css.PseudoStyleMerger.ResetNonInheritedBoxProperties(style);
     }
 
     /// <summary>Drops the boxes of the previous pass. The converter rebuilds the whole box

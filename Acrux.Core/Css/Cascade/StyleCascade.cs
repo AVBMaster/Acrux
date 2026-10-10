@@ -302,8 +302,13 @@ public class CascadeResolverState
         // prefixed name but behaves exactly like the unprefixed one, and only the name differs.
         var name = CssPropertyIdExtensions.BehaviourName(CssPropertyIdExtensions.ToString(id));
         var text = value.CssText();
-        text = CssFunctionEvaluator.Evaluate(text, Element,
-            FontSize, RootFontSize, ViewportWidth, ViewportHeight);
+        // 'content' keeps its counters as written; the layout that owns the counter scope turns
+        // them into text (CssFunctionEvaluator.EvaluateForContent says why).
+        text = name.Equals("content", StringComparison.OrdinalIgnoreCase)
+            ? CssFunctionEvaluator.EvaluateForContent(text, Element,
+                FontSize, RootFontSize, ViewportWidth, ViewportHeight)
+            : CssFunctionEvaluator.Evaluate(text, Element,
+                FontSize, RootFontSize, ViewportWidth, ViewportHeight);
         if (CssPropertyTraits.TryApplyCssWideKeyword(style, name, text, ParentStyle))
             return;
         // Font properties are deliberately not in CssPropertyApplier.Apply's
