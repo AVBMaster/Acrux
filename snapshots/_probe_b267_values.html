@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b267 value echo probe</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<pre id="report"></pre>
+<script>
+var CASES = [
+  ["text-decoration","underline dotted red 3px"],
+  ["text-decoration","overline"],
+  ["border-radius","10px 20px 30px 40px / 5px"],
+  ["border-radius","50%"],
+  ["flex-flow","row wrap"],
+  ["flex-flow","column-reverse nowrap"],
+  ["columns","2 100px"],
+  ["columns","auto"],
+  ["column-rule","2px dashed blue"],
+  ["list-style","square inside url(a.png)"],
+  ["outline","3px dashed red"],
+  ["outline","invert"],
+  ["overflow","hidden scroll"],
+  ["overflow","visible"],
+  ["place-content","center end"],
+  ["place-items","start end"],
+  ["place-self","center"],
+  ["inset","10px 20px"],
+  ["inset-block","auto 5px"],
+  ["gap","10px 20px"],
+  ["text-emphasis","filled dot"],
+  ["font-variant","small-caps oldstyle-nums"],
+  ["mask","url(a.png) 10px 20px / 30px 40px repeat-x"],
+  ["background","url(a.png) no-repeat center / cover padding-box border-box"],
+  ["transition","all 2s ease 1s"],
+  ["animation","fade 2s ease 1s 3 reverse both paused"],
+  ["text-underline-offset","3px"],
+  ["text-decoration-thickness","from-style"],
+  ["overflow-clip-margin","10px"],
+  ["scrollbar-gutter","stable both-edges"],
+  ["caret-shape","bar"],
+  ["tab-size","4"],
+  ["hyphens","auto"],
+  ["line-break","loose"],
+  ["ruby-align","space-around"],
+  ["font-synthesis","style weight small-caps"],
+  ["contain","layout style"],
+  ["content-visibility","visible"],
+  ["will-change","opacity, translate"]
+];
+var host = document.createElement('div'); document.body.appendChild(host);
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+for (var i=0;i<CASES.length;i++){
+  var p=CASES[i][0], v=CASES[i][1];
+  out.push(i+'|'+p+'|'+v+'|S='+spec(p,v)+'|C='+comp(p,v));
+}
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

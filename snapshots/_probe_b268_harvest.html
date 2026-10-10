@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b268 harvest</title>
+<style>body{font:12px monospace;margin:0}#cb{width:400px;height:200px;font-size:16px;position:relative}#host{height:0}</style></head><body>
+<div id="cb"><div id="host"></div></div>
+<pre id="report"></pre>
+<script>
+var CASES = [
+  ["flex-direction","row"],["flex-direction","column"],["flex-direction","row-reverse"],["flex-direction","column-reverse"],
+  ["flex-wrap","nowrap"],["flex-wrap","wrap"],["flex-wrap","wrap-reverse"],
+  ["flex-flow","row wrap"],["flex-flow","column nowrap"],["flex-flow","row-reverse wrap-reverse"],["flex-flow","wrap"],
+  ["inset-block","10px"],["inset-block","auto 5px"],["inset-block","1px 2px"],["inset-block","auto"],
+  ["inset-inline","5px"],["inset-inline","auto 10px"],["inset-inline","20px 30px"],
+  ["inset","10px"],["inset","5px auto"]
+];
+var host = document.getElementById('host');
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+for (var i=0;i<CASES.length;i++){ var p=CASES[i][0],v=CASES[i][1]; out.push(i+'|'+p+'|'+v+'|C='+comp(p,v)); }
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

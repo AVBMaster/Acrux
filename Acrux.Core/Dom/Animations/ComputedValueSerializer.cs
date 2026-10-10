@@ -137,6 +137,12 @@ public static class ComputedValueSerializer
             case "inset-block-end": return LengthText(style, style.Bottom);
             case "inset-inline-start": return InlineSideInset(style, start: true);
             case "inset-inline-end": return InlineSideInset(style, start: false);
+            // The two-sided shorthands over those longhand edges, printed the way every other
+            // two-sided shorthand is: the pair merges to one value when both halves agree.
+            case "inset-block":
+                return Pair(Longhand(style, "inset-block-start"), Longhand(style, "inset-block-end"));
+            case "inset-inline":
+                return Pair(Longhand(style, "inset-inline-start"), Longhand(style, "inset-inline-end"));
 
             case "margin-top": return MarginText(style, style.MarginTop);
             case "margin-right": return MarginText(style, style.MarginRight);
@@ -196,6 +202,21 @@ public static class ComputedValueSerializer
             case "border-bottom-left-radius": return RadiusText(style.BorderBottomLeftRadius, style.BorderBottomLeftRadiusY);
 
             case "flex-basis": return LengthText(style, style.FlexBasis);
+            // The two flex axis properties had no computed surface at all, so a read answered the
+            // empty string. 'nowrap' is one word, so it cannot come from the enum name.
+            case "flex-direction": return style.FlexDirection switch
+            {
+                FlexDirectionType.RowReverse => "row-reverse",
+                FlexDirectionType.Column => "column",
+                FlexDirectionType.ColumnReverse => "column-reverse",
+                _ => "row",
+            };
+            case "flex-wrap": return style.FlexWrap switch
+            {
+                FlexWrapType.Wrap => "wrap",
+                FlexWrapType.WrapReverse => "wrap-reverse",
+                _ => "nowrap",
+            };
 
             // --------------------------------------------------------- text
             // The family list is the text the page wrote, resolved to a face only at paint time,
@@ -1242,6 +1263,8 @@ public static class ComputedValueSerializer
             case "flex":
                 return $"{Longhand(style, "flex-grow")} {Longhand(style, "flex-shrink")} "
                      + $"{Longhand(style, "flex-basis")}";
+            case "flex-flow":
+                return $"{Longhand(style, "flex-direction")} {Longhand(style, "flex-wrap")}";
             case "columns": return ColumnsText(style);
             // Measured: 'column-rule' prints its width, then the style only when it is not the
             // initial 'none', then the colour — so a '3px' rule reads back as '3px rgb(...)'.
