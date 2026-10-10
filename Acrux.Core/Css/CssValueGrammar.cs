@@ -702,6 +702,15 @@ public static class CssValueGrammar
                 || IsOneOf(text, "allow-keywords")
                 || (text.Equals("numeric-only allow-keywords", StringComparison.OrdinalIgnoreCase)
                     || text.Equals("allow-keywords numeric-only", StringComparison.OrdinalIgnoreCase)),
+        // CSS Fonts 4 §9.3: the shorthand is 'none' or a set of the three synthesis kinds, each at
+        // most once. 'auto' and 'position' are later drafts this reference engine does not take, so
+        // they must be refused here — the CSSOM echo drops the declaration, not just the layout.
+        CssPropertyId.FontSynthesis => IsFontSynthesisValue,
+        // CSS Multi-column 1 §3.3: '<column-width> || <column-count>'. A bare positive integer is a
+        // count (zero is not); a length or percentage (and a lone '0', which is a length) is a width;
+        // 'auto' is either. A second of either, or a count below one, drops the whole declaration.
+        CssPropertyId.Columns => IsColumnsValue,
+        CssPropertyId.ColumnCount => IsColumnCountValue,
         _ => null,
     };
 
@@ -1429,6 +1438,63 @@ public static class CssValueGrammar
             // length while 'calc(1px + 2px)' is (measured, both, through 'supports(width: …)').
             if (IsMathFunctionCall(token, IsLengthOrPercentage)) continue;
             if (IsOtherFunctionCall(token)) continue;
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>'font-synthesis: none | [ weight || style || small-caps ]' (CSS Fonts 4 §9.3):
+    /// 'none' stands alone, otherwise each kind appears at most once. A word that is not one of the
+    /// three — 'auto', 'position', a duplicate — makes the whole declaration invalid.</summary>
+    private static bool IsFontSynthesisValue(string text)
+    {
+        var parts = SplitComponents(text);
+        if (parts.Count == 0) return false;
+        if (parts.Count == 1 && IsOneOf(parts[0], "none")) return true;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in parts)
+        {
+            if (!IsOneOf(p, "weight", "style", "small-caps")) return false;
+            if (!seen.Add(p.ToLowerInvariant())) return false;
+        }
+        return true;
+    }
+
+    /// <summary>'column-count: auto | &lt;integer [1, ∞]&gt;' (CSS Multi-column 1 §3.3): a bare zero is
+    /// not a count, and neither is a length.</summary>
+    private static bool IsColumnCountValue(string text)
+    {
+        var parts = SplitComponents(text);
+        if (parts.Count != 1) return false;
+        if (IsOneOf(parts[0], "auto")) return true;
+        return int.TryParse(parts[0], out var n) && n >= 1;
+    }
+
+    /// <summary>'columns: &lt;column-width&gt; || &lt;column-count&gt;'. A length or percentage (and a
+    /// lone '0', which is a zero length) is the width; a bare positive integer is the count; 'auto'
+    /// is either. A second width, a second count, or a count below one drops the declaration
+    /// (measured: 'columns: 0' is a width, 'columns: 0 0' is refused).</summary>
+    private static bool IsColumnsValue(string text)
+    {
+        bool hasWidth = false, hasCount = false;
+        foreach (var token in SplitComponents(text))
+        {
+            if (IsOneOf(token, "auto")) continue;
+            // Count first: a bare positive integer is the count, and only a value that is not one is
+            // a width. A lone '0' is not a count (a count starts at one) so it falls through to the
+            // width, where it is a zero length; '0 0' is then a second width and is refused.
+            if (int.TryParse(token, out var n) && n >= 1)
+            {
+                if (hasCount) return false;
+                hasCount = true;
+                continue;
+            }
+            if (IsLengthOrPercentage(token) || IsMathFunctionCall(token, IsLengthOrPercentage))
+            {
+                if (hasWidth) return false;
+                hasWidth = true;
+                continue;
+            }
             return false;
         }
         return true;

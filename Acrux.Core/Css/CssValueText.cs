@@ -232,6 +232,8 @@ public static class CssValueText
                 result = CanonicalizeColumnRule(result, property);
                 result = CanonicalizeListStyle(result, property);
                 result = CanonicalizeOffsetShorthand(result, property);
+                result = CanonicalizeFontSynthesis(result, property);
+                result = CanonicalizeColumns(result, property);
                 // The properties that only have to be said correctly — scroll snapping, the SVG
                 // keyword family, the rest of the font-variant group — print what their one table
                 // says, so a sheet and a CSSOM write cannot disagree about the order of a keyword
@@ -606,6 +608,65 @@ public static class CssValueText
             parts.Add(color);
         if (parts.Count == 0) parts.Add("none");
         return string.Join(" ", parts);
+    }
+
+    /// <summary>'font-synthesis' prints its kinds in the engine's own order — weight, style,
+    /// small-caps — whichever order the page listed them (measured: 'style weight' reads
+    /// 'weight style', 'small-caps weight' reads 'weight small-caps'); 'none' stands alone.</summary>
+    private static string CanonicalizeFontSynthesis(string text, string property)
+    {
+        if (!property.Equals("font-synthesis", StringComparison.OrdinalIgnoreCase)) return text;
+        var words = SplitTopLevelWords(text);
+        if (words.Count == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
+        bool weight = false, style = false, smallCaps = false;
+        foreach (var word in words)
+            switch (word.ToLowerInvariant())
+            {
+                case "weight": weight = true; break;
+                case "style": style = true; break;
+                case "small-caps": smallCaps = true; break;
+                // A word that is not one of the three makes the declaration invalid; leave it for the
+                // grammar/applier to refuse rather than reorder the value into a valid one.
+                default: return text;
+            }
+        var parts = new List<string>(3);
+        if (weight) parts.Add("weight");
+        if (style) parts.Add("style");
+        if (smallCaps) parts.Add("small-caps");
+        return parts.Count == 0 ? "none" : string.Join(" ", parts);
+    }
+
+    /// <summary>'columns' prints the width before the count, and omits whichever half is 'auto'
+    /// (measured: '2 100px' reads '100px 2', 'auto 100px' reads '100px', '2 auto' reads '2'). A bare
+    /// positive integer is the count; everything else that survives is the width, already folded to
+    /// its unit by the generic pass ('0' has become '0px' by now). A second width or count is not the
+    /// engine's to reorder — '92px 8px' is an invalid columns value, so it is left exactly as written
+    /// for the grammar/applier to refuse rather than silently trimmed to a valid '92px'.</summary>
+    private static string CanonicalizeColumns(string text, string property)
+    {
+        if (!property.Equals("columns", StringComparison.OrdinalIgnoreCase)) return text;
+        string? width = null, count = null;
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            var p = word.ToLowerInvariant();
+            if (p == "auto") continue;
+            // A bare positive integer is the count; a lone '0' (folded to '0px' by now) and any
+            // unit-bearing value are the width. A second of either is not the engine's to reorder.
+            if (int.TryParse(p, out var n) && n >= 1)
+            {
+                if (count != null) return text;
+                count = p;
+            }
+            else
+            {
+                if (width != null) return text;
+                width = word;
+            }
+        }
+        var parts = new List<string>(2);
+        if (width != null) parts.Add(width);
+        if (count != null) parts.Add(count);
+        return parts.Count == 0 ? "auto" : string.Join(" ", parts);
     }
 
     /// <summary>

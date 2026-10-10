@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b269 order probe</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<pre id="report"></pre>
+<script>
+var CASES = [
+  ["font-synthesis","weight style"],["font-synthesis","style weight"],
+  ["font-synthesis","small-caps weight"],["font-synthesis","weight style small-caps"],
+  ["font-synthesis","none"],["font-synthesis","auto"],
+  ["font-synthesis","weight style small-caps position"],
+  ["font-synthesis","position small-caps"],
+  ["columns","100px"],["columns","2"],["columns","2 100px"],["columns","100px 2"],
+  ["columns","auto 100px"],["columns","2 auto"],["columns","0"],["columns","0 0"]
+];
+var host = document.createElement('div'); document.body.appendChild(host);
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+for (var i=0;i<CASES.length;i++){ var p=CASES[i][0],v=CASES[i][1];
+  out.push(i+'|'+p+'|'+v+'|S='+spec(p,v)+'|C='+comp(p,v)); }
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 269 — the order a synthesis list prints and the two halves of columns</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; height: 200px; font-size: 16px; position: relative; background: rgb(245,245,245); }
+#host { height: 0; }
+/* A three-paragraph multicolumn block and a synthesised run: the pixel baseline guards the layout
+   the columns width/count and the font-synthesis flags actually drive. */
+#cols { column-width: 100px; column-count: 2; column-gap: 8px; height: 40px; background: rgb(238,238,238); }
+#cols p { margin: 0; font: 10px/12px "Segoe UI", sans-serif; }
+#synth { font: 10px/14px "Segoe UI", sans-serif; font-synthesis: weight style; }
+</style></head><body>
+<h4>b269 — two shorthands whose specified echo the reference engine re-sorts, and whose grammar it keeps tighter than ours did. 'font-synthesis' prints weight, then style, then small-caps however the page listed them, and refuses 'auto' and 'position' (later drafts this engine does not take) so the whole declaration goes. 'columns' prints the width before the count and omits whichever half is 'auto'; a bare positive integer is the count, a lone '0' is a zero length width, and '0 0' is refused because a count starts at one. The markers below are a two-column block and a synthesised run, so the pixel baseline guards the ground these values drive.</h4>
+<div id="cb">
+  <div id="cols"><p>one one one one</p><p>two two two two</p><p>three three three</p><p>four four four</p></div>
+  <div id="synth">synth</div>
+  <div id="host"></div>
+</div>
+<pre id="report"></pre>
+<script>
+var CASES = [["font-synthesis","weight style"],["font-synthesis","style weight"],["font-synthesis","small-caps weight"],["font-synthesis","weight style small-caps"],["font-synthesis","none"],["font-synthesis","auto"],["font-synthesis","weight style small-caps position"],["font-synthesis","position small-caps"],["columns","100px"],["columns","2"],["columns","2 100px"],["columns","100px 2"],["columns","auto 100px"],["columns","2 auto"],["columns","0"],["columns","0 0"]];
+var WANTS = ["weight style","weight style","weight small-caps","weight style small-caps","none","","","","100px","2","100px 2","100px 2","100px","2","0px",""];
+var WANTC = ["weight style","weight style","weight small-caps","weight style small-caps","none","weight style small-caps","weight style small-caps","weight style small-caps","100px","2","100px 2","100px 2","100px","2","0px","auto"];
+var host = document.getElementById('host');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out = []; var failed = 0;
+function row(name, got, want) {
+  var ok = String(got) === String(want); if (!ok) failed++;
+  out.push((ok ? 'ok   ' : 'FAIL ') + name + '   got=' + JSON.stringify(got) + '   want=' + JSON.stringify(want));
+}
+for (var i = 0; i < CASES.length; i++) {
+  var p = CASES[i][0], v = CASES[i][1];
+  row('#' + i + ' ' + p + '[' + v + '] spec', spec(p, v), WANTS[i]);
+  row('#' + i + ' ' + p + '[' + v + '] comp', comp(p, v), WANTC[i]);
+}
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>
