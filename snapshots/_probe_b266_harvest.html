@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b266 harvest</title>
+<style>body{font:12px monospace;margin:0}#cb{width:400px;height:200px;font-size:16px;position:relative}</style></head><body>
+<div id="cb"><div id="host"></div></div>
+<pre id="report"></pre>
+<script>
+var CASES = [
+  ["transition-duration","2s"],["transition-duration","2000ms"],["transition-duration","calc(1s + 500ms)"],
+  ["transition-duration","0.5s, 1s"],["transition-duration","2min"],["transition-duration","1"],
+  ["transition-duration","-2s"],["transition-duration","-0s"],["transition-duration","calc(-1s)"],
+  ["animation-duration","1ms"],["animation-duration","3min"],["animation-duration","-2s"],["animation-duration","calc(-1s)"],
+  ["transition-delay","500ms"],["transition-delay","-2s"],["transition-delay","calc(-1s)"],["transition-delay","1min"],
+  ["animation-delay","-5s"],["animation-delay","1s"],
+  ["width","calc(10px + 5px)"],["width","calc(100px - 1em)"],["width","calc(2 * 3px)"],["width","calc(100%)"],
+  ["width","calc(50% + 0px)"],["width","calc(10px * 2 + 5px)"],["width","min(10px, 20px)"],["width","clamp(1px, 2px, 3px)"],
+  ["width","calc(1e2px)"],["width","calc()"],
+  ["line-height","calc(1.5 + 0.5)"],["line-height","calc(2em - 4px)"],
+  ["margin-top","calc(10px + 1px)"],["rotate","calc(45deg + 45deg)"],["rotate","calc(1turn - 90deg)"],
+  ["flex-grow","calc(1 + 1)"],["opacity","calc(0.5 + 0.25)"]
+];
+var host = document.getElementById('host');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+for (var i=0;i<CASES.length;i++){
+  var p=CASES[i][0], v=CASES[i][1];
+  out.push(i+'|'+p+'|'+v+'|S='+spec(p,v)+'|C='+comp(p,v));
+}
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

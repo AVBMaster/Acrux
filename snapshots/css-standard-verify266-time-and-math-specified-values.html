@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 266 — the time a duration may not be, and the math a block echoes back</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+/* An authored containing block: a percentage means the same number in both engines, so every
+   computed value below can be compared exactly instead of skipped as window-dependent. */
+#cb { width: 400px; height: 200px; font-size: 16px; position: relative; background: rgb(245,245,245); }
+#host { height: 0; }
+#markers div { height: 6px; }
+#m1 { width: calc(100px - 1em); background: rgb(255,0,0); }
+#m2 { width: calc(50% + 0px); background: rgb(0,170,0); }
+#m3 { width: min(10px, 20px); background: rgb(0,0,255); }
+#m4 { width: clamp(1px, 2px, 3px); background: rgb(255,180,0); }
+#m5 { width: 100px; transform: rotate(calc(45deg + 45deg)); background: rgb(150,0,150); }
+</style></head><body>
+<h4>b266 — a duration and a delay are the same &lt;time&gt; type but not the same value space, and a math expression is echoed with its constants folded yet its calc() wrapper kept. The time block asks transition/animation duration and delay to refuse a non-second unit, a unitless number and (for a duration only) a literal negative, to normalise ms to s and '-0s' to '0s', and to clamp a calc() that evaluates negative down to '0s' on a duration while a delay keeps the negative. The math block asks the inline-style echo and the computed value of width/line-height/margin/rotate/flex-grow/opacity to fold constants, reorder a length against a font unit, keep a zero term, and turn min/max/clamp into calc(). The markers are laid out by the same expressions, so the pixel baseline guards the ground the values describe.</h4>
+<div id="cb">
+  <div id="markers">
+    <div id="m1"></div><div id="m2"></div><div id="m3"></div><div id="m4"></div><div id="m5"></div>
+  </div>
+  <div id="host"></div>
+</div>
+<pre id="report"></pre>
+<script>
+var CASES = [["transition-duration","2s"],["transition-duration","2000ms"],["transition-duration","calc(1s + 500ms)"],["transition-duration","0.5s, 1s"],["transition-duration","2min"],["transition-duration","1"],["transition-duration","-2s"],["transition-duration","-0s"],["transition-duration","calc(-1s)"],["animation-duration","1ms"],["animation-duration","3min"],["animation-duration","-2s"],["animation-duration","calc(-1s)"],["transition-delay","500ms"],["transition-delay","-2s"],["transition-delay","calc(-1s)"],["transition-delay","1min"],["animation-delay","-5s"],["animation-delay","1s"],["width","calc(10px + 5px)"],["width","calc(100px - 1em)"],["width","calc(2 * 3px)"],["width","calc(100%)"],["width","calc(50% + 0px)"],["width","calc(10px * 2 + 5px)"],["width","min(10px, 20px)"],["width","clamp(1px, 2px, 3px)"],["width","calc(1e2px)"],["width","calc()"],["line-height","calc(1.5 + 0.5)"],["line-height","calc(2em - 4px)"],["margin-top","calc(10px + 1px)"],["rotate","calc(45deg + 45deg)"],["rotate","calc(1turn - 90deg)"],["flex-grow","calc(1 + 1)"],["opacity","calc(0.5 + 0.25)"]];
+var WANTS = ["2s","2000ms","calc(1.5s)","0.5s, 1s","","","","0s","calc(-1s)","1ms","","","calc(-1s)","500ms","-2s","calc(-1s)","","-5s","1s","calc(15px)","calc(-1em + 100px)","calc(6px)","calc(100%)","calc(50% + 0px)","calc(25px)","calc(10px)","calc(2px)","calc(100px)","","calc(2)","calc(2em - 4px)","calc(11px)","calc(90deg)","calc(270deg)","calc(2)","calc(0.75)"];
+var WANTC = ["2s","2s","1.5s","0.5s, 1s","0s","0s","0s","0s","0s","0.001s","0s","0s","0s","0.5s","-2s","-1s","0s","-5s","1s","15px","84px","6px","400px","200px","25px","10px","2px","100px","400px","32px","28px","11px","90deg","270deg","2","0.75"];
+var host = document.getElementById('host');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out = []; var failed = 0;
+function row(name, got, want) {
+  var ok = String(got) === String(want); if (!ok) failed++;
+  out.push((ok ? 'ok   ' : 'FAIL ') + name + '   got=' + JSON.stringify(got) + '   want=' + JSON.stringify(want));
+}
+for (var i = 0; i < CASES.length; i++) {
+  var p = CASES[i][0], v = CASES[i][1];
+  row('#' + i + ' ' + p + '[' + v + '] spec', spec(p, v), WANTS[i]);
+  row('#' + i + ' ' + p + '[' + v + '] comp', comp(p, v), WANTC[i]);
+}
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

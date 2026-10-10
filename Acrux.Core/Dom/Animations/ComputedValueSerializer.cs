@@ -555,11 +555,11 @@ public static class ComputedValueSerializer
             // they were written with, so the initial values have to be spelled out here:
             // a computed style is a full snapshot and reports every longhand (CSSOM).
             case "transition-property": return ListOr(style.TransitionProperty, "all");
-            case "transition-duration": return TimeListOr(style.TransitionDuration, "0s");
+            case "transition-duration": return TimeListOr(style.TransitionDuration, "0s", nonNegative: true);
             case "transition-delay": return TimeListOr(style.TransitionDelay, "0s");
             case "transition-timing-function": return ListOr(style.TransitionTimingFunction, "ease");
             case "animation-name": return ListOr(style.AnimationName, "none");
-            case "animation-duration": return TimeListOr(style.AnimationDuration, "0s");
+            case "animation-duration": return TimeListOr(style.AnimationDuration, "0s", nonNegative: true);
             case "animation-timing-function": return ListOr(style.AnimationTimingFunction, "ease");
             case "animation-delay": return TimeListOr(style.AnimationDelay, "0s");
             case "animation-iteration-count": return ListOr(style.AnimationIterationCount, "1");
@@ -747,7 +747,7 @@ public static class ComputedValueSerializer
     /// §6.6 gives a time the unit 's' and the unit 'ms' and the computed value answers the larger of
     /// the two, so '500ms' reads back '0.5s' while '1.001s' keeps its own number (measured, both). A
     /// math function is printed as the engine folded it — its text already says seconds.</summary>
-    private static string TimeListOr(string? value, string fallback)
+    private static string TimeListOr(string? value, string fallback, bool nonNegative = false)
     {
         var list = ListOr(value, fallback);
         var items = Css.MaskLayerParser.SplitTopLevel(list, ',');
@@ -756,9 +756,16 @@ public static class ComputedValueSerializer
         {
             var text = item.Trim();
             if (text.Length == 0) continue;
-            kept.Add(CssValueTokenizer.TrySplitUnit(text, out var number, out var unit)
-                && unit.Equals("ms", StringComparison.OrdinalIgnoreCase)
-                    ? CssValueTokenizer.Num(number / 1000f) + "s" : text);
+            if (!CssValueTokenizer.TrySplitUnit(text, out var number, out var unit))
+            {
+                kept.Add(text);
+                continue;
+            }
+            // A computed time is always printed in seconds; a duration is additionally floored
+            // at zero, so 'calc(-1s)' reads '0s' here while a delay keeps '-1s' (measured).
+            double seconds = unit.Equals("ms", StringComparison.OrdinalIgnoreCase) ? number / 1000.0 : number;
+            if (nonNegative && seconds < 0) seconds = 0;
+            kept.Add(CssValueTokenizer.Num(seconds) + "s");
         }
         return kept.Count > 0 ? string.Join(", ", kept) : fallback;
     }

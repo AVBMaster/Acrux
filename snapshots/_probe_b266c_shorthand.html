@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b266c shorthand time</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<pre id="report"></pre>
+<script>
+var CASES = [
+  ["transition","all -2s"],["transition","all 2s"],["transition","all 2min"],["transition","-2s"],
+  ["transition","all 2s ease -1s"],["animation","fade -2s"],["animation","fade 2s"],
+  ["animation","2min"],["transition-duration","-2s, 1s"],["transition-duration","1s, -2s"],
+  ["transition-delay","-2s, -3s"],["animation-duration","-1s, 2s"]
+];
+var host = document.createElement('div'); document.body.appendChild(host);
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+function sup(p,v){ try { return CSS.supports(p,v)?'Y':'N'; } catch(e){ return 'E'; } }
+var out=[];
+for (var i=0;i<CASES.length;i++){
+  var p=CASES[i][0], v=CASES[i][1];
+  out.push(i+'|'+p+'|'+v+'|S='+spec(p,v)+'|Cdur='+comp(p,''+v).slice(0,40)+'|K='+sup(p,v));
+}
+// also read the longhand durations after a shorthand write
+function durAfter(shorthand){ host.setAttribute('style',''); host.style.setProperty('transition',shorthand);
+  return 'tdur='+host.style.getPropertyValue('transition-duration')+' tdelay='+host.style.getPropertyValue('transition-delay'); }
+out.push('SH|all -2s|'+durAfter('all -2s'));
+out.push('SH|all 2s ease -1s|'+durAfter('all 2s ease -1s'));
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

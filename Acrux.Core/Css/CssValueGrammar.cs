@@ -507,10 +507,15 @@ public static class CssValueGrammar
         // or 'ms', and the list is one time per item. No other unit spells a time — 'min' is a length
         // unit and the word round() takes, but it is never a duration, so the reference engine drops
         // 'transition-duration: 2min' entirely (measured: the echo, CSS.supports and the declaration
-        // form all three refuse it).
-        CssPropertyId.TransitionDuration or CssPropertyId.TransitionDelay
-            or CssPropertyId.AnimationDuration or CssPropertyId.AnimationDelay
-            => IsTimeList,
+        // form all three refuse it). A duration also refuses a literal negative time ('-2s' is dropped,
+        // though '-0s' is zero and reads back '0s'); a delay takes a negative happily. A calc() that
+        // evaluates negative is NOT refused here — the grammar cannot price it — it is clamped to '0s'
+        // at computed-value time instead (measured: 'transition-duration: calc(-1s)' echoes as written
+        // and computes '0s', while the same calc on a delay computes '-1s').
+        CssPropertyId.TransitionDuration or CssPropertyId.AnimationDuration
+            => static text => IsTimeList(text, nonNegative: true),
+        CssPropertyId.TransitionDelay or CssPropertyId.AnimationDelay
+            => static text => IsTimeList(text),
         // CSS Text Decoration 4 §2: any number of the four decoration lines (each at most once), at
         // most one style, at most one thickness and at most one colour, and the three lines that
         // stand alone ('none', 'spelling-error', 'grammar-error') stand alone. Every refusal named in
@@ -1188,7 +1193,7 @@ public static class CssValueGrammar
     /// math function that resolves to a time. The unit set is closed and small: '2min' is a perfectly
     /// good CSS dimension that is not a time, and the reference engine leaves the declaration out
     /// (measured: 'transition-duration: 2min' reads back empty from every surface).</summary>
-    private static bool IsTimeList(string text)
+    private static bool IsTimeList(string text, bool nonNegative = false)
     {
         foreach (var item in SplitTopLevel(text))
         {
@@ -1202,6 +1207,10 @@ public static class CssValueGrammar
                 continue;
             }
             if (!IsTime(item)) return false;
+            // A duration has the range [0, ∞): a literal negative time is dropped, but '-0s'
+            // is zero and survives. A calc() is left to the computed-value clamp.
+            if (nonNegative && Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(item, out var number, out _) && number < 0)
+                return false;
         }
         return true;
     }

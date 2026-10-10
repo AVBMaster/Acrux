@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b266 probe — time units and the specified echo of math</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<pre id="report"></pre>
+<script>
+// Each row: [property, authored-value]. We read the CSSOM specified echo (style.getPropertyValue)
+// and the resolved computed value (getComputedStyle) for each, on a detached-but-attached element.
+var CASES = [
+  ["transition-duration","2min"],["transition-duration","2h"],["transition-duration","2s"],
+  ["transition-duration","2000ms"],["transition-duration","calc(1s + 500ms)"],
+  ["transition-duration","0.5s, 1s"],["transition-duration","1"],["transition-duration","-2s"],
+  ["animation-duration","3min"],["animation-duration","1ms"],["animation-duration","1"],
+  ["animation-delay","-2s"],["animation-delay","1s"],["animation-delay","2min"],
+  ["transition-delay","500ms"],["transition-delay","1min"],
+  ["width","calc(10px + 5px)"],["width","calc(100px - 1em)"],["width","calc(2 * 3px)"],
+  ["width","calc(1px + 1px + 1px)"],["width","calc(100%)"],["width","calc(50% + 0px)"],
+  ["width","calc(10px * 2 + 5px)"],["width","min(10px, 20px)"],["width","clamp(1px, 2px, 3px)"],
+  ["width","calc(1e2px)"],["width","calc(10px + 1e2px)"],
+  ["line-height","calc(1.5 + 0.5)"],["line-height","calc(2em - 4px)"],
+  ["margin-top","calc(10px + 1px)"],["padding","calc(5px)"],
+  ["rotate","calc(45deg + 45deg)"],["rotate","calc(1turn - 90deg)"],
+  ["flex-grow","calc(1 + 1)"],["opacity","calc(0.5 + 0.25)"],
+  ["transition-duration","s"],["transition-duration","2"],["animation-duration","2s 3s"],
+  ["width","calc(10px +)"],["width","calc(10px 5px)"],["width","calc()"]
+];
+var host = document.createElement('div');
+document.body.appendChild(host);
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+for (var i=0;i<CASES.length;i++){
+  var p=CASES[i][0], v=CASES[i][1];
+  var s, c;
+  try { s = spec(p,v); } catch(e){ s='ERR'; }
+  try { c = comp(p,v); } catch(e){ c='ERR'; }
+  out.push(i+'|'+p+'|'+v+'|S='+s+'|C='+c);
+}
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

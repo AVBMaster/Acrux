@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b266b probe — negative time edge cases</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<pre id="report"></pre>
+<script>
+var CASES = [
+  ["transition-duration","-2s"],["transition-duration","-0s"],["transition-duration","calc(-1s)"],
+  ["transition-duration","calc(0s - 1s)"],["transition-duration","calc(1s * -1)"],
+  ["transition-duration","-200ms"],["transition-duration","0s"],["transition-duration","+2s"],
+  ["animation-duration","-2s"],["animation-duration","-0s"],["animation-duration","calc(-1s)"],
+  ["transition-delay","-2s"],["transition-delay","calc(-1s)"],
+  ["animation-delay","-5s"],["animation-delay","-0s"],
+  ["transition-duration","min(-1s, 2s)"],["transition-duration","clamp(-2s, -1s, 0s)"]
+];
+var host = document.createElement('div');
+document.body.appendChild(host);
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+function sup(p,v){ try { return CSS.supports(p,v) ? 'Y':'N'; } catch(e){ return 'E'; } }
+var out=[];
+for (var i=0;i<CASES.length;i++){
+  var p=CASES[i][0], v=CASES[i][1];
+  out.push(i+'|'+p+'|'+v+'|S='+spec(p,v)+'|C='+comp(p,v)+'|K='+sup(p,v));
+}
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
