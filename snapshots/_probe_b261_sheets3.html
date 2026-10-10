@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset="utf-8"><style id="s0">h1{color:red}</style></head><body>
+<script>
+const out = [];
+function add(id, css) { const st = document.createElement('style'); st.id = id; st.textContent = css; document.head.appendChild(st); return st; }
+const a = add('a', 'p{color:blue}');
+out.push('after-a=' + document.styleSheets.length + '/' + (document.styleSheets[1] === a.sheet) + '/' + a.sheet.cssRules.length);
+const b = add('b', 'h5{color:green}');
+out.push('after-b=' + document.styleSheets.length + '/' + Array.from(document.styleSheets).map(s => s.ownerNode.id).join('+'));
+const c = new CSSStyleSheet();
+c.replaceSync('h2{color:olive}');
+document.adoptedStyleSheets = [c];
+out.push('after-adopted=' + document.styleSheets.length + '/has=' + Array.from(document.styleSheets).some(s => s === c));
+console.log(out.join('\n'));
+</script></body></html>

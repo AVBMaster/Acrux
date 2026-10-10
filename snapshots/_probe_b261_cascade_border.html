@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+.brd { border: medium none rgb(0,0,0); width: 60px; height: 14px; }
+.brdsolid { border: medium solid rgb(0,0,0); width: 60px; height: 14px; }
+</style></head><body>
+<div id="a" class="brd">x</div>
+<div id="b" class="brdsolid">x</div>
+<script>
+const r = [];
+function cs(id, p) { return getComputedStyle(document.getElementById(id)).getPropertyValue(p); }
+r.push('none-style|' + cs('a', 'border-style'));
+r.push('none-width|' + cs('a', 'border-top-width'));
+r.push('none-wshorthand|' + cs('a', 'border-width'));
+r.push('solid-style|' + cs('b', 'border-style'));
+r.push('solid-width|' + cs('b', 'border-top-width'));
+document.title = r.join(' ; ');
+const d = document.createElement('div');
+document.body.appendChild(d);
+d.textContent = r.join(' ; ');
+</script>
+</body></html>

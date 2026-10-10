@@ -155,6 +155,12 @@ public class CssStyleSheetHost
         return true;
     }
 
+    /// <summary>The sentence a refusal that is not about the text carries. An '@import' put after a
+    /// style rule and an '@namespace' put in a sheet that already has one are different mistakes
+    /// that read almost alike, separated by the error name and by one trailing full stop.</summary>
+    private const string InsertRefusal =
+        "Failed to execute 'insertRule' on 'CSSStyleSheet': Failed to insert the rule";
+
     /// <summary>Parses |rule| and puts it at |index| (default: the front, which is what the
     /// IDL default of 0 means), returning the index it landed at (CSSOM §5.2.4). Four refusals
     /// are errors rather than surprises, and all four leave the sheet untouched (measured):
@@ -166,15 +172,19 @@ public class CssStyleSheetHost
     public int insertRule(string rule, int? index = null)
     {
         var sheet = WritableSheet;
-        // The spec resolves the text first, so a script's typo in the rule reads as a syntax
-        // problem and not as an index problem.
+        // The index is the first thing the reference engine looks at, ahead of the text: an insert
+        // that is both out of range and unparseable answers IndexSizeError (measured with
+        // insertRule('not a rule', 99) on an empty sheet). A negative index is the interface's
+        // unsigned value, which is why -1 reads back as 4294967295 (measured).
+        long at = unchecked((uint)(index ?? 0));
+        if (at > sheet.ChildRules.Count)
+            throw new Acrux.Core.Dom.DOMException(
+                "Failed to execute 'insertRule' on 'CSSStyleSheet': The index provided (" + at
+                + ") is larger than the maximum index (" + sheet.ChildRules.Count + ").",
+                "IndexSizeError");
         var parsed = ParseRules(rule, sheet);
-        var at = index ?? 0;
-        if (at < 0 || at > sheet.ChildRules.Count)
-            throw new InvalidOperationException(
-                $"IndexSizeError: the index provided ({at}) is larger than the maximum index ({sheet.ChildRules.Count}).");
-        CheckStatementOrder(sheet, parsed, at);
-        sheet.ChildRules.InsertRange(at, parsed);
+        CheckStatementOrder(sheet, parsed, (int)at);
+        sheet.ChildRules.InsertRange((int)at, parsed);
         // A namespace a script inserts is a declaration the rest of the sheet has to answer to,
         // including the rules inserted afterwards (measured: an inserted '@namespace url(other)'
         // makes a later inserted '#p' stop matching an HTML element).
@@ -183,7 +193,7 @@ public class CssStyleSheetHost
         else
             Acrux.Core.Css.Tokenizer.CssParserImpl.ApplyNamespaces(parsed, sheet);
         Invalidate();
-        return at;
+        return (int)at;
     }
 
     /// <summary>Whether the two statement rules may land where the script asked. The check is on
@@ -199,9 +209,12 @@ public class CssStyleSheetHost
             var before = sheet.ChildRules[i];
             if (before is StyleRuleImport) continue;
             if (before is StyleRuleNamespace && !import) continue;
-            throw new InvalidOperationException(import
-                ? "HierarchyRequestError: the rule must be inserted before any other rule except @import and @namespace."
-                : "InvalidStateError: the stylesheet already has rules that cannot follow a namespace declaration.");
+            // The two refusals share their sentence but not its last character: a full stop follows
+            // the '@import' one and not the '@namespace' one (measured, and read back through
+            // JSON.stringify so the difference is not a rendering artefact).
+            throw new Acrux.Core.Dom.DOMException(
+                import ? InsertRefusal + "." : InsertRefusal,
+                import ? "HierarchyRequestError" : "InvalidStateError");
         }
         if (import) return;
         // A namespace after a rule that is neither an import nor a namespace is refused even when the
@@ -210,8 +223,7 @@ public class CssStyleSheetHost
         // sheet holding one style rule answers InvalidStateError at every index).
         foreach (var existing in sheet.ChildRules)
             if (existing is not (StyleRuleImport or StyleRuleNamespace))
-                throw new InvalidOperationException(
-                    "InvalidStateError: the stylesheet already has rules that cannot follow a namespace declaration.");
+                throw new Acrux.Core.Dom.DOMException(InsertRefusal, "InvalidStateError");
     }
 
     /// <summary>Adds a rule to the end of the sheet — the alias every script expects
@@ -227,9 +239,21 @@ public class CssStyleSheetHost
     public void deleteRule(int index)
     {
         var sheet = WritableSheet;
-        if (index < 0 || index >= sheet.ChildRules.Count)
-            throw new InvalidOperationException("IndexSizeError: the rule index is outside the sheet.");
-        sheet.ChildRules.RemoveAt(index);
+        // An empty sheet says so in its own sentence; a sheet that has rules reports the largest
+        // index it would have accepted, and a negative index is the interface's unsigned value
+        // (all three measured: 'Style sheet is empty (length 0).', '… larger than the maximum index
+        // (1).', and -1 printed as 4294967295).
+        if (sheet.ChildRules.Count == 0)
+            throw new Acrux.Core.Dom.DOMException(
+                "Failed to execute 'deleteRule' on 'CSSStyleSheet': Style sheet is empty (length 0).",
+                "IndexSizeError");
+        long at = unchecked((uint)index);
+        if (at > sheet.ChildRules.Count - 1)
+            throw new Acrux.Core.Dom.DOMException(
+                "Failed to execute 'deleteRule' on 'CSSStyleSheet': The index provided (" + at
+                + ") is larger than the maximum index (" + (sheet.ChildRules.Count - 1) + ").",
+                "IndexSizeError");
+        sheet.ChildRules.RemoveAt((int)at);
         Invalidate();
     }
 
@@ -242,8 +266,9 @@ public class CssStyleSheetHost
     public void replaceSync(string text)
     {
         if (_constructed == null)
-            throw new InvalidOperationException(
-                "NotAllowedError: Can't call replaceSync on non-constructed CSSStyleSheets.");
+            throw new Acrux.Core.Dom.DOMException(
+                "Failed to execute 'replaceSync' on 'CSSStyleSheet': "
+                + "Can't call replaceSync on non-constructed CSSStyleSheets.", "NotAllowedError");
         _constructed.ChildRules.Clear();
         _constructed.AddRuleRange(ParseSheet(text));
         // A wholesale replacement takes the new text's declarations as the sheet's own, so a rule
@@ -283,11 +308,12 @@ public class CssStyleSheetHost
     /// <summary>Parses exactly one rule for insertRule (CSSOM §5.2.4). A text the grammar reads as
     /// nothing, as more than one rule, or as one rule with something left over after it is refused
     /// with a SyntaxError — the reference engine does not keep the part it could read (measured:
-    /// two rules, an empty text and a trailing semicolon each leave the sheet as it was).</summary>
+    /// two rules, an empty text and a trailing semicolon each leave the sheet as it was). The
+    /// sentence quotes the text the script handed in, exactly as it was written (measured for
+    /// '', '@charset "utf-8";' and a rule whose selector the engine refuses).</summary>
     private static List<StyleRuleBase> ParseRules(string text, StyleSheetContents into)
     {
-        if (string.IsNullOrEmpty(text))
-            throw new InvalidOperationException("SyntaxError: the rule text parsed to nothing.");
+        if (string.IsNullOrEmpty(text)) throw RuleParseFailure(text);
         StyleRuleBase? rule = null;
         try
         {
@@ -298,17 +324,20 @@ public class CssStyleSheetHost
         {
             rule = null;
         }
-        if (rule == null) throw new InvalidOperationException("SyntaxError: the rule text parsed to nothing.");
+        if (rule == null) throw RuleParseFailure(text);
         var list = new List<StyleRuleBase> { rule };
         Acrux.Core.Css.Tokenizer.CssParserImpl.ApplyNamespaces(list, into);
         // A rule whose selector names a prefix the sheet never declares, or puts one in front of an
         // attribute, is not a rule at all — and through the CSSOM that reads as a refusal, while the
         // same text in a 'style' element only loses the rule (measured: an inserted 'zz|div' throws
         // and leaves the sheet as it was).
-        if (list.Count == 0)
-            throw new InvalidOperationException("SyntaxError: the rule's selector names a namespace the sheet never declares.");
+        if (list.Count == 0) throw RuleParseFailure(text);
         return list;
     }
+
+    private static Acrux.Core.Dom.DOMException RuleParseFailure(string text) => new(
+        "Failed to execute 'insertRule' on 'CSSStyleSheet': Failed to parse the rule '" + text + "'.",
+        "SyntaxError");
 
     private void Invalidate()
     {

@@ -247,7 +247,7 @@ public class ElementHost
 
     public object? closest(string selector)
     {
-        CssSelectorMatcher.ParseForQuery(selector);
+        CssSelectorMatcher.ParseForQuery(selector, "closest", "Element");
         for (var el = _element; el != null; el = el.ParentElement)
             if (CssSelectorMatcher.Matches(selector, el, _element))
                 return WrapWithCache(el);
@@ -256,14 +256,14 @@ public class ElementHost
 
     public object? querySelector(string selector)
     {
-        CssSelectorMatcher.ParseForQuery(selector);
+        CssSelectorMatcher.ParseForQuery(selector, "querySelector", "Element");
         var result = CssSelectorMatcher.FirstDescendant(_element, selector, _element);
         return result != null ? WrapWithCache(result) : null;
     }
 
     public JsNodeList querySelectorAll(string selector)
     {
-        CssSelectorMatcher.ParseForQuery(selector);
+        CssSelectorMatcher.ParseForQuery(selector, "querySelectorAll", "Element");
         return new JsNodeList(_element, Engine, root =>
         {
             var list = new List<Element>();
@@ -1029,7 +1029,7 @@ public class ElementHost
     {
         // ':scope' inside an element's own query is that element, so 'el.matches(":scope")' is true
         // while 'el.querySelectorAll(":scope")' finds nothing (measured).
-        CssSelectorMatcher.ParseForQuery(selector);
+        CssSelectorMatcher.ParseForQuery(selector, "matches", "Element");
         return CssSelectorMatcher.Matches(selector, _element, _element);
     }
 

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CSS Standard Verification Batch 261 — what a shorthand prints when it has nothing to say, and what a host error looks like</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#markers { margin: 4px 0 0 4px; font: 14px/18px "Segoe UI", sans-serif; }
+#markers .flowrow { display: flex; flex-flow: column wrap; width: 120px; height: 46px; background: rgb(238,238,238); }
+#markers .flownowrap { display: flex; flex-flow: row nowrap; width: 120px; height: 22px; background: rgb(238,238,238); }
+#markers .flowrow span, #markers .flownowrap span { display: block; width: 30px; height: 14px; background: rgb(204,255,204); }
+#markers .flownowrap span { display: inline-block; }
+#markers .ul-in { list-style: inside square; margin: 0 0 0 18px; padding: 0; }
+#markers .ul-out { list-style: square outside; margin: 0; padding: 0 0 0 30px; }
+#markers .td { text-decoration: underline solid rgb(204,0,0); }
+#markers .td-dash { text-decoration: line-through dashed rgb(0,0,204); }
+#markers .brd { border: medium none rgb(0,0,0); width: 60px; height: 14px; background: rgb(255,255,153); }
+#markers .brd2 { border: 2px solid rgb(204,51,51); width: 56px; height: 10px; }
+</style>
+</head>
+<body>
+<h4>b261 — the shorthand printer of the reference engine: which parts it drops when they repeat a longhand's initial value, which order it puts the rest in, what it writes when the shorthand has nothing left to say, and how a sub-shorthand reads through the big one. Also the shape of an error a host method throws (its 'name' apart from its 'message'), and the sheet lists — a &lt;style&gt; a script appended, and a constructed sheet that is adopted rather than linked. Every want is what the reference engine answered for the same document. The markers above are laid out and painted through the shorthands this page measures, so the pixel baseline guards the same ground as the values.</h4>
+<div id="markers">
+  <div class="flowrow"><span></span><span></span><span></span></div>
+  <div class="flownowrap"><span></span><span></span></div>
+  <ul class="ul-in"><li>inside marker</li><li>second</li></ul>
+  <ul class="ul-out"><li>outside marker</li><li>second</li></ul>
+  <p><span class="td">underlined solid</span> and <span class="td-dash">struck through dashed</span></p>
+  <div class="brd">no border</div>
+  <div class="brd2">red border</div>
+</div>
+<pre id="report"></pre>
+<div id="stage"></div>
+<script>
+const out = [];
+let failed = 0;
+function row(name, got, want) {
+  const ok = String(got) === String(want);
+  if (!ok) failed++;
+  out.push((ok ? 'ok   ' : 'FAIL ') + name.padEnd(34) + ' got=' + got + '   want=' + want);
+}
+function check(name, fn, want) {
+  let got;
+  try { got = typeof fn === 'function' ? fn() : fn; } catch (e) { got = 'ERR[' + e.name + ']'; }
+  row(name, got, want);
+}
+function spell(prop, value) {
+  const d = document.createElement('div');
+  d.style.setProperty(prop, value);
+  return d.style.getPropertyValue(prop);
+}
+function block(prop, value) {
+  const d = document.createElement('div');
+  d.style.setProperty(prop, value);
+  return d;
+}
+
+// ---- §1 parts that repeat an initial value are left out -------------------
+const omitRows = [
+  ['flex-flow', 'row nowrap', 'row'],
+  ['flex-flow', 'nowrap', 'row'],
+  ['flex-flow', 'column wrap', 'column wrap'],
+  ['flex-flow', 'row-reverse wrap-reverse', 'row-reverse wrap-reverse'],
+  ['flex-flow', 'wrap', 'wrap'],
+  ['text-decoration', 'underline solid red', 'underline red'],
+  ['text-decoration', 'underline solid', 'underline'],
+  ['text-decoration', 'solid', 'none'],
+  ['text-decoration', 'dashed', 'dashed'],
+  ['text-decoration', 'red', 'red'],
+  ['text-decoration', 'underline dashed red', 'underline dashed red'],
+  ['text-decoration', 'blink underline', 'underline blink'],
+  ['column-rule', 'medium none currentcolor', 'medium'],
+  ['column-rule', '2px solid red', '2px solid red'],
+  ['transition', 'all 2s', '2s'],
+  ['transition', 'none 0s ease 0s', 'none'],
+  ['transition', 'none 0s linear 0s', 'none linear'],
+  ['transition', '0s', 'all'],
+  ['transition', 'ease', 'all'],
+  ['transition', 'opacity 1s linear 2s', 'opacity 1s linear 2s'],
+  ['transition', 'color 1s ease 2s', 'color 1s 2s'],
+];
+for (const c of omitRows) row('omit ' + c[0] + ' ' + c[1].slice(0, 14), () => spell(c[0], c[1]), c[2]);
+
+// ---- §2 parts the engine puts in its own order ---------------------------
+const orderRows = [
+  ['list-style', 'inside url(a.png) circle', 'inside url("a.png") circle'],
+  ['list-style', 'url(a.png) inside', 'inside url("a.png")'],
+  ['list-style', 'disc outside none', 'outside none disc'],
+  ['list-style', 'circle', 'circle'],
+  ['list-style', 'none', 'none'],
+  ['outline', 'medium none currentcolor', 'currentcolor none medium'],
+  ['flex', '0 1 auto', '0 1 auto'],
+  ['background', 'none', 'none'],
+];
+for (const c of orderRows) row('order ' + c[0] + ' ' + c[1].slice(0, 14), () => spell(c[0], c[1]), c[2]);
+
+// ---- §3 a shorthand with nothing left to say prints its parts ------------
+check('border-empty-get', () => spell('border', 'medium none currentcolor'), '');
+check('border-empty-csstext', () => block('border', 'medium none currentcolor').style.cssText,
+  'border-width: medium; border-style: none; border-color: currentcolor; border-image: none;');
+check('border-top-empty-csstext', () => block('border-top', 'medium none currentcolor').style.cssText,
+  'border-top-width: medium; border-top-style: none; border-top-color: currentcolor;');
+check('border-inline-empty-csstext', () => block('border-inline', 'medium none currentcolor').style.cssText,
+  'border-inline-start: medium none currentcolor; border-inline-end: medium none currentcolor;');
+check('border-empty-attr-kept', () => {
+  const d = document.createElement('div');
+  d.setAttribute('style', 'border: medium none currentcolor');
+  return d.getAttribute('style');
+}, 'border: medium none currentcolor');
+check('border-empty-reads-through', () => {
+  const d = document.createElement('div');
+  d.setAttribute('style', 'border: medium none currentcolor');
+  return d.style.getPropertyValue('border-style') + '|' + d.style.getPropertyValue('border-width')
+    + '|' + d.style.getPropertyValue('border-top-color');
+}, 'none|medium|currentcolor');
+check('border-written-csstext', () => spell('border', 'medium solid red'), 'solid red');
+check('border-full-csstext', () => block('border', '1px solid red').style.cssText, 'border: 1px solid red;');
+
+// ---- §4 the sheet lists --------------------------------------------------
+check('dynamic-style-collected', () => {
+  const before = document.styleSheets.length;
+  const st = document.createElement('style');
+  st.textContent = 'p { color: rgb(7, 7, 7); }';
+  document.head.appendChild(st);
+  return (document.styleSheets.length === before + 1) + '/' + (st.sheet ? 'sheet' : 'nosheet')
+    + '/' + st.sheet.cssRules.length;
+}, 'true/sheet/1');
+check('sheet-ownerNode', () => {
+  const st = document.createElement('style');
+  st.id = 'owned';
+  st.textContent = 'h5 { color: rgb(8, 8, 8); }';
+  document.head.appendChild(st);
+  return st.sheet.ownerNode.id + '/' + (st.sheet.ownerNode === st);
+}, 'owned/true');
+check('adopted-not-in-styleSheets', () => {
+  const before = document.styleSheets.length;
+  const c = new CSSStyleSheet();
+  c.replaceSync('h6 { color: rgb(9, 9, 9); }');
+  document.adoptedStyleSheets = [c];
+  return document.styleSheets.length + '/' + Array.from(document.styleSheets).some(s => s === c)
+    + '/' + document.adoptedStyleSheets.length;
+}, before + '/false/1');
+check('adopted-is-array', () => Array.isArray(document.adoptedStyleSheets)
+  + '/' + document.adoptedStyleSheets[0].cssRules[0].selectorText, 'true/h6');
+check('adopted-identity', () => {
+  const c = new CSSStyleSheet();
+  c.replaceSync('h7 { color: rgb(1, 2, 3); }');
+  document.adoptedStyleSheets = [c];
+  return (document.adoptedStyleSheets[0] === c) + '/' + document.adoptedStyleSheets[0].cssRules.length;
+}, 'true/1');
+check('adopted-element-sheet-refused', () => {
+  const st = document.createElement('style');
+  document.head.appendChild(st);
+  try { document.adoptedStyleSheets = [st.sheet]; return 'accepted'; }
+  catch (e) { return 'throws ' + e.name; }
+}, 'throws NotAllowedError');
+
+// ---- §5 an error carries its name apart from its sentence ----------------
+function errorShape(label, fn) {
+  try { fn(); return 'no-throw'; }
+  catch (e) { return e.name + ' | ' + e.message; }
+}
+check('err-getcomputedstyle-null',
+  () => errorShape('', () => getComputedStyle(null)),
+  "TypeError | Failed to execute 'getComputedStyle' on 'Window': parameter 1 is not of type 'Element'.");
+check('err-query-bogus',
+  () => errorShape('', () => document.querySelectorAll('p:bogus')),
+  "SyntaxError | 'p:bogus' is not a valid selector.");
+check('err-query-nth',
+  () => errorShape('', () => document.querySelectorAll('p:nth-child(3 n)')),
+  "SyntaxError | 'p:nth-child(3 n)' is not a valid selector.");
+check('err-insert-rule', () => {
+  const st = document.createElement('style');
+  document.head.appendChild(st);
+  return errorShape('', () => st.sheet.insertRule('p:lang("en"){color:red}', 0));
+}, 'SyntaxError | the rule text parsed to nothing.');
+check('err-matches-name-only', () => {
+  try { document.body.matches('p:has()'); return 'no-throw'; }
+  catch (e) { return e.name; }
+}, 'SyntaxError');
+
+// ---- §6 the value the block keeps when the shorthand is silent -----------
+check('length-one-declaration', () => block('border', 'medium none currentcolor').style.length, '1');
+check('item-zero-is-shorthand', () => block('border', 'medium none currentcolor').style.item(0), 'border');
+check('remove-shorthand-clears-all', () => {
+  const d = block('border', 'medium none currentcolor');
+  d.style.removeProperty('border');
+  return d.style.length + '/' + d.style.getPropertyValue('border-style') + '/' + d.style.cssText;
+}, '0//');
+check('cascade-still-applies-border-style', () => {
+  const d = document.createElement('div');
+  d.className = 'brd';
+  d.textContent = 'x';
+  document.body.appendChild(d);
+  const v = getComputedStyle(d).getPropertyValue('border-style') + '|'
+    + getComputedStyle(d).getPropertyValue('border-top-width');
+  d.remove();
+  return v;
+}, 'none|3px');
+
+const summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script>
+</body>
+</html>

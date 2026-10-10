@@ -1660,7 +1660,7 @@ public static class ShorthandExpander
             }
             else if (p is "solid" or "double" or "dotted" or "dashed" or "wavy")
                 result["text-decoration-style"] = p;
-            else if (p is "auto" or "from-font" || IsThickness(p))
+            else if (IsTextDecorationThickness(p))
                 result["text-decoration-thickness"] = p;
             else if (IsColor(p))
                 result["text-decoration-color"] = p;
@@ -1669,9 +1669,13 @@ public static class ShorthandExpander
             result["text-decoration-line"] = string.Join(' ', lines);
     }
 
-    /// <summary>A bare length or percentage in the 'text-decoration' shorthand is the
-    /// thickness (CSS Text Decoration 4 adds it to the shorthand grammar).</summary>
-    private static bool IsThickness(string token) => Dom.Length.IsLength(token);
+    /// <summary>A bare length or percentage in the 'text-decoration' shorthand is the thickness
+    /// (CSS Text Decoration 4 adds it to the shorthand grammar), next to the two keywords that name
+    /// it. The printer of the same shorthand has to agree with the expander about which token that
+    /// is — otherwise a width is read as the colour beside it and the value the engine keeps loses
+    /// the thickness the page asked for.</summary>
+    internal static bool IsTextDecorationThickness(string token) =>
+        token is "auto" or "from-font" || Dom.Length.IsLength(token);
 
     private static void ExpandTextEmphasis(Dictionary<string, string> result, string value)
     {

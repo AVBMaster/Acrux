@@ -63,9 +63,17 @@ public class JintEngineAdapter : IJavaScriptEngineAdapter, IDisposable
                     var head = message.Substring(0, cut);
                     if (!IsDomExceptionName(head)) return;
                     name = head;
+                    // The name the host wrote at the front of its message belongs on error.name and
+                    // not twice over: a page that prints 'e.name + ": " + e.message' would read
+                    // "TypeError: TypeError: …" (measured — the reference message starts at the
+                    // sentence, "Failed to execute 'getComputedStyle' on 'Window': …").
+                    message = message.Substring(cut + 2);
                 }
                 error.FastSetProperty("name", new PropertyDescriptor(
                     JsValue.FromObject(engine, name),
+                    PropertyFlag.ConfigurableEnumerableWritable));
+                error.FastSetProperty("message", new PropertyDescriptor(
+                    JsValue.FromObject(engine, message),
                     PropertyFlag.ConfigurableEnumerableWritable));
             };
         });
@@ -73,9 +81,13 @@ public class JintEngineAdapter : IJavaScriptEngineAdapter, IDisposable
 
     private static bool IsDomExceptionName(string name) => name switch
     {
+        // The names a host method can put in front of its message to say which kind of error the
+        // page should catch. The DOMException set, plus the plain JavaScript ones the IDL surfaces
+        // for a wrong argument ('TypeError') or a value out of range ('RangeError').
         "IndexSizeError" or "HierarchyRequestError" or "NotFoundError" or "NotSupportedError"
         or "NotAllowedError" or "InvalidStateError" or "SyntaxError" or "TypeMismatchError"
-        or "NetworkError" or "AbortError" or "SecurityError" or "InvalidAccessError" => true,
+        or "NetworkError" or "AbortError" or "SecurityError" or "InvalidAccessError"
+        or "TypeError" or "RangeError" => true,
         _ => false,
     };
 

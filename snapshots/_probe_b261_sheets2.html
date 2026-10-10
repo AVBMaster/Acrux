@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"><style id="s0">h1{color:red}</style></head><body>
+<script>
+const out = [];
+out.push('start=' + document.styleSheets.length);
+const st = document.createElement('style');
+st.textContent = 'p{color:blue}';
+document.head.appendChild(st);
+out.push('after-dynamic=' + document.styleSheets.length + '/' + (document.styleSheets[1] === st.sheet));
+const c = new CSSStyleSheet();
+c.replaceSync('h2{color:green}');
+document.adoptedStyleSheets = [c];
+out.push('after-adopted=' + document.styleSheets.length
+  + '/has=' + Array.from(document.styleSheets).some(s => s === c)
+  + '/owners=' + Array.from(document.styleSheets).map(s => s.ownerNode ? s.ownerNode.id || s.ownerNode.tagName : 'null').join('+'));
+console.log(out.join('\n'));
+</script></body></html>

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head><body>
+<script>
+const vals = [
+  'row nowrap', 'nowrap', 'column wrap', 'row-reverse wrap-reverse', 'wrap',
+  'row', 'column', 'row-reverse', 'wrap-reverse', 'row wrap', 'column nowrap',
+  'column wrap-reverse'
+];
+const lines = [];
+for (const v of vals) {
+  const d = document.createElement('div');
+  d.style.setProperty('flex-flow', v);
+  lines.push(v + ' => [' + d.style.getPropertyValue('flex-flow') + '] dir=['
+    + d.style.getPropertyValue('flex-direction') + '] wrap=[' + d.style.getPropertyValue('flex-wrap') + ']');
+}
+document.body.textContent = lines.join('\n');
+</script>
+<pre id="x"></pre>
+</body></html>

@@ -159,8 +159,10 @@ public class DocumentHost
 
     public object? querySelector(string selector)
     {
+        // The selector is checked before the document is even looked at: an empty document still
+        // refuses a text the grammar does not read (measured).
+        CssSelectorMatcher.ParseForQuery(selector, "querySelector", "Document");
         if (_document.DocumentElement == null) return null;
-        CssSelectorMatcher.ParseForQuery(selector);
         // A document query is anchored at the root element and its candidate list starts with it:
         // 'document.querySelectorAll("html")' answers with one element, and ':scope' inside such a
         // query means that element (both measured).
@@ -171,8 +173,8 @@ public class DocumentHost
 
     public object querySelectorAll(string selector)
     {
+        CssSelectorMatcher.ParseForQuery(selector, "querySelectorAll", "Document");
         if (_document.DocumentElement == null) return new object[0];
-        CssSelectorMatcher.ParseForQuery(selector);
         return new JsNodeList(_document.DocumentElement, Engine, root =>
         {
             var list = new List<Element>();
@@ -517,13 +519,20 @@ public class DocumentHost
                 for (int i = 0; i < value.Length; i++)
                 {
                     var host = value[i] as CssStyleSheetHost;
-                    if (host == null) continue;
+                    if (host == null)
+                        // A member that is not a stylesheet at all is refused by the IDL before the
+                        // list is read, so nothing is adopted (measured: '[null]' and '[{}]' both
+                        // answer TypeError, and the previous list is still in place afterwards).
+                        throw new Acrux.Core.Dom.DOMException(
+                            "Failed to set the 'adoptedStyleSheets' property on 'Document': "
+                            + "Failed to convert value to 'CSSStyleSheet'.", "TypeError");
                     // Only a sheet the script constructed itself can be adopted; a sheet an
                     // element owns is already in the cascade through that element, and the
                     // reference engine refuses the duplicate (measured: NotAllowedError).
                     if (!host.IsConstructed)
-                        throw new InvalidOperationException(
-                            "NotAllowedError: Can't adopt a non-constructed stylesheet.");
+                        throw new Acrux.Core.Dom.DOMException(
+                            "Failed to set the 'adoptedStyleSheets' property on 'Document': "
+                            + "Can't adopt non-constructed stylesheets.", "NotAllowedError");
                     var sheet = host.NativeSheet;
                     if (sheet != null) adopted.Add(sheet);
                 }
@@ -541,8 +550,17 @@ public class DocumentHost
             DomMutationTracker.Notify();
         }
     }
-    public object getComputedStyle(ElementHost element)
+    public object getComputedStyle(ElementHost? element)
     {
+        // The IDL takes an Element, so anything else is a wrong argument rather than an element
+        // with no styles — the reference engine answers with a TypeError whose message starts at
+        // the sentence and names the parameter (measured: e.name is 'TypeError' and e.message is
+        // "Failed to execute 'getComputedStyle' on 'Window': parameter 1 is not of type 'Element'.").
+        if (element == null)
+            throw new Acrux.Core.Dom.DOMException(
+                "Failed to execute 'getComputedStyle' on 'Window': parameter 1 is not of type 'Element'.",
+                "TypeError");
+
         // A computed style read is a style change event in disguise: whatever the
         // script did to the DOM earlier in the same tick has to be resolved first,
         // or the page reads the previous frame's values.

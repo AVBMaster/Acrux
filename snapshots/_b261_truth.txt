@@ -1,0 +1,147 @@
+b261 measured truth — reference engine (Chromium 150 family), inline-style CSSOM + host errors.
+Every line below is what the reference answered for the call shown; nothing here is derived from
+the specification text. Re-measured in this round with small evaluate_script payloads (one or a few
+calls per read), because long joined strings come back mangled.
+
+===== 1. flex-flow: which parts the printer drops =====
+The pair it elides against is 'row nowrap' — what the `flex` shorthand carries — and NOT the two
+longhands' own initial pair ('row' / 'wrap'). A plain 'wrap' therefore prints, a plain 'nowrap'
+does not. When both parts drop, the direction stands alone.
+
+  setProperty('flex-flow', V); getPropertyValue('flex-flow')
+  'row nowrap'                => 'row'
+  'nowrap'                    => 'row'
+  'row'                       => 'row'
+  'wrap'                      => 'wrap'
+  'wrap-reverse'              => 'wrap-reverse'
+  'row wrap'                  => 'wrap'
+  'column'                    => 'column'
+  'column nowrap'             => 'column'
+  'column wrap'               => 'column wrap'
+  'column wrap-reverse'       => 'column wrap-reverse'
+  'row-reverse'               => 'row-reverse'
+  'row-reverse wrap-reverse'  => 'row-reverse wrap-reverse'
+
+===== 2. a shorthand whose every part is initial prints its parts =====
+  d.style.setProperty('border', 'medium none currentcolor')
+    getPropertyValue('border')       => ''
+    getPropertyValue('border-style')  => 'none'
+    getPropertyValue('border-width')  => 'medium'
+    getPropertyValue('border-top-color') => 'currentcolor'
+    cssText     => 'border-width: medium; border-style: none; border-color: currentcolor; border-image: none;'
+    getAttribute('style') => the same text as cssText   <-- the attribute is the block's serialisation
+    style.length => 17   (12 physical border longhands + the 5 of border-image)
+    style.item(0) => 'border-top-width'
+  d.setAttribute('style', 'border: medium none currentcolor')
+    getAttribute('style') => 'border: medium none currentcolor'   (verbatim until a CSSOM write)
+  border-top with the same value => cssText
+    'border-top-width: medium; border-top-style: none; border-top-color: currentcolor;'
+  border-inline with the same value => cssText
+    'border-inline-start: medium none currentcolor; border-inline-end: medium none currentcolor;'
+  removeProperty('border') after the write => length 0, getPropertyValue('border-style') '', cssText ''
+
+  The 17-longhand storage is the part this engine does not do (gap #269): it keeps the one
+  declaration the page wrote and expands it only on the way out, so length is 1 and item(0) is
+  'border'. The attribute text now matches, because both surfaces print through one serializer.
+
+===== 3. other shorthand printers measured this round =====
+  text-decoration 'underline solid red' => 'underline red'      'solid' => 'none'
+  text-decoration 'underline solid'     => 'underline'          'dashed' => 'dashed'
+  text-decoration 'blink underline'     => 'underline blink'    (the lines print in engine order)
+  column-rule   'medium none currentcolor' => 'medium'          '2px solid red' => '2px solid red'
+  transition    'all 2s' => '2s'   'none 0s ease 0s' => 'none'   'none 0s linear 0s' => 'none linear'
+  transition    '0s' => 'all'      'ease' => 'all'               'color 1s ease 2s' => 'color 1s 2s'
+  list-style    'inside url(a.png) circle' => 'inside url("a.png") circle'
+  list-style    'url(a.png) inside' => 'inside url("a.png")'     'disc outside none' => 'outside none disc'
+  outline       'medium none currentcolor' => 'currentcolor none medium'
+  border        'medium solid red' => 'solid red'                '1px solid red' => '1px solid red'
+  flex          '0 1 auto' => '0 1 auto'        background 'none' => 'none'
+
+===== 4. computed value of a border width is its used value =====
+  .brd { border: medium none rgb(0,0,0) }  getComputedStyle => border-style 'none', border-top-width '0px'
+  .brdsolid{ border: medium solid … }      getComputedStyle => border-style 'solid', border-top-width '3px'
+  getPropertyValue('border-width') on the first => '0px'
+
+===== 5. host error shapes: name apart from message, sentence names the call =====
+  getComputedStyle(null) / (undefined)
+    TypeError | Failed to execute 'getComputedStyle' on 'Window': parameter 1 is not of type 'Element'.
+  document.querySelectorAll('p:bogus')
+    SyntaxError | Failed to execute 'querySelectorAll' on 'Document': 'p:bogus' is not a valid selector.
+  document.querySelector(sel) / document.body.querySelector(sel) / .querySelectorAll(sel)
+    same sentence with 'querySelector'|'querySelectorAll' and 'Document'|'Element' as asked
+  document.body.matches(sel) / .closest(sel)
+    SyntaxError | Failed to execute 'matches'|'closest' on 'Element': '<sel>' is not a valid selector.
+  document.querySelectorAll('')
+    SyntaxError | … : The provided selector is empty.
+  document.querySelectorAll('   ')
+    SyntaxError | … : '   ' is not a valid selector.        (spaces are NOT the empty selector)
+  document.querySelectorAll(':is()')      => 0 matches, no throw   (forgiving list)
+  document.body.matches(':not()')         => SyntaxError           (strict list)
+  document.querySelector('p:lang("en")')  => SyntaxError           (:lang is not supported at all)
+
+  sheet = <style>.sheet with no rules
+  insertRule('not a rule', 99)  => IndexSizeError | Failed to execute 'insertRule' on 'CSSStyleSheet':
+                                   The index provided (99) is larger than the maximum index (0).
+        <-- the INDEX is checked before the TEXT
+  insertRule('p{color:red}', 1) on an empty sheet => … index provided (1) … maximum index (0).
+  insertRule('p{color:red}', -1) => … index provided (4294967295) …   (unsigned long conversion)
+  insertRule('') / ('@charset "utf-8";') / ('zz|div{color:red}') / ('p:lang("en"){color:red}')
+    SyntaxError | Failed to execute 'insertRule' on 'CSSStyleSheet': Failed to parse the rule '<text>'.
+  sheet with one style rule:
+    insertRule('@namespace url(x);', 0)
+      InvalidStateError | Failed to execute 'insertRule' on 'CSSStyleSheet': Failed to insert the rule
+    insertRule('@import "a.css";', 1)
+      HierarchyRequestError | Failed to execute 'insertRule' on 'CSSStyleSheet': Failed to insert the rule.
+    (both leave cssRules.length at 1; the second sentence carries a trailing full stop, the first does
+     not — read with JSON.stringify, since the harness otherwise renders them identically)
+  deleteRule on an empty sheet (any index)
+    IndexSizeError | Failed to execute 'deleteRule' on 'CSSStyleSheet': Style sheet is empty (length 0).
+  deleteRule(5) / deleteRule(-1) on a two-rule sheet
+    IndexSizeError | … The index provided (5|4294967295) is larger than the maximum index (1).
+  elementSheet.replaceSync('p{color:red}')
+    NotAllowedError | Failed to execute 'replaceSync' on 'CSSStyleSheet': Can't call replaceSync on
+                      non-constructed CSSStyleSheets.
+  document.adoptedStyleSheets = [elementSheet]
+    NotAllowedError | Failed to set the 'adoptedStyleSheets' property on 'Document':
+                      Can't adopt non-constructed stylesheets.
+  document.adoptedStyleSheets = [null] / [{}]
+    TypeError | Failed to set the 'adoptedStyleSheets' property on 'Document':
+               Failed to convert value to 'CSSStyleSheet'.
+    and the list already in place is untouched: after [c] then [{}] => length 1, [0] === c
+
+===== 6. the sheet lists =====
+  a <style> appended by script joins document.styleSheets, its .sheet exists and its rules are live;
+  sheet.ownerNode is the element itself; the element sheets stay in document order;
+  an adopted constructed sheet is NOT in document.styleSheets and document.adoptedStyleSheets is a
+  real Array holding the very object that went in.
+
+===== 7. text-decoration: the full matrix (printing and grammar) =====
+  printed order is: lines (engine order), thickness, style, colour.
+  'underline solid red'        => 'underline red'          'underline solid'  => 'underline'
+  'solid'                      => 'none'                   'dashed'           => 'dashed'
+  'red'                        => 'red'                    '3px'              => '3px'
+  'auto'                       => 'none'                   'none solid'       => 'none'
+  'blink underline'            => 'underline blink'        'underline blink wavy' => 'underline blink wavy'
+  'wavy red underline'         => 'underline wavy red'
+  'overline 3px solid blue'    => 'overline 3px blue'
+  'line-through wavy green 4px'=> 'line-through 4px wavy green'
+  'underline 2px'              => 'underline 2px'          'underline 1.5px dotted' => 'underline 1.5px dotted'
+  'underline auto'             => 'underline'  (auto is the INITIAL thickness)
+  'underline from-font'        => 'underline from-font'
+  'underline 50%'              => 'underline 50%'          'underline -3px'   => 'underline -3px'
+  'underline 0'                => 'underline 0px'          'underline 0.0'    => 'underline 0px'
+  'underline 0%'               => 'underline 0%'
+  'underline calc(2px + 1px)'  => 'underline calc(3px)'
+  'underline overline'         => 'underline overline'     'none' => 'none'     'blink' => 'blink'
+  'spelling-error'             => 'spelling-error'         'grammar-error' => 'grammar-error'
+  computed for 'spelling-error': line 'spelling-error', style 'solid', colour rgb(0,0,0), thickness auto
+
+  refused outright (getPropertyValue reads '' and the longhands keep their initials):
+  'underline thick'      'underline 2'          'underline 3px 4px'    'underline auto 2px'
+  'underline from-font 2px'   'underline wavy dotted'   'underline none'
+  'underline spelling-error'  'grammar-error spelling-error'  'underline underline'  'blink blink'
+  'red red'              'underline bogus'
+  A write the grammar refuses leaves an earlier valid declaration untouched:
+    setProperty('text-decoration','underline solid red') then ('underline thick')
+      => line 'underline', colour 'red', length 4
+

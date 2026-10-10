@@ -47,12 +47,23 @@ public static class CssSelectorMatcher
     /// <summary>Parse a selector list for a DOM query, refusing a text the grammar does not read.
     /// 'no element matches' and 'there is no selector here' are different answers, and the reference
     /// engine keeps them apart: querySelector, querySelectorAll, matches and closest each throw a
-    /// SyntaxError for the second (measured for 'p:bogus', 'p:nth-child(3 n)' and a blank text).</summary>
-    public static List<CssSelector> ParseForQuery(string selectorText)
+    /// SyntaxError for the second (measured for 'p:bogus', 'p:nth-child(3 n)' and a blank text).
+    /// The sentence names the call that failed — the method and the interface it was asked on — and
+    /// then the selector (measured for all six: "Failed to execute 'querySelectorAll' on 'Document':
+    /// 'p:bogus' is not a valid selector."). A named script error, so the page catches
+    /// 'e.name == "SyntaxError"' and reads the sentence in 'e.message'; the name is not repeated
+    /// inside it.</summary>
+    public static List<CssSelector> ParseForQuery(string selectorText, string method, string owner)
     {
         var parsed = Parse(selectorText ?? string.Empty);
         if (parsed.Count == 0)
-            throw new InvalidOperationException("SyntaxError: '" + selectorText + "' is not a valid selector.");
+            // A text that is empty has its own sentence, while a text that is only spaces is quoted
+            // back as the invalid selector it is (both measured).
+            throw new Acrux.Core.Dom.DOMException(
+                "Failed to execute '" + method + "' on '" + owner + "': "
+                + ((selectorText ?? string.Empty).Length == 0
+                    ? "The provided selector is empty."
+                    : "'" + selectorText + "' is not a valid selector."), "SyntaxError");
         return parsed;
     }
 

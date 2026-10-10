@@ -211,6 +211,10 @@ public static class CssValueText
                 result = CanonicalizeTransition(result, property);
                 result = OmitInitialBorderParts(result, property);
                 result = CollapseBoxShorthandParts(result, property);
+                result = CanonicalizeFlexFlow(result, property);
+                result = CanonicalizeTextDecoration(result, property);
+                result = CanonicalizeColumnRule(result, property);
+                result = CanonicalizeListStyle(result, property);
             }
         }
         return result;
@@ -344,10 +348,7 @@ public static class CssValueText
         var kept = new List<string>();
         foreach (var word in SplitTopLevelWords(text))
         {
-            if (word.Equals("currentcolor", StringComparison.OrdinalIgnoreCase)
-                || word.Equals("medium", StringComparison.OrdinalIgnoreCase)
-                || word.Equals("none", StringComparison.OrdinalIgnoreCase))
-                continue;
+            if (IsInitialBorderPart(word)) continue;
             kept.Add(word);
         }
         // When every component is initial there is nothing left to say, and the reference engine
@@ -356,6 +357,71 @@ public static class CssValueText
         // on at that point, and 'border: ;' would not survive being parsed again, so the whole
         // value stays written (measured, and left as a documented gap).
         return kept.Count == 0 ? text : string.Join(" ", kept);
+    }
+
+    /// <summary>One component of a border shorthand that repeats its longhand's initial value:
+    /// 'medium' for the width, 'none' for the style, 'currentcolor' for the colour. The printer that
+    /// drops initial components and the one that asks whether anything is left both read this, so
+    /// the two cannot disagree about what an initial value is.</summary>
+    private static bool IsInitialBorderPart(string word) =>
+        word.Equals("currentcolor", StringComparison.OrdinalIgnoreCase)
+        || word.Equals("medium", StringComparison.OrdinalIgnoreCase)
+        || word.Equals("none", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsBorderSideShorthand(string name) =>
+        name is "border" or "border-top" or "border-right" or "border-bottom" or "border-left"
+            or "border-inline" or "border-inline-start" or "border-inline-end"
+            or "border-block" or "border-block-start" or "border-block-end";
+
+    /// <summary>
+    /// Whether a shorthand's value says nothing beyond the initial values of its longhands. The
+    /// reference engine then prints the longhands in its place and the shorthand reads back as the
+    /// empty string, while the style attribute keeps what the page wrote (measured:
+    /// 'border: medium none currentcolor' gives 'border-width: medium; border-style: none;
+    /// border-color: currentcolor; border-image: none;', and 'border-inline: medium none
+    /// currentcolor' gives the two logical sides with their values unwritten).
+    /// </summary>
+    public static bool ShorthandPrintsEmpty(string property, string? value)
+    {
+        if (value == null || value.Length == 0) return false;
+        var name = property.ToLowerInvariant();
+        if (!IsBorderSideShorthand(name)) return false;
+        var words = SplitTopLevelWords(value);
+        return words.Count > 0 && words.TrueForAll(IsInitialBorderPart);
+    }
+
+    /// <summary>
+    /// The declarations a shorthand prints when it has nothing left to say — its parts, each with
+    /// the value it holds. Measured for the border family: 'border' gives its four sub-shorthands
+    /// with their initials and a 'border-image: none' beside them, 'border-top' gives its three
+    /// longhands, and 'border-inline' gives the two logical sides with the value the page wrote
+    /// (a logical shorthand does not decompose any further on the way out). A shorthand this table
+    /// does not know prints as itself, which is what it did before.
+    /// </summary>
+    public static List<KeyValuePair<string, string>>? EmptyShorthandParts(string property, string value)
+    {
+        var name = property.ToLowerInvariant();
+        if (!IsBorderSideShorthand(name)) return null;
+        if (name == "border")
+            return new List<KeyValuePair<string, string>>
+            {
+                new("border-width", "medium"),
+                new("border-style", "none"),
+                new("border-color", "currentcolor"),
+                new("border-image", "none"),
+            };
+        if (name is "border-inline" or "border-block")
+            return new List<KeyValuePair<string, string>>
+            {
+                new(name + "-start", value),
+                new(name + "-end", value),
+            };
+        return new List<KeyValuePair<string, string>>
+        {
+            new(name + "-width", "medium"),
+            new(name + "-style", "none"),
+            new(name + "-color", "currentcolor"),
+        };
     }
 
     /// <summary>Collapse a four-value box shorthand to the shortest form that says the same thing,
@@ -419,7 +485,9 @@ public static class CssValueText
             var parts = new List<string>();
             if (name != null && !name.Equals("all", StringComparison.OrdinalIgnoreCase))
                 parts.Add(name);
-            if (duration != null) parts.Add(duration);
+            // A duration of zero is the initial value and is left out like the rest — measured,
+            // 'transition: none 0s linear 0s' reads back 'none linear' and 'transition: 0s' 'all'.
+            if (duration != null && !IsZeroTime(duration)) parts.Add(duration);
             if (easing != null && !easing.Equals("ease", StringComparison.OrdinalIgnoreCase))
                 parts.Add(easing);
             if (delay != null && !delay.Equals("0s", StringComparison.OrdinalIgnoreCase)
@@ -429,6 +497,153 @@ public static class CssValueText
             layers.Add(string.Join(" ", parts));
         }
         return string.Join(", ", layers);
+    }
+
+    private static bool IsZeroTime(string word) =>
+        word.Equals("0s", StringComparison.OrdinalIgnoreCase)
+        || word.Equals("0ms", StringComparison.OrdinalIgnoreCase)
+        || word.Equals("0", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Print <c>flex-flow</c> as the reference engine does: the direction, then the wrap, with a
+    /// part dropped when it says <c>row</c> or <c>nowrap</c> — the pair the <c>flex</c> shorthand
+    /// carries by default, which is not the longhands' own initial pair (a plain <c>wrap</c> is
+    /// printed although it is <c>flex-wrap</c>'s initial value, and a plain <c>nowrap</c> is
+    /// dropped). When both parts are dropped the direction still stands alone, because the shorthand
+    /// has nothing else to say (all twelve cases measured: 'row nowrap' and 'nowrap' read 'row',
+    /// 'row wrap' and 'wrap' read 'wrap', 'column nowrap' reads 'column', 'column wrap' and
+    /// 'row-reverse wrap-reverse' read as written).
+    /// </summary>
+    private static string CanonicalizeFlexFlow(string text, string property)
+    {
+        if (!property.Equals("flex-flow", StringComparison.OrdinalIgnoreCase)) return text;
+        string direction = "row", wrap = null;
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            var p = word.ToLowerInvariant();
+            if (p is "row" or "row-reverse" or "column" or "column-reverse") direction = p;
+            else if (p is "nowrap" or "wrap" or "wrap-reverse") wrap = p;
+        }
+        var parts = new List<string>();
+        if (direction != "row") parts.Add(direction);
+        if (wrap != null && wrap != "nowrap") parts.Add(wrap);
+        return parts.Count == 0 ? "row" : string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// Print <c>text-decoration</c>: the lines, then a thickness that is not the initial <c>auto</c>,
+    /// then a style that is not the initial <c>solid</c>, then a colour that is not
+    /// <c>currentcolor</c>; when every part is initial the shorthand says <c>none</c>, which is its
+    /// line's initial (all measured: 'underline solid red' reads 'underline red', 'dashed' reads
+    /// 'dashed', 'solid' reads 'none', 'overline 3px solid blue' reads 'overline 3px blue',
+    /// 'line-through wavy green 4px' reads 'line-through 4px wavy green' — the thickness has its own
+    /// place in the printed order, so it is neither dropped with the style nor read as the colour).
+    /// </summary>
+    private static string CanonicalizeTextDecoration(string text, string property)
+    {
+        if (!property.Equals("text-decoration", StringComparison.OrdinalIgnoreCase)) return text;
+        var lines = new List<string>();
+        string? style = null, color = null, thickness = null;
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            var p = word.ToLowerInvariant();
+            switch (p)
+            {
+                case "solid" or "double" or "dotted" or "dashed" or "wavy": style = p; break;
+                case "underline" or "overline" or "line-through" or "blink" or "none"
+                    or "spelling-error" or "grammar-error":
+                    if (!lines.Contains(p)) lines.Add(p);
+                    break;
+                default:
+                    // The width is a length, a percentage or one of two keywords; anything else that
+                    // is not a line or a style is the colour.
+                    if (thickness == null && ShorthandExpander.IsTextDecorationThickness(p))
+                        thickness = p;
+                    else color = word;
+                    break;
+            }
+        }
+        // The lines print in the engine's own order, not the order they were written in
+        // (measured: 'text-decoration: blink underline' reads back 'underline blink').
+        // A thickness written without a unit is zero — a non-zero number is no length and the
+        // grammar has already refused the declaration — and the engine prints the unit it means
+        // (measured: 'underline 0' and 'underline 0.0' both read 'underline 0px').
+        if (thickness != null && IsBareZero(thickness)) thickness = "0px";
+        var ordered = lines
+            .Where(l => l != "none")
+            .OrderBy(l => LineOrder(l))
+            .ToList();
+        var parts = new List<string>(ordered);
+        if (thickness != null && thickness != "auto") parts.Add(thickness);
+        if (style != null && style != "solid") parts.Add(style);
+        if (color != null && !color.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
+            parts.Add(color);
+        if (parts.Count == 0) parts.Add("none");
+        return string.Join(" ", parts);
+    }
+
+    private static int LineOrder(string line) => line switch
+    {
+        "underline" => 0,
+        "overline" => 1,
+        "line-through" => 2,
+        _ => 3,
+    };
+
+    /// <summary>A number written with no unit and worth zero — the one length a page may write
+    /// without saying what it is measured in.</summary>
+    private static bool IsBareZero(string token) =>
+        double.TryParse(token, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var value) && value == 0;
+
+    /// <summary>
+    /// Print <c>column-rule</c> the way the border shorthands are printed: a component that repeats
+    /// its longhand's initial is dropped, and a shorthand with nothing left says the width's initial
+    /// (<c>medium</c>) alone (measured: 'medium none currentcolor' reads 'medium' while
+    /// '2px solid red' reads as written).
+    /// </summary>
+    private static string CanonicalizeColumnRule(string text, string property)
+    {
+        if (!property.Equals("column-rule", StringComparison.OrdinalIgnoreCase)) return text;
+        var parts = new List<string>();
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            var p = word.ToLowerInvariant();
+            if (p is "medium" or "none" or "currentcolor") continue;
+            parts.Add(word);
+        }
+        if (parts.Count == 0) parts.Add("medium");
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// Put <c>list-style</c>'s three parts in the order the engine prints them — position, image,
+    /// type — keeping each one the page wrote (measured: 'url(a.png) inside' reads back
+    /// 'inside url("a.png")', and 'disc outside none' keeps all three as 'outside none disc',
+    /// because this shorthand prints what was written rather than only what differs).
+    /// </summary>
+    private static string CanonicalizeListStyle(string text, string property)
+    {
+        if (!property.Equals("list-style", StringComparison.OrdinalIgnoreCase)) return text;
+        string? position = null, image = null, type = null;
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            var p = word.ToLowerInvariant();
+            if (p is "inside" or "outside") { position = p; continue; }
+            if (p.StartsWith("url(", StringComparison.Ordinal)
+                || p.StartsWith("image-set(", StringComparison.Ordinal)
+                || (p.StartsWith("linear-gradient(", StringComparison.Ordinal)))
+            { image = word; continue; }
+            // 'none' is both a position's and an image's word and a type of its own; the first one
+            // seen goes to the image, which is where the engine prints it ('outside none disc').
+            if (p == "none" && image == null && position != null) { image = p; continue; }
+            type ??= word;
+        }
+        var parts = new List<string>();
+        if (position != null) parts.Add(position);
+        if (image != null) parts.Add(image);
+        if (type != null) parts.Add(type);
+        return parts.Count == 0 ? text : string.Join(" ", parts);
     }
 
     /// <summary>Apply a fold to each comma-separated layer of a value and rejoin them. A list

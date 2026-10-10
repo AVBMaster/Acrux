@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset="utf-8"><style id="s0">h1 { color: rgb(1, 1, 1); }</style></head><body>
+<h1>title</h1>
+<script>
+const out = [];
+const t = (label, fn) => { try { out.push(label + ' = ' + fn()); } catch (e) { out.push(label + ' THROW ' + e.name + ': ' + e.message); } };
+t('initial-count', () => document.styleSheets.length);
+t('is-array-like', () => (document.styleSheets.length !== undefined) + '/' + (typeof document.styleSheets[0]));
+t('dynamic-append-count', () => {
+  const st = document.createElement('style');
+  st.textContent = 'h2 { color: rgb(2,2,2); }';
+  document.head.appendChild(st);
+  return document.styleSheets.length + '/' + (st.sheet ? 'sheet' : 'nosheet');
+});
+t('dynamic-rules', () => {
+  const list = Array.from(document.styleSheets).map(s => s.cssRules.length);
+  return list.join(',');
+});
+t('ownerNode', () => {
+  const s = document.styleSheets[0];
+  return s && s.ownerNode ? s.ownerNode.tagName + '#' + (s.ownerNode.id || '') : 'none';
+});
+t('adopted-empty', () => document.adoptedStyleSheets.length + '/' + Array.isArray(document.adoptedStyleSheets));
+t('adopted-set', () => {
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync('h3 { color: rgb(3,3,3); }');
+  document.adoptedStyleSheets = [sheet];
+  return document.adoptedStyleSheets.length + '/' + document.styleSheets.length + '/' + document.adoptedStyleSheets[0].cssRules[0].selectorText;
+});
+t('adopted-push', () => {
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync('h4 { color: rgb(4,4,4); }');
+  document.adoptedStyleSheets.push(sheet);
+  return document.adoptedStyleSheets.length;
+});
+t('adopted-applied', () => getComputedStyle(document.querySelector('h3')).color);
+t('sheets-iterable', () => { let n = 0; for (const s of document.styleSheets) n++; return n; });
+console.log(out.join('\n'));
+</script></body></html>

@@ -325,6 +325,11 @@ public static class CssValueGrammar
     /// the property's value set from its text.</summary>
     private static Func<string, bool>? GrammarFor(CssPropertyId id) => id switch
     {
+        // CSS Text Decoration 4 §2: any number of the four decoration lines (each at most once), at
+        // most one style, at most one thickness and at most one colour, and the three lines that
+        // stand alone ('none', 'spelling-error', 'grammar-error') stand alone. Every refusal named in
+        // the helper's comment is a value the reference engine drops.
+        CssPropertyId.TextDecoration => IsTextDecorationShorthand,
         CssPropertyId.Display => static text => CssPropertyApplier.TryParseDisplay(text, out _, out _),
         CssPropertyId.Float => static text => CssFloatKeywords.TryParseFloat(text, out _),
         CssPropertyId.Clear => static text => CssFloatKeywords.TryParseClear(text, out _),
@@ -1061,6 +1066,65 @@ public static class CssValueGrammar
             _ => false,
         };
     }
+
+    /// <summary>The grammar of the <c>text-decoration</c> shorthand, measured value by value against
+    /// the reference engine. The four lines that combine (<c>underline</c>, <c>overline</c>,
+    /// <c>line-through</c>, <c>blink</c>) may each appear once — a repeat drops the declaration
+    /// (<c>'underline underline'</c>, <c>'blink blink'</c>) — and the three that stand alone
+    /// (<c>none</c>, <c>spelling-error</c>, <c>grammar-error</c>) appear with nothing else of their
+    /// kind (<c>'underline none'</c>, <c>'underline spelling-error'</c> and
+    /// <c>'grammar-error spelling-error'</c> are all refused) though not beside a style, a thickness
+    /// or a colour (<c>'none solid'</c> and <c>'spelling-error red'</c> are both kept). One style, one
+    /// thickness, one colour: <c>'underline wavy dotted'</c>, <c>'underline 3px 4px'</c>,
+    /// <c>'underline auto 2px'</c> and <c>'red red'</c> each leave the property untouched, and so does
+    /// a word that is none of these — <c>'underline thick'</c> is refused because <c>thick</c> is a
+    /// border width, not a text-decoration thickness.</summary>
+    private static bool IsTextDecorationShorthand(string text)
+    {
+        var lines = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        bool alone = false;
+        int styles = 0, thicknesses = 0, colors = 0;
+        foreach (var token in SplitComponents(text))
+        {
+            var p = token.ToLowerInvariant();
+            switch (p)
+            {
+                case "underline" or "overline" or "line-through" or "blink":
+                    if (alone || !lines.Add(p)) return false;
+                    break;
+                case "none" or "spelling-error" or "grammar-error":
+                    if (alone || lines.Count > 0) return false;
+                    alone = true;
+                    break;
+                case "solid" or "double" or "dotted" or "dashed" or "wavy":
+                    if (++styles > 1) return false;
+                    break;
+                default:
+                    if (p is "auto" or "from-font"
+                        || (IsLengthOrPercentage(token) && !IsUnitlessNonZero(p))
+                        || IsMathFunctionCall(token, IsLengthOrPercentage))
+                    {
+                        if (++thicknesses > 1) return false;
+                    }
+                    else if (ColorParser.IsColorToken(token))
+                    {
+                        if (++colors > 1) return false;
+                    }
+                    else return false;
+                    break;
+            }
+        }
+        // A value that named nothing the grammar recognises is refused by the branch above, so what
+        // reaches here always says something — but an empty text is not a declaration either.
+        return lines.Count > 0 || alone || styles > 0 || thicknesses > 0 || colors > 0;
+    }
+
+    /// <summary>A number written with no unit. Only zero means a length without one, so this is what
+    /// separates the <c>'underline 0'</c> the reference engine takes (and prints as <c>0px</c>) from
+    /// the <c>'underline 2'</c> it refuses.</summary>
+    private static bool IsUnitlessNonZero(string token) =>
+        double.TryParse(token, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var value) && value != 0;
 
     private static bool TextIsValid(string text, Func<string, bool> grammar)
     {

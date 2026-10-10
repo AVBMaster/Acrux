@@ -1,0 +1,10 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+const out = [];
+const t=(prop,v)=>{ const d=document.createElement('div'); d.style.setProperty(prop, v); out.push(prop+' <'+v+'> => ['+d.style.getPropertyValue(prop)+'] cssText['+d.style.cssText+']'); };
+t('list-style','inside url(a.png) circle'); t('list-style','circle'); t('list-style','none'); t('list-style','url(a.png) inside');
+t('transition','all 2s'); t('transition','opacity 1s linear 2s'); t('transition','none 0s linear 0s'); t('transition','0s'); t('transition','ease');
+t('text-decoration','solid'); t('text-decoration','blink underline'); t('text-decoration','red');
+t('flex-flow','column wrap'); t('flex-flow','nowrap'); t('flex-flow','row-reverse wrap-reverse');
+t('border','1px solid red'); t('border','medium solid red'); t('border','medium none red');
+console.log(out.join('\n'));
+</script></body></html>

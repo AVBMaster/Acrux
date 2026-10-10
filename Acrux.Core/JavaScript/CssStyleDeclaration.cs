@@ -23,7 +23,7 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
 
     public string cssText
     {
-        get => Serialize(Declarations());
+        get => SerializeForCssText(Declarations());
         set
         {
             // Assigning cssText replaces the block wholesale, so the map starts empty rather
@@ -90,6 +90,9 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         name = CssPropertyIdExtensions.CanonicalName(name);
         SyncWithAttribute();
         var direct = _element.Style.TryGetValue(name, out var val) ? val : null;
+        // A shorthand that has nothing to say beyond its longhands' initials reads back as the empty
+        // string even though the block carries its text (measured; see SerializeForCssText).
+        if (direct != null && CssValueText.ShorthandPrintsEmpty(name, direct)) return "";
         // A longhand the block only carries inside a shorthand still answers, because writing a
         // shorthand writes its parts: 'style="margin: 4px"' gives 'marginTop' as '4px'
         // (measured, CSSOM §5.3.1). The declaration the page wrote directly always wins, so a
@@ -175,11 +178,12 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
 
     /// <summary>Writes the block back into the attribute the way the reference engine does
     /// once the CSSOM mutates it (measured: after 'el.style.display = "block flow"', the
-    /// attribute reads 'display: block;'). A mutation that only re-serialises what is already
-    /// there leaves the attribute alone.</summary>
+    /// attribute reads 'display: block;'). What the page wrote into the attribute itself is left
+    /// alone until a CSSOM write happens — the attribute is then replaced by the same text the
+    /// CSSOM prints, printer and all.</summary>
     private void SyncAttribute()
     {
-        var text = Serialize(_element.Style);
+        var text = SerializeForCssText(_element.Style);
         _mirroredAttribute = text;
         if (!string.Equals(_element.GetAttribute("style") ?? "", text, StringComparison.Ordinal))
             _element.SetAttribute("style", text);
@@ -190,8 +194,30 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
             ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             : new Acrux.Core.Css.CssParser().ParseInlineStyle(styleText!);
 
-    private static string Serialize(IEnumerable<KeyValuePair<string, string>> declarations) =>
-        string.Join(" ", declarations.Select(d => $"{d.Key}: {d.Value};"));
+    /// <summary>
+    /// The block as the reference engine prints it — the one text both <c>cssText</c> and the style
+    /// attribute are written from. One case differs from the characters the page authored: a shorthand
+    /// whose every part repeats its longhand's initial value has nothing left to say, and the engine
+    /// prints its parts in its place (measured: 'border: medium none currentcolor' written through the
+    /// CSSOM leaves the block as 'border-width: medium; border-style: none; border-color:
+    /// currentcolor; border-image: none;', while 'getPropertyValue("border")' still reads the empty
+    /// string because a shorthand is a view over its parts, not a declaration of its own).
+    /// </summary>
+    private static string SerializeForCssText(IEnumerable<KeyValuePair<string, string>> declarations)
+    {
+        var parts = new List<string>();
+        foreach (var d in declarations)
+        {
+            if (Acrux.Core.Css.CssValueText.ShorthandPrintsEmpty(d.Key, d.Value)
+                && Acrux.Core.Css.CssValueText.EmptyShorthandParts(d.Key, d.Value) is { } piece)
+            {
+                foreach (var longhand in piece) parts.Add($"{longhand.Key}: {longhand.Value};");
+                continue;
+            }
+            parts.Add($"{d.Key}: {d.Value};");
+        }
+        return string.Join(" ", parts);
+    }
 
     /// <summary>The reference engine stores the parsed value rather than the characters that
     /// were written, so a declaration read back out of the CSSOM is in canonical keywords:
@@ -261,6 +287,32 @@ public abstract class CssStyleDeclarationBase : System.Dynamic.DynamicObject
         return sb.ToString();
     }
 
+    /// <summary>The four physical longhands a border sub-shorthand stands for, or null for any other
+    /// name. The order is the shorthand's own: top, right, bottom, left.</summary>
+    private static string[]? BorderSideParts(string name) => name.ToLowerInvariant() switch
+    {
+        "border-width" => new[] { "border-top-width", "border-right-width", "border-bottom-width", "border-left-width" },
+        "border-style" => new[] { "border-top-style", "border-right-style", "border-bottom-style", "border-left-style" },
+        "border-color" => new[] { "border-top-color", "border-right-color", "border-bottom-color", "border-left-color" },
+        _ => null,
+    };
+
+    /// <summary>The shortest text that says the same four sides: all one value, or the
+    /// top/bottom-left/right pair, or three with the left repeating the top (CSS Values §3.1).
+    /// The same collapse the printer applies to a written 'margin'.</summary>
+    private static string CollapseFourSides(List<string> values)
+    {
+        bool Same(string x, string y) => x.Equals(y, StringComparison.OrdinalIgnoreCase);
+        if (values.Count != 4) return string.Join(" ", values);
+        if (Same(values[0], values[1]) && Same(values[0], values[2]) && Same(values[0], values[3]))
+            return values[0];
+        if (Same(values[0], values[2]) && Same(values[1], values[3]))
+            return values[0] + " " + values[1];
+        if (Same(values[1], values[3]))
+            return values[0] + " " + values[1] + " " + values[2];
+        return string.Join(" ", values);
+    }
+
     /// <summary>Reads a longhand out of the shorthands the block carries (see
     /// <see cref="Acrux.Core.Css.ShorthandExpander.ShorthandsFor"/>). <paramref name="block"/>
     /// looks one property up in the declaration block; the answer is the longhand the
@@ -274,6 +326,21 @@ public abstract class CssStyleDeclarationBase : System.Dynamic.DynamicObject
             if (Acrux.Core.Css.ShorthandExpander.ExpandProperty(shorthand, text)
                 .TryGetValue(name, out var value) && !string.IsNullOrEmpty(value))
                 return value;
+        }
+        // The border family's sub-shorthands read through a bigger one the same way: a block that
+        // holds 'border: medium none currentcolor' answers 'border-style' with 'none' and
+        // 'border-width' with 'medium' (measured), because the four sides that shorthand wrote all
+        // say the same thing.
+        if (BorderSideParts(name) is string[] sides)
+        {
+            var values = new List<string>();
+            foreach (var side in sides)
+            {
+                var text = ReadThroughShorthand(side, block);
+                if (string.IsNullOrEmpty(text)) break;
+                values.Add(text!);
+            }
+            if (values.Count == sides.Length) return CollapseFourSides(values);
         }
         // A shorthand that is itself a shorthand of longhands has nothing of its own left to
         // read once it has been expanded, so it is rebuilt from the parts it controls:

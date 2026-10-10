@@ -1,0 +1,8 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+const out = [];
+try { getComputedStyle(null); } catch (e) { out.push('name=' + e.name + '|msg=' + e.message + '|ctor=' + e.constructor.name); }
+try { document.querySelectorAll('p:bogus'); } catch (e) { out.push('name=' + e.name + '|msg=' + e.message); }
+out.push('has-stack=' + (typeof e === 'undefined'));
+console.log(out.join('\n'));
+var e;
+</script></body></html>

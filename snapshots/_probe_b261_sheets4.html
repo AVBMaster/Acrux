@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><style id="s0">h1{color:red}</style></head><body><pre id="report"></pre><div id="stage"></div>
+<script>
+const out = [];
+const before = document.styleSheets.length;
+const st = document.createElement('style');
+st.textContent = 'p { color: rgb(7, 7, 7); }';
+document.head.appendChild(st);
+out.push('r1=' + (document.styleSheets.length === before + 1) + '/' + (st.sheet ? 'sheet' : 'nosheet') + '/' + st.sheet.cssRules.length);
+const st2 = document.createElement('style');
+st2.id = 'owned';
+st2.textContent = 'h5 { color: rgb(8, 8, 8); }';
+document.head.appendChild(st2);
+out.push('r2 owners=' + Array.from(document.styleSheets).map(s => s.ownerNode ? s.ownerNode.id || s.ownerNode.tagName : 'null').join('+') + ' identity=' + (st2.sheet.ownerNode.id) + '/' + (st2.sheet.ownerNode === st2));
+const b2 = document.styleSheets.length;
+const c = new CSSStyleSheet();
+c.replaceSync('h6 { color: rgb(9, 9, 9); }');
+document.adoptedStyleSheets = [c];
+out.push('r3=' + document.styleSheets.length + '/has=' + Array.from(document.styleSheets).some(s => s === c) + '/adopted=' + document.adoptedStyleSheets.length + '/owners=' + Array.from(document.styleSheets).map(s => s.ownerNode ? s.ownerNode.id || s.ownerNode.tagName : 'null').join('+'));
+console.log(out.join('\n'));
+</script></body></html>
