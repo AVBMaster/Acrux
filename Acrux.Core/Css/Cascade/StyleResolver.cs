@@ -323,6 +323,10 @@ public class StyleResolver
 
     private void MatchJsModifiedStyle(Element element, CascadeResolverState state)
     {
+        // The map is a mirror of the 'style' attribute, so a block the page replaced must be
+        // mirrored before this reads it — otherwise a property the new block does not declare keeps
+        // the value the block a script wrote had (see <see cref="InlineStyleBlock"/>).
+        InlineStyleBlock.SyncWithAttribute(element);
         if (element.Style == null || element.Style.Count == 0) return;
         var props = new CssPropertyValueSet();
         foreach (var kv in element.Style)
@@ -600,23 +604,11 @@ public class StyleResolver
         return result;
     }
 
-    private static bool IsExpandableShorthand(string name) => name switch
-    {
-        "margin" or "padding" or "border-width" or "border-style" or "border-color" or "border-radius" or
-        "border-top" or "border-right" or "border-bottom" or "border-left" or "border" or "margin-block" or
-        "margin-inline" or "padding-block" or "padding-inline" or "inset" or "gap" or "background" or
-        "background-position" or
-        "font" or "font-variant" or "flex" or "flex-flow" or "outline" or "text-decoration" or "text-emphasis" or "columns" or
-        "column-rule" or "animation" or "transition" or "grid-area" or "grid-column" or "grid-row" or "mask" or
-        "white-space" or "text-wrap" or "overflow" or "contain-intrinsic-size" or
-        "place-content" or "place-items" or "place-self" or "list-style" or
-        "scroll-margin" or "scroll-padding" or
-        "border-block" or "border-inline" or "border-block-start" or "border-block-end" or
-        "border-inline-start" or "border-inline-end" or "border-block-width" or
-        "border-block-style" or "border-block-color" or "border-inline-width" or
-        "border-inline-style" or "border-inline-color" => true,
-        _ => false
-    };
+    /// <summary>Whether a declaration is a shorthand the expander reads. The answer comes from the
+    /// expander's own list of names, because a shorthand that is expanded in one place and checked
+    /// for in another eventually stops being expanded at all (the 'offset' family was written to the
+    /// cascade under its own name this way).</summary>
+    private static bool IsExpandableShorthand(string name) => ShorthandExpander.IsShorthandName(name);
 
     private enum ScrollbarSlot { Bar, Thumb, Track, Corner, Button }
 

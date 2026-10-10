@@ -672,6 +672,33 @@ public class MathLength : Length
         // 'reference' is the percentage base here; font-relative units come from the
         // ambient FontUnitContext, and percentages from the base published below.
         using var _pct = CssFunctionEvaluator.UsePercentageBase(reference);
+        return Evaluate(reference, rootFontSize, viewportWidth, viewportHeight);
+    }
+
+    /// <summary>The expression worked out in a context that OWNS the base its percentages are a
+    /// share of — the containing block for a box size, the containing block's inline size for a
+    /// margin or padding (CSS 2.1 §8.3, §8.5). <see cref="ToPixels"/> hands its first argument to
+    /// the percentage as well, but a great many of its callers pass a FONT size there, because that
+    /// is what an 'em' in the expression needs; for those callers an expression that mixes a
+    /// percentage with a length must stay unsolved rather than answer a number no box was ever
+    /// measured in. This is the one entry point that says the number in front of it is a box, and
+    /// the only way a 'calc(100% - 10px)' can be laid out at all (measured: a 400px-wide block with
+    /// 'width: calc(100% - 10px)' is 390px wide, and 'calc(1px + 1%)' of the same block is 5px).</summary>
+    public float ToPixelsAgainstPercentageBase(float percentageBase, float rootFontSize,
+        float viewportWidth, float viewportHeight)
+    {
+        // Nothing to price, or no box to price it against: an expression with no '%' resolves
+        // the same either way, and one whose base is indefinite has to stay indefinite rather
+        // than answer a number invented for the percentage.
+        if (!Expression.Contains('%')
+            || float.IsNaN(percentageBase) || float.IsInfinity(percentageBase) || percentageBase <= 0)
+            return ToPixels(percentageBase, rootFontSize, viewportWidth, viewportHeight);
+        using var _pct = CssFunctionEvaluator.UsePercentageBase(percentageBase, priced: true);
+        return Evaluate(percentageBase, rootFontSize, viewportWidth, viewportHeight);
+    }
+
+    private float Evaluate(float reference, float rootFontSize, float viewportWidth, float viewportHeight)
+    {
         var evaluated = CssFunctionEvaluator.Evaluate(Expression, null, reference, rootFontSize, viewportWidth, viewportHeight, forceMath: true);
         if (evaluated.EndsWith("px") && float.TryParse(evaluated[..^2], System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var epx))
@@ -816,6 +843,13 @@ public class ComputedStyle
     /// percentage, in which case <see cref="LineHeight"/> holds the multiplier.
     /// </summary>
     public float? LineHeightPx { get; set; }
+
+    /// <summary>Whether <see cref="LineHeightPx"/> came from a math expression. The reference
+    /// engine snaps only a calc()-derived line-height to its 1/64-pixel layout grid at the
+    /// computed surface, never a plain length (measured: 'calc(1em + 5%)' on 11px reads
+    /// '11.5469px' while '9.9px' and '120%' read back exactly as authored), so the serializer
+    /// has to know which of the two produced the stored pixels.</summary>
+    public bool LineHeightFromMath { get; set; }
 
     public SKColor Color { get; set; } = SKColors.Black;
     public SKColor? BackgroundColor { get; set; }
@@ -1034,6 +1068,10 @@ public class ComputedStyle
         {
             if (LineHeightIsNormal) return "normal";
             var px = LineHeightPx ?? LineHeight * (FontSize > 0 ? FontSize : 16f);
+            // A calc()-derived line-height sits on the reference engine's 1/64-pixel grid; a plain
+            // length or multiplier does not (measured, and see the 'line-height' serializer case).
+            if (LineHeightPx is float mathPx && LineHeightFromMath)
+                px = (float)(System.Math.Floor(mathPx * 64) / 64);
             return Acrux.Core.Dom.Animations.CssValueTokenizer.Num(px) + "px";
         }
     }
@@ -1115,8 +1153,8 @@ public bool TextUnderlineOffsetIsAuto { get; set; } = true;
 public float TextUnderlineOffset { get; set; }
 /// <summary>'text-underline-position' (CSS Text Decoration 4 §3.2).</summary>
 public TextUnderlinePositionType TextUnderlinePosition { get; set; } = TextUnderlinePositionType.Auto;
-/// <summary>'text-decoration-skip-ink: none' asks for an unbroken line.</summary>
-public bool TextDecorationSkipInk { get; set; } = true;
+/// <summary>'text-decoration-skip-ink' (CSS Text Decoration 4 §2.1).</summary>
+public TextDecorationSkipInkType TextDecorationSkipInk { get; set; } = TextDecorationSkipInkType.Auto;
 /// <summary>'box-decoration-break' (CSS Fragmentation 3 §4.2): whether a box that
 /// is split across lines/columns repeats its decoration on each fragment.</summary>
 public BoxDecorationBreakType BoxDecorationBreak { get; set; } = BoxDecorationBreakType.Slice;
@@ -1148,7 +1186,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
                 TextDecorationLine, TextDecorationStyle, decorationColor,
                 TextDecorationThickness, TextDecorationThicknessFromFont,
                 TextUnderlineOffset, TextUnderlineOffsetIsAuto, TextUnderlinePosition,
-                TextDecorationSkipInk, FontSize));
+                TextDecorationSkipInk != TextDecorationSkipInkType.None, FontSize));
         }
         _appliedTextDecorations = list;
         return list;
@@ -1499,20 +1537,44 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     /// relative to), while 'auto', percentages and the intrinsic keywords stay as authored,
     /// which is what their computed value is. Numbers are trimmed the way a reference
     /// engine prints them ("12px", not "12.0px").
+    /// <paramref name="percentageBase"/> is the number a property of this element multiplies a
+    /// percentage by — the containing block's inline size for a margin or a padding (CSS 2.1
+    /// §8.3, §8.5) — and where it is given the computed surface answers that product instead of
+    /// the '%' the page wrote (measured: 'margin-top: calc(10px + 1%)' of a 365.625px containing
+    /// block is '13.6562px'). A property whose percentage has no base here keeps the authored
+    /// text, because inventing one would print a number the layout never used.
     /// </summary>
-    public string ComputedLengthCss(Length length, float viewportWidth = 0, float viewportHeight = 0)
+    public string ComputedLengthCss(Length length, float viewportWidth = 0, float viewportHeight = 0,
+        float? percentageBase = null)
     {
         if (length is AutoLength) return "auto";
         if (length is PercentLength percent)
             // The engine keeps a percentage as the fraction it multiplies by, so the printed
             // form has to scale it back to the percent the author wrote ('5%', not '0.05%').
-            return Acrux.Core.Dom.Animations.CssValueTokenizer.Num((double)percent.Value * 100) + "%";
+            return percentageBase == null
+                ? Acrux.Core.Dom.Animations.CssValueTokenizer.Num((double)percent.Value * 100) + "%"
+                : Acrux.Core.Dom.Animations.CssValueTokenizer.Num((double)percent.Value * percentageBase.Value) + "px";
         if (length is IntrinsicLength intrinsic) return intrinsic.ToString();
+        // A math expression resolves its own percentages against the base it is handed and its
+        // font-relative units through the ambient font, so the first argument is free to be the
+        // percentage base; a plain 'em' length reads that same argument as the font size, so the
+        // two roles only swap when the expression actually carries a '%'.
+        bool resolvesPercentage = percentageBase != null
+            && length is MathLength math && math.Expression.Contains('%');
         // A caller that has no viewport of its own gets the one the style was computed against;
-        // either way a 'vh' has to become a pixel count before it is printed.
-        var px = length.ToPixels(FontSize > 0 ? FontSize : 16f, FontSize,
-            viewportWidth > 0 ? viewportWidth : ComputedViewportWidth,
-            viewportHeight > 0 ? viewportHeight : ComputedViewportHeight);
+        // either way a 'vh' has to become a pixel count before it is printed. The style is also the
+        // font the expression's own units are relative to: a priced percentage hands the evaluator
+        // a BOX as its reference, and without this context a '1em' would be priced against that box
+        // (measured: 'margin-bottom: calc(1em + 5%)' of a 400px containing block is 36px, not 420px).
+        using var _fontContext = FontUnitContext.Use(this);
+        var px = resolvesPercentage
+            ? ((MathLength)length).ToPixelsAgainstPercentageBase(percentageBase!.Value, FontSize,
+                viewportWidth > 0 ? viewportWidth : ComputedViewportWidth,
+                viewportHeight > 0 ? viewportHeight : ComputedViewportHeight)
+            : length.ToPixels(FontSize > 0 ? FontSize : 16f,
+                FontSize,
+                viewportWidth > 0 ? viewportWidth : ComputedViewportWidth,
+                viewportHeight > 0 ? viewportHeight : ComputedViewportHeight);
         return float.IsNaN(px) ? length.ToString()
             : Acrux.Core.Dom.Animations.CssValueTokenizer.Num(px) + "px";
     }
@@ -1559,6 +1621,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             FontFamily = FontFamily, FontSize = FontSize, FontSizeIsDefault = FontSizeIsDefault, FontWeight = FontWeight,
             FontStyle = FontStyle, FontStyleObliqueDegrees = FontStyleObliqueDegrees, LineHeight = LineHeight,
             LineHeightIsNormal = LineHeightIsNormal, LineHeightPx = LineHeightPx,
+            LineHeightFromMath = LineHeightFromMath,
             Color = Color, BackgroundColor = BackgroundColor, BackgroundImage = BackgroundImage,
             BackgroundPositionX = BackgroundPositionX, BackgroundPositionY = BackgroundPositionY,
             BackgroundRepeat = BackgroundRepeat, BackgroundAttachment = BackgroundAttachment,
@@ -2065,6 +2128,13 @@ public static class TextDecorationLineExtensions
 }
 
 public enum TextDecorationStyleType { Solid, Double, Dotted, Dashed, Wavy }
+
+/// <summary>'text-decoration-skip-ink' (CSS Text Decoration 4 §2.1): <c>none</c> asks for an
+/// unbroken line, <c>auto</c> breaks it around the ink of the glyphs it crosses where the font
+/// says that is safe, and <c>all</c> does the same for every script. The painter draws one line or
+/// a skipped one, so it reads the two skipped spellings as one (measured: all three are stored and
+/// echoed as written, while 'space', 'leading' and 'trailing' are refused).</summary>
+public enum TextDecorationSkipInkType { Auto, None, All }
 
 /// <summary>'text-underline-position' (CSS Text Decoration 4 §3.2). 'auto' resolves to
 /// 'alphabetic' in horizontal writing modes; 'under' puts the line below the

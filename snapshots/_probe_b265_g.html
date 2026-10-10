@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 G position values</title></head>
+<body><div id="t">T</div>
+<script>
+var CASES = [
+  ["offset-anchor", "right 50%"],
+  ["offset-anchor", "right 25%"],
+  ["offset-anchor", "left 25%"],
+  ["offset-anchor", "right 20px"],
+  ["offset-anchor", "bottom 30px"],
+  ["offset-anchor", "top 50%"],
+  ["offset-anchor", "center 25%"],
+  ["offset-anchor", "25% center"],
+  ["offset-anchor", "left right"],
+  ["offset-anchor", "center center"],
+  ["offset-anchor", "top"],
+  ["offset-anchor", "0 0"],
+  ["offset-position", "right 50%"],
+  ["offset-position", "right 25%"],
+  ["offset-position", "left 25%"],
+  ["offset-position", "bottom 30px"],
+  ["offset-position", "center 25%"],
+  ["offset-position", "top"],
+  ["background-position", "right 50%"],
+  ["background-position", "left 25%"],
+  ["object-position", "right 50%"],
+  ["transform-origin", "right 50%"]
+];
+var t = document.getElementById("t");
+function row(i) {
+  var name = CASES[i][0], value = CASES[i][1];
+  t.setAttribute("style", "");
+  t.style.setProperty(name, value);
+  return i + "|" + name + "|" + value + " ## S=[" + t.style.getPropertyValue(name) +
+         "] ## C=[" + getComputedStyle(t).getPropertyValue(name) + "]";
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, CASES.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+</script>
+</body></html>

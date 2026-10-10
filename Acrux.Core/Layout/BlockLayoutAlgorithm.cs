@@ -527,13 +527,9 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
     private BoxStrut ComputePadding()
     {
-        float font = Style.FontSize;
-        using var _scope = FontUnitContext.Use(Style);
-        return new BoxStrut(
-            Style.PaddingTop.ToPixels(font, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight),
-            Style.PaddingRight.ToPixels(font, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight),
-            Style.PaddingBottom.ToPixels(font, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight),
-            Style.PaddingLeft.ToPixels(font, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight));
+        // A padding percentage is a share of the containing block's inline size on every axis
+        // (CSS 2.1 §8.5), which is the base this box was laid out against — not its own font.
+        return LengthUtils.ComputePadding(Space, Style);
     }
 
     private ConstraintSpace ConstraintSpaceForLayout() => Space;
@@ -2050,10 +2046,10 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         // margins are legal and shift the float / shrink the line box it reserves,
         // so they must not be clamped to zero here.
         using var _marginFontScope = FontUnitContext.Use(style);
-        float MarginPx(Length l) => l is AutoLength ? 0
-            : l.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
-        float BlockMarginPx(Length l) => l is AutoLength ? 0 :
-            l.ToPixels(style.FontSize, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+        float MarginPx(Length l) => LengthUtils.ResolveInsetSide(l,
+            Space.PercentageResolutionInlineSize, style, Space);
+        float BlockMarginPx(Length l) => LengthUtils.ResolveInsetSide(l,
+            Space.PercentageResolutionInlineSize, style, Space);
         float marginTopBlock = BlockMarginPx(style.MarginTop);
         float marginBottomBlock = BlockMarginPx(style.MarginBottom);
         float marginLeftBlock = MarginPx(style.MarginLeft);
@@ -3284,8 +3280,6 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
 
     private BoxStrut ComputeMarginsFor(ComputedStyle childStyle)
     {
-        float font = childStyle.FontSize;
-        using var _scope = FontUnitContext.Use(childStyle);
         // Percentage margins resolve against the containing block's inline size.
         // For a child laid out here, that containing block is THIS box, so the
         // base is our own content inline size (ChildrenInlineSize) — the same
@@ -3293,14 +3287,11 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         // was itself resolved against (Space.PercentageResolutionInlineSize),
         // which is one level too high and breaks nested narrow containers.
         float pctBase = LengthUtils.IsIndefinite(ChildrenInlineSize) ? 0 : ChildrenInlineSize;
-        static float M(Length l, float font, float pctBase, ConstraintSpace sp) =>
-            l is AutoLength ? 0
-            : l is PercentLength p ? p.Value * pctBase : l.ToPixels(font, sp.RootFontSize, sp.ViewportWidth, sp.ViewportHeight);
         return new BoxStrut(
-            M(childStyle.MarginTop, font, pctBase, Space),
-            M(childStyle.MarginRight, font, pctBase, Space),
-            M(childStyle.MarginBottom, font, pctBase, Space),
-            M(childStyle.MarginLeft, font, pctBase, Space));
+            LengthUtils.ResolveInsetSide(childStyle.MarginTop, pctBase, childStyle, Space),
+            LengthUtils.ResolveInsetSide(childStyle.MarginRight, pctBase, childStyle, Space),
+            LengthUtils.ResolveInsetSide(childStyle.MarginBottom, pctBase, childStyle, Space),
+            LengthUtils.ResolveInsetSide(childStyle.MarginLeft, pctBase, childStyle, Space));
     }
 
     private float ComputeChildInlineSize(Element child, ComputedStyle childStyle)
@@ -3323,18 +3314,14 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
     private BoxStrut PaddingFor(Element child)
     {
         var s = child.ComputedStyle!;
-        float font = s.FontSize;
-        using var _scope = FontUnitContext.Use(s);
         // Child percentage padding resolves against its containing block inline
         // size = this box's content inline size (see ComputeMarginsFor).
         float pctBase = LengthUtils.IsIndefinite(ChildrenInlineSize) ? 0 : ChildrenInlineSize;
-        static float P(Length l, float font, float pctBase, ConstraintSpace sp) =>
-            l is PercentLength p ? p.Value * pctBase : l.ToPixels(font, sp.RootFontSize, sp.ViewportWidth, sp.ViewportHeight);
         return new BoxStrut(
-            P(s.PaddingTop, font, pctBase, Space),
-            P(s.PaddingRight, font, pctBase, Space),
-            P(s.PaddingBottom, font, pctBase, Space),
-            P(s.PaddingLeft, font, pctBase, Space));
+            LengthUtils.ResolveInsetSide(s.PaddingTop, pctBase, s, Space),
+            LengthUtils.ResolveInsetSide(s.PaddingRight, pctBase, s, Space),
+            LengthUtils.ResolveInsetSide(s.PaddingBottom, pctBase, s, Space),
+            LengthUtils.ResolveInsetSide(s.PaddingLeft, pctBase, s, Space));
     }
 
     // ==========================================================================

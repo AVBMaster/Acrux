@@ -1,0 +1,25 @@
+0|rotate|45deg|S=Y|C=45deg
+1|rotate|1grad|S=Y|C=0.9deg
+2|rotate|0.5turn|S=Y|C=180deg
+3|rotate|1rad|S=Y|C=57.2958deg
+4|rotate|100grad|S=Y|C=90deg
+5|rotate|1.5rad|S=Y|C=85.9437deg
+6|rotate|0.1rad|S=Y|C=5.72958deg
+7|rotate|2rad|S=Y|C=114.592deg
+8|rotate|3.5grad|S=Y|C=3.15deg
+9|rotate|x 45deg|S=Y|C=x 45deg
+10|rotate|x 1rad|S=Y|C=x 57.2958deg
+11|rotate|x 0.5turn|S=Y|C=x 180deg
+12|rotate|z 90deg|S=Y|C=90deg
+13|rotate|y -45deg|S=Y|C=y -45deg
+14|rotate|1 1 0 100grad|S=Y|C=1 1 0 90deg
+15|rotate|1 0 0 45deg|S=Y|C=x 45deg
+16|rotate|0 0 1 0.5turn|S=Y|C=180deg
+17|rotate|calc(1turn)|S=Y|C=360deg
+18|rotate|calc(45deg + 1turn)|S=Y|C=405deg
+19|rotate|calc(100grad + 10grad)|S=Y|C=99deg
+20|rotate|calc(0.5turn)|S=Y|C=180deg
+21|rotate|calc(1rad)|S=Y|C=57.2958deg
+22|rotate|calc(90deg * 2)|S=Y|C=180deg
+23|rotate|none|S=Y|C=none
+24|rotate|45|S=|C=none

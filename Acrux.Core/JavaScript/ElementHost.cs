@@ -953,6 +953,7 @@ public class ElementHost
             clone.Attributes[attr.Key] = attr.Value;
         foreach (var kv in source.Style)
             clone.Style[kv.Key] = kv.Value;
+        clone.StyleMirrorText = source.StyleMirrorText;
         if (deep)
         {
             foreach (var child in source.Children)

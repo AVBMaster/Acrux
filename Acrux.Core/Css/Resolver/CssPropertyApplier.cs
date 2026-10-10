@@ -288,7 +288,14 @@ public static class CssPropertyApplier
             case "text-underline-offset": ApplyTextUnderlineOffset(style, value); break;
             case "text-underline-position": style.TextUnderlinePosition = ParseTextUnderlinePosition(value); break;
             case "text-decoration-skip-ink":
-                style.TextDecorationSkipInk = !value.Trim().Equals("none", StringComparison.OrdinalIgnoreCase);
+                // The three keywords of the set, and nothing else (measured: 'space', 'leading' and
+                // 'trailing' are refused, so they never reach the field at all).
+                style.TextDecorationSkipInk = value.Trim().ToLowerInvariant() switch
+                {
+                    "none" => Acrux.Core.Dom.TextDecorationSkipInkType.None,
+                    "all" => Acrux.Core.Dom.TextDecorationSkipInkType.All,
+                    _ => Acrux.Core.Dom.TextDecorationSkipInkType.Auto,
+                };
                 break;
             case "text-emphasis": style.TextEmphasis = value; break;
             case "text-emphasis-color": style.TextEmphasisColor = value; break;
@@ -646,12 +653,25 @@ public static class CssPropertyApplier
                 if (IndividualTransforms.TryTransformBox(value, out var boxKeyword))
                     style.TransformBox = boxKeyword;
                 break;
-            case "transition": style.Transition = value; break;
+            // A shorthand that carries a var() cannot be split into longhands while the sheet is
+            // parsed, so the cascade passes it through unresolved (StyleResolver.ExpandShorthands)
+            // and the substitution arrives here. Storing the text on the shorthand's own field alone
+            // would leave every longhand at its default: the substituted value has to be expanded
+            // into the longhands it stands for, through the appliers a longhand declaration goes
+            // through (measured: '--t: 2s; transition: var(--t) ease' computes a duration of 2s,
+            // because CSS Variables 1 §2 substitutes before anything is computed).
+            case "transition":
+                style.Transition = value;
+                ApplyExpandedShorthand("transition", value, style);
+                break;
             case "transition-delay": style.TransitionDelay = value; break;
             case "transition-duration": style.TransitionDuration = value; break;
             case "transition-property": style.TransitionProperty = value; break;
             case "transition-timing-function": style.TransitionTimingFunction = value; break;
-            case "animation": style.Animation = value; break;
+            case "animation":
+                style.Animation = value;
+                ApplyExpandedShorthand("animation", value, style);
+                break;
             case "animation-name": style.AnimationName = value; break;
             case "animation-duration": style.AnimationDuration = value; break;
             case "animation-timing-function": style.AnimationTimingFunction = value; break;
@@ -819,13 +839,12 @@ public static class CssPropertyApplier
                     var ratioText = value.Trim();
                     bool ratioAuto = ratioText.StartsWith("auto", StringComparison.OrdinalIgnoreCase);
                     if (ratioAuto) ratioText = ratioText[4..].Trim();
-                    var sides = ratioText.Split('/',
-                        StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    var sides = Acrux.Core.Css.CssValueText.SplitRatioSides(ratioText);
                     float? num = null, den = null;
-                    if (sides.Length == 1 && float.TryParse(sides[0], out var single))
+                    if (sides.Count == 1 && TryRatioSide(sides[0], out var single))
                     { num = single; den = 1f; }
-                    else if (sides.Length == 2 && float.TryParse(sides[0], out var av)
-                        && float.TryParse(sides[1], out var bv)) { num = av; den = bv; }
+                    else if (sides.Count == 2 && TryRatioSide(sides[0], out var av)
+                        && TryRatioSide(sides[1], out var bv)) { num = av; den = bv; }
                     if (num is > 0 && den is > 0)
                     {
                         style.AspectRatio = num.Value / den.Value;
@@ -1090,11 +1109,40 @@ public static class CssPropertyApplier
         if ((IsMetricOrViewportLength(v) || IsMathFunction(v)) && parentStyle != null)
         {
             using var _scope = FontUnitContext.Use(parentStyle);
-            float px = Length.Parse(v).ToPixels(parentFontSize, rootFontSize, viewportWidth, viewportHeight);
+            var parsed = Length.Parse(v);
+            // A 'font-size' percentage is a share of the PARENT font size (CSS Fonts 4 §7.1), and
+            // that is the one box this property has to price it against: an expression that mixes
+            // one with a length is otherwise left unsolved (measured: 'font-size: calc(2ch + 1%)'
+            // on a 16px parent is 16.16px, not the 2ch alone).
+            float px = parsed is MathLength math && math.Expression.Contains('%')
+                ? math.ToPixelsAgainstPercentageBase(parentFontSize, rootFontSize, viewportWidth, viewportHeight)
+                : parsed.ToPixels(parentFontSize, rootFontSize, viewportWidth, viewportHeight);
             if (!float.IsNaN(px) && px > 0)
                 return px;
         }
         return Length.ParseFontSize(v, parentFontSize, rootFontSize, viewportWidth, viewportHeight);
+    }
+
+    /// <summary>One side of <c>aspect-ratio</c> read as a number: a plain number, or a math
+    /// expression that resolves to a count. The reference engine computes
+    /// 'aspect-ratio: calc(1 + 1)' as '2 / 1', so the number the expression stands for has to reach
+    /// both layout and the computed surface, not just the echo the CSSOM prints (measured).</summary>
+    private static bool TryRatioSide(string text, out float value)
+    {
+        value = 0;
+        if (float.TryParse(text, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var plain))
+        {
+            value = plain;
+            return true;
+        }
+        if (text.IndexOf('(') < 0) return false;
+        var resolved = CssFunctionEvaluator
+            .Evaluate(text, null, 16f, 16f, 0, 0, forceMath: true).Trim();
+        if (!float.TryParse(resolved, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var number)) return false;
+        value = number;
+        return true;
     }
 
     /// <summary>True for a value whose arithmetic has to be evaluated before the unit is
@@ -1822,7 +1870,7 @@ public static class CssPropertyApplier
     /// it — which the reference engine prints as the arithmetic it is ('right 10px' is
     /// 'calc(100% - 10px)') except when the offset is a percentage, which folds onto the near
     /// edge while it is still a fraction ('right 10%' is '90%', measured).</summary>
-    private static Length? ResolvePositionAxis(ShorthandExpander.PositionAxis axis, bool horizontal)
+    public static Length? ResolvePositionAxis(ShorthandExpander.PositionAxis axis, bool horizontal)
     {
         if (!axis.Present) return new PercentLength(0.5f);
         if (axis.Edge == null) return ParseLengthToken(axis.Offset!);
@@ -1963,6 +2011,18 @@ public static class CssPropertyApplier
             return false;
         var inner = trimmed[4..close].Trim().Trim('"', '\'').Trim();
         return inner.Length == 0;
+    }
+
+    /// <summary>'transition' and 'animation' as the cascade applies a shorthand whose text only
+    /// became a value after substitution: the longhands the expansion names, written through the
+    /// same appliers a longhand declaration goes through. An expansion with nothing in it is a value
+    /// the grammar rejected, and a rejected declaration resets none of its longhands either.</summary>
+    private static void ApplyExpandedShorthand(string name, string value, ComputedStyle style)
+    {
+        var expanded = ShorthandExpander.ExpandProperty(name, value);
+        if (expanded.Count == 0) return;
+        foreach (var kv in expanded)
+            Apply(style, kv.Key, kv.Value);
     }
 
     /// <summary>

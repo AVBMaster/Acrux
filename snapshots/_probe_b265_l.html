@@ -1,0 +1,131 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 L math functions in a specified value</title>
+<style>
+#s1 { width: calc(10px + 2px); }
+#s2 { margin: calc(1em + 10px) calc(300px - 100%); }
+#s3 { offset-path: inset(calc(10px + 2px)); }
+#s4 { rotate: calc(0.5turn); }
+#s5 { width: min(1em, 2em); }
+</style>
+</head>
+<body>
+<div id="t"></div>
+<div id="s1" style="font-size: 16px"></div><div id="s2"></div><div id="s3"></div>
+<div id="s4"></div><div id="s5"></div>
+<script>
+var CASES = [
+  ["width", "calc(10px + 2px)"],
+  ["width", "calc(10px - 2px)"],
+  ["width", "calc( 10px - 2px )"],
+  ["width", "calc((10px + 2px))"],
+  ["width", "calc(10px + 2px + 3px)"],
+  ["width", "calc(1em + 10px)"],
+  ["width", "calc(10px + 1em)"],
+  ["width", "calc(10px + 2em)"],
+  ["width", "calc(1em + 2rem)"],
+  ["width", "calc(2rem + 1em)"],
+  ["width", "calc(10px + 2%)"],
+  ["width", "calc(300px - 100%)"],
+  ["width", "calc(1vw + 1em)"],
+  ["width", "calc(1vh + 1vw)"],
+  ["width", "calc(1px + 1% + 1em + 1rem + 1ex + 1ch + 1vw + 1vh + 1vmin + 1vmax + 1pt + 1cm + 1lh + 1cap)"],
+  ["width", "calc(2em)"],
+  ["width", "calc(1in)"],
+  ["width", "calc(1em - 1em)"],
+  ["width", "calc(10px - 10px)"],
+  ["width", "calc(0% + 1em)"],
+  ["width", "calc(10px * 2)"],
+  ["width", "calc(2 * 10px)"],
+  ["width", "calc(1em * 2)"],
+  ["width", "calc(20px / 2)"],
+  ["width", "calc(100% / 3)"],
+  ["width", "calc(1e2px + 1px)"],
+  ["width", "calc(0.1px + 0.2px)"],
+  ["width", "calc(1px / 3)"],
+  ["width", "calc(1000000px * 1000)"],
+  ["width", "min(10px, 20px)"],
+  ["width", "max(10px, 20px)"],
+  ["width", "clamp(5px, 10px, 20px)"],
+  ["width", "clamp(1px, 5px, 3px)"],
+  ["width", "min(1em, 2em)"],
+  ["width", "min(10px, 1em)"],
+  ["width", "min(10px + 2px, 30px)"],
+  ["width", "min(calc(10px + 2px), 20px)"],
+  ["width", "calc(min(1px, 2px) + 1em)"],
+  ["width", "calc(min(1em, 2em) + 10px)"],
+  ["width", "calc(min(1em, 2em) + min(3em, 4em))"],
+  ["width", "calc(10px + var(--a))"],
+  ["width", "calc(var(--a) + 2px + 3px)"],
+  ["width", "-webkit-calc(1px + 2px)"],
+  ["width", "CALC(1PX + 2PX)"],
+  ["width", "calc(1px + 1)"],
+  ["width", "calc(1px * 20px)"],
+  ["width", "calc(1px + 1s)"],
+  ["width", "0.123456789px"],
+  ["width", "33.333333px"],
+  ["width", "1234567px"],
+  ["width", "123456px"],
+  ["width", "1.50px"],
+  ["width", "1E2PX"],
+  ["width", ".5em"],
+  ["width", "+2px"],
+  ["margin", "calc(10px + 2px) auto"],
+  ["margin", "calc(10px + 2px) calc(1em + 1px)"],
+  ["background-position", "calc(10px + 2px) calc(20% + 3%)"],
+  ["transition-duration", "calc(1s + 1ms)"],
+  ["transition-duration", "calc(500ms)"],
+  ["transition", "calc(1s + 1ms) ease"],
+  ["rotate", "calc(10deg + 2turn)"],
+  ["rotate", "calc(1grad + 1rad)"],
+  ["line-height", "calc(1 + 2)"],
+  ["line-height", "2.123456789"],
+  ["opacity", "0.123456789"],
+  ["flex-grow", "1.23456789"],
+  ["font-size", "12.3456789px"],
+  ["padding-left", "calc(1em + 10px)"],
+  ["offset-path", "inset(calc(10px + 2px))"],
+  ["offset-distance", "calc(10px + 2px)"],
+  ["offset-distance", "calc(50% + 10px)"],
+  ["grid-template-columns", "calc(10px + 2px) 100px"],
+  ["translate", "calc(10px + 2px) calc(1em + 4px)"]
+];
+var SHEETS = [
+  ["#s1", "width"],
+  ["#s2", "margin-left"],
+  ["#s2", "margin-right"],
+  ["#s3", "offset-path"],
+  ["#s4", "rotate"],
+  ["#s5", "width"]
+];
+var t = document.getElementById("t");
+function row(i) {
+  var name = CASES[i][0], value = CASES[i][1];
+  t.setAttribute("style", "");
+  t.style.setProperty(name, value);
+  var cs = getComputedStyle(t);
+  return i + "|" + name + "|" + value + "|S=" + t.style.getPropertyValue(name)
+       + "|C=" + cs.getPropertyValue(name) + "|W=" + t.getBoundingClientRect().width;
+}
+function sheetRow(i) {
+  var el = document.querySelector(SHEETS[i][0]), name = SHEETS[i][1];
+  var cs = getComputedStyle(el);
+  return "S" + i + "|" + SHEETS[i][0] + "|" + name + "|A=" + el.getAttribute("style")
+       + "|C=" + cs.getPropertyValue(name)
+       + "|R=" + document.styleSheets[0].cssRules[0].style.getPropertyValue(name);
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, CASES.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+window.sheets = function () {
+  var out = [];
+  for (var i = 0; i < SHEETS.length; i++) out.push(sheetRow(i));
+  return out.join("\n");
+};
+window.N = CASES.length;
+for (var k = 0; k < CASES.length; k++) console.log(row(k));
+for (var j = 0; j < SHEETS.length; j++) console.log(sheetRow(j));
+</script>
+</body>
+</html>

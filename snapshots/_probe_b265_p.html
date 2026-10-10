@@ -1,0 +1,177 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 P var() substitution and IACVT</title>
+<style>
+#t { --x: 20px; --red: green; --chain: var(--pt); --pt: 14pt; --e: ;
+     --a: var(--b); --b: var(--a); --sp: "12px"; }
+#s1 { --x: 20px; font-size: var(--x); }
+#s2 { --y: 2em; font-size: 30px; line-height: var(--y); }
+#s3 { --a: var(--b); --b: 14pt; font-size: var(--a); }
+#s4 { font-size: var(--later); --later: 25px; }
+#s5 { color: green; }
+#s5 > div { color: var(--undef); }
+#s6 { --e: ; opacity: var(--e); }
+#s7 { width: calc(10px + var(--undef)); }
+#s8 { --m: 4px 8px; margin: var(--m); }
+#s9 { --t: 2s; transition: var(--t) ease; }
+#s10 { --l: 3px; border-left-width: var(--l); border-left-style: solid; }
+/* The same substitution read through a SHORTHAND: CSS Variables 1 §2 puts it before the shorthand
+   is split into its longhands, so each of these has to land on every part the shorthand describes. */
+#s11 { --f: 12px serif; font: var(--f); }
+#s12 { --b: 2px solid red; border: var(--b); }
+#s13 { --fl: 1 1 auto; flex: var(--fl); }
+#s14 { --pd: 4px 6px; padding: var(--pd); }
+#s15 { --ou: 3px dashed blue; outline: var(--ou); }
+#s16 { --sh: 1px 2px 3px red; box-shadow: var(--sh); }
+#s17 { --tr: 2s ease 1s width; transition: var(--tr); }
+#s18 { --an: 3s linear 1s slide 2 reverse; animation: var(--an); }
+#s19 { --gp: 4px 8px; gap: var(--gp); display: flex; }
+#s20 { --tf: translateX(10px); transform: var(--tf); }
+#s21 { --bk: break-all; word-break: var(--bk); }
+</style>
+</head>
+<body>
+<div id="t"></div>
+<div id="s1"></div>
+<div id="s2"></div>
+<div id="s3"></div>
+<div id="s4"></div>
+<div id="s5"><div></div></div>
+<div id="s6"></div>
+<div id="s7"></div>
+<div id="s8"></div>
+<div id="s9"></div>
+<div id="s10"></div>
+<div id="s11"></div>
+<div id="s12"></div>
+<div id="s13"></div>
+<div id="s14"></div>
+<div id="s15"></div>
+<div id="s16"></div>
+<div id="s17"></div>
+<div id="s18"></div>
+<div id="s19"></div>
+<div id="s20"></div>
+<div id="s21"></div>
+<script>
+// CSS Variables 1 §2 and §3: a var() is substituted BEFORE any property is computed, and a var()
+// that nothing answers — with no fallback to answer it — leaves the declaration with no value at
+// all, so the property computes as if it had never been written. Which properties answer 'as if not
+// written' is what the C= column decides here, because the S=/V= columns keep the page's own text
+// either way.
+//
+// The empty-value rows ('--e: ;') and the cycle rows ('--a: var(--b); --b: var(--a)') are the two
+// ways a var() can be answered by nothing without naming an undefined property. The fallback rows
+// ask whether a var() the engine never reaches still counts: it must not.
+var CASES = [
+  ["opacity", "var(--undef)"],
+  ["opacity", "calc(var(--undef))"],
+  ["opacity", "var(--e)"],
+  ["opacity", "var(--a)"],
+  ["opacity", "var(--undef, 0.5)"],
+  ["opacity", "var(--x)"],
+  ["letter-spacing", "var(--undef)"],
+  ["letter-spacing", "var(--e)"],
+  ["color", "var(--undef)"],
+  ["color", "var(--red, var(--undef))"],
+  ["color", "var(--undef, var(--red))"],
+  ["color", "var(--a)"],
+  ["color", "var(--b)"],
+  ["margin-left", "var(--a, var(--undef))"],
+  ["margin-left", "var(--x)"],
+  ["width", "var(--x)"],
+  ["width", "calc(1px * var(--x))"],
+  ["width", "var(--e)"],
+  ["width", "calc(10px + var(--undef))"],
+  ["flex-basis", "var(--undef)"],
+  ["border-width", "var(--undef)"],
+  ["transform", "translateX(var(--undef))"],
+  ["rotate", "var(--undef)"],
+  ["line-height", "var(--x)"],
+  ["font-size", "var(--x)"],
+  ["font-size", "var(--chain)"],
+  ["font-size", "var(--sp)"],
+  ["width", "calc(100% / 3)"],
+  ["margin-top", "calc(1em + 1px)"],
+  ["width", "14pt"],
+  ["width", "calc(1px * 0.1)"],
+  ["padding-top", "calc(100px / 7)"]
+];
+var t = document.getElementById("t");
+var s = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]
+  .map(function (i) { return document.getElementById("s" + i); });
+function row(i) {
+  var name = CASES[i][0], value = CASES[i][1];
+  t.setAttribute("style", "");
+  t.style.setProperty(name, value);
+  var cs = getComputedStyle(t);
+  return i + "|" + name + "|" + value
+       + "|S=" + (t.style.getPropertyValue(name) ? "Y" : "")
+       + "|P=" + (CSS.supports(name, value) ? "Y" : "")
+       + "|R=" + (CSS.supports(name + ": " + value) ? "Y" : "")
+       + "|V=" + t.style.getPropertyValue(name)
+       + "|C=" + cs.getPropertyValue(name);
+}
+function sheetRow(i) {
+  var cs = getComputedStyle(s[i]);
+  var own = s[i].getAttribute("id");
+  var line = "sheet|" + own
+    + "|fs=" + cs.getPropertyValue("font-size")
+    + "|lh=" + cs.getPropertyValue("line-height")
+    + "|color=" + cs.getPropertyValue("color")
+    + "|op=" + cs.getPropertyValue("opacity")
+    + "|margin=" + cs.getPropertyValue("margin-top") + " " + cs.getPropertyValue("margin-right")
+               + " " + cs.getPropertyValue("margin-bottom") + " " + cs.getPropertyValue("margin-left")
+    + "|blw=" + cs.getPropertyValue("border-left-width")
+    + "|tdur=" + cs.getPropertyValue("transition-duration")
+    + "|x=" + cs.getPropertyValue("--x") + "|e=" + cs.getPropertyValue("--e")
+             + "|a=" + cs.getPropertyValue("--a") + "|chain=" + cs.getPropertyValue("--chain");
+  if (own === "s5") line += "|childColor=" + getComputedStyle(s[4].firstElementChild).color;
+  return line;
+}
+// One row per shorthand whose whole value is a var(): every longhand the shorthand describes has to
+// arrive at the substituted part, not at its default. The names are listed with the row so a read
+// that returns the empty string — a longhand the engine never wrote — shows up as one.
+var SHORTHANDS = [
+  ["s11", ["font-size", "font-family"]],
+  ["s12", ["border-left-width", "border-left-style", "border-left-color"]],
+  ["s13", ["flex-grow", "flex-shrink", "flex-basis"]],
+  ["s14", ["padding-top", "padding-right", "padding-bottom", "padding-left"]],
+  ["s15", ["outline-width", "outline-style", "outline-color"]],
+  ["s16", ["box-shadow"]],
+  ["s17", ["transition-property", "transition-duration", "transition-timing-function", "transition-delay"]],
+  ["s18", ["animation-name", "animation-duration", "animation-timing-function", "animation-delay",
+           "animation-iteration-count", "animation-direction"]],
+  ["s19", ["row-gap", "column-gap"]],
+  ["s20", ["transform"]],
+  ["s21", ["word-break"]]
+];
+function shorthandRow(i) {
+  var id = SHORTHANDS[i][0], names = SHORTHANDS[i][1];
+  var cs = getComputedStyle(document.getElementById(id));
+  var out = ["sheet", id + "h", String(names.length)];
+  for (var k = 0; k < names.length; k++)
+    out.push(names[k] + "=" + cs.getPropertyValue(names[k]));
+  return out.join("|");
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, CASES.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+window.sheets = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, s.length); i++) out.push(sheetRow(i));
+  return out.join("\n");
+};
+window.shorthands = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, SHORTHANDS.length); i++) out.push(shorthandRow(i));
+  return out.join("\n");
+};
+window.N = CASES.length;
+for (var k = 0; k < CASES.length; k++) console.log(row(k));
+for (var j = 0; j < s.length; j++) console.log(sheetRow(j));
+for (var q = 0; q < SHORTHANDS.length; q++) console.log(shorthandRow(q));
+</script>
+</body>
+</html>

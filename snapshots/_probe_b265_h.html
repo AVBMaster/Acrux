@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 H motion path second pass</title></head>
+<body><div id="t"></div>
+<script>
+var CASES = [
+  ["offset-path", "content-box path(\"M 0 0\")"],
+  ["offset-path", "url(#p) content-box"],
+  ["offset-path", "content-box"],
+  ["offset-path", "circle(10px at 50% 50%)"],
+  ["offset-path", "ellipse(closest-side)"],
+  ["offset-path", "inset(10px round 5px)"],
+  ["offset-path", "path(\"M 0 0 L 10 10 Z\")"],
+  ["offset-path", "PATH(\"M 0 0\")"],
+  ["offset-anchor", "right 50%"],
+  ["offset-anchor", "10px 20px"],
+  ["offset-rotate", "reverse 45deg"],
+  ["offset-position", "right 25%"],
+  ["offset-distance", "1e2px"],
+  ["offset-distance", "0"],
+  ["offset", "content-box path(\"M 0 0\") 50% auto"],
+  ["offset", "none"]
+];
+var RESET = [
+  // Does the 'offset' shorthand own the anchor? Set one, then write the shorthand.
+  ["offset-anchor", "10px 20px", "offset", "none"],
+  ["offset-distance", "42%", "offset", "path(\"M 0 0\")"],
+  ["offset-rotate", "45deg", "offset-path", "path(\"M 0 0\")"]
+];
+var t = document.getElementById("t");
+function row(i) {
+  var name = CASES[i][0], value = CASES[i][1];
+  t.setAttribute("style", "");
+  t.style.setProperty(name, value);
+  var cs = getComputedStyle(t);
+  return i + "|" + name + "|" + value + "|S=" + t.style.getPropertyValue(name)
+       + "|L=" + t.style.length + "|C=" + cs.getPropertyValue(name)
+       + "|Sh=" + cs.getPropertyValue("offset");
+}
+function resetRow(i) {
+  var a = RESET[i][0], av = RESET[i][1], b = RESET[i][2], bv = RESET[i][3];
+  t.setAttribute("style", "");
+  t.style.setProperty(a, av);
+  t.style.setProperty(b, bv);
+  var cs = getComputedStyle(t);
+  return "R" + i + "|" + a + "=" + av + "|" + b + "=" + bv
+       + "|A=" + cs.getPropertyValue("offset-anchor")
+       + "|D=" + cs.getPropertyValue("offset-distance")
+       + "|O=" + cs.getPropertyValue("offset-rotate")
+       + "|P=" + cs.getPropertyValue("offset-path");
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, CASES.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+window.resets = function () {
+  var out = [];
+  for (var i = 0; i < RESET.length; i++) out.push(resetRow(i));
+  return out.join("\n");
+};
+window.N = CASES.length;
+for (var k = 0; k < CASES.length; k++) console.log(row(k));
+for (var j = 0; j < RESET.length; j++) console.log(resetRow(j));
+</script>
+</body></html>

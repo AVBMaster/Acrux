@@ -1,0 +1,96 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 Q percentages inside math expressions</title>
+<style>
+/* The containing block is authored, not stretched: a percentage anywhere in this page means the
+   same number in both engines, so a computed value can be compared exactly instead of being
+   skipped as window-dependent (which is what hid every one of these rows in _probe_b265_m). */
+#cb { width: 400px; height: 200px; font-size: 16px; position: relative; }
+#fx { display: flex; width: 400px; }
+</style>
+</head>
+<body>
+<div id="cb"><div id="t"></div></div>
+<div id="fx"><div id="f1"></div></div>
+<script>
+// CSS 2.1 §8.3/§8.5 (margin and padding percentages take the containing block's INLINE size on
+// every axis), §10.5 (a percentage height needs a definite height on the parent), CSS Fonts 4 §7.1
+// (a font-size percentage is a share of the PARENT font size) and CSS Values 4 §10.7 (a math
+// expression resolves its percentages against the same base a bare percentage would use).
+var CASES = [
+  ["width", "calc(1%)"],
+  ["width", "calc(1px + 1%)"],
+  ["width", "calc(100% - 10px)"],
+  ["width", "calc(100% * 2)"],
+  ["width", "calc(1em + 1%)"],
+  ["width", "calc(1% + 1em)"],
+  ["width", "min(1%, 200px)"],
+  ["width", "max(1%, 10px)"],
+  ["width", "clamp(1%, 20px, 3%)"],
+  ["width", "calc(50% - 20%)"],
+  ["width", "calc(10px + min(1%, 2px))"],
+  ["height", "calc(10px + 10%)"],
+  ["height", "calc(50%)"],
+  ["height", "calc(1% + 1em)"],
+  ["margin-top", "calc(10px + 1%)"],
+  ["margin-left", "calc(10px + 1%)"],
+  ["margin-top", "5%"],
+  ["margin-bottom", "calc(1em + 5%)"],
+  ["padding-left", "calc(10px + 1%)"],
+  ["padding-top", "10%"],
+  ["padding-right", "calc(2% + 2px)"],
+  ["font-size", "calc(1em + 1%)"],
+  ["font-size", "calc(100%)"],
+  ["font-size", "calc(50% + 8px)"],
+  ["font-size", "calc(1rem + 1%)"],
+  ["line-height", "calc(100% + 10px)"],
+  ["line-height", "calc(1em + 5%)"],
+  ["top", "calc(10px + 1%)"],
+  ["left", "calc(10px + 5%)"],
+  ["max-width", "calc(1% + 10px)"],
+  ["min-width", "calc(2% + 5px)"],
+  ["flex-basis", "calc(50% - 100px)"],
+  ["width", "calc(1px + 1%)"],
+  ["inset-inline-start", "calc(10px + 2%)"],
+  ["inset-inline-end", "5%"],
+  ["inset-block-start", "calc(10px + 1%)"],
+  ["bottom", "calc(10px + 1%)"],
+  ["right", "calc(10px + 2%)"],
+  ["top", "50%"],
+  ["left", "25%"],
+  ["margin-inline-start", "calc(10px + 1%)"],
+  ["padding-block-end", "5%"],
+  ["s-top", "calc(10px + 1%)"],
+  ["s-inset-inline-start", "calc(10px + 2%)"]
+];
+// The two 's-' rows ask the same question of a box that is NOT positioned: an inset on a static
+// box moves nothing, so the surface has to say whether it still prices the percentage.
+var t = document.getElementById("t");
+var f1 = document.getElementById("f1");
+function row(i) {
+  var name = CASES[i][0], value = CASES[i][1];
+  var staticBox = name.startsWith("s-");
+  if (staticBox) name = name.slice(2);
+  var host = name === "flex-basis" ? f1 : t;
+  host.setAttribute("style", "");
+  if (!staticBox && (name === "top" || name === "left" || name === "bottom" || name === "right"
+      || name === "inset-inline-start" || name === "inset-inline-end" || name === "inset-block-start"))
+    host.style.setProperty("position", "absolute");
+  host.style.setProperty(name, value);
+  var cs = getComputedStyle(host);
+  return i + "|" + name + "|" + value
+       + "|S=" + (host.style.getPropertyValue(name) ? "Y" : "")
+       + "|P=" + (CSS.supports(name, value) ? "Y" : "")
+       + "|R=" + (CSS.supports(name + ": " + value) ? "Y" : "")
+       + "|V=" + host.style.getPropertyValue(name)
+       + "|C=" + cs.getPropertyValue(name);
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, CASES.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+window.N = CASES.length;
+for (var k = 0; k < CASES.length; k++) console.log(row(k));
+</script>
+</body>
+</html>

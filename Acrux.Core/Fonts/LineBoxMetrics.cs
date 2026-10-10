@@ -204,15 +204,22 @@ public static class LineBoxMetrics
         }
 
         // <length>: resolve against the element's font size for font-relative
-        // units, then store the absolute pixel value.
+        // units, then store the absolute pixel value. A math expression's percentages
+        // are a share of that same font size (CSS 2.1 §10.6), which is the one base
+        // 'line-height' has (measured: 'line-height: calc(100% + 10px)' on a 16px box
+        // is 26px, and 'calc(1em + 5%)' is 16.8px).
         var length = Length.Parse(text);
         if (length != null)
         {
             float reference = style.FontSize > 0 ? style.FontSize : DefaultFontSize;
-            float px = length.ToPixels(reference, reference, 0, 0);
+            using var _fontContext = FontUnitContext.Use(style);
+            bool fromMath = length is MathLength;
+            float px = length is MathLength math && math.Expression.Contains('%')
+                ? math.ToPixelsAgainstPercentageBase(reference, reference, 0, 0)
+                : length.ToPixels(reference, reference, 0, 0);
             if (!float.IsNaN(px) && px >= 0)
             {
-                SetPixels(style, px);
+                SetPixels(style, px, fromMath);
                 return;
             }
         }
@@ -225,6 +232,7 @@ public static class LineBoxMetrics
     {
         style.LineHeightIsNormal = true;
         style.LineHeightPx = null;
+        style.LineHeightFromMath = false;
     }
 
     /// <summary>Set 'line-height' to a multiple of the element's font size.</summary>
@@ -235,19 +243,25 @@ public static class LineBoxMetrics
             style.LineHeightIsNormal = false;
             style.LineHeightPx = 0f;
             style.LineHeight = 0f;
+            style.LineHeightFromMath = false;
             return;
         }
 
         style.LineHeightIsNormal = false;
         style.LineHeightPx = null;
         style.LineHeight = multiplier;
+        style.LineHeightFromMath = false;
     }
 
-    /// <summary>Set 'line-height' to an absolute pixel length.</summary>
-    public static void SetPixels(ComputedStyle style, float pixels)
+    /// <summary>Set 'line-height' to an absolute pixel length. <paramref name="fromMath"/> marks
+    /// it as the result of a calc()/min()/max()/clamp(): only such a value is snapped to the
+    /// reference engine's 1/64-pixel grid on the computed surface, so a plain length and a
+    /// percentage stay exactly as they were resolved.</summary>
+    public static void SetPixels(ComputedStyle style, float pixels, bool fromMath = false)
     {
         style.LineHeightIsNormal = false;
         style.LineHeightPx = pixels;
+        style.LineHeightFromMath = fromMath;
 
         // Keep the multiplier roughly in sync for any consumer that still reads
         // it directly, so a stale reader degrades gracefully instead of treating

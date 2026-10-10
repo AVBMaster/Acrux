@@ -1,0 +1,93 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 C motion path + skip ink</title></head>
+<body><div id="t"></div>
+<script>
+var CASES = [
+  ["offset-path", "none"],
+  ["offset-path", "normal"],
+  ["offset-path", "content-box"],
+  ["offset-path", "border-box"],
+  ["offset-path", "padding-box"],
+  ["offset-path", "margin-box"],
+  ["offset-path", "fill-box"],
+  ["offset-path", "stroke-box"],
+  ["offset-path", "view-box"],
+  ["offset-path", "content-box path(\"M 0 0\")"],
+  ["offset-path", "border-box content-box"],
+  ["offset-path", "path(\"M0 0\")"],
+  ["offset-path", "path(\"M 10 -5.5 L 20 30 Z\")"],
+  ["offset-path", "path('M 0 0')"],
+  ["offset-path", "path(bogus)"],
+  ["offset-path", "path(\"M 0 0\", \"x\")"],
+  ["offset-path", "ray(45deg)"],
+  ["offset-path", "ray(45deg contain)"],
+  ["offset-path", "ray(center 45deg)"],
+  ["offset-path", "circle(10px)"],
+  ["offset-path", "margin-box circle(10px at 50% 50%)"],
+  ["offset-path", "ellipse(10px 20px)"],
+  ["offset-path", "inset(10px)"],
+  ["offset-path", "rect(0 0 10 10)"],
+  ["offset-path", "xywh(0 0 10px 10px)"],
+  ["offset-path", "url(#p)"],
+  ["offset-path", "url(\"a.svg#p\")"],
+  ["offset-path", "content-box url(#p)"],
+  ["offset-path", "url(#p) content-box"],
+  ["offset-path", "M 0 0"],
+  ["offset-path", "auto"],
+  ["offset-distance", "42%"],
+  ["offset-distance", "10px"],
+  ["offset-distance", "normal"],
+  ["offset-distance", "auto"],
+  ["offset-distance", "calc(10px + 2px)"],
+  ["offset-distance", "bogus"],
+  ["offset-anchor", "auto"],
+  ["offset-anchor", "none"],
+  ["offset-anchor", "50% 50%"],
+  ["offset-anchor", "top left"],
+  ["offset-anchor", "center"],
+  ["offset-anchor", "bogus"],
+  ["offset-position", "normal"],
+  ["offset-position", "auto"],
+  ["offset-position", "50% 50%"],
+  ["offset-position", "none"],
+  ["offset-position", "top"],
+  ["offset-rotate", "auto"],
+  ["offset-rotate", "reverse"],
+  ["offset-rotate", "auto 45deg"],
+  ["offset-rotate", "45deg"],
+  ["offset-rotate", "-45deg"],
+  ["offset-rotate", "auto reverse"],
+  ["offset-rotate", "bogus"],
+  ["offset", "none"],
+  ["offset", "path(\"M 0 0\")"],
+  ["offset", "content-box path(\"M 0 0\") 50% auto"],
+  ["offset", "auto"],
+  ["text-decoration-skip-ink", "auto"],
+  ["text-decoration-skip-ink", "none"],
+  ["text-decoration-skip-ink", "all"],
+  ["text-decoration-skip-ink", "space"],
+  ["text-decoration-skip-ink", "leading"],
+  ["text-decoration-skip-ink", "trailing"],
+  ["text-decoration-skip-ink", "bogus"],
+  ["text-decoration-skip-ink", "auto all"]
+];
+var t = document.getElementById("t");
+function row(i) {
+  var name = CASES[i][0], value = CASES[i][1];
+  t.setAttribute("style", "");
+  t.style.setProperty(name, value);
+  var stored = t.style.getPropertyValue(name);
+  var cs = getComputedStyle(t);
+  var computed = cs.getPropertyValue(name);
+  return i + "|" + name + "|" + value + "|S=" + stored + "|L=" + t.style.length + "|C=" + computed;
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, CASES.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+window.N = CASES.length;
+window.all = function () { return window.harvest(0, CASES.length); };
+for (var k = 0; k < CASES.length; k++) console.log(row(k));
+</script>
+</body></html>

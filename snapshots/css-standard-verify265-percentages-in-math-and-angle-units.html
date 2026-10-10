@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 265 — percentages priced inside math expressions, and the angles that come out in degrees</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+/* An authored containing block: a percentage means the same number in both engines, so every
+   computed value below can be compared exactly instead of skipped as window-dependent. */
+#cb { width: 400px; height: 200px; font-size: 16px; position: relative; background: rgb(245,245,245); }
+#t { height: 0; }
+#fx { display: flex; width: 400px; }
+#f1 { height: 0; }
+#markers div { height: 6px; }
+</style></head><body>
+<h4>b265 — a math expression that mixes a percentage with another unit, and an angle written in any unit. The first block asks getComputedStyle for the resolved value of calc()/min()/max()/clamp() over margin, padding, width, height, the inset family (physical, logical, positioned and static), font-size and line-height, all inside the authored 400×200 box; the second asks the individual 'rotate' property to spell every angle in degrees and to refuse a bare number. The markers are laid out by the same expressions, so the pixel baseline guards the layout the values describe.</h4>
+<div id="cb">
+  <div id="markers">
+    <div style="width: calc(1%); background: rgb(255,0,0);"></div>
+    <div style="width: calc(100% - 10px); background: rgb(0,170,0);"></div>
+    <div style="width: calc(1px + 1%); background: rgb(0,0,255);"></div>
+    <div style="width: calc(1em + 1%); background: rgb(255,180,0);"></div>
+    <div style="width: clamp(1%, 20px, 3%); background: rgb(150,0,150);"></div>
+    <div style="margin-left: calc(10px + 1%); padding-left: calc(10px + 1%); width: calc(100% - 30px); background: rgb(0,150,150);"></div>
+  </div>
+  <div id="t"></div>
+</div>
+<div id="fx"><div id="f1"></div></div>
+<pre id="report"></pre>
+<script>
+var CASES = [["width", "calc(1%)"], ["width", "calc(1px + 1%)"], ["width", "calc(100% - 10px)"], ["width", "calc(100% * 2)"], ["width", "calc(1em + 1%)"], ["width", "calc(1% + 1em)"], ["width", "min(1%, 200px)"], ["width", "max(1%, 10px)"], ["width", "clamp(1%, 20px, 3%)"], ["width", "calc(50% - 20%)"], ["width", "calc(10px + min(1%, 2px))"], ["height", "calc(10px + 10%)"], ["height", "calc(50%)"], ["height", "calc(1% + 1em)"], ["margin-top", "calc(10px + 1%)"], ["margin-left", "calc(10px + 1%)"], ["margin-top", "5%"], ["margin-bottom", "calc(1em + 5%)"], ["padding-left", "calc(10px + 1%)"], ["padding-top", "10%"], ["padding-right", "calc(2% + 2px)"], ["font-size", "calc(1em + 1%)"], ["font-size", "calc(100%)"], ["font-size", "calc(50% + 8px)"], ["font-size", "calc(1rem + 1%)"], ["line-height", "calc(100% + 10px)"], ["line-height", "calc(1em + 5%)"], ["top", "calc(10px + 1%)"], ["left", "calc(10px + 5%)"], ["max-width", "calc(1% + 10px)"], ["min-width", "calc(2% + 5px)"], ["flex-basis", "calc(50% - 100px)"], ["width", "calc(1px + 1%)"], ["inset-inline-start", "calc(10px + 2%)"], ["inset-inline-end", "5%"], ["inset-block-start", "calc(10px + 1%)"], ["bottom", "calc(10px + 1%)"], ["right", "calc(10px + 2%)"], ["top", "50%"], ["left", "25%"], ["margin-inline-start", "calc(10px + 1%)"], ["padding-block-end", "5%"], ["s-top", "calc(10px + 1%)"], ["s-inset-inline-start", "calc(10px + 2%)"]];
+var WANTC = ["4px", "5px", "390px", "800px", "20px", "20px", "4px", "10px", "12px", "120px", "12px", "30px", "100px", "18px", "14px", "14px", "20px", "36px", "14px", "40px", "10px", "16.16px", "16px", "16px", "16.16px", "26px", "16.7969px", "12px", "30px", "calc(1% + 10px)", "calc(2% + 5px)", "calc(50% - 100px)", "5px", "18px", "20px", "12px", "12px", "18px", "100px", "100px", "14px", "20px", "calc(1% + 10px)", "calc(2% + 10px)"];
+var ROT = [["45deg", "Y", "45deg"], ["1grad", "Y", "0.9deg"], ["0.5turn", "Y", "180deg"], ["1rad", "Y", "57.2958deg"], ["100grad", "Y", "90deg"], ["1.5rad", "Y", "85.9437deg"], ["0.1rad", "Y", "5.72958deg"], ["2rad", "Y", "114.592deg"], ["3.5grad", "Y", "3.15deg"], ["x 45deg", "Y", "x 45deg"], ["x 1rad", "Y", "x 57.2958deg"], ["x 0.5turn", "Y", "x 180deg"], ["z 90deg", "Y", "90deg"], ["y -45deg", "Y", "y -45deg"], ["1 1 0 100grad", "Y", "1 1 0 90deg"], ["1 0 0 45deg", "Y", "x 45deg"], ["0 0 1 0.5turn", "Y", "180deg"], ["calc(1turn)", "Y", "360deg"], ["calc(45deg + 1turn)", "Y", "405deg"], ["calc(100grad + 10grad)", "Y", "99deg"], ["calc(0.5turn)", "Y", "180deg"], ["calc(1rad)", "Y", "57.2958deg"], ["calc(90deg * 2)", "Y", "180deg"], ["none", "Y", "none"], ["45", "", "none"]];
+var INSETS = { top:1, left:1, bottom:1, right:1, 'inset-inline-start':1, 'inset-inline-end':1, 'inset-block-start':1 };
+var t = document.getElementById('t');
+var f1 = document.getElementById('f1');
+function computedAt(i) {
+  var name = CASES[i][0], value = CASES[i][1];
+  var staticBox = name.indexOf('s-') === 0;
+  if (staticBox) name = name.slice(2);
+  var host = name === 'flex-basis' ? f1 : t;
+  host.setAttribute('style', '');
+  if (!staticBox && INSETS[name]) host.style.setProperty('position', 'absolute');
+  host.style.setProperty(name, value);
+  return getComputedStyle(host).getPropertyValue(name);
+}
+var rot = document.createElement('div');
+document.body.appendChild(rot);
+function rotateSpec(v) { rot.setAttribute('style',''); rot.style.setProperty('rotate', v); return rot.style.getPropertyValue('rotate'); }
+function rotateComp(v) { rot.setAttribute('style',''); rot.style.setProperty('rotate', v); return getComputedStyle(rot).getPropertyValue('rotate'); }
+var out = []; var failed = 0;
+function row(name, got, want) {
+  var ok = String(got) === String(want); if (!ok) failed++;
+  out.push((ok ? 'ok   ' : 'FAIL ') + name + '   got=' + JSON.stringify(got) + '   want=' + JSON.stringify(want));
+}
+for (var i = 0; i < CASES.length; i++) {
+  var got; try { got = computedAt(i); } catch (e) { got = 'ERR[' + e.name + ']'; }
+  row('#' + i + ' ' + CASES[i][0] + '[' + CASES[i][1] + ']', got, WANTC[i]);
+}
+for (var j = 0; j < ROT.length; j++) {
+  var a = ROT[j][0];
+  // The middle column of ROT is the reference engine's acceptance flag (the inline-style echo is
+  // empty exactly when it refused the value), not an echo string — so the gate reads the echo's
+  // emptiness, and leaves the exact spelling to the computed column below.
+  var spec = rotateSpec(a);
+  row('#r' + j + ' rotate[' + a + '] spec', spec ? 'Y' : '', ROT[j][1]);
+  row('#r' + j + ' rotate[' + a + '] comp', rotateComp(a), ROT[j][2]);
+}
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

@@ -694,6 +694,12 @@ public class CascadeResolver
 
     private void AnalyzeJsModifiedStyle(Element element, int treeOrder)
     {
+        // The map is a mirror of the 'style' attribute, and the attribute may have been replaced
+        // since the CSSOM last wrote it — a script that empties the block and then asks for a
+        // computed style must be answered from the block the page has now, not from the one the
+        // script had written (measured: with 'color: red' stored through the CSSOM and the
+        // attribute then set to '', the computed colour is the initial black, not red).
+        InlineStyleBlock.SyncWithAttribute(element);
         foreach (var kv in element.Style)
         {
             if (!string.IsNullOrEmpty(kv.Key) && !string.IsNullOrEmpty(kv.Value))
@@ -825,6 +831,13 @@ public class CascadeResolver
         {
             if (name.StartsWith("--")) continue;
             if (IsHighPriorityProperty(name)) continue;
+
+            // A var() that names no custom property this element has leaves the declaration with no
+            // value at all, and a valueless declaration computes the way an absent one does — the
+            // inherited value where the property inherits, the initial elsewhere (CSS Variables 1 §3).
+            // Tested against the text as written: the substitution below turns the failure into
+            // 'calc(10px + )', which is no value of anything but says nothing about why.
+            if (CssFunctionEvaluator.HasUnresolvedVar(value, element)) continue;
 
             // 'content' resolves only what its own value owns; a counter is left as written (see
             // CssFunctionEvaluator.EvaluateForContent).

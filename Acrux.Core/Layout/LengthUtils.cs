@@ -64,12 +64,14 @@ public static class LengthUtils
         // calc()/min()/max()/clamp() expressions containing '%' resolve their
         // percentages against the same inline-size base the plain PercentLength
         // path above uses (ToPixels maps the reference onto '%' conversion).
+        // This is the box the percentage is a share of, so the expression is priced.
         if (length is MathLength mathLen && mathLen.Expression.Contains('%') && !IsIndefinite(percentageBase))
         {
             // The reference handed to the expression is the percentage base, so the
             // font-relative units inside it must come from the element's own style.
             using var _fontScope = FontUnitContext.Use(style);
-            float mvalue = mathLen.ToPixels(percentageBase, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
+            float mvalue = mathLen.ToPixelsAgainstPercentageBase(percentageBase,
+                space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
             if (!float.IsNaN(mvalue) && !float.IsInfinity(mvalue))
             {
                 if (style.BoxSizing == BoxSizingType.BorderBox)
@@ -156,7 +158,8 @@ public static class LengthUtils
         if (length is MathLength mathLenB && mathLenB.Expression.Contains('%') && !IsIndefinite(percentageBase))
         {
             using var _fontScope = FontUnitContext.Use(style);
-            float mvalue = mathLenB.ToPixels(percentageBase, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
+            float mvalue = mathLenB.ToPixelsAgainstPercentageBase(percentageBase,
+                space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
             if (!float.IsNaN(mvalue) && !float.IsInfinity(mvalue))
             {
                 if (style.BoxSizing == BoxSizingType.BorderBox)
@@ -185,6 +188,13 @@ public static class LengthUtils
         float borderPaddingSum, Length length)
     {
         if (length is AutoLength or PercentLength)
+            return null;
+        // Both callers have already tried the percentage base they own, so a math expression
+        // that reaches here has none: its percentages are a share of a box nobody has measured,
+        // and pricing them at the element's font size would answer a number the layout never
+        // used. The length is indefinite, which is what leaves a 'calc(100% + 10px)' box to
+        // stretch to the available space.
+        if (length is MathLength mathNoBase && mathNoBase.Expression.Contains('%'))
             return null;
 
         float value;
@@ -286,52 +296,45 @@ public static class LengthUtils
     private static float UsedBorderWidth(float width, BorderStyle borderStyle) =>
         borderStyle == BorderStyle.None ? 0 : width;
 
-    public static BoxStrut ComputePadding(ConstraintSpace space, ComputedStyle style)
-    {
-        float fontSize = style.FontSize;
-        using var _scope = FontUnitContext.Use(style);
-        return new BoxStrut(
-            ResolveInsetLength(style.PaddingTop, fontSize, space),
-            ResolveInsetLength(style.PaddingRight, fontSize, space),
-            ResolveInsetLength(style.PaddingBottom, fontSize, space),
-            ResolveInsetLength(style.PaddingLeft, fontSize, space));
-    }
+    public static BoxStrut ComputePadding(ConstraintSpace space, ComputedStyle style) =>
+        new(ResolveInsetSide(style.PaddingTop, space.PercentageResolutionInlineSize, style, space),
+            ResolveInsetSide(style.PaddingRight, space.PercentageResolutionInlineSize, style, space),
+            ResolveInsetSide(style.PaddingBottom, space.PercentageResolutionInlineSize, style, space),
+            ResolveInsetSide(style.PaddingLeft, space.PercentageResolutionInlineSize, style, space));
 
-    public static BoxStrut ComputeMargins(ConstraintSpace space, ComputedStyle style)
-    {
-        float fontSize = style.FontSize;
-        using var _scope = FontUnitContext.Use(style);
-        return new BoxStrut(
-            ResolveInsetLength(style.MarginTop, fontSize, space),
-            ResolveInsetLength(style.MarginRight, fontSize, space),
-            ResolveInsetLength(style.MarginBottom, fontSize, space),
-            ResolveInsetLength(style.MarginLeft, fontSize, space));
-    }
+    public static BoxStrut ComputeMargins(ConstraintSpace space, ComputedStyle style) =>
+        new(ResolveInsetSide(style.MarginTop, space.PercentageResolutionInlineSize, style, space),
+            ResolveInsetSide(style.MarginRight, space.PercentageResolutionInlineSize, style, space),
+            ResolveInsetSide(style.MarginBottom, space.PercentageResolutionInlineSize, style, space),
+            ResolveInsetSide(style.MarginLeft, space.PercentageResolutionInlineSize, style, space));
 
     /// <summary>
-    /// padding/margin percentages resolve against the containing block's INLINE
-    /// size on every axis (CSS box model); other units keep their normal bases.
+    /// One margin or padding side, laid out. The two properties share a rule that no other
+    /// length has: a percentage on either axis is a share of the containing block's INLINE size
+    /// (CSS 2.1 §8.3, §8.5), and a side that cannot be priced at all contributes nothing rather
+    /// than carrying a NaN into the geometry, where it would unmake the whole box.
+    /// <paramref name="percentageBase"/> is that inline size as the box that owns the side sees
+    /// it — each caller passes its own, because a child's base is its parent's content box and a
+    /// parent's base is not its own grandparent's.
     /// </summary>
-    private static float ResolveInsetLength(Length length, float fontSize, ConstraintSpace space)
+    public static float ResolveInsetSide(Length length, float percentageBase, ComputedStyle style,
+        ConstraintSpace space)
     {
-        // 'auto' is not a length: it contributes zero while the side is being
-        // resolved, and the leftover space is handed back later by the
-        // auto-margin rules (CSS 2.1 §10.3.3).
-        if (length is AutoLength)
-            return 0;
+        if (length is AutoLength) return 0;   // CSS 2.1 §10.3.3: the auto margins are settled later
+        float baseInline = IsIndefinite(percentageBase) || float.IsInfinity(percentageBase) ? 0 : percentageBase;
+        using var _scope = FontUnitContext.Use(style);
+        float pixels;
         if (length is PercentLength pct)
-        {
-            float baseInline = float.IsNaN(space.PercentageResolutionInlineSize) ? 0 : space.PercentageResolutionInlineSize;
-            return pct.Value * baseInline;
-        }
-        // Math expressions re-enter the evaluator here, and font-relative units
-        // inside them need the element's style as the ambient context.
-        if (FontUnitContext.Current is { } style)
-        {
-            using var _scope = FontUnitContext.Use(style);
-            return length.ToPixels(fontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
-        }
-        return length.ToPixels(fontSize, space.RootFontSize, space.ViewportWidth, space.ViewportHeight);
+            pixels = pct.Value * baseInline;
+        else if (length is MathLength math && math.Expression.Contains('%'))
+            // 'margin-left: calc(10px + 1%)' of a 400px containing block is 14px: the expression
+            // is priced against the same inline size a bare percentage would use.
+            pixels = math.ToPixelsAgainstPercentageBase(baseInline, space.RootFontSize,
+                space.ViewportWidth, space.ViewportHeight);
+        else
+            pixels = length.ToPixels(style.FontSize, space.RootFontSize,
+                space.ViewportWidth, space.ViewportHeight);
+        return float.IsNaN(pixels) || float.IsInfinity(pixels) ? 0 : pixels;
     }
 
     public static (float min, float max) ComputeMinMaxInlineSizes(ConstraintSpace space, ComputedStyle style, BoxStrut borderPadding,

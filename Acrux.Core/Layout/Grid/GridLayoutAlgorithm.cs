@@ -379,8 +379,14 @@ public class GridLayoutAlgorithm
         {
             // A math-function track size (CSS Values 3 §4 / css-grid §7.2.1) resolves
             // against the container's content box; treat the result as a fixed track.
-            // Percentages inside the expression use containerSize as their base.
-            float mathPx = Length.Parse(value).ToPixels(containerSize, _containerStyle?.FontSize ?? 16, _viewportWidth, _viewportHeight);
+            // Percentages inside the expression use containerSize as their base — a box,
+            // so the expression must be priced against it (plain ToPixels leaves an
+            // unpriced percentage unsolved, which dropped the track to auto).
+            var trackLength = Length.Parse(value);
+            float mathPx = trackLength is MathLength trackMath
+                ? trackMath.ToPixelsAgainstPercentageBase(containerSize, _containerStyle?.FontSize ?? 16,
+                    _viewportWidth, _viewportHeight)
+                : trackLength.ToPixels(containerSize, _containerStyle?.FontSize ?? 16, _viewportWidth, _viewportHeight);
             if (!float.IsNaN(mathPx) && !float.IsInfinity(mathPx))
             {
                 track.SizeType = TrackSizeType.Fixed;

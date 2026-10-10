@@ -28,15 +28,18 @@ public static class CssValueGrammar
     public static bool ValueIsValidFor(CssPropertyName name, CssValue value)
     {
         if (name.IsCustom) return true;
-        var grammar = GrammarFor(name.Id);
-        if (grammar == null) return true;
 
         // The grammars are decided from the value text. Identifier, string and
         // un-parsed (lazily parsed) values all carry that text verbatim; anything structured
         // — a function, a value list — has already been decoded, which is the proof that it
         // parsed, so it is left to the cascade to resolve.
         if (value is not (CssIdentifierValue or CssStringValue or Acrux.Core.Css.Tokenizer.CssUnparsedValue)) return true;
-        return TextIsValid(value.CssText(), grammar);
+        // One decision about one declaration. The property set used to ask its own question of the
+        // id's grammar while the CSSOM asked the name's, and the two lists drifted: a
+        // 'offset-path: content-box' written in a sheet or a style attribute was refused by the
+        // property's own id grammar while the echo table — the one that also decides the cascade and
+        // 'getComputedStyle' — accepted it through 'setProperty'.
+        return ValueTextIsValid(name.ToCssString(), value.CssText());
     }
 
     /// <summary>The same grammar for a declaration the CSSOM is about to store, where only
@@ -50,6 +53,14 @@ public static class CssValueGrammar
         // of them reads back a property the page could never have set (measured:
         // 'setProperty("initial-letter-align","superscript")' then answers the empty string).
         if (!Resolver.CssPropertyTraits.IsDeclaredProperty(propertyName)) return false;
+        return ValueTextIsValid(propertyName, value);
+    }
+
+    /// <summary>Whether a value text is a value of the named property, once the name itself has been
+    /// accepted as a property. Every surface that records a declaration asks this and nothing else,
+    /// so a sheet, a style attribute, <c>setProperty</c> and <c>CSS.supports</c> cannot disagree.</summary>
+    private static bool ValueTextIsValid(string propertyName, string value)
+    {
         // The background shorthand's grammar IS its expansion: a colour outside the final layer, a
         // token nothing in <bg-layer> reads and a position or size list the grammar refuses all leave
         // the declaration out of the cascade, and the reference engine refuses it in the CSSOM echo
@@ -59,6 +70,13 @@ public static class CssValueGrammar
         if (propertyName.Equals("background", StringComparison.OrdinalIgnoreCase)
             && !Resolver.CssPropertyTraits.IsCssWideKeyword(value.Trim()))
             return ShorthandExpander.ExpandProperty("background", value).Count > 0;
+        // The 'offset' shorthand is gated the same way, because it is read as a list of parts and
+        // the parts are judged by the five longhands' own table: a position written after the
+        // rotation, a second distance or a rotation spelled twice leave the whole declaration out
+        // (measured: 'offset: url(#p) 10% reverse center top' reads back empty).
+        if (propertyName.Equals("offset", StringComparison.OrdinalIgnoreCase)
+            && !Resolver.CssPropertyTraits.IsCssWideKeyword(value.Trim()))
+            return ShorthandExpander.ExpandProperty("offset", value).Count > 0;
         // The properties this engine echoes without consuming are read by one table, and that table
         // is the grammar too: a value whose canonical text does not exist is not a declaration on
         // any surface (measured value by value — 'fill-rule: bogus', 'mask-type: alpha luminance',
@@ -69,7 +87,94 @@ public static class CssValueGrammar
         // set is the same, and only the name the declaration is stored under differs.
         var id = CssPropertyIdExtensions.BehaviourId(CssPropertyIdExtensions.FromString(propertyName));
         var grammar = id != CssPropertyId.Invalid ? GrammarFor(id) : LegacyPrefixedGrammar(propertyName);
-        return grammar == null || TextIsValid(value, grammar);
+        if (grammar != null && !TextIsValid(value, grammar)) return false;
+        return !MathTypeRejects(propertyName, value);
+    }
+
+    /// <summary>The properties whose value is a time, spelled every way the engine knows them. A
+    /// math function in one of these has to resolve to a time, which is the whole of what separates
+    /// <c>transition-duration: calc(1s + 1ms)</c> from <c>calc(1s + 1px)</c> (measured, the second
+    /// leaves the property at its initial '0s').</summary>
+    private static readonly string[] MathTimeProperties =
+    {
+        "transition-duration", "transition-delay", "animation-duration", "animation-delay",
+        "-webkit-transition-duration", "-webkit-transition-delay",
+        "-webkit-animation-duration", "-webkit-animation-delay",
+    };
+
+    /// <summary>The properties whose value is an angle. 'rotate' takes one and nothing else, so
+    /// <c>rotate: calc(1deg * 2)</c> stands while <c>calc(1deg + 1)</c> falls (measured).</summary>
+    private static readonly string[] MathAngleProperties =
+    { "rotate", "rotate-x", "rotate-y", "rotate-z", "offset-rotate" };
+
+    /// <summary>The track lists, the only place a fraction is a value. A length property has no use
+    /// for one: <c>width: calc(1fr)</c> is refused while <c>grid-template-columns: calc(1fr + 2fr)</c>
+    /// is a track (measured for the first, and 'grid-column-gap: calc(1px + 1fr)' — a gap is not a
+    /// track — for the second).</summary>
+    private static readonly string[] MathTrackProperties =
+    {
+        "grid-template-columns", "grid-template-rows", "grid-auto-columns", "grid-auto-rows",
+    };
+
+    /// <summary>The properties whose value is a count and which take no dimension at all: a math
+    /// function in one of them has to come out a number (measured for 'opacity' and 'flex-grow',
+    /// whose <c>calc(0.5 + 1px)</c> and <c>calc(1 + 1px)</c> both fall).</summary>
+    private static readonly string[] MathNumberProperties =
+    { "opacity", "flex-grow", "flex-shrink", "order", "z-index", "aspect-ratio" };
+
+    /// <summary>The properties that take a count, a length or a share of one, so a math function of
+    /// any of the three types is a value of theirs (measured: <c>line-height</c> takes
+    /// <c>calc(1 + 1)</c> and <c>calc(2%)</c> alike, and <c>tab-size</c> takes a number and a length
+    /// because the property itself is spelled both ways).</summary>
+    private static readonly string[] MathNumberOrLengthProperties =
+    { "line-height", "tab-size", "columns" };
+
+    /// <summary>Whether a math function in this value is a value of this property at all. The
+    /// expression's own type rules come first — a number added to a length is no length whatever the
+    /// property is — and then the type has to be one the property measures: <c>width: calc(1)</c> is
+    /// a well-formed expression whose answer is a count, and a count is not a width
+    /// (CSS Values 4 §10.3, measured through <c>supports()</c>).</summary>
+    private static bool MathTypeRejects(string propertyName, string value)
+    {
+        if (value.IndexOf('(') < 0) return false;
+        var types = MathValueTypes(propertyName);
+        foreach (var call in CssMathValue.MathCalls(value))
+        {
+            if (!CssMathValue.WellTyped(call.Name + "(" + call.Argument + ")", out var category))
+                return true;
+            if (category == null || types == null) continue;
+            bool matches = false;
+            foreach (var type in types)
+                if (type == category) { matches = true; break; }
+            if (!matches) return true;
+        }
+        return false;
+    }
+
+    /// <summary>The value types a math function may resolve to for this property, or null when this
+    /// engine cannot say — which leaves the expression's own type rules to decide and takes nothing
+    /// away from a declaration it accepts today.</summary>
+    private static string[]? MathValueTypes(string property)
+    {
+        if (Matches(MathTimeProperties, property)) return new[] { "time" };
+        if (Matches(MathAngleProperties, property)) return new[] { "angle" };
+        if (Matches(MathTrackProperties, property))
+            return new[] { "length", "percentage", "flex" };
+        if (Matches(MathNumberProperties, property)) return new[] { "number" };
+        if (Matches(MathNumberOrLengthProperties, property))
+            return new[] { "number", "length", "percentage" };
+        // A length-valued property measures a length, and a share of one is a length as good as any
+        // other (CSS Values 3 §6.5) — but a count is not.
+        if (Resolver.CssPropertyTraits.TakesLength(property))
+            return new[] { "length", "percentage" };
+        return null;
+    }
+
+    private static bool Matches(string[] names, string property)
+    {
+        foreach (var name in names)
+            if (name.Equals(property, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     /// <summary>The legacy gate for the parser, which has the authored text in hand: a number this
@@ -387,10 +492,25 @@ public static class CssValueGrammar
             Acrux.Core.Css.CssValueText.CanonicalizeTextIndent(text, "text-indent") != null,
         CssPropertyId.AspectRatio => static text =>
             Acrux.Core.Css.CssValueText.CanonicalizeAspectRatio(text) != null,
+        // The individual 'rotate' property (CSS Transforms 2 §4.2) is an angle or an axis and an
+        // angle — 'none', '45deg', 'x 0.5turn', '1 0 0 90deg' — and an angle is never a bare number.
+        // A math function is left to the type check below (which already prices it as an angle), so
+        // only a plain value is judged here; the same reader the computed value uses decides it, which
+        // is why 'rotate: 45' is refused on every surface (measured: the echo reads back empty).
+        CssPropertyId.Rotate => static text =>
+            text.IndexOf('(') >= 0 || Acrux.Core.Css.IndividualTransforms.CanonicalRotate(text) != null,
         // CSS Lists 3 §4.3/§4.4: a counter is a name plus an integer, and the integer is written
         // even when the page left it out. 'none' is a value of the whole property, never of one
         // counter, and 'reverse' is simply a name (both measured).
         CssPropertyId.CounterReset or CssPropertyId.CounterSet => IsCounterList,
+        // CSS Transitions 1 §4.1 / CSS Animations 1 §3: a '<time>' is a number carrying the unit 's'
+        // or 'ms', and the list is one time per item. No other unit spells a time — 'min' is a length
+        // unit and the word round() takes, but it is never a duration, so the reference engine drops
+        // 'transition-duration: 2min' entirely (measured: the echo, CSS.supports and the declaration
+        // form all three refuse it).
+        CssPropertyId.TransitionDuration or CssPropertyId.TransitionDelay
+            or CssPropertyId.AnimationDuration or CssPropertyId.AnimationDelay
+            => IsTimeList,
         // CSS Text Decoration 4 §2: any number of the four decoration lines (each at most once), at
         // most one style, at most one thickness and at most one colour, and the three lines that
         // stand alone ('none', 'spelling-error', 'grammar-error') stand alone. Every refusal named in
@@ -537,14 +657,11 @@ public static class CssValueGrammar
         // in any order (measured: 'box-shadow: inset 0 0 2px red' and 'box-shadow: 0 0 2px #F00'
         // both stand, 'box-shadow: 2px dashed rgb(1, 2, 3)' does not).
         CssPropertyId.BoxShadow => IsBoxShadowValue,
-        // CSS Motion Path 1 §3: a path, a ray, an image, one of the basic shapes, or none, with the
-        // reference box it resolves against written in front. A function this grammar has no reading
-        // for is no path (measured: 'offset-path: bogus("M 0 0")' is not a declaration while
-        // 'offset-path: path("M 0 0")' is), which is the difference between naming a shape and
-        // naming anything at all.
-        CssPropertyId.OffsetPath => IsOffsetPathValue,
-        // CSS Values 4 §11.2 as the reference engine ships it: the two keywords, either alone or
-        // together. A third spelling is nothing ('interpolate-size: numeric-keywords', measured).
+        // CSS Text Decoration 4 §2.0.1: the three keywords of the set, and nothing else. 'space',
+        // 'leading' and 'trailing' are the values of the sibling property's tailoring grammar and
+        // are refused here (all four measured).
+        CssPropertyId.TextDecorationSkipInk
+            => static text => IsOneOf(text, "auto", "none", "all"),
         // The keyword family the engine declares without acting on. Each arm is the same matcher
         // the applier canonicalises with, so a value that would be stored is a value the grammar
         // accepts and the two cannot disagree about what a page wrote.
@@ -693,23 +810,6 @@ public static class CssValueGrammar
             return false;
         }
         return width <= 4 && style <= 1 && colour <= 1;
-    }
-
-    /// <summary>The motion path's own set of shapes. The box keyword is a prefix, not the path, so
-    /// it is taken off before the shape is judged and one shape has to be left behind it.</summary>
-    private static bool IsOffsetPathValue(string text)
-    {
-        if (IsOneOf(text, "none", "normal")) return true;
-        var parts = SplitComponents(text);
-        if (parts.Count == 0) return false;
-        if (parts.Count > 1 && IsOneOf(parts[0], "content-box", "border-box", "padding-box",
-                "fill-box", "stroke-box", "view-box"))
-            parts = parts.Skip(1).ToList();
-        if (parts.Count != 1) return false;
-        string shape = parts[0];
-        foreach (var name in new[] { "path", "ray", "circle", "ellipse", "inset", "rect", "xywh", "url" })
-            if (shape.StartsWith(name + "(", StringComparison.OrdinalIgnoreCase)) return true;
-        return false;
     }
 
     /// <summary>A family list: one name per comma, each name a quoted string or the identifiers
@@ -912,6 +1012,10 @@ public static class CssValueGrammar
         // An operand is a number, a dimension, a percentage, a nested function or a product of
         // them ('2 * 3px'); a leading sign belongs to the number itself.
         if (text.Length == 0) return false;
+        // A group in its own parentheses is an expression of its own, operators and all, which is
+        // what makes 'calc((10px + 2px))' and 'calc(2 * (1px + 2px))' values (measured, both).
+        if (text[0] == '(' && MatchingClose(text, 0) == text.Length - 1)
+            return IsExpression(text[1..^1], isOperand);
         if (text.StartsWith("(", StringComparison.Ordinal) && text.EndsWith(")"))
             text = text[1..^1].Trim();
         // Split on the spaces that are outside every parenthesis: a nested 'calc(100px - 50px)' is
@@ -925,6 +1029,21 @@ public static class CssValueGrammar
             any = true;
         }
         return any;
+    }
+
+    /// <summary>The index of the parenthesis that closes the one at <paramref name="open"/>, or -1
+    /// when nothing does.</summary>
+    private static int MatchingClose(string text, int open)
+    {
+        int depth = 0;
+        for (int i = open; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '"' || c == '\'') { i = SkipString(text, i); continue; }
+            if (c == '(') depth++;
+            else if (c == ')') { depth--; if (depth == 0) return i; }
+        }
+        return -1;
     }
 
     private static List<string> SplitOutsideParentheses(string text)
@@ -950,6 +1069,8 @@ public static class CssValueGrammar
     private static bool IsOperandOrNestedOne(string token, Func<string, bool> isOperand)
     {
         if (isOperand(token)) return true;
+        // A group inside a product is read as the operand it is.
+        if (token.Length > 1 && token[0] == '(') return IsOperandOrNested(token, isOperand);
         int open = token.IndexOf('(');
         if (open > 0 && token.EndsWith(")"))
         {
@@ -1032,8 +1153,17 @@ public static class CssValueGrammar
                 if (part.EndsWith(")"))
                 {
                     int open = part.IndexOf('(');
-                    if (open <= 0 || !TimingFunctions.Contains(part[..open].ToLowerInvariant())) return false;
-                    continue;
+                    if (open <= 0) return false;
+                    var name = part[..open].ToLowerInvariant();
+                    if (TimingFunctions.Contains(name)) continue;
+                    // A duration may be written as a math function, and the reference engine reads it
+                    // when the expression comes out a time: 'transition: calc(1s + 1ms) ease' stands
+                    // while 'transition: calc(1px) ease' leaves the whole shorthand out
+                    // (measured, both).
+                    if (MathFunctions.Contains(name)
+                        && CssMathValue.WellTyped(part, out var category)
+                        && (category == "time" || category == null)) continue;
+                    return false;
                 }
                 if (IsTime(part) || IsOneOf(part, "none", "auto")) continue;
                 if (TimingKeywords.Contains(part.ToLowerInvariant())) continue;
@@ -1053,6 +1183,28 @@ public static class CssValueGrammar
 
     private static readonly HashSet<string> TimingKeywords = new(StringComparer.OrdinalIgnoreCase)
     { "linear", "ease", "ease-in", "ease-out", "ease-in-out", "step-start", "step-end" };
+
+    /// <summary>A &lt;time&gt;# — every comma-separated item a number with the unit 's' or 'ms', or one
+    /// math function that resolves to a time. The unit set is closed and small: '2min' is a perfectly
+    /// good CSS dimension that is not a time, and the reference engine leaves the declaration out
+    /// (measured: 'transition-duration: 2min' reads back empty from every surface).</summary>
+    private static bool IsTimeList(string text)
+    {
+        foreach (var item in SplitTopLevel(text))
+        {
+            if (item.Length == 0) return false;
+            if (item.EndsWith(")"))
+            {
+                int open = item.IndexOf('(');
+                if (open <= 0) return false;
+                if (!MathFunctions.Contains(item[..open])) return false;
+                if (CssMathValue.WellTyped(item, out var category) && category != "time") return false;
+                continue;
+            }
+            if (!IsTime(item)) return false;
+        }
+        return true;
+    }
 
     private static bool IsTime(string token)
     {

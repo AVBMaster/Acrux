@@ -141,6 +141,14 @@ internal sealed class ImagePainter
             return free * 0.5f;
         if (position is PercentLength percent)
             return free * percent.Value;
+        // A calc() that mixes a percentage with a length is priced against the free space
+        // (the box minus the image, CSS Images 3 §5.5) — plain ToPixels leaves an unpriced
+        // percentage unsolved, which would silently fall back to centering.
+        if (position is MathLength math)
+        {
+            float mpx = math.ToPixelsAgainstPercentageBase(free, fontSize, 0f, 0f);
+            return float.IsNaN(mpx) ? free * 0.5f : mpx;
+        }
         float px = position.ToPixels(fontSize, fontSize, 0f, 0f);
         return float.IsNaN(px) ? free * 0.5f : px;
     }

@@ -295,7 +295,9 @@ public class OutOfFlowLayoutPart
     private static float ResolveInset(Length length, float basis, float fontSize) =>
         length is PercentLength pct
             ? pct.Value * basis
-            : length.ToPixels(basis, fontSize, basis, basis);
+            : length is MathLength math
+                ? math.ToPixelsAgainstPercentageBase(basis, fontSize, basis, basis)
+                : length.ToPixels(basis, fontSize, basis, basis);
 
     private static ComputedStyle? GetStyleOf(LayoutBox box) => box.Dimensions?.Style ?? null;
     private static Element? GetElementOf(LayoutBox box) => box.Dimensions?.Element ?? null;

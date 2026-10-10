@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 F lengths + path print</title>
+<style>
+#s1 { offset-path: path("M 1 2 L 3 4"); }
+#s2 { offset-path: path("m 1 2 l 3 4"); }
+#s3 { offset-path: path("M 1.5 2e1 h 3"); }
+#s4 { offset-distance: calc(10px + 2px); }
+#s5 { offset-anchor: calc(50% + 10px) top; }
+</style></head>
+<body><div id="s1">1</div><div id="s2">2</div><div id="s3">3</div>
+<div id="s4">4</div><div id="s5">5</div><div id="t">T</div>
+<script>
+var CASES = [
+  ["offset-distance", "calc(10px + 2px)"],
+  ["offset-distance", "2em"],
+  ["offset-distance", "50%"],
+  ["offset-distance", "1e2px"],
+  ["offset-distance", "-5px"],
+  ["offset-distance", "calc(50% + 10px)"],
+  ["offset-distance", "0"],
+  ["offset-anchor", "calc(50% + 10px) top"],
+  ["offset-anchor", "left"],
+  ["offset-anchor", "10px 20px"],
+  ["offset-anchor", "50%"],
+  ["offset-anchor", "bottom right"],
+  ["offset-anchor", "right 50%"],
+  ["offset-anchor", "auto auto"],
+  ["offset-position", "10px 20px"],
+  ["offset-position", "center"],
+  ["offset-position", "left 50%"],
+  ["offset-position", "auto 10px"],
+  ["offset-path", "path(\"M 1 2 L 3 4\")"],
+  ["offset-path", "path(\"m 1 2 l 3 4\")"],
+  ["offset-path", "path(\"M 1.5 2e1\")"],
+  ["offset-path", "path(\"M 1 2\", \"x\")"],
+  ["offset-path", "path(\"M 0 0\") content-box"],
+  ["offset-path", "view-box path(\"M 0 0\")"],
+  ["width", "calc(10px + 2px)"],
+  ["top", "calc(50% + 10px)"]
+];
+var t = document.getElementById("t");
+function row(i) {
+  var name = CASES[i][0], value = CASES[i][1];
+  t.setAttribute("style", "");
+  t.style.setProperty(name, value);
+  return i + "|" + name + "|" + value + "|S=" + t.style.getPropertyValue(name) +
+         "|C=" + getComputedStyle(t).getPropertyValue(name);
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, CASES.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+function sheet(id, name) {
+  var el = document.getElementById(id);
+  return id + " " + name + " C=" + getComputedStyle(el).getPropertyValue(name);
+}
+window.sheetRows = function () {
+  return [sheet("s1", "offset-path"), sheet("s2", "offset-path"), sheet("s3", "offset-path"),
+          sheet("s4", "offset-distance"), sheet("s5", "offset-anchor")].join("\n");
+};
+for (var q = 0; q < CASES.length; q++) console.log(row(q));
+window.sheetRows().split("\n").forEach(function (x) { console.log("SHEET " + x); });
+</script>
+</body></html>

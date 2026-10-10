@@ -1719,10 +1719,16 @@ public class LineBreaker
         if (!string.IsNullOrEmpty(_lineStyle.TextIndentMath))
         {
             // A deferred calc()/min()/max()/clamp(): resolve now that the
-            // containing block inline size is known (percentages use it as base).
+            // containing block inline size is known. That size is a box, so a
+            // percentage in the expression is a share of it and must be priced
+            // against it (MathLength.ToPixels leaves an unpriced percentage
+            // unsolved, which used to drop the whole indent to zero).
             using var _fu = Dom.FontUnitContext.Use(_lineStyle);
-            float mathPx = Length.Parse(_lineStyle.TextIndentMath!)
-                .ToPixels(_inlineBaseWidth, _rootFontSize, _viewportWidth, _viewportHeight);
+            var mathLength = Length.Parse(_lineStyle.TextIndentMath!);
+            float mathPx = mathLength is MathLength mathIndent
+                ? mathIndent.ToPixelsAgainstPercentageBase(_inlineBaseWidth, _rootFontSize,
+                    _viewportWidth, _viewportHeight)
+                : mathLength.ToPixels(_inlineBaseWidth, _rootFontSize, _viewportWidth, _viewportHeight);
             if (!float.IsNaN(mathPx)) indentLength += mathPx;
         }
         // 'each-line' extends the "first line" to the lines that follow a forced

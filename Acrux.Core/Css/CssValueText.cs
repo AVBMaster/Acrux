@@ -231,6 +231,7 @@ public static class CssValueText
                 result = CanonicalizeTextDecoration(result, property);
                 result = CanonicalizeColumnRule(result, property);
                 result = CanonicalizeListStyle(result, property);
+                result = CanonicalizeOffsetShorthand(result, property);
                 // The properties that only have to be said correctly — scroll snapping, the SVG
                 // keyword family, the rest of the font-variant group — print what their one table
                 // says, so a sheet and a CSSOM write cannot disagree about the order of a keyword
@@ -239,7 +240,10 @@ public static class CssValueText
                     result = echoed;
             }
         }
-        return result;
+        // Last of all, because it reads the components the passes above have just put in their
+        // places and prints each math function among them as the single expression the engine
+        // evaluates: 'inset(calc(10px + 2px))' and 'calc(10px + 2px) auto' both come out folded.
+        return CssMathValue.Fold(result);
     }
 
     /// <summary>The value as the reference engine prints one of its legacy <c>-webkit-</c>
@@ -654,28 +658,41 @@ public static class CssValueText
             auto = "auto";
             trimmed = rest;
         }
-        var sides = SplitTopLevel(trimmed, '/').ToList();
+        var sides = SplitRatioSides(trimmed);
         string a, b;
         if (sides.Count == 1)
         {
-            if (!double.TryParse(sides[0].Trim(), System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var single) || single <= 0)
-                return null;
+            if (!PositiveRatioSide(sides[0].Trim())) return null;
             a = sides[0].Trim(); b = "1";
         }
         else
         {
             if (sides.Count != 2) return null;
             a = sides[0].Trim(); b = sides[1].Trim();
-            if (!PositiveNumber(a) || !PositiveNumber(b)) return null;
+            if (!PositiveRatioSide(a) || !PositiveRatioSide(b)) return null;
         }
         var ratio = a + " / " + b;
         return auto == null ? ratio : auto + " " + ratio;
     }
 
-    private static bool PositiveNumber(string text) =>
-        double.TryParse(text, System.Globalization.NumberStyles.Float,
+    /// <summary>The sides of a ratio, split at the slash that stands outside every function — the one
+    /// inside 'calc(1 / 2)' belongs to the expression and does not make two sides of it.</summary>
+    internal static List<string> SplitRatioSides(string text) => SplitTopLevel(text, '/').ToList();
+
+    private static bool PositiveNumber(string text) =>        double.TryParse(text, System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var value) && value > 0;
+
+    /// <summary>Whether one side of a ratio is a number the ratio can carry: a positive plain number,
+    /// or a math expression that resolves to a count. The reference engine reads
+    /// 'aspect-ratio: calc(1 + 1)' as the ratio it prints 'calc(2) / 1' and leaves
+    /// 'aspect-ratio: calc(1px)' out of the cascade altogether (measured, both) — a length is no
+    /// count whatever number it is written with.</summary>
+    private static bool PositiveRatioSide(string text)
+    {
+        if (text.IndexOf('(') < 0) return PositiveNumber(text);
+        return CssMathValue.WellTyped(text, out var category)
+            && (category == "number" || category == null);
+    }
 
     /// <summary>
     /// Print <c>counter-reset</c> and <c>counter-set</c>: every counter says its integer, whether
@@ -755,6 +772,28 @@ public static class CssValueText
         }
         if (parts.Count == 0) parts.Add("medium");
         return string.Join(" ", parts);
+    }
+
+    /// <summary>The five parts of the <c>offset</c> shorthand, each said by the longhand that owns
+    /// it and each dropped when it still says that longhand's initial — until nothing is left, which
+    /// the shorthand says as its own initial <c>normal</c> (CSSOM §5.3.1; measured:
+    /// <c>offset: content-box path("M 0 0") 50% auto</c> reads
+    /// <c>path("M 0 0") content-box 50%</c> and a value that sets nothing reads <c>normal</c>).</summary>
+    private static string CanonicalizeOffsetShorthand(string text, string property)
+    {
+        if (!ShorthandExpander.IsOffsetShorthandName(property)) return text;
+        var expanded = ShorthandExpander.ExpandProperty(property, text);
+        if (expanded.Count == 0) return text;
+        var parts = new List<string>();
+        if (expanded.TryGetValue("offset-position", out var position) && position != "normal")
+            parts.Add(position);
+        if (expanded.TryGetValue("offset-path", out var path) && path != "none")
+            parts.Add(path);
+        if (expanded.TryGetValue("offset-distance", out var distance) && distance != "0px")
+            parts.Add(distance);
+        if (expanded.TryGetValue("offset-rotate", out var rotate) && rotate != "auto")
+            parts.Add(rotate);
+        return parts.Count == 0 ? "normal" : string.Join(" ", parts);
     }
 
     /// <summary>
@@ -859,16 +898,12 @@ public static class CssValueText
         return CanonicalNumber(value) + unit;
     }
 
-    /// <summary>A number printed shortest-round-trip and never in exponent notation: the form the
-    /// reference engine writes into a specified value.</summary>
-    private static string CanonicalNumber(double value)
-    {
-        if (value == 0) value = 0;   // folds the negative zero that '-0px' carries
-        var text = value.ToString("R", CultureInfo.InvariantCulture);
-        if (text.Contains('E') || text.Contains('e'))
-            text = value.ToString("0.##########", CultureInfo.InvariantCulture);
-        return text;
-    }
+    /// <summary>A number printed the way the reference engine prints one: to six significant
+    /// digits, in exponent notation when it does not fit (measured: '0.123456789px' reads
+    /// '0.123457px', '33.333333px' reads '33.3333px', '1234567px' reads '1.23457e+06px' and a
+    /// '2.123456789' line-height reads '2.12346'). The engine stores what the number means, so
+    /// '1.50px' is '1.5px' and a unit is a keyword with the one spelling.</summary>
+    private static string CanonicalNumber(double value) => CssMathValue.Number(value);
 
     /// <summary>Rewrite each colour a colour-valued property carries. A named colour prints as its
     /// own lower-case name; anything else — a hex, an <c>hsl()</c>, a modern <c>rgb()</c> written
@@ -1026,7 +1061,7 @@ public static class CssValueText
             : value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + "%";
 
     private static readonly string[] OpaqueArgumentFunctions =
-        { "url", "src", "local", "format", "domain", "regexp", "prefix", "image-set" };
+        { "url", "src", "local", "format", "domain", "regexp", "prefix", "image-set", "path" };
 
     /// <summary>Print the words a property's grammar owns in their canonical spelling. The engine
     /// stores the value it parsed rather than the text it read, so a keyword comes back in lower

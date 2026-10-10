@@ -168,6 +168,11 @@ public abstract class Element : Node
     }
 
     public Dictionary<string, string> Style { get; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The text of the 'style' attribute <see cref="Style"/> was last mirrored from. It
+    /// is kept on the element rather than on the CSSOM object that wrote it so that every reader —
+    /// the block a script touches and the cascade that computes the styles — agrees about which
+    /// block the map stands for (<see cref="Acrux.Core.Css.InlineStyleBlock"/>).</summary>
+    internal string? StyleMirrorText;
     public Dictionary<string, string>? BeforeStyles { get; set; }
     public Dictionary<string, string>? AfterStyles { get; set; }
     /// <summary>Collected ::marker declarations (color/font of the generated marker).</summary>

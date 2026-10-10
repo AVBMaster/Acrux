@@ -412,7 +412,13 @@ internal sealed class MaskPainter
         if (token.EndsWith('%') && float.TryParse(token[..^1], out var pct))
             return (extent - imageSize) * pct / 100f;
         var length = Length.Parse(token);
-        return length != null ? length.ToPixels(extent, extent, extent, extent) : 0;
+        if (length == null) return 0;
+        // A calc() mixing a percentage with a length is priced against the free space the
+        // plain-percentage branch above uses (extent minus the image); plain ToPixels leaves
+        // an unpriced percentage unsolved.
+        if (length is MathLength math)
+            return math.ToPixelsAgainstPercentageBase(extent - imageSize, extent, extent, extent);
+        return length.ToPixels(extent, extent, extent, extent);
     }
 
     /// <summary>Index just past the image function of a layer, honouring nesting.</summary>

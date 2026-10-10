@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 R rotate angle computed values</title></head>
+<body><div id="d"></div>
+<script>
+var CASES = [
+  "45deg","1grad","0.5turn","1rad","100grad","1.5rad","0.1rad","2rad","3.5grad",
+  "x 45deg","x 1rad","x 0.5turn","z 90deg","y -45deg",
+  "1 1 0 100grad","1 0 0 45deg","0 0 1 0.5turn",
+  "calc(1turn)","calc(45deg + 1turn)","calc(100grad + 10grad)","calc(0.5turn)","calc(1rad)",
+  "calc(90deg * 2)","none","45"
+];
+var d = document.getElementById("d");
+function row(i) {
+  var v = CASES[i];
+  d.setAttribute("style", "");
+  d.style.setProperty("rotate", v);
+  var cs = getComputedStyle(d);
+  return i + "|rotate|" + v
+       + "|S=" + (d.style.getPropertyValue("rotate") ? "Y" : "")
+       + "|C=" + cs.getPropertyValue("rotate");
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, CASES.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+window.N = CASES.length;
+for (var k = 0; k < CASES.length; k++) console.log(row(k));
+</script>
+</body></html>

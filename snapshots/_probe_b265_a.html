@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>b265 probe A</title>
+<style>
+#p1 { offset-path: path("M 0 0"); }
+#p2 { offset-path: content-box; }
+#p3 { offset-path: none; }
+#p4 { text-decoration-skip-ink: all; }
+#p5 { text-decoration-skip-ink: none; }
+#p6 { text-decoration-skip-ink: auto; }
+#p7 { text-decoration-line: spelling-error; }
+#p8 { text-decoration-line: grammar-error; }
+#p9 { text-decoration-line: grammar-error spelling-error underline; }
+</style>
+</head>
+<body>
+<div id="p1">A</div><div id="p2">B</div><div id="p3">C</div>
+<div id="p4" style="text-decoration: underline">D</div>
+<div id="p5" style="text-decoration: underline">E</div>
+<div id="p6" style="text-decoration: underline">F</div>
+<div id="p7">Ggg ggg</div><div id="p8">Hhh hhh</div><div id="p9">Iii iii</div>
+<div id="w" style="offset-path: bogus">W</div>
+<script>
+function r(k, v) { console.log("ROW " + k + " = " + JSON.stringify(v)); }
+function cs(id, prop, pseudo) {
+  var el = document.getElementById(id);
+  return getComputedStyle(el, pseudo || null).getPropertyValue(prop);
+}
+r("loc.href", window.location.href);
+r("loc.pathname", window.location.pathname);
+r("doc.url", document.URL);
+r("doc.documentUri", document.documentURI);
+r("loc.protocol", window.location.protocol);
+r("p1.computed", cs("p1", "offset-path"));
+r("p2.computed", cs("p2", "offset-path"));
+r("p3.computed", cs("p3", "offset-path"));
+r("p1.specified", document.getElementById("p1").style ? "(sheet)" : "");
+r("p4", cs("p4", "text-decoration-skip-ink"));
+r("p5", cs("p5", "text-decoration-skip-ink"));
+r("p6", cs("p6", "text-decoration-skip-ink"));
+r("p7", cs("p7", "text-decoration-line"));
+r("p8", cs("p8", "text-decoration-line"));
+r("p9", cs("p9", "text-decoration-line"));
+r("p9.color", cs("p9", "text-decoration-color"));
+var probe = document.createElement("div");
+document.body.appendChild(probe);
+function setS(v) { probe.style.textDecorationSkipInk = v; return cs0("text-decoration-skip-ink"); }
+function cs0(p) { return getComputedStyle(probe).getPropertyValue(p); }
+r("ink.all", setS("all"));
+r("ink.auto", setS("auto"));
+r("ink.none", setS("none"));
+r("ink.bogus", setS("bogus"));
+function setP(v) { probe.style.offsetPath = v; return cs0("offset-path"); }
+r("path.none", setP("none"));
+r("path.content", setP("content-box"));
+r("path.fill", setP("fill-box"));
+r("path.stroke", setP("stroke-box"));
+r("path.border", setP("view-box"));
+r("path.bogus", setP("bogus"));
+var st = document.createElement("style");
+st.textContent = "#p1 { offset-distance: 42%; }";
+document.head.appendChild(st);
+r("p1.dist", cs("p1", "offset-distance"));
+var names = getComputedStyle(document.body);
+r("len", names.length);
+r("item0", names.item(0));
+r("itemLast", names.item(names.length - 1));
+r("bogus.offpath", cs("w", "offset-path"));
+</script>
+</body>
+</html>

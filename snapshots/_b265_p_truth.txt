@@ -1,0 +1,103 @@
+Reference truth for snapshots/_probe_b265_p.html — var() substitution order, invalid-at-computed-value
+time (IACVT), and the precision of a computed number.
+Harvested 2026-10-10 from the reference engine (Chromium 150 webview) through window.harvest(a, b)
+and window.sheets(a, b), in the row format
+  i|property|authored|S=style echo non-empty|P=CSS.supports(name, value)|R=CSS.supports("name: value")
+   |V=getPropertyValue (specified)|C=getComputedStyle (computed)
+and the sheet format
+  sheet|id|fs=|lh=|color=|op=|margin=top right bottom left|blw=|tdur=|--x|--e|--a|--chain
+
+The window was 1200x900 at 1 dppx? No — the reference window is the webview's own (used width
+367px), so every C= that is a USED width is window-dependent and the comparator must skip it: rows
+16, 17, 18 (refused width → used 367px), row 27 (calc(100% / 3) of that width) and rows 29-31 where
+a percentage/absolute value resolves against it (recorded here so the ARITHMETIC can be read off the
+specified echo instead).
+
+What the reference answered:
+* Substitution runs BEFORE the property is computed, and before a shorthand is expanded: s8
+  ('--m: 4px 8px; margin: var(--m)') is '4px 8px 4px 8px' and s9 ('--t: 2s; transition: var(--t)
+  ease') is a duration of 2s. A custom property must therefore be on the element's computed style
+  before font-size, line-height or a shorthand reads it — s1 (20px), s2 (60px), s3 (18.6667px
+  through a chain) and s4 (25px, declared AFTER the declaration that uses it) all say so.
+* A var() nothing answers is IACVT, and IACVT is 'as if never written': the initial value for a
+  non-inherited property (rows 0, 1, 6, 19, 20, 21, 22) and the INHERITED value for an inherited one
+  (row 8 is black because nothing above it says otherwise; s5's child takes its parent's green).
+* The three other ways to be unanswered are all IACVT the same way: an empty value ('--e: ;', rows
+  2, 7, 17, and s6), a cycle ('--a: var(--b); --b: var(--a)' — rows 3, 11, 12), and a substitution
+  that is no value of the property ('--x: 20px' given to opacity, row 5, and --sp: "12px" given to
+  font-size, row 26 → the inherited 16px). A fallback, by contrast, answers: row 4
+  ('var(--undef, 0.5)') is 0.5.
+* A fallback that is never reached is not a problem: row 9 ('var(--red, var(--undef))' with --red
+  defined) is green, while row 10 (the same the other way round) is green too because --red answers
+  the fallback. Row 13 ('var(--a, var(--undef))' with --a a cycle) refuses.
+* A custom property's own computed value reads back SUBSTITUTED (s3: --a is '14pt', the value of
+  --b, not 'var(--b)'), and undefined or guaranteed-invalid ones read back as the empty string.
+* Numbers are printed to six significant digits, ties to even: 14pt is 18.6562px (18.65625), the
+  chain to 14pt is 18.6667px, 100px/7 is 14.2857px, 100%/3 is 33.3333% of the echo, and 1px*0.1 is
+  0.09375px (exact, six digits and no more).
+* 'border-width' computes 0px while 'border-style' is none (rows 19, 20, and every sheet row's
+  blw=0px), and the length the page wrote the moment a style arrives (s10: 3px).
+0|opacity|var(--undef)|S=Y|P=Y|R=Y|V=var(--undef)|C=1
+1|opacity|calc(var(--undef))|S=Y|P=Y|R=Y|V=calc(var(--undef))|C=1
+2|opacity|var(--e)|S=Y|P=Y|R=Y|V=var(--e)|C=1
+3|opacity|var(--a)|S=Y|P=Y|R=Y|V=var(--a)|C=1
+4|opacity|var(--undef, 0.5)|S=Y|P=Y|R=Y|V=var(--undef, 0.5)|C=0.5
+5|opacity|var(--x)|S=Y|P=Y|R=Y|V=var(--x)|C=1
+6|letter-spacing|var(--undef)|S=Y|P=Y|R=Y|V=var(--undef)|C=normal
+7|letter-spacing|var(--e)|S=Y|P=Y|R=Y|V=var(--e)|C=normal
+8|color|var(--undef)|S=Y|P=Y|R=Y|V=var(--undef)|C=rgb(0, 0, 0)
+9|color|var(--red, var(--undef))|S=Y|P=Y|R=Y|V=var(--red, var(--undef))|C=rgb(0, 128, 0)
+10|color|var(--undef, var(--red))|S=Y|P=Y|R=Y|V=var(--undef, var(--red))|C=rgb(0, 128, 0)
+11|color|var(--a)|S=Y|P=Y|R=Y|V=var(--a)|C=rgb(0, 0, 0)
+12|color|var(--b)|S=Y|P=Y|R=Y|V=var(--b)|C=rgb(0, 0, 0)
+13|margin-left|var(--a, var(--undef))|S=Y|P=Y|R=Y|V=var(--a, var(--undef))|C=0px
+14|margin-left|var(--x)|S=Y|P=Y|R=Y|V=var(--x)|C=20px
+15|width|var(--x)|S=Y|P=Y|R=Y|V=var(--x)|C=20px
+16|width|calc(1px * var(--x))|S=Y|P=Y|R=Y|V=calc(1px * var(--x))|C=367px
+17|width|var(--e)|S=Y|P=Y|R=Y|V=var(--e)|C=367px
+18|width|calc(10px + var(--undef))|S=Y|P=Y|R=Y|V=calc(10px + var(--undef))|C=367px
+19|flex-basis|var(--undef)|S=Y|P=Y|R=Y|V=var(--undef)|C=auto
+20|border-width|var(--undef)|S=Y|P=Y|R=Y|V=var(--undef)|C=0px
+21|transform|translateX(var(--undef))|S=Y|P=Y|R=Y|V=translateX(var(--undef))|C=none
+22|rotate|var(--undef)|S=Y|P=Y|R=Y|V=var(--undef)|C=none
+23|line-height|var(--x)|S=Y|P=Y|R=Y|V=var(--x)|C=20px
+24|font-size|var(--x)|S=Y|P=Y|R=Y|V=var(--x)|C=20px
+25|font-size|var(--chain)|S=Y|P=Y|R=Y|V=var(--chain)|C=18.6667px
+26|font-size|var(--sp)|S=Y|P=Y|R=Y|V=var(--sp)|C=16px
+27|width|calc(100% / 3)|S=Y|P=Y|R=Y|V=calc(33.3333%)|C=122.328px
+28|margin-top|calc(1em + 1px)|S=Y|P=Y|R=Y|V=calc(1em + 1px)|C=17px
+29|width|14pt|S=Y|P=Y|R=Y|V=14pt|C=18.6562px
+30|width|calc(1px * 0.1)|S=Y|P=Y|R=Y|V=calc(0.1px)|C=0.09375px
+31|padding-top|calc(100px / 7)|S=Y|P=Y|R=Y|V=calc(14.2857px)|C=14.2857px
+sheet|s1|fs=20px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=20px|e=|a=|chain=
+sheet|s2|fs=30px|lh=60px|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s3|fs=18.6667px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=14pt|chain=
+sheet|s4|fs=25px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s5|fs=16px|lh=normal|color=rgb(0, 128, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=|childColor=rgb(0, 128, 0)
+sheet|s6|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s7|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s8|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=4px 8px 4px 8px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s9|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=2s|x=|e=|a=|chain=
+sheet|s10|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=3px|tdur=0s|x=|e=|a=|chain=
+sheet|s11|fs=12px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s12|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=2px|tdur=0s|x=|e=|a=|chain=
+sheet|s13|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s14|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s15|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s16|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s17|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=2s|x=|e=|a=|chain=
+sheet|s18|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s19|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s20|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s21|fs=16px|lh=normal|color=rgb(0, 0, 0)|op=1|margin=0px 0px 0px 0px|blw=0px|tdur=0s|x=|e=|a=|chain=
+sheet|s11h|2|font-size=12px|font-family=serif
+sheet|s12h|3|border-left-width=2px|border-left-style=solid|border-left-color=rgb(255, 0, 0)
+sheet|s13h|3|flex-grow=1|flex-shrink=1|flex-basis=auto
+sheet|s14h|4|padding-top=4px|padding-right=6px|padding-bottom=4px|padding-left=6px
+sheet|s15h|3|outline-width=3px|outline-style=dashed|outline-color=rgb(0, 0, 255)
+sheet|s16h|1|box-shadow=rgb(255, 0, 0) 1px 2px 3px 0px
+sheet|s17h|4|transition-property=width|transition-duration=2s|transition-timing-function=ease|transition-delay=1s
+sheet|s18h|6|animation-name=slide|animation-duration=3s|animation-timing-function=linear|animation-delay=1s|animation-iteration-count=2|animation-direction=reverse
+sheet|s19h|2|row-gap=4px|column-gap=8px
+sheet|s20h|1|transform=matrix(1, 0, 0, 1, 10, 0)
+sheet|s21h|1|word-break=break-all

@@ -41,9 +41,10 @@ public static class ComputedValueSerializer
         if (Acrux.Core.Css.Resolver.EchoedProperties.Find(property) is { } echo)
         {
             var written = style.GetEchoed(echo.Name) ?? echo.Initial;
-            // Two of the entries say something in the computed value that the specified value does
-            // not: 'math-depth' answers the integer and 'offset-rotate' expands 'reverse'.
-            return echo.ComputedText is { } compute ? compute(written) : written;
+            // The entries that say something in the computed value that the specified value does
+            // not answer it themselves: 'math-depth' the integer, 'offset-rotate' the rotation,
+            // a length or position the box it is measured in.
+            return echo.ComputedText is { } compute ? compute(written, style) : written;
         }
         var value = ValueOf(style, property);
         if (value != null) return value;
@@ -128,10 +129,19 @@ public static class ComputedValueSerializer
             case "bottom": return LengthText(style, style.Bottom);
             case "left": return LengthText(style, style.Left);
 
-            case "margin-top": return LengthText(style, style.MarginTop);
-            case "margin-right": return LengthText(style, style.MarginRight);
-            case "margin-bottom": return LengthText(style, style.MarginBottom);
-            case "margin-left": return LengthText(style, style.MarginLeft);
+            // The logical inset longhands read back the physical side the cascade put them on
+            // (CSS Logical Properties 1 §4): 'inset-block-start' is the top edge, and
+            // 'inset-inline-start' is the left or right edge that 'direction' chose — the same
+            // side ApplyInlineInset wrote. Without these cases a read answers the empty string.
+            case "inset-block-start": return LengthText(style, style.Top);
+            case "inset-block-end": return LengthText(style, style.Bottom);
+            case "inset-inline-start": return InlineSideInset(style, start: true);
+            case "inset-inline-end": return InlineSideInset(style, start: false);
+
+            case "margin-top": return MarginText(style, style.MarginTop);
+            case "margin-right": return MarginText(style, style.MarginRight);
+            case "margin-bottom": return MarginText(style, style.MarginBottom);
+            case "margin-left": return MarginText(style, style.MarginLeft);
             case "padding-top": return LengthText(style, style.PaddingTop);
             case "padding-right": return LengthText(style, style.PaddingRight);
             case "padding-bottom": return LengthText(style, style.PaddingBottom);
@@ -151,8 +161,8 @@ public static class ComputedValueSerializer
             // them onto the sides during the cascade (CSS Logical Properties 1 §2), so a
             // 'margin-block-start' read answers with the top margin it became, and an
             // 'margin-inline-start' with the side 'direction' put it on.
-            case "margin-block-start": return LengthText(style, style.MarginTop);
-            case "margin-block-end": return LengthText(style, style.MarginBottom);
+            case "margin-block-start": return MarginText(style, style.MarginTop);
+            case "margin-block-end": return MarginText(style, style.MarginBottom);
             case "margin-inline-start": return InlineSideMargin(style, start: true);
             case "margin-inline-end": return InlineSideMargin(style, start: false);
             case "padding-block-start": return LengthText(style, style.PaddingTop);
@@ -202,7 +212,9 @@ public static class ComputedValueSerializer
                 // box: '1.2' reads back '13.2px', '120%' '13.2px', '2em' '22px', '0' '0px').
                 return style.LineHeightIsNormal
                     ? "normal"
-                    : Px(style.LineHeightPx ?? style.LineHeight * style.FontSize);
+                    : Px(style.LineHeightPx is float lhm && style.LineHeightFromMath
+                        ? (float)(System.Math.Floor(lhm * 64) / 64)
+                        : (style.LineHeightPx ?? style.LineHeight * style.FontSize));
             case "letter-spacing": return style.LetterSpacingIsNormal ? "normal" : Px(style.LetterSpacing);
             // 'word-spacing' has no keyword in its computed value (CSS Text 4 §5.1, measured):
             // 'normal' is the zero of the property and reads back as '0px'. 'letter-spacing'
@@ -413,9 +425,14 @@ public static class ComputedValueSerializer
             case "flex-shrink": return CssValueTokenizer.Num(style.FlexShrink);
             case "column-count": return style.ColumnCount > 0 ? style.ColumnCount.ToString(CultureInfo.InvariantCulture) : "auto";
             // 'normal' is the initial value of both gaps and is a keyword of its own, not a
-            // zero (CSS Box Alignment 3 §3.1, measured).
-            case "row-gap": return style.RowGapIsNormal ? "normal" : LengthText(style, style.RowGap);
-            case "column-gap": return style.ColumnGapIsNormal ? "normal" : LengthText(style, style.ColumnGap);
+            // zero (CSS Box Alignment 3 §3.1, measured). The legacy 'grid-' spellings are the same
+            // property and answer the same way (measured: 'grid-column-gap: calc(1px + 1fr)' is
+            // refused and the property still reads 'normal', while 'grid-column-gap: 8px' reads
+            // '8px').
+            case "row-gap":
+            case "grid-row-gap": return style.RowGapIsNormal ? "normal" : LengthText(style, style.RowGap);
+            case "column-gap":
+            case "grid-column-gap": return style.ColumnGapIsNormal ? "normal" : LengthText(style, style.ColumnGap);
             case "orphans": return style.Orphans.ToString(CultureInfo.InvariantCulture);
             case "widows": return style.Widows.ToString(CultureInfo.InvariantCulture);
 
@@ -498,8 +515,14 @@ public static class ComputedValueSerializer
             case "column-rule-style": return style.ColumnRuleStyle.ToCssString();
             case "column-rule-width": return Px(style.ColumnRuleWidth);
             // The line painter reads 'text-decoration-skip-ink', so it is not one of the echoed
-            // properties: the engine keeps the flag and prints the two answers it can give.
-            case "text-decoration-skip-ink": return style.TextDecorationSkipInk ? "auto" : "none";
+            // properties: the engine keeps the keyword it parsed and prints that same word back
+            // (measured: 'all' is a value of its own, not a spelling of 'auto').
+            case "text-decoration-skip-ink": return style.TextDecorationSkipInk switch
+            {
+                Acrux.Core.Dom.TextDecorationSkipInkType.None => "none",
+                Acrux.Core.Dom.TextDecorationSkipInkType.All => "all",
+                _ => "auto",
+            };
             case "text-decoration-style": return style.TextDecorationStyle switch
             {
                 TextDecorationStyleType.Double => "double",
@@ -532,13 +555,13 @@ public static class ComputedValueSerializer
             // they were written with, so the initial values have to be spelled out here:
             // a computed style is a full snapshot and reports every longhand (CSSOM).
             case "transition-property": return ListOr(style.TransitionProperty, "all");
-            case "transition-duration": return ListOr(style.TransitionDuration, "0s");
-            case "transition-delay": return ListOr(style.TransitionDelay, "0s");
+            case "transition-duration": return TimeListOr(style.TransitionDuration, "0s");
+            case "transition-delay": return TimeListOr(style.TransitionDelay, "0s");
             case "transition-timing-function": return ListOr(style.TransitionTimingFunction, "ease");
             case "animation-name": return ListOr(style.AnimationName, "none");
-            case "animation-duration": return ListOr(style.AnimationDuration, "0s");
+            case "animation-duration": return TimeListOr(style.AnimationDuration, "0s");
             case "animation-timing-function": return ListOr(style.AnimationTimingFunction, "ease");
-            case "animation-delay": return ListOr(style.AnimationDelay, "0s");
+            case "animation-delay": return TimeListOr(style.AnimationDelay, "0s");
             case "animation-iteration-count": return ListOr(style.AnimationIterationCount, "1");
             case "animation-direction": return ListOr(style.AnimationDirection, "normal");
             case "animation-fill-mode": return ListOr(style.AnimationFillMode, "none");
@@ -720,6 +743,26 @@ public static class ComputedValueSerializer
     /// by ', ' (measured: two transitions answer 'color, width' and '1s, 3s'), or |fallback|
     /// when the cascade never reached the property. Splitting at top level keeps a function
     /// like 'cubic-bezier(.1,.2,.3,.4)' in one piece.</summary>
+    /// <summary>A list of times on the computed surface, each one spelled in seconds. CSS Values 4
+    /// §6.6 gives a time the unit 's' and the unit 'ms' and the computed value answers the larger of
+    /// the two, so '500ms' reads back '0.5s' while '1.001s' keeps its own number (measured, both). A
+    /// math function is printed as the engine folded it — its text already says seconds.</summary>
+    private static string TimeListOr(string? value, string fallback)
+    {
+        var list = ListOr(value, fallback);
+        var items = Css.MaskLayerParser.SplitTopLevel(list, ',');
+        var kept = new List<string>(items.Count);
+        foreach (var item in items)
+        {
+            var text = item.Trim();
+            if (text.Length == 0) continue;
+            kept.Add(CssValueTokenizer.TrySplitUnit(text, out var number, out var unit)
+                && unit.Equals("ms", StringComparison.OrdinalIgnoreCase)
+                    ? CssValueTokenizer.Num(number / 1000f) + "s" : text);
+        }
+        return kept.Count > 0 ? string.Join(", ", kept) : fallback;
+    }
+
     private static string ListOr(string? value, string fallback)
     {
         if (string.IsNullOrWhiteSpace(value)) return fallback;
@@ -774,12 +817,19 @@ public static class ComputedValueSerializer
 
     /// <summary>The margin of the inline side 'direction' put a logical longhand on.</summary>
     private static string InlineSideMargin(ComputedStyle style, bool start) =>
-        LengthText(style, IsRtl(style) ? (start ? style.MarginRight : style.MarginLeft)
+        MarginText(style, IsRtl(style) ? (start ? style.MarginRight : style.MarginLeft)
                                        : (start ? style.MarginLeft : style.MarginRight));
 
     private static string InlineSidePadding(ComputedStyle style, bool start) =>
         LengthText(style, IsRtl(style) ? (start ? style.PaddingRight : style.PaddingLeft)
                                        : (start ? style.PaddingLeft : style.PaddingRight));
+
+    /// <summary>The inset of the inline side 'direction' put a logical longhand on — the same
+    /// side ApplyInlineInset wrote, so a read of 'inset-inline-start' answers the left edge it
+    /// became in ltr and the right edge it became in rtl.</summary>
+    private static string InlineSideInset(ComputedStyle style, bool start) =>
+        LengthText(style, IsRtl(style) ? (start ? style.Right : style.Left)
+                                       : (start ? style.Left : style.Right));
 
     private static bool IsRtl(ComputedStyle style) =>
         style.Direction.Equals("rtl", StringComparison.OrdinalIgnoreCase);
@@ -870,6 +920,13 @@ public static class ComputedValueSerializer
         // percentage stays a percentage and 'auto' stays a keyword.
         return owner.ComputedLengthCss(length);
     }
+
+    /// <summary>One side of a margin. 'auto' is the keyword CSS 2.1 §10.3.3 lets a page write, but it
+    /// is not what the computed surface answers: the free space the side was left to take is nothing
+    /// at computed-value time, so the reference engine prints '0px' for it (measured:
+    /// 'margin: calc(10px + 2px) auto' computes '12px 0px').</summary>
+    private static string MarginText(ComputedStyle owner, Length? length) =>
+        length is AutoLength ? "0px" : LengthText(owner, length);
 
     /// <summary>One side of a scroll inset (CSS Scroll Snap 1 §6.1). The initial value is the
     /// length zero, so an untouched side reads back as '0px' — never as 'auto', which is only
@@ -1221,9 +1278,36 @@ public static class ComputedValueSerializer
             // ------------------------------------------------------ backgrounds
             case "background": return BackgroundText(style);
             case "mask": return MaskText(style);
+
+            // ---------------------------------------------------- motion path
+            case "offset": return OffsetText(style);
             default: return null;
         }
     }
+
+    /// <summary>The computed value of the <c>offset</c> shorthand (CSS Motion Path 1 §3): the five
+    /// longhands in the order the shorthand takes them, with the two the reference engine leaves
+    /// out when they say nothing a box on a path does not need — the position when it is
+    /// <c>normal</c> and the anchor when it is <c>auto</c>, the latter because the anchor is the
+    /// one part the shorthand writes behind a <c>/</c> (all measured: an untouched box reads
+    /// <c>none 0px auto 0deg</c>, a box with <c>offset-anchor: right 50%</c> reads
+    /// <c>none 0px auto 0deg / 100% 50%</c> and one with <c>offset-position: right 25%</c> reads
+    /// <c>100% 25% none 0px auto 0deg</c>).</summary>
+    private static string OffsetText(ComputedStyle style)
+    {
+        var text = EchoedLonghand(style, "offset-path") + " "
+                 + EchoedLonghand(style, "offset-distance") + " "
+                 + EchoedLonghand(style, "offset-rotate");
+        var position = EchoedLonghand(style, "offset-position");
+        if (position != "normal") text = position + " " + text;
+        var anchor = EchoedLonghand(style, "offset-anchor");
+        return anchor == "auto" ? text : text + " / " + anchor;
+    }
+
+    /// <summary>An echo-only longhand read through the one table that owns it. A shorthand whose
+    /// parts live there cannot use <see cref="Longhand"/>, which asks the typed fields.</summary>
+    private static string EchoedLonghand(ComputedStyle style, string name)
+        => Get(style, name, includeShorthands: false) ?? "";
 
     /// <summary>The line list in the engine's own order — the three that draw, then the three that
     /// only say themselves (measured: 'blink underline' computes 'underline blink', and

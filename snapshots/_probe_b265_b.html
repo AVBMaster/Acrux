@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 probe B</title></head>
+<body><div id="a">A</div><div id="b">B</div>
+<script>
+function r(k, v) { console.log("ROW " + k + " = " + JSON.stringify(v)); }
+var a = document.getElementById("a");
+function both(name, value) {
+  a.setAttribute("style", name + ": " + value);
+  var spec = a.style.getPropertyValue(name);
+  var comp = getComputedStyle(a).getPropertyValue(name);
+  r(name + "|" + value, "S=" + spec + " C=" + comp + " len=" + a.style.length +
+     " cssText=" + a.getAttribute("style"));
+}
+both("offset-path", "content-box");
+both("offset-path", "border-box");
+both("offset-path", "fill-box");
+both("offset-path", "none");
+both("offset-path", "path(\"M 0 0\")");
+both("offset-path", "normal");
+both("offset-path", "view-box");
+both("offset-rotate", "reverse");
+both("offset-rotate", "45deg");
+both("offset-distance", "42%");
+both("offset-anchor", "auto");
+both("text-decoration-skip-ink", "all");
+both("text-decoration-skip-ink", "none");
+both("print-color-adjust", "exact");
+both("mask-type", "alpha");
+both("font-language-override", "\"SIN\"");
+both("animation-timeline", "auto");
+var b = document.createElement("div");
+document.body.appendChild(b);
+b.setAttribute("style", "offset-path: content-box");
+r("fresh.inline", b.style.getPropertyValue("offset-path"));
+r("fresh.computed", getComputedStyle(b).getPropertyValue("offset-path"));
+r("supports.contentBox", CSS.supports("offset-path", "content-box"));
+r("supports.path", CSS.supports("offset-path", "path(\"M 0 0\")"));
+</script>
+</body></html>

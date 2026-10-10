@@ -1,0 +1,101 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 J basic shapes of offset-path</title>
+<style>
+#a { offset-anchor: 10px 20px; offset: none; }
+#b { offset-distance: 42%; offset: path("M 0 0"); }
+#c { margin-left: 10px; margin: 0px; }
+#d { offset-rotate: 45deg; }
+#e { offset-rotate: 45deg; offset-path: path("M 0 0"); }
+</style>
+</head>
+<body>
+<div id="t"></div><div id="a"></div><div id="b"></div><div id="c"></div>
+<div id="d"></div><div id="e"></div>
+<script>
+var CASES = [
+  ["offset-path", "circle(10px)"],
+  ["offset-path", "circle()"],
+  ["offset-path", "circle(closest-side)"],
+  ["offset-path", "circle(farthest-side)"],
+  ["offset-path", "circle(closest-side at left)"],
+  ["offset-path", "circle(10px at left)"],
+  ["offset-path", "circle(10px at 50%)"],
+  ["offset-path", "circle(2em at left 50%)"],
+  ["offset-path", "circle(calc(10px))"],
+  ["offset-path", "circle(bogus)"],
+  ["offset-path", "circle(10px at bogus)"],
+  ["offset-path", "ellipse(10px)"],
+  ["offset-path", "ellipse()"],
+  ["offset-path", "ellipse(closest-side)"],
+  ["offset-path", "ellipse(closest-side closest-side)"],
+  ["offset-path", "ellipse(closest-side 10px)"],
+  ["offset-path", "ellipse(10px closest-side)"],
+  ["offset-path", "ellipse(farthest-side)"],
+  ["offset-path", "ellipse(10px 20px at top)"],
+  ["offset-path", "inset(10px)"],
+  ["offset-path", "inset(10px 20px 10px)"],
+  ["offset-path", "inset(10px 20px 10px 20px)"],
+  ["offset-path", "inset(10px 20px 30px 40px round 5px 5px 5px 5px)"],
+  ["offset-path", "inset(10px round 5px 10px)"],
+  ["offset-path", "inset(10px round 5px 10px 5px 10px)"],
+  ["offset-path", "inset(10px round 5px 10px 15px)"],
+  ["offset-path", "inset(10px round 5px / 10px)"],
+  ["offset-path", "inset(closest-side)"],
+  ["offset-path", "inset(auto)"],
+  ["offset-path", "inset(10px round)"],
+  ["offset-path", "inset(calc(10px + 2px))"],
+  ["offset-path", "xywh(0 0 10px 10px)"],
+  ["offset-path", "xywh(10px 10px 10px 10px)"],
+  ["offset-path", "xywh(10% 0px 30% 40px)"],
+  ["offset-path", "xywh(0 0 10px 10px extend contain)"],
+  ["offset-path", "xywh(0 0 10px)"],
+  ["offset-path", "xywh(auto 0 10px 10px)"],
+  ["offset-rotate", "reverse 45deg"],
+  ["offset-rotate", "reverse -45deg"],
+  ["offset-rotate", "reverse 1turn"],
+  ["offset-distance", "calc(10px + 2px)"],
+  ["offset-distance", "calc(50% + 10px)"],
+  ["offset", "circle(10px at left) 50%"],
+  ["offset", "inset(10px) auto"],
+  ["offset", "normal"]
+];
+var RESET = [
+  ["#a", "offset-anchor", "offset"],
+  ["#b", "offset-distance", "offset"],
+  ["#c", "margin-left", "margin"],
+  ["#e", "offset-rotate", "offset-path"]
+];
+var t = document.getElementById("t");
+function row(i) {
+  var name = CASES[i][0], value = CASES[i][1];
+  t.setAttribute("style", "");
+  t.style.setProperty(name, value);
+  var cs = getComputedStyle(t);
+  return i + "|" + name + "|" + value + "|S=" + t.style.getPropertyValue(name)
+       + "|L=" + t.style.length + "|C=" + cs.getPropertyValue(name)
+       + "|Sh=" + cs.getPropertyValue("offset");
+}
+function resetRow(i) {
+  var sel = RESET[i][0], first = RESET[i][1], shorthand = RESET[i][2];
+  var el = document.querySelector(sel), cs = getComputedStyle(el);
+  var keys = shorthand === "margin" ? ["margin-left"]
+           : ["offset-anchor", "offset-distance", "offset-rotate", "offset-path"];
+  return "R" + i + "|" + shorthand + "|" + first + "=" + cs.getPropertyValue(first)
+       + "|" + keys.map(function (k) { return k + "=" + cs.getPropertyValue(k); }).join("|");
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, CASES.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+window.resets = function () {
+  var out = [];
+  for (var i = 0; i < RESET.length; i++) out.push(resetRow(i));
+  return out.join("\n");
+};
+window.N = CASES.length;
+for (var k = 0; k < CASES.length; k++) console.log(row(k));
+for (var j = 0; j < RESET.length; j++) console.log(resetRow(j));
+</script>
+</body>
+</html>

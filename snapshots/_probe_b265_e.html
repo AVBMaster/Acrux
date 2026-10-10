@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 E offset shorthand + surfaces</title>
+<style>
+#sheet1 { offset-path: content-box; }
+#sheet2 { offset-path: path("M 10 -5.5 L 20 30 Z"); }
+#sheet3 { offset-anchor: top left; }
+#sheet4 { offset-rotate: auto; }
+#sheet5 { offset-path: circle(10px); }
+</style></head>
+<body><div id="attr1" style="offset-path: content-box">A</div>
+<div id="attr2" style="offset-path: path(&quot;M 0 0&quot;) content-box">B</div>
+<div id="sheet1">1</div><div id="sheet2">2</div><div id="sheet3">3</div>
+<div id="sheet4">4</div><div id="sheet5">5</div>
+<div id="t"></div>
+<script>
+var LONG = ["offset-path", "offset-distance", "offset-rotate", "offset-anchor", "offset-position"];
+var SHORTS = ["none", "path(\"M 0 0\")", "content-box path(\"M 0 0\") 50% auto", "auto",
+              "path(\"M 0 0\") 10px 45deg", "url(#p) 10% reverse center top", "normal"];
+var t = document.getElementById("t");
+function row(i) {
+  var v = SHORTS[i];
+  t.setAttribute("style", "");
+  t.style.setProperty("offset", v);
+  var parts = ["#" + i + " offset:" + v];
+  parts.push("S=" + t.style.getPropertyValue("offset"));
+  parts.push("n=" + t.style.length);
+  parts.push("cssText=" + t.style.cssText);
+  for (var k = 0; k < LONG.length; k++)
+    parts.push(LONG[k] + " S=" + t.style.getPropertyValue(LONG[k]) +
+               " C=" + getComputedStyle(t).getPropertyValue(LONG[k]));
+  return parts.join(" | ");
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, SHORTS.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+function surf(id, name) {
+  var el = document.getElementById(id);
+  return id + " C=" + getComputedStyle(el).getPropertyValue(name) +
+         " len=" + (el.getAttribute("style") !== null ? el.style.length : "-") +
+         " S=" + (el.style.length >= 0 ? el.style.getPropertyValue(name) : "") +
+         " cssText=" + el.style.cssText;
+}
+window.surfaces = function () {
+  return [surf("attr1", "offset-path"), surf("attr2", "offset-path"),
+          surf("sheet1", "offset-path"), surf("sheet2", "offset-path"),
+          surf("sheet3", "offset-anchor"), surf("sheet4", "offset-rotate"),
+          surf("sheet5", "offset-path")].join("\n");
+};
+for (var q = 0; q < SHORTS.length; q++) console.log(row(q));
+window.surfaces().split("\n").forEach(function (x) { console.log("SURF " + x); });
+</script>
+</body></html>

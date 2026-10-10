@@ -33,8 +33,11 @@ public static class EchoedProperties
         public required Func<string, string?> Normalize { get; init; }
         public bool Inherited { get; init; }
         /// <summary>Set when the computed value is not the text the specified value keeps — the
-        /// <c>math-depth</c> and <c>offset-rotate</c> shape, where the engine expands a keyword.</summary>
-        public Func<string, string>? ComputedText { get; init; }
+        /// <c>math-depth</c> and <c>offset-rotate</c> shape, where the engine expands a keyword, and
+        /// the <c>offset-distance</c> shape, where it resolves a length against the element's own
+        /// font. The style is handed to the hook for that alone; an entry that only re-spells a
+        /// keyword ignores it.</summary>
+        public Func<string, Acrux.Core.Dom.ComputedStyle, string>? ComputedText { get; init; }
     }
 
     /// <summary>The entry for a property name, or null when the property is not echo-only.</summary>
@@ -95,13 +98,22 @@ public static class EchoedProperties
             new() { Name = "math-depth", Initial = "0", Normalize = NormalizeMathDepth,
                 ComputedText = MathDepthComputed },
 
-            // ===== Motion Path 1 §3. The path is echoed as the engine reads it — the command
-            // letter, then its numbers, each separated (measured: 'path("M0 0")' reads
-            // 'path("M 0 0")') — and 'reverse' is a rotation the engine prints as the angle it
-            // means (measured: 'offset-rotate: reverse' computes 'auto 180deg').
-            new() { Name = "offset-path", Initial = "none", Normalize = NormalizeOffsetPath },
+            // ===== Motion Path 1 §3. Nothing here lays a box on a path yet, but every one of these
+            // values is read, inherited and echoed correctly (snapshots/_b265_*): the path is echoed
+            // the way the engine reads it — command letter, then its numbers, each separated
+            // (measured: 'path("M0 0")' reads 'path("M 0 0")') — a geometry box stands beside the
+            // shape but never beside another box, and 'reverse' is a rotation the engine spells out
+            // in the computed value while the specified one keeps the word the page wrote.
+            new() { Name = "offset-path", Initial = "none", Normalize = NormalizeOffsetPath,
+                ComputedText = OffsetPathComputed },
+            new() { Name = "offset-distance", Initial = "0px", Normalize = NormalizeOffsetDistance,
+                ComputedText = LengthPercentageComputed },
             new() { Name = "offset-rotate", Initial = "auto", Normalize = NormalizeOffsetRotate,
                 ComputedText = OffsetRotateComputed },
+            new() { Name = "offset-anchor", Initial = "auto", Normalize = NormalizeOffsetAnchor,
+                ComputedText = PositionComputed },
+            new() { Name = "offset-position", Initial = "normal", Normalize = NormalizeOffsetPosition,
+                ComputedText = PositionComputed },
 
             // ===== SVG 2 properties CSS inherits: each is one keyword of a closed set.
             new() { Name = "text-anchor", Initial = "start", Inherited = true,
@@ -338,38 +350,496 @@ public static class EchoedProperties
     }
 
     /// <summary>The computed text of <c>math-depth</c>: the integer the specified value adds.</summary>
-    public static string MathDepthComputed(string canonical)
+    public static string MathDepthComputed(string canonical, Acrux.Core.Dom.ComputedStyle _)
     {
         if (canonical.Equals("auto-add", StringComparison.OrdinalIgnoreCase)) return "0";
         int open = canonical.IndexOf('('), close = canonical.IndexOf(')');
         return open >= 0 && close > open ? canonical[(open + 1)..close].Trim() : canonical;
     }
 
+    /// <summary>The geometry boxes <c>offset-path</c> reads (CSS Motion Path 1 §3.2). The
+    /// reference engine's set is the one a shape can be measured against: <c>margin-box</c> is not
+    /// in it (measured: refused), while <c>view-box</c> is.</summary>
     private static readonly string[] OffsetBoxes =
     {
-        "content-box", "border-box", "padding-box", "margin-box", "stroke-box", "fill-box"
+        "content-box", "border-box", "padding-box", "stroke-box", "fill-box", "view-box"
     };
 
-    /// <summary>CSS Motion Path 1 §3.2: <c>none</c>, one of the geometry boxes, or a
-    /// <c>path()</c>/<c>ray()</c> function. The path data is echoed the way the engine reads it —
-    /// command letter, then its numbers, space separated (measured: <c>path("M0 0")</c> reads
-    /// <c>path("M 0 0")</c>).</summary>
+    /// <summary>CSS Motion Path 1 §3.2: <c>none</c>, one of the geometry boxes, a box beside a
+    /// shape, or a shape — which the engine prints FIRST, whichever order the page wrote them in
+    /// (measured: <c>content-box path("M 0 0")</c> reads <c>path("M 0 0") content-box</c>, and two
+    /// boxes are no value at all). The path data itself is echoed command letter, then its numbers,
+    /// space separated and with their case kept, because an absolute <c>L</c> and a relative <c>l</c>
+    /// are different commands (measured: <c>path("M0 0")</c> reads <c>path("M 0 0")</c> and
+    /// <c>path("M 1 2 L 3 4")</c> keeps its <c>L</c>).</summary>
     private static string? NormalizeOffsetPath(string text)
     {
-        var trimmed = text.Trim();
-        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
-        foreach (var box in OffsetBoxes)
-            if (trimmed.Equals(box, StringComparison.OrdinalIgnoreCase)) return box;
-        if (trimmed.StartsWith("path(", StringComparison.OrdinalIgnoreCase))
+        var tokens = SplitTopLevel(text);
+        if (tokens.Count == 0) return null;
+        if (tokens.Count == 1 && tokens[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+            return "none";
+        string? box = null, shape = null;
+        foreach (var token in tokens)
         {
-            int close = FindMatchingParen(trimmed, 4);
-            if (close < 0 || trimmed.Length != close + 1) return null;
-            var inner = trimmed[5..close].Trim();
-            if (!IsQuotedString(inner)) return null;
-            var data = CanonicalPathData(Unquote(inner));
-            return data == null ? null : "path(\"" + data + "\")";
+            if (box == null && IsOneOf(token, OffsetBoxes)) box = token.ToLowerInvariant();
+            else if (shape == null && IsOffsetShape(token, out var canonical)) shape = canonical;
+            else return null;
         }
-        return trimmed.StartsWith("ray(", StringComparison.OrdinalIgnoreCase) ? trimmed.ToLowerInvariant() : null;
+        if (shape == null) return box;
+        return box == null ? shape : shape + " " + box;
+    }
+
+    /// <summary>Whether one token is a shape <c>offset-path</c> takes, and the text it is
+    /// echoed as. <c>path()</c> has its own reprint; <c>url()</c> the quoted spelling the CSSOM
+    /// prints; <c>ray()</c> is the page's own data; and the basic shapes have the grammar of
+    /// CSS Shapes 1 §4 as the reference engine reads it: a radius that is the shape's own default
+    /// is not said, an ellipse takes two radii or none, the offsets of an inset take one to four
+    /// lengths and collapse the way a four-sided list does, the box of an xywh takes exactly four
+    /// lengths and nothing beside them, and an <c>at</c> clause is a position, which the engine
+    /// prints as its two axes (all measured, value by value — see snapshots/_probe_b265_h.html).</summary>
+    private static bool IsOffsetShape(string token, out string? canonical)
+    {
+        canonical = null;
+        int open = token.IndexOf('(');
+        if (open <= 0 || !token.EndsWith(")", StringComparison.Ordinal)) return false;
+        var name = token[..open].ToLowerInvariant();
+        var inner = token[(open + 1)..^1].Trim();
+        switch (name)
+        {
+            case "path":
+            {
+                if (!IsQuotedString(inner)) return false;
+                var data = CanonicalPathData(Unquote(inner));
+                if (data == null) return false;
+                canonical = "path(\"" + data + "\")";
+                return true;
+            }
+            case "ray":
+            {
+                // The shape position of a ray is not a value this engine reads (measured:
+                // 'ray(center 45deg)' is refused while 'ray(45deg contain)' is kept whole).
+                var words = inner.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                if (words.Length == 0
+                    || words[0].ToLowerInvariant() is "left" or "center" or "right"
+                        or "top" or "bottom") return false;
+                canonical = token.ToLowerInvariant();
+                return true;
+            }
+            case "url":
+            {
+                var address = IsQuotedString(inner) ? Unquote(inner) : inner;
+                if (address.Length == 0) return false;
+                canonical = "url(\"" + address + "\")";
+                return true;
+            }
+            case "circle":
+            case "ellipse":
+            {
+                if (!TrySplitShapeClause(inner, "at", out var sizes, out var position)) return false;
+                // An ellipse is two radii or no radii at all; a circle has one (measured:
+                // 'ellipse(10px)' is refused while 'ellipse()' is kept).
+                if (sizes.Count > (name == "circle" ? 1 : 2)) return false;
+                if (name == "ellipse" && sizes.Count == 1) return false;
+                var printed = new List<string>();
+                foreach (var size in sizes)
+                {
+                    if (size.ToLowerInvariant() is "closest-side" or "farthest-side")
+                        printed.Add(size.ToLowerInvariant());
+                    else if (ShapeLength(size) is { } length) printed.Add(length);
+                    else return false;
+                }
+                // A radius the shape would assume anyway is not said twice: the default of both
+                // circle() and ellipse() is 'closest-side', and the engine prints the shape with
+                // that radius as the shape without one (measured: 'circle(closest-side at left)'
+                // reads 'circle(at left center)', but 'ellipse(closest-side 10px)' keeps both).
+                if (printed.Count > 0 && printed.TrueForAll(r => r == "closest-side"))
+                    printed.Clear();
+                var head = string.Join(" ", printed);
+                string? positionText = null;
+                if (position != null)
+                {
+                    positionText = ShorthandExpander.PositionPairText(string.Join(" ", position));
+                    if (positionText == null) return false;
+                }
+                canonical = name + "(" + head
+                    + (positionText == null ? "" : (head.Length > 0 ? " at " : "at ") + positionText)
+                    + ")";
+                return true;
+            }
+            case "inset":
+            {
+                if (!TrySplitShapeClause(inner, "round", out var offsets, out var radii))
+                    return false;
+                if (offsets.Count == 0 || offsets.Count > 4) return false;
+                var sides = new List<string>();
+                foreach (var offset in offsets)
+                {
+                    if (ShapeLength(offset) is { } length) sides.Add(length);
+                    else return false;
+                }
+                var text = "inset(" + string.Join(" ", CollapseBox(sides));
+                if (radii != null)
+                {
+                    // The round corners are border radii: one to four of them, each possibly a
+                    // horizontal and a vertical radius separated by '/'.
+                    var corners = new List<string>();
+                    foreach (var corner in radii)
+                    {
+                        if (corner == "/") { corners.Add("/"); continue; }
+                        if (ShapeLength(corner) is { } radius) corners.Add(radius);
+                        else return false;
+                    }
+                    int slash = corners.IndexOf("/");
+                    if (slash < 0)
+                    {
+                        if (corners.Count == 0 || corners.Count > 4) return false;
+                        text += " round " + string.Join(" ", CollapseBox(corners));
+                    }
+                    else
+                    {
+                        var horizontal = corners[..slash];
+                        var vertical = corners[(slash + 1)..];
+                        if (horizontal.Count == 0 || vertical.Count == 0
+                            || horizontal.Count > 4 || vertical.Count > 4) return false;
+                        var first = CollapseBox(horizontal);
+                        var second = CollapseBox(vertical);
+                        var pair = first.SequenceEqual(second)
+                            ? string.Join(" ", first)
+                            : string.Join(" ", first) + " / " + string.Join(" ", second);
+                        text += " round " + pair;
+                    }
+                }
+                canonical = text + ")";
+                return true;
+            }
+            case "xywh":
+            {
+                // Four lengths and nothing else: the 'extend' and 'contain' flags of the shapes
+                // grammar are no value here (measured: refused).
+                var args = SplitTopLevel(inner);
+                if (args.Count != 4) return false;
+                var printed = new List<string>();
+                foreach (var arg in args)
+                {
+                    if (ShapeLength(arg) is { } length) printed.Add(length);
+                    else return false;
+                }
+                canonical = "xywh(" + string.Join(" ", printed) + ")";
+                return true;
+            }
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>The tokens of a shape's arguments, split at its one top-level keyword: what comes
+    /// before it, and what comes after it — null when the keyword is absent, an empty list when the
+    /// page wrote the keyword and nothing after it, which is no shape at all.</summary>
+    private static bool TrySplitShapeClause(string inner, string keyword, out List<string> head,
+        out List<string>? tail)
+    {
+        head = new List<string>();
+        tail = null;
+        var tokens = SplitTopLevel(inner);
+        int at = -1;
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            if (tokens[i].Equals(keyword, StringComparison.OrdinalIgnoreCase)) { at = i; break; }
+        }
+        if (at < 0)
+        {
+            head = tokens;
+            return true;
+        }
+        head = tokens[..at].ToList();
+        tail = tokens[(at + 1)..].ToList();
+        return tail.Count > 0;
+    }
+
+    /// <summary>One &lt;length-percentage&gt; of a shape, printed the way the engine prints a
+    /// length: a number the page wrote without a unit is the zero pixels it stands for (measured:
+    /// <c>xywh(0 0 10px 10px)</c> reads <c>xywh(0px 0px 10px 10px)</c>), and a math function is
+    /// kept whole because folding its constant parts is the same gap every other length has
+    /// (#277). Anything else — a keyword, an angle, a name — is not a length.</summary>
+    private static string? ShapeLength(string token)
+    {
+        var trimmed = token.Trim();
+        if (trimmed.Length == 0) return null;
+        if (IsCalc(trimmed)) return trimmed;
+        if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(trimmed, out var number,
+                out var unit)) return null;
+        var canonical = number.ToString("0.################", CultureInfo.InvariantCulture)
+                        + (unit.Length == 0 ? "px" : unit.ToLowerInvariant());
+        return CssPropertyApplier.IsLengthOrPercentageToken(canonical) ? canonical : null;
+    }
+
+    /// <summary>The four-value collapse of a one-to-four-item list (CSS 2.1 §5.10.1, and the same
+    /// rule the reference engine applies to an inset's offsets and its round corners): the list is
+    /// read as the four sides it means, and said again as the shortest sequence that means those
+    /// four (measured: <c>inset(10px 20px 10px)</c> reads <c>inset(10px 20px)</c> and
+    /// <c>round 5px 10px 5px 10px</c> reads <c>round 5px 10px</c>).</summary>
+    private static List<string> CollapseBox(List<string> values)
+    {
+        string top = values[0];
+        string right = values.Count > 1 ? values[1] : values[0];
+        string bottom = values.Count > 2 ? values[2] : values[0];
+        string left = values.Count > 3 ? values[3] : right;
+        if (bottom == top && left == right) return top == right ? new List<string> { top }
+            : new List<string> { top, right };
+        if (left == right) return new List<string> { top, right, bottom };
+        return new List<string> { top, right, bottom, left };
+    }
+
+    /// <summary>The computed text of <c>offset-path</c>: the shape the page wrote, measured in the
+    /// box it will be drawn in. A length is resolved against the element's own font, a position
+    /// inside the shape becomes the pair of edges and offsets it stands for, and a box given as
+    /// <c>xywh()</c> is said as the insets it means (all three measured: <c>circle(2em at left 50%)</c>
+    /// computes <c>circle(32px at 0% 50%)</c> and <c>xywh(10px 10px 10px 10px)</c> computes
+    /// <c>inset(10px calc(100% - 20px) calc(100% - 20px) 10px)</c>). A path, a ray, a url and a
+    /// geometry box are the text they already are.</summary>
+    public static string OffsetPathComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
+    {
+        if (style == null) return canonical;
+        var parts = new List<string>();
+        foreach (var token in SplitTopLevel(canonical))
+        {
+            parts.Add(TryShapeFunction(token, out var name, out var inner)
+                ? ShapeComputed(name, inner, style) : token);
+        }
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>Whether the token is one of the four basic shapes whose arguments the computed
+    /// value has to resolve. A <c>path()</c>, a <c>ray()</c> and a <c>url()</c> are not: their data
+    /// is measured by nothing at computed-value time.</summary>
+    private static bool TryShapeFunction(string token, out string name, out string inner)
+    {
+        int open = token.IndexOf('(');
+        name = open <= 0 ? string.Empty : token[..open].ToLowerInvariant();
+        inner = open <= 0 ? string.Empty : token[(open + 1)..^1].Trim();
+        return name is "circle" or "ellipse" or "inset" or "xywh"
+            && token.EndsWith(")", StringComparison.Ordinal);
+    }
+
+    private static string ShapeComputed(string name, string inner,
+        Acrux.Core.Dom.ComputedStyle style)
+    {
+        switch (name)
+        {
+            case "circle":
+            case "ellipse":
+            {
+                if (!TrySplitShapeClause(inner, "at", out var sizes, out var position))
+                    return name + "(" + inner + ")";
+                var parts = new List<string>();
+                foreach (var size in sizes) parts.Add(ResolveShapeLength(size, style));
+                var text = string.Join(" ", parts);
+                if (position != null)
+                    text += (text.Length > 0 ? " at " : "at ")
+                            + PositionComputed(string.Join(" ", position), style);
+                return name + "(" + text + ")";
+            }
+            case "inset":
+            {
+                if (!TrySplitShapeClause(inner, "round", out var offsets, out var radii))
+                    return "inset(" + inner + ")";
+                var sides = new List<string>();
+                foreach (var offset in offsets) sides.Add(ResolveShapeLength(offset, style));
+                var text = "inset(" + string.Join(" ", CollapseBox(sides));
+                if (radii != null)
+                {
+                    var corners = new List<string>();
+                    foreach (var radius in radii)
+                        corners.Add(radius == "/" ? "/" : ResolveShapeLength(radius, style));
+                    text += " round " + string.Join(" ", corners);
+                }
+                return text + ")";
+            }
+            case "xywh":
+            {
+                var args = SplitTopLevel(inner);
+                if (args.Count != 4) return "xywh(" + inner + ")";
+                var resolved = new List<string>();
+                foreach (var arg in args) resolved.Add(ResolveShapeLength(arg, style));
+                if (resolved.Count(r => IsCalc(r)) > 0) return "xywh(" + string.Join(" ", resolved) + ")";
+                if (resolved.Count(r => TryEdgeValue(r, out _, out _)) != 4)
+                    return "xywh(" + string.Join(" ", resolved) + ")";
+                TryEdgeValue(resolved[0], out var xPx, out var xPct);
+                TryEdgeValue(resolved[1], out var yPx, out var yPct);
+                TryEdgeValue(resolved[2], out var wPx, out var wPct);
+                TryEdgeValue(resolved[3], out var hPx, out var hPct);
+                // The box is the four insets it leaves: the top and the left are the origin the
+                // page wrote, and the right and the bottom are what is left of the reference box
+                // once the origin and the size are taken off it.
+                return "inset(" + resolved[1] + " " + RemainingInset(xPx, xPct, wPx, wPct) + " "
+                     + RemainingInset(yPx, yPct, hPx, hPct) + " " + resolved[0] + ")";
+            }
+            default:
+                return name + "(" + inner + ")";
+        }
+    }
+
+    /// <summary>One length of a shape, resolved the way the same length is resolved anywhere else
+    /// in the computed value: a font unit against this element's font, a percentage kept as the
+    /// percentage it is, a math function kept whole.</summary>
+    private static string ResolveShapeLength(string token, Acrux.Core.Dom.ComputedStyle style) =>
+        ShapeLength(token) is { } length ? LengthPercentageComputed(length, style) : token;
+
+    /// <summary>The number and the unit of a resolved length: <c>32px</c> is 32 pixels and no
+    /// percentage, <c>50%</c> is 50 percent and no pixels.</summary>
+    private static bool TryEdgeValue(string text, out double px, out double percent)
+    {
+        px = percent = 0;
+        if (text.EndsWith("%", StringComparison.Ordinal))
+            return double.TryParse(text[..^1], NumberStyles.Float, CultureInfo.InvariantCulture,
+                out percent);
+        return Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(text, out px, out var unit)
+            && (unit.Length == 0 || unit.Equals("px", StringComparison.Ordinal));
+    }
+
+    /// <summary>What is left of a 100%-wide reference box once one origin and one size are taken
+    /// off it. A pure percentage folds to that percentage; a mix of percentages and pixels is the
+    /// arithmetic the engine cannot do yet, so it is said as the calculation it is (measured:
+    /// <c>xywh(10% 0px 30% 40px)</c> computes <c>inset(0px 60% calc(100% - 40px) 10%)</c>).</summary>
+    private static string RemainingInset(double originPx, double originPercent, double sizePx,
+        double sizePercent)
+    {
+        double percent = 100 - originPercent - sizePercent;
+        double px = -(originPx + sizePx);
+        if (px == 0) return Number(percent) + "%";
+        if (percent == 0) return Number(px) + "px";
+        return "calc(" + Number(percent) + "% " + (px < 0 ? "- " : "+ ") + Number(Math.Abs(px))
+             + "px)";
+    }
+
+    private static string Number(double value) =>
+        value.ToString("0.################", CultureInfo.InvariantCulture);
+
+
+    /// <summary>Motion Path 1 §3.3: one <c>&lt;length-percentage&gt;</c>. A bare number is no
+    /// length — except zero, which the engine prints with the unit it means, and a number written
+    /// in another spelling is echoed in the digits it stands for (measured: <c>offset-distance: 0</c>
+    /// reads <c>0px</c> and <c>1e2px</c> reads <c>100px</c>), while <c>auto</c> and <c>normal</c> are
+    /// not values of this property at all. A math function is kept whole: folding its constant
+    /// parts is the same gap every other length has (#277).</summary>
+    private static string? NormalizeOffsetDistance(string text)
+    {
+        var trimmed = text.Trim();
+        // A math function is one value with spaces inside it, so it is read before the length
+        // token test, which has no way to see past the first of them.
+        if (IsCalc(trimmed)) return SplitTopLevel(trimmed).Count == 1 ? trimmed : null;
+        return trimmed.Contains(' ') ? null : ShapeLength(trimmed);
+    }
+
+    /// <summary>The computed text of a length the page wrote: resolved against the element's own
+    /// font and viewport, with a percentage kept as the percentage it is and a math function kept
+    /// whole because part of it cannot be resolved yet (all three measured: <c>2em</c> on a 16px box
+    /// is <c>32px</c>, <c>50%</c> stays <c>50%</c> and <c>calc(50% + 10px)</c> stays as written).</summary>
+    public static string LengthPercentageComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
+    {
+        if (style == null || IsCalc(canonical)) return canonical;
+        if (!CssPropertyApplier.IsLengthOrPercentageToken(canonical)) return canonical;
+        var length = Acrux.Core.Dom.Length.Parse(canonical.ToLowerInvariant());
+        return length is Acrux.Core.Dom.AutoLength ? canonical : style.ComputedLengthCss(length);
+    }
+
+    private static bool IsCalc(string text) =>
+        text.StartsWith("calc(", StringComparison.OrdinalIgnoreCase)
+        || text.StartsWith("min(", StringComparison.OrdinalIgnoreCase)
+        || text.StartsWith("max(", StringComparison.OrdinalIgnoreCase)
+        || text.StartsWith("clamp(", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Motion Path 1 §3.5: where the box is placed on the path. <c>auto</c> stands alone —
+    /// two of them are no value (measured) — and anything else is a position, which the engine
+    /// prints as its two axes with the horizontal one first, the axis the page never named filled
+    /// with the middle of the box (measured: <c>bottom right</c> reads <c>right bottom</c> and
+    /// <c>top</c> reads <c>center top</c>).</summary>
+    private static string? NormalizeOffsetAnchor(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Equals("auto", StringComparison.OrdinalIgnoreCase)) return "auto";
+        return ShorthandExpander.PositionPairText(trimmed);
+    }
+
+    /// <summary>Motion Path 1 §3.6: where an element with no path starts. <c>normal</c> and
+    /// <c>auto</c> stand alone, and a position is printed as the pair of axes it names (measured:
+    /// <c>offset-position: none</c> is refused, so the initial stays <c>normal</c>).</summary>
+    private static string? NormalizeOffsetPosition(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Equals("normal", StringComparison.OrdinalIgnoreCase)) return "normal";
+        if (trimmed.Equals("auto", StringComparison.OrdinalIgnoreCase)) return "auto";
+        return ShorthandExpander.PositionPairText(trimmed);
+    }
+
+    /// <summary>The computed text of a position: each axis resolved to the place in the box it
+    /// stands for — the keywords are the edges and the middle, a length is itself (measured:
+    /// <c>right 50%</c> computes <c>100% 50%</c> and <c>top</c> computes <c>50% 0%</c>).</summary>
+    public static string PositionComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
+    {
+        if (canonical is "auto" or "normal" || style == null) return canonical;
+        var words = SplitTopLevel(canonical);
+        if (words.Count == 0) return canonical;
+        if (!ShorthandExpander.TryMatchBackgroundPosition(words, out var x, out var y))
+            return canonical;
+        return AxisComputed(x, true, style) + " " + AxisComputed(y, false, style);
+    }
+
+    private static string AxisComputed(ShorthandExpander.PositionAxis axis, bool horizontal,
+        Acrux.Core.Dom.ComputedStyle style)
+    {
+        // A math function on an axis is printed as written: its percentage half has no box to be
+        // resolved against yet (measured: 'calc(50% + 10px) top' computes 'calc(50% + 10px) 0%').
+        if (axis.Present && axis.Edge == null && IsCalc(axis.Offset ?? "")) return axis.Offset!;
+        var length = CssPropertyApplier.ResolvePositionAxis(axis, horizontal);
+        return length == null ? "center" : style.ComputedLengthCss(length);
+    }
+
+    /// <summary>Whether one token is a shape <c>offset-path</c> takes. The <c>'offset'</c> shorthand
+    /// reads its parts one token at a time, and this is the line between the shape and the distance
+    /// written beside it.</summary>
+    public static bool IsOffsetPathShape(string token) => IsOffsetShape(token, out _);
+
+    /// <summary>Whether one token names a geometry box a path can be measured against.</summary>
+    public static bool IsOffsetBoxKeyword(string token) => IsOneOf(token, OffsetBoxes);
+
+    /// <summary>The whitespace-separated tokens of a value, with a function call and a quoted string
+    /// each kept as the one token they are.</summary>
+    public static List<string> SplitTopLevel(string text)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = -1;
+        bool inString = false;
+        char quote = '"';
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (inString)
+            {
+                if (c == '\\' && i + 1 < text.Length) i++;
+                else if (c == quote) inString = false;
+                continue;
+            }
+            if (c is '"' or '\'') { inString = true; quote = c; if (start < 0) start = i; continue; }
+            if (c == '(') depth++;
+            else if (c == ')' && depth > 0) depth--;
+            if (depth == 0 && char.IsWhiteSpace(c))
+            {
+                if (start >= 0 && i > start) parts.Add(text[start..i]);
+                start = -1;
+                continue;
+            }
+            if (start < 0) start = i;
+        }
+        if (start >= 0 && start < text.Length) parts.Add(text[start..]);
+        return parts;
+    }
+
+    private static bool IsOneOf(string token, string[] allowed)
+    {
+        foreach (var a in allowed)
+            if (token.Equals(a, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     /// <summary>Re-print SVG path data: each command letter on its own, its numbers after it.
@@ -405,20 +875,10 @@ public static class EchoedProperties
         return parts.Count == 0 ? null : string.Join(" ", parts);
     }
 
-    private static int FindMatchingParen(string text, int openIndex)
-    {
-        int depth = 0;
-        for (int i = openIndex; i < text.Length; i++)
-        {
-            if (text[i] == '(') depth++;
-            else if (text[i] == ')' && --depth == 0) return i;
-        }
-        return -1;
-    }
-
-    /// <summary>CSS Motion Path 1 §3.4: <c>auto</c>, optionally with an angle, <c>reverse</c>, or a
-    /// bare angle. The engine prints <c>reverse</c> as the rotation it stands for (measured), and
-    /// keeps an angle beside <c>auto</c> in the order it was written.</summary>
+    /// <summary>CSS Motion Path 1 §3.4: <c>auto</c>, optionally with an angle, <c>reverse</c>,
+    /// optionally with an angle, or a bare angle. The engine prints <c>reverse</c> as the rotation
+    /// it stands for (measured), and keeps an angle beside <c>auto</c> or <c>reverse</c> in the
+    /// order it was written.</summary>
     private static string? NormalizeOffsetRotate(string text)
     {
         var words = Words(text);
@@ -430,16 +890,52 @@ public static class EchoedProperties
             if (one == "reverse") return "reverse";
             return IsAngle(one) ? one : null;
         }
-        if (words.Length == 2 && words[0].Equals("auto", StringComparison.OrdinalIgnoreCase)
-            && IsAngle(words[1].ToLowerInvariant()))
-            return "auto " + words[1].ToLowerInvariant();
-        return null;
+        if (words.Length != 2) return null;
+        var first = words[0].ToLowerInvariant();
+        if (first != "auto" && first != "reverse") return null;
+        var angle = words[1].ToLowerInvariant();
+        return IsAngle(angle) ? first + " " + angle : null;
     }
 
-    /// <summary>The computed text of <c>offset-rotate</c>: <c>reverse</c> is a rotation the engine
-    /// spells out, while the specified value keeps the word the page wrote (both measured).</summary>
-    public static string OffsetRotateComputed(string canonical) =>
-        canonical.Equals("reverse", StringComparison.OrdinalIgnoreCase) ? "auto 180deg" : canonical;
+    /// <summary>The computed text of <c>offset-rotate</c>: the engine always spells out the rotation
+    /// it stands for, so <c>auto</c> becomes <c>auto 0deg</c> and <c>reverse</c> the half turn it
+    /// means — with an angle beside it, the turn it adds (all three measured: <c>reverse</c> is
+    /// <c>auto 180deg</c> and <c>reverse -45deg</c> is <c>auto 135deg</c>), while an angle the page
+    /// wrote beside <c>auto</c> is kept as it is.</summary>
+    public static string OffsetRotateComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
+    {
+        var words = SplitTopLevel(canonical);
+        if (words.Count == 1)
+        {
+            if (words[0].Equals("reverse", StringComparison.OrdinalIgnoreCase)) return "auto 180deg";
+            if (words[0].Equals("auto", StringComparison.OrdinalIgnoreCase)) return "auto 0deg";
+            return canonical;
+        }
+        if (words.Count == 2 && words[0].Equals("reverse", StringComparison.OrdinalIgnoreCase)
+            && TryAngleInDegrees(words[1], out var degrees))
+            return "auto " + Number(degrees + 180) + "deg";
+        return canonical;
+    }
+
+    /// <summary>The degrees an angle stands for; a unit the engine does not know is no angle.</summary>
+    private static bool TryAngleInDegrees(string token, out double degrees)
+    {
+        degrees = 0;
+        foreach (var (suffix, factor) in new[]
+                 {
+                     ("deg", 1.0), ("grad", 0.9), ("rad", 180.0 / System.Math.PI), ("turn", 360.0)
+                 })
+        {
+            if (token.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                && double.TryParse(token[..^suffix.Length], NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out var value))
+            {
+                degrees = value * factor;
+                return true;
+            }
+        }
+        return false;
+    }
 
     private static bool IsAngle(string w)
     {

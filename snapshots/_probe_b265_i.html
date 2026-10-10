@@ -1,0 +1,18 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 attribute echo</title></head>
+<body><div id="t"></div>
+<script>
+var t = document.getElementById("t");
+function probe(v) {
+  t.setAttribute("style", "");
+  t.style.setProperty("offset-path", v);
+  return "IN=" + v + "|ATTR=" + t.getAttribute("style")
+       + "|S=" + t.style.getPropertyValue("offset-path")
+       + "|C=" + getComputedStyle(t).getPropertyValue("offset-path");
+}
+console.log(probe('path("M 0 0")'));
+console.log(probe('path("M 0 0") content-box'));
+console.log(probe('content-box path("M 0 0")'));
+console.log(probe('url(#p) content-box'));
+</script>
+</body></html>

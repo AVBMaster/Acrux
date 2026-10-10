@@ -1,0 +1,109 @@
+Reference truth for snapshots/_probe_b265_m.html — the TYPE of a math expression (does the
+property take it at all) rather than its arithmetic.
+Harvested 2026-10-10 from the reference engine (Chromium 150 webview).
+A refused declaration leaves the box's used width in C= (367px in that window); the comparator
+skips C= for width/height/min-width/max-width whenever S= is empty.
+0|width|calc(1px + 1)|S=|P=|R=|V=|C=367px
+1|width|calc(1 + 1px)|S=|P=|R=|V=|C=367px
+2|width|calc(1px - 1)|S=|P=|R=|V=|C=367px
+3|width|calc(1)|S=|P=|R=|V=|C=367px
+4|width|calc(1s)|S=|P=|R=|V=|C=367px
+5|width|calc(1deg)|S=|P=|R=|V=|C=367px
+6|width|calc(1%)|S=Y|P=Y|R=Y|V=calc(1%)|C=3.65625px
+7|width|calc(1fr)|S=|P=|R=|V=|C=367px
+8|width|calc(1px + 1s)|S=|P=|R=|V=|C=367px
+9|width|calc(1px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 1px)|C=4.65625px
+10|width|calc(1% + 1)|S=|P=|R=|V=|C=367px
+11|width|calc(1px * 20px)|S=|P=|R=|V=|C=367px
+12|width|calc(20px * 1px)|S=|P=|R=|V=|C=367px
+13|width|calc(10px / 2px)|S=|P=|R=|V=|C=367px
+14|width|calc(10px * 2)|S=Y|P=Y|R=Y|V=calc(20px)|C=20px
+15|width|calc(2 * 10px)|S=Y|P=Y|R=Y|V=calc(20px)|C=20px
+16|width|calc(10px * 20%)|S=|P=|R=|V=|C=367px
+17|width|calc(100% * 2)|S=Y|P=Y|R=Y|V=calc(200%)|C=734px
+18|width|calc(2 * 3 * 4px)|S=Y|P=Y|R=Y|V=calc(24px)|C=24px
+19|width|calc(1px + 1em + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 1em + 1px)|C=20.6562px
+20|width|calc(1vw + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 1vw)|C=7.5px
+21|width|calc(min(1px, 1s))|S=|P=|R=|V=|C=367px
+22|width|calc(min(1px, 2px))|S=Y|P=Y|R=Y|V=calc(1px)|C=1px
+23|width|calc(10px + mod(1px, 1px))|S=Y|P=Y|R=Y|V=calc(10px)|C=10px
+24|width|round(2px, 1px)|S=Y|P=Y|R=Y|V=calc(2px)|C=2px
+25|width|round(2, 1)|S=|P=|R=|V=|C=367px
+26|width|calc(hypot(1px, 2px))|S=Y|P=Y|R=Y|V=calc(2.23607px)|C=2.23438px
+27|width|calc(sign(1px))|S=|P=|R=|V=|C=367px
+28|width|calc(1px + calc(1))|S=|P=|R=|V=|C=367px
+29|width|calc((1px + 2px) * 2)|S=Y|P=Y|R=Y|V=calc(6px)|C=6px
+30|height|calc(1px + 1)|S=|P=|R=|V=|C=0px
+31|margin-left|calc(10px + 2)|S=|P=|R=|V=|C=0px
+32|line-height|calc(1 + 1)|S=Y|P=Y|R=Y|V=calc(2)|C=32px
+33|line-height|calc(1px + 1)|S=|P=|R=|V=|C=normal
+34|line-height|calc(2%)|S=Y|P=Y|R=Y|V=calc(2%)|C=0.32px
+35|opacity|calc(0.5 + 1px)|S=|P=|R=|V=|C=1
+36|opacity|calc(0.1 + 0.2)|S=Y|P=Y|R=Y|V=calc(0.3)|C=0.3
+37|flex-grow|calc(1 + 1)|S=Y|P=Y|R=Y|V=calc(2)|C=2
+38|rotate|calc(1deg + 1)|S=|P=|R=|V=|C=none
+39|rotate|calc(1)|S=|P=|R=|V=|C=none
+40|rotate|calc(1deg * 2)|S=Y|P=Y|R=Y|V=calc(2deg)|C=2deg
+41|rotate|calc(1deg + 1s)|S=|P=|R=|V=|C=none
+42|transition-duration|calc(1s + 1px)|S=|P=|R=|V=|C=0s
+43|transition-duration|calc(1)|S=|P=|R=|V=|C=0s
+44|transition-duration|calc(1s * 2)|S=Y|P=Y|R=Y|V=calc(2s)|C=2s
+45|transition-duration|calc(1s + 1ms)|S=Y|P=Y|R=Y|V=calc(1.001s)|C=1.001s
+46|transition-duration|calc(2s / 4)|S=Y|P=Y|R=Y|V=calc(0.5s)|C=0.5s
+47|transition|calc(1s + 1ms) ease|S=Y|P=Y|R=Y|V=calc(1.001s)|C=1.001s
+48|transition|calc(1px) ease|S=|P=|R=|V=|C=all
+49|transition|ease calc(2s)|S=Y|P=Y|R=Y|V=calc(2s)|C=2s
+50|animation-duration|calc(1s + 1ms)|S=Y|P=Y|R=Y|V=calc(1.001s)|C=1.001s
+51|background-position|calc(10px + 2px) calc(20% + 3%)|S=Y|P=Y|R=Y|V=calc(12px) calc(23%)|C=12px 23%
+52|margin|calc(10px + 2px) auto|S=Y|P=Y|R=Y|V=calc(12px) auto|C=12px 0px
+53|aspect-ratio|calc(1 + 1)|S=Y|P=Y|R=Y|V=calc(2) / 1|C=2 / 1
+54|font-size|calc(1em + 2)|S=|P=|R=|V=|C=16px
+55|translate|calc(10px + 1) calc(1px + 1)|S=|P=|R=|V=|C=none
+56|width|calc(1000ms)|S=|P=|R=|V=|C=367px
+57|width|calc(0.5turn)|S=|P=|R=|V=|C=367px
+58|width|calc(mod(10px, 3))|S=|P=|R=|V=|C=367px
+59|width|calc(mod(10, 3px))|S=|P=|R=|V=|C=367px
+60|width|calc(rem(10px, 3px))|S=Y|P=Y|R=Y|V=calc(1px)|C=1px
+61|width|calc(abs(-1px))|S=Y|P=Y|R=Y|V=calc(1px)|C=1px
+62|width|calc(sqrt(4))|S=|P=|R=|V=|C=367px
+63|width|calc(sqrt(4px))|S=|P=|R=|V=|C=367px
+64|width|calc(pow(2px, 2))|S=|P=|R=|V=|C=367px
+65|width|calc(exp(1))|S=|P=|R=|V=|C=367px
+66|width|calc(log(1px))|S=|P=|R=|V=|C=367px
+67|width|calc(min(1px, 2))|S=|P=|R=|V=|C=367px
+68|width|calc(round(1px, 2))|S=|P=|R=|V=|C=367px
+69|width|calc(round(1px, 2px))|S=Y|P=Y|R=Y|V=calc(2px)|C=2px
+70|width|calc(hypot(1px, 2))|S=|P=|R=|V=|C=367px
+71|width|calc(clamp(1px, 2%, 3px))|S=Y|P=Y|R=Y|V=clamp(1px, 2%, 3px)|C=3px
+72|width|calc(clamp(1%, 2px, 3%))|S=Y|P=Y|R=Y|V=clamp(1%, 2px, 3%)|C=3.65625px
+73|opacity|calc(0.5 + 1%)|S=|P=|R=|V=|C=1
+74|line-height|calc(1 + 1%)|S=|P=|R=|V=|C=normal
+75|width|calc(50% + 0)|S=|P=|R=|V=|C=367px
+76|width|calc(1px + 1px * 2)|S=Y|P=Y|R=Y|V=calc(3px)|C=3px
+77|width|calc((1px + 2px) / 2)|S=Y|P=Y|R=Y|V=calc(1.5px)|C=1.5px
+78|width|calc(1px / 2)|S=Y|P=Y|R=Y|V=calc(0.5px)|C=0.5px
+79|width|calc(1px / -2)|S=Y|P=Y|R=Y|V=calc(-0.5px)|C=0px
+80|rotate|calc(1turn + 1deg)|S=Y|P=Y|R=Y|V=calc(361deg)|C=361deg
+81|rotate|calc(1deg + 0.001turn)|S=Y|P=Y|R=Y|V=calc(1.36deg)|C=1.36deg
+82|transition-duration|calc(1s + 100%)|S=|P=|R=|V=|C=0s
+83|transition-duration|2min|S=|P=|R=|V=|C=0s
+84|margin-top|calc(10px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 10px)|C=13.6562px
+85|width|calc(var(--x) + 1)|S=Y|P=Y|R=Y|V=calc(var(--x) + 1)|C=367px
+86|width|calc(1px + var(--x) * 2)|S=Y|P=Y|R=Y|V=calc(1px + var(--x) * 2)|C=367px
+87|width|calc(var(--x))|S=Y|P=Y|R=Y|V=calc(var(--x))|C=367px
+88|width|min(1px, var(--x))|S=Y|P=Y|R=Y|V=min(1px, var(--x))|C=367px
+89|border-width|calc(1px + 2)|S=|P=|R=|V=|C=0px
+90|outline-width|calc(1em + 2px)|S=Y|P=Y|R=Y|V=calc(1em + 2px)|C=18px
+91|font-size|calc(2ch + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 2ch)|C=16.16px
+92|letter-spacing|calc(1px + 0.1em)|S=Y|P=Y|R=Y|V=calc(0.1em + 1px)|C=2.6px
+93|word-spacing|calc(1 + 1px)|S=|P=|R=|V=|C=0px
+94|flex-basis|calc(10px + 1em)|S=Y|P=Y|R=Y|V=calc(1em + 10px)|C=26px
+95|grid-column-gap|calc(1px + 1fr)|S=|P=|R=|V=|C=normal
+96|width|calc(1px + calc(1s))|S=|P=|R=|V=|C=367px
+97|width|calc(max(1px, 2px) + 3px)|S=Y|P=Y|R=Y|V=calc(5px)|C=5px
+98|width|calc(1px + 2px + 3px + 4px + 5px)|S=Y|P=Y|R=Y|V=calc(15px)|C=15px
+99|width|calc((((1px))))|S=Y|P=Y|R=Y|V=calc(1px)|C=1px
+100|width|calc(1e1px + 1px)|S=Y|P=Y|R=Y|V=calc(11px)|C=11px
+101|width|calc(-1px + 1px)|S=Y|P=Y|R=Y|V=calc(0px)|C=0px
+102|width|calc(0px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 0px)|C=3.65625px
+sheet|width|C=12px|transitionDuration=1.001s|transitionProperty=all|rule=calc(1.001s)

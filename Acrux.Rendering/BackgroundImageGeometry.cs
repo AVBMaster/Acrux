@@ -89,7 +89,13 @@ public sealed class BackgroundImageGeometry
             return px.Value;
         if (length is PercentLength pct)
             return pct.Value * available;
-        float value = length.ToPixels(available, 16, 0, 0);
+        // 'available' is the free space a background-position percentage is priced against
+        // (positioning area minus the image, CSS Backgrounds 3 §5.1), so a calc() that mixes
+        // a percentage with a length must be priced against it — plain ToPixels leaves an
+        // unpriced percentage unsolved, which collapsed 'calc(100% - 10px)' to 0.
+        float value = length is MathLength math
+            ? math.ToPixelsAgainstPercentageBase(available, 16, 0, 0)
+            : length.ToPixels(available, 16, 0, 0);
         if (float.IsNaN(value))
             return 0;
         return Math.Max(0, value);

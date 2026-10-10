@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 K a refused declaration resets nothing</title></head>
+<body><div id="t"></div>
+<script>
+var CASES = [
+  ["background-color", "red"],
+  ["background-color", "bogus"],
+  ["background-color", ""],
+  ["color", "red"],
+  ["color", "bogus"],
+  ["color", "rgb(0, 0, 255)"],
+  ["margin-left", "10px"],
+  ["margin-left", "bogus"],
+  ["margin-left", "0px"],
+  ["offset-path", "path(\"M 0 0\")"],
+  ["offset-path", "circle(bogus)"],
+  ["offset-path", "ellipse()"],
+  ["offset-path", "inset(auto)"],
+  ["offset-path", "none"],
+  ["offset-anchor", "10px 20px"],
+  ["offset-anchor", "bogus"],
+  ["offset-anchor", "auto"]
+];
+var t = document.getElementById("t");
+function row(i) {
+  var name = CASES[i][0], value = CASES[i][1];
+  t.setAttribute("style", "");
+  t.style.setProperty(name, value);
+  var cs = getComputedStyle(t);
+  return i + "|" + name + "|" + value + "|S=" + t.style.getPropertyValue(name)
+       + "|L=" + t.style.length + "|C=" + cs.getPropertyValue(name)
+       + "|T=" + cs.getPropertyValue("color");
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, CASES.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+window.N = CASES.length;
+for (var k = 0; k < CASES.length; k++) console.log(row(k));
+</script>
+</body>
+</html>

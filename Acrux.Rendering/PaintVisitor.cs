@@ -1757,7 +1757,10 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         op.DecorationThicknessFromFont = style?.TextDecorationThicknessFromFont ?? false;
         op.DecorationUnderlineOffset = style == null || style.TextUnderlineOffsetIsAuto ? float.NaN : style.TextUnderlineOffset;
         op.DecorationUnderlinePosition = style?.TextUnderlinePosition ?? TextUnderlinePositionType.Auto;
-        op.DecorationSkipInk = style?.TextDecorationSkipInk ?? true;
+        // The painter draws one line or a skipped one: 'auto' and 'all' both ask for the skip,
+        // only 'none' keeps the line unbroken.
+        op.DecorationSkipInk = (style?.TextDecorationSkipInk
+            ?? Acrux.Core.Dom.TextDecorationSkipInkType.Auto) != Acrux.Core.Dom.TextDecorationSkipInkType.None;
         op.AncestorDecorations = CollectPropagatedDecorations(origin);
     }
 

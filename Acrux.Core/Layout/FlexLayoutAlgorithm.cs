@@ -661,7 +661,7 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                 : Space.PercentageResolutionBlockSize;
             if (float.IsNaN(basis) || float.IsInfinity(basis))
                 return float.NaN;
-            float v = math.ToPixels(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+            float v = math.ToPixelsAgainstPercentageBase(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
             return float.IsNaN(v) ? float.NaN : Math.Max(0, v - borderPadding);
         }
         return float.NaN;
@@ -831,7 +831,7 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         float basis = isRow ? _itemPctInline : _itemPctBlock;
         if (float.IsNaN(basis) || float.IsInfinity(basis))
             basis = isRow ? ChildAvailableInlineSize : 0;
-        return math.ToPixels(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+        return math.ToPixelsAgainstPercentageBase(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
     }
 
     /// <summary>Clamp a content-box main size by the item's min/max on the main axis.</summary>
@@ -900,7 +900,7 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
             {
                 float basis = inlineAxis ? _itemPctInline : _itemPctBlock;
                 if (float.IsNaN(basis) || float.IsInfinity(basis)) return float.NaN;
-                float v = math.ToPixels(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+                float v = math.ToPixelsAgainstPercentageBase(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
                 return float.IsNaN(v) ? float.NaN : v;
             }
             default:
@@ -960,7 +960,9 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
             {
                 float basis = _itemPctBlock;
                 if (float.IsNaN(basis) || float.IsInfinity(basis)) basis = 0;
-                float v = hm.ToPixels(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+                // The basis is a box, so a percentage in the expression is priced against
+                // it; plain ToPixels leaves an unpriced percentage unsolved.
+                float v = hm.ToPixelsAgainstPercentageBase(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
                 if (!float.IsNaN(v)) return ContentBox(v);
             }
         }
@@ -976,7 +978,9 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
             {
                 float basis = _itemPctInline;
                 if (float.IsNaN(basis) || float.IsInfinity(basis)) basis = ChildAvailableInlineSize;
-                float v = wm.ToPixels(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
+                // The basis is a box, so a percentage in the expression is priced against
+                // it; plain ToPixels leaves an unpriced percentage unsolved.
+                float v = wm.ToPixelsAgainstPercentageBase(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
                 if (!float.IsNaN(v)) return ContentBox(v);
             }
             if (style.Width is IntrinsicLength wk)

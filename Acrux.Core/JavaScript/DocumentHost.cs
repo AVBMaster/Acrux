@@ -912,6 +912,12 @@ public class ComputedStyleHost
     public string getPropertyValue(string name)
     {
         if (string.IsNullOrEmpty(name)) return "";
+        // CSS Variables 1 §4: a custom property is a property of the computed style, and what it
+        // reads back is the value the cascade substituted — '14pt' for '--a: var(--b)' written beside
+        // '--b: 14pt' (measured). A name nothing on the element or its ancestors answers reads back
+        // as the empty string, like any property with no value.
+        if (name.StartsWith("--", StringComparison.Ordinal) && _style != null)
+            return _style.GetCustomProperty(name[2..]) ?? "";
         // A name the reference engine does not declare has no value to read, whatever this engine
         // stores under it: the prefix is part of the property's identity here, and folding it away
         // (as the canonicaliser does for the cascade) would make 'text-security' answer for a page
@@ -959,6 +965,24 @@ public class ComputedStyleHost
             // does not look at — stays the authored percentage.
             case "width": return SizeUsed(text, box.ContentBox.Width);
             case "height": return SizeUsed(text, box.ContentBox.Height);
+            case "margin-top": case "margin-right": case "margin-bottom": case "margin-left":
+            case "padding-top": case "padding-right": case "padding-bottom": case "padding-left":
+            case "margin-block-start": case "margin-block-end":
+            case "margin-inline-start": case "margin-inline-end":
+            case "padding-block-start": case "padding-block-end":
+            case "padding-inline-start": case "padding-inline-end":
+                return SideUsed(name, text, box);
+            // A positioned box's inset reports the offset layout will apply, so its percentage is
+            // priced against the containing block (CSS 2.1 §10.5/§10.6: the vertical pair against
+            // its height, the horizontal pair against its width). A static box moves nothing, so its
+            // inset keeps the serialiser's text with the '%' left in it (measured).
+            case "top": case "bottom":
+            case "inset-block-start": case "inset-block-end":
+                return InsetUsed(name, text, box, vertical: true);
+            case "left": case "right":
+            case "inset-inline-start": case "inset-inline-end":
+                return InsetUsed(name, text, box, vertical: false);
+
             case "transform-origin":
             case "perspective-origin":
                 return TransformOriginUsed(text, LayoutUnit(box.BorderBox.Width),
@@ -969,13 +993,85 @@ public class ComputedStyleHost
     }
 
     /// <summary>One box size on the computed surface: the used value where the authored value was
-    /// 'auto', the authored pixel value snapped to a layout unit otherwise.</summary>
+    /// 'auto' or carried a percentage, the authored pixel value snapped to a layout unit
+    /// otherwise.</summary>
     private static string? SizeUsed(string text, float used)
     {
         if (text == "auto") return Px(LayoutUnit(used));
         if (text.EndsWith("px") && TryNumber(text.Substring(0, text.Length - 2), out var px))
             return Px(LayoutUnit((float)px));
+        // A box size is reported as the number the layout produced whatever the page wrote, so a
+        // percentage needs no base of its own once the box exists (measured: 'width: calc(1px + 1%)'
+        // answers one number, and 'width: 25%' of a 400px containing block answers '100px').
+        if (text.IndexOf('%') >= 0) return Px(LayoutUnit(used));
         return null;
+    }
+
+    /// <summary>A margin or padding the page wrote as a percentage: CSS 2.1 §8.3 and §8.5 resolve it
+    /// against the containing block's inline size, and the computed surface reports the product
+    /// (measured: 'margin-top: calc(10px + 1%)' of a 365.625px containing block is '13.6562px', never
+    /// the sum with a '%' left in it). A length with no percentage in it is the serialiser's own
+    /// answer and stays untouched.</summary>
+    private string? SideUsed(string name, string text, Acrux.Core.Dom.LayoutBox box)
+    {
+        if (_style == null || text.IndexOf('%') < 0) return null;
+        bool rtl = string.Equals(_style.Direction, "rtl", StringComparison.OrdinalIgnoreCase);
+        var length = name switch
+        {
+            "margin-top" or "margin-block-start" => _style.MarginTop,
+            "margin-right" => _style.MarginRight,
+            "margin-bottom" or "margin-block-end" => _style.MarginBottom,
+            "margin-left" => _style.MarginLeft,
+            "margin-inline-start" => rtl ? _style.MarginRight : _style.MarginLeft,
+            "margin-inline-end" => rtl ? _style.MarginLeft : _style.MarginRight,
+            "padding-top" or "padding-block-start" => _style.PaddingTop,
+            "padding-right" => _style.PaddingRight,
+            "padding-bottom" or "padding-block-end" => _style.PaddingBottom,
+            "padding-left" => _style.PaddingLeft,
+            "padding-inline-start" => rtl ? _style.PaddingRight : _style.PaddingLeft,
+            "padding-inline-end" => rtl ? _style.PaddingLeft : _style.PaddingRight,
+            _ => null,
+        };
+        if (length == null) return null;
+        // The box the percentage belongs to: the containing block the layout resolved the box's own
+        // size against, its parent when that link is not filled in, and the viewport for a box whose
+        // containing block is the initial one.
+        var inlineSize = box.ContainingBlock?.ContentBox.Width
+            ?? box.Parent?.ContentBox.Width
+            ?? _style.ComputedViewportWidth;
+        if (inlineSize <= 0) return null;
+        return _style.ComputedLengthCss(length, percentageBase: inlineSize);
+    }
+
+    /// <summary>An inset the page wrote with a percentage on a box that is actually positioned.
+    /// cssom-view reports the <em>used</em> offset there, so the percentage is priced against the
+    /// containing block — its height for the vertical pair, its width for the horizontal one — while
+    /// a static box, which the offset does not move, keeps the authored text (measured:
+    /// 'top: calc(10px + 1%)' of an absolutely positioned box in a 200px-tall block is '12px', of a
+    /// static one 'calc(1% + 10px)').</summary>
+    private string? InsetUsed(string name, string text, Acrux.Core.Dom.LayoutBox box, bool vertical)
+    {
+        if (_style == null || text.IndexOf('%') < 0) return null;
+        if (_style.Position == Acrux.Core.Dom.PositionType.Static) return null;
+        float baseSize = vertical
+            ? box.ContainingBlock?.ContentBox.Height ?? box.Parent?.ContentBox.Height
+              ?? _style.ComputedViewportHeight
+            : box.ContainingBlock?.ContentBox.Width ?? box.Parent?.ContentBox.Width
+              ?? _style.ComputedViewportWidth;
+        if (baseSize <= 0) return null;
+        bool rtl = string.Equals(_style.Direction, "rtl", StringComparison.OrdinalIgnoreCase);
+        var length = name switch
+        {
+            "top" or "inset-block-start" => _style.Top,
+            "bottom" or "inset-block-end" => _style.Bottom,
+            "left" => _style.Left,
+            "right" => _style.Right,
+            "inset-inline-start" => rtl ? _style.Right : _style.Left,
+            "inset-inline-end" => rtl ? _style.Left : _style.Right,
+            _ => null,
+        };
+        if (length == null) return null;
+        return _style.ComputedLengthCss(length, percentageBase: baseSize);
     }
 
     /// <summary>The reference engine's layout works in units of 1/64 of a CSS pixel and every
@@ -1095,6 +1191,11 @@ public class ComputedStyleHost
     public string? __resolve(string name)
     {
         if (string.IsNullOrEmpty(name)) return null;
+        // A custom property is reached the same way as any other member of the computed style, and
+        // answers the substituted value (CSS Variables 1 §4, measured). Unlike the dashed read it
+        // has no empty string to give: a name nothing answers is no member at all.
+        if (name.StartsWith("--", StringComparison.Ordinal))
+            return _style?.GetCustomProperty(name[2..]);
         var dashed = Acrux.Core.Css.Properties.CssPropertyIdExtensions
             .CanonicalName(Hyphenate(name));
         // The same refusal the dashed read makes: a name the reference engine does not declare is

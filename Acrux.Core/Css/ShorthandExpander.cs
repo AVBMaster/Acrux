@@ -85,6 +85,7 @@ public static class ShorthandExpander
             case "padding-inline": ExpandLogicalPair(result, "padding-inline", value); break;
             case "overflow": ExpandOverflow(result, value); break;
             case "mask": ExpandMask(result, value); break;
+            case "offset": ExpandOffset(result, value); break;
             default: result[name] = value; break;
         }
 
@@ -135,6 +136,10 @@ public static class ShorthandExpander
             "overflow" => new[] { "overflow-x", "overflow-y" },
             "contain-intrinsic-size" => new[] { "contain-intrinsic-width", "contain-intrinsic-height" },
             "mask" => new[] { "mask-image", "mask-position", "mask-size", "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode" },
+            // Motion Path 1 §3.7: the five longhands, including the anchor the shorthand's own
+            // grammar never names but does reset.
+            "offset" => new[] { "offset-path", "offset-distance", "offset-rotate", "offset-anchor",
+                                "offset-position" },
             "gap" => new[] { "row-gap", "column-gap" },
             "columns" => new[] { "column-width", "column-count" },
             "column-rule" => new[] { "column-rule-width", "column-rule-style", "column-rule-color" },
@@ -185,7 +190,7 @@ public static class ShorthandExpander
         // this array is what ShorthandsFor() indexes, and a longhand whose shorthand is missing
         // from it reads back empty through the CSSOM even though the shorthand set it.
         "place-content", "place-items", "place-self", "list-style",
-        "scroll-margin", "scroll-padding",
+        "scroll-margin", "scroll-padding", "offset",
         "border-block", "border-inline", "border-block-start", "border-block-end",
         "border-inline-start", "border-inline-end", "border-block-width", "border-block-style",
         "border-block-color", "border-inline-width", "border-inline-style",
@@ -193,6 +198,17 @@ public static class ShorthandExpander
     };
 
     private static Dictionary<string, List<string>>? _longhandToShorthands;
+
+    /// <summary>Whether a name is one of the shorthands this expander reads. The cascade asks this
+    /// before it expands anything, and it is the same list <see cref="ShorthandsFor"/> indexes: two
+    /// lists of the same property set drift apart, and a shorthand missing from one of them is
+    /// written to the cascade as if it were a longhand of its own name.</summary>
+    public static bool IsShorthandName(string name)
+    {
+        foreach (var shorthand in ShorthandNames)
+            if (name.Equals(shorthand, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
 
     /// <summary>The shorthands that carry a given longhand — <see cref="GetControlledLonghands"/>
     /// read the other way round. The CSSOM needs it: a declaration block that was written as
@@ -724,12 +740,29 @@ public static class ShorthandExpander
         return xs.Count > 0;
     }
 
-    private static string PositionAxisText(PositionAxis axis) => !axis.Present ? "center"
+    private static string PositionAxisText(PositionAxis axis, bool canonicalLength = false)
+        => !axis.Present ? "center"
         : axis.Edge != null
             ? axis.Offset != null
-                ? KeywordText(axis.Edge) + " " + KeywordText(axis.Offset)
+                ? KeywordText(axis.Edge) + " "
+                  + (canonicalLength ? CanonicalPositionLength(axis.Offset) : KeywordText(axis.Offset))
                 : KeywordText(axis.Edge)
-            : KeywordText(axis.Offset!);
+            : canonicalLength
+                ? CanonicalPositionLength(axis.Offset!)
+                : KeywordText(axis.Offset!);
+
+    /// <summary>A &lt;position&gt; offset printed the way the properties that hold one print it: a
+    /// number with no unit is the zero pixels it stands for (measured: 'offset-anchor: 0 0' reads
+    /// '0px 0px'). A background layer keeps the text the page wrote, where the same number is
+    /// the percentage of the box it is measured against.</summary>
+    private static string CanonicalPositionLength(string token)
+    {
+        if (token.Contains('(')) return token;
+        return Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out var number, out var unit)
+               && unit.Length == 0
+            ? number.ToString(System.Globalization.CultureInfo.InvariantCulture) + "px"
+            : token;
+    }
 
     /// <summary>The two axis lists as the one &lt;bg-position&gt; list they stand for: paired a
     /// layer at a time, and a list shorter than the other cycles the way every background list
@@ -745,6 +778,17 @@ public static class ShorthandExpander
         for (int i = 0; i < count; i++)
             layers.Add(xs[i % xs.Count] + " " + ys[i % ys.Count]);
         return string.Join(", ", layers);
+    }
+
+    /// <summary>One &lt;position&gt; as the pair of axes it stands for, horizontal first: the
+    /// properties that take a single position print it this way (measured: 'offset-anchor: top'
+    /// reads 'center top' and 'bottom right' reads 'right bottom'), and a bare number is the
+    /// length it means ('0 0' reads '0px 0px'). A token list the position grammar refuses has
+    /// no pair at all, and the caller loses the declaration.</summary>
+    public static string? PositionPairText(string value)
+    {
+        if (!TryMatchBackgroundPosition(SplitShorthand(value.Trim()), out var x, out var y)) return null;
+        return PositionAxisText(x, canonicalLength: true) + " " + PositionAxisText(y, canonicalLength: true);
     }
 
     /// <summary>True for a token the &lt;image&gt; production of the background shorthand takes:
@@ -1442,7 +1486,10 @@ public static class ShorthandExpander
         result["transition-delay"] = string.Join(", ", delays);
     }
 
-    /// <summary>True for a &lt;time&gt; token: an optional sign, digits, and a s/ms unit.</summary>
+    /// <summary>True for a &lt;time&gt; token: an optional sign, digits, and a s/ms unit — or one math
+    /// function that resolves to a time. CSS Transitions 1 §2.2 puts a math duration in the same slot
+    /// a plain one fills: 'transition: calc(1s + 1ms) ease' is a duration and leaves the property at
+    /// 'all', while 'transition: calc(1px) ease' is no transition at all (measured, both).</summary>
     internal static bool IsTimeToken(string token)
     {
         var t = token.Trim().ToLowerInvariant();
@@ -1451,7 +1498,17 @@ public static class ShorthandExpander
             return IsNumberToken(t[..^2]);
         if (t.EndsWith("s", StringComparison.Ordinal))
             return IsNumberToken(t[..^1]);
-        return false;
+        return IsMathTimeToken(t);
+    }
+
+    /// <summary>Whether the whole token is one call of a math function and what it comes out to is a
+    /// time — or is not yet known, which a 'var()' leaves it.</summary>
+    private static bool IsMathTimeToken(string token)
+    {
+        if (!token.EndsWith(")", StringComparison.Ordinal)) return false;
+        var calls = CssMathValue.MathCalls(token);
+        if (calls.Count != 1 || calls[0].Start != 0 || calls[0].Length != token.Length) return false;
+        return CssMathValue.WellTyped(token, out var category) && (category == "time" || category == null);
     }
 
     internal static bool IsNumberToken(string token)
@@ -1848,7 +1905,111 @@ public static class ShorthandExpander
     private static bool IsColor(string p) => ColorParser.IsColorToken(p);
     private static bool IsFontSize(string p) => IsOneOfKeyword(p, "xx-small", "x-small", "small",
         "medium", "large", "x-large", "xx-large", "larger", "smaller");
-    private static bool IsNamedColor(string p) => KnownColors.Get(p).HasValue;    /// <summary>
+    private static bool IsNamedColor(string p) => KnownColors.Get(p).HasValue;
+
+    /// <summary>Whether a name is the <c>offset</c> shorthand itself. The value text is decided from
+    /// the parts the shorthand owns, and both the grammar gate and the CSSOM echo ask this first, so
+    /// neither treats a longhand of it as a shorthand of its own.</summary>
+    public static bool IsOffsetShorthandName(string name) =>
+        name.Equals("offset", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The edge keywords a lone &lt;position&gt; is made of. 'auto' and 'normal' are not in
+    /// the set: each is a value of the shorthand on its own, and 'none' is the absence of a path.</summary>
+    private static readonly string[] PositionEdgeKeywords =
+        { "left", "right", "center", "top", "bottom" };
+
+    /// <summary>CSS Motion Path 1 §3.7: the shorthand that lays a box on a path. It owns all five
+    /// longhands, so a part the value leaves out is reset to its initial — and every part is judged
+    /// by the longhand's own table, so the shorthand and the five can never disagree about one
+    /// declaration (measured: 'offset: content-box path("M 0 0") 50% auto' is the box, the shape,
+    /// the distance and the auto rotation, while 'offset: url(#p) 10% reverse center top' is no
+    /// declaration at all because a position is read only where the shorthand starts).</summary>
+    private static void ExpandOffset(Dictionary<string, string> result, string value)
+    {
+        var tokens = Acrux.Core.Css.Resolver.EchoedProperties.SplitTopLevel(value.Trim());
+        if (tokens.Count == 0) return;
+        int index = 0;
+
+        // Where the path starts is the one part written in front of it, and it is the keywords that
+        // name an edge, or 'auto'/'normal': a length in this position is the distance along the
+        // path, and an angle is the rotation at the end of it.
+        string? position = null;
+        if (IsOneOfKeyword(tokens[index], "auto", "normal"))
+        {
+            position = tokens[index];
+            index = 1;
+        }
+        else
+        {
+            int run = index;
+            while (run < tokens.Count && IsOneOfKeyword(tokens[run], PositionEdgeKeywords)) run++;
+            if (run > index)
+            {
+                position = string.Join(" ", tokens.GetRange(index, run - index));
+                index = run;
+            }
+        }
+
+        var shape = new List<string>();
+        string? distance = null, rotate = null;
+        for (; index < tokens.Count; index++)
+        {
+            var token = tokens[index];
+            if (IsOneOfKeyword(token, "none")
+                || Acrux.Core.Css.Resolver.EchoedProperties.IsOffsetBoxKeyword(token)
+                || Acrux.Core.Css.Resolver.EchoedProperties.IsOffsetPathShape(token))
+            {
+                shape.Add(token);
+                continue;
+            }
+            // The rotation is read before the distance: 'auto' and 'reverse' are no lengths at all,
+            // and an angle is a rotation rather than the distance it looks like.
+            if (rotate == null && (IsOneOfKeyword(token, "auto", "reverse") || IsOffsetAngle(token)))
+            {
+                rotate = token;
+                continue;
+            }
+            if (distance == null && !IsOffsetAngle(token)
+                && Acrux.Core.Css.Resolver.CssPropertyApplier.IsLengthOrPercentageToken(token))
+            {
+                distance = token;
+                continue;
+            }
+            return;
+        }
+
+        // Each part is echoed by the longhand that owns it, so a second shape, a second distance or
+        // a rotation spelled twice is refused here exactly as it is on the longhand.
+        if (Acrux.Core.Css.Resolver.EchoedProperties.Normalize("offset-path",
+                shape.Count == 0 ? "none" : string.Join(" ", shape)) is not { } pathText) return;
+        if (Acrux.Core.Css.Resolver.EchoedProperties.Normalize("offset-distance",
+                distance ?? "0px") is not { } distanceText) return;
+        if (Acrux.Core.Css.Resolver.EchoedProperties.Normalize("offset-rotate",
+                rotate ?? "auto") is not { } rotateText) return;
+        if (Acrux.Core.Css.Resolver.EchoedProperties.Normalize("offset-position",
+                position ?? "normal") is not { } positionText) return;
+
+        result["offset-path"] = pathText;
+        result["offset-distance"] = distanceText;
+        result["offset-rotate"] = rotateText;
+        // The anchor is not a part of the shorthand's grammar, but the shorthand does own it, and a
+        // shorthand resets every part it names (measured: 'offset: none' leaves 'auto').
+        result["offset-anchor"] = "auto";
+        result["offset-position"] = positionText;
+    }
+
+    /// <summary>Whether a token is an angle: the rotation at the end of the shorthand is the one
+    /// part there that a length parser would otherwise claim.</summary>
+    private static bool IsOffsetAngle(string token)
+    {
+        foreach (var unit in new[] { "deg", "grad", "rad", "turn" })
+            if (token.EndsWith(unit, StringComparison.OrdinalIgnoreCase)
+                && double.TryParse(token[..^unit.Length], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out _)) return true;
+        return false;
+    }
+
+    /// <summary>
     /// 'mask' (CSS Masking 1 §5.1) into its longhands. The layer list is decomposed by
     /// <see cref="MaskLayerParser"/>, the same code the mask painter uses, so the cascade and
     /// the rendering can never disagree about what a layer said. Parts the value does not name

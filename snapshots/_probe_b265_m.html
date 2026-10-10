@@ -1,0 +1,151 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 M math expression types</title>
+<style>
+#m1 { width: calc(10px + 2px); transition: calc(1s + 1ms) ease; }
+</style>
+</head>
+<body>
+<div id="t"></div>
+<div id="m1"></div>
+<script>
+// One row per math expression whose TYPE is the question: does the engine take the
+// declaration at all (S= non-empty), does it agree through CSS.supports, and what does
+// the computed value read (C=). The expression's own arithmetic is not under test here —
+// that is _probe_b265_l.html.
+var CASES = [
+  ["width", "calc(1px + 1)"],
+  ["width", "calc(1 + 1px)"],
+  ["width", "calc(1px - 1)"],
+  ["width", "calc(1)"],
+  ["width", "calc(1s)"],
+  ["width", "calc(1deg)"],
+  ["width", "calc(1%)"],
+  ["width", "calc(1fr)"],
+  ["width", "calc(1px + 1s)"],
+  ["width", "calc(1px + 1%)"],
+  ["width", "calc(1% + 1)"],
+  ["width", "calc(1px * 20px)"],
+  ["width", "calc(20px * 1px)"],
+  ["width", "calc(10px / 2px)"],
+  ["width", "calc(10px * 2)"],
+  ["width", "calc(2 * 10px)"],
+  ["width", "calc(10px * 20%)"],
+  ["width", "calc(100% * 2)"],
+  ["width", "calc(2 * 3 * 4px)"],
+  ["width", "calc(1px + 1em + 1%)"],
+  ["width", "calc(1vw + 1%)"],
+  ["width", "calc(min(1px, 1s))"],
+  ["width", "calc(min(1px, 2px))"],
+  ["width", "calc(10px + mod(1px, 1px))"],
+  ["width", "round(2px, 1px)"],
+  ["width", "round(2, 1)"],
+  ["width", "calc(hypot(1px, 2px))"],
+  ["width", "calc(sign(1px))"],
+  ["width", "calc(1px + calc(1))"],
+  ["width", "calc((1px + 2px) * 2)"],
+  ["height", "calc(1px + 1)"],
+  ["margin-left", "calc(10px + 2)"],
+  ["line-height", "calc(1 + 1)"],
+  ["line-height", "calc(1px + 1)"],
+  ["line-height", "calc(2%)"],
+  ["opacity", "calc(0.5 + 1px)"],
+  ["opacity", "calc(0.1 + 0.2)"],
+  ["flex-grow", "calc(1 + 1)"],
+  ["rotate", "calc(1deg + 1)"],
+  ["rotate", "calc(1)"],
+  ["rotate", "calc(1deg * 2)"],
+  ["rotate", "calc(1deg + 1s)"],
+  ["transition-duration", "calc(1s + 1px)"],
+  ["transition-duration", "calc(1)"],
+  ["transition-duration", "calc(1s * 2)"],
+  ["transition-duration", "calc(1s + 1ms)"],
+  ["transition-duration", "calc(2s / 4)"],
+  ["transition", "calc(1s + 1ms) ease"],
+  ["transition", "calc(1px) ease"],
+  ["transition", "ease calc(2s)"],
+  ["animation-duration", "calc(1s + 1ms)"],
+  ["background-position", "calc(10px + 2px) calc(20% + 3%)"],
+  ["margin", "calc(10px + 2px) auto"],
+  ["aspect-ratio", "calc(1 + 1)"],
+  ["font-size", "calc(1em + 2)"],
+  ["translate", "calc(10px + 1) calc(1px + 1)"],
+  ["width", "calc(1000ms)"],
+  ["width", "calc(0.5turn)"],
+  ["width", "calc(mod(10px, 3))"],
+  ["width", "calc(mod(10, 3px))"],
+  ["width", "calc(rem(10px, 3px))"],
+  ["width", "calc(abs(-1px))"],
+  ["width", "calc(sqrt(4))"],
+  ["width", "calc(sqrt(4px))"],
+  ["width", "calc(pow(2px, 2))"],
+  ["width", "calc(exp(1))"],
+  ["width", "calc(log(1px))"],
+  ["width", "calc(min(1px, 2))"],
+  ["width", "calc(round(1px, 2))"],
+  ["width", "calc(round(1px, 2px))"],
+  ["width", "calc(hypot(1px, 2))"],
+  ["width", "calc(clamp(1px, 2%, 3px))"],
+  ["width", "calc(clamp(1%, 2px, 3%))"],
+  ["opacity", "calc(0.5 + 1%)"],
+  ["line-height", "calc(1 + 1%)"],
+  ["width", "calc(50% + 0)"],
+  ["width", "calc(1px + 1px * 2)"],
+  ["width", "calc((1px + 2px) / 2)"],
+  ["width", "calc(1px / 2)"],
+  ["width", "calc(1px / -2)"],
+  ["rotate", "calc(1turn + 1deg)"],
+  ["rotate", "calc(1deg + 0.001turn)"],
+  ["transition-duration", "calc(1s + 100%)"],
+  ["transition-duration", "2min"],
+  ["margin-top", "calc(10px + 1%)"],
+  ["width", "calc(var(--x) + 1)"],
+  ["width", "calc(1px + var(--x) * 2)"],
+  ["width", "calc(var(--x))"],
+  ["width", "min(1px, var(--x))"],
+  ["border-width", "calc(1px + 2)"],
+  ["outline-width", "calc(1em + 2px)"],
+  ["font-size", "calc(2ch + 1%)"],
+  ["letter-spacing", "calc(1px + 0.1em)"],
+  ["word-spacing", "calc(1 + 1px)"],
+  ["flex-basis", "calc(10px + 1em)"],
+  ["grid-column-gap", "calc(1px + 1fr)"],
+  ["width", "calc(1px + calc(1s))"],
+  ["width", "calc(max(1px, 2px) + 3px)"],
+  ["width", "calc(1px + 2px + 3px + 4px + 5px)"],
+  ["width", "calc((((1px))))"],
+  ["width", "calc(1e1px + 1px)"],
+  ["width", "calc(-1px + 1px)"],
+  ["width", "calc(0px + 1%)"]
+];
+var m1 = document.getElementById("m1");
+var t = document.getElementById("t");
+function row(i) {
+  var name = CASES[i][0], value = CASES[i][1];
+  t.setAttribute("style", "");
+  t.style.setProperty(name, value);
+  var cs = getComputedStyle(t);
+  return i + "|" + name + "|" + value
+       + "|S=" + (t.style.getPropertyValue(name) ? "Y" : "")
+       + "|P=" + (CSS.supports(name, value) ? "Y" : "")
+       + "|R=" + (CSS.supports(name + ": " + value) ? "Y" : "")
+       + "|V=" + t.style.getPropertyValue(name)
+       + "|C=" + cs.getPropertyValue(name);
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, CASES.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+window.sheet = function () {
+  var cs = getComputedStyle(m1);
+  return "sheet|width|C=" + cs.getPropertyValue("width")
+       + "|transitionDuration=" + cs.getPropertyValue("transition-duration")
+       + "|transitionProperty=" + cs.getPropertyValue("transition-property")
+       + "|rule=" + document.styleSheets[0].cssRules[0].style.getPropertyValue("transition");
+};
+window.N = CASES.length;
+for (var k = 0; k < CASES.length; k++) console.log(row(k));
+console.log(window.sheet());
+</script>
+</body>
+</html>

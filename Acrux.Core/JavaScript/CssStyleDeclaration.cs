@@ -9,13 +9,6 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
 {
     private readonly Element _element;
 
-    /// <summary>The text of the 'style' attribute the declaration map was last mirrored from.
-    /// The attribute is the inline declaration block and the map is only a view of it, so both
-    /// reads and writes go through <see cref="SyncWithAttribute"/> first: that way a block
-    /// parsed from HTML is visible through 'el.style', and a setAttribute('style', ...) that
-    /// replaces the block takes the script's own declarations with it.</summary>
-    private string? _mirroredAttribute;
-
     public CssStyleDeclaration(Element element)
     {
         _element = element;
@@ -133,20 +126,7 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
     /// snapshots/_b259_mask_box_image_truth.txt). The split therefore belongs to the block, not
     /// to the printer.</summary>
     private void StoreDeclaration(string name, string value)
-    {
-        if (Acrux.Core.Css.MaskBoxImageShorthand.IsShorthand(name)
-            && Acrux.Core.Css.MaskBoxImageShorthand.Parse(value) is { } parts)
-        {
-            _element.Style.Remove(name);
-            for (int i = 0; i < Acrux.Core.Css.MaskBoxImageShorthand.Longhands.Length; i++)
-            {
-                var longhand = Acrux.Core.Css.MaskBoxImageShorthand.Longhands[i];
-                _element.Style[longhand] = CanonicalSpecifiedValue(longhand, parts[i]);
-            }
-            return;
-        }
-        _element.Style[name] = CanonicalSpecifiedValue(name, value);
-    }
+        => InlineStyleBlock.Store(_element, name, value);
 
     /// <summary>The inline declaration block, which is the 'style' attribute: the map is kept
     /// as its canonicalised mirror (see <see cref="SyncWithAttribute"/>), so the CSSOM's own
@@ -164,17 +144,11 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
     /// declarations the script had made and all, and a block parsed from HTML has to be
     /// visible through 'el.style' as well (measured: after
     /// 'el.setAttribute("style", "display: block flow list-item")', 'el.style.display' is
-    /// 'list-item' while the attribute keeps the authored text).
+    /// 'list-item' while the attribute keeps the authored text). The cascade runs the same
+    /// mirror, because a computed style read while the map still held the replaced block would
+    /// answer a property the page no longer declares with the value the removed block had.
     /// </summary>
-    private void SyncWithAttribute()
-    {
-        var text = _element.GetAttribute("style") ?? "";
-        if (string.Equals(text, _mirroredAttribute, StringComparison.Ordinal)) return;
-        _element.Style.Clear();
-        foreach (var kv in Parse(text))
-            StoreDeclaration(kv.Key, kv.Value);
-        _mirroredAttribute = text;
-    }
+    private void SyncWithAttribute() => Acrux.Core.Css.InlineStyleBlock.SyncWithAttribute(_element);
 
     /// <summary>Writes the block back into the attribute the way the reference engine does
     /// once the CSSOM mutates it (measured: after 'el.style.display = "block flow"', the
@@ -184,15 +158,13 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
     private void SyncAttribute()
     {
         var text = SerializeForCssText(_element.Style);
-        _mirroredAttribute = text;
+        _element.StyleMirrorText = text;
         if (!string.Equals(_element.GetAttribute("style") ?? "", text, StringComparison.Ordinal))
             _element.SetAttribute("style", text);
     }
 
     private static Dictionary<string, string> Parse(string? styleText) =>
-        string.IsNullOrWhiteSpace(styleText)
-            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            : new Acrux.Core.Css.CssParser().ParseInlineStyle(styleText!);
+        Acrux.Core.Css.InlineStyleBlock.Parse(styleText);
 
     /// <summary>
     /// The block as the reference engine prints it — the one text both <c>cssText</c> and the style
@@ -233,16 +205,7 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
     /// 'margin: 0px auto' however the author typed them.
     /// </para></summary>
     private static string CanonicalSpecifiedValue(string name, string value)
-    {
-        if (name.StartsWith("--", StringComparison.Ordinal)) return value;
-        var text = value.Trim();
-        if (Acrux.Core.Css.Resolver.CssPropertyTraits.IsCssWideKeyword(text))
-            return text.ToLowerInvariant();
-        if (name.Equals("display", StringComparison.OrdinalIgnoreCase)
-            && Acrux.Core.Css.Resolver.CssPropertyApplier.TryCanonicalDisplayText(text, out var canonical))
-            return canonical;
-        return Acrux.Core.Css.CssValueText.Canonicalize(text, name.ToLowerInvariant());
-    }
+        => Acrux.Core.Css.InlineStyleBlock.CanonicalSpecifiedValue(name, value);
 }
 
 

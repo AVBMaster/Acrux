@@ -53,6 +53,8 @@ public class StyleCascade
     {
         AnalyzeIfNeeded();
 
+        ApplyCustomProperties();
+
         ApplyCascadeAffecting();
 
         ApplyHighPriority();
@@ -88,8 +90,6 @@ public class StyleCascade
 
     private void ApplyMatchResult(CascadeFilter? filter)
     {
-        // Apply custom properties FIRST so that var() references in regular
-        // properties resolve against the current element's declarations.
         foreach (var customName in _map.CustomNames)
         {
             if (filter?.Rejects(new CssPropertyName(customName)) == true) continue;
@@ -98,9 +98,7 @@ public class StyleCascade
             // in the same map a custom property does, but it is not one: it must never reach the
             // table var() reads. What it does reach is the computed style, which answers the value
             // the page wrote even though no layout step looks at it.
-            if (Acrux.Core.Css.Properties.CssPropertyIdExtensions.IsCustomPropertyName(customName))
-                ApplyCustomIfPresent(customName);
-            else
+            if (!Acrux.Core.Css.Properties.CssPropertyIdExtensions.IsCustomPropertyName(customName))
                 ApplyDeclaredOnlyIfPresent(customName);
         }
         foreach (var id in _map.NativeIds)
@@ -231,16 +229,55 @@ public class StyleCascade
             _state.ApplyDeclaredOnlyProperty(name, prop.Value);
     }
 
-    private void ApplyCustomIfPresent(string customName)
+    /// <summary>
+    /// Store the element's custom properties before any property is computed. CSS Variables 1 §2 puts
+    /// var() replacement in front of the cascade, so 'font-size: var(--x)' has to see the '--x' the
+    /// same element declared — whether it was written after the declaration that uses it or reached
+    /// through a chain ('--a: var(--b); --b: 14pt'). The reference engine answers the real number for
+    /// both (measured: 20px, 25px, 18.6667px), so the pass repeats until the table stops changing
+    /// rather than running once in declaration order.
+    /// </summary>
+    private void ApplyCustomProperties()
     {
-        if (!_map.TryGetWinner(customName, out var priority)) return;
-        if (!priority.IsRelevant) return;
+        var style = _state.Element?.ComputedStyle;
+        if (style == null) return;
+        var pending = new List<KeyValuePair<string, CssValue>>();
+        foreach (var customName in _map.CustomNames)
+        {
+            if (!Acrux.Core.Css.Properties.CssPropertyIdExtensions.IsCustomPropertyName(customName))
+                continue;
+            var value = WinningCustomValue(customName);
+            if (value == null) continue;
+            pending.Add(new KeyValuePair<string, CssValue>(
+                customName.StartsWith("--", StringComparison.Ordinal) ? customName[2..] : customName,
+                value));
+        }
+
+        for (int pass = 0; pass < pending.Count + 1 && pending.Count > 0; pass++)
+        {
+            bool changed = false;
+            foreach (var (lookup, value) in pending)
+            {
+                var before = style.GetCustomProperty(lookup);
+                _state.ApplyCustomProperty("--" + lookup, value);
+                if (!string.Equals(before, style.GetCustomProperty(lookup), StringComparison.Ordinal))
+                    changed = true;
+            }
+            if (!changed) break;
+        }
+    }
+
+    /// <summary>The declaration that wins this custom property's cascade slot, or null when the
+    /// property has no winning declaration on this element.</summary>
+    private CssValue? WinningCustomValue(string customName)
+    {
+        if (!_map.TryGetWinner(customName, out var priority)) return null;
+        if (!priority.IsRelevant) return null;
         var matchedEntry = FindMatchedEntry(priority);
-        if (matchedEntry == null) return;
+        if (matchedEntry == null) return null;
         var prop = matchedEntry.Properties.Properties
             .LastOrDefault(p => p.Name.IsCustom && p.Name.CustomName == customName);
-        if (prop.Value != null)
-            _state.ApplyCustomProperty(customName, prop.Value);
+        return prop.Value;
     }
 
     private void ApplyProperty(CssPropertyId id, CssValue value)
@@ -302,6 +339,14 @@ public class CascadeResolverState
         // prefixed name but behaves exactly like the unprefixed one, and only the name differs.
         var name = CssPropertyIdExtensions.BehaviourName(CssPropertyIdExtensions.ToString(id));
         var text = value.CssText();
+        // A var() that names no custom property this element has leaves the declaration with no
+        // value at all, and a valueless declaration computes the way an absent one does — the
+        // inherited value where the property inherits, the initial elsewhere (CSS Variables 1 §3,
+        // measured: 'opacity: calc(var(--x))' is the initial 1, 'color: var(--x)' is the parent's
+        // colour, 'width: calc(10px + var(--x))' is the width a box with no 'width' was given).
+        // The test reads the text as written; once the substitution has run, the failure it is
+        // looking for has been papered over into 'calc(10px + )'.
+        if (CssFunctionEvaluator.HasUnresolvedVar(text, Element)) return;
         // 'content' keeps its counters as written; the layout that owns the counter scope turns
         // them into text (CssFunctionEvaluator.EvaluateForContent says why).
         text = name.Equals("content", StringComparison.OrdinalIgnoreCase)

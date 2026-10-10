@@ -1,0 +1,74 @@
+Reference truth for snapshots/_probe_b265_n.html — the math function family other than calc().
+Harvested 2026-10-10 from the reference engine (Chromium 150 webview) through
+window.harvest(a, b) / window.sheet(), in the row format
+  i|property|authored|S=style echo non-empty|P=CSS.supports(name, value)|R=CSS.supports("name: value")
+   |V=getPropertyValue (specified)|C=getComputedStyle (computed)
+
+The three questions these rows answer, and what the reference answered:
+* A bare number given to sin(), cos() or tan() is RADIANS: 'cos(0.5)' is 'calc(0.877583)' (row 5),
+  while 'sin(100grad)' is 'calc(1)' (row 2).
+* The inverse functions answer with an ANGLE, so they belong to 'rotate' and to nothing else
+  (rows 9-14: 'atan2(-1,-1)' is 'calc(-135deg)', 'asin(1deg)' is refused).
+* sign(), sqrt(), exp(), log() and pow() answer with a COUNT, which a length-valued property turns
+  down (rows 21-34) while 'line-height' takes it (rows 6-8).
+* Every function other than calc() prints as a calc() once worked out; one whose arguments are not
+  all absolute units is left standing exactly as written (rows 31, 46, 48).
+
+0|width|calc(sin(30deg) * 100px)|S=Y|P=Y|R=Y|V=calc(50px)|C=50px
+1|width|calc(sin(0.5) * 100px)|S=Y|P=Y|R=Y|V=calc(47.9426px)|C=47.9375px
+2|width|calc(sin(100grad) * 100px)|S=Y|P=Y|R=Y|V=calc(100px)|C=100px
+3|width|calc(cos(60deg) * 100px)|S=Y|P=Y|R=Y|V=calc(50px)|C=50px
+4|width|calc(tan(45deg) * 1px)|S=Y|P=Y|R=Y|V=calc(1px)|C=1px
+5|line-height|cos(0.5)|S=Y|P=Y|R=Y|V=calc(0.877583)|C=14.0413px
+6|line-height|sqrt(4)|S=Y|P=Y|R=Y|V=calc(2)|C=32px
+7|line-height|sign(1px)|S=Y|P=Y|R=Y|V=calc(1)|C=16px
+8|line-height|calc(1 + 2)|S=Y|P=Y|R=Y|V=calc(3)|C=48px
+9|rotate|asin(0.5)|S=Y|P=Y|R=Y|V=calc(30deg)|C=30deg
+10|rotate|acos(0.5)|S=Y|P=Y|R=Y|V=calc(60deg)|C=60deg
+11|rotate|atan(1)|S=Y|P=Y|R=Y|V=calc(45deg)|C=45deg
+12|rotate|atan2(1,1)|S=Y|P=Y|R=Y|V=calc(45deg)|C=45deg
+13|rotate|atan2(-1,-1)|S=Y|P=Y|R=Y|V=calc(-135deg)|C=-135deg
+14|rotate|asin(1deg)|S=|P=|R=|V=|C=none
+15|rotate|calc(1turn + 100grad)|S=Y|P=Y|R=Y|V=calc(450deg)|C=450deg
+16|width|calc(sin(1px))|S=|P=|R=|V=|C=367px
+17|width|calc(atan2(1px,1px))|S=|P=|R=|V=|C=367px
+18|width|calc(hypot(1px,1s))|S=|P=|R=|V=|C=367px
+19|width|calc(hypot(3px,4px))|S=Y|P=Y|R=Y|V=calc(5px)|C=5px
+20|width|calc(hypot(3px,4px) + 1px)|S=Y|P=Y|R=Y|V=calc(6px)|C=6px
+21|width|sqrt(4)|S=|P=|R=|V=|C=367px
+22|width|sqrt(4px)|S=|P=|R=|V=|C=367px
+23|width|pow(2,3)|S=|P=|R=|V=|C=367px
+24|width|calc(pow(2,3) * 1px)|S=Y|P=Y|R=Y|V=calc(8px)|C=8px
+25|width|pow(2px,2)|S=|P=|R=|V=|C=367px
+26|width|exp(1)|S=|P=|R=|V=|C=367px
+27|width|calc(exp(0) * 1px)|S=Y|P=Y|R=Y|V=calc(1px)|C=1px
+28|width|log(1px)|S=|P=|R=|V=|C=367px
+29|width|calc(sqrt(4) + 1px)|S=|P=|R=|V=|C=367px
+30|width|abs(-1px)|S=Y|P=Y|R=Y|V=calc(1px)|C=1px
+31|width|abs(-1em)|S=Y|P=Y|R=Y|V=abs(-1em)|C=16px
+32|width|abs(calc(10px + 2px))|S=Y|P=Y|R=Y|V=calc(12px)|C=12px
+33|width|sign(1px)|S=|P=|R=|V=|C=367px
+34|width|calc(sign(1px))|S=|P=|R=|V=|C=367px
+35|width|calc(1px * sign(10px))|S=Y|P=Y|R=Y|V=calc(1px)|C=1px
+36|width|calc(sign(-1px) * 1px)|S=Y|P=Y|R=Y|V=calc(-1px)|C=0px
+37|width|round(10.2px, 1px)|S=Y|P=Y|R=Y|V=calc(10px)|C=10px
+38|width|round(up, 10.2px, 1px)|S=Y|P=Y|R=Y|V=calc(11px)|C=11px
+39|width|round(nearest, 10.5px, 3px)|S=Y|P=Y|R=Y|V=calc(12px)|C=12px
+40|width|round(1px, 2)|S=|P=|R=|V=|C=367px
+41|width|round(infinity, 1px)|S=|P=|R=|V=|C=367px
+42|width|mod(10px, 3px)|S=Y|P=Y|R=Y|V=calc(1px)|C=1px
+43|width|mod(10px, 3)|S=|P=|R=|V=|C=367px
+44|width|rem(10px, 3px)|S=Y|P=Y|R=Y|V=calc(1px)|C=1px
+45|width|min(10px, 20px)|S=Y|P=Y|R=Y|V=calc(10px)|C=10px
+46|width|min(1em, 2em)|S=Y|P=Y|R=Y|V=min(1em, 2em)|C=16px
+47|width|clamp(1px, 2px, 3px)|S=Y|P=Y|R=Y|V=calc(2px)|C=2px
+48|width|clamp(1em, 2px, 3em)|S=Y|P=Y|R=Y|V=clamp(1em, 2px, 3em)|C=16px
+49|width|calc(min(10px,20px) + 5px)|S=Y|P=Y|R=Y|V=calc(15px)|C=15px
+50|width|calc(10px + var(--x))|S=Y|P=Y|R=Y|V=calc(10px + var(--x))|C=367px
+51|width|calc(1px + sin(30deg) * 1px)|S=Y|P=Y|R=Y|V=calc(1.5px)|C=1.5px
+52|transition-duration|calc(1s + 1ms)|S=Y|P=Y|R=Y|V=calc(1.001s)|C=1.001s
+53|transition-duration|calc(1s + 100%)|S=|P=|R=|V=|C=0s
+54|animation-duration|500ms|S=Y|P=Y|R=Y|V=500ms|C=0.5s
+55|width|calc(10px + 2px)|S=Y|P=Y|R=Y|V=calc(12px)|C=12px
+56|background-position|calc(10px + 2px) calc(20% + 3%)|S=Y|P=Y|R=Y|V=calc(12px) calc(23%)|C=12px 23%
+sheet|width|C=50px|rotate=-135deg|lineHeight=14.0413px|transitionDuration=1.001s|rule=width: calc(50px); rotate: calc(-135deg); transition: calc(1.001s); line-height: calc(0.877583);

@@ -1,0 +1,44 @@
+0|width|calc(1%)|S=Y|P=Y|R=Y|V=calc(1%)|C=4px
+1|width|calc(1px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 1px)|C=5px
+2|width|calc(100% - 10px)|S=Y|P=Y|R=Y|V=calc(100% - 10px)|C=390px
+3|width|calc(100% * 2)|S=Y|P=Y|R=Y|V=calc(200%)|C=800px
+4|width|calc(1em + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 1em)|C=20px
+5|width|calc(1% + 1em)|S=Y|P=Y|R=Y|V=calc(1% + 1em)|C=20px
+6|width|min(1%, 200px)|S=Y|P=Y|R=Y|V=min(1%, 200px)|C=4px
+7|width|max(1%, 10px)|S=Y|P=Y|R=Y|V=max(1%, 10px)|C=10px
+8|width|clamp(1%, 20px, 3%)|S=Y|P=Y|R=Y|V=clamp(1%, 20px, 3%)|C=12px
+9|width|calc(50% - 20%)|S=Y|P=Y|R=Y|V=calc(30%)|C=120px
+10|width|calc(10px + min(1%, 2px))|S=Y|P=Y|R=Y|V=calc(10px + min(1%, 2px))|C=12px
+11|height|calc(10px + 10%)|S=Y|P=Y|R=Y|V=calc(10% + 10px)|C=30px
+12|height|calc(50%)|S=Y|P=Y|R=Y|V=calc(50%)|C=100px
+13|height|calc(1% + 1em)|S=Y|P=Y|R=Y|V=calc(1% + 1em)|C=18px
+14|margin-top|calc(10px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 10px)|C=14px
+15|margin-left|calc(10px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 10px)|C=14px
+16|margin-top|5%|S=Y|P=Y|R=Y|V=5%|C=20px
+17|margin-bottom|calc(1em + 5%)|S=Y|P=Y|R=Y|V=calc(5% + 1em)|C=36px
+18|padding-left|calc(10px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 10px)|C=14px
+19|padding-top|10%|S=Y|P=Y|R=Y|V=10%|C=40px
+20|padding-right|calc(2% + 2px)|S=Y|P=Y|R=Y|V=calc(2% + 2px)|C=10px
+21|font-size|calc(1em + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 1em)|C=16.16px
+22|font-size|calc(100%)|S=Y|P=Y|R=Y|V=calc(100%)|C=16px
+23|font-size|calc(50% + 8px)|S=Y|P=Y|R=Y|V=calc(50% + 8px)|C=16px
+24|font-size|calc(1rem + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 1rem)|C=16.16px
+25|line-height|calc(100% + 10px)|S=Y|P=Y|R=Y|V=calc(100% + 10px)|C=26px
+26|line-height|calc(1em + 5%)|S=Y|P=Y|R=Y|V=calc(5% + 1em)|C=16.7969px
+27|top|calc(10px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 10px)|C=12px
+28|left|calc(10px + 5%)|S=Y|P=Y|R=Y|V=calc(5% + 10px)|C=30px
+29|max-width|calc(1% + 10px)|S=Y|P=Y|R=Y|V=calc(1% + 10px)|C=calc(1% + 10px)
+30|min-width|calc(2% + 5px)|S=Y|P=Y|R=Y|V=calc(2% + 5px)|C=calc(2% + 5px)
+31|flex-basis|calc(50% - 100px)|S=Y|P=Y|R=Y|V=calc(50% - 100px)|C=calc(50% - 100px)
+32|width|calc(1px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 1px)|C=5px
+33|inset-inline-start|calc(10px + 2%)|S=Y|P=Y|R=Y|V=calc(2% + 10px)|C=18px
+34|inset-inline-end|5%|S=Y|P=Y|R=Y|V=5%|C=20px
+35|inset-block-start|calc(10px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 10px)|C=12px
+36|bottom|calc(10px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 10px)|C=12px
+37|right|calc(10px + 2%)|S=Y|P=Y|R=Y|V=calc(2% + 10px)|C=18px
+38|top|50%|S=Y|P=Y|R=Y|V=50%|C=100px
+39|left|25%|S=Y|P=Y|R=Y|V=25%|C=100px
+40|margin-inline-start|calc(10px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 10px)|C=14px
+41|padding-block-end|5%|S=Y|P=Y|R=Y|V=5%|C=20px
+42|top|calc(10px + 1%)|S=Y|P=Y|R=Y|V=calc(1% + 10px)|C=calc(1% + 10px)
+43|inset-inline-start|calc(10px + 2%)|S=Y|P=Y|R=Y|V=calc(2% + 10px)|C=calc(2% + 10px)

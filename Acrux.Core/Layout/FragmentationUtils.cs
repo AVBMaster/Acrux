@@ -38,7 +38,7 @@ public static class AbsoluteUtils
         float pixels = length switch
         {
             PercentLength pct => pct.Value * axisBasis,
-            MathLength math => math.ToPixels(axisBasis, rootFontSize, viewportWidth, viewportHeight),
+            MathLength math => math.ToPixelsAgainstPercentageBase(axisBasis, rootFontSize, viewportWidth, viewportHeight),
             _ => length.ToPixels(style.FontSize, rootFontSize, viewportWidth, viewportHeight),
         };
         return float.IsNaN(pixels) ? null : pixels;

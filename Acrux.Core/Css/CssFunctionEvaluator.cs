@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using Acrux.Core.Dom;
 
@@ -42,25 +43,20 @@ public static class CssFunctionEvaluator
     {
         if (string.IsNullOrEmpty(value) || maxRecursion <= 0) return value;
 
-        // Percentages inside calc()/min()/max()/clamp() depend on the containing
-        // block, which is unknown at computed-value time: substitute var()/attr()
-        // only and keep the math expression intact (MathLength) so the layout
-        // pass can resolve it against the correct percentage base. Layout-time
-        // callers pass forceMath: true to get the numeric result.
-        if (!forceMath && HasMathFunctionWithPercent(value))
-        {
-            var varsOnly = EvaluateVar(value, context, parentFontSize, rootFontSize, viewportWidth, viewportHeight, maxRecursion);
-            return EvaluateAttr(varsOnly, context);
-        }
-
         var result = value;
 
         result = EvaluateVar(result, context, parentFontSize, rootFontSize, viewportWidth, viewportHeight, maxRecursion);
         result = EvaluateAttr(result, context);
         result = EvaluateCalcAndMath(result, parentFontSize, rootFontSize, viewportWidth, viewportHeight);
-        result = EvaluateFitContent(result, parentFontSize, rootFontSize, viewportWidth, viewportHeight);
-        result = EvaluateCounter(result, context);
-        result = EvaluateCounters(result, context);
+        // A percentage inside a math expression is a share of the box, which is not known here, so
+        // the passes that would price one at the font go the way of the expression they read: the
+        // layout owns them.
+        if (forceMath || !HasMathFunctionWithPercent(result))
+        {
+            result = EvaluateFitContent(result, parentFontSize, rootFontSize, viewportWidth, viewportHeight);
+            result = EvaluateCounter(result, context);
+            result = EvaluateCounters(result, context);
+        }
 
         return result;
     }
@@ -144,23 +140,83 @@ public static class CssFunctionEvaluator
         return false;
     }
 
+    /// <summary>Substitute every var() in the text. The call is found by a parenthesis walk rather
+    /// than by a pattern because a fallback is a value in its own right and may be another call:
+    /// 'var(--red, var(--undef))' has one closing parenthesis more than a flat pattern counts, and
+    /// reading the fallback up to the FIRST ')' hands the property 'var(--undef' — a text no property
+    /// has a value for (measured: the reference engine answers the fallback only when the name is
+    /// the one that is unanswered; rows 9 and 10 of _probe_b265_p.html are both green).</summary>
     private static string EvaluateVar(string value, Element? context, float parentFontSize, float rootFontSize, float viewportWidth, float viewportHeight, int maxRecursion = 10)
     {
-        return VarRegex.Replace(value, match =>
+        if (string.IsNullOrEmpty(value)
+            || value.IndexOf("var", StringComparison.OrdinalIgnoreCase) < 0
+            || maxRecursion <= 0)
+            return value;
+
+        var sb = new System.Text.StringBuilder(value.Length + 16);
+        int i = 0;
+        while (i < value.Length)
         {
-            var name = match.Groups[1].Value.Trim();
-            var fallback = match.Groups[2].Success ? match.Groups[2].Value.Trim() : "";
+            int at = FindVarCall(value, i, out int open);
+            if (at < 0)
+            {
+                sb.Append(value, i, value.Length - i);
+                break;
+            }
+            int close = MatchingClose(value, open);
+            if (close < 0)
+            {
+                // A call whose parenthesis never closes is not a value of anything; leaving the text
+                // as written lets the property's own parse refuse it, which is what the reference
+                // engine ends up doing too.
+                sb.Append(value, i, value.Length - i);
+                break;
+            }
+            sb.Append(value, i, at - i);
+            var argument = value[(open + 1)..close];
+            int comma = TopLevelComma(argument);
+            var name = (comma < 0 ? argument : argument[..comma]).Trim();
+            if (!name.StartsWith("--", StringComparison.Ordinal))
+            {
+                // var() takes a custom property name and nothing else; 'var(color)' is not a value,
+                // and the text stays as written so the property that got it says so.
+                sb.Append(value, at, close + 1 - at);
+                i = close + 1;
+                continue;
+            }
+            var resolved = ResolveVar(name[2..], context);
+            bool answered = resolved != null && resolved.Trim().Length > 0;
+            // Only the branch that is taken is read: a fallback beside an answered name never was.
+            var substitution = answered ? resolved!
+                : comma < 0 ? string.Empty
+                : argument[(comma + 1)..].Trim();
+            sb.Append(substitution.Contains('(')
+                ? Evaluate(substitution, context, parentFontSize, rootFontSize,
+                    viewportWidth, viewportHeight, maxRecursion - 1)
+                : substitution);
+            i = close + 1;
+        }
+        return sb.ToString();
+    }
 
-            var resolved = ResolveVar(name, context);
-
-            if (resolved == null)
-                resolved = !string.IsNullOrEmpty(fallback) ? fallback : "";
-
-            if (resolved != null && (VarRegex.IsMatch(resolved) || CalcFuncRegex.IsMatch(resolved)))
-                resolved = Evaluate(resolved, context, parentFontSize, rootFontSize, viewportWidth, viewportHeight, maxRecursion - 1);
-
-            return resolved ?? "";
-        });
+    /// <summary>The start of the next 'var(' at or after <paramref name="from"/>, with the index of
+    /// its opening parenthesis, or -1 when there is none. 'var' has to be a word of its own: a
+    /// property or function whose name ends in those three letters is not a call.</summary>
+    private static int FindVarCall(string text, int from, out int open)
+    {
+        open = -1;
+        for (int i = from; i + 3 <= text.Length; i++)
+        {
+            if (!text.AsSpan(i, 3).Equals("var".AsSpan(), StringComparison.OrdinalIgnoreCase)) continue;
+            if (i > 0 && (char.IsLetterOrDigit(text[i - 1]) || text[i - 1] == '-' || text[i - 1] == '_'))
+                continue;
+            int j = i + 3;
+            while (j < text.Length && (text[j] == ' ' || text[j] == '\t')) j++;
+            if (j >= text.Length || text[j] != '(') continue;
+            open = j;
+            return i;
+        }
+        return -1;
     }
 
     private static string? ResolveVar(string name, Element? context)
@@ -207,6 +263,68 @@ public static class CssFunctionEvaluator
         return null;
     }
 
+    /// <summary>Whether the text asks for a custom property that nothing in the element's chain
+    /// answers — or answers with nothing — while no fallback is there to answer it instead. CSS
+    /// Variables 1 §3 makes the whole declaration invalid at computed-value time when that happens:
+    /// the CSSOM echo keeps what the page wrote while the computed value is the property's inherited
+    /// value or its initial (measured: 'opacity: calc(var(--x))' computes the initial '1', 'color:
+    /// var(--x)' under a green parent computes that green, and 'width: calc(10px + var(--x))' computes
+    /// the width a box with no 'width' was given). Printing the substitution instead would say
+    /// something no engine says — and the text it prints, 'calc(10px + )', is not a value of
+    /// anything.</summary>
+    public static bool HasUnresolvedVar(string value, Element? context)
+    {
+        for (int i = 0; i < value.Length; i++)
+        {
+            if (i + 4 > value.Length
+                || !value.AsSpan(i, 4).Equals("var(".AsSpan(), StringComparison.OrdinalIgnoreCase))
+                continue;
+            int close = MatchingClose(value, i + 3);
+            if (close < 0) return false;
+            var argument = value[(i + 4)..close];
+            int comma = TopLevelComma(argument);
+            var name = (comma < 0 ? argument : argument[..comma]).Trim();
+            if (!name.StartsWith("--", StringComparison.Ordinal)) { i = close; continue; }
+            var substituted = ResolveVar(name[2..], context);
+            // An empty value substitutes to nothing, which leaves the property with no value to
+            // parse — the same failure, and the same answer ('--x: ;' with 'opacity: var(--x)').
+            bool answered = substituted != null && substituted.Trim().Length > 0;
+            if (!answered && comma < 0) return true;
+            // Only the branch that is taken is a problem: 'var(--x, var(--y))' with --x defined never
+            // reads --y, so an undefined --y in the fallback says nothing here (measured).
+            if (!answered && HasUnresolvedVar(argument[(comma + 1)..], context)) return true;
+            i = close;
+        }
+        return false;
+    }
+
+    /// <summary>The index of the parenthesis that closes the one at <paramref name="open"/>, or -1
+    /// when the list never closes.</summary>
+    private static int MatchingClose(string text, int open)
+    {
+        int depth = 0;
+        for (int i = open; i < text.Length; i++)
+        {
+            if (text[i] == '(') depth++;
+            else if (text[i] == ')' && --depth == 0) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>The comma that separates a var()'s name from its fallback — the first one with no
+    /// parenthesis open in front of it — or -1 when the argument carries no fallback.</summary>
+    private static int TopLevelComma(string argument)
+    {
+        int depth = 0;
+        for (int i = 0; i < argument.Length; i++)
+        {
+            if (argument[i] == '(') depth++;
+            else if (argument[i] == ')' && depth > 0) depth--;
+            else if (argument[i] == ',' && depth == 0) return i;
+        }
+        return -1;
+    }
+
     private static string EvaluateAttr(string value, Element? context)
     {
         return AttrRegex.Replace(value, match =>
@@ -223,137 +341,62 @@ public static class CssFunctionEvaluator
         // 'calc(l + 20)' refers to channel keywords this evaluator cannot resolve.
         if (ColorParser.IsFunctionalColor(value)) return value;
 
-        int maxIter = 20;
-        while (maxIter-- > 0)
+        var calls = CssMathValue.MathCalls(value);
+        if (calls.Count == 0) return value;
+
+        var sb = new StringBuilder(value.Length + 16);
+        int at = 0;
+        foreach (var call in calls)
         {
-            var match = FindOuterMathFunction(value);
-            if (match == null) break;
-
-            var (funcName, innerExpr, _, _) = match.Value;
-            if (HasUnresolvableIdentifier(innerExpr))
+            sb.Append(value, at, call.Start - at);
+            at = call.Start + call.Length;
+            var text = value.Substring(call.Start, call.Length);
+            var category = CssMathValue.TypeOf(text);
+            // A share of the box in one expression with a length is not a number yet — the base is
+            // the containing block, which the layout owns — while an expression that is nothing but
+            // shares folds to the share it adds up to (measured: 'background-position:
+            // calc(10px + 2px) calc(20% + 3%)' computes '12px 23%', and 'calc(300px - 100%)' is
+            // still a calc() at computed-value time). A caller that has published a priced base owns
+            // that box, and then the expression is worked out.
+            var unit = category == null ? null : PrintedUnit(category);
+            if (unit == null || (category == "length" && call.Argument.Contains('%')
+                    && !_percentagesArePriced))
             {
-                // The expression carries a bare identifier that is neither a unit nor
-                // a nested call — a relative color channel keyword inside calc(), for
-                // instance. Folding it to a number here would silently lose meaning,
-                // so leave the expression for the parser that owns it.
-                break;
+                sb.Append(text);
+                continue;
             }
-
             float result;
             try
             {
-                result = EvalMathExpression(innerExpr, funcName, parentFontSize, rootFontSize, viewportWidth, viewportHeight);
+                result = category == "percentage"
+                    ? EvalInPercentageSpace(call, parentFontSize, rootFontSize, viewportWidth, viewportHeight)
+                    : EvalMathExpression(call.Argument, call.Name, parentFontSize, rootFontSize, viewportWidth, viewportHeight);
             }
             catch
             {
                 result = 0;
             }
-            // Six significant digits, which is the precision a reference engine carries a
-            // computed length at (measured: 'calc(100px + 1cm)' is '137.795px'). Rounding the
-            // fold to one decimal made every calc() answer in 0.1px steps, so a third of a
-            // hundred pixels came out '33.3px' and a millimetre came out '3.8px'.
-            value = value[..match.Value.StartIndex]
-                + Acrux.Core.Dom.Animations.CssValueTokenizer.Num(result) + "px"
-                + value[(match.Value.StartIndex + match.Value.Length)..];
+            sb.Append(Acrux.Core.Dom.Animations.CssValueTokenizer.Num(result) + unit);
         }
-        return value;
+        sb.Append(value, at, value.Length - at);
+        return sb.ToString();
     }
 
-    /// <summary>True when the text contains an identifier that this evaluator cannot
-    /// resolve: not a unit glued to a number, and not one of the math functions.</summary>
-    private static bool HasUnresolvableIdentifier(string expr)
+    /// <summary>The unit a math expression of this type is printed with once it has been worked out,
+    /// or null for a type the engine has no number for yet. The engine measures a length in pixels,
+    /// an angle in degrees and a time in seconds, which is what the reference engine prints too
+    /// (measured: 'calc(1grad + 1rad)' is '58.1958deg', 'calc(1s + 1ms)' is '1.001s' and
+    /// 'calc(1 + 2)' is the number '3'); a fraction of a grid track, a frequency and a resolution
+    /// are left as written because nothing here prices them.</summary>
+    private static string? PrintedUnit(string category) => category switch
     {
-        for (int i = 0; i < expr.Length; i++)
-        {
-            char c = expr[i];
-            if (!(char.IsLetter(c) || c == '_')) continue;
-
-            int start = i;
-            while (i < expr.Length && (char.IsLetterOrDigit(expr[i]) || expr[i] == '-' || expr[i] == '_')) i++;
-            string word = expr[start..i];
-
-            if (i < expr.Length && expr[i] == '(') continue; // nested call: resolvable
-            char before = start > 0 ? expr[start - 1] : ' ';
-            if (char.IsDigit(before) || before == '.') continue; // unit suffix: resolvable
-
-            bool known = false;
-            foreach (var name in MathFunctions)
-            {
-                if (string.Equals(word, name, StringComparison.OrdinalIgnoreCase)) { known = true; break; }
-            }
-            if (!known)
-            {
-                foreach (var name in MathKeywordArguments)
-                {
-                    if (string.Equals(word, name, StringComparison.OrdinalIgnoreCase)) { known = true; break; }
-                }
-            }
-            if (!known) return true;
-            i--;
-        }
-        return false;
-    }
-
-    /// <summary>Identifiers that are arguments rather than unknown names: the
-    /// rounding strategies of round(), plus the special values it accepts.</summary>
-    private static readonly string[] MathKeywordArguments =
-        { "nearest", "up", "down", "to-zero", "inf", "-inf", "nan" };
-
-    /// <summary>
-    /// CSS Values 4 &amp;10.3 math functions. Order only matters for readability: the
-    /// match requires a '(' right after the name, so 'min' cannot shadow 'minmax'.
-    /// </summary>
-    private static readonly string[] MathFunctions =
-        { "calc", "clamp", "round", "sign", "min", "max", "mod", "rem", "abs" };
-
-    private static (string funcName, string innerExpr, int StartIndex, int Length)? FindOuterMathFunction(string value)
-    {
-        int i = 0;
-        while (i < value.Length)
-        {
-            string? func = null;
-            // A function name must start at a token boundary: 'max(' inside
-            // 'minmax(' is not a call to max().
-            bool boundary = i == 0 || !(char.IsLetterOrDigit(value[i - 1]) || value[i - 1] == '-' || value[i - 1] == '_');
-            if (boundary)
-            {
-                foreach (var name in MathFunctions)
-                {
-                    if (i + name.Length < value.Length &&
-                        value[i + name.Length] == '(' &&
-                        value[i..(i + name.Length)].Equals(name, StringComparison.OrdinalIgnoreCase))
-                    {
-                        func = name;
-                        break;
-                    }
-                }
-            }
-
-            if (func != null)
-            {
-                int parenStart = i + func.Length; // index of the '(' character
-                int depth = 1;
-                int j = parenStart + 1;           // start scanning AFTER '('
-                while (j < value.Length && depth > 0)
-                {
-                    if (value[j] == '(') depth++;
-                    else if (value[j] == ')') depth--;
-                    if (depth > 0) j++;
-                }
-                if (depth == 0)
-                {
-                    var inner = value[(parenStart + 1)..j];
-                    return (func, inner, i, j - i + 1);
-                }
-                i = j + 1;
-            }
-            else
-            {
-                i++;
-            }
-        }
-        return null;
-    }
+        "length" => "px",
+        "angle" => "deg",
+        "time" => "s",
+        "number" => "",
+        "percentage" => "%",
+        _ => null,
+    };
 
     private static float EvalMathExpression(string expr, string funcName, float parentFontSize, float rootFontSize, float viewportWidth, float viewportHeight)
     {
@@ -431,8 +474,68 @@ public static class CssFunctionEvaluator
                 : a - b * MathF.Truncate(quotient);
         }
 
+        if (funcName == "hypot")
+        {
+            // The length of a vector out of the arguments, in their own unit (measured:
+            // 'hypot(3px, 4px)' is 'calc(5px)').
+            var parts = SplitArgs(expr);
+            double sum = 0;
+            foreach (var part in parts)
+            {
+                double value = EvalArithmetic(part.Trim(), parentFontSize, rootFontSize,
+                    viewportWidth, viewportHeight);
+                sum += value * value;
+            }
+            return (float)System.Math.Sqrt(sum);
+        }
+
+        if (funcName is "sqrt" or "exp" or "log" or "pow"
+            or "sin" or "cos" or "tan" or "asin" or "acos" or "atan" or "atan2")
+            return EvalNamedFunction(funcName, expr, parentFontSize, rootFontSize,
+                viewportWidth, viewportHeight);
+
         return EvalArithmetic(expr, parentFontSize, rootFontSize, viewportWidth, viewportHeight);
     }
+
+    /// <summary>
+    /// The arithmetic and circular functions, worked out in the unit the surrounding expression is
+    /// measured in. The first group answers with a count and takes nothing but counts; sin(), cos()
+    /// and tan() take an angle but a bare number given to them is radians, which a page would not
+    /// guess (measured: 'cos(0.5)' is 'calc(0.877583)', the cosine of half a radian); and the
+    /// inverse functions answer with an angle, printed in degrees like every other angle here.
+    /// </summary>
+    private static float EvalNamedFunction(string funcName, string expr, float parentFontSize,
+        float rootFontSize, float viewportWidth, float viewportHeight)
+    {
+        var parts = SplitArgs(expr);
+        float Value(int index) => index < parts.Count
+            ? EvalArithmetic(parts[index].Trim(), parentFontSize, rootFontSize,
+                viewportWidth, viewportHeight)
+            : 0f;
+
+        switch (funcName)
+        {
+            case "sqrt": return parts.Count < 1 || Value(0) < 0 ? 0f : MathF.Sqrt(Value(0));
+            case "exp": return parts.Count < 1 ? 0f : MathF.Exp(Value(0));
+            case "log": return parts.Count < 1 || Value(0) <= 0 ? 0f : MathF.Log(Value(0));
+            case "pow": return parts.Count < 2 ? 0f : MathF.Pow(Value(0), Value(1));
+            case "sin": return parts.Count < 1 ? 0f : MathF.Sin(RadiansOf(Value(0), parts[0]));
+            case "cos": return parts.Count < 1 ? 0f : MathF.Cos(RadiansOf(Value(0), parts[0]));
+            case "tan": return parts.Count < 1 ? 0f : MathF.Tan(RadiansOf(Value(0), parts[0]));
+            case "asin": return parts.Count < 1 ? 0f : MathF.Asin(Math.Clamp(Value(0), -1f, 1f)) * DegreesPerRadian;
+            case "acos": return parts.Count < 1 ? 0f : MathF.Acos(Math.Clamp(Value(0), -1f, 1f)) * DegreesPerRadian;
+            case "atan": return parts.Count < 1 ? 0f : MathF.Atan(Value(0)) * DegreesPerRadian;
+            default: return parts.Count < 2 ? 0f : MathF.Atan2(Value(0), Value(1)) * DegreesPerRadian;
+        }
+    }
+
+    private const float DegreesPerRadian = 180f / MathF.PI;
+
+    /// <summary>An angle in radians: the expression has already been resolved to degrees by the
+    /// unit conversion, but a count written into sin(), cos() or tan() is radians as it is, so the
+    /// text the page wrote decides which of the two it was (measured, both spellings).</summary>
+    private static float RadiansOf(float value, string argument)
+        => CssMathValue.TypeOf(argument) == "number" ? value : value / DegreesPerRadian;
 
     private enum RoundStrategy { Nearest, Up, Down, ToZero }
 
@@ -537,18 +640,61 @@ public static class CssFunctionEvaluator
         return result2;
     }
 
+    /// <summary>Work every math function that stands on its own inside an expression out to the
+    /// number it is worth, printed in the unit its own type prints in. The old version printed 'px'
+    /// for all of them, which turned a nested angle into a length and a nested time into a
+    /// length.</summary>
     private static string ResolveNestedFunctions(string expr, float parentFontSize, float rootFontSize, float viewportWidth, float viewportHeight)
     {
-        int maxIter = 10;
-        while (maxIter-- > 0)
+        var calls = CssMathValue.MathCalls(expr);
+        if (calls.Count == 0) return expr;
+
+        var sb = new StringBuilder(expr.Length + 16);
+        int at = 0;
+        foreach (var call in calls)
         {
-            var match = FindOuterMathFunction(expr);
-            if (match == null) break;
-            var (funcName, innerExpr, start, len) = match.Value;
-            float val = EvalMathExpression(innerExpr, funcName, parentFontSize, rootFontSize, viewportWidth, viewportHeight);
-            expr = expr[..start] + $"{val:F1}px" + expr[(start + len)..];
+            sb.Append(expr, at, call.Start - at);
+            at = call.Start + call.Length;
+            var text = expr.Substring(call.Start, call.Length);
+            var category = CssMathValue.TypeOf(text);
+            var unit = category == null ? null : PrintedUnit(category);
+            // A share of the box is priced by the layout, not here, so a percentage expression keeps
+            // its own text and the caller decides what to do with it — unless the caller has
+            // published the box it is a share of.
+            if (unit == null || (category == "length" && call.Argument.Contains('%')
+                    && !_percentagesArePriced))
+            {
+                sb.Append(text);
+                continue;
+            }
+            float result;
+            try
+            {
+                result = category == "percentage"
+                    ? EvalInPercentageSpace(call, parentFontSize, rootFontSize, viewportWidth, viewportHeight)
+                    : EvalMathExpression(call.Argument, call.Name, parentFontSize, rootFontSize,
+                        viewportWidth, viewportHeight);
+            }
+            catch
+            {
+                result = 0;
+            }
+            sb.Append(Acrux.Core.Dom.Animations.CssValueTokenizer.Num(result) + unit);
         }
-        return expr;
+        sb.Append(expr, at, expr.Length - at);
+        return sb.ToString();
+    }
+
+    /// <summary>Work out an expression that is nothing but shares of a box. The box is not known at
+    /// computed-value time, so the arithmetic runs with 100 as the base and the answer keeps the
+    /// percent sign it was priced with (measured: 'background-position: calc(20% + 3%)' computes
+    /// '23%', not the fraction of a font size the plain conversion would give).</summary>
+    private static float EvalInPercentageSpace(CssMathValue.MathCall call, float parentFontSize,
+        float rootFontSize, float viewportWidth, float viewportHeight)
+    {
+        using (UsePercentageBase(100f))
+            return EvalMathExpression(call.Argument, call.Name, parentFontSize, rootFontSize,
+                viewportWidth, viewportHeight);
     }
 
     private abstract class Token { }
@@ -646,17 +792,31 @@ public static class CssFunctionEvaluator
     /// calc() depends on the containing block, which only layout knows, so the
     /// layout-time caller publishes it here instead of overloading the font size
     /// argument (CSS Values 4 10.7).
+    ///
+    /// <c>priced</c> says that the base published is a BOX — that the number in front of
+    /// the engine is what the percentage is a share of, and not a font size handed over for
+    /// the 'em's in the same expression. Only then may a length expression that mixes a
+    /// percentage with a length be worked out: the computed surface must leave
+    /// 'calc(300px - 100%)' standing because nothing has measured the box yet, while the
+    /// layout of a 400px block has to be told that its 'width: calc(100% - 10px)' is 390px.
     /// </summary>
     [ThreadStatic] private static float _percentageBase;
+    [ThreadStatic] private static bool _percentagesArePriced;
 
     public sealed class PercentageBaseScope : IDisposable
     {
-        private readonly float _previous;
-        internal PercentageBaseScope(float value) { _previous = _percentageBase; _percentageBase = value; }
-        public void Dispose() => _percentageBase = _previous;
+        private readonly float _previousBase;
+        private readonly bool _previousPriced;
+        internal PercentageBaseScope(float value, bool priced)
+        {
+            _previousBase = _percentageBase; _previousPriced = _percentagesArePriced;
+            _percentageBase = value; _percentagesArePriced = priced;
+        }
+        public void Dispose() { _percentageBase = _previousBase; _percentagesArePriced = _previousPriced; }
     }
 
-    public static IDisposable UsePercentageBase(float value) => new PercentageBaseScope(value);
+    public static IDisposable UsePercentageBase(float value, bool priced = false)
+        => new PercentageBaseScope(value, priced);
 
     private static float ConvertUnit(float value, string unit, float parentFontSize, float rootFontSize, float viewportWidth, float viewportHeight)
     {
@@ -717,6 +877,14 @@ public static class CssFunctionEvaluator
             "rlh" => value * rootFontSize,
             "cap" => value * parentFontSize * 0.7f,
             "rcap" => value * rootFontSize * 0.7f,
+            // An angle is measured in degrees and a time in seconds, whichever way the page spelled
+            // it, because those are the units they are printed in — the same table the fold of a
+            // specified value reads from (measured: 'calc(1grad + 1rad)' is '58.1958deg' and
+            // 'calc(1s + 1ms)' is '1.001s').
+            "grad" => value * 0.9f,
+            "rad" => value * DegreesPerRadian,
+            "turn" => value * 360f,
+            "ms" => value * 0.001f,
             _ => value
         };
     }
@@ -784,7 +952,12 @@ public static class CssFunctionEvaluator
 
     public static bool IsCalc(string value) => CalcFuncRegex.IsMatch(value);
     public static bool IsVar(string value) => VarRegex.IsMatch(value);
-    public static bool IsMinMax(string value) => FindOuterMathFunction(value) != null;
-    public static bool IsClamp(string value) => FindOuterMathFunction(value)?.funcName == "clamp";
+    public static bool IsMinMax(string value) => CssMathValue.MathCalls(value).Count > 0;
+    public static bool IsClamp(string value)
+    {
+        foreach (var call in CssMathValue.MathCalls(value))
+            if (call.Name == "clamp") return true;
+        return false;
+    }
     public static bool IsFitContent(string value) => FitContentRegex.IsMatch(value);
 }

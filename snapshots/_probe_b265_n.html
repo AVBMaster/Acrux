@@ -1,0 +1,112 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b265 N math function family</title>
+<style>
+#n1 { width: calc(sin(30deg) * 100px); rotate: atan2(-1,-1);
+      transition: calc(1s + 1ms) ease; line-height: cos(0.5); }
+</style>
+</head>
+<body>
+<div id="t"></div>
+<div id="n1"></div>
+<script>
+// One row per math function other than calc(): the type it answers with decides whether the
+// declaration is taken at all, and the value it reduces to decides both the specified text (V=,
+// where a function becomes a calc()) and the computed one (C=). The typing of the OPERATORS
+// around a function is _probe_b265_m.html and the arithmetic of a plain sum is
+// _probe_b265_l.html.
+//
+// The measured questions here are three: does a bare number given to sin(), cos() or tan() mean
+// radians, do the inverse functions answer with an angle, and does every function other than
+// calc() print itself as a calc() once it has been worked out.
+var CASES = [
+  ["width", "calc(sin(30deg) * 100px)"],
+  ["width", "calc(sin(0.5) * 100px)"],
+  ["width", "calc(sin(100grad) * 100px)"],
+  ["width", "calc(cos(60deg) * 100px)"],
+  ["width", "calc(tan(45deg) * 1px)"],
+  ["line-height", "cos(0.5)"],
+  ["line-height", "sqrt(4)"],
+  ["line-height", "sign(1px)"],
+  ["line-height", "calc(1 + 2)"],
+  ["rotate", "asin(0.5)"],
+  ["rotate", "acos(0.5)"],
+  ["rotate", "atan(1)"],
+  ["rotate", "atan2(1,1)"],
+  ["rotate", "atan2(-1,-1)"],
+  ["rotate", "asin(1deg)"],
+  ["rotate", "calc(1turn + 100grad)"],
+  ["width", "calc(sin(1px))"],
+  ["width", "calc(atan2(1px,1px))"],
+  ["width", "calc(hypot(1px,1s))"],
+  ["width", "calc(hypot(3px,4px))"],
+  ["width", "calc(hypot(3px,4px) + 1px)"],
+  ["width", "sqrt(4)"],
+  ["width", "sqrt(4px)"],
+  ["width", "pow(2,3)"],
+  ["width", "calc(pow(2,3) * 1px)"],
+  ["width", "pow(2px,2)"],
+  ["width", "exp(1)"],
+  ["width", "calc(exp(0) * 1px)"],
+  ["width", "log(1px)"],
+  ["width", "calc(sqrt(4) + 1px)"],
+  ["width", "abs(-1px)"],
+  ["width", "abs(-1em)"],
+  ["width", "abs(calc(10px + 2px))"],
+  ["width", "sign(1px)"],
+  ["width", "calc(sign(1px))"],
+  ["width", "calc(1px * sign(10px))"],
+  ["width", "calc(sign(-1px) * 1px)"],
+  ["width", "round(10.2px, 1px)"],
+  ["width", "round(up, 10.2px, 1px)"],
+  ["width", "round(nearest, 10.5px, 3px)"],
+  ["width", "round(1px, 2)"],
+  ["width", "round(infinity, 1px)"],
+  ["width", "mod(10px, 3px)"],
+  ["width", "mod(10px, 3)"],
+  ["width", "rem(10px, 3px)"],
+  ["width", "min(10px, 20px)"],
+  ["width", "min(1em, 2em)"],
+  ["width", "clamp(1px, 2px, 3px)"],
+  ["width", "clamp(1em, 2px, 3em)"],
+  ["width", "calc(min(10px,20px) + 5px)"],
+  ["width", "calc(10px + var(--x))"],
+  ["width", "calc(1px + sin(30deg) * 1px)"],
+  ["transition-duration", "calc(1s + 1ms)"],
+  ["transition-duration", "calc(1s + 100%)"],
+  ["animation-duration", "500ms"],
+  ["width", "calc(10px + 2px)"],
+  ["background-position", "calc(10px + 2px) calc(20% + 3%)"]
+];
+var n1 = document.getElementById("n1");
+var t = document.getElementById("t");
+function row(i) {
+  var name = CASES[i][0], value = CASES[i][1];
+  t.setAttribute("style", "");
+  t.style.setProperty(name, value);
+  var cs = getComputedStyle(t);
+  return i + "|" + name + "|" + value
+       + "|S=" + (t.style.getPropertyValue(name) ? "Y" : "")
+       + "|P=" + (CSS.supports(name, value) ? "Y" : "")
+       + "|R=" + (CSS.supports(name + ": " + value) ? "Y" : "")
+       + "|V=" + t.style.getPropertyValue(name)
+       + "|C=" + cs.getPropertyValue(name);
+}
+window.harvest = function (a, b) {
+  var out = [];
+  for (var i = a; i < Math.min(b, CASES.length); i++) out.push(row(i));
+  return out.join("\n");
+};
+window.sheet = function () {
+  var cs = getComputedStyle(n1);
+  return "sheet|width|C=" + cs.getPropertyValue("width")
+       + "|rotate=" + cs.getPropertyValue("rotate")
+       + "|lineHeight=" + cs.getPropertyValue("line-height")
+       + "|transitionDuration=" + cs.getPropertyValue("transition-duration")
+       + "|rule=" + document.styleSheets[0].cssRules[0].style.cssText;
+};
+window.N = CASES.length;
+for (var k = 0; k < CASES.length; k++) console.log(row(k));
+console.log(window.sheet());
+</script>
+</body>
+</html>
