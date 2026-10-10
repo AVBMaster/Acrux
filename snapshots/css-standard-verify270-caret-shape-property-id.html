@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 270 — caret-shape had no id, so the cascade never stored it</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; height: 60px; font-size: 16px; position: relative; background: rgb(245,245,245); }
+#host { height: 0; }
+/* A text field carrying a caret shape: the pixel baseline guards that the property is applied. */
+#field { width: 200px; height: 20px; font: 12px/20px "Segoe UI", sans-serif; border: 1px solid rgb(150,150,150); background: rgb(255,255,255); }
+</style></head><body>
+<h4>b270 — caret-shape was read, validated, echoed and printed by the computed surface, but it had no property id, so FromString answered Invalid and the cascade dropped the declaration before it could reach the field the computed value reads: every caret-shape computed 'auto' no matter what the page wrote. Giving it an id routes it through the applier, which already knew the three keywords this reference engine takes — 'auto', 'bar' and 'block' — and refuses 'underline' and 'none'. The grammar now gates the same set, so CSS.supports and the CSSOM echo refuse the rest too.</h4>
+<div id="cb"><input id="field" type="text" value="caret" style="caret-shape: block"><div id="host"></div></div>
+<pre id="report"></pre>
+<script>
+var CASES = [["caret-shape","auto"],["caret-shape","bar"],["caret-shape","block"],["caret-shape","underline"],["caret-shape","none"],["caret-shape","caret"],["caret-shape","bar block"],["caret-shape","auto, bar"]];
+var WANTS = ["auto","bar","block","","","","",""];
+var WANTC = ["auto","bar","block","auto","auto","auto","auto","auto"];
+var host = document.getElementById('host');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+function sup(p,v){ try { return CSS.supports(p,v) ? 'Y' : 'N'; } catch(e) { return 'E'; } }
+var out = []; var failed = 0;
+function row(name, got, want) {
+  var ok = String(got) === String(want); if (!ok) failed++;
+  out.push((ok ? 'ok   ' : 'FAIL ') + name + '   got=' + JSON.stringify(got) + '   want=' + JSON.stringify(want));
+}
+for (var i = 0; i < CASES.length; i++) {
+  var p = CASES[i][0], v = CASES[i][1];
+  row('#' + i + ' ' + p + '[' + v + '] spec', spec(p, v), WANTS[i]);
+  row('#' + i + ' ' + p + '[' + v + '] comp', comp(p, v), WANTC[i]);
+  row('#' + i + ' ' + p + '[' + v + '] supports', sup(p, v), WANTS[i] === "" ? 'N' : 'Y');
+}
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

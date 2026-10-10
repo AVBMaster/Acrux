@@ -711,6 +711,9 @@ public static class CssValueGrammar
         // 'auto' is either. A second of either, or a count below one, drops the whole declaration.
         CssPropertyId.Columns => IsColumnsValue,
         CssPropertyId.ColumnCount => IsColumnCountValue,
+        // CSS UI 4 §4.3: 'caret-shape' is exactly one keyword, and this reference engine takes only
+        // 'auto', 'bar' and 'block' — 'underline' and 'none' are refused (measured via CSS.supports).
+        CssPropertyId.CaretShape => static text => IsOneOf(text, "auto", "bar", "block"),
         _ => null,
     };
 

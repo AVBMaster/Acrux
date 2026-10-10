@@ -487,6 +487,11 @@ public enum CssPropertyId
     WebkitTextOrientation,
     WebkitTextSecurity,
     WebkitWritingMode,
+    // 'caret-shape' is read, validated, stored and echoed but never consumed (the platform caret is
+    // one shape). It needs an id so the cascade dispatches the declaration to the applier at all —
+    // without one FromString answers Invalid and the value is dropped before it can reach the field
+    // the computed surface prints (measured: 'caret-shape: bar' computed 'auto' until this existed).
+    CaretShape,
     MaxProperties
 }
 
