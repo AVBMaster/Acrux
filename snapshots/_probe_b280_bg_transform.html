@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>probe b280 — background component order and the transform matrix</title>
+<style>#host { font-size: 16px; }</style></head><body>
+<div id="host"></div><pre id="out"></pre>
+<script>
+var host = document.getElementById('host');
+function spec(p,v){ host.setAttribute('style','font-size:16px'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var lines = [];
+['red url(a.png)','url(a.png) red','no-repeat red','red no-repeat','10px 20px red','red 10px 20px',
+ 'content-box padding-box','url(a.png) repeat fixed','center / cover red','url(a.png) 10px 20px',
+ '10px 20px url(a.png)','url(a.png) center / cover','url(a.png) left top','url(a.png) scroll',
+ 'url(a.png) border-box','url(a.png) padding-box','red','none','transparent','url(a.png) repeat',
+ 'url(a.png) 0% 0%','url(a.png) no-repeat','url(a.png) fixed','url(a.png) text','inherit']
+ .forEach(function (v) {
+  lines.push('B ' + JSON.stringify(v) + ' S=' + JSON.stringify(spec('background', v)));
+});
+['translateZ(10px)','rotateZ(45deg)','scaleZ(2)','translate3d(1px,2px,0px)','rotate3d(1,1,1,45deg)',
+ 'scale3d(2,3,4)','perspective(2px)','translate(10px) rotate(45deg)','rotate(45deg) translate(10px)',
+ 'matrix(1,0.5,0.3,1,2,3)','skewY(30deg)','rotate(0.25turn) scale(2)','none','rotate(45deg) translateZ(1px)',
+ 'matrix3d(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)','rotate3d(0,0,0,90deg)','translateX(10px) scaleZ(1)',
+ 'rotateX(30deg)','scale(2)','skew(10deg,20deg)']
+ .forEach(function (v) {
+  lines.push('T ' + JSON.stringify(v) + ' C=' + JSON.stringify(comp('transform', v)));
+});
+var t = lines.join('\n') + '\n';
+document.getElementById('out').textContent = t;
+console.log(t);
+</script></body></html>

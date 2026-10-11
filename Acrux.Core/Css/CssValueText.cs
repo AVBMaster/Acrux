@@ -265,6 +265,7 @@ public static class CssValueText
                 result = CanonicalizeContainIntrinsic(result, property);
                 result = CanonicalizeContainerShorthand(result, property);
                 result = CanonicalizeFilterList(result, property);
+                result = CanonicalizeBackgroundShorthand(result, property);
                 result = CanonicalizePaintOrder(result, property);
                 result = CanonicalizeClipPath(result, property);
                 // The properties that only have to be said correctly — scroll snapping, the SVG
@@ -734,6 +735,13 @@ public static class CssValueText
         => property.Equals("filter", StringComparison.OrdinalIgnoreCase)
             || property.Equals("backdrop-filter", StringComparison.OrdinalIgnoreCase)
             ? Acrux.Core.Css.CssFilterValue.CanonicalizeSpecified(text) : text;
+
+    /// <summary>'background' says its components in the order the grammar takes them rather than
+    /// the order the page wrote them (CSS Backgrounds 3 §4, measured); see
+    /// <see cref="Acrux.Core.Css.ShorthandExpander.BackgroundLayerOrderText"/>.</summary>
+    private static string CanonicalizeBackgroundShorthand(string text, string property)
+        => property.Equals("background", StringComparison.OrdinalIgnoreCase)
+            ? Acrux.Core.Css.ShorthandExpander.BackgroundLayerOrderText(text) : text;
 
     private static readonly string[] ContainWords =
         { "none", "strict", "content", "size", "inline-size", "layout", "style", "paint" };

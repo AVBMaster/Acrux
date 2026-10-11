@@ -997,23 +997,22 @@ public static class ComputedValueSerializer
         style.Direction.Equals("rtl", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>A transform's computed value as the matrix it applies.</summary>
-    private static string TransformText(string? transform)
+    internal static string TransformText(string? transform)
     {
         if (string.IsNullOrWhiteSpace(transform)) return "none";
         var operations = Acrux.Core.Css.TransformParser.Parse(transform);
         if (operations.Count == 0) return transform.Trim();
-        // A 3D function computes to a 4x4 and prints as matrix3d(); this engine has no text
-        // form for that yet, and a 2D projection of it would be a wrong answer rather than a
-        // different spelling of the right one, so those lists stay as authored.
-        foreach (var operation in operations)
-            if (operation.Function is "translate3d" or "rotate3d" or "rotatex" or "rotatey"
-                or "matrix3d" or "perspective")
-                return transform.Trim();
-
-        var m = Acrux.Core.Css.TransformParser.ToMatrix(operations, 0, 0);
-        return $"matrix({CssValueTokenizer.Num(m.ScaleX)}, {CssValueTokenizer.Num(m.SkewY)}, "
-             + $"{CssValueTokenizer.Num(m.SkewX)}, {CssValueTokenizer.Num(m.ScaleY)}, "
-             + $"{CssValueTokenizer.Num(m.TransX)}, {CssValueTokenizer.Num(m.TransY)})";
+        // A computed transform is a matrix, not the list the page wrote (CSS Transforms 2 §6,
+        // measured): 'scaleX(2)' reads 'matrix(2, 0, 0, 1, 0, 0)' and 'translateZ(10px)' reads
+        // 'matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 10, 1)'. Which of the two it is
+        // depends on what the product SAYS rather than on what the page spelled: a list that
+        // carries 'translate3d(1px, 2px, 0px)' or 'rotateZ(45deg)' is flat and prints as a
+        // matrix(), while 'scaleZ(2)' is not (all measured).
+        var m = Acrux.Core.Css.TransformParser.ToMatrix4(operations);
+        string N(float value) => CssValueTokenizer.Num(value);
+        if (Acrux.Core.Css.TransformParser.IsFlat4(m))
+            return $"matrix({N(m[0])}, {N(m[1])}, {N(m[4])}, {N(m[5])}, {N(m[12])}, {N(m[13])})";
+        return "matrix3d(" + string.Join(", ", m.Select(N)) + ")";
     }
 
     /// <summary>The 'font' shorthand's computed value: its longhands in the shorthand's own

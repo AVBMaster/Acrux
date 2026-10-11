@@ -987,6 +987,21 @@ public class ComputedStyleHost
             case "perspective-origin":
                 return TransformOriginUsed(text, LayoutUnit(box.BorderBox.Width),
                     LayoutUnit(box.BorderBox.Height)) ?? withAddresses;
+
+            case "transform":
+            {
+                // A translate() percentage is measured against the element's own border box, so the
+                // computed matrix is only right once the box has been laid out (CSS Transforms 2 §4;
+                // measured: 'translate(10%, 20%)' on a 100x50 box reads
+                // 'matrix(1, 0, 0, 1, 10, 10)'). With no percentage in the list the serialiser's own
+                // answer needs nothing from here.
+                var authored = _style?.Transform;
+                if (string.IsNullOrEmpty(authored)
+                    || !authored.Contains('%', StringComparison.Ordinal)) return withAddresses;
+                return Acrux.Core.Dom.Animations.ComputedValueSerializer.TransformText(
+                    Acrux.Core.Css.TransformParser.ResolveTranslatePercentages(authored,
+                        box.BorderBox.Width, box.BorderBox.Height));
+            }
             default:
                 return withAddresses == text ? null : withAddresses;
         }

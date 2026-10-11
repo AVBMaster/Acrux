@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 280 — a background says its parts in order, and a transform says one matrix</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; padding: 8px; font-size: 16px; background: rgb(245,245,245); }
+#probe { font-size: 16px; }
+/* Painted markers: a layered background and a transform that leans over its own box. */
+#bg { width: 120px; height: 40px; background: rgb(255,128,128); }
+#bg2 { width: 120px; height: 40px; background: rgb(0,200,0) url(missing-b280.png) no-repeat; }
+#t1 { width: 40px; height: 20px; background: rgb(30,30,200); transform: rotate(45deg); }
+#t2 { width: 40px; height: 20px; background: rgb(200,30,30); transform: translateX(10px) scaleZ(1); }
+#pct { width: 100px; height: 50px; transform: translate(10%, 20%); }
+</style></head><body>
+<h4>b280 — two surfaces that repeated the page instead of answering it. 'background' echoed its components in the order the sheet wrote them, so 'red url(a.png)' read back with the colour in front; the reference engine prints a layer in the order its own grammar takes the components — image, position / size, repeat, attachment, the two boxes, colour last — and it says only what the page wrote, which is why the longhand map cannot give that answer: a written 'repeat' and a reset 'repeat' look identical there, and the engine keeps the word the page spoke. A computed 'transform' is a matrix rather than the list the page spelled, and this engine printed the list for every function with depth: 'translateZ(10px)' echoed itself, and 'rotate(45deg) translateZ(1px)' collapsed to a 2D matrix that had silently dropped the z offset — a wrong answer wearing the right shape. The product is now built as a 4x4 and printed as matrix() exactly when it is flat, which is what the reference engine does: 'translate3d(1px, 2px, 0px)' and 'rotateZ(45deg)' come back as matrix() and 'scaleZ(2)' does not.</h4>
+<div id="cb">
+  <div id="bg"></div><div id="bg2"></div><div id="t1"></div><div id="t2"></div><div id="pct"></div>
+</div>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style','font-size:16px'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out = []; var failed = 0;
+function row(name, got, want){ var ok = String(got) === String(want); if(!ok) failed++;
+  out.push((ok?'ok   ':'FAIL ')+name+'  got='+JSON.stringify(String(got))+'  want='+JSON.stringify(String(want))); }
+
+// Each entry: value, wantSpec  (every one measured in the reference engine)
+var BG = [
+  ['red url(a.png)','url("a.png") red'],
+  ['url(a.png) red','url("a.png") red'],
+  ['no-repeat red','no-repeat red'],
+  ['red no-repeat','no-repeat red'],
+  ['10px 20px red','10px 20px red'],
+  ['red 10px 20px','10px 20px red'],
+  ['content-box padding-box','content-box padding-box'],
+  ['url(a.png) repeat fixed','url("a.png") repeat fixed'],
+  ['center / cover red','center center / cover red'],
+  ['url(a.png) 10px 20px','url("a.png") 10px 20px'],
+  ['10px 20px url(a.png)','url("a.png") 10px 20px'],
+  ['url(a.png) center / cover','url("a.png") center center / cover'],
+  ['url(a.png) left top','url("a.png") left top'],
+  ['url(a.png) scroll','url("a.png") scroll'],
+  ['url(a.png) border-box','url("a.png") border-box border-box'],
+  ['url(a.png) padding-box','url("a.png") padding-box padding-box'],
+  ['red','red'],
+  ['none','none'],
+  ['transparent','transparent'],
+  ['url(a.png) repeat','url("a.png") repeat'],
+  ['url(a.png) 0% 0%','url("a.png") 0% 0%'],
+  ['url(a.png) no-repeat','url("a.png") no-repeat'],
+  ['url(a.png) fixed','url("a.png") fixed'],
+  ['url(a.png) text','url("a.png") text'],
+  ['inherit','inherit'],
+  // the size is a LIST, and the position is always printed as its pair of axes
+  ['red 0 0 / 50px 100%','0px 0px / 50px 100% red'],
+  ['url(a.png) 10px 20px / 30px 40px','url("a.png") 10px 20px / 30px 40px'],
+  ['url(a.png) 50% / cover','url("a.png") 50% center / cover'],
+  ['url(a.png) center','url("a.png") center center'],
+  ['url(a.png) left 10px top 20px / 30px 40px no-repeat fixed content-box padding-box red',
+   'url("a.png") left 10px top 20px / 30px 40px no-repeat fixed content-box padding-box red'],
+  ['linear-gradient(rgb(255,0,0),rgb(255,0,0)) 0 0 / 30px 30px no-repeat, linear-gradient(rgb(0,255,0),rgb(0,255,0)) 40px 0 / 30px 30px no-repeat rgb(250,250,250)',
+   'linear-gradient(rgb(255, 0, 0), rgb(255, 0, 0)) 0px 0px / 30px 30px no-repeat, linear-gradient(rgb(0, 255, 0), rgb(0, 255, 0)) 40px 0px / 30px 30px no-repeat rgb(250, 250, 250)'],
+];
+for (var i=0;i<BG.length;i++) row('B'+i+' background['+BG[i][0]+']', spec('background',BG[i][0]), BG[i][1]);
+
+var TF = [
+  ['translateZ(10px)','matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 10, 1)'],
+  ['rotateZ(45deg)','matrix(0.707107, 0.707107, -0.707107, 0.707107, 0, 0)'],
+  ['scaleZ(2)','matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1)'],
+  ['translate3d(1px,2px,0px)','matrix(1, 0, 0, 1, 1, 2)'],
+  ['rotate3d(1,1,1,45deg)','matrix3d(0.804738, 0.505879, -0.310617, 0, -0.310617, 0.804738, 0.505879, 0, 0.505879, -0.310617, 0.804738, 0, 0, 0, 0, 1)'],
+  ['scale3d(2,3,4)','matrix3d(2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 4, 0, 0, 0, 0, 1)'],
+  ['perspective(2px)','matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, -0.5, 0, 0, 0, 1)'],
+  ['translate(10px) rotate(45deg)','matrix(0.707107, 0.707107, -0.707107, 0.707107, 10, 0)'],
+  ['rotate(45deg) translate(10px)','matrix(0.707107, 0.707107, -0.707107, 0.707107, 7.07107, 7.07107)'],
+  ['matrix(1,0.5,0.3,1,2,3)','matrix(1, 0.5, 0.3, 1, 2, 3)'],
+  ['skewY(30deg)','matrix(1, 0.57735, 0, 1, 0, 0)'],
+  ['skew(10deg,20deg)','matrix(1, 0.36397, 0.176327, 1, 0, 0)'],
+  ['rotate(0.25turn) scale(2)','matrix(0, 2, -2, 0, 0, 0)'],
+  ['none','none'],
+  ['rotate(45deg) translateZ(1px)','matrix3d(0.707107, 0.707107, 0, 0, -0.707107, 0.707107, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1)'],
+  ['matrix3d(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)','matrix(1, 0, 0, 1, 0, 0)'],
+  ['rotate3d(0,0,0,90deg)','matrix(1, 0, 0, 1, 0, 0)'],
+  ['translateX(10px) scaleZ(1)','matrix(1, 0, 0, 1, 10, 0)'],
+  ['rotateX(30deg)','matrix3d(1, 0, 0, 0, 0, 0.866025, 0.5, 0, 0, -0.5, 0.866025, 0, 0, 0, 0, 1)'],
+  ['scale(2)','matrix(2, 0, 0, 2, 0, 0)'],
+];
+for (var j=0;j<TF.length;j++) row('T'+j+' transform['+TF[j][0]+']', comp('transform',TF[j][0]), TF[j][1]);
+
+// A percentage in a translate() is measured against the element's own border box, so the
+// computed matrix can only say the truth once the box has one (CSS Transforms 2 §4).
+row('P1 #pct translate(10%,20%)', getComputedStyle(document.getElementById('pct')).transform,
+    'matrix(1, 0, 0, 1, 10, 10)');
+
+// The b279 surfaces, re-checked so this round cannot silently undo them.
+row('V0 content[attr(x, "y")] comp', comp('content','attr(data-x, "y")'), '"y"');
+row('V1 content[attr(x, url)] comp', comp('content','attr(data-x, url)'), 'normal');
+row('V2 filter[grayscale] refused', spec('filter','grayscale'), '');
+row('V3 filter[drop-shadow(2px 2px red)] spec', spec('filter','drop-shadow(2px 2px red)'), 'drop-shadow(red 2px 2px)');
+row('V4 contain[inline-size] comp', comp('contain','inline-size'), 'inline-size');
+row('V5 container query supports', CSS.supports('(container: x / inline-size)'), true);
+
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

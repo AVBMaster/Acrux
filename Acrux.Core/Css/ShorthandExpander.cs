@@ -764,6 +764,93 @@ public static class ShorthandExpander
             : token;
     }
 
+    /// <summary>The 'background' shorthand the way the reference engine prints it: the components
+    /// the page WROTE, in the order the grammar takes them — <c>&lt;bg-image&gt;</c>,
+    /// <c>&lt;position&gt; [ / &lt;size&gt; ]</c>, <c>&lt;repeat-style&gt;</c>,
+    /// <c>&lt;attachment&gt;</c>, the two boxes, and the <c>&lt;color&gt;</c> last (measured:
+    /// 'red url(a.png)' reads 'url("a.png") red', 'red no-repeat' reads 'no-repeat red', and
+    /// 'red 10px 20px' reads '10px 20px red'). Only what was written is said, so a written default
+    /// keeps its word — 'url(a.png) repeat' still says 'repeat' — which is exactly why this cannot
+    /// be rebuilt from the longhand map: that map carries the shorthand's resets too and cannot tell
+    /// the two apart. One box sets both, so it is printed twice ('url(a.png) border-box' reads
+    /// 'border-box border-box', measured), and a size forces the position to say both of its axes
+    /// ('center / cover' reads 'center center / cover'). A layer this reader cannot classify is
+    /// returned exactly as it came, because the grammar has already had its say.</summary>
+    public static string BackgroundLayerOrderText(string text)
+    {
+        var layers = SplitTopLevel(text, ',');
+        if (layers.Count == 0) return text;
+        var printed = new List<string>(layers.Count);
+        foreach (var layer in layers)
+        {
+            // Put a slash written inside a token on the same footing as one written alone.
+            var stream = new List<string>();
+            foreach (var raw in SplitShorthand(layer).Select(t => t.Trim().TrimEnd(',').Trim())
+                         .Where(t => t.Length > 0))
+            {
+                if (!raw.Contains('/') || raw.Contains('(')) { stream.Add(raw); continue; }
+                var halves = raw.Split('/', 2);
+                if (halves[0].Trim().Length > 0) stream.Add(halves[0].Trim());
+                stream.Add("/");
+                if (halves.Length > 1 && halves[1].Trim().Length > 0) stream.Add(halves[1].Trim());
+            }
+
+            string? image = null, colour = null, repeat = null, attachment = null;
+            var position = new List<string>();
+            var size = new List<string>();
+            var boxes = new List<string>();
+            bool afterSlash = false, unknown = false;
+            foreach (var token in stream)
+            {
+                var p = KeywordText(token);
+                if (token == "/") { afterSlash = true; continue; }
+                if (afterSlash)
+                {
+                    // The size stays open for its SECOND term: '0 0 / 30px 30px' is one size, and
+                    // closing on the first would leave the other to be read as a position.
+                    if (IsBackgroundSizeTerm(p)) { size.Add(p); continue; }
+                    afterSlash = false;
+                }
+                if (IsBackgroundImageToken(p)) { image = p; continue; }
+                if (ColorParser.LooksLikeColor(p)) { colour = p; continue; }
+                if (IsKeyword(p, "repeat") || IsKeyword(p, "no-repeat") || IsKeyword(p, "repeat-x")
+                    || IsKeyword(p, "repeat-y") || IsKeyword(p, "round") || IsKeyword(p, "space"))
+                { repeat = repeat == null ? p : repeat + " " + p; continue; }
+                if (IsKeyword(p, "scroll") || IsKeyword(p, "fixed") || IsKeyword(p, "local"))
+                { attachment = p; continue; }
+                if (IsKeyword(p, "padding-box") || IsKeyword(p, "border-box")
+                    || IsKeyword(p, "content-box") || IsKeyword(p, "text"))
+                { boxes.Add(p); continue; }
+                if (IsKeyword(p, "left") || IsKeyword(p, "right") || IsKeyword(p, "center")
+                    || IsKeyword(p, "top") || IsKeyword(p, "bottom") || IsBackgroundPositionLength(p))
+                { position.Add(p); continue; }
+                unknown = true;
+                break;
+            }
+            if (unknown) return text;
+
+            var parts = new List<string>(7);
+            if (image != null) parts.Add(image);
+            // The position is printed as its pair of axes whichever company it keeps: 'center'
+            // reads 'center center' and '50%' reads '50% center', with or without a size behind it
+            // (measured), while 'left top' and '10px 20px' are already a pair.
+            var positionText = position.Count > 0
+                ? (PositionPairText(string.Join(" ", position)) ?? string.Join(" ", position))
+                : null;
+            if (positionText != null && size.Count > 0)
+                parts.Add(positionText + " / " + string.Join(" ", size));
+            else if (positionText != null) parts.Add(positionText);
+            else if (size.Count > 0) parts.Add(string.Join(" ", size));
+            if (repeat != null) parts.Add(repeat);
+            if (attachment != null) parts.Add(attachment);
+            if (boxes.Count == 1 && boxes[0] != "text") { parts.Add(boxes[0]); parts.Add(boxes[0]); }
+            else foreach (var box in boxes) parts.Add(box);
+            if (colour != null) parts.Add(colour);
+            printed.Add(parts.Count > 0 ? string.Join(" ", parts) : KeywordText(layer.Trim()));
+        }
+        return string.Join(", ", printed);
+    }
+
     /// <summary>The two axis lists as the one &lt;bg-position&gt; list they stand for: paired a
     /// layer at a time, and a list shorter than the other cycles the way every background list
     /// does (CSS Backgrounds 3 §2 — measured: the axes '10px, 20px' and '5px' read back as
