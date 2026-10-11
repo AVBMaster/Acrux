@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>probe b278 — which axis does contain: inline-size contain?</title>
+<style>
+  .row { width: 400px; margin: 0 0 8px 0; }
+  .box { background: #ddd; padding: 10px; }
+  .tall { width: 100%; height: 100px; background: #69f; }
+  .c-none  { contain: none; }
+  .c-size  { contain: size; }
+  .c-isize { contain: inline-size; }
+  .c-isize-f { contain: inline-size; contain-intrinsic-block-size: 40px; }
+  #out { font: 12px/1.4 monospace; white-space: pre; }
+</style>
+</head>
+<body>
+<div class="row"><div id="a" class="box c-none"><div class="tall"></div></div></div>
+<div class="row"><div id="b" class="box c-size"><div class="tall"></div></div></div>
+<div class="row"><div id="c" class="box c-isize"><div class="tall"></div></div></div>
+<div class="row"><div id="d" class="box c-isize-f"><div class="tall"></div></div></div>
+<!-- inline-size containment must still let the block size come from the contents -->
+<div class="row"><div id="e" class="box c-isize">one line of text that is tall by itself</div></div>
+<div class="row"><div id="f" class="box c-size">one line of text that is tall by itself</div></div>
+<!-- the inline axis, by contrast, must stop reading its contents: a min-content
+     width of an auto box with contain:inline-size cannot come from the text. -->
+<div style="width:60px;"><div id="g" class="box c-none">wwwwwwwwww wwwwwwwwww</div></div>
+<div style="width:60px;"><div id="h" class="box c-isize">wwwwwwwwww wwwwwwwwww</div></div>
+<div id="out"></div>
+<script>
+function say(id) {
+  var el = document.getElementById(id);
+  var r = el.getBoundingClientRect();
+  var cs = getComputedStyle(el);
+  return id + ' w=' + Math.round(r.width) + ' h=' + Math.round(r.height) +
+         ' contain=' + cs.contain + ' cis=' + JSON.stringify(cs.containIntrinsicBlockSize);
+}
+var ids = ['a','b','c','d','e','f','g','h'];
+var lines = ids.map(say);
+document.getElementById('out').textContent = lines.join('\n') + '\n';
+lines.forEach(function (l) { console.log(l); });
+</script>
+</body>
+</html>

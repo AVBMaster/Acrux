@@ -342,7 +342,7 @@ public class FieldsetLayoutAlgorithm : LayoutAlgorithm
         var border = LengthUtils.ComputeBorders(Style);
         var padding = LengthUtils.ComputePadding(Space, Style);
 
-        bool hasInlineSizeContainment = Style.HasSizeContainment;
+        bool hasInlineSizeContainment = Style.HasInlineAxisSizeContainment;
         if (hasInlineSizeContainment)
         {
             // 'contain-intrinsic-width' replaces the zero the contained axis would

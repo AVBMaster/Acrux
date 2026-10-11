@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>probe b278 — the CSSOM path for the intrinsic axes</title></head>
+<body><div id="probe"></div><pre id="out"></pre>
+<script>
+var host = document.getElementById('probe');
+var lines = [];
+function read(p, v) {
+  host.setAttribute('style', '');
+  host.style.setProperty(p, v);
+  var cs = getComputedStyle(host);
+  lines.push(p + '[' + v + '] spec=' + JSON.stringify(host.style.getPropertyValue(p)) +
+    ' compSelf=' + JSON.stringify(cs.getPropertyValue(p)) +
+    ' viaShorthand=' + JSON.stringify(cs.getPropertyValue('contain-intrinsic-size')) +
+    ' contains=' + JSON.stringify(host.getAttribute('style')));
+}
+['contain-intrinsic-width','contain-intrinsic-height','contain-intrinsic-inline-size',
+ 'contain-intrinsic-block-size','contain-intrinsic-size'].forEach(function (p) { read(p, '55px'); });
+['none','size','layout inline-size','inline-size'].forEach(function (v) { read('contain', v); });
+var t = lines.join('\n') + '\n';
+document.getElementById('out').textContent = t;
+console.log(t);
+</script></body></html>

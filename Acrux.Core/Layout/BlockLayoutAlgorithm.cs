@@ -892,12 +892,12 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
         // place and still overflow — containment replaces the box's size, not its content —
         // and a specified width/height/min/max still wins over the replacement, which is why
         // this runs through the same length resolution as the block path.
-        if (Style.HasSizeContainment && result.Fragment != null)
+        // The two axes are asked separately: 'contain: inline-size' (§2.3) replaces the inline
+        // size and leaves the line boxes to give the block size.
+        if (Style.HasInlineAxisSizeContainment && result.Fragment != null)
         {
             float intrinsicInline = ContainmentMetrics.ContainedInlineBorderBox(
                 Style, Space, _borderPadding.HorizontalSum);
-            float intrinsicBlock = ContainmentMetrics.ContainedBlockBorderBox(
-                Style, Space, _borderPadding.VerticalSum);
             var contained = new MinMaxSizesResult(new MinMaxSizes(intrinsicInline, intrinsicInline));
 
             float inlineSize = LengthUtils.ComputeInlineSizeForFragment(Space, Style, _borderPadding,
@@ -907,20 +907,28 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             var (minI, maxI) = LengthUtils.ComputeMinMaxInlineSizes(Space, Style, _borderPadding, _ => contained);
             inlineSize = Math.Clamp(inlineSize, minI, maxI);
 
-            float blockSize = LengthUtils.ComputeBlockSizeForFragment(Space, Style, _borderPadding,
-                intrinsicBlock, inlineSize);
-            if (LengthUtils.IsIndefinite(blockSize))
-                blockSize = intrinsicBlock;
-            var (minB, maxB) = LengthUtils.ComputeMinMaxBlockSizes(Space, Style, _borderPadding,
-                null, _ => intrinsicBlock);
-            blockSize = Math.Clamp(blockSize, minB, maxB);
+            float blockSize = result.Fragment.BlockSize;
+            if (Style.HasSizeContainment)
+            {
+                float intrinsicBlock = ContainmentMetrics.ContainedBlockBorderBox(
+                    Style, Space, _borderPadding.VerticalSum);
+
+                blockSize = LengthUtils.ComputeBlockSizeForFragment(Space, Style, _borderPadding,
+                    intrinsicBlock, inlineSize);
+                if (LengthUtils.IsIndefinite(blockSize))
+                    blockSize = intrinsicBlock;
+                var (minB, maxB) = LengthUtils.ComputeMinMaxBlockSizes(Space, Style, _borderPadding,
+                    null, _ => intrinsicBlock);
+                blockSize = Math.Clamp(blockSize, minB, maxB);
+
+                Builder.IntrinsicBlockSize = intrinsicBlock;
+                result.IntrinsicBlockSize = intrinsicBlock;
+            }
 
             result.Fragment.InlineSize = inlineSize;
             result.Fragment.BlockSize = blockSize;
             Builder.InlineSize = inlineSize;
             Builder.BlockSize = blockSize;
-            Builder.IntrinsicBlockSize = intrinsicBlock;
-            result.IntrinsicBlockSize = intrinsicBlock;
         }
 
         return result;

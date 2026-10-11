@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>probe b278 — containment surface sweep</title></head>
+<body>
+<div id="a"></div><pre id="out"></pre>
+<script>
+var host = document.getElementById('a');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var CASES = [
+  ['contain','inline-size'],['contain','size inline-size'],['contain','inline-size layout'],
+  ['contain','strict style'],['contain','content, paint'],['contain','inline-size, layout'],
+  ['contain','STYLE'],['contain','inherit'],
+  ['contain-intrinsic-size','55px'],['contain-intrinsic-size','auto 55px'],
+  ['contain-intrinsic-size','55px 65px'],['contain-intrinsic-size','none'],
+  ['contain-intrinsic-inline-size','55px'],['contain-intrinsic-block-size','55px'],
+  ['content-visibility','visible'],['content-visibility','auto'],['content-visibility','hidden'],
+  ['content-visibility','hidden match-none'],['content-visibility','bogus'],
+  ['container-type','inline-size'],['container-type','size'],['container-type','normal'],
+  ['container-type','inline-size size'],['container-type','cards'],
+  ['container-name','cards'],['container-name','none'],['container-name','a b'],
+  ['container','inline-size cards'],['container','size'],
+  // the shorthand's computed shape, and the physical longhands
+  ['container',''],['container','normal'],['container','normal cards'],
+  ['container','size none'],['container','inline-size'],['container','inline-size none'],
+  ['container','cards'],['container-type','inline-size'],['container-name','cards'],
+  ['contain-intrinsic-width','55px'],['contain-intrinsic-height','55px'],
+  ['contain-intrinsic-width','auto 55px'],['contain-intrinsic-size','auto'],
+  ['contain-intrinsic-size','33px 44px'],['contain-intrinsic-inline-size','none'],
+];
+var lines = [];
+for (var i = 0; i < CASES.length; i++) {
+  var c = CASES[i];
+  lines.push(c[0] + '[' + c[1] + '] spec=' + JSON.stringify(spec(c[0],c[1])) +
+             ' comp=' + JSON.stringify(comp(c[0],c[1])) +
+             ' sup=' + CSS.supports(c[0], c[1]));
+}
+var text = lines.join('\n') + '\n';
+document.getElementById('out').textContent = text;
+console.log(text);
+</script></body></html>

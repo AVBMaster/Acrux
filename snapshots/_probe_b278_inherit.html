@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>probe b278 — which containment properties reach a child</title>
+<style>
+#pp { contain: size; content-visibility: hidden; container-type: inline-size;
+      container-name: foo; contain-intrinsic-width: 44px; }
+#cc { }
+</style></head><body>
+<div id="pp"><div id="cc">text</div></div>
+<pre id="out"></pre>
+<script>
+var parent = document.getElementById('pp');
+var child = document.getElementById('cc');
+var props = ['contain','content-visibility','container-type','container-name','contain-intrinsic-width'];
+var lines = [];
+for (var i = 0; i < props.length; i++) {
+  var p = props[i];
+  lines.push(p + ' parent=' + JSON.stringify(getComputedStyle(parent).getPropertyValue(p)) +
+             ' child=' + JSON.stringify(getComputedStyle(child).getPropertyValue(p)));
+}
+lines.push('declared parent=' + JSON.stringify(parent.getAttribute('style')));
+lines.push('cssText parent=' + JSON.stringify(parent.style.cssText));
+lines.push('cssText child=' + JSON.stringify(child.style.cssText));
+var text = lines.join('\n') + '\n';
+document.getElementById('out').textContent = text;
+console.log(text);
+</script></body></html>

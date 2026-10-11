@@ -240,6 +240,10 @@ public static class CssValueText
                 result = CanonicalizeContent(result, property);
                 result = CanonicalizeGridAutoFlow(result, property);
                 result = CanonicalizeMaskPosition(result, property);
+                result = CanonicalizePositionPair(result, property);
+                result = CanonicalizeContain(result, property);
+                result = CanonicalizeContainIntrinsic(result, property);
+                result = CanonicalizeContainerShorthand(result, property);
                 result = CanonicalizePaintOrder(result, property);
                 result = CanonicalizeClipPath(result, property);
                 // The properties that only have to be said correctly — scroll snapping, the SVG
@@ -644,6 +648,67 @@ public static class CssValueText
         return parts.Count == 0 ? "none" : string.Join(" ", parts);
     }
 
+    /// <summary>'contain' prints its keyword list in the order the reference engine uses and in
+    /// its one spelling: 'layout inline-size' reads back 'inline-size layout', 'STYLE' reads
+    /// 'style' (both measured). It does NOT collapse a complete set into 'content' or 'strict' —
+    /// that shortcut belongs to the computed value alone (measured: 'style layout paint' reads
+    /// back all three words and computes 'content'). A word that is nobody's containment keyword
+    /// ('inherit', a function) leaves the text as written, and so does a list the grammar
+    /// refuses: folding 'strict style' into a word of its own would say what the page never wrote.
+    /// Idempotent, because the text it produces parses back to the same set.</summary>
+    private static string CanonicalizeContain(string text, string property)
+    {
+        if (!property.Equals("contain", StringComparison.OrdinalIgnoreCase)) return text;
+        if (text.IndexOf(',') >= 0) return text;
+        var words = SplitTopLevelWords(text);
+        if (words.Count == 0) return text;
+        foreach (var word in words)
+            if (System.Array.IndexOf(ContainWords, word.ToLowerInvariant()) < 0) return text;
+        if (!Acrux.Core.Css.CssValueGrammar.TextIsValidFor("contain", text)) return text;
+        if (words.Count == 1) return words[0].ToLowerInvariant();
+
+        var seen = new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
+        foreach (var word in words) seen.Add(word.ToLowerInvariant());
+        var parts = new System.Collections.Generic.List<string>(4);
+        foreach (var name in ContainWords)
+            if (name is not ("none" or "strict" or "content") && seen.Contains(name)) parts.Add(name);
+        return parts.Count == 0 ? text : string.Join(' ', parts);
+    }
+
+    /// <summary>The 'contain-intrinsic' family prints its 'auto' flag in the one keyword
+    /// spelling and drops an <c>auto</c> that no axis is waiting for: the flag belongs in front
+    /// of the size it modifies, so '55px auto' keeps the size and loses the flag (measured: it
+    /// reads back '55px' and computes '55px'), while 'AUTO 55px' reads 'auto 55px'. A text the
+    /// property's grammar refuses is left exactly as written.</summary>
+    private static string CanonicalizeContainIntrinsic(string text, string property)
+    {
+        if (!property.StartsWith("contain-intrinsic-", StringComparison.OrdinalIgnoreCase)) return text;
+        if (!Acrux.Core.Css.CssValueGrammar.TextIsValidFor(property, text)) return text;
+        var words = SplitTopLevelWords(text);
+        if (words.Count == 0) return text;
+        for (int i = 0; i < words.Count; i++)
+            if (words[i].Equals("auto", StringComparison.OrdinalIgnoreCase)) words[i] = "auto";
+        // 'auto' with nothing after it says nothing, and an 'auto' after the last size has no
+        // size to introduce — the reference engine simply leaves it out.
+        if (words.Count > 1 && words[^1] == "auto") words.RemoveAt(words.Count - 1);
+        return string.Join(' ', words);
+    }
+
+    /// <summary>The 'container' shorthand keeps the page's own spelling — the words are names —
+    /// except for the single word 'none', which is a keyword and so prints in its one spelling
+    /// (measured: 'container: INLINE-SIZE Cards' reads back with its capitals while
+    /// 'container: NONE' reads 'none').</summary>
+    private static string CanonicalizeContainerShorthand(string text, string property)
+    {
+        if (!property.Equals("container", StringComparison.OrdinalIgnoreCase)) return text;
+        var words = SplitTopLevelWords(text);
+        return words.Count == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase)
+            ? "none" : text;
+    }
+
+    private static readonly string[] ContainWords =
+        { "none", "strict", "content", "size", "inline-size", "layout", "style", "paint" };
+
     /// <summary>'grid-auto-flow' says its axis only when it says 'column': 'row' is what the
     /// property means without it, so 'row dense' is the single word 'dense' (measured), while a
     /// plain 'row' still names itself. Two axes or two 'dense's are refused by the grammar and are
@@ -816,6 +881,18 @@ public static class CssValueText
             || word.EndsWith("px", StringComparison.OrdinalIgnoreCase)) return word;
         return double.TryParse(word, System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out _) ? word + "px" : word;
+    }
+
+    /// <summary>'object-position' and 'background-position' are the same <c>&lt;position&gt;</c>
+    /// grammar, printed the same way. Their appliers read the axes by keyword, so the echo has to
+    /// say both of them (measured: 'background-position: top' and 'mask-position: top' both read
+    /// 'center top').</summary>
+    private static string CanonicalizePositionPair(string text, string property)
+    {
+        if (!property.Equals("object-position", StringComparison.OrdinalIgnoreCase)
+            && !property.Equals("background-position", StringComparison.OrdinalIgnoreCase)) return text;
+        if (text.Contains(',')) return text;
+        return ShorthandExpander.PositionPairText(text.Trim()) ?? text;
     }
 
     /// <summary>'content' is echoed as a space-separated list of its items, which is what the
@@ -1262,8 +1339,24 @@ public static class CssValueText
         var lowered = name.ToLowerInvariant();
         var inner = fold(word[(open + 1)..^1]);
         if (lowered == "color-mix") inner = CanonicalColorMix(inner);
+        // A function name is ASCII case-insensitive on the way in, but the CSSOM prints the few
+        // that carry a capital in their canonical spelling — the transform family above all, so
+        // 'TRANSLATEZ(10px)' reads back 'translateZ(10px)' and not 'translatez(10px)' (measured).
+        if (CanonicalFunctionNames.TryGetValue(lowered, out var canonical)) lowered = canonical;
         return lowered + "(" + inner + ")";
     }
+
+    /// <summary>Function names whose printed form is not simply the lowercase one.</summary>
+    private static readonly Dictionary<string, string> CanonicalFunctionNames =
+        new(StringComparer.Ordinal)
+    {
+        ["rotatex"] = "rotateX", ["rotatey"] = "rotateY", ["rotatez"] = "rotateZ",
+        ["rotatedx"] = "rotateX", ["rotatedy"] = "rotateY", ["rotatedz"] = "rotateZ",
+        ["scalex"] = "scaleX", ["scaley"] = "scaleY", ["scalez"] = "scaleZ",
+        ["translatex"] = "translateX", ["translatey"] = "translateY", ["translatez"] = "translateZ",
+        ["rotate3d"] = "rotate3d", ["scale3d"] = "scale3d", ["translate3d"] = "translate3d",
+        ["matrix3d"] = "matrix3d",
+    };
 
     /// <summary>
     /// An <c>animation</c> value in the order the engine prints it: duration, timing function,
@@ -1404,6 +1497,10 @@ public static class CssValueText
         "grid-row-end", "grid-column-start", "grid-column-end", "anchor-name", "anchor-scope",
         "position-anchor", "position-try-anchor", "view-transition-name", "view-transition-class",
         "timeline-scope", "scroll-timeline-name", "view-timeline-name", "container-name",
+        // The 'container' shorthand is a list of names on this engine's reading too: the reference
+        // engine echoes it back exactly as authored, capitals and all (measured: 'INLINE-SIZE
+        // Cards' reads 'INLINE-SIZE Cards'), so no keyword folding of ours may re-spell it.
+        "container",
         "font-palette-values", "page", "export", "part",
     };
 

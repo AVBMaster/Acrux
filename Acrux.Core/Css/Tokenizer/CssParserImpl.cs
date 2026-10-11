@@ -2209,9 +2209,49 @@ public class CssParserImpl
     {
         if (from >= to || tokens[from].Type != CssTokenType.IdentToken) return false;
         var inner = text[starts[from]..ends[to - 1]];
+        // A 'container' atomic is a CONTAINER QUERY rather than a declaration: 'container: x /
+        // inline-size' names a container and then states the condition, and the reference engine
+        // answers yes for any query it can read (measured, snapshots/out/_b256_edge_supports.txt).
+        // The declaration grammar has no reading for the slash, so the query is decided here
+        // instead of being refused downstream by a property grammar that never saw it coming.
+        if (ReadsContainerQuery(inner)) return true;
         return SupportsConditionShapes(inner,
             ShapeBareDeclaration | ShapeValidateDeclaration, out int reached)
             && string.IsNullOrWhiteSpace(TailOf(inner, reached));
+    }
+
+    /// <summary>Whether an atomic supports() text reads as a container query:
+    /// <c>container: [ &lt;container-name&gt; ] / &lt;container-condition&gt;</c>.</summary>
+    private static bool ReadsContainerQuery(string inner)
+    {
+        int colon = inner.IndexOf(':');
+        if (colon <= 0) return false;
+        if (!inner[..colon].Trim().Equals("container", StringComparison.OrdinalIgnoreCase)) return false;
+        return ReadsContainerQueryValue(inner[(colon + 1)..]);
+    }
+
+    /// <summary>The value side of that query: one or more name words, the slash, and the condition.
+    /// Measured value by value, the reference engine reads only <c>inline-size</c> here —
+    /// <c>x / block-size</c>, <c>x / orientation</c>, <c>x / (inline-size &gt; 100px)</c>,
+    /// <c>x / inline-size and block-size</c> and a bare <c>x / bogus</c> are all no condition, while
+    /// the name may be several words ('a b') or a dashed one ('--x') but not a digit-leading one
+    /// ('1x'), the name may not be missing ('/ inline-size' falls), and a trailing '!important' is
+    /// tolerated.</summary>
+    private static bool ReadsContainerQueryValue(string value)
+    {
+        int slash = value.IndexOf('/');
+        if (slash < 0) return false;
+        var name = value[..slash].Trim();
+        var condition = value[(slash + 1)..].Trim();
+        if (condition.EndsWith("!important", StringComparison.OrdinalIgnoreCase))
+            condition = condition[..^"!important".Length].Trim();
+        if (name.Length == 0 || condition.Length == 0) return false;
+        foreach (var word in name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (char.IsAsciiDigit(word[0])) return false;
+            if (!word.All(c => char.IsLetterOrDigit(c) || c is '-' or '_')) return false;
+        }
+        return condition.Equals("inline-size", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Whether the engine can read a <c>selector()</c> argument as a selector list. The
@@ -2408,6 +2448,13 @@ public class CssParserImpl
             value = value[..bang].Trim();
         }
         if (value.Length == 0) return false;
+        // A 'container' group that carries a slash is a CONTAINER QUERY, not a declaration: the
+        // words before the slash name a container and what follows states the condition. The
+        // declaration grammar has no reading for it, so it must not be asked (measured:
+        // CSS.supports('(container: x / inline-size)') is true while the same text as a
+        // declaration is not).
+        if (name.Equals("container", StringComparison.OrdinalIgnoreCase) && ReadsContainerQueryValue(value))
+            return true;
         return custom || (shapes & ShapeValidateDeclaration) == 0
                || Acrux.Core.Css.CssValueGrammar.TextIsValidFor(name, value);
     }

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>probe b278 — supports() on a container query</title></head>
+<body><pre id="out"></pre>
+<script>
+var CASES = [
+  '(container: x / inline-size)',
+  '(container: inline-size)',
+  'container: x / inline-size',
+  '(container: / inline-size)',
+  '(container: x / (min-width: 100px))',
+  '(container: x / bogus!!)',
+  '(container: 1x / inline-size)',
+  '(container-name: x)',
+  '(container: x)',
+  'CSS.supports("container","x / inline-size")'
+];
+var lines = [];
+function p(t, v) { lines.push(t + ' -> ' + v); }
+for (var i = 0; i < CASES.length; i++) {
+  var c = CASES[i];
+  if (c.indexOf('CSS.supports("container"') === 0) {
+    p('two-arg container/x / inline-size', CSS.supports('container', 'x / inline-size'));
+    continue;
+  }
+  var one;
+  try { one = CSS.supports(c); } catch (e) { one = 'throw ' + e.name; }
+  p(c, one);
+}
+var text = lines.join('\n') + '\n';
+document.getElementById('out').textContent = text;
+console.log(text);
+</script></body></html>

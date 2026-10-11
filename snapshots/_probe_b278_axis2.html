@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>probe b278 — inline-size containment: which axis, and does it imply layout?</title>
+<style>
+  body { margin: 0; font: 10px/10px monospace; }
+  .ib { display: inline-block; vertical-align: top; background: #ddd; }
+  .tall { width: 100%; height: 100px; background: #69f; }
+  /* No 'position' on the wrapper: only layout containment can make it the containing block. */
+  .wrap { width: 200px; border: 1px solid #333; }
+  .abs { position: absolute; left: 100px; top: 20px; width: 20px; height: 10px; background: #e00; }
+  .c-i   { contain: inline-size; }
+  .c-s   { contain: size; }
+  .c-l   { contain: layout; }
+  .c-n   { contain: none; }
+  /* A shrink-to-fit box: its width comes from its content unless the inline axis is contained. */
+  #out { font: 11px/1.35 monospace; white-space: pre; }
+</style>
+</head>
+<body>
+<!-- 1. inline axis: does contain:inline-size stop the contents from setting the width? -->
+<div class="wrap"><div id="i1" class="ib c-n">wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww</div></div>
+<div class="wrap"><div id="i2" class="ib c-i">wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww</div></div>
+<div class="wrap"><div id="i3" class="ib c-s">wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww</div></div>
+<!-- 2. same, with an inline-axis intrinsic fallback -->
+<div class="wrap"><div id="i4" class="ib c-i" style="contain-intrinsic-inline-size:55px">wwwwwwwwwww</div></div>
+<!-- 3. block axis: does contain:inline-size stop the contents from setting the height? -->
+<div class="wrap"><div id="b1" class="ib c-n"><div class="tall"></div>xxxx</div></div>
+<div class="wrap"><div id="b2" class="ib c-i"><div class="tall"></div>xxxx</div></div>
+<div class="wrap"><div id="b3" class="ib c-s"><div class="tall"></div>xxxx</div></div>
+<!-- 4. does inline-size imply LAYOUT containment (containing block + no margin collapse + IFC)? -->
+<div class="wrap c-n"><div id="l1" class="abs"></div></div>
+<div class="wrap c-l"><div id="l2" class="abs"></div></div>
+<div class="wrap c-i"><div id="l3" class="abs"></div></div>
+<div class="wrap c-s"><div id="l4" class="abs"></div></div>
+<div id="out"></div>
+<script>
+function say(id) {
+  var el = document.getElementById(id);
+  var r = el.getBoundingClientRect();
+  var cr = el.getBoundingClientRect();
+  return id + ' x=' + Math.round(cr.left) + ' y=' + Math.round(cr.top) +
+         ' w=' + Math.round(cr.width) + ' h=' + Math.round(cr.height) +
+         ' contain=' + getComputedStyle(el).contain;
+}
+var ids = ['i1','i2','i3','i4','b1','b2','b3','l1','l2','l3','l4'];
+var lines = ids.map(say);
+document.getElementById('out').textContent = lines.join('\n') + '\n';
+</script>
+</body>
+</html>

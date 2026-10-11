@@ -44,8 +44,10 @@ public static class IntrinsicMeasure
             percentageResolutionInline: float.NaN);
         // CSS Containment 3 §2.2: while size containment is on, the contents contribute no
         // intrinsic size, so the probe must not lay them out at all — the axis measures the
-        // contain-intrinsic fallback plus the box's own border and padding.
-        if (element.ComputedStyle.HasSizeContainment)
+        // contain-intrinsic fallback plus the box's own border and padding. 'inline-size'
+        // says the same for this axis alone (§2.3), which is why the probe asks the
+        // inline-axis predicate rather than the both-axes one.
+        if (element.ComputedStyle.HasInlineAxisSizeContainment)
             return ContainedBorderBoxInline(element.ComputedStyle, space);
         // Same rule as the block path: 'break-word' must not break during
         // min-content measurement (CSS Text 3 §4.3).
@@ -232,7 +234,7 @@ public static class IntrinsicMeasure
     private static float? ContainedInlineProbe(Element element, ConstraintSpace space)
     {
         var style = element.ComputedStyle;
-        if (style == null || !style.HasSizeContainment)
+        if (style == null || !style.HasInlineAxisSizeContainment)
             return null;
         return ContainedBorderBoxInline(style, space);
     }
@@ -256,8 +258,10 @@ public static class IntrinsicMeasure
         // intrinsic size at all, so both keywords collapse to the contain-intrinsic fallback
         // plus the box's own border and padding (reference engine: 'contain: size' with 10px
         // padding and no fallback is a 20px-wide box, with 'contain-intrinsic-width: 100px'
-        // it is 120px).
-        if (style.HasSizeContainment)
+        // it is 120px). This is the inline axis, so 'contain: inline-size' (§2.3) collapses
+        // here too — measured: an inline-block with long text and 'contain: inline-size' is
+        // 0px wide yet keeps its content height.
+        if (style.HasInlineAxisSizeContainment)
         {
             float contained = ContainmentMetrics.ContainedInlineBorderBox(style, space, bp);
             return (contained, contained);

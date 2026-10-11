@@ -374,6 +374,15 @@ public static class ComputedValueSerializer
             case "text-rendering": return style.TextRendering;
             case "contain": return Css.Resolver.CssPropertyApplier.FormatContain(style.Contain);
             case "contain-intrinsic-size": return ContainIntrinsicSizeText(style);
+            // The four axis longhands each say one axis. They store into the same two fields the
+            // shorthand uses — the logical pair picking its physical axis by 'writing-mode' — but
+            // they had no printer of their own, so every one of them computed the empty string
+            // while the reference engine repeats the length back (measured: 'contain-intrinsic-
+            // width: 55px' and 'contain-intrinsic-inline-size: 55px' both read '55px').
+            case "contain-intrinsic-width": return ContainIntrinsicPhysicalText(style, width: true);
+            case "contain-intrinsic-height": return ContainIntrinsicPhysicalText(style, width: false);
+            case "contain-intrinsic-inline-size": return ContainIntrinsicAxisText(style, inline: true);
+            case "contain-intrinsic-block-size": return ContainIntrinsicAxisText(style, inline: false);
             case "field-sizing": return style.FieldSizing == FieldSizingType.Content ? "content" : "normal";
             case "text-overflow": return style.TextOverflowString is { Length: > 0 } tos ? tos
                 : style.TextOverflow == TextOverflowType.Ellipsis ? "ellipsis" : "clip";
@@ -766,18 +775,35 @@ public static class ComputedValueSerializer
     /// <summary>'contain-intrinsic-size' as a computed value: every axis carries its own
     /// 'auto', and 'content-visibility: auto' gives that keyword to a bare size too (CSS
     /// Containment 2 §3.1, measured: the same '33px 44px' reads back 'auto 33px auto 44px' once
-    /// content-visibility is auto, and '33px 44px' while it is visible).</summary>
+    /// content-visibility is auto, and '33px 44px' while it is visible). Equal axes are said once.</summary>
     private static string ContainIntrinsicSizeText(ComputedStyle style)
     {
-        var forceAuto = style.ContentVisibility == ContentVisibilityType.Auto;
-        string Axis(Length? size, bool hasAuto)
-        {
-            if (size == null) return hasAuto ? "auto none" : "none";
-            return (hasAuto || forceAuto ? "auto " : "") + style.ComputedLengthCss(size);
-        }
-        var inlineText = Axis(style.ContainIntrinsicWidth, style.ContainIntrinsicWidthIsAuto);
-        var blockText = Axis(style.ContainIntrinsicHeight, style.ContainIntrinsicHeightIsAuto);
+        // The shorthand prints its PHYSICAL pair, not its logical one: measured under
+        // 'writing-mode: vertical-rl', a box whose 'contain-intrinsic-inline-size' is 55px says
+        // 'none 55px' — the width first, the height second, whichever axis they are to the page.
+        var inlineText = ContainIntrinsicPhysicalText(style, width: true);
+        var blockText = ContainIntrinsicPhysicalText(style, width: false);
         return inlineText == blockText ? inlineText : $"{inlineText} {blockText}";
+    }
+
+    /// <summary>One axis of the 'contain-intrinsic' pair, named by the page's own writing mode.
+    /// The LOGICAL pair resolves through 'writing-mode' exactly as the applier did when it stored
+    /// the value; the PHYSICAL pair must not, or 'contain-intrinsic-width' of a vertical box would
+    /// print the block axis (measured: a vertical box with 'contain-intrinsic-inline-size: 55px'
+    /// says width 'none' and height '55px').</summary>
+    private static string ContainIntrinsicAxisText(ComputedStyle style, bool inline)
+    {
+        bool vertical = style.WritingMode is WritingModeType.VerticalRl or WritingModeType.VerticalLr;
+        return ContainIntrinsicPhysicalText(style, width: inline != vertical);
+    }
+
+    private static string ContainIntrinsicPhysicalText(ComputedStyle style, bool width)
+    {
+        var size = width ? style.ContainIntrinsicWidth : style.ContainIntrinsicHeight;
+        bool hasAuto = width ? style.ContainIntrinsicWidthIsAuto : style.ContainIntrinsicHeightIsAuto;
+        if (size == null) return hasAuto ? "auto none" : "none";
+        return (hasAuto || style.ContentVisibility == ContentVisibilityType.Auto ? "auto " : "")
+            + style.ComputedLengthCss(size);
     }
 
     /// <summary>'font-feature-settings' the way the reference engine serialises it: items

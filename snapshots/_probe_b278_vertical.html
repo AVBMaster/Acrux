@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>probe b278 — logical intrinsic axes under a vertical writing mode</title>
+<style>
+#wm { writing-mode: vertical-rl; }
+#w1 { contain-intrinsic-inline-size: 55px; }
+#w2 { contain-intrinsic-block-size: 66px; }
+#w3 { contain-intrinsic-width: 77px; }
+</style></head><body>
+<div id="wm"><div id="w1"></div><div id="w2"></div><div id="w3"></div><div id="w4" style="writing-mode: vertical-rl; contain-intrinsic-inline-size: 88px"></div></div>
+<pre id="out"></pre>
+<script>
+var props = ['writing-mode','contain-intrinsic-size','contain-intrinsic-width','contain-intrinsic-height','contain-intrinsic-inline-size','contain-intrinsic-block-size'];
+var lines = [];
+['w1','w2','w3','w4'].forEach(function (id) {
+  var el = document.getElementById(id);
+  var cs = getComputedStyle(el);
+  lines.push(id + ': ' + props.map(function (p) { return p + '=' + JSON.stringify(cs.getPropertyValue(p)); }).join(' '));
+});
+var text = lines.join('\n') + '\n';
+document.getElementById('out').textContent = text;
+console.log(text);
+</script></body></html>

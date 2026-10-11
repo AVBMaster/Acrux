@@ -866,7 +866,18 @@ public static class CssPropertyApplier
                 }
                 break;
             case "object-fit": style.ObjectFit = ParseObjectFit(value); break;
-            case "object-position": ParsePosition(value, out var opx, out var opy); style.ObjectPositionX = opx; style.ObjectPositionY = opy; break;
+            case "object-position":
+                // A <position> names its axes by KEYWORD, not by the order the page wrote them:
+                // 'top' is the vertical axis and leaves the horizontal in the middle, so reading
+                // parts[0] as x put 'top' on the wrong axis and 'object-position: top' computed
+                // '0% 50%' where the reference engine says '50% 0%' (CSS Images 3 §5, measured).
+                {
+                    var scratch = new ComputedStyle();
+                    ParseBackgroundPosition(value, scratch);
+                    style.ObjectPositionX = scratch.BackgroundPositionX;
+                    style.ObjectPositionY = scratch.BackgroundPositionY;
+                }
+                break;
             case "filter": style.Filter = value; break;
             case "backdrop-filter": style.BackdropFilter = value; break;
             case "clip-path": style.ClipPath = value; break;
@@ -3916,6 +3927,7 @@ public static class CssPropertyApplier
             ContainType bit = token switch
             {
                 "size" => ContainType.Size,
+                "inline-size" => ContainType.InlineSize,
                 "layout" => ContainType.Layout,
                 "style" => ContainType.Style,
                 "paint" => ContainType.Paint,
@@ -3936,6 +3948,7 @@ public static class CssPropertyApplier
         if (contain == ContainType.Content) return "content";
         var parts = new List<string>(4);
         if ((contain & ContainType.Size) != 0) parts.Add("size");
+        if ((contain & ContainType.InlineSize) != 0) parts.Add("inline-size");
         if ((contain & ContainType.Layout) != 0) parts.Add("layout");
         if ((contain & ContainType.Style) != 0) parts.Add("style");
         if ((contain & ContainType.Paint) != 0) parts.Add("paint");

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>probe b278 — the containment axes, in gate-page geometry</title>
+<style>
+body { font: 16px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; }
+#cb { width: 400px; padding: 8px; font-size: 16px; background: rgb(245,245,245); }
+.shrink { display: inline-block; vertical-align: top; padding: 10px; background: rgb(220,220,220); }
+.kid { width: 70px; height: 100px; background: rgb(120,120,240); }
+#k1 { contain: none; }
+#k2 { contain: inline-size; }
+#k3 { contain: size; }
+#k4 { contain: inline-size; contain-intrinsic-inline-size: 55px; }
+#k5 { contain: inline-size; contain-intrinsic-size: 55px; }
+#out { font: 12px/1.4 monospace; white-space: pre; }
+</style>
+</head>
+<body>
+<div id="cb">
+  <div id="k1" class="shrink"><div class="kid"></div></div>
+  <div id="k2" class="shrink"><div class="kid"></div></div>
+  <div id="k3" class="shrink"><div class="kid"></div></div>
+  <div id="k4" class="shrink"><div class="kid"></div></div>
+  <div id="k5" class="shrink"><div class="kid"></div></div>
+</div>
+<div id="out"></div>
+<script>
+function say(id) {
+  var el = document.getElementById(id);
+  var r = el.getBoundingClientRect();
+  return id + ' w=' + Math.round(r.width) + ' h=' + Math.round(r.height) +
+         ' contain=' + getComputedStyle(el).contain;
+}
+var lines = ['k1','k2','k3','k4','k5'].map(say);
+document.getElementById('out').textContent = lines.join('\n') + '\n';
+lines.forEach(function (l) { console.log(l); });
+</script>
+</body>
+</html>

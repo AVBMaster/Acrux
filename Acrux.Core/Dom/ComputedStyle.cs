@@ -1390,6 +1390,15 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public bool HasSizeContainment => (Contain & ContainType.Size) != 0
         || ContentVisibility == ContentVisibilityType.Hidden;
 
+    /// <summary>CSS Containment 3 §2.3: the 'inline-size' keyword contains the INLINE axis
+    /// only, so the block size still comes from the contents. Measured on the reference
+    /// engine, an inline-block with 'contain: inline-size' around a 100px child is 110px
+    /// tall and 0px wide, while the same box with 'contain: size' is 0x0; 'inline-size'
+    /// furthermore does not imply layout containment there (an absolutely positioned
+    /// descendant still resolves against the initial containing block).</summary>
+    public bool HasInlineAxisSizeContainment => (Contain & (ContainType.Size | ContainType.InlineSize)) != 0
+        || ContentVisibility == ContentVisibilityType.Hidden;
+
     /// <summary>The union of the containment flags that turn the box into a paint boundary:
     /// layout and paint containment, and either non-visible 'content-visibility' value.</summary>
     public bool CreatesContainmentContext =>
@@ -2079,6 +2088,10 @@ public enum ContainType
     Layout = 1 << 1,
     Style = 1 << 2,
     Paint = 1 << 3,
+    /// <summary>CSS Containment 3 §2.3: size containment along the inline axis only. It is its
+    /// own bit rather than an alias for <see cref="Size"/>, because the axes differ: the block
+    /// size of an 'inline-size' box still comes from its contents.</summary>
+    InlineSize = 1 << 4,
     Content = Layout | Style | Paint,
     Strict = Size | Layout | Style | Paint,
 }

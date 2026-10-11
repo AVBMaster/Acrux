@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 278 — a position names its axes, and contain has a third word</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; padding: 8px; font-size: 16px; background: rgb(245,245,245); }
+#probe { font-size: 16px; }
+/* Visual markers: an <img> placed by object-position, and a contained box. */
+#imgbox { width: 100px; height: 60px; background: rgb(230,230,230); display: inline-block; vertical-align: top; margin-right: 8px; }
+#objTop { object-position: top; background: rgb(255,128,128); width: 40px; height: 24px; }
+#objLeft { object-position: left; background: rgb(128,255,128); width: 40px; height: 24px; }
+#objBoth { object-position: bottom right; background: rgb(128,128,255); width: 40px; height: 24px; }
+#cont { width: 40px; height: 40px; background: rgb(250,220,150); contain: inline-size; }
+/* The containment axes: a shrink-to-fit box with 10px padding around a fixed 70x100 child. */
+.shrink { display: inline-block; vertical-align: top; padding: 10px; background: rgb(220,220,220); }
+.kid { width: 70px; height: 100px; background: rgb(120,120,240); }
+#k1 { contain: none; }
+#k2 { contain: inline-size; }
+#k3 { contain: size; }
+#k4 { contain: inline-size; contain-intrinsic-inline-size: 55px; }
+/* The logical intrinsic pair under a vertical writing mode: empty boxes, so nothing here
+   paints — 'contain-intrinsic-*' only speaks when an axis is contained. */
+#wm { writing-mode: vertical-rl; }
+#w1 { contain-intrinsic-inline-size: 55px; }
+#w2 { contain-intrinsic-block-size: 66px; }
+</style></head><body>
+<h4>b278 — values read in the wrong place, and facts with no way to speak. A <c>&lt;position&gt;</c> names its axes by KEYWORD, not by the order the page wrote them, but 'object-position' took the first token as the horizontal axis: 'object-position: top' put 'top' on x and computed '0% 50%' where the reference engine says '50% 0%' — the image sat against the wrong edge. It now shares the parser the background and the mask already use, and 'background-position' echoes the pair the way 'mask-position' does. 'contain: inline-size' had no bit at all, so the one CSS Containment 3 keyword that is neither 'size' nor 'none' computed back as 'none' — and the first fix for it was itself wrong, because containment is per AXIS: measured, 'inline-size' collapses the inline size and leaves the block size to the contents, and does not make the box a containing block. The keyword list had no grammar either, so 'size inline-size', 'strict style' and 'none style' were stored as specified values that no sheet should have kept. The four 'contain-intrinsic' axis longhands had fields and no printer, so each computed the empty string; 'content-visibility' stored the draft's 'match-none'; and the 'container' shorthand said nothing at all. Last, the value fold lowercased every function name, which is right for 'RGB(' but wrong for the transform family: 'translateZ(10px)' came back as 'translatez(10px)', a name no CSS grammar has.</h4>
+<div id="cb">
+  <span id="imgbox"><img id="objTop"><img id="objLeft"><img id="objBoth"></span><div id="cont"></div>
+  <div id="axes"><div id="k1" class="shrink"><div class="kid"></div></div><div id="k2" class="shrink"><div class="kid"></div></div><div id="k3" class="shrink"><div class="kid"></div></div><div id="k4" class="shrink"><div class="kid"></div></div></div>
+  <div id="wm"><div id="w1"></div><div id="w2"></div></div>
+</div>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out = []; var failed = 0;
+function row(name, got, want){ var ok = String(got) === String(want); if(!ok) failed++;
+  out.push((ok?'ok   ':'FAIL ')+name+'  got='+JSON.stringify(String(got))+'  want='+JSON.stringify(String(want))); }
+
+// Each entry: property, value, wantSpec, wantComp  (every one measured in the reference engine)
+var CASES = [
+  // ===== a position puts each keyword on its own axis =====
+  ['object-position','top','center top','50% 0%'],
+  ['object-position','left','left center','0% 50%'],
+  ['object-position','bottom right','right bottom','100% 100%'],
+  ['object-position','right top','right top','100% 0%'],
+  ['object-position','center','center center','50% 50%'],
+  ['object-position','10px 20px','10px 20px','10px 20px'],
+  ['object-position','left 10px bottom 20px','left 10px bottom 20px','10px calc(100% - 20px)'],
+  // the mask and the background must keep answering the same way
+  ['mask-position','top','center top','50% 0%'],
+  ['background-position','top','center top','50% 0%'],
+
+  // ===== 'contain' has a third size word =====
+  ['contain','inline-size','inline-size','inline-size'],
+  ['contain','size','size','size'],
+  ['contain','strict','strict','strict'],
+  ['contain','content','content','content'],
+  ['contain','layout paint','layout paint','layout paint'],
+  ['contain','none','none','none'],
+  // the keyword list, in the order the reference engine prints it
+  ['contain','inline-size layout','inline-size layout','inline-size layout'],
+  ['contain','layout inline-size','inline-size layout','inline-size layout'],
+  ['contain','inline-size style','inline-size style','inline-size style'],
+  ['contain','inline-size paint','inline-size paint','inline-size paint'],
+  ['contain','style layout paint','layout style paint','content'],
+  ['contain','size layout style paint','size layout style paint','strict'],
+  ['contain','INLINE-SIZE','inline-size','inline-size'],
+  ['contain','inline-size, layout','','none'],
+  ['contain','content, paint','','none'],
+  // ... and refused: 'size' names both axes, so a list that says both overlaps itself;
+  // 'none'/'strict'/'content' stand alone; a keyword may not repeat.
+  ['contain','size inline-size','','none'],
+  ['contain','inline-size size','','none'],
+  ['contain','inline-size  inline-size','','none'],
+  ['contain','size size','','none'],
+  ['contain','style style','','none'],
+  ['contain','strict inline-size','','none'],
+  ['contain','strict style','','none'],
+  ['contain','content inline-size','','none'],
+  ['contain','content paint','','none'],
+  ['contain','none inline-size','','none'],
+  ['contain','inline-size none','','none'],
+  ['contain','inline-size auto','','none'],
+  ['contain','size layout style paint inline-size','','none'],
+  ['contain','auto','','none'],
+
+  // ===== the 'contain-intrinsic' axes had fields but no printer: every one computed '' =====
+  ['contain-intrinsic-size','55px','55px','55px'],
+  ['contain-intrinsic-size','55px 65px','55px 65px','55px 65px'],
+  ['contain-intrinsic-size','auto 55px','auto 55px','auto 55px'],
+  ['contain-intrinsic-size','none','none','none'],
+  ['contain-intrinsic-size','auto','','none'],
+  ['contain-intrinsic-width','55px','55px','55px'],
+  ['contain-intrinsic-height','55px','55px','55px'],
+  ['contain-intrinsic-inline-size','55px','55px','55px'],
+  ['contain-intrinsic-block-size','55px','55px','55px'],
+  ['contain-intrinsic-inline-size','none','none','none'],
+  // the strictness the reference engine adds: 'auto' needs a size beside it, a percentage is no
+  // length, a negative length is refused, and a stray 'auto' after a length is dropped rather
+  // than kept (all measured).
+  ['contain-intrinsic-size','auto auto','','none'],
+  ['contain-intrinsic-size','50%','','none'],
+  ['contain-intrinsic-size','50px 20%','','none'],
+  ['contain-intrinsic-size','-5px','','none'],
+  ['contain-intrinsic-size','none none none','','none'],
+  ['contain-intrinsic-size','auto none','auto none','auto none'],
+  ['contain-intrinsic-size','AUTO 55px','auto 55px','auto 55px'],
+  ['contain-intrinsic-size','55px auto','55px','55px'],
+  ['contain-intrinsic-size','55px, 65px','','none'],
+  ['contain-intrinsic-width','50%','','none'],
+
+  // ===== 'content-visibility' takes one word; 'match-none' is no word of it =====
+  ['content-visibility','visible','visible','visible'],
+  ['content-visibility','auto','auto','auto'],
+  ['content-visibility','hidden','hidden','hidden'],
+  ['content-visibility','hidden match-none','','visible'],
+  ['content-visibility','bogus','','visible'],
+
+  // ===== the 'container' shorthand is a word list, printed as the page wrote it =====
+  ['container','inline-size cards','inline-size cards','inline-size cards'],
+  ['container','size','size','size'],
+  ['container','normal','normal','normal'],
+  ['container','none','none','none'],
+  ['container','auto','auto','auto'],
+  ['container','size size','size size','size size'],
+  ['container','INLINE-SIZE Cards','INLINE-SIZE Cards','INLINE-SIZE Cards'],
+  ['container','normal none','','none'],
+  ['container','none cards','','none'],
+  ['container','1cards','','none'],
+  ['container','NONE','none','none'],
+  ['container','1cards b','','none'],
+  ['container','-cards','-cards','-cards'],
+  ['container-name','CARDS','CARDS','CARDS'],
+  ['container-name','none cards','','none'],
+  ['container-name','-cards','-cards','-cards'],
+  ['contain-intrinsic-inline-size','CARDS','','none'],
+
+  // ===== a function name prints its own canonical spelling =====
+  ['transform','translateZ(10px)','translateZ(10px)','translateZ(10px)'],
+  ['transform','translatez(10px)','translateZ(10px)','translateZ(10px)'],
+  ['transform','TRANSLATEZ(10px)','translateZ(10px)','translateZ(10px)'],
+  ['transform','scaleX(2)','scaleX(2)','scaleX(2)'],
+  ['transform','rotateY(45deg)','rotateY(45deg)','rotateY(45deg)'],
+  ['transform','translate3d(1px,2px,3px)','translate3d(1px, 2px, 3px)','translate3d(1px, 2px, 3px)'],
+];
+for (var i=0;i<CASES.length;i++){ var c=CASES[i];
+  row('#'+i+' '+c[0]+'['+c[1]+'] spec', spec(c[0],c[1]), c[2]);
+  // The transform rows assert the SPELLED form only. The reference engine resolves a transform to
+  // a matrix on the computed surface ('translateZ(10px)' computes
+  // 'matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 10, 1)'), which this engine does not do
+  // yet — that gap is tracked separately, and asserting the function text here would enshrine it.
+  if (c[0] === 'transform') continue;
+  row('#'+i+' '+c[0]+'['+c[1]+'] comp', comp(c[0],c[1]), c[3]); }
+
+// CSS Containment 3 §2.3: 'inline-size' contains ONE axis. Each box is an inline-block with
+// 10px padding around a fixed 70x100 child, so the uncontained size is 90x120 and the
+// reference engine says: 'inline-size' 20x120 (inline collapsed, block still from the child),
+// 'size' 20x20 (both collapsed), and 'inline-size' with a 55px inline fallback 75x120.
+function boxSize(id){ var r = document.getElementById(id).getBoundingClientRect();
+  return Math.round(r.width) + 'x' + Math.round(r.height); }
+row('A1 contain:none box', boxSize('k1'), '90x120');
+row('A2 contain:inline-size box', boxSize('k2'), '20x120');
+row('A3 contain:size box', boxSize('k3'), '20x20');
+row('A4 contain:inline-size + 55px fallback', boxSize('k4'), '75x120');
+
+// The same gate has to answer on the supports surface, which reads the value grammar.
+row('S1 supports(contain, inline-size layout)', CSS.supports('contain','inline-size layout'), true);
+row('S2 supports(contain, size inline-size)', CSS.supports('contain','size inline-size'), false);
+row('S3 supports(contain, strict style)', CSS.supports('contain','strict style'), false);
+row('S4 supports(contain, layout style paint)', CSS.supports('contain','layout style paint'), true);
+row('S5 supports(contain, auto)', CSS.supports('contain','auto'), false);
+
+// The logical pair resolves its axis through 'writing-mode', in the store AND so in the
+// printer. Measured with a vertical box: 'contain-intrinsic-inline-size: 55px' answers the
+// PHYSICAL height, and the shorthand says the untouched axis as 'none'.
+function compAt(id,p){ return getComputedStyle(document.getElementById(id)).getPropertyValue(p); }
+row('W1 w1[vertical] inline-size', compAt('w1','contain-intrinsic-inline-size'), '55px');
+row('W2 w1[vertical] block-size', compAt('w1','contain-intrinsic-block-size'), 'none');
+row('W3 w1[vertical] width', compAt('w1','contain-intrinsic-width'), 'none');
+row('W4 w1[vertical] height', compAt('w1','contain-intrinsic-height'), '55px');
+row('W5 w1[vertical] size', compAt('w1','contain-intrinsic-size'), 'none 55px');
+row('W6 w2[vertical] inline-size', compAt('w2','contain-intrinsic-inline-size'), 'none');
+row('W7 w2[vertical] width', compAt('w2','contain-intrinsic-width'), '66px');
+row('W8 w2[vertical] size', compAt('w2','contain-intrinsic-size'), '66px none');
+
+// The reference engine leaves the two longhands alone when the shorthand speaks.
+host.setAttribute('style',''); host.style.setProperty('container','inline-size cards');
+row('C1 container[] leaves container-type', getComputedStyle(host).getPropertyValue('container-type'), 'normal');
+
+// The b277 surfaces, re-checked so this round cannot silently undo them.
+row('V0 overflow-x[clip] comp', comp('overflow-x','clip'), 'clip');
+row('V1 background-blend-mode[luminosity] comp', comp('background-blend-mode','luminosity'), 'luminosity');
+row('V2 text-orientation[sideways-right] comp', comp('text-orientation','sideways-right'), 'sideways');
+row('V3 list-style[none] comp', comp('list-style','none'), 'outside none none');
+row('V4 list-style-image[none] comp', comp('list-style-image','none'), 'none');
+row('V5 clip-path[border-box circle(50%)] spec', spec('clip-path','border-box circle(50%)'), 'circle(50%)');
+row('V6 content[bogus] refused', spec('content','bogus'), '');
+row('V7 fill[red] comp', comp('fill','red'), 'rgb(255, 0, 0)');
+row('V8 break-before[page] comp', comp('break-before','page'), 'page');
+row('V9 transform rotate(0.5turn)', comp('transform','rotate(0.5turn)'), 'matrix(-1, 0, 0, -1, 0, 0)');
+
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>probe b278 — contain keyword combinations</title></head>
+<body>
+<div id="a"></div><div id="out" style="font:12px/1.4 monospace;white-space:pre"></div>
+<script>
+var vals = ["size inline-size","inline-size size","inline-size layout","layout inline-size",
+            "strict inline-size","content inline-size","inline-size style","inline-size paint",
+            "INLINE-SIZE","inline-size  inline-size","none inline-size","inline-size none",
+            "strict style","strict size","content paint","content content","none none","none",
+            "size size","style style","layout layout","paint paint","style layout paint",
+            "size layout style paint","size layout style paint inline-size","auto","block",
+            "","style","size","layout","paint","strict","content","none style","size none",
+            "inline-size auto"];
+var el = document.getElementById('a');
+var lines = [];
+for (var i = 0; i < vals.length; i++) {
+  el.style.contain = '';
+  el.style.contain = vals[i];
+  lines.push(JSON.stringify(vals[i]) + ' -> specified=' + JSON.stringify(el.style.contain) +
+             ' computed=' + JSON.stringify(getComputedStyle(el).contain) +
+             ' supports=' + CSS.supports('contain', vals[i] === '' ? 'none' : vals[i]));
+}
+document.getElementById('out').textContent = lines.join('\n') + '\n';
+lines.forEach(function (l) { console.log(l); });
+</script>
+</body>
+</html>

@@ -195,6 +195,12 @@ public static class EchoedProperties
             new() { Name = "container-type", Initial = "normal",
                 Normalize = Single("normal", "size", "inline-size") },
             new() { Name = "container-name", Initial = "none", Normalize = NormalizeContainerName },
+            // The 'container' shorthand is the same word list read the same way: the reference
+            // engine does not sort its parts, does not lower them, and does not even decide which
+            // one is the type — 'INLINE-SIZE Cards' comes back exactly as authored, while
+            // 'normal none' and 'none cards' and '1cards' are refused (all measured). The one
+            // difference is its initial value, which is the name's 'none'.
+            new() { Name = "container", Initial = "none", Normalize = NormalizeContainerName },
             new() { Name = "interpolate-size", Initial = "numeric-only", Inherited = true,
                 Normalize = Single("numeric-only") },
         };
@@ -1087,11 +1093,23 @@ public static class EchoedProperties
         var parts = new List<string>();
         foreach (var w in words)
         {
-            if (!IsCustomIdent(w) || w.Equals("none", StringComparison.OrdinalIgnoreCase)) return null;
+            // A container name is an <ident> here: the reference engine keeps a leading dash —
+            // '-cards' reads back exactly as written (measured) — while a word that starts with a
+            // digit is no ident at all ('1cards' and '1cards b' are refused, measured), and 'none'
+            // belongs to the keyword rather than to a name.
+            if (!IsContainerNameWord(w) || w.Equals("none", StringComparison.OrdinalIgnoreCase)) return null;
             parts.Add(w);
         }
         return string.Join(" ", parts);
     }
+
+    /// <summary>One word of a container name list: ident characters, not beginning with a digit,
+    /// not a lone dash (which is no name in any spelling) and not a dashed ident — a name that
+    /// starts with '--' is reserved and the reference engine refuses it as a container name
+    /// (measured: '-cards' is kept, '--cards' is not).</summary>
+    private static bool IsContainerNameWord(string w) =>
+        w.Length > 1 && !char.IsAsciiDigit(w[0])
+        && !w.StartsWith("--", StringComparison.Ordinal) && IsIdentChars(w);
 
     /// <summary>CSS Fill and Stroke 3 §2: a <c>&lt;paint&gt;</c> is <c>none</c>, <c>currentColor</c>
     /// or a colour. A colour written as a name keeps it, and any other spelling becomes the rgb()
@@ -1240,7 +1258,7 @@ public static class EchoedProperties
     private static bool IsDashedIdent(string w) => w.Length > 2 && w[0] == '-' && w[1] == '-'
         && IsIdentChars(w[2..]);
 
-    private static bool IsCustomIdent(string w) => w.Length > 0 && w[0] != '-' && IsIdentChars(w);
+    private static bool IsCustomIdent(string w) => w.Length > 0 && w[0] != '-' && !char.IsAsciiDigit(w[0]) && IsIdentChars(w);
 
     private static bool IsIdentChars(string w)
     {

@@ -356,6 +356,65 @@ public static class CssValueGrammar
         return mode || style;
     }
 
+    /// <summary><c>contain</c> (CSS Containment 3 §2.1): either one of the three set keywords on
+    /// its own, or a comma-free list of the five kinds with none repeated. Measured value by
+    /// value: 'size inline-size' is refused — 'size' already contains the axis 'inline-size'
+    /// names — 'strict style', 'content, paint' and 'none style' are refused, a keyword spelled
+    /// twice is refused, and 'size layout style paint' is accepted. An unknown word refuses the
+    /// declaration here rather than silently computing 'none', which is what the applier's own
+    /// fallback would have made of it.</summary>
+    private static bool IsContainValue(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count == 0) return false;
+        // A comma separates layers in some grammars; 'contain' takes a space-separated list, so
+        // 'inline-size, layout' is no value at all (measured).
+        if (text.IndexOf(',') >= 0) return false;
+        if (words.Count == 1)
+            return IsOneOf(words[0], "none", "strict", "content", "size", "inline-size",
+                "layout", "style", "paint");
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        bool size = false, inlineSize = false;
+        foreach (var word in words)
+        {
+            var p = word.ToLowerInvariant();
+            // The set keywords say the whole list, so they have no company.
+            if (p is "none" or "strict" or "content") return false;
+            if (p is not ("size" or "inline-size" or "layout" or "style" or "paint")) return false;
+            if (p == "size") { if (inlineSize) return false; size = true; }
+            else if (p == "inline-size") { if (size) return false; inlineSize = true; }
+            if (!seen.Add(p)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>CSS Containment 3 §3.1 for the 'contain-intrinsic' family: at most
+    /// <paramref name="maxComponents"/> components — two for the shorthand, one for each axis
+    /// longhand — of 'none', 'auto' or a non-negative unit-bearing length, with 'auto' never
+    /// standing on its own. Measured: 'auto' and 'auto auto' are refused while 'auto none' and
+    /// 'AUTO 55px' stand, '50%' and '50px 20%' and '-5px' and 'none none none' are refused.</summary>
+    private static bool IsContainIntrinsicValue(string text, int maxComponents)
+    {
+        if (text.IndexOf(',') >= 0) return false;
+        var words = SplitComponents(text);
+        if (words.Count == 0 || words.Count > maxComponents) return false;
+        bool saysSize = false;
+        foreach (var word in words)
+        {
+            var p = word.ToLowerInvariant();
+            if (p == "auto") continue;
+            if (p == "none") { saysSize = true; continue; }
+            if (p.StartsWith("-", StringComparison.Ordinal)
+                || p.StartsWith("+", StringComparison.Ordinal)
+                || !IsPlainLength(p)) return false;
+            saysSize = true;
+        }
+        // 'auto' names the size to fall back on while the box is skipped; with no size beside it
+        // there is nothing to fall back to, and the reference engine keeps nothing at all.
+        return saysSize;
+    }
+
     private static bool IsOneWordList(string text, params string[] words)
     {
         foreach (var part in SplitComponents(text))
@@ -616,6 +675,28 @@ public static class CssValueGrammar
         CssPropertyId.BackgroundImage or CssPropertyId.MaskImage
             or CssPropertyId.Background or CssPropertyId.Mask
             => static text => !NamesAFontLocal(text),
+        // CSS Containment 3 §2.1: 'contain' is either one of the three set keywords standing
+        // alone, or a duplicate-free list of the five kinds. Measured value by value:
+        // 'size inline-size' is refused because 'size' already names the axis 'inline-size'
+        // names, 'strict style' and 'none style' are refused because a set keyword says the
+        // whole list, 'style style' is refused, and 'size layout style paint' is accepted and
+        // computes 'strict' — so the refusal has to happen here, in the echo and in supports(),
+        // and not only in the applier, which has no way to say the declaration was never stored.
+        CssPropertyId.Contain => IsContainValue,
+        // CSS Containment 3 §3.1: the 'contain-intrinsic' family is one or two components — the
+        // shorthand takes the pair, each axis longhand exactly one — of 'none', 'auto' or a
+        // non-negative unit-bearing length. Measured: 'auto' and 'auto auto' are refused while
+        // 'auto none' stands, '50%' and '-5px' and 'none none none' are refused, and a bare '2'
+        // is no length here.
+        CssPropertyId.ContainIntrinsicSize => static text => IsContainIntrinsicValue(text, 2),
+        CssPropertyId.ContainIntrinsicWidth or CssPropertyId.ContainIntrinsicHeight
+            or CssPropertyId.ContainIntrinsicInlineSize or CssPropertyId.ContainIntrinsicBlockSize
+            => static text => IsContainIntrinsicValue(text, 1),
+        // CSS Containment 3 §2.5: one keyword. 'match-none', the second word an older draft
+        // spelled beside 'hidden', is refused here too (measured: 'content-visibility: hidden
+        // match-none' reads back the empty string while 'hidden' reads back 'hidden').
+        CssPropertyId.ContentVisibility => static text => IsSingleKeywordWord(text,
+            new[] { "visible", "auto", "hidden" }),
         // CSS Transforms 2 §3: 'none' or a list of transform functions. A bare identifier names no
         // transform, which is the whole of the difference between 'transform: bogus' — no condition
         // at all — and 'transform: translateX(1px)' (measured through 'supports()').
