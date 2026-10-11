@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b275 content</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+var vals=["normal","none","\"x\"","counter(x)","url(a.png)","attr(alt)","open-quote","\"a\" \"b\"","bogus",""];
+for (var i=0;i<vals.length;i++){ var v=vals[i];
+  out.push(i+'|content|'+v+'|S='+JSON.stringify(spec("content",v))+'|C='+JSON.stringify(comp("content",v))); }
+// and on a pseudo
+var s=document.createElement('style'); s.textContent='#pp::before{content:"B"}#qq::after{content:none}';
+document.head.appendChild(s);
+var pp=document.createElement('div'); pp.id='pp'; document.body.appendChild(pp);
+var qq=document.createElement('div'); qq.id='qq'; document.body.appendChild(qq);
+out.push('pseudo before='+JSON.stringify(getComputedStyle(pp,'::before').getPropertyValue('content')));
+out.push('pseudo after='+JSON.stringify(getComputedStyle(qq,'::after').getPropertyValue('content')));
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

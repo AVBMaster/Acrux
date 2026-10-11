@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 275 — content's grammar, and echoes the reference engine shortens</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; padding: 8px; font-size: 16px; background: rgb(245,245,245); }
+#probe { font-size: 16px; }
+/* Visual markers: a generated string, a merged pair of strings, and a masked box. */
+#gen::before { content: "A" "B"; background: rgb(255,220,220); }
+#gen2::before { content: "CD"; background: rgb(220,255,220); }
+#flow { display: grid; grid-auto-flow: row dense; grid-template-columns: 40px 40px; background: rgb(225,225,250); }
+#flow i { display: block; height: 12px; background: rgb(180,180,230); }
+#mp { width: 60px; height: 24px; background: rgb(255,200,120); mask-image: url(none.png); mask-position: center; }
+</style></head><body>
+<h4>b275 — the specified echo and the content value. 'content' had no grammar at all, so 'content: bogus' was a declaration the engine accepted and printed; it now reads a content list (strings, counter(), counters(), attr(), url() and the four quote keywords, with at most one '/ &lt;string&gt;' alt text) and refuses the rest, while keeping the two-argument attr() this engine supports on purpose. Two adjacent strings are one string by computed-value time ('"a" "b"' computes '"ab"'), and two strings written side by side are still two items in the echo ('"a""b"' reads '"a" "b"'). The three marker properties computed the empty string and are inherited echo properties now. And three values print shorter than the page wrote them, the way the reference engine prints them: 'grid-auto-flow: row dense' is just 'dense', 'mask-position: center' is the pair 'center center', and 'paint-order' prints the shortest list that still says the whole order — which also needed that prefix to be idempotent, because the echo runs through it before the applier does.</h4>
+<div id="cb">
+  <div id="gen">x</div>
+  <div id="gen2">y</div>
+  <div id="flow"><i></i><i></i><i></i></div>
+  <div id="mp"></div>
+</div>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out = []; var failed = 0;
+function row(name, got, want){ var ok = String(got) === String(want); if(!ok) failed++;
+  out.push((ok?'ok   ':'FAIL ')+name+'  got='+JSON.stringify(String(got))+'  want='+JSON.stringify(String(want))); }
+
+// Each entry: property, value, wantSpec, wantComp  (every one measured in the reference engine)
+var CASES = [
+  // ===== content: a grammar, a merged computed string, and a spaced echo =====
+  ['content','normal','normal','normal'],
+  ['content','none','none','normal'],
+  ['content','"x"','"x"','"x"'],
+  ['content','"a" "b"','"a" "b"','"ab"'],
+  ['content','"a""b"','"a" "b"','"ab"'],
+  ['content','"a" "" "b"','"a" "" "b"','"ab"'],
+  ['content','""','""','""'],
+  ['content','counter(x)','counter(x)','counter(x)'],
+  ['content','counters(x, ".")','counters(x, ".")','counters(x, ".")'],
+  ['content','attr(alt)','attr(alt)','""'],
+  ['content','url(a.png)','url("a.png")','url("file:///home/master/Acrux/snapshots/a.png")'],
+  ['content','open-quote','open-quote','open-quote'],
+  ['content','no-close-quote','no-close-quote','no-close-quote'],
+  ['content','"a" open-quote','"a" open-quote','"a" open-quote'],
+  ['content','counter(x) "y" counter(y)','counter(x) "y" counter(y)','counter(x) "y" counter(y)'],
+  ['content','"a" / "b"','"a" / "b"','"a" / "b"'],
+  ['content','counter(x) / "b"','counter(x) / "b"','counter(x) / "b"'],
+  ['content','"a" url(b.png)','"a" url("b.png")','"a" url("file:///home/master/Acrux/snapshots/b.png")'],
+  ['content','bogus','','normal'],
+  ['content','x','','normal'],
+  ['content','normal "a"','','normal'],
+  ['content','none "a"','','normal'],
+  ['content','"a" bogus','','normal'],
+  ['content','attr()','','normal'],
+  ['content','counter()','','normal'],
+  ['content','counter(x, 1)','','normal'],
+  ['content','target-counter(a,b)','','normal'],
+  ['content','content(text)','','normal'],
+  ['content','"a" /','','normal'],
+  ['content','/ "a"','','normal'],
+  // counter styles: the b174/b177 regression guard. A named style is part of the call, the default
+  // 'decimal' is not said, and a function where a style name belongs is refused.
+  ['content','counter(x, upper-roman)','counter(x, upper-roman)','counter(x, upper-roman)'],
+  ['content','counter(x,decimal)','counter(x)','counter(x)'],
+  ['content','counter(x, decimal)','counter(x)','counter(x)'],
+  ['content','counters(x, ".", upper-roman)','counters(x, ".", upper-roman)','counters(x, ".", upper-roman)'],
+  ['content','counters(x, ".", decimal)','counters(x, ".")','counters(x, ".")'],
+  ['content','counter(neg, negab)','counter(neg, negab)','counter(neg, negab)'],
+  ['content','counter(x, symbols("a" "b"))','','normal'],
+  ['content','counter(x, upper-roman, extra)','','normal'],
+  ['content','counter(x, )','','normal'],
+
+  // ===== grid-auto-flow: 'row' goes when 'dense' says it anyway =====
+  ['grid-auto-flow','row','row','row'],
+  ['grid-auto-flow','column','column','column'],
+  ['grid-auto-flow','dense','dense','dense'],
+  ['grid-auto-flow','row dense','dense','dense'],
+  ['grid-auto-flow','dense row','dense','dense'],
+  ['grid-auto-flow','column dense','column dense','column dense'],
+  ['grid-auto-flow','dense column','column dense','column dense'],
+  ['grid-auto-flow','row row','','row'],
+  ['grid-auto-flow','row column','','row'],
+  ['grid-auto-flow','dense dense','','row'],
+
+  // ===== mask-position is a pair, horizontal axis first =====
+  ['mask-position','center','center center','50% 50%'],
+  ['mask-position','top','center top','50% 0%'],
+  ['mask-position','left','left center','0% 50%'],
+  ['mask-position','top left','left top','0% 0%'],
+  ['mask-position','10px 20px','10px 20px','10px 20px'],
+
+  // ===== paint-order prints the shortest list that says the order =====
+  ['paint-order','normal','normal','normal'],
+  ['paint-order','stroke','stroke','stroke'],
+  ['paint-order','stroke fill','stroke','stroke'],
+  ['paint-order','fill stroke','fill','fill'],
+  ['paint-order','markers stroke fill','markers stroke','markers stroke'],
+  ['paint-order','markers','markers','markers'],
+  ['paint-order','stroke normal fill','','normal'],
+  ['paint-order','stroke stroke','','normal'],
+
+  // ===== the marker family had no computed value at all =====
+  ['marker-start','none','none','none'],
+  ['marker-start','url(#m)','url("#m")','url("#m")'],
+  ['marker-start','url(a.png)','url("a.png")','url("file:///home/master/Acrux/snapshots/a.png")'],
+  ['marker-start','bogus','','none'],
+  ['marker-end','url(#m)','url("#m")','url("#m")'],
+  ['marker-mid','url(#m)','url("#m")','url("#m")'],
+];
+for (var i=0;i<CASES.length;i++){ var c=CASES[i];
+  row('#'+i+' '+c[0]+'['+c[1]+'] spec', spec(c[0],c[1]), c[2]);
+  row('#'+i+' '+c[0]+'['+c[1]+'] comp', comp(c[0],c[1]), c[3]); }
+
+// The markers and the paint family inherit; grid-auto-flow does not.
+var par = document.createElement('div');
+par.style.setProperty('marker-start','url(#m)'); par.style.setProperty('paint-order','stroke');
+par.style.setProperty('grid-auto-flow','column dense');
+var ch = document.createElement('div'); par.appendChild(ch); document.body.appendChild(par);
+row('M0 child inherits marker-start', getComputedStyle(ch).getPropertyValue('marker-start'), 'url("#m")');
+row('M1 child inherits paint-order', getComputedStyle(ch).getPropertyValue('paint-order'), 'stroke');
+row('M2 grid-auto-flow does not inherit', getComputedStyle(ch).getPropertyValue('grid-auto-flow'), 'row');
+
+// A generated box still reads its own content, and the page's own '::before' string is built.
+var g = document.createElement('div'); g.id='gg';
+var st = document.createElement('style'); st.textContent='#gg::before{content:"p" "q"}';
+document.head.appendChild(st); document.body.appendChild(g);
+row('G0 ::before content', getComputedStyle(g,'::before').getPropertyValue('content'), '"pq"');
+
+// The b274 surfaces, re-checked so this round cannot silently undo them.
+row('R0 fill[red] comp', comp('fill','red'), 'rgb(255, 0, 0)');
+row('R1 stroke-dasharray[5 3] spec', spec('stroke-dasharray','5 3'), '5, 3');
+row('R2 outline-style[auto] comp', comp('outline-style','auto'), 'auto');
+row('R3 transform rotate(0.5turn)', comp('transform','rotate(0.5turn)'), 'matrix(-1, 0, 0, -1, 0, 0)');
+row('R4 break-before[page] comp', comp('break-before','page'), 'page');
+row('R5 text-indent[50%] comp', comp('text-indent','50%'), '50%');
+
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

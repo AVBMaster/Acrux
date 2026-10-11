@@ -168,6 +168,17 @@ public static class EchoedProperties
             new() { Name = "stroke-dasharray", Initial = "none", Inherited = true,
                 Normalize = NormalizeDashArray, ComputedText = DashArrayComputed },
 
+            // ===== SVG 2 §11.3. The three marker properties name one image or nothing at all. The
+            // specified value keeps the address the page wrote in the url() spelling the CSSOM
+            // prints; the computed value makes it absolute, except for a bare fragment, which is
+            // already a reference into the document (all measured).
+            new() { Name = "marker-start", Initial = "none", Inherited = true,
+                Normalize = NormalizeMarker, ComputedText = MarkerComputed },
+            new() { Name = "marker-mid", Initial = "none", Inherited = true,
+                Normalize = NormalizeMarker, ComputedText = MarkerComputed },
+            new() { Name = "marker-end", Initial = "none", Inherited = true,
+                Normalize = NormalizeMarker, ComputedText = MarkerComputed },
+
             // ===== Scroll-driven Animations 1, View Transitions 1 and Anchor Position 1. A name is
             // a dashed ident here, so a bare 't' is refused while '--t' is kept; 'view-transition-name'
             // reserves 'auto' (measured: it is refused).
@@ -830,6 +841,45 @@ public static class EchoedProperties
         return length == null ? "center" : style.ComputedLengthCss(length);
     }
 
+    /// <summary>The items of a 'content' value. Whitespace separates them, but two strings written
+    /// side by side are still two items — the reference engine reads 'content: "a""b"' as the pair
+    /// it prints, '"a" "b"' (measured).</summary>
+    public static List<string> SplitContentItems(string text)
+    {
+        var items = new List<string>();
+        foreach (var token in SplitTopLevel(text))
+        {
+            var strings = RunOfQuotedStrings(token);
+            if (strings != null) items.AddRange(strings);
+            else items.Add(token);
+        }
+        return items;
+    }
+
+    /// <summary>The quoted strings a token is made of, or null when it is anything else — so
+    /// '"a""b"' is two items while '"a" attr(x)' and 'url("a")' stay exactly as they are.</summary>
+    private static List<string>? RunOfQuotedStrings(string token)
+    {
+        var found = new List<string>();
+        int i = 0;
+        while (i < token.Length)
+        {
+            char quote = token[i];
+            if (quote != '"' && quote != '\'') return null;
+            int j = i + 1;
+            while (j < token.Length)
+            {
+                if (token[j] == '\\') { j += 2; continue; }
+                if (token[j] == quote) break;
+                j++;
+            }
+            if (j >= token.Length) return null;   // the string never closes
+            found.Add(token.Substring(i, j - i + 1));
+            i = j + 1;
+        }
+        return found.Count > 0 ? found : null;
+    }
+
     /// <summary>Whether one token is a shape <c>offset-path</c> takes. The <c>'offset'</c> shorthand
     /// reads its parts one token at a time, and this is the line between the shape and the distance
     /// written beside it.</summary>
@@ -1153,6 +1203,28 @@ public static class EchoedProperties
         var printed = new List<string>();
         foreach (var part in parts) printed.Add(SvgLengthComputed(part, style));
         return string.Join(", ", printed);
+    }
+
+    /// <summary>SVG 2 §11.3: a marker is <c>none</c> or one <c>url()</c>. A bare ident names no
+    /// image, so 'marker-start: bogus' is refused (measured).</summary>
+    private static string? NormalizeMarker(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
+        if (!trimmed.StartsWith("url(", StringComparison.OrdinalIgnoreCase)
+            || !trimmed.EndsWith(")", StringComparison.Ordinal)) return null;
+        var inner = trimmed[4..^1].Trim();
+        var address = IsQuotedString(inner) ? Unquote(inner) : inner;
+        return address.Length == 0 ? null : "url(\"" + address + "\")";
+    }
+
+    /// <summary>The computed marker: a relative address becomes the absolute one the image is
+    /// looked up by, and a fragment reference is already complete.</summary>
+    public static string MarkerComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
+    {
+        if (canonical.Equals("none", StringComparison.OrdinalIgnoreCase)) return canonical;
+        var printed = Acrux.Core.Css.ImageValueCanonicalizer.Canonicalize(canonical);
+        return string.IsNullOrWhiteSpace(printed) ? canonical : printed;
     }
 
     // ===== the small token tests every entry above leans on =====

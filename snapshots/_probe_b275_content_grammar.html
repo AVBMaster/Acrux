@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b275 content grammar</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var vals = [
+  "normal","none","\"x\"","\"a\" \"b\"","\"a\"\"b\"","counter(x)","counters(x, \".\")",
+  "attr(alt)","attr(data-x \"fb\")","url(a.png)","open-quote","close-quote","no-open-quote","no-close-quote",
+  "\"a\" open-quote","counter(x) \"y\" counter(y)","\"a\" / \"b\"","counter(x) / \"b\"","\"a\" url(b.png)",
+  "bogus","x","inherit","normal \"a\"","none \"a\"","\"a\" bogus","attr()","counter()","counter(x, 1)",
+  "\"a\" \"\" \"b\"","\"\"","target-counter(a,b)","content(text)","\"a\" /","/ \"a\""
+];
+var out=[];
+for (var i=0;i<vals.length;i++){ var v=vals[i];
+  out.push(i+' ['+v+'] S='+JSON.stringify(spec("content",v))+' C='+JSON.stringify(comp("content",v))); }
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

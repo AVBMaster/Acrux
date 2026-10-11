@@ -114,6 +114,10 @@ public static class CssInheritance
 
         // Box, direction and interaction.
         child.Visibility = parent.Visibility;
+        // SVG 2 §11: 'paint-order' is a property of the element's painting and runs down the tree
+        // like the rest of the SVG family (measured: a child of 'paint-order: stroke' reads
+        // 'stroke', where 'grid-auto-flow' beside it stays at its initial 'row').
+        child.PaintOrder = parent.PaintOrder;
         child.Cursor = parent.Cursor;
         child.Direction = parent.Direction;
         child.WritingMode = parent.WritingMode;

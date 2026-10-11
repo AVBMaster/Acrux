@@ -68,18 +68,19 @@ public static class CssPropertyApplier
         string[] order = { "fill", "stroke", "markers" };
         if (words.Any(w => !order.Contains(w)) || words.Length != words.Distinct().Count())
             return null;
-        int Rank(string w) => System.Array.IndexOf(order, w);
-        bool Ascending(List<string> list)
+        // The whole order the page means: what it named, then whatever is left in the default
+        // order. 'markers stroke' and 'markers stroke fill' are the same order, and so both print
+        // the shorter of the two — which is also why this has to be idempotent, since the echo runs
+        // through here before the applier does.
+        var full = words.ToList();
+        full.AddRange(order.Where(o => !full.Contains(o)));
+        for (int take = 1; take <= full.Count; take++)
         {
-            for (int i = 1; i < list.Count; i++)
-                if (Rank(list[i - 1]) > Rank(list[i])) return false;
-            return true;
+            var prefix = full.Take(take).ToList();
+            var completed = prefix.Concat(order.Where(o => !prefix.Contains(o))).ToList();
+            if (completed.SequenceEqual(full)) return string.Join(' ', prefix);
         }
-        // The tail that goes is the longest proper one already in the default order.
-        for (int take = words.Length - 1; take >= 1; take--)
-            if (Ascending(words.Skip(words.Length - take).ToList()))
-                return string.Join(' ', words.Take(words.Length - take));
-        return string.Join(' ', words);
+        return string.Join(' ', full);
     }
 
     /// <summary>The value text with its runs of whitespace reduced to single spaces, which is how a

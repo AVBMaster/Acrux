@@ -658,6 +658,25 @@ public static class CssValueGrammar
         CssPropertyId.OverflowAnchor => static text => IsSingleKeywordWord(text,
             new[] { "auto", "none" }),
         CssPropertyId.Outline => IsOutlineValue,
+        // CSS Generated Content 3 §5.1: 'normal', 'none', or a content list with an optional
+        // '/' alt string. A bare ident is no content item, so 'content: bogus' is refused.
+        CssPropertyId.Content => IsContentValue,
+        // CSS Grid 1 §7.4: at most one axis and at most one 'dense'. Two axes ('row column') or a
+        // repeated word are no value at all (measured: 'row row' reads back empty).
+        CssPropertyId.GridAutoFlow => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count is < 1 or > 2) return false;
+            bool axis = false, dense = false;
+            foreach (var w in words)
+            {
+                var p = w.ToLowerInvariant();
+                if (p is "row" or "column") { if (axis) return false; axis = true; }
+                else if (p == "dense") { if (dense) return false; dense = true; }
+                else return false;
+            }
+            return true;
+        },
         // CSS Text 3 §5.1.11: 'middle' is not a value of 'text-align-last' — the reference engine
         // refuses it, so the declaration never exists (measured).
         CssPropertyId.TextAlignLast => static text => IsSingleKeywordWord(text,
@@ -782,6 +801,119 @@ public static class CssValueGrammar
             return false;
         }
         return width <= 1 && style <= 1 && colour <= 1;
+    }
+
+    /// <summary>CSS Generated Content 3 §5.1: <c>normal</c>, <c>none</c>, or one or more content
+    /// items — a quoted string, an image, <c>counter()</c>, <c>counters()</c>, <c>attr()</c> and the
+    /// four quote keywords — with at most one <c>/ &lt;string&gt;</c> alt text on the end. A bare
+    /// ident is not an item, so 'content: bogus' and 'content: normal "a"' are no value at all, and
+    /// neither is a function with the wrong arguments (all measured). This engine reads the
+    /// two-argument <c>attr()</c> the reference engine refuses, deliberately and on purpose
+    /// (docs/CSS-HANDOFF.md #244), so that form stays a value here.</summary>
+    private static bool IsContentValue(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0) return false;
+        if (trimmed.Equals("normal", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
+        var tokens = Acrux.Core.Css.Resolver.EchoedProperties.SplitTopLevel(trimmed);
+        if (tokens.Count == 0) return false;
+        int slash = tokens.IndexOf("/");
+        if (slash >= 0)
+        {
+            // The alt text is exactly one string, and it is the last thing in the value.
+            if (slash != tokens.Count - 2 || !IsContentString(tokens[slash + 1])) return false;
+            tokens = tokens.GetRange(0, slash);
+            if (tokens.Count == 0) return false;
+        }
+        foreach (var token in tokens)
+            if (!IsContentItem(token)) return false;
+        return true;
+    }
+
+    private static bool IsContentItem(string token)
+    {
+        if (IsContentString(token)) return true;
+        if (token is "open-quote" or "close-quote" or "no-open-quote" or "no-close-quote") return true;
+        int open = token.IndexOf('(');
+        if (open <= 0 || !token.EndsWith(")", StringComparison.Ordinal)) return false;
+        var name = token[..open].ToLowerInvariant();
+        var inner = token[(open + 1)..^1].Trim();
+        switch (name)
+        {
+            // counter(<counter-name> [, <counter-style>]) — the style is an ident or a
+            // symbols()-style function, and 'counter(x, 1)' has a number where a style name
+            // belongs, which is no counter (measured).
+            case "counter":
+                {
+                    var parts = inner.Split(',');
+                    if (parts.Length is < 1 or > 2) return false;
+                    if (!IsContentIdent(parts[0].Trim())) return false;
+                    return parts.Length == 1 || IsCounterStyle(parts[1].Trim());
+                }
+            // counters(<counter-name>, <string> [, <counter-style>])
+            case "counters":
+                {
+                    var parts = SplitOnTopLevelCommas(inner);
+                    if (parts.Length is < 2 or > 3) return false;
+                    if (!IsContentIdent(parts[0].Trim())) return false;
+                    if (!IsContentString(parts[1].Trim())) return false;
+                    return parts.Length == 2 || IsCounterStyle(parts[2].Trim());
+                }
+            case "attr":
+                {
+                    var parts = Acrux.Core.Css.Resolver.EchoedProperties.SplitTopLevel(inner);
+                    if (parts.Count is < 1 or > 2 || !IsContentIdent(parts[0])) return false;
+                    return parts.Count == 1 || IsContentString(parts[1]);
+                }
+            case "url": return inner.Length > 0;
+            // 'target-counter()' and the Content 4 'content()' are not values this engine takes.
+            default: return false;
+        }
+    }
+
+    /// <summary>A counter style name — one of the built-in keywords or a name an @counter-style
+    /// block defines. A function is not a style name here: 'counter(x, symbols("a" "b"))' is
+    /// refused (measured), even though @counter-style itself takes symbols().</summary>
+    private static bool IsCounterStyle(string token) =>
+        IsContentIdent(token) || token.StartsWith("--", StringComparison.Ordinal);
+
+    /// <summary>The comma-separated parts of a function's arguments, with a nested call or a quoted
+    /// string each kept as the one part it is. Also how 'content' prints a counter's arguments.</summary>
+    internal static string[] SplitCounterArguments(string inner) => SplitOnTopLevelCommas(inner);
+    private static string[] SplitOnTopLevelCommas(string inner)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = 0;
+        bool inString = false;
+        char quote = '"';
+        for (int i = 0; i < inner.Length; i++)
+        {
+            char c = inner[i];
+            if (inString)
+            {
+                if (c == '\\') i++;
+                else if (c == quote) inString = false;
+                continue;
+            }
+            if (c is '"' or '\'') { inString = true; quote = c; continue; }
+            if (c == '(') depth++;
+            else if (c == ')' && depth > 0) depth--;
+            else if (c == ',' && depth == 0) { parts.Add(inner[start..i]); start = i + 1; }
+        }
+        parts.Add(inner[start..]);
+        return parts.ToArray();
+    }
+
+    private static bool IsContentString(string token) => token.Length >= 2
+        && (token[0] == '"' || token[0] == '\'') && token[^1] == token[0];
+
+    private static bool IsContentIdent(string token)
+    {
+        if (token.Length == 0) return false;
+        foreach (var c in token)
+            if (!char.IsLetterOrDigit(c) && c is not ('-' or '_' or '\\')) return false;
+        return !char.IsDigit(token[0]);
     }
 
     /// <summary>One layer of a shadow list: the lengths, at most one colour, and for a box shadow

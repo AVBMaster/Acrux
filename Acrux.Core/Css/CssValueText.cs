@@ -237,6 +237,10 @@ public static class CssValueText
                 result = CanonicalizeFontSynthesis(result, property);
                 result = CanonicalizeColumns(result, property);
                 result = CanonicalizeTextUnderlinePosition(result, property);
+                result = CanonicalizeContent(result, property);
+                result = CanonicalizeGridAutoFlow(result, property);
+                result = CanonicalizeMaskPosition(result, property);
+                result = CanonicalizePaintOrder(result, property);
                 // The properties that only have to be said correctly — scroll snapping, the SVG
                 // keyword family, the rest of the font-variant group — print what their one table
                 // says, so a sheet and a CSSOM write cannot disagree about the order of a keyword
@@ -637,6 +641,87 @@ public static class CssValueText
         if (style) parts.Add("style");
         if (smallCaps) parts.Add("small-caps");
         return parts.Count == 0 ? "none" : string.Join(" ", parts);
+    }
+
+    /// <summary>'grid-auto-flow' says its axis only when it says 'column': 'row' is what the
+    /// property means without it, so 'row dense' is the single word 'dense' (measured), while a
+    /// plain 'row' still names itself. Two axes or two 'dense's are refused by the grammar and are
+    /// left exactly as written here.</summary>
+    private static string CanonicalizeGridAutoFlow(string text, string property)
+    {
+        if (!property.Equals("grid-auto-flow", StringComparison.OrdinalIgnoreCase)) return text;
+        bool column = false, dense = false, row = false;
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            var p = word.ToLowerInvariant();
+            switch (p)
+            {
+                case "row": if (row || column) return text; row = true; break;
+                case "column": if (row || column) return text; column = true; break;
+                case "dense": if (dense) return text; dense = true; break;
+                default: return text;
+            }
+        }
+        if (!row && !column && !dense) return text;
+        var parts = new List<string>();
+        if (column) parts.Add("column");
+        else if (!dense) parts.Add("row");
+        if (dense) parts.Add("dense");
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>'mask-position' is a position, and a position is printed as its two axes with the
+    /// horizontal one first and the axis the page left out named explicitly (measured: 'center'
+    /// reads 'center center' and 'top' reads 'center top'). A comma-separated multi-layer value is
+    /// left alone — the layers are the applier's to keep in order.</summary>
+    private static string CanonicalizeMaskPosition(string text, string property)
+    {
+        if (!property.Equals("mask-position", StringComparison.OrdinalIgnoreCase)) return text;
+        if (text.Contains(',')) return text;
+        return ShorthandExpander.PositionPairText(text.Trim()) ?? text;
+    }
+
+    /// <summary>'paint-order' is printed as the shortest list that still says the whole order: the
+    /// item the page left out is implied by the ones it named, so 'stroke fill' is just 'stroke'
+    /// (measured). The applier already computes that prefix, and the echo says the same thing.</summary>
+    private static string CanonicalizePaintOrder(string text, string property)
+    {
+        if (!property.Equals("paint-order", StringComparison.OrdinalIgnoreCase)) return text;
+        return Css.Resolver.CssPropertyApplier.CanonicalPaintOrder(text) ?? text;
+    }
+
+    /// <summary>'content' is echoed as a space-separated list of its items, which is what the
+    /// reference engine prints even when the page ran two strings together (measured:
+    /// 'content: "a""b"' reads back '"a" "b"'). A value the grammar will refuse is left exactly as
+    /// written — re-spelling it would be the same mistake a shorthand canonicaliser makes when it
+    /// tidies an invalid value into a valid one.</summary>
+    private static string CanonicalizeContent(string text, string property)
+    {
+        if (!property.Equals("content", StringComparison.OrdinalIgnoreCase)) return text;
+        if (!CssValueGrammar.TextIsValidFor("content", text)) return text;
+        var tokens = Acrux.Core.Css.Resolver.EchoedProperties.SplitContentItems(text.Trim());
+        for (int i = 0; i < tokens.Count; i++) tokens[i] = CanonicalCounterCall(tokens[i]);
+        return tokens.Count == 0 ? text : string.Join(" ", tokens);
+    }
+
+    /// <summary>A counter call is printed with its arguments separated by one space after the comma,
+    /// and without a style that is the default anyway (measured: 'counter(x, decimal)' reads back
+    /// 'counter(x)' while 'counter(x, upper-roman)' keeps its style).</summary>
+    private static string CanonicalCounterCall(string token)
+    {
+        int open = token.IndexOf('(');
+        if (open <= 0 || !token.EndsWith(")", StringComparison.Ordinal)) return token;
+        var name = token[..open].ToLowerInvariant();
+        if (name != "counter" && name != "counters") return token;
+        var args = new List<string>(CssValueGrammar.SplitCounterArguments(token[(open + 1)..^1]));
+        // 'counter(name, decimal)' and 'counters(name, sep, decimal)' say the style the property
+        // would use anyway.
+        int styleIndex = name == "counter" ? 1 : 2;
+        if (args.Count == styleIndex + 1
+            && args[styleIndex].Trim().Equals("decimal", StringComparison.OrdinalIgnoreCase))
+            args.RemoveAt(styleIndex);
+        for (int i = 0; i < args.Count; i++) args[i] = args[i].Trim();
+        return name + "(" + string.Join(", ", args) + ")";
     }
 
     /// <summary>'columns' prints the width before the count, and omits whichever half is 'auto'

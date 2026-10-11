@@ -595,7 +595,7 @@ public static class ComputedValueSerializer
             // 'none' is left as it is here: whether it stands for a generated box that draws
             // nothing or for an element, whose 'content' the reference engine reports as
             // 'normal', is decided by the surface that knows which of the two it is reading.
-            case "content": return style.Content ?? "normal";
+            case "content": return ContentComputedText(style.Content);
 
             // ------------------------------------------------ time-controlled
             // The transition and animation longhands are carried as the declaration text
@@ -883,6 +883,37 @@ public static class ComputedValueSerializer
     private static string ClearTypeText(ClearType value) => CssFloatKeywords.ToCssString(value);
 
     private static string Px(float value) => CssValueTokenizer.Num(value) + "px";
+
+    /// <summary>The computed text of 'content'. Adjacent quoted strings are a single string by the
+    /// time the value is computed (measured: 'content: "a" "b"' reads '"ab"', and the empty string
+    /// between two others disappears into them), while every other item keeps its place and the
+    /// '/' alt text stays behind the slash.</summary>
+    private static string ContentComputedText(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return "normal";
+        var tokens = Acrux.Core.Css.Resolver.EchoedProperties.SplitContentItems(content);
+        int slash = tokens.IndexOf("/");
+        var list = slash < 0 ? tokens : tokens.GetRange(0, slash);
+        var parts = new List<string>();
+        foreach (var token in list)
+        {
+            if (IsQuotedContent(token) && parts.Count > 0 && IsQuotedContent(parts[^1]))
+            {
+                parts[^1] = "\"" + UnquoteContent(parts[^1]) + UnquoteContent(token) + "\"";
+                continue;
+            }
+            parts.Add(token);
+        }
+        var text = string.Join(" ", parts);
+        if (slash >= 0 && slash + 1 < tokens.Count)
+            text += " / " + string.Join(" ", tokens.GetRange(slash + 1, tokens.Count - slash - 1));
+        return text;
+    }
+
+    private static bool IsQuotedContent(string token) => token.Length >= 2
+        && (token[0] == '"' || token[0] == '\'') && token[^1] == token[0];
+
+    private static string UnquoteContent(string token) => token[1..^1];
 
     /// <summary>The computed text of a 'page-break-before' / 'page-break-after' alias read from the
     /// shared slot: 'page' re-spells as 'always', 'auto'/'avoid'/'left'/'right' stay, and a modern
