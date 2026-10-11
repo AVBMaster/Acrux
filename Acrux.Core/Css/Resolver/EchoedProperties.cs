@@ -1104,11 +1104,11 @@ public static class EchoedProperties
     }
 
     /// <summary>One word of a container name list: ident characters, not beginning with a digit,
-    /// not a lone dash (which is no name in any spelling) and not a dashed ident — a name that
-    /// starts with '--' is reserved and the reference engine refuses it as a container name
-    /// (measured: '-cards' is kept, '--cards' is not).</summary>
+    /// not a lone dash (which is no name in any spelling — but a one-letter name like 'x' is) and
+    /// not a dashed ident, which the reference engine refuses as a container name (measured:
+    /// '-cards' is kept, '--cards' is not).</summary>
     private static bool IsContainerNameWord(string w) =>
-        w.Length > 1 && !char.IsAsciiDigit(w[0])
+        w.Length > 0 && w != "-" && !char.IsAsciiDigit(w[0])
         && !w.StartsWith("--", StringComparison.Ordinal) && IsIdentChars(w);
 
     /// <summary>CSS Fill and Stroke 3 §2: a <c>&lt;paint&gt;</c> is <c>none</c>, <c>currentColor</c>

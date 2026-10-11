@@ -193,6 +193,19 @@ row('W8 w2[vertical] size', compAt('w2','contain-intrinsic-size'), '66px none');
 host.setAttribute('style',''); host.style.setProperty('container','inline-size cards');
 row('C1 container[] leaves container-type', getComputedStyle(host).getPropertyValue('container-type'), 'normal');
 
+// supports() reads a container query — and reads exactly ONE condition of it. Measured value by
+// value: the name may be several words or a dashed one, the condition must be 'inline-size', and
+// a name or a condition left out is no condition at all.
+row('K1 supports((container: x / inline-size))', CSS.supports('(container: x / inline-size)'), true);
+row('K2 supports((container: a b / inline-size))', CSS.supports('(container: a b / inline-size)'), true);
+row('K3 supports((container: --x / inline-size))', CSS.supports('(container: --x / inline-size)'), true);
+row('K4 supports((container: x / inline-size !important))', CSS.supports('(container: x / inline-size !important)'), true);
+row('K5 supports((container: / inline-size))', CSS.supports('(container: / inline-size)'), false);
+row('K6 supports((container: x / block-size))', CSS.supports('(container: x / block-size)'), false);
+row('K7 supports((container: x / (inline-size > 100px)))', CSS.supports('(container: x / (inline-size > 100px))'), false);
+row('K8 supports((container: 1x / inline-size))', CSS.supports('(container: 1x / inline-size)'), false);
+row('K9 supports((container: x / inline-size and block-size))', CSS.supports('(container: x / inline-size and block-size)'), false);
+
 // The b277 surfaces, re-checked so this round cannot silently undo them.
 row('V0 overflow-x[clip] comp', comp('overflow-x','clip'), 'clip');
 row('V1 background-blend-mode[luminosity] comp', comp('background-blend-mode','luminosity'), 'luminosity');
