@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b276 shapes</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var V = [
+ "inset(0)","inset(0px)","inset(10px 20px)","inset(0 round 5px)","inset(50% 0% 50% 0%)",
+ "circle(50%)","circle(0)","circle(50% at 10px 20px)","circle(50% at 0 0)",
+ "ellipse(10px 20px)","ellipse(0 0)","polygon(0 0, 10px 10px, 0 20px)","polygon(50% 0%, 0% 100%, 100% 100%)",
+ "xywh(0 0 10px 10px)","path('M0 0 L10 10')","border-box circle(50%)","margin-box polygon(0 0, 10px 0, 0 10px)",
+ "none","url(#clip)","stroke-box circle(50%)","view-box inset(0)"
+];
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+for (var i=0;i<V.length;i++){ var v=V[i];
+  out.push(i+' ['+v+'] S='+spec("clip-path",v)+'|C='+comp("clip-path",v)); }
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

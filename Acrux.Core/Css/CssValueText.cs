@@ -241,6 +241,7 @@ public static class CssValueText
                 result = CanonicalizeGridAutoFlow(result, property);
                 result = CanonicalizeMaskPosition(result, property);
                 result = CanonicalizePaintOrder(result, property);
+                result = CanonicalizeClipPath(result, property);
                 // The properties that only have to be said correctly — scroll snapping, the SVG
                 // keyword family, the rest of the font-variant group — print what their one table
                 // says, so a sheet and a CSSOM write cannot disagree about the order of a keyword
@@ -688,6 +689,133 @@ public static class CssValueText
     {
         if (!property.Equals("paint-order", StringComparison.OrdinalIgnoreCase)) return text;
         return Css.Resolver.CssPropertyApplier.CanonicalPaintOrder(text) ?? text;
+    }
+
+    /// <summary>The geometry boxes a <c>&lt;geometry-box&gt;</c> names (CSS Shapes 1 §4, CSS
+    /// Masking 1 §5.2). 'no-clip' belongs to 'clip', not to 'clip-path'.</summary>
+    private static readonly string[] GeometryBoxes =
+    {
+        "border-box", "padding-box", "content-box", "margin-box",
+        "fill-box", "stroke-box", "view-box",
+    };
+
+    /// <summary>'clip-path' is a shape with an optional geometry box, and the box goes AFTER the
+    /// shape whichever way the page wrote it — so 'border-box circle(50%)' becomes
+    /// 'circle(50%) border-box' (measured, and the reference engine drops the initial box entirely,
+    /// which is what the echo says). This is not only a spelling: the clip parser reads the shape
+    /// name as the text before the first '(', so a box written in front made the whole declaration
+    /// name a shape that does not exist and the element drew unclipped.</summary>
+    private static string CanonicalizeClipPath(string text, string property)
+    {
+        if (!property.Equals("clip-path", StringComparison.OrdinalIgnoreCase)) return text;
+        var tokens = Css.Resolver.EchoedProperties.SplitTopLevel(text.Trim());
+        if (tokens.Count == 0) return text;
+        string? shape = null, box = null;
+        foreach (var token in tokens)
+        {
+            var lower = token.ToLowerInvariant();
+            if (GeometryBoxes.Contains(lower))
+            {
+                // Two boxes is no clip-path value at all; leave it for the grammar to refuse.
+                if (box != null) return text;
+                box = lower;
+                continue;
+            }
+            // 'none' and a clip-source url() carry no box and need no reordering.
+            if (lower == "none" || lower.StartsWith("url(", StringComparison.Ordinal))
+            {
+                if (shape != null || box != null) return text;
+                return lower == "none" ? "none" : text;
+            }
+            if (shape != null) return text;
+            shape = FoldShapeLengths(token);
+        }
+        if (shape == null || box == "border-box") return shape ?? text;
+        return box == null ? shape : shape + " " + box;
+    }
+
+    /// <summary>Inside a basic shape every argument is a length, a percentage or a keyword, and a
+    /// number written without a unit is the zero pixels it stands for — which is what the reference
+    /// engine prints (measured: 'inset(0)' reads 'inset(0px)', and the same fold shows in
+    /// 'xywh(0 0 10px 10px)' → 'xywh(0px 0px 10px 10px)'). A nested call is left alone, because its
+    /// own arguments are not lengths this fold may touch.</summary>
+    private static string FoldShapeLengths(string token)
+    {
+        int open = token.IndexOf('(');
+        if (open <= 0 || !token.EndsWith(")", StringComparison.Ordinal)) return token;
+        var name = token[..open].ToLowerInvariant();
+        var inner = token[(open + 1)..^1];
+        // A quoted argument is opaque apart from its spelling: path()'s SVG data is re-printed the
+        // way the engine reads it, in the double quotes the CSSOM always uses (measured:
+        // "path('M0 0 L10 10')" reads 'path("M 0 0 L 10 10")').
+        if (inner.Length > 0 && (inner[0] == '"' || inner[0] == '\''))
+        {
+            if (name != "path" || inner.Length < 2) return token;
+            var data = Css.Resolver.EchoedProperties.CanonicalPathData(
+                inner.Substring(1, inner.Length - 2));
+            return data == null ? token : "path(\"" + data + "\")";
+        }
+        // A nested call — 'calc(1px + 2px)' inside an inset — is not a list of lengths to fold.
+        if (inner.Contains('(')) return token;
+        if (name == "inset") return "inset(" + FoldInset(inner) + ")";
+        // The comma separates the points of a polygon, so it is the outer split and the space the
+        // inner one: folding both into one list would turn 'polygon(0 0, 10px 10px)' into a list of
+        // four coordinates instead of two points.
+        var points = inner.Split(',');
+        for (int i = 0; i < points.Length; i++)
+        {
+            var words = points[i].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            for (int w = 0; w < words.Length; w++) words[w] = FoldOneLength(words[w]);
+            points[i] = string.Join(" ", words);
+        }
+        return token[..open] + "(" + string.Join(inner.Contains(',') ? ", " : " ", points) + ")";
+    }
+
+    /// <summary>'inset' is one to four offsets and an optional 'round' radius list, and each list
+    /// collapses to the shortest form that means the same four sides (measured: 'inset(50% 0% 50%
+    /// 0%)' reads 'inset(50% 0%)').</summary>
+    private static string FoldInset(string inner)
+    {
+        var words = inner.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        int round = Array.FindIndex(words, w => w.Equals("round", StringComparison.OrdinalIgnoreCase));
+        var offsetWords = round < 0 ? words : words[..round];
+        var offsets = new List<string>();
+        foreach (var word in offsetWords) offsets.Add(FoldOneLength(word));
+        var text = string.Join(" ", CollapseSides(offsets));
+        if (round >= 0)
+        {
+            var corners = new List<string>();
+            foreach (var word in words[(round + 1)..]) corners.Add(word == "/" ? "/" : FoldOneLength(word));
+            int slash = corners.IndexOf("/");
+            if (slash < 0) text += " round " + string.Join(" ", CollapseSides(corners));
+            else text += " round " + string.Join(" ", CollapseSides(corners[..slash])) + " / "
+                       + string.Join(" ", CollapseSides(corners[(slash + 1)..]));
+        }
+        return text;
+    }
+
+    /// <summary>The shortest list that means the same four sides as the one given.</summary>
+    private static List<string> CollapseSides(List<string> values)
+    {
+        if (values.Count is 0 or > 4) return values;
+        string top = values[0];
+        string right = values.Count > 1 ? values[1] : values[0];
+        string bottom = values.Count > 2 ? values[2] : values[0];
+        string left = values.Count > 3 ? values[3] : right;
+        if (bottom == top && left == right)
+            return top == right ? new List<string> { top } : new List<string> { top, right };
+        if (left == right) return new List<string> { top, right, bottom };
+        return new List<string> { top, right, bottom, left };
+    }
+
+    /// <summary>A bare number in a length position is the pixels it stands for.</summary>
+    private static string FoldOneLength(string word)
+    {
+        if (word.Length == 0) return word;
+        if (word.EndsWith("%", StringComparison.Ordinal)
+            || word.EndsWith("px", StringComparison.OrdinalIgnoreCase)) return word;
+        return double.TryParse(word, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out _) ? word + "px" : word;
     }
 
     /// <summary>'content' is echoed as a space-separated list of its items, which is what the

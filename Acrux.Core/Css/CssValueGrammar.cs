@@ -661,6 +661,11 @@ public static class CssValueGrammar
         // CSS Generated Content 3 §5.1: 'normal', 'none', or a content list with an optional
         // '/' alt string. A bare ident is no content item, so 'content: bogus' is refused.
         CssPropertyId.Content => IsContentValue,
+        // CSS Masking 1 §5.2 / CSS Shapes 1 §4: 'none', a clip-source url(), or a basic shape with
+        // an optional geometry box on either side of it. A shape that received a token it cannot
+        // use is no value at all (measured: 'circle(50%, bogus)' reads back empty). Anything this
+        // reader cannot classify is accepted, so a shape that works today is never lost here.
+        CssPropertyId.ClipPath => IsClipPathValue,
         // CSS Grid 1 §7.4: at most one axis and at most one 'dense'. Two axes ('row column') or a
         // repeated word are no value at all (measured: 'row row' reads back empty).
         CssPropertyId.GridAutoFlow => static text =>
@@ -877,6 +882,130 @@ public static class CssValueGrammar
     /// refused (measured), even though @counter-style itself takes symbols().</summary>
     private static bool IsCounterStyle(string token) =>
         IsContentIdent(token) || token.StartsWith("--", StringComparison.Ordinal);
+
+    /// <summary>CSS Masking 1 §5.2: <c>clip-path</c> is <c>none</c>, a <c>&lt;clip-source&gt;</c>
+    /// url, or a basic shape with an optional <c>&lt;geometry-box&gt;</c>. The shape's own arguments
+    /// are checked (CSS Shapes 1 §4) because a stray token inside them makes the whole declaration
+    /// invalid — 'circle(50%, bogus)' is refused while 'circle(50% at 0 0)' is not. A shape this
+    /// reader does not recognise is accepted rather than dropped: the clip already drawn by the
+    /// painter must not disappear because the grammar fell short.</summary>
+    private static bool IsClipPathValue(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0) return false;
+        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
+        var tokens = SplitComponents(trimmed);
+        if (tokens.Count == 0) return false;
+        int index = 0;
+        if (tokens.Count > 1 && GeometryBoxWords.Contains(tokens[0].ToLowerInvariant())) index = 1;
+        if (index >= tokens.Count) return false;
+        var shape = tokens[index];
+        if (shape.StartsWith("url(", StringComparison.OrdinalIgnoreCase)) return true;
+        if (index + 1 < tokens.Count
+            && GeometryBoxWords.Contains(tokens[index + 1].ToLowerInvariant())) index++;
+        else if (index + 1 < tokens.Count) return false;
+        int open = shape.IndexOf('(');
+        if (open <= 0 || !shape.EndsWith(")", StringComparison.Ordinal)) return false;
+        var name = shape[..open].ToLowerInvariant();
+        var inner = shape[(open + 1)..^1].Trim();
+        return name switch
+        {
+            "circle" or "ellipse" => IsRadiusShape(name, inner),
+            "inset" => IsInsetShape(inner),
+            "polygon" => IsPolygonShape(inner),
+            "xywh" => IsXywhShape(inner),
+            "path" => inner.Length >= 2 && (inner[0] == '"' || inner[0] == '\''),
+            // 'content-box' written inside a shape is a stray token; anything else is unknown.
+            _ => true,
+        };
+    }
+
+    private static readonly string[] GeometryBoxWords =
+    {
+        "border-box", "padding-box", "content-box", "margin-box",
+        "fill-box", "stroke-box", "view-box",
+    };
+
+    private static string[] ShapeWords(string text) => text.Split((char[]?)null,
+        StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static bool IsLengthPercentage(string word)
+    {
+        if (word.Length == 0) return false;
+        if (word.StartsWith("calc(", StringComparison.OrdinalIgnoreCase)
+            || word.StartsWith("min(", StringComparison.OrdinalIgnoreCase)
+            || word.StartsWith("max(", StringComparison.OrdinalIgnoreCase)
+            || word.StartsWith("clamp(", StringComparison.OrdinalIgnoreCase)) return true;
+        return Acrux.Core.Css.Resolver.CssPropertyApplier.IsLengthOrPercentageToken(word);
+    }
+
+    /// <summary>circle() and ellipse(): up to two radii (or none), then an optional 'at' position of
+    /// one to three parts.</summary>
+    private static bool IsRadiusShape(string name, string inner)
+    {
+        if (inner.Length == 0) return true;   // 'ellipse()' is the shape without radii
+        var words = ShapeWords(inner);
+        int at = Array.FindIndex(words, w => w.Equals("at", StringComparison.OrdinalIgnoreCase));
+        var radii = at < 0 ? words : words[..at];
+        var position = at < 0 ? Array.Empty<string>() : words[(at + 1)..];
+        if (radii.Length > (name == "circle" ? 1 : 2)) return false;
+        foreach (var radius in radii)
+            if (!IsLengthPercentage(radius)
+                && !radius.Equals("closest-side", StringComparison.OrdinalIgnoreCase)
+                && !radius.Equals("farthest-side", StringComparison.OrdinalIgnoreCase)) return false;
+        // 'at' is optional: 'circle(50%)' has no position at all, and one to three words follow it
+        // when it is there.
+        if (at >= 0 && position.Length is < 1 or > 3) return false;
+        foreach (var part in position)
+            if (!IsLengthPercentage(part) && !PositionWords.Contains(part.ToLowerInvariant())) return false;
+        return true;
+    }
+
+    private static readonly string[] PositionWords =
+        { "left", "right", "top", "bottom", "center" };
+
+    /// <summary>inset(): one to four offsets, then an optional 'round' radius list.</summary>
+    private static bool IsInsetShape(string inner)
+    {
+        var words = ShapeWords(inner);
+        if (words.Length == 0) return false;
+        int round = Array.FindIndex(words, w => w.Equals("round", StringComparison.OrdinalIgnoreCase));
+        var offsets = round < 0 ? words : words[..round];
+        var radii = round < 0 ? Array.Empty<string>() : words[(round + 1)..];
+        if (offsets.Length is < 1 or > 4) return false;
+        foreach (var offset in offsets) if (!IsLengthPercentage(offset)) return false;
+        if (round >= 0 && (radii.Length is < 1 or > 8)) return false;
+        foreach (var radius in radii)
+            if (radius != "/" && !IsLengthPercentage(radius)) return false;
+        return true;
+    }
+
+    /// <summary>polygon(): an optional fill rule, then the coordinate pairs. One pair is still a
+    /// value — the reference engine accepts 'polygon(0 0)' and prints it back (measured).</summary>
+    private static bool IsPolygonShape(string inner)
+    {
+        var points = SplitOnTopLevelCommas(inner);
+        if (points.Length == 0) return false;
+        int first = 0;
+        var head = points[0].Trim().ToLowerInvariant();
+        if (head is "nonzero" or "evenodd") first = 1;
+        for (int i = first; i < points.Length; i++)
+        {
+            var words = ShapeWords(points[i]);
+            if (words.Length != 2) return false;
+            if (!IsLengthPercentage(words[0]) || !IsLengthPercentage(words[1])) return false;
+        }
+        return points.Length > first;
+    }
+
+    /// <summary>xywh(): exactly four lengths or percentages, and nothing beside them.</summary>
+    private static bool IsXywhShape(string inner)
+    {
+        var words = ShapeWords(inner);
+        if (words.Length != 4) return false;
+        foreach (var word in words) if (!IsLengthPercentage(word)) return false;
+        return true;
+    }
 
     /// <summary>The comma-separated parts of a function's arguments, with a nested call or a quoted
     /// string each kept as the one part it is. Also how 'content' prints a counter's arguments.</summary>

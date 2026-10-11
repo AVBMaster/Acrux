@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b276 clip geometry box</title>
+<style>
+body{margin:0;background:rgb(255,255,255);font:12px monospace}
+.row{position:relative;height:70px}
+.box{position:absolute;left:0;top:0;width:60px;height:60px;background:rgb(255,128,128)}
+/* the authored prefix form, which the reference engine accepts and clips with */
+#pre .box{clip-path:border-box circle(50%)}
+/* the suffix form */
+#suf .box{clip-path:circle(50%) margin-box}
+/* no box at all (the initial border-box is implied) */
+#none .box{clip-path:circle(50%)}
+/* a margin-box prefix: the circle should be measured against the margin box */
+#mpre .box{clip-path:margin-box circle(50%);margin:5px;left:5px;top:5px}
+.lbl{position:absolute;left:70px;top:20px}
+</style></head><body>
+<div class="row" id="pre"><div class="box"></div><div class="lbl">prefix border-box</div></div>
+<div class="row" id="suf"><div class="box"></div><div class="lbl">suffix margin-box</div></div>
+<div class="row" id="none"><div class="box"></div><div class="lbl">no box</div></div>
+<div class="row" id="mpre"><div class="box"></div><div class="lbl">prefix margin-box</div></div>
+<script>
+// Probe the corner pixel of each box: (255,128,128) means NOT clipped, white means clipped away.
+function px(id){ var el=document.getElementById(id).querySelector('.box'); var r=el.getBoundingClientRect();
+  return id+' corner='+Math.round(r.left+1)+','+Math.round(r.top+1); }
+console.log(['pre','suf','none','mpre'].map(px).join(' | '));
+</script></body></html>

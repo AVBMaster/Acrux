@@ -929,7 +929,7 @@ public static class EchoedProperties
 
     /// <summary>Re-print SVG path data: each command letter on its own, its numbers after it.
     /// A letter the grammar does not know, or a number it cannot read, is no path at all.</summary>
-    private static string? CanonicalPathData(string data)
+    internal static string? CanonicalPathData(string data)
     {
         var parts = new List<string>();
         int i = 0;

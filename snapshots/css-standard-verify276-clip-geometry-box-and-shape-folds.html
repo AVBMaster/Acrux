@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 276 — a geometry box in front of the shape still clips</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); background: rgb(255,255,255); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; padding: 8px; font-size: 16px; background: rgb(245,245,245); }
+#probe { font-size: 16px; }
+/* Visual markers — the prefix form used to draw a full square. */
+.b { width: 40px; height: 40px; background: rgb(255,128,128); display: inline-block; margin: 0 6px; }
+#pre { clip-path: border-box circle(50%); }
+#preM { clip-path: margin-box circle(50%); }
+#preP { clip-path: padding-box polygon(0 0, 100% 0, 0 100%); }
+#suf { clip-path: circle(50%) content-box; }
+#plain { clip-path: inset(0 20px 0 20px); }
+#round { clip-path: inset(50% 0% 50% 0%); background: rgb(128,128,255); }
+</style></head><body>
+<h4>b276 — 'clip-path' is a shape with an optional geometry box, and the box may be written in front of the shape. The clip parser read the shape's name as everything before the first '(', so 'clip-path: border-box circle(50%)' named a shape called 'border-box circle', found no such thing, and dropped the whole clip — the element drew as a full square while the reference engine clipped it to a circle. The value is now rewritten into the suffix form the parser reads (and the reference engine prints) before it reaches it, which also fixes the echo: the initial 'border-box' is dropped, a non-initial box moves behind the shape, a bare number in a length position gains its 'px', 'inset' collapses four sides to the shortest list that means them, and path()'s data is re-printed the way the engine reads it, in double quotes.</h4>
+<div id="cb">
+  <span class="b" id="pre"></span><span class="b" id="preM"></span><span class="b" id="preP"></span><span class="b" id="suf"></span><span class="b" id="plain"></span><span class="b" id="round"></span>
+</div>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out = []; var failed = 0;
+function row(name, got, want){ var ok = String(got) === String(want); if(!ok) failed++;
+  out.push((ok?'ok   ':'FAIL ')+name+'  got='+JSON.stringify(String(got))+'  want='+JSON.stringify(String(want))); }
+
+// Each entry: value, wantSpec, wantComp  (every one measured in the reference engine)
+var V = [
+  ['border-box circle(50%)','circle(50%)','circle(50%)'],
+  ['circle(50%)','circle(50%)','circle(50%)'],
+  ['margin-box circle(50%)','circle(50%) margin-box','circle(50%) margin-box'],
+  ['stroke-box circle(50%)','circle(50%) stroke-box','circle(50%) stroke-box'],
+  ['view-box inset(0)','inset(0px) view-box','inset(0px) view-box'],
+  ['content-box polygon(0 0, 10px 0, 0 10px)','polygon(0px 0px, 10px 0px, 0px 10px) content-box','polygon(0px 0px, 10px 0px, 0px 10px) content-box'],
+  ['inset(0)','inset(0px)','inset(0px)'],
+  ['inset(0px)','inset(0px)','inset(0px)'],
+  ['inset(10px 20px)','inset(10px 20px)','inset(10px 20px)'],
+  ['inset(0 round 5px)','inset(0px round 5px)','inset(0px round 5px)'],
+  ['inset(50% 0% 50% 0%)','inset(50% 0%)','inset(50% 0%)'],
+  ['inset(10px 40px 10px 10px)','inset(10px 40px 10px 10px)','inset(10px 40px 10px 10px)'],
+  ['circle(0)','circle(0px)','circle(0px)'],
+  ['circle(50% at 10px 20px)','circle(50% at 10px 20px)','circle(50% at 10px 20px)'],
+  ['circle(50% at 0 0)','circle(50% at 0px 0px)','circle(50% at 0px 0px)'],
+  ['ellipse(0 0)','ellipse(0px 0px)','ellipse(0px 0px)'],
+  ['polygon(0 0, 10px 10px, 0 20px)','polygon(0px 0px, 10px 10px, 0px 20px)','polygon(0px 0px, 10px 10px, 0px 20px)'],
+  ['polygon(50% 0%, 0% 100%, 100% 100%)','polygon(50% 0%, 0% 100%, 100% 100%)','polygon(50% 0%, 0% 100%, 100% 100%)'],
+  ["path('M0 0 L10 10')",'path("M 0 0 L 10 10")','path("M 0 0 L 10 10")'],
+  ['none','none','none'],
+  ['url(#clip)','url("#clip")','url("#clip")'],
+  // A box inside the parentheses is a stray token the reference engine refuses outright.
+  ['circle(50%, bogus)','','none'],
+  ['circle(50% at 0 0)','circle(50% at 0px 0px)','circle(50% at 0px 0px)'],
+  ['inset(10px round)','','none'],
+  ['polygon(0 0)','polygon(0px 0px)','polygon(0px 0px)'],
+];
+for (var i=0;i<V.length;i++){
+  row('#'+i+' clip-path['+V[i][0]+'] spec', spec('clip-path',V[i][0]), V[i][1]);
+  row('#'+i+' clip-path['+V[i][0]+'] comp', comp('clip-path',V[i][0]), V[i][2]); }
+
+// The rendering itself: a prefix box must clip, not draw the whole square. The three circle()
+// markers lose their top-left corner; the polygon's first vertex IS that corner, so it stays hit.
+function clipped(id){ var el=document.getElementById(id); var r=el.getBoundingClientRect();
+  var hit = document.elementsFromPoint(r.left+1, r.top+1).indexOf(el) >= 0;
+  return hit; }
+row('P0 border-box circle clips its corner', clipped('pre'), false);
+row('P1 margin-box circle clips its corner', clipped('preM'), false);
+row('P3 suffix box still clips', clipped('suf'), false);
+row('P4 plain shape still clips', clipped('plain'), false);
+
+// The b275 surfaces, re-checked so this round cannot silently undo them.
+row('R0 content[bogus] spec refused', spec('content','bogus'), '');
+row('R1 content["a" "b"] comp', comp('content','"a" "b"'), '"ab"');
+row('R2 marker-start[url(#m)] comp', comp('marker-start','url(#m)'), 'url("#m")');
+row('R3 grid-auto-flow[row dense] spec', spec('grid-auto-flow','row dense'), 'dense');
+row('R4 paint-order[markers stroke fill] spec', spec('paint-order','markers stroke fill'), 'markers stroke');
+row('R5 mask-position[center] spec', spec('mask-position','center'), 'center center');
+
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>
