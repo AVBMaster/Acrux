@@ -654,7 +654,18 @@ public static class CssValueGrammar
         // — one of each, and the width is a single value rather than the four-side list a border
         // side shorthand takes. Measured: 'outline: 2px dashed rgb(1, 2, 3)' and 'outline: red'
         // both stand, while 'outline: 3px 3px 0 #e33' and 'outline: 2px red dashed extra' fall.
+        // CSS Overflow Anchoring 1 §3: exactly 'auto' or 'none'.
+        CssPropertyId.OverflowAnchor => static text => IsSingleKeywordWord(text,
+            new[] { "auto", "none" }),
         CssPropertyId.Outline => IsOutlineValue,
+        // CSS Text 3 §5.1.11: 'middle' is not a value of 'text-align-last' — the reference engine
+        // refuses it, so the declaration never exists (measured).
+        CssPropertyId.TextAlignLast => static text => IsSingleKeywordWord(text,
+            new[] { "auto", "start", "end", "left", "right", "center", "justify" }),
+        // CSS UI 4 §3.3: the outline's styles are the border's plus 'auto'.
+        CssPropertyId.OutlineStyle => static text => IsSingleKeywordWord(text,
+            new[] { "auto", "none", "hidden", "dotted", "dashed", "solid", "double", "groove",
+                "ridge", "inset", "outset" }),
         // CSS Text 3 §5.1.9: two or three lengths and an optional colour, and no 'inset' — that
         // belongs to 'box-shadow' only (measured: 'text-shadow: inset 0 0 2px red' is dropped).
         CssPropertyId.TextShadow => IsTextShadowValue,
@@ -763,7 +774,9 @@ public static class CssValueGrammar
         int width = 0, style = 0, colour = 0;
         foreach (var part in parts)
         {
-            if (ShorthandExpander.IsBorderStyle(part)) { style++; continue; }
+            // 'auto' is a style the outline takes and a border does not (CSS UI 4 §3.3).
+            if (ShorthandExpander.IsBorderStyle(part)
+                || part.Equals("auto", StringComparison.OrdinalIgnoreCase)) { style++; continue; }
             if (Acrux.Core.Css.Resolver.CssPropertyApplier.IsBorderWidthToken(part)) { width++; continue; }
             if (ColorParser.IsColorToken(part) || IsOtherFunctionCall(part)) { colour++; continue; }
             return false;

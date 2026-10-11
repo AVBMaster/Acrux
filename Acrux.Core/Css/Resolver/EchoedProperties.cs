@@ -47,6 +47,11 @@ public static class EchoedProperties
     /// <summary>The canonical text of a value, or null when the value is refused.</summary>
     public static string? Normalize(string name, string value) => Find(name)?.Normalize(value);
 
+    /// <summary>The entries that run down the tree. <see cref="CssInheritance"/> copies these and
+    /// nothing else from this table, so an entry's <c>Inherited</c> flag is read in exactly one
+    /// place rather than being decoration.</summary>
+    public static IEnumerable<Entry> InheritedEntries { get; private set; } = Array.Empty<Entry>();
+
     private static readonly Dictionary<string, Entry> ByName = Build();
 
     private static Dictionary<string, Entry> Build()
@@ -134,6 +139,35 @@ public static class EchoedProperties
             new() { Name = "clip-rule", Initial = "nonzero", Inherited = true,
                 Normalize = Single("nonzero", "evenodd") },
 
+            // ===== CSS Fill and Stroke 3 / SVG 2 §11. The paint family is inherited and, in this
+            // engine, read by nothing but the CSSOM — every one of them computed the empty string
+            // until here. A <paint> is a colour, 'none' or 'currentColor', and the computed value
+            // resolves the keyword to the element's own colour (measured: 'fill: currentColor' reads
+            // 'rgb(0, 0, 0)'); a bare number of 'stroke-width'/'stroke-dashoffset' is the pixel
+            // length it stands for once computed but keeps its unitless spelling as specified, while
+            // a percentage is never priced; and a dash list is printed comma-separated, each part
+            // with its unit (measured: '5 3' specifies as '5, 3' and computes '5px, 3px').
+            new() { Name = "fill", Initial = "rgb(0, 0, 0)", Inherited = true,
+                Normalize = NormalizePaint, ComputedText = PaintComputed },
+            new() { Name = "stroke", Initial = "none", Inherited = true,
+                Normalize = NormalizePaint, ComputedText = PaintComputed },
+            new() { Name = "stop-color", Initial = "rgb(0, 0, 0)", Inherited = true,
+                Normalize = NormalizePaint, ComputedText = PaintComputed },
+            new() { Name = "fill-opacity", Initial = "1", Inherited = true,
+                Normalize = NormalizeOpacityValue },
+            new() { Name = "stroke-opacity", Initial = "1", Inherited = true,
+                Normalize = NormalizeOpacityValue },
+            new() { Name = "stop-opacity", Initial = "1", Inherited = true,
+                Normalize = NormalizeOpacityValue },
+            new() { Name = "stroke-width", Initial = "1px", Inherited = true,
+                Normalize = NormalizeSvgLength, ComputedText = SvgLengthComputed },
+            new() { Name = "stroke-dashoffset", Initial = "0px", Inherited = true,
+                Normalize = NormalizeSvgLength, ComputedText = SvgLengthComputed },
+            new() { Name = "stroke-miterlimit", Initial = "4", Inherited = true,
+                Normalize = NormalizePositiveNumber },
+            new() { Name = "stroke-dasharray", Initial = "none", Inherited = true,
+                Normalize = NormalizeDashArray, ComputedText = DashArrayComputed },
+
             // ===== Scroll-driven Animations 1, View Transitions 1 and Anchor Position 1. A name is
             // a dashed ident here, so a bare 't' is refused while '--t' is kept; 'view-transition-name'
             // reserves 'auto' (measured: it is refused).
@@ -152,6 +186,7 @@ public static class EchoedProperties
 
         var map = new Dictionary<string, Entry>(StringComparer.Ordinal);
         foreach (var e in entries) map[e.Name] = e;
+        InheritedEntries = entries.Where(e => e.Inherited).ToArray();
         return map;
     }
 
@@ -1004,8 +1039,123 @@ public static class EchoedProperties
         return string.Join(" ", parts);
     }
 
-    // ===== the small token tests every entry above leans on =====
+    /// <summary>CSS Fill and Stroke 3 §2: a <c>&lt;paint&gt;</c> is <c>none</c>, <c>currentColor</c>
+    /// or a colour. A colour written as a name keeps it, and any other spelling becomes the rgb()
+    /// form the engine prints (measured: 'stroke: blue' reads 'blue' while 'fill: #00ff00' reads
+    /// 'rgb(0, 255, 0)') — the same split every other colour property in this engine already makes.</summary>
+    private static string? NormalizePaint(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
+        if (trimmed.Equals("currentcolor", StringComparison.OrdinalIgnoreCase)) return "currentcolor";
+        if (!Acrux.Core.Css.ColorParser.IsColorToken(trimmed)) return null;
+        bool isName = char.IsAsciiLetter(trimmed[0])
+            && !trimmed.Contains('(') && !trimmed.Contains('#');
+        if (isName) return trimmed.ToLowerInvariant();
+        var color = Acrux.Core.Css.ColorParser.Parse(trimmed);
+        return Acrux.Core.Dom.Animations.ComputedValueSerializer.ColorText(color);
+    }
 
+    /// <summary>The computed <c>&lt;paint&gt;</c>: 'currentColor' becomes the element's own colour,
+    /// which is the one place the keyword never survives, and a named colour becomes the rgb() triple
+    /// it stands for (measured: 'fill: red' specifies 'red' and computes 'rgb(255, 0, 0)').</summary>
+    public static string PaintComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
+    {
+        if (canonical.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
+            return style == null ? "rgb(0, 0, 0)"
+                : Acrux.Core.Dom.Animations.ComputedValueSerializer.ColorText(style.Color);
+        if (canonical.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
+        if (!canonical.Contains('('))
+            return Acrux.Core.Dom.Animations.ComputedValueSerializer
+                .ColorText(Acrux.Core.Css.ColorParser.Parse(canonical));
+        return canonical;
+    }
+
+    /// <summary>A <c>&lt;number&gt;</c> or <c>&lt;percentage&gt;</c>, echoed in the digits it stands
+    /// for. The opacity properties take one; a negative or a non-number is no value.</summary>
+    private static string? NormalizeOpacityValue(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.EndsWith("%", StringComparison.Ordinal))
+        {
+            return double.TryParse(trimmed[..^1], NumberStyles.Float, CultureInfo.InvariantCulture,
+                out var percent) && percent >= 0
+                ? Number(percent) + "%" : null;
+        }
+        return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+            && number >= 0 ? Number(number) : null;
+    }
+
+    /// <summary>A positive <c>&lt;number&gt;</c>, which is what 'stroke-miterlimit' measures.</summary>
+    private static string? NormalizePositiveNumber(string text)
+    {
+        var trimmed = text.Trim();
+        return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+            && number > 0 ? Number(number) : null;
+    }
+
+    /// <summary>CSS Fill and Stroke 3 §4.5: a <c>&lt;length&gt;</c>, a <c>&lt;percentage&gt;</c> or a
+    /// bare number, which is a number of pixels. The specified value keeps the spelling the page
+    /// wrote (measured: 'stroke-width: 2' reads '2'), so only the digits are normalised.</summary>
+    private static string? NormalizeSvgLength(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.EndsWith("%", StringComparison.Ordinal))
+            return double.TryParse(trimmed[..^1], NumberStyles.Float, CultureInfo.InvariantCulture,
+                out var percent) ? Number(percent) + "%" : null;
+        if (Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(trimmed, out var number,
+                out var unit))
+        {
+            return unit.Length == 0 ? Number(number)
+                : Number(number) + unit.ToLowerInvariant();
+        }
+        return null;
+    }
+
+    /// <summary>The computed length: a bare number is the pixel count it means, a length is priced
+    /// against the element's own font, and a percentage is left alone (measured: '2' computes '2px'
+    /// and '50%' computes '50%').</summary>
+    public static string SvgLengthComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
+    {
+        if (canonical.EndsWith("%", StringComparison.Ordinal) || style == null) return canonical;
+        if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(canonical, out var number,
+                out var unit)) return canonical;
+        if (unit.Length == 0) return Number(number) + "px";
+        var length = Acrux.Core.Dom.Length.Parse(canonical.ToLowerInvariant());
+        return length is Acrux.Core.Dom.AutoLength ? canonical : style.ComputedLengthCss(length);
+    }
+
+    /// <summary>CSS Fill and Stroke 3 §5.5: 'none' or a list of lengths, numbers and percentages.
+    /// The page may separate the parts with commas, with spaces or with both, and the reference
+    /// engine always prints them comma-separated (measured: '5 3' and '5,3' both read '5, 3').</summary>
+    private static string? NormalizeDashArray(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
+        var parts = trimmed.Split(new[] { ',', ' ', '\t' },
+            StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return null;
+        var printed = new List<string>();
+        foreach (var part in parts)
+        {
+            if (NormalizeSvgLength(part) is not { } one) return null;
+            printed.Add(one);
+        }
+        return string.Join(", ", printed);
+    }
+
+    /// <summary>The computed dash list: every part priced the way 'stroke-width' is.</summary>
+    public static string DashArrayComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
+    {
+        if (canonical.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
+        var parts = canonical.Split(new[] { ',', ' ', '\t' }, StringSplitOptions.TrimEntries
+            | StringSplitOptions.RemoveEmptyEntries);
+        var printed = new List<string>();
+        foreach (var part in parts) printed.Add(SvgLengthComputed(part, style));
+        return string.Join(", ", printed);
+    }
+
+    // ===== the small token tests every entry above leans on =====
     private static bool IsQuotedString(string text) => text.Length >= 2
         && (text[0] == '"' || text[0] == '\'') && text[text.Length - 1] == text[0];
 

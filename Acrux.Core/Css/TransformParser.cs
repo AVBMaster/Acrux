@@ -201,6 +201,16 @@ public static class TransformParser
     private static float ParseFloat(string s)
     {
         s = s.Trim();
+        // 'grad' is tested before 'rad' because it ends in it, and an unrecognised angle unit
+        // must not fall through to the bare-number branch and read as a pixel length.
+        if (s.EndsWith("turn", StringComparison.OrdinalIgnoreCase))
+        {
+            if (float.TryParse(s[..^4], out var turn)) return turn * 360f;
+        }
+        if (s.EndsWith("grad", StringComparison.OrdinalIgnoreCase))
+        {
+            if (float.TryParse(s[..^4], out var grad)) return grad * 0.9f;
+        }
         if (s.EndsWith("deg", StringComparison.OrdinalIgnoreCase))
         {
             if (float.TryParse(s[..^3], out var deg)) return deg;

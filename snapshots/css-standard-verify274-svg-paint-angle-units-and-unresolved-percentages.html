@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 274 — the SVG paint family, a turn that turns, and percentages that stay percentages</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; padding: 8px; font-size: 16px; background: rgb(245,245,245); }
+#probe { font-size: 16px; }
+/* Visual markers: a half turn really rotates the box now, and an auto outline draws. */
+#quarter { width: 60px; height: 20px; background: rgb(255,128,128); transform: rotate(0.5turn); }
+#grad { width: 60px; height: 20px; background: rgb(128,255,128); transform: rotate(100grad); }
+#autoout { width: 60px; height: 20px; outline: auto; background: rgb(128,128,255); }
+#thick { text-decoration: underline; text-decoration-thickness: 25%; font-size: 20px; background: rgb(250,250,220); }
+#ind { width: 200px; background: rgb(235,225,245); }
+#ind p { margin: 0; text-indent: 50%; }
+</style></head><body>
+<h4>b274 — a sweep of 106 property/value pairs against the reference engine, and the divergences it found. (1) The whole SVG paint family — fill, stroke, stop-color, the three opacities, stroke-width, stroke-dashoffset, stroke-dasharray, stroke-miterlimit — had a property id but no field, so all of them computed the empty string; they are inherited echo properties now, with the paint's currentColor resolved, a bare stroke-width number printed as pixels, and a dash list comma-separated. (2) 'transform: rotate()' read only deg and rad, so a turn or a grad fell through to zero and the box never moved — 'rotate(0.5turn)' computed the identity matrix. (3) A percentage of 'text-decoration-thickness' and of 'text-indent' was priced against the font and printed in pixels; the reference engine leaves a percentage unresolved at computed-value time. (4) 'outline-style: auto' — an outline-only style — collapsed to 'none'. (5) 'overflow-anchor' had a field and an applier but no computed case. (6) 'list-style-image' lost its url() wrapper and its absolute address. (7) 'text-align-last' accepted 'middle', which the reference engine refuses.</h4>
+<div id="cb">
+  <div id="quarter"></div>
+  <div id="grad"></div>
+  <div id="autoout"></div>
+  <div id="thick">thickness 25%</div>
+  <div id="ind"><p>indented half the line</p></div>
+</div>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out = []; var failed = 0;
+function row(name, got, want){ var ok = String(got) === String(want); if(!ok) failed++;
+  out.push((ok?'ok   ':'FAIL ')+name+'  got='+JSON.stringify(String(got))+'  want='+JSON.stringify(String(want))); }
+
+// Each entry: property, value, wantSpec, wantComp  (every one measured in the reference engine)
+var CASES = [
+  // ===== the angle units 'transform' had never heard of =====
+  ['transform','rotate(0.5turn)','rotate(0.5turn)','matrix(-1, 0, 0, -1, 0, 0)'],
+  ['transform','rotate(100grad)','rotate(100grad)','matrix(0, 1, -1, 0, 0, 0)'],
+  ['transform','rotate(-50grad)','rotate(-50grad)','matrix(0.707107, -0.707107, 0.707107, 0.707107, 0, 0)'],
+  ['transform','skew(50grad)','skew(50grad)','matrix(1, 0, 1, 1, 0, 0)'],
+  ['transform','rotate(45deg)','rotate(45deg)','matrix(0.707107, 0.707107, -0.707107, 0.707107, 0, 0)'],
+
+  // ===== a percentage that stays a percentage =====
+  ['text-decoration-thickness','10%','10%','10%'],
+  ['text-decoration-thickness','2px','2px','2px'],
+  ['text-decoration-thickness','auto','auto','auto'],
+  ['text-decoration-thickness','from-font','from-font','from-font'],
+  ['text-indent','50%','50%','50%'],
+  ['text-indent','2em','2em','32px'],
+  ['text-indent','50% hanging','50% hanging','50% hanging'],
+
+  // ===== 'outline-style: auto' =====
+  ['outline-style','auto','auto','auto'],
+  ['outline-style','solid','solid','solid'],
+  ['outline-style','bogus','','none'],
+  ['outline','auto','auto','rgb(0, 0, 0) auto 3px'],
+
+  // ===== computed cases that were simply absent =====
+  ['overflow-anchor','none','none','none'],
+  ['overflow-anchor','auto','auto','auto'],
+  ['overflow-anchor','bogus','','auto'],
+
+  // ===== text-align-last: 'middle' is refused =====
+  ['text-align-last','middle','','auto'],
+  ['text-align-last','center','center','center'],
+  ['text-align-last','justify','justify','justify'],
+
+  // ===== the SVG paint family =====
+  ['fill','red','red','rgb(255, 0, 0)'],
+  ['fill','#00ff00','rgb(0, 255, 0)','rgb(0, 255, 0)'],
+  ['fill','none','none','none'],
+  ['fill','currentColor','currentcolor','rgb(0, 0, 0)'],
+  ['stroke','blue','blue','rgb(0, 0, 255)'],
+  ['stroke','none','none','none'],
+  ['stop-color','red','red','rgb(255, 0, 0)'],
+  ['fill-opacity','0.25','0.25','0.25'],
+  ['stroke-opacity','0.5','0.5','0.5'],
+  ['stop-opacity','1','1','1'],
+  ['stroke-width','2','2','2px'],
+  ['stroke-width','2px','2px','2px'],
+  ['stroke-width','50%','50%','50%'],
+  ['stroke-width','1.5em','1.5em','24px'],
+  ['stroke-dashoffset','4','4','4px'],
+  ['stroke-dashoffset','4px','4px','4px'],
+  ['stroke-dasharray','5 3','5, 3','5px, 3px'],
+  ['stroke-dasharray','5,3','5, 3','5px, 3px'],
+  ['stroke-dasharray','none','none','none'],
+  ['stroke-miterlimit','4','4','4'],
+  ['stroke-linecap','round','round','round'],
+  ['fill-rule','evenodd','evenodd','evenodd'],
+
+  // ===== list-style-image keeps its url() and gains an absolute address =====
+  ['list-style-image','url(a.png)','url("a.png")','url("file:///home/master/Acrux/snapshots/a.png")'],
+  ['list-style-image','none','none','none'],
+];
+for (var i=0;i<CASES.length;i++){ var c=CASES[i];
+  row('#'+i+' '+c[0]+'['+c[1]+'] spec', spec(c[0],c[1]), c[2]);
+  row('#'+i+' '+c[0]+'['+c[1]+'] comp', comp(c[0],c[1]), c[3]); }
+
+// The SVG paint family is inherited (CSS 2 §11.1 / Fill and Stroke 3): a child reads its parent's.
+var par = document.createElement('div'); par.style.setProperty('fill','rgb(1, 2, 3)');
+par.style.setProperty('stroke-width','3'); par.style.setProperty('fill-opacity','0.4');
+var ch = document.createElement('div'); par.appendChild(ch); document.body.appendChild(par);
+row('S0 child inherits fill', getComputedStyle(ch).getPropertyValue('fill'), 'rgb(1, 2, 3)');
+row('S1 child inherits stroke-width', getComputedStyle(ch).getPropertyValue('stroke-width'), '3px');
+row('S2 child inherits fill-opacity', getComputedStyle(ch).getPropertyValue('fill-opacity'), '0.4');
+
+// The b273 break surface, re-checked so this round cannot silently undo it.
+row('B0 break-before[page] comp', comp('break-before','page'), 'page');
+row('B1 page-break-after[always] comp', comp('page-break-after','always'), 'always');
+row('B2 break-before[region] spec refused', spec('break-before','region'), '');
+row('B3 vertical-align[20%] comp', comp('vertical-align','20%'), '20%');
+row('B4 tab-size[4em] comp', comp('tab-size','4em'), '64px');
+
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

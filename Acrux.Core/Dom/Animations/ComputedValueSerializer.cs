@@ -243,10 +243,17 @@ public static class ComputedValueSerializer
             case "word-spacing": return style.WordSpacingIsNormal ? "0px" : Px(style.WordSpacing);
             // The computed value of 'text-indent' is the resolved length with the two flags still
             // attached, in the engine's own order (measured: '3em hanging' reads '48px hanging').
-            case "text-indent": return CssValueText.CanonicalizeTextIndent(
-                Px(style.TextIndent)
-                + (style.TextIndentHanging ? " hanging" : "")
-                + (style.TextIndentEachLine ? " each-line" : ""), "text-indent") ?? Px(style.TextIndent);
+            case "text-indent": {
+                // A percentage is priced against the line box only at used-value time, so the
+                // computed value keeps it (measured: 'text-indent: 50%' reads '50%', not '0px').
+                var indent = style.TextIndentPercent != 0
+                    ? CssValueTokenizer.Num(style.TextIndentPercent * 100f) + "%"
+                    : Px(style.TextIndent);
+                return CssValueText.CanonicalizeTextIndent(
+                    indent
+                    + (style.TextIndentHanging ? " hanging" : "")
+                    + (style.TextIndentEachLine ? " each-line" : ""), "text-indent") ?? indent;
+            }
             case "font-weight": return ((int)style.FontWeight).ToString(CultureInfo.InvariantCulture);
             case "visibility": return style.Visibility switch
             {
@@ -374,6 +381,8 @@ public static class ComputedValueSerializer
             case "tab-size": return style.TabSizePx is { } tabPx
                 ? Px(tabPx) : CssValueTokenizer.Num(style.TabSize);
             case "scroll-behavior": return style.ScrollBehavior.ToString().ToLowerInvariant();
+            // CSS Overflow Anchoring 1 §3: the one keyword pair the property takes.
+            case "overflow-anchor": return style.OverflowAnchor == OverflowAnchorType.None ? "none" : "auto";
             case "overscroll-behavior-x": return style.OverscrollBehaviorX.ToString().ToLowerInvariant();
             case "overscroll-behavior-y": return style.OverscrollBehaviorY.ToString().ToLowerInvariant();
             // CSS Fragmentation 3 §3.2–3.4 with the CSS 2.1 'page-break-*' aliases: the modern and
@@ -540,7 +549,7 @@ public static class ComputedValueSerializer
             case "text-shadow": return TextShadowText(style);
 
             // ------------------------------------------------------ borders
-            case "outline-style": return style.OutlineStyle.ToCssString();
+            case "outline-style": return style.OutlineStyleIsAuto ? "auto" : style.OutlineStyle.ToCssString();
             case "border-top-style": return style.BorderTopStyle.ToCssString();
             case "border-right-style": return style.BorderRightStyle.ToCssString();
             case "border-bottom-style": return style.BorderBottomStyle.ToCssString();
@@ -566,9 +575,14 @@ public static class ComputedValueSerializer
             };
             case "text-decoration-line": return TextDecorationLineText(style.TextDecorationLine);
             case "text-decoration-thickness":
-                return style.TextDecorationThicknessFromFont || float.IsNaN(style.TextDecorationThickness)
-                    ? "auto"
-                    : Px(style.TextDecorationThickness);
+                // 'from-font' is a value of its own on the computed surface (measured), 'auto' reads
+                // 'auto', a length resolves, but a percentage is kept as the percentage the page
+                // wrote (measured: '10%' computes '10%').
+                return style.TextDecorationThicknessFromFont ? "from-font"
+                    : float.IsNaN(style.TextDecorationThickness) ? "auto"
+                    : style.TextDecorationThicknessPercent != 0
+                        ? CssValueTokenizer.Num(style.TextDecorationThicknessPercent) + "%"
+                        : Px(style.TextDecorationThickness);
             case "text-underline-offset":
                 return style.TextUnderlineOffsetIsAuto ? "auto" : Px(style.TextUnderlineOffset);
             // 'filled' is the initial shape style, and the reference engine leaves it out of the
@@ -689,7 +703,15 @@ public static class ComputedValueSerializer
             case "column-width": return LengthText(style, style.ColumnWidth);
             case "column-fill": return style.ColumnFill;
             case "column-span": return style.ColumnSpanAll ? "all" : "none";
-            case "list-style-image": return string.IsNullOrWhiteSpace(style.ListStyleImage) ? "none" : style.ListStyleImage!;
+            // The cascade stores the bare address (that is what the marker painter looks up), so it
+            // is wrapped back into url() before the shared image printer absolutises it — the same
+            // spelling the background and the mask use (measured: 'url(a.png)' computes
+            // 'url("file:///…/a.png")', not the bare path).
+            case "list-style-image": return Css.ImageValueCanonicalizer.Canonicalize(
+                string.IsNullOrWhiteSpace(style.ListStyleImage) ? "none"
+                    : style.ListStyleImage!.Contains('(')
+                        ? style.ListStyleImage!
+                        : "url(\"" + style.ListStyleImage + "\")");
             case "object-position":
                 return $"{ObjectPositionText(style.ObjectPositionX)} {ObjectPositionText(style.ObjectPositionY)}";
             case "grid-auto-flow":
@@ -964,7 +986,7 @@ public static class ComputedValueSerializer
         return text.Length > 0 ? text : initial;
     }
 
-    private static string ColorText(SkiaSharp.SKColor c)
+    internal static string ColorText(SkiaSharp.SKColor c)
     {
         if (c.Alpha == 255) return $"rgb({c.Red}, {c.Green}, {c.Blue})";
         // A fully transparent color is not spelled 'transparent' on the computed surface: the

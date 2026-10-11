@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b274 fontsize2</title>
+<style>body{margin:0;font:12px monospace}
+.f{margin:0}</style></head><body>
+<span id="s"></span>
+<pre id="report"></pre>
+<script>
+var WORDS=["xx-small","x-small","small","medium","large","x-large","xx-large","xxx-large"];
+var FAMS=["monospace","serif","sans-serif","arial","times new roman"];
+var out=[]; var s=document.getElementById('s');
+for (var f=0;f<FAMS.length;f++){
+  out.push('--- family '+FAMS[f]+' ---');
+  for (var i=0;i<WORDS.length;i++){
+    s.setAttribute('style','font-family:'+FAMS[i]+';font-size:'+WORDS[i]);
+    out.push('  '+WORDS[i]+'='+getComputedStyle(s).fontSize);
+  }
+}
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

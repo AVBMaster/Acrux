@@ -457,7 +457,8 @@ public static class CssPropertyTraits
             case "text-decoration-color": to.TextDecorationColor = from.TextDecorationColor;
                 to.TextDecorationColorIsAuto = from.TextDecorationColorIsAuto; break;
             case "text-decoration-thickness": to.TextDecorationThickness = from.TextDecorationThickness;
-                to.TextDecorationThicknessFromFont = from.TextDecorationThicknessFromFont; break;
+                to.TextDecorationThicknessFromFont = from.TextDecorationThicknessFromFont;
+                to.TextDecorationThicknessPercent = from.TextDecorationThicknessPercent; break;
             case "text-decoration-skip-ink": to.TextDecorationSkipInk = from.TextDecorationSkipInk; break;
             case "text-underline-offset": to.TextUnderlineOffset = from.TextUnderlineOffset;
                 to.TextUnderlineOffsetIsAuto = from.TextUnderlineOffsetIsAuto; break;

@@ -102,6 +102,16 @@ public static class CssInheritance
                 child.SetDeclaredOnlyValue(legacyName, inherited);
         }
 
+        // The echo-only properties that inherit (CSS 2 §11.1 paint, Fonts 4 §9 variants, the SVG
+        // keyword family, Color Adjust 1): the same table that gives them their grammar and their
+        // computed text says whether they run down the tree, so one loop covers all of them and a
+        // new entry cannot be given an 'Inherited' flag that nothing reads.
+        foreach (var echo in Acrux.Core.Css.Resolver.EchoedProperties.InheritedEntries)
+        {
+            var value = parent.GetEchoed(echo.Name);
+            if (value != null) child.SetEchoed(echo.Name, value);
+        }
+
         // Box, direction and interaction.
         child.Visibility = parent.Visibility;
         child.Cursor = parent.Cursor;

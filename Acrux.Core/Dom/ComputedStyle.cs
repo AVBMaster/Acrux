@@ -1148,6 +1148,11 @@ public SKColor ResolvedTextDecorationColor => TextDecorationColorIsAuto ? Color 
 public float TextDecorationThickness { get; set; } = float.NaN;
 /// <summary>'text-decoration-thickness: from-font' (CSS Text Decoration 4 §3.4).</summary>
 public bool TextDecorationThicknessFromFont { get; set; }
+/// <summary>An authored percentage of 'text-decoration-thickness', in percent (10 for '10%').
+/// The reference engine resolves a percentage only at used-value time, so the computed value
+/// keeps it (measured: '10%' reads back '10%'); <see cref="TextDecorationThickness"/> still
+/// carries the font-relative pixels the painter uses. Zero means none was authored.</summary>
+public float TextDecorationThicknessPercent { get; set; }
 /// <summary>Authored 'auto' keyword of 'text-underline-offset'.</summary>
 public bool TextUnderlineOffsetIsAuto { get; set; } = true;
 public float TextUnderlineOffset { get; set; }
@@ -1235,6 +1240,10 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public float OutlineWidth { get; set; }
     public SKColor OutlineColor { get; set; } = SKColors.Black;
     public BorderStyle OutlineStyle { get; set; } = BorderStyle.None;
+    /// <summary>'outline-style: auto' (CSS UI 4 §3.3) — a style of its own that only the outline
+    /// takes, so it lives beside the shared <see cref="OutlineStyle"/> rather than in the border
+    /// enum. The reference engine keeps the word in its computed value (measured).</summary>
+    public bool OutlineStyleIsAuto { get; set; }
     public float OutlineOffset { get; set; }
     public string TableLayout { get; set; } = "auto";
     public string CaptionSide { get; set; } = "top";
@@ -1705,6 +1714,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             TextDecorationColor = TextDecorationColor, TextDecorationColorIsAuto = TextDecorationColorIsAuto,
             TextDecorationThickness = TextDecorationThickness,
             TextDecorationThicknessFromFont = TextDecorationThicknessFromFont,
+            TextDecorationThicknessPercent = TextDecorationThicknessPercent,
             TextUnderlineOffset = TextUnderlineOffset, TextUnderlineOffsetIsAuto = TextUnderlineOffsetIsAuto,
             TextUnderlinePosition = TextUnderlinePosition, TextDecorationSkipInk = TextDecorationSkipInk,
             BoxDecorationBreak = BoxDecorationBreak,
@@ -1719,6 +1729,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             ColumnRuleWidth = ColumnRuleWidth, ColumnRuleStyle = ColumnRuleStyle,
             ColumnRuleColor = ColumnRuleColor,
             OutlineWidth = OutlineWidth, OutlineColor = OutlineColor, OutlineStyle = OutlineStyle, OutlineOffset = OutlineOffset,
+            OutlineStyleIsAuto = OutlineStyleIsAuto,
             TableLayout = TableLayout, CaptionSide = CaptionSide, EmptyCells = EmptyCells, Content = Content,
             CounterIncrement = CounterIncrement, CounterReset = CounterReset, CounterSet = CounterSet, Quotes = Quotes,
             Order = Order, CurrentColorSlots = CurrentColorSlots, AspectRatio = AspectRatio,

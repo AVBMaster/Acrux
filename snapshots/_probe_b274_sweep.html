@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b274 sweep</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<pre id="report"></pre>
+<script>
+var CASES = [
+  ["text-decoration","underline"],["text-decoration","underline dotted red"],["text-decoration","overline line-through"],
+  ["text-decoration-line","underline overline"],["text-decoration-thickness","2px"],["text-decoration-thickness","10%"],
+  ["text-decoration-color","currentColor"],["text-decoration-skip-ink","none"],
+  ["outline","2px solid red"],["outline-offset","3px"],["outline-style","auto"],["outline","inset red"],
+  ["list-style","square inside url(a.png)"],["list-style-image","url('a.png')"],["list-style-type","\"x\""],
+  ["transform","rotate(0.5turn)"],["transform","translate(10px, 20%)"],["transform","matrix(1,0,0,1,2,3)"],
+  ["transform","skew(10deg, 20deg)"],["transform","scale(2)"],["transform-origin","left top"],
+  ["transform-origin","20% 30%"],
+  ["border-radius","10%/20%"],["border-top-left-radius","50% 25%"],["border-radius","1px 2px 3px 4px / 5px"],
+  ["column-width","12em"],["column-count","3"],["column-rule","2px dashed blue"],["column-gap","normal"],
+  ["grid-template-columns","repeat(2, 1fr)"],["grid-template-columns","minmax(10px, auto) 1fr"],
+  ["grid-auto-flow","row dense"],["grid-column","1 / span 2"],
+  ["mask","url(a.png) repeat-x"],["mask-position","center"],["mask-size","contain"],
+  ["transition","all 1s ease 2s"],["animation-name","none"],["animation","slide 2s infinite"],
+  ["font","small-caps bold 14px/1.2 serif"],["font-size","x-large"],["font-weight","bolder"],
+  ["font-family","'Times New Roman', serif"],
+  ["object-fit","contain"],["object-position","right 20% bottom"],
+  ["text-overflow","ellipsis"],["text-overflow","'…'"],
+  ["will-change","transform"],["counter-reset","section 2 item"],["counter-set","x"],
+  ["quotes","\"a\" \"b\""],["text-emphasis","filled dot"],["text-emphasis-position","over right"],
+  ["scroll-margin-top","10px"],["scroll-padding-left","2em"],
+  ["caret-color","transparent"],["accent-color","auto"],["appearance","none"],
+  ["unicode-bidi","plaintext"],["isolation","isolate"],["mix-blend-mode","multiply"],
+  ["backdrop-filter","blur(2px)"],["clip-path","border-box circle(50%)"],
+  ["overflow-anchor","none"],["touch-action","manipulation"],["user-select","all"],
+  ["cursor","url(a.cur) 2 2, pointer"],["resize","vertical"],
+  ["white-space","pre-wrap"],["word-spacing","normal"],["line-height","normal"],
+  ["letter-spacing",".5em"],["text-indent","50%"],["text-align-last","middle"],
+  ["box-shadow","inset 1px 2px 3px"],["box-shadow","none"],
+  ["filter","drop-shadow(1px 2px 3px red)"],["filter","hue-rotate(90deg)"],
+  ["background","url(a.png) no-repeat center / cover"],["background-size","auto 40px"],
+  ["background-position","left 10px bottom 20px"],["background-clip","text"],
+  ["border","2px solid red"],["border-style","none solid"],["border-spacing","4px 8px"],
+  ["table-layout","fixed"],["caption-side","bottom"],["empty-cells","hide"],
+  ["vertical-align","middle"],["direction","ltr"],["writing-mode","vertical-rl"],
+  ["text-combine-upright","all"],["ruby-position","over"],["hanging-punctuation","first"],
+  ["image-rendering","pixelated"],["shape-rendering","crispEdges"],["paint-order","stroke fill"],
+  ["vector-effect","non-scaling-stroke"],["stroke-dasharray","5 3"],["fill-opacity","0.5"],
+  ["all","unset"],["contain","layout paint"],["content-visibility","auto"],
+  ["content","counter(x) \"tail\""],["content","normal"],["content","none"]
+];
+var host = document.createElement('div'); document.body.appendChild(host);
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+for (var i=0;i<CASES.length;i++){ var p=CASES[i][0],v=CASES[i][1];
+  out.push(i+'|'+p+'|'+v+'|S='+spec(p,v)+'|C='+comp(p,v)); }
+console.log(out.join('\n'));
+</script></body></html>

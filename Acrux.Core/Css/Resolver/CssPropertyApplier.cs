@@ -818,7 +818,12 @@ public static class CssPropertyApplier
                 style.AuthoredWidthSlots |= (uint)CurrentColorSlot.Outline;
                 break;
             case "outline-color": style.OutlineColor = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.Outline, value); break;
-            case "outline-style": style.OutlineStyle = ParseBorderStyleValue(value); break;
+            case "outline-style":
+                // 'auto' is an outline-only style (CSS UI 4 §3.3); the shared border parser has no
+                // word for it, so it is recorded beside the enum rather than folded into 'none'.
+                style.OutlineStyleIsAuto = value.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase);
+                style.OutlineStyle = ParseBorderStyleValue(value);
+                break;
             case "outline-offset": style.OutlineOffset = ParseSize(value) ?? 0; break;
             case "table-layout": style.TableLayout = value.ToLowerInvariant() == "fixed" ? "fixed" : "auto"; break;
             case "caption-side": style.CaptionSide = value.ToLowerInvariant() == "bottom" ? "bottom" : "top"; break;
@@ -3169,6 +3174,12 @@ public static class CssPropertyApplier
                 or "inset" or "outset" or "none" or "hidden")
             {
                 style.OutlineStyle = ParseBorderStyleValue(part);
+                style.OutlineStyleIsAuto = false;
+                hasStyle = true;
+            }
+            else if (part.Equals("auto", StringComparison.OrdinalIgnoreCase))
+            {
+                style.OutlineStyleIsAuto = true;
                 hasStyle = true;
             }
             else if (IsBorderWidthToken(part))
@@ -3442,14 +3453,20 @@ public static class CssPropertyApplier
         {
             style.TextDecorationThicknessFromFont = true;
             style.TextDecorationThickness = float.NaN;
+            style.TextDecorationThicknessPercent = 0;
             return;
         }
         style.TextDecorationThicknessFromFont = false;
         if (token == "auto" || !Length.TryParse(token, out var length))
         {
             style.TextDecorationThickness = float.NaN;
+            style.TextDecorationThicknessPercent = 0;
             return;
         }
+        // A percentage is priced against the font for the painter but kept as the percentage it
+        // was for the computed value, which the reference engine does not resolve (measured).
+        style.TextDecorationThicknessPercent =
+            length is PercentLength thicknessPercent ? thicknessPercent.Value * 100f : 0;
         style.TextDecorationThickness = Math.Max(0, length.ToPixels(style.FontSize, style.FontSize, 0, 0));
     }
 
