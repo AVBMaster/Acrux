@@ -1486,6 +1486,13 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public float Zoom { get; set; } = 1;
     public int Orphans { get; set; } = 2;
     public int Widows { get; set; } = 2;
+    /// <summary>'break-before' / 'break-after' and their legacy 'page-break-*' spellings share one
+    /// slot per axis, holding the modern CSS Fragmentation 3 keyword ('auto' when nothing was
+    /// authored; null is that 'auto'). Non-inherited (measured). The legacy name re-spells 'page' as
+    /// 'always' and reads the empty string for a value it has no word for.</summary>
+    public string? BreakBefore { get; set; }
+    public string? BreakAfter { get; set; }
+    public string? BreakInside { get; set; }
     public string FontVariant { get; set; } = "normal";
     public string FontVariantCaps { get; set; } = "normal";
     public string FontKerning { get; set; } = "auto";
@@ -1745,6 +1752,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             HangingPunctuation = HangingPunctuation, RubyAlign = RubyAlign, RubyPosition = RubyPosition,
             BorderSpacing = BorderSpacing, BorderRowSpacing = BorderRowSpacing,
             Zoom = Zoom, Orphans = Orphans, Widows = Widows,
+            BreakBefore = BreakBefore, BreakAfter = BreakAfter, BreakInside = BreakInside,
             BorderImageSource = BorderImageSource, BorderImageSlice = BorderImageSlice,
             BorderImageWidth = BorderImageWidth, BorderImageRepeat = BorderImageRepeat, BorderImageOutset = BorderImageOutset,
             FontVariant = FontVariant, FontVariantCaps = FontVariantCaps,

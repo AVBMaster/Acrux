@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b273 break alias</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<pre id="report"></pre>
+<script>
+var host = document.createElement('div'); document.body.appendChild(host);
+function one(setName, setVal, readNames){
+  host.setAttribute('style','');
+  host.style.setProperty(setName,setVal);
+  var r=[];
+  for (var i=0;i<readNames.length;i++){ r.push(readNames[i]+'='+JSON.stringify(getComputedStyle(host).getPropertyValue(readNames[i]))); }
+  return setName+':'+setVal+'  '+r.join('  ');
+}
+var out=[];
+out.push(one('page-break-after','always',['page-break-after','break-after']));
+out.push(one('page-break-after','left',['page-break-after','break-after']));
+out.push(one('page-break-before','avoid',['page-break-before','break-before']));
+out.push(one('page-break-inside','avoid',['page-break-inside','break-inside']));
+out.push(one('break-after','page',['page-break-after','break-after']));
+out.push(one('break-before','column',['page-break-before','break-before']));
+out.push(one('break-inside','avoid-column',['page-break-inside','break-inside']));
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

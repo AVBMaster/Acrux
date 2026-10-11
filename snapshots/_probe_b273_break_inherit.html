@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b273 break inherit</title>
+<style>body{font:12px monospace;margin:0}#p1{break-inside:avoid}#p2{break-before:page}#p3{break-after:column}</style></head><body>
+<div id="p1"><span id="c1">x</span></div>
+<div id="p2"><span id="c2">x</span></div>
+<div id="p3"><span id="c3">x</span></div>
+<pre id="report"></pre>
+<script>
+function g(el,p){return getComputedStyle(el).getPropertyValue(p);}
+var out=[];
+out.push('c1 break-inside='+JSON.stringify(g(c1,'break-inside'))+' page-break-inside='+JSON.stringify(g(c1,'page-break-inside')));
+out.push('p1 break-inside='+JSON.stringify(g(p1,'break-inside')));
+out.push('c2 break-before='+JSON.stringify(g(c2,'break-before')));
+out.push('c3 break-after='+JSON.stringify(g(c3,'break-after')));
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

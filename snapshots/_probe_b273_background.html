@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b273 background probe</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<pre id="report"></pre>
+<script>
+var CASES = [
+  "url(a.png) no-repeat center / cover padding-box border-box",
+  "red",
+  "no-repeat",
+  "center / contain",
+  "url(a.png), url(b.png) repeat-x bottom",
+  "fixed url(a.png) left top",
+  "url(a.png) 10px 20px",
+  "content-box url(a.png)",
+  "url(a.png) repeat space",
+  "linear-gradient(red,blue) center / 50% 50% no-repeat",
+  "url(a.png) top right 10px",
+  "none",
+  "url(a.png) center no-repeat, red"
+];
+var host = document.createElement('div'); document.body.appendChild(host);
+function spec(v){ host.setAttribute('style',''); host.style.setProperty('background',v); return host.style.getPropertyValue('background'); }
+function comp(v){ host.setAttribute('style',''); host.style.setProperty('background',v); return getComputedStyle(host).getPropertyValue('background-color'); }
+var out=[];
+for (var i=0;i<CASES.length;i++){ var v=CASES[i]; out.push(i+'|'+v+'|S='+spec(v)); }
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

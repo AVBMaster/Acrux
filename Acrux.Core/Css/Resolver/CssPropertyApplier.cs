@@ -1010,9 +1010,24 @@ public static class CssPropertyApplier
                 style.BoxDecorationBreak = value.Trim().StartsWith("clone", StringComparison.OrdinalIgnoreCase)
                     ? BoxDecorationBreakType.Clone : BoxDecorationBreakType.Slice;
                 break;
-            case "page-break-after": break;
-            case "page-break-before": break;
-            case "page-break-inside": break;
+            case "break-before":
+                if (ParseBreakBetween(name, value) is { } brkB) style.BreakBefore = brkB;
+                break;
+            case "page-break-before":
+                if (ParseBreakBetween(name, value) is { } brkPB) style.BreakBefore = brkPB;
+                break;
+            case "break-after":
+                if (ParseBreakBetween(name, value) is { } brkA) style.BreakAfter = brkA;
+                break;
+            case "page-break-after":
+                if (ParseBreakBetween(name, value) is { } brkPA) style.BreakAfter = brkPA;
+                break;
+            case "break-inside":
+                if (ParseBreakInside(name, value) is { } brkI) style.BreakInside = brkI;
+                break;
+            case "page-break-inside":
+                if (ParseBreakInside(name, value) is { } brkPI) style.BreakInside = brkPI;
+                break;
             // Both were empty stubs: the declaration was accepted (so nothing warned)
             // and then thrown away, which also silently disabled the multicol
             // 'orphans' floor that ColumnLayoutAlgorithm reads from this style.
@@ -3651,38 +3666,60 @@ public static class CssPropertyApplier
         style.ColumnWidth = width;
     }
 
+    /// <summary>'break-before' / 'break-after' and their legacy 'page-break-before' /
+    /// 'page-break-after' aliases write one shared slot holding the CSS Fragmentation 3 keyword.
+    /// The legacy name accepts only 'auto always avoid left right' and folds 'always' onto 'page',
+    /// where the modern name takes the whole column/page/recto/verso set; 'region' and
+    /// 'avoid-region' are refused on both (all measured). Null (a value off the name's list) leaves
+    /// the property untouched.</summary>
+    private static string? ParseBreakBetween(string name, string value)
+    {
+        string w = value.Trim().ToLowerInvariant();
+        if (name.StartsWith("page-break", StringComparison.OrdinalIgnoreCase))
+            return w switch
+            {
+                "always" => "page",
+                "auto" or "avoid" or "left" or "right" => w,
+                _ => null,
+            };
+        return w switch
+        {
+            "auto" or "avoid" or "avoid-page" or "page" or "left" or "right"
+            or "recto" or "verso" or "avoid-column" or "column" => w,
+            _ => null,
+        };
+    }
+
+    /// <summary>'break-inside' and its 'page-break-inside' alias. The modern name takes
+    /// 'auto avoid avoid-page avoid-column'; the legacy name only 'auto avoid' (measured).</summary>
+    private static string? ParseBreakInside(string name, string value)
+    {
+        string w = value.Trim().ToLowerInvariant();
+        if (name.StartsWith("page-break", StringComparison.OrdinalIgnoreCase))
+            return w is "auto" or "avoid" ? w : null;
+        return w is "auto" or "avoid" or "avoid-page" or "avoid-column" ? w : null;
+    }
+
     private static void ParseTabSize(ComputedStyle style, string value)
     {
         string text = value.Trim();
-        bool isLength = false;
-        if (text.EndsWith("px", StringComparison.OrdinalIgnoreCase))
+        // A number with a unit is a <length>, resolved against this element's font at
+        // computed-value time; a bare number counts space advances and stays unitless
+        // (CSS Text 4 §3.4, measured: '4em' at a 12px font computes '48px').
+        bool hasUnit = text.Length > 0 && !char.IsAsciiDigit(text[text.Length - 1]) && text[^1] != '.';
+        if (hasUnit && Length.TryParse(text, out var length) && length is not AutoLength)
         {
-            isLength = true;
-            text = text[..^2];
+            float px = length.ToPixels(style.FontSize, style.FontSize, 0f, 0f);
+            if (px < 0) return;   // a negative tab size is out of range and drops the declaration
+            style.TabSizePx = px;
+            style.TabSize = 8;
+            return;
         }
-        else if (text.EndsWith("rem", StringComparison.OrdinalIgnoreCase))
-        {
-            isLength = true;
-            text = text[..^3];
-        }
-        else if (text.EndsWith("em", StringComparison.OrdinalIgnoreCase))
-        {
-            isLength = true;
-            text = text[..^2];
-        }
-        if (!float.TryParse(text.Trim(), System.Globalization.NumberStyles.Float,
+        if (!float.TryParse(text, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out float size) || size < 0)
             return;
-        if (isLength)
-        {
-            style.TabSizePx = size;
-            style.TabSize = 8;
-        }
-        else
-        {
-            style.TabSize = size;
-            style.TabSizePx = null;
-        }
+        style.TabSize = size;
+        style.TabSizePx = null;
     }
 
     public static GridAutoFlowType ParseGridAutoFlow(string value)

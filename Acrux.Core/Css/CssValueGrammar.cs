@@ -719,6 +719,19 @@ public static class CssValueGrammar
         // unknown word all drop the declaration (measured against the reference engine).
         CssPropertyId.TextUnderlinePosition
             => static text => CssPropertyApplier.TryParseTextUnderlinePosition(text, out _),
+        // CSS Fragmentation 3 §3.2–3.4 with the CSS 2.1 'page-break-*' aliases: one keyword of each
+        // family's own measured set. The modern before/after set is the column/page/recto/verso family;
+        // 'region'/'avoid-region' are refused on both, and the legacy spelling keeps only 'always'
+        // where the modern set has 'page' (measured value by value).
+        CssPropertyId.BreakBefore or CssPropertyId.BreakAfter => static text => IsSingleKeywordWord(text,
+            new[] { "auto", "avoid", "avoid-page", "page", "left", "right", "recto", "verso",
+                "avoid-column", "column" }),
+        CssPropertyId.BreakInside => static text => IsSingleKeywordWord(text,
+            new[] { "auto", "avoid", "avoid-page", "avoid-column" }),
+        CssPropertyId.PageBreakBefore or CssPropertyId.PageBreakAfter => static text =>
+            IsSingleKeywordWord(text, new[] { "auto", "always", "avoid", "left", "right" }),
+        CssPropertyId.PageBreakInside => static text => IsSingleKeywordWord(text,
+            new[] { "auto", "avoid" }),
         _ => null,
     };
 

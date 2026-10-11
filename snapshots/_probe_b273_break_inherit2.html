@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b273 break inherit2</title>
+<style>body{font:12px monospace;margin:0}#p{break-inside:avoid-column}</style></head><body>
+<div id="p"><div id="kid">x</div></div>
+<pre id="report"></pre>
+<script>
+var out=[];
+out.push('p='+JSON.stringify(getComputedStyle(p).getPropertyValue('break-inside')));
+out.push('kid='+JSON.stringify(getComputedStyle(kid).getPropertyValue('break-inside')));
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

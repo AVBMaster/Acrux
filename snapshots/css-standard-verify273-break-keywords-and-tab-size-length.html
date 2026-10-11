@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 273 — break-* keywords and a percentage tab-size that pays its font</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; padding: 8px; font-size: 16px; background: rgb(245,245,245); }
+#probe { font-size: 16px; }
+/* Visual markers — the pixel baseline guards these. */
+#tabs3 { white-space: pre; tab-size: 3em; background: rgb(220,235,220); margin: 0; }
+#tabsnum { white-space: pre; tab-size: 3; background: rgb(235,225,210); margin: 0; }
+#tabsrem { white-space: pre; tab-size: 1.5rem; background: rgb(220,225,240); margin: 0; }
+#vab { background: rgb(240,220,240); line-height: 40px; }
+#vab .pct { vertical-align: 50%; background: rgb(120,120,220); color: rgb(255,255,255); }
+#vab .top { vertical-align: top; background: rgb(220,120,120); color: rgb(255,255,255); }
+#brkband { break-inside: avoid; background: rgb(200,230,200); padding: 3px; }
+</style></head><body>
+<h4>b273 — three gaps closed against the reference engine. (1) 'break-before'/'break-after'/'break-inside' and their 'page-break-*' aliases had property ids but no style field, so every one of them computed to the empty string and the CSSOM echoed even a rejected value like 'break-before: region'; they are one shared slot per axis now, holding the modern CSS Fragmentation 3 keyword, and the legacy name re-spells 'page' as 'always' and reads the empty string for a modern value it cannot name. (2) A percentage 'vertical-align' serialised the stored fraction, so '20%' read back '0.2%'. (3) 'tab-size' with an 'em'/'rem' length stored the bare number as pixels — '4em' computed '4px' — now it resolves against this element's font like every other length.</h4>
+<div id="cb">
+  <div id="tabs3">A&#9;B&#9;C&#9;D</div>
+  <div id="tabsnum">A&#9;B&#9;C&#9;D</div>
+  <div id="tabsrem">A&#9;B&#9;C&#9;D</div>
+  <div id="vab"><span class="pct">pct</span><span class="top">top</span>base</div>
+  <div id="brkband">break-inside:avoid band</div>
+</div>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out = []; var failed = 0;
+function row(name, got, want){ var ok = String(got) === String(want); if(!ok) failed++;
+  out.push((ok?'ok   ':'FAIL ')+name+'  got='+JSON.stringify(String(got))+'  want='+JSON.stringify(String(want))); }
+
+// Each entry: property, value, wantSpec, wantComp  (all measured in the reference engine)
+var BREAK = [
+  ['break-before','auto','auto','auto'],
+  ['break-before','avoid','avoid','avoid'],
+  ['break-before','avoid-page','avoid-page','avoid-page'],
+  ['break-before','page','page','page'],
+  ['break-before','left','left','left'],
+  ['break-before','right','right','right'],
+  ['break-before','recto','recto','recto'],
+  ['break-before','verso','verso','verso'],
+  ['break-before','avoid-column','avoid-column','avoid-column'],
+  ['break-before','column','column','column'],
+  ['break-before','avoid-region','','auto'],
+  ['break-before','region','','auto'],
+  ['break-before','always','','auto'],
+  ['break-before','page page','','auto'],
+  ['break-before','bogus','','auto'],
+  ['break-after','page','page','page'],
+  ['break-after','column','column','column'],
+  ['break-after','region','','auto'],
+  ['break-inside','auto','auto','auto'],
+  ['break-inside','avoid','avoid','avoid'],
+  ['break-inside','avoid-page','avoid-page','avoid-page'],
+  ['break-inside','avoid-column','avoid-column','avoid-column'],
+  ['break-inside','page','','auto'],
+  ['break-inside','column','','auto'],
+  ['break-inside','always','','auto'],
+  ['page-break-before','auto','auto','auto'],
+  ['page-break-before','avoid','avoid','avoid'],
+  ['page-break-before','left','left','left'],
+  ['page-break-before','right','right','right'],
+  ['page-break-before','always','always','always'],
+  ['page-break-before','page','','auto'],
+  ['page-break-before','avoid-page','','auto'],
+  ['page-break-before','column','','auto'],
+  ['page-break-after','always','always','always'],
+  ['page-break-after','avoid','avoid','avoid'],
+  ['page-break-inside','avoid','avoid','avoid'],
+  ['page-break-inside','always','','auto'],
+];
+for (var i=0;i<BREAK.length;i++){ var b=BREAK[i];
+  row('#'+i+' '+b[0]+'['+b[1]+'] spec', spec(b[0],b[1]), b[2]);
+  row('#'+i+' '+b[0]+'['+b[1]+'] comp', comp(b[0],b[1]), b[3]); }
+
+// The alias: one shared slot, so a legacy spelling is readable through the modern name and back.
+function alias(setProp,setValue,readProp){ host.setAttribute('style',''); host.style.setProperty(setProp,setValue); return getComputedStyle(host).getPropertyValue(readProp); }
+row('A0 page-break-after:always -> break-after', alias('page-break-after','always','break-after'), 'page');
+row('A1 page-break-after:always -> page-break-after', alias('page-break-after','always','page-break-after'), 'always');
+row('A2 break-after:page -> page-break-after', alias('break-after','page','page-break-after'), 'always');
+row('A3 break-before:column -> page-break-before', alias('break-before','column','page-break-before'), '');
+row('A4 page-break-inside:avoid -> break-inside', alias('page-break-inside','avoid','break-inside'), 'avoid');
+row('A5 break-inside:avoid-column -> page-break-inside', alias('break-inside','avoid-column','page-break-inside'), '');
+
+// break-* are non-inherited: a child of an 'avoid' parent reads 'auto' (measured).
+var par = document.createElement('div'); par.style.setProperty('break-inside','avoid');
+var ch = document.createElement('div'); par.appendChild(ch); document.body.appendChild(par);
+row('I0 child of break-inside:avoid stays auto', getComputedStyle(ch).getPropertyValue('break-inside'), 'auto');
+
+// vertical-align percentage serialisation.
+row('V0 vertical-align[20%] comp', comp('vertical-align','20%'), '20%');
+row('V1 vertical-align[-10%] comp', comp('vertical-align','-10%'), '-10%');
+row('V2 vertical-align[1em] comp', comp('vertical-align','1em'), '16px');
+row('V3 vertical-align[text-top] comp', comp('vertical-align','text-top'), 'text-top');
+
+// tab-size length resolution (this element's font is 16px).
+row('T0 tab-size[4em] comp', comp('tab-size','4em'), '64px');
+row('T1 tab-size[2rem] comp', comp('tab-size','2rem'), '32px');
+row('T2 tab-size[4px] comp', comp('tab-size','4px'), '4px');
+row('T3 tab-size[4] comp (number)', comp('tab-size','4'), '4');
+row('T4 tab-size[3] spec (number)', spec('tab-size','3'), '3');
+row('T5 tab-size[0] comp', comp('tab-size','0'), '0');
+
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

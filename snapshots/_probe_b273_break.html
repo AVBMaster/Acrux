@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b273 break probe</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<pre id="report"></pre>
+<script>
+var PROPS = ["break-before","break-after","break-inside","page-break-before","page-break-after","page-break-inside"];
+var WORDS = ["auto","avoid","avoid-page","page","left","right","recto","verso","avoid-column","column","avoid-region","region","always","avoid avoid","multicol","page page","inherit","bogus",""];
+var host = document.createElement('div'); document.body.appendChild(host);
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+for (var i=0;i<PROPS.length;i++){ var p=PROPS[i];
+  for (var j=0;j<WORDS.length;j++){ var w=WORDS[j];
+    out.push(p+' ['+w+'] S='+JSON.stringify(spec(p,w))+' C='+JSON.stringify(comp(p,w))); } }
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

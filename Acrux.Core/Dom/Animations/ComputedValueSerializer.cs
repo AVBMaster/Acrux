@@ -376,6 +376,17 @@ public static class ComputedValueSerializer
             case "scroll-behavior": return style.ScrollBehavior.ToString().ToLowerInvariant();
             case "overscroll-behavior-x": return style.OverscrollBehaviorX.ToString().ToLowerInvariant();
             case "overscroll-behavior-y": return style.OverscrollBehaviorY.ToString().ToLowerInvariant();
+            // CSS Fragmentation 3 §3.2–3.4 with the CSS 2.1 'page-break-*' aliases: the modern and
+            // legacy spellings of one axis share a slot holding the modern keyword, and the legacy
+            // name re-spells 'page' as 'always' and reads the empty string for a modern value it has
+            // no word for (measured: 'break-after: page' → 'break-after' reads 'page', 'page-break-after'
+            // reads 'always'; 'break-before: column' → 'page-break-before' reads '').
+            case "break-before": return style.BreakBefore ?? "auto";
+            case "break-after": return style.BreakAfter ?? "auto";
+            case "break-inside": return style.BreakInside ?? "auto";
+            case "page-break-before": return LegacyPageBreakText(style.BreakBefore);
+            case "page-break-after": return LegacyPageBreakText(style.BreakAfter);
+            case "page-break-inside": return LegacyPageBreakInsideText(style.BreakInside);
             // 'text-wrap' prints as the shorthand the page wrote: a wrapping mode is what a style
             // word alone means, so 'wrap balance' reads 'balance' while 'nowrap stable' says both
             // (measured).
@@ -601,7 +612,7 @@ public static class ComputedValueSerializer
                 return style.VerticalAlign switch
                 {
                     VerticalAlignType.Length => Px(style.VerticalAlignOffsetPx ?? 0f),
-                    VerticalAlignType.Percentage => $"{CssValueTokenizer.Num(style.VerticalAlignOffsetPx ?? 0f)}%",
+                    VerticalAlignType.Percentage => $"{CssValueTokenizer.Num((style.VerticalAlignOffsetPx ?? 0f) * 100f)}%",
                     _ => CssEnumFormatter.CssKeywordFromEnum(style.VerticalAlign.ToString()),
                 };
             case "white-space-collapse": return CssEnumFormatter.CssKeywordFromEnum(style.WhiteSpaceCollapse.ToString());
@@ -850,6 +861,26 @@ public static class ComputedValueSerializer
     private static string ClearTypeText(ClearType value) => CssFloatKeywords.ToCssString(value);
 
     private static string Px(float value) => CssValueTokenizer.Num(value) + "px";
+
+    /// <summary>The computed text of a 'page-break-before' / 'page-break-after' alias read from the
+    /// shared slot: 'page' re-spells as 'always', 'auto'/'avoid'/'left'/'right' stay, and a modern
+    /// value with no legacy word reads the empty string (measured).</summary>
+    private static string LegacyPageBreakText(string? canonical) => canonical switch
+    {
+        null or "auto" => "auto",
+        "page" => "always",
+        "avoid" or "left" or "right" => canonical,
+        _ => string.Empty,
+    };
+
+    /// <summary>The computed text of 'page-break-inside': only 'auto' and 'avoid' have a legacy
+    /// spelling; an 'avoid-page' or 'avoid-column' from the modern name reads empty (measured).</summary>
+    private static string LegacyPageBreakInsideText(string? canonical) => canonical switch
+    {
+        null or "auto" => "auto",
+        "avoid" => "avoid",
+        _ => string.Empty,
+    };
 
     /// <summary>A border width's computed value: zero while its style is 'none' or 'hidden'
     /// (CSS 2.1 §10.3.2 — the width is suppressed at computed-value time, so an authored

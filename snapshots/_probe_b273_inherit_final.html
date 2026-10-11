@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b273 inherit final</title>
+<style>body{font:12px monospace;margin:0}
+#outside{break-inside:avoid}
+#mid{}
+</style></head><body>
+<div id="outside"><div id="mid"><div id="deep">d</div></div></div>
+<pre id="report"></pre>
+<script>
+var out=[];
+function g(el){var s=getComputedStyle(el);return 'inside='+JSON.stringify(s.getPropertyValue('break-inside'))+' before='+JSON.stringify(s.getPropertyValue('break-before'))+' page-inside='+JSON.stringify(s.getPropertyValue('page-break-inside'));}
+out.push('outside '+g(outside));
+out.push('mid '+g(mid));
+out.push('deep '+g(deep));
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
