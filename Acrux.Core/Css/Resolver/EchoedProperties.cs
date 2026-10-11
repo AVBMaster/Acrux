@@ -68,7 +68,11 @@ public static class EchoedProperties
             // ===== Writing Modes 4 §3.4 and Ruby 1 §3.3. 'sideways-left' is not a value here, and
             // 'vertical-rl' belongs to 'writing-mode' alone (both measured).
             new() { Name = "text-orientation", Initial = "mixed",
-                Normalize = Single("mixed", "upright", "sideways-right", "sideways") },
+                Normalize = Single("mixed", "upright", "sideways-right", "sideways"),
+                // 'sideways-right' is the long spelling of the same orientation, and the computed
+                // value only ever says the short one (measured).
+                ComputedText = (canonical, _) => canonical.Equals("sideways-right",
+                    StringComparison.OrdinalIgnoreCase) ? "sideways" : canonical },
             new() { Name = "ruby-align", Initial = "space-around",
                 Normalize = Single("start", "center", "space-between", "space-around") },
             new() { Name = "text-combine-upright", Initial = "none",

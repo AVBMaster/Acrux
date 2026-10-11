@@ -63,15 +63,11 @@ for (var i=0;i<V.length;i++){
   row('#'+i+' clip-path['+V[i][0]+'] spec', spec('clip-path',V[i][0]), V[i][1]);
   row('#'+i+' clip-path['+V[i][0]+'] comp', comp('clip-path',V[i][0]), V[i][2]); }
 
-// The rendering itself: a prefix box must clip, not draw the whole square. The three circle()
-// markers lose their top-left corner; the polygon's first vertex IS that corner, so it stays hit.
-function clipped(id){ var el=document.getElementById(id); var r=el.getBoundingClientRect();
-  var hit = document.elementsFromPoint(r.left+1, r.top+1).indexOf(el) >= 0;
-  return hit; }
-row('P0 border-box circle clips its corner', clipped('pre'), false);
-row('P1 margin-box circle clips its corner', clipped('preM'), false);
-row('P3 suffix box still clips', clipped('suf'), false);
-row('P4 plain shape still clips', clipped('plain'), false);
+// The clip itself is verified by a pixel probe, not from here: document.elementsFromPoint is
+// still an unimplemented stub in this engine (it answers the empty array), so any JS assertion
+// about hit testing is vacuous. See snapshots/_probe_b276_clipbox.html read with
+// 'Acrux --pixels' — the corner of a 'border-box circle(50%)' box is now the page's white
+// background while its centre still paints (255,128,128).
 
 // The b275 surfaces, re-checked so this round cannot silently undo them.
 row('R0 content[bogus] spec refused', spec('content','bogus'), '');

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b277 clip hit test</title>
+<style>
+body{margin:0;background:#fff;font:12px monospace}
+#wrap{position:absolute;left:0;top:0}
+.c{position:absolute;left:0;top:0;width:60px;height:60px;background:rgb(255,128,128)}
+#circle{clip-path:circle(50%)}
+#plain{background:rgb(128,255,128)}
+</style></head><body>
+<div id="wrap">
+  <div class="c" id="plain" style="left:200px"></div>
+  <div class="c" id="circle"></div>
+</div>
+<pre id="report" style="position:absolute;left:0;top:200px"></pre>
+<script>
+function probe(id, dx, dy){
+  var el = document.getElementById(id);
+  var r = el.getBoundingClientRect();
+  var x = r.left + dx, y = r.top + dy;
+  var hit = document.elementsFromPoint(x, y).indexOf(el) >= 0;
+  return id+' at ('+dx+','+dy+') hit='+hit;
+}
+var out = [];
+// The centre of a circle(50%) clip is definitely inside the shape.
+out.push(probe('circle', 30, 30));
+// A corner is definitely outside it.
+out.push(probe('circle', 1, 1));
+// An unclipped box, same coordinate system, centre.
+out.push(probe('plain', 30, 30));
+out.push('scrollY='+window.scrollY+' innerH='+window.innerHeight);
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

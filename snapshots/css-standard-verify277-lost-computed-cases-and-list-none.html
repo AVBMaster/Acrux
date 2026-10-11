@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 277 — values that parsed, stored, and then said nothing</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; padding: 8px; font-size: 16px; background: rgb(245,245,245); }
+#probe { font-size: 16px; }
+ul { margin: 0; padding-left: 0; list-style: none; }
+#clipped { width: 60px; height: 24px; overflow-x: clip; overflow-y: hidden; background: rgb(220,235,220); }
+#blend { width: 60px; height: 24px; background: rgb(255,128,128); background-blend-mode: luminosity; }
+#vert { writing-mode: vertical-lr; text-orientation: sideways-right; background: rgb(225,225,245); }
+</style></head><body>
+<h4>b277 — an 88-pair sweep, and the pattern it found is the same one every round keeps meeting: a property that parses, stores, and then has no computed case, so a script reads the empty string or the initial. overflow-x/y lost 'clip' from the printer even though the applier had added it two rounds ago (so a box that DID clip reported that it did not); background-blend-mode had a field, an applier and no case at all; text-orientation kept the long spelling 'sideways-right' where the computed value only ever says 'sideways'. Two are list markers: 'list-style: none' never claimed the type slot, so the shorthand's own reset put 'disc' back and the marker type read as if nothing had been said; and the image printer wrapped the word 'none' into a url, turning 'list-style: none' into a request for a file called none.</h4>
+<div id="cb">
+  <ul><li>no marker</li><li>no marker</li></ul>
+  <div id="clipped">012345678901234567890123456789012345678901234567890123456789</div>
+  <div id="blend"></div>
+  <div id="vert">sideways</div>
+</div>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out = []; var failed = 0;
+function row(name, got, want){ var ok = String(got) === String(want); if(!ok) failed++;
+  out.push((ok?'ok   ':'FAIL ')+name+'  got='+JSON.stringify(String(got))+'  want='+JSON.stringify(String(want))); }
+
+// Each entry: property, value, wantSpec, wantComp  (every one measured in the reference engine)
+var CASES = [
+  // ===== the axes that clip, and the value the printer had lost =====
+  ['overflow-x','clip','clip','clip'],
+  ['overflow-y','clip','clip','clip'],
+  // 'clip hidden' collapses to 'hidden' on the shorthand, in both engines: a visible or clipped
+  // axis yields to the scrollable one (CSS Overflow 3 §3.3, measured).
+  ['overflow','clip hidden','clip hidden','hidden'],
+  ['overflow-x','hidden','hidden','hidden'],
+  ['overflow-x','auto','auto','auto'],
+  ['overflow','visible','visible','visible'],
+
+  // ===== a blend with no computed case =====
+  ['background-blend-mode','luminosity','luminosity','luminosity'],
+  ['background-blend-mode','normal','normal','normal'],
+  ['background-blend-mode','multiply','multiply','multiply'],
+
+  // ===== 'sideways-right' is the long spelling of 'sideways' =====
+  ['text-orientation','sideways-right','sideways-right','sideways'],
+  ['text-orientation','sideways','sideways','sideways'],
+  ['text-orientation','mixed','mixed','mixed'],
+  ['text-orientation','upright','upright','upright'],
+
+  // ===== 'none' is a marker type, and not a file name =====
+  ['list-style','none','none','outside none none'],
+  ['list-style-type','none','none','none'],
+  ['list-style','square','square','outside none square'],
+  ['list-style','inside','inside','inside none disc'],
+  ['list-style-image','none','none','none'],
+  ['list-style','none inside','inside none','inside none none'],
+];
+for (var i=0;i<CASES.length;i++){ var c=CASES[i];
+  row('#'+i+' '+c[0]+'['+c[1]+'] spec', spec(c[0],c[1]), c[2]);
+  row('#'+i+' '+c[0]+'['+c[1]+'] comp', comp(c[0],c[1]), c[3]); }
+
+// The image url still absolutises (the b275 fix this round must not undo).
+row('U0 list-style-image[url(a.png)] spec', spec('list-style-image','url(a.png)'), 'url("a.png")');
+row('U1 list-style-image[url(a.png)] comp', comp('list-style-image','url(a.png)'),
+    'url("file:///home/master/Acrux/snapshots/a.png")');
+
+// The b276 clip surface, re-checked.
+row('C0 clip-path[border-box circle(50%)] spec', spec('clip-path','border-box circle(50%)'), 'circle(50%)');
+row('C1 clip-path[margin-box circle(50%)] comp', comp('clip-path','margin-box circle(50%)'), 'circle(50%) margin-box');
+row('C2 clip-path[circle(50%, bogus)] refused', spec('clip-path','circle(50%, bogus)'), '');
+row('C3 clip-path[circle(50%)] survives', comp('clip-path','circle(50%)'), 'circle(50%)');
+
+// The b275 content surface, re-checked.
+row('N0 content[bogus] refused', spec('content','bogus'), '');
+row('N1 content["a" "b"] comp', comp('content','"a" "b"'), '"ab"');
+row('N2 marker-start[url(#m)] comp', comp('marker-start','url(#m)'), 'url("#m")');
+
+// The b274/b273 surfaces.
+row('S0 fill[red] comp', comp('fill','red'), 'rgb(255, 0, 0)');
+row('S1 transform rotate(0.5turn)', comp('transform','rotate(0.5turn)'), 'matrix(-1, 0, 0, -1, 0, 0)');
+row('S2 break-before[page] comp', comp('break-before','page'), 'page');
+row('S3 tab-size[4em] comp', comp('tab-size','4em'), '64px');
+row('S4 vertical-align[20%] comp', comp('vertical-align','20%'), '20%');
+
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

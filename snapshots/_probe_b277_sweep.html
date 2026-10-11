@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>b277 sweep</title>
+<style>body{font:12px monospace;margin:0}</style></head><body>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var CASES = [
+  ["text-shadow","1px 2px 3px red"],["text-shadow","1px 2px"],["text-shadow","0 0 0 transparent"],
+  ["box-shadow","1px 2px 3px 4px red"],["box-shadow","1px 2px , 3px 4px"],
+  ["place-content","center space-between"],["place-items","center end"],["place-self","center start"],
+  ["gap","10px 20px"],["gap","normal"],["row-gap","normal"],
+  ["font-variant","small-caps"],["font-variant","normal"],
+  ["scroll-margin","10px"],["scroll-padding","1em"],["scroll-behavior","smooth"],
+  ["text-emphasis","dot"],["text-emphasis","open circle"],["text-emphasis-style","\"x\""],
+  ["mask-mode","alpha"],["mask-clip","content-box"],["mask-composite","exclude"],
+  ["mask-repeat","repeat-x"],["mask-origin","padding-box"],
+  ["rotate","x 45deg"],["rotate","1 1 0 90deg"],["translate","10px 20px"],["scale","2 3"],
+  ["overflow","hidden auto"],["overflow-x","clip"],["overflow-y","scroll"],
+  ["text-orientation","sideways-right"],["text-combine-upright","all"],
+  ["caret-color","red"],["accent-color","rgb(1,2,3)"],
+  ["list-style","none"],["list-style-position","outside"],
+  ["background-blend-mode","luminosity"],["background-repeat","repeat-x repeat-y"],
+  ["background-origin","content-box"],
+  ["counter-reset","x -1"],["counter-reset","none"],
+  ["white-space","nowrap"],["white-space-collapse","preserve-breaks"],
+  ["line-height","1.5"],["line-height","20px"],["line-height","150%"],
+  ["aspect-ratio","1 / 2"],["aspect-ratio","auto"],
+  ["width","min(10px, 20px)"],["width","clamp(10px, 50%, 100px)"],["height","max(1em, 20px)"],
+  ["filter","brightness(1.5)"],["filter","contrast(200%)"],["filter","sepia(0.5)"],
+  ["filter","grayscale(1) hue-rotate(90deg)"],["filter","opacity(50%)"],["filter","invert(1)"],
+  ["filter","blur()"],["filter","url(#f)"],
+  ["transform","translate3d(1px,2px,3px)"],["transform","scale3d(2,3,4)"],
+  ["transform","rotate3d(1,1,0,90deg)"],["transform","perspective(500px)"],
+  ["transform","translateZ(10px)"],["transform","none"],
+  ["will-change","opacity, transform"],["will-change","auto"],
+  ["contain","strict"],["contain","inline-size"],
+  ["float","inline-end"],["clear","inline-start"],
+  ["object-fit","scale-down"],["object-position","top"],
+  ["image-orientation","from-image"],["image-orientation","90deg"],
+  ["scroll-snap-type","both"],["scroll-snap-align","center"],
+  ["user-select","contain"],["pointer-events","none"],
+  ["content-visibility","visible"],["field-sizing","content"],
+  ["text-wrap-mode","wrap"],["text-wrap-style","balance"],
+  ["tab-size","2.5"],["hyphenate-limit-chars","4 2 3"],
+  ["print-color-adjust","exact"],["ruby-position","under"]
+];
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+for (var i=0;i<CASES.length;i++){ var p=CASES[i][0],v=CASES[i][1];
+  out.push(i+'|'+p+'|'+v+'|S='+spec(p,v)+'|C='+comp(p,v)); }
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

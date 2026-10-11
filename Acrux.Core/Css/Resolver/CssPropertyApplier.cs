@@ -3000,6 +3000,16 @@ public static class CssPropertyApplier
                 style.ListStylePosition = lower == "inside" ? ListStylePosition.Inside : ListStylePosition.Outside;
             else if (lower.StartsWith("url("))
                 style.ListStyleImage = NormalizeUrlValue(part);
+            // 'none' is a marker type of its own, not only an image keyword: 'list-style: none'
+            // computes 'outside none none' (measured), so it must claim the type slot rather than
+            // fall through to the reset that would put 'disc' back.
+            else if (!sawType && lower == "none")
+            {
+                style.ListStyleType = ListStyleType.None;
+                style.ListStyleTypeString = null;
+                style.ListStyleTypeName = null;
+                sawType = true;
+            }
             else if (!sawType && (MatchListStyleType(lower) is { } type || IsQuotedString(part)
                                   || IsCounterStyleName(part)))
             {

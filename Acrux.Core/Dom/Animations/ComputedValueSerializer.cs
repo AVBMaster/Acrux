@@ -271,11 +271,14 @@ public static class ComputedValueSerializer
             case "clear": return ClearTypeText(style.Clear);
             case "z-index": return style.ZIndex?.ToString(CultureInfo.InvariantCulture) ?? "auto";
             case "order": return style.Order.ToString(CultureInfo.InvariantCulture);
+            // CSS Overflow 3 §3.3: 'clip' is a value of its own on each axis, and the printer had
+            // no arm for it, so a box that did clip reported that it did not.
             case "overflow-x": return style.OverflowX switch
             {
                 OverflowType.Hidden => "hidden",
                 OverflowType.Scroll => "scroll",
                 OverflowType.Auto => "auto",
+                OverflowType.Clip => "clip",
                 _ => "visible",
             };
             case "overflow-y": return style.OverflowY switch
@@ -283,6 +286,7 @@ public static class ComputedValueSerializer
                 OverflowType.Hidden => "hidden",
                 OverflowType.Scroll => "scroll",
                 OverflowType.Auto => "auto",
+                OverflowType.Clip => "clip",
                 _ => "visible",
             };
             // -------------------------------------------------- box alignment
@@ -534,6 +538,10 @@ public static class ComputedValueSerializer
             case "background-origin":
                 return CycleListText(style.BackgroundOriginLayers, style.BackgroundOrigin, one => one,
                     BackgroundLayerCount(style));
+            // CSS Compositing 1 §3: the field and the applier were both there and the computed case
+            // was not, so a blend the page asked for read back as the empty string.
+            case "background-blend-mode":
+                return CssEnumFormatter.CssKeywordFromEnum(style.BackgroundBlendMode.ToString());
             // The whole list, colours canonicalised: reporting only the first layer made a
             // multi-layer background look like a single-image one to any script reading it.
             case "background-image": return Css.ImageValueCanonicalizer.Canonicalize(
@@ -708,7 +716,9 @@ public static class ComputedValueSerializer
             // spelling the background and the mask use (measured: 'url(a.png)' computes
             // 'url("file:///…/a.png")', not the bare path).
             case "list-style-image": return Css.ImageValueCanonicalizer.Canonicalize(
-                string.IsNullOrWhiteSpace(style.ListStyleImage) ? "none"
+                string.IsNullOrWhiteSpace(style.ListStyleImage)
+                || style.ListStyleImage!.Equals("none", StringComparison.OrdinalIgnoreCase)
+                    ? "none"
                     : style.ListStyleImage!.Contains('(')
                         ? style.ListStyleImage!
                         : "url(\"" + style.ListStyleImage + "\")");
