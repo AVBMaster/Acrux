@@ -829,7 +829,11 @@ public static class CssPropertyApplier
             case "table-layout": style.TableLayout = value.ToLowerInvariant() == "fixed" ? "fixed" : "auto"; break;
             case "caption-side": style.CaptionSide = value.ToLowerInvariant() == "bottom" ? "bottom" : "top"; break;
             case "empty-cells": style.EmptyCells = value.ToLowerInvariant() == "hide" ? "hide" : "show"; break;
-            case "content": style.Content = value; break;
+            case "content":
+                // An attr() whose fallback is not a string leaves the property at its initial
+                // value while the declaration itself stays in the sheet (CSS Values 5 §2.2.2).
+                if (!ContentHasUnusableAttrFallback(value)) style.Content = value;
+                break;
             case "counter-increment": style.CounterIncrement = value; break;
             case "counter-reset": style.CounterReset = value; break;
             case "counter-set": style.CounterSet = value; break;
@@ -3953,6 +3957,55 @@ public static class CssPropertyApplier
         if ((contain & ContainType.Style) != 0) parts.Add("style");
         if ((contain & ContainType.Paint) != 0) parts.Add("paint");
         return string.Join(' ', parts);
+    }
+
+    /// <summary>CSS Values 5 §2.2.2 read against Generated Content 3 §5.1: an <c>attr()</c> written
+    /// with a comma carries a fallback, and in 'content' that fallback has to be a string — a run of
+    /// quoted strings counts. When it is not, the declaration is stored and echoed but the property
+    /// computes its initial 'normal' (measured: 'attr(x, url)', 'attr(x, 5px)', 'attr(x, "y" url)',
+    /// 'attr(x, url "y")', 'attr(x, )' and 'attr(x, "a", "b")' all compute 'normal', while
+    /// 'attr(x, "y")' and 'attr(x, "y" "z")' compute the string). A type in front of the comma does
+    /// not rescue a fallback that is not a string ('attr(x type(string), 5px)' is 'normal'), and a
+    /// string needs no type at all ('attr(x type(number), "y")' reads '"y"').</summary>
+    public static bool ContentHasUnusableAttrFallback(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return false;
+        var text = value!;
+        for (int i = 0; i + 5 <= text.Length; i++)
+        {
+            if (!text.AsSpan(i, 4).Equals("attr".AsSpan(), StringComparison.OrdinalIgnoreCase)
+                || text[i + 4] != '(') continue;
+            int depth = 0, close = -1;
+            for (int j = i + 4; j < text.Length; j++)
+            {
+                if (text[j] == '(') depth++;
+                else if (text[j] == ')' && --depth == 0) { close = j; break; }
+            }
+            if (close < 0) return false;
+            var inner = text[(i + 5)..close];
+            int comma = inner.IndexOf(',');
+            if (comma >= 0 && !FallbackIsStringRun(inner[(comma + 1)..])) return true;
+            i = close;
+        }
+        return false;
+    }
+
+    /// <summary>Whether an <c>attr()</c> fallback is a &lt;string&gt; — one quoted string, or
+    /// several written side by side. A comma anywhere in it belongs to the argument list rather than
+    /// to the value, so it makes the run no string at all.</summary>
+    private static bool FallbackIsStringRun(string fallback)
+    {
+        if (fallback.IndexOf(',') >= 0) return false;
+        var words = (fallback ?? string.Empty).Trim()
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0) return false;
+        foreach (var word in words)
+        {
+            if (word.Length < 2) return false;
+            var quote = word[0];
+            if (quote is not ('"' or '\'') || word[^1] != quote) return false;
+        }
+        return true;
     }
 
     /// <summary>

@@ -131,6 +131,26 @@ public static class CssValueText
                 int start = i;
                 while (i < value.Length && IsIdentPart(value[i])) i++;
                 var word = value.Substring(start, i - start);
+                if (word.Equals("attr", StringComparison.OrdinalIgnoreCase) && i < value.Length
+                    && value[i] == '(' && property != null
+                    && property.Equals("content", StringComparison.OrdinalIgnoreCase))
+                {
+                    // 'content' echoes an attr() exactly as the page wrote it — the name's own case
+                    // and the spacing round the comma included — because its fallback is an
+                    // arbitrary token run rather than a parsed argument list (measured:
+                    // 'ATTR(data-x , "y")' reads back 'ATTR(data-x , "y")' while 'COUNTER(x)' reads
+                    // 'counter(x)').
+                    int attrEnd = MatchingParen(value, i);
+                    if (attrEnd > i)
+                    {
+                        if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
+                        sb.Append(value, start, attrEnd + 1 - start);
+                        pendingSpace = true;
+                        afterSlash = false;
+                        i = attrEnd + 1;
+                        continue;
+                    }
+                }
                 if (IsQuotedArgument(word) && i < value.Length && value[i] == '(')
                 {
                     int end = MatchingParen(value, i);
@@ -244,6 +264,7 @@ public static class CssValueText
                 result = CanonicalizeContain(result, property);
                 result = CanonicalizeContainIntrinsic(result, property);
                 result = CanonicalizeContainerShorthand(result, property);
+                result = CanonicalizeFilterList(result, property);
                 result = CanonicalizePaintOrder(result, property);
                 result = CanonicalizeClipPath(result, property);
                 // The properties that only have to be said correctly — scroll snapping, the SVG
@@ -705,6 +726,14 @@ public static class CssValueText
         return words.Count == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase)
             ? "none" : text;
     }
+
+    /// <summary>'filter' and 'backdrop-filter' print a <c>drop-shadow()</c> with its colour in
+    /// front of the offsets, whichever end of the list the page wrote it on (CSS Filter Effects 1
+    /// §29.1, measured); the rest of the list is what it was.</summary>
+    private static string CanonicalizeFilterList(string text, string property)
+        => property.Equals("filter", StringComparison.OrdinalIgnoreCase)
+            || property.Equals("backdrop-filter", StringComparison.OrdinalIgnoreCase)
+            ? Acrux.Core.Css.CssFilterValue.CanonicalizeSpecified(text) : text;
 
     private static readonly string[] ContainWords =
         { "none", "strict", "content", "size", "inline-size", "layout", "style", "paint" };

@@ -683,7 +683,12 @@ public static class CssValueGrammar
         // computes 'strict' — so the refusal has to happen here, in the echo and in supports(),
         // and not only in the applier, which has no way to say the declaration was never stored.
         CssPropertyId.Contain => IsContainValue,
-        // CSS Containment 3 §3.1: the 'contain-intrinsic' family is one or two components — the
+        // CSS Filter Effects 1 §29.1: the list is judged by the printer that would have to read it,
+        // so 'grayscale' without its parentheses, a negative blur, a comma list and a colour in the
+        // middle of a drop-shadow all refuse the declaration rather than computing 'none' from a
+        // value the page can still read back (all measured).
+        CssPropertyId.Filter or CssPropertyId.BackdropFilter
+            => static text => CssFilterValue.IsFilterValueList(text),        // CSS Containment 3 §3.1: the 'contain-intrinsic' family is one or two components — the
         // shorthand takes the pair, each axis longhand exactly one — of 'none', 'auto' or a
         // non-negative unit-bearing length. Measured: 'auto' and 'auto auto' are refused while
         // 'auto none' stands, '50%' and '-5px' and 'none none none' are refused, and a bare '2'
@@ -948,15 +953,39 @@ public static class CssValueGrammar
                 }
             case "attr":
                 {
-                    var parts = Acrux.Core.Css.Resolver.EchoedProperties.SplitTopLevel(inner);
-                    if (parts.Count is < 1 or > 2 || !IsContentIdent(parts[0])) return false;
-                    return parts.Count == 1 || IsContentString(parts[1]);
+                    // CSS Values 5 §2.2.2: 'attr( <attr-name> [ <attr-type> ]? , <declaration-value>? )'.
+                    // The fallback is a declaration value, so it may be a string, a run of strings, a
+                    // bare ident, a length, another function, a second comma — or nothing at all — and
+                    // every one of those is a value the reference engine keeps (measured). What it
+                    // refuses is a value with no name: 'attr(, "y")'. This engine additionally reads
+                    // the space-separated two-argument form the reference engine refuses, deliberately
+                    // and on purpose (docs/CSS-HANDOFF.md #244).
+                    int comma = inner.IndexOf(',');
+                    if (comma < 0)
+                    {
+                        var words = Acrux.Core.Css.Resolver.EchoedProperties.SplitTopLevel(inner);
+                        if (words.Count is < 1 or > 2 || !IsContentIdent(words[0])) return false;
+                        return words.Count == 1 || IsContentString(words[1]);
+                    }
+                    var head = Acrux.Core.Css.Resolver.EchoedProperties.SplitTopLevel(inner[..comma]);
+                    if (head.Count is < 1 or > 2) return false;
+                    if (!IsContentIdent(head[0])) return false;
+                    return head.Count == 1 || IsAttrType(head[1]);
                 }
             case "url": return inner.Length > 0;
             // 'target-counter()' and the Content 4 'content()' are not values this engine takes.
             default: return false;
         }
     }
+
+    /// <summary>The optional type of an <c>attr()</c>: <c>type( … )</c> whatever its argument
+    /// spells, or a bare type keyword. Both forms are measured ('attr(x type(string), "y")',
+    /// 'attr(x type(&lt;length&gt;), 5px)', 'attr(x string, "y")' all stand).</summary>
+    private static bool IsAttrType(string token) =>
+        (token.StartsWith("type(", StringComparison.OrdinalIgnoreCase)
+            && token.EndsWith(")", StringComparison.Ordinal))
+        || IsContentIdent(token)
+        || (token.StartsWith("<", StringComparison.Ordinal) && token.EndsWith(">", StringComparison.Ordinal));
 
     /// <summary>A counter style name — one of the built-in keywords or a name an @counter-style
     /// block defines. A function is not a style name here: 'counter(x, symbols("a" "b"))' is

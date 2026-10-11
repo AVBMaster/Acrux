@@ -674,15 +674,21 @@ public class LayoutEngine
             {
                 // attr(name) resolves against the originating element; a missing
                 // attribute contributes an empty string (CSS Values 4 §11.1) unless the
-                // two-argument form supplies a fallback: attr(name "FB").
+                // two-argument form supplies a fallback: attr(name "FB"), or — the spelling
+                // the reference engine reads — attr(name, "FB"). A type written between the
+                // name and the comma belongs to the type, not to the name (CSS Values 5 §2.2.2).
                 int parenStart = i + 4;
                 int parenEnd = FindMatchingParen(trimmed, parenStart);
                 if (parenEnd > parenStart)
                 {
                     var argument = trimmed.Substring(parenStart + 1, parenEnd - parenStart - 1).Trim();
-                    int space = argument.IndexOfAny(new[] { ' ', '\t' });
-                    var attrName = space > 0 ? argument[..space] : argument;
-                    var fallback = space > 0 ? UnquoteAttrFallback(argument[(space + 1)..]) : null;
+                    int comma = argument.IndexOf(',');
+                    var head = (comma < 0 ? argument : argument[..comma]).Trim();
+                    int space = head.IndexOfAny(new[] { ' ', '\t' });
+                    var attrName = space > 0 ? head[..space] : head;
+                    var fallback = comma < 0
+                        ? (space > 0 ? UnquoteAttrFallback(head[(space + 1)..]) : null)
+                        : UnquoteAttrFallback(argument[(comma + 1)..]);
                     if (owner != null && owner.HasAttribute(attrName))
                         sb.Append(owner.GetAttribute(attrName));
                     else if (fallback != null)
@@ -871,14 +877,22 @@ public class LayoutEngine
 
     /// <summary>A counter() separator is a &lt;string&gt;; an unquoted argument is not a
     /// valid value and contributes nothing.</summary>
-    /// <summary>The fallback argument of <c>attr(name "FB")</c>: only a quoted string is
-    /// a valid fallback here, so an unquoted remainder yields no fallback at all.</summary>
+    /// <summary>The fallback argument of <c>attr(name "FB")</c> and <c>attr(name, "FB")</c>: only a
+    /// quoted string is a valid fallback here, or several written side by side, which are the one
+    /// string they spell (measured: 'attr(x, "y" "z")' paints 'yz'). Anything else — a bare ident, a
+    /// length, nothing at all — is no fallback, and the cascade has already put the whole declaration
+    /// out of force by then.</summary>
     private static string? UnquoteAttrFallback(string text)
     {
-        text = text.Trim();
-        if (text.Length >= 2 && (text[0] == '"' || text[0] == '\'') && text[^1] == text[0])
-            return Css.Resolver.CssPropertyApplier.UnescapeCssString(text[1..^1]);
-        return null;
+        var words = text.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0) return null;
+        var sb = new StringBuilder();
+        foreach (var word in words)
+        {
+            if (word.Length < 2 || word[0] is not ('"' or '\'') || word[^1] != word[0]) return null;
+            sb.Append(Css.Resolver.CssPropertyApplier.UnescapeCssString(word[1..^1]));
+        }
+        return sb.ToString();
     }
 
     private static string UnquoteCounterArg(string text)

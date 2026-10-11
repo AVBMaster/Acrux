@@ -67,8 +67,14 @@ public static class PseudoStyleMerger
             // .EvaluateForContent). The layout builds the painted text from the raw declaration
             // instead, so this only serves the reading surface.
             if (withContent && name == "content")
+            {
+                // The same rule the cascade applies: an attr() whose fallback is not a string is no
+                // content, so the generated box keeps its initial value rather than painting the
+                // empty string the substitution below would leave behind (CSS Values 5 §2.2.2).
+                if (Css.Resolver.CssPropertyApplier.ContentHasUnusableAttrFallback(value)) continue;
                 value = CssFunctionEvaluator.EvaluateForContent(value, element,
                     style.FontSize, 16f, 0f, 0f);
+            }
             switch (name)
             {
                 case "content" when !withContent:

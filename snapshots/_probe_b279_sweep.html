@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>probe b279 — attr fallback, shorthand echo, shorthand CSSOM, var order</title>
+<style>
+#host { font-size: 16px; }
+</style></head><body>
+<div id="host"></div>
+<div id="v1" style="--x: 20px; font-size: var(--x)"></div>
+<div id="v2" style="--y: 2em; font-size: 30px; line-height: var(--y)"></div>
+<div id="v3" style="--a: var(--b); --b: 14pt; font-size: var(--a)"></div>
+<div id="v4"><span style="font-size: var(--later); --later: 25px"></span></div>
+<div id="v5" style="opacity: calc(var(--undef))"></div>
+<div id="v6" style="letter-spacing: var(--undef)"></div>
+<div id="v7" style="color: var(--undef)"></div>
+<div id="v8" style="margin-left: var(--a2, var(--undef))"></div>
+<div id="v9" style="width: calc(10px + var(--undef))"></div>
+<div id="v10" style="border-width: var(--undef)"></div>
+<div id="v11" style="--c: 5px; padding-left: calc(var(--c) * 2)"></div>
+<div id="v12" style="font-size: var(---weird, 11px)"></div>
+<pre id="out"></pre>
+<script>
+var host = document.getElementById('host');
+var lines = [];
+function push(t) { lines.push(t); }
+function spec(p, v) { host.setAttribute('style', 'font-size:16px'); host.style.setProperty(p, v); return host.style.getPropertyValue(p); }
+function comp(p, v) { host.setAttribute('style', 'font-size:16px'); host.style.setProperty(p, v); return getComputedStyle(host).getPropertyValue(p); }
+
+// ===== §1 content: the attr() fallback forms =====
+['attr(data-x, "y")', 'attr(data-x "y")', 'attr(data-x)', 'attr(data-x, url)', 'attr(data-x, "y" "z")',
+ 'attr(data-x, 5px)', 'attr(data-x, attr(y))', 'attr(, "y")', 'attr(data-x , "y")', 'attr(data-x,"y")',
+ 'attr(data-x type(string), "y")', 'attr(data-x type(length), 5px)', 'attr(data-x, )', 'attr(data-x, "y") "b"']
+ .forEach(function (v) {
+  push('C1 ' + JSON.stringify(v) + ' S=' + JSON.stringify(spec('content', v)) +
+       ' C=' + JSON.stringify(comp('content', v)) + ' sup=' + CSS.supports('content', v));
+});
+
+// ===== §2 the filter and background shorthand echo =====
+['drop-shadow(2px 2px red)', 'drop-shadow(red 2px 2px)', 'drop-shadow(2px 2px 3px)',
+ 'drop-shadow(2px 2px)', 'invert(25%)', 'grayscale', 'brightness(1.5) contrast(2)', 'url(a.png)']
+ .forEach(function (v) {
+  push('F2 ' + JSON.stringify(v) + ' S=' + JSON.stringify(spec('filter', v)) +
+       ' C=' + JSON.stringify(comp('filter', v)));
+});
+['red url(a.png)', 'url(a.png) red', 'no-repeat red', 'red no-repeat', 'content-box padding-box',
+ '10px 20px red', 'red 10px 20px', 'url(a.png) repeat fixed', 'center / cover red']
+ .forEach(function (v) {
+  push('B3 ' + JSON.stringify(v) + ' S=' + JSON.stringify(spec('background', v)) +
+       ' C=' + JSON.stringify(getComputedStyle(host).backgroundColor) +
+       ' Ci=' + JSON.stringify(getComputedStyle(host).backgroundImage));
+});
+
+// ===== §3 the CSSOM surface of a shorthand =====
+host.setAttribute('style', 'font-size:16px');
+host.style.setProperty('margin', '1px 2px 3px 4px');
+push('M4 length=' + host.style.length + ' item0=' + JSON.stringify(host.style.item(0)) +
+     ' cssText=' + JSON.stringify(host.style.cssText));
+host.setAttribute('style', 'font-size:16px');
+host.style.setProperty('background', 'red url(a.png) no-repeat');
+push('M5 length=' + host.style.length + ' cssText=' + JSON.stringify(host.style.cssText));
+host.setAttribute('style', 'font-size:16px');
+host.style.setProperty('border', '1px solid red');
+push('M6 length=' + host.style.length + ' cssText=' + JSON.stringify(host.style.cssText));
+host.setAttribute('style', 'font-size:16px');
+host.style.setProperty('flex', '1 2 3px');
+push('M7 length=' + host.style.length + ' cssText=' + JSON.stringify(host.style.cssText));
+host.setAttribute('style', 'font-size:16px');
+host.style.setProperty('font', 'bold 12px/1.5 Arial');
+push('M8 length=' + host.style.length + ' cssText=' + JSON.stringify(host.style.cssText));
+
+// ===== §4 the transform computed surface =====
+['translateZ(10px)', 'scaleX(2)', 'rotateY(45deg)', 'translate3d(1px,2px,3px)', 'rotate(0.5turn)',
+ 'perspective(2px)', 'skew(10deg,20deg)', 'rotate(45deg) translateZ(1px)', 'matrix(1,2,3,4,5,6)']
+ .forEach(function (v) { push('T9 ' + JSON.stringify(v) + ' S=' + JSON.stringify(spec('transform', v)) +
+       ' C=' + JSON.stringify(comp('transform', v))); });
+
+// ===== §5 var() substitution order and IACVT =====
+function cs(id, p) { return JSON.stringify(getComputedStyle(document.getElementById(id)).getPropertyValue(p)); }
+push('V1 font-size=' + cs('v1', 'font-size') + ' (want the --x length as a font size)');
+push('V2 line-height=' + cs('v2', 'line-height'));
+push('V3 font-size=' + cs('v3', 'font-size'));
+push('V4 font-size=' + cs('v4', 'font-size') + ' (declared after the use)');
+push('V5 opacity=' + cs('v5', 'opacity'));
+push('V6 letter-spacing=' + cs('v6', 'letter-spacing'));
+push('V7 color=' + cs('v7', 'color'));
+push('V8 margin-left=' + cs('v8', 'margin-left'));
+push('V9 width=' + cs('v9', 'width'));
+push('V10 border-left-width=' + cs('v10', 'border-left-width'));
+push('V11 padding-left=' + cs('v11', 'padding-left'));
+push('V12 font-size=' + cs('v12', 'font-size'));
+
+var text = lines.join('\n') + '\n';
+document.getElementById('out').textContent = text;
+console.log(text);
+</script></body></html>

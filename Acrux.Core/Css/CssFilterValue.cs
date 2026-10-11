@@ -77,6 +77,57 @@ public static class CssFilterValue
         return string.Join(" ", parts);
     }
 
+    /// <summary>Whether a text is a <c>&lt;filter-value-list&gt;</c> the engine can read. One
+    /// predicate decides it, and it is the printer: a list the computed surface cannot build is a
+    /// list the page never wrote a value of, so the echo, the sheet, <c>setProperty</c> and
+    /// <c>supports()</c> cannot disagree. Measured — <c>grayscale</c> without its parentheses,
+    /// <c>blur(-2px)</c>, <c>grayscale(-1)</c>, <c>foo(2px)</c>, a comma list, <c>drop-shadow(red)</c>,
+    /// a fourth length and a colour written between the offsets and the radius all void the
+    /// declaration, while <c>invert(25%)</c> and <c>brightness(2%)</c> stand.</summary>
+    public static bool IsFilterValueList(string? text)
+    {
+        var trimmed = (text ?? "").Trim();
+        if (trimmed.Length == 0) return false;
+        // A value carrying var() is not decided until the substitution has run, and this engine
+        // substitutes before it validates, so the grammar has to let it through.
+        if (trimmed.Contains("var(", StringComparison.OrdinalIgnoreCase)) return true;
+        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
+        // A stand-in style, not 'null': the printer resolves an 'em' against the element's own font,
+        // and with no font to ask it calls 'drop-shadow(2em 2em red)' unreadable — which is a
+        // grammar answer, not a length answer (measured: the reference engine keeps that filter and
+        // resolves it to 32px at the default font size).
+        return ComputedText(trimmed, new ComputedStyle()) != "none";
+    }
+
+    /// <summary>The specified value as the reference engine prints it. One thing moves: a
+    /// <c>drop-shadow()</c> writes its colour in front of the offsets whichever end the page put it
+    /// on, and the arguments are printed with one space between them (measured:
+    /// 'drop-shadow( 2px  2px  red )' reads 'drop-shadow(red 2px 2px)'). Nothing is RESOLVED here —
+    /// a specified length still says '2em' and a percentage still says '2%'.</summary>
+    public static string CanonicalizeSpecified(string? text)
+    {
+        var trimmed = (text ?? "").Trim();
+        if (trimmed.Length == 0 || !IsFilterValueList(trimmed)) return text ?? "";
+        var items = CssValueTokenizer.SplitTokens(trimmed);
+        var parts = new List<string>(items.Count);
+        foreach (var item in items)
+        {
+            if (!CssValueTokenizer.TryReadFunction(item, out var rawName, out var argsText)
+                || !rawName.Trim().Equals("drop-shadow", StringComparison.OrdinalIgnoreCase)
+                || HasTopLevelComma(argsText))
+            { parts.Add(item); continue; }
+            var args = SplitArgumentTokens(argsText);
+            int colour = -1;
+            for (int i = 0; i < args.Count; i++)
+                if (ColorParser.IsColorToken(args[i])) { colour = i; break; }
+            if (colour <= 0) { parts.Add(item); continue; }      // none, or already in front
+            var reordered = new List<string>(args.Count) { args[colour] };
+            for (int i = 0; i < args.Count; i++) if (i != colour) reordered.Add(args[i]);
+            parts.Add("drop-shadow(" + string.Join(" ", reordered) + ")");
+        }
+        return string.Join(" ", parts);
+    }
+
     private static string? ComputeItem(string item, ComputedStyle? style)
     {
         if (!CssValueTokenizer.TryReadFunction(item, out var rawName, out var argsText)) return null;
@@ -146,6 +197,11 @@ public static class CssFilterValue
     /// </summary>
     private static string? DropShadowText(List<string> args, ComputedStyle? style)
     {
+        // The colour is the first argument or the last one — a colour written between the offsets
+        // and the radius is no drop-shadow at all (measured: 'drop-shadow(2px 2px red 3px)' is
+        // refused while 'drop-shadow(red 2px 2px 3px)' and 'drop-shadow(2px 2px 3px red)' stand).
+        for (int index = 1; index < args.Count - 1; index++)
+            if (ColorParser.IsColorToken(args[index])) return null;
         SKColor? color = null;
         var lengths = new List<string>();
         foreach (var token in args)

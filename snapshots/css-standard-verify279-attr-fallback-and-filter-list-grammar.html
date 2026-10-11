@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 279 — an attr() fallback that says nothing, and a filter list that cannot be read</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; padding: 8px; font-size: 16px; background: rgb(245,245,245); }
+#probe { font-size: 16px; }
+/* Generated content is only worth a screenshot if the fallback actually paints. */
+#a1::before { content: attr(data-x, "FB1"); color: rgb(200,0,0); }
+#a2::before { content: attr(data-t, "FB2"); color: rgb(0,120,0); }
+#a3::before { content: attr(data-x, url); color: rgb(0,0,200); }
+#a4::before { content: attr(data-x, "F" "B" "4"); color: rgb(0,0,200); }
+#a5::before { content: attr(data-x type(string), "FB5"); color: rgb(160,90,0); }
+</style></head><body>
+<h4>b279 — two places where a value was read as though the engine owned words it does not. The comma form of <c>attr()</c> is the spelling CSS Values 5 gives a fallback, and this engine refused every one of them while accepting the space-separated form the reference engine does not — so 'content: attr(data-x, "y")' painted nothing where the reference engine paints the fallback, and a fallback that is NOT a string ('attr(x, url)', 'attr(x, 5px)', 'attr(x, )') is no content at all: the declaration stays in the sheet and the property computes its initial 'normal'. Second, 'filter' had no value grammar: a bare 'grayscale' without its parentheses, a negative blur and a colour written between the offsets and the radius of a drop-shadow were all stored as specified values that the reference engine never keeps, and a drop-shadow kept the colour wherever the page left it instead of printing it in front of the offsets.</h4>
+<div id="cb">
+  <div id="a1"></div><div id="a2" data-t="REAL"></div><div id="a3"></div><div id="a4"></div><div id="a5"></div>
+</div>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style',''); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out = []; var failed = 0;
+function row(name, got, want){ var ok = String(got) === String(want); if(!ok) failed++;
+  out.push((ok?'ok   ':'FAIL ')+name+'  got='+JSON.stringify(String(got))+'  want='+JSON.stringify(String(want))); }
+
+// Each entry: property, value, wantSpec, wantComp  (every one measured in the reference engine)
+var CASES = [
+  // ===== attr(): the comma is how a fallback is written =====
+  ['content','attr(data-x, "y")','attr(data-x, "y")','"y"'],
+  ['content','attr(data-x)','attr(data-x)','""'],
+  ['content','attr(data-x, "y" "z")','attr(data-x, "y" "z")','"yz"'],
+  ['content','attr(data-x type(string), "y")','attr(data-x type(string), "y")','"y"'],
+  ['content','attr(data-x type(number), "y")','attr(data-x type(number), "y")','"y"'],
+  ['content','attr(data-x string, "y")','attr(data-x string, "y")','"y"'],
+  ['content','attr(data-x, "y") "b"','attr(data-x, "y") "b"','"yb"'],
+  // a fallback that is not a string is no content: the declaration stands, the property does not
+  ['content','attr(data-x, url)','attr(data-x, url)','normal'],
+  ['content','attr(data-x, 5px)','attr(data-x, 5px)','normal'],
+  ['content','attr(data-x, )','attr(data-x, )','normal'],
+  ['content','attr(data-x, "y" url)','attr(data-x, "y" url)','normal'],
+  ['content','attr(data-x type(string), 5px)','attr(data-x type(string), 5px)','normal'],
+  ['content','attr(data-x type(length), 5px)','attr(data-x type(length), 5px)','normal'],
+  // ... and a value with no name is no attr() at all
+  ['content','attr(, "y")','','normal'],
+  ['content','content(a)','','normal'],
+  ['content','element(#a)','','normal'],
+
+  // ===== filter: a list the printer cannot read was never a value =====
+  ['filter','grayscale','','none'],
+  ['filter','blur(-2px)','','none'],
+  ['filter','grayscale(-1)','','none'],
+  ['filter','foo(2px)','','none'],
+  ['filter','blur(2px), brightness(1.2)','','none'],
+  ['filter','drop-shadow(6px, 6px, green)','','none'],
+  ['filter','drop-shadow(red)','','none'],
+  ['filter','drop-shadow(2px 2px red 3px)','','none'],
+  ['filter','drop-shadow(2px 2px 3px 4px red)','','none'],
+  // the colour is printed in front of the offsets whichever end the page wrote it on
+  ['filter','drop-shadow(2px 2px red)','drop-shadow(red 2px 2px)','drop-shadow(rgb(255, 0, 0) 2px 2px 0px)'],
+  ['filter','drop-shadow(2px 2px 3px red)','drop-shadow(red 2px 2px 3px)','drop-shadow(rgb(255, 0, 0) 2px 2px 3px)'],
+  ['filter','drop-shadow(red 2px 2px)','drop-shadow(red 2px 2px)','drop-shadow(rgb(255, 0, 0) 2px 2px 0px)'],
+  ['filter','drop-shadow( 2px  2px  red )','drop-shadow(red 2px 2px)','drop-shadow(rgb(255, 0, 0) 2px 2px 0px)'],
+  ['filter','drop-shadow(2em 2em red)','drop-shadow(red 2em 2em)','drop-shadow(rgb(255, 0, 0) 32px 32px 0px)'],
+  ['filter','drop-shadow(2px 2px)','drop-shadow(2px 2px)','drop-shadow(rgb(0, 0, 0) 2px 2px 0px)'],
+  ['filter','BRIGHTNESS(2)','brightness(2)','brightness(2)'],
+  ['filter','brightness(2%)','brightness(2%)','brightness(0.02)'],
+  ['filter','invert(25%)','invert(25%)','invert(0.25)'],
+  ['filter','none','none','none'],
+  ['backdrop-filter','grayscale','','none'],
+  ['backdrop-filter','drop-shadow(2px 2px red)','drop-shadow(red 2px 2px)','drop-shadow(rgb(255, 0, 0) 2px 2px 0px)'],
+];
+for (var i=0;i<CASES.length;i++){ var c=CASES[i];
+  row('#'+i+' '+c[0]+'['+c[1]+'] spec', spec(c[0],c[1]), c[2]);
+  row('#'+i+' '+c[0]+'['+c[1]+'] comp', comp(c[0],c[1]), c[3]); }
+
+// The painted markers: a generated box says the fallback when its attribute is missing and the
+// attribute when it is there — and says nothing at all when the fallback is not a string.
+function text(id){ return getComputedStyle(document.getElementById(id), '::before').content; }
+row('P1 a1 attr(data-x, "FB1")', text('a1'), '"FB1"');
+row('P2 a2 attr(data-t, "FB2") with data-t', text('a2'), '"REAL"');
+row('P3 a3 attr(data-x, url)', text('a3'), 'none');
+row('P4 a4 attr(data-x, "F" "B" "4")', text('a4'), '"FB4"');
+row('P5 a5 attr(data-x type(string), "FB5")', text('a5'), '"FB5"');
+
+// The b278 surfaces, re-checked so this round cannot silently undo them.
+row('V0 contain[inline-size] comp', comp('contain','inline-size'), 'inline-size');
+row('V1 contain[size inline-size] refused', spec('contain','size inline-size'), '');
+row('V2 contain-intrinsic-width[55px] comp', comp('contain-intrinsic-width','55px'), '55px');
+row('V3 container[x / inline-size] supports', CSS.supports('(container: x / inline-size)'), true);
+row('V4 container[x / block-size] supports', CSS.supports('(container: x / block-size)'), false);
+row('V5 object-position[top] comp', comp('object-position','top'), '50% 0%');
+row('V6 content[bogus] refused', spec('content','bogus'), '');
+row('V7 content[counter(x, DECIMAL)] spec', spec('content','counter(x, DECIMAL)'), 'counter(x)');
+
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

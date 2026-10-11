@@ -98,17 +98,58 @@ public static class CssFunctionEvaluator
             int at = value.IndexOf("attr(", i, StringComparison.OrdinalIgnoreCase);
             if (at < 0) { sb.Append(value, i, value.Length - i); break; }
             sb.Append(value, i, at - i);
-            int close = value.IndexOf(')', at + 5);
+            int close = MatchingParen(value, at + 4);
             if (close < 0) { sb.Append(value, at, value.Length - at); break; }
             var inner = value[(at + 5)..close];
+            // 'attr( <name> [ <attr-type> ]? , <fallback> )' (CSS Values 5 §2.2.2): the name is the
+            // first word and a type written beside it is nobody's name, while the fallback after the
+            // comma is what a missing attribute becomes (measured: 'attr(data-x type(string), "y")'
+            // on an element with no such attribute reads '"y"').
             int comma = inner.IndexOf(',');
-            var name = (comma < 0 ? inner : inner[..comma]).Trim();
-            var fallback = comma < 0 ? "\"\"" : inner[(comma + 1)..].Trim();
+            var head = (comma < 0 ? inner : inner[..comma]).Trim();
+            var space = head.IndexOfAny(new[] { ' ', '\t' });
+            var name = space > 0 ? head[..space] : head;
             var attribute = context?.GetAttribute(name);
-            sb.Append(string.IsNullOrEmpty(attribute) ? fallback : "\"" + attribute + "\"");
+            if (!string.IsNullOrEmpty(attribute))
+                sb.Append('"').Append(attribute).Append('"');
+            else if (comma >= 0)
+                sb.Append(AttrFallbackText(inner[(comma + 1)..]));
+            else
+                sb.Append("\"\"");
             i = close + 1;
         }
         return sb.ToString();
+    }
+
+    /// <summary>The computed form of an <c>attr()</c> fallback: a run of quoted strings joined into
+    /// the one string they say (measured: 'attr(x, "y" "z")' reads '"yz"').</summary>
+    private static string AttrFallbackText(string fallback)
+    {
+        var words = (fallback ?? string.Empty).Trim()
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0) return "\"\"";
+        var text = new System.Text.StringBuilder();
+        foreach (var word in words)
+        {
+            var quote = word[0];
+            if (word.Length < 2 || quote is not ('"' or '\'') || word[^1] != quote) return "\"\"";
+            text.Append(Acrux.Core.Css.Resolver.CssPropertyApplier.UnescapeCssString(word[1..^1]));
+        }
+        return "\"" + text + "\"";
+    }
+
+    /// <summary>The index of the ')' closing the parenthesis that starts at
+    /// <paramref name="open"/>, or -1. Nested calls — 'attr(x, attr(y))' — belong to their own
+    /// argument list.</summary>
+    private static int MatchingParen(string text, int open)
+    {
+        int depth = 0;
+        for (int j = open; j < text.Length; j++)
+        {
+            if (text[j] == '(') depth++;
+            else if (text[j] == ')' && --depth == 0) return j;
+        }
+        return -1;
     }
 
     /// <summary>True when a calc/min/max/clamp expression in the value contains a

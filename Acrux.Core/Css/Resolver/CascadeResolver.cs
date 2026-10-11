@@ -841,6 +841,8 @@ public class CascadeResolver
 
             // 'content' resolves only what its own value owns; a counter is left as written (see
             // CssFunctionEvaluator.EvaluateForContent).
+            if (name.Equals("content", StringComparison.OrdinalIgnoreCase)
+                && CssPropertyApplier.ContentHasUnusableAttrFallback(value)) continue;
             var evaluated = name.Equals("content", StringComparison.OrdinalIgnoreCase)
                 ? CssFunctionEvaluator.EvaluateForContent(value, element,
                     style.FontSize, RootFontSize(), _viewportWidth, _viewportHeight)

@@ -349,6 +349,12 @@ public class CascadeResolverState
         if (CssFunctionEvaluator.HasUnresolvedVar(text, Element)) return;
         // 'content' keeps its counters as written; the layout that owns the counter scope turns
         // them into text (CssFunctionEvaluator.EvaluateForContent says why).
+        // An attr() whose fallback is not a string is no content at all: the declaration stays in
+        // the sheet and the property computes its initial 'normal' (CSS Values 5 §2.2.2, measured —
+        // 'attr(x, url)', 'attr(x, 5px)' and 'attr(x, )' all read 'normal'). The test reads the text
+        // as written, because the substitution below has already turned the fallback into a string.
+        if (name.Equals("content", StringComparison.OrdinalIgnoreCase)
+            && CssPropertyApplier.ContentHasUnusableAttrFallback(text)) return;
         text = name.Equals("content", StringComparison.OrdinalIgnoreCase)
             ? CssFunctionEvaluator.EvaluateForContent(text, Element,
                 FontSize, RootFontSize, ViewportWidth, ViewportHeight)
