@@ -803,8 +803,16 @@ public static class ComputedValueSerializer
                     _ => style.RubyAlign,
                 };
             case "font-variant": return style.FontVariant;
-            case "font-variation-settings": return style.FontVariationSettings;
-            case "font-feature-settings": return FontFeatureSettingsText(style.FontFeatureSettings);
+            // Both tag lists are said in tag order on this surface, with the last of a repeated tag
+            // winning (CSS Fonts 4 §8.6/§10.1, measured) — the same helper the specified value reads.
+            case "font-variation-settings":
+                return Acrux.Core.Css.CssValueGrammar.CanonicalTagList(
+                    style.FontVariationSettings ?? "normal", integerValues: false, inTagOrder: true)
+                    ?? style.FontVariationSettings ?? "normal";
+            case "font-feature-settings":
+                return Acrux.Core.Css.CssValueGrammar.CanonicalTagList(
+                    style.FontFeatureSettings ?? "normal", integerValues: true, inTagOrder: true)
+                    ?? style.FontFeatureSettings ?? "normal";
             // 'hyphenate-character' is 'auto' or a <string>, and a string is printed as one:
             // the engine keeps the characters, the CSSOM has to show the quotes (CSS Text 4 §5.1).
             case "hyphenate-character": return style.HyphenateCharacter == "auto"
@@ -898,30 +906,6 @@ public static class ComputedValueSerializer
         if (size == null) return hasAuto ? "auto none" : "none";
         return (hasAuto || style.ContentVisibility == ContentVisibilityType.Auto ? "auto " : "")
             + style.ComputedLengthCss(size);
-    }
-
-    /// <summary>'font-feature-settings' the way the reference engine serialises it: items
-    /// sorted by tag and a value of 1 left out (measured: '\"liga\" 0, \"dlig\" 1' reads back
-    /// '\"dlig\", \"liga\" 0'). Text that is not that shape is returned as authored.</summary>
-    private static string FontFeatureSettingsText(string? value)
-    {
-        var text = (value ?? string.Empty).Trim();
-        if (text.Length == 0 || text.Equals("normal", StringComparison.OrdinalIgnoreCase)) return "normal";
-        var items = Css.MaskLayerParser.SplitTopLevel(text, ',');
-        var features = new List<(string Tag, string Number)>(items.Count);
-        foreach (var item in items)
-        {
-            var entry = item.Trim();
-            var space = entry.LastIndexOf(' ');
-            var tag = space < 0 ? entry : entry[..space].Trim();
-            var number = space < 0 ? "1" : entry[(space + 1)..].Trim();
-            if (tag.Length < 2 || tag[0] != '\"' || tag[tag.Length - 1] != '\"') return text;
-            features.Add((tag, number));
-        }
-        features.Sort((a, b) => string.CompareOrdinal(a.Tag, b.Tag));
-        var parts = new List<string>(features.Count);
-        foreach (var (tag, number) in features) parts.Add(number == "1" ? tag : $"{tag} {number}");
-        return string.Join(", ", parts);
     }
 
     /// <summary>A declaration list the way the computed value spells it: every item, separated

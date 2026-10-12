@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify286 — the font-variant family and the words a writing mode takes</title>
+<style>
+body { font: 14px/1.4 monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+/* paint guard: the values that must change what is drawn, not just what is said */
+#pg-v { writing-mode: vertical-rl; width: 120px; height: 40px; background: rgb(255,128,128); }
+#pg-c { font-variant-caps: small-caps; font-size: 20px; }
+#pg-k { font-kerning: none; letter-spacing: 0; font-size: 20px; }
+#pg-o { font-optical-sizing: none; font-size: 20px; }
+#pg-b { direction: rtl; unicode-bidi: bidi-override; width: 200px; font-size: 20px; }
+/* What the guard proves, and what it does not: the vertical box draws a rotated line, 'small-caps'
+ * draws real small capitals, and a 'direction: rtl' line is placed against the right edge. The
+ * override keyword is accepted and painted, but the engine does not yet reverse the visual order of
+ * the text it names — measured, the reference engine puts the first character at x=198 of this box
+ * and the last at x=98, where ours keeps 'abc' at x=98. That gap is #279. */
+</style></head><body>
+<h2>paint guard (a vertical box, small caps, killed kerning, a right-to-left line)</h2>
+<div id="pg-v">VERTICAL</div>
+<p id="pg-c">Small Caps Text</p>
+<p id="pg-k">AVKTY</p>
+<p id="pg-o">Optical</p>
+<p id="pg-b">abc def ghi</p>
+<h2>value rows</h2>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* Measured against the reference engine row by row, on this exact set of values: every value is
+ * written on a fresh div that is appended before the declaration is set, and the row states what
+ * the CSSOM echo answers, what the computed surface answers, and what CSS.supports says.
+ *
+ * A '~' means the column is measured but not asserted here. It is used by three rows only, and
+ * each one is a gap this round wrote down rather than papered over:
+ *   - 'font-size-adjust: from-font' computes the font's own aspect ratio (the reference engine
+ *     answers 0.543 for its default face), which needs the metrics #278 does not read yet;
+ *   - 'writing-mode: sideways-rl' and 'sideways-lr' rotate the whole line box, which the layout
+ *     engine does not do, so its computed value says 'horizontal-tb'. Their echo is asserted.
+ */
+var T = [
+  ['font-variation-settings','normal','normal','normal','1'],
+  ['font-variation-settings','none','','normal','0'],
+  ['font-variation-settings','"wght" 700','"wght" 700','"wght" 700','1'],
+  ['font-variation-settings','"wght" 700, "wdth" 50','"wght" 700, "wdth" 50','"wdth" 50, "wght" 700','1'],
+  ['font-variation-settings','"wght"','','normal','0'],
+  ['font-variation-settings','wght 700','','normal','0'],
+  ['font-variation-settings','"wght" 700 "wdth" 50','','normal','0'],
+  ['font-variation-settings','"wght" 1e3','"wght" 1000','"wght" 1000','1'],
+  ['font-variation-settings','"WGHT" 700','"WGHT" 700','"WGHT" 700','1'],
+  ['font-variation-settings','"wght" 700,','','normal','0'],
+  ['font-variation-settings','"" 700','','normal','0'],
+  ['font-feature-settings','normal','normal','normal','1'],
+  ['font-feature-settings','none','','normal','0'],
+  ['font-feature-settings','"liga" 0','"liga" 0','"liga" 0','1'],
+  ['font-feature-settings','"liga" off','"liga" 0','"liga" 0','1'],
+  ['font-feature-settings','"liga" on','"liga"','"liga"','1'],
+  ['font-feature-settings','"smcp", "swsh" 2','"smcp", "swsh" 2','"smcp", "swsh" 2','1'],
+  ['font-feature-settings','"liga" 1, "liga" 0','"liga", "liga" 0','"liga" 0','1'],
+  ['font-feature-settings','liga 1','','normal','0'],
+  ['font-optical-sizing','auto','auto','auto','1'],
+  ['font-optical-sizing','none','none','none','1'],
+  ['font-optical-sizing','0','','auto','0'],
+  ['font-palette','normal','normal','normal','1'],
+  ['font-palette','light','light','light','1'],
+  ['font-palette','dark','dark','dark','1'],
+  ['font-palette','0','','normal','0'],
+  ['font-palette','1','','normal','0'],
+  ['font-palette','3','','normal','0'],
+  ['font-palette','--my','--my','--my','1'],
+  ['font-palette','normal --my','','normal','0'],
+  ['font-palette','--my normal','','normal','0'],
+  ['font-language-override','normal','normal','normal','1'],
+  ['font-language-override','none','','normal','0'],
+  ['font-language-override','"SRB"','"SRB"','"SRB"','1'],
+  ['font-language-override','SRB','','normal','0'],
+  ['font-language-override','"srb"','"srb"','"srb"','1'],
+  ['font-language-override','"toolongtag"','','normal','0'],
+  ['font-kerning','auto','auto','auto','1'],
+  ['font-kerning','normal','normal','normal','1'],
+  ['font-kerning','none','none','none','1'],
+  ['font-kerning','0','','auto','0'],
+  ['font-size-adjust','none','none','none','1'],
+  ['font-size-adjust','0.5','0.5','0.5','1'],
+  ['font-size-adjust','1','1','1','1'],
+  ['font-size-adjust','from-font','from-font','~','1'],
+  ['font-size-adjust','50%','','none','0'],
+  ['font-size-adjust','-1','','none','0'],
+  ['font-variant-caps','normal','normal','normal','1'],
+  ['font-variant-caps','small-caps','small-caps','small-caps','1'],
+  ['font-variant-caps','all-small-caps','all-small-caps','all-small-caps','1'],
+  ['font-variant-caps','petite-caps','petite-caps','petite-caps','1'],
+  ['font-variant-caps','titling-caps','titling-caps','titling-caps','1'],
+  ['font-variant-caps','unicase','unicase','unicase','1'],
+  ['font-variant-caps','small-caps small-caps','','normal','0'],
+  ['font-variant-east-asian','normal','normal','normal','1'],
+  ['font-variant-east-asian','jis78','jis78','jis78','1'],
+  ['font-variant-east-asian','jis04 simplified full-width','','normal','0'],
+  ['font-variant-east-asian','ruby','ruby','ruby','1'],
+  ['font-variant-east-asian','full-ruby','','normal','0'],
+  ['font-variant-numeric','normal','normal','normal','1'],
+  ['font-variant-numeric','oldstyle-nums lining-nums','','normal','0'],
+  ['font-variant-numeric','slashed-zero ordinal','slashed-zero ordinal','ordinal slashed-zero','1'],
+  ['font-variant-numeric','fraction','','normal','0'],
+  ['font-variant-numeric','diagonal-fractions stacked-fractions','','normal','0'],
+  ['font-variant-ligatures','normal','normal','normal','1'],
+  ['font-variant-ligatures','none','none','none','1'],
+  ['font-variant-ligatures','common-ligatures','common-ligatures','common-ligatures','1'],
+  ['font-variant-ligatures','no-contextual','no-contextual','no-contextual','1'],
+  ['font-variant-ligatures','discretionary-ligatures historical-forms','','normal','0'],
+  ['font-variant-position','normal','normal','normal','1'],
+  ['font-variant-position','sub','sub','sub','1'],
+  ['font-variant-position','super','super','super','1'],
+  ['font-variant-alternates','normal','normal','normal','1'],
+  ['font-variant-alternates','historical-forms','historical-forms','historical-forms','1'],
+  ['font-variant-east-asian','traditional','traditional','traditional','1'],
+  ['text-orientation','mixed','mixed','mixed','1'],
+  ['text-orientation','upright','upright','upright','1'],
+  ['text-orientation','sideways','sideways','sideways','1'],
+  ['text-orientation','vertical','','mixed','0'],
+  ['text-orientation','horizontal','','mixed','0'],
+  ['text-combine-upright','none','none','none','1'],
+  ['text-combine-upright','all','all','all','1'],
+  ['text-combine-upright','digits 2','','none','0'],
+  ['text-combine-upright','digits','','none','0'],
+  ['text-combine-upright','digits 3','','none','0'],
+  ['text-combine-upright','all digits 2','','none','0'],
+  ['unicode-bidi','normal','normal','normal','1'],
+  ['unicode-bidi','embed','embed','embed','1'],
+  ['unicode-bidi','isolate','isolate','isolate','1'],
+  ['unicode-bidi','bidi-override','bidi-override','bidi-override','1'],
+  ['unicode-bidi','plaintext','plaintext','plaintext','1'],
+  ['unicode-bidi','-isolate','','isolate','0'],
+  ['unicode-bidi','-plaintext','','isolate','0'],
+  ['isolation','auto','auto','auto','1'],
+  ['isolation','isolate','isolate','isolate','1'],
+  ['isolation','normal','','auto','0'],
+  ['writing-mode','horizontal-tb','horizontal-tb','horizontal-tb','1'],
+  ['writing-mode','vertical-rl','vertical-rl','vertical-rl','1'],
+  ['writing-mode','vertical-lr','vertical-lr','vertical-lr','1'],
+  ['writing-mode','sideways-rl','sideways-rl','~','1'],
+  ['writing-mode','sideways-lr','sideways-lr','~','1'],
+  ['text-direction','ltr','','','0'],
+  ['direction','ltr','ltr','ltr','1'],
+  ['direction','rtl','rtl','rtl','1'],
+  ['direction','inherit','inherit','ltr','1'],
+  ['font-feature-settings','"swsh" 2, "liga"','"swsh" 2, "liga"','"liga", "swsh" 2','1'],
+  ['font-feature-settings','"liga" 0, "liga" 1','"liga" 0, "liga"','"liga"','1'],
+  ['font-feature-settings','"liga" 2.5','','normal','0'],
+  ['font-feature-settings','"liga" -1','"liga" -1','"liga" -1','1'],
+  ['font-feature-settings','"liga" 0.0','','normal','0'],
+  ['font-feature-settings','"liga" 1.0','','normal','0'],
+  ['font-feature-settings','"LIGA" 0','"LIGA" 0','"LIGA" 0','1'],
+  ['font-feature-settings','"liga" on, "swsh" off','"liga", "swsh" 0','"liga", "swsh" 0','1'],
+  ['font-variation-settings','"wght" 700, "wght" 500','"wght" 700, "wght" 500','"wght" 500','1'],
+  ['font-variation-settings','"wght" 700, "opsz" 12, "ital" 1','"wght" 700, "opsz" 12, "ital" 1','"ital" 1, "opsz" 12, "wght" 700','1'],
+  ['font-variation-settings','"wght" -0.5','"wght" -0.5','"wght" -0.5','1'],
+  ['font-variation-settings','"wght" 700.25','"wght" 700.25','"wght" 700.25','1'],
+  ['font-variation-settings','"wght" 7e2','"wght" 700','"wght" 700','1'],
+  ['font-variation-settings','normal, "wght" 1','','normal','0'],
+  ['font-variant-numeric','stacked-fractions slashed-zero','stacked-fractions slashed-zero','stacked-fractions slashed-zero','1'],
+  ['font-variant-numeric','slashed-zero stacked-fractions','slashed-zero stacked-fractions','stacked-fractions slashed-zero','1'],
+  ['font-variant-numeric','ordinal oldstyle-nums','ordinal oldstyle-nums','oldstyle-nums ordinal','1'],
+  ['font-variant-numeric','oldstyle-nums slashed-zero proportional-nums','oldstyle-nums slashed-zero proportional-nums','oldstyle-nums proportional-nums slashed-zero','1'],
+  ['font-variant-numeric','normal slashed-zero','','normal','0'],
+  ['font-variant-numeric','lining-nums no-common-ligatures','','normal','0'],
+  ['font-variant-east-asian','jis78 traditional','','normal','0'],
+  ['font-variant-east-asian','traditional simplified','','normal','0'],
+  ['font-variant-east-asian','ruby proportional-width','proportional-width ruby','proportional-width ruby','1'],
+  ['font-variant-east-asian','ruby ruby','','normal','0'],
+  ['font-variant-east-asian','no-full-width','','normal','0'],
+  ['font-variant-east-asian','text-emphasis inter-character','','normal','0'],
+  ['font-variant-east-asian','normal','normal','normal','1'],
+  ['font-variant-ligatures','no-common-ligatures discretionary-ligatures','no-common-ligatures discretionary-ligatures','no-common-ligatures discretionary-ligatures','1'],
+  ['font-variant-ligatures','historical-forms contextual','','normal','0'],
+  ['font-variant-ligatures','common-ligatures no-common-ligatures','','normal','0'],
+  ['font-variant-ligatures','none common-ligatures','','normal','0'],
+  ['font-variant-ligatures','leading3','','normal','0'],
+  ['font-variant-caps','small-caps unicase','','normal','0'],
+  ['font-variant-caps','SMALL-CAPS','small-caps','small-caps','1'],
+  ['font-variant-caps','lowercase','','normal','0'],
+  ['font-variant-caps','uppercase','','normal','0'],
+  ['font-variant-position','sub super','','normal','0'],
+  ['font-language-override','"ab"','"ab"','"ab"','1'],
+  ['font-language-override','"abc"','"abc"','"abc"','1'],
+  ['font-language-override','"ab" "cd"','','normal','0'],
+  ['font-palette','--my-thing','--my-thing','--my-thing','1'],
+  ['font-palette','light','light','light','1'],
+  ['font-palette','bogus','','normal','0'],
+  ['font-palette','auto','','normal','0'],
+  ['text-combine-upright','DIGITS 2','','none','0'],
+  ['writing-mode','vertical','','horizontal-tb','0'],
+  ['writing-mode','sideways','','horizontal-tb','0'],
+  ['writing-mode','horizontal-tb vertical-rl','','horizontal-tb','0'],
+  ['font-optical-sizing','AUTO','auto','auto','1'],
+  ['font-kerning','NONE','none','none','1']];
+var box=document.getElementById('box'), pass=0, fail=0, out=[];
+for (var i=0;i<T.length;i++){
+  var prop=T[i][0], value=T[i][1], wantS=T[i][2], wantC=T[i][3], wantSup=T[i][4];
+  var d=document.createElement('div'); box.appendChild(d);
+  d.style.setProperty(prop,value);
+  var gotS=d.style.getPropertyValue(prop), gotC=getComputedStyle(d).getPropertyValue(prop);
+  var gotSup=CSS.supports(prop,value)?'1':'0', bad=[];
+  if (wantS!=='~' && gotS!==wantS) bad.push('S got['+gotS+'] want['+wantS+']');
+  if (wantC!=='~' && gotC!==wantC) bad.push('C got['+gotC+'] want['+wantC+']');
+  if (gotSup!==wantSup) bad.push('sup got['+gotSup+'] want['+wantSup+']');
+  if (bad.length){ fail++; var line='FAIL '+i+' '+prop+': '+value+' | '+bad.join(' | ');
+    out.push(line); console.log(line); } else pass++;
+}
+var summary='b286 '+pass+'/'+(pass+fail)+' rows pass'+(fail?' — '+fail+' fail':'');
+out.push(summary); document.getElementById('report').textContent=out.join('\n'); console.log(summary);
+</script></body></html>

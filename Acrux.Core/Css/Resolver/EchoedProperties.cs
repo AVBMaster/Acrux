@@ -190,6 +190,13 @@ public static class EchoedProperties
                 Normalize = NormalizeScrollMarkerGroup,
                 ComputedText = ScrollMarkerGroupComputed },
             new() { Name = "font-palette", Initial = "normal", Normalize = NormalizeFontPalette },
+            // CSS Fonts 4 §8.7.4, read against the reference engine: of the five alternation
+            // functions it takes 'styleset()' and the bare 'historical-forms' only — 'ornaments',
+            // 'annotation(2)' and 'character-variant(1)' are each dropped. The two parts it does
+            // take sit beside each other space-separated ('historical-forms styleset(a)'), and the
+            // names inside the function are the comma list.
+            new() { Name = "font-variant-alternates", Initial = "normal",
+                Normalize = NormalizeFontVariantAlternates },
             new() { Name = "position-try-fallbacks", Initial = "none",
                 Normalize = NormalizePositionTryFallbacks },
             // CSS Anchor Positioning §3.2/§4.5/§4.6: an anchor name is 'none' or ONE
@@ -210,7 +217,8 @@ public static class EchoedProperties
             new() { Name = "font-variant-east-asian", Initial = "normal", Inherited = true,
                 Normalize = NormalizeEastAsian },
             new() { Name = "font-variant-numeric", Initial = "normal", Inherited = true,
-                Normalize = NormalizeFontVariantNumeric },
+                Normalize = NormalizeFontVariantNumeric,
+                ComputedText = static (text, _) => NumericVariantOrder(text) },
             new() { Name = "font-variant-ligatures", Initial = "normal", Inherited = true,
                 Normalize = NormalizeLigatures },
 
@@ -423,6 +431,40 @@ public static class EchoedProperties
         return null;
     }
 
+    /// <summary>'font-variant-alternates' as far as the reference engine implements it: 'normal', or
+    /// the space-separated pair of 'historical-forms' and 'styleset(<name>#)' (measured: 'ornaments',
+    /// 'annotation(2)' and 'character-variant(1)' are each dropped, 'styleset(SS01)' and
+    /// 'historical-forms styleset(a)' both stand, and an empty 'styleset()' is no value).</summary>
+    private static string? NormalizeFontVariantAlternates(string value)
+    {
+        var text = value.Trim();
+        if (text.Length == 0) return null;
+        if (text.Equals("normal", StringComparison.OrdinalIgnoreCase)) return "normal";
+        bool sawHistorical = false, sawStyleset = false;
+        var kept = new List<string>();
+        foreach (var raw in Acrux.Core.Css.MaskLayerParser.SplitTopLevel(text, ' '))
+        {
+            var item = raw.Trim();
+            if (item.Equals("historical-forms", StringComparison.OrdinalIgnoreCase))
+            {
+                if (sawHistorical) return null;
+                sawHistorical = true;
+                kept.Add("historical-forms");
+                continue;
+            }
+            int open = item.IndexOf('(');
+            if (open <= 0 || !item.EndsWith(")", StringComparison.Ordinal)) return null;
+            if (!item[..open].Equals("styleset", StringComparison.OrdinalIgnoreCase)) return null;
+            if (sawStyleset) return null;
+            var inner = item[(open + 1)..^1].Trim();
+            var names = inner.Split(',');
+            if (inner.Length == 0 || names.Any(name => name.Trim().Length == 0)) return null;
+            sawStyleset = true;
+            kept.Add("styleset(" + string.Join(", ", names.Select(name => name.Trim())) + ")");
+        }
+        return kept.Count == 0 ? null : string.Join(" ", kept);
+    }
+
     /// <summary>'anchor-scope' is 'none', 'all', or a comma list of <dashed-ident>s (CSS Anchor
     /// Positioning §3.3); 'position-anchor' is 'auto' or one dashed name (§4.3).</summary>
     private static string? NormalizeAnchorScope(string value)
@@ -614,7 +656,12 @@ public static class EchoedProperties
     {
         var trimmed = text.Trim();
         if (trimmed.Equals("normal", StringComparison.OrdinalIgnoreCase)) return "normal";
-        return IsQuotedString(trimmed) ? "\"" + Unquote(trimmed) + "\"" : null;
+        if (!IsQuotedString(trimmed)) return null;
+        // The tag inside the quotes is a language subtag: the reference engine takes up to four
+        // characters and no more (measured: '"ab"', '"abc"' and '"abcd"' stand while '"abcde"' and
+        // '"abcdefghijkl"' are each dropped — the spec's three is older than the engine).
+        var inner = Unquote(trimmed);
+        return inner.Length is >= 1 and <= 4 ? "\"" + inner + "\"" : null;
     }
 
     /// <summary>CSS Fonts 4 §9.3: one value from each of three groups, and <c>normal</c> says it
@@ -693,6 +740,34 @@ public static class EchoedProperties
         _ => w,
     };
 
+    /// <summary>The computed spelling of <c>font-variant-numeric</c>: the same keywords, but said in
+    /// the order the grammar lists its groups rather than the order the page wrote them (measured:
+    /// 'slashed-zero ordinal' computes 'ordinal slashed-zero', and
+    /// 'diagonal-fractions slashed-zero ordinal proportional-nums oldstyle-nums' computes
+    /// 'oldstyle-nums proportional-nums diagonal-fractions ordinal slashed-zero'). The specified
+    /// value keeps the page's own order, which is why this is a computed hook and not the
+    /// normalizer.</summary>
+    private static string NumericVariantOrder(string text)
+    {
+        var words = Words(text);
+        if (words.Length < 2) return string.Join(" ", words);
+        return string.Join(" ", words
+            .Select((word, index) => (word, index))
+            .OrderBy(item => NumericRank(item.word))
+            .ThenBy(item => item.index)
+            .Select(item => item.word));
+    }
+
+    private static int NumericRank(string word) => word switch
+    {
+        "oldstyle-nums" or "lining-nums" => 0,
+        "proportional-nums" or "tabular-nums" => 1,
+        "diagonal-fractions" or "stacked-fractions" => 2,
+        "ordinal" => 3,
+        "slashed-zero" => 4,
+        _ => 5,
+    };
+
     private static bool IsFactor(string w)
     {
         int slash = w.IndexOf('/');
@@ -707,6 +782,9 @@ public static class EchoedProperties
     {
         var words = Words(text);
         if (words.Length == 0) return null;
+        // 'none' says the whole value: no ligature of any kind (measured: it stands and reads back
+        // 'none', while 'none common-ligatures' is dropped).
+        if (words.Length == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var outWords = new List<string>();
         foreach (var raw in words)

@@ -543,6 +543,12 @@ public enum CssPropertyId
     // reads it, echoes it and inherits nothing from it; this engine has no ::scroll-marker-group box
     // to place, so it lives in the echo table like the shape trio did before it had a consumer.
     ScrollMarkerGroup,
+    // CSS Fonts 4 §8.7.4. The reference engine declares it, reads it and echoes it; no text layout
+    // step consumes it yet. It needs an id for the same reason the trio above did — the cascade
+    // dispatches by id, and without one a declaration is dropped before it can reach the text the
+    // computed surface prints (measured: 'font-variant-alternates: historical-forms' echoes AND
+    // computes itself, where an unknown name only echoes).
+    FontVariantAlternates,
     MaxProperties
 }
 

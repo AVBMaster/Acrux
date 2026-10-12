@@ -1953,22 +1953,14 @@ public static class CssValueText
     /// with its default is printed without it: <c>"liga" 1</c> reads back <c>"liga"</c> while
     /// <c>"liga" 0</c> and <c>"liga" 2</c> keep the number (measured, in a style rule and in an
     /// '@font-face' alike).</summary>
+    /// <summary>Say <c>font-feature-settings</c> the way the reference engine prints the value the
+    /// page wrote: a feature's default value is not said at all, so 'on' and '1' both leave the
+    /// number out and 'off' becomes the '0' it means (measured: '"liga" on' and '"liga" 1' both read
+    /// '"liga"', '"liga" off' reads '"liga" 0'). The items keep the order the page used; the computed
+    /// surface reads the same helper with its own ordering, so the two cannot disagree.</summary>
     private static string ElideDefaultFeatureValues(string text)
-    {
-        var items = SplitTopLevelCommas(text);
-        for (int i = 0; i < items.Count; i++)
-        {
-            var item = items[i].Trim();
-            items[i] = item;
-            if (item.Length == 0) continue;
-            // The tag is the string and the number is the only thing that may follow it.
-            int space = item.LastIndexOf(' ');
-            if (space <= 0 || item[(space + 1)..] != "1") continue;
-            var tag = item[..space].TrimEnd();
-            if (tag.Length >= 2 && tag[0] is '"' or '\'' && tag[^1] == tag[0]) items[i] = tag;
-        }
-        return string.Join(", ", items);
-    }
+        => Acrux.Core.Css.CssValueGrammar.CanonicalTagList(text,
+            integerValues: true, inTagOrder: false) ?? text;
 
     /// <summary>Split a list at its commas, ignoring the ones inside a quoted string or a
     /// parenthesis.</summary>

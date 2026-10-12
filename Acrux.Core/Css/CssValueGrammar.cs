@@ -467,6 +467,132 @@ public static class CssValueGrammar
         return parts.Count == 1 && IsOneOf(parts[0], words);
     }
 
+    /// <summary>The two tag-list properties, <c>font-variation-settings</c> and
+    /// <c>font-feature-settings</c> (CSS Fonts 4 §8.6, §10.1). Each is <c>normal</c> or a comma list
+    /// of a quoted tag with an optional value. The tag is <b>exactly four characters</b> — a three-
+    /// or a five-character name is no tag at all — and an unquoted one is not a tag either
+    /// (measured: '"abc" 1', '"abcde" 1' and 'liga 1' are each dropped while '"wght" 700' stands).
+    /// A feature's value is an integer or the word <c>on</c>/<c>off</c> and may be left out; a
+    /// variation's is required and may be any number (measured: '"liga" 2.5', '"liga" 0.0',
+    /// '"liga" 1.0' and '"wght" 700,' are dropped while '"wght" 700.25' stands).</summary>
+    private static bool IsTagSettingList(string text, bool integerValues)
+    {
+        var words = SplitComponents(text);
+        if (words.Count == 1 && words[0].Equals("normal", StringComparison.OrdinalIgnoreCase)) return true;
+        foreach (var item in SplitTagListItems(text))
+        {
+            var parts = SplitComponents(item);
+            if (parts.Count is 0 or > 2) return false;
+            if (!IsTagWord(parts[0])) return false;
+            if (parts.Count == 1)
+            {
+                // A bare tag is a feature switched on; a variation has nothing to vary and is no
+                // value at all (measured: '"smcp", "swsh" 2' stands while '"wght"' is dropped).
+                if (!integerValues) return false;
+                continue;
+            }
+            var value = parts[1];
+            if (integerValues && (value.Equals("on", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("off", StringComparison.OrdinalIgnoreCase))) continue;
+            if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                || double.IsNaN(number) || double.IsInfinity(number)) return false;
+            // A feature index is written as an integer, not merely valued as one: the reference
+            // engine drops '"liga" 1.0' and '"liga" 0.0' while '"liga" 1' stands (measured).
+            if (integerValues && !IsIntegerText(value)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>An integer as a page writes one: an optional sign and digits, with no decimal point
+    /// and no exponent. <c>1.0</c> is the same number as <c>1</c> and not the same value.</summary>
+    private static bool IsIntegerText(string text)
+    {
+        if (text.Length == 0) return false;
+        int start = text[0] == '-' || text[0] == '+' ? 1 : 0;
+        if (start == text.Length) return false;
+        for (int i = start; i < text.Length; i++)
+            if (!char.IsAsciiDigit(text[i])) return false;
+        return true;
+    }
+
+    /// <summary>The items of a tag list, split at the commas that are not inside a function. An
+    /// empty item is kept, because a trailing comma is exactly what makes the reference engine drop
+    /// the declaration (measured: '"wght" 700,' is no value).</summary>
+    private static List<string> SplitTagListItems(string text)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            else if (c == ',' && depth == 0) { parts.Add(text[start..i]); start = i + 1; }
+        }
+        parts.Add(text[start..]);
+        return parts;
+    }
+
+    /// <summary>A tag: four characters between a matched pair of quotes, either kind.</summary>
+    private static bool IsTagWord(string word)
+    {
+        if (word.Length != 6) return false;
+        var quote = word[0];
+        return (quote == '"' || quote == '\'') && word[^1] == quote;
+    }
+
+    /// <summary>Say one of the two tag lists. A feature's <c>on</c> and its <c>1</c> are the same
+    /// thing, and the reference engine leaves the number out for both; <c>off</c> is <c>0</c>, which
+    /// it says, and a single-quoted tag is printed with double quotes (measured: '"liga" on' reads
+    /// '"liga"', '"liga" 1' reads '"liga"', '"liga" off' reads '"liga" 0' and "'SIN' 1" reads
+    /// '"SIN" 1'). |inTagOrder| is the difference between the two surfaces: the computed value puts
+    /// the items in tag order and lets the last of a repeated tag win, while the specified value
+    /// keeps the order the page wrote (measured: '"swsh" 2, "liga"' echoes itself and computes
+    /// '"liga", "swsh" 2'; '"liga" 0, "liga" 1' computes the single '"liga"').</summary>
+    public static string? CanonicalTagList(string text, bool integerValues, bool inTagOrder)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0) return null;
+        if (trimmed.Equals("normal", StringComparison.OrdinalIgnoreCase)) return "normal";
+        var items = SplitTagListItems(trimmed);
+        var entries = new List<(string Tag, string? Value)>(items.Count);
+        foreach (var item in items)
+        {
+            var parts = SplitComponents(item);
+            if (parts.Count is < 1 or > 2) return null;
+            if (!IsTagWord(parts[0])) return null;
+            var tag = "\"" + parts[0][1..^1] + "\"";
+            string? value;
+            if (parts.Count == 1) value = null;
+            else if (!integerValues)
+            {
+                // A variation keeps every number it is given, its 1 included (measured:
+                // '"wght" 700, "opsz" 12, "ital" 1' computes '"ital" 1, "opsz" 12, "wght" 700').
+                if (!double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture,
+                        out var variant) || double.IsNaN(variant) || double.IsInfinity(variant)) return null;
+                value = CssMathValue.Number(variant);
+            }
+            else if (parts[1].Equals("on", StringComparison.OrdinalIgnoreCase)) value = null;
+            else if (parts[1].Equals("off", StringComparison.OrdinalIgnoreCase)) value = "0";
+            else
+            {
+                if (!double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture,
+                        out var feature) || double.IsNaN(feature) || double.IsInfinity(feature)) return null;
+                value = feature == 1 ? null : CssMathValue.Number(feature);
+            }
+            if (inTagOrder)
+            {
+                int repeat = entries.FindIndex(existing => existing.Tag == tag);
+                if (repeat >= 0) entries[repeat] = (tag, value);
+                else entries.Add((tag, value));
+            }
+            else entries.Add((tag, value));
+        }
+        if (inTagOrder) entries.Sort((a, b) => string.CompareOrdinal(a.Tag, b.Tag));
+        return string.Join(", ", entries.Select(entry =>
+            entry.Value == null ? entry.Tag : entry.Tag + " " + entry.Value));
+    }
+
     private static bool IsOneWordList(string text, params string[] words)
     {
         foreach (var part in SplitComponents(text))
@@ -718,6 +844,30 @@ public static class CssValueGrammar
                     System.Globalization.CultureInfo.InvariantCulture, out var ratio)
                 && !double.IsNaN(ratio) && ratio >= 0;
         },
+        // CSS Fonts 4 §8.6 and §10.1: a list of four-character tags, each with its value. The
+        // reference engine refuses a three- or five-character tag, an unquoted one, a decimal
+        // feature index and a 'normal' written beside a tag (measured, case by case). The
+        // 'font-variant-*' sets, 'font-palette' and 'font-language-override' are read by the
+        // echo-only table instead, which is their one origin.
+        CssPropertyId.FontVariationSettings => static text => IsTagSettingList(text, integerValues: false),
+        CssPropertyId.FontFeatureSettings => static text => IsTagSettingList(text, integerValues: true),
+        // CSS Fonts 4 §8.7.1 and §8.5: one keyword each, and a second is no value
+        // (measured: 'small-caps small-caps', 'petite-caps unicase' and 'sub super' are dropped).
+        CssPropertyId.FontVariantCaps => static text => IsOneWordOnly(text,
+            "normal", "small-caps", "all-small-caps", "petite-caps", "all-petite-caps",
+            "unicase", "titling-caps"),
+        CssPropertyId.FontOpticalSizing => static text => IsOneWordOnly(text, "auto", "none"),
+        CssPropertyId.FontKerning => static text => IsOneWordOnly(text, "auto", "normal", "none"),
+        // CSS Writing Modes 3 §3.2/§4.1: the axis keywords, and nothing else. 'vertical' and
+        // 'sideways' are not values of 'writing-mode', and 'sideways-lr vertical-rl' is two of them
+        // (each measured: dropped, with the property left at its initial).
+        CssPropertyId.WritingMode => static text => IsOneWordOnly(text,
+            "horizontal-tb", "vertical-rl", "vertical-lr", "sideways-rl", "sideways-lr"),
+        // CSS Text 4 §2.1: the five keywords. The legacy '-isolate' and '-plaintext' spellings are
+        // not values the reference engine takes any more (measured: both read back empty).
+        CssPropertyId.UnicodeBidi => static text => IsOneWordOnly(text,
+            "normal", "embed", "isolate", "bidi-override", "plaintext"),
+        CssPropertyId.Isolation => static text => IsOneWordOnly(text, "auto", "isolate"),
         CssPropertyId.Display => static text => CssPropertyApplier.TryParseDisplay(text, out _, out _),
         CssPropertyId.Float => static text => CssFloatKeywords.TryParseFloat(text, out _),
         CssPropertyId.Clear => static text => CssFloatKeywords.TryParseClear(text, out _),

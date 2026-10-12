@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b286 probe 1 — the font family's advanced members, and the writing-direction keywords</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 4px; }</style></head><body>
+<pre id="report"></pre>
+<script>
+// One fresh element per case, appended before the declaration is written (b283/b284/b285 rule).
+var CASES = [
+  // font-variation-settings / font-feature-settings: a quoted tag and a number, or normal/none.
+  ['font-variation-settings','normal'], ['font-variation-settings','none'],
+  ['font-variation-settings','"wght" 700'], ['font-variation-settings','"wght" 700, "wdth" 50'],
+  ['font-variation-settings','"wght"'], ['font-variation-settings','wght 700'],
+  ['font-variation-settings','"wght" 700 "wdth" 50'],
+  ['font-variation-settings','"wght" 1e3'], ['font-variation-settings','"WGHT" 700'],
+  ['font-variation-settings','"wght" 700,'], ['font-variation-settings','"" 700'],
+  ['font-feature-settings','normal'], ['font-feature-settings','none'],
+  ['font-feature-settings','"liga" 0'], ['font-feature-settings','"liga" off'],
+  ['font-feature-settings','"liga" on'], ['font-feature-settings','"smcp", "swsh" 2'],
+  ['font-feature-settings','"liga" 1, "liga" 0'], ['font-feature-settings','liga 1'],
+  ['font-optical-sizing','auto'], ['font-optical-sizing','none'], ['font-optical-sizing','0'],
+  ['font-palette','normal'], ['font-palette','light'], ['font-palette','dark'],
+  ['font-palette','0'], ['font-palette','1'], ['font-palette','3'],
+  ['font-palette','--my'], ['font-palette','normal --my'], ['font-palette','--my normal'],
+  ['font-language-override','normal'], ['font-language-override','none'],
+  ['font-language-override','"SRB"'], ['font-language-override','SRB'],
+  ['font-language-override','"srb"'], ['font-language-override','"toolongtag"'],
+  ['font-kerning','auto'], ['font-kerning','normal'], ['font-kerning','none'], ['font-kerning','0'],
+  ['font-size-adjust','none'], ['font-size-adjust','0.5'], ['font-size-adjust','1'],
+  ['font-size-adjust','from-font'], ['font-size-adjust','50%'], ['font-size-adjust','-1'],
+  ['font-variant-caps','normal'], ['font-variant-caps','small-caps'],
+  ['font-variant-caps','all-small-caps'], ['font-variant-caps','petite-caps'],
+  ['font-variant-caps','titling-caps'], ['font-variant-caps','unicase'],
+  ['font-variant-caps','small-caps small-caps'],
+  ['font-variant-east-asian','normal'], ['font-variant-east-asian','jis78'],
+  ['font-variant-east-asian','jis04 simplified full-width'],
+  ['font-variant-east-asian','ruby'], ['font-variant-east-asian','full-ruby'],
+  ['font-variant-numeric','normal'], ['font-variant-numeric','oldstyle-nums lining-nums'],
+  ['font-variant-numeric','slashed-zero ordinal'],
+  ['font-variant-numeric','fraction'], ['font-variant-numeric','diagonal-fractions stacked-fractions'],
+  ['font-variant-ligatures','normal'], ['font-variant-ligatures','none'],
+  ['font-variant-ligatures','common-ligatures'], ['font-variant-ligatures','no-contextual'],
+  ['font-variant-ligatures','discretionary-ligatures historical-forms'],
+  ['font-variant-position','normal'], ['font-variant-position','sub'], ['font-variant-position','super'],
+  ['font-variant-alternates','normal'], ['font-variant-alternates','historical-forms'],
+  ['font-variant-east-asian','traditional'],
+  // The writing-mode family.
+  ['text-orientation','mixed'], ['text-orientation','upright'], ['text-orientation','sideways'],
+  ['text-orientation','vertical'], ['text-orientation','horizontal'],
+  ['text-combine-upright','none'], ['text-combine-upright','all'],
+  ['text-combine-upright','digits 2'], ['text-combine-upright','digits'],
+  ['text-combine-upright','digits 3'], ['text-combine-upright','all digits 2'],
+  ['unicode-bidi','normal'], ['unicode-bidi','embed'], ['unicode-bidi','isolate'],
+  ['unicode-bidi','bidi-override'], ['unicode-bidi','plaintext'], ['unicode-bidi','-isolate'],
+  ['unicode-bidi','-plaintext'], ['isolation','auto'], ['isolation','isolate'], ['isolation','normal'],
+  ['writing-mode','horizontal-tb'], ['writing-mode','vertical-rl'], ['writing-mode','vertical-lr'],
+  ['writing-mode','sideways-rl'], ['writing-mode','sideways-lr'],
+  ['text-direction','ltr'], ['direction','ltr'], ['direction','rtl'], ['direction','inherit']
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var prop = CASES[i][0], value = CASES[i][1];
+  var d = document.createElement('div');
+  document.body.appendChild(d);
+  d.style.setProperty(prop, value);
+  out.push(i + '|' + prop + '|' + value + '|' + d.style.getPropertyValue(prop)
+           + '|' + getComputedStyle(d).getPropertyValue(prop)
+           + '|sup=' + (CSS.supports(prop, value) ? 1 : 0));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

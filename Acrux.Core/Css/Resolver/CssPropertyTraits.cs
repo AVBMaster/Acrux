@@ -289,7 +289,7 @@ public static class CssPropertyTraits
     /// font and text properties of CSS Fonts 4 and CSS Text 4.</summary>
     private static readonly HashSet<string> ReferenceDeclared = new(StringComparer.Ordinal)
     {
-        "baseline-source", "font-variant-alternates",
+        "baseline-source",
         "font-variant-emoji", "overflow-block", "overflow-inline", "paint-order",
         "x", "y",
     };

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b286 probe 2 — what a list of tags and a set of keywords print as</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 4px; }</style></head><body>
+<pre id="report"></pre>
+<script>
+// One fresh element per case, appended before the declaration is written.
+var CASES = [
+  // Does the computed list sort, and what does a duplicate tag do?
+  ['font-feature-settings','"swsh" 2, "liga"'],
+  ['font-feature-settings','"liga" 0, "liga" 1'],
+  ['font-feature-settings','"liga" 2.5'],
+  ['font-feature-settings','"liga" -1'],
+  ['font-feature-settings','"liga" 0.0'],
+  ['font-feature-settings','"liga" 1.0'],
+  ['font-feature-settings','"LIGA" 0'],
+  ['font-feature-settings','"liga" on, "swsh" off'],
+  ['font-variation-settings','"wght" 700, "wght" 500'],
+  ['font-variation-settings','"wght" 700, "opsz" 12, "ital" 1'],
+  ['font-variation-settings','"wght" -0.5'],
+  ['font-variation-settings','"wght" 700.25'],
+  ['font-variation-settings','"wght" 7e2'],
+  ['font-variation-settings','normal, "wght" 1'],
+  ['font-variant-numeric','stacked-fractions slashed-zero'],
+  ['font-variant-numeric','slashed-zero stacked-fractions'],
+  ['font-variant-numeric','ordinal oldstyle-nums'],
+  ['font-variant-numeric','oldstyle-nums slashed-zero proportional-nums'],
+  ['font-variant-numeric','normal slashed-zero'],
+  ['font-variant-numeric','lining-nums no-common-ligatures'],
+  ['font-variant-east-asian','jis78 traditional'],
+  ['font-variant-east-asian','traditional simplified'],
+  ['font-variant-east-asian','ruby proportional-width'],
+  ['font-variant-east-asian','ruby ruby'],
+  ['font-variant-east-asian','no-full-width'],
+  ['font-variant-east-asian','text-emphasis inter-character'],
+  ['font-variant-east-asian','normal'],
+  ['font-variant-ligatures','no-common-ligatures discretionary-ligatures'],
+  ['font-variant-ligatures','historical-forms contextual'],
+  ['font-variant-ligatures','common-ligatures no-common-ligatures'],
+  ['font-variant-ligatures','none common-ligatures'],
+  ['font-variant-ligatures','leading3'],
+  ['font-variant-caps','small-caps unicase'],
+  ['font-variant-caps','SMALL-CAPS'],
+  ['font-variant-caps','lowercase'],
+  ['font-variant-caps','uppercase'],
+  ['font-variant-position','sub super'],
+  ['font-language-override','"ab"'],
+  ['font-language-override','"abc"'],
+  ['font-language-override','"ab" "cd"'],
+  ['font-palette','--my-thing'],
+  ['font-palette','light'],
+  ['font-palette','bogus'],
+  ['font-palette','auto'],
+  ['text-combine-upright','DIGITS 2'],
+  ['writing-mode','vertical'],
+  ['writing-mode','sideways'],
+  ['writing-mode','horizontal-tb vertical-rl'],
+  ['font-optical-sizing','AUTO'],
+  ['font-kerning','NONE']
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var prop = CASES[i][0], value = CASES[i][1];
+  var d = document.createElement('div');
+  document.body.appendChild(d);
+  d.style.setProperty(prop, value);
+  out.push(i + '|' + prop + '|' + value + '|' + d.style.getPropertyValue(prop)
+           + '|' + getComputedStyle(d).getPropertyValue(prop)
+           + '|sup=' + (CSS.supports(prop, value) ? 1 : 0));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>
