@@ -1586,8 +1586,11 @@ public static class ComputedValueSerializer
             ? style.Color
             : ColorParser.Parse(style.TextEmphasisColor);
 
+    /// <summary>A grid line pair as the engine prints it: the trailing <c>auto</c> is what an
+    /// omitted end line means, so 'grid-column: span 2' reads 'span 2' and only a second line that
+    /// says something of its own is printed (measured; '1 / 3' keeps both).</summary>
     private static string GridLine(string start, string end) =>
-        start == "auto" && end == "auto" ? "auto" : $"{start} / {end}";
+        end == "auto" ? start : (start == "auto" && end == "auto" ? "auto" : $"{start} / {end}");
 
     private static string GridAreaText(ComputedStyle style)
     {
@@ -1601,6 +1604,10 @@ public static class ComputedValueSerializer
         int last = lines.Length - 1;
         while (last > 0 && lines[last] == "auto") last--;
         if (last == 0 && lines[0] == "auto") return "auto";
+        // A named area is ONE word, not four: 'grid-area: main' puts the name on all four lines and
+        // reads back 'main', while four equal NUMBERS keep the list ('1 / 1 / 1 / 1' — both measured).
+        if (lines[0] == lines[1] && lines[1] == lines[2] && lines[2] == lines[3]
+            && Acrux.Core.Css.ShorthandExpander.NamesAnArea(lines[0])) return lines[0];
         return string.Join(" / ", lines, 0, last + 1);
     }
 

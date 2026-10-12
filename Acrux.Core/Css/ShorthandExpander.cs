@@ -1533,16 +1533,21 @@ public static class ShorthandExpander
 
     private static void ExpandGridArea(Dictionary<string, string> result, string value)
     {
-        // Spec: grid-area: <row-start> / <column-start> / <row-end> / <column-end>.
-        // A single token names all four lines (the common named-area form).
+        // Spec: grid-area: <grid-line> [ / <grid-line> ]{0,3} (CSS Grid 1 §8.5), so ONE value is
+        // the row-start alone. One exception, measured: a single <custom-ident> — 'main', 'bogus',
+        // 'none' — is the named-area form and fills all four lines, while a single integer ('2') or
+        // a span ('span 2') sets only the row-start and leaves the other three 'auto'.
         var parts = value.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         switch (parts.Length)
         {
             case 1:
                 result["grid-row-start"] = parts[0];
-                result["grid-column-start"] = parts[0];
-                result["grid-row-end"] = parts[0];
-                result["grid-column-end"] = parts[0];
+                if (NamesAnArea(parts[0]))
+                {
+                    result["grid-column-start"] = parts[0];
+                    result["grid-row-end"] = parts[0];
+                    result["grid-column-end"] = parts[0];
+                }
                 break;
             case 2:
                 result["grid-row"] = parts[0];
@@ -1560,6 +1565,23 @@ public static class ShorthandExpander
                 result["grid-column-end"] = parts[3];
                 break;
         }
+    }
+
+    /// <summary>Whether one &lt;grid-line&gt; is a line NAME rather than a position: 'auto', an
+    /// integer and 'span N' are positions, and everything else a &lt;custom-ident&gt; allows is a
+    /// name the named-area form is written with (CSS Grid 1 §8.5, measured: 'main', 'bogus' and
+    /// 'none' each fill all four lines while '2' and 'span 2' fill only the row-start).</summary>
+    internal static bool NamesAnArea(string text)
+    {
+        var word = text.Trim();
+        if (word.Length == 0) return false;
+        if (word.Equals("auto", StringComparison.OrdinalIgnoreCase)) return false;
+        if (word.StartsWith("span", StringComparison.OrdinalIgnoreCase)) return false;
+        int i = word[0] is '+' or '-' ? 1 : 0;
+        bool digits = false;
+        while (i < word.Length && char.IsAsciiDigit(word[i])) { digits = true; i++; }
+        if (digits && i == word.Length) return false;
+        return true;
     }
 
     private static void ExpandGridLine(Dictionary<string, string> result, string prop, string value)

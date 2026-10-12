@@ -492,6 +492,17 @@ public enum CssPropertyId
     // without one FromString answers Invalid and the value is dropped before it can reach the field
     // the computed surface prints (measured: 'caret-shape: bar' computed 'auto' until this existed).
     CaretShape,
+    // These four are read, validated, stored and echoed but not consumed: 'speak' belongs to a
+    // screen reader this engine has no channel to, and the shape trio is CSS Shapes 1 §4/§11, whose
+    // float exclusion the line breaker does not carve out yet. They need ids for the same reason
+    // 'caret-shape' did — without one FromString answers Invalid, the cascade drops the declaration
+    // before it reaches the applier's echo branch, and the computed surface prints the initial for
+    // a value the page clearly wrote (measured: 'shape-outside: circle(50%)' computed 'none' and
+    // 'speak: spell-out' computed 'normal').
+    Speak,
+    ShapeOutside,
+    ShapeMargin,
+    ShapeImageThreshold,
     MaxProperties
 }
 

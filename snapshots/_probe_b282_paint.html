@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b282 probe — painted colour accuracy</title>
+<style>
+body { margin: 0; padding: 0; background: rgb(255,255,255); }
+.s { width: 20px; height: 20px; }
+</style></head><body>
+<div class="s" style="background: lab(50 20 30)"></div>
+<div class="s" style="background: lch(50% 30 120deg)"></div>
+<div class="s" style="background: lch(50 30 none)"></div>
+<div class="s" style="background: oklab(0.5 0.1 0.1)"></div>
+<div class="s" style="background: oklch(0.5 0.2 120)"></div>
+<div class="s" style="background: color(srgb-linear 0.5 0 0)"></div>
+<div class="s" style="background: color(xyz 0.1 0.2 0.3)"></div>
+<div class="s" style="background: color(display-p3 1 0 0)"></div>
+<div class="s" style="background: hwb(120 20% 30%)"></div>
+<div class="s" style="background: lab(30% -10 40)"></div>
+</body></html>

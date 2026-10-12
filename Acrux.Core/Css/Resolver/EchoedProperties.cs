@@ -78,6 +78,26 @@ public static class EchoedProperties
             new() { Name = "text-combine-upright", Initial = "none",
                 Normalize = Single("none", "all") },
 
+            // ===== CSS Aural 2 §4.2, measured word by word: the reference engine keeps 'none',
+            // 'normal' and the four common listening manuals, and refuses every other word it has
+            // ever defined — 'auto', 'never', 'once', 'always', 'off', 'muted', 'highlight' and
+            // 'point' all leave the property at its initial 'normal'.
+            new() { Name = "speak", Initial = "normal",
+                Normalize = Single("none", "normal", "spell-out", "digits",
+                    "literal-punctuation", "no-punctuation") },
+
+            // ===== CSS Shapes 1 §4/§11. 'shape-outside' is the clip-path shape grammar with the
+            // MARGIN box as its default, so a box is printed only when it is not 'margin-box' and
+            // always behind the shape (measured: 'border-box circle(50%)' reads
+            // 'circle(50%) border-box'). 'shape-margin' is a length that resolves against the
+            // element's own font at computed-value time ('2em' → '32px'), and 'shape-image-threshold'
+            // is a number that a percentage spells as its fraction ('25%' → '0.25').
+            new() { Name = "shape-outside", Initial = "none", Normalize = NormalizeShapeOutside },
+            new() { Name = "shape-margin", Initial = "0px", Normalize = NormalizeShapeMargin,
+                ComputedText = LengthPercentageComputed },
+            new() { Name = "shape-image-threshold", Initial = "0",
+                Normalize = NormalizeShapeImageThreshold },
+
             // ===== Fonts 4 §9. A tag is a quoted string, and the engine prints it with double
             // quotes whichever way the page wrote it (measured: "'SIN'" reads '"SIN"').
             new() { Name = "font-language-override", Initial = "normal", Inherited = true,
@@ -225,6 +245,41 @@ public static class EchoedProperties
 
     private static string[] Words(string text) => text.Split((char[]?)null,
         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>'shape-outside' takes the same shape as 'clip-path' (CSS Shapes 1 §11) with the
+    /// margin box as its default, so one reader decides both rather than a second list of shape
+    /// names drifting from the first.</summary>
+    private static string? NormalizeShapeOutside(string value)
+    {
+        var text = value.Trim();
+        return text.Length > 0 && CssValueGrammar.IsClipPathValue(text, bareBoxAllowed: true) ? text : null;
+    }
+
+    private static string? NormalizeShapeMargin(string value)
+    {
+        var text = value.Trim();
+        return text.Length > 0 && CssValueGrammar.IsLengthOrPercentage(text) ? text : null;
+    }
+
+    /// <summary>'shape-image-threshold' is a number, and a percentage is the fraction it stands for
+    /// (measured: '25%' reads '0.25' on the specified surface as on the computed one). Outside 0 to
+    /// 1 the engine clamps it rather than dropping the declaration.</summary>
+    private static string? NormalizeShapeImageThreshold(string value)
+    {
+        var text = value.Trim();
+        if (text.Length == 0) return null;
+        double number;
+        if (text.EndsWith("%", StringComparison.Ordinal))
+        {
+            if (!double.TryParse(text[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent))
+                return null;
+            number = percent / 100d;
+        }
+        else if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number))
+            return null;
+        if (double.IsNaN(number)) return null;
+        return Math.Clamp(number, 0d, 1d).ToString("R", CultureInfo.InvariantCulture);
+    }
 
     private static string? NormalizeScrollSnapType(string text)
     {

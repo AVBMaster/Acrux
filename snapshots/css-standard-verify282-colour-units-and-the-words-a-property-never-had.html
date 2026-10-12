@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 282 — the units a colour argument carries, and the words a property never had</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; padding: 8px; font-size: 16px; background: rgb(245,245,245); }
+#probe { font-size: 16px; }
+/* Painted markers: a grid item placed by ONE grid-area word, and a colour that only reads right
+   once an angle unit is understood. */
+#grid { display: grid; grid-template-columns: 40px 40px 40px; grid-template-rows: 20px 20px; width: 120px; }
+#one { grid-area: 2; background: rgb(255, 128, 128); height: 20px; }
+#two { grid-area: span 2; background: rgb(128, 255, 128); }
+#lab { width: 40px; height: 20px; background: lch(50% 30 120deg); }
+#lab2 { width: 40px; height: 20px; background: lab(50 20 30); }
+#lab3 { width: 40px; height: 20px; background: lch(50 30 none); }
+</style></head><body>
+<h4>b282 — a colour argument is not always a number. 'lch(50% 30 120deg)' carries a percentage in the lightness, an angle in the hue and a number in the chroma, and the engine prints all three in their own way: the lightness as the number the percentage means ('lab(50% …)' is 'lab(50 …)' while 'oklab(50% …)' is 'oklab(0.5 …)', because the two spaces measure lightness on different scales), the angle in degrees without the unit ('50grad' is '45'), and an alpha as a fraction ('/ 50%' is '/ 0.5'). A 'none' channel is printed as 'none' and computes as the zero it stands for. The colour space 'xyz' is an alias and the engine says the long name, 'xyz-d65'. This was not only a spelling: the parser met '120deg' where it wanted a number, read nothing, and painted that lch() BLACK. Beside it, a channel written as a percentage used to be rounded into a byte by truncation, so 'hsl(120 50% 50% / 25%)' echoed 0.247 and 'hwb(120 20% 30%)' lost the half of its green; both round to nearest now, a tie away from zero, which is what the reference engine reports. A 'color-mix()' whose second component carries the percentage says the FIRST one instead — 'red, blue 40%' is 'red 60%, blue' — because the first has no initial to hide behind. Then four properties that were never quite there: 'speak' (which the reference engine declares and accepts 'none', 'normal' and the four manuals of, and whose initial is 'normal'), the shape trio 'shape-outside'/'shape-margin'/'shape-image-threshold' (a shape with its box printed behind it, a length that resolves against the element's own font, a number a percentage spells as its fraction — and a bare box on its own IS a shape-outside value, the rectangle of that box), and the predefined counter styles, which are keywords and print in their one spelling while a name that is not one of them keeps the author's case ('DISC' is 'disc', 'HEX' is 'HEX'). 'grid-area' was the layout bug of the round: one value is the row-start alone — 'span 2' never spanned anything in the other three lines — and only a line NAME is the named-area form that fills all four; 'grid-column: span 2' also stopped printing the ', auto' it does not mean.</h4>
+<div id="cb">
+  <div id="grid"><div id="one"></div><div id="two"></div></div>
+  <div id="lab"></div>
+  <div id="lab2"></div><div id="lab3"></div>
+</div>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9)'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9)'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out = []; var failed = 0;
+function row(name, got, want){ var ok = String(got) === String(want); if(!ok) failed++;
+  out.push((ok?'ok   ':'FAIL ')+name+'  got='+JSON.stringify(String(got))+'  want='+JSON.stringify(String(want))); }
+// Both surfaces, where the reference engine answers the same way on each.
+function both(name,p,v,wantS,wantC){ row('#'+name+' spec', spec(p,v), wantS); row('#'+name+' comp', comp(p,v), wantC); }
+// Specified only: the computed value of a colour function is its own story (#116), and this page
+// does not assert what this round does not claim.
+function speconly(name,p,v,wantS){ row('#'+name+' spec', spec(p,v), wantS); }
+
+// ===== the units a colour argument carries =====
+speconly('a0','color','lab(50% 20 30)','lab(50 20 30)');
+speconly('a1','color','lab(50% 20 30 / 50%)','lab(50 20 30 / 0.5)');
+speconly('a2','color','lab(0.5 20 30)','lab(0.5 20 30)');
+speconly('a3','color','lab(none 20 30)','lab(none 20 30)');
+speconly('a4','color','lch(50% 30 50grad)','lch(50 30 45)');
+speconly('a5','color','lch(50% 30 120deg)','lch(50 30 120)');
+speconly('a6','color','lch(50% 30 none)','lch(50 30 none)');
+speconly('a7','color','oklab(50% 0.1 0.1)','oklab(0.5 0.1 0.1)');
+speconly('a8','color','oklch(50% 0.2 120deg / 25%)','oklch(0.5 0.2 120 / 0.25)');
+speconly('a9','color','color(srgb 1 0 0)','color(srgb 1 0 0)');
+speconly('a10','color','color(srgb-linear 0.5 0 0)','color(srgb-linear 0.5 0 0)');
+speconly('a11','color','color(xyz 0.1 0.2 0.3)','color(xyz-d65 0.1 0.2 0.3)');
+speconly('a12','color','color(display-p3 1 0 0 / 0.5)','color(display-p3 1 0 0 / 0.5)');
+// ===== a percentage that is not a channel: the alpha =====
+both('b0','color','hsl(120 50% 50% / 25%)','rgba(64, 191, 64, 0.25)','rgba(64, 191, 64, 0.25)');
+both('b1','color','hsl(120 50% 50% / .25)','rgba(64, 191, 64, 0.25)','rgba(64, 191, 64, 0.25)');
+both('b2','color','hwb(120 20% 30%)','rgb(51, 179, 51)','rgb(51, 179, 51)');
+both('b3','color','rgb(10 20 30 / 25%)','rgba(10, 20, 30, 0.25)','rgba(10, 20, 30, 0.25)');
+both('b4','color','#f008','rgba(255, 0, 0, 0.533)','rgba(255, 0, 0, 0.533)');
+both('b5','color','#FF000080','rgba(255, 0, 0, 0.5)','rgba(255, 0, 0, 0.5)');
+both('b6','color','rgb(255 0 0 / none)','rgba(255, 0, 0, 0)','rgba(255, 0, 0, 0)');
+both('b7','color','rgb(300 -20 999)','rgb(255, 0, 255)','rgb(255, 0, 255)');
+both('b8','color','TRANSPARENT','transparent','rgba(0, 0, 0, 0)');
+both('b9','color','currentColor','currentcolor','rgb(0, 0, 0)');
+both('b10','color','LIGHTBLUE','lightblue','rgb(173, 216, 230)');
+// ===== color-mix, which says the share the first component has to carry =====
+speconly('c0','color','color-mix(in srgb, RED 50%, BLUE 50%)','color-mix(in srgb, red, blue)');
+speconly('c1','color','color-mix(in srgb, red, blue 100%)','color-mix(in srgb, red 0%, blue)');
+speconly('c2','color','color-mix(in oklab, red, blue 40%)','color-mix(red 60%, blue)');
+speconly('c3','color','color-mix(in oklab, red 25%, blue)','color-mix(red 25%, blue)');
+speconly('c4','color','color-mix(in lab, red, blue)','color-mix(in lab, red, blue)');
+speconly('c5','color','color-mix(in srgb, #f00 40%, hsl(120 50% 50%))',
+    'color-mix(in srgb, rgb(255, 0, 0) 40%, rgb(64, 191, 64))');
+
+// ===== 'speak', the property this engine had no id for at all =====
+var SPEAK = [['auto','','normal'],['none','none','none'],['normal','normal','normal'],
+  ['spell-out','spell-out','spell-out'],['digits','digits','digits'],
+  ['literal-punctuation','literal-punctuation','literal-punctuation'],
+  ['no-punctuation','no-punctuation','no-punctuation'],
+  ['never','','normal'],['always','','normal'],['once','','normal'],['off','','normal'],
+  ['muted','','normal'],['highlight','','normal'],['point','','normal'],['BOTH','','normal']];
+for (var i=0;i<SPEAK.length;i++) both('s'+i,'speak',SPEAK[i][0],SPEAK[i][1],SPEAK[i][2]);
+
+// ===== the shape trio =====
+both('d0','shape-outside','none','none','none');
+both('d1','shape-outside','circle(50%)','circle(50%)','circle(50%)');
+both('d2','shape-outside','border-box circle(50%)','circle(50%) border-box','circle(50%) border-box');
+both('d3','shape-outside','margin-box','margin-box','margin-box');
+both('d4','shape-outside','polygon(0 0, 10px 0, 0 10px)','polygon(0px 0px, 10px 0px, 0px 10px)',
+     'polygon(0px 0px, 10px 0px, 0px 10px)');
+both('d5','shape-image-threshold','0.5','0.5','0.5');
+both('d6','shape-image-threshold','25%','0.25','0.25');
+both('d7','shape-margin','10px','10px','10px');
+both('d8','shape-margin','2em','2em','32px');
+
+// ===== the counter styles that are keywords, and the names that are not =====
+both('e0','list-style-type','DISC','disc','disc');
+both('e1','list-style-type','UPPER-ROMAN','upper-roman','upper-roman');
+both('e2','list-style-type','Cjk-decimal','cjk-decimal','cjk-decimal');
+both('e3','list-style-type','NONE','none','none');
+both('e4','list-style-type','HEX','HEX','HEX');
+both('e5','list-style-type','STRING','STRING','STRING');
+both('e6','list-style-type','FOO','FOO','FOO');
+both('e7','list-style-type',"'x'",'"x"','"x"');
+
+// ===== grid-area: one value is the row-start, a name is all four =====
+both('f0','grid-area','span 2','span 2','span 2');
+both('f1','grid-area','2','2','2');
+both('f2','grid-area','main','main','main');
+both('f3','grid-area','bogus','bogus','bogus');
+both('f4','grid-area','none','none','none');
+both('f5','grid-area','auto','auto','auto');
+both('f6','grid-area','1 / auto','1','1');
+both('f7','grid-area','1 / 2 / 3 / 4','1 / 2 / 3 / 4','1 / 2 / 3 / 4');
+both('f8','grid-area','1 / 1 / 1 / 1','1 / 1 / 1 / 1','1 / 1 / 1 / 1');
+both('f9','grid-area','auto / 1 / auto / 2','auto / 1 / auto / 2','auto / 1 / auto / 2');
+both('f10','grid-area','SPAN 2','span 2','span 2');
+both('f11','grid-area','span','','auto');
+row('f12 grid-area span 2 fills the row-start only',
+    (function(){ host.setAttribute('style',''); host.style.setProperty('grid-area','span 2');
+      var cs = getComputedStyle(host);
+      return [cs.getPropertyValue('grid-row-start'), cs.getPropertyValue('grid-column-start'),
+              cs.getPropertyValue('grid-row-end'), cs.getPropertyValue('grid-column-end')].join(',');
+    })(), 'span 2,auto,auto,auto');
+row('f13 grid-area main fills all four',
+    (function(){ host.setAttribute('style',''); host.style.setProperty('grid-area','main');
+      var cs = getComputedStyle(host);
+      return [cs.getPropertyValue('grid-row-start'), cs.getPropertyValue('grid-column-start'),
+              cs.getPropertyValue('grid-row-end'), cs.getPropertyValue('grid-column-end')].join(',');
+    })(), 'main,main,main,main');
+both('f14','grid-column','span 2','span 2','span 2');
+both('f15','grid-row','1 / 3','1 / 3','1 / 3');
+
+// ===== the placed boxes, read through layout rather than through the CSSOM =====
+var one = document.getElementById('one').getBoundingClientRect();
+var two = document.getElementById('two').getBoundingClientRect();
+var grid = document.getElementById('grid').getBoundingClientRect();
+row('L1 grid-area:2 puts the box in row 2', [Math.round(one.top-grid.top), Math.round(one.left-grid.left)].join(','), '20,0');
+row('L2 grid-area:span 2 spans both rows', [Math.round(two.height), Math.round(two.top-grid.top)].join(','), '40,0');
+// A colour that only reads right once the hue's unit is understood: lch(50% 30 120deg) is a green,
+// and a hue that failed to parse painted it black.
+var lab = document.getElementById('lab');
+row('L3 lch() with a deg hue is not painted black',
+    getComputedStyle(lab).backgroundColor === 'rgb(0, 0, 0)' ? 'black' : 'coloured', 'coloured');
+// The three swatches below are checked by pixel probe, not by the CSSOM: the reference engine
+// paints lab(50 20 30) as rgb(161, 105, 69), lch(50 30 120) as rgb(105, 126, 73) and
+// lch(50 30 none) as rgb(166, 98, 120) (canvas readback), and Lab is D50-referenced, so a
+// conversion that reaches sRGB through the D65 matrix is off by a dozen units per channel.
+row('L4 the three lab swatches are laid out',
+    [document.getElementById('lab').getBoundingClientRect().height,
+     document.getElementById('lab2').getBoundingClientRect().height,
+     document.getElementById('lab3').getBoundingClientRect().height].join(','), '20,20,20');
+
+// ===== the keyword spellings this round did not break =====
+var KW = [['display','BLOCK','block'],['float','LEFT','left'],['font-size','LARGE','large'],
+  ['text-transform','UPPERCASE','uppercase'],['word-break','BREAK-ALL','break-all'],
+  ['position','RELATIVE','relative'],['overflow','HIDDEN AUTO','hidden auto'],
+  ['white-space','NORMAL','normal'],['text-align','JUSTIFY','justify'],
+  ['visibility','HIDDEN','hidden'],['font-weight','BOLD','bold'],['font-style','ITALIC','italic'],
+  ['text-decoration','UNDERLINE DOTTED RED','underline dotted red'],
+  ['border-top','1PX SOLID RED','1px solid red'],['transition','ALL 1S','1s'],
+  ['outline','2PX dashed RED','red dashed 2px'],['text-emphasis','FILLED DOT RED','filled dot red'],
+  ['font-variant-caps','SMALL-CAPS','small-caps'],['font-synthesis','WEIGHT STYLE','weight style'],
+  ['writing-mode','VERTICAL-RL','vertical-rl'],['user-select','NONE','none'],
+  ['mix-blend-mode','MULTIPLY','multiply'],['backdrop-filter','BLUR(2PX)','blur(2px)'],
+  ['filter','BLUR(2PX) INVERT(50%)','blur(2px) invert(50%)'],
+  ['transform','TRANSLATE(10PX, 20PX) ROTATE(45DEG)','translate(10px, 20px) rotate(45deg)'],
+  ['border-radius','10PX 20PX / 30PX 40PX','10px 20px / 30px 40px'],
+  ['padding','0PX','0px'],['margin','AUTO','auto'],['top','10PX','10px'],
+  ['text-underline-position','UNDER RIGHT','under right'],
+  ['overscroll-behavior','CONTAIN NONE','contain none'],['text-wrap','BALANCE','balance'],
+  ['field-sizing','CONTENT','content'],['shape-outside','MARGIN-BOX','margin-box'],
+  ['background-image','linear-gradient(RED, BLUE)','linear-gradient(red, blue)'],
+  ['background-image','URL(a.PNG)','url("a.PNG")'],
+  ['font-family','FOO','FOO'],['animation-name','BOGUS','BOGUS'],['counter-reset','FOO 2','FOO 2'],
+  ['container-name','FOO','FOO'],['content','"RED"','"RED"'],
+  ['grid-template-areas','"A" "B"','"A" "B"'],['quotes','"«" "»"','"«" "»"'],
+  ['clip-path','INSET(0 PX 10PX)',''],['outline-color','INVERT','']];
+for (var i=0;i<KW.length;i++) row('K'+i+' '+KW[i][0]+'['+KW[i][1]+']', spec(KW[i][0],KW[i][1]), KW[i][2]);
+
+// The b281 surfaces, re-checked so this round cannot silently undo them.
+row('V0 fold back', (function(){ host.setAttribute('style','');
+  host.style.setProperty('margin-top','1px'); host.style.setProperty('margin-right','2px');
+  host.style.setProperty('margin-bottom','3px'); host.style.setProperty('margin-left','4px');
+  return host.style.cssText; })(), 'margin: 1px 2px 3px 4px;');
+row('V1 mask boxes', spec('mask','url(a.png) border-box content-box'), 'url("a.png") border-box content-box');
+row('V2 mask no-clip', spec('mask','url(a.png) border-box no-clip'), 'url("a.png") no-clip');
+row('V3 mask repeat elided', spec('mask','url(a.png) repeat repeat'), 'url("a.png")');
+row('V4 decoration echo', spec('text-decoration','underline solid'), 'underline');
+row('V5 background order', spec('background','red url(a.png)'), 'url("a.png") red');
+row('V6 contain inline-size', comp('contain','inline-size'), 'inline-size');
+
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

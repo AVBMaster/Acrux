@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b282 probe — the spelling a declaration comes back with</title></head><body>
+<div id="probe" style="font-size:16px;color:rgb(9,9,9)"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9)'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9)'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var CASES = [
+  // colours: the form the engine prints, whichever way the page spelled it
+  ['color','#F00'],['color','#ff0000'],['color','#FF000080'],['color','#f008'],
+  ['color','hsl(0,100%,50%)'],['color','hsl(120 50% 50% / 25%)'],['color','hwb(120 20% 30%)'],
+  ['color','lab(50% 20 30)'],['color','oklch(50% 0.2 120)'],['color','rgb(1 2 3 / 0.5)'],
+  ['color','rgba(1,2,3,.5)'],['color','rgb(255 0 0 / none)'],['color','TRANSPARENT'],
+  ['color','currentColor'],['color','rebeccapurple'],['color','LIGHTBLUE'],
+  ['color','color-mix(in srgb, RED 50%, BLUE 50%)'],
+  ['color','rgb(300 -20 999)'],['color','RGB(1,2,3)'],['color','rgb( 10 , 20 , 30 )'],
+  ['color','hsl(0 0% 0% / 1)'],['background','RED'],['border-color','RED BLUE'],
+  ['outline-color','INVERT'],['box-shadow','10px 10px RED'],
+  ['background-image','linear-gradient(RED, BLUE)'],
+  ['background-image','URL(a.PNG)'],['background-image','url( a.png )'],
+  // keywords: the engine's own spelling, and custom idents left alone
+  ['display','BLOCK'],['float','LEFT'],['font-size','LARGE'],['text-transform','UPPERCASE'],
+  ['word-break','BREAK-ALL'],['list-style-type','UPPER-ROMAN'],['border-top','1PX SOLID RED'],
+  ['grid-area','SPAN 2'],['transition','ALL 1S'],['position','RELATIVE'],
+  ['overflow','HIDDEN AUTO'],['white-space','NORMAL'],['text-align','JUSTIFY'],
+  ['visibility','HIDDEN'],['font-weight','BOLD'],['font-style','ITALIC'],
+  ['text-decoration','UNDERLINE DOTTED RED'],['font-family','FOO'],['animation-name','BOGUS'],
+  ['counter-reset','FOO 2'],['container-name','FOO'],['grid-template-areas','"A" "B"'],
+  ['content','"RED"'],['quotes','"«" "»"'],['hyphens','AUTO'],
+  ['cursor','POINTER'],['resize','BOTH'],['direction','RTL'],['writing-mode','VERTICAL-RL'],
+  ['object-fit','COVER'],['image-rendering','PIXELATED'],['speak','NEVER'],
+  ['text-underline-position','UNDER RIGHT'],['overscroll-behavior','CONTAIN NONE'],
+  ['scroll-behavior','SMOOTH'],['text-wrap','BALANCE'],['field-sizing','CONTENT'],
+  ['user-select','NONE'],['pointer-events','AUTO'],['appearance','NONE'],
+  ['mix-blend-mode','MULTIPLY'],['backdrop-filter','BLUR(2PX)'],
+  ['filter','BLUR(2PX) INVERT(50%)'],['transform','TRANSLATE(10PX, 20PX) ROTATE(45DEG)'],
+  ['clip-path','INSET(0 PX 10PX)'],['shape-outside','MARGIN-BOX'],
+  ['font-variant-caps','SMALL-CAPS'],['font-synthesis','WEIGHT STYLE'],
+  ['line-break','STRICT'],['tab-size','4'],['z-index','AUTO'],
+  ['top','10PX'],['width','100%'],['margin','AUTO'],['padding','0PX'],
+  ['border-radius','10PX 20PX / 30PX 40PX'],['outline','2PX dashed RED'],
+  ['text-emphasis','FILLED DOT RED'],['accent-color','AUTO']
+];
+var out = [];
+for (var i=0;i<CASES.length;i++) {
+  var c = CASES[i];
+  out.push(i + '|' + c[0] + '|' + c[1] + '|' + spec(c[0],c[1]) + '|' + comp(c[0],c[1]));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

@@ -10,6 +10,14 @@ namespace Acrux.Core.Css;
 /// </summary>
 public static class ColorParser
 {
+    /// <summary>A colour channel as the 8-bit byte the engine paints with: to the nearest byte, and
+    /// a tie AWAY FROM ZERO. <c>MathF.Round</c> rounds a tie to even, which turns the 178.5 of
+    /// 'hwb(120 20% 30%)' into 178 where the reference engine says 179, and truncation turned the
+    /// 0.25 of 'hsl(120 50% 50% / 25%)' into the byte 63 and so into an echo of '0.247' (both
+    /// measured).</summary>
+    private static byte ChannelByte(float value)
+        => (byte)Math.Clamp((int)Math.Round(value, MidpointRounding.AwayFromZero), 0, 255);
+
     /// <summary>CSS 'transparent' is rgba(0, 0, 0, 0). SkiaSharp's
     /// <see cref="SKColors.Transparent"/> is WHITE with zero alpha, and that leaked
     /// (255,255,255,0) into every computed value and into any interpolation that
@@ -57,6 +65,13 @@ public static class ColorParser
             return CssTransparent;
 
         value = value.Trim();
+
+        // The colour functions that carry units and percentages in their arguments are read in the
+        // one spelling this engine prints them in, so a hue written '120deg' or a lightness written
+        // '50%' cannot be read as a number by one caller and as nothing by another (measured:
+        // 'lch(50% 30 120deg)' painted BLACK before this, because its hue did not parse).
+        if (CssColorFunctions.Canonicalize(value) is { } canonical)
+            value = CssColorFunctions.ForParsing(canonical);
 
         var hex = ParseHex(value);
         if (hex.HasValue) return hex.Value;
@@ -171,7 +186,7 @@ public static class ColorParser
         if (parts.Count >= 4)
         {
             if (!TryAlpha(parts[3], out var a)) return null;
-            alpha = (byte)Math.Clamp(MathF.Round(a * 255), 0, 255);
+            alpha = ChannelByte(a * 255);
         }
 
         return new SKColor(r, g, b, alpha);
@@ -255,7 +270,7 @@ public static class ColorParser
             scaled = pct / 100f * max;
         }
         else if (!TryNumber(token, out scaled)) { value = 0; return false; }
-        value = (byte)Math.Clamp(MathF.Round(scaled), 0, max);
+        value = (byte)Math.Clamp((int)Math.Round(scaled, MidpointRounding.AwayFromZero), 0, max);
         return true;
     }
 
@@ -336,10 +351,10 @@ public static class ColorParser
         else { r = c; g = 0; b = x; }
 
         return new SKColor(
-            (byte)Math.Round((r + m) * 255),
-            (byte)Math.Round((g + m) * 255),
-            (byte)Math.Round((b + m) * 255),
-            (byte)(a * 255));
+            ChannelByte((r + m) * 255),
+            ChannelByte((g + m) * 255),
+            ChannelByte((b + m) * 255),
+            ChannelByte(a * 255));
     }
 
     private static SKColor? ParseHwb(string value)
@@ -377,10 +392,10 @@ public static class ColorParser
         bb = bb * (1f - w - b) + w;
 
         return new SKColor(
-            (byte)Math.Clamp(MathF.Round(r * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(g * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(bb * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(alpha * 255), 0, 255));
+            ChannelByte(r * 255),
+            ChannelByte(g * 255),
+            ChannelByte(bb * 255),
+            ChannelByte(alpha * 255));
     }
 
     private static SKColor? ParseLab(string value)
@@ -404,7 +419,7 @@ public static class ColorParser
         float y = LabLinearComponent(fy) * 1f;
         float z = LabLinearComponent(fz) * 0.82521f;
 
-        return XyzToSrgb(x, y, z, alpha);
+        return XyzToSrgb(x, y, z, alpha, d50: true);
     }
 
     private static SKColor? ParseLch(string value)
@@ -429,7 +444,7 @@ public static class ColorParser
         float y = LabLinearComponent(fy) * 1f;
         float z = LabLinearComponent(fz) * 0.82521f;
 
-        return XyzToSrgb(x, y, z, alpha);
+        return XyzToSrgb(x, y, z, alpha, d50: true);
     }
 
     private static SKColor? ParseOklab(string value)
@@ -462,10 +477,10 @@ public static class ColorParser
         b = LinearToSrgbChannel(b);
 
         return new SKColor(
-            (byte)Math.Clamp(MathF.Round(r * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(g * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(b * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(alpha * 255), 0, 255));
+            ChannelByte(r * 255),
+            ChannelByte(g * 255),
+            ChannelByte(b * 255),
+            ChannelByte(alpha * 255));
     }
 
     private static SKColor? ParseOklch(string value)
@@ -501,10 +516,10 @@ public static class ColorParser
         b = LinearToSrgbChannel(b);
 
         return new SKColor(
-            (byte)Math.Clamp(MathF.Round(r * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(g * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(b * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(alpha * 255), 0, 255));
+            ChannelByte(r * 255),
+            ChannelByte(g * 255),
+            ChannelByte(b * 255),
+            ChannelByte(alpha * 255));
     }
 
     /// <summary>
@@ -901,7 +916,26 @@ public static class ColorParser
     }
 
     private static SKColor XyzToSrgb(float x, float y, float z, float alpha)
+        => XyzToSrgb(x, y, z, alpha, d50: false);
+
+    /// <summary>Two matrices, because two white points: 'xyz'/'xyz-d65' and the linear and
+    /// gamma-encoded RGB spaces are all D65, while Lab and LCh are referenced to D50 (CSS Color 4
+    /// §10.2). Running D50 tristimulus values through the D65 matrix is not a rounding difference —
+    /// 'lab(50 20 30)' came out rgb(168, 103, 55) where the reference engine paints
+    /// rgb(161, 105, 69), a dozen units off in two channels (measured through a canvas readback).
+    /// The reference engine reaches sRGB the long way, adapting D50 to D65 first, and that matters
+    /// at the edge of the gamut: 'lab(54.29 80.81 69.89)' has a linear blue the one-step matrix
+    /// leaves a hair above zero, which prints as rgb(255, 0, 1) where the adaptation chain puts it
+    /// below zero and the clip makes it rgb(255, 0, 0) (measured).</summary>
+    private static SKColor XyzToSrgb(float x, float y, float z, float alpha, bool d50)
     {
+        if (d50)
+        {
+            float ax = 0.9555766f * x - 0.0230393f * y + 0.0631636f * z;
+            float ay = -0.0282895f * x + 1.0099416f * y + 0.0210077f * z;
+            float az = 0.0122982f * x - 0.0204830f * y + 1.3299098f * z;
+            x = ax; y = ay; z = az;
+        }
         float r = 3.2404542f * x - 1.5371385f * y - 0.4985314f * z;
         float g = -0.9692660f * x + 1.8760108f * y + 0.0415560f * z;
         float b = 0.0556434f * x - 0.2040259f * y + 1.0572252f * z;
@@ -911,10 +945,10 @@ public static class ColorParser
         b = LinearToSrgbChannel(b);
 
         return new SKColor(
-            (byte)Math.Clamp(MathF.Round(r * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(g * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(b * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(alpha * 255), 0, 255));
+            ChannelByte(r * 255),
+            ChannelByte(g * 255),
+            ChannelByte(b * 255),
+            ChannelByte(alpha * 255));
     }
 
     private static (byte r, byte g, byte b) DisplayP3ToSrgb(float r, float g, float b)
@@ -924,9 +958,9 @@ public static class ColorParser
         float sg = 0.0f * r + 1.0f * g + 0.0f * b;
         float sb = 0.0f * r + 0.0f * g + 1.0f * b;
         return (
-            (byte)Math.Clamp(MathF.Round(LinearToSrgbChannel(sr) * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(LinearToSrgbChannel(sg) * 255), 0, 255),
-            (byte)Math.Clamp(MathF.Round(LinearToSrgbChannel(sb) * 255), 0, 255));
+            ChannelByte(LinearToSrgbChannel(sr) * 255),
+            ChannelByte(LinearToSrgbChannel(sg) * 255),
+            ChannelByte(LinearToSrgbChannel(sb) * 255));
     }
 
     private static float LinearToSrgbChannel(float c)

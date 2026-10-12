@@ -764,7 +764,15 @@ public static class CssValueGrammar
         // an optional geometry box on either side of it. A shape that received a token it cannot
         // use is no value at all (measured: 'circle(50%, bogus)' reads back empty). Anything this
         // reader cannot classify is accepted, so a shape that works today is never lost here.
-        CssPropertyId.ClipPath => IsClipPathValue,
+        CssPropertyId.ClipPath => static text => IsClipPathValue(text),
+        // CSS Grid 1 §7.14/§8.3: a <grid-line> is 'auto', 'none', a line name, a line number, or
+        // 'span' with its number. A bare 'span' is no line — the reference engine drops it (measured:
+        // 'grid-area: span' reads back empty and computes 'auto'), and two words with no slash
+        // between them are no line either ('grid-area: main head' is dropped the same way).
+        CssPropertyId.GridArea or CssPropertyId.GridRow or CssPropertyId.GridColumn
+            or CssPropertyId.GridRowStart or CssPropertyId.GridRowEnd
+            or CssPropertyId.GridColumnStart or CssPropertyId.GridColumnEnd
+            => IsGridLineValue,
         // CSS Grid 1 §7.4: at most one axis and at most one 'dense'. Two axes ('row column') or a
         // repeated word are no value at all (measured: 'row row' reads back empty).
         CssPropertyId.GridAutoFlow => static text =>
@@ -1012,7 +1020,7 @@ public static class CssValueGrammar
     /// invalid — 'circle(50%, bogus)' is refused while 'circle(50% at 0 0)' is not. A shape this
     /// reader does not recognise is accepted rather than dropped: the clip already drawn by the
     /// painter must not disappear because the grammar fell short.</summary>
-    private static bool IsClipPathValue(string text)
+    internal static bool IsClipPathValue(string text, bool bareBoxAllowed = false)
     {
         var trimmed = text.Trim();
         if (trimmed.Length == 0) return false;
@@ -1020,8 +1028,12 @@ public static class CssValueGrammar
         var tokens = SplitComponents(trimmed);
         if (tokens.Count == 0) return false;
         int index = 0;
-        if (tokens.Count > 1 && GeometryBoxWords.Contains(tokens[0].ToLowerInvariant())) index = 1;
-        if (index >= tokens.Count) return false;
+        if (GeometryBoxWords.Contains(tokens[0].ToLowerInvariant())) index = 1;
+        // 'shape-outside' names its box on its own — a box with no shape is the rectangle of that
+        // box (CSS Shapes 1 §11, measured: 'shape-outside: margin-box' reads back 'margin-box'),
+        // where the same words alone are no clip-path value at all.
+        if (index >= tokens.Count)
+            return bareBoxAllowed && tokens.Count == 1;
         var shape = tokens[index];
         if (shape.StartsWith("url(", StringComparison.OrdinalIgnoreCase)) return true;
         if (index + 1 < tokens.Count
@@ -1696,6 +1708,32 @@ public static class CssValueGrammar
         return true;
     }
 
+    /// <summary>One &lt;grid-line&gt;, or a slash-separated list of them (the shorthands take the same
+    /// words in the same order). See the arm that calls this for what the reference engine takes.</summary>
+    private static bool IsGridLineValue(string text)
+    {
+        var parts = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(text, '/');
+        if (parts.Count == 0) return false;
+        foreach (var part in parts)
+        {
+            var words = SplitComponents(part);
+            if (words.Count == 1)
+            {
+                if (IsIntegerWord(words[0]) || (IsIdentifierLike(words[0])
+                    && !words[0].Equals("span", StringComparison.OrdinalIgnoreCase))) continue;
+                return false;
+            }
+            if (words.Count == 2 && words[0].Equals("span", StringComparison.OrdinalIgnoreCase)
+                && IsIntegerWord(words[1])) continue;
+            return false;
+        }
+        return true;
+    }
+
+    private static bool IsIntegerWord(string text) =>
+        int.TryParse(text, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out _);
+
     private static bool IsIdentifierLike(string text)
     {
         if (text.Length == 0) return false;
@@ -1980,7 +2018,7 @@ public static class CssValueGrammar
     /// <summary>A &lt;length&gt; or &lt;percentage&gt; in the sign/number/unit shape CSS Syntax
     /// gives them. The unit is not looked up in a table: a unit name this engine has not heard
     /// of yet is still a unit, and refusing it would lose a working declaration.</summary>
-    private static bool IsLengthOrPercentage(string token)
+    internal static bool IsLengthOrPercentage(string token)
     {
         int i = 0;
         if (i < token.Length && (token[i] == '+' || token[i] == '-')) i++;

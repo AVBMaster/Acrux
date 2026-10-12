@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b282 probe 2 — colour functions and grid-area</title></head><body>
+<div id="probe" style="font-size:16px;color:rgb(9,9,9);width:200px"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9);width:200px'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9);width:200px'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var CASES = [
+  ['color','lab(50% -20 30)'],['color','lab(50% 20 30 / 0.5)'],['color','lab(0.5 20 30)'],
+  ['color','lch(50% 30 120deg)'],['color','lch(50% 30 120)'],['color','oklab(50% 0.1 0.1)'],
+  ['color','oklch(50% 0.2 120deg / 25%)'],['color','color(srgb 1 0 0)'],
+  ['color','color(display-p3 1 0 0 / 0.5)'],['color','rgb(10 20 30 / 25%)'],
+  ['color','hsl(120 50% 50% / .25)'],['color','hsl(120deg 50% 50%)'],
+  ['color','color-mix(in oklab, red 25%, blue)'],['color','color-mix(in srgb, rgb(10,20,30), transparent)'],
+  ['color','color-mix(in srgb, #f00 40%, hsl(120 50% 50%))'],
+  ['background-color','lab(30% 10 10)'],['caret-color','oklch(50% 0.2 120)'],
+  ['grid-area','span 2'],['grid-area','1 / 2 / 3 / 4'],['grid-area','auto'],
+  ['grid-area','main'],['grid-area','1 / span 2'],['grid-area','a / b'],
+  ['grid-row-start','span 2'],['grid-column-start','span 2'],
+  ['speak','normal'],['speak','spell-out'],['shape-outside','none'],['shape-outside','circle(50%)'],
+  ['shape-image-threshold','0.5'],['shape-margin','10px'],
+  ['list-style-type','DISC'],['list-style-type','Lower-Greek'],['list-style-type','FOO'],
+  ['list-style-type'," 'x' "],
+  ['width','100%']
+];
+var out = [];
+for (var i=0;i<CASES.length;i++) {
+  var c = CASES[i];
+  out.push(i + '|' + c[0] + '|' + c[1] + '|' + spec(c[0],c[1]) + '|' + comp(c[0],c[1]));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

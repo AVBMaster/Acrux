@@ -213,9 +213,12 @@ public static class CssValueText
                 result = FoldFamilyNames(result);
             else if (property.Equals("list-style-type", StringComparison.OrdinalIgnoreCase))
                 // A string marker is printed with double quotes whichever way the page wrote it
-                // (measured: "'x'" reads '"x"'). Only one string ever reaches here — two of them
-                // are no value, which the property's grammar has already refused.
-                result = FoldQuotedString(result);
+                // (measured: "'x'" reads '"x"'), and a predefined counter style is a keyword that
+                // prints in its one spelling — 'DISC' reads 'disc' while a name that is not one of
+                // them keeps the author's case ('HEX' reads 'HEX', both measured). Only one string
+                // ever reaches here — two of them are no value, which the grammar has refused.
+                result = MapLayers(FoldQuotedString(result),
+                    layer => FoldKeywordsInLayer(layer, ListStyleTypeKeywords));
             else if (property.Equals("font-feature-settings", StringComparison.OrdinalIgnoreCase))
                 result = ElideDefaultFeatureValues(result);
             else if (Acrux.Core.Css.CssValueGrammar.IsLegacyPrefixedName(property))
@@ -268,6 +271,7 @@ public static class CssValueText
                     result = CanonicalizeColumnRule(result, property);
                     result = CanonicalizeListStyle(result, property);
                     result = CanonicalizeOffsetShorthand(result, property);
+                    result = CanonicalizeGridArea(result, property);
                     result = CanonicalizeFontSynthesis(result, property);
                     result = CanonicalizeColumns(result, property);
                     result = CanonicalizeTextUnderlinePosition(result, property);
@@ -659,6 +663,31 @@ public static class CssValueText
         return string.Join(" ", parts);
     }
 
+    /// <summary>The 'grid-area' shorthand as the engine prints it: the four lines joined by
+    /// <c>" / "</c> with the trailing <c>auto</c>s dropped, and the <c>span</c> keyword in its one
+    /// spelling (measured: '1 / auto' reads '1', 'auto / auto / 2' keeps its two leading autos,
+    /// 'SPAN 2 / 3' reads 'span 2 / 3'). A line NAME keeps the author's case — it is a
+    /// &lt;custom-ident&gt;, not a keyword.</summary>
+    private static string CanonicalizeGridArea(string text, string property)
+    {
+        if (!property.Equals("grid-area", StringComparison.OrdinalIgnoreCase)) return text;
+        var parts = text.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0 || parts.Length > 4) return text;
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var words = parts[i].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length == 0) return text;
+            if (words[0].Equals("span", StringComparison.OrdinalIgnoreCase))
+                words[0] = "span";
+            else if (words[0].Equals("auto", StringComparison.OrdinalIgnoreCase))
+                words[0] = "auto";
+            parts[i] = string.Join(" ", words);
+        }
+        int last = parts.Length - 1;
+        while (last > 0 && parts[last].Equals("auto", StringComparison.Ordinal)) last--;
+        return string.Join(" / ", parts, 0, last + 1);
+    }
+
     /// <summary>'font-synthesis' prints its kinds in the engine's own order — weight, style,
     /// small-caps — whichever order the page listed them (measured: 'style weight' reads
     /// 'weight style', 'small-caps weight' reads 'weight small-caps'); 'none' stands alone.</summary>
@@ -831,7 +860,12 @@ public static class CssValueText
     /// name a shape that does not exist and the element drew unclipped.</summary>
     private static string CanonicalizeClipPath(string text, string property)
     {
-        if (!property.Equals("clip-path", StringComparison.OrdinalIgnoreCase)) return text;
+        // One shape grammar, two default boxes: a clip starts at the border box (CSS Masking 1 §5.1)
+        // and a float exclusion at the margin box (CSS Shapes 1 §11). The box that is not the default
+        // is printed BEHIND the shape whichever end the page wrote it at.
+        bool isClip = property.Equals("clip-path", StringComparison.OrdinalIgnoreCase);
+        if (!isClip && !property.Equals("shape-outside", StringComparison.OrdinalIgnoreCase)) return text;
+        var initialBox = isClip ? "border-box" : "margin-box";
         var tokens = Css.Resolver.EchoedProperties.SplitTopLevel(text.Trim());
         if (tokens.Count == 0) return text;
         string? shape = null, box = null;
@@ -840,7 +874,7 @@ public static class CssValueText
             var lower = token.ToLowerInvariant();
             if (GeometryBoxes.Contains(lower))
             {
-                // Two boxes is no clip-path value at all; leave it for the grammar to refuse.
+                // Two boxes is no shape value at all; leave it for the grammar to refuse.
                 if (box != null) return text;
                 box = lower;
                 continue;
@@ -854,7 +888,7 @@ public static class CssValueText
             if (shape != null) return text;
             shape = FoldShapeLengths(token);
         }
-        if (shape == null || box == "border-box") return shape ?? text;
+        if (shape == null || box == initialBox) return shape ?? text;
         return box == null ? shape : shape + " " + box;
     }
 
@@ -1365,6 +1399,12 @@ public static class CssValueText
                 // against the background, border-image and color-mix parsers alike).
                 if (ColorParser.IsColorToken(word) && IsPlainColorFunction(word))
                     words[i] = CssColorText.FromColor(ColorParser.Parse(word));
+                // A lightness, a chroma and an angle are not colours to fold but arguments to say
+                // correctly, and the reference engine re-spells them: 'lab(50% 20 30 / 50%)' is
+                // 'lab(50 20 30 / 0.5)', 'lch(50% 30 50grad)' is 'lch(50 30 45)',
+                // 'oklab(50% …)' is 'oklab(0.5 …)', and 'color(xyz …)' names its space in full.
+                else if (CssColorFunctions.Canonicalize(word) is { } colourFunction)
+                    words[i] = colourFunction;
                 else
                     words[i] = InsideFunction(word,
                         inner => MapLayers(inner, layer => FoldColorWordsInLayer(layer, property)));
@@ -1469,14 +1509,23 @@ public static class CssValueText
         if (space.Equals("in oklab", StringComparison.OrdinalIgnoreCase)) args[0] = string.Empty;
 
         var first = TakePercentageOff(args[1], out float firstShare);
+        bool firstWritten = firstShare >= 0;
+        float writtenFirst = firstWritten ? firstShare : 50f;
         // The first component's own initial is half, and only that one goes unsaid.
-        if (firstShare >= 0 && Math.Abs(firstShare - 50f) < 0.0001f) firstShare = -1;
-        args[1] = first + (firstShare >= 0 ? " " + FormatShare(firstShare) : string.Empty);
-        var writtenFirst = firstShare >= 0 ? firstShare : 50f;
+        if (firstWritten && Math.Abs(firstShare - 50f) < 0.0001f) firstShare = -1;
         var second = TakePercentageOff(args[2], out float secondShare);
+        // A share written on the SECOND component is the first one's complement, and the engine says
+        // the FIRST, which is the one that has no initial to hide behind (measured: 'red, blue 40%'
+        // reads 'red 60%, blue' and 'red, blue 100%' reads 'red 0%, blue').
+        if (!firstWritten && secondShare >= 0 && Math.Abs(secondShare - 50f) >= 0.0001f)
+        {
+            firstShare = 100f - secondShare;
+            secondShare = -1;
+        }
         // The second share is implied by the first, and a written one that says the same thing
         // adds nothing to print.
         if (secondShare >= 0 && Math.Abs(secondShare - (100f - writtenFirst)) < 0.0001f) secondShare = -1;
+        args[1] = first + (firstShare >= 0 ? " " + FormatShare(firstShare) : string.Empty);
         args[2] = second + (secondShare >= 0 ? " " + FormatShare(secondShare) : string.Empty);
 
         var kept = args.Where(a => a.Trim().Length > 0).Select(a => a.Trim()).ToList();
@@ -1588,6 +1637,17 @@ public static class CssValueText
     private static readonly string[] AutoKeyword = { "auto" };
     private static readonly string[] SpanAndAutoKeywords = { "span", "auto" };
 
+    /// <summary>The predefined counter styles of CSS Lists 3 §4.3, spelled the one way the engine
+    /// spells every enum keyword (see <see cref="Acrux.Core.Dom.CssEnumFormatter"/>), so the list is
+    /// derived from the enum and cannot drift from it. 'Symbol', 'String' and 'Custom' are storage
+    /// cases of this engine rather than values a page may write, so they are not in it.</summary>
+    private static readonly string[] ListStyleTypeKeywords = System.Array.FindAll(
+        System.Enum.GetNames<Acrux.Core.Dom.ListStyleType>(),
+        static n => n is not ("Symbol" or "String" or "Custom"))
+        .Select(Acrux.Core.Dom.CssEnumFormatter.CssKeywordFromEnum)
+        .Concat(new[] { "circle", "disc" })
+        .ToArray();
+
     /// <summary>The closed keyword sets of the animation grammar. Everything else an
     /// <c>animation</c> shorthand holds is a keyframe-set name, and that one is case-sensitive:
     /// measured, <c>animation: 3s 2s LINEAR BOGUS</c> reads back with 'linear' folded and 'BOGUS'
@@ -1623,6 +1683,12 @@ public static class CssValueText
             or "animation-play-state" or "animation-timing-function")
             return AnimationKeywords;
         if (name == "font-size" || name == "font") return FontSizeKeywords;
+        // CSS Lists 3 §4.3: a predefined counter style is a keyword and prints in its one spelling,
+        // while a name that is not one of them is a custom ident and keeps the author's case
+        // (measured: 'DISC' reads 'disc' and 'HEX' reads 'HEX'). The words that name no counter
+        // style are left out of the list on purpose — 'Symbol'/'String'/'Custom' are this engine's
+        // own storage cases, not values a page may write.
+        if (name == "list-style-type") return ListStyleTypeKeywords;
         if (name is "grid-area" or "grid-row" or "grid-column"
             or "grid-row-start" or "grid-row-end" or "grid-column-start" or "grid-column-end")
             return SpanAndAutoKeywords;
