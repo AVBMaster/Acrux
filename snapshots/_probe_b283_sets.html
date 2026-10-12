@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b283 probe 2 — the sets these properties take</title></head><body>
+<div id="probe" style="font-size:16px;color:rgb(9,9,9);width:200px"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9);width:200px'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9);width:200px'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var CASES = [
+  ['text-autospace','auto'],['text-autospace','normal'],['text-autospace','no-autospace'],
+  ['text-autospace','ideograph-alpha'],['text-autospace','ideograph-inheritance'],
+  ['text-spacing-trim','trim-both'],['text-spacing-trim','trim-edge'],['text-spacing-trim','trim-atomic-start'],
+  ['text-spacing-trim','allow-end'],['text-spacing-trim','space-all trim-start'],
+  ['text-spacing-trim','normal allow-end'],['text-spacing-trim','BOTH'],
+  ['color-scheme','only'],['color-scheme','light'],['color-scheme','dark'],['color-scheme','light only'],
+  ['color-scheme','normal dark'],['color-scheme','brown'],
+  ['scrollbar-color','auto auto'],['scrollbar-color','red blue green'],['scrollbar-color','currentcolor blue'],
+  ['resize','vertical'],['resize','block'],['resize','inline both'],
+  ['text-emphasis-position','under'],['text-emphasis-position','under left'],['text-emphasis-position','right'],
+  ['text-emphasis-position','over auto'],['text-emphasis-position','over under'],
+  ['box-decoration-break','clone'],['box-decoration-break','slice'],
+  ['animation-composition','accumulate'],['animation-composition','add, accumulate'],
+  ['webkit-line-clamp','3'],['line-clamp','3'],
+  ['caret-animation','auto'],
+  ['interactivity','inert'],['interactivity','auto'],['interactivity','none'],
+  ['scroll-initial-target','none'],['scroll-initial-target','nearest'],['scroll-initial-target','auto'],
+  ['timeline-scope','--x, --y'],['view-timeline-name','--y'],['view-timeline-name','none'],
+  ['view-timeline-inset','auto'],['view-timeline-axis','all'],
+  ['overflow-clip-margin','border-box'],['overflow-clip-margin','10px content-box'],
+  ['overflow-clip-margin','content-box 10px'],['overflow-clip-margin','padding-box'],
+  ['text-wrap-style','auto'],['text-wrap-style','pretty'],['text-wrap-style','stable'],
+  ['text-wrap','stable balance'],['text-wrap','wrap pretty'],
+  ['contain-intrinsic-block-size','auto 30px'],['contain-intrinsic-inline-size','auto 40px'],
+  ['contain-intrinsic-size','auto 30px'],['contain-intrinsic-width','auto 30px'],
+  ['contain-intrinsic-height','none'],['contain-intrinsic-block-size','none'],
+  ['font-palette','dark'],['font-palette','light dark'],['font-palette','--x'],
+  ['font-size-adjust','from-font'],['font-size-adjust','50%'],
+  ['scroll-timeline-name','none'],['scroll-timeline-axis','inline block'],
+  ['anchor-name','none'],['anchor-scroll','--a'],
+  ['position-try-order','normal'],['position-try-order','most-width'],
+  ['position-try-fallbacks','none'],['position-try-fallbacks','flip-inline drop'],
+  ['scroll-marker-group','none'],['scroll-marker-group','before'],
+  ['overlay-scrollbars','auto']
+];
+var out = [];
+for (var i=0;i<CASES.length;i++) {
+  var c = CASES[i];
+  out.push(i + '|' + c[0] + '|' + c[1] + '|' + spec(c[0],c[1]) + '|' + comp(c[0],c[1]));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

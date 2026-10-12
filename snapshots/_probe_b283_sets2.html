@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b283 probe 4 — the sets the follow-ups left open</title></head><body>
+<div id="probe" style="font-size:16px;color:rgb(9,9,9);width:200px"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9);width:200px'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9);width:200px'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var CASES = [
+  // scroll-marker-group: which positions, and what does the content side take?
+  ['scroll-marker-group','none'],['scroll-marker-group','before'],['scroll-marker-group','after'],
+  ['scroll-marker-group','before links'],['scroll-marker-group','after links'],
+  ['scroll-marker-group','before after'],['scroll-marker-group','after before'],
+  ['scroll-marker-group','links'],['scroll-marker-group','before normal'],
+  ['scroll-marker-group','before auto'],['scroll-marker-group','before first'],
+  ['scroll-marker-group','BEFORE'],['scroll-marker-group','before  links'],
+  ['scroll-marker-group','none none'],['scroll-marker-group','before links links'],
+  // color-scheme: the order it prints, and the case rules of each word
+  ['color-scheme','only dark'],['color-scheme','dark only'],['color-scheme','light dark only'],
+  ['color-scheme','Brown'],['color-scheme','light Brown'],['color-scheme','dark Light'],
+  ['color-scheme','normal light'],['color-scheme','light normal'],['color-scheme','--x light'],
+  ['color-scheme','light --x'],['color-scheme','DARK'],['color-scheme','only only'],
+  // text-wrap: which component disappears from the echo
+  ['text-wrap','wrap stable'],['text-wrap','stable wrap'],['text-wrap','nowrap balance'],
+  ['text-wrap','balance wrap'],['text-wrap','wrap auto'],['text-wrap','auto wrap'],
+  ['text-wrap','auto'],['text-wrap','wrap nowrap'],['text-wrap','stable pretty'],
+  ['text-wrap','pretty stable'],['text-wrap','nowrap'],
+  // text-emphasis-position: the horizontal side in the computed value
+  ['text-emphasis-position','under left'],['text-emphasis-position','under right'],
+  ['text-emphasis-position','over left'],['text-emphasis-position','over right'],
+  ['text-emphasis-position','left over'],['text-emphasis-position','right over'],
+  // the sizing family's computed surface, keyword by keyword
+  ['min-width','fit-content'],['min-width','max-content'],['max-width','max-content'],
+  ['min-width','contain'],['max-width','contain'],['min-height','stretch'],
+  ['max-height','auto'],['min-inline-size','stretch'],['min-inline-size','none'],
+  ['max-block-size','auto'],
+  // scrollbar-color with the colours told apart
+  ['scrollbar-color','auto blue'],['scrollbar-color','blue auto'],['scrollbar-color','red red'],
+  ['scrollbar-color','#00f']
+];
+var out = [];
+for (var i=0;i<CASES.length;i++) {
+  var c = CASES[i];
+  out.push(i + '|' + c[0] + '|' + c[1] + '|' + spec(c[0],c[1]) + '|' + comp(c[0],c[1]));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

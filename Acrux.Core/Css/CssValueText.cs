@@ -267,6 +267,11 @@ public static class CssValueText
                     result = OmitInitialBorderParts(result, property);
                     result = CollapseBoxShorthandParts(result, property);
                     result = CanonicalizeFlexFlow(result, property);
+                    result = CanonicalizeTextWrap(result, property);
+                    result = CanonicalizeSchemeList(result, property);
+                    result = CanonicalizeEmphasisPosition(result, property);
+                    result = CanonicalizeClipMargin(result, property);
+                    result = CanonicalizeScrollInset(result, property);
                     result = CanonicalizeTextDecoration(result, property);
                     result = CanonicalizeColumnRule(result, property);
                     result = CanonicalizeListStyle(result, property);
@@ -609,6 +614,84 @@ public static class CssValueText
         if (direction != "row") parts.Add(direction);
         if (wrap != null && wrap != "nowrap") parts.Add(wrap);
         return parts.Count == 0 ? "row" : string.Join(" ", parts);
+    }
+
+    /// <summary>Print <c>text-wrap</c> as the two longhands it says, with the initial ones left out
+    /// (CSS Text Wrap 1 §3/§4, measured): 'wrap pretty' reads 'pretty', 'wrap stable' and
+    /// 'stable wrap' read 'stable', 'wrap balance' reads 'balance', and a value that says nothing the
+    /// page did not already have — 'auto', 'wrap', 'wrap auto' — still has to say its mode, so it
+    /// reads 'wrap'. 'auto' is the other spelling of the initial mode, never a word of its own.</summary>
+    private static string CanonicalizeTextWrap(string text, string property)
+    {
+        if (!property.Equals("text-wrap", StringComparison.OrdinalIgnoreCase)) return text;
+        string mode = null, style = null;
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            var p = word.ToLowerInvariant();
+            if (p is "wrap" or "nowrap") { if (mode != null) return text; mode = p; }
+            else if (p is "stable" or "balance" or "pretty") { if (style != null) return text; style = p; }
+            else if (p != "auto") return text;
+        }
+        var parts = new List<string>();
+        if (mode != null && mode != "wrap") parts.Add(mode);
+        if (style != null) parts.Add(style);
+        return parts.Count == 0 ? "wrap" : string.Join(" ", parts);
+    }
+
+    /// <summary>Say <c>color-scheme</c> in the one order and casing the reference engine prints, and
+    /// say nothing for a value it would drop. The grammar owns the decision (both surfaces and the
+    /// cascade read the same answer), so a sheet, a CSSOM write and getComputedStyle cannot disagree
+    /// about where 'only' goes.</summary>
+    private static string CanonicalizeSchemeList(string text, string property)
+    {
+        if (!property.Equals("color-scheme", StringComparison.OrdinalIgnoreCase)) return text;
+        return Acrux.Core.Css.CssValueGrammar.CanonicalColorScheme(text) ?? text;
+    }
+
+    /// <summary>Say one of the scroll insets' shorthands the way the reference engine prints a
+    /// box or pair whose sides all match (CSS Scroll Snap 1 §6.1, measured): 'scroll-margin-block:
+    /// 2px 2px' reads '2px' and 'scroll-padding-inline: auto auto' reads 'auto', while a pair that
+    /// differs keeps both halves in the order the page wrote them.</summary>
+    private static string CanonicalizeScrollInset(string text, string property)
+    {
+        var lower = property.ToLowerInvariant();
+        if (lower is not ("scroll-margin" or "scroll-padding" or "scroll-margin-block"
+            or "scroll-margin-inline" or "scroll-padding-block" or "scroll-padding-inline"))
+            return text;
+        var parts = SplitTopLevelWords(text);
+        if (parts.Count < 2) return text;
+        return parts.All(part => part.Equals(parts[0], StringComparison.OrdinalIgnoreCase))
+            ? parts[0] : string.Join(" ", parts);
+    }
+
+    /// <summary>Say <c>overflow-clip-margin</c> as one value: the box it measures from in front of
+    /// the length, each part said only when it left its initial (CSS Overflow 3 §4.1, measured:
+    /// '10px content-box' and 'content-box 10px' both read 'content-box 10px', a plain 'border-box'
+    /// reads 'border-box', and 'padding-box' — the initial box, which the reference engine still
+    /// takes — reads the length it means, '0px'). The computed surface prints the same shape from
+    /// the same two parts, so the two surfaces cannot drift.</summary>
+    private static string CanonicalizeClipMargin(string text, string property)
+    {
+        if (!property.Equals("overflow-clip-margin", StringComparison.OrdinalIgnoreCase)) return text;
+        string box = null, length = null;
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            var p = word.ToLowerInvariant();
+            if (p is "content-box" or "border-box" or "padding-box") { if (box != null) return text; box = p; }
+            else { if (length != null) return text; length = p; }
+        }
+        var parts = new List<string>();
+        if (box != null && box != "padding-box") parts.Add(box);
+        if (length != null && length != "0px") parts.Add(length);
+        return parts.Count == 0 ? "0px" : string.Join(" ", parts);
+    }
+
+    /// <summary>Say <c>text-emphasis-position</c> with the vertical side first, whichever order the
+    /// page used (measured: 'left over' reads 'over left').</summary>
+    private static string CanonicalizeEmphasisPosition(string text, string property)
+    {
+        if (!property.Equals("text-emphasis-position", StringComparison.OrdinalIgnoreCase)) return text;
+        return Acrux.Core.Css.CssValueGrammar.CanonicalTextEmphasisPosition(text) ?? text;
     }
 
     /// <summary>
@@ -1604,6 +1687,9 @@ public static class CssValueText
         "grid-template-rows", "grid-area", "grid-row", "grid-column", "grid-row-start",
         "grid-row-end", "grid-column-start", "grid-column-end", "anchor-name", "anchor-scope",
         "position-anchor", "position-try-anchor", "view-transition-name", "view-transition-class",
+        // A scheme list is keywords and names mixed, and the names keep the author's case
+        // (measured: 'color-scheme: Brown' reads 'Brown', while 'Light' is the keyword 'light').
+        "color-scheme",
         "timeline-scope", "scroll-timeline-name", "view-timeline-name", "container-name",
         // The 'container' shorthand is a list of names on this engine's reading too: the reference
         // engine echoes it back exactly as authored, capitals and all (measured: 'INLINE-SIZE

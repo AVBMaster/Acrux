@@ -1114,6 +1114,7 @@ public class CascadeResolver
         dest.AccentColor = src.AccentColor;
         dest.CaretColor = src.CaretColor;
         dest.ColorScheme = src.ColorScheme;
+        dest.EffectiveColorScheme = src.EffectiveColorScheme;
         dest.ForcedColorAdjust = src.ForcedColorAdjust;
         dest.Orphans = src.Orphans;
         dest.Widows = src.Widows;

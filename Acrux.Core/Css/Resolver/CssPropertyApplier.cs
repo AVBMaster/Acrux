@@ -90,18 +90,29 @@ public static class CssPropertyApplier
 
     /// <summary>Scrollbar-color &lt;thumb&gt; &lt;track&gt; ("auto" resets a slot).</summary>
 
+    /// <summary>One value of the sizing family (CSS Sizing 3 §5.1/§6.2). 'none', 'stretch' and its
+    /// prefixed spelling constrain nothing, so they lay out as 'auto' does — but they are three
+    /// different words on the computed surface, and which of them a property takes is decided by
+    /// that property's grammar, not here.</summary>
+    private static Length ParseSizingValue(string value) =>
+        SizingKeywordLength.For(value) ?? Length.Parse(value);
+
     public static void ApplyScrollbarColors(ComputedStyle style, string value)
     {
         var parts = ShorthandExpander.SplitShorthand(value);
         if (parts.Count == 0) return;
 
-        style.ScrollbarThumbColor = parts[0].Trim() == "auto"
-            ? null
-            : ColorParser.Parse(parts[0].Trim(), style);
-
-        style.ScrollbarTrackColor = parts.Count >= 2
-            ? (parts[1].Trim() == "auto" ? null : ColorParser.Parse(parts[1].Trim(), style))
-            : style.ScrollbarThumbColor;
+        // 'currentcolor' is the element's own colour, which the cascade has not necessarily settled
+        // by the time this runs, so the slot is booked and StyleAdjuster fills it after inheritance.
+        string thumb = parts[0].Trim(), track = parts.Count >= 2 ? parts[1].Trim() : thumb;
+        style.ScrollbarThumbColor = thumb == "auto" ? null : ColorParser.Parse(thumb, style);
+        style.ScrollbarTrackColor = track == "auto" ? null : ColorParser.Parse(track, style);
+        if (thumb.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
+            style.CurrentColorSlots |= (uint)ComputedStyle.CurrentColorSlot.ScrollbarThumb;
+        else style.CurrentColorSlots &= ~(uint)ComputedStyle.CurrentColorSlot.ScrollbarThumb;
+        if (track.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
+            style.CurrentColorSlots |= (uint)ComputedStyle.CurrentColorSlot.ScrollbarTrack;
+        else style.CurrentColorSlots &= ~(uint)ComputedStyle.CurrentColorSlot.ScrollbarTrack;
     }
 
     public static void Apply(ComputedStyle style, string name, string value)
@@ -127,20 +138,20 @@ public static class CssPropertyApplier
     {
         switch (name)
         {
-            case "width": style.Width = Length.Parse(value); break;
-            case "height": style.Height = Length.Parse(value); break;
-            case "min-width": style.MinWidth = Length.Parse(value); break;
-            case "min-height": style.MinHeight = Length.Parse(value); break;
-            case "max-width": style.MaxWidth = Length.Parse(value); break;
-            case "max-height": style.MaxHeight = Length.Parse(value); break;
+            case "width": style.Width = ParseSizingValue(value); break;
+            case "height": style.Height = ParseSizingValue(value); break;
+            case "min-width": style.MinWidth = ParseSizingValue(value); break;
+            case "min-height": style.MinHeight = ParseSizingValue(value); break;
+            case "max-width": style.MaxWidth = ParseSizingValue(value); break;
+            case "max-height": style.MaxHeight = ParseSizingValue(value); break;
             // Logical sizing properties map to the physical ones for the
             // horizontal writing modes the engine supports (CSS Logical §1.2).
-            case "inline-size": style.Width = Length.Parse(value); break;
-            case "block-size": style.Height = Length.Parse(value); break;
-            case "min-inline-size": style.MinWidth = Length.Parse(value); break;
-            case "min-block-size": style.MinHeight = Length.Parse(value); break;
-            case "max-inline-size": style.MaxWidth = Length.Parse(value); break;
-            case "max-block-size": style.MaxHeight = Length.Parse(value); break;
+            case "inline-size": style.Width = ParseSizingValue(value); break;
+            case "block-size": style.Height = ParseSizingValue(value); break;
+            case "min-inline-size": style.MinWidth = ParseSizingValue(value); break;
+            case "min-block-size": style.MinHeight = ParseSizingValue(value); break;
+            case "max-inline-size": style.MaxWidth = ParseSizingValue(value); break;
+            case "max-block-size": style.MaxHeight = ParseSizingValue(value); break;
             case "display": ApplyDisplay(style, value); break;
             case "position": style.Position = ParsePosition(value); break;
             case "float": style.Float = ParseFloat(value); break;
@@ -190,6 +201,18 @@ public static class CssPropertyApplier
             case "scroll-padding-right": SetScrollInset(style, value, 5); break;
             case "scroll-padding-bottom": SetScrollInset(style, value, 6); break;
             case "scroll-padding-left": SetScrollInset(style, value, 7); break;
+            // The logical edges of the same two insets (CSS Scroll Snap 1 §6.1, CSS Logical 1 §4):
+            // the block pair is the top and bottom edge, and the inline pair is the left and right
+            // one that 'direction' picks — the same edge-not-side rule the margins obey, so these
+            // four names are queued for replay once 'direction' is final.
+            case "scroll-margin-block-start": SetScrollInset(style, value, 0); break;
+            case "scroll-margin-block-end": SetScrollInset(style, value, 2); break;
+            case "scroll-margin-inline-start": SetScrollInset(style, value, InlineStartSide(style) == "right" ? 1 : 3); break;
+            case "scroll-margin-inline-end": SetScrollInset(style, value, InlineEndSide(style) == "right" ? 1 : 3); break;
+            case "scroll-padding-block-start": SetScrollInset(style, value, 4); break;
+            case "scroll-padding-block-end": SetScrollInset(style, value, 6); break;
+            case "scroll-padding-inline-start": SetScrollInset(style, value, InlineStartSide(style) == "right" ? 5 : 7); break;
+            case "scroll-padding-inline-end": SetScrollInset(style, value, InlineEndSide(style) == "right" ? 5 : 7); break;
 
             // Standard scrollbar properties.
             case "scrollbar-width":
@@ -215,8 +238,13 @@ public static class CssPropertyApplier
                 };
                 break;
             case "color-scheme":
-                var cs = value.ToLowerInvariant();
-                style.ColorScheme = cs switch { "light" => "light", "dark" => "dark", "light dark" => "light dark", _ => "normal" };
+                // The declared value is the canonical scheme list and is NOT inherited (CSS Color
+                // Adjustment 1 §5.2, measured: an element whose root says 'light dark' still answers
+                // 'normal' for itself). What the descendants of that element see is a separate fact —
+                // the used scheme, which 'light-dark()' chooses between — so the two are stored
+                // apart: ColorScheme for the surfaces a page reads, EffectiveColorScheme for paint.
+                style.ColorScheme = CssValueGrammar.CanonicalColorScheme(value) ?? "normal";
+                style.EffectiveColorScheme = style.ColorScheme;
                 break;
             // '-webkit-appearance' is an alias, not a second property: measured in the reference
             // engine, writing it changes the computed 'appearance' and the CSSOM normalises
@@ -309,7 +337,12 @@ public static class CssPropertyApplier
             case "text-emphasis": style.TextEmphasis = value; break;
             case "text-emphasis-color": style.TextEmphasisColor = value; break;
             case "text-emphasis-style": style.TextEmphasisStyle = value; break;
-            case "text-emphasis-position": style.TextEmphasisPosition = value; break;
+            case "text-emphasis-position":
+                // Vertical side first, whichever way the page wrote the pair; the computed surface
+                // drops a horizontal 'right' from this same text (see the serializer).
+                style.TextEmphasisPosition =
+                    CssValueGrammar.CanonicalTextEmphasisPosition(value) ?? "over";
+                break;
             case "text-shadow": style.TextShadow = ParseTextShadow(value); break;
             case "text-overflow": ParseTextOverflow(value, style); break;
             case "text-wrap":
@@ -356,7 +389,7 @@ public static class CssPropertyApplier
                 style.TextWrapStyle = value.Trim().ToLowerInvariant() switch
                 {
                     "stable" => TextWrapStyleType.Stable,
-                    "balanced" => TextWrapStyleType.Balanced,
+                    "balance" => TextWrapStyleType.Balanced,
                     "pretty" => TextWrapStyleType.Pretty,
                     _ => TextWrapStyleType.Auto,
                 };
@@ -382,13 +415,24 @@ public static class CssPropertyApplier
                 // CSS Overflow 3 §4.1: 'content-box' | 'border-box' | 'padding-box' | <length>.
                 // A negative length is out of range and drops the declaration.
                 {
+                    // The box and the length may come in either order (CSS Overflow 3 §4.1), so the
+                    // two words are told apart rather than matched as a phrase — measured:
+                    // '10px content-box' and 'content-box 10px' both stand and both print
+                    // 'content-box 10px'.
                     string cm = value.Trim().ToLowerInvariant();
-                    if (cm == "content-box") style.OverflowClipMarginBox = OverflowClipMarginBox.ContentBox;
-                    else if (cm == "border-box") style.OverflowClipMarginBox = OverflowClipMarginBox.BorderBox;
-                    else if (cm == "padding-box") style.OverflowClipMarginBox = OverflowClipMarginBox.PaddingBox;
-                    else
+                    var words = cm.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                    if (words.Length is 0 or > 2) break;
+                    string lengthText = "0px";
+                    foreach (var word in words)
                     {
-                        var len = Length.Parse(cm);
+                        if (word == "content-box") style.OverflowClipMarginBox = OverflowClipMarginBox.ContentBox;
+                        else if (word == "border-box") style.OverflowClipMarginBox = OverflowClipMarginBox.BorderBox;
+                        else if (word == "padding-box") style.OverflowClipMarginBox = OverflowClipMarginBox.PaddingBox;
+                        else lengthText = word;
+                    }
+                    if (lengthText != "0px")
+                    {
+                        var len = Length.Parse(lengthText);
                         // A negative length is out of range: drop the declaration.
                         if (len is PixelLength neg && neg.Value < 0) break;
                         style.OverflowClipMargin = len;
@@ -820,7 +864,16 @@ public static class CssPropertyApplier
             case "font-optical-sizing": style.FontOpticalSizing = value.ToLowerInvariant(); break;
             case "font-variation-settings": style.FontVariationSettings = value; break;
             case "font-feature-settings": style.FontFeatureSettings = value; break;
-            case "font-size-adjust": if (value != "none" && float.TryParse(value, out var fsa)) style.FontSizeAdjust = fsa; break;
+            case "font-size-adjust":
+                // 'none' says so in words and a ratio says so in a number; the grammar has already
+                // refused a percentage and a negative, and 'from-font' leaves the property at 'none'
+                // because there is no font-aspect table to read the value out of yet (#278).
+                var fas = value.Trim();
+                if (fas.Equals("none", StringComparison.OrdinalIgnoreCase)) style.FontSizeAdjust = null;
+                else if (float.TryParse(fas, System.Globalization.NumberStyles.Float,
+                         System.Globalization.CultureInfo.InvariantCulture, out var fsa))
+                    style.FontSizeAdjust = fsa;
+                break;
             case "outline": ParseOutlineShorthand(value, style); break;
             case "outline-width":
                 style.OutlineWidth = BorderWidthPx(value);
@@ -3297,6 +3350,8 @@ public static class CssPropertyApplier
             "border-inline-start-width", "border-inline-start-style", "border-inline-start-color",
             "border-inline-end-width", "border-inline-end-style", "border-inline-end-color",
             "inset-inline", "inset-inline-start", "inset-inline-end",
+            "scroll-margin-inline", "scroll-margin-inline-start", "scroll-margin-inline-end",
+            "scroll-padding-inline", "scroll-padding-inline-start", "scroll-padding-inline-end",
             "border-start-start-radius", "border-start-end-radius",
             "border-end-start-radius", "border-end-end-radius",
         };
@@ -4311,14 +4366,19 @@ public static class CssPropertyApplier
     {
         var token = value.Trim().ToLowerInvariant();
         Length? length;
-        if (token == "auto") length = new PixelLength(0);
+        // 'auto' is a value of 'scroll-padding' and not of 'scroll-margin' (measured: a margin side
+        // written 'auto' is dropped, while a padding side keeps the word). It means the zero the
+        // property starts at, so it lays out as one; the AutoLength is what lets the computed
+        // surface say the word back.
+        if (token == "auto") length = side >= 4 ? AutoLength.Instance : new PixelLength(0);
         else if (!Length.TryParse(token, out _)) return;
         else
         {
             var parsed = Length.Parse(token);
-            // A percentage would have to resolve against the scrollport, which the inset is
-            // measured from, and the grammar does not allow one at all.
-            if (parsed is PercentLength) return;
+            // A margin side takes no percentage at all (measured: 'scroll-margin-top: 50%' is
+            // dropped), and a padding side keeps the one it wrote — the scrollport it would
+            // resolve against is not known at computed-value time, so '50%' prints as '50%'.
+            if (parsed is PercentLength && side < 4) return;
             length = parsed;
         }
         switch (side)

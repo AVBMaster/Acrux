@@ -119,9 +119,19 @@ public static class ComputedValueSerializer
             // still zero wide, and a negative used value prints as one (CSS 2.1 §10.4).
             case "width": return style.ComputedSizeCss(style.Width);
             case "height": return style.ComputedSizeCss(style.Height);
-            case "min-width": return style.MinWidth != null ? LengthText(style, style.MinWidth) : "auto";
+            // The logical sizing pair answers with the physical side the writing mode selects
+            // (CSS Logical 1 §4.2) — which for the horizontal modes this engine lays out in is the
+            // inline axis = width and the block axis = height. Measured: 'block-size: 100px'
+            // computes '100px', where this engine had no case at all and answered the empty string.
+            case "inline-size": return style.ComputedSizeCss(style.Width);
+            case "block-size": return style.ComputedSizeCss(style.Height);
+            case "min-inline-size": return MinLengthText(style, style.MinWidth);
+            case "min-block-size": return MinLengthText(style, style.MinHeight);
+            case "max-inline-size": return style.MaxWidth != null ? LengthText(style, style.MaxWidth) : "none";
+            case "max-block-size": return style.MaxHeight != null ? LengthText(style, style.MaxHeight) : "none";
+            case "min-width": return MinLengthText(style, style.MinWidth);
             case "max-width": return style.MaxWidth != null ? LengthText(style, style.MaxWidth) : "none";
-            case "min-height": return style.MinHeight != null ? LengthText(style, style.MinHeight) : "auto";
+            case "min-height": return MinLengthText(style, style.MinHeight);
             case "max-height": return style.MaxHeight != null ? LengthText(style, style.MaxHeight) : "none";
 
             case "top": return LengthText(style, style.Top);
@@ -310,7 +320,24 @@ public static class ComputedValueSerializer
             // 'overflow-clip-margin' is a length plus the box it measures from; the length form
             // is what the reference engine prints for a plain value.
             case "overflow-clip-margin":
-                return style.OverflowClipMargin == null ? "0px" : LengthText(style, style.OverflowClipMargin);
+                // The box and the length are one value, and the engine says a part only when it left
+                // its initial: the box is 'padding-box' and the length '0px' unless the page moved
+                // them (measured: 'padding-box' reads '0px', 'border-box' reads 'border-box', and
+                // '10px content-box' reads 'content-box 10px' — the box first, wherever it was
+                // written).
+                {
+                    string box = style.OverflowClipMarginBox switch
+                    {
+                        OverflowClipMarginBox.ContentBox => "content-box",
+                        OverflowClipMarginBox.BorderBox => "border-box",
+                        _ => "padding-box",
+                    };
+                    var margin = style.OverflowClipMargin == null
+                        ? "0px" : LengthText(style, style.OverflowClipMargin);
+                    bool zero = margin == "0px";
+                    if (box == "padding-box") return margin;
+                    return zero ? box : box + " " + margin;
+                }
             // The scroll insets (CSS Scroll Snap 1 §6.1): a side the page never mentioned is the
             // initial zero, not 'auto' — 'auto' is only another spelling of that zero.
             case "scroll-margin-top": return ScrollInsetText(style, style.ScrollMarginTop);
@@ -321,6 +348,32 @@ public static class ComputedValueSerializer
             case "scroll-padding-right": return ScrollInsetText(style, style.ScrollPaddingRight);
             case "scroll-padding-bottom": return ScrollInsetText(style, style.ScrollPaddingBottom);
             case "scroll-padding-left": return ScrollInsetText(style, style.ScrollPaddingLeft);
+            // The logical edges of the two insets answer with the physical side the writing
+            // direction put them on (CSS Logical 1 §4) — the same side SetScrollInset wrote.
+            case "scroll-margin-block-start": return ScrollInsetText(style, style.ScrollMarginTop);
+            case "scroll-margin-block-end": return ScrollInsetText(style, style.ScrollMarginBottom);
+            case "scroll-margin-inline-start":
+                return ScrollInsetText(style, style.Direction == "rtl"
+                    ? style.ScrollMarginRight : style.ScrollMarginLeft);
+            case "scroll-margin-inline-end":
+                return ScrollInsetText(style, style.Direction == "rtl"
+                    ? style.ScrollMarginLeft : style.ScrollMarginRight);
+            case "scroll-padding-block-start": return ScrollInsetText(style, style.ScrollPaddingTop);
+            case "scroll-padding-block-end": return ScrollInsetText(style, style.ScrollPaddingBottom);
+            case "scroll-padding-inline-start":
+                return ScrollInsetText(style, style.Direction == "rtl"
+                    ? style.ScrollPaddingRight : style.ScrollPaddingLeft);
+            case "scroll-padding-inline-end":
+                return ScrollInsetText(style, style.Direction == "rtl"
+                    ? style.ScrollPaddingLeft : style.ScrollPaddingRight);
+            case "scroll-margin-block":
+                return Pair(Longhand(style, "scroll-margin-block-start"), Longhand(style, "scroll-margin-block-end"));
+            case "scroll-margin-inline":
+                return Pair(Longhand(style, "scroll-margin-inline-start"), Longhand(style, "scroll-margin-inline-end"));
+            case "scroll-padding-block":
+                return Pair(Longhand(style, "scroll-padding-block-start"), Longhand(style, "scroll-padding-block-end"));
+            case "scroll-padding-inline":
+                return Pair(Longhand(style, "scroll-padding-inline-start"), Longhand(style, "scroll-padding-inline-end"));
             case "caret-shape": return string.IsNullOrWhiteSpace(style.CaretShape)
                 ? "auto" : style.CaretShape;
             case "text-underline-position": return UnderlinePositionText(style.TextUnderlinePosition);
@@ -369,6 +422,11 @@ public static class ComputedValueSerializer
             case "font-variant-caps": return style.FontVariantCaps;
             case "font-kerning": return style.FontKerning;
             case "font-optical-sizing": return style.FontOpticalSizing;
+            // A ratio prints as the number it is and the initial prints as its own word (measured:
+            // 'font-size-adjust: 0.5' computes '0.5', 'none' computes 'none', and the unset case is
+            // 'none' — never the empty string the property used to answer).
+            case "font-size-adjust": return style.FontSizeAdjust is float ratio
+                ? CssValueTokenizer.Num(ratio) : "none";
             // 'normal' is reported as the percentage it means.
             case "font-stretch": return style.FontStretch is "" or "normal" ? "100%" : style.FontStretch;
             case "text-rendering": return style.TextRendering;
@@ -605,7 +663,7 @@ public static class ComputedValueSerializer
             // 'filled' is the initial shape style, and the reference engine leaves it out of the
             // computed value (measured: 'text-emphasis: filled circle' reads back as 'circle').
             case "text-emphasis-style": return TextEmphasisStyleText(style.TextEmphasisStyle);
-            case "text-emphasis-position": return style.TextEmphasisPosition;
+            case "text-emphasis-position": return EmphasisPositionText(style.TextEmphasisPosition);
             case "will-change": return style.WillChange ?? "auto";
             // The computed value of 'content' is the list the page wrote, with the substitutions
             // the property owns already made (see CssFunctionEvaluator.EvaluateForContent). A lone
@@ -1093,7 +1151,24 @@ public static class ComputedValueSerializer
     /// length zero, so an untouched side reads back as '0px' — never as 'auto', which is only
     /// another spelling the page may use for that same zero (measured).</summary>
     private static string ScrollInsetText(ComputedStyle style, Length? length) =>
-        length == null ? "0px" : LengthText(style, length);
+        length == null ? "0px" : length is AutoLength ? "auto" : LengthText(style, length);
+
+    /// <summary>The computed text of <c>text-emphasis-position</c>: the vertical side always, the
+    /// horizontal one only when the page put a <c>left</c> there. 'right' is the word the engine
+    /// remembers for the pair, and the reference engine never prints it (measured: 'over right' and
+    /// 'under right' both compute one word, 'over left' and 'under left' both compute two).</summary>
+    private static string EmphasisPositionText(string stored)
+    {
+        var words = (stored ?? "over").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        var kept = new System.Collections.Generic.List<string>(2);
+        foreach (var word in words)
+        {
+            var p = word.ToLowerInvariant();
+            if (p is "over" or "under") kept.Add(p);
+            else if (p == "left") kept.Add(p);
+        }
+        return kept.Count == 0 ? "over" : string.Join(" ", kept);
+    }
 
     private static string RadiusText(float x, float y)
     {
@@ -1589,6 +1664,19 @@ public static class ComputedValueSerializer
     /// <summary>A grid line pair as the engine prints it: the trailing <c>auto</c> is what an
     /// omitted end line means, so 'grid-column: span 2' reads 'span 2' and only a second line that
     /// says something of its own is printed (measured; '1 / 3' keeps both).</summary>
+    /// <summary>A minimum size: the initial is the 'auto' the page may write, and the reference
+    /// engine computes that spelling to the zero it stands for (measured: 'min-width: auto' reads
+    /// 'auto' in the specified value and '0px' in the computed one).</summary>
+    private static string MinLengthText(ComputedStyle style, Length? length)
+    {
+        // A minimum with nothing written at it is the number zero, not the keyword 'auto': the
+        // reference engine answers '0px' (measured, and the same answer a dropped
+        // 'min-width: none' falls back to). 'auto' written on purpose means the same zero.
+        if (length == null) return "0px";
+        var text = LengthText(style, length);
+        return text.Equals("auto", StringComparison.OrdinalIgnoreCase) ? "0px" : text;
+    }
+
     private static string GridLine(string start, string end) =>
         end == "auto" ? start : (start == "auto" && end == "auto" ? "auto" : $"{start} / {end}");
 

@@ -98,6 +98,73 @@ public static class EchoedProperties
             new() { Name = "shape-image-threshold", Initial = "0",
                 Normalize = NormalizeShapeImageThreshold },
 
+            // ===== CSS Text 4 §3.9 (the autospace pair) and CSS Text 3 §3.1.5, measured word by
+            // word. 'text-autospace' takes 'normal' or its initial 'no-autospace' and nothing of
+            // the sub-keywords the older draft spelled ('none', 'insert', 'replace',
+            // 'ideograph-space', and any two-word list are all refused); 'text-spacing-trim' takes
+            // 'normal', 'space-all', 'space-first' and 'trim-start' alone ('trim-both', 'trim-edge',
+            // 'trim-atomic-start', 'allow-end' and every two-word list are refused).
+            new() { Name = "text-autospace", Initial = "no-autospace",
+                Normalize = Single("normal", "no-autospace") },
+            new() { Name = "text-spacing-trim", Initial = "normal",
+                Normalize = Single("normal", "space-all", "space-first", "trim-start") },
+
+            // ===== CSS UI 4 §3.7 and the caret's own animation. The reference engine declares
+            // 'caret-animation' with ONE value — 'auto' — and drops 'always' and 'never' with it
+            // (measured), and 'interactivity' takes 'auto' and 'inert' only.
+            new() { Name = "caret-animation", Initial = "auto", Normalize = Single("auto") },
+            new() { Name = "interactivity", Initial = "auto", Normalize = Single("auto", "inert") },
+            new() { Name = "scroll-initial-target", Initial = "none",
+                Normalize = Single("none", "nearest") },
+
+            // ===== CSS Animations 2 §3 and Scroll-linked Animations 1 §3/§5. A timeline name is a
+            // <dashed-ident> or 'none', an axis is ONE keyword ('inline block' is refused,
+            // measured), and 'animation-composition' is a comma list of the three composition
+            // keywords — one per keyframe animation, so a space between two of them is no list.
+            new() { Name = "animation-composition", Initial = "replace",
+                Normalize = NormalizeCompositionList },
+            new() { Name = "animation-range", Initial = "normal",
+                Normalize = NormalizeAnimationRange },
+            new() { Name = "animation-range-start", Initial = "normal",
+                Normalize = NormalizeAnimationRangeEdge },
+            new() { Name = "animation-range-end", Initial = "normal",
+                Normalize = NormalizeAnimationRangeEdge },
+            new() { Name = "scroll-timeline-axis", Initial = "block",
+                Normalize = Single("block", "inline", "x", "y", "initial") },
+            new() { Name = "view-timeline-axis", Initial = "block",
+                Normalize = Single("block", "inline", "x", "y", "initial") },
+            new() { Name = "scroll-timeline-name", Initial = "none",
+                Normalize = NormalizeTimelineName },
+            new() { Name = "view-timeline-name", Initial = "none",
+                Normalize = NormalizeTimelineName },
+            new() { Name = "timeline-scope", Initial = "none", Normalize = NormalizeTimelineScope },
+            new() { Name = "view-timeline-inset", Initial = "auto",
+                Normalize = NormalizeViewTimelineInset },
+
+            // ===== CSS Fonts 5 §11.4 and CSS Anchor Positioning §4.7. 'font-palette' is ONE of the
+            // two preset keywords or a single <dashed-ident> ('light dark' is refused, measured);
+            // 'position-try-fallbacks' is a COMMA list of the flip and insert keywords, so two of
+            // them written with only a space between are no value at all.
+            // CSS Overflow 5 §3: which way the marker group sits relative to its scroller, with the
+            // word for what goes in it behind that. Measured: the side alone stands ('before'),
+            // 'links' may follow it, and the two are the only content word — 'before first',
+            // 'before auto', a bare 'links' and 'before after' are all dropped. The computed surface
+            // always says what the group holds, so a lone side grows its 'links'.
+            new() { Name = "scroll-marker-group", Initial = "none",
+                Normalize = NormalizeScrollMarkerGroup,
+                ComputedText = ScrollMarkerGroupComputed },
+            new() { Name = "font-palette", Initial = "normal", Normalize = NormalizeFontPalette },
+            new() { Name = "position-try-fallbacks", Initial = "none",
+                Normalize = NormalizePositionTryFallbacks },
+            // CSS Anchor Positioning §3.2/§4.5/§4.6: an anchor name is 'none' or ONE
+            // <dashed-ident>, 'anchor-scope' adds 'all', and 'position-try-order' is one of the
+            // three orderings (measured, both surfaces).
+            new() { Name = "anchor-name", Initial = "none", Normalize = NormalizeTimelineName },
+            new() { Name = "anchor-scope", Initial = "none", Normalize = NormalizeAnchorScope },
+            new() { Name = "position-try-order", Initial = "normal",
+                Normalize = Single("normal", "most-width", "most-height", "lighter", "brighter",
+                    "color", "dark", "light") },
+
             // ===== Fonts 4 §9. A tag is a quoted string, and the engine prints it with double
             // quotes whichever way the page wrote it (measured: "'SIN'" reads '"SIN"').
             new() { Name = "font-language-override", Initial = "normal", Inherited = true,
@@ -234,6 +301,151 @@ public static class EchoedProperties
     // ===== the readers =====
 
     /// <summary>One keyword of a closed set, in the engine's own lower case.</summary>
+    // ===== The normalizers the block above names. Each one is the measured value set of its
+    // property, and each returns the canonical text or null for a value the reference engine drops.
+
+    private static string? NormalizeCompositionList(string value) =>
+        KeywordList(value, "add", "accumulate", "replace");
+
+    private static string? NormalizeScrollMarkerGroup(string value)
+    {
+        var words = Words(value);
+        if (words.Length == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+            return "none";
+        if (words.Length is < 1 or > 2) return null;
+        var side = words[0].ToLowerInvariant();
+        if (side is not ("before" or "after")) return null;
+        if (words.Length == 2)
+        {
+            if (!words[1].Equals("links", StringComparison.OrdinalIgnoreCase)) return null;
+            return side + " links";
+        }
+        return side;
+    }
+
+    private static string ScrollMarkerGroupComputed(string canonical, Acrux.Core.Dom.ComputedStyle _) =>
+        // The group always says what it holds, so a side written on its own grows the word the page
+        // left out — and one that already said 'links' says it once (measured: 'before' computes
+        // 'before links' and 'before links' computes itself).
+        canonical is "none" or "before links" or "after links" ? canonical
+            : canonical + " links";
+
+    private static string? NormalizeFontPalette(string value)
+    {
+        var words = Words(value);
+        if (words.Length == 1)
+        {
+            var one = words[0];
+            if (one.Equals("normal", StringComparison.OrdinalIgnoreCase)) return "normal";
+            if (one.Equals("light", StringComparison.OrdinalIgnoreCase)) return "light";
+            if (one.Equals("dark", StringComparison.OrdinalIgnoreCase)) return "dark";
+            return IsDashedIdent(one) ? one : null;
+        }
+        return null;
+    }
+
+    /// <summary>'anchor-scope' is 'none', 'all', or a comma list of <dashed-ident>s (CSS Anchor
+    /// Positioning §3.3); 'position-anchor' is 'auto' or one dashed name (§4.3).</summary>
+    private static string? NormalizeAnchorScope(string value)
+    {
+        var words = Words(value);
+        if (words.Length == 1 && (words[0].Equals("none", StringComparison.OrdinalIgnoreCase)
+            || words[0].Equals("all", StringComparison.OrdinalIgnoreCase)))
+            return words[0].ToLowerInvariant();
+        return DashedList(value);
+    }
+
+    private static string? NormalizePositionTryFallbacks(string value) =>
+        KeywordList(value, "none", "flip-block", "flip-inline", "flip-start", "flip-end",
+            "insert-block", "insert-inline", "insert-start", "insert-end");
+
+    private static string? NormalizeTimelineName(string value)
+    {
+        var words = Words(value);
+        if (words.Length != 1) return null;
+        return words[0].Equals("none", StringComparison.OrdinalIgnoreCase) ? "none"
+            : IsDashedIdent(words[0]) ? words[0] : null;
+    }
+
+    private static string? NormalizeTimelineScope(string value)
+    {
+        var words = Words(value);
+        if (words.Length == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
+        return DashedList(value);
+    }
+
+    private static string? NormalizeViewTimelineInset(string value)
+    {
+        var words = Words(value);
+        if (words.Length is < 1 or > 2) return null;
+        foreach (var word in words)
+        {
+            if (word.Equals("auto", StringComparison.OrdinalIgnoreCase)
+                || word.Equals("none", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!Acrux.Core.Css.CssValueGrammar.IsLengthOrPercentage(word)) return null;
+        }
+        return string.Join(" ", words.Select(w => w.ToLowerInvariant()));
+    }
+
+    private static string? NormalizeAnimationRange(string value)
+    {
+        var words = Words(value);
+        if (words.Length == 0 || words.Length > 4) return null;
+        if (words.Length == 1 && words[0].Equals("normal", StringComparison.OrdinalIgnoreCase))
+            return "normal";
+        return NormalizeAnimationRangeEdge(value) != null ? string.Join(" ", words) : null;
+    }
+
+    private static string? NormalizeAnimationRangeEdge(string value)
+    {
+        var words = Words(value);
+        if (words.Length is < 1 or > 2) return null;
+        if (words[0].Equals("normal", StringComparison.OrdinalIgnoreCase))
+            return words.Length == 1 ? "normal" : null;
+        bool firstName = System.Array.IndexOf(RangeNames, words[0].ToLowerInvariant()) >= 0;
+        if (firstName)
+        {
+            if (words.Length == 2 && !Acrux.Core.Css.CssValueGrammar.IsLengthOrPercentage(words[1]))
+                return null;
+            return string.Join(" ", words.Select(w => w.ToLowerInvariant()));
+        }
+        if (words.Length != 1 || !Acrux.Core.Css.CssValueGrammar.IsLengthOrPercentage(words[0]))
+            return null;
+        return words[0].ToLowerInvariant();
+    }
+
+    private static readonly string[] RangeNames =
+        { "contain", "cover", "entry", "exit", "entry-crossing", "exit-crossing" };
+
+    /// <summary>A comma list of one keyword per animation, each from the given set — a space
+    /// between two of them is not a list (measured: 'replace accumulate' is dropped where
+    /// 'add, accumulate' stands).</summary>
+    private static string? KeywordList(string value, params string[] allowed)
+    {
+        var parts = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(value, ',');
+        if (parts.Count == 0) return null;
+        var kept = new string[parts.Count];
+        for (int i = 0; i < parts.Count; i++)
+        {
+            var words = Words(parts[i]);
+            if (words.Length != 1) return null;
+            int index = System.Array.FindIndex(allowed,
+                a => a.Equals(words[0], StringComparison.OrdinalIgnoreCase));
+            if (index < 0) return null;
+            kept[i] = allowed[index];
+        }
+        return string.Join(", ", kept);
+    }
+
+    private static string? DashedList(string value)
+    {
+        var parts = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0) return null;
+        foreach (var part in parts)
+            if (!IsDashedIdent(part)) return null;
+        return string.Join(", ", parts);
+    }
+
     private static Func<string, string?> Single(params string[] allowed) => text =>
     {
         var words = Words(text);

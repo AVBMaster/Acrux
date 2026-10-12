@@ -546,7 +546,7 @@ public static class ColorParser
         int at = IndexOfTopLevelComma(inner);
         if (at < 0) return null;
 
-        string scheme = context?.ColorScheme ?? "normal";
+        string scheme = context?.EffectiveColorScheme ?? "normal";
         bool dark = scheme.Contains("dark", StringComparison.OrdinalIgnoreCase) &&
                     !scheme.Contains("light", StringComparison.OrdinalIgnoreCase);
         string chosen = (dark ? inner[(at + 1)..] : inner[..at]).Trim();

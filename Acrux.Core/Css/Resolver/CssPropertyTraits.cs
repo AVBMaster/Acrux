@@ -28,7 +28,7 @@ public static class CssPropertyTraits
         // parent's character (measured: 'getComputedStyle(child)["-webkit-text-security"]' is the
         // parent's 'disc' and the child's run is bullets).
         "text-security",
-        "word-spacing", "writing-mode", "overflow-wrap", "color-scheme", "ruby-position",
+        "word-spacing", "writing-mode", "overflow-wrap", "ruby-position",
         "text-emphasis", "text-emphasis-color", "text-emphasis-style", "text-emphasis-position",
     };
 
@@ -192,6 +192,7 @@ public static class CssPropertyTraits
         ["-webkit-border-horizontal-spacing"] = ("0px", true),
         ["-webkit-border-vertical-spacing"] = ("0px", true),
         ["-webkit-font-smoothing"] = ("auto", true),
+        ["-webkit-mask-box-image"] = ("none", false),
         ["-webkit-mask-box-image-outset"] = ("0", false),
         ["-webkit-mask-box-image-repeat"] = ("stretch", false),
         ["-webkit-mask-box-image-slice"] = ("0 fill", false),
@@ -231,6 +232,16 @@ public static class CssPropertyTraits
     /// expansion — 'above 5px url(a.png)' with its slice, origin and repeat — is still open (#259).</summary>
     public static string LegacyComputedText(string name, string declared)
     {
+        // The old flexbox names its axis two ways, and the computed surface only knows the modern
+        // pair (measured: '-webkit-box-orient: inline-axis' computes 'horizontal' while it still
+        // echoes 'inline-axis' as written).
+        if (name.Equals("-webkit-box-orient", StringComparison.OrdinalIgnoreCase))
+            return declared.Trim().ToLowerInvariant() switch
+            {
+                "inline-axis" => "horizontal",
+                "block-axis" => "vertical",
+                _ => declared,
+            };
         if (!name.Equals("-webkit-box-reflect", StringComparison.OrdinalIgnoreCase)) return declared;
         var words = declared.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
         bool direction = words.Length > 0 && words[0] is "above" or "below" or "left" or "right";
@@ -269,12 +280,9 @@ public static class CssPropertyTraits
     /// font and text properties of CSS Fonts 4 and CSS Text 4.</summary>
     private static readonly HashSet<string> ReferenceDeclared = new(StringComparer.Ordinal)
     {
-        "animation-composition", "animation-range", "animation-range-end", "animation-range-start",
-        "baseline-source", "caret-shape", "font-palette", "font-variant-alternates",
+        "baseline-source", "font-variant-alternates",
         "font-variant-emoji", "overflow-block", "overflow-inline", "overlay", "paint-order",
-        "position-area", "position-try-fallbacks", "position-visibility", "scroll-timeline",
-        "scroll-timeline-axis", "scroll-timeline-name", "shape-image-threshold", "shape-margin",
-        "shape-outside", "text-autospace", "text-spacing-trim",
+        "position-area", "position-visibility", "scroll-timeline",
         "transition-behavior", "x", "y",
     };
 

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b283 probe — a sweep of properties this engine has barely asked about</title></head><body>
+<div id="probe" style="font-size:16px;color:rgb(9,9,9);width:200px"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9);width:200px'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9);width:200px'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var CASES = [
+  // the Chrome-12x text spacing pair, declared in this engine's property list
+  ['text-autospace','normal'],['text-autospace','none'],['text-autospace','normal ideograph-alpha'],
+  ['text-autospace','ideograph-space'],['text-autospace','insert'],['text-autospace','replace'],
+  ['text-spacing-trim','space-all'],['text-spacing-trim','trim-start'],['text-spacing-trim','space-first'],
+  ['text-spacing-trim','trim-both'],['text-spacing-trim','normal'],['text-spacing-trim','BOTH'],
+  // caret and accent
+  ['caret-animation','auto'],['caret-animation','always'],['caret-animation','never'],
+  ['caret-shape','bar'],['caret-color','#00f'],
+  ['accent-color','auto'],['accent-color','#00f'],
+  ['color-scheme','light dark'],['color-scheme','ONLY'],['color-scheme','normal'],
+  // overlay scrollbars and the scrollbar trio
+  ['overlay-scrollbars','auto'],['overlay-scrollbars','none'],
+  ['scrollbar-width','auto'],['scrollbar-width','thin'],['scrollbar-width','none'],['scrollbar-width','THIN'],
+  ['scrollbar-color','auto'],['scrollbar-color','red blue'],['scrollbar-color','red'],
+  ['scrollbar-gutter','auto'],['scrollbar-gutter','stable'],
+  // sizing and overflow corners
+  ['block-size','100px'],['inline-size','50%'],['min-inline-size','auto'],['max-block-size','none'],
+  ['overflow-clip-margin','0px'],['overflow-clip-margin','content-box'],['overflow-clip-margin','10px'],
+  ['overflow-anchor','auto'],['overflow-anchor','none'],
+  ['resize','inline'],['resize','both horizontal'],
+  // text corners
+  ['text-align-all','center'],['text-align-last','auto'],
+  ['text-justify','auto'],['text-justify','inter-word'],
+  ['text-emphasis-position','over'],['text-emphasis-position','left'],['text-emphasis-position','over right'],
+  ['text-emphasis-style','filled circle'],['text-emphasis-style','open dot'],['text-emphasis-style','sesame'],
+  ['text-decoration-skip-ink','auto'],['text-decoration-skip-ink','none'],
+  ['text-decoration-thickness','25%'],['text-decoration-thickness','from-font'],
+  ['text-underline-offset','-3px'],['text-wrap-mode','wrap'],
+  ['text-wrap-style','balance'],['text-wrap-style','stable'],
+  ['hanging-punctuation','first'],['hanging-punctuation','allow-end force-end'],
+  ['hyphenate-limit-chars','2 3 4'],['hyphenate-limit-chars','auto'],
+  // line clamp and box
+  ['line-clamp','2'],['line-clamp','none'],['webkit-line-clamp','3'],
+  ['box-decoration-break','slice clone'],
+  ['box-orient','inline-axis'],['box-align','center'],['box-flex','2'],
+  // fonts
+  ['font-optical-sizing','none'],['font-optical-sizing','auto'],
+  ['font-palette','normal'],['font-palette','light'],
+  ['font-size-detect','auto'],['font-variation-settings','"wght" 400'],
+  ['font-language-override','NORMAL'],['font-size-adjust','0.5'],['font-size-adjust','none'],
+  // views and effects
+  ['view-transition-name','none'],['view-transition-name','x'],
+  ['will-change','auto'],['will-change','scroll-position'],
+  ['contain-intrinsic-block-size','auto 30px'],['contain-intrinsic-inline-size','auto 40px'],
+  ['content-visibility','auto'],['content-visibility','visible'],
+  ['interactivity','inert'],['interactivity','auto'],
+  ['scroll-initial-target','none'],['scroll-initial-target','nearest'],
+  ['scroll-margin-block','1px 2px'],['scroll-padding-inline','auto'],
+  ['scroll-timeline-axis','block'],['scroll-timeline-name','--x'],
+  ['timeline-scope','--x'],['view-timeline-name','--y'],['view-timeline-axis','inline'],
+  ['animation-composition','add'],['animation-composition','replace accumulate'],
+  ['animation-timeline','auto'],['animation-range','normal'],
+  ['transition-property','all'],['transition-timing-function','linear'],
+  ['offset-anchor','auto'],['offset-distance','50%'],['offset-rotate','auto 90deg'],
+  ['rotate','x 45deg'],['scale','1 2 3'],['translate','10px 20px'],
+  ['anchor-name','--a'],['anchor-scope','--a'],['position-anchor','--a'],
+  ['position-try-order','most-height'],['position-try-fallbacks','flip-block']
+];
+var out = [];
+for (var i=0;i<CASES.length;i++) {
+  var c = CASES[i];
+  out.push(i + '|' + c[0] + '|' + c[1] + '|' + spec(c[0],c[1]) + '|' + comp(c[0],c[1]));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

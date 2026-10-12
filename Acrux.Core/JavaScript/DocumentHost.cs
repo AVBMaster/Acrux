@@ -963,8 +963,11 @@ public class ComputedStyleHost
             // content box the layout produced). A percentage we cannot resolve yet — the box the
             // reference engine measures it against is the containing block's, which this surface
             // does not look at — stays the authored percentage.
-            case "width": return SizeUsed(text, box.ContentBox.Width);
-            case "height": return SizeUsed(text, box.ContentBox.Height);
+            // The logical pair reports the used value of the physical side it selects, exactly as
+            // its twin does (CSS Logical 1 §4.2; measured: 'inline-size: 50%' and 'width: 50%'
+            // answer the same number, where the name alone decided whether the layout was asked).
+            case "width": case "inline-size": return SizeUsed(text, box.ContentBox.Width);
+            case "height": case "block-size": return SizeUsed(text, box.ContentBox.Height);
             case "margin-top": case "margin-right": case "margin-bottom": case "margin-left":
             case "padding-top": case "padding-right": case "padding-bottom": case "padding-left":
             case "margin-block-start": case "margin-block-end":

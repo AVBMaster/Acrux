@@ -131,7 +131,7 @@ public static class CssInheritance
         child.ImageRendering = parent.ImageRendering;
         child.AccentColor = parent.AccentColor;
         child.CaretColor = parent.CaretColor;
-        child.ColorScheme = parent.ColorScheme;
+        child.EffectiveColorScheme = parent.EffectiveColorScheme;
         child.ForcedColorAdjust = parent.ForcedColorAdjust;
         child.PointerEvents = parent.PointerEvents;
         child.UserSelect = parent.UserSelect;

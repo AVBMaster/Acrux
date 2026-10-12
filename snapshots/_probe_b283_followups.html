@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b283 probe 3 — the value sets the sweep left ambiguous</title></head><body>
+<div id="probe" style="font-size:16px;color:rgb(9,9,9);width:200px"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9);width:200px'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9);width:200px'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var CASES = [
+  // color-scheme: is a lone 'only' a value, and what does the computed surface print?
+  ['color-scheme','only'],['color-scheme','only light'],['color-scheme','light only'],
+  ['color-scheme','normal'],['color-scheme','light'],['color-scheme','dark'],
+  ['color-scheme','Light'],['color-scheme','light dark'],['color-scheme','brown'],
+  ['color-scheme','dark brown'],['color-scheme','normal normal'],['color-scheme','light light'],
+  ['color-scheme','--x'],['color-scheme','none'],
+  // text-emphasis-position: which side is printed when only one was authored?
+  ['text-emphasis-position','over'],['text-emphasis-position','under'],
+  ['text-emphasis-position','over left'],['text-emphasis-position','under right'],
+  ['text-emphasis-position','over right'],
+  // text-wrap shorthand: what is elided from the echo?
+  ['text-wrap','wrap pretty'],['text-wrap','pretty wrap'],['text-wrap','pretty'],
+  ['text-wrap','balance'],['text-wrap','stable'],['text-wrap','wrap'],
+  ['text-wrap','stable freeze'],['text-wrap','wrap balance'],['text-wrap','anywhere stable'],
+  ['text-wrap','balance pretty'],
+  // font-size-adjust computed, keyword by keyword
+  ['font-size-adjust','none'],['font-size-adjust','0.5'],['font-size-adjust','1'],
+  ['font-size-adjust','0.458984'],['font-size-adjust','from-font'],['font-size-adjust','-1'],
+  // the sizing family's computed surface (no viewport dependence: keywords only)
+  ['min-width','none'],['min-width','auto'],['min-width','0px'],['min-width','min-content'],
+  ['max-width','none'],['max-width','auto'],['max-width','min-content'],['max-width','fit-content'],
+  ['min-block-size','none'],['max-block-size','none'],['max-inline-size','auto'],
+  ['width','none'],['height','none'],['width','stretch'],['max-width','stretch'],
+  ['min-width','stretch'],
+  // scrollbar-color and the currentcolor it must resolve
+  ['scrollbar-color','currentcolor blue'],['scrollbar-color','blue currentcolor'],
+  ['scrollbar-color','auto'],['scrollbar-color','red rgb(0, 255, 0)'],
+  // scroll-marker-group: the reference declares it; what does it take?
+  ['scroll-marker-group','none'],['scroll-marker-group','before'],['scroll-marker-group','after'],
+  ['scroll-marker-group','first'],['scroll-marker-group','last'],['scroll-marker-group','normal'],
+  ['scroll-marker-group','discard'],['scroll-marker-group','contain'],['scroll-marker-group','cover'],
+  ['scroll-marker-group','before links'],['scroll-marker-group','after first'],
+  ['scroll-marker-group','before auto'],
+  // and the properties the sweep found refused
+  ['overlay-scrollbars','auto'],['overlay-scrollbars','none'],['font-size-detect','auto'],
+  ['text-align-all','center'],['hanging-punctuation','first'],['box-orient','inline-axis'],
+  ['line-clamp','3'],['line-clamp','none']
+];
+var out = [];
+for (var i=0;i<CASES.length;i++) {
+  var c = CASES[i];
+  out.push(i + '|' + c[0] + '|' + c[1] + '|' + spec(c[0],c[1]) + '|' + comp(c[0],c[1]));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

@@ -93,6 +93,13 @@ public static class ShorthandExpander
             // edges is enumerated, folded and demoted as the pair the page wrote (CSS Logical 1 §4).
             case "inset-block": ExpandLogicalPair(result, "inset-block", value); break;
             case "inset-inline": ExpandLogicalPair(result, "inset-inline", value); break;
+            // The scroll insets address the same two edges (CSS Scroll Snap 1 §6.1), and a page that
+            // writes 'scroll-margin-block: 1px 2px' has written both of its longhands — which is what
+            // the computed surface of the pair then reads back (measured: it answers '1px 2px').
+            case "scroll-margin-block": ExpandLogicalPair(result, "scroll-margin-block", value); break;
+            case "scroll-margin-inline": ExpandLogicalPair(result, "scroll-margin-inline", value); break;
+            case "scroll-padding-block": ExpandLogicalPair(result, "scroll-padding-block", value); break;
+            case "scroll-padding-inline": ExpandLogicalPair(result, "scroll-padding-inline", value); break;
             case "overflow": ExpandOverflow(result, value); break;
             case "mask": ExpandMask(result, value); break;
             case "offset": ExpandOffset(result, value); break;
@@ -145,6 +152,10 @@ public static class ShorthandExpander
             "padding-inline" => new[] { "padding-inline-start", "padding-inline-end" },
             "inset-block" => new[] { "inset-block-start", "inset-block-end" },
             "inset-inline" => new[] { "inset-inline-start", "inset-inline-end" },
+            "scroll-margin-block" => new[] { "scroll-margin-block-start", "scroll-margin-block-end" },
+            "scroll-margin-inline" => new[] { "scroll-margin-inline-start", "scroll-margin-inline-end" },
+            "scroll-padding-block" => new[] { "scroll-padding-block-start", "scroll-padding-block-end" },
+            "scroll-padding-inline" => new[] { "scroll-padding-inline-start", "scroll-padding-inline-end" },
             "overflow" => new[] { "overflow-x", "overflow-y" },
             "contain-intrinsic-size" => new[] { "contain-intrinsic-width", "contain-intrinsic-height" },
             "mask" => new[] { "mask-image", "mask-position", "mask-size", "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode" },
@@ -204,6 +215,8 @@ public static class ShorthandExpander
         // from it reads back empty through the CSSOM even though the shorthand set it.
         "place-content", "place-items", "place-self", "list-style",
         "scroll-margin", "scroll-padding", "offset",
+        "scroll-margin-block", "scroll-margin-inline",
+        "scroll-padding-block", "scroll-padding-inline",
         "border-block", "border-inline", "border-block-start", "border-block-end",
         "border-inline-start", "border-inline-end", "border-block-width", "border-block-style",
         "border-block-color", "border-inline-width", "border-inline-style",
@@ -269,7 +282,9 @@ public static class ShorthandExpander
             _ => "collapse",
         };
         string mode = head == "pre" || head == "nowrap" ? "nowrap" : "wrap";
-        string style = v.Contains("balance") ? "balanced"
+        // The style is emitted in the spelling the property itself takes: 'balance', not the
+        // 'balanced' of an older draft (measured: 'text-wrap-style: balanced' is dropped).
+        string style = v.Contains("balance") ? "balance"
             : v.Contains("stable") ? "stable"
             : v.Contains("pretty") ? "pretty" : "auto";
         result["white-space-collapse"] = collapse;
@@ -308,7 +323,7 @@ public static class ShorthandExpander
     {
         string v = value.Trim().ToLowerInvariant();
         result["text-wrap-mode"] = v.Contains("nowrap") ? "nowrap" : "wrap";
-        result["text-wrap-style"] = v.Contains("balance") ? "balanced"
+        result["text-wrap-style"] = v.Contains("balance") ? "balance"
             : v.Contains("stable") ? "stable"
             : v.Contains("pretty") ? "pretty" : "auto";
     }
@@ -938,6 +953,10 @@ public static class ShorthandExpander
         "padding-inline" => new[] { "padding-inline-start", "padding-inline-end" },
         "inset-block" => new[] { "inset-block-start", "inset-block-end" },
         "inset-inline" => new[] { "inset-inline-start", "inset-inline-end" },
+        "scroll-margin-block" => new[] { "scroll-margin-block-start", "scroll-margin-block-end" },
+        "scroll-margin-inline" => new[] { "scroll-margin-inline-start", "scroll-margin-inline-end" },
+        "scroll-padding-block" => new[] { "scroll-padding-block-start", "scroll-padding-block-end" },
+        "scroll-padding-inline" => new[] { "scroll-padding-inline-start", "scroll-padding-inline-end" },
         "outline" => new[] { "outline-color", "outline-style", "outline-width" },
         "border-width" => new[] { "border-top-width", "border-right-width", "border-bottom-width", "border-left-width" },
         "border-style" => new[] { "border-top-style", "border-right-style", "border-bottom-style", "border-left-style" },

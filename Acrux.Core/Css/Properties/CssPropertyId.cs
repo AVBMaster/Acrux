@@ -503,6 +503,34 @@ public enum CssPropertyId
     ShapeOutside,
     ShapeMargin,
     ShapeImageThreshold,
+    // The names below are declared by the reference engine and read, validated, stored and echoed
+    // here, but no layout step consumes them yet (the timeline pair has no scroll or view timeline
+    // to name, 'interactivity' has no inert-region behaviour, 'caret-animation' has no caret). They
+    // need ids for the same reason 'caret-shape' and the shape trio did: the cascade dispatches by
+    // id, so without one the declaration is dropped before it can reach the echoed text the
+    // computed surface prints — measured, every name below answered the empty string for both
+    // surfaces before this existed.
+    TextAutospace,
+    TextSpacingTrim,
+    CaretAnimation,
+    Interactivity,
+    ScrollInitialTarget,
+    AnimationComposition,
+    AnimationRange,
+    AnimationRangeStart,
+    AnimationRangeEnd,
+    FontPalette,
+    ScrollTimelineAxis,
+    ScrollTimelineName,
+    TimelineScope,
+    ViewTimelineAxis,
+    ViewTimelineInset,
+    ViewTimelineName,
+    PositionTryFallbacks,
+    // CSS Overflow 5 §3 (the marker-group pseudo-element anchor). The reference engine declares it,
+    // reads it, echoes it and inherits nothing from it; this engine has no ::scroll-marker-group box
+    // to place, so it lives in the echo table like the shape trio did before it had a consumer.
+    ScrollMarkerGroup,
     MaxProperties
 }
 

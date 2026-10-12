@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b283 probe 5 — isolated elements, no style reuse</title></head><body>
+<div id="box"></div>
+<pre id="report"></pre>
+<script>
+var box = document.getElementById('box');
+var TE = ['over','under','over left','over right','under left','under right',
+          'left over','right over','left under','right under','over  left','UNDER RIGHT'];
+var out = [];
+for (var i=0;i<TE.length;i++) {
+  var d = document.createElement('div');
+  d.style.setProperty('text-emphasis-position', TE[i]);
+  box.appendChild(d);
+  out.push('TE '+i+' '+TE[i]+' spec='+d.style.getPropertyValue('text-emphasis-position')
+           +' comp='+getComputedStyle(d).getPropertyValue('text-emphasis-position')
+           +' vert='+getComputedStyle(d).textEmphasisPosition);
+}
+// the sizing keyword sets, one fresh element per case
+var SIZE = [['width','contain'],['height','contain'],['min-width','contain'],['max-width','contain'],
+            ['inline-size','contain'],['block-size','contain'],['width','-webkit-fill-available'],
+            ['min-width','-webkit-fill-available'],['max-width','-webkit-fill-available'],
+            ['width','stretch'],['height','stretch'],['min-height','stretch'],['max-height','stretch'],
+            ['width','fill-available'],['max-width','fill-content'],['min-width','contain-content'],
+            ['width','auto 30px'],['max-width','none none']];
+for (var j=0;j<SIZE.length;j++) {
+  var p = SIZE[j][0], v = SIZE[j][1];
+  var e = document.createElement('div');
+  e.style.setProperty(p, v);
+  box.appendChild(e);
+  out.push('SZ '+j+' '+p+'='+v+' spec='+JSON.stringify(e.style.getPropertyValue(p))
+           +' comp='+JSON.stringify(getComputedStyle(e).getPropertyValue(p)));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

@@ -401,6 +401,13 @@ public static class CssValueGrammar
     {
         if (text.IndexOf(',') >= 0) return false;
         var words = SplitComponents(text);
+        // One leading 'auto' is the remembered-size prefix and is not one of the sizes the property
+        // counts; a second 'auto' is a size, and 'auto' alone is nothing to fall back on.
+        if (words.Count > 0 && words[0].Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            if (words.Count == 1) return false;
+            words.RemoveAt(0);
+        }
         if (words.Count == 0 || words.Count > maxComponents) return false;
         bool saysSize = false;
         foreach (var word in words)
@@ -416,6 +423,16 @@ public static class CssValueGrammar
         // 'auto' names the size to fall back on while the box is skipped; with no size beside it
         // there is nothing to fall back to, and the reference engine keeps nothing at all.
         return saysSize;
+    }
+
+    /// <summary>ONE word, from the given set. The list form below accepts any number of them,
+    /// which is not the grammar of a property that takes a single keyword: 'resize: both horizontal'
+    /// and 'box-decoration-break: slice clone' are two values where the reference engine keeps
+    /// neither (measured).</summary>
+    private static bool IsOneWordOnly(string text, params string[] words)
+    {
+        var parts = SplitComponents(text);
+        return parts.Count == 1 && IsOneOf(parts[0], words);
     }
 
     private static bool IsOneWordList(string text, params string[] words)
@@ -588,6 +605,69 @@ public static class CssValueGrammar
         // 'flex-flow: wrap reverse' reads back the empty string while 'row wrap' and
         // 'column-reverse nowrap' stand).
         CssPropertyId.FlexFlow => IsFlexFlowValue,
+        // CSS Color Adjustment 1 §5.2: 'normal' alone, or a list of scheme keywords and custom
+        // names. Measured word by word: 'light dark', 'light only' and even 'brown' stand, 'normal
+        // dark' and 'only' alone fall, 'light light' stands (a duplicate is not a second grammar
+        // slot), and the three words are not equally fussy about their case — 'Light' and 'DARK' are
+        // the keywords, while 'ONLY' is neither the keyword nor a name.
+        CssPropertyId.ColorScheme => static text => CanonicalColorScheme(text) != null,
+        // CSS Scrollbars 1 §3.1: 'scrollbar-color' is 'auto' or exactly TWO colours — the thumb and
+        // the track. One colour alone is no value (measured: 'scrollbar-color: red' is dropped
+        // while 'red blue' and 'currentcolor blue' both stand).
+        CssPropertyId.ScrollbarColor => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count == 1 && words[0].Equals("auto", StringComparison.OrdinalIgnoreCase))
+                return true;
+            return words.Count == 2 && words.All(ColorParser.IsColorToken);
+        },
+        // CSS UI 4 §3.11: ONE keyword. 'both horizontal' is two of them, and the reference engine
+        // drops it (measured); 'block' and 'inline' are values this engine was missing.
+        CssPropertyId.Resize => static text =>
+            IsOneWordOnly(text, "none", "both", "horizontal", "vertical", "block", "inline"),
+        // CSS Box Decoration Break 1 §3: one of the two, never both ('slice clone' is dropped).
+        CssPropertyId.BoxDecorationBreak => static text => IsOneWordOnly(text, "slice", "clone"),
+        // CSS Overflow 3 §4.1: the box it measures from, the length, or the two together — in either
+        // order, and never two boxes or two lengths (measured: 'content-box border-box' and
+        // '10px 10px' are both dropped while '10px content-box' stands). 'padding-box' is the word
+        // the reference engine still takes, and it is the one that prints as the length.
+        CssPropertyId.OverflowClipMargin => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count is < 1 or > 2) return false;
+            string? box = null, length = null;
+            foreach (var word in words)
+            {
+                var p = word.ToLowerInvariant();
+                if (p is "content-box" or "border-box" or "padding-box")
+                {
+                    if (box != null) return false;
+                    box = p;
+                }
+                else if (length == null && IsLengthOrPercentage(word)) length = p;
+                else return false;
+            }
+            return box != null || length != null;
+        },
+        // CSS Text Emphasis 1 §3.3: the vertical side, optionally with the horizontal one beside it
+        // — and the two may come in either order, which is what the '||' in the grammar says
+        // (measured: 'left over' stands and reads back 'over left', while a lone 'left' falls).
+        CssPropertyId.TextEmphasisPosition => static text =>
+            CanonicalTextEmphasisPosition(text) != null,
+        // CSS Fonts 3 §7.4: 'none', a ratio, or the font's own aspect value. A percentage is not a
+        // ratio here (measured: 'font-size-adjust: 50%' is dropped).
+        CssPropertyId.FontSizeAdjust => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count != 1) return false;
+            var p = words[0].ToLowerInvariant();
+            if (p is "none" or "from-font") return true;
+            return !p.EndsWith("%", StringComparison.Ordinal)
+                && !p.EndsWith("px", StringComparison.Ordinal)
+                && double.TryParse(p, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var ratio)
+                && !double.IsNaN(ratio) && ratio >= 0;
+        },
         CssPropertyId.Display => static text => CssPropertyApplier.TryParseDisplay(text, out _, out _),
         CssPropertyId.Float => static text => CssFloatKeywords.TryParseFloat(text, out _),
         CssPropertyId.Clear => static text => CssFloatKeywords.TryParseClear(text, out _),
@@ -600,15 +680,49 @@ public static class CssValueGrammar
         // CSS Text 4 §5.1: a length or a percentage plus the 'normal' keyword.
         CssPropertyId.LetterSpacing or CssPropertyId.WordSpacing
             => static text => IsLengthList(text, "normal"),
-        // CSS Sizing 3: 'auto' and the intrinsic sizes, and 'none' for the maximums.
+        // CSS Sizing 3, measured keyword by keyword and one component at a time: a size takes ONE
+        // value, so 'width: auto 30px' and 'max-width: none none' are no declaration. 'auto' belongs
+        // to the sizes and the minimums, 'none' ONLY to the maximums (the reference engine drops
+        // 'width: none' and 'min-width: none', which is why a block with 'min-width: none' keeps the
+        // 'auto' it had, and drops 'max-width: auto' just as surely). 'contain' is gone from every
+        // one of the eight — it was in an older draft of the keyword set and the engine still
+        // answered for it, but 'min-width: contain' and 'max-width: contain' are both dropped now
+        // (measured). The logical pair takes the same set as its physical twin.
         CssPropertyId.Width or CssPropertyId.Height
+            or CssPropertyId.InlineSize or CssPropertyId.BlockSize
             or CssPropertyId.MinWidth or CssPropertyId.MinHeight
-            or CssPropertyId.MaxWidth or CssPropertyId.MaxHeight
-            => static text => IsLengthList(text,
-                "auto", "none", "min-content", "max-content", "fit-content", "contain", "stretch",
+            or CssPropertyId.MinInlineSize or CssPropertyId.MinBlockSize
+            => static text => IsSingleLength(text,
+                "auto", "min-content", "max-content", "fit-content", "stretch",
                 // The legacy spelling of 'stretch' the engine still answers, and the prefixed
                 // form pages use today.
                 "-webkit-fill-available", "-webkit-fit-content"),
+        CssPropertyId.MaxWidth or CssPropertyId.MaxHeight
+            or CssPropertyId.MaxInlineSize or CssPropertyId.MaxBlockSize
+            => static text => IsSingleLength(text,
+                "none", "min-content", "max-content", "fit-content", "stretch",
+                "-webkit-fill-available", "-webkit-fit-content"),
+        // CSS Scroll Snap 1 §6.1, measured side by side: a margin side is a length and nothing
+        // else — 'auto' and '50%' are both dropped — while a padding side is a length, a percentage
+        // or the word 'auto', which is what it prints back for the zero the word means. A longhand
+        // takes exactly one of them, the logical pair one or two ('scroll-margin-inline: 1px 2px 3px'
+        // is no value) and the box shorthand up to four.
+        CssPropertyId.ScrollMarginTop or CssPropertyId.ScrollMarginRight
+            or CssPropertyId.ScrollMarginBottom or CssPropertyId.ScrollMarginLeft
+            or CssPropertyId.ScrollMarginBlockStart or CssPropertyId.ScrollMarginBlockEnd
+            or CssPropertyId.ScrollMarginInlineStart or CssPropertyId.ScrollMarginInlineEnd
+            => static text => IsScrollInset(text, 1, padding: false),
+        CssPropertyId.ScrollPaddingTop or CssPropertyId.ScrollPaddingRight
+            or CssPropertyId.ScrollPaddingBottom or CssPropertyId.ScrollPaddingLeft
+            or CssPropertyId.ScrollPaddingBlockStart or CssPropertyId.ScrollPaddingBlockEnd
+            or CssPropertyId.ScrollPaddingInlineStart or CssPropertyId.ScrollPaddingInlineEnd
+            => static text => IsScrollInset(text, 1, padding: true),
+        CssPropertyId.ScrollMarginBlock or CssPropertyId.ScrollMarginInline
+            => static text => IsScrollInset(text, 2, padding: false),
+        CssPropertyId.ScrollPaddingBlock or CssPropertyId.ScrollPaddingInline
+            => static text => IsScrollInset(text, 2, padding: true),
+        CssPropertyId.ScrollMargin => static text => IsScrollInset(text, 4, padding: false),
+        CssPropertyId.ScrollPadding => static text => IsScrollInset(text, 4, padding: true),
         CssPropertyId.Margin or CssPropertyId.MarginTop or CssPropertyId.MarginRight
             or CssPropertyId.MarginBottom or CssPropertyId.MarginLeft
             or CssPropertyId.MarginBlock or CssPropertyId.MarginBlockStart or CssPropertyId.MarginBlockEnd
@@ -707,7 +821,10 @@ public static class CssValueGrammar
         // 'auto none' stands, '50%' and '-5px' and 'none none none' are refused, and a bare '2'
         // is no length here.
         CssPropertyId.ContainIntrinsicSize => static text => IsContainIntrinsicValue(text, 2),
-        CssPropertyId.ContainIntrinsicWidth or CssPropertyId.ContainIntrinsicHeight
+        // The four axis longhands take ONE size, with the remembered-size 'auto' in front of it —
+        // 'auto 30px' is a value of 'contain-intrinsic-width' too (measured), which is why the
+        // 'auto' is a prefix here and not one of the counted components.
+            CssPropertyId.ContainIntrinsicWidth or CssPropertyId.ContainIntrinsicHeight
             or CssPropertyId.ContainIntrinsicInlineSize or CssPropertyId.ContainIntrinsicBlockSize
             => static text => IsContainIntrinsicValue(text, 1),
         // CSS Containment 3 §2.5: one keyword. 'match-none', the second word an older draft
@@ -838,7 +955,7 @@ public static class CssValueGrammar
         // here either (measured: '-webkit-line-clamp: 2 1.5em' reads back 'none').
         CssPropertyId.LineClamp or CssPropertyId.WebkitLineClamp
             => static text => text.Equals("none", StringComparison.OrdinalIgnoreCase)
-                || (int.TryParse(text.Trim(), out var lines) && lines >= 0),
+                || (int.TryParse(text.Trim(), out var lines) && lines >= 1),
         CssPropertyId.InterpolateSize
             => static text => IsOneOf(text, "numeric-only")
                 || IsOneOf(text, "allow-keywords")
@@ -1734,7 +1851,7 @@ public static class CssValueGrammar
         int.TryParse(text, System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out _);
 
-    private static bool IsIdentifierLike(string text)
+    internal static bool IsIdentifierLike(string text)
     {
         if (text.Length == 0) return false;
         foreach (var c in text)
@@ -1757,6 +1874,67 @@ public static class CssValueGrammar
                  parts[1].Equals("both-edges", StringComparison.OrdinalIgnoreCase),
             _ => false,
         };
+    }
+
+    /// <summary>The one spelling of <c>color-scheme</c> the reference engine prints, or null for a
+    /// value it drops (CSS Color Adjustment 1 §5.2, measured word by word). 'normal' is alone or
+    /// nothing; 'light' and 'dark' are keywords in any case and print lower-cased; 'only' is a
+    /// keyword ONLY in its own lower case — 'ONLY' is neither the keyword nor a name — and it moves
+    /// behind the schemes it modifies ('only dark' reads 'dark only'); anything else has to be a
+    /// name, and a name keeps the author's case ('Brown' reads 'Brown', 'none' reads 'none').</summary>
+    internal static string? CanonicalColorScheme(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count == 0) return null;
+        if (words.Count == 1 && words[0].Equals("normal", StringComparison.OrdinalIgnoreCase))
+            return "normal";
+        var kept = new System.Collections.Generic.List<string>(words.Count);
+        bool saysOnly = false;
+        foreach (var word in words)
+        {
+            if (word.Equals("normal", StringComparison.OrdinalIgnoreCase)) return null;
+            if (word.Equals("light", StringComparison.OrdinalIgnoreCase)) kept.Add("light");
+            else if (word.Equals("dark", StringComparison.OrdinalIgnoreCase)) kept.Add("dark");
+            else if (word.Equals("only", StringComparison.Ordinal))
+            {
+                if (saysOnly) return null;
+                saysOnly = true;
+            }
+            else if (word.Equals("only", StringComparison.OrdinalIgnoreCase)) return null;
+            else if (!IsIdentifierLike(word)) return null;
+            else kept.Add(word);
+        }
+        if (kept.Count == 0) return null;
+        if (saysOnly) kept.Add("only");
+        return string.Join(" ", kept);
+    }
+
+    /// <summary>The one spelling of <c>text-emphasis-position</c> (CSS Text Emphasis 1 §3.3,
+    /// measured): the vertical side, then the horizontal one if the page said it, whichever order
+    /// the page wrote them in. Two verticals are no position, and a lone horizontal side is either
+    /// no value at all.</summary>
+    internal static string? CanonicalTextEmphasisPosition(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count is < 1 or > 2) return null;
+        string? vertical = null, horizontal = null;
+        foreach (var word in words)
+        {
+            var p = word.ToLowerInvariant();
+            if (p is "over" or "under")
+            {
+                if (vertical != null) return null;
+                vertical = p;
+            }
+            else if (p is "left" or "right")
+            {
+                if (horizontal != null) return null;
+                horizontal = p;
+            }
+            else return null;
+        }
+        if (vertical == null) return null;
+        return horizontal == null ? vertical : $"{vertical} {horizontal}";
     }
 
     /// <summary><c>flex-flow</c> (CSS Flexbox 1 §4): at most one direction and at most one wrap,
@@ -1921,6 +2099,34 @@ public static class CssValueGrammar
             return false;
         }
         return true;
+    }
+
+    /// <summary>One of the two scroll insets (CSS Scroll Snap 1 §6.1): up to <paramref
+    /// name="max"/> sides, each a length — and for 'scroll-padding' also a percentage or the word
+    /// 'auto', which the margin does not take.</summary>
+    private static bool IsScrollInset(string text, int max, bool padding)
+    {
+        var parts = SplitComponents(text);
+        if (parts.Count == 0 || parts.Count > max) return false;
+        foreach (var part in parts)
+        {
+            if (padding && part.Equals("auto", StringComparison.OrdinalIgnoreCase)) continue;
+            bool saysPercentage = part.Contains('%', StringComparison.Ordinal);
+            if (saysPercentage && !padding) return false;
+            if (!IsLengthOrPercentage(part) && !IsMathFunctionCall(part, IsLengthOrPercentage))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>A property whose grammar is ONE &lt;length-percentage&gt; or one keyword: a size, a
+    /// minimum, a maximum. Two of them side by side are not a value the reference engine keeps
+    /// (measured: 'width: auto 30px' and 'max-width: none none' both read back as nothing), even
+    /// though the same two words written as the two axes of 'contain-intrinsic-size' are.</summary>
+    private static bool IsSingleLength(string text, params string[] keywords)
+    {
+        var parts = SplitComponents(text);
+        return parts.Count == 1 && IsLengthList(parts[0], keywords);
     }
 
     /// <summary>'font-synthesis: none | [ weight || style || small-caps ]' (CSS Fonts 4 §9.3):

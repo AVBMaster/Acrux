@@ -196,6 +196,8 @@ public class StyleAdjuster
         if ((slots & (uint)ComputedStyle.CurrentColorSlot.TextDecoration) != 0) style.TextDecorationColor = c;
         if ((slots & (uint)ComputedStyle.CurrentColorSlot.ColumnRule) != 0) style.ColumnRuleColor = c;
         if ((slots & (uint)ComputedStyle.CurrentColorSlot.Caret) != 0) style.CaretColor = c;
+        if ((slots & (uint)ComputedStyle.CurrentColorSlot.ScrollbarThumb) != 0) style.ScrollbarThumbColor = c;
+        if ((slots & (uint)ComputedStyle.CurrentColorSlot.ScrollbarTrack) != 0) style.ScrollbarTrackColor = c;
     }
 
     /// <summary>

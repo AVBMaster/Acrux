@@ -333,6 +333,31 @@ public class AutoLength : Length
     public override string ToString() => "auto";
 }
 
+/// <summary>A sizing keyword that constrains nothing, so layout treats it exactly as it treats
+/// 'auto' — which is why this is an <see cref="AutoLength"/> and not a sibling of it. What it is
+/// not is the word 'auto': the computed surface answers the keyword the page wrote, and the
+/// reference engine answers 'none' for a maximum with no maximum and 'stretch' for a minimum or
+/// maximum that means the free space (measured: 'max-width: none' computes 'none' where
+/// 'min-width: none' is dropped, 'min-height: stretch' computes 'stretch' where
+/// '-webkit-fill-available' computes the same 'stretch').</summary>
+public class SizingKeywordLength : AutoLength
+{
+    public string Keyword { get; }
+    public SizingKeywordLength(string keyword) => Keyword = keyword;
+    public override string ToString() => Keyword;
+
+    /// <summary>The sizing keywords that mean the same thing to layout but not to the computed
+    /// surface, and the word each one answers with. 'none' keeps its own; the two spellings of
+    /// "the free space" both print 'stretch' (measured).</summary>
+    public static SizingKeywordLength? For(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "none" => new SizingKeywordLength("none"),
+        "stretch" => new SizingKeywordLength("stretch"),
+        "-webkit-fill-available" => new SizingKeywordLength("stretch"),
+        _ => null,
+    };
+}
+
 public enum IntrinsicSizeKind { MaxContent, MinContent, FitContent }
 
 /// <summary>`width/height: max-content | min-content | fit-content` (CSS Sizing 3 §4).
@@ -1216,7 +1241,11 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
 
     public string TextEmphasisColor { get; set; } = "currentcolor";
     public string TextEmphasisStyle { get; set; } = "none";
-    public string TextEmphasisPosition { get; set; } = "over right";
+    /// <summary>CSS Text Emphasis 1 §3.3. The vertical side is the one that always prints; a
+/// horizontal side is remembered only because the page may have written it, and the computed
+/// surface answers it for a 'left' and never for a 'right' (measured: 'over right' computes 'over',
+/// 'over left' computes 'over left'), which is why the initial value says one word and not two.</summary>
+    public string TextEmphasisPosition { get; set; } = "over";
 
     public Length RowGap { get; set; } = new PixelLength(0);
     public Length ColumnGap { get; set; } = new PixelLength(0);
@@ -1278,6 +1307,13 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
         TextDecoration = 1 << 5,
         ColumnRule = 1 << 6,
         Caret = 1 << 7,
+        /// <summary>The two halves of 'scrollbar-color' (CSS Scrollbars 1 §3.1). A page may write
+        /// 'currentcolor' for either, and like the borders it means this element's own colour, which
+        /// is only known after inheritance — recorded here so StyleAdjuster resolves it there
+        /// (measured: 'scrollbar-color: currentcolor blue' on a box whose colour is rgb(9,9,9)
+        /// computes 'rgb(9, 9, 9) rgb(0, 0, 255)', not black.</summary>
+        ScrollbarThumb = 1 << 8,
+        ScrollbarTrack = 1 << 9,
         AllBorders = BorderTop | BorderRight | BorderBottom | BorderLeft,
     }
     public float AspectRatio { get; set; }
@@ -1419,6 +1455,14 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public SKColor? CaretColor { get; set; }
     public string ColorScheme { get; set; } = "normal";
 
+    /// <summary>The scheme this box paints under, which is not the same fact as the one it declares.
+    /// 'color-scheme' is not inherited (CSS Color Adjustment 1 §5.2, measured: a div under a root that
+    /// says 'dark' still answers 'normal' for itself), yet 'light-dark()' inside that div still picks
+    /// the dark branch — the reference engine propagates the *used* scheme down the tree while the
+    /// declared one stays where it was written. This field carries the used scheme; the cascade writes
+    /// both from a declaration, inheritance copies only this one.</summary>
+    public string EffectiveColorScheme { get; set; } = "normal";
+
     /// <summary>CSS UI 4 §4.3 'appearance'. The initial value is 'none' — only a box the
     /// user-agent stylesheet puts a widget on reports 'auto', so a plain element answers
     /// 'none' even though the engine has no widget to remove. The reference engine folds
@@ -1519,7 +1563,11 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public string FontOpticalSizing { get; set; } = "auto";
     public string FontVariationSettings { get; set; } = "normal";
     public string FontFeatureSettings { get; set; } = "normal";
-    public float FontSizeAdjust { get; set; }
+    /// <summary>'font-size-adjust' (CSS Fonts 3 §7.4). Null is the keyword 'none' — the initial
+    /// value — and a ratio of zero is a number the page asked for, so the two cannot share a
+    /// sentinel. 'from-font' is the third spelling the reference engine answers with the font's own
+    /// aspect value; this engine has no aspect table to read, so it stays 'none' (gap #278).</summary>
+    public float? FontSizeAdjust { get; set; }
     public string TextRendering { get; set; } = "auto";
     public string UnicodeBidi { get; set; } = "normal";
 
@@ -1572,7 +1620,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public string ComputedLengthCss(Length length, float viewportWidth = 0, float viewportHeight = 0,
         float? percentageBase = null)
     {
-        if (length is AutoLength) return "auto";
+        if (length is AutoLength auto) return auto.ToString();
         if (length is PercentLength percent)
             // The engine keeps a percentage as the fraction it multiplies by, so the printed
             // form has to scale it back to the percent the author wrote ('5%', not '0.05%').
@@ -1762,7 +1810,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             ContainIntrinsicWidthIsAuto = ContainIntrinsicWidthIsAuto,
             ContainIntrinsicHeightIsAuto = ContainIntrinsicHeightIsAuto,
             WillChange = WillChange, Appearance = Appearance, NativeThemeFamily = NativeThemeFamily, FieldSizing = FieldSizing, AccentColor = AccentColor, CaretColor = CaretColor,
-            ColorScheme = ColorScheme, ForcedColorAdjust = ForcedColorAdjust,
+            ColorScheme = ColorScheme, EffectiveColorScheme = EffectiveColorScheme, ForcedColorAdjust = ForcedColorAdjust,
             ImageRendering = ImageRendering, Isolation = Isolation, MixBlendMode = MixBlendMode,
             Filter = Filter, BackdropFilter = BackdropFilter, ClipPath = ClipPath,
             Mask = Mask, MaskImage = MaskImage, MaskClip = MaskClip, MaskComposite = MaskComposite,
