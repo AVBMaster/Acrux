@@ -337,6 +337,29 @@ public static class CssValueGrammar
 
     /// <summary>One word of a closed set — a second word is no value even when it is itself a
     /// member ('word-break: normal break-word', 'user-select: none auto', both measured).</summary>
+    /// <summary>One or two words of a closed set, printed once when both agree (the pair
+    /// shorthands of CSS Overscroll Behavior 1 §3, measured: 'auto auto' reads 'auto').</summary>
+    /// <summary>For 'object-position': a value with two side keywords and exactly one length is
+    /// no position (measured). Every other shape the background grammar takes, this one takes too.</summary>
+    private static bool SaysBothOrNeither(string text)
+    {
+        int sides = 0, lengths = 0;
+        foreach (var word in SplitComponents(text))
+        {
+            var p = word.ToLowerInvariant();
+            if (p is "left" or "right" or "top" or "bottom" or "center") sides++;
+            else lengths++;
+        }
+        return !(sides == 2 && lengths == 1);
+    }
+
+    private static bool IsOneOrTwoKeywords(string text, params string[] allowed)
+    {
+        var words = SplitComponents(text);
+        if (words.Count is < 1 or > 2) return false;
+        return words.All(word => IsOneOf(word, allowed));
+    }
+
     private static bool IsSingleKeywordWord(string text, string[] allowed)
     {
         var words = SplitComponents(text);
@@ -554,7 +577,25 @@ public static class CssValueGrammar
         CssPropertyId.OverscrollBehaviorX or CssPropertyId.OverscrollBehaviorY
             => static text => IsSingleKeywordWord(text, new[] { "auto", "contain", "none" }),
         CssPropertyId.WordBreak => static text => IsSingleKeywordWord(text,
-            new[] { "normal", "break-all", "keep-all", "break-word" }),
+            new[] { "normal", "break-all", "keep-all", "break-word", "auto-phrase" }),
+        // CSS Text 3 §5.1 and CSS Text 4 §4.5: 'text-justify' is one word, and the legacy
+        // 'distribute' is answered as the modern 'inter-character' (measured, both surfaces).
+        CssPropertyId.TextJustify => static text => IsSingleKeywordWord(text,
+            new[] { "auto", "inter-word", "distribute", "inter-character", "none" }),
+        // CSS Overscroll Behavior 1 §3: one behaviour per axis, and the pair shorthand takes one
+        // or two of them; 'pan-contain' is a later draft this engine does not answer.
+        CssPropertyId.OverscrollBehavior or CssPropertyId.OverscrollBehaviorBlock
+            or CssPropertyId.OverscrollBehaviorInline
+            => static text => IsOneOrTwoKeywords(text, "auto", "contain", "none"),
+        // CSS Masking 1 §11.3: one composite per layer, so two keywords inside one layer are no
+        // value ('intersect exclude' falls) while a comma list of them is a list of layers.
+        CssPropertyId.MaskComposite => static text =>
+        {
+            var layers = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(text, ',');
+            if (layers.Count == 0) return false;
+            return layers.All(layer => IsSingleKeywordWord(layer,
+                new[] { "add", "subtract", "intersect", "exclude" }));
+        },
         CssPropertyId.TextWrap => IsTextWrapValue,
         // CSS Text 3 §3.4 as this engine reads it: a number or a length, and nothing else — neither
         // 'normal' nor 'auto' is a value of 'tab-size' here (all three measured).
@@ -707,6 +748,12 @@ public static class CssValueGrammar
         // or the word 'auto', which is what it prints back for the zero the word means. A longhand
         // takes exactly one of them, the logical pair one or two ('scroll-margin-inline: 1px 2px 3px'
         // is no value) and the box shorthand up to four.
+        // CSS Backgrounds 3 §5: each part has its own number set, and the shorthand says all five.
+        CssPropertyId.BorderImageSlice => static text => CanonicalBorderImageSlice(text) != null,
+        CssPropertyId.BorderImageWidth => static text => CanonicalBorderImageWidth(text) != null,
+        CssPropertyId.BorderImageOutset => static text => CanonicalBorderImageOutset(text) != null,
+        CssPropertyId.BorderImageRepeat => static text => CanonicalBorderImageRepeat(text) != null,
+        CssPropertyId.BorderImage => static text => CanonicalBorderImageShorthand(text) != null,
         CssPropertyId.ScrollMarginTop or CssPropertyId.ScrollMarginRight
             or CssPropertyId.ScrollMarginBottom or CssPropertyId.ScrollMarginLeft
             or CssPropertyId.ScrollMarginBlockStart or CssPropertyId.ScrollMarginBlockEnd
@@ -759,7 +806,24 @@ public static class CssValueGrammar
         // alive: a declaration the grammar rejects is dropped from the cascade, so
         // 'background-position: top 10px' on a box the stylesheet had put at '7px 9px' reads back
         // as '7px 9px' and not as the initial '0% 0%' (measured).
+        // CSS Box Alignment 3 §6/§8: the six alignment properties share one keyword table, and the
+        // legacy family belongs to 'justify-items' alone (measured: 'justify-content: legacy left'
+        // and 'align-content: legacy center' are both dropped, while 'justify-items: legacy right'
+        // stands). The gate is the same function the cascade uses, so the echo, supports() and the
+        // stored value cannot disagree about which words are values.
+        CssPropertyId.AlignItems or CssPropertyId.AlignSelf or CssPropertyId.AlignContent
+            or CssPropertyId.JustifyContent or CssPropertyId.JustifySelf
+            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsAlignmentValue(text),
+        CssPropertyId.JustifyItems
+            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsAlignmentValue(
+                text, legacyAllowed: true),
         CssPropertyId.BackgroundPosition => ShorthandExpander.IsBackgroundPositionValue,
+        // CSS Images 3 §5.2 and CSS Position 3 §5.2: 'object-position' takes the same grammar as a
+        // background position except for one case — when two side keywords are written, each of
+        // them has to carry its own length (measured: 'top left 10px' is dropped here while
+        // 'background-position' still takes it, and 'right 10px bottom' is dropped with it).
+        CssPropertyId.ObjectPosition => static text =>
+            ShorthandExpander.IsBackgroundPositionValue(text) && SaysBothOrNeither(text),
         CssPropertyId.BackgroundSize => ShorthandExpander.IsBackgroundSizeValue,
         CssPropertyId.BackgroundRepeat => ShorthandExpander.IsBackgroundRepeatValue,
         CssPropertyId.BackgroundAttachment => ShorthandExpander.IsBackgroundAttachmentValue,
@@ -945,9 +1009,12 @@ public static class CssValueGrammar
         CssPropertyId.ColorInterpolation or CssPropertyId.ColorInterpolationFilters
             => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
                 text, "auto", "sRGB", "linearRGB"),
+        // CSS Images 3 §5.1: the two words, and no angle. Measured: '0deg' and '90deg' are both
+        // dropped (the rotation the draft allowed is not what this engine answers), and 'flip'
+        // alone or beside another word is dropped with them.
         CssPropertyId.ImageOrientation
             => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
-                text, "from-image", "none") || Acrux.Core.Css.Resolver.CssPropertyApplier.IsImageOrientationAngle(text),
+                text, "from-image", "none"),
         CssPropertyId.TextSecurity
             => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
                 text, "none", "disc", "circle", "square"),
@@ -1907,6 +1974,165 @@ public static class CssValueGrammar
         if (kept.Count == 0) return null;
         if (saysOnly) kept.Add("only");
         return string.Join(" ", kept);
+    }
+
+    /// <summary>One of the border-image box-value parts (CSS Backgrounds 3 §5). The reference
+    /// engine prints a part once when all of its sides agree — '50% 50% 50% 50%' reads '50%' and
+    /// '1 1 1 1' reads '1' — and drops a value with a fifth side, a negative number, or a unit
+    /// the part does not take. <paramref name="extra"/> names the one word this part accepts
+    /// besides its numbers: 'fill' for the slice.</summary>
+    private static string? CanonicalBoxPart(string text, int max, bool percentages, bool lengths,
+        string? extra = null)
+    {
+        var words = SplitComponents(text);
+        if (words.Count == 0) return null;
+        var sides = new System.Collections.Generic.List<string>(words.Count);
+        string? trailing = null;
+        foreach (var word in words)
+        {
+            var p = word.ToLowerInvariant();
+            if (extra != null && p == extra)
+            {
+                if (trailing != null) return null;
+                trailing = p;
+                continue;
+            }
+            if (p.EndsWith("%", StringComparison.Ordinal))
+            {
+                if (!percentages || !NonNegative(p[..^1])) return null;
+                sides.Add(p); continue;
+            }
+            // A length has to say so with a unit: these parts take a bare number as their own
+            // dimensionless unit, so '-1' is a negative number rather than a negative length.
+            if (lengths && p.Length > 2 && !double.IsNaN(LengthValueOf(p)))
+            {
+                if (!NonNegative(p[..^2])) return null;
+                sides.Add(p); continue;
+            }
+            if (!NonNegative(p)) return null;
+            sides.Add(p);
+        }
+        if (sides.Count == 0 || sides.Count > max) return null;
+        // The part is printed once when every side agrees (measured: '50% 50% 50% 50%' reads
+        // '50%', '1 1 1 1' reads '1', and a repeat pair reads one word the same way).
+        var kept = sides.All(side => side == sides[0])
+            ? new System.Collections.Generic.List<string> { sides[0] } : sides;
+        return trailing == null ? string.Join(" ", kept) : string.Join(" ", kept) + " " + trailing;
+    }
+
+    /// <summary>The number in front of a two-letter unit, or NaN when the word is not a length.</summary>
+    private static double LengthValueOf(string word)
+    {
+        var head = word[..^2];
+        return double.TryParse(head, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : double.NaN;
+    }
+
+    private static bool NonNegative(string text) =>
+        double.TryParse(text, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var v)
+        && !double.IsNaN(v) && !double.IsInfinity(v) && v >= 0;
+
+    /// <summary>The slice: one to four numbers or percentages, and the word 'fill' at the end.</summary>
+    internal static string? CanonicalBorderImageSlice(string text) =>
+        CanonicalBoxPart(text, 4, percentages: true, lengths: false, extra: "fill");
+
+    /// <summary>The width: one to four numbers, lengths, percentages or 'auto'.</summary>
+    internal static string? CanonicalBorderImageWidth(string text)
+    {
+        if (text.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase)) return "auto";
+        return CanonicalBoxPart(text, 4, percentages: true, lengths: true);
+    }
+
+    /// <summary>The outset: one to four numbers or lengths, and no percentages.</summary>
+    internal static string? CanonicalBorderImageOutset(string text) =>
+        CanonicalBoxPart(text, 4, percentages: false, lengths: true);
+
+    /// <summary>The <c>border-image</c> shorthand, said the way the reference engine prints it:
+    /// the source, the slice, then the three box parts divided by slashes and the repeat last,
+    /// with every part the page left out named by its initial (CSS Backgrounds 3 §5.9, measured:
+    /// 'url(a.png) 3' reads 'url("a.png") 3 / 1 / 0 stretch'). A value with no source in it —
+    /// 'fill', 'red 3' — is no border-image at all.</summary>
+    internal static string? CanonicalBorderImageShorthand(string text)
+    {
+        var groups = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(text, '/');
+        if (groups.Count == 0 || groups.Count > 3) return null;
+        string? source = null; var slice = new System.Collections.Generic.List<string>();
+        var width = new System.Collections.Generic.List<string>();
+        var outset = new System.Collections.Generic.List<string>();
+        string? repeat = null; bool saysFill = false;
+        for (int g = 0; g < groups.Count; g++)
+        {
+            foreach (var word in SplitComponents(groups[g]))
+            {
+                var p = word.ToLowerInvariant();
+                if (p == "fill") { saysFill = true; continue; }
+                if (p is "stretch" or "repeat" or "round" or "space")
+                {
+                    // The repeat is a pair of its own inside the shorthand (measured:
+                    // 'url(a.png) stretch round' reads '… / 1 / 0 stretch round').
+                    repeat = repeat == null ? p : repeat + " " + p;
+                    continue;
+                }
+                if (word.StartsWith("url(", StringComparison.OrdinalIgnoreCase)
+                    || IsGeneratedImageWord(word) || p == "none")
+                {
+                    if (source != null) return null;
+                    source = word; continue;
+                }
+                if (g == 0) slice.Add(p);
+                else if (g == 1) width.Add(p);
+                else outset.Add(p);
+            }
+        }
+        // A source is not required — 'border-image: 3' is a slice with the initial 'none' beside it
+        // and reads back 'none 3 / 1 / 0 stretch' (measured) — but a value that says nothing but
+        // 'fill', or says 'none' twice, is no value at all.
+        if (source == null && slice.Count == 0 && width.Count == 0 && outset.Count == 0
+            && repeat == null) return null;
+        if (source == null && saysFill && slice.Count == 0) return null;
+        source ??= "none";
+        var sliceText = CanonicalBorderImageSlice(string.Join(" ", slice) + (saysFill ? " fill" : ""));
+        if (slice.Count > 0 && sliceText == null) return null;
+        sliceText ??= "100%";
+        var widthText = width.Count == 0 ? "1" : CanonicalBorderImageWidth(string.Join(" ", width));
+        var outsetText = outset.Count == 0 ? "0" : CanonicalBorderImageOutset(string.Join(" ", outset));
+        if (widthText == null || outsetText == null) return null;
+        var repeatText = repeat == null ? "stretch" : CanonicalBorderImageRepeat(repeat);
+        if (repeatText == null) return null;
+        // The shorthand says the source alone while every part beside it is still initial, and
+        // then the whole five-part form once any of them has moved (measured: 'url(a.png)' reads
+        // back as the url, 'url(a.png) 1 2 3 4' and 'url(a.png) stretch round' as the expansion).
+        if (sliceText == "100%" && widthText == "1" && outsetText == "0" && repeatText == "stretch")
+            return source;
+        return $"{source} {sliceText} / {widthText} / {outsetText} {repeatText}";
+    }
+
+    /// <summary>Whether a token is one of the image functions a border-image source can name.</summary>
+    private static bool IsGeneratedImageWord(string word) =>
+        word.StartsWith("linear-gradient(", StringComparison.OrdinalIgnoreCase)
+        || word.StartsWith("radial-gradient(", StringComparison.OrdinalIgnoreCase)
+        || word.StartsWith("conic-gradient(", StringComparison.OrdinalIgnoreCase)
+        || word.StartsWith("repeating-linear-gradient(", StringComparison.OrdinalIgnoreCase)
+        || word.StartsWith("repeating-radial-gradient(", StringComparison.OrdinalIgnoreCase)
+        || word.StartsWith("repeating-conic-gradient(", StringComparison.OrdinalIgnoreCase)
+        || word.StartsWith("image(", StringComparison.OrdinalIgnoreCase)
+        || word.StartsWith("image-set(", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The repeat: one or two of the four words, printed once when both halves agree
+    /// (measured: 'stretch stretch' reads 'stretch' while 'round stretch' keeps both).</summary>
+    internal static string? CanonicalBorderImageRepeat(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count is < 1 or > 2) return null;
+        var kept = new System.Collections.Generic.List<string>(words.Count);
+        foreach (var word in words)
+        {
+            var p = word.ToLowerInvariant();
+            if (p is not ("stretch" or "repeat" or "round" or "space")) return null;
+            kept.Add(p);
+        }
+        return kept.Count == 2 && kept[0] == kept[1] ? kept[0] : string.Join(" ", kept);
     }
 
     /// <summary>The one spelling of <c>text-emphasis-position</c> (CSS Text Emphasis 1 §3.3,

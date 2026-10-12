@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b284 probe 2 — the sets probe 1 left open, one fresh element per case</title></head><body>
+<div id="box"></div>
+<pre id="report"></pre>
+<script>
+var CASES = [
+  // border-image: the number sets, the merge rule, and the shorthand's grammar
+  ['border-image-slice','1 2'],['border-image-slice','1 2 3'],['border-image-slice','1 2 3 4'],
+  ['border-image-slice','1 2 3 4 5'],['border-image-slice','50% 50% 50% 50%'],
+  ['border-image-slice','1 2 3 4 fill'],['border-image-slice','-1'],['border-image-slice','1px'],
+  ['border-image-width','1 2 3 4'],['border-image-width','1 2 3 4 5'],['border-image-width','0'],
+  ['border-image-width','50%'],['border-image-width','1 1 1 1'],
+  ['border-image-outset','1'],['border-image-outset','1 2 3 4'],['border-image-outset','1px 2px'],
+  ['border-image-outset','1 1 1 1'],['border-image-outset','-1'],
+  ['border-image-repeat','stretch'],['border-image-repeat','round'],['border-image-repeat','space'],
+  ['border-image-repeat','stretch stretch'],['border-image-repeat','repeat'],
+  ['border-image','url(a.png) 3'],['border-image','url(a.png) 3 round'],
+  ['border-image','url(a.png) 3 / 2 / 1px stretch'],['border-image','fill'],
+  ['border-image-source','none'],['border-image-source','url(a.png)'],
+  // image-orientation
+  ['image-orientation','from-image'],['image-orientation','flip'],['image-orientation','0deg'],
+  ['image-orientation','90deg flip'],['image-orientation','from-image flip'],
+  ['image-orientation','0deg 90deg'],['image-orientation','none flip'],
+  // <position> in object-position
+  ['object-position','right 10px'],['object-position','10px 20px'],['object-position','left top'],
+  ['object-position','bottom right'],['object-position','center'],['object-position','50% 50%'],
+  ['object-position','right 10px bottom 20px'],['object-position','top left 10px'],
+  ['object-position','left 10% top 20%'],['object-position','x-start y-end'],
+  // steps() and the timing functions
+  ['animation-timing-function','steps(2, start)'],['animation-timing-function','steps(2, end)'],
+  ['animation-timing-function','steps(2)'],['animation-timing-function','steps(2,jump-none)'],
+  ['animation-timing-function','cubic-bezier(0,0,1,1)'],['animation-timing-function','linear(0, 1)'],
+  ['animation-timing-function','ease-in-out'],['transition-timing-function','steps(3,end)'],
+  // alignment keywords
+  ['align-items','first baseline'],['align-items','last baseline'],['align-items','baseline'],
+  ['align-items','safe center'],['align-items','unsafe flex-start'],
+  ['justify-content','legacy left'],['justify-content','legacy center'],['justify-content','right'],
+  ['justify-content','end'],['justify-content','safe right'],
+  ['align-content','space-around'],['place-items','baseline last baseline'],
+  // the overscroll family
+  ['overscroll-behavior','auto'],['overscroll-behavior','contain'],['overscroll-behavior','none none'],
+  ['overscroll-behavior','contain auto'],['overscroll-behavior-block','pan-contain'],
+  ['overscroll-behavior-inline','auto'],['overscroll-behavior-x','contain'],
+  // mask-composite and the mask shorthand parts
+  ['mask-composite','add'],['mask-composite','subtract'],['mask-composite','intersect exclude'],
+  ['mask-composite','add, subtract'],
+  // the anchor-positioning and overlay pair
+  ['overlay','none'],['overlay','auto'],['position-try','flip-block'],
+  ['position-area','span-block start'],['position-visibility','anchored'],
+  ['position-try-order','normal'],['anchor-scroll','none'],
+  // the timeline shorthands
+  ['scroll-timeline','none'],['scroll-timeline','--t inline'],
+  ['view-timeline','--t inline'],['animation-range','entry'],
+  ['animation-range','entry 10% exit 90%'],['transition-behavior','allow-discrete'],
+  // text-justify and word-break sets
+  ['text-justify','auto'],['text-justify','inter-character'],['text-justify','inter-word'],
+  ['text-justify','distribute'],['text-justify','NONE'],
+  ['word-break','normal'],['word-break','auto-phrase'],['word-break','break-all'],
+  ['word-break','keep-all'],['word-break','normal auto-phrase'],
+  // object-view-box and the rest of the echo family
+  ['object-view-box','none'],['object-view-box','inset(10%)'],
+  ['text-spacing-trim','trim-start'],['wrap-after','anywhere'],
+  ['line-padding','4px'],['text-wrap','wrap'],
+  ['webkit-line-clamp','none'],['line-clamp','none'],
+  ['webkit-box-flex','2'],['box-flex-group','2']
+];
+var box = document.getElementById('box');
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var p = CASES[i][0], v = CASES[i][1];
+  var d = document.createElement('div');
+  d.style.setProperty('color', 'rgb(9,9,9)');
+  d.style.setProperty('font-size', '16px');
+  box.appendChild(d);
+  d.style.setProperty(p, v);
+  out.push(i + '|' + p + '|' + v + '|' + d.style.getPropertyValue(p)
+           + '|' + getComputedStyle(d).getPropertyValue(p));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

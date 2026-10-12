@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b284 probe 1 — a wide sweep, one fresh element per case</title></head><body>
+<div id="box"></div>
+<pre id="report"></pre>
+<script>
+// Every case gets its own element, appended before the declaration is written: a reused host
+// answers a dropped declaration with the previous row's value (measured in b283), and an element
+// that is not in the document answers the empty string for every computed property.
+var CASES = [
+  // border-image
+  ['border-image-slice','3'],['border-image-slice','3 fill'],['border-image-slice','0'],
+  ['border-image-slice','33% 33% 33% 33%'],['border-image-slice','auto'],
+  ['border-image-width','3'],['border-image-width','3px'],['border-image-width','auto'],
+  ['border-image-outset','2 3'],['border-image-outset','2px'],
+  ['border-image-repeat','round stretch'],['border-image-repeat','fill'],
+  ['border-image-source','linear-gradient(red,blue)'],['border-image','red 3'],
+  // outline
+  ['outline-width','thin'],['outline-width','3px'],['outline-width','calc(1px + 2px)'],
+  ['outline-style','dashed'],['outline-style','auto'],['outline-color','invert'],
+  ['outline-offset','-3px'],['outline','3px red solid'],
+  // columns
+  ['columns','20px 3'],['column-width','12em'],['column-count','0'],['column-count','auto'],
+  ['column-span','all'],['column-fill','balance'],['column-fill','auto'],
+  ['column-rule-width','thick'],['column-rule-style','groove'],['column-rule-color','red'],
+  ['column-gap','normal'],['row-gap','10px'],['gap','10px 20px'],
+  // list-style
+  ['list-style-type','circle'],['list-style-type','CIRC'],['list-style-type','symbols(circular "x")'],
+  ['list-style-position','outside'],['list-style-image','none'],['list-style','square inside'],
+  // font-variant family
+  ['font-variant-numeric','old-nums ordinal'],['font-variant-numeric','slashed-zero'],
+  ['font-position','auto'],['font-variant-position','sub'],['font-variant-caps','small-caps'],
+  ['font-variant-east-asian','ruby'],['font-variant-ligatures','no-common-ligatures'],
+  ['font-kerning','none'],['font-optical-sizing','auto'],
+  // alignment
+  ['align-content','center'],['align-content','safe center'],['align-content','baseline'],
+  ['align-items','flex-start'],['align-items','first baseline'],['align-self','stretch'],
+  ['justify-content','space-between'],['justify-content','legacy right'],
+  ['justify-items','safe end'],['justify-self','auto'],
+  ['place-content','center end'],['place-items','start end'],['place-self','auto center'],
+  // counters / content / quotes
+  ['counter-increment','c 2'],['counter-reset','none'],['quotes','"a" "b"'],
+  ['content','open-quotes'],['content','attr(title)'],['string-set','x "a"'],
+  // scroll and touch
+  ['scroll-behavior','smooth'],['scroll-snap-type','y proximity'],
+  ['scroll-snap-align','center span-inline-end'],['overscroll-behavior','contain'],
+  ['overscroll-behavior-inline','none'],['touch-action','pan-x pinch-zoom'],
+  ['touch-action','manipulation'],['user-select','all'],['user-select','contain'],
+  // writing and ruby
+  ['writing-mode','vertical-rl'],['text-orientation','sideways'],
+  ['text-combine-upright','all'],['ruby-position','over'],['ruby-merge','separate'],
+  ['ruby-align','space-between'],
+  // text spacing
+  ['line-height','normal'],['line-height','1.5'],['letter-spacing','0.1em'],
+  ['word-spacing','normal'],['text-indent','50%'],['text-justify','distribute'],
+  ['white-space','break-spaces'],['word-break','auto-phrase'],['overflow-wrap','anywhere'],
+  ['hyphens','manual'],['tab-size','4em'],['text-align-last','justify'],
+  // images and objects
+  ['image-orientation','90deg'],['image-orientation','none'],['image-rendering','pixelated'],
+  ['object-fit','contain'],['object-position','right 10px bottom'],['object-view-box','none'],
+  // transforms
+  ['transform-box','content-box'],['transform-box','border-box'],
+  ['transform-origin','left top'],['transform-style','preserve-3d'],
+  ['perspective','200px'],['perspective-origin','10% 10%'],['backface-visibility','hidden'],
+  ['translate','10px 20px 30px'],['rotate','45deg'],['scale','2'],['skew','10deg 20deg'],
+  // shapes and masks
+  ['shape-outside','circle(50%)'],['shape-margin','10px'],['shape-image-threshold','0.5'],
+  ['mask-type','alpha'],['mask-mode','match-source'],['mask-clip','padding-box'],
+  ['mask-origin','border-box'],['mask-composite','add exclude'],
+  // effects
+  ['mix-blend-mode','multiply'],['filter','blur(2px)'],['backdrop-filter','none'],
+  ['isolation','isolate'],['opacity','-1'],['will-change','opacity'],
+  // grid
+  ['grid-template-columns','repeat(2,[a] 1fr)'],['grid-auto-flow','column dense'],
+  ['grid-auto-rows','min-content'],['grid-column-start','span 2'],
+  ['grid-area','1 / 2 / span 3 / 4'],
+  // boxes and stacking
+  ['z-index','auto'],['z-index','2.5'],['float','inline-start'],['clear','both'],
+  ['position','sticky'],['position-try','none'],['inset','10px auto'],
+  ['box-sizing','border-box'],['box-decoration-break','clone'],
+  ['contain','inline-size'],['contain-intrinsic-size','auto 20px'],
+  ['content-visibility','hidden'],['overlay','auto'],['appearance','textfield'],
+  ['field-sizing','content'],['caret-color','transparent'],['accent-color','auto'],
+  ['color','red'],['caret-shape','block'],['interactivity','inert'],
+  ['font-size','larger'],['font-size','150%'],['font-weight','bolder'],
+  ['font-family','serif'],['font','12px/1.2 serif'],['text-transform','capitalize'],
+  ['text-overflow','ellipsis'],['text-overflow','a b'],['white-space-collapse','preserve-breaks'],
+  ['text-wrap-mode','wrap'],['text-emphasis-style','dot'],['text-emphasis-color','red'],
+  ['text-decoration-line','underline overline'],['text-decoration-style','wavy'],
+  ['text-decoration-thickness','2px'],['text-decoration-skip-ink','all'],
+  ['text-underline-offset','4px'],['text-underline-position','under left'],
+  ['text-decoration','underline'],['text-decoration','none'],
+  ['line-break','loose'],['line-clamp','none'],['block-ellipsis','none'],
+  ['webkit-line-clamp','none'],['box-orient','vertical'],['box-flex','2'],
+  ['animation-name','none'],['animation-duration','2s'],['animation-timing-function','steps(2,end)'],
+  ['animation-fill-mode','both'],['animation-direction','alternate-reverse'],
+  ['animation-iteration-count','2.5'],['animation-play-state','paused'],
+  ['transition-property','opacity'],['transition-duration','1s, 2s'],
+  ['transition-delay','0s'],['transition','opacity 1s linear 0s'],
+  ['timeline-scope','none'],['scroll-timeline','none'],
+  ['offset-path','path("M0 0")'],['offset-distance','50%'],['offset-anchor','auto'],
+  ['offset-rotate','auto'],['offset','none'],
+  ['view-transition-name','none'],['view-timeline-name','none'],
+  ['anchor-name','none'],['position-anchor','auto'],['position-area','none'],
+  ['position-visibility','anchors-visible'],['position-try-fallbacks','none'],
+  ['inset-area','top'],['top','10px'],['right','auto']
+];
+var box = document.getElementById('box');
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var p = CASES[i][0], v = CASES[i][1];
+  var d = document.createElement('div');
+  d.style.setProperty('color', 'rgb(9,9,9)');
+  d.style.setProperty('font-size', '16px');
+  box.appendChild(d);
+  d.style.setProperty(p, v);
+  out.push(i + '|' + p + '|' + v + '|' + d.style.getPropertyValue(p)
+           + '|' + getComputedStyle(d).getPropertyValue(p));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

@@ -160,6 +160,12 @@ public static class CssPropertyTraits
             return WebkitAliases.Contains(name["-webkit-".Length..])
                 || LegacyDeclaredOnly.ContainsKey(name)
                 || Css.CssValueGrammar.IsLegacyPrefixedName(name);
+        // The IDL spelling of a prefixed property carries no dash, and only the member path turns
+        // it back into the CSS name (CssStyleDeclaration.ToCssName). Written into setProperty, the
+        // same spelling is a name no page can set (measured: 'setProperty("webkit-line-clamp", …)'
+        // is refused, and so is 'webkit-box-flex').
+        if (name.StartsWith("webkit-", StringComparison.Ordinal)
+            && !name.StartsWith("-webkit-", StringComparison.Ordinal)) return false;
         if (EngineOnlyNames.Contains(name)) return false;
         // A property the engine echoes from its own table is a declared property even where this
         // engine has no id for it ('font-language-override' is the one such name — the reference
@@ -281,9 +287,8 @@ public static class CssPropertyTraits
     private static readonly HashSet<string> ReferenceDeclared = new(StringComparer.Ordinal)
     {
         "baseline-source", "font-variant-alternates",
-        "font-variant-emoji", "overflow-block", "overflow-inline", "overlay", "paint-order",
-        "position-area", "position-visibility", "scroll-timeline",
-        "transition-behavior", "x", "y",
+        "font-variant-emoji", "overflow-block", "overflow-inline", "paint-order",
+        "x", "y",
     };
 
     /// <summary>Ids this engine keeps in its property table that are not properties the reference

@@ -284,6 +284,22 @@ public abstract class CssStyleDeclarationBase : System.Dynamic.DynamicObject
 
     private static string ToCssName(string jsName)
     {
+        // A legacy prefix is a word of its own in the CSS spelling and cannot be one in the IDL:
+        // the member 'webkitLineClamp' is the property '-webkit-line-clamp', and hyphenating the
+        // name as usual would ask for a property no page can write (measured: the member stores
+        // under the dashed name, while setProperty('webkit-line-clamp', …) is refused).
+        foreach (var prefix in new[] { "webkit", "moz", "ms", "o" })
+        {
+            if (jsName.Length > prefix.Length + 1
+                && jsName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && char.IsUpper(jsName[prefix.Length]))
+                return "-" + prefix + HyphenateCamel(jsName[prefix.Length..]);
+        }
+        return HyphenateCamel(jsName);
+    }
+
+    private static string HyphenateCamel(string jsName)
+    {
         var sb = new System.Text.StringBuilder(jsName.Length + 4);
         foreach (var ch in jsName)
             if (char.IsUpper(ch))

@@ -319,6 +319,30 @@ public static class ComputedValueSerializer
                 ? "auto" : style.JustifySelf;
             // 'overflow-clip-margin' is a length plus the box it measures from; the length form
             // is what the reference engine prints for a plain value.
+            // The border-image family answers the parts the cascade stored, in the one spelling
+            // the echo prints too (CSS Backgrounds 3 §5). The shorthand says all five parts, the
+            // slashes and all, which is what the reference engine prints for it (measured:
+            // 'url("a.png") 3 / 1 / 0 stretch').
+            case "border-image-slice": return style.BorderImageSlice;
+            case "border-image-width": return style.BorderImageWidth;
+            case "border-image-outset": return style.BorderImageOutset;
+            case "border-image-repeat": return style.BorderImageRepeat;
+            // The source is printed by the same image printer background-image uses, so a colour
+            // keyword inside a gradient has already become its rgb() form (measured:
+            // 'linear-gradient(red,blue)' computes 'linear-gradient(rgb(255, 0, 0), rgb(0, 0, 255))').
+            case "border-image-source":
+                return Css.ImageValueCanonicalizer.Canonicalize(style.BorderImageSourceText ?? "none");
+            case "border-image":
+                // A dropped declaration leaves the shorthand at its initial 'none'; only a source
+                // the page really named turns it into the five-part expansion (measured:
+                // 'border-image: fill' computes 'none').
+                if (style.BorderImageSourceText == null
+                    || style.BorderImageSourceText.Equals("none", StringComparison.OrdinalIgnoreCase))
+                    return "none";
+                return $"{Css.ImageValueCanonicalizer.Canonicalize(style.BorderImageSourceText)}"
+                    + $" {style.BorderImageSlice}"
+                    + $" / {style.BorderImageWidth} / {style.BorderImageOutset}"
+                    + $" {style.BorderImageRepeat}";
             case "overflow-clip-margin":
                 // The box and the length are one value, and the engine says a part only when it left
                 // its initial: the box is 'padding-box' and the length '0px' unless the page moved
@@ -456,6 +480,11 @@ public static class ComputedValueSerializer
             case "overflow-anchor": return style.OverflowAnchor == OverflowAnchorType.None ? "none" : "auto";
             case "overscroll-behavior-x": return style.OverscrollBehaviorX.ToString().ToLowerInvariant();
             case "overscroll-behavior-y": return style.OverscrollBehaviorY.ToString().ToLowerInvariant();
+            // The logical pair names the same two axes through the writing mode (CSS Overscroll
+            // Behavior 1 §2): block is the y axis and inline the x one, which is how the cascade
+            // stored them.
+            case "overscroll-behavior-block": return style.OverscrollBehaviorY.ToString().ToLowerInvariant();
+            case "overscroll-behavior-inline": return style.OverscrollBehaviorX.ToString().ToLowerInvariant();
             // CSS Fragmentation 3 §3.2–3.4 with the CSS 2.1 'page-break-*' aliases: the modern and
             // legacy spellings of one axis share a slot holding the modern keyword, and the legacy
             // name re-spells 'page' as 'always' and reads the empty string for a modern value it has
@@ -1106,7 +1135,11 @@ public static class ComputedValueSerializer
     {
         var images = Css.MaskLayerParser.SplitTopLevel(
             string.IsNullOrEmpty(style.MaskImage) ? (style.Mask ?? string.Empty) : style.MaskImage, ',');
-        var text = Css.MaskKeywordSerializer.LayerList(layers, scalar, images.Count, normalize);
+        // A mask with no image still has the one layer the shorthand's other parts are written
+        // against, so a longer list is truncated to it (measured: 'mask-composite: add, subtract'
+        // with no 'mask-image' computes 'add').
+        var text = Css.MaskKeywordSerializer.LayerList(layers, scalar,
+            Math.Max(1, images.Count), normalize);
         return text.Length > 0 ? text : initial;
     }
 

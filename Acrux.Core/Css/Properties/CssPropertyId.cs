@@ -527,6 +527,18 @@ public enum CssPropertyId
     ViewTimelineInset,
     ViewTimelineName,
     PositionTryFallbacks,
+    // Declared by the reference engine, read and echoed here, and consumed by nothing yet: the
+    // top layer has no dialog to sit in, the anchor-positioning pair has no anchor to place
+    // against, and a view or scroll timeline has no scroller to name. They need ids for the same
+    // reason the shape trio did — the cascade dispatches by id, and without one a declaration is
+    // dropped before it can reach the text the computed surface prints.
+    Overlay,
+    PositionArea,
+    PositionVisibility,
+    TransitionBehavior,
+    ObjectViewBox,
+    ScrollTimeline,
+    ViewTimeline,
     // CSS Overflow 5 §3 (the marker-group pseudo-element anchor). The reference engine declares it,
     // reads it, echoes it and inherits nothing from it; this engine has no ::scroll-marker-group box
     // to place, so it lives in the echo table like the shape trio did before it had a consumer.
@@ -605,12 +617,10 @@ public static class CssPropertyIdExtensions
     {
         if (NameToId.TryGetValue(name, out var id))
             return id;
-        // A script that reaches a prefixed property through its IDL member spells it without the
-        // leading dash — 'style.webkitTextSecurity' is the same property as '-webkit-text-security'
-        // (measured: setting it prints '-webkit-text-security: disc;').
-        if (name.StartsWith("webkit-", StringComparison.Ordinal)
-            && NameToId.TryGetValue("-" + name, out id))
-            return id;
+        // A script that reaches a prefixed property through its IDL member gets the dash from the
+        // member path itself (CssStyleDeclaration.ToCssName turns 'webkitLineClamp' into
+        // '-webkit-line-clamp'), and NOT from here: measured, setProperty('webkit-line-clamp', …)
+        // is refused, so a name without the leading dash is not a property this engine knows.
         return CssPropertyId.Invalid;
     }
 
@@ -642,11 +652,11 @@ public static class CssPropertyIdExtensions
     public static string CanonicalName(string name)
     {
         if (string.IsNullOrEmpty(name) || name.StartsWith("--", StringComparison.Ordinal)) return name;
-        // A prefixed property this engine has no id for is still somebody's property, and an IDL
-        // member names it without its leading dash: 'style.webkitBoxFlex = "1"' is stored as
-        // '-webkit-box-flex' (measured).
-        if (name.StartsWith("webkit-", StringComparison.Ordinal) && FromString(name) == CssPropertyId.Invalid)
-            name = "-" + name;
+        // The IDL spelling of a prefixed property is turned back into the CSS name where the member
+        // is read (CssStyleDeclaration.ToCssName, DocumentHost.Hyphenate), NOT here: the same
+        // spelling written into setProperty is a name no page can set (measured:
+        // 'setProperty("webkit-line-clamp", "none")' is refused while 'style.webkitLineClamp' is
+        // stored under '-webkit-line-clamp').
         var id = FromString(name);
         return id == CssPropertyId.Invalid || id == CssPropertyId.Variable ? name : ToString(id);
     }

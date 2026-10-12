@@ -272,6 +272,8 @@ public static class CssValueText
                     result = CanonicalizeEmphasisPosition(result, property);
                     result = CanonicalizeClipMargin(result, property);
                     result = CanonicalizeScrollInset(result, property);
+                    result = CanonicalizeBorderImage(result, property);
+                    result = CanonicalizeB284(result, property);
                     result = CanonicalizeTextDecoration(result, property);
                     result = CanonicalizeColumnRule(result, property);
                     result = CanonicalizeListStyle(result, property);
@@ -662,6 +664,55 @@ public static class CssValueText
         if (parts.Count < 2) return text;
         return parts.All(part => part.Equals(parts[0], StringComparison.OrdinalIgnoreCase))
             ? parts[0] : string.Join(" ", parts);
+    }
+
+    /// <summary>Say the properties this batch tightened in the one spelling the reference engine
+    /// prints: a timing function with its default step term left out and its linear positions
+    /// filled in, the legacy 'distribute' as the modern 'inter-character', and a pair of identical
+    /// overscroll behaviours as the one word it is (all measured). The cascade and the computed
+    /// surface read the same helpers, so a sheet, a style attribute and getComputedStyle agree.</summary>
+    private static string CanonicalizeB284(string text, string property)
+    {
+        var lower = property.ToLowerInvariant();
+        if (lower is "animation-timing-function" or "transition-timing-function"
+            or "-webkit-animation-timing-function" or "-webkit-transition-timing-function")
+            return Acrux.Core.Css.Resolver.CssPropertyApplier.CanonicalTimingFunction(text);
+        if (lower == "text-justify"
+            && text.Trim().Equals("distribute", StringComparison.OrdinalIgnoreCase))
+            return "inter-character";
+        if (lower is "overscroll-behavior" or "overscroll-behavior-block"
+            or "overscroll-behavior-inline" or "overscroll-behavior-x" or "overscroll-behavior-y")
+        {
+            var parts = SplitTopLevelWords(text);
+            if (parts.Count == 2 && parts[0].Equals(parts[1], StringComparison.OrdinalIgnoreCase))
+                return parts[0].ToLowerInvariant();
+        }
+        if (lower is "align-items" or "align-content" or "justify-self" or "align-self")
+        {
+            var trimmed = string.Join(" ", SplitTopLevelWords(text));
+            if (trimmed.Equals("first baseline", StringComparison.OrdinalIgnoreCase))
+                return "baseline";
+        }
+        return text;
+    }
+
+    /// <summary>Say one of the border-image parts, and the shorthand, the way the reference engine
+    /// prints them: a box part collapses to one value when all its sides agree, and the shorthand
+    /// names every part the page left out (CSS Backgrounds 3 §5, measured). One canonicaliser
+    /// serves the echo, the grammar and the cascade, so the three cannot disagree about a spelling.</summary>
+    private static string CanonicalizeBorderImage(string text, string property)
+    {
+        var lower = property.ToLowerInvariant();
+        var canonical = lower switch
+        {
+            "border-image-slice" => Acrux.Core.Css.CssValueGrammar.CanonicalBorderImageSlice(text),
+            "border-image-width" => Acrux.Core.Css.CssValueGrammar.CanonicalBorderImageWidth(text),
+            "border-image-outset" => Acrux.Core.Css.CssValueGrammar.CanonicalBorderImageOutset(text),
+            "border-image-repeat" => Acrux.Core.Css.CssValueGrammar.CanonicalBorderImageRepeat(text),
+            "border-image" => Acrux.Core.Css.CssValueGrammar.CanonicalBorderImageShorthand(text),
+            _ => null,
+        };
+        return canonical ?? text;
     }
 
     /// <summary>Say <c>overflow-clip-margin</c> as one value: the box it measures from in front of

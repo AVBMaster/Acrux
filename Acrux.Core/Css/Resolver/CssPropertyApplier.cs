@@ -516,11 +516,24 @@ public static class CssPropertyApplier
             case "border-collapse": style.BorderCollapse = value.ToLowerInvariant() == "collapse"; break;
             case "border-spacing": ApplyBorderSpacing(style, value); break;
             case "border-image": ParseBorderImageShorthand(value, style); break;
-            case "border-image-source": style.BorderImageSource = NormalizeImageSource(value); break;
-            case "border-image-slice": style.BorderImageSlice = value; break;
-            case "border-image-width": style.BorderImageWidth = value; break;
-            case "border-image-repeat": style.BorderImageRepeat = value; break;
-            case "border-image-outset": style.BorderImageOutset = value; break;
+            case "border-image-source":
+                style.BorderImageSource = NormalizeImageSource(value);
+                style.BorderImageSourceText = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+                break;
+            // Each part is stored in the one spelling the echo and the computed surface print
+            // (CSS Backgrounds 3 §5); the grammar has already refused anything else.
+            case "border-image-slice":
+                style.BorderImageSlice = CssValueGrammar.CanonicalBorderImageSlice(value) ?? "100%";
+                break;
+            case "border-image-width":
+                style.BorderImageWidth = CssValueGrammar.CanonicalBorderImageWidth(value) ?? "1";
+                break;
+            case "border-image-repeat":
+                style.BorderImageRepeat = CssValueGrammar.CanonicalBorderImageRepeat(value) ?? "stretch";
+                break;
+            case "border-image-outset":
+                style.BorderImageOutset = CssValueGrammar.CanonicalBorderImageOutset(value) ?? "0";
+                break;
             case "box-sizing": style.BoxSizing = value.Contains("border") ? BoxSizingType.BorderBox : BoxSizingType.ContentBox; style.BoxSizingIsAuthored = true; break;
             case "opacity": if (float.TryParse(value, out var o)) style.Opacity = Math.Clamp(o, 0, 1); break;
             case "box-shadow": style.BoxShadow = ParseBoxShadow(value); break;
@@ -542,7 +555,7 @@ public static class CssPropertyApplier
                 break;
             case "justify-items":
                 {
-                    var ji = CanonicalAlignmentValue(value);
+                    var ji = CanonicalAlignmentValue(value, legacyAllowed: true);
                     if (ji != null) style.JustifyItems = ji;
                 }
                 break;
@@ -586,7 +599,8 @@ public static class CssPropertyApplier
             case "place-items":
                 {
                     style.PlaceItems = value.ToLowerInvariant();
-                    var (block, inline) = PlacePair(value);
+                    // The inline side of 'place-items' is 'justify-items', legacy family and all.
+                    var (block, inline) = PlacePair(value, inlineAllowsLegacy: true);
                     ApplyPlace(v => { style.AlignItems = ParseAlignItems(v); style.AlignItemsCssText = v; },
                         v => style.JustifyItems = v, block, inline);
                 }
@@ -720,14 +734,16 @@ public static class CssPropertyApplier
             case "transition-delay": style.TransitionDelay = value; break;
             case "transition-duration": style.TransitionDuration = value; break;
             case "transition-property": style.TransitionProperty = value; break;
-            case "transition-timing-function": style.TransitionTimingFunction = value; break;
+            case "transition-timing-function":
+                style.TransitionTimingFunction = CanonicalTimingFunction(value); break;
             case "animation":
                 style.Animation = value;
                 ApplyExpandedShorthand("animation", value, style);
                 break;
             case "animation-name": style.AnimationName = value; break;
             case "animation-duration": style.AnimationDuration = value; break;
-            case "animation-timing-function": style.AnimationTimingFunction = value; break;
+            case "animation-timing-function":
+                style.AnimationTimingFunction = CanonicalTimingFunction(value); break;
             case "animation-delay": style.AnimationDelay = value; break;
             case "animation-iteration-count": style.AnimationIterationCount = value; break;
             case "animation-direction": style.AnimationDirection = value; break;
@@ -1739,6 +1755,7 @@ public static class CssPropertyApplier
         "break-all" => WordBreakMode.BreakAll,
         "break-word" => WordBreakMode.BreakWord,
         "keep-all" => WordBreakMode.KeepAll,
+        "auto-phrase" => WordBreakMode.AutoPhrase,
         _ => WordBreakMode.Normal
     };
 
@@ -2406,6 +2423,7 @@ public static class CssPropertyApplier
     public static void ParseBorderImageShorthand(string value, ComputedStyle style)
     {
         style.BorderImageSource = null;
+        style.BorderImageSourceText = null;
 
         var tokens = new List<string>();
         var group = new List<string>();
@@ -2465,11 +2483,13 @@ public static class CssPropertyApplier
             if (source != null)
             {
                 style.BorderImageSource = source;
+                style.BorderImageSourceText = token;
                 continue;
             }
             if (IsGeneratedImage(token))
             {
                 style.BorderImageSource = token;
+                style.BorderImageSourceText = token;
                 continue;
             }
             if (boxGroup == 0) slice.Add(token);
@@ -2478,7 +2498,10 @@ public static class CssPropertyApplier
         }
 
         style.BorderImageSlice = (slice.Count > 0 ? string.Join(" ", slice) : "100%") + (fill ? " fill" : "");
-        style.BorderImageWidth = width.Count > 0 ? string.Join(" ", width) : "auto";
+        // The shorthand resets every part it does not carry, and the width's initial is the
+        // number one — not 'auto', which is only one of the values a page may write for it
+        // (measured: 'border-image: url(a.png) 3' reads 'url("a.png") 3 / 1 / 0 stretch').
+        style.BorderImageWidth = width.Count > 0 ? string.Join(" ", width) : "1";
         style.BorderImageOutset = outset.Count > 0 ? string.Join(" ", outset) : "0";
         style.BorderImageRepeat = repeat.Count > 0 ? string.Join(" ", repeat) : "stretch";
     }
@@ -2513,16 +2536,22 @@ public static class CssPropertyApplier
         "normal", "auto", "stretch", "start", "end", "flex-start", "flex-end", "center",
         "left", "right", "baseline", "first baseline", "last baseline",
         "space-between", "space-around", "space-evenly",
-        // The legacy family is 'justify-items' only (CSS Box Alignment 3 §8), but the six
-        // properties share one keyword table here.
-        "legacy", "legacy-left", "legacy-right", "legacy-center",
+        // The legacy family is 'justify-items' alone (CSS Box Alignment 3 §8), and it is written
+        // with a space: measured, 'legacy right' stands there while 'legacy-right' and
+        // 'align-content: legacy center' both fall.
+        "legacy", "legacy left", "legacy right", "legacy center",
     };
 
     /// <summary>The canonical spelling of an alignment value: lower-case, whitespace collapsed,
     /// and null when the token is not an alignment keyword. The property stores this text because
     /// its computed value is the keyword the page used — 'end' answers 'end' and an authored
     /// 'flex-end' answers 'flex-end' (measured), which a single enum could not tell apart.</summary>
-    private static string? CanonicalAlignmentValue(string value)
+    /// <summary>Whether a value is one of the alignment keywords, asked of the same function the
+    /// cascade uses so no surface answers twice about one declaration.</summary>
+    public static bool IsAlignmentValue(string value, bool legacyAllowed = false) =>
+        CanonicalAlignmentValue(value, legacyAllowed) != null;
+
+    private static string? CanonicalAlignmentValue(string value, bool legacyAllowed = false)
     {
         // Collapse the runs of space a multi-word keyword may be written with, so that
         // 'first  baseline' and 'first baseline' are the same value.
@@ -2545,23 +2574,44 @@ public static class CssPropertyApplier
             if (text.StartsWith(qualifier, StringComparison.OrdinalIgnoreCase))
             {
                 var rest = text[qualifier.Length..];
-                return AlignmentKeywords.Contains(rest) && rest is not ("normal" or "auto" or "stretch")
-                    ? text.ToLowerInvariant()
-                    : null;
+                if (!AlignmentKeywords.Contains(rest) || rest is "normal" or "auto" or "stretch")
+                    return null;
+                if (rest.StartsWith("legacy", StringComparison.OrdinalIgnoreCase) && !legacyAllowed)
+                    return null;
+                return text.ToLowerInvariant();
             }
         }
-        return AlignmentKeywords.Contains(text) ? text.ToLowerInvariant() : null;
+        if (!AlignmentKeywords.Contains(text)) return null;
+        var canonical = text.ToLowerInvariant();
+        // 'first' is the baseline the other keyword already names (measured: 'align-items: first
+        // baseline' reads 'baseline'), and the legacy family belongs to 'justify-items' alone.
+        if (canonical == "first baseline") canonical = "baseline";
+        if (canonical.StartsWith("legacy", StringComparison.Ordinal) && !legacyAllowed) return null;
+        return canonical;
     }
 
     /// <summary>Splits a 'place-*' value into its block and inline side, the inline side
     /// defaulting to the block one (CSS Box Alignment 3 §6). A side that is not an alignment
     /// keyword makes the whole declaration invalid.</summary>
-    private static (string? block, string? inlineAxis) PlacePair(string value)
+    private static (string? block, string? inlineAxis) PlacePair(string value,
+        bool inlineAllowsLegacy = false)
     {
         var parts = ShorthandExpander.SplitShorthand(value).ToArray();
         if (parts.Length == 0) return (null, null);
-        var block = CanonicalAlignmentValue(parts[0]);
-        var inlineAxis = parts.Length > 1 ? CanonicalAlignmentValue(parts[1]) : block;
+        // A side of the pair can itself be two words ('place-items: baseline last baseline'), so
+        // the split is decided by what parses rather than by how many spaces there are: the first
+        // side is the longest prefix that is a value, and the rest is the second (measured).
+        int blockWords = 1;
+        string? block = CanonicalAlignmentValue(parts[0]);
+        if (block == null && parts.Length > 2)
+        {
+            block = CanonicalAlignmentValue(parts[0] + " " + parts[1]);
+            blockWords = 2;
+        }
+        var rest = parts[blockWords..];
+        var inlineAxis = rest.Length == 0
+            ? block
+            : CanonicalAlignmentValue(string.Join(" ", rest), inlineAllowsLegacy);
         return block == null || inlineAxis == null ? (null, null) : (block, inlineAxis);
     }
 
@@ -3963,10 +4013,52 @@ public static class CssPropertyApplier
         _ => LineBreakType.Auto
     };
 
+    /// <summary>Say a timing function the way the reference engine prints it (CSS Easing 1 §3.6).
+    /// A <c>steps()</c> jump term that is the default <c>end</c> is left out, and a step count
+    /// below two is no value at all; a <c>linear()</c> list has its positions written out for the
+    /// stops that did not carry one, evenly from 0% to 100%. Measured: 'steps(2, end)' reads
+    /// 'steps(2)', 'steps(1, jump-none)' is dropped, and 'linear(0, 1)' reads
+    /// 'linear(0 0%, 1 100%)'.</summary>
+    internal static string CanonicalTimingFunction(string value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        var lower = text.ToLowerInvariant();
+        if (lower.StartsWith("steps(", StringComparison.Ordinal) && lower.EndsWith(")", StringComparison.Ordinal))
+        {
+            var inner = text[6..^1];
+            var parts = inner.Split(',');
+            if (parts.Length is < 1 or > 2) return text;
+            if (!int.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var count) || count < 2)
+                return text;
+            if (parts.Length == 1) return $"steps({count})";
+            var jump = parts[1].Trim().ToLowerInvariant();
+            return jump == "end" ? $"steps({count})" : $"steps({count}, {jump})";
+        }
+        if (lower.StartsWith("linear(", StringComparison.Ordinal) && lower.EndsWith(")", StringComparison.Ordinal))
+        {
+            var stops = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(text[7..^1], ',');
+            if (stops.Count < 2) return text;
+            var written = new List<string>(stops.Count);
+            for (int i = 0; i < stops.Count; i++)
+            {
+                var words = stops[i].Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                if (words.Length > 2) return text;
+                var position = words.Length == 2 ? words[1]
+                    : Acrux.Core.Dom.Animations.CssValueTokenizer.Num(100d * i / (stops.Count - 1)) + "%";
+                written.Add($"{words[0]} {position}");
+            }
+            return "linear(" + string.Join(", ", written) + ")";
+        }
+        return text;
+    }
+
     public static TextJustifyType ParseTextJustify(string value) => value.ToLowerInvariant() switch
     {
         "inter-word" => TextJustifyType.InterWord,
-        "inter-character" => TextJustifyType.InterCharacter,
+        // 'distribute' is the older spelling of 'inter-character' and the reference engine answers
+        // the modern word on both surfaces (measured).
+        "inter-character" or "distribute" => TextJustifyType.InterCharacter,
         "none" => TextJustifyType.None,
         _ => TextJustifyType.Auto
     };

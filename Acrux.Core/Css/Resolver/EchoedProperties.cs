@@ -150,6 +150,42 @@ public static class EchoedProperties
             // 'links' may follow it, and the two are the only content word — 'before first',
             // 'before auto', a bare 'links' and 'before after' are all dropped. The computed surface
             // always says what the group holds, so a lone side grows its 'links'.
+            // CSS Display 3 §6B and CSS UI 4: 'overlay' says whether a dialog's top-layer box is
+            // drawn over the page. Both words are taken, and the computed surface answers 'none'
+            // for either — 'auto' only becomes 'auto' once a box is really in the top layer with a
+            // transition running (measured: both spellings compute 'none').
+            new() { Name = "overlay", Initial = "none", Normalize = Single("auto", "none"),
+                ComputedText = static (_, _) => "none" },
+
+            // CSS Anchor Positioning §5.2/§5.3/§4.2. 'position-area' names one or two sides of the
+            // anchor's containing block; the measured set so far is 'none' and the single sides,
+            // while the 'span-block start' pair is refused. 'position-visibility' says when the
+            // fallback box is hidden, and 'anchored' — the word an older draft used — is refused.
+            new() { Name = "position-area", Initial = "none",
+                Normalize = Single("none", "top", "bottom", "left", "right", "center", "start",
+                    "end", "self-start", "self-end", "span-start", "span-end", "span-self-start",
+                    "span-self-end", "span-all", "x-start", "x-end", "y-start", "y-end",
+                    "span-x-start", "span-x-end", "span-y-start", "span-y-end") },
+            new() { Name = "position-visibility", Initial = "anchors-visible",
+                Normalize = Single("anchors-visible", "no-anchored", "anchor-size", "always") },
+            new() { Name = "position-try", Initial = "none",
+                Normalize = Single("normal", "none", "flip-block", "flip-inline", "flip-start") },
+
+            // CSS Transitions 2 §4.2 and CSS View Transitions 1: a comma list, one keyword per
+            // transition, and the view box the replaced element is cropped to.
+            new() { Name = "transition-behavior", Initial = "normal",
+                Normalize = NormalizeBehaviorList },
+            new() { Name = "object-view-box", Initial = "none",
+                Normalize = NormalizeViewBox },
+
+            // Scroll-linked Animations 1 §3/§5: the two shorthands say the name and the axis (and
+            // for a view timeline the inset) the longhands carry. Measured: a lone dashed name, a
+            // name with an axis, and 'none' all stand; a plain name is not a timeline name.
+            new() { Name = "scroll-timeline", Initial = "none",
+                Normalize = NormalizeTimelineShorthand },
+            new() { Name = "view-timeline", Initial = "none",
+                Normalize = NormalizeTimelineShorthand },
+
             new() { Name = "scroll-marker-group", Initial = "none",
                 Normalize = NormalizeScrollMarkerGroup,
                 ComputedText = ScrollMarkerGroupComputed },
@@ -307,6 +343,49 @@ public static class EchoedProperties
     private static string? NormalizeCompositionList(string value) =>
         KeywordList(value, "add", "accumulate", "replace");
 
+    /// <summary>'transition-behavior' is a comma list of the two behaviours, one per transition
+    /// (CSS Transitions 2 §4.2, measured: 'normal' and 'allow-discrete' both stand and a space
+    /// between them is no list).</summary>
+    private static string? NormalizeBehaviorList(string value) =>
+        KeywordList(value, "normal", "allow-discrete");
+
+    /// <summary>'object-view-box' is 'none' or one inset function (CSS View Transitions 1 §4.6,
+    /// measured: 'auto' is refused and 'inset(10%)' stands as written).</summary>
+    private static string? NormalizeViewBox(string value)
+    {
+        var text = value.Trim();
+        if (text.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
+        return text.StartsWith("inset(", StringComparison.OrdinalIgnoreCase) ? text : null;
+    }
+
+    /// <summary>The timeline shorthands: 'none', a dashed name, an axis, or the name and the
+    /// axis in either order (Scroll-linked Animations 1 §3.1/§5.1, measured: '--t inline' reads
+    /// back as written and a second axis word is no value).</summary>
+    private static string? NormalizeTimelineShorthand(string value)
+    {
+        var words = Words(value);
+        if (words.Length == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+            return "none";
+        string? name = null, axis = null;
+        foreach (var word in words)
+        {
+            var p = word.ToLowerInvariant();
+            if (p is "block" or "inline" or "x" or "y")
+            {
+                if (axis != null) return null;
+                axis = p;
+            }
+            else if (IsDashedIdent(word))
+            {
+                if (name != null) return null;
+                name = word;
+            }
+            else return null;
+        }
+        if (name == null && axis == null) return null;
+        return name == null ? axis : axis == null ? name : name + " " + axis;
+    }
+
     private static string? NormalizeScrollMarkerGroup(string value)
     {
         var words = Words(value);
@@ -393,7 +472,14 @@ public static class EchoedProperties
         if (words.Length == 0 || words.Length > 4) return null;
         if (words.Length == 1 && words[0].Equals("normal", StringComparison.OrdinalIgnoreCase))
             return "normal";
-        return NormalizeAnimationRangeEdge(value) != null ? string.Join(" ", words) : null;
+        // The shorthand says both edges, and each edge is a range name with an optional offset —
+        // so the whole value is up to four words, two per edge (measured: 'entry 10% exit 90%'
+        // stands and reads back as written, while 'entry 10% 10%' does not).
+        if (NormalizeAnimationRangeEdge(value) != null) return string.Join(" ", words);
+        if (words.Length != 4) return null;
+        var start = NormalizeAnimationRangeEdge(string.Join(" ", words[..2]));
+        var end = NormalizeAnimationRangeEdge(string.Join(" ", words[2..]));
+        return start != null && end != null ? string.Join(" ", words) : null;
     }
 
     private static string? NormalizeAnimationRangeEdge(string value)

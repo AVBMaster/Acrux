@@ -1541,6 +1541,11 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public float? BorderRowSpacing { get; set; }
     public float UsedBorderRowSpacing => BorderRowSpacing ?? BorderSpacing;
     public string? BorderImageSource { get; set; }
+
+    /// <summary>The source as a page reads it back — the <c>url(…)</c> or image function the
+    /// declaration carried — kept apart from <see cref="BorderImageSource"/>, which is the path
+    /// the nine-piece painter opens. Null means the property is at its initial 'none'.</summary>
+    public string? BorderImageSourceText { get; set; }
     public string BorderImageSlice { get; set; } = "100%";
     public string BorderImageWidth { get; set; } = "1";
     public string BorderImageRepeat { get; set; } = "stretch";
@@ -1821,7 +1826,8 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             BorderSpacing = BorderSpacing, BorderRowSpacing = BorderRowSpacing,
             Zoom = Zoom, Orphans = Orphans, Widows = Widows,
             BreakBefore = BreakBefore, BreakAfter = BreakAfter, BreakInside = BreakInside,
-            BorderImageSource = BorderImageSource, BorderImageSlice = BorderImageSlice,
+            BorderImageSource = BorderImageSource, BorderImageSourceText = BorderImageSourceText,
+            BorderImageSlice = BorderImageSlice,
             BorderImageWidth = BorderImageWidth, BorderImageRepeat = BorderImageRepeat, BorderImageOutset = BorderImageOutset,
             FontVariant = FontVariant, FontVariantCaps = FontVariantCaps,
             FontKerning = FontKerning, FontStretch = FontStretch,
@@ -2034,7 +2040,7 @@ public enum TextWrapModeType { Wrap, NoWrap }
 /// <summary>'text-wrap-style' (CSS Text 4 §4.3). 'Balanced' is the standard keyword;
 /// 'Pretty' is the browser-specific one that 'text-wrap: pretty' maps to.</summary>
 public enum TextWrapStyleType { Auto, Stable, Balanced, Pretty }
-public enum WordBreakMode { Normal, BreakAll, BreakWord, KeepAll }
+public enum WordBreakMode { Normal, BreakAll, BreakWord, KeepAll, AutoPhrase }
 public enum OverflowWrapMode { Normal, BreakWord, Anywhere }
 /// <summary>CSS Overflow 3 §3.3. 'Clip' is NOT a scroll container and, unlike every
 /// other non-visible value, it does not establish a block formatting context

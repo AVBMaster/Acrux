@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b284 probe — margin collapsing into a static parent, and empty inline fragments</title>
+<style>
+body { margin: 0; font: 16px/20px Arial, sans-serif; color: #111; background: #fff; }
+.wrap { margin: 0; padding: 0; }
+.p { background: #ffd8d8; border: 0; padding: 0; margin: 0; }
+.p.b { border: 1px solid #333; }
+.p.pad { padding: 4px 0; }
+.c { height: 20px; background: #d8ffd8; }
+.i { background: #d8d8ff; }
+.empty { display: inline; width: 0; height: 0; background: #ff00ff; }
+.abs { position: absolute; }
+table { border-collapse: separate; }
+</style></head><body>
+
+<div class="wrap"><div id="m1" class="p"><div id="m1c" class="c" style="margin-top:30px">1</div></div></div>
+<div class="wrap"><div id="m2" class="p b"><div id="m2c" class="c" style="margin-top:30px">2</div></div></div>
+<div class="wrap"><div id="m3" class="p pad"><div id="m3c" class="c" style="margin-top:30px">3</div></div></div>
+<div class="wrap"><div id="m4" class="p" style="margin-top:10px"><div id="m4c" class="c" style="margin-top:30px">4</div></div></div>
+<div class="wrap"><div id="m5" class="p"><div id="m5c" class="c" style="margin-top:30px">5</div><div class="c" style="margin-top:20px">5b</div></div></div>
+<div class="wrap"><div id="m6" class="p" style="overflow:hidden"><div id="m6c" class="c" style="margin-top:30px">6</div></div></div>
+<div class="wrap"><div id="m7" class="p"><div id="m7c" class="c" style="margin-bottom:30px">7</div></div><div id="m7n" class="c" style="background:#fff0c0">7n</div></div>
+<div class="wrap"><div id="m8" class="p"><div id="m8c" class="c abs" style="margin-top:30px;position:absolute">8</div></div></div>
+<div class="wrap"><div id="m9" class="p"><div id="m9c" class="c" style="margin-top:-10px">9</div></div></div>
+<div class="wrap"><div id="m10" class="p"><div id="m10c" class="c" style="margin-top:30px;display:inline-block">10</div></div></div>
+
+<p id="e1"><span class="empty"></span><span class="i">A</span></p>
+<p id="e2"><span class="i">B</span><span class="empty"></span><span class="i">C</span></p>
+<p id="e3"><span class="i">D</span><span class="empty" style="display:inline-block"></span><span class="i">E</span></p>
+<p id="e4">F<span class="empty"></span>G</p>
+<p id="e5"><span class="i">H</span><span class="empty"></span><br><span class="i">I</span></p>
+
+<script>
+function rect(id){ var e = document.getElementById(id); if (!e) return id+':missing'; var r = e.getBoundingClientRect();
+  return id + ' x=' + Math.round(r.left*10)/10 + ' y=' + Math.round(r.top*10)/10 + ' w=' + Math.round(r.width*10)/10 + ' h=' + Math.round(r.height*10)/10; }
+function frag(id){ var e=document.getElementById(id); if(!e) return id+':missing'; var out=[];
+  var w=document.createTreeWalker(e,NodeFilter.SHOW_TEXT,null); var n;
+  while(n=w.nextNode()){ var r=document.createRange(); r.selectNodeContents(n);
+    var rs=r.getClientRects(); for(var i=0;i<rs.length;i++) out.push(n.textContent+':'+Math.round(rs[i].left)+'/'+Math.round(rs[i].top)+'x'+Math.round(rs[i].width)); }
+  return id+' '+out.join(' '); }
+var ids = ['m1','m1c','m2','m2c','m3','m3c','m4','m4c','m5','m5c','m6','m6c','m7','m7c','m7n','m8','m8c','m9','m9c','m10','m10c'];
+var out = ids.map(rect);
+out = out.concat(['e1','e2','e3','e4','e5'].map(frag));
+var text = out.join('\n');
+document.getElementById('report') || document.body.appendChild(Object.assign(document.createElement('pre'),{id:'report'})).textContent = text;
+console.log(text);
+</script></body></html>
