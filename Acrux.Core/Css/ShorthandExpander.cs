@@ -15,6 +15,12 @@ public static class ShorthandExpander
 
         foreach (var prop in properties)
         {
+            // A shorthand the property's own grammar refuses expands into nothing at all. Reading it
+            // as a handful of separately-valid longhands handed a declaration the reference engine
+            // drops a cascade slot it should never have held (measured: 'text-decoration: underline
+            // red overline' in a <style> block paints no line, exactly as the same value written
+            // through el.style.setProperty, which the CSSOM gate refuses).
+            if (IsShorthandName(prop.Key) && !CssValueGrammar.TextIsValidFor(prop.Key, prop.Value)) continue;
             var expanded = ExpandProperty(prop.Key, prop.Value);
             foreach (var kv in expanded)
                 result[kv.Key] = kv.Value;
@@ -83,6 +89,10 @@ public static class ShorthandExpander
             case "margin-inline": ExpandLogicalPair(result, "margin-inline", value); break;
             case "padding-block": ExpandLogicalPair(result, "padding-block", value); break;
             case "padding-inline": ExpandLogicalPair(result, "padding-inline", value); break;
+            // The logical inset pairs expand here as well as apply: a block that carries the two
+            // edges is enumerated, folded and demoted as the pair the page wrote (CSS Logical 1 §4).
+            case "inset-block": ExpandLogicalPair(result, "inset-block", value); break;
+            case "inset-inline": ExpandLogicalPair(result, "inset-inline", value); break;
             case "overflow": ExpandOverflow(result, value); break;
             case "mask": ExpandMask(result, value); break;
             case "offset": ExpandOffset(result, value); break;
@@ -133,6 +143,8 @@ public static class ShorthandExpander
             "margin-inline" => new[] { "margin-inline-start", "margin-inline-end" },
             "padding-block" => new[] { "padding-block-start", "padding-block-end" },
             "padding-inline" => new[] { "padding-inline-start", "padding-inline-end" },
+            "inset-block" => new[] { "inset-block-start", "inset-block-end" },
+            "inset-inline" => new[] { "inset-inline-start", "inset-inline-end" },
             "overflow" => new[] { "overflow-x", "overflow-y" },
             "contain-intrinsic-size" => new[] { "contain-intrinsic-width", "contain-intrinsic-height" },
             "mask" => new[] { "mask-image", "mask-position", "mask-size", "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode" },
@@ -182,7 +194,8 @@ public static class ShorthandExpander
         "background", "background-position", "margin", "padding", "border", "border-width", "border-color",
         "border-style", "border-radius", "border-top", "border-right", "border-bottom",
         "border-left", "font", "font-variant", "flex", "outline", "white-space", "text-wrap",
-        "animation", "transition", "inset", "margin-block", "margin-inline", "padding-block",
+        "animation", "transition", "inset", "inset-block", "inset-inline",
+        "margin-block", "margin-inline", "padding-block",
         "padding-inline", "overflow", "contain-intrinsic-size", "mask", "gap", "columns",
         "column-rule", "flex-flow", "text-decoration", "text-emphasis", "grid-column",
         "grid-row", "grid-area",
@@ -850,6 +863,143 @@ public static class ShorthandExpander
         }
         return string.Join(", ", printed);
     }
+
+    /// <summary>The 'mask' shorthand in the order its grammar takes the parts — image, position /
+    /// size, repeat, origin, clip, composite, mode — saying only the parts the layer named
+    /// (measured: 'url(a.png) exclude content-box' reads 'url("a.png") content-box exclude' and
+    /// 'url(a.png) 50%' reads 'url("a.png") 50% center'). Unlike 'background', a mask layer has no
+    /// colour and no attachment, and one box keyword is printed ONCE rather than as the pair the
+    /// background says twice (both measured).</summary>
+    public static string MaskLayerOrderText(string text)
+    {
+        var layers = Acrux.Core.Css.MaskLayerParser.Parse(text);
+        if (layers.Count == 0) return text;
+        var printed = new List<string>(layers.Count);
+        foreach (var layer in layers)
+        {
+            var parts = new List<string>(7);
+            if (layer.Image.Length > 0) parts.Add(layer.Image);
+            if (layer.Position != null)
+            {
+                var position = PositionPairText(layer.Position) ?? layer.Position;
+                parts.Add(layer.Size != null ? position + " / " + layer.Size : position);
+            }
+            if (layer.Repeat != null && !Acrux.Core.Css.MaskLayerParser.RepeatIsInitial(layer.Repeat))
+                parts.Add(layer.Repeat);
+            AddMaskBoxParts(parts, layer);
+            if (layer.Composite != null) parts.Add(layer.Composite);
+            if (layer.Mode != null) parts.Add(layer.Mode);
+            printed.Add(parts.Count > 0 ? string.Join(" ", parts) : "none");
+        }
+        return string.Join(", ", printed);
+    }
+
+    /// <summary>The origin/clip pair a mask layer names, in the two-box shapes the reference engine
+    /// answers (all measured): a pair that sits at its initial value says nothing at all, so
+    /// <c>url(a) border-box</c> is <c>url("a")</c>; a single box is ONE word, not the pair the
+    /// background says twice; unequal boxes are both said, in origin-then-clip order, even when the
+    /// origin is the initial one; and 'no-clip' replaces the clip half so an initial origin beside it
+    /// is silence while a named origin still speaks.</summary>
+    private static void AddMaskBoxParts(List<string> parts, Acrux.Core.Css.MaskLayer layer)
+    {
+        if (layer.Origin == null && layer.Clip == null) return;
+        if (layer.Clip == "no-clip")
+        {
+            if (layer.Origin != null && layer.Origin != "border-box") parts.Add(layer.Origin);
+            parts.Add("no-clip");
+            return;
+        }
+        if (layer.Origin == layer.Clip)
+        {
+            if (layer.Origin != "border-box") parts.Add(layer.Origin);
+            return;
+        }
+        if (layer.Origin != null) parts.Add(layer.Origin);
+        if (layer.Clip != null) parts.Add(layer.Clip);
+    }
+
+    /// <summary>The longhands a shorthand stands for when a page enumerates the declaration block,
+    /// in the order the reference engine lists them — measured for every list here, and the shape
+    /// is not the expansion order: <c>border</c> runs the four widths, then the four styles, then
+    /// the four colours, then the five <c>border-image</c> parts (17); <c>background</c> has no
+    /// <c>background-position</c> of its own because it lists the two axes; <c>mask</c> lists its
+    /// position axes under their legacy <c>-webkit-</c> names; <c>place-items</c> is the two
+    /// <c>align</c>/<c>justify</c> longhands it writes. Null for a shorthand that has not been
+    /// measured, where the caller falls back to the parts the expansion produced.</summary>
+    public static string[]? CssomLonghands(string name) => name.ToLowerInvariant() switch
+    {
+        "margin" => new[] { "margin-top", "margin-right", "margin-bottom", "margin-left" },
+        "padding" => new[] { "padding-top", "padding-right", "padding-bottom", "padding-left" },
+        "inset" => new[] { "top", "right", "bottom", "left" },
+        // The logical pairs enumerate as the two edges they wrote, start first (CSS Logical 1 §4).
+        "margin-block" => new[] { "margin-block-start", "margin-block-end" },
+        "margin-inline" => new[] { "margin-inline-start", "margin-inline-end" },
+        "padding-block" => new[] { "padding-block-start", "padding-block-end" },
+        "padding-inline" => new[] { "padding-inline-start", "padding-inline-end" },
+        "inset-block" => new[] { "inset-block-start", "inset-block-end" },
+        "inset-inline" => new[] { "inset-inline-start", "inset-inline-end" },
+        "outline" => new[] { "outline-color", "outline-style", "outline-width" },
+        "border-width" => new[] { "border-top-width", "border-right-width", "border-bottom-width", "border-left-width" },
+        "border-style" => new[] { "border-top-style", "border-right-style", "border-bottom-style", "border-left-style" },
+        "border-color" => new[] { "border-top-color", "border-right-color", "border-bottom-color", "border-left-color" },
+        "border" => new[] {
+            "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+            "border-top-style", "border-right-style", "border-bottom-style", "border-left-style",
+            "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+            "border-image-source", "border-image-slice", "border-image-width",
+            "border-image-outset", "border-image-repeat",
+        },
+        "list-style" => new[] { "list-style-position", "list-style-image", "list-style-type" },
+        "animation" => new[] {
+            "animation-duration", "animation-timing-function", "animation-delay",
+            "animation-iteration-count", "animation-direction", "animation-fill-mode",
+            "animation-play-state", "animation-name", "animation-timeline",
+            "animation-range-start", "animation-range-end",
+        },
+        "transition" => new[] {
+            "transition-behavior", "transition-duration", "transition-timing-function",
+            "transition-delay", "transition-property",
+        },
+        "columns" => new[] { "column-width", "column-count", "column-height", "column-wrap" },
+        "mask" => new[] {
+            "mask-image", "-webkit-mask-position-x", "-webkit-mask-position-y", "mask-size",
+            "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode",
+        },
+        "gap" => new[] { "row-gap", "column-gap" },
+        "text-decoration" => new[] {
+            "text-decoration-line", "text-decoration-thickness", "text-decoration-style",
+            "text-decoration-color",
+        },
+        "overflow" => new[] { "overflow-x", "overflow-y" },
+        "border-radius" => new[] {
+            "border-top-left-radius", "border-top-right-radius",
+            "border-bottom-right-radius", "border-bottom-left-radius",
+        },
+        "place-items" => new[] { "align-items", "justify-items" },
+        "place-content" => new[] { "align-content", "justify-content" },
+        "place-self" => new[] { "align-self", "justify-self" },
+        "background-position" => new[] { "background-position-x", "background-position-y" },
+        "background" => new[] {
+            "background-image", "background-position-x", "background-position-y", "background-size",
+            "background-repeat", "background-attachment", "background-origin", "background-clip",
+            "background-color",
+        },
+        "flex" => new[] { "flex-grow", "flex-shrink", "flex-basis" },
+        "grid" => new[] {
+            "grid-template-rows", "grid-template-columns", "grid-template-areas",
+            "grid-auto-flow", "grid-auto-columns", "grid-auto-rows",
+        },
+        "text-emphasis" => new[] { "text-emphasis-style", "text-emphasis-color" },
+        "font" => new[] {
+            "font-style", "font-variant-caps", "font-variant-ligatures", "font-variant-numeric",
+            "font-variant-east-asian", "font-variant-alternates", "font-size-adjust",
+            "font-language-override", "font-kerning", "font-optical-sizing",
+            "font-feature-settings", "font-variation-settings", "font-variant-position",
+            "font-variant-emoji", "font-weight", "font-stretch", "font-size", "line-height",
+            "font-family",
+        },
+        _ => null,
+    };
 
     /// <summary>The two axis lists as the one &lt;bg-position&gt; list they stand for: paired a
     /// layer at a time, and a list shorter than the other cycles the way every background list

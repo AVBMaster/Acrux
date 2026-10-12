@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b281 probe 5 — authored blocks and more merges</title></head><body>
+<div id="a" style="margin-top:1px;margin-right:2px;margin-bottom:3px;margin-left:4px"></div>
+<div id="b" style="margin: 1px 2px 3px 4px; margin-top: 9px"></div>
+<div id="c" style="border-radius: 1px 2px / 3px 4px"></div>
+<pre id="report"></pre>
+<script>
+var out=[];
+function el(id){ return document.getElementById(id); }
+out.push('authored four longhands: cssText='+JSON.stringify(el('a').style.cssText)+' len='+el('a').style.length
+  +' attr='+JSON.stringify(el('a').getAttribute('style')));
+out.push('authored shorthand+longhand: cssText='+JSON.stringify(el('b').style.cssText)+' len='+el('b').style.length);
+out.push('authored radius: cssText='+JSON.stringify(el('c').style.cssText)+' len='+el('c').style.length
+  +' radius='+JSON.stringify(el('c').style.getPropertyValue('border-radius')));
+var host = document.getElementById('a');
+function reset(){ host.setAttribute('style',''); }
+function log(n,parts){ reset(); parts.forEach(function(p){ host.style.setProperty(p[0],p[1]); });
+  out.push(n+' => '+JSON.stringify(host.style.cssText)+'   len='+host.style.length); }
+log('overflow', [['overflow-x','hidden'],['overflow-y','auto']]);
+log('overflow equal', [['overflow-x','hidden'],['overflow-y','hidden']]);
+log('margin-block', [['margin-block-start','1px'],['margin-block-end','2px']]);
+log('radius slash', [['border-top-left-radius','1px 2px'],['border-top-right-radius','3px 4px'],['border-bottom-right-radius','5px 6px'],['border-bottom-left-radius','7px 8px']]);
+log('radius equal halves', [['border-top-left-radius','1px 1px'],['border-top-right-radius','2px 2px'],['border-bottom-right-radius','1px 1px'],['border-bottom-left-radius','2px 2px']]);
+log('text-decoration thickness only', [['text-decoration-line','underline'],['text-decoration-style','solid'],['text-decoration-color','currentcolor'],['text-decoration-thickness','2px']]);
+log('columns pair', [['column-count','3'],['column-width','100px']]);
+log('inset-block', [['inset-block-start','1px'],['inset-block-end','2px']]);
+log('transition two', [['transition-property','all'],['transition-duration','1s'],['transition-timing-function','ease'],['transition-delay','0s'],['transition-behavior','normal']]);
+log('write then remove shorthand', [['margin-top','1px'],['margin-right','2px'],['margin-bottom','3px'],['margin-left','4px']]);
+host.style.removeProperty('margin');
+out.push('  after removeProperty(margin) => '+JSON.stringify(host.style.cssText)+' len='+host.style.length);
+log('border top then rest', [['border-top','1px solid red'],['border-right','2px solid red'],['border-bottom','3px solid red'],['border-left','4px solid red']]);
+log('all four borders', [['border-top-width','1px'],['border-top-style','solid'],['border-top-color','red'],['border-right-width','1px'],['border-right-style','solid'],['border-right-color','red'],['border-bottom-width','1px'],['border-bottom-style','solid'],['border-bottom-color','red'],['border-left-width','1px'],['border-left-style','solid'],['border-left-color','red']]);
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

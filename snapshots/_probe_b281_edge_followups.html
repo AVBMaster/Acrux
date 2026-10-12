@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b281 probe</title></head><body>
+<div id="probe" style="font-size:16px"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style','font-size:16px'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+function pair(name,p,v){
+  out.push(name+' ['+p+': '+v+']\n  spec='+JSON.stringify(spec(p,v))+'\n  comp='+JSON.stringify(comp(p,v)));
+}
+pair('A','text-decoration','spelling-error solid');
+pair('A2','text-decoration','spelling-error');
+pair('A3','text-decoration','grammar-error');
+pair('A4','text-decoration','grammar-error wavy');
+pair('A5','text-decoration','blink');
+pair('A6','text-decoration','blink dotted');
+pair('A7','text-decoration-line','spelling-error');
+pair('A8','text-decoration-style','solid');
+pair('B','mask','url(a.png) 50%');
+pair('B2','mask','url(a.png) center');
+pair('B3','mask','url(a.png) border-box content-box');
+pair('B4','mask','url(a.png) content-box');
+pair('B5','mask','url(a.png)');
+pair('B6','mask','url(a.png) exclude');
+pair('B7','mask','url(a.png) no-clip');
+pair('B8','mask','url(a.png) border-box no-clip');
+out.push('bare mask-origin comp='+JSON.stringify(comp('mask-origin','content-box')));
+out.push('bare mask-clip comp='+JSON.stringify(comp('mask-clip','content-box')));
+// initial values with nothing written
+host.setAttribute('style','font-size:16px');
+var cs = getComputedStyle(host);
+out.push('initial mask-origin='+JSON.stringify(cs.maskOrigin)+' mask-clip='+JSON.stringify(cs.maskClip)
+  +' mask-mode='+JSON.stringify(cs.maskMode)+' mask-composite='+JSON.stringify(cs.maskComposite)
+  +' mask-position='+JSON.stringify(cs.maskPosition)+' mask-size='+JSON.stringify(cs.maskSize));
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

@@ -245,35 +245,50 @@ public static class CssValueText
                     result = CanonicalizeCounterList(result, "0") ?? result;
                 else if (property.Equals("counter-increment", StringComparison.OrdinalIgnoreCase))
                     result = CanonicalizeCounterList(result, "1") ?? result;
-                result = PutColorFirst(result, property);
-                result = CanonicalizeTransition(result, property);
-                result = OmitInitialBorderParts(result, property);
-                result = CollapseBoxShorthandParts(result, property);
-                result = CanonicalizeFlexFlow(result, property);
-                result = CanonicalizeTextDecoration(result, property);
-                result = CanonicalizeColumnRule(result, property);
-                result = CanonicalizeListStyle(result, property);
-                result = CanonicalizeOffsetShorthand(result, property);
-                result = CanonicalizeFontSynthesis(result, property);
-                result = CanonicalizeColumns(result, property);
-                result = CanonicalizeTextUnderlinePosition(result, property);
-                result = CanonicalizeContent(result, property);
-                result = CanonicalizeGridAutoFlow(result, property);
-                result = CanonicalizeMaskPosition(result, property);
-                result = CanonicalizePositionPair(result, property);
-                result = CanonicalizeContain(result, property);
-                result = CanonicalizeContainIntrinsic(result, property);
-                result = CanonicalizeContainerShorthand(result, property);
-                result = CanonicalizeFilterList(result, property);
-                result = CanonicalizeBackgroundShorthand(result, property);
-                result = CanonicalizePaintOrder(result, property);
-                result = CanonicalizeClipPath(result, property);
-                // The properties that only have to be said correctly — scroll snapping, the SVG
-                // keyword family, the rest of the font-variant group — print what their one table
-                // says, so a sheet and a CSSOM write cannot disagree about the order of a keyword
-                // list the engine re-sorts ('font-variant-east-asian: full-width jis04').
-                if (Acrux.Core.Css.Resolver.EchoedProperties.Normalize(property, result) is { } echoed)
-                    result = echoed;
+                // A printer that re-arranges a value has to know when the value is not a value at
+                // all. 'text-decoration: underline red overline' is a line list broken by a colour,
+                // which the reference engine drops; sorting it into 'underline overline red' made
+                // the sheet's own grammar see a declaration it takes, and the element painted two
+                // lines (measured, both). The same holds for every pass below: each one says a
+                // value the property accepted, and none of them is allowed to earn a refused value
+                // the right to be applied.
+                if (!Acrux.Core.Css.CssValueGrammar.ValueTextIsValid(property, result))
+                {
+                    // Nothing re-spelled: the text goes to the cascade as the page wrote it, where
+                    // the property's grammar is asked and the declaration is dropped.
+                }
+                else
+                {
+                    result = PutColorFirst(result, property);
+                    result = CanonicalizeTransition(result, property);
+                    result = OmitInitialBorderParts(result, property);
+                    result = CollapseBoxShorthandParts(result, property);
+                    result = CanonicalizeFlexFlow(result, property);
+                    result = CanonicalizeTextDecoration(result, property);
+                    result = CanonicalizeColumnRule(result, property);
+                    result = CanonicalizeListStyle(result, property);
+                    result = CanonicalizeOffsetShorthand(result, property);
+                    result = CanonicalizeFontSynthesis(result, property);
+                    result = CanonicalizeColumns(result, property);
+                    result = CanonicalizeTextUnderlinePosition(result, property);
+                    result = CanonicalizeContent(result, property);
+                    result = CanonicalizeGridAutoFlow(result, property);
+                    result = CanonicalizeMaskPosition(result, property);
+                    result = CanonicalizePositionPair(result, property);
+                    result = CanonicalizeContain(result, property);
+                    result = CanonicalizeContainIntrinsic(result, property);
+                    result = CanonicalizeContainerShorthand(result, property);
+                    result = CanonicalizeFilterList(result, property);
+                    result = CanonicalizeBackgroundShorthand(result, property);
+                    result = CanonicalizePaintOrder(result, property);
+                    result = CanonicalizeClipPath(result, property);
+                    // The properties that only have to be said correctly — scroll snapping, the SVG
+                    // keyword family, the rest of the font-variant group — print what their one table
+                    // says, so a sheet and a CSSOM write cannot disagree about the order of a keyword
+                    // list the engine re-sorts ('font-variant-east-asian: full-width jis04').
+                    if (Acrux.Core.Css.Resolver.EchoedProperties.Normalize(property, result) is { } echoed)
+                        result = echoed;
+                }
             }
         }
         // Last of all, because it reads the components the passes above have just put in their
@@ -738,10 +753,17 @@ public static class CssValueText
 
     /// <summary>'background' says its components in the order the grammar takes them rather than
     /// the order the page wrote them (CSS Backgrounds 3 §4, measured); see
-    /// <see cref="Acrux.Core.Css.ShorthandExpander.BackgroundLayerOrderText"/>.</summary>
+    /// <see cref="Acrux.Core.Css.ShorthandExpander.BackgroundLayerOrderText"/>. 'mask' has the same
+    /// shape with a part list of its own (CSS Masking 1 §5.1).</summary>
     private static string CanonicalizeBackgroundShorthand(string text, string property)
-        => property.Equals("background", StringComparison.OrdinalIgnoreCase)
-            ? Acrux.Core.Css.ShorthandExpander.BackgroundLayerOrderText(text) : text;
+    {
+        if (property.Equals("background", StringComparison.OrdinalIgnoreCase))
+            return Acrux.Core.Css.ShorthandExpander.BackgroundLayerOrderText(text);
+        if (property.Equals("mask", StringComparison.OrdinalIgnoreCase)
+            && Acrux.Core.Css.CssValueGrammar.TextIsValidFor("mask", text))
+            return Acrux.Core.Css.ShorthandExpander.MaskLayerOrderText(text);
+        return text;
+    }
 
     private static readonly string[] ContainWords =
         { "none", "strict", "content", "size", "inline-size", "layout", "style", "paint" };

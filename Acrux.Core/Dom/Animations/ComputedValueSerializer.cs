@@ -1555,13 +1555,18 @@ public static class ComputedValueSerializer
     private static string TextDecorationText(ComputedStyle style)
     {
         // Measured order: line, thickness, style, colour — and a part that is still at its
-        // initial is left out, so a plain underline says 'underline' and nothing more.
-        var parts = new List<string> { Longhand(style, "text-decoration-line") };
+        // initial is left out, so a plain underline says 'underline' and nothing more. The line's
+        // initial is 'none', which is why 'text-decoration: none red' says only the colour, while a
+        // value with nothing but initials says 'none' (both measured).
+        var parts = new List<string>();
+        var line = Longhand(style, "text-decoration-line");
+        if (line != "none") parts.Add(line);
         var thickness = Longhand(style, "text-decoration-thickness");
         if (thickness != "auto") parts.Add(thickness);
         var decorationStyle = Longhand(style, "text-decoration-style");
         if (decorationStyle != "solid") parts.Add(decorationStyle);
         if (!style.TextDecorationColorIsAuto) parts.Add(ColorText(style.TextDecorationColor));
+        if (parts.Count == 0) parts.Add("none");
         return string.Join(" ", parts);
     }
 
@@ -1853,19 +1858,50 @@ public static class ComputedValueSerializer
         var size = MaskLayerList(style, style.MaskSizeLayers, style.MaskSize, "auto", null);
         var repeat = MaskLayerList(style, style.MaskRepeatLayers, style.MaskRepeat, "repeat",
             Css.MaskKeywordSerializer.Repeat);
+        var origin = MaskLayerList(style, style.MaskOriginLayers, style.MaskOrigin, "border-box", null);
         var clip = MaskLayerList(style, style.MaskClipLayers, style.MaskClip, "border-box", null);
+        var composite = MaskLayerList(style, style.MaskCompositeLayers, style.MaskComposite, "add", null);
+        var mode = MaskLayerList(style, style.MaskModeLayers, style.MaskMode, "match-source", null);
         var items = new List<string>(images.Count);
         for (int i = 0; i < images.Count; i++)
         {
-            var parts = new List<string>(5) { At(images, i) };
+            var parts = new List<string>(7) { At(images, i) };
             var p = At(List(position), i);
             var s = At(List(size), i);
             if (p.Length > 0 && p != "0% 0%") parts.Add(p);
             if (s.Length > 0 && s != "auto") { parts.Add("/"); parts.Add(s); }
             var r = At(List(repeat), i);
-            if (r.Length > 0 && r != "repeat") parts.Add(r);
+            // A mask layer that only repeats says nothing: the initial is 'repeat' for one axis and
+            // 'repeat repeat' for two (measured, both).
+            if (!Acrux.Core.Css.MaskLayerParser.RepeatIsInitial(r)) parts.Add(r);
+            // The two boxes are one pair, and the pair has four shapes (all measured): a pair at
+            // its initial says nothing at all, a single box is ONE word, unequal boxes are both said
+            // in origin-then-clip order even when the origin is the initial one, and 'no-clip'
+            // replaces the clip half so a border-box origin beside it is silence.
+            var o = At(List(origin), i);
             var c = At(List(clip), i);
-            if (c.Length > 0 && c != "border-box") parts.Add(c);
+            if (o.Length == 0) o = "border-box";
+            if (c.Length == 0) c = "border-box";
+            if (c == "no-clip")
+            {
+                if (o != "border-box") parts.Add(o);
+                parts.Add("no-clip");
+            }
+            else if (o == c)
+            {
+                if (o != "border-box") parts.Add(o);
+            }
+            else if (o != "border-box" || c != "border-box")
+            {
+                parts.Add(o);
+                parts.Add(c);
+            }
+            // Then the composite and the mode, each left out while it sits at its initial
+            // (measured order: '... no-repeat content-box exclude luminance').
+            var k = At(List(composite), i);
+            if (k.Length > 0 && k != "add") parts.Add(k);
+            var m = At(List(mode), i);
+            if (m.Length > 0 && m != "match-source") parts.Add(m);
             items.Add(string.Join(" ", parts));
         }
         return string.Join(", ", items);

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CSS Standard Verification Batch 281 — a block that counts its parts, and the words a shorthand never took</title>
+<style>
+body { font: 10px/1.25 "Segoe UI", sans-serif; margin: 0; padding: 0; color: rgb(0,0,0); }
+h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: rgb(80,80,0); }
+#report { white-space: pre-wrap; }
+#cb { width: 400px; padding: 8px; font-size: 16px; background: rgb(245,245,245); }
+#probe { font-size: 16px; }
+/* Painted markers: the three line words the shorthand forgot, and a mask that says its composite. */
+#blink { text-decoration: blink dotted; color: rgb(200,0,0); }
+#err { text-decoration: spelling-error solid; color: rgb(0,120,0); }
+#und { text-decoration: underline red overline; color: rgb(0,0,200); }
+#mk { width: 60px; height: 24px; background: rgb(250,200,120); }
+/* Authored refusals: each of these is a value the grammar drops, so the sheet must drop it too. */
+#badmask { mask: url(a.png) red; }
+#badflow { flex-flow: wrap reverse; }
+#badcontain { contain: size inline-size; }
+</style></head><body>
+<h4>b281 — the declaration block was asked how many declarations it holds and answered with the number of semicolons. The reference engine enumerates a shorthand as the longhands it carries: a block whose only write was 'margin: 1px 2px 3px 4px' has length 4 and answers item(1) with 'margin-top', and 'border' is seventeen parts (the four widths, then the four styles, then the four colours, then the five border-image parts), 'background' nine with no 'background-position' among them because it lists the two axes, 'mask' nine with its position axes under their legacy '-webkit-' names, 'font' nineteen. Removing one part breaks the shorthand apart in place: after removeProperty('margin-top') the block says the three sides it still has and 'margin' reads back as nothing. Writing a shorthand also takes the longhands it covers out of the block, which is why 'font-size: 16px' followed by 'font: bold 12px/1.5 Arial' leaves nineteen parts and one declaration in the text. And the fold runs the other way too: four parts that all exist again are ONE shorthand again, printed where the first of them stood, so a block written as four 'margin' edges — through four setProperty calls or straight out of the style attribute — says 'margin: 1px 2px 3px 4px', the three sides a removal left behind fold back the moment the fourth is written again, and a shorthand written first and given one of its parts afterwards is rewritten rather than doubled. Two families do not fold at all, both measured: 'columns' and 'font' stay as the longhands they were written as. Beside that, three words the 'text-decoration' shorthand had never learned ('blink', 'spelling-error', 'grammar-error'), a line list the engine split around a colour it should not have re-joined ('underline red overline'), an echo that said the style and colour a page never moved ('underline solid' is 'underline', and an error line says neither), a 'flex-flow' that took 'reverse' as a word, and a 'mask' that swallowed a colour the grammar has no place for, put a second geometry box in the origin's seat instead of the clip's, and then dropped its own composite, origin and mode from the computed value.</h4>
+<div id="cb">
+  <span id="blink">blink</span> <span id="err">error</span> <span id="und">split</span>
+  <div id="mk"></div>
+  <div id="badmask"></div><div id="badflow"></div><div id="badcontain"></div>
+  <span id="badinline" style="text-decoration: underline red overline">inline</span>
+</div>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style','font-size:16px'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out = []; var failed = 0;
+function row(name, got, want){ var ok = String(got) === String(want); if(!ok) failed++;
+  out.push((ok?'ok   ':'FAIL ')+name+'  got='+JSON.stringify(String(got))+'  want='+JSON.stringify(String(want))); }
+
+// ===== the words a shorthand never took =====
+var CASES = [
+  // 'text-decoration' knows three more lines. Its line list is one run, and its echo says a
+  // part only when the part moved: the initial style is dropped, an unset colour is dropped,
+  // and the lines come back in their own order whoever wrote them first (all measured).
+  ['text-decoration','blink dotted','blink dotted','blink dotted'],
+  ['text-decoration','spelling-error solid','spelling-error','spelling-error'],
+  ['text-decoration','grammar-error','grammar-error','grammar-error'],
+  ['text-decoration','underline red overline','','none'],
+  ['text-decoration','underline overline red','underline overline red','underline overline rgb(255, 0, 0)'],
+  ['text-decoration','red underline','underline red','underline rgb(255, 0, 0)'],
+  ['text-decoration','underline underline','','none'],
+  ['text-decoration','underline solid','underline','underline'],
+  ['text-decoration','underline solid rgb(1,2,3)','underline rgb(1, 2, 3)','underline rgb(1, 2, 3)'],
+  ['text-decoration','underline blink','underline blink','underline blink'],
+  ['text-decoration','blink underline','underline blink','underline blink'],
+  ['text-decoration','underline spelling-error','','none'],
+  ['text-decoration','spelling-error wavy','spelling-error wavy','spelling-error wavy'],
+  ['text-decoration','spelling-error red','spelling-error red','spelling-error rgb(255, 0, 0)'],
+  ['text-decoration','underline dotted','underline dotted','underline dotted'],
+  ['text-decoration','none red','red','rgb(255, 0, 0)'],
+  ['text-decoration','underline 2px','underline 2px','underline 2px'],
+  ['text-decoration','blink wavy red','blink wavy red','blink wavy rgb(255, 0, 0)'],
+  ['text-decoration','grammar-error 3px dotted','grammar-error 3px dotted','grammar-error 3px dotted'],
+  ['text-decoration','underline overline line-through blink','underline overline line-through blink',
+      'underline overline line-through blink'],
+  ['text-decoration','spelling-error grammar-error','','none'],
+  // 'flex-flow' takes a direction and a wrap, and no half-word
+  ['flex-flow','wrap reverse','','row nowrap'],
+  ['flex-flow','row wrap','wrap','row wrap'],
+  ['flex-flow','column nowrap','column','column nowrap'],
+  ['flex-flow','column-reverse nowrap','column-reverse','column-reverse nowrap'],
+  ['flex-flow','row row','','row nowrap'],
+  // a mask layer has no colour, and its computed says the parts it was given
+  ['mask','url(a.png) red','','none'],
+  ['mask','red url(a.png)','','none'],
+  ['mask','red','','none'],
+  ['mask','url(a.png) center','url("a.png") center center','url("a.png") 50% 50%'],
+  ['mask','url(a.png) 50%','url("a.png") 50% center','url("a.png") 50% 50%'],
+  ['mask','url(a.png) content-box','url("a.png") content-box','url("a.png") content-box'],
+  ['mask','url(a.png) border-box content-box','url("a.png") border-box content-box','url("a.png") border-box content-box'],
+  // the origin/clip pair at its initial is silence, and 'no-clip' is the clip half only
+  ['mask','url(a.png) border-box','url("a.png")','url("a.png")'],
+  ['mask','url(a.png) no-clip','url("a.png") no-clip','url("a.png") no-clip'],
+  ['mask','url(a.png) border-box no-clip','url("a.png") no-clip','url("a.png") no-clip'],
+  ['mask','url(a.png) no-clip border-box','url("a.png") no-clip','url("a.png") no-clip'],
+  ['mask','url(a.png) content-box no-clip','url("a.png") content-box no-clip','url("a.png") content-box no-clip'],
+  ['mask','url(a.png) exclude','url("a.png") exclude','url("a.png") exclude'],
+  ['mask','url(a.png) luminance','url("a.png") luminance','url("a.png") luminance'],
+  // the counted shapes: one composite, one mode, two boxes, and a size that needs its position
+  ['mask','url(a.png) border-box content-box padding-box','','none'],
+  ['mask','url(a.png) / cover','','none'],
+  ['mask','url(a.png) luminance alpha','','none'],
+  ['mask','url(a.png) add exclude','','none'],
+  ['mask','url(a.png) no-clip no-clip','','none'],
+  // a repeat that only repeats is silence, and a position prints as its pair
+  ['mask','url(a.png) repeat repeat','url("a.png")','url("a.png")'],
+  ['mask','url(a.png) 10px','url("a.png") 10px center','url("a.png") 10px 50%'],
+  ['mask','url(a.png) center left','url("a.png") left center','url("a.png") 0% 50%'],
+  ['mask','none','none','none'],
+];
+for (var i=0;i<CASES.length;i++){ var c=CASES[i];
+  row('#'+i+' '+c[0]+'['+c[1]+'] spec', spec(c[0],c[1]), c[2]);
+  var got = comp(c[0],c[1]);
+  // An address is made absolute on the computed surface, so compare the tail the page wrote.
+  if (c[3].indexOf('url("a.png")') === 0) got = got.replace(/url\("[^"]*a\.png"\)/, 'url("a.png")');
+  row('#'+i+' '+c[0]+'['+c[1]+'] comp', got, c[3]); }
+
+// ===== the block enumerates the parts a shorthand stands for =====
+function block(write, extra){
+  host.setAttribute('style','');
+  host.style.setProperty('font-size','16px');
+  host.style.setProperty(write[0], write[1]);
+  return { length: host.style.length, item: host.style.item(1), text: host.style.cssText };
+}
+var m = block(['margin','1px 2px 3px 4px']);
+row('M1 margin length', m.length, 5);
+row('M2 margin item(1)', m.item, 'margin-top');
+row('M3 margin cssText', m.text, 'font-size: 16px; margin: 1px 2px 3px 4px;');
+row('M4 margin reads back', host.style.getPropertyValue('margin'), '1px 2px 3px 4px');
+row('M5 margin-top reads through', host.style.getPropertyValue('margin-top'), '1px');
+host.setAttribute('style','');
+host.style.setProperty('font-size','16px');
+host.style.setProperty('margin','1px 2px 3px 4px');
+row('M0 margin before any part write', host.style.cssText, 'font-size: 16px; margin: 1px 2px 3px 4px;');
+host.style.removeProperty('margin-top');
+row('M6 after removing margin-top, length', host.style.length, 4);
+row('M7 after removing margin-top, cssText', host.style.cssText,
+    'font-size: 16px; margin-right: 2px; margin-bottom: 3px; margin-left: 4px;');
+row('M8 after removing margin-top, margin', host.style.getPropertyValue('margin'), '');
+row('M9 after removing margin-top, margin-top', host.style.getPropertyValue('margin-top'), '');
+host.style.setProperty('margin-top','9px');
+row('M10 after setting margin-top again, length', host.style.length, 5);
+// The block folds back: four parts that all exist again are one shorthand again, printed in the
+// place the first of them held (measured).
+row('M11 after setting margin-top again, cssText', host.style.cssText,
+    'font-size: 16px; margin: 9px 2px 3px 4px;');
+host.style.removeProperty('margin');
+row('M12 after removing the folded shorthand', host.style.cssText, 'font-size: 16px;');
+host.setAttribute('style','');
+host.style.setProperty('border','1px solid red');
+row('B1 border length', host.style.length, 17);
+row('B2 border item(0)', host.style.item(0), 'border-top-width');
+row('B3 border item(12)', host.style.item(12), 'border-image-source');
+row('B4 border reads through', host.style.getPropertyValue('border-left-width'), '1px');
+host.setAttribute('style','');
+host.style.setProperty('background','red url(a.png) no-repeat');
+row('B5 background length', host.style.length, 9);
+row('B6 background item(1)', host.style.item(1), 'background-position-x');
+row('B7 background item(8)', host.style.item(8), 'background-color');
+row('B8 background has no position part', host.style.item(2), 'background-position-y');
+host.setAttribute('style','font-size:16px');
+host.style.setProperty('font','bold 12px/1.5 Arial');
+row('B9 font after an earlier font-size, length', host.style.length, 19);
+row('B10 font cssText', host.style.cssText, 'font: bold 12px / 1.5 Arial;');
+host.setAttribute('style','font-size:16px');
+host.style.setProperty('flex','1 2 3px');
+row('B11 flex length', host.style.length, 4);
+host.setAttribute('style','font-size:16px');
+host.style.setProperty('list-style','square inside');
+row('B12 list-style length', host.style.length, 4);
+row('B13 list-style item(1)', host.style.item(1), 'list-style-position');
+host.setAttribute('style','font-size:16px');
+host.style.setProperty('columns','100px 3');
+row('B14 columns length', host.style.length, 5);
+row('B15 columns item(1)', host.style.item(1), 'column-width');
+host.setAttribute('style','font-size:16px');
+host.style.setProperty('overflow','hidden auto');
+row('B16 overflow length', host.style.length, 3);
+row('B17 overflow item(1)', host.style.item(1), 'overflow-x');
+
+// ===== a completed set of parts folds back into the shorthand =====
+function fold(writes){
+  host.setAttribute('style','');
+  for (var i=0;i<writes.length;i++) host.style.setProperty(writes[i][0], writes[i][1]);
+  return host.style.cssText;
+}
+var F = [
+  ['margin four parts',[['margin-top','1px'],['margin-right','2px'],['margin-bottom','3px'],['margin-left','4px']],
+      'margin: 1px 2px 3px 4px;'],
+  ['margin shuffled',[['margin-left','4px'],['margin-right','2px'],['margin-top','1px'],['margin-bottom','3px']],
+      'margin: 1px 2px 3px 4px;'],
+  ['margin collapses',[['margin-top','1px'],['margin-right','2px'],['margin-bottom','1px'],['margin-left','2px']],
+      'margin: 1px 2px;'],
+  ['padding three sides',[['padding-top','7px'],['padding-right','2px'],['padding-bottom','1px'],['padding-left','2px']],
+      'padding: 7px 2px 1px;'],
+  ['gap pair',[['row-gap','1px'],['column-gap','2px']],'gap: 1px 2px;'],
+  ['gap equal',[['row-gap','1px'],['column-gap','1px']],'gap: 1px;'],
+  ['overflow pair',[['overflow-x','hidden'],['overflow-y','auto']],'overflow: hidden auto;'],
+  ['overflow equal',[['overflow-x','hidden'],['overflow-y','hidden']],'overflow: hidden;'],
+  ['margin-block',[['margin-block-start','1px'],['margin-block-end','2px']],'margin-block: 1px 2px;'],
+  ['inset-block',[['inset-block-start','1px'],['inset-block-end','2px']],'inset-block: 1px 2px;'],
+  ['place-items',[['align-items','center'],['justify-items','start']],'place-items: center start;'],
+  ['background-position',[['background-position-x','10px'],['background-position-y','20px']],
+      'background-position: 10px 20px;'],
+  ['outline',[['outline-color','red'],['outline-style','dashed'],['outline-width','2px']],
+      'outline: red dashed 2px;'],
+  ['list-style',[['list-style-position','inside'],['list-style-image','none'],['list-style-type','square']],
+      'list-style: inside none square;'],
+  ['flex',[['flex-grow','1'],['flex-shrink','2'],['flex-basis','3px']],'flex: 1 2 3px;'],
+  ['border-width',[['border-top-width','1px'],['border-right-width','2px'],['border-bottom-width','3px'],
+      ['border-left-width','4px']],'border-width: 1px 2px 3px 4px;'],
+  ['border-radius split',[['border-top-left-radius','1px 2px'],['border-top-right-radius','3px 4px'],
+      ['border-bottom-right-radius','5px 6px'],['border-bottom-left-radius','7px 8px']],
+      'border-radius: 1px 3px 5px 7px / 2px 4px 6px 8px;'],
+  ['border-radius one list',[['border-top-left-radius','1px 1px'],['border-top-right-radius','2px 2px'],
+      ['border-bottom-right-radius','1px 1px'],['border-bottom-left-radius','2px 2px']],'border-radius: 1px 2px;'],
+  ['text-decoration',[['text-decoration-line','underline'],['text-decoration-style','dotted'],
+      ['text-decoration-color','red'],['text-decoration-thickness','2px']],'text-decoration: underline 2px dotted red;'],
+  ['text-decoration initials',[['text-decoration-line','underline'],['text-decoration-style','solid'],
+      ['text-decoration-color','currentcolor'],['text-decoration-thickness','2px']],'text-decoration: underline 2px;'],
+  // Two shorthands the reference engine leaves as the longhands they were written as (measured).
+  ['columns does not fold',[['column-width','100px'],['column-count','3']],'column-width: 100px; column-count: 3;'],
+  ['font does not fold',[['font-style','italic'],['font-variant','small-caps'],['font-weight','bold'],
+      ['font-stretch','condensed'],['font-size','12px'],['line-height','1.5'],['font-family','Arial']],
+      'font-style: italic; font-variant: small-caps; font-weight: bold; font-stretch: condensed;'
+      + ' font-size: 12px; line-height: 1.5; font-family: Arial;'],
+];
+for (var i=0;i<F.length;i++) row('F'+i+' '+F[i][0], fold(F[i][1]), F[i][2]);
+// A part written among others keeps the neighbours where they were (measured).
+host.setAttribute('style','');
+host.style.setProperty('margin-top','1px');
+host.style.setProperty('color','red');
+host.style.setProperty('margin-right','2px');
+host.style.setProperty('margin-bottom','3px');
+host.style.setProperty('margin-left','4px');
+row('F23 non-contiguous parts fold in place', host.style.cssText, 'margin: 1px 2px 3px 4px; color: red;');
+// An authored attribute folds in the CSSOM text while the attribute keeps its own characters.
+host.setAttribute('style','margin-top:1px;margin-right:2px;margin-bottom:3px;margin-left:4px');
+row('F24 authored parts, cssText', host.style.cssText, 'margin: 1px 2px 3px 4px;');
+row('F25 authored parts, attribute', host.getAttribute('style'), 'margin-top:1px;margin-right:2px;margin-bottom:3px;margin-left:4px');
+host.setAttribute('style','margin: 1px 2px 3px 4px; margin-top: 9px');
+row('F26 authored shorthand then part', host.style.cssText, 'margin: 9px 2px 3px 4px;');
+
+var ib = block(['inset-block','1px 2px']);
+row('L1 inset-block length', ib.length, 3);
+row('L2 inset-block item(1)', ib.item, 'inset-block-start');
+row('L3 inset-block cssText', ib.text, 'font-size: 16px; inset-block: 1px 2px;');
+var mb = block(['margin-block','1px 2px']);
+row('L4 margin-block length', mb.length, 3);
+row('L5 margin-block item(2)', host.style.item(2), 'margin-block-end');
+
+// The b280/b279 surfaces, re-checked so this round cannot silently undo them.
+row('V0 background order', spec('background','red url(a.png)'), 'url("a.png") red');
+row('V1 transform translateZ', comp('transform','translateZ(10px)'),
+    'matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 10, 1)');
+row('V2 content attr comma', comp('content','attr(data-x, "y")'), '"y"');
+row('V3 filter grayscale refused', spec('filter','grayscale'), '');
+row('V4 contain inline-size', comp('contain','inline-size'), 'inline-size');
+
+// The sheet path and the CSSOM path must refuse one declaration the same way: the three rules
+// above are authored in this page's <style>, and the value the CSSOM drops has to be dropped
+// by the sheet too rather than reach the cascade as a handful of separately-valid longhands.
+row('S0 authored "underline red overline" paints no line',
+    getComputedStyle(document.getElementById('und')).textDecorationLine, 'none');
+row('S1 authored "underline red overline" paints no colour',
+    getComputedStyle(document.getElementById('und')).textDecorationColor, 'rgb(0, 0, 200)');
+row('S2 authored "blink dotted"',
+    getComputedStyle(document.getElementById('blink')).textDecorationLine, 'blink');
+row('S3 authored "spelling-error solid"',
+    getComputedStyle(document.getElementById('err')).textDecorationLine, 'spelling-error');
+row('S4 authored mask with a colour',
+    getComputedStyle(document.getElementById('badmask')).maskImage, 'none');
+row('S5 authored "flex-flow: wrap reverse"',
+    getComputedStyle(document.getElementById('badflow')).flexDirection, 'row');
+row('S6 authored "contain: size inline-size"',
+    getComputedStyle(document.getElementById('badcontain')).contain, 'none');
+// The style attribute is the third road to the same block, and it must ask the same question.
+row('S7 authored inline refusal, echo',
+    document.getElementById('badinline').style.getPropertyValue('text-decoration'), '');
+row('S8 authored inline refusal, computed',
+    getComputedStyle(document.getElementById('badinline')).textDecorationLine, 'none');
+
+var summary = out.join('\n') + '\nTOTAL ' + out.length + ' FAILED ' + failed + '\n';
+document.getElementById('report').textContent = summary;
+console.log(summary);
+</script></body></html>

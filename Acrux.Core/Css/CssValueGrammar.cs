@@ -58,8 +58,11 @@ public static class CssValueGrammar
 
     /// <summary>Whether a value text is a value of the named property, once the name itself has been
     /// accepted as a property. Every surface that records a declaration asks this and nothing else,
-    /// so a sheet, a style attribute, <c>setProperty</c> and <c>CSS.supports</c> cannot disagree.</summary>
-    private static bool ValueTextIsValid(string propertyName, string value)
+    /// so a sheet, a style attribute, <c>setProperty</c> and <c>CSS.supports</c> cannot disagree.
+    /// <see cref="CssValueText"/> asks this one too: a printer that re-orders words has to know when
+    /// the value it was handed is not a value at all, or it repairs the declaration it should leave
+    /// the cascade to drop.</summary>
+    internal static bool ValueTextIsValid(string propertyName, string value)
     {
         // The background shorthand's grammar IS its expansion: a colour outside the final layer, a
         // token nothing in <bg-layer> reads and a position or size list the grammar refuses all leave
@@ -580,6 +583,11 @@ public static class CssValueGrammar
         // stand alone ('none', 'spelling-error', 'grammar-error') stand alone. Every refusal named in
         // the helper's comment is a value the reference engine drops.
         CssPropertyId.TextDecoration => IsTextDecorationShorthand,
+        // CSS Flexbox 1 §4: 'flex-flow' is the pair of its two longhands — at most one direction
+        // and at most one wrap, and a word that is neither is no value at all (measured:
+        // 'flex-flow: wrap reverse' reads back the empty string while 'row wrap' and
+        // 'column-reverse nowrap' stand).
+        CssPropertyId.FlexFlow => IsFlexFlowValue,
         CssPropertyId.Display => static text => CssPropertyApplier.TryParseDisplay(text, out _, out _),
         CssPropertyId.Float => static text => CssFloatKeywords.TryParseFloat(text, out _),
         CssPropertyId.Clear => static text => CssFloatKeywords.TryParseClear(text, out _),
@@ -673,8 +681,13 @@ public static class CssValueGrammar
         // (measured: 'background-image: url(a.png), local(x)', 'mask-image: local(x)' and
         // 'background: local(x)' all read back an empty rule).
         CssPropertyId.BackgroundImage or CssPropertyId.MaskImage
-            or CssPropertyId.Background or CssPropertyId.Mask
+            or CssPropertyId.Background
             => static text => !NamesAFontLocal(text),
+        // CSS Masking 1 §5.1: a mask layer takes no <color> at all — the shorthand of the same
+        // shape that the background is keeps one, and this one does not — and no word outside its
+        // own list. Measured: 'mask: red' and 'mask: url(a.png) red' both read back empty.
+        CssPropertyId.Mask => static text => !NamesAFontLocal(text)
+            && Acrux.Core.Css.MaskLayerParser.IsMaskLayerList(text),
         // CSS Containment 3 §2.1: 'contain' is either one of the three set keywords standing
         // alone, or a duplicate-free list of the five kinds. Measured value by value:
         // 'size inline-size' is refused because 'size' already names the axis 'inline-size'
@@ -1708,6 +1721,24 @@ public static class CssValueGrammar
         };
     }
 
+    /// <summary><c>flex-flow</c> (CSS Flexbox 1 §4): at most one direction and at most one wrap,
+    /// and nothing else. Measured: 'wrap reverse' is refused — 'reverse' is half of a word, not a
+    /// word — while 'row wrap', 'column nowrap' and a lone 'wrap' all stand.</summary>
+    private static bool IsFlexFlowValue(string text)
+    {
+        bool direction = false, wrap = false;
+        foreach (var word in SplitComponents(text))
+        {
+            var p = word.ToLowerInvariant();
+            if (p is "row" or "row-reverse" or "column" or "column-reverse")
+            { if (direction) return false; direction = true; }
+            else if (p is "nowrap" or "wrap" or "wrap-reverse")
+            { if (wrap) return false; wrap = true; }
+            else return false;
+        }
+        return direction || wrap;
+    }
+
     /// <summary>The grammar of the <c>text-decoration</c> shorthand, measured value by value against
     /// the reference engine. The four lines that combine (<c>underline</c>, <c>overline</c>,
     /// <c>line-through</c>, <c>blink</c>) may each appear once — a repeat drops the declaration
@@ -1723,7 +1754,7 @@ public static class CssValueGrammar
     private static bool IsTextDecorationShorthand(string text)
     {
         var lines = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        bool alone = false;
+        bool alone = false, nonLineSeen = false;
         int styles = 0, thicknesses = 0, colors = 0;
         foreach (var token in SplitComponents(text))
         {
@@ -1731,7 +1762,11 @@ public static class CssValueGrammar
             switch (p)
             {
                 case "underline" or "overline" or "line-through" or "blink":
-                    if (alone || !lines.Add(p)) return false;
+                    // The line list is one run: a line may follow a colour that led the value
+                    // ('red underline' is kept) but not one that came after the run had already
+                    // started and stopped ('underline red overline' is refused) — the parser
+                    // leaves a list it has begun and does not come back to it (both measured).
+                    if (alone || !lines.Add(p) || (nonLineSeen && lines.Count > 1)) return false;
                     break;
                 case "none" or "spelling-error" or "grammar-error":
                     if (alone || lines.Count > 0) return false;
@@ -1739,6 +1774,7 @@ public static class CssValueGrammar
                     break;
                 case "solid" or "double" or "dotted" or "dashed" or "wavy":
                     if (++styles > 1) return false;
+                    nonLineSeen = true;
                     break;
                 default:
                     if (p is "auto" or "from-font"
@@ -1752,6 +1788,7 @@ public static class CssValueGrammar
                         if (++colors > 1) return false;
                     }
                     else return false;
+                    nonLineSeen = true;
                     break;
             }
         }

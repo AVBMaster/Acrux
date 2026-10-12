@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>probe b281 — shorthand echoes and the CSSOM surface</title>
+<style>#host { font-size: 16px; }</style></head><body>
+<div id="host"></div><pre id="out"></pre>
+<script>
+var host = document.getElementById('host');
+function spec(p,v){ host.setAttribute('style','font-size:16px'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var lines = [];
+var CASES = [
+  // the mask shorthand (the same grammar shape as 'background')
+  ['mask','url(a.png) red'],['mask','red url(a.png)'],['mask','url(a.png) 10px 20px / 30px 40px no-repeat'],
+  ['mask','url(a.png) center'],['mask','linear-gradient(red,blue) 0 0 / 30px 30px exclude'],
+  // the inset shorthand and its logical pair
+  ['inset','10px 20px 30px 40px'],['inset','auto 20px'],['inset','10px'],
+  // the overflow pair
+  ['overflow','hidden auto'],['overflow','clip visible'],['overflow','visible clip'],
+  // place-* pairs
+  ['place-items','center end'],['place-content','start end'],['place-self','end auto'],
+  // gap
+  ['gap','10px 20px'],['gap','20px 10px'],['gap','10px'],
+  // outline and text-decoration shorthands
+  ['outline','red 2px dashed'],['outline','2px'],['outline','dashed'],
+  ['text-decoration','underline red overline'],['text-decoration','blink dotted'],
+  // border-radius's slash pair
+  ['border-radius','10px / 20px'],['border-radius','10px 20px / 30px 40px'],
+  // columns, flex-flow, grid shorthand pieces
+  ['columns','100px 3'],['columns','3 100px'],['columns','auto'],
+  ['flex-flow','column nowrap'],['flex-flow','wrap reverse'],
+  // list-style and the animation/transition shorthands
+  ['list-style','square inside'],['list-style','url(a.png) none outside'],
+  ['animation','3s 2s linear slide'],['transition','all 1s ease 2s'],
+  // font and background for the record
+  ['font','italic small-caps bold 12px/1.5 Arial'],['background','url(a.png) center / cover no-repeat red'],
+];
+CASES.forEach(function (c) {
+  lines.push(c[0] + ' [' + c[1] + '] S=' + JSON.stringify(spec(c[0], c[1])) +
+             ' C=' + JSON.stringify(comp(c[0], c[1])));
+});
+// the CSSOM surface of a shorthand
+host.setAttribute('style','font-size:16px');
+host.style.setProperty('margin','1px 2px 3px 4px');
+lines.push('OM length=' + host.style.length + ' item0=' + JSON.stringify(host.style.item(0)) +
+  ' item1=' + JSON.stringify(host.style.item(1)) + ' cssText=' + JSON.stringify(host.style.cssText));
+host.setAttribute('style','font-size:16px');
+host.style.setProperty('border','1px solid red');
+lines.push('OB length=' + host.style.length + ' cssText=' + JSON.stringify(host.style.cssText) +
+  ' bgp=' + JSON.stringify(host.style.getPropertyValue('border-left-width')));
+host.setAttribute('style','font-size:16px');
+host.style.setProperty('background','red url(a.png) no-repeat');
+lines.push('OC length=' + host.style.length + ' cssText=' + JSON.stringify(host.style.cssText));
+host.setAttribute('style','font-size:16px');
+host.style.setProperty('flex','1 2 3px');
+lines.push('OD length=' + host.style.length + ' cssText=' + JSON.stringify(host.style.cssText));
+host.setAttribute('style','font-size:16px');
+host.style.setProperty('font','bold 12px/1.5 Arial');
+lines.push('OE length=' + host.style.length + ' cssText=' + JSON.stringify(host.style.cssText));
+host.setAttribute('style','font-size:16px');
+host.style.setProperty('margin','1px 2px 3px 4px');
+host.style.removeProperty('margin-top');
+lines.push('OF after removing margin-top: length=' + host.style.length +
+  ' cssText=' + JSON.stringify(host.style.cssText) +
+  ' mt=' + JSON.stringify(host.style.getPropertyValue('margin-top')));
+var t = lines.join('\n') + '\n';
+document.getElementById('out').textContent = t;
+console.log(t);
+</script></body></html>

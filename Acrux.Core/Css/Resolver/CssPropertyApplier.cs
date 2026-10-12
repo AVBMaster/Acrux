@@ -278,7 +278,15 @@ public static class CssPropertyApplier
             case "background-blend-mode": style.BackgroundBlendMode = ParseBackgroundBlendMode(value); break;
             case "text-align": style.TextAlign = ParseTextAlign(value); break;
             case "text-align-last": style.TextAlignLast = ParseTextAlignLast(value); break;
-            case "text-decoration": ParseTextDecorationShorthand(value, style); break;
+            case "text-decoration":
+                // The reader below takes each token on its own, which is how a value the grammar
+                // refuses — a line list broken by a colour, 'underline red overline' — would still
+                // reach the style from a sheet, where the property set lets a decoded value list
+                // past its own gate. The reference engine drops that declaration (measured: the
+                // element computes no line at all), so the read site asks the same question.
+                if (CssValueGrammar.TextIsValidFor("text-decoration", value))
+                    ParseTextDecorationShorthand(value, style);
+                break;
             case "text-decoration-line":
                 style.TextDecorationLine = ParseTextDecorationLine(value);
                 style.TextDecoration = LegacyTextDecorationOf(style.TextDecorationLine);
@@ -3603,6 +3611,19 @@ public static class CssPropertyApplier
                     continue;
                 case "line-through":
                     style.TextDecorationLine |= TextDecorationLineType.LineThrough;
+                    continue;
+                // 'blink' is a line the reference engine still stores and still does not blink,
+                // and the two error lines are lines too (measured: 'text-decoration: blink dotted'
+                // reads 'blink dotted', and the legacy single-line enum names none of them, so
+                // nothing is drawn).
+                case "blink":
+                    style.TextDecorationLine |= TextDecorationLineType.Blink;
+                    continue;
+                case "spelling-error":
+                    style.TextDecorationLine |= TextDecorationLineType.SpellingError;
+                    continue;
+                case "grammar-error":
+                    style.TextDecorationLine |= TextDecorationLineType.GrammarError;
                     continue;
                 case "solid":
                 case "double":

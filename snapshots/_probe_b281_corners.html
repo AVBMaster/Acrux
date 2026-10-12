@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b281 probe 7 — corners for the next round</title></head><body>
+<div id="probe" style="font-size:16px;color:rgb(9,9,9)"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9)'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9)'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+function pair(p,v){ out.push('['+p+': '+v+'] spec='+JSON.stringify(spec(p,v))+' comp='+JSON.stringify(comp(p,v))); }
+pair('mask','url(a.png) border-box content-box padding-box');
+pair('mask','url(a.png) / cover');
+pair('mask','url(a.png) 10px');
+pair('mask','url(a.png) content content-box');
+pair('mask','url(a.png) luminance alpha');
+pair('mask','url(a.png) add exclude');
+pair('mask','url(a.png) repeat repeat');
+pair('mask','url(a.png) center left');
+pair('text-decoration','spelling-error grammar-error');
+pair('text-decoration','underline 2px');
+pair('text-decoration','blink wavy red');
+pair('text-decoration','grammar-error 3px dotted');
+pair('text-decoration','none red');
+pair('text-decoration','underline overline line-through blink');
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

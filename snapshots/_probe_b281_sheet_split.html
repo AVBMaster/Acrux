@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b281 probe 6 — where the sheet path splits the shorthand</title>
+<style>
+#und { text-decoration: underline red overline; color: rgb(0,0,200); }
+#ok { text-decoration: underline overline red; color: rgb(0,0,200); }
+</style></head><body>
+<span id="und">u</span> <span id="ok">o</span>
+<pre id="report"></pre>
+<script>
+var out=[];
+function push(n,v){ out.push(n+' = '+JSON.stringify(String(v))); }
+push('supports(text-decoration, underline red overline)', CSS.supports('text-decoration','underline red overline'));
+push('supports(line, underline overline)', CSS.supports('text-decoration-line','underline overline'));
+var rules = document.styleSheets[0].cssRules;
+for (var i=0;i<rules.length;i++){
+  push('rule['+i+'].selectorText', rules[i].selectorText);
+  push('rule['+i+'].length', rules[i].style.length);
+  push('rule['+i+'].cssText', rules[i].style.cssText);
+  push('rule['+i+'].getPropertyValue(text-decoration)', rules[i].style.getPropertyValue('text-decoration'));
+  push('rule['+i+'].getPropertyValue(text-decoration-line)', rules[i].style.getPropertyValue('text-decoration-line'));
+}
+var und = getComputedStyle(document.getElementById('und'));
+push('und.line', und.textDecorationLine); push('und.color', und.textDecorationColor);
+var ok = getComputedStyle(document.getElementById('ok'));
+push('ok.line', ok.textDecorationLine); push('ok.color', ok.textDecorationColor);
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

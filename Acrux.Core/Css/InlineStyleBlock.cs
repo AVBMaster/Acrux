@@ -25,7 +25,15 @@ public static class InlineStyleBlock
         if (string.Equals(text, element.StyleMirrorText, StringComparison.Ordinal)) return;
         element.Style.Clear();
         foreach (var kv in Parse(text))
+        {
+            // The same question the CSSOM's setter asks, because the attribute and setProperty are
+            // two roads to one block: a declaration the property's grammar refuses is never in the
+            // map at all, and so never reads back as if it were (measured: an authored
+            // 'style="text-decoration: underline red overline"' answers getPropertyValue with the
+            // empty string and paints no line).
+            if (!CssValueGrammar.TextIsValidFor(kv.Key, kv.Value)) continue;
             Store(element, kv.Key, kv.Value);
+        }
         element.StyleMirrorText = text;
     }
 
@@ -49,7 +57,31 @@ public static class InlineStyleBlock
             }
             return;
         }
+        // A shorthand written into a block takes the longhands it covers with it, whichever end of
+        // the block they were written on (CSSOM §5.1.4.2, measured: a block that had
+        // 'font-size: 16px' and is then given 'font: bold 12px/1.5 Arial' is left with the nineteen
+        // parts of that 'font' and nothing else — the earlier 'font-size' is gone, and 'cssText'
+        // prints only the shorthand). Only the shorthands whose part list has been measured here
+        // take anything away; the rest are stored beside what the block already carried.
+        if (ShorthandExpander.CssomLonghands(name) is { } covered)
+        {
+            foreach (var longhand in covered) element.Style.Remove(longhand);
+            element.Style[name] = CanonicalSpecifiedValue(name, value);
+            return;
+        }
+        // The other end of the same rule: a longhand written beside a shorthand that already carries
+        // it reaches through that shorthand, and a block whose parts are complete is printed as the
+        // shorthand again (see ShorthandReparse). The legacy '-webkit-mask-box-image' is exempt — it
+        // is stored only as its five longhands, so folding them back would put a declaration the
+        // reference engine never keeps into the block.
+        if (name.StartsWith("-webkit-mask-box-image", StringComparison.OrdinalIgnoreCase))
+        {
+            element.Style[name] = CanonicalSpecifiedValue(name, value);
+            return;
+        }
+        ShorthandReparse.DemoteCoveringShorthands(element, name);
         element.Style[name] = CanonicalSpecifiedValue(name, value);
+        ShorthandReparse.TryFold(element, name);
     }
 
     /// <summary>The declarations of a block of style text, in the order the page wrote them.</summary>

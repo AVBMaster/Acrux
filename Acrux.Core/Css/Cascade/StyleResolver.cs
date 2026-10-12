@@ -572,6 +572,13 @@ public class StyleResolver
                 continue;
             }
 
+            // The same decision the CSSOM makes about this declaration, asked of the shorthand's own
+            // text: a value the grammar refuses expands into longhands that are each valid on their
+            // own, and the cascade would then honour a declaration the reference engine drops
+            // (measured: 'text-decoration: underline red overline' paints no line at all). The text
+            // is what the property set cannot ask — it lets a decoded value list past its own gate.
+            if (!CssValueGrammar.TextIsValidFor(name, text)) continue;
+
             var expanded = ShorthandExpander.ExpandProperty(name, text);
             // An expansion with nothing in it is not a shorthand that described no longhand —
             // it is a value the grammar rejected ('background: url(a) text text'). A declaration

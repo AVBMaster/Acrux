@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b281 probe 2</title></head><body>
+<div id="probe" style="font-size:16px;color:rgb(9,9,9)"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+function spec(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9)'); host.style.setProperty(p,v); return host.style.getPropertyValue(p); }
+function comp(p,v){ host.setAttribute('style','font-size:16px;color:rgb(9,9,9)'); host.style.setProperty(p,v); return getComputedStyle(host).getPropertyValue(p); }
+var out=[];
+function pair(p,v){ out.push('['+p+': '+v+']\n  spec='+JSON.stringify(spec(p,v))+'\n  comp='+JSON.stringify(comp(p,v))
+  +'\n  line='+JSON.stringify(comp('text-decoration-line',''+v)) ); }
+// does an error/blink-only line list suppress style and colour?
+pair('text-decoration','underline solid');
+pair('text-decoration','underline solid rgb(1,2,3)');
+pair('text-decoration','underline blink');
+pair('text-decoration','underline spelling-error');
+pair('text-decoration','spelling-error wavy');
+pair('text-decoration','spelling-error red');
+pair('text-decoration','spelling-error dotted red');
+pair('text-decoration','blink underline');
+pair('text-decoration','underline');
+pair('text-decoration','underline dotted');
+long:
+out.push('---mask---');
+pair('mask','url(a.png) content-box no-clip');
+pair('mask','url(a.png) padding-box no-clip');
+pair('mask','url(a.png) padding-box');
+pair('mask','url(a.png) border-box border-box');
+pair('mask','url(a.png) border-box');
+pair('mask','url(a.png) repeat-x');
+pair('mask','url(a.png) 10px 20px / 30px');
+pair('mask','url(a.png) left top repeat no-clip luminance intersect');
+pair('mask','url(a.png) no-clip border-box');
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

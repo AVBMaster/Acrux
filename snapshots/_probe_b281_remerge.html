@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b281 probe 3 — cssText re-merge</title></head><body>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+var out=[];
+function snap(){ return host.style.cssText; }
+function w(p,v){ host.style.setProperty(p,v); }
+function reset(){ host.setAttribute('style',''); }
+function log(n){ out.push(n+' => '+JSON.stringify(snap())+'   len='+host.style.length
+  +'   margin='+JSON.stringify(host.style.getPropertyValue('margin'))); }
+
+reset(); w('margin-top','1px'); w('margin-right','2px'); w('margin-bottom','3px'); w('margin-left','4px'); log('four written one by one');
+reset(); w('margin','1px 2px 3px 4px'); host.style.removeProperty('margin-top'); w('margin-top','9px'); log('shorthand, drop top, set top again');
+reset(); w('margin','1px 2px 1px 2px'); host.style.removeProperty('margin-top'); w('margin-top','7px'); log('collapse 7px 2px 1px 2px?');
+reset(); w('font-size','16px'); w('margin','1px 2px 3px 4px'); w('color','red'); host.style.removeProperty('margin-top'); w('margin-top','9px'); log('with neighbours before and after');
+reset(); w('margin','1px 2px 3px 4px'); w('padding','5px'); host.style.removeProperty('margin-top'); w('margin-top','9px'); log('interleaved with another shorthand');
+reset(); w('background','red url(a.png) no-repeat'); log('background stays a shorthand');
+reset(); w('background-color','red'); w('background-image','url(a.png)'); w('background-repeat','no-repeat'); w('background-position','10px 20px'); w('background-size','auto'); w('background-origin','padding-box'); w('background-clip','border-box'); w('background-attachment','scroll'); w('-webkit-background-composite','discard'); log('background longhands one by one');
+reset(); w('border-top-width','1px'); w('border-right-width','1px'); w('border-bottom-width','1px'); w('border-left-width','1px'); log('border-width four');
+reset(); w('flex-grow','1'); w('flex-shrink','2'); w('flex-basis','3px'); log('flex three');
+reset(); w('margin','10px'); host.style.removeProperty('margin-bottom'); w('margin-bottom','10px'); log('all four equal again');
+reset(); w('top','1px'); w('right','2px'); w('bottom','3px'); w('left','4px'); log('inset four');
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

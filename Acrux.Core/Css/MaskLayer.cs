@@ -38,6 +38,11 @@ public static class MaskLayerParser
     private static readonly string[] ModeKeywords =
         { "match-source", "alpha", "luminance" };
 
+    /// <summary>The keywords the position and the size each take on their own — the edge words of
+    /// one &lt;position&gt; and the three spellings of a &lt;bg-size&gt;.</summary>
+    private static readonly string[] PositionOrSizeWords =
+        { "left", "right", "center", "top", "bottom", "auto", "cover", "contain" };
+
     public static List<MaskLayer> Parse(string? value)
     {
         var layers = new List<MaskLayer>();
@@ -46,12 +51,98 @@ public static class MaskLayerParser
         return layers;
     }
 
+    /// <summary>Whether every token of a layer list is something the mask grammar takes. A
+    /// <c>&lt;color&gt;</c> is the one thing a mask layer never takes (measured: 'mask: red' and
+    /// 'mask: url(a.png) red' are both refused, where the background shorthand of the same shape
+    /// keeps a colour), and so is any word that is not a box, a composite, a mode, a repeat, an
+    /// image, a position term or a size term. The list is also counted: two composites, two modes,
+    /// three geometry boxes, or a <c>&lt;bg-size&gt;</c> whose position is missing are each no value
+    /// (all measured: 'url(a.png) add exclude', 'url(a.png) luminance alpha',
+    /// 'url(a.png) border-box content-box padding-box' and 'url(a.png) / cover' all read back
+    /// empty). The reference engine drops the whole declaration for one such word, which is what
+    /// this gate is for.</summary>
+    public static bool IsMaskLayerList(string? value)
+    {
+        var layers = SplitTopLevel(value ?? string.Empty, ',');
+        if (layers.Count == 0) return false;
+        foreach (var text in layers)
+        {
+            var tokens = SplitTokensPreservingFunctions(text);
+            if (tokens.Count == 0) return false;
+            int boxes = 0, modes = 0, composites = 0, noClips = 0, images = 0;
+            int positionWords = 0, sizeWords = 0, before = 0;
+            bool afterSlash = false;
+            foreach (var token in tokens)
+            {
+                var lower = token.ToLowerInvariant();
+                if (lower == "/")
+                {
+                    // One slash, and it has to have a position in front of it: a size with no
+                    // <position> before it is not the '<position> [ / <bg-size> ]?' the grammar has.
+                    if (afterSlash || before == 0 || positionWords == 0) return false;
+                    afterSlash = true;
+                    continue;
+                }
+                if (GeometryBoxes.Contains(lower)) { if (++boxes > 2) return false; }
+                else if (CompositeKeywords.Contains(lower)) { if (++composites > 1) return false; }
+                else if (ModeKeywords.Contains(lower)) { if (++modes > 1) return false; }
+                else if (lower == "no-clip") { if (++noClips > 1) return false; }
+                else if (IsImageToken(lower)) { images++; }
+                else if (RepeatKeywords.Contains(lower)) { /* the pair is read by the parser */ }
+                else if (PositionOrSizeWords.Contains(lower) || IsLengthOrPercentageTerm(lower))
+                {
+                    if (afterSlash) sizeWords++; else positionWords++;
+                }
+                else return false;
+                before++;
+            }
+            // Two images in one layer is the shape 'mask: url(a), url(b)' written without its
+            // commas; the parser joins them and the reference engine has no reading for it.
+            if (images > 1 || (afterSlash && sizeWords == 0) || sizeWords > 2 || positionWords > 4)
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>A position or size term: a &lt;length&gt;, a &lt;percentage&gt;, or a math function
+    /// carrying one. A bare number is neither (only zero stands for the length it means).</summary>
+    private static bool IsLengthOrPercentageTerm(string token)
+    {
+        if (token.StartsWith("calc(", StringComparison.Ordinal)
+            || token.StartsWith("min(", StringComparison.Ordinal)
+            || token.StartsWith("max(", StringComparison.Ordinal)
+            || token.StartsWith("clamp(", StringComparison.Ordinal)) return true;
+        if (token.EndsWith("%", StringComparison.Ordinal))
+            return double.TryParse(token[..^1], System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out _);
+        int i = 0;
+        if (i < token.Length && token[i] is '+' or '-') i++;
+        int digits = i;
+        while (i < token.Length && (char.IsAsciiDigit(token[i]) || token[i] == '.')) i++;
+        if (i == digits) return false;
+        // A unit of its own is what separates the '10px' the grammar takes from the '10' it does
+        // not — only a bare zero stands for a length, and it is spelled '0' here.
+        var unit = token[i..];
+        if (unit.Length == 0) return token == "0" || token == "+0" || token == "-0";
+        return char.IsLetter(unit[0]) || unit[0] == '%';
+    }
+
+    /// <summary>Whether a &lt;repeat-style&gt; says nothing: the initial is 'repeat' for one axis and
+    /// 'repeat repeat' for two, and a mask layer that only repeats is printed without the word at
+    /// all (measured: 'mask: url(a.png) repeat repeat' reads 'url("a.png")', where the background
+    /// shorthand of the same shape keeps a written 'repeat').</summary>
+    public static bool RepeatIsInitial(string? repeat)
+    {
+        if (string.IsNullOrEmpty(repeat)) return true;
+        var words = repeat!.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.All(w => w.Equals("repeat", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static MaskLayer ParseLayer(string layerText)
     {
         var layer = new MaskLayer();
         var tokens = SplitTokensPreservingFunctions(layerText);
         var geometry = new List<string>();
-        bool seenBox = false;
 
         for (int i = 0; i < tokens.Count; i++)
         {
@@ -66,11 +157,12 @@ public static class MaskLayerParser
             if (lower == "no-clip") { layer.Clip = "no-clip"; continue; }
             if (GeometryBoxes.Contains(lower))
             {
-                // One box names both origin and clip; a second one fills whichever is still
-                // unset (CSS Masking 1 §5.1 — measured, and asymmetric with 'mask-clip' alone).
-                if (!seenBox) { layer.Origin = lower; layer.Clip = lower; seenBox = true; }
-                else if (layer.Clip == null || layer.Clip == "no-clip") layer.Clip = lower;
-                else layer.Origin = lower;
+                // The boxes are positional, exactly as 'background' reads them (CSS Masking 1
+                // §5.10): the first names the origin and the last names the clip, so one box is
+                // given to BOTH. A 'no-clip' before them has already spoken for the clip, and a
+                // box after it can only be filling in the origin.
+                if (layer.Origin == null) { layer.Origin = lower; layer.Clip ??= lower; }
+                else layer.Clip = lower;
                 continue;
             }
             if (CompositeKeywords.Contains(lower)) { layer.Composite ??= lower; continue; }
@@ -107,9 +199,11 @@ public static class MaskLayerParser
     }
 
     /// <summary>'url(...)' and any gradient function name the mask source; 'src(...)' does not,
-    /// and neither does a bare keyword.</summary>
+    /// and neither does a bare keyword. 'none' is a mask source of its own (CSS Masking 1 §5.1),
+    /// which is why 'mask: none' is a declaration and not an unclassified word.</summary>
     private static bool IsImageToken(string lower) =>
-        lower.StartsWith("url(", StringComparison.Ordinal)
+        lower == "none"
+        || lower.StartsWith("url(", StringComparison.Ordinal)
         || (lower.Contains("gradient(") && !lower.StartsWith("src(", StringComparison.Ordinal));
 
     /// <summary>Split on whitespace at function depth zero, so url(a b.png) stays one token.</summary>

@@ -30,15 +30,46 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         }
     }
 
-    public int length => Declarations().Count;
+    /// <summary>The block as a page enumerates it (CSSOM §5.1.4.2): a shorthand stands for the
+    /// longhands it carries, so a block whose only declaration is 'margin: 1px 2px 3px 4px' has
+    /// length 4 and answers item(1) with 'margin-top' (measured). The stored text is untouched —
+    /// 'cssText' still prints the shorthand, which is the other half of the same measurement.</summary>
+    public int length => EnumeratedDeclarations().Count;
 
     /// <summary>An index past the end reads back the empty string rather than null: the IDL
     /// returns a DOMString (CSSOM §2.1, measured: item(9) on a two-declaration block is "").</summary>
     public string item(int index)
     {
-        var declarations = Declarations();
+        var declarations = EnumeratedDeclarations();
         if (index < 0 || index >= declarations.Count) return "";
         return declarations[index].Key;
+    }
+
+    private List<KeyValuePair<string, string>> EnumeratedDeclarations()
+    {
+        var stored = Declarations();
+        if (stored.Count == 0) return stored;
+        var expanded = new List<KeyValuePair<string, string>>(stored.Count * 2);
+        foreach (var entry in stored)
+        {
+            var longhands = Acrux.Core.Css.ShorthandExpander.CssomLonghands(entry.Key);
+            if (longhands == null)
+            {
+                expanded.Add(entry);
+                continue;
+            }
+            var parts = entry.Key.Equals("font", StringComparison.OrdinalIgnoreCase)
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : Acrux.Core.Css.ShorthandExpander.ExpandProperty(entry.Key, entry.Value);
+            foreach (var name in longhands)
+            {
+                var value = parts.TryGetValue(name, out var v) ? v
+                    : name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? entry.Value
+                    : "";
+                expanded.Add(new KeyValuePair<string, string>(name, value));
+            }
+        }
+        return expanded;
     }
 
     public string getPropertyValue(string propertyName) => GetStyle(propertyName) ?? "";
@@ -66,6 +97,20 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
                 removed |= _element.Style.Remove(longhand);
         }
         else removed = _element.Style.Remove(propertyName);
+        if (!removed)
+        {
+            // A longhand of a stored shorthand is removed by breaking that shorthand apart: the
+            // block keeps the parts that were written, each in the shorthand's place, and loses the
+            // one the page named (CSSOM §5.1.4.2, measured: after 'margin: 1px 2px 3px 4px' a
+            // removeProperty('margin-top') leaves 'margin-right: 2px; margin-bottom: 3px;
+            // margin-left: 4px', and 'margin' itself then reads back the empty string).
+            foreach (var shorthand in Acrux.Core.Css.ShorthandExpander.ShorthandsFor(propertyName))
+            {
+                if (!_element.Style.TryGetValue(shorthand, out var text)) continue;
+                removed = Acrux.Core.Css.ShorthandReparse.DemoteShorthand(_element, shorthand, text!, propertyName);
+                break;
+            }
+        }
         if (!removed) return "";
         SyncAttribute();
         DirtyState.AddSelf(_element, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
@@ -260,21 +305,11 @@ public abstract class CssStyleDeclarationBase : System.Dynamic.DynamicObject
         _ => null,
     };
 
-    /// <summary>The shortest text that says the same four sides: all one value, or the
-    /// top/bottom-left/right pair, or three with the left repeating the top (CSS Values §3.1).
-    /// The same collapse the printer applies to a written 'margin'.</summary>
+    /// <summary>The shortest text that says the same four sides: one printer for the CSSOM's reads
+    /// and for the fold a completed set of longhands makes (see
+    /// <see cref="Acrux.Core.Css.ShorthandReparse.CollapseFourSides"/>).</summary>
     private static string CollapseFourSides(List<string> values)
-    {
-        bool Same(string x, string y) => x.Equals(y, StringComparison.OrdinalIgnoreCase);
-        if (values.Count != 4) return string.Join(" ", values);
-        if (Same(values[0], values[1]) && Same(values[0], values[2]) && Same(values[0], values[3]))
-            return values[0];
-        if (Same(values[0], values[2]) && Same(values[1], values[3]))
-            return values[0] + " " + values[1];
-        if (Same(values[1], values[3]))
-            return values[0] + " " + values[1] + " " + values[2];
-        return string.Join(" ", values);
-    }
+        => Acrux.Core.Css.ShorthandReparse.CollapseFourSides(values);
 
     /// <summary>Reads a longhand out of the shorthands the block carries (see
     /// <see cref="Acrux.Core.Css.ShorthandExpander.ShorthandsFor"/>). <paramref name="block"/>

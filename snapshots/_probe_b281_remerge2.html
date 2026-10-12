@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b281 probe 4 — which shorthands re-merge</title></head><body>
+<div id="probe"></div>
+<pre id="report"></pre>
+<script>
+var host = document.getElementById('probe');
+var out=[];
+function reset(){ host.setAttribute('style',''); }
+function log(n,parts){ reset(); parts.forEach(function(p){ host.style.setProperty(p[0],p[1]); });
+  out.push(n+' => '+JSON.stringify(host.style.cssText)+'   len='+host.style.length); }
+
+log('padding', [['padding-top','1px'],['padding-right','2px'],['padding-bottom','3px'],['padding-left','4px']]);
+log('padding collapsed', [['padding-top','1px'],['padding-right','2px'],['padding-bottom','1px'],['padding-left','2px']]);
+log('gap', [['row-gap','1px'],['column-gap','2px']]);
+log('gap equal', [['row-gap','1px'],['column-gap','1px']]);
+log('columns', [['column-width','100px'],['column-count','3']]);
+log('outline', [['outline-color','red'],['outline-style','dashed'],['outline-width','2px']]);
+log('text-decoration', [['text-decoration-line','underline'],['text-decoration-style','dotted'],['text-decoration-color','red'],['text-decoration-thickness','2px']]);
+log('list-style', [['list-style-position','inside'],['list-style-image','none'],['list-style-type','square']]);
+log('border-radius', [['border-top-left-radius','1px'],['border-top-right-radius','2px'],['border-bottom-right-radius','3px'],['border-bottom-left-radius','4px']]);
+log('border-style', [['border-top-style','solid'],['border-right-style','solid'],['border-bottom-style','solid'],['border-left-style','solid']]);
+log('place-items', [['align-items','center'],['justify-items','start']]);
+log('background-position', [['background-position-x','10px'],['background-position-y','20px']]);
+log('transition', [['transition-behavior','normal'],['transition-duration','1s'],['transition-timing-function','ease'],['transition-delay','0s'],['transition-property','all']]);
+log('animation', [['animation-name','none'],['animation-duration','0s'],['animation-timing-function','ease'],['animation-delay','0s'],['animation-iteration-count','1'],['animation-direction','normal'],['animation-fill-mode','none'],['animation-play-state','running']]);
+log('grid-area', [['grid-row-start','1'],['grid-column-start','2'],['grid-row-end','3'],['grid-column-end','4']]);
+log('mask', [['mask-image','url(a.png)'],['mask-position','10px 20px'],['mask-size','auto'],['mask-repeat','no-repeat'],['mask-origin','border-box'],['mask-clip','border-box'],['mask-composite','add'],['mask-mode','match-source']]);
+log('font', [['font-style','italic'],['font-variant','small-caps'],['font-weight','bold'],['font-stretch','condensed'],['font-size','12px'],['line-height','1.5'],['font-family','Arial']]);
+log('three of four margin', [['margin-top','1px'],['margin-right','2px'],['margin-bottom','3px']]);
+log('non-contiguous', [['margin-top','1px'],['color','red'],['margin-right','2px'],['margin-bottom','3px'],['margin-left','4px']]);
+log('border sub then big', [['border-top-width','1px'],['border-right-width','2px'],['border-bottom-width','3px'],['border-left-width','4px'],['border-style','solid']]);
+log('shorthand then longhand', [['margin','1px 2px 3px 4px'],['margin-top','9px']]);
+log('longhand then shorthand', [['margin-top','9px'],['margin-right','2px'],['margin-bottom','3px'],['margin-left','4px'],['margin','5px']]);
+log('order shuffled', [['margin-left','4px'],['margin-right','2px'],['margin-top','1px'],['margin-bottom','3px']]);
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
