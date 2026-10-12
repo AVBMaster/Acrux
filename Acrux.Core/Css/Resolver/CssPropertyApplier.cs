@@ -3261,56 +3261,54 @@ public static class CssPropertyApplier
             || (trimmed[0] == '\'' && trimmed[^1] == '\''));
     }
 
+    /// <summary>Apply a 'font' shorthand. The reading is done once, by
+    /// <see cref="ShorthandExpander.ParseFontShorthand"/>, so the grammar, the CSSOM echo and these
+    /// longhands cannot disagree about what the page wrote (CSS Fonts 4 §5.2/§5.3).</summary>
     public static void ParseFontShorthand(string value, ComputedStyle style)
     {
         // CSS Fonts 4 §5.3: the shorthand resets the variant slots it does not
         // carry, otherwise a previous font-variant(-caps) would leak through.
         style.FontVariant = "normal";
         style.FontVariantCaps = "normal";
-        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        int i = 0;
+        style.FontStretch = "normal";
+        var parts = ShorthandExpander.ParseFontShorthand(value);
+        if (parts == null) return;
 
-        while (i < parts.Length)
+        if (parts.SystemFont != null)
         {
-            var lower = parts[i].ToLowerInvariant();
-            if (lower is "normal" or "italic" or "oblique")
-            {
-                if (lower == "italic" || lower == "oblique") style.FontStyle = FontStyleType.Italic;
-                i++;
-            }
-            else if (lower == "small-caps")
-            {
-                style.FontVariant = "small-caps";
-                style.FontVariantCaps = "small-caps";
-                i++;
-            }
-            else if (lower is "bold" or "bolder" or "lighter" ||
-                     lower is "100" or "200" or "300" or "400" or "500" or "600" or "700" or "800" or "900")
-            {
-                style.FontWeight = ParseFontWeight(parts[i]);
-                i++;
-            }
-            else break;
+            // A system-font keyword stands for the platform's own face and size (measured: all six
+            // answer 16px Arial here), and it says nothing about the other slots.
+            var system = ShorthandExpander.SystemFontFace();
+            SetFontSize(style, system.Size, Length.ParseFontSize(system.Size, style.FontSize));
+            style.FontFamily = ParseFontFamily(system.Family);
+            return;
         }
 
-        if (i < parts.Length && (parts[i].EndsWith("px") || parts[i].EndsWith("em") || parts[i].EndsWith("rem") ||
-            parts[i].EndsWith("%") || parts[i] is "xx-small" or "x-small" or "small" or "medium" or
-            "large" or "x-large" or "xx-large"))
+        if (parts.Style is { } fontStyle)
         {
-            SetFontSize(style, parts[i], Length.ParseFontSize(parts[i], style.FontSize));
-            i++;
+            if (fontStyle == "italic") style.FontStyle = FontStyleType.Italic;
+            else if (fontStyle.StartsWith("oblique", StringComparison.Ordinal))
+            {
+                // 'oblique 40deg' keeps its angle, which is what the computed surface prints
+                // (CSS Fonts 4 §3.2; measured for b225 §D and again for 'font:' here).
+                style.FontStyle = FontStyleType.Oblique;
+                var angle = fontStyle["oblique".Length..].Trim();
+                if (angle.Length > 0 && Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(angle, out var degrees, out _))
+                    style.FontStyleObliqueDegrees = (float)degrees;
+            }
         }
-
-        if (i < parts.Length && parts[i] == "/")
+        if (parts.Variant != null)
         {
-            i++;
-            if (i < parts.Length)
-                Fonts.LineBoxMetrics.ApplyLineHeight(style, parts[i]);
-            i++;
+            style.FontVariant = parts.Variant;
+            style.FontVariantCaps = parts.Variant;
         }
-
-        if (i < parts.Length)
-            style.FontFamily = ParseFontFamily(string.Join(" ", parts.Skip(i)));
+        if (parts.Weight != null) style.FontWeight = ParseFontWeight(parts.Weight);
+        if (parts.Stretch != null) style.FontStretch = parts.Stretch;
+        SetFontSize(style, parts.Size, Length.ParseFontSize(parts.Size, style.FontSize));
+        if (parts.LineHeight != null
+            && !parts.LineHeight.Equals("normal", StringComparison.OrdinalIgnoreCase))
+            Fonts.LineBoxMetrics.ApplyLineHeight(style, parts.LineHeight);
+        style.FontFamily = ParseFontFamily(parts.Family);
     }
 
     public static void ParseOutlineShorthand(string value, ComputedStyle style)

@@ -234,7 +234,10 @@ public static class CssValueText
                 result = FoldColorWords(result, property);
                 result = FoldKeywordCase(result, property);
                 if (property.Equals("font", StringComparison.OrdinalIgnoreCase))
+                {
+                    result = CanonicalizeFontShorthand(result);
                     result = FoldGenericFamilies(result);
+                }
                 // Three properties print a value the page did not literally write: the indent flags
                 // move behind the length, a ratio always says both sides, and a counter always says
                 // its integer. All three are decided here so a sheet, the CSSOM echo and
@@ -1932,6 +1935,17 @@ public static class CssValueText
         return name;
     }
 
+    /// <summary>Whether a word is one of the generic family names. The list has one home because
+    /// two readers need it: the printer, which says a generic in its one spelling, and the
+    /// <c>font</c> shorthand's grammar, which refuses a generic followed by another name
+    /// (measured: 'font: 12px serif extra' is dropped while 'font: 12px serif, sans-serif' stands).</summary>
+    internal static bool IsGenericFamilyName(string name)
+    {
+        foreach (var generic in GenericFamilies)
+            if (name.Equals(generic, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
     /// <summary>Lower-case only the generic family keywords of a <c>font</c> shorthand. The whole
     /// value cannot go through the family fold, because its other components — 'bold 16px serif' —
     /// are also bare identifiers and would be quoted into one family name. A generic family is a
@@ -1942,6 +1956,32 @@ public static class CssValueText
         var words = SplitTopLevelWords(text);
         for (int i = 0; i < words.Count; i++) words[i] = CanonicalGenericFamily(words[i]);
         return string.Join(" ", words);
+    }
+
+    /// <summary>Say the <c>font</c> shorthand in the order its grammar lists its parts, with a
+    /// line-height that says nothing left out and the family list printed the way
+    /// <c>font-family</c> prints it (CSS Fonts 4 §5.2, measured: 'small-caps bold italic condensed
+    /// 12px/1.4 serif' reads 'italic small-caps bold condensed 12px / 1.4 serif', 'normal 12px serif'
+    /// reads '12px serif', '12px/normal serif' reads '12px serif', and '12px "Foo", serif' reads
+    /// '12px Foo, serif'). A text the shorthand reader refuses is returned untouched, so the
+    /// declaration keeps the shape the cascade is about to drop.</summary>
+    private static string CanonicalizeFontShorthand(string text)
+    {
+        var parts = Acrux.Core.Css.ShorthandExpander.ParseFontShorthand(text);
+        if (parts == null) return text;
+        if (parts.SystemFont != null) return parts.SystemFont;
+        var printed = new List<string>(7);
+        if (parts.Style != null) printed.Add(parts.Style);
+        if (parts.Variant != null) printed.Add(parts.Variant);
+        if (parts.Weight != null) printed.Add(parts.Weight);
+        if (parts.Stretch != null) printed.Add(parts.Stretch);
+        var size = parts.Size;
+        if (parts.LineHeight != null
+            && !parts.LineHeight.Equals("normal", StringComparison.OrdinalIgnoreCase))
+            size += " / " + parts.LineHeight;
+        printed.Add(size);
+        printed.Add(FoldFamilyNames(parts.Family));
+        return string.Join(" ", printed);
     }
 
     private static readonly string[] GenericFamilies =

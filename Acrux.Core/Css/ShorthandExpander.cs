@@ -1335,89 +1335,207 @@ public static class ShorthandExpander
     private static bool IsBackgroundSizeAxisTerm(string token) =>
         IsKeyword(token, "auto") || IsBackgroundPositionLength(token);
 
-    private static void ExpandFont(Dictionary<string, string> result, string value)
+    /// <summary>The parts a 'font' shorthand carries. Everything is in the spelling the engine
+    /// prints: keywords lower-cased, the line-height left out when it says nothing.</summary>
+    public sealed class FontShorthandParts
     {
-        // CSS Fonts 4 §5.3: [ style || variant || weight || stretch ]? size [ / line-height ]? family
-        // Once the size is seen, every remaining token belongs to the font-family
-        // list — unquoted family names must not be dropped or re-interpreted.
-        string fontSize = "16px", lineHeight = "normal";
-        bool foundSize = false;
-        int normalSlot = 0;
-        var family = new List<string>();
-        var parts = SplitFontShorthand(value);
+        public required string Size { get; init; }
+        public required string Family { get; init; }
+        public string? Style { get; init; }
+        public string? Variant { get; init; }
+        public string? Weight { get; init; }
+        public string? Stretch { get; init; }
+        public string? LineHeight { get; init; }
+        /// <summary>Set when the whole value was one of the six system-font keywords
+        /// (CSS Fonts 4 §5.4). It stands for a size, a family and a weight the platform owns, so
+        /// none of those three are carried here.</summary>
+        public string? SystemFont { get; init; }
+    }
 
-        for (int index = 0; index < parts.Count; index++)
+    /// <summary>The system-font keywords, in the spelling the engine prints. Measured against the
+    /// reference engine on this platform, all six resolve to the same UI face and size — 16px Arial —
+    /// and the shorthand's own echo is the keyword as written.</summary>
+    private static readonly string[] SystemFontKeywords =
+        { "caption", "menu", "icon", "message-box", "small-caption", "status-bar" };
+
+    internal static bool IsSystemFontKeyword(string token)
+    {
+        foreach (var keyword in SystemFontKeywords)
+            if (token.Equals(keyword, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>The face a system-font keyword stands for: one answer, read both by the expansion
+    /// that fills the longhands and by the applier that fills the style, so the CSSOM's list of
+    /// longhands and getComputedStyle cannot disagree about what 'caption' means (measured: every one
+    /// of the six keywords resolves to 16px Arial on this platform, while the shorthand still echoes
+    /// the keyword the page wrote).</summary>
+    public static (string Size, string Family) SystemFontFace() => ("16px", "Arial");
+
+    /// <summary>Read a 'font' shorthand (CSS Fonts 4 §5.2): <c>[ style || variant || weight ||
+    /// stretch ]? size [ / line-height ]? family</c>. Three things the engine used to get wrong are
+    /// decided here, once, for the grammar, the echo and the longhands alike:
+    /// <list type="bullet">
+    /// <item>a size and a family are both required (measured: 'bold 12px' and '12px' are dropped);</item>
+    /// <item>a word before the size that is none of the four categories is no value at all
+    /// (measured: 'line-height 12px serif' is dropped — it is not a family name waiting early);</item>
+    /// <item>after the size everything is the family list, and a list that does not read as one is
+    /// dropped ('12px serif extra', where a generic name is followed by a second word).</item>
+    /// </list>
+    /// 'oblique' may carry the angle it leans by, and 'normal' fills a slot without being said.</summary>
+    public static FontShorthandParts? ParseFontShorthand(string value)
+    {
+        var single = value.Trim();
+        if (!single.Contains(' ') && IsSystemFontKeyword(single))
+            return new FontShorthandParts { Size = string.Empty, Family = string.Empty, SystemFont = single };
+        string? style = null, variant = null, weight = null, stretch = null;
+        string? size = null, lineHeight = null;
+        var after = new List<string>();
+        var tokens = SplitFontShorthand(value);
+        for (int index = 0; index < tokens.Count; index++)
         {
-            var part = parts[index].Trim();
-            var p = part.ToLowerInvariant();
-
-            // The size and the line-height are separated by a slash that the value's own
-            // spelling prints as a token of its own ('font: 12px / 1.5 Arial'), so the pair is
-            // read here rather than by the classification below: once the size has been taken,
-            // every other token is a family name and a '/' would otherwise be one of them.
-            if (foundSize && p == "/")
+            var token = tokens[index].Trim();
+            if (token.Length == 0) continue;
+            var p = token.ToLowerInvariant();
+            if (size != null)
             {
-                if (index + 1 < parts.Count)
-                {
-                    lineHeight = parts[index + 1].Trim();
-                    index++;
-                }
+                after.Add(p == "/" ? "/" : token);
                 continue;
             }
-
-            if (foundSize)
+            if (p.Contains('/') && TrySizeThenLineHeight(p, out var glued, out var gluedLine))
             {
-                // A family name is a name, not a keyword: 'Arial' and 'arial' are different
-                // strings to a font matcher on a case-sensitive filesystem, and the reference
-                // engine hands the author's spelling back through getComputedStyle.
-                family.Add(part);
+                size = glued; lineHeight = gluedLine;
                 continue;
             }
-
-            if (p == "normal")
+            if (IsFontSize(p) || IsFontSizeLength(p)) { size = p; continue; }
+            // 'oblique' may carry the angle it leans by (CSS Fonts 4 §3.2), and the angle is part
+            // of the style rather than a word of its own (measured: 'oblique 40deg 12px serif'
+            // reads back whole, where the engine used to lose it into the family list).
+            if (p is "italic" or "oblique")
             {
-                // Successive 'normal' fill the style, variant, weight, stretch slots in order.
-                switch (normalSlot++)
-                {
-                    case 0: result["font-style"] = "normal"; break;
-                    case 1: result["font-variant"] = "normal"; break;
-                    case 2: result["font-weight"] = "normal"; break;
-                }
+                if (style != null) return null;
+                if (p == "oblique" && index + 1 < tokens.Count && IsAngle(tokens[index + 1]))
+                { style = "oblique " + tokens[++index].Trim().ToLowerInvariant(); continue; }
+                style = p;
+                continue;
             }
-            else if (p == "italic" || p == "oblique")
-                result["font-style"] = p;
-            else if (p == "small-caps")
-                result["font-variant"] = p;
-            else if (p == "bold" || p == "bolder" || p == "lighter" || int.TryParse(p, out _))
-                result["font-weight"] = p;
-            else if (IsFontStretch(p))
+            if (p == "small-caps") { if (variant != null) return null; variant = p; continue; }
+            // 'normal' fills the next slot the grammar has and is not printed at all.
+            if (p == "normal") continue;
+            if (p is "bold" or "bolder" or "lighter"
+                || (int.TryParse(p, out var number) && number >= 1 && number <= 1000))
             {
-                // font-stretch is parsed but not applied by the engine yet.
+                if (weight != null) return null;
+                weight = p;
+                continue;
             }
-            else if (p.Contains('/'))
+            if (IsFontStretch(p))
             {
-                var sizeLine = p.Split('/');
-                fontSize = sizeLine[0].Trim();
-                lineHeight = sizeLine[1].Trim();
-                foundSize = true;
+                if (stretch != null) return null;
+                stretch = p;
+                continue;
             }
-            else if (IsFontSize(p) || IsFontSizeLength(p))
-            {
-                fontSize = p;
-                foundSize = true;
-            }
-            else
-                family.Add(part);
+            return null;
         }
 
-        result["font-size"] = fontSize;
-        result["line-height"] = lineHeight;
-        if (family.Count > 0)
-            result["font-family"] = JoinFamilyList(string.Join(" ", family));
-        result.TryAdd("font-style", "normal");
-        result.TryAdd("font-weight", "normal");
-        result.TryAdd("font-variant", "normal");
+        if (size == null) return null;
+        var familyStart = 0;
+        if (after.Count > 0 && after[0] == "/")
+        {
+            if (after.Count < 2) return null;
+            lineHeight = after[1];
+            familyStart = 2;
+        }
+        if (familyStart >= after.Count) return null;
+        var family = string.Join(" ", after.Skip(familyStart));
+        if (!IsFamilyList(family)) return null;
+        return new FontShorthandParts
+        {
+            Size = size, Family = family, Style = style, Variant = variant,
+            Weight = weight, Stretch = stretch, LineHeight = lineHeight,
+        };
     }
+
+    /// <summary>'12px/1.5' as one token: a size, a slash, and whatever the line-height says.</summary>
+    private static bool TrySizeThenLineHeight(string token, out string size, out string lineHeight)
+    {
+        size = string.Empty; lineHeight = string.Empty;
+        int slash = token.IndexOf('/');
+        if (slash <= 0 || slash == token.Length - 1) return false;
+        var head = token[..slash];
+        var tail = token[(slash + 1)..];
+        if (!IsFontSize(head) && !IsFontSizeLength(head)) return false;
+        size = head;
+        lineHeight = tail;
+        return true;
+    }
+
+    /// <summary>An angle: a number with the unit that says degrees, or a bare number for the
+    /// properties that take one without.</summary>
+    private static bool IsAngle(string token)
+        => token.EndsWith("deg", StringComparison.OrdinalIgnoreCase)
+            || token.EndsWith("grad", StringComparison.OrdinalIgnoreCase)
+            || token.EndsWith("rad", StringComparison.OrdinalIgnoreCase)
+            || token.EndsWith("turn", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A comma list of family names, each one a quoted string or a run of identifiers —
+    /// except that a generic name is a family of its own (measured: 'serif extra' is dropped while
+    /// 'serif, sans-serif' and 'Times New Roman' stand).</summary>
+    private static bool IsFamilyList(string family)
+    {
+        var entries = family.Split(',');
+        if (entries.Length == 0) return false;
+        foreach (var entry in entries)
+        {
+            var text = entry.Trim();
+            if (text.Length == 0) return false;
+            if (text[0] is '"' or '\'')
+            {
+                if (text.Length < 2 || text[^1] != text[0]) return false;
+                continue;
+            }
+            var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length == 0) return false;
+            if (Acrux.Core.Css.CssValueText.IsGenericFamilyName(words[0]))
+            {
+                if (words.Length != 1) return false;
+                continue;
+            }
+            foreach (var word in words)
+                if (!Acrux.Core.Css.CssValueGrammar.IsIdentifierLike(word)) return false;
+        }
+        return true;
+    }
+
+    private static void ExpandFont(Dictionary<string, string> result, string value)
+    {
+        var parts = ParseFontShorthand(value);
+        if (parts == null) return;
+        // CSS Fonts 4 §5.3: the shorthand resets every part it does not carry, so the longhands
+        // it does not name go back to their initials rather than keeping what the page said.
+        if (parts.SystemFont != null)
+        {
+            var system = SystemFontFace();
+            result["font-style"] = "normal";
+            result["font-variant"] = "normal";
+            result["font-variant-caps"] = "normal";
+            result["font-weight"] = "normal";
+            result["font-stretch"] = "normal";
+            result["font-size"] = system.Size;
+            result["line-height"] = "normal";
+            result["font-family"] = system.Family;
+            return;
+        }
+        result["font-style"] = parts.Style ?? "normal";
+        result["font-variant-caps"] = parts.Variant ?? "normal";
+        result["font-variant"] = "normal";
+        result["font-weight"] = parts.Weight ?? "normal";
+        result["font-stretch"] = parts.Stretch ?? "normal";
+        result["font-size"] = parts.Size;
+        result["line-height"] = parts.LineHeight ?? "normal";
+        result["font-family"] = JoinFamilyList(parts.Family);
+    }
+
 
     /// <summary>A font-family list in the spelling the platform prints: the families separated
     /// by ', '. Authors may write the list with the commas tight against the names, or with the

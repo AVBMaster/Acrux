@@ -81,6 +81,14 @@ public static class CssValueGrammar
         if (propertyName.Equals("offset", StringComparison.OrdinalIgnoreCase)
             && !Resolver.CssPropertyTraits.IsCssWideKeyword(value.Trim()))
             return ShorthandExpander.ExpandProperty("offset", value).Count > 0;
+        // The 'font' shorthand is gated by the same reader the expansion and the echo use: a size
+        // with no family, a word before the size that is none of the four categories, and a family
+        // list that does not read as one each leave the declaration out of the cascade
+        // (measured: 'font: bold 12px', 'font: line-height 12px serif' and 'font: 12px serif extra'
+        // are all dropped, where the engine used to keep a half-read version of each).
+        if (propertyName.Equals("font", StringComparison.OrdinalIgnoreCase)
+            && !Resolver.CssPropertyTraits.IsCssWideKeyword(value.Trim())
+            && ShorthandExpander.ParseFontShorthand(value) == null) return false;
         // The properties this engine echoes without consuming are read by one table, and that table
         // is the grammar too: a value whose canonical text does not exist is not a declaration on
         // any surface (measured value by value — 'fill-rule: bogus', 'mask-type: alpha luminance',
@@ -732,11 +740,31 @@ public static class CssValueGrammar
                 new[] { "add", "subtract", "intersect", "exclude" }));
         },
         CssPropertyId.TextWrap => IsTextWrapValue,
-        // CSS Text 3 §3.4 as this engine reads it: a number or a length, and nothing else — neither
-        // 'normal' nor 'auto' is a value of 'tab-size' here (all three measured).
-        CssPropertyId.TabSize => static text => IsLengthList(text) && !SplitComponents(text).Any(
-            static w => w.Equals("normal", StringComparison.OrdinalIgnoreCase)
-                || w.Equals("auto", StringComparison.OrdinalIgnoreCase)),
+        // CSS Text 4 §1: ONE of the six words. The two-value form the current draft adds
+        // ('white-space: pre nowrap') and the 'stable' keyword are not values this engine's
+        // reference takes (measured: 'normal nowrap', 'pre normal', 'break-spaces normal' and
+        // 'stable' are each dropped, with the property left at its 'normal').
+        CssPropertyId.WhiteSpace => static text => IsOneWordOnly(text,
+            "normal", "pre", "nowrap", "pre-wrap", "pre-line", "break-spaces"),
+        // CSS Cascades 4 §4.6: 'all' takes nothing but the keywords that stand for a whole value.
+        // 'none' and 'normal' are not among them (measured: both read back empty).
+        CssPropertyId.All => static text => IsOneWordOnly(text,
+            "initial", "inherit", "unset", "revert", "revert-layer"),
+        // CSS Text 3 §5.3: one of three words, and a second is no value
+        // (measured: 'hyphens: none auto' is dropped).
+        CssPropertyId.Hyphens => static text => IsOneWordOnly(text, "none", "manual", "auto"),
+        // CSS Text 3 §3.4 as this engine reads it: ONE number or length, and never a negative one
+        // (measured: 'tab-size: 2 4' and 'tab-size: -1' are dropped while '1.5' and '4em' stand;
+        // 'normal' and 'auto' are not values of this property either).
+        CssPropertyId.TabSize => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count != 1) return false;
+            var word = words[0];
+            if (word.Equals("normal", StringComparison.OrdinalIgnoreCase)
+                || word.Equals("auto", StringComparison.OrdinalIgnoreCase)) return false;
+            return !word.StartsWith("-", StringComparison.Ordinal) && IsLengthOrPercentage(word);
+        },
         // 'symbols()' is a @counter-style descriptor, not a value of 'list-style-type' here
         // (measured: the declaration is dropped and the property stays 'disc'), while a quoted
         // string is a marker the engine keeps.
@@ -952,7 +980,11 @@ public static class CssValueGrammar
             => static text => IsLengthList(text, "thin", "medium", "thick", "auto"),
         // CSS Multi-column 1 §6: 'auto' lets the column width be calculated.
         CssPropertyId.ColumnWidth => static text => IsLengthList(text, "auto"),
-        CssPropertyId.Gap or CssPropertyId.RowGap or CssPropertyId.ColumnGap
+        // CSS Box Alignment 3 §3.7 and CSS Gap 1 §3: 'normal' or a length, one for each axis. The
+        // shorthand takes at most two, so a third is no value (measured: 'gap: 10px 20px 30px' is
+        // dropped while 'gap: 10px 20px' and 'gap: normal' stand), and a longhand takes exactly one.
+        CssPropertyId.Gap => static text => IsLengthListUpTo(text, 2, "normal"),
+        CssPropertyId.RowGap or CssPropertyId.ColumnGap
             => static text => IsLengthList(text, "normal"),
         CssPropertyId.Color or CssPropertyId.BackgroundColor or CssPropertyId.OutlineColor
             or CssPropertyId.BorderTopColor or CssPropertyId.BorderRightColor

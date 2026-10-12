@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify287 — what a font shorthand says, and what all is willing to reset</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+/* paint guard: the shorthand parts that must reach the drawn text */
+#pg-1 { font: italic bold 18px serif; }
+#pg-2 { font: condensed 18px serif; }
+#pg-3 { font: 18px/1.4 "Foo", serif; }
+#pg-4 { font: oblique 25deg 18px serif; }
+#pg-5 { white-space: pre-wrap; width: 80px; border: 2px solid rgb(255,128,128); }
+#pg-6 { tab-size: 2; white-space: pre; border: 2px solid rgb(0,0,255); width: 200px; }
+</style></head><body>
+<h2>paint guard (the shorthand parts reaching the drawn text)</h2>
+<p id="pg-1">Italic Bold Serif</p>
+<p id="pg-2">Condensed</p>
+<p id="pg-3">Quoted family</p>
+<p id="pg-4">Oblique 25 degrees</p>
+<pre id="pg-5">a b c d e f g h i j k l m n o p</pre>
+<pre id="pg-6">x	y	z</pre>
+<h2>value rows</h2>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* Measured against the reference engine row by row: the CSSOM echo, the computed value and what
+ * CSS.supports says, for a fresh div appended before the declaration is written.
+ *
+ * The 'len' column the probe also recorded is NOT asserted here. For 'white-space', 'text-wrap'
+ * and 'contain-intrinsic-size' the reference engine counts the two longhands a shorthand resets
+ * even when it carries only one of them, where this engine counts the one it wrote (measured:
+ * 'white-space: normal' has length 2 there and 1 here). That is gap #281.
+ */
+var T = [
+  ['all','initial','initial','','1','1'],
+  ['all','inherit','inherit','','1','1'],
+  ['all','unset','unset','','1','1'],
+  ['all','revert','revert','','1','1'],
+  ['all','revert-layer','revert-layer','','1','1'],
+  ['all','none','','','0','0'],
+  ['all','normal','','','0','0'],
+  ['font','12px serif','12px serif','12px serif','1','19'],
+  ['font','bold 12px serif','bold 12px serif','700 12px serif','1','19'],
+  ['font','italic small-caps bold 12px serif','italic small-caps bold 12px serif','italic small-caps 700 12px serif','1','19'],
+  ['font','12px/1.5 serif','12px / 1.5 serif','12px / 18px serif','1','19'],
+  ['font','12px/150% serif','12px / 150% serif','12px / 18px serif','1','19'],
+  ['font','12px / 1.5 serif','12px / 1.5 serif','12px / 18px serif','1','19'],
+  ['font','caption','caption','16px Arial','1','19'],
+  ['font','menu','menu','16px Arial','1','19'],
+  ['font','icon','icon','16px Arial','1','19'],
+  ['font','message-box','message-box','16px Arial','1','19'],
+  ['font','small-caption','small-caption','16px Arial','1','19'],
+  ['font','status-bar','status-bar','16px Arial','1','19'],
+  ['font','12px "Foo", serif','12px Foo, serif','12px Foo, serif','1','19'],
+  ['font','12px \'Foo\', serif','12px Foo, serif','12px Foo, serif','1','19'],
+  ['font','12px Foo, serif','12px Foo, serif','12px Foo, serif','1','19'],
+  ['font','bold 12px','','14px / 18px monospace','0','0'],
+  ['font','12px','','14px / 18px monospace','0','0'],
+  ['font','normal 12px serif','12px serif','12px serif','1','19'],
+  ['font','small-caps bold italic condensed 12px/1.4 serif','italic small-caps bold condensed 12px / 1.4 serif','italic small-caps 700 condensed 12px / 16.8px serif','1','19'],
+  ['font','oblique 40deg 12px serif','oblique 40deg 12px serif','oblique 40deg 12px serif','1','19'],
+  ['font','bolder 12px serif','bolder 12px serif','700 12px serif','1','19'],
+  ['font','200 12px serif','200 12px serif','200 12px serif','1','19'],
+  ['font','12px serif extra','','14px / 18px monospace','0','0'],
+  ['font','condensed 12px serif','condensed 12px serif','condensed 12px serif','1','19'],
+  ['font','ultra-condensed 12px serif','ultra-condensed 12px serif','ultra-condensed 12px serif','1','19'],
+  ['font','line-height 12px serif','','14px / 18px monospace','0','0'],
+  ['overflow-wrap','normal','normal','normal','1','1'],
+  ['overflow-wrap','break-word','break-word','break-word','1','1'],
+  ['overflow-wrap','anywhere','anywhere','anywhere','1','1'],
+  ['word-break','normal','normal','normal','1','1'],
+  ['word-break','break-all','break-all','break-all','1','1'],
+  ['word-break','keep-all','keep-all','keep-all','1','1'],
+  ['word-break','break-word','break-word','break-word','1','1'],
+  ['word-break','anywhere','','normal','0','0'],
+  ['line-break','auto','auto','auto','1','1'],
+  ['line-break','loose','loose','loose','1','1'],
+  ['line-break','normal','normal','normal','1','1'],
+  ['line-break','strict','strict','strict','1','1'],
+  ['line-break','anywhere','anywhere','anywhere','1','1'],
+  ['hyphens','auto','auto','auto','1','1'],
+  ['hyphens','manual','manual','manual','1','1'],
+  ['hyphens','none','none','none','1','1'],
+  ['hyphens','none auto','','manual','0','0'],
+  ['tab-size','2','2','2','1','1'],
+  ['tab-size','0','0','0','1','1'],
+  ['tab-size','4em','4em','56px','1','1'],
+  ['tab-size','2 4','','8','0','0'],
+  ['tab-size','normal','','8','0','0'],
+  ['tab-size','-1','','8','0','0'],
+  ['tab-size','1.5','1.5','1.5','1','1'],
+  ['white-space','normal','normal','normal','1','1'],
+  ['white-space','pre-wrap','pre-wrap','pre-wrap','1','1'],
+  ['white-space','break-spaces','break-spaces','break-spaces','1','1'],
+  ['white-space','normal nowrap','','normal','0','0'],
+  ['white-space','pre normal','','normal','0','0'],
+  ['white-space','stable','','normal','0','0'],
+  ['text-space-collapse','discard','','','0','0'],
+  ['text-space-trim','whitespace','','','0','0'],
+  ['text-wrap','nowrap','nowrap','nowrap','1','1'],
+  ['text-wrap','balance','balance','balance','1','1'],
+  ['text-wrap','wrap normal','','wrap','0','0'],
+  ['text-wrap','stable pretty','','wrap','0','0'],
+  ['text-wrap','nowrap balance','nowrap balance','nowrap balance','1','1'],
+  ['caret','red','','','0','0'],
+  ['caret','block','','','0','0'],
+  ['caret','red block','','','0','0'],
+  ['caret','block red','','','0','0'],
+  ['caret','auto','','','0','0'],
+  ['caret','red block red','','','0','0'],
+  ['caret','none','','','0','0'],
+  ['gap','normal','normal','normal','1','2'],
+  ['gap','10px','10px','10px','1','2'],
+  ['gap','10px 20px','10px 20px','10px 20px','1','2'],
+  ['gap','10px 20px 30px','','normal','0','0'],
+  ['row-gap','normal','normal','normal','1','1'],
+  ['column-gap','normal','normal','normal','1','1'],
+  ['column-gap','10px','10px','10px','1','1'],
+  ['contain-intrinsic-size','10px 20px','10px 20px','10px 20px','1','1'],
+  ['contain-intrinsic-size','auto 10px','auto 10px','auto 10px','1','1'],
+  ['contain-intrinsic-size','auto none','auto none','auto none','1','1'],
+  ['contain-intrinsic-size','10px','10px','10px','1','1'],
+  ['contain-intrinsic-size','none','none','none','1','1'],
+  ['contain-intrinsic-block-size','auto 10px','auto 10px','auto 10px','1','1'],
+  ['contain-intrinsic-inline-size','auto 10px','auto 10px','auto 10px','1','1'],
+  ['contain','layout style paint','layout style paint','content','1','1'],
+  ['contain','strict','strict','strict','1','1'],
+  ['contain','content','content','content','1','1'],
+  ['contain','size layout','size layout','size layout','1','1'],
+  ['contain','block','','none','0','0'],
+  ['contain','inline-size','inline-size','inline-size','1','1'],
+  ['content-visibility','visible','visible','visible','1','1'],
+  ['content-visibility','auto','auto','auto','1','1'],
+  ['content-visibility','hidden','hidden','hidden','1','1'],
+  ['content-visibility','hidden-match-result','','visible','0','0']];
+var box=document.getElementById('box'), pass=0, fail=0, out=[];
+for (var i=0;i<T.length;i++){
+  var prop=T[i][0], value=T[i][1], wantS=T[i][2], wantC=T[i][3], wantSup=T[i][4];
+  var d=document.createElement('div'); box.appendChild(d);
+  d.style.setProperty(prop,value);
+  var gotS=d.style.getPropertyValue(prop), gotC=getComputedStyle(d).getPropertyValue(prop);
+  var gotSup=CSS.supports(prop,value)?'1':'0', bad=[];
+  if (wantS!=='~' && gotS!==wantS) bad.push('S got['+gotS+'] want['+wantS+']');
+  if (wantC!=='~' && gotC!==wantC) bad.push('C got['+gotC+'] want['+wantC+']');
+  if (gotSup!==wantSup) bad.push('sup got['+gotSup+'] want['+wantSup+']');
+  if (bad.length){ fail++; var line='FAIL '+i+' '+prop+': '+value+' | '+bad.join(' | ');
+    out.push(line); console.log(line); } else pass++;
+}
+var summary='b287 '+pass+'/'+(pass+fail)+' rows pass'+(fail?' — '+fail+' fail':'');
+out.push(summary); document.getElementById('report').textContent=out.join('\n'); console.log(summary);
+</script></body></html>

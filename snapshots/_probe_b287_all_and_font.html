@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b287 probe 1 — the 'all' shorthand, the font shorthand, and the word-breaking sets</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 4px; }</style></head><body>
+<pre id="report"></pre>
+<script>
+// One fresh element per case, appended before the declaration is written.
+var CASES = [
+  // CSS Cascades 4 §4.6: 'all' resets every property but the custom ones.
+  ['all','initial'], ['all','inherit'], ['all','unset'], ['all','revert'], ['all','revert-layer'],
+  ['all','none'], ['all','normal'],
+  // CSS Fonts 4 §5.2: the shorthand says style/variant/weight/stretch, size/line-height, family.
+  ['font','12px serif'], ['font','bold 12px serif'], ['font','italic small-caps bold 12px serif'],
+  ['font','12px/1.5 serif'], ['font','12px/150% serif'], ['font','12px / 1.5 serif'],
+  ['font','caption'], ['font','menu'], ['font','icon'], ['font','message-box'],
+  ['font','small-caption'], ['font','status-bar'],
+  ['font','12px "Foo", serif'], ["font","12px 'Foo', serif"], ['font','12px Foo, serif'],
+  ['font','bold 12px'], ['font','12px'], ['font','normal 12px serif'],
+  ['font','small-caps bold italic condensed 12px/1.4 serif'],
+  ['font','oblique 40deg 12px serif'], ['font','bolder 12px serif'],
+  ['font','200 12px serif'], ['font','12px serif extra'],
+  ['font','condensed 12px serif'], ['font','ultra-condensed 12px serif'],
+  ['font','line-height 12px serif'],
+  // CSS Text 3 §5.7 / CSS Text 4 §5.5: the word-breaking sets.
+  ['overflow-wrap','normal'], ['overflow-wrap','break-word'], ['overflow-wrap','anywhere'],
+  ['word-break','normal'], ['word-break','break-all'], ['word-break','keep-all'],
+  ['word-break','break-word'], ['word-break','anywhere'],
+  ['line-break','auto'], ['line-break','loose'], ['line-break','normal'], ['line-break','strict'],
+  ['line-break','anywhere'], ['hyphens','auto'], ['hyphens','manual'], ['hyphens','none'],
+  ['hyphens','none auto'], ['tab-size','2'], ['tab-size','0'], ['tab-size','4em'],
+  ['tab-size','2 4'], ['tab-size','normal'], ['tab-size','-1'], ['tab-size','1.5'],
+  ['white-space','normal'], ['white-space','pre-wrap'], ['white-space','break-spaces'],
+  ['white-space','normal nowrap'], ['white-space','pre normal'], ['white-space','stable'],
+  ['text-space-collapse','discard'], ['text-space-trim','whitespace'],
+  ['text-wrap','nowrap'], ['text-wrap','balance'], ['text-wrap','wrap normal'],
+  ['text-wrap','stable pretty'], ['text-wrap','nowrap balance'],
+  // CSS UI 4 §4.4: the 'caret' shorthand is a colour and a shape in either order.
+  ['caret','red'], ['caret','block'], ['caret','red block'], ['caret','block red'],
+  ['caret','auto'], ['caret','red block red'], ['caret','none'],
+  // CSS Box Sizing 4 §4 / Scroll Snap: 'gap' takes 'normal' now, and the intrinsic trio.
+  ['gap','normal'], ['gap','10px'], ['gap','10px 20px'], ['gap','10px 20px 30px'],
+  ['row-gap','normal'], ['column-gap','normal'], ['column-gap','10px'],
+  ['contain-intrinsic-size','10px 20px'], ['contain-intrinsic-size','auto 10px'],
+  ['contain-intrinsic-size','auto none'], ['contain-intrinsic-size','10px'],
+  ['contain-intrinsic-size','none'], ['contain-intrinsic-block-size','auto 10px'],
+  ['contain-intrinsic-inline-size','auto 10px'],
+  ['contain','layout style paint'], ['contain','strict'], ['contain','content'],
+  ['contain','size layout'], ['contain','block'], ['contain','inline-size'],
+  ['content-visibility','visible'], ['content-visibility','auto'], ['content-visibility','hidden'],
+  ['content-visibility','hidden-match-result']
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var prop = CASES[i][0], value = CASES[i][1];
+  var d = document.createElement('div');
+  document.body.appendChild(d);
+  d.style.setProperty(prop, value);
+  out.push(i + '|' + prop + '|' + value + '|' + d.style.getPropertyValue(prop)
+           + '|' + getComputedStyle(d).getPropertyValue(prop)
+           + '|sup=' + (CSS.supports(prop, value) ? 1 : 0)
+           + '|len=' + d.style.length);
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>
