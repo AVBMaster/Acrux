@@ -25,16 +25,18 @@
         the parent's line still propagates over the child's text in the PARENT's color.
      e3c a bare child of a decorated parent computes text-decoration-line: none.
 
-   KNOWN DIVERGENCE (c3): Edge reports the *shorthand's* rgb(0,128,255) for
+   CLOSED DIVERGENCE (c3, b285): Edge reports the *shorthand's* rgb(0,128,255) for
    'text-decoration: underline rgb(0,128,255); text-decoration-color: auto', because
    Chrome rejects the longhand 'auto' at parse time and the earlier declaration
-   survives (measured: an inline 'text-decoration-color: auto' leaves
-   CSSStyleDeclaration.length at 0). We accept 'auto' as the spec's keyword and reset
-   to auto -> rgb(200,30,30). Our cascade cannot express Chrome's behavior anyway:
+   survives (measured again: an inline 'text-decoration-color: auto' leaves
+   CSSStyleDeclaration.length at 0, and c3 computes rgb(0, 128, 255)). The colour
+   grammar now reads the same way — CSS Text Decoration 4 §5.1 gives this longhand a
+   <color> and nothing else, so 'auto' is not a value it takes, the declaration is
+   dropped, and the shorthand's colour stands. a1/a5 are unchanged: with no other
+   declaration the initial value is the text colour, so both still paint rgb(200,30,30).
+   (The cascade note below still holds for a *rule* that says the same property twice:
    StyleResolver stores a rule's declarations in a name-keyed dictionary, so the LAST
-   declaration for a property replaces the earlier one before it is ever parsed (an
-   invalid value therefore erases a valid one, and ColorParser turns anything it
-   cannot parse into a transparent color instead of failing). See CSS-HANDOFF §4 #202.
+   declaration for a property replaces the earlier one before it is ever parsed.)
 */
 body { font: 24px/34px Arial, sans-serif; margin: 8px; color: rgb(200, 30, 30); background: #fff; }
 p { margin: 4px 0; text-decoration-line: underline; }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Acrux.Core.Css.Properties;
 using Acrux.Core.Css.Resolver;
 using Acrux.Core.Css.Values;
@@ -86,6 +87,14 @@ public static class CssValueGrammar
         // 'container-name: a, b', 'animation-timeline: t' and the rest).
         if (Acrux.Core.Css.Resolver.EchoedProperties.Find(propertyName) is { } echo)
             return TextIsValid(value, text => echo.Normalize(text) != null);
+        // The properties whose whole value is a colour (or a list of them) have this one grammar:
+        // a word the colour parser cannot read, a function with the wrong number of arguments, and
+        // a '#' glued in front of a function name are all no value at all (measured: 'caret-color:
+        // bogus', 'rgb(1,2)' and '#rgb(0%, 50%, 100%)' are each dropped, where the engine used to
+        // store black for them).
+        if (ColorValueArity.TryGetValue(propertyName, out var arity)
+            && !Resolver.CssPropertyTraits.IsCssWideKeyword(value.Trim())
+            && !IsColorListValue(value, arity.Max, arity.Extra)) return false;
         // A '-webkit-' spelling that is a property of its own has its twin's grammar: the value
         // set is the same, and only the name the declaration is stored under differs.
         var id = CssPropertyIdExtensions.BehaviourId(CssPropertyIdExtensions.FromString(propertyName));
@@ -1975,6 +1984,163 @@ public static class CssValueGrammar
         if (saysOnly) kept.Add("only");
         return string.Join(" ", kept);
     }
+
+    /// <summary>How many colours a colour-only property takes, and the words beside them. The
+    /// border list is the four-edge one (CSS Backgrounds 3 §5.3); the rest take exactly one.</summary>
+    private static readonly Dictionary<string, (int Max, string[] Extra)> ColorValueArity =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["color"] = (1, Array.Empty<string>()),
+            ["background-color"] = (1, Array.Empty<string>()),
+            ["caret-color"] = (1, new[] { "auto" }),
+            ["accent-color"] = (1, new[] { "auto" }),
+            // 'invert' is deliberately absent: CSS UI 4 §5.2 gives this property a <color>, and
+            // Color 4 §14.1 keeps the keyword for forced-colours mode only (b239 measured the
+            // declaration dropped, and b285 measured the same through the CSSOM).
+            ["outline-color"] = (1, Array.Empty<string>()),
+            ["column-rule-color"] = (1, Array.Empty<string>()),
+            ["text-decoration-color"] = (1, Array.Empty<string>()),
+            ["text-emphasis-color"] = (1, Array.Empty<string>()),
+            ["border-color"] = (4, Array.Empty<string>()),
+            ["border-top-color"] = (1, Array.Empty<string>()),
+            ["border-right-color"] = (1, Array.Empty<string>()),
+            ["border-bottom-color"] = (1, Array.Empty<string>()),
+            ["border-left-color"] = (1, Array.Empty<string>()),
+            ["border-block-color"] = (2, Array.Empty<string>()),
+            ["border-block-start-color"] = (1, Array.Empty<string>()),
+            ["border-block-end-color"] = (1, Array.Empty<string>()),
+            ["border-inline-color"] = (2, Array.Empty<string>()),
+            ["border-inline-start-color"] = (1, Array.Empty<string>()),
+            ["border-inline-end-color"] = (1, Array.Empty<string>()),
+            ["-webkit-text-fill-color"] = (1, Array.Empty<string>()),
+            ["-webkit-text-stroke-color"] = (1, Array.Empty<string>()),
+            ["-webkit-tap-highlight-color"] = (1, Array.Empty<string>()),
+        };
+
+    /// <summary>A list of one to <paramref name="max"/> colours, space divided, with the given
+    /// keywords allowed in place of one. A comma is not a divider here: these properties have no
+    /// layer list to write.</summary>
+    internal static bool IsColorListValue(string text, int max, params string[] extra)
+    {
+        var words = SplitComponents(text);
+        if (words.Count == 0 || words.Count > max) return false;
+        foreach (var word in words)
+        {
+            if (extra.Any(name => name.Equals(word, StringComparison.OrdinalIgnoreCase))) continue;
+            if (!IsWellFormedColor(word)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>Whether a single word is a colour the engine can read, with the arguments its
+    /// function name asks for. The arity is checked here rather than in the parser because the
+    /// parser is deliberately forgiving about a page's numbers — a missing channel is not a
+    /// missing number, it is a different colour than the one the page wrote.</summary>
+    internal static bool IsWellFormedColor(string token)
+    {
+        if (string.IsNullOrEmpty(token)) return false;
+        if (token.StartsWith("#", StringComparison.Ordinal))
+        {
+            // A hex colour is 3, 4, 6 or 8 hex digits after the sign (CSS Color 4 §5); a '#' in
+            // front of a function name is neither that nor anything else the grammar reads
+            // (measured: '#rgb(0%, 50%, 100%)' is dropped).
+            var digits = token[1..];
+            if (digits.Length is not (3 or 4 or 6 or 8)) return false;
+            return digits.All(Uri.IsHexDigit);
+        }
+        int open = token.IndexOf('(');
+        if (open < 0) return ColorParser.IsColorToken(token);
+        if (open == 0 || !token.EndsWith(")", StringComparison.Ordinal)) return false;
+        var name = token[..open].TrimEnd().ToLowerInvariant();
+        var inner = token[(open + 1)..^1].Trim();
+        // 'light-dark()' takes two colours of its own, and a relative colour reads the base
+        // colour through a 'from' clause whose channels are names, not numbers — both are the
+        // parser's business, not the arity table's (measured: each stands as written).
+        if (name == "light-dark")
+        {
+            var parts = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(inner, ',');
+            return parts.Count == 2 && parts.All(part => IsWellFormedColor(part.Trim()));
+        }
+        if (name is "rgb" or "rgba" or "hsl" or "hsla" or "hwb"
+            or "lab" or "lch" or "oklab" or "oklch")
+        {
+            if (inner.StartsWith("from ", StringComparison.OrdinalIgnoreCase)) return true;
+            if (!TrySplitColorAlpha(inner, out var body, out var alpha)) return false;
+            return HasColorChannels(body, alpha, 3);
+        }
+        if (name == "color")
+        {
+            if (inner.StartsWith("from ", StringComparison.OrdinalIgnoreCase)) return true;
+            // 'color()' is a colour space and its three channels. The space is not one of the
+            // channels, and a comma is not a separator this function was ever written with
+            // (measured: 'color(1 2 3)', 'color(srgb, 1, 0, 0)', 'color(srgb 1 2 3 4)' and
+            // 'color(srgb 1 0)' are each dropped, 'color(srgb 1 0 0 / 0.5)' stands).
+            if (!TrySplitColorAlpha(inner, out var body, out var alpha)) return false;
+            if (body.Contains(',', StringComparison.Ordinal)) return false;
+            if (alpha != null && !IsAlphaWord(alpha)) return false;
+            return SplitComponents(body).Count == 4;
+        }
+        if (name == "color-mix") return ColorParser.IsColorToken(token);
+        return false;
+    }
+
+    /// <summary>Split a colour function's arguments at the slash that opens its alpha, refusing a
+    /// second one and an alpha nobody wrote (measured: 'lab(50 20 30 / 0.5 / 0.5)' and
+    /// 'rgb(1 2 3 / )' are dropped).</summary>
+    private static bool TrySplitColorAlpha(string inner, out string body, out string? alpha)
+    {
+        body = inner; alpha = null;
+        int first = IndexOfTopLevel(inner, '/');
+        if (first < 0) return true;
+        var tail = inner[(first + 1)..];
+        if (IndexOfTopLevel(tail, '/') >= 0) return false;
+        body = inner[..first].Trim();
+        alpha = tail.Trim();
+        return body.Length > 0 && alpha.Length > 0;
+    }
+
+    /// <summary>Whether a colour function's arguments are its three channels and at most one alpha,
+    /// written in one of the two forms and never in both. The comma form carries its alpha as a
+    /// fourth argument; the space form has no commas and puts the alpha behind a slash
+    /// (measured: 'rgba(1 2 3)' and 'hsl(120, 50%, 50%, 0.5)' stand, while 'rgb(1, 2, 3 / 0.5)',
+    /// 'rgb(1,2,3,0.5,)', 'lab(50 20 30 none)' and 'rgb(1 2 3 4)' are dropped).</summary>
+    private static bool HasColorChannels(string body, string? alpha, int channels)
+    {
+        if (body.Contains(',', StringComparison.Ordinal))
+        {
+            if (alpha != null) return false;
+            var parts = body.Split(',');
+            if (parts.Length is < 3 or > 4) return false;
+            return parts.All(part => part.Trim().Length > 0);
+        }
+        if (alpha != null && !IsAlphaWord(alpha)) return false;
+        return SplitComponents(body).Count == channels;
+    }
+
+    /// <summary>An alpha: one word that says a number, a percentage of one, or
+    /// <c>none</c> — and anything the parser has to read (a math function) is left to it.</summary>
+    private static bool IsAlphaWord(string alpha)
+    {
+        if (SplitComponents(alpha).Count != 1) return false;
+        if (alpha.Contains('(', StringComparison.Ordinal)) return true;
+        if (alpha.Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
+        var text = alpha.EndsWith("%", StringComparison.Ordinal) ? alpha[..^1] : alpha;
+        return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out _);
+    }
+
+    private static int IndexOfTopLevel(string text, char marker)
+    {
+        int depth = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            else if (c == marker && depth == 0) return i;
+        }
+        return -1;
+    }
+
 
     /// <summary>One of the border-image box-value parts (CSS Backgrounds 3 §5). The reference
     /// engine prints a part once when all of its sides agree — '50% 50% 50% 50%' reads '50%' and

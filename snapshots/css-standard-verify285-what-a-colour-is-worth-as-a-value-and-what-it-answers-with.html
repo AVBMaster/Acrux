@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify285 — what a colour is worth as a value, and what it answers with</title>
+<style>
+body { font: 16px/1.4 monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+h2 { font-size: 16px; margin: 12px 0 4px; }
+/* paint guard: the colours that must actually paint, including the currentcolor ones */
+#pg-a { color: rgb(9,9,9); background-color: currentcolor; width: 60px; height: 24px; }
+#pg-b { color: rgb(255,128,128); background-color: rgb(255,128,128); width: 60px; height: 24px; }
+#pg-c { width: 60px; height: 24px; background-color: rgb(0,0,255); border: 4px solid currentcolor; }
+#pg-d { color: rgb(0,128,0); text-decoration: underline; text-decoration-color: currentcolor; }
+#pg-e { width: 60px; height: 24px; background-color: rgb(200,60,60); outline: 3px solid currentcolor; }
+</style></head><body>
+<h2>paint guard (currentcolor as background, border and outline)</h2>
+<div id="pg-a"></div><div id="pg-b"></div><div id="pg-c"></div>
+<p id="pg-d">underlined in the text colour</p><div id="pg-e"></div>
+<h2>value rows</h2>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* Measured against the reference engine, row by row, on this exact set of values: every value
+ * is written on a fresh div that already says color: rgb(9,9,9) (so currentcolor has a price),
+ * and the row states what the CSSOM echo answers and what the computed surface answers.
+ *
+ * A '~' means the column is measured but not asserted here. Only computed values use it, and
+ * only for the notations whose computed value keeps its colour function instead of resolving to
+ * srgb — lab(50 20 30), lch(...), oklab(...), oklch(...), color(srgb 1 0 0), color(xyz-d65 ...),
+ * the relative-color hsl(from red h s l) and the four color-mix() shapes; the reference engine
+ * answers those in the colour space the value names, which the engine does not carry yet (#116).
+ * Their specified-value echo is asserted in full.
+ */
+var COLOURS = [
+  ['red','red','rgb(255, 0, 0)'],
+  ['#fff','rgb(255, 255, 255)','rgb(255, 255, 255)'],
+  ['#ffffffff','rgb(255, 255, 255)','rgb(255, 255, 255)'],
+  ['rgb(1,2,3)','rgb(1, 2, 3)','rgb(1, 2, 3)'],
+  ['rgb(1 2 3)','rgb(1, 2, 3)','rgb(1, 2, 3)'],
+  ['rgba(1,2,3,.5)','rgba(1, 2, 3, 0.5)','rgba(1, 2, 3, 0.5)'],
+  ['rgb(1 2 3 / 50%)','rgba(1, 2, 3, 0.5)','rgba(1, 2, 3, 0.5)'],
+  ['hsl(120,50%,50%)','rgb(64, 191, 64)','rgb(64, 191, 64)'],
+  ['hsl(120 50% 50% / .5)','rgba(64, 191, 64, 0.5)','rgba(64, 191, 64, 0.5)'],
+  ['hwb(120 50% 50%)','rgb(128, 128, 128)','rgb(128, 128, 128)'],
+  ['rgb(300 -10 20)','rgb(255, 0, 20)','rgb(255, 0, 20)'],
+  ['hsl(480 50% 50%)','rgb(64, 191, 64)','rgb(64, 191, 64)'],
+  ['#1234','rgba(17, 34, 51, 0.267)','rgba(17, 34, 51, 0.267)'],
+  ['rgb(1 2 3 / none)','rgba(1, 2, 3, 0)','rgba(1, 2, 3, 0)'],
+  ['transparent','transparent','rgba(0, 0, 0, 0)'],
+  ['rebeccapurple','rebeccapurple','rgb(102, 51, 153)'],
+  ['light-dark(red, blue)','light-dark(red, blue)','rgb(255, 0, 0)'],
+  ['lab(50% 20 30)','lab(50 20 30)','~'],
+  ['lch(50% 30 120)','lch(50 30 120)','~'],
+  ['oklab(0.5 0.1 0.1)','oklab(0.5 0.1 0.1)','~'],
+  ['oklch(0.5 0.1 120)','oklch(0.5 0.1 120)','~'],
+  ['color(srgb 1 0 0)','color(srgb 1 0 0)','~'],
+  ['color(display-p3 1 0 0)','color(display-p3 1 0 0)','~'],
+  ['color(xyz 1 1 1)','color(xyz-d65 1 1 1)','~'],
+  ['lab(50% 20 30 / 0.5)','lab(50 20 30 / 0.5)','~'],
+  ['hsl(from red h s l)','hsl(from red h s l)','~'],
+  ['color-mix(in srgb, red, blue)','color-mix(in srgb, red, blue)','~'],
+  ['color-mix(in oklab, red 30%, blue)','color-mix(red 30%, blue)','~'],
+  ['color-mix(in srgb, currentcolor, blue)','color-mix(in srgb, currentcolor, blue)','~'],
+  ['color-mix(in hsl, red, blue 10%)','color-mix(in hsl, red 90%, blue)','~']
+];
+
+// What a dropped declaration leaves behind, per property: the echo the CSSOM still answers and
+// the computed value of the property with nothing useful in it.
+var DROP = {
+  'color':                 ['rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  'background-color':      ['','rgba(0, 0, 0, 0)'],
+  'caret-color':           ['','rgb(9, 9, 9)'],
+  'accent-color':          ['','auto'],
+  'outline-color':         ['','rgb(9, 9, 9)'],
+  'text-decoration-color': ['','rgb(9, 9, 9)'],
+  'border-top-color':      ['','rgb(9, 9, 9)']
+};
+var DROPPED = ['#rgb(0%, 50%, 100%)','rgb(1,2)','bogus'];
+var PROPS = ['color','background-color','caret-color','accent-color','outline-color',
+             'text-decoration-color','border-top-color'];
+
+var T = [];
+for (var p = 0; p < PROPS.length; p++) {
+  var prop = PROPS[p];
+  for (var c = 0; c < COLOURS.length; c++) T.push([prop, COLOURS[c][0], COLOURS[c][1], COLOURS[c][2]]);
+  // On the text colour the keyword names the colour the element *inherits* — the page's own
+  // rgb(9,9,9) here — rather than the initial black it parses to on its own.
+  T.push([prop, 'currentcolor', 'currentcolor', 'rgb(9, 9, 9)']);
+  for (var d = 0; d < DROPPED.length; d++)
+    T.push([prop, DROPPED[d], DROP[prop][0], DROP[prop][1]]);
+}
+
+// The shapes these properties have on top of one colour.
+var EXTRA = [
+  ['border-color','red blue','red blue','rgb(255, 0, 0) rgb(0, 0, 255)'],
+  ['border-color','red red red red','red','rgb(255, 0, 0)'],
+  ['border-color','red blue green','red blue green','rgb(255, 0, 0) rgb(0, 0, 255) rgb(0, 128, 0)'],
+  ['border-color','red blue green purple','red blue green purple','rgb(255, 0, 0) rgb(0, 0, 255) rgb(0, 128, 0) rgb(128, 0, 128)'],
+  ['border-color','currentcolor','currentcolor','rgb(9, 9, 9)'],
+  ['outline-color','invert','','rgb(9, 9, 9)'],
+  ['outline-color','auto','','rgb(9, 9, 9)'],
+  ['caret-color','auto','auto','rgb(9, 9, 9)'],
+  ['accent-color','auto','auto','auto'],
+  ['text-decoration-color','inherit','inherit','rgb(9, 9, 9)'],
+  ['background-color','red, blue','','rgba(0, 0, 0, 0)'],
+  ['background-color','none','','rgba(0, 0, 0, 0)'],
+  ['color','1px','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  // A keyword and a function name are ASCII case-insensitive (CSS Values 5 §4), so the same
+  // value in another case is the same value — measured, not inferred.
+  ['caret-color','AUTO','auto','rgb(9, 9, 9)'],
+  ['accent-color','AUTO','auto','auto'],
+  ['color','RGB(1,2,3)','rgb(1, 2, 3)','rgb(1, 2, 3)'],
+  ['background-color','TRANSPARENT','transparent','rgba(0, 0, 0, 0)'],
+  ['color','CURRENTCOLOR','currentcolor','rgb(9, 9, 9)'],
+  ['outline-color','Invert','','rgb(9, 9, 9)'],
+  // The two legacy colour properties whose initial is the text colour rather than a number
+  // (measured: with nothing written, and with a dropped declaration, both answer rgb(9, 9, 9)).
+  ['-webkit-text-fill-color','red','red','rgb(255, 0, 0)'],
+  ['-webkit-text-fill-color','rgba(1,2,3,.5)','rgba(1, 2, 3, 0.5)','rgba(1, 2, 3, 0.5)'],
+  ['-webkit-text-fill-color','currentColor','currentcolor','rgb(9, 9, 9)'],
+  ['-webkit-text-fill-color','bogus','','rgb(9, 9, 9)'],
+  ['-webkit-text-stroke-color','red','red','rgb(255, 0, 0)'],
+  ['-webkit-text-stroke-color','bogus','','rgb(9, 9, 9)'],
+  ['-webkit-text-stroke-color','currentColor','currentcolor','rgb(9, 9, 9)'],
+  // The two forms a colour function may be written in, and the shapes that mix them (CSS Color 4
+  // §4, §12.3). A comma list carries its alpha as a fourth argument; a space list puts it behind
+  // one slash. Measured row by row in snapshots/_probe_b285_separators.html.
+  ['color','rgb(1, 2, 3 / 0.5)','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  ['color','rgb(1 2 3, 0.5)','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  ['color','rgba(1 2 3)','rgb(1, 2, 3)','rgb(1, 2, 3)'],
+  ['color','hsl(120, 50%, 50%, 0.5)','rgba(64, 191, 64, 0.5)','rgba(64, 191, 64, 0.5)'],
+  ['color','rgb(1,2,3,0.5,)','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  ['color','rgb(1 2 3 / )','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  ['color','rgb(1 2 3 /)','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  ['color','lab(50 20 30 / 0.5 / 0.5)','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  ['color','lab(50 20 30 / none)','lab(50 20 30 / none)','~'],
+  ['color','lab(50 20 30 none)','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  ['color','color(srgb 1 0 0 / 0.5)','color(srgb 1 0 0 / 0.5)','~'],
+  ['color','color(srgb, 1, 0, 0)','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  ['color','color(1 2 3)','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  ['color','color(srgb 1 2 3 4)','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  ['color','color(srgb 1 0)','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  ['color','hsl(120 50% 50%)','rgb(64, 191, 64)','rgb(64, 191, 64)'],
+  ['color','hwb(120 50% 50% / 0.5)','rgba(128, 128, 128, 0.5)','rgba(128, 128, 128, 0.5)'],
+  ['color','hwb(120 50%)','rgb(9, 9, 9)','rgb(9, 9, 9)'],
+  ['color','oklch(50% 0.1 120deg)','oklch(0.5 0.1 120)','~'],
+  ['color','rgb(1 2 3 / 50%)','rgba(1, 2, 3, 0.5)','rgba(1, 2, 3, 0.5)'],
+  ['color','rgb(1 2 3 / 200%)','rgb(1, 2, 3)','rgb(1, 2, 3)'],
+  ['color','rgb(1 2 3 / none)','rgba(1, 2, 3, 0)','rgba(1, 2, 3, 0)']
+  // 'color: var(--x)' is measured (the reference engine echoes 'var(--x)' and computes
+  // 'rgb(0, 0, 0)' — invalid at computed-value time falls back to the inherited colour) but is
+  // not gated here: var() substitution is #99. See snapshots/_probe_b285_colours.html row 251.
+];
+for (var e = 0; e < EXTRA.length; e++) T.push(EXTRA[e]);
+
+var box=document.getElementById('box'), pass=0, fail=0, out=[];
+for (var i=0;i<T.length;i++){
+  var prop=T[i][0], value=T[i][1], wantS=T[i][2], wantC=T[i][3];
+  var d=document.createElement('div'); d.style.setProperty('color','rgb(9,9,9)'); box.appendChild(d);
+  d.style.setProperty(prop,value);
+  var gotS=d.style.getPropertyValue(prop), gotC=getComputedStyle(d).getPropertyValue(prop), bad=[];
+  if (wantS!=='~' && gotS!==wantS) bad.push('S got['+gotS+'] want['+wantS+']');
+  if (wantC!=='~' && gotC!==wantC) bad.push('C got['+gotC+'] want['+wantC+']');
+  if (bad.length){ fail++; var line='FAIL '+i+' '+prop+': '+value+' | '+bad.join(' | ');
+    out.push(line); console.log(line); } else pass++;
+}
+var summary='b285 '+pass+'/'+(pass+fail)+' rows pass'+(fail?' — '+fail+' fail':'');
+out.push(summary); document.getElementById('report').textContent=out.join('\n'); console.log(summary);
+</script></body></html>

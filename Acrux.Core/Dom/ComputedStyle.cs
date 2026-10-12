@@ -1314,6 +1314,20 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
         /// computes 'rgb(9, 9, 9) rgb(0, 0, 255)', not black.</summary>
         ScrollbarThumb = 1 << 8,
         ScrollbarTrack = 1 << 9,
+        /// <summary>'background-color' (CSS Backgrounds 3 §4.1). Its initial is transparent, so a
+        /// page that writes 'currentcolor' is the only way the text colour gets in — and the colour
+        /// is not known until inheritance is done (measured: a box whose own colour is rgb(9,9,9)
+        /// computes 'background-color: rgb(9, 9, 9)' for that declaration).</summary>
+        Background = 1 << 10,
+        /// <summary>'accent-color' (CSS UI 4 §3.8). Its initial is the keyword 'auto', so the text
+        /// colour only arrives through a declaration that names 'currentcolor' (measured: a box
+        /// whose colour is rgb(9,9,9) computes that, not 'auto' and not black).</summary>
+        Accent = 1 << 11,
+        /// <summary>'color' itself (CSS Color 3 §4.4). On the text colour the keyword names the
+        /// value the element <i>inherits</i>, not the one it settles on, so it can only be read
+        /// from the parent's style — the reference engine answers a child's 'color: currentcolor'
+        /// with its parent's colour, and the initial black only on a root with nothing above it.</summary>
+        OwnColor = 1 << 12,
         AllBorders = BorderTop | BorderRight | BorderBottom | BorderLeft,
     }
     public float AspectRatio { get; set; }

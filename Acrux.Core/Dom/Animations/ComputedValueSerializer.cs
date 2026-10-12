@@ -61,7 +61,14 @@ public static class ComputedValueSerializer
         {
             var written = style.GetDeclaredOnlyValue(property);
             if (written == null || Acrux.Core.Css.Resolver.CssPropertyTraits.IsLegacyComputedInitial(property))
-                return Acrux.Core.Css.Resolver.CssPropertyTraits.LegacyDeclaredOnlyInitial(property);
+            {
+                var initial = Acrux.Core.Css.Resolver.CssPropertyTraits.LegacyDeclaredOnlyInitial(property);
+                // 'currentcolor' in that table is a sentinel, not an answer: the property paints
+                // with the text colour, so the computed surface says the colour it means.
+                return initial != null && initial.Equals("currentcolor", StringComparison.OrdinalIgnoreCase)
+                    ? ColorText(style.Color)
+                    : initial;
+            }
             return Acrux.Core.Css.Resolver.CssPropertyTraits.LegacyComputedText(property, written);
         }
 

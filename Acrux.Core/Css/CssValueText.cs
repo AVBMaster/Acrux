@@ -1531,7 +1531,7 @@ public static class CssValueText
                 // and 'color-mix(in hsl, hsl(0 100% 50%), …)' has its stops folded to rgb() the way
                 // the reference engine prints them (measured; and re-read: the expansion was checked
                 // against the background, border-image and color-mix parsers alike).
-                if (ColorParser.IsColorToken(word) && IsPlainColorFunction(word))
+                if (ColorParser.IsColorToken(word) && IsPlainColorFunction(word) && !IsRelativeColorSyntax(word))
                     words[i] = CssColorText.FromColor(ColorParser.Parse(word));
                 // A lightness, a chroma and an angle are not colours to fold but arguments to say
                 // correctly, and the reference engine re-spells them: 'lab(50% 20 30 / 50%)' is
@@ -1853,6 +1853,18 @@ public static class CssValueText
             || name.Equals("hsl", StringComparison.OrdinalIgnoreCase)
             || name.Equals("hsla", StringComparison.OrdinalIgnoreCase)
             || name.Equals("hwb", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Whether a colour function derives itself from another colour — <c>hsl(from red
+    /// h s l)</c> (CSS Color 4 §13.2.3). The engine has no slot for the origin it would resolve
+    /// against, so the reference engine prints the authored form as the specified value and only
+    /// resolves it on the computed surface (measured: 'hsl(from red h s l)' reads itself there).</summary>
+    private static bool IsRelativeColorSyntax(string word)
+    {
+        int open = word.IndexOf('(');
+        if (open <= 0 || !word.EndsWith(")", StringComparison.Ordinal)) return false;
+        var first = SplitTopLevelWords(word[(open + 1)..^1]).FirstOrDefault();
+        return first is not null && first.Equals("from", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Split a value into its top-level components: whitespace-separated words, with a

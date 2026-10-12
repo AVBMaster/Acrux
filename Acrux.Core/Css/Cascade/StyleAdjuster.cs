@@ -25,7 +25,7 @@ public class StyleAdjuster
         AdjustZIndex(style, parentStyle);
         AdjustTickBoxDecoration(style, element);
         ReplayBoxEdgeProperties(style);
-        ResolveCurrentColors(style);
+        ResolveCurrentColors(style, parentStyle);
         ApplyInitialBorderWidths(style);
     }
 
@@ -183,10 +183,14 @@ public class StyleAdjuster
     /// used 'color' (CSS Color 3 §4.4): the cascade records which color slots
     /// carried the keyword and the values are substituted here.
     /// </summary>
-    private static void ResolveCurrentColors(ComputedStyle style)
+    private static void ResolveCurrentColors(ComputedStyle style, ComputedStyle? parentStyle)
     {
         uint slots = style.CurrentColorSlots;
         if (slots == 0) return;
+        // On the text colour itself the keyword means the value the element inherits, so it is the
+        // parent's colour rather than this box's — and every other slot reads that answer.
+        if ((slots & (uint)ComputedStyle.CurrentColorSlot.OwnColor) != 0 && parentStyle != null)
+            style.Color = parentStyle.Color;
         var c = style.Color;
         if ((slots & (uint)ComputedStyle.CurrentColorSlot.BorderTop) != 0) style.BorderTopColor = c;
         if ((slots & (uint)ComputedStyle.CurrentColorSlot.BorderRight) != 0) style.BorderRightColor = c;
@@ -196,6 +200,8 @@ public class StyleAdjuster
         if ((slots & (uint)ComputedStyle.CurrentColorSlot.TextDecoration) != 0) style.TextDecorationColor = c;
         if ((slots & (uint)ComputedStyle.CurrentColorSlot.ColumnRule) != 0) style.ColumnRuleColor = c;
         if ((slots & (uint)ComputedStyle.CurrentColorSlot.Caret) != 0) style.CaretColor = c;
+        if ((slots & (uint)ComputedStyle.CurrentColorSlot.Background) != 0) style.BackgroundColor = c;
+        if ((slots & (uint)ComputedStyle.CurrentColorSlot.Accent) != 0) style.AccentColor = c;
         if ((slots & (uint)ComputedStyle.CurrentColorSlot.ScrollbarThumb) != 0) style.ScrollbarThumbColor = c;
         if ((slots & (uint)ComputedStyle.CurrentColorSlot.ScrollbarTrack) != 0) style.ScrollbarTrackColor = c;
     }

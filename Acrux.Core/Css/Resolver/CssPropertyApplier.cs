@@ -184,9 +184,13 @@ public static class CssPropertyApplier
             case "padding-block-end": style.PaddingBottom = Length.Parse(value); break;
             case "padding-inline-start": SetPaddingSide(style, InlineStartSide(style), Length.Parse(value)); break;
             case "padding-inline-end": SetPaddingSide(style, InlineEndSide(style), Length.Parse(value)); break;
-            case "color": style.Color = ColorParser.Parse(value, style); break;
-            case "accent-color": style.AccentColor = value == "auto" ? null : ColorParser.Parse(value, style); break;
-            case "caret-color": style.CaretColor = value == "auto" ? null : ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.Caret, value); break;
+            case "color": style.Color = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.OwnColor, value); break;
+            case "accent-color":
+                // 'auto' is a keyword, so it reads the same in any case (CSS UI 4 §3.8).
+                style.AccentColor = IsAutoKeyword(value) ? null : ColorParser.Parse(value, style);
+                MarkCurrentColor(style, CurrentColorSlot.Accent, value);
+                break;
+            case "caret-color": style.CaretColor = IsAutoKeyword(value) ? null : ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.Caret, value); break;
             // CSS UI 4 §4.3: 'caret-shape' is the keyword pair, and a platform that draws one
             // caret still keeps the authored one for the computed surface and for scripts.
             case "caret-shape": { var caretShape = value.Trim().ToLowerInvariant();
@@ -255,7 +259,10 @@ public static class CssPropertyApplier
                 break;
             case "forced-color-adjust": style.ForcedColorAdjust = value.ToLowerInvariant() == "none" ? ForcedColorAdjustType.None : ForcedColorAdjustType.Auto; break;
             case "background": ParseBackgroundShorthand(value, style); break;
-            case "background-color": style.BackgroundColor = ColorParser.Parse(value, style); break;
+            case "background-color":
+                style.BackgroundColor = ColorParser.Parse(value, style);
+                MarkCurrentColor(style, CurrentColorSlot.Background, value);
+                break;
             case "background-image":
                 style.BackgroundImage = ParseImageLayerList(value);
                 break;
@@ -2505,6 +2512,11 @@ public static class CssPropertyApplier
         style.BorderImageOutset = outset.Count > 0 ? string.Join(" ", outset) : "0";
         style.BorderImageRepeat = repeat.Count > 0 ? string.Join(" ", repeat) : "stretch";
     }
+
+    /// <summary>The keyword 'auto', read as the keyword it is: a CSS keyword is ASCII
+    /// case-insensitive, and a property whose initial value is that keyword says so in any case.</summary>
+    private static bool IsAutoKeyword(string value)
+        => value.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Records that a color property was declared as the `currentcolor`
     /// keyword; StyleAdjuster substitutes the computed color after inheritance.</summary>

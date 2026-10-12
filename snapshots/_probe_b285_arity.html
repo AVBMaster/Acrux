@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b285 probe 2 — the edges of the colour arity table</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 4px; }</style></head><body>
+<pre id="report"></pre>
+<script>
+// One fresh element per case, appended before the declaration is written.
+var CASES = [
+  ['border-color','red blue green purple orange'],   // five sides is four too many
+  ['border-color','red blue bogus'],                 // one bad colour drops the list
+  ['border-color','auto'],                           // 'auto' is not a <color> here
+  ['border-color','currentcolor red'],               // two colours, both read
+  ['caret-color','red blue'],                        // one colour only
+  ['caret-color','auto auto'],
+  ['accent-color','red currentcolor'],
+  ['outline-color','red blue'],
+  ['outline-color','invert red'],
+  ['color','red blue'],
+  ['color','rgb(1,2,3,4)'],                          // four channels is not an rgb()
+  ['color','hsl(120 50%)'],                          // too few channels
+  ['color','lab(50 20)'],                            // a modern function asks three
+  ['color','color(srgb 1 0)'],                       // a space and two channels is no colour
+  ['color','color(srgb 1 0 0 0.5)'],                 // alpha written as a fourth channel
+  ['color','light-dark(red)'],                       // light-dark() takes two
+  ['color','light-dark(red, blue, green)'],
+  ['color','rgb(1,2,3,)'],                           // a dangling comma
+  ['color','rgb(1 2 3 4)'],                          // no slash, four numbers
+  ['background-color','rgb(1,2,3) rgb(4,5,6)'],      // two colours, no list here
+  ['-webkit-text-fill-color','red'],
+  ['-webkit-text-fill-color','bogus'],
+  ['text-emphasis-color','lab(50% 20 30)'],
+  ['column-rule-color','red blue']
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var prop = CASES[i][0], value = CASES[i][1];
+  var d = document.createElement('div');
+  d.style.setProperty('color', 'rgb(9,9,9)');
+  document.body.appendChild(d);
+  d.style.setProperty(prop, value);
+  out.push(i + '|' + prop + '|' + value + '|' + d.style.getPropertyValue(prop)
+           + '|' + getComputedStyle(d).getPropertyValue(prop)
+           + '|supports=' + CSS.supports(prop, value));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

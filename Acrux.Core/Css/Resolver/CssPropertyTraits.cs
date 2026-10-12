@@ -206,9 +206,12 @@ public static class CssPropertyTraits
         ["-webkit-mask-box-image-width"] = ("auto", false),
         ["-webkit-tap-highlight-color"] = ("rgba(0, 0, 0, 0.18)", true),
         ["-webkit-text-decorations-in-effect"] = ("none", false),
-        ["-webkit-text-fill-color"] = ("rgb(0, 0, 0)", true),
+        // Both of these are painted with the text colour when the page wrote nothing, so their
+        // initial is 'currentcolor' rather than a number (measured on a box whose colour is
+        // rgb(9,9,9): both compute 'rgb(9, 9, 9)'; the ComputedValueSerializer reads the sentinel).
+        ["-webkit-text-fill-color"] = ("currentcolor", true),
         ["-webkit-text-stroke"] = ("0px rgb(0, 0, 0)", true),
-        ["-webkit-text-stroke-color"] = ("rgb(0, 0, 0)", true),
+        ["-webkit-text-stroke-color"] = ("currentcolor", true),
         ["-webkit-text-stroke-width"] = ("0px", true),
         ["-webkit-user-drag"] = ("auto", false),
         ["-webkit-user-modify"] = ("read-only", true),

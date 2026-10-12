@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b285 probe 1 — what a colour answers with, property by property</title></head><body>
+<div id="box"></div>
+<pre id="report"></pre>
+<script>
+// One fresh element per case, appended before the declaration is written (b283/b284 rule).
+var COLOURS = [
+  'red','#fff','#ffffffff','rgb(1,2,3)','rgb(1 2 3)','rgba(1,2,3,.5)','rgb(1 2 3 / 50%)',
+  'hsl(120,50%,50%)','hsl(120 50% 50% / .5)','hwb(120 50% 50%)','lab(50% 20 30)',
+  'lch(50% 30 120)','oklab(0.5 0.1 0.1)','oklch(0.5 0.1 120)','color(srgb 1 0 0)',
+  'color(display-p3 1 0 0)','color(xyz 1 1 1)','color-mix(in srgb, red, blue)',
+  'color-mix(in oklab, red 30%, blue)','color-mix(in srgb, currentcolor, blue)',
+  'hsl(from red h s l)','light-dark(red, blue)','currentcolor','transparent','rebeccapurple',
+  'rgb(300 -10 20)','hsl(480 50% 50%)','#1234','#rgb(0%, 50%, 100%)','rgb(1 2 3 / none)',
+  'color-mix(in hsl, red, blue 10%)','lab(50% 20 30 / 0.5)','rgb(1,2)','bogus'
+];
+var PROPS = ['color','background-color','caret-color','accent-color','outline-color',
+             'text-decoration-color','border-top-color'];
+var CASES = [];
+for (var p = 0; p < PROPS.length; p++)
+  for (var c = 0; c < COLOURS.length; c++) CASES.push([PROPS[p], COLOURS[c]]);
+// a few shapes the colour properties add on top of one colour
+var EXTRA = [
+  ['border-color','red blue'],['border-color','red red red red'],['border-color','red blue green'],
+  ['border-color','red blue green purple'],['border-color','currentcolor'],
+  ['outline-color','invert'],['outline-color','auto'],
+  ['caret-color','auto'],['accent-color','auto'],
+  ['text-decoration-color','inherit'],
+  ['background-color','red, blue'],['background-color','none'],
+  ['color','1px'],['color','var(--x)']
+];
+for (var e = 0; e < EXTRA.length; e++) CASES.push(EXTRA[e]);
+var box = document.getElementById('box');
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var prop = CASES[i][0], value = CASES[i][1];
+  var d = document.createElement('div');
+  d.style.setProperty('color', 'rgb(9,9,9)');
+  box.appendChild(d);
+  d.style.setProperty(prop, value);
+  out.push(i + '|' + prop + '|' + value + '|' + d.style.getPropertyValue(prop)
+           + '|' + getComputedStyle(d).getPropertyValue(prop));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

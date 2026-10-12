@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b285 probe 3 — which separators a colour function may mix</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 4px; }</style></head><body>
+<pre id="report"></pre>
+<script>
+// One fresh element per case, appended before the declaration is written.
+var CASES = [
+  'rgb(1, 2, 3 / 0.5)',      // a comma list with a slashed alpha
+  'rgb(1 2 3, 0.5)',         // a space list with a comma alpha
+  'rgba(1 2 3)',             // the legacy name in the modern form
+  'hsl(120, 50%, 50%, 0.5)', // four comma arguments
+  'rgb(1,2,3,0.5,)',         // a dangling comma after a full list
+  'rgb(1 2 3 / )',           // a slash with nothing after it
+  'rgb(1 2 3 /)',
+  'lab(50 20 30 / 0.5 / 0.5)',
+  'lab(50 20 30 / none)',
+  'lab(50 20 30 none)',      // a fourth channel with no slash
+  'color(srgb 1 0 0 / 0.5)',
+  'color(srgb, 1, 0, 0)',    // the comma form of color()
+  'color(1 2 3)',            // no colour space named
+  'color(srgb 1 2 3 4)',
+  'color(srgb 1 0)',
+  'hsl(120 50% 50%)',
+  'hwb(120 50% 50% / 0.5)',
+  'hwb(120 50%)',
+  'oklch(50% 0.1 120deg)',
+  'rgb(1 2 3 / 50%)',        // a percentage alpha in the modern form
+  'rgb(1 2 3 / 200%)',
+  'rgb(1 2 3 / none)'
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var d = document.createElement('div');
+  d.style.setProperty('color', 'rgb(9,9,9)');
+  document.body.appendChild(d);
+  d.style.setProperty('color', CASES[i]);
+  out.push(i + '|' + CASES[i] + '|' + d.style.getPropertyValue('color')
+           + '|' + getComputedStyle(d).getPropertyValue('color')
+           + '|supports=' + CSS.supports('color', CASES[i]));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>
