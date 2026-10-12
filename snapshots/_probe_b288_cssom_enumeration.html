@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b288 probe 1 — what a shorthand enumerates in the CSSOM</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 4px; }</style></head><body>
+<pre id="report"></pre>
+<script>
+// One fresh element per case; the whole value goes in through cssText, which is the end that
+// expands a shorthand into the longhands it covers.
+var CASES = [
+  'margin: 1px', 'margin: 1px 2px', 'padding: 5px 6px 7px', 'inset: 1px 2px',
+  'inset-block: 10px', 'inset-inline: 10px 20px',
+  'border: 2px solid red', 'border-width: 1px', 'border-color: red', 'border-style: dashed',
+  'outline: 2px solid red', 'list-style: inside square',
+  'flex: 1 1 auto', 'flex: none', 'gap: 10px', 'row-gap: 1px',
+  'columns: 2 10px', 'place-items: center', 'place-content: space-between',
+  'overflow: hidden', 'text-decoration: underline red',
+  'background: red', 'background: url(a.png) no-repeat', 'mask: url(a.png)',
+  'grid-area: 1 / 2', 'grid-template: none', 'animation: slide 2s', 'transition: color 1s',
+  'container: x / inline-size', 'contain: layout', 'contain-intrinsic-size: 10px',
+  'white-space: pre-wrap', 'text-wrap: nowrap', 'text-wrap: balance',
+  'font: 12px serif', 'font: italic bold 12px/1.4 "Foo", serif', 'font: caption',
+  'place-self: center', 'align-content: safe center', 'scroll-margin: 4px',
+  'mask-composite: add', 'text-emphasis: dot filled', 'translate: 1px 2px', 'rotate: 45deg',
+  'scale: 2', 'inset-area: span-top', 'caret-color: red'
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var d = document.createElement('div');
+  document.body.appendChild(d);
+  d.style.cssText = CASES[i];
+  var names = [];
+  for (var j = 0; j < d.style.length; j++) names.push(d.style.item(j));
+  out.push(i + '|' + CASES[i] + '|n=' + d.style.length + '|' + names.join(',')
+           + '|cssText=' + d.style.cssText);
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

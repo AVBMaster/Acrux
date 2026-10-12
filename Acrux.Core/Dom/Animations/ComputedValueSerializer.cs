@@ -1669,14 +1669,28 @@ public static class ComputedValueSerializer
         return string.Join(" ", parts);
     }
 
-    /// <summary>The 'text-emphasis' shape without its initial 'filled' (measured: a page that
-    /// writes 'filled circle' reads back 'circle').</summary>
+    /// <summary>The emphasis mark as the computed surface says it: the shape always, and the fill only
+    /// when it is not the initial <c>filled</c> — so a page that writes <c>filled</c> reads back the
+    /// <c>dot</c> that keyword stands for, <c>open</c> reads <c>open dot</c>, <c>filled circle</c>
+    /// reads <c>circle</c> and <c>dot filled</c> reads <c>dot</c> (measured, all four). A string marker
+    /// names no shape and takes no fill.</summary>
     private static string TextEmphasisStyleText(string authored)
     {
         var text = (authored ?? "").Trim();
-        return text.StartsWith("filled ", StringComparison.OrdinalIgnoreCase)
-            ? text.Substring("filled ".Length).Trim()
-            : (text.Length == 0 ? "none" : text);
+        if (text.Length == 0) return "none";
+        if (text[0] is '"' or '\'') return text;
+        string fill = null, shape = null;
+        foreach (var word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var lower = word.ToLowerInvariant();
+            if (lower is "filled" or "open") fill = lower;
+            else if (lower == "none") return "none";
+            else shape = lower;
+        }
+        // A fill with no shape beside it still asks for the default shape, and the default shape with
+        // the default fill is one word (measured: 'filled' computes 'dot').
+        if (shape == null) return fill == "open" ? "open dot" : "dot";
+        return fill == "open" ? "open " + shape : shape;
     }
 
     private static SkiaSharp.SKColor EmphasisColor(ComputedStyle style) =>

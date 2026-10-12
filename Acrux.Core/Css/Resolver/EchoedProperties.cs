@@ -331,7 +331,8 @@ public static class EchoedProperties
             // one is the type — 'INLINE-SIZE Cards' comes back exactly as authored, while
             // 'normal none' and 'none cards' and '1cards' are refused (all measured). The one
             // difference is its initial value, which is the name's 'none'.
-            new() { Name = "container", Initial = "none", Normalize = NormalizeContainerName },
+            new() { Name = "container", Initial = "none",
+                Normalize = NormalizeContainerShorthand },
             new() { Name = "interpolate-size", Initial = "numeric-only", Inherited = true,
                 Normalize = Single("numeric-only") },
         };
@@ -1532,6 +1533,27 @@ public static class EchoedProperties
             parts.Add(w);
         }
         return string.Join(" ", parts);
+    }
+
+    /// <summary>The <c>container</c> shorthand (CSS Containment 3 §3.4): the same name list the
+    /// longhand reads, and after one slash the type. Each half is read by the longhand's own
+    /// reader, so the shorthand cannot accept a name or a type its longhand would refuse.
+    /// Measured: 'x' names a container whose type stays 'normal', 'a b / inline-size' carries
+    /// both, while '/ inline-size' (no name), 'x /' (no type), 'x / bogus' and a second slash
+    /// are no value at all. The slash is said with a space on each side.</summary>
+    private static string? NormalizeContainerShorthand(string text)
+    {
+        var trimmed = text.Trim();
+        int slash = trimmed.IndexOf('/');
+        if (slash < 0) return NormalizeContainerName(trimmed);
+        if (trimmed.IndexOf('/', slash + 1) >= 0) return null;
+        var names = NormalizeContainerName(trimmed[..slash]);
+        var type = Find("container-type")?.Normalize(trimmed[(slash + 1)..]);
+        if (names == null || type == null) return null;
+        // A type of 'normal' says nothing the shorthand did not already say, so it is left out of
+        // the echo (measured: 'container: x / normal' reads back 'container: x', and
+        // 'container: none / normal' reads back 'container: none').
+        return type == "normal" ? names : names + " / " + type;
     }
 
     /// <summary>One word of a container name list: ident characters, not beginning with a digit,

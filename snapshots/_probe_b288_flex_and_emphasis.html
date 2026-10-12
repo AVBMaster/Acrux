@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b288 probe 2 — the flex and text-emphasis value matrix</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 4px; }</style></head><body>
+<pre id="report"></pre>
+<script>
+// One fresh element per case. Each value is written through the CSSOM and read back through it,
+// and the same value is written into a sheet and read from the rule, because the two ends of a
+// declaration have been shown to be separate writers of a spelling.
+var CASES = [
+  ['flex', 'flex: 1'], ['flex', 'flex: 1 1'], ['flex', 'flex: 1 1 auto'],
+  ['flex', 'flex: 1 0%'], ['flex', 'flex: auto'], ['flex', 'flex: initial'],
+  ['flex', 'flex: none'], ['flex', 'flex: 0 0 auto'], ['flex', 'flex: 0 1 auto'],
+  ['flex', 'flex: 1 2 auto'], ['flex', 'flex: 1 auto'], ['flex', 'flex: 2 3 4px'],
+  ['flex', 'flex: 1 1 0'], ['flex', 'flex: 1 1 0%'], ['flex', 'flex: 0 0 0'],
+  ['flex', 'flex: 100 1e3 20px'], ['flex', 'flex: 1.5'], ['flex', 'flex: 1 1 calc(10px + 5px)'],
+  ['flex', 'flex: 1 1 -5px'], ['flex', 'flex: 1 1 50%'], ['flex', 'flex: -1 1 auto'],
+  ['flex', 'flex: 1 -1 auto'], ['flex', 'flex: 1 1 auto extra'], ['flex', 'flex: auto 1'],
+  ['flex-grow', 'flex-grow: 1'], ['flex-grow', 'flex-grow: none'],
+  ['flex-shrink', 'flex-shrink: 1'], ['flex-shrink', 'flex-shrink: none'],
+  ['flex-basis', 'flex-basis: auto'], ['flex-basis', 'flex-basis: 1 2'],
+  ['text-emphasis', 'text-emphasis: dot filled'], ['text-emphasis', 'text-emphasis: filled dot'],
+  ['text-emphasis', 'text-emphasis: open dot'], ['text-emphasis', 'text-emphasis: dot open'],
+  ['text-emphasis', 'text-emphasis: sesame'], ['text-emphasis', 'text-emphasis: filled'],
+  ['text-emphasis', 'text-emphasis: dot red'], ['text-emphasis', 'text-emphasis: red dot'],
+  ['text-emphasis', 'text-emphasis: filled dot red'], ['text-emphasis', 'text-emphasis: red filled dot'],
+  ['text-emphasis', 'text-emphasis: circle currentcolor'], ['text-emphasis', 'text-emphasis: none'],
+  ['text-emphasis', 'text-emphasis: normal'], ["text-emphasis", "text-emphasis: 'x'"],
+  ['text-emphasis', 'text-emphasis: auto dot'], ['text-emphasis', 'text-emphasis: dot auto'],
+  ['text-emphasis', 'text-emphasis: FILLED DOT'], ['text-emphasis', 'text-emphasis: dot filled extra'],
+  ['text-emphasis-style', 'text-emphasis-style: dot filled'],
+  ['text-emphasis-style', 'text-emphasis-style: filled dot'],
+  ['text-emphasis-style', 'text-emphasis-style: double-circle'],
+  ['text-emphasis-style', 'text-emphasis-style: none'],
+  ['text-emphasis-style', 'text-emphasis-style: triangle red'],
+  ['text-emphasis-color', 'text-emphasis-color: currentcolor'],
+  ['text-emphasis-color', 'text-emphasis-color: red'],
+  ['text-emphasis-position', 'text-emphasis-position: right'],
+  ['text-emphasis-position', 'text-emphasis-position: over right'],
+  ['text-emphasis-position', 'text-emphasis-position: right over'],
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var prop = CASES[i][0], decl = CASES[i][1];
+  var d = document.createElement('div');
+  document.body.appendChild(d);
+  d.style.cssText = decl;
+  var names = [];
+  for (var j = 0; j < d.style.length; j++) names.push(d.style.item(j));
+  var rule = document.styleSheets.length;
+  var sheet = document.createElement('style');
+  sheet.textContent = 'div { ' + decl + ' }';
+  document.head.appendChild(sheet);
+  var echo = '?';
+  try { echo = sheet.sheet.cssRules[0].style.getPropertyValue(prop); } catch (e) { echo = 'ERR'; }
+  // getComputedStyle needs a live element with the rule applied.
+  var host = document.createElement('div');
+  document.body.appendChild(host);
+  var computed = '?';
+  try { computed = getComputedStyle(host).getPropertyValue(prop); } catch (e) { computed = 'ERR'; }
+  out.push(i + '|' + decl + '|n=' + d.style.length + '|' + names.join(',')
+           + '|cssText=' + d.style.cssText + '|sheet=' + echo + '|comp=' + computed);
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

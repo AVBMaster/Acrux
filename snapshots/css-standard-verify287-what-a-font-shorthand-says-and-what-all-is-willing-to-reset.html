@@ -22,13 +22,14 @@ h2 { font-size: 15px; margin: 12px 0 4px; }
 <h2>value rows</h2>
 <div id="box"></div><pre id="report"></pre>
 <script>
-/* Measured against the reference engine row by row: the CSSOM echo, the computed value and what
- * CSS.supports says, for a fresh div appended before the declaration is written.
+/* Measured against the reference engine row by row: the CSSOM echo, the computed value, what
+ * CSS.supports says and how many declarations the style attribute enumerates for the value — a
+ * fresh div per row, appended before the declaration is written.
  *
- * The 'len' column the probe also recorded is NOT asserted here. For 'white-space', 'text-wrap'
- * and 'contain-intrinsic-size' the reference engine counts the two longhands a shorthand resets
- * even when it carries only one of them, where this engine counts the one it wrote (measured:
- * 'white-space: normal' has length 2 there and 1 here). That is gap #281.
+ * The 'len' column is the one the b287 round could not assert when it shipped: 'white-space',
+ * 'text-wrap' and 'contain-intrinsic-size' counted only the longhand the expansion wrote, where
+ * the reference engine counts every longhand the shorthand covers. That was filed as #281 and is
+ * closed by the b288 round, so all four columns are asserted here now.
  */
 var T = [
   ['all','initial','initial','','1','1'],
@@ -88,19 +89,19 @@ var T = [
   ['tab-size','normal','','8','0','0'],
   ['tab-size','-1','','8','0','0'],
   ['tab-size','1.5','1.5','1.5','1','1'],
-  ['white-space','normal','normal','normal','1','1'],
-  ['white-space','pre-wrap','pre-wrap','pre-wrap','1','1'],
-  ['white-space','break-spaces','break-spaces','break-spaces','1','1'],
+  ['white-space','normal','normal','normal','1','2'],
+  ['white-space','pre-wrap','pre-wrap','pre-wrap','1','2'],
+  ['white-space','break-spaces','break-spaces','break-spaces','1','2'],
   ['white-space','normal nowrap','','normal','0','0'],
   ['white-space','pre normal','','normal','0','0'],
   ['white-space','stable','','normal','0','0'],
   ['text-space-collapse','discard','','','0','0'],
   ['text-space-trim','whitespace','','','0','0'],
-  ['text-wrap','nowrap','nowrap','nowrap','1','1'],
-  ['text-wrap','balance','balance','balance','1','1'],
+  ['text-wrap','nowrap','nowrap','nowrap','1','2'],
+  ['text-wrap','balance','balance','balance','1','2'],
   ['text-wrap','wrap normal','','wrap','0','0'],
   ['text-wrap','stable pretty','','wrap','0','0'],
-  ['text-wrap','nowrap balance','nowrap balance','nowrap balance','1','1'],
+  ['text-wrap','nowrap balance','nowrap balance','nowrap balance','1','2'],
   ['caret','red','','','0','0'],
   ['caret','block','','','0','0'],
   ['caret','red block','','','0','0'],
@@ -115,11 +116,11 @@ var T = [
   ['row-gap','normal','normal','normal','1','1'],
   ['column-gap','normal','normal','normal','1','1'],
   ['column-gap','10px','10px','10px','1','1'],
-  ['contain-intrinsic-size','10px 20px','10px 20px','10px 20px','1','1'],
-  ['contain-intrinsic-size','auto 10px','auto 10px','auto 10px','1','1'],
-  ['contain-intrinsic-size','auto none','auto none','auto none','1','1'],
-  ['contain-intrinsic-size','10px','10px','10px','1','1'],
-  ['contain-intrinsic-size','none','none','none','1','1'],
+  ['contain-intrinsic-size','10px 20px','10px 20px','10px 20px','1','2'],
+  ['contain-intrinsic-size','auto 10px','auto 10px','auto 10px','1','2'],
+  ['contain-intrinsic-size','auto none','auto none','auto none','1','2'],
+  ['contain-intrinsic-size','10px','10px','10px','1','2'],
+  ['contain-intrinsic-size','none','none','none','1','2'],
   ['contain-intrinsic-block-size','auto 10px','auto 10px','auto 10px','1','1'],
   ['contain-intrinsic-inline-size','auto 10px','auto 10px','auto 10px','1','1'],
   ['contain','layout style paint','layout style paint','content','1','1'],
@@ -138,10 +139,11 @@ for (var i=0;i<T.length;i++){
   var d=document.createElement('div'); box.appendChild(d);
   d.style.setProperty(prop,value);
   var gotS=d.style.getPropertyValue(prop), gotC=getComputedStyle(d).getPropertyValue(prop);
-  var gotSup=CSS.supports(prop,value)?'1':'0', bad=[];
+  var gotSup=CSS.supports(prop,value)?'1':'0', gotLen=''+d.style.length, bad=[];
   if (wantS!=='~' && gotS!==wantS) bad.push('S got['+gotS+'] want['+wantS+']');
   if (wantC!=='~' && gotC!==wantC) bad.push('C got['+gotC+'] want['+wantC+']');
   if (gotSup!==wantSup) bad.push('sup got['+gotSup+'] want['+wantSup+']');
+  if (T[i][5]!==undefined && gotLen!==T[i][5]) bad.push('len got['+gotLen+'] want['+T[i][5]+']');
   if (bad.length){ fail++; var line='FAIL '+i+' '+prop+': '+value+' | '+bad.join(' | ');
     out.push(line); console.log(line); } else pass++;
 }

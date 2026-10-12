@@ -341,20 +341,29 @@ public class CssTokenizer
         string numStr = _input[_prevPos.._pos];
         if (numStr.Contains('.') || numStr.Contains('e') || numStr.Contains('E'))
             numType = NumberType.Number;
+        // A plus the author wrote is kept as the character it is, not folded into the number, so the
+        // text this token stream prints still says whether two operands were joined by an operator.
+        bool leadingPlus = numStr.Length > 0 && numStr[0] == '+';
+
+        CssParserToken Signed(CssParserToken token)
+        {
+            token.HasLeadingPlus = leadingPlus;
+            return token;
+        }
 
         if (Peek() == '%')
         {
             Consume();
-            return CssParserToken.CreatePercentage(num);
+            return Signed(CssParserToken.CreatePercentage(num));
         }
 
         if (NextCharsAreIdentifier())
         {
             string unit = ConsumeName();
-            return CssParserToken.CreateDimension(num, unit, numType);
+            return Signed(CssParserToken.CreateDimension(num, unit, numType));
         }
 
-        return CssParserToken.CreateNumber(num, numType);
+        return Signed(CssParserToken.CreateNumber(num, numType));
     }
 
     private CssParserToken ConsumeIdentLikeToken()

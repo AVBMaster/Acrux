@@ -460,6 +460,75 @@ public static class CssMathValue
 
     // ------------------------------------------------------------------ typing one expression
 
+    /// <summary>Whether every <c>+</c> and <c>-</c> that adds or subtracts in this expression text is
+    /// written with whitespace on both sides of it (CSS Values 4 §10.2.1). The rule is not typography:
+    /// a tokenizer reading <c>1px+1px</c> makes one signed dimension out of <c>+1px</c>, so what the
+    /// page wrote is two values standing side by side with no operator between them, which is no
+    /// expression and no value either (measured: the reference engine drops
+    /// <c>width: calc(1px+1px)</c>, <c>calc(1px+ 1px)</c> and <c>calc(1px +1px)</c> alike and answers
+    /// <c>false</c> for each through <c>supports()</c>). A sign that has nothing to take from — the
+    /// front of an operand, after <c>*</c> or <c>/</c>, after a parenthesis or a comma — belongs to the
+    /// number it stands in front of and is not an operator; <c>calc(1px * -2)</c> is a value.
+    /// The scan skips strings, keeps an exponent inside its number, and treats a closing parenthesis
+    /// as the end of the value it closes, so a nested call or a <c>var()</c> neither hides a sum nor
+    /// asks for one.</summary>
+    public static bool OperatorsAreSpaced(string text)
+    {
+        bool afterValue = false;
+        for (int i = 0; i < text.Length;)
+        {
+            char c = text[i];
+            if (c is '"' or '\'') { i = SkipQuoted(text, i); afterValue = true; continue; }
+            if (char.IsWhiteSpace(c)) { i++; continue; }
+            if (c is '+' or '-')
+            {
+                if (afterValue)
+                {
+                    bool spaceBefore = i > 0 && char.IsWhiteSpace(text[i - 1]);
+                    bool spaceAfter = i + 1 >= text.Length || char.IsWhiteSpace(text[i + 1]);
+                    if (!spaceBefore || !spaceAfter) return false;
+                }
+                i++;
+                afterValue = false;
+                continue;
+            }
+            if (c is '*' or '/' or '(' or ',')
+            {
+                i++;
+                afterValue = false;
+                continue;
+            }
+            if (c == ')') { i++; afterValue = true; continue; }
+            if (char.IsAsciiDigit(c) || c == '.')
+            {
+                // The number, its exponent and its unit — and the unit scan stops at a sign, which
+                // is what lets the operator test above see '1px+1px' as a sum written without spaces.
+                while (i < text.Length && (char.IsAsciiDigit(text[i]) || text[i] == '.')) i++;
+                if (i < text.Length && (text[i] == 'e' || text[i] == 'E'))
+                {
+                    int probe = i + 1;
+                    if (probe < text.Length && text[probe] is '+' or '-') probe++;
+                    int digits = probe;
+                    while (probe < text.Length && char.IsAsciiDigit(text[probe])) probe++;
+                    if (probe > digits) i = probe;
+                }
+                if (i < text.Length && text[i] == '%') i++;
+                else while (i < text.Length && char.IsLetter(text[i])) i++;
+                afterValue = true;
+                continue;
+            }
+            if (IsIdentStart(text, i))
+            {
+                while (i < text.Length && IsIdentPart(text[i])) i++;
+                afterValue = true;
+                continue;
+            }
+            i++;
+            afterValue = false;
+        }
+        return true;
+    }
+
     /// <summary>The type an expression resolves to when one of its terms is somebody else's value —
     /// a <c>var()</c>, an <c>attr()</c>, a function this checker does not own. The declaration is
     /// accepted on the word of the page, which is what the reference engine does with
@@ -720,12 +789,20 @@ public static class CssMathValue
             while (true)
             {
                 SkipSpace();
-                if (Peek() is not ('+' or '-')) return left;
+                char operatorCharacter = Peek();
+                if (operatorCharacter is not ('+' or '-')) return left;
+                // The same whitespace rule the value reader applies, read off the text because the
+                // product before the operator has already skipped over the space in front of it.
+                if (!IsSpaceOrEnd(_i - 1) || !IsSpaceOrEnd(_i + 1)) return TypedBad;
                 _i++;
                 SkipSpace();
                 left = Combine(left, Product());
             }
         }
+
+        /// <summary>Whether this offset is whitespace or one of the two ends of the text.</summary>
+        private bool IsSpaceOrEnd(int offset)
+            => offset < 0 || offset >= _text.Length || char.IsWhiteSpace(_text[offset]);
 
         private string Product()
         {
@@ -924,6 +1001,13 @@ public static class CssMathValue
                 SkipSpace();
                 char c = Peek();
                 if (c is not ('+' or '-')) break;
+                // An operator the page did not put whitespace around is not an operator: the
+                // tokenizer reads '1px+1px' as two values side by side, so the expression — and with
+                // it the declaration — is nothing, and a folder that quietly added the two together
+                // would print a value the property never accepted (measured, and CSS Values 4 §10.2.1).
+                // The space in front is read off the text rather than off the scanner's move, because
+                // the product before the operator has already skipped over that space.
+                if (!IsSpaceOrEnd(_i - 1) || !IsSpaceOrEnd(_i + 1)) return null;
                 _i++;
                 SkipSpace();
                 var next = ReadProduct();
@@ -932,6 +1016,11 @@ public static class CssMathValue
             }
             return sum;
         }
+
+        /// <summary>Whether this offset is whitespace or one of the two ends of the text — the boundary
+        /// a sum's operator has to have on each side of it.</summary>
+        private bool IsSpaceOrEnd(int offset)
+            => offset < 0 || offset >= _text.Length || char.IsWhiteSpace(_text[offset]);
 
         private Sum? ReadProduct()
         {

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b288 probe 6 — which characters take an emphasis mark</title>
+<style>
+body { font: 14px/18px monospace; margin: 6px; }
+span { background: rgb(240,240,240); display: block; }
+.e { text-emphasis: filled dot; }
+</style></head><body>
+<p><span id="a1">abcdefgh</span> <span id="a2" class="e">abcdefgh</span></p>
+<p><span id="b1">&#31281;&#31281;</span> <span id="b2" class="e">&#31281;&#31281;</span></p>
+<p><span id="c1">12345</span> <span id="c2" class="e">12345</span></p>
+<p><span id="d1">,.!-</span> <span id="d2" class="e">,.!-</span></p>
+<p><span id="e1">a b</span> <span id="e2" class="e">a b</span></p>
+<p><span id="f1">ABC</span> <span id="f2" class="e">ABC</span></p>
+<p><span id="g1">&#12354;&#12358;&#12361;</span> <span id="g2" class="e">&#12354;&#12358;&#12361;</span></p>
+<p><span id="h1">x</span> <span id="h2" class="e">x&#31281;x</span></p>
+<script>
+var out = [];
+var spans = document.querySelectorAll('span');
+for (var i = 0; i < spans.length; i++) {
+  var sp = spans[i];
+  void sp.offsetHeight;
+  var r = sp.getBoundingClientRect();
+  out.push((sp.id || '?') + ' h=' + r.height.toFixed(2) + ' w=' + r.width.toFixed(2)
+           + ' line=' + sp.parentNode.getBoundingClientRect().height.toFixed(2)
+           + ' text=' + JSON.stringify(sp.textContent));
+}
+var text = out.join('\n');
+document.getElementById('report') && 0;
+console.log(text);
+window.ROWS = out;
+document.title = 'b288 probe 6';
+var pre = document.createElement('pre'); pre.textContent = text; document.body.appendChild(pre);
+</script></body></html>

@@ -184,11 +184,24 @@ public static class CssValueText
                 // Read the whole number, unit included: '0px' is one token, and printing it as
                 // '0' plus 'px' would leave the decision about the unit to nobody.
                 int start = i;
-                if (c == '+' || c == '-') i++;
+                bool signed = c == '+' || c == '-';
+                if (signed) i++;
                 while (i < value.Length && (char.IsAsciiDigit(value[i]) || value[i] == '.')) i++;
                 while (i < value.Length && (IsIdentPart(value[i]) || value[i] == '%')) i++;
                 var token = value.Substring(start, i - start);
                 if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
+                // A sign with no space in front of it is not a number's: written straight after a
+                // value it belongs to the sum the page meant to write, and re-spelling '+1' as '1'
+                // here glued the two operands into 'calc(11)' — a value the property's grammar has no
+                // reason to refuse. A declaration the page wrote without spaces around its operator
+                // is no declaration (CSS Values 4 §10.2.1), so its characters stay as they came and
+                // the grammar is left to drop it (measured: 'flex-grow: calc(1+1)' reads back empty).
+                if (signed && sb.Length > 0 && !IsComponentSeparator(sb[^1]))
+                {
+                    sb.Append(c).Append(FoldNumberAndUnit(token[1..]));
+                    afterSlash = false;
+                    continue;
+                }
                 if (depth == 0 && !afterSlash && lengths && token == "0") token = "0px";
                 // A unit is a keyword and CSS keywords are ASCII case-insensitive, so a reference
                 // engine prints the one spelling of it: 'border-top: 1PX solid red' and
@@ -270,9 +283,11 @@ public static class CssValueText
                     result = OmitInitialBorderParts(result, property);
                     result = CollapseBoxShorthandParts(result, property);
                     result = CanonicalizeFlexFlow(result, property);
+                    result = CanonicalizeFlexShorthand(result, property);
                     result = CanonicalizeTextWrap(result, property);
                     result = CanonicalizeSchemeList(result, property);
                     result = CanonicalizeEmphasisPosition(result, property);
+                    result = CanonicalizeEmphasisStyle(result, property);
                     result = CanonicalizeClipMargin(result, property);
                     result = CanonicalizeScrollInset(result, property);
                     result = CanonicalizeBorderImage(result, property);
@@ -621,6 +636,20 @@ public static class CssValueText
         return parts.Count == 0 ? "row" : string.Join(" ", parts);
     }
 
+    /// <summary>Print <c>flex</c> as the three longhands it stands for, in the order the property
+    /// lists them: the words of the shorthand are not part of its answer, so <c>flex: none</c> reads
+    /// <c>0 0 auto</c> and <c>flex: 1</c> reads <c>1 1 0%</c> while <c>flex: 1 1 0</c> reads the
+    /// <c>0px</c> its basis means (measured, and the same three parts the computed surface answers).
+    /// A CSS-wide keyword is the value itself and keeps its spelling, and a value the reader cannot
+    /// take apart is left exactly as the page wrote it — the grammar drops it, and a printer that
+    /// invented parts for a refused shorthand would hand the cascade a declaration it never had.</summary>
+    private static string CanonicalizeFlexShorthand(string text, string property)
+    {
+        if (!property.Equals("flex", StringComparison.OrdinalIgnoreCase)) return text;
+        if (Resolver.CssPropertyTraits.IsCssWideKeyword(text.Trim())) return text;
+        return ShorthandExpander.ParseFlexParts(text) is { } parts ? parts.Text : text;
+    }
+
     /// <summary>Print <c>text-wrap</c> as the two longhands it says, with the initial ones left out
     /// (CSS Text Wrap 1 §3/§4, measured): 'wrap pretty' reads 'pretty', 'wrap stable' and
     /// 'stable wrap' read 'stable', 'wrap balance' reads 'balance', and a value that says nothing the
@@ -746,6 +775,24 @@ public static class CssValueText
     {
         if (!property.Equals("text-emphasis-position", StringComparison.OrdinalIgnoreCase)) return text;
         return Acrux.Core.Css.CssValueGrammar.CanonicalTextEmphasisPosition(text) ?? text;
+    }
+
+    /// <summary>Say an emphasis mark with its fill in front of its shape and its colour behind both,
+    /// whichever order the page wrote them: 'dot filled' reads 'filled dot', 'red dot' reads 'dot red'
+    /// and 'red filled dot' reads 'filled dot red' (measured). The words the page left unspoken stay
+    /// unspoken on this surface — 'filled' reads 'filled' while the computed value answers the
+    /// 'dot' it means — and a mark the reader cannot take apart is left exactly as it was written.</summary>
+    private static string CanonicalizeEmphasisStyle(string text, string property)
+    {
+        if (property.Equals("text-emphasis-style", StringComparison.OrdinalIgnoreCase))
+            return ShorthandExpander.ParseEmphasisStyle(text) ?? text;
+        if (property.Equals("text-emphasis", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Resolver.CssPropertyTraits.IsCssWideKeyword(text.Trim())) return text;
+            if (ShorthandExpander.ParseTextEmphasisParts(text) is not { } parts) return text;
+            return parts.Color == null ? parts.Style : parts.Style + " " + parts.Color;
+        }
+        return text;
     }
 
     /// <summary>
@@ -2178,6 +2225,11 @@ public static class CssValueText
     }
 
     private static bool IsWhitespace(char c) => c is ' ' or '\t' or '\n' or '\r' or '\f';
+
+    /// <summary>Whether a character at the end of the printed text already separates the component
+    /// that follows it, so a sign written next is that component's own and not a sum's operator.</summary>
+    private static bool IsComponentSeparator(char c) =>
+        IsWhitespace(c) || c is '(' or ',' or '*' or '/';
 
     private static bool IsIdentStart(char c) =>
         char.IsLetter(c) || c is '_' or '-' || c > '\u007F';

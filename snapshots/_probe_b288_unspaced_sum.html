@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b288 probe 5 — how an unspaced sum is read</title>
+<style>body { font: 14px/18px monospace; margin: 4px; }</style></head><body>
+<pre id="report"></pre>
+<script>
+var CASES = [
+  'flex-grow: calc(1+1)', 'flex-grow: calc(1+2)', 'flex-grow: calc(2-1)', 'flex-grow: calc(3*2)',
+  'opacity: calc(3+4)', 'opacity: calc(1+1+1)', 'opacity: calc( 1+1 )', 'order: calc(10+5)',
+  'z-index: calc(1+1)', 'width: calc(1px+1px)', 'width: calc(1px+ 1px)', 'width: calc(1px +1px)',
+  'margin-top: calc(-1px-1px)', 'padding-left: calc(1px+1px)', 'flex-basis: calc(1px+1px)',
+  'top: calc(1px+1px)', 'left: calc(2px+3px)', 'letter-spacing: calc(1em+1em)',
+  'line-height: calc(1+1)', 'font-size: calc(10px+10px)', 'aspect-ratio: calc(1+1)',
+  'transition-duration: calc(1s+1s)', 'animation-delay: calc(1s+1s)', 'gap: calc(1px+1px)',
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var decl = CASES[i], prop = decl.split(':')[0].trim();
+  var d = document.createElement('div');
+  document.body.appendChild(d);
+  d.style.cssText = decl;
+  var sheet = document.createElement('style');
+  sheet.textContent = '.c' + i + ' { ' + decl + ' }';
+  document.head.appendChild(sheet);
+  var host = document.createElement('div');
+  host.className = 'c' + i;
+  document.body.appendChild(host);
+  void host.offsetHeight;
+  out.push(i + '|' + decl + '|n=' + d.style.length + '|cssText=' + d.style.cssText
+           + '|comp=' + getComputedStyle(host).getPropertyValue(prop)
+           + '|sup=' + (CSS.supports(prop, decl.slice(prop.length + 1).trim()) ? 'yes' : 'no'));
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

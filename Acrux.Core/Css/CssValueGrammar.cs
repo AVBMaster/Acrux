@@ -160,6 +160,11 @@ public static class CssValueGrammar
         var types = MathValueTypes(propertyName);
         foreach (var call in CssMathValue.MathCalls(value))
         {
+            // A sign the page did not put whitespace around is not an operator, so the expression it
+            // stands in is not an expression whatever its terms are — and the printer must not be left
+            // to fold 'calc(1+1)' into a number the property then reads as a value (measured: every
+            // unspaced sum is dropped, through 'supports()' as well).
+            if (!CssMathValue.OperatorsAreSpaced(call.Argument)) return true;
             if (!CssMathValue.WellTyped(call.Name + "(" + call.Argument + ")", out var category))
                 return true;
             if (category == null || types == null) continue;
@@ -809,6 +814,41 @@ public static class CssValueGrammar
         // 'flex-flow: wrap reverse' reads back the empty string while 'row wrap' and
         // 'column-reverse nowrap' stand).
         CssPropertyId.FlexFlow => IsFlexFlowValue,
+        // CSS Flexbox 1 §7.1.1/§7.2: the shorthand is the three parts and nothing else, the two
+        // factors are counts from zero up, and a basis is 'auto', 'content' or one
+        // &lt;length-percentage&gt; that is not negative. Measured refusals: 'flex: none 1',
+        // 'flex: 1 1 auto extra', 'flex: 1 2 3 4px', 'flex: auto auto', 'flex: 0% 0%',
+        // 'flex: 1 1 -5px', 'flex-grow: none', 'flex-grow: -1', 'flex-grow: 20%',
+        // 'flex-shrink: none', 'flex-basis: -5px', 'flex-basis: 1 2', 'flex-basis: auto auto' and
+        // 'flex-basis: bogus' each leave no declaration.
+        CssPropertyId.Flex => static text => ShorthandExpander.ParseFlexParts(text) != null,
+        // CSS Text-Emphasis 1 §3.1/§3.2: the mark is at most one fill and one shape (or a string in
+        // place of both, or 'none' alone), and the shorthand adds at most one colour to it. The
+        // measured refusals are 'text-emphasis: normal', '… : auto dot', '… : dot auto',
+        // '… : dot filled extra', '… : dot filled filled', '… : over dot', '… : dot red blue',
+        // 'text-emphasis-style: normal', '… : auto dot', '… : dot dot', '… : filled open' and
+        // '… : triangle red'.
+        CssPropertyId.TextEmphasis => static text =>
+            ShorthandExpander.ParseTextEmphasisParts(text) != null,
+        CssPropertyId.TextEmphasisStyle => static text =>
+            ShorthandExpander.ParseEmphasisStyle(text) != null,
+        CssPropertyId.FlexGrow or CssPropertyId.FlexShrink => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count != 1) return false;
+            if (IsMathFunctionCall(words[0], IsLengthOrPercentage)) return true;
+            return IsNonNegativeCount(words[0]);
+        },
+        CssPropertyId.FlexBasis => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count != 1) return false;
+            var word = words[0];
+            if (word.Equals("auto", StringComparison.OrdinalIgnoreCase)
+                || word.Equals("content", StringComparison.OrdinalIgnoreCase)) return true;
+            if (IsMathFunctionCall(word, IsLengthOrPercentage)) return true;
+            return IsNonNegativeLengthOrPercentage(word);
+        },
         // CSS Color Adjustment 1 §5.2: 'normal' alone, or a list of scheme keywords and custom
         // names. Measured word by word: 'light dark', 'light only' and even 'brown' stand, 'normal
         // dark' and 'only' alone fall, 'light light' stands (a duplicate is not a second grammar
@@ -1839,7 +1879,10 @@ public static class CssValueGrammar
             text = text[1..^1].Trim();
         // Split on the spaces that are outside every parenthesis: a nested 'calc(100px - 50px)' is
         // one operand, and cutting it at its own spaces takes a working declaration down with it.
-        var pieces = SplitOutsideParentheses(text);
+        // A product's operators are spaced first, because CSS Values 4 §10.2.1 puts no whitespace
+        // requirement on '*' and '/' — 'calc(10px*2)' is the same value as 'calc(10px * 2)' and the
+        // reference engine takes both (measured).
+        var pieces = SplitOutsideParentheses(SpaceProductOperators(text));
         bool any = false;
         foreach (var piece in pieces)
         {
@@ -1883,6 +1926,38 @@ public static class CssValueGrammar
         }
         if (text.Length > start) parts.Add(text[start..]);
         return parts;
+    }
+
+    /// <summary>Put a space on each side of every <c>*</c> and <c>/</c> that stands at the top level of
+    /// one math operand — outside every parenthesis and every string. CSS Values 4 §10.2.1 requires no
+    /// whitespace around a product's operators, so <c>calc(10px*2)</c> is the same value as
+    /// <c>calc(10px * 2)</c> and the reader of an operand list has to see three pieces in either
+    /// spelling (measured: the reference engine takes both through <c>supports()</c>).</summary>
+    private static string SpaceProductOperators(string text)
+    {
+        if (text.IndexOf('*') < 0 && text.IndexOf('/') < 0) return text;
+        var sb = new System.Text.StringBuilder(text.Length + 8);
+        int depth = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c is '"' or '\'')
+            {
+                int next = SkipString(text, i);
+                sb.Append(text, i, next - i);
+                i = next - 1;
+                continue;
+            }
+            if (c == '(') { depth++; sb.Append(c); continue; }
+            if (c == ')') { depth--; sb.Append(c); continue; }
+            if (depth == 0 && (c == '*' || c == '/'))
+            {
+                sb.Append(' ').Append(c).Append(' ');
+                continue;
+            }
+            sb.Append(c);
+        }
+        return sb.ToString();
     }
 
     private static bool IsOperandOrNestedOne(string token, Func<string, bool> isOperand)
@@ -2037,6 +2112,27 @@ public static class CssValueGrammar
         if (!IsNumber(rest) || (unit != "s" && unit != "S")) return IsNumber(token[..^2]) &&
             token[^2..].Equals("ms", StringComparison.OrdinalIgnoreCase);
         return true;
+    }
+
+    /// <summary>A &lt;number&gt; from zero up, exponent and leading plus included, as the two flex
+    /// factors are written: <c>flex-grow: -1</c> is a count below nothing and <c>20%</c> is not a count
+    /// at all (measured, both refused).</summary>
+    private static bool IsNonNegativeCount(string word)
+    {
+        if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(word, out var number, out var unit))
+            return false;
+        return unit.Length == 0 && number >= 0;
+    }
+
+    /// <summary>A &lt;length-percentage&gt; that is not negative. A negative basis measures less than
+    /// nothing, so <c>flex-basis: -5px</c> is no value at all — and the same negative written the other
+    /// way round in the shorthand falls with it (measured, both).</summary>
+    private static bool IsNonNegativeLengthOrPercentage(string token)
+    {
+        if (!IsLengthOrPercentage(token)) return false;
+        if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out var number, out _))
+            return false;
+        return number >= 0;
     }
 
     private static bool IsNumber(string text)

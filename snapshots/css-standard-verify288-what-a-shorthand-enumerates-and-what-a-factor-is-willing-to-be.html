@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify288 &#8212; what a shorthand enumerates, and what a factor is willing to be</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+/* paint guard: the values below have to reach the drawn page, not only the CSSOM */
+#pg-1 { display: flex; width: 200px; }
+#pg-1 span { background: rgb(255,128,128); }
+#pg-2 { display: flex; width: 200px; }
+#pg-2 span { background: rgb(0,0,255); }
+#pg-3 { text-emphasis: filled dot; }
+#pg-4 { text-emphasis: open circle rgb(255,0,0); }
+#pg-5 { text-emphasis: sesame; width: 120px; }
+#pg-6 { width: calc(1px+1px); background: rgb(0,128,0); height: 8px; }
+#pg-7 { flex: 1 1 40%; background: rgb(255,200,0); }
+#pg-8 { container: sidebar / inline-size; background: rgb(230,230,230); }
+</style></head><body>
+<h2>paint guard (the values that must reach the drawn page)</h2>
+<div id="pg-1"><span>a</span><span style="flex: none">b</span><span style="flex: 1">c</span></div>
+<div id="pg-2"><span>a</span><span style="flex: none">b</span><span style="flex: 0 0 auto">c</span></div>
+<p id="pg-3">&#31281;&#31281;&#31281; filled dot</p>
+<p id="pg-4">&#22763;&#22763;&#22763; open circle red</p>
+<p id="pg-5">&#27720;&#27720;&#27720; sesame</p>
+<div id="pg-6"></div>
+<div style="display:flex;width:200px"><div id="pg-7">basis 40%</div></div>
+<div id="pg-8">a named container</div>
+<h2>value rows</h2>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* Measured row by row on the reference engine (snapshots/_probe_b288_measure_all.html, whose whole
+ * table is transcribed into T below): a fresh div appended before the declaration is written,
+ * setProperty for the write, a forced style flush before getComputedStyle.
+ *
+ * Columns: property, value, the CSSOM echo, the computed value, CSS.supports, how many
+ * declarations the block enumerates, and the names it enumerates in that order.
+ *
+ * What the round was for. #281: a shorthand in a declaration block counts as the longhands it
+ * covers, so 'white-space' is two, 'container' is two, 'grid-template' is three and 'border' is
+ * seventeen — the list is now asserted rather than only counted. flex: the shorthand prints the
+ * three parts it means ('none' is '0 0 auto', '1' is '1 1 0%', '1 1 0' is '1 1 0px'), a strict
+ * grammar refuses what the reference engine refuses ('none 1', a third number, a second basis, a
+ * negative anywhere), and 'content' is a basis with a computed value of its own. text-emphasis: the
+ * mark prints its fill before its shape and its colour behind both, and the computed surface pays
+ * the shape an omitted fill still asks for. And the arithmetic: a '+' or '-' that the page did not
+ * space is not an operator, so the expression is not a value — on the echo, the cascade,
+ * getComputedStyle and CSS.supports alike, which had disagreed with each other about it.
+ *
+ * Two columns carry '~' where the reference engine's own answer cannot be asserted here: the
+ * enumeration order of 'font: caption' (the reference lists the nineteen font longhands in a
+ * different order for the system-font branch than for a written-out value — no standard fixes that
+ * order, and this engine has one; filed as #282) and the computed 'width' of a dropped declaration,
+ * which the reference resolves against a viewport that measures nothing.
+ */
+var T = [
+  ['margin','1px','1px','1px','1','4','margin-top,margin-right,margin-bottom,margin-left'],
+  ['margin','1px 2px','1px 2px','1px 2px','1','4','margin-top,margin-right,margin-bottom,margin-left'],
+  ['padding','5px 6px 7px','5px 6px 7px','5px 6px 7px','1','4','padding-top,padding-right,padding-bottom,padding-left'],
+  ['inset','1px 2px','1px 2px','1px 2px','1','4','top,right,bottom,left'],
+  ['inset-block','10px','10px','10px','1','2','inset-block-start,inset-block-end'],
+  ['inset-inline','10px 20px','10px 20px','10px 20px','1','2','inset-inline-start,inset-inline-end'],
+  ['border','2px solid red','2px solid red','2px solid rgb(255, 0, 0)','1','17','border-top-width,border-right-width,border-bottom-width,border-left-width,border-top-style,border-right-style,border-bottom-style,border-left-style,border-top-color,border-right-color,border-bottom-color,border-left-color,border-image-source,border-image-slice,border-image-width,border-image-outset,border-image-repeat'],
+  ['border-width','1px','1px','0px','1','4','border-top-width,border-right-width,border-bottom-width,border-left-width'],
+  ['border-color','red','red','rgb(255, 0, 0)','1','4','border-top-color,border-right-color,border-bottom-color,border-left-color'],
+  ['border-style','dashed','dashed','dashed','1','4','border-top-style,border-right-style,border-bottom-style,border-left-style'],
+  ['outline','2px solid red','red solid 2px','rgb(255, 0, 0) solid 2px','1','3','outline-color,outline-style,outline-width'],
+  ['list-style','inside square','inside square','inside none square','1','3','list-style-position,list-style-image,list-style-type'],
+  ['flex','1 1 auto','1 1 auto','1 1 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','none','0 0 auto','0 0 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['gap','10px','10px','10px','1','2','row-gap,column-gap'],
+  ['row-gap','1px','1px','1px','1','1','row-gap'],
+  ['columns','2 10px','10px 2','10px 2','1','4','column-width,column-count,column-height,column-wrap'],
+  ['place-items','center','center','center','1','2','align-items,justify-items'],
+  ['place-content','space-between','space-between','space-between','1','2','align-content,justify-content'],
+  ['overflow','hidden','hidden','hidden','1','2','overflow-x,overflow-y'],
+  ['text-decoration','underline red','underline red','underline rgb(255, 0, 0)','1','4','text-decoration-line,text-decoration-thickness,text-decoration-style,text-decoration-color'],
+  ['background','red','red','rgb(255, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box','1','9','background-image,background-position-x,background-position-y,background-size,background-repeat,background-attachment,background-origin,background-clip,background-color'],
+  ['background','url(a.png) no-repeat','url("a.png") no-repeat','rgba(0, 0, 0, 0) url("file:///home/master/Acrux/snapshots/a.png") no-repeat scroll 0% 0% / auto padding-box border-box','1','9','background-image,background-position-x,background-position-y,background-size,background-repeat,background-attachment,background-origin,background-clip,background-color'],
+  ['mask','url(a.png)','url("a.png")','url("file:///home/master/Acrux/snapshots/a.png")','1','9','mask-image,-webkit-mask-position-x,-webkit-mask-position-y,mask-size,mask-repeat,mask-origin,mask-clip,mask-composite,mask-mode'],
+  ['grid-area','1 / 2','1 / 2','1 / 2','1','4','grid-row-start,grid-column-start,grid-row-end,grid-column-end'],
+  ['grid-template','none','none','none','1','3','grid-template-rows,grid-template-columns,grid-template-areas'],
+  ['animation','slide 2s','2s ease 0s 1 normal none running slide','2s slide','1','11','animation-duration,animation-timing-function,animation-delay,animation-iteration-count,animation-direction,animation-fill-mode,animation-play-state,animation-name,animation-timeline,animation-range-start,animation-range-end'],
+  ['transition','color 1s','color 1s','color 1s','1','5','transition-behavior,transition-duration,transition-timing-function,transition-delay,transition-property'],
+  ['container','x / inline-size','x / inline-size','x / inline-size','1','2','container-name,container-type'],
+  ['contain','layout','layout','layout','1','1','contain'],
+  ['contain-intrinsic-size','10px','10px','10px','1','2','contain-intrinsic-width,contain-intrinsic-height'],
+  ['white-space','pre-wrap','pre-wrap','pre-wrap','1','2','white-space-collapse,text-wrap-mode'],
+  ['text-wrap','nowrap','nowrap','nowrap','1','2','text-wrap-mode,text-wrap-style'],
+  ['text-wrap','balance','balance','balance','1','2','text-wrap-mode,text-wrap-style'],
+  ['font','12px serif','12px serif','12px serif','1','19','font-style,font-variant-caps,font-variant-ligatures,font-variant-numeric,font-variant-east-asian,font-variant-alternates,font-size-adjust,font-language-override,font-kerning,font-optical-sizing,font-feature-settings,font-variation-settings,font-variant-position,font-variant-emoji,font-weight,font-stretch,font-size,line-height,font-family'],
+  ['font','italic bold 12px/1.4 "Foo", serif','italic bold 12px / 1.4 Foo, serif','italic 700 12px / 16.8px Foo, serif','1','19','font-style,font-variant-caps,font-variant-ligatures,font-variant-numeric,font-variant-east-asian,font-variant-alternates,font-size-adjust,font-language-override,font-kerning,font-optical-sizing,font-feature-settings,font-variation-settings,font-variant-position,font-variant-emoji,font-weight,font-stretch,font-size,line-height,font-family'],
+  ['font','caption','caption','16px Arial','1','19','~'],
+  ['place-self','center','center','center','1','2','align-self,justify-self'],
+  ['align-content','safe center','safe center','safe center','1','1','align-content'],
+  ['scroll-margin','4px','4px','4px','1','4','scroll-margin-top,scroll-margin-right,scroll-margin-bottom,scroll-margin-left'],
+  ['mask-composite','add','add','add','1','1','mask-composite'],
+  ['text-emphasis','dot filled','filled dot','dot rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['translate','1px 2px','1px 2px','1px 2px','1','1','translate'],
+  ['rotate','45deg','45deg','45deg','1','1','rotate'],
+  ['scale','2','2','2','1','1','scale'],
+  ['inset-area','span-top','','','0','0',''],
+  ['caret-color','red','red','rgb(255, 0, 0)','1','1','caret-color'],
+  ['flex','1','1 1 0%','1 1 0%','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1 1','1 1 0%','1 1 0%','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1 0%','1 1 0%','1 1 0%','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','auto','1 1 auto','1 1 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','initial','initial','0 1 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','0 0 auto','0 0 auto','0 0 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','0 1 auto','0 1 auto','0 1 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1 2 auto','1 2 auto','1 2 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1 auto','1 1 auto','1 1 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','2 3 4px','2 3 4px','2 3 4px','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1 1 0','1 1 0px','1 1 0px','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1 1 0%','1 1 0%','1 1 0%','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','0 0 0','0 0 0px','0 0 0px','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','100 1e3 20px','100 1000 20px','100 1000 20px','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1.5','1.5 1 0%','1.5 1 0%','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1 1 calc(10px + 5px)','1 1 calc(15px)','1 1 15px','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1 1 -5px','','0 1 auto','0','0',''],
+  ['flex','1 1 50%','1 1 50%','1 1 50%','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','-1 1 auto','','0 1 auto','0','0',''],
+  ['flex','1 -1 auto','','0 1 auto','0','0',''],
+  ['flex','1 1 auto extra','','0 1 auto','0','0',''],
+  ['flex','auto 1','1 1 auto','1 1 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex-grow','1','1','1','1','1','flex-grow'],
+  ['flex-grow','none','','0','0','0',''],
+  ['flex-shrink','1','1','1','1','1','flex-shrink'],
+  ['flex-shrink','none','','1','0','0',''],
+  ['flex-basis','auto','auto','auto','1','1','flex-basis'],
+  ['flex-basis','1 2','','auto','0','0',''],
+  ['text-emphasis','filled dot','filled dot','dot rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','open dot','open dot','open dot rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','dot open','open dot','open dot rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','sesame','sesame','sesame rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','filled','filled','dot rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','dot red','dot red','dot rgb(255, 0, 0)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','red dot','dot red','dot rgb(255, 0, 0)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','filled dot red','filled dot red','dot rgb(255, 0, 0)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','red filled dot','filled dot red','dot rgb(255, 0, 0)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','circle currentcolor','circle currentcolor','circle rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','none','none','none rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','normal','','none rgb(9, 9, 9)','0','0',''],
+  ['text-emphasis','auto dot','','none rgb(9, 9, 9)','0','0',''],
+  ['text-emphasis','dot auto','','none rgb(9, 9, 9)','0','0',''],
+  ['text-emphasis','FILLED DOT','filled dot','dot rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','dot filled extra','','none rgb(9, 9, 9)','0','0',''],
+  ['text-emphasis-style','dot filled','filled dot','dot','1','1','text-emphasis-style'],
+  ['text-emphasis-style','filled dot','filled dot','dot','1','1','text-emphasis-style'],
+  ['text-emphasis-style','double-circle','double-circle','double-circle','1','1','text-emphasis-style'],
+  ['text-emphasis-style','none','none','none','1','1','text-emphasis-style'],
+  ['text-emphasis-style','triangle red','','none','0','0',''],
+  ['text-emphasis-color','currentcolor','currentcolor','rgb(9, 9, 9)','1','1','text-emphasis-color'],
+  ['text-emphasis-color','red','red','rgb(255, 0, 0)','1','1','text-emphasis-color'],
+  ['text-emphasis-position','right','','over','0','0',''],
+  ['text-emphasis-position','over right','over right','over','1','1','text-emphasis-position'],
+  ['text-emphasis-position','right over','over right','over','1','1','text-emphasis-position'],
+  ['flex','4px','1 1 4px','1 1 4px','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','50%','1 1 50%','1 1 50%','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','2 4px','2 1 4px','2 1 4px','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','none 1','','0 1 auto','0','0',''],
+  ['flex','1 none','','0 1 auto','0','0',''],
+  ['flex','calc(1)','calc(1) 1 0%','1 1 0%','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1 calc(1)','1 calc(1) 0%','1 1 0%','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1 1 calc(10px)','1 1 calc(10px)','1 1 10px','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1e3','1000 1 0%','1000 1 0%','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','0 auto','0 1 auto','0 1 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','auto auto','','0 1 auto','0','0',''],
+  ['flex','1 1 auto auto','','0 1 auto','0','0',''],
+  ['flex','1 2 3 4px','','0 1 auto','0','0',''],
+  ['flex','1 1 +2','','0 1 auto','0','0',''],
+  ['flex','1 1 2.','','0 1 auto','0','0',''],
+  ['flex','1 1 .5','','0 1 auto','0','0',''],
+  ['flex','0','0 1 0%','0 1 0%','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','1 1 content','1 1 content','1 1 content','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex-grow','-1','','0','0','0',''],
+  ['flex-grow','20%','','0','0','0',''],
+  ['flex-grow','calc(1+1)','','0','0','0',''],
+  ['flex-grow','1e3','1000','1000','1','1','flex-grow'],
+  ['flex-grow','0','0','0','1','1','flex-grow'],
+  ['flex-grow','1.5.2','','0','0','0',''],
+  ['flex-shrink','-1','','1','0','0',''],
+  ['flex-shrink','1e3','1000','1000','1','1','flex-shrink'],
+  ['flex-shrink','0','0','0','1','1','flex-shrink'],
+  ['flex-basis','-5px','','auto','0','0',''],
+  ['flex-basis','content','content','content','1','1','flex-basis'],
+  ['flex-basis','0','0px','0px','1','1','flex-basis'],
+  ['flex-basis','calc(2*5px)','calc(10px)','10px','1','1','flex-basis'],
+  ['flex-basis','auto auto','','auto','0','0',''],
+  ['flex-basis','50%','50%','50%','1','1','flex-basis'],
+  ['flex-basis','1em','1em','14px','1','1','flex-basis'],
+  ['flex-basis','bogus','','auto','0','0',''],
+  ['text-emphasis','open','open','open dot rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','filled circle','filled circle','circle rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','circle filled','filled circle','circle rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','dot filled filled','','none rgb(9, 9, 9)','0','0',''],
+  ['text-emphasis','dot currentcolor','dot currentcolor','dot rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','RED DOT','dot red','dot rgb(255, 0, 0)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','dot #f00','dot rgb(255, 0, 0)','dot rgb(255, 0, 0)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','over dot','','none rgb(9, 9, 9)','0','0',''],
+  ['text-emphasis','dot red blue','','none rgb(9, 9, 9)','0','0',''],
+  ['text-emphasis-style','filled','filled','dot','1','1','text-emphasis-style'],
+  ['text-emphasis-style','open','open','open dot','1','1','text-emphasis-style'],
+  ['text-emphasis-style','sesame','sesame','sesame','1','1','text-emphasis-style'],
+  ['text-emphasis-style','""','""','""','1','1','text-emphasis-style'],
+  ['text-emphasis-style','dot dot','','none','0','0',''],
+  ['text-emphasis-style','filled open','','none','0','0',''],
+  ['text-emphasis','"x" red','"x" red','"x" rgb(255, 0, 0)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','red "x"','"x" red','"x" rgb(255, 0, 0)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis','circle','circle','circle rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis-position','over','over','over','1','1','text-emphasis-position'],
+  ['text-emphasis-position','under','under','under','1','1','text-emphasis-position'],
+  ['text-emphasis-position','left','','over','0','0',''],
+  ['text-emphasis-position','vertical','','over','0','0',''],
+  ['text-emphasis-position','over left','over left','over left','1','1','text-emphasis-position'],
+  ['text-emphasis-position','right left','','over','0','0',''],
+  ['text-emphasis-position','auto','','over','0','0',''],
+  ['text-emphasis-position','over over','','over','0','0',''],
+  ['font','menu','menu','16px Arial','1','19','~'],
+  ['font','small-caption','small-caption','16px Arial','1','19','~'],
+  ['text-decoration','overline dotted red','overline dotted red','overline dotted rgb(255, 0, 0)','1','4','text-decoration-line,text-decoration-thickness,text-decoration-style,text-decoration-color'],
+  ['text-decoration','red dotted overline','overline dotted red','overline dotted rgb(255, 0, 0)','1','4','text-decoration-line,text-decoration-thickness,text-decoration-style,text-decoration-color'],
+  ['flex-grow','calc(1+2)','','0','0','0',''],
+  ['flex-grow','calc(2-1)','','0','0','0',''],
+  ['flex-grow','calc(3*2)','calc(6)','6','1','1','flex-grow'],
+  ['opacity','calc(3+4)','','1','0','0',''],
+  ['opacity','calc(1+1+1)','','1','0','0',''],
+  ['opacity','calc( 1+1 )','','1','0','0',''],
+  ['order','calc(10+5)','','0','0','0',''],
+  ['z-index','calc(1+1)','','auto','0','0',''],
+  ['width','calc(1px+1px)','','~','0','0',''],
+  ['width','calc(1px+ 1px)','','~','0','0',''],
+  ['width','calc(1px +1px)','','~','0','0',''],
+  ['margin-top','calc(-1px-1px)','','0px','0','0',''],
+  ['padding-left','calc(1px+1px)','','0px','0','0',''],
+  ['flex-basis','calc(1px+1px)','','auto','0','0',''],
+  ['top','calc(1px+1px)','','auto','0','0',''],
+  ['left','calc(2px+3px)','','auto','0','0',''],
+  ['letter-spacing','calc(1em+1em)','','normal','0','0',''],
+  ['line-height','calc(1+1)','','18px','0','0',''],
+  ['font-size','calc(10px+10px)','','14px','0','0',''],
+  ['aspect-ratio','calc(1+1)','','auto','0','0',''],
+  ['transition-duration','calc(1s+1s)','','0s','0','0',''],
+  ['animation-delay','calc(1s+1s)','','0s','0','0',''],
+  ['gap','calc(1px+1px)','','normal','0','0',''],
+  ['flex','inherit','inherit','0 1 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','unset','unset','0 1 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','revert','revert','0 1 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex','revert-layer','revert-layer','0 1 auto','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['flex-basis','calc(1px * 2)','calc(2px)','2px','1','1','flex-basis'],
+  ['flex-basis','calc(1px/2)','calc(0.5px)','0.5px','1','1','flex-basis'],
+  ['flex','content auto','','0 1 auto','0','0',''],
+  ['flex','0 0 content','0 0 content','0 0 content','1','3','flex-grow,flex-shrink,flex-basis'],
+  ['text-emphasis','auto','','none rgb(9, 9, 9)','0','0',''],
+  ['text-emphasis','currentcolor dot','dot currentcolor','dot rgb(9, 9, 9)','1','2','text-emphasis-style,text-emphasis-color'],
+  ['text-emphasis-style','dotted','','none','0','0',''],
+  ['text-emphasis-style','FILLED DOT','filled dot','dot','1','1','text-emphasis-style'],
+  ['text-emphasis','dot red, blue','','none rgb(9, 9, 9)','0','0',''],
+  ['container','x','x','x','1','2','container-name,container-type'],
+  ['container','none / inline-size','none / inline-size','none / inline-size','1','2','container-name,container-type'],
+  ['container','x / normal','x','x','1','2','container-name,container-type'],
+  ['container','x / block-size','','none','0','0',''],
+  ['container-name','x, y','','none','0','0',''],
+  ['scroll-padding','4px','4px','4px','1','4','scroll-padding-top,scroll-padding-right,scroll-padding-bottom,scroll-padding-left'],
+  ['grid-template-areas','none','none','none','1','1','grid-template-areas'],
+  ['white-space-collapse','collapse','collapse','collapse','1','1','white-space-collapse'],
+  ['text-wrap-mode','nowrap','nowrap','nowrap','1','1','text-wrap-mode'],
+  ['text-wrap-style','stable','stable','stable','1','1','text-wrap-style'],
+  ['font','12px/1.4 caption','12px / 1.4 caption','12px / 16.8px caption','1','19','font-style,font-variant-caps,font-variant-ligatures,font-variant-numeric,font-variant-east-asian,font-variant-alternates,font-size-adjust,font-language-override,font-kerning,font-optical-sizing,font-feature-settings,font-variation-settings,font-variant-position,font-variant-emoji,font-weight,font-stretch,font-size,line-height,font-family'],
+  ];
+var box = document.getElementById('box'), pass = 0, fail = 0, out = [];
+for (var i = 0; i < T.length; i++) {
+  var prop = T[i][0], value = T[i][1];
+  var d = document.createElement('div');
+  box.appendChild(d);
+  d.style.setProperty(prop, value);
+  var names = [];
+  for (var j = 0; j < d.style.length; j++) names.push(d.style.item(j));
+  void d.offsetHeight;
+  var gotS = d.style.getPropertyValue(prop), gotC = getComputedStyle(d).getPropertyValue(prop);
+  var gotSup = CSS.supports(prop, value) ? '1' : '0', gotLen = '' + d.style.length;
+  var bad = [];
+  if (T[i][2] !== '~' && gotS !== T[i][2]) bad.push('S got[' + gotS + '] want[' + T[i][2] + ']');
+  if (T[i][3] !== '~' && gotC !== T[i][3]) bad.push('C got[' + gotC + '] want[' + T[i][3] + ']');
+  if (gotSup !== T[i][4]) bad.push('sup got[' + gotSup + '] want[' + T[i][4] + ']');
+  if (gotLen !== T[i][5]) bad.push('len got[' + gotLen + '] want[' + T[i][5] + ']');
+  if (T[i][6] !== '~' && names.join(',') !== T[i][6]) bad.push('names got[' + names.join(',') + ']');
+  if (bad.length) { fail++; var line = 'FAIL ' + i + ' ' + prop + ': ' + value + ' | ' + bad.join(' | ');
+    out.push(line); console.log(line); } else pass++;
+}
+var summary = 'b288 ' + pass + '/' + (pass + fail) + ' rows pass' + (fail ? ' \u2014 ' + fail + ' fail' : '');
+out.push(summary);
+document.getElementById('report').textContent = out.join('\n');
+console.log(summary);
+</script></body></html>

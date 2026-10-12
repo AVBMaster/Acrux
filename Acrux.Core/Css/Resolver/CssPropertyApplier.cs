@@ -341,9 +341,21 @@ public static class CssPropertyApplier
                     _ => Acrux.Core.Dom.TextDecorationSkipInkType.Auto,
                 };
                 break;
-            case "text-emphasis": style.TextEmphasis = value; break;
+            // The mark and its colour are stored in the one spelling the echo, the expansion and the
+            // computed surface print, so a page that wrote 'dot filled' and a page that wrote
+            // 'filled dot' leave the engine saying the same thing (CSS Text-Emphasis 1 §3.2).
+            case "text-emphasis":
+                if (ShorthandExpander.ParseTextEmphasisParts(value) is { } emphasis)
+                {
+                    style.TextEmphasis = value;
+                    style.TextEmphasisStyle = emphasis.Style;
+                    if (emphasis.Color != null) style.TextEmphasisColor = emphasis.Color;
+                }
+                break;
             case "text-emphasis-color": style.TextEmphasisColor = value; break;
-            case "text-emphasis-style": style.TextEmphasisStyle = value; break;
+            case "text-emphasis-style":
+                style.TextEmphasisStyle = ShorthandExpander.ParseEmphasisStyle(value) ?? value;
+                break;
             case "text-emphasis-position":
                 // Vertical side first, whichever way the page wrote the pair; the computed surface
                 // drops a horizontal 'right' from this same text (see the serializer).
@@ -548,7 +560,7 @@ public static class CssPropertyApplier
             case "flex-wrap": style.FlexWrap = ParseFlexWrap(value); break;
             case "flex-grow": if (float.TryParse(value, out var g)) style.FlexGrow = g; break;
             case "flex-shrink": if (float.TryParse(value, out var s)) style.FlexShrink = s; break;
-            case "flex-basis": style.FlexBasis = Length.Parse(value); break;
+            case "flex-basis": style.FlexBasis = ParseFlexBasis(value); break;
             case "flex": ParseFlexShorthand(value, style); break;
             case "flex-flow": style.FlexFlow = value; ParseFlexFlow(value, style); break;
             case "order": if (int.TryParse(value, out var ord)) style.Order = ord; break;
@@ -2925,42 +2937,40 @@ public static class CssPropertyApplier
         }
     }
 
+    /// <summary>The <c>flex</c> shorthand applied through the one reader the expansion, the echo and
+    /// the grammar share, so a count written as a keyword and a count written as two numbers put the
+    /// same three values in the style (CSS Flexbox 1 §7.1.1).</summary>
     public static void ParseFlexShorthand(string value, ComputedStyle style)
     {
-        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
-        if (parts.Length == 0) return;
+        if (ShorthandExpander.ParseFlexParts(value) is not { } parts) return;
+        ApplyFlexPart("flex-grow", parts.Grow, style);
+        ApplyFlexPart("flex-shrink", parts.Shrink, style);
+        ApplyFlexPart("flex-basis", parts.Basis, style);
+    }
 
-        if (parts[0] == "none" || parts[0] == "auto")
+    /// <summary>One part of the <c>flex</c> shorthand, put through the longhand's own parser — an
+    /// expression the longhand reads (a <c>calc()</c> factor included) is the same value here as it is
+    /// when the page writes that longhand.</summary>
+    private static void ApplyFlexPart(string longhand, string part, ComputedStyle style)
+    {
+        switch (longhand)
         {
-            style.FlexGrow = 0; style.FlexShrink = 1;
-            style.FlexBasis = AutoLength.Instance;
-            return;
+            case "flex-grow": if (float.TryParse(part, out var g)) style.FlexGrow = g; break;
+            case "flex-shrink": if (float.TryParse(part, out var s)) style.FlexShrink = s; break;
+            default: style.FlexBasis = ParseFlexBasis(part); break;
         }
+    }
 
-        int i = 0;
-        if (float.TryParse(parts[0], out var g))
-        {
-            style.FlexGrow = g; style.FlexShrink = 1; i++;
-            if (i < parts.Length && float.TryParse(parts[i], out var s))
-            { style.FlexShrink = s; i++; }
-            // A trailing non-number token is the explicit flex-basis; only when no
-            // basis is given does a numeric 'flex' shorthand default it to 0%.
-            if (i < parts.Length)
-            {
-                var b = parts[i].Trim().ToLowerInvariant();
-                style.FlexBasis = b == "auto" ? AutoLength.Instance : Length.Parse(parts[i]);
-            }
-            else
-            {
-                style.FlexBasis = new PercentLength(0);
-            }
-        }
-        else
-        {
-            style.FlexBasis = Length.Parse(parts[0]); i++;
-            if (i < parts.Length && float.TryParse(parts[i], out var g2))
-                style.FlexGrow = g2;
-        }
+    /// <summary>&lt;'flex-basis'&gt; (CSS Flexbox 1 §7.2): a length, a percentage, <c>auto</c>, and the
+    /// <c>content</c> keyword — which measures the item's own content, so layout treats it as the free
+    /// space it falls back to while the computed surface answers the word the page wrote (measured:
+    /// <c>flex-basis: content</c> computes <c>content</c>).</summary>
+    private static Length ParseFlexBasis(string value)
+    {
+        var text = value.Trim();
+        if (text.Equals("content", StringComparison.OrdinalIgnoreCase))
+            return new SizingKeywordLength("content");
+        return Length.Parse(text);
     }
 
     public static FlexDirectionType ParseFlexDirection(string value) => value.ToLowerInvariant() switch

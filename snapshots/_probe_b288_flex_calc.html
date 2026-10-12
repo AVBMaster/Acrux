@@ -1,0 +1,9 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font:14px monospace}</style></head><body><pre id="r"></pre>
+<script>
+var C=['flex: 1 1 calc(10px)','flex: 1 1 calc(10px + 5px)','flex: 1 1 min(10px, 5px)','flex-basis: calc(10px + 5px)',
+      'flex: calc(1)','flex: 1 calc(1)','flex: 1 1 calc(10px + 5px) ','flex: 1 1 calc( 10px + 5px )','width: calc(10px + 5px)','flex: 1 1 5%'];
+var out=[];
+for (var i=0;i<C.length;i++){var d=document.createElement('div');document.body.appendChild(d);d.style.cssText=C[i];
+  var n=[];for(var j=0;j<d.style.length;j++)n.push(d.style.item(j));
+  out.push(i+'|'+C[i]+'|n='+d.style.length+'|'+n.join(',')+'|cssText='+d.style.cssText+'|sup='+(CSS.supports(C[i].split(':')[0],C[i].split(':')[1].trim())?'yes':'no'));}
+console.log(out.join('\n'));window.ROWS=out;</script></body></html>

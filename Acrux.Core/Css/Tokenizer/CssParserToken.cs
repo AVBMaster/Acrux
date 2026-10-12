@@ -14,6 +14,13 @@ public struct CssParserToken
     public uint UnicodeRangeStart { get; set; }
     public uint UnicodeRangeEnd { get; set; }
     public bool HasStringVal { get; set; }
+
+    /// <summary>Whether the page wrote a plus in front of this number. The value it stands for is the
+    /// same number either way, but the characters are not: a token stream that prints <c>1+1</c> as
+    /// <c>11</c> hands the reader an operand list with no operator in it, and a math expression whose
+    /// <c>+</c> or <c>-</c> is not surrounded by whitespace is no expression at all (CSS Values 4
+    /// §10.2.1) — so the sign the author wrote has to survive to the grammar that says so.</summary>
+    public bool HasLeadingPlus { get; set; }
     public int Line { get; set; }
     public int Column { get; set; }
 
@@ -135,9 +142,9 @@ public struct CssParserToken
             case CssTokenType.UrlToken: return "url(" + Value + ")";
             case CssTokenType.BadUrlToken: return "url(";
             case CssTokenType.DelimiterToken: return Value;
-            case CssTokenType.NumberToken: return FormatNumber(NumericValue);
-            case CssTokenType.PercentageToken: return FormatNumber(NumericValue) + "%";
-            case CssTokenType.DimensionToken: return FormatNumber(NumericValue) + Unit;
+            case CssTokenType.NumberToken: return Signed(FormatNumber(NumericValue));
+            case CssTokenType.PercentageToken: return Signed(FormatNumber(NumericValue) + "%");
+            case CssTokenType.DimensionToken: return Signed(FormatNumber(NumericValue) + Unit);
             case CssTokenType.WhitespaceToken: return " ";
             case CssTokenType.CdoToken: return "<!--";
             case CssTokenType.CdcToken: return "-->";
@@ -174,6 +181,10 @@ public struct CssParserToken
         value == Math.Floor(value) && Math.Abs(value) < 1e15
             ? value.ToString("0.###############", System.Globalization.CultureInfo.InvariantCulture)
             : value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The number as the page wrote its sign: a plus the author put in front of a number is
+    /// printed, because dropping it would glue this number onto whatever stood in front of it.</summary>
+    private string Signed(string number) => HasLeadingPlus ? "+" + number : number;
 
     private static string EscapeString(string value)
     {

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b288 probe 3 — flex factors, emphasis shapes, system fonts</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 4px; }</style></head><body>
+<pre id="report"></pre>
+<script>
+// One fresh element per case. Each value is written through the CSSOM (specified text) and into a
+// sheet that a later element reads through getComputedStyle; the style flush is forced before the
+// computed read, because an unforced read answers with the previous element's values.
+var CASES = [
+  'flex: 4px', 'flex: 50%', 'flex: 2 4px', 'flex: 0 0 0', 'flex: 1 1 0',
+  'flex: none 1', 'flex: 1 none', 'flex: calc(1)', 'flex: 1 calc(1)', 'flex: 1 1 calc(10px)',
+  'flex: 1e3', 'flex: 0 auto', 'flex: auto auto', 'flex: 1 1 auto auto', 'flex: 1 2 3 4px',
+  'flex: 1 1 +2', 'flex: 1 1 2.', 'flex: 1 1 .5', 'flex: 0', 'flex: 1 1 content',
+  'flex-grow: -1', 'flex-grow: 20%', 'flex-grow: calc(1+1)', 'flex-grow: 1e3', 'flex-grow: 0',
+  'flex-grow: 1.5.2', 'flex-shrink: -1', 'flex-shrink: 1e3', 'flex-shrink: 0',
+  'flex-basis: -5px', 'flex-basis: content', 'flex-basis: 0', 'flex-basis: calc(2*5px)',
+  'flex-basis: auto auto', 'flex-basis: 50%', 'flex-basis: 1em', 'flex-basis: bogus',
+  'text-emphasis: open', 'text-emphasis: filled circle', 'text-emphasis: circle filled',
+  'text-emphasis: dot filled filled', 'text-emphasis: dot currentcolor', 'text-emphasis: RED DOT',
+  'text-emphasis: dot #f00', 'text-emphasis: over dot', 'text-emphasis: dot red blue',
+  'text-emphasis-style: filled', 'text-emphasis-style: open', 'text-emphasis-style: sesame',
+  ['text-emphasis-style', "text-emphasis-style: 'x'"], ['text-emphasis-style', "text-emphasis-style: 'ab'"],
+  'text-emphasis-style: ""', 'text-emphasis-style: dot dot', 'text-emphasis-style: filled open',
+  'text-emphasis: "x" red', 'text-emphasis: red "x"', 'text-emphasis: circle',
+  'text-emphasis-position: over', 'text-emphasis-position: under', 'text-emphasis-position: left',
+  'text-emphasis-position: vertical', 'text-emphasis-position: over left', 'text-emphasis-position: right left',
+  'text-emphasis-position: auto', 'text-emphasis-position: over over',
+  'font: caption', 'font: menu', 'font: small-caption', 'font: 12px serif',
+  'text-decoration: overline dotted red', 'text-decoration: red dotted overline',
+];
+function propOf(decl) { return decl.split(':')[0].trim(); }
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var decl = CASES[i].length ? CASES[i] : CASES[i];
+  var prop = Array.isArray(CASES[i]) ? CASES[i][0] : propOf(CASES[i]);
+  decl = Array.isArray(CASES[i]) ? CASES[i][1] : CASES[i];
+  var d = document.createElement('div');
+  document.body.appendChild(d);
+  d.style.cssText = decl;
+  var names = [];
+  for (var j = 0; j < d.style.length; j++) names.push(d.style.item(j));
+  var sheet = document.createElement('style');
+  sheet.textContent = '.c' + i + ' { ' + decl + ' }';
+  document.head.appendChild(sheet);
+  var host = document.createElement('div');
+  host.className = 'c' + i;
+  document.body.appendChild(host);
+  void host.offsetHeight;              // force the style recalc before the computed read
+  var computed = '?';
+  try { computed = getComputedStyle(host).getPropertyValue(prop); } catch (e) { computed = 'ERR'; }
+  out.push(i + '|' + decl + '|n=' + d.style.length + '|' + names.join(',')
+           + '|cssText=' + d.style.cssText + '|comp=' + computed);
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

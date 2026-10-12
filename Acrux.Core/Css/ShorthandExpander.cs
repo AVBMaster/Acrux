@@ -60,6 +60,7 @@ public static class ShorthandExpander
             case "outline": ExpandOutline(result, value); break;
             case "text-decoration": ExpandTextDecoration(result, value); break;
             case "white-space": ExpandWhiteSpace(result, value); break;
+            case "container": ExpandContainer(result, value); break;
             case "contain-intrinsic-size": ExpandContainIntrinsicSize(result, value); break;
             case "text-wrap": ExpandTextWrap(result, value); break;
             case "text-emphasis": ExpandTextEmphasis(result, value); break;
@@ -214,6 +215,7 @@ public static class ShorthandExpander
         // this array is what ShorthandsFor() indexes, and a longhand whose shorthand is missing
         // from it reads back empty through the CSSOM even though the shorthand set it.
         "place-content", "place-items", "place-self", "list-style",
+        "container", "grid-template",
         "scroll-margin", "scroll-padding", "offset",
         "scroll-margin-block", "scroll-margin-inline",
         "scroll-padding-block", "scroll-padding-inline",
@@ -268,6 +270,26 @@ public static class ShorthandExpander
     /// here (rather than mapping it inside the applier) is what makes source order work:
     /// 'white-space-collapse: preserve; white-space: normal' must end at 'normal', and
     /// both declarations then write the same longhand keys.</summary>
+    /// <summary>CSS Containment 3 §3.4: the shorthand is the name list and, after one slash, the
+    /// type. The reading is the echo table's — <c>container</c> is an echoed name whose own reader
+    /// decides every shape, including the slash — so this only splits its answer back into the two
+    /// longhands, with the type the page left out reported as the 'normal' it means (measured:
+    /// 'container: x' enumerates container-name='x' and container-type='normal').</summary>
+    private static void ExpandContainer(Dictionary<string, string> result, string value)
+    {
+        var canonical = Resolver.EchoedProperties.Normalize("container", value);
+        if (canonical == null) return;
+        int slash = canonical.IndexOf('/');
+        if (slash < 0)
+        {
+            result["container-name"] = canonical;
+            result["container-type"] = "normal";
+            return;
+        }
+        result["container-name"] = canonical[..slash].Trim();
+        result["container-type"] = canonical[(slash + 1)..].Trim();
+    }
+
     private static void ExpandWhiteSpace(Dictionary<string, string> result, string value)
     {
         string v = value.Trim().ToLowerInvariant();
@@ -985,6 +1007,29 @@ public static class ShorthandExpander
             "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode",
         },
         "gap" => new[] { "row-gap", "column-gap" },
+        // Three the engine expands but did not enumerate: each names the longhands it covers even
+        // when the value carries only one of them (measured, in this order —
+        // 'white-space: normal' enumerates [white-space-collapse, text-wrap-mode] with length 2,
+        // 'text-wrap: nowrap' [text-wrap-mode, text-wrap-style], and
+        // 'contain-intrinsic-size: 10px' [contain-intrinsic-width, contain-intrinsic-height]).
+        "white-space" => new[] { "white-space-collapse", "text-wrap-mode" },
+        "text-wrap" => new[] { "text-wrap-mode", "text-wrap-style" },
+        "contain-intrinsic-size" => new[] { "contain-intrinsic-width", "contain-intrinsic-height" },
+        // The two box shorthands of the scroll snap area and the two grid ones. The order is the
+        // reference engine's own enumeration, which for 'grid-area' interleaves the axes
+        // (row-start, column-start, row-end, column-end) rather than pairing them
+        // (measured, every name read back through style.item(i)).
+        "scroll-margin" => new[] { "scroll-margin-top", "scroll-margin-right",
+            "scroll-margin-bottom", "scroll-margin-left" },
+        "scroll-padding" => new[] { "scroll-padding-top", "scroll-padding-right",
+            "scroll-padding-bottom", "scroll-padding-left" },
+        "grid-area" => new[] { "grid-row-start", "grid-column-start",
+            "grid-row-end", "grid-column-end" },
+        "grid-template" => new[] { "grid-template-rows", "grid-template-columns",
+            "grid-template-areas" },
+        // CSS Containment 3 §3.4: the name list and the type, in that order, whether or not the
+        // page said the type (measured: 'container: x' enumerates both, with 'normal' for the type).
+        "container" => new[] { "container-name", "container-type" },
         "text-decoration" => new[] {
             "text-decoration-line", "text-decoration-thickness", "text-decoration-style",
             "text-decoration-color",
@@ -1072,13 +1117,18 @@ public static class ShorthandExpander
         if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out var number, out var unit))
             return false;
         if (unit.Length == 0) return number == 0;
-        return unit.ToLowerInvariant() switch
-        {
-            "deg" or "grad" or "rad" or "turn" or "s" or "ms" or "hz" or "khz"
-                or "dpi" or "dpcm" or "dppx" => false,
-            _ => true,
-        };
+        return IsLengthUnit(unit);
     }
+
+    /// <summary>The units that measure a length, which is every unit a token can carry except the
+    /// angles, times, frequencies, resolutions and track fractions — the ones a property that wants
+    /// a length has no use for.</summary>
+    internal static bool IsLengthUnit(string unit) => unit.ToLowerInvariant() switch
+    {
+        "deg" or "grad" or "rad" or "turn" or "s" or "ms" or "hz" or "khz"
+            or "dpi" or "dpcm" or "dppx" or "fr" => false,
+        _ => true,
+    };
 
     /// <summary>One token of an enumerated list, lower-cased so the longhand parsers — which all
     /// compare against the grammar's own spellings — see the keyword the page meant. A function
@@ -1592,67 +1642,140 @@ public static class ShorthandExpander
             System.Globalization.CultureInfo.InvariantCulture, out _);
     }
 
-    private static void ExpandFlex(Dictionary<string, string> result, string value)
+    /// <summary>The three parts the <c>flex</c> shorthand stands for, each spelled the way its own
+    /// longhand spells it.</summary>
+    public sealed class FlexShorthandParts
     {
-        var parts = SplitShorthand(value);
-        if (parts.Count == 0) return;
+        public required string Grow { get; init; }
+        public required string Shrink { get; init; }
+        public required string Basis { get; init; }
 
-        string grow = null, shrink = null, basis = null;
-        int numberCount = 0;
-
-        foreach (var part in parts)
-        {
-            var p = part.Trim().ToLowerInvariant();
-            if (p == "none")
-            {
-                grow = "0"; shrink = "0"; basis = "auto";
-                numberCount = 0;
-            }
-            else if (p == "auto")
-            {
-                if (basis == null) basis = "auto";
-            }
-            else if (p == "initial")
-            {
-                grow = "0"; shrink = "1"; basis = "auto";
-            }
-            else if (IsFlexBasisLength(p))
-            {
-                basis = p;
-            }
-            else if (float.TryParse(p, out _))
-            {
-                numberCount++;
-                if (grow == null) grow = p;
-                else if (shrink == null) shrink = p;
-            }
-        }
-
-        if (grow == null) grow = numberCount > 0 ? "0" : "1";
-        if (shrink == null) shrink = "1";
-        if (basis == null)
-        {
-            basis = numberCount > 0 ? "0%" : "auto";
-        }
-
-        result["flex-grow"] = grow;
-        result["flex-shrink"] = shrink;
-        result["flex-basis"] = basis;
+        /// <summary>The shorthand as the engine says it: the three parts, because a reference engine
+        /// prints what <c>flex</c> means and not what the page typed — <c>flex: none</c> reads
+        /// <c>0 0 auto</c>, <c>flex: 1</c> reads <c>1 1 0%</c> and <c>flex: 1 1 0</c> reads
+        /// <c>1 1 0px</c> (measured, all three, on both the echo and the computed surface).</summary>
+        public string Text => Grow + " " + Shrink + " " + Basis;
     }
 
-    private static bool IsFlexBasisLength(string p)
+    /// <summary>CSS Flexbox 1 §7.1.1 <c>flex: none | [ &lt;'flex-grow'&gt; &lt;'flex-shrink'&gt;? ||
+    /// &lt;'flex-basis'&gt; ]</c>, read as strictly as the reference engine reads it. The two factors
+    /// are counts from zero up and the basis is a length, a percentage, <c>auto</c> or <c>content</c>,
+    /// and a value that asks for more than that is no value: <c>none</c> stands alone, a third number
+    /// has no slot, a second basis contradicts the first, and a negative of any of the three is
+    /// refused (measured: <c>flex: none 1</c>, <c>flex: 1 2 3 4px</c>, <c>flex: auto auto</c>,
+    /// <c>flex: 0% 0%</c>, <c>flex: 1 1 -5px</c> and <c>flex: 1 1 auto extra</c> are all dropped,
+    /// while <c>flex: auto 1</c> is the same value as <c>flex: 1 auto</c> because the parts of a
+    /// <c>||</c> list may be written in either order).</summary>
+    public static FlexShorthandParts? ParseFlexParts(string value)
     {
-        if (string.IsNullOrEmpty(p)) return false;
-        if (p.EndsWith("px", StringComparison.OrdinalIgnoreCase)) return true;
-        if (p.EndsWith("em", StringComparison.OrdinalIgnoreCase)) return true;
-        if (p.EndsWith("rem", StringComparison.OrdinalIgnoreCase)) return true;
-        if (p.EndsWith("%", StringComparison.OrdinalIgnoreCase)) return true;
-        if (p.EndsWith("vh", StringComparison.OrdinalIgnoreCase)) return true;
-        if (p.EndsWith("vw", StringComparison.OrdinalIgnoreCase)) return true;
-        // A bare "0" is NOT a flex-basis here: in the 'flex' shorthand the leading
-        // numbers are grow/shrink, so "0" must fall through to the number branch
-        // (treating it as a unitless basis would swallow grow and default it to 1).
+        var tokens = SplitShorthand(value);
+        if (tokens.Count == 0) return null;
+
+        string? grow = null, shrink = null, basis = null;
+        bool anyNumber = false;
+
+        foreach (var raw in tokens)
+        {
+            var token = raw.Trim();
+            if (token.Length == 0) continue;
+
+            if (token.Equals("none", StringComparison.OrdinalIgnoreCase))
+            {
+                // 'none' is a value of the shorthand, not of one of its parts, so nothing may stand
+                // beside it (measured: 'flex: none 1' and 'flex: 1 none' are both dropped).
+                if (tokens.Count != 1) return null;
+                return new FlexShorthandParts { Grow = "0", Shrink = "0", Basis = "auto" };
+            }
+
+            if (token.Equals("auto", StringComparison.OrdinalIgnoreCase)
+                || token.Equals("content", StringComparison.OrdinalIgnoreCase))
+            {
+                if (basis != null) return null;
+                basis = token.ToLowerInvariant();
+                continue;
+            }
+
+            // A math function goes into the slot its type names: 'flex: calc(1) 1 auto' asks for the
+            // count and 'flex: 1 1 calc(10px)' for the length (measured, both), and an expression
+            // whose type the engine cannot name — a variable — takes a count slot as the shorthand's
+            // own.
+            if (token.Contains('('))
+            {
+                if (MathExpressionIsLength(token))
+                {
+                    if (basis != null) return null;
+                    basis = token.ToLowerInvariant();
+                    continue;
+                }
+                if (grow == null) { grow = token.ToLowerInvariant(); anyNumber = true; continue; }
+                if (shrink == null) { shrink = token.ToLowerInvariant(); anyNumber = true; continue; }
+                return null;
+            }
+
+            if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out var number, out var unit))
+                return null;
+
+            // A negative is refused wherever it stands: the two factors are counts from zero up, and
+            // a basis that is less than nothing measures nothing (measured: 'flex: -1 1 auto',
+            // 'flex: 1 -1 auto' and 'flex: 1 1 -5px' all leave no declaration).
+            if (number < 0) return null;
+
+            if (unit.Length == 0)
+            {
+                if (grow == null) { grow = token.ToLowerInvariant(); anyNumber = true; continue; }
+                if (shrink == null) { shrink = token.ToLowerInvariant(); anyNumber = true; continue; }
+                // A third unitless number is the zero length it may stand for and nothing else:
+                // 'flex: 0 0 0' is a basis of '0px' while 'flex: 1 1 .5' is no value (measured).
+                if (number != 0 || basis != null) return null;
+                basis = "0px";
+                continue;
+            }
+
+            if (!IsLengthUnit(unit) || basis != null) return null;
+            basis = token.ToLowerInvariant();
+        }
+
+        grow ??= "1";
+        shrink ??= "1";
+        // A basis the value never names is '0%' when the value wrote a count — the shorthand's own
+        // default, which is not the longhand's 'auto' — and 'auto' when it wrote none at all
+        // (measured: 'flex: 1' is '1 1 0%' while 'flex: auto' is '1 1 auto').
+        basis ??= anyNumber ? "0%" : "auto";
+        return new FlexShorthandParts { Grow = grow, Shrink = shrink, Basis = basis };
+    }
+
+    /// <summary>Whether a math call resolves to a length or a percentage, which is what puts it in the
+    /// basis slot of the <c>flex</c> shorthand rather than in one of the two count slots.</summary>
+    private static bool MathExpressionIsLength(string token)
+    {
+        foreach (var call in Acrux.Core.Css.CssMathValue.MathCalls(token))
+            if (Acrux.Core.Css.CssMathValue.WellTyped(call.Name + "(" + call.Argument + ")", out var category)
+                && category is "length" or "percentage")
+                return true;
         return false;
+    }
+
+    /// <summary>Initial values of the three parts, which is what a CSS-wide keyword on the shorthand
+    /// expands to — the block keeps the keyword as its text, and the enumeration of the shorthand's
+    /// longhands still has to name three of them (measured: 'flex: initial' reads back 'initial' and
+    /// still counts three).</summary>
+    private static FlexShorthandParts FlexInitialValues() =>
+        new() { Grow = "0", Shrink = "1", Basis = "auto" };
+
+    private static void ExpandFlex(Dictionary<string, string> result, string value)
+    {
+        if (Resolver.CssPropertyTraits.IsCssWideKeyword(value.Trim()))
+        {
+            var wide = FlexInitialValues();
+            result["flex-grow"] = wide.Grow;
+            result["flex-shrink"] = wide.Shrink;
+            result["flex-basis"] = wide.Basis;
+            return;
+        }
+        if (ParseFlexParts(value) is not { } parts) return;
+        result["flex-grow"] = parts.Grow;
+        result["flex-shrink"] = parts.Shrink;
+        result["flex-basis"] = parts.Basis;
     }
 
     private static void ExpandFlexFlow(Dictionary<string, string> result, string value)
@@ -2172,28 +2295,88 @@ public static class ShorthandExpander
     internal static bool IsTextDecorationThickness(string token) =>
         token is "auto" or "from-font" || Dom.Length.IsLength(token);
 
+    /// <summary>The five shapes an emphasis mark takes, and the two ways it may be filled
+    /// (CSS Text-Emphasis 1 §3.2). Both lists are in the spelling the engine prints.</summary>
+    private static readonly string[] EmphasisShapes =
+        { "dot", "circle", "double-circle", "triangle", "sesame" };
+
+    /// <summary>&lt;text-emphasis-style&gt; read as the reference engine reads it: at most one of
+    /// <c>filled</c> and <c>open</c>, at most one of the five shapes, a string marker instead of both,
+    /// or <c>none</c> alone — and the fill is printed first whichever order the page wrote them in.
+    /// Everything else is no value: a position word, <c>normal</c>, a colour, a shape written twice or
+    /// a fill written twice (measured: <c>text-emphasis-style: dot filled</c> reads back
+    /// <c>filled dot</c> while <c>auto dot</c>, <c>dot dot</c>, <c>filled open</c>, <c>normal</c> and
+    /// <c>triangle red</c> leave no declaration).</summary>
+    public static string? ParseEmphasisStyle(string text)
+    {
+        string? fill = null, shape = null;
+        foreach (var word in SplitShorthand(text))
+        {
+            var p = word.Trim();
+            if (p.Length == 0) continue;
+            if (p[0] is '"' or '\'')
+            {
+                // A string marker is the whole style; nothing else may be said beside it.
+                if (fill != null || shape != null) return null;
+                shape = p;
+                continue;
+            }
+            var lower = p.ToLowerInvariant();
+            if (lower == "none")
+            {
+                if (fill != null || shape != null) return null;
+                shape = "none";
+                continue;
+            }
+            if (lower is "filled" or "open")
+            {
+                if (fill != null) return null;
+                fill = lower;
+                continue;
+            }
+            if (System.Array.IndexOf(EmphasisShapes, lower) < 0) return null;
+            if (shape != null) return null;
+            shape = lower;
+        }
+        if (fill == null && shape == null) return null;
+        if (shape == "none") return "none";
+        if (shape == null) return fill;
+        return fill == null ? shape : fill + " " + shape;
+    }
+
+    /// <summary>The style and the colour the <c>text-emphasis</c> shorthand says, read through the one
+    /// style parser above so the shorthand, its longhand and the grammar cannot disagree about what a
+    /// mark is. The colour may be written on either side of the style and is printed after it
+    /// (measured: <c>text-emphasis: red dot</c> reads <c>dot red</c> and <c>red filled dot</c> reads
+    /// <c>filled dot red</c>), and a value with two colours in it is no value at all.</summary>
+    public static (string Style, string? Color)? ParseTextEmphasisParts(string value)
+    {
+        string? colour = null;
+        var styleWords = new List<string>();
+        foreach (var word in SplitShorthand(value))
+        {
+            var p = word.Trim();
+            if (p.Length == 0) continue;
+            if (IsColor(p))
+            {
+                if (colour != null) return null;
+                colour = p;
+                continue;
+            }
+            styleWords.Add(p);
+        }
+        if (styleWords.Count == 0) return null;
+        var style = ParseEmphasisStyle(string.Join(" ", styleWords));
+        return style == null ? null : (style, colour);
+    }
+
     private static void ExpandTextEmphasis(Dictionary<string, string> result, string value)
     {
-        var parts = SplitShorthand(value);
         result["text-emphasis-style"] = "none";
         result["text-emphasis-color"] = "currentcolor";
-
-        var markParts = new List<string>();
-        foreach (var part in parts)
-        {
-            var p = part.Trim();
-            if (IsColor(p))
-                result["text-emphasis-color"] = p;
-            else
-                markParts.Add(p);
-        }
-
-        if (markParts.Count > 0)
-        {
-            var style = string.Join(" ", markParts).Trim();
-            if (style == "auto") style = "filled dot";
-            result["text-emphasis-style"] = style;
-        }
+        if (ParseTextEmphasisParts(value) is not { } parts) return;
+        result["text-emphasis-style"] = parts.Style;
+        if (parts.Color != null) result["text-emphasis-color"] = parts.Color;
     }
 
     private static void ExpandGap(Dictionary<string, string> result, string value)

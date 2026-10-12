@@ -117,7 +117,7 @@ public static class CssPropertyTraits
     private static readonly HashSet<string> ColorValued = new(StringComparer.OrdinalIgnoreCase)
     {
         "color", "background-color", "caret-color", "accent-color", "outline-color",
-        "column-rule-color", "text-decoration-color", "text-emphasis-color",
+        "column-rule-color", "text-decoration-color", "text-emphasis-color", "text-emphasis",
         "border-color", "border-top-color", "border-right-color", "border-bottom-color",
         "border-left-color", "border-block-color", "border-block-start-color",
         "border-block-end-color", "border-inline-color", "border-inline-start-color",

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b288 probe 7 — the flex parts reaching layout</title>
+<style>
+body { font: 14px/18px monospace; margin: 0; }
+.row { display: flex; width: 200px; height: 20px; }
+.a { background: rgb(255,128,128); }
+.b { background: rgb(0,0,255); }
+#c1 { flex: 1 1 auto; }
+#c2 { flex: 1 1 0%; }
+#c3 { flex: none; }
+#c4 { flex: 0 0 auto; }
+#c5 { flex: 2 1 40px; }
+#c6 { flex: 1 1 300px; }
+#c7 { flex: 0 1 400px; }
+#c8 { flex: 1 1 content; }
+</style></head><body>
+<div class="row" id="r1"><div class="a" id="c1">ab</div><div class="b" id="c2">ab</div></div>
+<div class="row" id="r2"><div class="a" id="c3">ab</div><div class="b" id="c4">ab</div></div>
+<div class="row" id="r3"><div class="a" id="c5">ab</div><div class="b" id="c6">ab</div></div>
+<div class="row" id="r4"><div class="a" id="c7">ab</div><div class="b" id="c8">ab</div></div>
+<script>
+var out = [];
+['c1','c2','c3','c4','c5','c6','c7','c8'].forEach(function (id) {
+  var el = document.getElementById(id);
+  var r = el.getBoundingClientRect();
+  out.push(id + ' x=' + r.x.toFixed(1) + ' w=' + r.width.toFixed(1));
+});
+console.log(out.join('\n'));
+window.ROWS = out;
+</script></body></html>
