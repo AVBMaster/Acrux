@@ -43,6 +43,34 @@ public static class CssValueGrammar
         return ValueTextIsValid(name.ToCssString(), value.CssText());
     }
 
+    /// <summary>Whether a value text carries an exclamation mark outside every string and every
+    /// group — the shape of an important flag. The two-argument <c>CSS.supports</c> is the one
+    /// surface that refuses it: 'color: red !important', 'color: red !' and even a custom property's
+    /// 'red !important' are each unsupported, while the condition form reads the same declaration as
+    /// well-formed (all measured). A mark inside a string — 'content: "!important"' — is a value with
+    /// a mark in it and no flag at all, and is supported.</summary>
+    public static bool HasImportantFlag(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return false;
+        int depth = 0;
+        char quote = '\0';
+        for (int i = 0; i < value.Length; i++)
+        {
+            char c = value[i];
+            if (quote != '\0')
+            {
+                if (c == '\\' && i + 1 < value.Length) i++;
+                else if (c == quote) quote = '\0';
+                continue;
+            }
+            if (c is '"' or '\'') { quote = c; continue; }
+            if (c == '(') depth++;
+            else if (c == ')') { if (depth > 0) depth--; }
+            else if (c == '!' && depth == 0) return true;
+        }
+        return false;
+    }
+
     /// <summary>The same grammar for a declaration the CSSOM is about to store, where only
     /// the property name and the value text are at hand.</summary>
     public static bool TextIsValidFor(string propertyName, string value)
@@ -868,7 +896,8 @@ public static class CssValueGrammar
         // CSS UI 4 §3.11: ONE keyword. 'both horizontal' is two of them, and the reference engine
         // drops it (measured); 'block' and 'inline' are values this engine was missing.
         CssPropertyId.Resize => static text =>
-            IsOneWordOnly(text, "none", "both", "horizontal", "vertical", "block", "inline"),
+            IsOneWordOnly(text, "none", "both", "horizontal", "vertical", "block", "inline",
+            "auto"),
         // CSS Box Decoration Break 1 §3: one of the two, never both ('slice clone' is dropped).
         CssPropertyId.BoxDecorationBreak => static text => IsOneWordOnly(text, "slice", "clone"),
         // CSS Overflow 3 §4.1: the box it measures from, the length, or the two together — in either
@@ -1285,12 +1314,119 @@ public static class CssValueGrammar
                 "avoid-column", "column" }),
         CssPropertyId.BreakInside => static text => IsSingleKeywordWord(text,
             new[] { "auto", "avoid", "avoid-page", "avoid-column" }),
-        CssPropertyId.PageBreakBefore or CssPropertyId.PageBreakAfter => static text =>
-            IsSingleKeywordWord(text, new[] { "auto", "always", "avoid", "left", "right" }),
-        CssPropertyId.PageBreakInside => static text => IsSingleKeywordWord(text,
-            new[] { "auto", "avoid" }),
+        CssPropertyId.PageBreakBefore or CssPropertyId.PageBreakAfter or CssPropertyId.PageBreakInside
+            => text => IsSingleKeywordWord(text, LegacyBreakAlias.ValuesOf(id)!),
+        // ===== The keyword families measured value by value in b290 (251 cases,
+        // snapshots/_probe_b290_unswept_keyword_sets.html). None of these properties had a grammar
+        // arm at all before, so each of them took whatever word a page wrote.
+        // CSS UI 4 §3.6 + the form-control spellings this engine answers: one word, and the set is
+        // smaller than the draft's — 'slider', 'popover', 'toolbars', 'document', 'alpha' and
+        // 'pickers' are all dropped, and a second word is never a value (measured, each).
+        CssPropertyId.Appearance => static text => IsOneWordOnly(text,
+            "auto", "none", "textfield", "menulist", "listbox", "textarea", "button", "checkbox",
+            "radio", "menulist-button", "searchfield", "meter", "progress-bar"),
+        // CSS Color 5 §…: 'zoom' is a scaling factor — a number from zero up, a percentage, or
+        // 'normal'. 'reset' is a later draft's word, a length measures nothing to scale by, a
+        // negative is no factor, and a calc() that mixes a percentage with a length is not a
+        // number (measured: 'calc(1 + 1)' stands, 'calc(50% + 10px)' falls).
+        CssPropertyId.Zoom => static text =>
+        {
+            var word = text.Trim();
+            if (word.Equals("normal", StringComparison.OrdinalIgnoreCase)) return true;
+            if (IsMathFunctionCall(word, IsLengthOrPercentage))
+                return CssMathValue.TypeOf(word) == "number";
+            if (word.EndsWith("%", StringComparison.Ordinal))
+                return IsNumber(word[..^1]);
+            return Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(word, out var factor,
+                out var unit) && unit.Length == 0 && factor >= 0;
+        },
+        // CSS Lists 3 §4.1 and GCPM §8.1: quote pairs, so an odd number of strings says one and a
+        // half a pair and is no value (measured: '"a"' and '"a" "b" "c"' both fall, two and four
+        // stand), and 'none'/'auto' stand alone.
+        CssPropertyId.Quotes => static text =>
+        {
+            var word = text.Trim();
+            if (word.Equals("none", StringComparison.OrdinalIgnoreCase)
+                || word.Equals("auto", StringComparison.OrdinalIgnoreCase)) return true;
+            var items = SplitComponents(word);
+            return items.Count >= 2 && items.Count % 2 == 0
+                && items.All(item => item.Length > 1 && (item[0] == '"' || item[0] == '\''));
+        },
+        // CSS Text 3 §5.1: one final-line choice. 'justify-all' and 'match-parent' are the values
+        // of a different draft, and the two-word form CSS Text 4 sketches is not answered here
+        // either (measured: all four fall, 'center' and 'justify' stand). The four legacy '-webkit-'
+        // spellings do stand — and '-webkit-justify' is the one of them that does not (measured).
+        CssPropertyId.TextAlign => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count != 1) return false;
+            return IsOneOf(words[0], "left", "right", "center", "justify", "start", "end",
+                "-webkit-left", "-webkit-right", "-webkit-center", "-webkit-match-parent");
+        },
+        // CSS Text 4 §3.6 (the set this engine answers): 'trim-both' and 'trim-none' are dropped
+        // (measured), and so is the second word of the draft's two-word form.
+        CssPropertyId.TextSpacingTrim => static text => IsOneWordOnly(text,
+            "normal", "none", "space-all", "space-first", "trim-start"),
+        // CSSOM View §7.1: 'instant' is not a value of this property here (measured).
+        CssPropertyId.ScrollBehavior => static text => IsOneWordOnly(text, "auto", "smooth"),
+        // CSS Multi-column 1 §3.4: one keyword. The '||' with 'all'/'columns' of the same draft is
+        // not answered (measured: 'balance all', 'balance columns' and 'auto all' all fall).
+        CssPropertyId.ColumnFill => static text => IsOneWordOnly(text, "auto", "balance"),
+        // CSS Fragmentation 3 §3.5/§3.6: an integer from one up, and no 'auto' in this engine
+        // (measured: 'widows: auto', 'widows: 0' and 'widows: 1.5' all fall).
+        CssPropertyId.Widows or CssPropertyId.Orphans => static text =>
+            IsIntegerText(text) && int.TryParse(text.Trim(), out var count) && count >= 1,
         _ => null,
     };
+
+    /// <summary>CSS Anchor Positioning 1 §4.1: the inset-area vocabulary, split by the axis each
+    /// word measures along. Two words name one area only when they take one slot each; the same
+    /// axis twice is no area (measured: 'x-start y-end' and 'left top' stand).</summary>
+    private static readonly string[] InsetAreaAlongX =
+    {
+        "left", "right", "x-start", "x-end", "span-left", "span-right", "span-x-start", "span-x-end",
+        "inline-start", "inline-end", "span-inline-start", "span-inline-end",
+    };
+
+    private static readonly string[] InsetAreaAlongY =
+    {
+        "top", "bottom", "y-start", "y-end", "span-top", "span-bottom", "span-y-start", "span-y-end",
+        "block-start", "block-end", "span-block-start", "span-block-end",
+    };
+
+    private static readonly string[] InsetAreaEitherAxis =
+    {
+        "center", "span-all", "span-x", "span-y", "self-start", "self-end", "self-center",
+        "span-self-start", "span-self-end", "span-self-center",
+    };
+
+    private static bool IsInsetAreaWord(string word) =>
+        System.Array.IndexOf(InsetAreaAlongX, word) >= 0
+        || System.Array.IndexOf(InsetAreaAlongY, word) >= 0
+        || System.Array.IndexOf(InsetAreaEitherAxis, word) >= 0;
+
+    /// <summary>&lt;inset-area&gt;: one or two side keywords that do not both measure along
+    /// the same axis. The echo table reads this one too, so a sheet, the CSSOM and supports()
+    /// cannot disagree about what 'left top' names.</summary>
+    internal static bool IsInsetArea(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count == 0 || words.Count > 2) return false;
+        foreach (var word in words)
+            if (!IsInsetAreaWord(word.ToLowerInvariant())) return false;
+        if (words.Count == 1) return true;
+        string First(string w) => w.ToLowerInvariant();
+        var a = First(words[0]);
+        var b = First(words[1]);
+        bool AlongX(string w) => System.Array.IndexOf(InsetAreaAlongX, w) >= 0;
+        bool AlongY(string w) => System.Array.IndexOf(InsetAreaAlongY, w) >= 0;
+        bool Either(string w) => System.Array.IndexOf(InsetAreaEitherAxis, w) >= 0;
+        // Two words fill the two slots: one from each axis, or two that resolve per axis
+        // themselves. A single-axis word beside a both-axis word leaves the pair ambiguous and is
+        // no area (measured: 'left span-top' and 'self-start self-end' stand while
+        // 'span-block-end self-start' and 'top bottom' fall).
+        return (AlongX(a) && AlongY(b)) || (AlongY(a) && AlongX(b)) || (Either(a) && Either(b));
+    }
 
     /// <summary>A pair of values from one set — the shape of 'text-overflow', which takes one
     /// keyword per axis and so never more than two.</summary>

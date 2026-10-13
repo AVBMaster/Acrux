@@ -652,7 +652,7 @@ public class DocumentHost
                 ["font-weight"] = ((int)computedStyle.FontWeight).ToString(),
                 ["font-style"] = computedStyle.FontStyleCssText,
                 ["line-height"] = computedStyle.LineHeightCssText,
-                ["text-align"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.TextAlign.ToString()),
+                ["text-align"] = computedStyle.TextAlignLegacyKeyword ?? Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.TextAlign.ToString()),
                 ["text-decoration"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.TextDecoration.ToString()),
                 ["white-space"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.WhiteSpace.ToString()),
                 ["word-break"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.WordBreak.ToString()),

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b290 probe 4 — where a space goes in a bold line</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+h2 { font-size: 15px; margin: 0; }
+.b { font-weight: bold; }
+</style></head><body>
+<h2 id="a">paint guards (the keyword must lay the line out)</h2>
+<div class="b" id="b">paint guards (the keyword must lay the line out)</div>
+<div id="c">paint guards (the keyword must lay the line out)</div>
+<div class="b" id="d">a b c d e f g h i j k l m n o p</div>
+<div class="b" id="e">A B C D E F G H I J K L M N O P</div>
+<script>
+var out = [];
+['a','b','c','d','e'].forEach(function (id) {
+  var el = document.getElementById(id);
+  var r = el.getBoundingClientRect();
+  out.push(id + '|w=' + r.width.toFixed(1) + '|text=' + el.textContent);
+});
+var text = out.join('\n');
+document.getElementById('report') && (document.getElementById('report').textContent = text);
+console.log(text);
+</script><pre id="report"></pre></body></html>

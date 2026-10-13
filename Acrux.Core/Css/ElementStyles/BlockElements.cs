@@ -125,7 +125,7 @@ public static class BlockElements
             case "th":
                 style.Display = DisplayType.TableCell;
                 style.FontWeight = FontWeight.Bold;
-                style.TextAlign = TextAlignType.Center;
+                style.SetTextAlign(TextAlignType.Center);
                 style.VerticalAlign = VerticalAlignType.Middle;
                 style.PaddingTop = new PixelLength(1);
                 style.PaddingBottom = new PixelLength(1);
@@ -147,7 +147,7 @@ public static class BlockElements
                 // HTML UA stylesheet: a caption is only centered; it carries no
                 // padding of its own.
                 style.Display = DisplayType.TableCaption;
-                style.TextAlign = TextAlignType.Center;
+                style.SetTextAlign(TextAlignType.Center);
                 break;
             case "colgroup":
                 style.Display = DisplayType.TableColumnGroup;
@@ -228,7 +228,7 @@ public static class BlockElements
                 break;
             case "figcaption":
                 style.Display = DisplayType.Block;
-                style.TextAlign = TextAlignType.Center;
+                style.SetTextAlign(TextAlignType.Center);
                 style.FontSize = 14;
                 style.Color = SKColor.Parse("#808080");
                 style.MarginTop = new PixelLength(8);
@@ -304,7 +304,7 @@ public static class BlockElements
             // 其他块级元素
             case "center":
                 style.Display = DisplayType.Block;
-                style.TextAlign = TextAlignType.Center;
+                style.SetTextAlign(TextAlignType.Center);
                 break;
             case "dir":
                 style.Display = DisplayType.Block;

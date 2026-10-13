@@ -84,7 +84,11 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
     {
         propertyName = CssPropertyIdExtensions.CanonicalName(propertyName);
         SyncWithAttribute();
-        var old = GetStyle(propertyName);
+        // The legacy break names are removed from under the property they carry (measured:
+        // 'removeProperty("page-break-before")' empties a block holding 'break-before: page').
+        var asked = propertyName;
+        propertyName = LegacyBreakAlias.ModernName(asked) ?? asked;
+        var old = GetStyle(asked);
         // A shorthand the block keeps as its longhands has to take those with it. The legacy
         // '-webkit-mask-box-image' writes five longhands and stores nothing under its own name, so
         // removing that name alone left all five in the block (measured: the reference engine is
@@ -126,6 +130,13 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         // A property the block does not carry reads back as the empty string, not as null
         // (CSSOM): 'el.style.color' is '' on an element with no color declaration.
         name = CssPropertyIdExtensions.CanonicalName(name);
+        // The three CSS 2.1 break names are carried by the block under the property they alias and
+        // read back in their own spelling: a block holding 'break-before: page' answers
+        // 'page-break-before' with 'always', and one holding 'break-before: column' — a value the
+        // legacy name has no word for — answers the empty string (measured, LegacyBreakAlias).
+        var asked = name;
+        string? aliased = LegacyBreakAlias.ModernName(asked);
+        if (aliased != null) name = aliased;
         SyncWithAttribute();
         var direct = _element.Style.TryGetValue(name, out var val) ? val : null;
         // A shorthand that has nothing to say beyond its longhands' initials reads back as the empty
@@ -135,8 +146,10 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         // shorthand writes its parts: 'style="margin: 4px"' gives 'marginTop' as '4px'
         // (measured, CSSOM §5.3.1). The declaration the page wrote directly always wins, so a
         // block that names the longhand itself is never read through the shorthand beside it.
-        return direct ?? ReadThroughShorthand(name,
-            shorthand => _element.Style.TryGetValue(shorthand, out var text) ? text : null) ?? "";
+        if (direct == null)
+            return ReadThroughShorthand(name,
+                shorthand => _element.Style.TryGetValue(shorthand, out var text) ? text : null) ?? "";
+        return aliased == null ? direct : LegacyBreakAlias.SpecifiedValue(asked, direct) ?? "";
     }
 
     protected override void SetStyle(string name, string? value)
@@ -150,7 +163,7 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         SyncWithAttribute();
         if (remove)
         {
-            if (!_element.Style.Remove(name)) return;
+            if (!_element.Style.Remove(LegacyBreakAlias.ModernName(name) ?? name)) return;
         }
         else StoreDeclaration(name, value!);
         SyncAttribute();

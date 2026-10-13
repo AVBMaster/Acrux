@@ -41,6 +41,10 @@ public static class CssPropertyApplier
     /// <summary>CSS Touch Action §6: 'auto', 'none' and 'manipulation' each stand alone, and the
     /// pan keywords combine freely. The reference engine prints the authored list in the order it
     /// was written (measured: 'pan-x pinch-zoom'), so this only checks the shape and re-spells it.</summary>
+    /// <summary>The echo surface's spelling of 'touch-action': the same reader the grammar uses, so
+    /// a stored value and an accepted one cannot disagree.</summary>
+    public static string? CanonicalTouchActionForEcho(string value) => CanonicalTouchAction(value);
+
     internal static string? CanonicalTouchAction(string value)
     {
         var words = CollapseSpace(value).ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -51,7 +55,23 @@ public static class CssPropertyApplier
             return standalone.Contains(words[0]) || combinable.Contains(words[0]) ? words[0] : null;
         if (words.Any(w => standalone.Contains(w))) return null;
         if (!words.All(w => combinable.Contains(w))) return null;
-        return words.Length != words.Distinct().Count() ? null : string.Join(' ', words);
+        if (words.Length != words.Distinct().Count()) return null;
+        // CSS Pointer Events 2 §3.4 as this engine reads it: the two directions of an axis are the
+        // axis, so a list that names both of them — or an axis beside one of its directions — says
+        // the same thing twice and is no value (measured: 'pan-left pan-right', 'pan-x pan-left'
+        // and 'pan-up pan-down' each fall while 'pan-x pan-y' stands). What is left prints in one
+        // order whichever way the page wrote it ('pinch-zoom pan-x' reads 'pan-x pinch-zoom').
+        var groups = new Dictionary<string, string>
+        {
+            ["pan-x"] = "x", ["pan-left"] = "x", ["pan-right"] = "x",
+            ["pan-y"] = "y", ["pan-up"] = "y", ["pan-down"] = "y",
+            ["pinch-zoom"] = "zoom",
+        };
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var word in words)
+            if (!seen.Add(groups[word])) return null;
+        string[] order = { "pan-x", "pan-y", "pinch-zoom", "pan-left", "pan-right", "pan-up", "pan-down" };
+        return string.Join(' ', words.OrderBy(w => Array.IndexOf(order, w)).ToArray());
     }
 
     /// <summary>CSS Painting Order: the three paint types in any order, each at most once. The
@@ -311,7 +331,7 @@ public static class CssPropertyApplier
                 style.BackgroundOriginLayers = ParseBackgroundLayerList(value, s => s.ToLowerInvariant());
                 break;
             case "background-blend-mode": style.BackgroundBlendMode = ParseBackgroundBlendMode(value); break;
-            case "text-align": style.TextAlign = ParseTextAlign(value); break;
+            case "text-align": ApplyTextAlign(style, value); break;
             case "text-align-last": style.TextAlignLast = ParseTextAlignLast(value); break;
             case "text-decoration":
                 // The reader below takes each token on its own, which is how a value the grammar
@@ -1609,6 +1629,41 @@ public static class CssPropertyApplier
 
     public static ClearType ParseClear(string value) =>
         Acrux.Core.Dom.CssFloatKeywords.TryParseClear(value, out var c) ? c : ClearType.None;
+
+    /// <summary>'text-align' (CSS Text 3 §5.1) with the four legacy '-webkit-' spellings the
+    /// reference engine still takes. 'left', 'right' and 'center' align the line the way their
+    /// unprefixed twin does and print their own word on the computed surface, which the children that
+    /// inherit it then print too (measured: a child of 'text-align: -webkit-center' computes
+    /// '-webkit-center'). 'match-parent' is the alignment the element already carries from its parent,
+    /// with its logical keyword resolved to the physical side the *parent's* direction says — a plain
+    /// ltr child computes 'left', not 'start', an rtl parent gives 'right', and an element that writes
+    /// 'direction: rtl' beside it still computes 'left' under an ltr parent (all measured). The modern
+    /// names 'match-parent' and 'justify-all' are refused, so they never reach here.</summary>
+    public static void ApplyTextAlign(ComputedStyle style, string value)
+    {
+        var word = value.Trim().ToLowerInvariant();
+        switch (word)
+        {
+            case "-webkit-left":
+            case "-webkit-right":
+            case "-webkit-center":
+                style.SetTextAlign(ParseTextAlign(word[8..]), word);
+                return;
+            case "-webkit-match-parent":
+                // Both halves of the pair are already the parent's: 'text-align' and the direction it
+                // came from are inherited. Only a logical keyword has to be said in physical words.
+                bool parentRtl = string.Equals(style.ParentDirection, "rtl",
+                    StringComparison.OrdinalIgnoreCase);
+                style.TextAlign = style.TextAlign switch
+                {
+                    TextAlignType.Start => parentRtl ? TextAlignType.Right : TextAlignType.Left,
+                    TextAlignType.End => parentRtl ? TextAlignType.Left : TextAlignType.Right,
+                    var carried => carried,
+                };
+                return;
+        }
+        style.SetTextAlign(ParseTextAlign(word));
+    }
 
     public static TextAlignType ParseTextAlign(string value) => value.ToLowerInvariant() switch
     {
@@ -3857,37 +3912,32 @@ public static class CssPropertyApplier
 
     /// <summary>'break-before' / 'break-after' and their legacy 'page-break-before' /
     /// 'page-break-after' aliases write one shared slot holding the CSS Fragmentation 3 keyword.
-    /// The legacy name accepts only 'auto always avoid left right' and folds 'always' onto 'page',
-    /// where the modern name takes the whole column/page/recto/verso set; 'region' and
-    /// 'avoid-region' are refused on both (all measured). Null (a value off the name's list) leaves
-    /// the property untouched.</summary>
+    /// The legacy name's own set, and the 'always' → 'page' fold it needs, are one table with the
+    /// CSSOM's storage and the computed surface's re-spelling — see <see cref="LegacyBreakAlias"/>.
+    /// Null (a value off the name's list) leaves the property untouched.</summary>
     private static string? ParseBreakBetween(string name, string value)
     {
-        string w = value.Trim().ToLowerInvariant();
-        if (name.StartsWith("page-break", StringComparison.OrdinalIgnoreCase))
-            return w switch
-            {
-                "always" => "page",
-                "auto" or "avoid" or "left" or "right" => w,
-                _ => null,
-            };
-        return w switch
-        {
-            "auto" or "avoid" or "avoid-page" or "page" or "left" or "right"
-            or "recto" or "verso" or "avoid-column" or "column" => w,
-            _ => null,
-        };
+        // A legacy name is judged by its OWN set, so a modern keyword it never knew ('recto') is not
+        // let in through the fold.
+        if (LegacyBreakAlias.IsLegacyName(name)) return LegacyBreakAlias.StoredValue(name, value);
+        var word = value.Trim().ToLowerInvariant();
+        return IsModernBreakBetweenWord(word) ? word : null;
     }
+
+    private static bool IsModernBreakBetweenWord(string word) => word is "auto" or "avoid" or "avoid-page"
+        or "page" or "left" or "right" or "recto" or "verso" or "avoid-column" or "column";
 
     /// <summary>'break-inside' and its 'page-break-inside' alias. The modern name takes
     /// 'auto avoid avoid-page avoid-column'; the legacy name only 'auto avoid' (measured).</summary>
     private static string? ParseBreakInside(string name, string value)
     {
-        string w = value.Trim().ToLowerInvariant();
-        if (name.StartsWith("page-break", StringComparison.OrdinalIgnoreCase))
-            return w is "auto" or "avoid" ? w : null;
-        return w is "auto" or "avoid" or "avoid-page" or "avoid-column" ? w : null;
+        if (LegacyBreakAlias.IsLegacyName(name)) return LegacyBreakAlias.StoredValue(name, value);
+        var word = value.Trim().ToLowerInvariant();
+        return IsModernBreakInsideWord(word) ? word : null;
     }
+
+    private static bool IsModernBreakInsideWord(string word) =>
+        word is "auto" or "avoid" or "avoid-page" or "avoid-column";
 
     private static void ParseTabSize(ComputedStyle style, string value)
     {
@@ -4088,6 +4138,10 @@ public static class CssPropertyApplier
     /// 'inline-start' computes 'none'), and neither is a pair of keywords.</summary>
     public static ResizeType ParseResize(string value) => value.ToLowerInvariant() switch
     {
+        // 'auto' is the UA's own choice, and the choice it makes is 'both': the reference engine
+        // answers the computed value of 'resize: auto' with 'both' for a div, a span and an image,
+        // with and without an overflow (measured). The block still prints the word the page wrote.
+        "auto" => ResizeType.Both,
         "both" => ResizeType.Both,
         "horizontal" => ResizeType.Horizontal,
         "vertical" => ResizeType.Vertical,
@@ -4432,9 +4486,15 @@ public static class CssPropertyApplier
 
     public static float ParseZoom(string value)
     {
-        if (value.EndsWith("%") && float.TryParse(value[..^1], out var pct)) return pct / 100f;
-        if (float.TryParse(value, out var num)) return num;
-        return 1;
+        // A zoom that is nothing is no scale. The reference engine keeps the authored '0' as the
+        // specified value and answers the computed one with '1' (measured: 'zoom: 0' and 'zoom: 0%'
+        // each compute '1', while 'zoom: 0.0001' computes itself), and a layout that multiplied by
+        // the zero would collapse the box the engine is meant to leave alone. A negative never
+        // reaches here — the grammar refuses it.
+        float zoom = value.EndsWith("%") && float.TryParse(value[..^1], out var pct)
+            ? pct / 100f
+            : float.TryParse(value, out var num) ? num : 1f;
+        return zoom > 0 ? zoom : 1f;
     }
 
     public static void ParseGap(string value, ComputedStyle style)

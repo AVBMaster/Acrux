@@ -64,6 +64,9 @@ public static class ShorthandExpander
             case "contain-intrinsic-size": ExpandContainIntrinsicSize(result, value); break;
             case "text-wrap": ExpandTextWrap(result, value); break;
             case "text-emphasis": ExpandTextEmphasis(result, value); break;
+            case "overscroll-behavior": ExpandPair(result, value, "overscroll-behavior-x",
+                "overscroll-behavior-y", "auto"); break;
+            case "position-try": ExpandPositionTry(result, value); break;
             case "gap": ExpandGap(result, value); break;
         case "columns": ExpandColumns(result, value); break;
         case "column-rule": ExpandColumnRule(result, value); break;
@@ -170,6 +173,12 @@ public static class ShorthandExpander
             "flex-flow" => new[] { "flex-direction", "flex-wrap" },
             "text-decoration" => new[] { "text-decoration-line", "text-decoration-style", "text-decoration-color", "text-decoration-thickness" },
             "text-emphasis" => new[] { "text-emphasis-style", "text-emphasis-color" },
+            // CSS Overscroll Behavior 1 §3.1: the shorthand is the two axes, and the block counts
+            // both whether or not the page said the second one (measured: 'overscroll-behavior:
+            // auto' enumerates x and y).
+            "overscroll-behavior" => new[] { "overscroll-behavior-x", "overscroll-behavior-y" },
+            // CSS Anchor Positioning 1 §4: the order and the fallbacks.
+            "position-try" => new[] { "position-try-order", "position-try-fallbacks" },
             "grid-column" => new[] { "grid-column-start", "grid-column-end" },
             "grid-row" => new[] { "grid-row-start", "grid-row-end" },
             "grid-area" => new[] { "grid-row-start", "grid-row-end", "grid-column-start", "grid-column-end" },
@@ -210,6 +219,7 @@ public static class ShorthandExpander
         "margin-block", "margin-inline", "padding-block",
         "padding-inline", "overflow", "contain-intrinsic-size", "mask", "gap", "columns",
         "column-rule", "flex-flow", "text-decoration", "text-emphasis", "grid-column",
+        "overscroll-behavior", "position-try",
         "grid-row", "grid-area",
         // Every shorthand <see cref="ExpandProperty"/> knows has to be listed here as well:
         // this array is what ShorthandsFor() indexes, and a longhand whose shorthand is missing
@@ -1063,6 +1073,11 @@ public static class ShorthandExpander
             "grid-template-rows", "grid-template-columns", "grid-template-areas",
             "grid-auto-flow", "grid-auto-columns", "grid-auto-rows",
         },
+        // The two-axis overscroll pair and the anchor try shorthand each count both of their parts,
+        // whether or not the page said the second one (measured: 'overscroll-behavior: auto' and
+        // 'position-try: none' each enumerate two).
+        "overscroll-behavior" => new[] { "overscroll-behavior-x", "overscroll-behavior-y" },
+        "position-try" => new[] { "position-try-order", "position-try-fallbacks" },
         "text-emphasis" => new[] { "text-emphasis-style", "text-emphasis-color" },
         "font" => new[] {
             "font-style", "font-variant-caps", "font-variant-ligatures", "font-variant-numeric",
@@ -2382,6 +2397,29 @@ public static class ShorthandExpander
         if (styleWords.Count == 0) return null;
         var style = ParseEmphasisStyle(string.Join(" ", styleWords));
         return style == null ? null : (style, colour);
+    }
+
+    /// <summary>The two-axis shorthands that say one word per axis, with the axis the page left out
+    /// standing at its own initial (CSS Overscroll Behavior 1 §3.1).</summary>
+    private static void ExpandPair(Dictionary<string, string> result, string value,
+        string first, string second, string fallback)
+    {
+        var words = SplitShorthand(value);
+        result[first] = words.Count > 0 ? words[0].ToLowerInvariant() : fallback;
+        result[second] = words.Count > 1 ? words[1].ToLowerInvariant()
+            : words.Count > 0 ? words[0].ToLowerInvariant() : fallback;
+    }
+
+    /// <summary>'position-try' puts the order and the fallbacks where each belongs; a named try
+    /// block says nothing about either, so both axes keep their initial.</summary>
+    private static void ExpandPositionTry(Dictionary<string, string> result, string value)
+    {
+        var words = SplitShorthand(value);
+        var order = words.FirstOrDefault(w => w.ToLowerInvariant() is "most-width" or "most-height");
+        result["position-try-order"] = order?.ToLowerInvariant() ?? "normal";
+        var rest = string.Join(" ", words
+            .Where(w => w.ToLowerInvariant() is not ("most-width" or "most-height" or "normal" or "none")));
+        result["position-try-fallbacks"] = rest.Length == 0 ? "none" : rest.ToLowerInvariant();
     }
 
     private static void ExpandTextEmphasis(Dictionary<string, string> result, string value)

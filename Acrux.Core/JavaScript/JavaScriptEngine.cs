@@ -1450,9 +1450,13 @@ public class CssObjectHost
         Acrux.Core.Css.Tokenizer.CssParserImpl.SupportsConditionIsWellFormed(condition);
 
     public bool supports(string property, string value) =>
-        (property ?? "").StartsWith("--", StringComparison.Ordinal)
-        || Acrux.Core.Css.Tokenizer.CssParserImpl.SupportsConditionIsWellFormed(
-            $"{property}: {value}");
+        // The two-argument form is asked about a VALUE, and an important flag is not part of one:
+        // 'supports("color", "red !important")' is false while the condition form
+        // 'supports("(color: red !important)")' is true (measured, both).
+        !Acrux.Core.Css.CssValueGrammar.HasImportantFlag(value ?? "")
+        && ((property ?? "").StartsWith("--", StringComparison.Ordinal)
+            || Acrux.Core.Css.Tokenizer.CssParserImpl.SupportsConditionIsWellFormed(
+                $"{property}: {value}"));
 }
 
 public class NavigatorHost

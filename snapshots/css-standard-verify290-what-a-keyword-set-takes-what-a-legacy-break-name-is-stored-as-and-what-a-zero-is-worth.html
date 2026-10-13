@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify290 &#8212; what a keyword set takes, what a legacy break name is stored as, and what a zero is worth</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+/* paint guards: an alignment keyword and a zoom factor have to reach the drawn page, not only the CSSOM */
+.grow { width: 200px; height: 12px; background: rgb(240,240,240); }
+.bar { display: inline-block; width: 40px; height: 10px; background: rgb(255,128,128); }
+#g-2 { width: 60px; height: 20px; background: rgb(0,0,255); zoom: 0; }
+#g-4 { width: 60px; height: 20px; background: rgb(0,128,0); zoom: 0%; }
+#sheetcase { page-break-before: always; }
+</style></head><body>
+<h2>paint guards (the keyword must lay the line out, and a zero must not collapse the box)</h2>
+<div class="grow" id="g-1" style="text-align: -webkit-center"><span class="bar" id="b-1"></span></div>
+<div id="g-2"></div>
+<div class="grow" id="g-3" style="text-align: -webkit-right"><span class="bar" id="b-3"></span></div>
+<div id="g-4"></div>
+<div id="g-5" style="width: 200px"><div style="width: 200px; text-align: right"><div id="g-5i" style="width: 200px; text-align: -webkit-match-parent"><span class="bar" id="b-5"></span></div></div></div>
+<h2>the keyword sets, measured value by value</h2>
+<div id="sheet-host"><div id="sheetcase"></div></div>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* Every want in E and A is a transcription of what the reference engine printed for the same case
+ * (snapshots/_probe_b290_unswept_keyword_sets.html, _probe_b290_follow_up.html and
+ * _probe_b290_page_break_alias.html); nothing here is derived from a rule. E is one declaration
+ * written through the CSSOM on a fresh div and read back through every surface at once — the block's
+ * length, its item(i) sequence, getPropertyValue, getComputedStyle, CSS.supports and cssText. A is
+ * the same for the CSS 2.1 break names, which the reference engine does not keep: it stores the
+ * modern property with 'always' folded onto 'page', and reads the legacy name back in its own
+ * spelling. S is what the same alias does through a style attribute, a stylesheet rule,
+ * removeProperty and the IDL setter.
+ *
+ * No cell is marked '~': none of these values resolves against the viewport, which is the one place
+ * the reference engine's zero-wide window could make two correct engines disagree.
+ */
+var E = [
+  ["touch-action", "pan-up", "1", "touch-action", "pan-up", "pan-up", "1", "touch-action: pan-up;"],
+  ["touch-action", "pan-down", "1", "touch-action", "pan-down", "pan-down", "1", "touch-action: pan-down;"],
+  ["touch-action", "pan-left pan-right", "0", "", "", "auto", "0", ""],
+  ["touch-action", "pan-x pan-left", "0", "", "", "auto", "0", ""],
+  ["touch-action", "manipulation pan-x", "0", "", "", "auto", "0", ""],
+  ["touch-action", "pinch-zoom pan-x", "1", "touch-action", "pan-x pinch-zoom", "pan-x pinch-zoom", "1", "touch-action: pan-x pinch-zoom;"],
+  ["text-spacing-trim", "none", "0", "", "", "normal", "0", ""],
+  ["text-spacing-trim", "normal trim-start", "0", "", "", "normal", "0", ""],
+  ["text-spacing-trim", "space-all allow-jpt", "0", "", "", "normal", "0", ""],
+  ["position-try", "flip-start block-start", "0", "", "", "none", "0", ""],
+  ["position-try", "most-height flip-start", "2", "position-try-order,position-try-fallbacks", "most-height flip-start", "most-height flip-start", "1", "position-try: most-height flip-start;"],
+  ["position-try", "most-height", "0", "", "", "none", "0", ""],
+  ["position-try", "none", "2", "position-try-order,position-try-fallbacks", "none", "none", "1", "position-try: none;"],
+  ["position-try", "flip-start flip-block", "2", "position-try-order,position-try-fallbacks", "flip-start flip-block", "flip-start flip-block", "1", "position-try: flip-start flip-block;"],
+  ["position-area", "left span-top", "1", "position-area", "left span-top", "left span-top", "1", "position-area: left span-top;"],
+  ["position-area", "top bottom", "0", "", "", "none", "0", ""],
+  ["position-area", "self-start self-end", "1", "position-area", "self-start self-end", "self-start self-end", "1", "position-area: self-start self-end;"],
+  ["position-area", "span-all", "1", "position-area", "span-all", "span-all", "1", "position-area: span-all;"],
+  ["appearance", "radio", "1", "appearance", "radio", "radio", "1", "appearance: radio;"],
+  ["appearance", "menu-list", "0", "", "", "none", "0", ""],
+  ["appearance", "push-button", "0", "", "", "none", "0", ""],
+  ["cursor", "url(a.png) 0 0, pointer", "1", "cursor", "url(\"a.png\") 0 0, pointer", "url(\"file:///home/master/Acrux/snapshots/a.png\") 0 0, pointer", "1", "cursor: url(\"a.png\") 0 0, pointer;"],
+  ["cursor", "url(a.png) -1 2, pointer", "1", "cursor", "url(\"a.png\") -1 2, pointer", "url(\"file:///home/master/Acrux/snapshots/a.png\") -1 2, pointer", "1", "cursor: url(\"a.png\") -1 2, pointer;"],
+  ["cursor", "pointer, url(a.png)", "0", "", "", "auto", "0", ""],
+  ["cursor", "url(a.png) 2 2 2, pointer", "0", "", "", "auto", "0", ""],
+  ["cursor", "url(\"a.png\") 2 2, url(\"b.png\") 3 4, pointer", "1", "cursor", "url(\"a.png\") 2 2, url(\"b.png\") 3 4, pointer", "url(\"file:///home/master/Acrux/snapshots/a.png\") 2 2, url(\"file:///home/master/Acrux/snapshots/b.png\") 3 4, pointer", "1", "cursor: url(\"a.png\") 2 2, url(\"b.png\") 3 4, pointer;"],
+  ["zoom", "1e2", "1", "zoom", "100", "100", "1", "zoom: 100;"],
+  ["zoom", ".5", "1", "zoom", "0.5", "0.5", "1", "zoom: 0.5;"],
+  ["zoom", "+1", "1", "zoom", "1", "1", "1", "zoom: 1;"],
+  ["zoom", "1%", "1", "zoom", "1%", "0.01", "1", "zoom: 1%;"],
+  ["zoom", "0%", "1", "zoom", "0%", "1", "1", "zoom: 0%;"],
+  ["quotes", "\"a\" \"b\" \"c\" \"d\" \"e\" \"f\"", "1", "quotes", "\"a\" \"b\" \"c\" \"d\" \"e\" \"f\"", "\"a\" \"b\" \"c\" \"d\" \"e\" \"f\"", "1", "quotes: \"a\" \"b\" \"c\" \"d\" \"e\" \"f\";"],
+  ["quotes", "none auto", "0", "", "", "auto", "0", ""],
+  ["widows", "10", "1", "widows", "10", "10", "1", "widows: 10;"],
+  ["widows", "inherit", "1", "widows", "inherit", "2", "1", "widows: inherit;"],
+  ["orphans", "0", "0", "", "", "2", "0", ""],
+  ["overscroll-behavior", "none contain", "2", "overscroll-behavior-x,overscroll-behavior-y", "none contain", "none contain", "1", "overscroll-behavior: none contain;"],
+  ["overscroll-behavior", "contain contain", "2", "overscroll-behavior-x,overscroll-behavior-y", "contain", "contain", "1", "overscroll-behavior: contain;"],
+  ["resize", "auto both", "0", "", "", "none", "0", ""],
+  ["page-break-before", "avoid", "1", "break-before", "avoid", "avoid", "1", "break-before: avoid;"],
+  ["page-break-before", "inherit", "1", "break-before", "inherit", "auto", "1", "break-before: inherit;"],
+  ["break-before", "inherit", "1", "break-before", "inherit", "auto", "1", "break-before: inherit;"],
+  ["scroll-behavior", "instant auto", "0", "", "", "auto", "0", ""],
+  ["column-fill", "balance balance", "0", "", "", "balance", "0", ""],
+  ["text-align", "left", "1", "text-align", "left", "left", "1", "text-align: left;"],
+  ["text-align", "webkit-center", "0", "", "", "start", "0", ""],
+  ["position-visibility", "none", "0", "", "", "anchors-visible", "0", ""],
+  ["appearance", "auto", "1", "appearance", "auto", "auto", "1", "appearance: auto;"],
+  ["appearance", "none", "1", "appearance", "none", "none", "1", "appearance: none;"],
+  ["appearance", "textfield", "1", "appearance", "textfield", "textfield", "1", "appearance: textfield;"],
+  ["appearance", "button", "1", "appearance", "button", "button", "1", "appearance: button;"],
+  ["appearance", "menulist", "1", "appearance", "menulist", "menulist", "1", "appearance: menulist;"],
+  ["appearance", "listbox", "1", "appearance", "listbox", "listbox", "1", "appearance: listbox;"],
+  ["appearance", "checkbox", "1", "appearance", "checkbox", "checkbox", "1", "appearance: checkbox;"],
+  ["appearance", "slider", "0", "", "", "none", "0", ""],
+  ["appearance", "textarea", "1", "appearance", "textarea", "textarea", "1", "appearance: textarea;"],
+  ["appearance", "searchfield", "1", "appearance", "searchfield", "searchfield", "1", "appearance: searchfield;"],
+  ["appearance", "popover", "0", "", "", "none", "0", ""],
+  ["appearance", "toolbars", "0", "", "", "none", "0", ""],
+  ["appearance", "document", "0", "", "", "none", "0", ""],
+  ["appearance", "alpha", "0", "", "", "none", "0", ""],
+  ["appearance", "pickers", "0", "", "", "none", "0", ""],
+  ["appearance", "AUTO", "1", "appearance", "auto", "auto", "1", "appearance: auto;"],
+  ["appearance", "none auto", "0", "", "", "none", "0", ""],
+  ["appearance", "menulist-button", "1", "appearance", "menulist-button", "menulist-button", "1", "appearance: menulist-button;"],
+  ["appearance", "meter", "1", "appearance", "meter", "meter", "1", "appearance: meter;"],
+  ["appearance", "progress-bar", "1", "appearance", "progress-bar", "progress-bar", "1", "appearance: progress-bar;"],
+  ["-webkit-appearance", "none", "1", "appearance", "none", "none", "1", "appearance: none;"],
+  ["-webkit-appearance", "textfield", "1", "appearance", "textfield", "textfield", "1", "appearance: textfield;"],
+  ["-webkit-appearance", "auto", "1", "appearance", "auto", "auto", "1", "appearance: auto;"],
+  ["cursor", "pointer", "1", "cursor", "pointer", "pointer", "1", "cursor: pointer;"],
+  ["cursor", "url(a.png)", "0", "", "", "auto", "0", ""],
+  ["cursor", "url(a.png), pointer", "1", "cursor", "url(\"a.png\"), pointer", "url(\"file:///home/master/Acrux/snapshots/a.png\"), pointer", "1", "cursor: url(\"a.png\"), pointer;"],
+  ["cursor", "url(a.png) 2 2, pointer", "1", "cursor", "url(\"a.png\") 2 2, pointer", "url(\"file:///home/master/Acrux/snapshots/a.png\") 2 2, pointer", "1", "cursor: url(\"a.png\") 2 2, pointer;"],
+  ["cursor", "url(a.png) 2px 2px, pointer", "0", "", "", "auto", "0", ""],
+  ["cursor", "crosshair", "1", "cursor", "crosshair", "crosshair", "1", "cursor: crosshair;"],
+  ["cursor", "GRAB", "1", "cursor", "grab", "grab", "1", "cursor: grab;"],
+  ["cursor", "grabbing", "1", "cursor", "grabbing", "grabbing", "1", "cursor: grabbing;"],
+  ["cursor", "alias", "1", "cursor", "alias", "alias", "1", "cursor: alias;"],
+  ["cursor", "all-scroll", "1", "cursor", "all-scroll", "all-scroll", "1", "cursor: all-scroll;"],
+  ["cursor", "col-resize", "1", "cursor", "col-resize", "col-resize", "1", "cursor: col-resize;"],
+  ["cursor", "e-resize", "1", "cursor", "e-resize", "e-resize", "1", "cursor: e-resize;"],
+  ["cursor", "n-resize", "1", "cursor", "n-resize", "n-resize", "1", "cursor: n-resize;"],
+  ["cursor", "ne-resize", "1", "cursor", "ne-resize", "ne-resize", "1", "cursor: ne-resize;"],
+  ["cursor", "zoom-in", "1", "cursor", "zoom-in", "zoom-in", "1", "cursor: zoom-in;"],
+  ["cursor", "zoom-out", "1", "cursor", "zoom-out", "zoom-out", "1", "cursor: zoom-out;"],
+  ["cursor", "help", "1", "cursor", "help", "help", "1", "cursor: help;"],
+  ["cursor", "wait", "1", "cursor", "wait", "wait", "1", "cursor: wait;"],
+  ["cursor", "progress", "1", "cursor", "progress", "progress", "1", "cursor: progress;"],
+  ["cursor", "no-drop", "1", "cursor", "no-drop", "no-drop", "1", "cursor: no-drop;"],
+  ["cursor", "not-allowed", "1", "cursor", "not-allowed", "not-allowed", "1", "cursor: not-allowed;"],
+  ["cursor", "cell", "1", "cursor", "cell", "cell", "1", "cursor: cell;"],
+  ["cursor", "text", "1", "cursor", "text", "text", "1", "cursor: text;"],
+  ["cursor", "vertical-text", "1", "cursor", "vertical-text", "vertical-text", "1", "cursor: vertical-text;"],
+  ["cursor", "default", "1", "cursor", "default", "default", "1", "cursor: default;"],
+  ["cursor", "none", "1", "cursor", "none", "none", "1", "cursor: none;"],
+  ["cursor", "copy", "1", "cursor", "copy", "copy", "1", "cursor: copy;"],
+  ["cursor", "move", "1", "cursor", "move", "move", "1", "cursor: move;"],
+  ["cursor", "ew-resize", "1", "cursor", "ew-resize", "ew-resize", "1", "cursor: ew-resize;"],
+  ["cursor", "ns-resize", "1", "cursor", "ns-resize", "ns-resize", "1", "cursor: ns-resize;"],
+  ["cursor", "nesw-resize", "1", "cursor", "nesw-resize", "nesw-resize", "1", "cursor: nesw-resize;"],
+  ["cursor", "nwse-resize", "1", "cursor", "nwse-resize", "nwse-resize", "1", "cursor: nwse-resize;"],
+  ["cursor", "sw-resize", "1", "cursor", "sw-resize", "sw-resize", "1", "cursor: sw-resize;"],
+  ["cursor", "se-resize", "1", "cursor", "se-resize", "se-resize", "1", "cursor: se-resize;"],
+  ["cursor", "nw-resize", "1", "cursor", "nw-resize", "nw-resize", "1", "cursor: nw-resize;"],
+  ["cursor", "row-resize", "1", "cursor", "row-resize", "row-resize", "1", "cursor: row-resize;"],
+  ["cursor", "hand", "0", "", "", "auto", "0", ""],
+  ["cursor", "pointer, pointer", "0", "", "", "auto", "0", ""],
+  ["cursor", "url(a.png) 2 2", "0", "", "", "auto", "0", ""],
+  ["cursor", "url(a.png) 2, pointer", "0", "", "", "auto", "0", ""],
+  ["cursor", "url(\"a.png\"), auto", "1", "cursor", "url(\"a.png\"), auto", "url(\"file:///home/master/Acrux/snapshots/a.png\"), auto", "1", "cursor: url(\"a.png\"), auto;"],
+  ["cursor", "bogus", "0", "", "", "auto", "0", ""],
+  ["cursor", "auto auto", "0", "", "", "auto", "0", ""],
+  ["position-anchor", "--x", "1", "position-anchor", "--x", "--x", "1", "position-anchor: --x;"],
+  ["position-anchor", "none", "1", "position-anchor", "none", "none", "1", "position-anchor: none;"],
+  ["position-anchor", "x", "0", "", "", "none", "0", ""],
+  ["position-try", "flip-start", "2", "position-try-order,position-try-fallbacks", "flip-start", "flip-start", "1", "position-try: flip-start;"],
+  ["position-try", "insert-block-end", "0", "", "", "none", "0", ""],
+  ["position-try", "--t", "2", "position-try-order,position-try-fallbacks", "--t", "--t", "1", "position-try: --t;"],
+  ["position-try-fallbacks", "flip-start", "1", "position-try-fallbacks", "flip-start", "flip-start", "1", "position-try-fallbacks: flip-start;"],
+  ["position-try-fallbacks", "flip-block flip-inline", "1", "position-try-fallbacks", "flip-block flip-inline", "flip-block flip-inline", "1", "position-try-fallbacks: flip-block flip-inline;"],
+  ["position-try-fallbacks", "left top", "1", "position-try-fallbacks", "left top", "left top", "1", "position-try-fallbacks: left top;"],
+  ["position-try-fallbacks", "block-start", "1", "position-try-fallbacks", "block-start", "block-start", "1", "position-try-fallbacks: block-start;"],
+  ["position-try-fallbacks", "span-block-end", "1", "position-try-fallbacks", "span-block-end", "span-block-end", "1", "position-try-fallbacks: span-block-end;"],
+  ["position-try-fallbacks", "scale size-down", "0", "", "", "none", "0", ""],
+  ["position-try-order", "normal", "1", "position-try-order", "normal", "normal", "1", "position-try-order: normal;"],
+  ["position-try-order", "most-height", "1", "position-try-order", "most-height", "most-height", "1", "position-try-order: most-height;"],
+  ["position-try-order", "most-width", "1", "position-try-order", "most-width", "most-width", "1", "position-try-order: most-width;"],
+  ["position-try-order", "viewport-fits", "0", "", "", "normal", "0", ""],
+  ["position-visibility", "visible", "0", "", "", "anchors-visible", "0", ""],
+  ["position-visibility", "anchors-visible", "1", "position-visibility", "anchors-visible", "anchors-visible", "1", "position-visibility: anchors-visible;"],
+  ["position-visibility", "no-alternatives", "0", "", "", "anchors-visible", "0", ""],
+  ["position-visibility", "at-risk", "0", "", "", "anchors-visible", "0", ""],
+  ["inset-area", "span-top", "0", "", "", "", "0", ""],
+  ["inset-area", "top", "0", "", "", "", "0", ""],
+  ["inset-area", "left span-x-start", "0", "", "", "", "0", ""],
+  ["position-area", "top", "1", "position-area", "top", "top", "1", "position-area: top;"],
+  ["position-area", "span-block-end self-start", "0", "", "", "none", "0", ""],
+  ["position-area", "center", "1", "position-area", "center", "center", "1", "position-area: center;"],
+  ["position-area", "x-start y-end", "1", "position-area", "x-start y-end", "x-start y-end", "1", "position-area: x-start y-end;"],
+  ["quotes", "\"“\" \"”\"", "1", "quotes", "\"“\" \"”\"", "\"“\" \"”\"", "1", "quotes: \"“\" \"”\";"],
+  ["quotes", "\"“\" \"”\" \"‘\" \"’\"", "1", "quotes", "\"“\" \"”\" \"‘\" \"’\"", "\"“\" \"”\" \"‘\" \"’\"", "1", "quotes: \"“\" \"”\" \"‘\" \"’\";"],
+  ["quotes", "none", "1", "quotes", "none", "none", "1", "quotes: none;"],
+  ["quotes", "auto", "1", "quotes", "auto", "auto", "1", "quotes: auto;"],
+  ["quotes", "\"a\"", "0", "", "", "auto", "0", ""],
+  ["quotes", "\"a\" \"b\" \"c\"", "0", "", "", "auto", "0", ""],
+  ["quotes", "initial", "1", "quotes", "initial", "auto", "1", "quotes: initial;"],
+  ["quotes", "\"«\" \"»\"", "1", "quotes", "\"«\" \"»\"", "\"«\" \"»\"", "1", "quotes: \"«\" \"»\";"],
+  ["string-set", "none", "0", "", "", "", "0", ""],
+  ["string-set", "foo \"a\"", "0", "", "", "", "0", ""],
+  ["string-set", "foo content()", "0", "", "", "", "0", ""],
+  ["string-set", "foo content(before)", "0", "", "", "", "0", ""],
+  ["string-set", "foo content(after)", "0", "", "", "", "0", ""],
+  ["string-set", "foo \"a\", bar content()", "0", "", "", "", "0", ""],
+  ["zoom", "1", "1", "zoom", "1", "1", "1", "zoom: 1;"],
+  ["zoom", "1.5", "1", "zoom", "1.5", "1.5", "1", "zoom: 1.5;"],
+  ["zoom", "50%", "1", "zoom", "50%", "0.5", "1", "zoom: 50%;"],
+  ["zoom", "normal", "1", "zoom", "normal", "1", "1", "zoom: normal;"],
+  ["zoom", "reset", "0", "", "", "1", "0", ""],
+  ["zoom", "0", "1", "zoom", "0", "1", "1", "zoom: 0;"],
+  ["zoom", "-1", "0", "", "", "1", "0", ""],
+  ["zoom", "20px", "0", "", "", "1", "0", ""],
+  ["zoom", "calc(1 + 1)", "1", "zoom", "calc(2)", "2", "1", "zoom: calc(2);"],
+  ["zoom", "calc(50% + 10px)", "0", "", "", "1", "0", ""],
+  ["overscroll-behavior", "auto", "2", "overscroll-behavior-x,overscroll-behavior-y", "auto", "auto", "1", "overscroll-behavior: auto;"],
+  ["overscroll-behavior", "none", "2", "overscroll-behavior-x,overscroll-behavior-y", "none", "none", "1", "overscroll-behavior: none;"],
+  ["overscroll-behavior", "contain", "2", "overscroll-behavior-x,overscroll-behavior-y", "contain", "contain", "1", "overscroll-behavior: contain;"],
+  ["overscroll-behavior", "contain auto", "2", "overscroll-behavior-x,overscroll-behavior-y", "contain auto", "contain auto", "1", "overscroll-behavior: contain auto;"],
+  ["overscroll-behavior", "no-precession", "0", "", "", "auto", "0", ""],
+  ["overscroll-behavior-x", "contain", "1", "overscroll-behavior-x", "contain", "contain", "1", "overscroll-behavior-x: contain;"],
+  ["overscroll-behavior-y", "stretch", "0", "", "", "auto", "0", ""],
+  ["overscroll-behavior", "bogus", "0", "", "", "auto", "0", ""],
+  ["overscroll-behavior", "contain contain contain", "0", "", "", "auto", "0", ""],
+  ["touch-action", "auto", "1", "touch-action", "auto", "auto", "1", "touch-action: auto;"],
+  ["touch-action", "none", "1", "touch-action", "none", "none", "1", "touch-action: none;"],
+  ["touch-action", "pan-x", "1", "touch-action", "pan-x", "pan-x", "1", "touch-action: pan-x;"],
+  ["touch-action", "pan-y", "1", "touch-action", "pan-y", "pan-y", "1", "touch-action: pan-y;"],
+  ["touch-action", "pan-left", "1", "touch-action", "pan-left", "pan-left", "1", "touch-action: pan-left;"],
+  ["touch-action", "pinch-zoom", "1", "touch-action", "pinch-zoom", "pinch-zoom", "1", "touch-action: pinch-zoom;"],
+  ["touch-action", "manipulation", "1", "touch-action", "manipulation", "manipulation", "1", "touch-action: manipulation;"],
+  ["touch-action", "pan-x pan-y", "1", "touch-action", "pan-x pan-y", "pan-x pan-y", "1", "touch-action: pan-x pan-y;"],
+  ["touch-action", "auto none", "0", "", "", "auto", "0", ""],
+  ["touch-action", "pan-up pan-down", "0", "", "", "auto", "0", ""],
+  ["user-select", "auto", "1", "user-select", "auto", "auto", "1", "user-select: auto;"],
+  ["user-select", "none", "1", "user-select", "none", "none", "1", "user-select: none;"],
+  ["user-select", "text", "1", "user-select", "text", "text", "1", "user-select: text;"],
+  ["user-select", "all", "1", "user-select", "all", "all", "1", "user-select: all;"],
+  ["user-select", "contain", "0", "", "", "auto", "0", ""],
+  ["user-select", "element", "0", "", "", "auto", "0", ""],
+  ["user-select", "force-selection", "0", "", "", "auto", "0", ""],
+  ["user-select", "none none", "0", "", "", "auto", "0", ""],
+  ["-webkit-user-select", "none", "1", "user-select", "none", "none", "1", "user-select: none;"],
+  ["-webkit-user-select", "element", "0", "", "", "auto", "0", ""],
+  ["resize", "none", "1", "resize", "none", "none", "1", "resize: none;"],
+  ["resize", "both", "1", "resize", "both", "both", "1", "resize: both;"],
+  ["resize", "horizontal", "1", "resize", "horizontal", "horizontal", "1", "resize: horizontal;"],
+  ["resize", "vertical", "1", "resize", "vertical", "vertical", "1", "resize: vertical;"],
+  ["resize", "block", "1", "resize", "block", "block", "1", "resize: block;"],
+  ["resize", "inline", "1", "resize", "inline", "inline", "1", "resize: inline;"],
+  ["resize", "vertical horizontal", "0", "", "", "none", "0", ""],
+  ["resize", "auto", "1", "resize", "auto", "both", "1", "resize: auto;"],
+  ["column-fill", "balance", "1", "column-fill", "balance", "balance", "1", "column-fill: balance;"],
+  ["column-fill", "auto", "1", "column-fill", "auto", "auto", "1", "column-fill: auto;"],
+  ["column-fill", "balance all", "0", "", "", "balance", "0", ""],
+  ["column-fill", "balance columns", "0", "", "", "balance", "0", ""],
+  ["column-fill", "auto all", "0", "", "", "balance", "0", ""],
+  ["break-before", "auto", "1", "break-before", "auto", "auto", "1", "break-before: auto;"],
+  ["break-before", "page", "1", "break-before", "page", "page", "1", "break-before: page;"],
+  ["break-before", "column", "1", "break-before", "column", "column", "1", "break-before: column;"],
+  ["break-before", "always", "0", "", "", "auto", "0", ""],
+  ["break-before", "left", "1", "break-before", "left", "left", "1", "break-before: left;"],
+  ["break-before", "right", "1", "break-before", "right", "right", "1", "break-before: right;"],
+  ["break-before", "recto", "1", "break-before", "recto", "recto", "1", "break-before: recto;"],
+  ["break-before", "verso", "1", "break-before", "verso", "verso", "1", "break-before: verso;"],
+  ["break-before", "region", "0", "", "", "auto", "0", ""],
+  ["break-before", "avoid", "1", "break-before", "avoid", "avoid", "1", "break-before: avoid;"],
+  ["break-before", "avoid-page", "1", "break-before", "avoid-page", "avoid-page", "1", "break-before: avoid-page;"],
+  ["break-before", "page always", "0", "", "", "auto", "0", ""],
+  ["break-before", "auto page", "0", "", "", "auto", "0", ""],
+  ["break-after", "avoid-column", "1", "break-after", "avoid-column", "avoid-column", "1", "break-after: avoid-column;"],
+  ["break-inside", "avoid", "1", "break-inside", "avoid", "avoid", "1", "break-inside: avoid;"],
+  ["break-inside", "auto", "1", "break-inside", "auto", "auto", "1", "break-inside: auto;"],
+  ["break-inside", "avoid-page", "1", "break-inside", "avoid-page", "avoid-page", "1", "break-inside: avoid-page;"],
+  ["break-inside", "avoid-column", "1", "break-inside", "avoid-column", "avoid-column", "1", "break-inside: avoid-column;"],
+  ["break-inside", "avoid-region", "0", "", "", "auto", "0", ""],
+  ["page-break-before", "always", "1", "break-before", "always", "always", "1", "break-before: page;"],
+  ["page-break-after", "auto", "1", "break-after", "auto", "auto", "1", "break-after: auto;"],
+  ["page-break-inside", "avoid", "1", "break-inside", "avoid", "avoid", "1", "break-inside: avoid;"],
+  ["page-break-inside", "auto", "1", "break-inside", "auto", "auto", "1", "break-inside: auto;"],
+  ["page-break-before", "left", "1", "break-before", "left", "left", "1", "break-before: left;"],
+  ["page-break-after", "recto", "0", "", "", "auto", "0", ""],
+  ["widows", "2", "1", "widows", "2", "2", "1", "widows: 2;"],
+  ["widows", "1", "1", "widows", "1", "1", "1", "widows: 1;"],
+  ["widows", "auto", "0", "", "", "2", "0", ""],
+  ["widows", "0", "0", "", "", "2", "0", ""],
+  ["widows", "1.5", "0", "", "", "2", "0", ""],
+  ["orphans", "3", "1", "orphans", "3", "3", "1", "orphans: 3;"],
+  ["orphans", "auto", "0", "", "", "2", "0", ""],
+  ["text-align-last", "auto", "1", "text-align-last", "auto", "auto", "1", "text-align-last: auto;"],
+  ["text-align-last", "start", "1", "text-align-last", "start", "start", "1", "text-align-last: start;"],
+  ["text-align-last", "end", "1", "text-align-last", "end", "end", "1", "text-align-last: end;"],
+  ["text-align-last", "left", "1", "text-align-last", "left", "left", "1", "text-align-last: left;"],
+  ["text-align-last", "right", "1", "text-align-last", "right", "right", "1", "text-align-last: right;"],
+  ["text-align-last", "center", "1", "text-align-last", "center", "center", "1", "text-align-last: center;"],
+  ["text-align-last", "justify", "1", "text-align-last", "justify", "justify", "1", "text-align-last: justify;"],
+  ["text-align", "justify-all", "0", "", "", "start", "0", ""],
+  ["text-align", "match-parent", "0", "", "", "start", "0", ""],
+  ["text-align", "start end", "0", "", "", "start", "0", ""],
+  ["text-align", "left right", "0", "", "", "start", "0", ""],
+  ["text-align", "justify", "1", "text-align", "justify", "justify", "1", "text-align: justify;"],
+  ["text-align", "center", "1", "text-align", "center", "center", "1", "text-align: center;"],
+  ["text-align", "-webkit-center", "1", "text-align", "-webkit-center", "-webkit-center", "1", "text-align: -webkit-center;"],
+  ["text-justify", "auto", "1", "text-justify", "auto", "auto", "1", "text-justify: auto;"],
+  ["text-justify", "inter-word", "1", "text-justify", "inter-word", "inter-word", "1", "text-justify: inter-word;"],
+  ["text-justify", "inter-character", "1", "text-justify", "inter-character", "inter-character", "1", "text-justify: inter-character;"],
+  ["text-justify", "distribute", "1", "text-justify", "inter-character", "inter-character", "1", "text-justify: inter-character;"],
+  ["text-spacing-trim", "normal", "1", "text-spacing-trim", "normal", "normal", "1", "text-spacing-trim: normal;"],
+  ["text-spacing-trim", "space-all", "1", "text-spacing-trim", "space-all", "space-all", "1", "text-spacing-trim: space-all;"],
+  ["text-spacing-trim", "trim-start", "1", "text-spacing-trim", "trim-start", "trim-start", "1", "text-spacing-trim: trim-start;"],
+  ["text-spacing-trim", "trim-both", "0", "", "", "normal", "0", ""],
+  ["text-spacing-trim", "trim-none", "0", "", "", "normal", "0", ""],
+  ["text-spacing-trim", "space-first", "1", "text-spacing-trim", "space-first", "space-first", "1", "text-spacing-trim: space-first;"],
+  ["line-clamp", "2", "0", "", "", "", "0", ""],
+  ["line-clamp", "none", "0", "", "", "", "0", ""],
+  ["-webkit-line-clamp", "2", "1", "-webkit-line-clamp", "2", "2", "1", "-webkit-line-clamp: 2;"],
+  ["-webkit-line-clamp", "none", "1", "-webkit-line-clamp", "none", "none", "1", "-webkit-line-clamp: none;"],
+  ["scroll-behavior", "auto", "1", "scroll-behavior", "auto", "auto", "1", "scroll-behavior: auto;"],
+  ["scroll-behavior", "smooth", "1", "scroll-behavior", "smooth", "smooth", "1", "scroll-behavior: smooth;"],
+  ["scroll-behavior", "instant", "0", "", "", "auto", "0", ""],
+  ["will-change", "auto", "1", "will-change", "auto", "auto", "1", "will-change: auto;"],
+  ["will-change", "transform", "1", "will-change", "transform", "transform", "1", "will-change: transform;"],
+  ["will-change", "opacity, transform", "1", "will-change", "opacity, transform", "opacity, transform", "1", "will-change: opacity, transform;"],
+  ["will-change", "scroll-position", "1", "will-change", "scroll-position", "scroll-position", "1", "will-change: scroll-position;"],
+  ["will-change", "contents", "1", "will-change", "contents", "contents", "1", "will-change: contents;"],
+  ["will-change", "left, top", "1", "will-change", "left, top", "left, top", "1", "will-change: left, top;"],
+  ["counter-reset", "none", "1", "counter-reset", "none", "none", "1", "counter-reset: none;"],
+  ["counter-reset", "foo", "1", "counter-reset", "foo 0", "foo 0", "1", "counter-reset: foo 0;"],
+  ["counter-reset", "foo 1", "1", "counter-reset", "foo 1", "foo 1", "1", "counter-reset: foo 1;"],
+  ["counter-reset", "foo bar", "1", "counter-reset", "foo 0 bar 0", "foo 0 bar 0", "1", "counter-reset: foo 0 bar 0;"],
+  ["counter-increment", "none", "1", "counter-increment", "none", "none", "1", "counter-increment: none;"],
+  ["counter-increment", "foo", "1", "counter-increment", "foo 1", "foo 1", "1", "counter-increment: foo 1;"],
+  ["counter-set", "none", "1", "counter-set", "none", "none", "1", "counter-set: none;"],
+  ["counter-set", "foo 2", "1", "counter-set", "foo 2", "foo 2", "1", "counter-set: foo 2;"],
+  ["shape-outside", "none", "1", "shape-outside", "none", "none", "1", "shape-outside: none;"],
+  ["shape-outside", "circle()", "1", "shape-outside", "circle()", "circle()", "1", "shape-outside: circle();"],
+  ["shape-outside", "margin-box", "1", "shape-outside", "margin-box", "margin-box", "1", "shape-outside: margin-box;"],
+  ["shape-outside", "polygon(0 0, 10px 10px)", "1", "shape-outside", "polygon(0px 0px, 10px 10px)", "polygon(0px 0px, 10px 10px)", "1", "shape-outside: polygon(0px 0px, 10px 10px);"],
+  ["shape-image-threshold", "0.5", "1", "shape-image-threshold", "0.5", "0.5", "1", "shape-image-threshold: 0.5;"],
+  ["shape-image-threshold", "2", "1", "shape-image-threshold", "2", "1", "1", "shape-image-threshold: 2;"],
+  ["shape-margin", "4px", "1", "shape-margin", "4px", "4px", "1", "shape-margin: 4px;"],
+  ["shape-margin", "50%", "1", "shape-margin", "50%", "50%", "1", "shape-margin: 50%;"],
+  ["float", "left", "1", "float", "left", "left", "1", "float: left;"],
+  ["float", "inline-start", "1", "float", "inline-start", "inline-start", "1", "float: inline-start;"],
+  ["float", "top", "0", "", "", "none", "0", ""],
+  ["float", "pending", "0", "", "", "none", "0", ""],
+  ["float-defer", "1", "0", "", "", "", "0", ""],
+  ["float-defer", "last", "0", "", "", "", "0", ""],
+  ["float-reference", "column", "0", "", "", "", "0", ""],
+  ["float-reference", "page", "0", "", "", "", "0", ""],
+  ["scroll-margin", "4px 8px", "4", "scroll-margin-top,scroll-margin-right,scroll-margin-bottom,scroll-margin-left", "4px 8px", "4px 8px", "1", "scroll-margin: 4px 8px;"],
+  ["scroll-snap-type", "x mandatory", "1", "scroll-snap-type", "x mandatory", "x mandatory", "1", "scroll-snap-type: x mandatory;"],
+  ["scroll-snap-type", "none", "1", "scroll-snap-type", "none", "none", "1", "scroll-snap-type: none;"],
+  ["scroll-snap-align", "center", "1", "scroll-snap-align", "center", "center", "1", "scroll-snap-align: center;"],
+  ["scroll-snap-stop", "always", "1", "scroll-snap-stop", "always", "always", "1", "scroll-snap-stop: always;"],
+  ["scroll-snap-stop", "normal", "1", "scroll-snap-stop", "normal", "normal", "1", "scroll-snap-stop: normal;"]
+];
+/* prop, value, n, names, pb, bb, idl, cpb, cbb, cin, cbin, sup, text — pb/bb/idl are the CSSOM reads
+ * of 'page-break-before', 'break-before' and 'style.pageBreakBefore'; cpb/cbb/cin/cbin their computed
+ * twins. */
+var A = [
+  ["page-break-before", "always", "1", "break-before", "always", "page", "always", "always", "page", "auto", "auto", "1", "break-before: page;"],
+  ["page-break-before", "avoid", "1", "break-before", "avoid", "avoid", "avoid", "avoid", "avoid", "auto", "auto", "1", "break-before: avoid;"],
+  ["page-break-before", "auto", "1", "break-before", "auto", "auto", "auto", "auto", "auto", "auto", "auto", "1", "break-before: auto;"],
+  ["page-break-before", "left", "1", "break-before", "left", "left", "left", "left", "left", "auto", "auto", "1", "break-before: left;"],
+  ["page-break-before", "right", "1", "break-before", "right", "right", "right", "right", "right", "auto", "auto", "1", "break-before: right;"],
+  ["page-break-before", "inherit", "1", "break-before", "inherit", "inherit", "inherit", "auto", "auto", "auto", "auto", "1", "break-before: inherit;"],
+  ["page-break-before", "recto", "0", "", "", "", "", "auto", "auto", "auto", "auto", "0", ""],
+  ["page-break-before", "page", "0", "", "", "", "", "auto", "auto", "auto", "auto", "0", ""],
+  ["page-break-before", "ALWAYS", "1", "break-before", "always", "page", "always", "always", "page", "auto", "auto", "1", "break-before: page;"],
+  ["page-break-before", "always !important", "0", "", "", "", "", "auto", "auto", "auto", "auto", "0", ""],
+  ["page-break-after", "always", "1", "break-after", "", "", "", "auto", "auto", "auto", "auto", "1", "break-after: page;"],
+  ["page-break-after", "auto", "1", "break-after", "", "", "", "auto", "auto", "auto", "auto", "1", "break-after: auto;"],
+  ["page-break-after", "recto", "0", "", "", "", "", "auto", "auto", "auto", "auto", "0", ""],
+  ["page-break-inside", "avoid", "1", "break-inside", "", "", "", "auto", "auto", "avoid", "avoid", "1", "break-inside: avoid;"],
+  ["page-break-inside", "auto", "1", "break-inside", "", "", "", "auto", "auto", "auto", "auto", "1", "break-inside: auto;"],
+  ["page-break-inside", "avoid-column", "0", "", "", "", "", "auto", "auto", "auto", "auto", "0", ""],
+  ["break-before", "page", "1", "break-before", "always", "page", "always", "always", "page", "auto", "auto", "1", "break-before: page;"],
+  ["break-before", "column", "1", "break-before", "", "column", "", "", "column", "auto", "auto", "1", "break-before: column;"],
+  ["break-before", "avoid", "1", "break-before", "avoid", "avoid", "avoid", "avoid", "avoid", "auto", "auto", "1", "break-before: avoid;"],
+  ["break-before", "avoid-page", "1", "break-before", "", "avoid-page", "", "", "avoid-page", "auto", "auto", "1", "break-before: avoid-page;"],
+  ["break-inside", "avoid", "1", "break-inside", "", "", "", "auto", "auto", "avoid", "avoid", "1", "break-inside: avoid;"],
+  ["break-inside", "avoid-column", "1", "break-inside", "", "", "", "auto", "auto", "", "avoid-column", "1", "break-inside: avoid-column;"]
+];
+/* The same alias reached through the other four doors a declaration comes in by: a style
+ * attribute, a stylesheet rule, removeProperty and the IDL setter. The whole line the probe
+ * printed is the want, because each of those rows is one measurement of one path. */
+var S = [
+  ["attr|names=break-before|pb=always|bb=page|text=break-before: page;|attr=page-break-before: always|cpb=always|cbb=page"],
+  ["sheet|cpb=always|cbb=page"],
+  ["remove|n=0|text="],
+  ["idlset|n=1|text=break-before: page;|pb=always"]
+];
+
+var box = document.getElementById('box'), pass = 0, fail = 0, out = [];
+
+function read(d, prop) { return d.style.getPropertyValue(prop); }
+function names(d) { var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i)); return a.join(','); }
+
+for (var i = 0; i < E.length; i++) {
+  var prop = E[i][0], value = E[i][1];
+  var d = document.createElement('div');
+  box.appendChild(d);
+  d.style.setProperty(prop, value);
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) { sup = 'ERR'; }
+  var got = ['' + d.style.length, names(d), read(d, prop),
+             getComputedStyle(d).getPropertyValue(prop), sup, d.style.cssText];
+  var want = [E[i][2], E[i][3], E[i][4], E[i][5], E[i][6], E[i][7]];
+  var bad = [];
+  for (var j = 0; j < want.length; j++) {
+    if (want[j] === '~') continue;
+    if (got[j] !== want[j]) bad.push('c' + j + ' got[' + got[j] + '] want[' + want[j] + ']');
+  }
+  if (bad.length) { fail++; out.push('FAIL E' + i + ' ' + prop + ': ' + value + ' | ' + bad.join(' | ')); }
+  else pass++;
+}
+
+for (var i = 0; i < A.length; i++) {
+  var prop = A[i][0], value = A[i][1];
+  var d = document.createElement('div');
+  box.appendChild(d);
+  d.style.setProperty(prop, value);
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) { sup = 'ERR'; }
+  var cs = getComputedStyle(d);
+  var got = ['' + d.style.length, names(d), read(d, 'page-break-before'), read(d, 'break-before'),
+             '' + d.style.pageBreakBefore, '' + cs.pageBreakBefore, '' + cs.breakBefore,
+             '' + cs.pageBreakInside, '' + cs.breakInside, sup, d.style.cssText];
+  var want = [A[i][2], A[i][3], A[i][4], A[i][5], A[i][6], A[i][7], A[i][8], A[i][9], A[i][10], A[i][11], A[i][12]];
+  var bad = [];
+  for (var j = 0; j < want.length; j++) {
+    if (want[j] === '~') continue;
+    if (got[j] !== want[j]) bad.push('c' + j + ' got[' + got[j] + '] want[' + want[j] + ']');
+  }
+  if (bad.length) { fail++; out.push('FAIL A' + i + ' ' + prop + ': ' + value + ' | ' + bad.join(' | ')); }
+  else pass++;
+}
+
+/* The alias through the other four doors a declaration can come in by. */
+var extra = [];
+var a = document.createElement('div');
+a.setAttribute('style', 'page-break-before: always');
+box.appendChild(a);
+void a.offsetHeight;
+extra.push('attr|names=' + names(a) + '|pb=' + read(a, 'page-break-before') + '|bb=' + read(a, 'break-before')
+  + '|text=' + a.style.cssText + '|attr=' + a.getAttribute('style')
+  + '|cpb=' + getComputedStyle(a).pageBreakBefore + '|cbb=' + getComputedStyle(a).breakBefore);
+var s = document.getElementById('sheetcase');
+void s.offsetHeight;
+extra.push('sheet|cpb=' + getComputedStyle(s).pageBreakBefore + '|cbb=' + getComputedStyle(s).breakBefore);
+var r = document.createElement('div');
+box.appendChild(r);
+r.style.setProperty('page-break-before', 'always');
+r.style.removeProperty('page-break-before');
+extra.push('remove|n=' + r.style.length + '|text=' + r.style.cssText);
+var w = document.createElement('div');
+box.appendChild(w);
+w.style.pageBreakBefore = 'always';
+extra.push('idlset|n=' + w.style.length + '|text=' + w.style.cssText + '|pb=' + read(w, 'page-break-before'));
+for (var i = 0; i < extra.length; i++) {
+  var name = extra[i].split('|')[0];
+  var wantRow = null;
+  for (var k = 0; k < S.length; k++) if (S[k][0].split('|')[0] === name) wantRow = S[k][0];
+  if (wantRow !== extra[i]) { fail++; out.push('FAIL S' + i + ' got[' + extra[i] + '] want[' + wantRow + ']'); }
+  else pass++;
+}
+
+/* The paint guards, read as geometry: a centered bar starts where the box says it does, and a box
+ * that was zoomed to nothing is still the size it was written at. */
+function rectOf(id) { var e = document.getElementById(id); var b = e.getBoundingClientRect(); return b.left.toFixed(1) + ',' + b.top.toFixed(1) + ',' + b.width.toFixed(1) + ',' + b.height.toFixed(1); }
+var GUARDS = [
+  ['b-1', 'centered inside g-1', function () {
+      var bar = document.getElementById('b-1').getBoundingClientRect();
+      var row = document.getElementById('g-1').getBoundingClientRect();
+      return ((bar.left + bar.right) / 2 - row.left - row.width / 2).toFixed(1);
+  }],
+  ['b-3', 'flush to the right edge of g-3', function () {
+      var bar = document.getElementById('b-3').getBoundingClientRect();
+      var row = document.getElementById('g-3').getBoundingClientRect();
+      return (row.right - bar.right).toFixed(1);
+  }],
+  ['b-5', 'match-parent inherits the right edge', function () {
+      // The bar's own box is the one that declares 'match-parent', and it is the only thing in a
+      // full-width row of its own — so where it lands is the parent's alignment arriving. A 'start'
+      // that never matched would leave the gap the row's width minus the bar's: 160, not 0.
+      var bar = document.getElementById('b-5').getBoundingClientRect();
+      var row = document.getElementById('g-5i').getBoundingClientRect();
+      return (row.right - bar.right).toFixed(1);
+  }],
+  ['g-2', 'a zero zoom keeps the written size', function () {
+      var b = document.getElementById('g-2').getBoundingClientRect();
+      return b.width.toFixed(1) + 'x' + b.height.toFixed(1);
+  }],
+  ['g-4', 'a zero percent zoom keeps it too', function () {
+      var b = document.getElementById('g-4').getBoundingClientRect();
+      return b.width.toFixed(1) + 'x' + b.height.toFixed(1);
+  }]
+];
+for (var i = 0; i < GUARDS.length; i++) {
+  out.push('guard ' + GUARDS[i][0] + ' (' + GUARDS[i][1] + '): ' + GUARDS[i][2]());
+}
+
+out.unshift((fail === 0 ? 'ALLPASS' : 'FAILURES') + ' b290: ' + pass + '/' + (pass + fail) + ' rows pass');
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

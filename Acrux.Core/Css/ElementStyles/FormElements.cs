@@ -265,7 +265,7 @@ public static class FormElements
                 style.FontSize = 13.3333f;
                 style.FontWeight = FontWeight.Normal;
                 style.FontFamily = "Arial";
-                style.TextAlign = TextAlignType.Center;
+                style.SetTextAlign(TextAlignType.Center);
                 style.Cursor = "default";
                 style.WhiteSpace = WhiteSpaceMode.Nowrap;
                 break;

@@ -50,6 +50,11 @@ public static class CssInheritance
         // Text (CSS Text 3/4; the modular white-space longhands inherit exactly like the
         // shorthand they feed).
         child.TextAlign = parent.TextAlign;
+        // The legacy '-webkit-' spelling is part of the inherited computed value, not a decoration
+        // on the element that wrote it (measured: a child of 'text-align: -webkit-center' computes
+        // '-webkit-center'), and 'match-parent' resolves against the parent's direction.
+        child.TextAlignLegacyKeyword = parent.TextAlignLegacyKeyword;
+        child.ParentDirection = parent.Direction;
         child.TextAlignLast = parent.TextAlignLast;
         child.WhiteSpace = parent.WhiteSpace;
         child.WhiteSpaceCollapse = parent.WhiteSpaceCollapse;

@@ -19,7 +19,8 @@ public static class CssCursorValue
     private static readonly HashSet<string> CursorKeywords = new(StringComparer.OrdinalIgnoreCase)
     {
         "alias", "all-scroll", "auto", "cell", "col-resize", "context-menu", "copy", "crosshair",
-        "default", "e-resize", "grab", "grabbing", "help", "move", "n-resize", "ne-resize",
+        "default", "e-resize", "ew-resize", "ns-resize", "grab", "grabbing", "help",
+        "move", "n-resize", "ne-resize",
         "nesw-resize", "no-drop", "none", "not-allowed", "nw-resize", "nwse-resize",
         "pointer", "progress", "row-resize", "s-resize", "se-resize", "sw-resize", "text",
         "vertical-text", "wait", "w-resize", "zoom-in", "zoom-out",

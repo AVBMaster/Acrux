@@ -96,7 +96,8 @@ public static class EchoedProperties
             new() { Name = "shape-margin", Initial = "0px", Normalize = NormalizeShapeMargin,
                 ComputedText = LengthPercentageComputed },
             new() { Name = "shape-image-threshold", Initial = "0",
-                Normalize = NormalizeShapeImageThreshold },
+                Normalize = NormalizeShapeImageThreshold,
+                ComputedText = static (text, _) => ClampToUnitInterval(text) },
 
             // ===== CSS Text 4 §3.9 (the autospace pair) and CSS Text 3 §3.1.5, measured word by
             // word. 'text-autospace' takes 'normal' or its initial 'no-autospace' and nothing of
@@ -162,14 +163,11 @@ public static class EchoedProperties
             // while the 'span-block start' pair is refused. 'position-visibility' says when the
             // fallback box is hidden, and 'anchored' — the word an older draft used — is refused.
             new() { Name = "position-area", Initial = "none",
-                Normalize = Single("none", "top", "bottom", "left", "right", "center", "start",
-                    "end", "self-start", "self-end", "span-start", "span-end", "span-self-start",
-                    "span-self-end", "span-all", "x-start", "x-end", "y-start", "y-end",
-                    "span-x-start", "span-x-end", "span-y-start", "span-y-end") },
+                Normalize = NormalizePositionArea },
             new() { Name = "position-visibility", Initial = "anchors-visible",
-                Normalize = Single("anchors-visible", "no-anchored", "anchor-size", "always") },
+                Normalize = Single("anchors-visible") },
             new() { Name = "position-try", Initial = "none",
-                Normalize = Single("normal", "none", "flip-block", "flip-inline", "flip-start") },
+                Normalize = NormalizePositionTry },
 
             // CSS Transitions 2 §4.2 and CSS View Transitions 1: a comma list, one keyword per
             // transition, and the view box the replaced element is cropped to.
@@ -189,6 +187,10 @@ public static class EchoedProperties
             new() { Name = "scroll-marker-group", Initial = "none",
                 Normalize = NormalizeScrollMarkerGroup,
                 ComputedText = ScrollMarkerGroupComputed },
+            // CSS Pointer Events 2 §3.4: the combinable words print in one order whichever way the
+            // page wrote them (measured: 'pinch-zoom pan-x' reads 'pan-x pinch-zoom').
+            new() { Name = "touch-action", Initial = "auto",
+                Normalize = Acrux.Core.Css.Resolver.CssPropertyApplier.CanonicalTouchActionForEcho },
             new() { Name = "font-palette", Initial = "normal", Normalize = NormalizeFontPalette },
             // CSS Fonts 4 §8.7.4, read against the reference engine: of the five alternation
             // functions it takes 'styleset()' and the bare 'historical-forms' only — 'ornaments',
@@ -205,8 +207,7 @@ public static class EchoedProperties
             new() { Name = "anchor-name", Initial = "none", Normalize = NormalizeTimelineName },
             new() { Name = "anchor-scope", Initial = "none", Normalize = NormalizeAnchorScope },
             new() { Name = "position-try-order", Initial = "normal",
-                Normalize = Single("normal", "most-width", "most-height", "lighter", "brighter",
-                    "color", "dark", "light") },
+                Normalize = Single("normal", "most-width", "most-height") },
 
             // ===== Fonts 4 §9. A tag is a quoted string, and the engine prints it with double
             // quotes whichever way the page wrote it (measured: "'SIN'" reads '"SIN"').
@@ -319,7 +320,7 @@ public static class EchoedProperties
             // reserves 'auto' (measured: it is refused).
             new() { Name = "animation-timeline", Initial = "auto", Normalize = NormalizeTimeline },
             new() { Name = "view-transition-name", Initial = "none", Normalize = NormalizeViewTransitionName },
-            new() { Name = "position-anchor", Initial = "auto", Normalize = NormalizePositionAnchor },
+            new() { Name = "position-anchor", Initial = "none", Normalize = NormalizePositionAnchor },
 
             // ===== Containment 3 §3.4 and the interpolation control of Values 4 §1.2. A container
             // name list is space-separated — a comma is no value (measured).
@@ -467,7 +468,9 @@ public static class EchoedProperties
     }
 
     /// <summary>'anchor-scope' is 'none', 'all', or a comma list of <dashed-ident>s (CSS Anchor
-    /// Positioning §3.3); 'position-anchor' is 'auto' or one dashed name (§4.3).</summary>
+    /// Positioning §3.3); 'position-anchor' is 'auto', 'none' or one dashed name (§4.3), and the
+    /// engine's initial for it is 'none' — a box that declares nothing answers 'none', not 'auto'
+    /// (measured).</summary>
     private static string? NormalizeAnchorScope(string value)
     {
         var words = Words(value);
@@ -477,9 +480,67 @@ public static class EchoedProperties
         return DashedList(value);
     }
 
-    private static string? NormalizePositionTryFallbacks(string value) =>
-        KeywordList(value, "none", "flip-block", "flip-inline", "flip-start", "flip-end",
-            "insert-block", "insert-inline", "insert-start", "insert-end");
+    /// <summary>CSS Anchor Positioning 1 §4.1: a fallback is a run of flips OR one inset area, never
+    /// both — 'flip-block flip-inline', 'left top' and a lone 'block-start' stand, while
+    /// 'flip-start block-start' does not (measured; 'insert-*' and 'scale size-down' are the draft's
+    /// vocabulary this engine drops, and a flip written twice says nothing twice).</summary>
+    private static string? NormalizePositionTryFallbacks(string value)
+    {
+        var words = Words(value);
+        if (words.Length == 0) return null;
+        if (words.Length == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+            return "none";
+        var flips = new List<string>();
+        var area = new List<string>();
+        foreach (var word in words)
+        {
+            var lower = word.ToLowerInvariant();
+            if (lower is "flip-start" or "flip-block" or "flip-inline") { flips.Add(lower); continue; }
+            area.Add(lower);
+        }
+        if (flips.Count > 0 && area.Count > 0) return null;
+        if (area.Count > 0 && !Acrux.Core.Css.CssValueGrammar.IsInsetArea(string.Join(" ", area)))
+            return null;
+        if (flips.Distinct().Count() != flips.Count) return null;
+        var parts = new List<string>();
+        if (flips.Count > 0) parts.Add(string.Join(" ", flips));
+        if (area.Count > 0) parts.Add(string.Join(" ", area));
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>§5.2: 'none' or one &lt;inset-area&gt; (measured: 'x-start y-end' and
+    /// 'left span-top' stand; 'top bottom' — two words of the same axis — does not).</summary>
+    private static string? NormalizePositionArea(string value)
+    {
+        var words = Words(value);
+        if (words.Length == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+            return "none";
+        return Acrux.Core.Css.CssValueGrammar.IsInsetArea(value)
+            ? string.Join(" ", words.Select(w => w.ToLowerInvariant())) : null;
+    }
+
+    /// <summary>§4: the shorthand is the order and the fallbacks in either order, or a named try
+    /// block, or 'none' (measured: 'most-height flip-start' and '--t' stand and enumerate the two
+    /// longhands, while 'most-height' alone and 'flip-start block-start' do not).</summary>
+    private static string? NormalizePositionTry(string value)
+    {
+        var words = Words(value);
+        if (words.Length == 0) return null;
+        if (words.Length == 1)
+        {
+            var only = words[0];
+            if (only.Equals("none", StringComparison.OrdinalIgnoreCase)
+                || only.Equals("normal", StringComparison.OrdinalIgnoreCase)) return only.ToLowerInvariant();
+            if (only.Length > 2 && only.StartsWith("--", StringComparison.Ordinal)) return only;
+            return NormalizePositionTryFallbacks(value);
+        }
+        var order = words.Where(w => w.ToLowerInvariant() is "most-width" or "most-height");
+        var rest = string.Join(" ", words
+            .Where(w => w.ToLowerInvariant() is not ("most-width" or "most-height")));
+        var fallbacks = NormalizePositionTryFallbacks(rest);
+        if (fallbacks == null) return null;
+        return order.Count() > 0 ? string.Join(" ", order) + " " + fallbacks : fallbacks;
+    }
 
     private static string? NormalizeTimelineName(string value)
     {
@@ -603,8 +664,15 @@ public static class EchoedProperties
     }
 
     /// <summary>'shape-image-threshold' is a number, and a percentage is the fraction it stands for
-    /// (measured: '25%' reads '0.25' on the specified surface as on the computed one). Outside 0 to
-    /// 1 the engine clamps it rather than dropping the declaration.</summary>
+    /// (measured: '25%' reads '0.25' on the specified surface as on the computed one). The specified
+    /// surface says the number the page wrote — '2' reads '2' and computes '1' (measured, both), so
+    /// the clamp belongs to the computed printer and not here: a printer that clamps repairs a value
+    /// the property never said.</summary>
+    /// <summary>The number as the page wrote it, clamped into 0..1 for the computed surface.</summary>
+    private static string ClampToUnitInterval(string text)
+        => double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            ? Math.Clamp(value, 0d, 1d).ToString("R", CultureInfo.InvariantCulture) : text;
+
     private static string? NormalizeShapeImageThreshold(string value)
     {
         var text = value.Trim();
@@ -619,7 +687,7 @@ public static class EchoedProperties
         else if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number))
             return null;
         if (double.IsNaN(number)) return null;
-        return Math.Clamp(number, 0d, 1d).ToString("R", CultureInfo.InvariantCulture);
+        return number.ToString("R", CultureInfo.InvariantCulture);
     }
 
     private static string? NormalizeScrollSnapType(string text)
@@ -1512,8 +1580,12 @@ public static class EchoedProperties
         var words = Words(text);
         if (words.Length != 1) return null;
         var w = words[0];
-        if (w.Equals("auto", StringComparison.OrdinalIgnoreCase)) return "auto";
-        return IsDashedIdent(w) || IsCustomIdent(w) ? w : null;
+        // 'none' and 'auto' are the two words the property says for "no anchor", and the name of
+        // one is the dashed custom property 'anchor-name' declared — a plain ident is nobody's
+        // anchor name (measured: '--x' and 'none' stand, 'x' leaves no declaration).
+        if (w.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            || w.Equals("none", StringComparison.OrdinalIgnoreCase)) return w.ToLowerInvariant();
+        return IsDashedIdent(w) ? w : null;
     }
 
     private static string? NormalizeContainerName(string text)

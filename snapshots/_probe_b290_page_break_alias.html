@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b290 probe 3 — what a page-break alias is stored as</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+#sheetcase { page-break-before: always; }</style></head><body>
+<pre id="report"></pre>
+<script>
+/* The three CSS 2.1 names that the reference engine may store under their CSS Fragmentation 3 twin.
+ * One fresh div per case: what the block carries, what each name reads back through the CSSOM, what
+ * each name computes to, and what CSS.supports says. */
+var SET = [
+  ['page-break-before', 'always'], ['page-break-before', 'avoid'], ['page-break-before', 'auto'],
+  ['page-break-before', 'left'], ['page-break-before', 'right'], ['page-break-before', 'inherit'],
+  ['page-break-before', 'recto'], ['page-break-before', 'page'], ['page-break-before', 'ALWAYS'],
+  ['page-break-before', 'always !important'], ['page-break-after', 'always'],
+  ['page-break-after', 'auto'], ['page-break-after', 'recto'],
+  ['page-break-inside', 'avoid'], ['page-break-inside', 'auto'], ['page-break-inside', 'avoid-column'],
+  ['break-before', 'page'], ['break-before', 'column'], ['break-before', 'avoid'],
+  ['break-before', 'avoid-page'], ['break-inside', 'avoid'], ['break-inside', 'avoid-column'],
+];
+var out = [];
+for (var i = 0; i < SET.length; i++) {
+  var prop = SET[i][0], value = SET[i][1];
+  var d = document.createElement('div');
+  document.body.appendChild(d);
+  d.style.setProperty(prop, value);
+  var names = [];
+  for (var j = 0; j < d.style.length; j++) names.push(d.style.item(j));
+  void d.offsetHeight;
+  var cs = getComputedStyle(d);
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) {}
+  out.push(i + '|' + prop + '|' + value + '|n=' + d.style.length + '|names=' + names.join(',')
+    + '|pb=' + d.style.getPropertyValue('page-break-before')
+    + '|bb=' + d.style.getPropertyValue('break-before')
+    + '|idl=' + d.style.pageBreakBefore
+    + '|cpb=' + cs.pageBreakBefore + '|cbb=' + cs.breakBefore + '|cin=' + cs.pageBreakInside
+    + '|cbin=' + cs.breakInside
+    + '|sup=' + sup + '|text=' + d.style.cssText);
+}
+/* The same value reached through the style attribute and through a stylesheet, which are two other
+ * places a name is written down. */
+var a = document.createElement('div');
+a.setAttribute('style', 'page-break-before: always');
+document.body.appendChild(a);
+void a.offsetHeight;
+var an = [];
+for (var j = 0; j < a.style.length; j++) an.push(a.style.item(j));
+out.push('attr|names=' + an.join(',') + '|pb=' + a.style.getPropertyValue('page-break-before')
+  + '|bb=' + a.style.getPropertyValue('break-before') + '|text=' + a.style.cssText
+  + '|attr=' + a.getAttribute('style')
+  + '|cpb=' + getComputedStyle(a).pageBreakBefore + '|cbb=' + getComputedStyle(a).breakBefore);
+var s = document.createElement('div');
+s.id = 'sheetcase';
+document.body.appendChild(s);
+void s.offsetHeight;
+out.push('sheet|cpb=' + getComputedStyle(s).pageBreakBefore + '|cbb=' + getComputedStyle(s).breakBefore);
+/* removeProperty through one name of the pair, and the IDL setter through the other. */
+var r = document.createElement('div');
+document.body.appendChild(r);
+r.style.setProperty('page-break-before', 'always');
+r.style.removeProperty('page-break-before');
+out.push('remove|n=' + r.style.length + '|text=' + r.style.cssText);
+var w = document.createElement('div');
+document.body.appendChild(w);
+w.style.pageBreakBefore = 'always';
+out.push('idlset|n=' + w.style.length + '|text=' + w.style.cssText + '|pb=' + w.style.getPropertyValue('page-break-before'));
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

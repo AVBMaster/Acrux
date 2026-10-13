@@ -41,6 +41,15 @@ public static class InlineStyleBlock
     /// the value spelled the way the engine prints it (see <see cref="CanonicalSpecifiedValue"/>).</summary>
     public static void Store(Element element, string name, string value)
     {
+        // The three CSS 2.1 break names are recorded under the property they alias, with the value
+        // folded onto that name's set (LegacyBreakAlias; measured through both ends of the block —
+        // setProperty and an authored 'style="page-break-before: always"' each leave the block
+        // carrying 'break-before: page').
+        if (LegacyBreakAlias.ModernName(name) is { } modern)
+        {
+            value = LegacyBreakAlias.StoredValue(name, value) ?? value;
+            name = modern;
+        }
         // One name is special: the reference engine keeps no serialisation for the legacy
         // '-webkit-mask-box-image' shorthand, so writing it replaces the shorthand with its five
         // longhands — the pieces the value left out printed as 'initial' — and the shorthand itself

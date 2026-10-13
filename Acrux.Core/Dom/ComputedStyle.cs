@@ -908,6 +908,27 @@ public class ComputedStyle
     public BackgroundAttachment BackgroundAttachment { get; set; } = BackgroundAttachment.Scroll;
 
     public TextAlignType TextAlign { get; set; } = TextAlignType.Start;
+    /// <summary>The computed spelling of 'text-align' when it is not the word its alignment prints:
+    /// the reference engine keeps a '-webkit-left', '-webkit-right' or '-webkit-center' the page
+    /// authored as the computed value of that property, in that spelling, and passes it to the children
+    /// that inherit it (measured: 'text-align: -webkit-center' answers 'getComputedStyle' with
+    /// '-webkit-center', and a child of that element does too). Null prints the alignment's own word.</summary>
+    public string? TextAlignLegacyKeyword { get; set; }
+
+    /// <summary>The direction this style took from its parent, before any direction it set for itself.
+    /// 'text-align: -webkit-match-parent' resolves a logical 'start'/'end' against this and not against
+    /// <see cref="Direction"/>: an element that writes both 'direction: rtl' and 'match-parent' computes
+    /// the side its parent reads, 'left' under an ltr parent (measured).</summary>
+    public string ParentDirection { get; set; } = "ltr";
+
+    /// <summary>Set the alignment and, with it, the spelling the computed surface prints. A rule that
+    /// names an alignment itself — the UA sheet's 'center' for a heading — leaves no legacy keyword
+    /// behind, so the pair is written here and nowhere else.</summary>
+    public void SetTextAlign(TextAlignType value, string? legacyKeyword = null)
+    {
+        TextAlign = value;
+        TextAlignLegacyKeyword = legacyKeyword;
+    }
     public TextAlignLastType TextAlignLast { get; set; } = TextAlignLastType.Auto;
     public TextDecorationType TextDecoration { get; set; } = TextDecorationType.None;
     public VerticalAlignType VerticalAlign { get; set; } = VerticalAlignType.Baseline;

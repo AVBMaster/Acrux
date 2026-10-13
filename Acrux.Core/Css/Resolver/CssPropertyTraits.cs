@@ -451,7 +451,10 @@ public static class CssPropertyTraits
                 to.LineHeightIsNormal = from.LineHeightIsNormal;
                 to.LineHeightPx = from.LineHeightPx;
                 break;
-            case "text-align": to.TextAlign = from.TextAlign; break;
+            case "text-align":
+                to.TextAlign = from.TextAlign;
+                to.TextAlignLegacyKeyword = from.TextAlignLegacyKeyword;
+                break;
             case "text-decoration":
                 to.TextDecoration = from.TextDecoration;
                 to.TextDecorationLine = from.TextDecorationLine;

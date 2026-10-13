@@ -500,9 +500,9 @@ public static class ComputedValueSerializer
             case "break-before": return style.BreakBefore ?? "auto";
             case "break-after": return style.BreakAfter ?? "auto";
             case "break-inside": return style.BreakInside ?? "auto";
-            case "page-break-before": return LegacyPageBreakText(style.BreakBefore);
-            case "page-break-after": return LegacyPageBreakText(style.BreakAfter);
-            case "page-break-inside": return LegacyPageBreakInsideText(style.BreakInside);
+            case "page-break-before": return LegacyPageBreakText("page-break-before", style.BreakBefore);
+            case "page-break-after": return LegacyPageBreakText("page-break-after", style.BreakAfter);
+            case "page-break-inside": return LegacyPageBreakText("page-break-inside", style.BreakInside);
             // 'text-wrap' prints as the shorthand the page wrote: a wrapping mode is what a style
             // word alone means, so 'wrap balance' reads 'balance' while 'nowrap stable' says both
             // (measured).
@@ -1029,25 +1029,14 @@ public static class ComputedValueSerializer
 
     private static string UnquoteContent(string token) => token[1..^1];
 
-    /// <summary>The computed text of a 'page-break-before' / 'page-break-after' alias read from the
-    /// shared slot: 'page' re-spells as 'always', 'auto'/'avoid'/'left'/'right' stay, and a modern
-    /// value with no legacy word reads the empty string (measured).</summary>
-    private static string LegacyPageBreakText(string? canonical) => canonical switch
-    {
-        null or "auto" => "auto",
-        "page" => "always",
-        "avoid" or "left" or "right" => canonical,
-        _ => string.Empty,
-    };
-
-    /// <summary>The computed text of 'page-break-inside': only 'auto' and 'avoid' have a legacy
-    /// spelling; an 'avoid-page' or 'avoid-column' from the modern name reads empty (measured).</summary>
-    private static string LegacyPageBreakInsideText(string? canonical) => canonical switch
-    {
-        null or "auto" => "auto",
-        "avoid" => "avoid",
-        _ => string.Empty,
-    };
+    /// <summary>The computed text of a 'page-break-before' / 'page-break-after' /
+    /// 'page-break-inside' alias, read from the shared slot its modern name writes: the legacy
+    /// spelling of a value the modern property stores under another word, and the empty string for
+    /// a value the legacy name has no word for. One table answers this for the CSSOM's specified
+    /// read as well (see <see cref="LegacyBreakAlias"/>), because the two surfaces cannot be
+    /// allowed to disagree about which word a name owns.</summary>
+    private static string LegacyPageBreakText(string legacyName, string? canonical)
+        => Acrux.Core.Css.LegacyBreakAlias.SpecifiedValue(legacyName, canonical ?? "auto") ?? string.Empty;
 
     /// <summary>A border width's computed value: zero while its style is 'none' or 'hidden'
     /// (CSS 2.1 §10.3.2 — the width is suppressed at computed-value time, so an authored

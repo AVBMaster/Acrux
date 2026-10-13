@@ -958,6 +958,8 @@ public class CascadeResolver
         dest.LineHeightIsNormal = src.LineHeightIsNormal;
         dest.LineHeightPx = src.LineHeightPx;
         dest.TextAlign = src.TextAlign;
+        dest.TextAlignLegacyKeyword = src.TextAlignLegacyKeyword;
+        dest.ParentDirection = src.ParentDirection;
         dest.TextDecoration = src.TextDecoration;
         dest.TextDecorationLine = src.TextDecorationLine;
         dest.TextDecorationStyle = src.TextDecorationStyle;

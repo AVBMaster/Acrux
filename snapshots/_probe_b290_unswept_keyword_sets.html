@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b290 probe 1 — the keyword sets no round has swept yet</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }</style></head><body>
+<pre id="report"></pre>
+<script>
+/* One fresh div per case, written through the CSSOM and read back through every surface at once:
+ * the block's own enumeration, its text, the computed value and what CSS.supports says. */
+var CASES = [
+  'appearance: auto', 'appearance: none', 'appearance: textfield', 'appearance: button',
+  'appearance: menulist', 'appearance: listbox', 'appearance: checkbox', 'appearance: slider',
+  'appearance: textarea', 'appearance: searchfield', 'appearance: popover', 'appearance: toolbars',
+  'appearance: document', 'appearance: alpha', 'appearance: pickers', 'appearance: AUTO',
+  'appearance: none auto', 'appearance: menulist-button', 'appearance: meter', 'appearance: progress-bar',
+  '-webkit-appearance: none', '-webkit-appearance: textfield', '-webkit-appearance: auto',
+  'cursor: pointer', 'cursor: url(a.png)', 'cursor: url(a.png), pointer',
+  'cursor: url(a.png) 2 2, pointer', 'cursor: url(a.png) 2px 2px, pointer',
+  'cursor: crosshair', 'cursor: GRAB', 'cursor: grabbing', 'cursor: alias', 'cursor: all-scroll',
+  'cursor: col-resize', 'cursor: e-resize', 'cursor: n-resize', 'cursor: ne-resize',
+  'cursor: zoom-in', 'cursor: zoom-out', 'cursor: help', 'cursor: wait', 'cursor: progress',
+  'cursor: no-drop', 'cursor: not-allowed', 'cursor: cell', 'cursor: text', 'cursor: vertical-text',
+  'cursor: default', 'cursor: none', 'cursor: copy', 'cursor: move', 'cursor: ew-resize',
+  'cursor: ns-resize', 'cursor: nesw-resize', 'cursor: nwse-resize', 'cursor: sw-resize',
+  'cursor: se-resize', 'cursor: nw-resize', 'cursor: row-resize', 'cursor: hand',
+  'cursor: pointer, pointer', 'cursor: url(a.png) 2 2', 'cursor: url(a.png) 2, pointer',
+  'cursor: url("a.png"), auto', 'cursor: bogus', 'cursor: auto auto',
+  'position-anchor: --x', 'position-anchor: none', 'position-anchor: x',
+  'position-try: flip-start', 'position-try: insert-block-end', 'position-try: --t',
+  'position-try-fallbacks: flip-start', 'position-try-fallbacks: flip-block flip-inline',
+  'position-try-fallbacks: left top', 'position-try-fallbacks: block-start',
+  'position-try-fallbacks: span-block-end', 'position-try-fallbacks: scale size-down',
+  'position-try-order: normal', 'position-try-order: most-height', 'position-try-order: most-width',
+  'position-try-order: viewport-fits', 'position-visibility: visible',
+  'position-visibility: anchors-visible', 'position-visibility: no-alternatives',
+  'position-visibility: at-risk', 'inset-area: span-top', 'inset-area: top',
+  'inset-area: left span-x-start', 'position-area: top', 'position-area: span-block-end self-start',
+  'position-area: center', 'position-area: x-start y-end',
+  'quotes: "“" "”"', 'quotes: "“" "”" "‘" "’"', 'quotes: none', 'quotes: auto',
+  'quotes: "a"', 'quotes: "a" "b" "c"', 'quotes: initial', 'quotes: "«" "»"',
+  'string-set: none', 'string-set: foo "a"', 'string-set: foo content()',
+  'string-set: foo content(before)', 'string-set: foo content(after)',
+  'string-set: foo "a", bar content()',
+  'zoom: 1', 'zoom: 1.5', 'zoom: 50%', 'zoom: normal', 'zoom: reset', 'zoom: 0', 'zoom: -1',
+  'zoom: 20px', 'zoom: calc(1 + 1)', 'zoom: calc(50% + 10px)',
+  'overscroll-behavior: auto', 'overscroll-behavior: none', 'overscroll-behavior: contain',
+  'overscroll-behavior: contain auto', 'overscroll-behavior: no-precession',
+  'overscroll-behavior-x: contain', 'overscroll-behavior-y: stretch',
+  'overscroll-behavior: bogus', 'overscroll-behavior: contain contain contain',
+  'touch-action: auto', 'touch-action: none', 'touch-action: pan-x', 'touch-action: pan-y',
+  'touch-action: pan-left', 'touch-action: pinch-zoom', 'touch-action: manipulation',
+  'touch-action: pan-x pan-y', 'touch-action: auto none', 'touch-action: pan-up pan-down',
+  'user-select: auto', 'user-select: none', 'user-select: text', 'user-select: all',
+  'user-select: contain', 'user-select: element', 'user-select: force-selection',
+  'user-select: none none', '-webkit-user-select: none', '-webkit-user-select: element',
+  'resize: none', 'resize: both', 'resize: horizontal', 'resize: vertical', 'resize: block',
+  'resize: inline', 'resize: vertical horizontal', 'resize: auto',
+  'column-fill: balance', 'column-fill: auto', 'column-fill: balance all',
+  'column-fill: balance columns', 'column-fill: auto all',
+  'break-before: auto', 'break-before: page', 'break-before: column', 'break-before: always',
+  'break-before: left', 'break-before: right', 'break-before: recto', 'break-before: verso',
+  'break-before: region', 'break-before: avoid', 'break-before: avoid-page',
+  'break-before: page always', 'break-before: auto page',
+  'break-after: avoid-column', 'break-inside: avoid', 'break-inside: auto',
+  'break-inside: avoid-page', 'break-inside: avoid-column', 'break-inside: avoid-region',
+  'page-break-before: always', 'page-break-after: auto', 'page-break-inside: avoid',
+  'page-break-inside: auto', 'page-break-before: left', 'page-break-after: recto',
+  'widows: 2', 'widows: 1', 'widows: auto', 'widows: 0', 'widows: 1.5', 'orphans: 3', 'orphans: auto',
+  'text-align-last: auto', 'text-align-last: start', 'text-align-last: end', 'text-align-last: left',
+  'text-align-last: right', 'text-align-last: center', 'text-align-last: justify',
+  'text-align: justify-all', 'text-align: match-parent', 'text-align: start end',
+  'text-align: left right', 'text-align: justify', 'text-align: center', 'text-align: -webkit-center',
+  'text-justify: auto', 'text-justify: inter-word', 'text-justify: inter-character',
+  'text-justify: distribute', 'text-spacing-trim: normal', 'text-spacing-trim: space-all',
+  'text-spacing-trim: trim-start', 'text-spacing-trim: trim-both',
+  'text-spacing-trim: trim-none', 'text-spacing-trim: space-first',
+  'line-clamp: 2', 'line-clamp: none', '-webkit-line-clamp: 2', '-webkit-line-clamp: none',
+  'scroll-behavior: auto', 'scroll-behavior: smooth', 'scroll-behavior: instant',
+  'will-change: auto', 'will-change: transform', 'will-change: opacity, transform',
+  'will-change: scroll-position', 'will-change: contents', 'will-change: left, top',
+  'counter-reset: none', 'counter-reset: foo', 'counter-reset: foo 1', 'counter-reset: foo bar',
+  'counter-increment: none', 'counter-increment: foo', 'counter-set: none', 'counter-set: foo 2',
+  'shape-outside: none', 'shape-outside: circle()', 'shape-outside: margin-box',
+  'shape-outside: polygon(0 0, 10px 10px)', 'shape-image-threshold: 0.5', 'shape-image-threshold: 2',
+  'shape-margin: 4px', 'shape-margin: 50%',
+  'float: left', 'float: inline-start', 'float: top', 'float: pending',
+  'float-defer: 1', 'float-defer: last', 'float-reference: column', 'float-reference: page',
+  'scroll-margin: 4px 8px', 'scroll-snap-type: x mandatory', 'scroll-snap-type: none',
+  'scroll-snap-align: center', 'scroll-snap-stop: always', 'scroll-snap-stop: normal',
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var decl = CASES[i];
+  var prop = decl.slice(0, decl.indexOf(':')).trim();
+  var value = decl.slice(decl.indexOf(':') + 1).trim();
+  var d = document.createElement('div');
+  document.body.appendChild(d);
+  d.style.setProperty(prop, value);
+  var names = [];
+  for (var j = 0; j < d.style.length; j++) names.push(d.style.item(j));
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) {}
+  out.push(i + '|' + prop + '|' + value + '|n=' + d.style.length + '|names=' + names.join(',')
+           + '|echo=' + d.style.getPropertyValue(prop) + '|comp=' + getComputedStyle(d).getPropertyValue(prop)
+           + '|sup=' + sup + '|text=' + d.style.cssText);
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

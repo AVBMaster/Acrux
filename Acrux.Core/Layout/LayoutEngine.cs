@@ -519,7 +519,7 @@ public class LayoutEngine
                 case "z-index": style.ZIndex = int.TryParse(value, out var zi) ? zi : 0; break;
                 case "opacity": style.Opacity = float.TryParse(value, out var op) ? op : 1; break;
                 case "overflow": style.Overflow = ParsePseudoOverflow(value); break;
-                case "text-align": style.TextAlign = ParsePseudoTextAlign(value); break;
+                case "text-align": Css.Resolver.CssPropertyApplier.ApplyTextAlign(style, value); break;
                 case "font-size": Css.Resolver.CssPropertyApplier.SetFontSize(style, value, ParsePseudoFontSize(value)); break;
                 case "line-height": Acrux.Core.Fonts.LineBoxMetrics.ApplyLineHeight(style, value); break;
                 case "font-family": style.FontFamily = value; break;
@@ -556,10 +556,6 @@ public class LayoutEngine
     private static OverflowType ParsePseudoOverflow(string v) => v.ToLowerInvariant() switch
     {
         "hidden" => OverflowType.Hidden, "scroll" => OverflowType.Scroll, "auto" => OverflowType.Auto, _ => OverflowType.Visible
-    };
-    private static TextAlignType ParsePseudoTextAlign(string v) => v.ToLowerInvariant() switch
-    {
-        "left" => TextAlignType.Left, "right" => TextAlignType.Right, "center" => TextAlignType.Center, "justify" => TextAlignType.Justify, _ => TextAlignType.Start
     };
     private static float ParsePseudoFontSize(string v)
     {
