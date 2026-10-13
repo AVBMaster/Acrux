@@ -1099,17 +1099,29 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
             return;
         }
 
-        // CSS Flexbox §9.7 iterative resolution with freeze steps: clamping a
-        // flexible track to its min/max freezes the item and removes its
-        // contribution from the remaining free space, so shrinkable/growable
-        // siblings absorb the difference instead of overflowing.
+        // CSS Flexbox §9.7 step 4: an item is frozen before anything is distributed only when it
+        // cannot move in the direction the free space lies — a positive balance leaves an item with
+        // 'flex-grow: 0' at its hypothetical size, a negative one leaves 'flex-shrink: 0' there.
+        // Every other item starts the distribution at its FLEX BASE SIZE. The min/max clamp is a
+        // floor and ceiling on the RESULT; folding it into the accounting here paid the automatic
+        // minimum twice, so a 200px row of 'flex: 1 1 25%' beside 'flex: 1 1 0%' read 118/82 where
+        // the reference engine reads 125/75, and 'flex: 1 1 content' beside 'flex: 1 1 0%' read
+        // 100/100 where it reads 107/93 (measured both).
         float Unclamped(FlexItemData item) => item.FlexBaseSize + item.TargetMainSize;
         float FrozenUsed(FlexItemData item) => ClampMainSize(item, Unclamped(item), isRowAxis);
 
+        float baseSum = 0;
+        foreach (var item in items) baseSum += item.FlexBaseSize;
+        float balance = availableMain - baseSum;
         foreach (var item in items)
         {
-            float clamped = ClampMainSize(item, item.FlexBaseSize, isRowAxis);
-            item.TargetMainSize = clamped - item.FlexBaseSize;
+            item.TargetMainSize = 0;
+            if ((balance > 0 && item.Style.FlexGrow == 0)
+                || (balance < 0 && item.Style.FlexShrink == 0))
+            {
+                item.TargetMainSize = ClampMainSize(item, item.FlexBaseSize, isRowAxis) - item.FlexBaseSize;
+                item.IsFrozen = true;
+            }
         }
 
         for (int pass = 0; pass < items.Count + 2; pass++)
@@ -1139,9 +1151,15 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                     float factor = scaled < 1 ? scaled : 1;
                     item.TargetMainSize += scaled * factor;
                     float unclamped = Unclamped(item);
-                    if (unclamped > ClampMainSize(item, unclamped, isRowAxis) && unclamped - ClampMainSize(item, unclamped, isRowAxis) > maxViol)
+                    float clamped = ClampMainSize(item, unclamped, isRowAxis);
+                    // A growing item can violate its min/max in either direction: over the ceiling
+                    // (the old case) or under its automatic minimum, which is the floor §4.5 puts
+                    // under an item whose content cannot be squeezed. Both freeze at the clamped
+                    // size so the next pass gives the space to somebody who can take it.
+                    float violation = System.Math.Abs(clamped - unclamped);
+                    if (violation > 0.01f && violation > maxViol)
                     {
-                        maxViol = unclamped - ClampMainSize(item, unclamped, isRowAxis);
+                        maxViol = violation;
                         maxViolation = items.IndexOf(item);
                     }
                 }
@@ -1149,13 +1167,35 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                 var viol = items[maxViolation];
                 viol.TargetMainSize = ClampMainSize(viol, Unclamped(viol), isRowAxis) - viol.FlexBaseSize;
                 viol.IsFrozen = true;
+                // §9.7.3: freezing a violator discards the line's current resolution and restarts
+                // from step 4, so the items still flexible go back to their base sizes before the
+                // next pass shares out what is left. Without the restart a share earned in the
+                // discarded pass stayed baked into 'TargetMainSize', and the pass after it read the
+                // leftover as negative space and shrank a sibling to its floor — 'min-width: 150px'
+                // beside 'flex: 1 1 0' gave 150/14 where the reference engine gives 150/50
+                // (measured).
+                foreach (var other in items)
+                    if (!other.IsFrozen) other.TargetMainSize = 0;
             }
             else
             {
                 float weighted = 0;
                 foreach (var item in items)
                     if (!item.IsFrozen) weighted += item.Style.FlexShrink * item.FlexBaseSize;
-                if (weighted == 0) break;
+                if (weighted == 0)
+                {
+                    // §9.7 step 7: when no unfrozen item has a base size to weight the shrink with
+                    // — the 'flex: 1 1 0%' pair that overflows because their content will not fit —
+                    // there is nothing to take away proportionally, so each item keeps its
+                    // hypothetical main size, which is its base clamped by the automatic minimum.
+                    // Measured: a 200px row of a 40-letter word and a two-letter word, both
+                    // 'flex: 1 1 0%', reads 308/14 in the reference engine.
+                    foreach (var item in items)
+                        if (!item.IsFrozen)
+                            item.TargetMainSize =
+                                ClampMainSize(item, item.FlexBaseSize, isRowAxis) - item.FlexBaseSize;
+                    break;
+                }
 
                 int maxViolation = -1;
                 float maxRatio = -1;
@@ -1178,6 +1218,15 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                 var viol = items[maxViolation];
                 viol.TargetMainSize = ClampMainSize(viol, Unclamped(viol), isRowAxis) - viol.FlexBaseSize;
                 viol.IsFrozen = true;
+                // §9.7.3: freezing a violator discards the line's current resolution and restarts
+                // from step 4, so the items still flexible go back to their base sizes before the
+                // next pass shares out what is left. Without the restart a share earned in the
+                // discarded pass stayed baked into 'TargetMainSize', and the pass after it read the
+                // leftover as negative space and shrank a sibling to its floor — 'min-width: 150px'
+                // beside 'flex: 1 1 0' gave 150/14 where the reference engine gives 150/50
+                // (measured).
+                foreach (var other in items)
+                    if (!other.IsFrozen) other.TargetMainSize = 0;
             }
         }
 

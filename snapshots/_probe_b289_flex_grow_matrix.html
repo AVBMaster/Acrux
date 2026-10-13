@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b289 probe 1 — what a growing flex item is paid</title>
+<style>
+body { font: 14px/18px monospace; margin: 0; }
+.row { display: flex; width: 200px; height: 20px; }
+.col { display: flex; flex-direction: column; width: 200px; height: 120px; }
+.a { background: rgb(255,128,128); }
+.b { background: rgb(0,0,255); }
+</style></head><body>
+<!-- r1: auto basis beside a definite one -->
+<div class="row" id="r1"><div class="a" id="c1">ab</div><div class="b" id="c2" style="flex:1 1 0%">ab</div></div>
+<!-- r2: percentage basis -->
+<div class="row" id="r2"><div class="a" id="c3" style="flex:1 1 25%">ab</div><div class="b" id="c4" style="flex:1 1 0%">ab</div></div>
+<!-- r3: auto basis with a definite width -->
+<div class="row" id="r3"><div class="a" id="c5" style="width:60px;flex:1 1 auto">ab</div><div class="b" id="c6" style="flex:1 1 auto">ab</div></div>
+<!-- r4: an explicit min-width wins over the automatic one -->
+<div class="row" id="r4"><div class="a" id="c7" style="min-width:40px;flex:0 1 400px">ab</div><div class="b" id="c8" style="flex:1 1 0%">ab</div></div>
+<!-- r5: grow factors that do not sum to one -->
+<div class="row" id="r5"><div class="a" id="c9" style="flex:2 1 0%">ab</div><div class="b" id="c10" style="flex:1 1 0%">ab</div></div>
+<!-- r6: one grow, one frozen -->
+<div class="row" id="r6"><div class="a" id="c11" style="flex:0 0 30px">ab</div><div class="b" id="c12" style="flex:1 1 auto">ab</div></div>
+<!-- r7: content basis -->
+<div class="row" id="r7"><div class="a" id="c13" style="flex:1 1 content">ab</div><div class="b" id="c14" style="flex:1 1 0%">ab</div></div>
+<!-- r8: a long unbreakable word sets a floor no definite basis can escape -->
+<div class="row" id="r8"><div class="a" id="c15" style="flex:1 1 0%">cccccccccccccccccccccccccccccccccccccccccccc</div><div class="b" id="c16" style="flex:1 1 0%">ab</div></div>
+<!-- r9: column flow, where min-height:auto says nothing -->
+<div class="col" id="r9"><div class="a" id="c17" style="flex:1 1 0">ab</div><div class="b" id="c18" style="flex:1 1 40px">ab</div></div>
+<!-- r10: free space left over with no grow at all -->
+<div class="row" id="r10"><div class="a" id="c19" style="flex:0 0 0%">ab</div><div class="b" id="c20" style="flex:0 0 auto">ab</div></div>
+<!-- r11: a ceiling the grow cannot pass -->
+<div class="row" id="r11"><div class="a" id="c21" style="flex:1 1 0;max-width:60px">ab</div><div class="b" id="c22" style="flex:1 1 0">ab</div></div>
+<!-- r12: an explicit min-width larger than the share -->
+<div class="row" id="r12"><div class="a" id="c23" style="flex:1 1 0;min-width:150px">ab</div><div class="b" id="c24" style="flex:1 1 0">ab</div></div>
+<!-- r13: border-box padding on a definite basis -->
+<div class="row" id="r13"><div class="a" id="c25" style="flex:1 1 80px;padding:0 10px;box-sizing:border-box">ab</div><div class="b" id="c26" style="flex:1 1 0%">ab</div></div>
+<!-- r14: the classic shrink of definite bases -->
+<div class="row" id="r14"><div class="a" id="c27" style="flex:0 1 100px">ab</div><div class="b" id="c28" style="flex:0 1 200px">ab</div></div>
+<!-- r15: wrap, where each line resolves on its own -->
+<div class="row" id="r15" style="flex-wrap:wrap;height:40px"><div class="a" id="c29" style="flex:1 1 120px">ab</div><div class="b" id="c30" style="flex:1 1 120px">ab</div></div>
+<!-- r16: a column whose auto basis is the content height -->
+<div class="col" id="r16"><div class="a" id="c31" style="flex:1 1 auto">ab</div><div class="b" id="c32" style="flex:1 1 0">ab</div></div>
+<!-- r17: nested flex, the inner row sized by the outer share -->
+<div class="row" id="r17"><div class="a" id="c33" style="flex:1 1 0"><div class="row" style="width:100%"><div id="c34" style="flex:1 1 0;background:rgb(0,128,0)">ab</div><div style="flex:1 1 25%;background:rgb(128,0,128)">ab</div></div></div></div>
+<script>
+var out = [];
+for (var i = 1; i <= 34; i++) {
+  var el = document.getElementById('c' + i);
+  var r = el.getBoundingClientRect();
+  out.push('c' + i + ' x=' + r.x.toFixed(1) + ' y=' + r.y.toFixed(1)
+           + ' w=' + r.width.toFixed(1) + ' h=' + r.height.toFixed(1));
+}
+var text = out.join('\n');
+console.log(text);
+window.ROWS = out;
+var pre = document.createElement('pre'); pre.textContent = text; document.body.appendChild(pre);
+</script></body></html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b289 probe 2 — does a completed set of longhands fold back</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }</style></head><body>
+<pre id="report"></pre>
+<script>
+/* Each case writes the longhands of one shorthand, one by one, and reads the block back: the
+ * reference engine keeps a shorthand as one declaration, so a completed set folds into it again.
+ * 'fold' is what cssText says after the last write; 'n' is how many declarations the block counts.
+ * A case whose name ends in '-partial' leaves one part unwritten, which must not fold. */
+var CASES = [
+  ['background', ['background-color: red'], 'background'],
+  ['background', ['background-color: red', 'background-image: url(a.png)'], 'background'],
+  ['background', ['background-color: red', 'background-image: url(a.png)', 'background-repeat: no-repeat',
+                  'background-position-x: 0%', 'background-position-y: 0%', 'background-size: auto',
+                  'background-attachment: scroll', 'background-origin: padding-box', 'background-clip: border-box'], 'background'],
+  ['background-partial', ['background-color: red', 'background-image: url(a.png)'], 'background'],
+  ['mask', ['mask-image: url(a.png)'], 'mask'],
+  ['mask', ['mask-image: url(a.png)', 'mask-repeat: no-repeat'], 'mask'],
+  ['transition', ['transition-property: color'], 'transition'],
+  ['transition', ['transition-property: color', 'transition-duration: 1s', 'transition-timing-function: ease',
+                  'transition-delay: 0s', 'transition-behavior: normal'], 'transition'],
+  ['grid-area', ['grid-row-start: 1', 'grid-column-start: 2', 'grid-row-end: 3', 'grid-column-end: 4'], 'grid-area'],
+  ['grid-area-partial', ['grid-row-start: 1', 'grid-column-start: 2', 'grid-row-end: 3'], 'grid-area'],
+  ['grid-column', ['grid-column-start: 1', 'grid-column-end: span 2'], 'grid-column'],
+  ['grid-row', ['grid-row-start: auto', 'grid-row-end: 3'], 'grid-row'],
+  ['grid-template', ['grid-template-rows: none', 'grid-template-columns: none', 'grid-template-areas: none'], 'grid-template'],
+  ['text-emphasis', ['text-emphasis-style: dot', 'text-emphasis-color: red'], 'text-emphasis'],
+  ['text-decoration', ['text-decoration-line: underline', 'text-decoration-style: solid',
+                       'text-decoration-color: red', 'text-decoration-thickness: auto'], 'text-decoration'],
+  ['white-space', ['white-space-collapse: collapse', 'text-wrap-mode: wrap'], 'white-space'],
+  ['text-wrap', ['text-wrap-mode: nowrap', 'text-wrap-style: auto'], 'text-wrap'],
+  ['container', ['container-name: x', 'container-type: inline-size'], 'container'],
+  ['contain-intrinsic-size', ['contain-intrinsic-width: 10px', 'contain-intrinsic-height: 20px'], 'contain-intrinsic-size'],
+  ['scroll-margin', ['scroll-margin-top: 1px', 'scroll-margin-right: 2px', 'scroll-margin-bottom: 3px',
+                     'scroll-margin-left: 4px'], 'scroll-margin'],
+  ['columns', ['column-width: 10px', 'column-count: 2'], 'columns'],
+  ['flex', ['flex-grow: 1', 'flex-shrink: 1', 'flex-basis: 0%'], 'flex'],
+  ['flex-flow', ['flex-direction: row', 'flex-wrap: wrap'], 'flex-flow'],
+  ['border', ['border-top-width: 1px', 'border-right-width: 1px', 'border-bottom-width: 1px',
+              'border-left-width: 1px', 'border-top-style: solid', 'border-right-style: solid',
+              'border-bottom-style: solid', 'border-left-style: solid', 'border-top-color: red',
+              'border-right-color: red', 'border-bottom-color: red', 'border-left-color: red',
+              'border-image-source: none', 'border-image-slice: 100%', 'border-image-width: 1',
+              'border-image-outset: 0', 'border-image-repeat: stretch'], 'border'],
+  ['font', ['font-size: 12px', 'font-family: serif'], 'font'],
+  ['place-items', ['align-items: center', 'justify-items: center'], 'place-items'],
+  ['gap', ['row-gap: 4px', 'column-gap: 8px'], 'gap'],
+  ['outline', ['outline-color: red', 'outline-style: solid', 'outline-width: 2px'], 'outline'],
+  ['inset', ['top: 1px', 'right: 2px', 'bottom: 3px', 'left: 4px'], 'inset'],
+  ['overflow', ['overflow-x: hidden', 'overflow-y: auto'], 'overflow'],
+  ['list-style', ['list-style-type: square', 'list-style-position: inside', 'list-style-image: none'], 'list-style'],
+  ['border-radius', ['border-top-left-radius: 1px', 'border-top-right-radius: 2px',
+                     'border-bottom-right-radius: 3px', 'border-bottom-left-radius: 4px'], 'border-radius'],
+  ['margin-inline', ['margin-inline-start: 1px', 'margin-inline-end: 2px'], 'margin-inline'],
+  ['text-underline-position', ['text-underline-position: from-font'], 'text-underline-position'],
+  ['translate', ['translate: 1px 2px'], 'translate'],
+  ['border-image-set', ['border-top-width: 1px', 'border-right-width: 1px', 'border-bottom-width: 1px',
+              'border-left-width: 1px', 'border-top-style: solid', 'border-right-style: solid',
+              'border-bottom-style: solid', 'border-left-style: solid', 'border-top-color: red',
+              'border-right-color: red', 'border-bottom-color: red', 'border-left-color: red',
+              'border-image-source: none', 'border-image-slice: 50%', 'border-image-width: 1',
+              'border-image-outset: 0', 'border-image-repeat: stretch'], 'border'],
+  ['border-uneven', ['border-top-width: 1px', 'border-right-width: 2px', 'border-bottom-width: 1px',
+              'border-left-width: 2px', 'border-top-style: solid', 'border-right-style: solid',
+              'border-bottom-style: solid', 'border-left-style: solid', 'border-top-color: red',
+              'border-right-color: red', 'border-bottom-color: red', 'border-left-color: red',
+              'border-image-source: none', 'border-image-slice: 100%', 'border-image-width: 1',
+              'border-image-outset: 0', 'border-image-repeat: stretch'], 'border'],
+  ['background-two-layers', ['background-color: red', 'background-image: url(a.png), url(b.png)',
+              'background-repeat: no-repeat, repeat', 'background-position-x: 0%, 50%',
+              'background-position-y: 0%, 50%', 'background-size: auto, auto',
+              'background-attachment: scroll, fixed', 'background-origin: padding-box, content-box',
+              'background-clip: border-box, padding-box'], 'background'],
+  ['background-no-colour', ['background-image: url(a.png)', 'background-repeat: no-repeat',
+              'background-position-x: 0%', 'background-position-y: 0%', 'background-size: auto',
+              'background-attachment: scroll', 'background-origin: padding-box',
+              'background-clip: border-box', 'background-color: transparent'], 'background'],
+  ['white-space-style', ['white-space-collapse: collapse', 'text-wrap-mode: wrap', 'text-wrap-style: balance'], 'white-space'],
+  ['white-space-pre', ['white-space-collapse: preserve', 'text-wrap-mode: nowrap'], 'white-space'],
+  ['white-space-preline', ['white-space-collapse: preserve-breaks', 'text-wrap-mode: wrap'], 'white-space'],
+  ['text-wrap-both', ['text-wrap-mode: wrap', 'text-wrap-style: balance'], 'text-wrap'],
+  ['grid-area-all-auto', ['grid-row-start: auto', 'grid-column-start: auto', 'grid-row-end: auto', 'grid-column-end: auto'], 'grid-area'],
+  ['grid-area-name', ['grid-row-start: main', 'grid-column-start: main', 'grid-row-end: main', 'grid-column-end: main'], 'grid-area'],
+  ['scroll-padding', ['scroll-padding-top: 1px', 'scroll-padding-right: 2px', 'scroll-padding-bottom: 3px', 'scroll-padding-left: 4px'], 'scroll-padding'],
+  ['transition-two', ['transition-property: color, opacity', 'transition-duration: 1s, 2s',
+              'transition-timing-function: ease, linear', 'transition-delay: 0s, 0s',
+              'transition-behavior: normal, normal'], 'transition'],
+  ['container-normal', ['container-name: none', 'container-type: normal'], 'container'],
+  ['intrinsic-auto', ['contain-intrinsic-width: auto 10px', 'contain-intrinsic-height: auto 20px'], 'contain-intrinsic-size'],
+  ['text-emphasis-none', ['text-emphasis-style: none', 'text-emphasis-color: currentcolor'], 'text-emphasis'],
+  ['place-self', ['align-self: center', 'justify-self: center'], 'place-self'],
+  ['inset-block', ['inset-block-start: 1px', 'inset-block-end: 2px'], 'inset-block'],
+  ['text-dec-thick', ['text-decoration-line: underline', 'text-decoration-style: solid',
+                      'text-decoration-color: currentcolor', 'text-decoration-thickness: 2px'], 'text-decoration'],
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var d = document.createElement('div');
+  document.body.appendChild(d);
+  var writes = CASES[i][1];
+  for (var j = 0; j < writes.length; j++) {
+    var p = writes[j].split(':')[0].trim();
+    var v = writes[j].slice(writes[j].indexOf(':') + 1).trim();
+    d.style.setProperty(p, v);
+  }
+  var names = [];
+  for (var k = 0; k < d.style.length; k++) names.push(d.style.item(k));
+  out.push(i + '|' + CASES[i][0] + '|n=' + d.style.length + '|names=' + names.join(',')
+           + '|cssText=' + d.style.cssText);
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

@@ -991,6 +991,16 @@ public static class ShorthandExpander
             "border-image-outset", "border-image-repeat",
         },
         "list-style" => new[] { "list-style-position", "list-style-image", "list-style-type" },
+        // The five parts of the border's image, in the order the reference engine enumerates them
+        // (measured: 'border-image: none 50% / 1 / 0 stretch' counts all five).
+        "border-image" => new[] { "border-image-source", "border-image-slice",
+            "border-image-width", "border-image-outset", "border-image-repeat" },
+        // The pair each grid line is made of, and the pair the flex axis is made of: the block
+        // enumerates them (measured: writing 'grid-row-start' and 'grid-row-end' reads back
+        // 'grid-row: auto / 3'), and the fold needs the same list to know when it is complete.
+        "grid-row" => new[] { "grid-row-start", "grid-row-end" },
+        "grid-column" => new[] { "grid-column-start", "grid-column-end" },
+        "flex-flow" => new[] { "flex-direction", "flex-wrap" },
         "animation" => new[] {
             "animation-duration", "animation-timing-function", "animation-delay",
             "animation-iteration-count", "animation-direction", "animation-fill-mode",
@@ -1847,8 +1857,12 @@ public static class ShorthandExpander
     private static void ExpandGridLine(Dictionary<string, string> result, string prop, string value)
     {
         var parts = value.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length >= 1) result[$"{prop}-start"] = parts[0].Trim();
-        if (parts.Length >= 2) result[$"{prop}-end"] = parts[1].Trim();
+        if (parts.Length < 1) return;
+        result[$"{prop}-start"] = parts[0].Trim();
+        // An omitted end is the 'auto' the longhand means, and it has to be said: the block that
+        // holds 'grid-row: auto' still carries both axes, which is how a later 'grid-column-end'
+        // completes the four lines of 'grid-area' (measured: four autos fold into 'grid-area: auto').
+        result[$"{prop}-end"] = parts.Length >= 2 ? parts[1].Trim() : "auto";
     }
 
     /// <summary>

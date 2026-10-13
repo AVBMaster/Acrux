@@ -854,9 +854,12 @@ public static class CssValueText
     /// &lt;custom-ident&gt;, not a keyword.</summary>
     private static string CanonicalizeGridArea(string text, string property)
     {
-        if (!property.Equals("grid-area", StringComparison.OrdinalIgnoreCase)) return text;
+        bool area = property.Equals("grid-area", StringComparison.OrdinalIgnoreCase);
+        bool line = property.Equals("grid-row", StringComparison.OrdinalIgnoreCase)
+            || property.Equals("grid-column", StringComparison.OrdinalIgnoreCase);
+        if (!area && !line) return text;
         var parts = text.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length == 0 || parts.Length > 4) return text;
+        if (parts.Length == 0 || parts.Length > (area ? 4 : 2)) return text;
         for (int i = 0; i < parts.Length; i++)
         {
             var words = parts[i].Split(' ', StringSplitOptions.RemoveEmptyEntries);

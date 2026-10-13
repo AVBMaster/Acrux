@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify289 &#8212; what a completed set of longhands folds back into, and what a growing item is paid</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+/* paint guard: the resolved flex lengths have to reach the drawn page */
+.prow { display: flex; width: 200px; height: 18px; }
+.row { display: flex; width: 200px; height: 20px; }
+.col { display: flex; flex-direction: column; width: 200px; height: 120px; }
+.a { background: rgb(255,128,128); } .b { background: rgb(0,0,255); }
+#g-1 div { background: rgb(255,128,128); }
+#g-2 div { background: rgb(0,0,255); }
+#g-3 div { background: rgb(0,128,0); }
+/* the folded shorthand has to paint, not only read back */
+#g-4 { background: rgb(255,0,0); background-image: url(missing.png); background-repeat: no-repeat;
+       background-position: 10px 10px; background-size: 20px 20px; background-attachment: scroll;
+       background-origin: padding-box; background-clip: border-box; width: 60px; height: 24px; }
+#g-5 { list-style-type: square; list-style-position: inside; list-style-image: none;
+       width: 90px; border: 2px solid rgb(0,0,255); }
+</style></head><body>
+<h2>flex geometry (the boxes a flex line resolves to)</h2>
+<!-- r1: auto basis beside a definite one -->
+<div class="row" id="r1"><div class="a" id="c1">ab</div><div class="b" id="c2" style="flex:1 1 0%">ab</div></div>
+<!-- r2: percentage basis -->
+<div class="row" id="r2"><div class="a" id="c3" style="flex:1 1 25%">ab</div><div class="b" id="c4" style="flex:1 1 0%">ab</div></div>
+<!-- r3: auto basis with a definite width -->
+<div class="row" id="r3"><div class="a" id="c5" style="width:60px;flex:1 1 auto">ab</div><div class="b" id="c6" style="flex:1 1 auto">ab</div></div>
+<!-- r4: an explicit min-width wins over the automatic one -->
+<div class="row" id="r4"><div class="a" id="c7" style="min-width:40px;flex:0 1 400px">ab</div><div class="b" id="c8" style="flex:1 1 0%">ab</div></div>
+<!-- r5: grow factors that do not sum to one -->
+<div class="row" id="r5"><div class="a" id="c9" style="flex:2 1 0%">ab</div><div class="b" id="c10" style="flex:1 1 0%">ab</div></div>
+<!-- r6: one grow, one frozen -->
+<div class="row" id="r6"><div class="a" id="c11" style="flex:0 0 30px">ab</div><div class="b" id="c12" style="flex:1 1 auto">ab</div></div>
+<!-- r7: content basis -->
+<div class="row" id="r7"><div class="a" id="c13" style="flex:1 1 content">ab</div><div class="b" id="c14" style="flex:1 1 0%">ab</div></div>
+<!-- r8: a long unbreakable word sets a floor no definite basis can escape -->
+<div class="row" id="r8"><div class="a" id="c15" style="flex:1 1 0%">cccccccccccccccccccccccccccccccccccccccccccc</div><div class="b" id="c16" style="flex:1 1 0%">ab</div></div>
+<!-- r9: column flow, where min-height:auto says nothing -->
+<div class="col" id="r9"><div class="a" id="c17" style="flex:1 1 0">ab</div><div class="b" id="c18" style="flex:1 1 40px">ab</div></div>
+<!-- r10: free space left over with no grow at all -->
+<div class="row" id="r10"><div class="a" id="c19" style="flex:0 0 0%">ab</div><div class="b" id="c20" style="flex:0 0 auto">ab</div></div>
+<!-- r11: a ceiling the grow cannot pass -->
+<div class="row" id="r11"><div class="a" id="c21" style="flex:1 1 0;max-width:60px">ab</div><div class="b" id="c22" style="flex:1 1 0">ab</div></div>
+<!-- r12: an explicit min-width larger than the share -->
+<div class="row" id="r12"><div class="a" id="c23" style="flex:1 1 0;min-width:150px">ab</div><div class="b" id="c24" style="flex:1 1 0">ab</div></div>
+<!-- r13: border-box padding on a definite basis -->
+<div class="row" id="r13"><div class="a" id="c25" style="flex:1 1 80px;padding:0 10px;box-sizing:border-box">ab</div><div class="b" id="c26" style="flex:1 1 0%">ab</div></div>
+<!-- r14: the classic shrink of definite bases -->
+<div class="row" id="r14"><div class="a" id="c27" style="flex:0 1 100px">ab</div><div class="b" id="c28" style="flex:0 1 200px">ab</div></div>
+<!-- r15: wrap, where each line resolves on its own -->
+<div class="row" id="r15" style="flex-wrap:wrap;height:40px"><div class="a" id="c29" style="flex:1 1 120px">ab</div><div class="b" id="c30" style="flex:1 1 120px">ab</div></div>
+<!-- r16: a column whose auto basis is the content height -->
+<div class="col" id="r16"><div class="a" id="c31" style="flex:1 1 auto">ab</div><div class="b" id="c32" style="flex:1 1 0">ab</div></div>
+<!-- r17: nested flex, the inner row sized by the outer share -->
+<div class="row" id="r17"><div class="a" id="c33" style="flex:1 1 0"><div class="row" style="width:100%"><div id="c34" style="flex:1 1 0;background:rgb(0,128,0)">ab</div><div style="flex:1 1 25%;background:rgb(128,0,128)">ab</div></div></div></div>
+<h2>paint guard (the resolved lengths and the folded declarations)</h2>
+<div class="prow" id="g-1"><div style="flex:1 1 25%">ab</div><div style="flex:1 1 0%">ab</div></div>
+<div class="prow" id="g-2"><div style="flex:1 1 content">ab</div><div style="flex:1 1 0%">ab</div></div>
+<div class="prow" id="g-3"><div style="flex:1 1 0;min-width:150px">ab</div><div style="flex:1 1 0">ab</div></div>
+<div id="g-4"></div>
+<ul id="g-5"><li>inside square</li></ul>
+<h2>folding rows (a completed set of longhands, read back through the CSSOM)</h2>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* Both tables are transcriptions of what the reference engine printed for the same cases
+ * (snapshots/_probe_b289_longhand_folding2.html and _probe_b289_flex_grow_matrix.html); nothing in
+ * F or G is derived. The folding rows write the parts one by one through setProperty and then read
+ * the block's length, its item(i) sequence and its cssText; the geometry rows measure the boxes a
+ * flex line resolves to, which is the channel the round's other half needed: the same distribution
+ * that reads '125/75' in the CSSOM has to paint 125 and 75.
+ *
+ * F rows are labelled by what was written: a name ending in '-partial' leaves a part out and must
+ * NOT fold into that shorthand, 'border-image-set' keeps a written border-image beside the three
+ * border groups, and 'background-two-layers' zips two of everything.
+ *
+ * The geometry numbers are comparable across the two engines because every box here has an explicit
+ * width or height: the reference engine's own viewport measures nothing, which is why the round
+ * never reads a percentage of it.
+ */
+var F = [
+  ['background','1','~','background-color: red;'],
+  ['background','2','~','background-color: red; background-image: url("a.png");'],
+  ['background','9','~','background: url("a.png") 0% 0% / auto no-repeat scroll padding-box border-box red;'],
+  ['background-partial','2','background-color,background-image','background-color: red; background-image: url("a.png");'],
+  ['mask','1','mask-image','mask-image: url("a.png");'],
+  ['mask','2','mask-image,mask-repeat','mask-image: url("a.png"); mask-repeat: no-repeat;'],
+  ['transition','1','~','transition-property: color;'],
+  ['transition','5','~','transition: color 1s;'],
+  ['grid-area','4','grid-row-start,grid-column-start,grid-row-end,grid-column-end','grid-area: 1 / 2 / 3 / 4;'],
+  ['grid-area-partial','3','~','grid-row: 1 / 3; grid-column-start: 2;'],
+  ['grid-column','2','grid-column-start,grid-column-end','grid-column: 1 / span 2;'],
+  ['grid-row','2','grid-row-start,grid-row-end','grid-row: auto / 3;'],
+  ['grid-template','3','grid-template-rows,grid-template-columns,grid-template-areas','grid-template: none;'],
+  ['text-emphasis','2','text-emphasis-style,text-emphasis-color','text-emphasis: dot red;'],
+  ['text-decoration','4','~','text-decoration: underline red;'],
+  ['white-space','2','white-space-collapse,text-wrap-mode','white-space: normal;'],
+  ['text-wrap','2','text-wrap-mode,text-wrap-style','text-wrap: nowrap;'],
+  ['container','2','container-name,container-type','container: x / inline-size;'],
+  ['contain-intrinsic-size','2','contain-intrinsic-width,contain-intrinsic-height','contain-intrinsic-size: 10px 20px;'],
+  ['scroll-margin','4','scroll-margin-top,scroll-margin-right,scroll-margin-bottom,scroll-margin-left','scroll-margin: 1px 2px 3px 4px;'],
+  ['columns','2','column-width,column-count','column-width: 10px; column-count: 2;'],
+  ['flex','3','flex-grow,flex-shrink,flex-basis','flex: 1 1 0%;'],
+  ['flex-flow','2','flex-direction,flex-wrap','flex-flow: wrap;'],
+  ['border','17','border-top-width,border-right-width,border-bottom-width,border-left-width,border-top-style,border-right-style,border-bottom-style,border-left-style,border-top-color,border-right-color,border-bottom-color,border-left-color,border-image-source,border-image-slice,border-image-width,border-image-outset,border-image-repeat','border: 1px solid red;'],
+  ['font','2','font-size,font-family','font-size: 12px; font-family: serif;'],
+  ['place-items','2','align-items,justify-items','place-items: center;'],
+  ['gap','2','row-gap,column-gap','gap: 4px 8px;'],
+  ['outline','3','outline-color,outline-style,outline-width','outline: red solid 2px;'],
+  ['inset','4','top,right,bottom,left','inset: 1px 2px 3px 4px;'],
+  ['overflow','2','overflow-x,overflow-y','overflow: hidden auto;'],
+  ['list-style','3','~','list-style: inside none square;'],
+  ['border-radius','4','border-top-left-radius,border-top-right-radius,border-bottom-right-radius,border-bottom-left-radius','border-radius: 1px 2px 3px 4px;'],
+  ['margin-inline','2','margin-inline-start,margin-inline-end','margin-inline: 1px 2px;'],
+  ['text-underline-position','1','text-underline-position','text-underline-position: from-font;'],
+  ['translate','1','translate','translate: 1px 2px;'],
+  ['border-image-set','17','border-top-width,border-right-width,border-bottom-width,border-left-width,border-top-style,border-right-style,border-bottom-style,border-left-style,border-top-color,border-right-color,border-bottom-color,border-left-color,border-image-source,border-image-slice,border-image-width,border-image-outset,border-image-repeat','border-width: 1px; border-style: solid; border-color: red; border-image: none 50% / 1 / 0 stretch;'],
+  ['border-uneven','17','border-top-width,border-right-width,border-bottom-width,border-left-width,border-top-style,border-right-style,border-bottom-style,border-left-style,border-top-color,border-right-color,border-bottom-color,border-left-color,border-image-source,border-image-slice,border-image-width,border-image-outset,border-image-repeat','border-width: 1px 2px; border-style: solid; border-color: red; border-image: none;'],
+  ['background-two-layers','9','~','background: url("a.png") 0% 0% / auto no-repeat scroll padding-box border-box, url("b.png") 50% 50% / auto repeat fixed content-box padding-box red;'],
+  ['background-no-colour','9','~','background: url("a.png") 0% 0% / auto no-repeat scroll padding-box border-box transparent;'],
+  ['white-space-style','3','white-space-collapse,text-wrap-mode,text-wrap-style','white-space: normal; text-wrap-style: balance;'],
+  ['white-space-pre','2','white-space-collapse,text-wrap-mode','white-space: pre;'],
+  ['white-space-preline','2','white-space-collapse,text-wrap-mode','white-space: pre-line;'],
+  ['text-wrap-both','2','text-wrap-mode,text-wrap-style','text-wrap: balance;'],
+  ['grid-area-all-auto','4','grid-row-start,grid-column-start,grid-row-end,grid-column-end','grid-area: auto;'],
+  ['grid-area-name','4','grid-row-start,grid-column-start,grid-row-end,grid-column-end','grid-area: main;'],
+  ['scroll-padding','4','scroll-padding-top,scroll-padding-right,scroll-padding-bottom,scroll-padding-left','scroll-padding: 1px 2px 3px 4px;'],
+  ['transition-two','5','~','transition: color 1s, opacity 2s linear;'],
+  ['container-normal','2','container-name,container-type','container: none;'],
+  ['intrinsic-auto','2','contain-intrinsic-width,contain-intrinsic-height','contain-intrinsic-size: auto 10px auto 20px;'],
+  ['text-emphasis-none','2','text-emphasis-style,text-emphasis-color','text-emphasis: none currentcolor;'],
+  ['place-self','2','align-self,justify-self','place-self: center;'],
+  ['inset-block','2','inset-block-start,inset-block-end','inset-block: 1px 2px;'],
+  ['text-dec-thick','4','~','text-decoration: underline 2px;']
+];
+var G = [
+  ['c1','0.0','0.0','14.0','20.0'],
+  ['c2','14.0','0.0','186.0','20.0'],
+  ['c3','0.0','20.0','125.0','20.0'],
+  ['c4','125.0','20.0','75.0','20.0'],
+  ['c5','0.0','40.0','123.0','20.0'],
+  ['c6','123.0','40.0','77.0','20.0'],
+  ['c7','0.0','60.0','186.0','20.0'],
+  ['c8','186.0','60.0','14.0','20.0'],
+  ['c9','0.0','80.0','133.3','20.0'],
+  ['c10','133.3','80.0','66.7','20.0'],
+  ['c11','0.0','100.0','30.0','20.0'],
+  ['c12','30.0','100.0','170.0','20.0'],
+  ['c13','0.0','120.0','107.0','20.0'],
+  ['c14','107.0','120.0','93.0','20.0'],
+  ['c15','0.0','140.0','308.0','20.0'],
+  ['c16','308.0','140.0','14.0','20.0'],
+  ['c17','0.0','160.0','200.0','40.0'],
+  ['c18','0.0','200.0','200.0','80.0'],
+  ['c19','0.0','280.0','14.0','20.0'],
+  ['c20','14.0','280.0','14.0','20.0'],
+  ['c21','0.0','300.0','60.0','20.0'],
+  ['c22','60.0','300.0','140.0','20.0'],
+  ['c23','0.0','320.0','150.0','20.0'],
+  ['c24','150.0','320.0','50.0','20.0'],
+  ['c25','0.0','340.0','140.0','20.0'],
+  ['c26','140.0','340.0','60.0','20.0'],
+  ['c27','0.0','360.0','66.7','20.0'],
+  ['c28','66.7','360.0','133.3','20.0'],
+  ['c29','0.0','380.0','200.0','20.0'],
+  ['c30','0.0','400.0','200.0','20.0'],
+  ['c31','0.0','420.0','200.0','69.0'],
+  ['c32','0.0','489.0','200.0','51.0'],
+  ['c33','0.0','540.0','200.0','20.0'],
+  ['c34','0.0','540.0','75.0','20.0']
+];
+var box = document.getElementById('box'), pass = 0, fail = 0, out = [];
+
+var WRITES = [
+  ['background-color: red'],
+  ['background-color: red', 'background-image: url(a.png)'],
+  ['background-color: red', 'background-image: url(a.png)', 'background-repeat: no-repeat', 'background-position-x: 0%', 'background-position-y: 0%', 'background-size: auto', 'background-attachment: scroll', 'background-origin: padding-box', 'background-clip: border-box'],
+  ['background-color: red', 'background-image: url(a.png)'],
+  ['mask-image: url(a.png)'],
+  ['mask-image: url(a.png)', 'mask-repeat: no-repeat'],
+  ['transition-property: color'],
+  ['transition-property: color', 'transition-duration: 1s', 'transition-timing-function: ease', 'transition-delay: 0s', 'transition-behavior: normal'],
+  ['grid-row-start: 1', 'grid-column-start: 2', 'grid-row-end: 3', 'grid-column-end: 4'],
+  ['grid-row-start: 1', 'grid-column-start: 2', 'grid-row-end: 3'],
+  ['grid-column-start: 1', 'grid-column-end: span 2'],
+  ['grid-row-start: auto', 'grid-row-end: 3'],
+  ['grid-template-rows: none', 'grid-template-columns: none', 'grid-template-areas: none'],
+  ['text-emphasis-style: dot', 'text-emphasis-color: red'],
+  ['text-decoration-line: underline', 'text-decoration-style: solid', 'text-decoration-color: red', 'text-decoration-thickness: auto'],
+  ['white-space-collapse: collapse', 'text-wrap-mode: wrap'],
+  ['text-wrap-mode: nowrap', 'text-wrap-style: auto'],
+  ['container-name: x', 'container-type: inline-size'],
+  ['contain-intrinsic-width: 10px', 'contain-intrinsic-height: 20px'],
+  ['scroll-margin-top: 1px', 'scroll-margin-right: 2px', 'scroll-margin-bottom: 3px', 'scroll-margin-left: 4px'],
+  ['column-width: 10px', 'column-count: 2'],
+  ['flex-grow: 1', 'flex-shrink: 1', 'flex-basis: 0%'],
+  ['flex-direction: row', 'flex-wrap: wrap'],
+  ['border-top-width: 1px', 'border-right-width: 1px', 'border-bottom-width: 1px', 'border-left-width: 1px', 'border-top-style: solid', 'border-right-style: solid', 'border-bottom-style: solid', 'border-left-style: solid', 'border-top-color: red', 'border-right-color: red', 'border-bottom-color: red', 'border-left-color: red', 'border-image-source: none', 'border-image-slice: 100%', 'border-image-width: 1', 'border-image-outset: 0', 'border-image-repeat: stretch'],
+  ['font-size: 12px', 'font-family: serif'],
+  ['align-items: center', 'justify-items: center'],
+  ['row-gap: 4px', 'column-gap: 8px'],
+  ['outline-color: red', 'outline-style: solid', 'outline-width: 2px'],
+  ['top: 1px', 'right: 2px', 'bottom: 3px', 'left: 4px'],
+  ['overflow-x: hidden', 'overflow-y: auto'],
+  ['list-style-type: square', 'list-style-position: inside', 'list-style-image: none'],
+  ['border-top-left-radius: 1px', 'border-top-right-radius: 2px', 'border-bottom-right-radius: 3px', 'border-bottom-left-radius: 4px'],
+  ['margin-inline-start: 1px', 'margin-inline-end: 2px'],
+  ['text-underline-position: from-font'],
+  ['translate: 1px 2px'],
+  ['border-top-width: 1px', 'border-right-width: 1px', 'border-bottom-width: 1px', 'border-left-width: 1px', 'border-top-style: solid', 'border-right-style: solid', 'border-bottom-style: solid', 'border-left-style: solid', 'border-top-color: red', 'border-right-color: red', 'border-bottom-color: red', 'border-left-color: red', 'border-image-source: none', 'border-image-slice: 50%', 'border-image-width: 1', 'border-image-outset: 0', 'border-image-repeat: stretch'],
+  ['border-top-width: 1px', 'border-right-width: 2px', 'border-bottom-width: 1px', 'border-left-width: 2px', 'border-top-style: solid', 'border-right-style: solid', 'border-bottom-style: solid', 'border-left-style: solid', 'border-top-color: red', 'border-right-color: red', 'border-bottom-color: red', 'border-left-color: red', 'border-image-source: none', 'border-image-slice: 100%', 'border-image-width: 1', 'border-image-outset: 0', 'border-image-repeat: stretch'],
+  ['background-color: red', 'background-image: url(a.png), url(b.png)', 'background-repeat: no-repeat, repeat', 'background-position-x: 0%, 50%', 'background-position-y: 0%, 50%', 'background-size: auto, auto', 'background-attachment: scroll, fixed', 'background-origin: padding-box, content-box', 'background-clip: border-box, padding-box'],
+  ['background-image: url(a.png)', 'background-repeat: no-repeat', 'background-position-x: 0%', 'background-position-y: 0%', 'background-size: auto', 'background-attachment: scroll', 'background-origin: padding-box', 'background-clip: border-box', 'background-color: transparent'],
+  ['white-space-collapse: collapse', 'text-wrap-mode: wrap', 'text-wrap-style: balance'],
+  ['white-space-collapse: preserve', 'text-wrap-mode: nowrap'],
+  ['white-space-collapse: preserve-breaks', 'text-wrap-mode: wrap'],
+  ['text-wrap-mode: wrap', 'text-wrap-style: balance'],
+  ['grid-row-start: auto', 'grid-column-start: auto', 'grid-row-end: auto', 'grid-column-end: auto'],
+  ['grid-row-start: main', 'grid-column-start: main', 'grid-row-end: main', 'grid-column-end: main'],
+  ['scroll-padding-top: 1px', 'scroll-padding-right: 2px', 'scroll-padding-bottom: 3px', 'scroll-padding-left: 4px'],
+  ['transition-property: color, opacity', 'transition-duration: 1s, 2s', 'transition-timing-function: ease, linear', 'transition-delay: 0s, 0s', 'transition-behavior: normal, normal'],
+  ['container-name: none', 'container-type: normal'],
+  ['contain-intrinsic-width: auto 10px', 'contain-intrinsic-height: auto 20px'],
+  ['text-emphasis-style: none', 'text-emphasis-color: currentcolor'],
+  ['align-self: center', 'justify-self: center'],
+  ['inset-block-start: 1px', 'inset-block-end: 2px'],
+  ['text-decoration-line: underline', 'text-decoration-style: solid', 'text-decoration-color: currentcolor', 'text-decoration-thickness: 2px']
+];
+for (var i = 0; i < F.length; i++) {
+  var d = document.createElement('div');
+  box.appendChild(d);
+  var writes = WRITES[i];
+  for (var j = 0; j < writes.length; j++) {
+    var decl = writes[j], p = decl.split(':')[0].trim();
+    d.style.setProperty(p, decl.slice(decl.indexOf(':') + 1).trim());
+  }
+  var names = [];
+  for (var k = 0; k < d.style.length; k++) names.push(d.style.item(k));
+  var bad = [];
+  if ('' + d.style.length !== F[i][1]) bad.push('n got[' + d.style.length + '] want[' + F[i][1] + ']');
+  if (F[i][2] !== '~' && names.join(',') !== F[i][2]) bad.push('names got[' + names.join(',') + ']');
+  if (d.style.cssText !== F[i][3]) bad.push('cssText got[' + d.style.cssText + '] want[' + F[i][3] + ']');
+  if (bad.length) { fail++; var line = 'FAIL fold ' + i + ' ' + F[i][0] + ' | ' + bad.join(' | ');
+    out.push(line); console.log(line); } else pass++;
+}
+
+
+for (var g = 0; g < G.length; g++) {
+  var el = document.getElementById(G[g][0]);
+  if (!el) { fail++; out.push('FAIL flex ' + G[g][0] + ' | no such element'); continue; }
+  void el.offsetWidth;
+  var r = el.getBoundingClientRect();
+  // Measured against the row the item sits in: the page's own margin and headings would otherwise
+  // be part of the number, and they are not part of the layout being asserted.
+  var host = r;
+  var line = el.parentNode.getBoundingClientRect();
+  var got = [(r.x - line.x).toFixed(1), (r.y - line.y).toFixed(1),
+             r.width.toFixed(1), r.height.toFixed(1)];
+  var want = [G[g][1], G[g][2], G[g][3], G[g][4]];
+  // 'y' is not asserted: it is where the page's own headings put the row, not what the flex line
+  // resolved. x (inside the row), w and h are the numbers the algorithm decides.
+  var diff = [];
+  var labels = ['x', 'y', 'w', 'h'];
+  for (var c = 0; c < 4; c++) {
+    if (c === 1) continue;
+    if (got[c] !== want[c]) diff.push(labels[c] + ' got[' + got[c] + '] want[' + want[c] + ']');
+  }
+  if (diff.length) { fail++; var l2 = 'FAIL flex ' + G[g][0] + ' | ' + diff.join(' | ');
+    out.push(l2); console.log(l2); } else pass++;
+}
+var summary = 'b289 ' + pass + '/' + (pass + fail) + ' rows pass' + (fail ? ' \u2014 ' + fail + ' fail' : '');
+out.push(summary);
+document.getElementById('report').textContent = out.join('\n');
+console.log(summary);
+</script></body></html>
