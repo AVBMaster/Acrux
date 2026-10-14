@@ -128,12 +128,20 @@ public class ElementHost
         get
         {
             // A select answers the value of its selected option (its text when that option carries
-            // no value attribute); every other element answers its own value.
+            // no value attribute); a textarea answers its text content; every other element answers
+            // its own value.
             if (string.Equals(_element.TagName, "SELECT", StringComparison.OrdinalIgnoreCase))
                 return SelectedOptionValue();
+            if (string.Equals(_element.TagName, "TEXTAREA", StringComparison.OrdinalIgnoreCase))
+                return _element.TextContent ?? "";
             return _element.Value;
         }
-        set => _element.Value = value;
+        set
+        {
+            if (string.Equals(_element.TagName, "TEXTAREA", StringComparison.OrdinalIgnoreCase))
+                _element.TextContent = value ?? "";
+            else _element.Value = value;
+        }
     }
 
     private string? SelectedOptionValue()
@@ -1489,7 +1497,49 @@ public class ElementHost
         return false;
     }
 
-    public int compareDocumentPosition(object? other) => 0;
+    /// <summary>DOM 4 §4.4.1: the bitmask describing the other node's position relative to this one
+    /// (disconnected / preceding / following / contains / contained-by). The document-order half is
+    /// found by walking both nodes' ancestor paths from the root and comparing the first position
+    /// where they differ — the pair that never shared a tree reads as disconnected.</summary>
+    public int compareDocumentPosition(object? other)
+    {
+        var o = UnwrapNode(other);
+        if (o == null) return 0;
+        if (ReferenceEquals(o, _element)) return 0;
+        const int Disconnected = 1, Preceding = 2, Following = 4, Contains = 8, ContainedBy = 16;
+        var mine = PathToRoot(_element);
+        var theirs = PathToRoot(o);
+        int result = 0;
+        if (mine.Count > 0 && theirs.Count > 0 && !ReferenceEquals(mine[0], theirs[0]))
+            result |= Disconnected;
+        if (theirs.Contains(_element)) result |= ContainedBy;
+        if (mine.Contains(o)) result |= Contains;
+        if ((result & (Disconnected | Contains | ContainedBy)) == 0)
+        {
+            int n = Math.Min(mine.Count, theirs.Count);
+            for (int i = 0; i < n; i++)
+            {
+                if (ReferenceEquals(mine[i], theirs[i])) continue;
+                var parent = mine[i].Parent;
+                if (parent != null)
+                {
+                    int ia = parent.Children.IndexOf(mine[i]);
+                    int ib = parent.Children.IndexOf(theirs[i]);
+                    result |= (ia < ib) ? Following : Preceding;
+                }
+                break;
+            }
+        }
+        return result;
+    }
+
+    private static List<Node> PathToRoot(Node node)
+    {
+        var list = new List<Node>();
+        for (var n = node; n != null; n = n.Parent) list.Add(n);
+        list.Reverse();
+        return list;
+    }
 
     public object? getRootNode() => GetRootNodeCore(null);
     public object? getRootNode(object? options) => GetRootNodeCore(options);
@@ -1820,6 +1870,47 @@ public class ElementHost
         set => _element.SetAttribute("rel", value);
     }
 
+    public RelTokenListHost relList => new(this);
+
+    // Reflected content attributes the standard names directly on the element interface.
+    public string? download
+    {
+        get => _element.GetAttribute("download");
+        set => _element.SetAttribute("download", value);
+    }
+
+    public string? alt
+    {
+        get => _element.GetAttribute("alt");
+        set => _element.SetAttribute("alt", value);
+    }
+
+    public bool multiple
+    {
+        get => _element.HasAttribute("multiple");
+        set { if (value) _element.SetAttribute("multiple", ""); else _element.RemoveAttribute("multiple"); }
+    }
+
+    /// <summary>HTMLSelectElement.selectedOptions — the option children whose 'selected' flag is
+    /// set, in tree order.</summary>
+    public object[] selectedOptions
+    {
+        get
+        {
+            var list = new List<object>();
+            foreach (var opt in _element.Children.OfType<Element>())
+                if (string.Equals(opt.TagName, "OPTION", StringComparison.OrdinalIgnoreCase) && opt.HasAttribute("selected"))
+                    list.Add(WrapWithCache(opt) ?? new ElementHost(opt));
+            return list.ToArray();
+        }
+    }
+
+    public string? htmlFor
+    {
+        get => _element.GetAttribute("for");
+        set => _element.SetAttribute("for", value);
+    }
+
     public string? target
     {
         get => _element.GetAttribute("target");
@@ -1837,6 +1928,37 @@ public class ElementHost
     {
         get => _element.GetAttribute("alt");
         set => _element.SetAttribute("alt", value);
+    }
+
+    // HTML width/height content attributes. On the elements the spec gives a *number* (img, iframe,
+    // embed, object) it answers the parsed integer — and the same element's offsetWidth reads back
+    // the very number the attribute carried, the way the layout treats it. On every other element
+    // 'width'/'height' carry no meaning, so the attribute text is returned.
+    public object width
+    {
+        get => NumericSizeElement ? (object)ParseIntAttr("width") : (_element.GetAttribute("width") ?? "");
+        set => _element.SetAttribute("width", Convert.ToString(value) ?? "");
+    }
+
+    public object height
+    {
+        get => NumericSizeElement ? (object)ParseIntAttr("height") : (_element.GetAttribute("height") ?? "");
+        set => _element.SetAttribute("height", Convert.ToString(value) ?? "");
+    }
+
+    private bool NumericSizeElement => TagIs("IMG", "IFRAME", "EMBED", "OBJECT");
+
+    private bool TagIs(params string[] names)
+    {
+        foreach (var n in names) if (string.Equals(_element.TagName, n, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private ulong ParseIntAttr(string name)
+    {
+        var raw = _element.GetAttribute(name) ?? "";
+        var digits = new string(raw.TakeWhile(char.IsDigit).ToArray());
+        return ulong.TryParse(digits, out var v) ? v : 0;
     }
 
     public ulong imgWidth
@@ -1891,6 +2013,46 @@ public class ElementHost
             CollectFormElements(child, elements);
         }
     }
+}
+
+/// <summary>DOMTokenList over the 'rel' content attribute (DOM 4 §3.3.5). A set of space-separated
+/// tokens kept in the attribute; it is its own class because the element's 'classList' reads and
+/// writes the 'class' attribute specifically and cannot stand in for 'rel'.</summary>
+public class RelTokenListHost
+{
+    private readonly ElementHost _element;
+    public RelTokenListHost(ElementHost element) => _element = element;
+    private Element El => _element.NativeElement;
+    private List<string> Tokens() =>
+        (El.GetAttribute("rel") ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+    private void SetTokens(List<string> t) => El.SetAttribute("rel", string.Join(" ", t));
+    public int length => Tokens().Count;
+    public string? item(int index) { var t = Tokens(); return index >= 0 && index < t.Count ? t[index] : null; }
+    public bool contains(string token) => Tokens().Contains(token);
+    public void add(params string[] tokens)
+    {
+        var t = Tokens();
+        foreach (var tok in tokens) if (!string.IsNullOrEmpty(tok) && !t.Contains(tok)) t.Add(tok);
+        SetTokens(t);
+    }
+    public void remove(params string[] tokens)
+    {
+        var t = Tokens();
+        foreach (var tok in tokens) t.Remove(tok);
+        SetTokens(t);
+    }
+    public bool toggle(string token)
+    {
+        var t = Tokens();
+        if (t.Contains(token)) { t.Remove(token); SetTokens(t); return false; }
+        t.Add(token); SetTokens(t); return true;
+    }
+    public string value
+    {
+        get => El.GetAttribute("rel") ?? "";
+        set => El.SetAttribute("rel", value ?? "");
+    }
+    public override string ToString() => value;
 }
 
 public class TextNodeWrapper

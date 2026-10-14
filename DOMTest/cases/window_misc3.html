@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head><title>Window / misc probe 3</title></head>
+<body>
+<script>
+(function () {
+  var d = document;
+
+  // --- window event target: addEventListener + dispatch ---
+  var loadFired = 0;
+  window.addEventListener('testload', function () { loadFired++; });
+  window.dispatchEvent(new Event('testload'));
+  __T('window listener fires', loadFired === 1, 'f=' + loadFired);
+
+  // --- window.on* handler (HTML WindowEventHandlers) ---
+  var errFired = 0;
+  try {
+    window.onerror = function () { errFired++; };
+    __T('window.onerror assignable', typeof window.onerror === 'function', 't=' + typeof window.onerror);
+  } catch (e) { __T('window.onerror', false, e.message); }
+
+  // --- DOMRect ---
+  try {
+    var r = new DOMRect(1, 2, 30, 40);
+    __T('DOMRect fields', r.x === 1 && r.y === 2 && r.width === 30 && r.height === 40 && r.top === 2 && r.right === 31, 'r=' + JSON.stringify({x:r.x,right:r.right}));
+  } catch (e) { __T('DOMRect', false, e.message); }
+
+  // --- Array.from over a NodeList ---
+  try {
+    var ps = d.querySelectorAll('p');
+    var arr = Array.prototype.slice.call(ps.length ? ps : []);
+    __T('slice over NodeList', Array.isArray(arr), 'ok');
+    if (typeof Array.from === 'function') {
+      var f = Array.from(d.getElementById ? [] : []);
+      __T('Array.from exists', true);
+    }
+  } catch (e) { __T('Array over NodeList', false, e.message); }
+
+  // --- comment textContent / data ---
+  var c = d.createComment('hi');
+  __T('comment textContent', c.textContent === 'hi', 'tc=' + c.textContent);
+
+  // --- document.characterSet / inputEncoding ---
+  __T('document.characterSet', /UTF-8/i.test(d.characterSet || ''), 'cs=' + d.characterSet);
+
+  // --- element.getBoundingClientRect shape ---
+  var div = d.createElement('div'); d.body.appendChild(div);
+  var bb = div.getBoundingClientRect();
+  __T('rect has left/top/width/height', ['left','top','width','height','right','bottom'].every(function(k){return k in bb;}), 'keys='+Object.keys(bb).join(','));
+
+  // --- Node.compareDocumentPosition basics ---
+  try {
+    var a = d.createElement('a'), b = d.createElement('b');
+    var host = d.createElement('div'); host.appendChild(a); host.appendChild(b); d.body.appendChild(host);
+    var pos = a.compareDocumentPosition(b);
+    __T('compareDocumentPosition nonzero', typeof pos === 'number' && pos !== 0, 'pos=' + pos);
+  } catch (e) { __T('compareDocumentPosition', false, e.message); }
+})();
+</script>
+</body>
+</html>

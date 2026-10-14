@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head><title>HTMLElement IDL reflection probe</title></head>
+<body>
+<a id="a1" href="x.html" target="_blank" rel="noopener" download="f.txt" title="Tip">lnk</a>
+<input id="i1" type="checkbox" checked required disabled>
+<button id="b1" type="submit" disabled>btn</button>
+<select id="s1" multiple><option value="a">A</option><option value="b" selected>B</option><option value="c" selected>C</option></select>
+<img id="im1" src="a.png" width="40" height="30" alt="pic">
+<div id="dv1" title="hello" hidden tabindex="3" lang="en" dir="rtl">d</div>
+<label id="lb1" for="i1">L</label>
+<textarea id="ta1" rows="4" cols="30" placeholder="ph">text</textarea>
+<iframe id="if1" src="about:blank" name="fr" width="10" height="20"></iframe>
+<script>
+(function () {
+  var d = document;
+  function id(x){ return d.getElementById(x); }
+
+  // anchor reflection
+  var a = id('a1');
+  __T('a.target', a.target === '_blank', 't=' + a.target);
+  __T('a.rel', a.rel === 'noopener', 'r=' + a.rel);
+  __T('a.download', a.download === 'f.txt', 'dn=' + a.download);
+  __T('a.title', a.title === 'Tip', 'ti=' + a.title);
+  a.relList && __T('a.relList contains', typeof a.relList.contains === 'function' ? a.relList.contains('noopener') : false);
+
+  // input reflection
+  var i = id('i1');
+  __T('input.required', i.required === true, 'req=' + i.required);
+  __T('input.disabled', i.disabled === true);
+  __T('input.checked', i.checked === true);
+  i.required = false;
+  __T('input.required set', i.required === false && !i.hasAttribute('required'), 'attr=' + i.getAttribute('required'));
+
+  // button
+  var b = id('b1');
+  __T('button.type', b.type === 'submit', 'bt=' + b.type);
+  __T('button.disabled', b.disabled === true);
+
+  // select multiple + values
+  var s = id('s1');
+  __T('select.multiple', s.multiple === true, 'mu=' + s.multiple);
+  __T('select selected options', s.selectedOptions ? s.selectedOptions.length === 2 : (s.selectedOptions && false), 'so=' + (s.selectedOptions && s.selectedOptions.length));
+
+  // img
+  var im = id('im1');
+  __T('img.width', im.width === 40, 'w=' + im.width);
+  __T('img.height', im.height === 30, 'h=' + im.height);
+  __T('img.alt', im.alt === 'pic', 'alt=' + im.alt);
+  __T('img.src present', typeof im.src === 'string' && im.src.length > 0, 'src=' + im.src);
+
+  // div global attrs
+  var dv = id('dv1');
+  __T('div.title', dv.title === 'hello');
+  __T('div.hidden', dv.hidden === true, 'hid=' + dv.hidden);
+  __T('div.tabIndex', dv.tabIndex === 3, 'ti=' + dv.tabIndex);
+  __T('div.lang', dv.lang === 'en', 'lang=' + dv.lang);
+  __T('div.dir', dv.dir === 'rtl', 'dir=' + dv.dir);
+
+  // label htmlFor
+  __T('label.htmlFor', id('lb1').htmlFor === 'i1', 'hf=' + id('lb1').htmlFor);
+
+  // textarea
+  var ta = id('ta1');
+  __T('textarea.placeholder', ta.placeholder === 'ph', 'ph=' + ta.placeholder);
+  __T('textarea.rows', ta.rows === 4, 'rows=' + ta.rows);
+  __T('textarea.value has text', /text/.test(ta.value), 'v=' + ta.value);
+
+  // iframe
+  var ifr = id('if1');
+  __T('iframe.width', ifr.width === 10, 'iw=' + ifr.width);
+  __T('iframe.name', ifr.name === 'fr', 'in=' + ifr.name);
+})();
+</script>
+</body>
+</html>

@@ -738,6 +738,26 @@ public class JavaScriptEngine : IDisposable
                 Object.defineProperty(this, 'size', { get: function () { return pairs.length; } });
             }
 
+            // CSSOM View §5.1 — DOMRect. Four numbers in, the rectangle and its derived edges out;
+            // a negative width/height flips the origin the way the geometry model says it must.
+            function DOMRect(x, y, w, h) {
+                x = x === undefined ? 0 : Number(x);
+                y = y === undefined ? 0 : Number(y);
+                w = w === undefined ? 0 : Number(w);
+                h = h === undefined ? 0 : Number(h);
+                this.x = this.left = Math.min(x, x + w);
+                this.y = this.top = Math.min(y, y + h);
+                this.width = Math.abs(w);
+                this.height = Math.abs(h);
+                this.right = this.left + this.width;
+                this.bottom = this.top + this.height;
+                this.toJSON = function () {
+                    return { x: this.x, y: this.y, width: this.width, height: this.height,
+                        top: this.top, right: this.right, bottom: this.bottom, left: this.left };
+                };
+            }
+            DOMRect.fromRect = function (o) { return new DOMRect(o.x, o.y, o.width, o.height); };
+
             // ── Encoding / Crypto / DOM parsing / Blob ─────────────────────────
             // TextEncoder/TextDecoder carry the UTF-8 transformation the Web platform uses to move
             // text across the byte-oriented APIs; surrogate pairs are combined before encoding so an
@@ -925,6 +945,13 @@ public class JavaScriptEngine : IDisposable
                     document.removeEventListener(type, listener, options);
                 }
             };
+            // A Window is an EventTarget; the listeners registered through window.addEventListener
+            // live on the document (the host's single tree root), so a dispatch on the window walks
+            // the same target. The return is 'not cancelled', matching EventTarget.dispatchEvent.
+            window.dispatchEvent = function(evt) {
+                if (document && document.dispatchEvent) return !!document.dispatchEvent(evt);
+                return true;
+            };
 
             Object.defineProperty(window, 'innerWidth', { configurable: true, get: function() { return __acrux.innerWidth(); } });
             Object.defineProperty(window, 'innerHeight', { configurable: true, get: function() { return __acrux.innerHeight(); } });
@@ -1094,6 +1121,9 @@ public class JavaScriptEngine : IDisposable
                 if (P) { for (var k in P) defOn(P[k]); }
                 defOn(window.HTMLElement && window.HTMLElement.prototype);
                 defOn(window.Element && window.Element.prototype);
+                // WindowEventHandlers (HTML §6.7.1): window.onload / onerror / onscroll and friends
+                // are the same one-slot accessors, installed on the global itself.
+                defOn(window);
             })();
 
             // HTML §6.1.4.3 — the 'dataset' DOMStringMap. It is a live view over the element's
