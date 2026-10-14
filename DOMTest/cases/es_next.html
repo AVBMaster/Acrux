@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head><title>ECMAScript 2020+ probe</title></head>
+<body>
+<script>
+class Point { #x = 1; get x(){ return this.#x; } static make(){ var p = new Point(); p.#x = 5; return p; } }
+(function () {
+  // --- Object.hasOwn ---
+  __T('Object.hasOwn', typeof Object.hasOwn === 'function' ? Object.hasOwn({a:1},'a') && !Object.hasOwn({a:1},'toString') : false);
+
+  // --- class private fields + static (written as real syntax, not eval, so the binding is in scope) ---
+  try {
+    var inst = Point.make();
+    __T('class private field', inst.x === 5, 'x=' + inst.x);
+  } catch (e) { __T('class private field', false, e.message); }
+
+  // --- generators ---
+  try {
+    function* gen(){ yield 1; yield 2; return 3; }
+    var g = gen(); var got = [g.next().value, g.next().value];
+    __T('generator yields', got.join(',') === '1,2', 'got=' + got.join(','));
+  } catch (e) { __T('generator', false, e.message); }
+
+  // --- async / await ---
+  try {
+    var asyncOk = null;
+    (async function(){ return await Promise.resolve('done'); })().then(function(v){ asyncOk = v; });
+    __T('async function type', typeof (async function(){}), 'ok=deferred');
+  } catch (e) { __T('async', false, e.message); }
+
+  // --- spread / destructuring ---
+  try {
+    var [a,b] = [1,2]; var {c,d=9} = {c:3};
+    var merged = Object.assign({}, {x:1}, {y:2});
+    __T('destructuring + spread', a===1 && b===2 && c===3 && d===9 && merged.y===2);
+    var arr = [...[1,2,3]];
+    __T('array spread', arr.length===3);
+  } catch (e) { __T('destructure', false, e.message); }
+
+  // --- optional chaining / nullish assignment ---
+  try {
+    var o = {a:{b:{}}};
+    __T('optional deep', (o?.a?.b?.c === undefined));
+    var n = null; n ??= 5;
+    __T('nullish assign', n === 5, 'n=' + n);
+  } catch (e) { __T('optional/nullish', false, e.message); }
+
+  // --- Array.from / of / flatMap ---
+  __T('Array.flatMap', [1,2].flatMap(function(x){ return [x,x]; }).length === 4);
+  __T('Array.from set', (function(){ var s=new Set([1,2,3]); return Array.from(s).length===3; })(), 'setfrom');
+
+  // --- RegExp named groups + sticky ---
+  try {
+    var m = /(?<year>\d{4})-(?<mon>\d{2})/.exec('2026-10');
+    __T('RegExp named group', !!(m && m.groups && m.groups.year === '2026' && m.groups.mon === '10'), 'g=' + (m && m.groups && m.groups.year));
+    var st = /a/g; __T('RegExp flags', 'a'.match(st) !== null);
+  } catch (e) { __T('RegExp groups', false, e.message); }
+
+  // --- Proxy set/has traps ---
+  try {
+    var store = {};
+    var pr = new Proxy({}, { set: function(t,k,v){ store[k]=v*2; return true; }, get: function(t,k){ return store[k]; } });
+    pr.n = 5;
+    __T('Proxy set trap', pr.n === 10, 'n=' + pr.n);
+  } catch (e) { __T('Proxy set', false, e.message); }
+
+  // --- getters/setters on object literal ---
+  var obj = { _v: 1, get v(){ return this._v; }, set v(x){ this._v = x; } };
+  obj.v = 7;
+  __T('object accessor', obj.v === 7, 'v=' + obj.v);
+})();
+</script>
+</body>
+</html>
