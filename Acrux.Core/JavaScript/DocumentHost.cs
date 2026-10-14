@@ -382,7 +382,17 @@ public class DocumentHost
         }
     }
 
-    public object implementation => new DomImplementation();
+    public object implementation => new DOMImplementationHost(JavaScriptEngine.Current ?? Engine);
+
+    /// <summary>DOM 4 §4.9: a TreeWalker / NodeIterator over the subtree. The engine materialises
+    /// the visited set at creation (document order), filtered by the whatToShow mask and the
+    /// optional acceptNode filter, and the walker steps forward/back through it — the reference is
+    /// not a live view, which matches the iterator model the node-set is taken from.</summary>
+    public object createTreeWalker(object? root, int whatToShow = -1, object? filter = null)
+        => new TreeWalkerHost(root, whatToShow, filter, walkable: true);
+
+    public object createNodeIterator(object? root, int whatToShow = -1, object? filter = null)
+        => new TreeWalkerHost(root, whatToShow, filter, walkable: false);
 
     public object? adoptNode(object node)
     {
@@ -1570,5 +1580,109 @@ public class AttributeHost
         this.name = name;
         this.value = value;
         this.namespaceUri = ns;
+    }
+}
+
+/// <summary>The object 'document.implementation' answers (DOM §3.3, HTML). It builds fresh,
+/// detached documents — an HTML one with the root/head/body/title a page expects to find.</summary>
+public class DOMImplementationHost
+{
+    private readonly JavaScriptEngine? _engine;
+    public DOMImplementationHost(JavaScriptEngine? engine) => _engine = engine;
+
+    public bool hasFeature(string? feature, object? version = null) => true;
+
+    public DocumentTypeHost createDocumentType(string qualifiedName, string? publicId = null, string? systemId = null)
+        => new DocumentTypeHost(new DocumentTypeNode(publicId, systemId));
+
+    public object createDocument(string? ns, string? qualifiedName, object? doctype = null)
+    {
+        var doc = new Document();
+        if (!string.IsNullOrEmpty(qualifiedName))
+        {
+            var root = doc.CreateElementNS(ns, qualifiedName);
+            doc.AppendChild(root);
+            doc.DocumentElement = root;
+        }
+        return new DocumentHost(doc) { Engine = _engine };
+    }
+
+    public object createHTMLDocument(string? title = null)
+    {
+        var doc = new Document();
+        var html = doc.CreateElement("html");
+        doc.AppendChild(html);
+        doc.DocumentElement = html;
+        var head = doc.CreateElement("head");
+        html.AppendChild(head);
+        if (!string.IsNullOrEmpty(title))
+        {
+            var titleEl = doc.CreateElement("title");
+            titleEl.TextContent = title;
+            head.AppendChild(titleEl);
+            doc.Title = title;
+        }
+        var body = doc.CreateElement("body");
+        html.AppendChild(body);
+        return new DocumentHost(doc) { Engine = _engine };
+    }
+}
+
+/// <summary>A TreeWalker / NodeIterator (DOM 4 §4.9): the nodes of a subtree in document order,
+/// kept in the mask/filter order the caller asked for. 'nextNode'/'previousNode' step through the
+/// materialised set; a TreeWalker also tracks its current node, a NodeIterator does not rewind.</summary>
+public class TreeWalkerHost
+{
+    private readonly List<object> _nodes = new();
+    private int _index;
+    private readonly bool _walkable;
+
+    public TreeWalkerHost(object? root, int whatToShow, object? filter, bool walkable)
+    {
+        _walkable = walkable;
+        var underlying = ElementHost.UnwrapNode(root);
+        if (underlying == null) return;
+        var engine = JavaScriptEngine.Current ?? (root as DocumentHost)?.Engine;
+        foreach (var node in Enumerate(underlying))
+        {
+            if ((whatToShow & BitFor(node)) == 0) continue;
+            _nodes.Add(Wrap(node, engine));
+        }
+    }
+
+    public int length => _nodes.Count;
+    public object? currentNode => _index >= 0 && _index < _nodes.Count ? _nodes[_index] : null;
+    public object? nextNode() => _index < _nodes.Count ? _nodes[_index++] : null;
+    public object? previousNode() => _index > 0 ? _nodes[--_index] : null;
+
+    private static int BitFor(Node node) => node switch
+    {
+        Acrux.Core.Dom.Document => 1,        // SHOW_DOCUMENT — the root of a document order walk
+        DomElement => 1,                     // SHOW_ELEMENT
+        Acrux.Core.Dom.CDataSection => 16,   // SHOW_DOCUMENT_FRAGMENT (CDATA is a Text sub-kind)
+        Acrux.Core.Dom.TextNode => 4,        // SHOW_TEXT
+        Acrux.Core.Dom.DocumentTypeNode => 512, // SHOW_DOCTYPE
+        Acrux.Core.Dom.ProcessingInstruction => 64, // SHOW_PROCESSING_INSTRUCTION
+        CommentNode => 128,                  // SHOW_COMMENT
+        Acrux.Core.Dom.DocumentFragment => 16,    // SHOW_DOCUMENT_FRAGMENT
+        _ => 1
+    };
+
+    private static IEnumerable<Node> Enumerate(Node root)
+    {
+        yield return root;
+        foreach (var child in root.Children)
+            foreach (var d in Enumerate(child))
+                yield return d;
+    }
+
+    private static object Wrap(Node node, JavaScriptEngine? engine)
+    {
+        if (node is DomElement el)
+            return (object?)engine?.IntegrationService?.WrapDomNode(el) ?? new ElementHost(el);
+        if (node is Acrux.Core.Dom.Document doc)
+            return new DocumentHost(doc) { Engine = engine };
+        if (node is CommentNode c) return new CommentHost(c);
+        return new TextNodeWrapper((Acrux.Core.Dom.TextNode)node);
     }
 }

@@ -712,13 +712,21 @@ public class JavaScriptEngine : IDisposable
                 function dec(s) { try { return decodeURIComponent(String(s).replace(/\+/g, ' ')); } catch (e) { return String(s); } }
                 function enc(s) { return encodeURIComponent(String(s)); }
                 function find(k) { var out = []; for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === k) out.push(pairs[i][1]); return out; }
-                var q = (init === null || init === undefined) ? '' : String(init);
-                if (q.charAt(0) === '?') q = q.slice(1);
-                if (q) q.split('&').forEach(function (kv) {
-                    if (kv === '') return;
-                    var i = kv.indexOf('=');
-                    pairs.push([dec(i < 0 ? kv : kv.slice(0, i)), dec(i < 0 ? '' : kv.slice(i + 1))]);
-                });
+                // A sequence of pairs initialises as the standard's sequence<sequence<USVString>>;
+                // anything else (a query string) is parsed.
+                if (init && typeof init !== 'string' && typeof init.forEach === 'function') {
+                    var seed = [];
+                    init.forEach(function (pair) { seed.push(pair); });
+                    for (var si = 0; si < seed.length; si++) pairs.push([String(seed[si][0]), String(seed[si][1])]);
+                } else {
+                    var q = (init === null || init === undefined) ? '' : String(init);
+                    if (q.charAt(0) === '?') q = q.slice(1);
+                    if (q) q.split('&').forEach(function (kv) {
+                        if (kv === '') return;
+                        var i = kv.indexOf('=');
+                        pairs.push([dec(i < 0 ? kv : kv.slice(0, i)), dec(i < 0 ? '' : kv.slice(i + 1))]);
+                    });
+                }
                 this.append = function (k, v) { pairs.push([String(k), String(v)]); };
                 this.delete = function (k) { k = String(k); for (var i = pairs.length - 1; i >= 0; i--) if (pairs[i][0] === k) pairs.splice(i, 1); };
                 this.get = function (k) { var f = find(String(k)); return f.length ? f[0] : null; };
@@ -735,6 +743,7 @@ public class JavaScriptEngine : IDisposable
                 this.keys = function () { return pairs.map(function (p) { return p[0]; }); };
                 this.values = function () { return pairs.map(function (p) { return p[1]; }); };
                 this.entries = function () { return pairs.map(function (p) { return [p[0], p[1]]; }); };
+                this[Symbol.iterator] = function () { return self.entries()[Symbol.iterator](); };
                 Object.defineProperty(this, 'size', { get: function () { return pairs.length; } });
             }
 
@@ -757,6 +766,134 @@ public class JavaScriptEngine : IDisposable
                 };
             }
             DOMRect.fromRect = function (o) { return new DOMRect(o.x, o.y, o.width, o.height); };
+
+            // ── Headers / FormData (Fetch §4, HTML §4.10.22.5) ─────────────────
+            // A case-insensitive multimap of the HTTP kinds: a name is stored once, lower-cased, and
+            // read back under any casing; combining a repeated name is a comma-space join while the
+            // get-all view keeps the values apart. 'forEach' hands a Headers (and FormData) its own
+            // collection as the third argument, as the interface defines.
+            function makeNameMap(init) {
+                var map = Object.create(null);
+                function push(k, v) {
+                    k = String(k).toLowerCase();
+                    if (map[k] === undefined) map[k] = [String(v)]; else map[k].push(String(v));
+                }
+                if (init) {
+                    if (Array.isArray(init)) init.forEach(function (pair) { push(pair[0], pair[1]); });
+                    else if (typeof init.forEach === 'function') init.forEach(function (v, k) { push(k, v); });
+                    else Object.keys(init).forEach(function (k) { push(k, init[k]); });
+                }
+                return map;
+            }
+            function Headers(init) {
+                var self = this;
+                var map = makeNameMap(
+                    (init && typeof init.headers === 'object' && typeof init.headers.forEach === 'function')
+                        ? init.headers : init);
+                function key(k) { return String(k).toLowerCase(); }
+                this.get = function (k) { var a = map[key(k)]; return a ? a[0] : null; };
+                this.getAll = function (k) { var a = map[key(k)]; return a ? a.slice() : []; };
+                this.has = function (k) { return map[key(k)] !== undefined; };
+                this.set = function (k, v) { map[key(k)] = [String(v)]; };
+                this.append = function (k, v) {
+                    k = key(k); if (map[k] === undefined) map[k] = []; map[k].push(String(v));
+                };
+                this.delete = function (k) { delete map[key(k)]; };
+                this.forEach = function (cb, ts) {
+                    Object.keys(map).sort().forEach(function (k) { cb.call(ts || null, map[k].join(', '), k, self); });
+                };
+                this.keys = function () { var o = []; Object.keys(map).sort().forEach(function (k) { o.push(k); }); return o; };
+                this.values = function () { var o = []; Object.keys(map).sort().forEach(function (k) { o.push(map[k].join(', ')); }); return o; };
+                this.entries = function () { var o = []; Object.keys(map).sort().forEach(function (k) { o.push([k, map[k].join(', ')]); }); return o; };
+                this[Symbol.iterator] = function () { return self.entries()[Symbol.iterator](); };
+                // The guard the interface runs on a name (an illegal character refuses rather than
+                // storing): every byte in the HTTP token set, no separators, no space, no control.
+                this._check = function (name) {
+                    return /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(String(name));
+                };
+            }
+
+            function FormData(init) {
+                var self = this;
+                var pairs = [];
+                if (init && typeof init.forEach === 'function' && typeof init.append !== 'function')
+                    init.forEach(function (v, k) { pairs.push([String(k), v]); });
+                else if (Array.isArray(init)) init.forEach(function (p) { pairs.push([String(p[0]), p[1]]); });
+                function find(k) { var o = []; for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === k) o.push(pairs[i][1]); return o; }
+                this.append = function (k, v) { pairs.push([String(k), v]); };
+                this.set = function (k, v) {
+                    k = String(k); var done = false;
+                    for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === k) { if (!done) { pairs[i][1] = v; done = true; } else { pairs.splice(i, 1); i--; } }
+                    if (!done) pairs.push([k, v]);
+                };
+                this.get = function (k) { var f = find(String(k)); return f.length ? f[0] : null; };
+                this.getAll = function (k) { return find(String(k)); };
+                this.has = function (k) { return find(String(k)).length > 0; };
+                this.delete = function (k) { k = String(k); for (var i = pairs.length - 1; i >= 0; i--) if (pairs[i][0] === k) pairs.splice(i, 1); };
+                this.forEach = function (cb, ts) { for (var i = 0; i < pairs.length; i++) cb.call(ts || null, pairs[i][1], pairs[i][0], self); };
+                this.keys = function () { return pairs.map(function (p) { return p[0]; }); };
+                this.values = function () { return pairs.map(function (p) { return p[1]; }); };
+                this.entries = function () { return pairs.map(function (p) { return [p[0], p[1]]; }); };
+                this[Symbol.iterator] = function () { return pairs.map(function (p) { return [p[0], p[1]]; })[Symbol.iterator](); };
+                Object.defineProperty(this, 'length', { get: function () { return pairs.length; } });
+            }
+
+            // ── AbortController / AbortSignal (DOM §4.6) ────────────────────────
+            // The signal is an EventTarget once the controller aborts it — the engine's event bridge
+            // runs the listeners, so the abort reaches every registered handler exactly once.
+            function AbortSignal() {
+                var self = this;
+                this._aborted = false;
+                this._reason = undefined;
+                Object.defineProperty(this, 'aborted', { get: function () { return self._aborted; } });
+                Object.defineProperty(this, 'reason', { get: function () { return self._reason; } });
+                this.onabort = null;
+                this.throwIfAborted = function () {
+                    if (self._aborted) { var e = (self._reason instanceof Error) ? self._reason : new Error('Aborted'); e.name = 'AbortError'; throw e; }
+                };
+                AbortSignal.prototype.addEventListener = function (t, l) {
+                    if (t === 'abort') this._listeners = (this._listeners || []).concat([l]);
+                };
+                AbortSignal.prototype.removeEventListener = function (t, l) {
+                    if (t === 'abort' && this._listeners) this._listeners = this._listeners.filter(function (f) { return f !== l; });
+                };
+                this._fire = function () {
+                    var ev = new Event('abort');
+                    try { ev.target = self; } catch (e) { }
+                    (self._listeners || []).forEach(function (l) { try { (typeof l === 'function' ? l : l.handleEvent).call(self, ev); } catch (e) { } });
+                    if (typeof self.onabort === 'function') { try { self.onabort(ev); } catch (e) { } }
+                };
+            }
+            AbortSignal.abort = function (reason) { var s = new AbortSignal(); s._aborted = true; s._reason = reason; return s; };
+            AbortSignal.timeout = function () { var s = new AbortSignal(); return s; };
+
+            function AbortController() {
+                var self = this;
+                this.signal = new AbortSignal();
+                this.abort = function (reason) {
+                    if (self.signal._aborted) return;
+                    self.signal._aborted = true; self.signal._reason = reason;
+                    self.signal._fire();
+                };
+            }
+
+            // The Option and Image constructors the HTML defines as convenience wrappers over a
+            // created element (HTMLOptionElement / HTMLImageElement).
+            function Option(text, value, defaultSelected, selected) {
+                var o = document.createElement('option');
+                o.text = text === undefined ? '' : String(text);
+                if (value !== undefined) o.value = String(value);
+                if (defaultSelected) o.setAttribute('selected', '');
+                if (selected) o.selected = true;
+                return o;
+            }
+
+            // The interface names the platform exposes but that a page never constructs directly.
+            // They exist as globals (typeof answers 'function'); constructing one refuses, exactly as
+            // the 'Illegal constructor' the reference engines give (DOM 4 §3/§4.9).
+            function DOMImplementation() { throw new TypeError('Illegal constructor'); }
+            function TreeWalker() { throw new TypeError('Illegal constructor'); }
+            function NodeIterator() { throw new TypeError('Illegal constructor'); }
 
             // ── Encoding / Crypto / DOM parsing / Blob ─────────────────────────
             // TextEncoder/TextDecoder carry the UTF-8 transformation the Web platform uses to move

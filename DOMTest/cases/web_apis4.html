@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head><title>Web APIs probe 4 (Headers/FormData/Abort/DOMImplementation)</title></head>
+<body>
+<script>
+(function () {
+  // indirect eval → global scope, so 'typeof Missing' answers 'undefined' instead of throwing.
+  function exists(n){ try { return (0, eval)('typeof ' + n); } catch(e){ return 'err'; } }
+
+  ['Headers','FormData','AbortController','AbortSignal','DOMImplementation','TreeWalker','NodeIterator',
+   'Image','Option'].forEach(function (g) {
+    __T('exists:'+g, exists(g) === 'function', 'typeof=' + exists(g));
+  });
+
+  // Genuinely-absent subsystems (no transport / no XSLT engine / no canvas text metrics yet):
+  // their names must NOT be defined, so a feature check on them answers false rather than lying.
+  ['BroadcastChannel','XSLTProcessor','TextMetrics'].forEach(function (g) {
+    __T('absent:'+g, exists(g) === 'undefined', 'typeof=' + exists(g));
+  });
+
+  // --- Headers ---
+  try {
+    var h = new Headers({ 'Content-Type': 'text/plain', 'X-Custom': 'a' });
+    __T('Headers.get', h.get('content-type') === 'text/plain', 'ct=' + h.get('content-type'));
+    h.append('X-Multi', '1'); h.append('X-Multi', '2');
+    __T('Headers.getAll', (h.getAll ? h.getAll('x-multi').length : h.get('x-multi')) >= 1, 'all=' + JSON.stringify(h.getAll && h.getAll('x-multi')));
+    h.set('x-custom', 'b');
+    __T('Headers.set overwrites', h.get('x-custom') === 'b', 'xc=' + h.get('x-custom'));
+    __T('Headers.has', h.has('content-type') === true && h.has('nope') === false);
+    h.delete('x-custom');
+    __T('Headers.delete', h.has('x-custom') === false);
+    var keys = []; h.forEach(function(v,k){ keys.push(k); });
+    __T('Headers.forEach', keys.length >= 1, 'keys=' + keys.join(','));
+  } catch (e) { __T('Headers', false, e.message); }
+
+  // --- FormData ---
+  try {
+    var fd = new FormData();
+    fd.append('a', '1'); fd.append('b', '2'); fd.append('a', '3');
+    __T('FormData.get first', fd.get('a') === '1', 'a=' + fd.get('a'));
+    __T('FormData.getAll', fd.getAll('a').length === 2, 'all=' + fd.getAll('a').length);
+    __T('FormData.has', fd.has('b') === true && fd.has('z') === false);
+    fd.set('b', '20');
+    __T('FormData.set', fd.get('b') === '20', 'b=' + fd.get('b'));
+    fd.delete('a');
+    __T('FormData.delete', fd.has('a') === false);
+  } catch (e) { __T('FormData', false, e.message); }
+
+  // --- AbortController / AbortSignal ---
+  try {
+    var ac = new AbortController();
+    __T('signal present', !!ac.signal && ac.signal.aborted === false, 'ab=' + (ac.signal && ac.signal.aborted));
+    var fired = 0;
+    ac.signal.addEventListener('abort', function () { fired++; });
+    ac.abort();
+    __T('abort sets signal.aborted', ac.signal.aborted === true);
+    __T('abort fires listener', fired === 1, 'fired=' + fired);
+  } catch (e) { __T('AbortController', false, e.message); }
+
+  // --- DOMImplementation.createHTMLDocument ---
+  try {
+    var nd = document.implementation.createHTMLDocument('New Title');
+    __T('createHTMLDocument docType', nd && nd.nodeType === 9, 'nt=' + (nd && nd.nodeType));
+    __T('createHTMLDocument has html', nd && nd.documentElement && nd.documentElement.tagName === 'HTML', 'de=' + (nd && nd.documentElement && nd.documentElement.tagName));
+    __T('createHTMLDocument title', nd && /New Title/.test(nd.title), 't=' + (nd && nd.title));
+  } catch (e) { __T('createHTMLDocument', false, e.message); }
+
+  // --- TreeWalker ---
+  try {
+    var tw = document.createTreeWalker(document.body, 1 /*SHOW_ELEMENT*/, null);
+    __T('createTreeWalker exists', !!tw, 'tw=' + typeof tw);
+  } catch (e) { __T('createTreeWalker', false, e.message); }
+
+  // --- URLSearchParams from pairs array ---
+  try {
+    var usp = new URLSearchParams([['a','1'],['b','2']]);
+    __T('URLSearchParams array init', usp.get('a') === '1', 'a=' + usp.get('a'));
+  } catch (e) { __T('usp array init', false, e.message); }
+})();
+</script>
+</body>
+</html>
