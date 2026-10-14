@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head><title>Collection classes / Element API probe</title></head>
+<body>
+<ul id="list"><li>1</li><li>2</li><li>3</li></ul>
+<div class="a b c">multi</div>
+<script>
+(function () {
+  var d = document;
+  var list = d.getElementById('list');
+  var items = list.getElementsByTagName('li');
+
+  // --- HTMLCollection live-ish behaviour + item/namedItem ---
+  __T('HTMLCollection.length', items.length === 3, 'len=' + items.length);
+  __T('HTMLCollection.item', items.item(1) === items[1] || (items.item(1) && items.item(1).tagName === 'LI'));
+  __T('HTMLCollection indexed', items[0].textContent === '1');
+
+  // --- getElementsByTagName on element scope ---
+  var outer = d.getElementsByTagName('div');
+  __T('document.getElementsByTagName div', outer.length >= 1, 'n=' + outer.length);
+
+  // --- getElementsByClassName ---
+  var multi = d.getElementsByClassName('b');
+  __T('getElementsByClassName', multi.length === 1 && multi[0].className.indexOf('a') >= 0, 'n=' + multi.length);
+
+  // --- classList: replace / value setter / add many ---
+  var box = d.querySelector('.a');
+  box.classList.add('x', 'y');
+  __T('classList add many', box.classList.contains('x') && box.classList.contains('y'));
+  var changed = box.classList.replace('x', 'z');
+  __T('classList replace', changed === true && box.classList.contains('z') && !box.classList.contains('x'));
+
+  // --- documentElement / body collections ---
+  __T('documentElement has children', d.documentElement.children.length >= 1, 'dc=' + d.documentElement.children.length);
+  __T('document.children is a collection', d.children && typeof d.children.length === 'number' && d.children.length >= 1, 'dc=' + (d.children && d.children.length));
+
+  // --- createElement many tags ---
+  var tags = ['button','table','select','textarea','iframe','canvas','video','svg'];
+  var made = tags.map(function (t) { var e = d.createElement(t); return e && e.tagName ? e.tagName : '?'; });
+  __T('createElement various', made.every(function (x) { return x && x !== '?'; }), 'made=' + made.join(','));
+
+  // --- attribute reflection: input.checked as IDL ---
+  var cb = d.createElement('input'); cb.type = 'checkbox'; d.body.appendChild(cb);
+  cb.checked = true;
+  __T('input.checked IDL set', cb.checked === true);
+
+  // --- cloneNode shallow vs deep ---
+  var deep = list.cloneNode(true);
+  var shallow = list.cloneNode(false);
+  __T('clone shallow no children', shallow.children.length === 0, 'sh=' + shallow.children.length);
+  __T('clone deep has children', deep.children.length === 3, 'dp=' + deep.children.length);
+
+  // --- hasChildNodes ---
+  __T('hasChildNodes true', list.hasChildNodes() === true);
+  var empty = d.createElement('div');
+  __T('hasChildNodes false', empty.hasChildNodes() === false);
+})();
+</script>
+</body>
+</html>

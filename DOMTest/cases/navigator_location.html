@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head><title>Navigator / Location / History probe</title></head>
+<body>
+<script>
+(function () {
+  // --- navigator fields ---
+  __T('navigator.appName string', typeof navigator.appName === 'string', 'app=' + navigator.appName);
+  __T('navigator.platform string', typeof navigator.platform === 'string');
+  __T('navigator.language string', typeof navigator.language === 'string', 'lang=' + navigator.language);
+  __T('navigator.languages array', Array.isArray(navigator.languages), 'langs=' + navigator.languages);
+  __T('navigator.cookieEnabled bool', typeof navigator.cookieEnabled === 'boolean');
+  __T('navigator.onLine bool', typeof navigator.onLine === 'boolean');
+
+  // --- location ---
+  __T('location.protocol', typeof location.protocol === 'string', 'proto=' + location.protocol);
+  __T('location.origin', typeof location.origin === 'string', 'origin=' + location.origin);
+  __T('location.search', typeof location.search === 'string');
+  __T('location.assign function', typeof location.assign === 'function');
+  __T('location.reload function', typeof location.reload === 'function');
+
+  // assign updates href
+  var before = location.href;
+  location.assign('https://example.org/x?y=1');
+  __T('location.assign sets href', location.href === 'https://example.org/x?y=1', 'href=' + location.href);
+  location.href = before;
+
+  // --- history ---
+  __T('history.pushState fn', typeof history.pushState === 'function');
+  __T('history.back fn', typeof history.back === 'function');
+  __T('history.go fn', typeof history.go === 'function');
+
+  // --- document.cookie ---
+  try {
+    document.cookie = 'sess=abc';
+    __T('cookie set', /sess=abc/.test(document.cookie), 'c=' + document.cookie);
+  } catch (e) { __T('cookie', false, e.message); }
+
+  // --- screen ---
+  __T('screen.height', typeof screen.height === 'number' && screen.height > 0);
+  __T('screen.availWidth?', typeof screen.width === 'number');
+})();
+</script>
+</body>
+</html>

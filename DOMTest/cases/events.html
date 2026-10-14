@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head><title>Events probe</title></head>
+<body>
+<div id="box"><span id="inner">hi</span></div>
+<script>
+(function () {
+  var box = document.getElementById('box');
+  var inner = document.getElementById('inner');
+
+  // --- addEventListener / dispatch / remove ---
+  var clicks = 0;
+  function handler() { clicks++; }
+  box.addEventListener('click', handler);
+  box.dispatchEvent(new Event('click'));
+  __T('listener fired once', clicks === 1, 'clicks=' + clicks);
+  box.removeEventListener('click', handler);
+  box.dispatchEvent(new Event('click'));
+  __T('removeEventListener stops', clicks === 1, 'clicks=' + clicks);
+
+  // --- Event object fields ---
+  var e = new Event('myping', { bubbles: true, cancelable: true });
+  __T('Event.type', e.type === 'myping', 'type=' + e.type);
+  __T('Event.bubbles', e.bubbles === true);
+  __T('Event.cancelable', e.cancelable === true);
+  __T('Event.target null before dispatch', e.target === null || e.target === undefined);
+
+  // --- CustomEvent detail ---
+  var ce = new CustomEvent('custom', { detail: { n: 42 } });
+  __T('CustomEvent detail', ce.detail && ce.detail.n === 42);
+
+  // --- bubbling via dispatch ---
+  var order = [];
+  box.addEventListener('poke', function () { order.push('box'); }, false);
+  inner.addEventListener('poke', function () { order.push('inner'); }, false);
+  inner.dispatchEvent(new Event('poke', { bubbles: true }));
+  __T('bubbles to ancestor', order.indexOf('inner') >= 0 && order.indexOf('box') >= 0, 'order=' + order);
+
+  // --- once option ---
+  var onceCount = 0;
+  box.addEventListener('once_ev', function () { onceCount++; }, { once: true });
+  box.dispatchEvent(new Event('once_ev'));
+  box.dispatchEvent(new Event('once_ev'));
+  __T('once fires a single time', onceCount === 1, 'count=' + onceCount);
+
+  // --- inline onX handler ---
+  var inlineFired = false;
+  box.onclick = function () { inlineFired = true; };
+  box.dispatchEvent(new Event('click'));
+  __T('onclick handler runs', inlineFired === true);
+})();
+</script>
+</body>
+</html>

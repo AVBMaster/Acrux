@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head><title>CharacterData / Text probe</title></head>
+<body>
+<div id="d">Hello World</div>
+<script>
+(function () {
+  var d = document;
+  var host = d.getElementById('d');
+  var text = host.firstChild;
+
+  __T('text is Text node', text && text.nodeType === 3);
+  __T('wholeText', text.wholeText === 'Hello World', 'wt=' + text.wholeText);
+  __T('debug typeofs', true, 'appendData=' + typeof text.appendData + ' splitText=' + typeof text.splitText + ' remove=' + typeof text.remove + ' cloneNode=' + typeof text.cloneNode + ' nodeValue=' + typeof text.nodeValue + ' data=' + text.data);
+
+  // splitText
+  try {
+    var after = text.splitText(6); // split at 'World'
+    __T('splitText returns tail', after.nodeValue === 'World', 'tail=' + after.nodeValue);
+    __T('splitText shrinks head', text.nodeValue === 'Hello ', 'head=' + text.nodeValue);
+    __T('splitText siblings', host.childNodes.length === 2,
+        'cn=' + host.childNodes.length);
+  } catch (e) { __T('splitText', false, e.message); }
+
+  // substringData / appendData / insertData / deleteData / replaceData (CharacterData)
+  var t2 = d.createTextNode('abc');
+  var el2 = d.createElement('p'); el2.appendChild(t2); d.body.appendChild(el2);
+  try {
+    t2.appendData('def');
+    __T('appendData', t2.data === 'abcdef', 'd=' + t2.data);
+    t2.insertData(3, '-');
+    __T('insertData', t2.data === 'abc-def', 'd=' + t2.data);
+    t2.deleteData(3, 1);
+    __T('deleteData', t2.data === 'abcdef', 'd=' + t2.data);
+    t2.replaceData(0, 3, 'XYZ');
+    __T('replaceData', t2.data === 'XYZdef', 'd=' + t2.data);
+    __T('substringData', t2.substringData(0, 3) === 'XYZ');
+    __T('length', t2.length === 6, 'len=' + t2.length);
+  } catch (e) { __T('CharacterData methods', false, e.message); }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head><title>Element extra APIs probe</title></head>
+<body>
+<div id="wrap"><p class="c1">one</p><p class="c2">two</p></div>
+<script>
+(function () {
+  var d = document;
+  var wrap = d.getElementById('wrap');
+  var first = wrap.querySelector('p');
+
+  // --- matches / closest ---
+  __T('matches true', first.matches('p.c1') === true, 'm=' + first.matches('p.c1'));
+  __T('matches false', first.matches('.c2') === false);
+  __T('closest self', first.closest('p') === first);
+  __T('closest ancestor', first.closest('#wrap') === wrap);
+  __T('closest miss null', first.closest('table') === null);
+
+  // --- insertAdjacentHTML ---
+  wrap.insertAdjacentHTML('beforeend', '<span id="adj">adj</span>');
+  __T('insertAdjacentHTML beforeend', !!d.getElementById('adj'));
+  wrap.insertAdjacentHTML('afterbegin', '<b id="head">h</b>');
+  __T('insertAdjacentHTML afterbegin', wrap.firstElementChild && wrap.firstElementChild.id === 'head');
+
+  // --- append / prepend ---
+  var ap = d.createElement('i');
+  wrap.append(ap);
+  __T('append adds last', wrap.lastElementChild === ap);
+  var pp = d.createElement('u');
+  wrap.prepend(pp);
+  __T('prepend adds first', wrap.firstElementChild === pp);
+
+  // --- remove / replaceWith / before / after ---
+  var tmp = d.createElement('div'); tmp.id = 'tmp';
+  d.body.append(tmp);
+  tmp.remove();
+  __T('remove detaches', d.getElementById('tmp') === null);
+
+  var marker = d.createElement('em'); marker.id = 'mk';
+  first.before(marker);
+  __T('before inserts sibling', first.previousElementSibling === marker);
+  var mk = d.createElement('a'); mk.id = 'aaa';
+  marker.replaceWith(mk);
+  __T('replaceWith swaps', first.previousElementSibling === mk && d.getElementById('mk') === null);
+
+  // --- toggleAttribute ---
+  var t = d.createElement('div');
+  d.body.append(t);
+  t.toggleAttribute('hidden');
+  __T('toggleAttribute on', t.hasAttribute('hidden'));
+  t.toggleAttribute('hidden');
+  __T('toggleAttribute off', !t.hasAttribute('hidden'));
+
+  // --- isConnected ---
+  __T('connected in doc', wrap.isConnected === true);
+  var detached = d.createElement('div');
+  __T('detached not connected', detached.isConnected === false);
+
+  // --- textContent set replaces children ---
+  first.textContent = 'replaced';
+  __T('textContent set', first.textContent === 'replaced' && first.children.length === 0);
+
+  // --- idl reflection: element.id setter ---
+  first.id = 'renamed';
+  __T('id setter', d.getElementById('renamed') === first);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head><title>Document API probe</title></head>
+<body>
+<form name="login"><input name="user"></form>
+<img src="a.png" alt="a"><img src="b.png" alt="b">
+<a href="#anchor1" name="anchor1">x</a>
+<div id="adopt-me">adopt</div>
+<script>
+(function () {
+  var d = document;
+
+  __T('document.nodeType 9', d.nodeType === 9, 'nt=' + d.nodeType);
+  __T('document.nodeName', d.nodeName === '#document', 'nn=' + d.nodeName);
+  __T('readyState', typeof d.readyState === 'string', 'rs=' + d.readyState);
+  __T('hasFocus returns bool', typeof d.hasFocus() === 'boolean');
+
+  // --- collections ---
+  __T('forms collection', d.forms.length === 1, 'forms=' + d.forms.length);
+  __T('images collection', d.images.length === 2, 'images=' + d.images.length);
+  __T('links collection counts anchors+areas', d.links.length >= 1, 'links=' + d.links.length);
+  __T('anchors by name', d.anchors.length >= 1, 'anchors=' + d.anchors.length);
+
+  // --- getElementsByName ---
+  var named = d.getElementsByName('user');
+  __T('getElementsByName', named.length === 1, 'n=' + named.length);
+
+  // --- doctype ---
+  __T('doctype present', d.doctype && /html/i.test(d.doctype.name || ''), 'dt=' + (d.doctype && d.doctype.name));
+
+  // --- documentElement / body / head ---
+  __T('documentElement is HTML', d.documentElement && d.documentElement.tagName === 'HTML');
+  __T('body is BODY', d.body && d.body.tagName === 'BODY');
+  __T('head is HEAD', d.head && d.head.tagName === 'HEAD');
+
+  // --- adoptedStyleSheets is an array ---
+  __T('adoptedStyleSheets array', Array.isArray(d.adoptedStyleSheets), 'ass=' + typeof d.adoptedStyleSheets);
+
+  // --- write ---
+  try {
+    var before = d.querySelectorAll('p').length;
+    d.write('<p id="written">w</p>');
+    __T('document.write adds node', !!d.getElementById('written'));
+  } catch (e) { __T('document.write', false, e.message); }
+
+  // --- title ---
+  d.title = 'Set Title';
+  __T('title set', d.title === 'Set Title', 't=' + d.title);
+})();
+</script>
+</body>
+</html>

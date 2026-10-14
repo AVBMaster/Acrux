@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head><title>Nodes &amp; fragments probe</title></head>
+<body>
+<div id="host">before<span id="mid">mid</span>after</div>
+<script>
+(function () {
+  var d = document;
+  var host = d.getElementById('host');
+
+  // --- childNodes vs children ---
+  __T('childNodes includes text', host.childNodes.length === 3, 'cn=' + host.childNodes.length);
+  __T('children element-only', host.children.length === 1, 'ch=' + host.children.length);
+  __T('childNodes[0] is text', host.childNodes[0].nodeType === 3);
+  __T('childNodes[1] is element', host.childNodes[1].nodeType === 1);
+
+  // --- text node basics ---
+  var t = host.childNodes[0];
+  __T('text nodeValue', t.nodeValue === 'before' || t.data === 'before', 'nv=' + t.nodeValue);
+  __T('text nodeName', t.nodeName === '#text');
+
+  // --- createTextNode + appendChild(text) ---
+  var tn = d.createTextNode('XYZ');
+  host.appendChild(tn);
+  __T('append text node', host.childNodes[host.childNodes.length - 1].nodeValue === 'XYZ');
+
+  // --- comment node ---
+  var cm = d.createComment('note');
+  __T('comment nodeType 8', cm.nodeType === 8, 'nt=' + cm.nodeType);
+  __T('comment nodeName', cm.nodeName === '#comment', 'nn=' + cm.nodeName);
+  __T('comment data', cm.data === 'note');
+  host.appendChild(cm);
+  var sawComment = false;
+  for (var i = 0; i < host.childNodes.length; i++)
+    if (host.childNodes[i].nodeType === 8) sawComment = true;
+  __T('comment in childNodes', sawComment);
+
+  // --- document fragment ---
+  var frag = d.createDocumentFragment();
+  var p1 = d.createElement('p'); p1.textContent = 'f1';
+  var p2 = d.createElement('p'); p2.textContent = 'f2';
+  frag.appendChild(p1);
+  frag.appendChild(p2);
+  __T('fragment holds children', frag.children.length === 2, 'fc=' + frag.children.length);
+  var before = d.querySelectorAll('p').length;
+  host.appendChild(frag);
+  __T('fragment inserts children (emptied)',
+      d.querySelectorAll('p').length === before + 2 && frag.children.length === 0,
+      'after=' + d.querySelectorAll('p').length + ' fragLeft=' + frag.children.length);
+
+  // --- NodeList.item / forEach-free indexed ---
+  var nodes = host.childNodes;
+  __T('childNodes.item(1)', nodes.item(1) === nodes[1] || (nodes.item(1) && nodes.item(1).nodeType === 1), 'item=' + (nodes.item(1) && nodes.item(1).nodeType));
+
+  // --- appendChild move (already in tree re-parents) ---
+  var mid = d.getElementById('mid');
+  var hostCount = host.childNodes.length;
+  d.body.appendChild(mid); // move span out of host into body
+  __T('appendChild moves node', d.getElementById('mid').parentNode === d.body || mid.parentElement === d.body);
+  __T('host lost moved child', host.childNodes.length === hostCount - 1, 'now=' + host.childNodes.length);
+
+  // --- replaceChild returns old ---
+  var repl = d.createElement('b');
+  var firstText = host.childNodes[0];
+  var old = host.replaceChild(repl, firstText);
+  __T('replaceChild returns old node', old === firstText);
+  __T('replaceChild swapped in', host.childNodes[0] === repl || host.childNodes[0].tagName === 'B');
+
+  // --- normalize ---
+  var nz = d.createElement('div');
+  nz.appendChild(d.createTextNode('a'));
+  nz.appendChild(d.createTextNode('b'));
+  nz.normalize();
+  __T('normalize merges text', nz.childNodes.length === 1 && nz.textContent === 'ab', 'n=' + nz.childNodes.length + ' tc=' + nz.textContent);
+})();
+</script>
+</body>
+</html>

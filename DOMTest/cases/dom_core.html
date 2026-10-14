@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head><title>DOM core probe</title></head>
+<body>
+<div id="a" class="x y" data-foo="bar">Hello <span>World</span></div>
+<p id="b">para one</p>
+<p class="x">para two</p>
+<script>
+(function () {
+  var d = document;
+  var a = d.getElementById('a');
+
+  // --- getElementById / querySelector / querySelectorAll ---
+  __T('getElementById hit', a && a.id === 'a');
+  __T('getElementById miss null', d.getElementById('nope') === null);
+  __T('querySelector by id', d.querySelector('#a') === a);
+  __T('querySelector tag', !!d.querySelector('p'));
+  var ps = d.querySelectorAll('p');
+  __T('querySelectorAll length', ps.length === 2, 'len=' + ps.length);
+  __T('querySelectorAll indexed', ps[0] && ps[1] && ps[0].id === 'b');
+  __T('querySelectorAll NodeList item()', ps.item && ps.item(1) === ps[1]);
+  __T('querySelectorAll scoped', a.querySelectorAll('span').length === 1);
+
+  // --- className / classList ---
+  __T('className', a.className === 'x y', 'got=' + a.className);
+  __T('classList contains', a.classList.contains('x') && a.classList.contains('y'));
+  __T('classList length', a.classList.length === 2, 'len=' + a.classList.length);
+  a.classList.add('z');
+  __T('classList add', a.classList.contains('z'));
+  a.classList.remove('z');
+  __T('classList remove', !a.classList.contains('z'));
+  __T('classList toggle on', a.classList.toggle('q') === true && a.classList.contains('q'));
+  __T('classList toggle off', a.classList.toggle('q') === false && !a.classList.contains('q'));
+  __T('classList item', a.classList.item(0) === 'x', 'item0=' + a.classList.item(0));
+
+  // --- attributes ---
+  __T('getAttribute', a.getAttribute('data-foo') === 'bar');
+  a.setAttribute('title', 'T');
+  __T('setAttribute then get', a.getAttribute('title') === 'T');
+  __T('hasAttribute', a.hasAttribute('title') && !a.hasAttribute('nope'));
+  a.removeAttribute('title');
+  __T('removeAttribute', a.getAttribute('title') === null);
+
+  // --- dataset ---
+  __T('dataset read', a.dataset && a.dataset.foo === 'bar', 'ds=' + (a.dataset && a.dataset.foo));
+
+  // --- textContent / innerHTML ---
+  __T('textContent', a.textContent.replace(/\s+/g,' ').trim() === 'Hello World', 'tc=' + a.textContent);
+  __T('innerHTML has span', /<span>World<\/span>/.test(a.innerHTML), 'ih=' + a.innerHTML);
+
+  // --- node relationships ---
+  var span = a.querySelector('span');
+  __T('parentNode', span.parentNode === a);
+  __T('parentElement', span.parentElement === a);
+  __T('firstChild is text', a.firstChild && a.firstChild.nodeType === 3);
+  __T('firstElementChild', a.firstElementChild === span, 'fec=' + (a.firstElementChild && a.firstElementChild.tagName));
+  __T('lastChild', a.lastChild === span);
+  __T('childNodes count', a.childNodes.length === 2, 'cn=' + a.childNodes.length);
+  __T('children count', a.children.length === 1, 'ch=' + a.children.length);
+  __T('nextSibling', span.previousSibling && span.previousSibling.nodeType === 3);
+
+  // --- nodeType / nodeName / tagName ---
+  __T('nodeType element', a.nodeType === 1);
+  __T('nodeType text', a.firstChild.nodeType === 3);
+  __T('nodeName upper', a.nodeName === 'DIV', 'nn=' + a.nodeName);
+  __T('tagName upper', a.tagName === 'DIV', 'tn=' + a.tagName);
+
+  // --- createElement / append / remove ---
+  var el = d.createElement('section');
+  el.id = 'sec';
+  el.textContent = 'new';
+  d.body.appendChild(el);
+  __T('createElement appended', d.getElementById('sec') === el);
+  __T('appendChild returns node', d.body.appendChild(d.createElement('br')) !== null);
+  var removed = d.body.removeChild(el);
+  __T('removeChild returns + detached', removed === el && d.getElementById('sec') === null);
+
+  // --- insertBefore ---
+  var p1 = d.getElementById('b');
+  var mark = d.createElement('em');
+  p1.insertBefore(mark, p1.firstChild);
+  __T('insertBefore', p1.firstElementChild === mark);
+
+  // --- cloneNode ---
+  var clone = a.cloneNode(true);
+  __T('cloneNode deep', clone.tagName === 'DIV' && clone.querySelector('span') !== null);
+  __T('cloneNode not in doc', clone.parentNode === null);
+
+  // --- appendChild move semantics ---
+  var b2 = d.getElementById('b');
+  var pCountBefore = d.querySelectorAll('p').length;
+  d.body.appendChild(b2.cloneNode(true));
+  __T('clone appended grows doc', d.querySelectorAll('p').length === pCountBefore + 1);
+
+  // --- contains / compareDocumentPosition basics ---
+  __T('contains descendant', a.contains(span));
+  __T('contains self', a.contains(a));
+  __T('not contains unrelated', !a.contains(d.getElementById('nope') || d.body));
+})();
+</script>
+</body>
+</html>

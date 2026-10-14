@@ -82,6 +82,34 @@ public class DocumentHost
 
     public string? compatMode => "CSS1Compat";
 
+    // A Document is a Node (DOM 4 §4), so it reports nodeType 9 and '#document' like any other,
+    // and its documentElement is the root element under it.
+    public int nodeType => 9;
+    public string nodeName => "#document";
+    public Node? parentNode => null;
+    public Node? ownerDocument => null;
+
+    // A Document is a Node, so it carries the child-node accessors too. Its only element child is
+    // the document element; the rest (doctype, comments) are non-element children.
+    public object[] children => _document.Children.OfType<DomElement>().Select(e => (object)WrapElement(e)!).ToArray();
+    public object[] childNodes => _document.Children.Select(WrapAnyDocumentNode).Where(x => x != null).Select(x => x!).ToArray();
+    public ElementHost? firstElementChild => _document.DocumentElement != null ? WrapElement(_document.DocumentElement) : null;
+    public ElementHost? lastElementChild => firstElementChild;
+    public int childElementCount => _document.Children.OfType<DomElement>().Count();
+
+    private object? WrapAnyDocumentNode(Node n) => n switch
+    {
+        DomElement el => WrapElement(el),
+        CommentNode c => new CommentHost(c),
+        TextNode t => new TextNodeWrapper(t),
+        _ => null,
+    };
+    public string? textContent
+    {
+        get => _document.TextContent;
+        set => _document.TextContent = value;
+    }
+
     public object? location => Engine?.LocationHost;
 
     public string __domType => "HTMLDocument";
@@ -225,8 +253,7 @@ public class DocumentHost
         return new TextNodeWrapper(new TextNode(text));
     }
 
-    public object? createComment(string data) =>
-        new TextNodeWrapper(new TextNode(data));
+    public object? createComment(string data) => new CommentHost(new CommentNode(data));
 
     public object? createDocumentFragment()
     {
@@ -1308,10 +1335,169 @@ public class DocumentFragmentHost
 
     public DocumentFragmentHost(DocumentFragment fragment) => _fragment = fragment;
 
-    public object? querySelector(string selector) => null;
-    public object[] querySelectorAll(string selector) => Array.Empty<object>();
-    public object[] children => Array.Empty<object>();
-    public int childElementCount => 0;
+    internal DocumentFragment NativeFragment => _fragment;
+
+    public string nodeName => "#document-fragment";
+    public int nodeType => 11;
+    public string? __domType => "DocumentFragment";
+    public string[] __domTypeChain => new[] { "EventTarget", "Node", "DocumentFragment" };
+
+    public object? querySelector(string selector)
+    {
+        foreach (var el in EnumerateElements(_fragment))
+        {
+            var m = CssSelectorMatcher.FirstDescendant(el, selector, el, includeRoot: true);
+            if (m != null) return Wrap(m);
+        }
+        return null;
+    }
+
+    public object querySelectorAll(string selector)
+    {
+        var list = new List<DomElement>();
+        foreach (var el in EnumerateElements(_fragment))
+            CssSelectorMatcher.CollectDescendants(el, selector, list, el, includeRoot: true);
+        return list.Select(e => (object)Wrap(e)!).ToArray();
+    }
+
+    public object append(object? child)
+    {
+        var node = ElementHost.UnwrapNode(child);
+        if (node == null) return child!;
+        if (node is Acrux.Core.Dom.DocumentFragment f)
+            foreach (var moved in f.Children.ToList()) _fragment.AppendChild(moved);
+        else _fragment.AppendChild(node);
+        return child!;
+    }
+
+    public object prepend(object? child)
+    {
+        var node = ElementHost.UnwrapNode(child);
+        if (node == null) return child!;
+        var first = _fragment.Children.FirstOrDefault();
+        if (node is Acrux.Core.Dom.DocumentFragment f)
+            foreach (var moved in f.Children.ToList()) _fragment.InsertBefore(moved, first);
+        else _fragment.InsertBefore(node, first);
+        return child!;
+    }
+
+    // A document fragment is a Node, so the whole mutation surface it is used through —
+    // building up a subtree before inserting it — has to answer, not just 'append'.
+    public object appendChild(object? child)
+    {
+        var node = ElementHost.UnwrapNode(child);
+        if (node == null)
+            throw new DOMException("NotFoundError", "The node to be appended is not a node of this document.");
+        if (node is Acrux.Core.Dom.DocumentFragment f)
+            foreach (var moved in f.Children.ToList()) _fragment.AppendChild(moved);
+        else _fragment.AppendChild(node);
+        return child!;
+    }
+
+    public object insertBefore(object? newChild, object? refChild)
+    {
+        var node = ElementHost.UnwrapNode(newChild);
+        if (node == null)
+            throw new DOMException("NotFoundError", "The node to be inserted is not a node of this document.");
+        Node? refNode = refChild == null ? null : ElementHost.UnwrapNode(refChild);
+        if (node is Acrux.Core.Dom.DocumentFragment f)
+            foreach (var moved in f.Children.ToList()) _fragment.InsertBefore(moved, refNode);
+        else _fragment.InsertBefore(node, refNode);
+        return newChild!;
+    }
+
+    public object removeChild(object? child)
+    {
+        var node = ElementHost.UnwrapNode(child);
+        if (node == null)
+            throw new DOMException("NotFoundError", "The node to be removed is not a child of this node.");
+        _fragment.RemoveChild(node);
+        return child!;
+    }
+
+    public object replaceChild(object? newChild, object? oldChild)
+    {
+        var newNode = ElementHost.UnwrapNode(newChild);
+        var oldNode = ElementHost.UnwrapNode(oldChild);
+        if (newNode == null || oldNode == null)
+            throw new DOMException("NotFoundError", "The node to be replaced is not a child of this node.");
+        _fragment.ReplaceChild(newNode, oldNode);
+        return oldChild!;
+    }
+
+    public object? getElementById(string id)
+    {
+        foreach (var el in EnumerateElements(_fragment))
+            if (el.Id == id) return Wrap(el);
+        return null;
+    }
+
+    public object[] children => EnumerateElements(_fragment).Select(e => (object)Wrap(e)!).ToArray();
+
+    public object[] childNodes
+    {
+        get
+        {
+            var r = new List<object>();
+            foreach (var n in _fragment.Children)
+                r.Add(WrapAnyNode(n)!);
+            return r.ToArray();
+        }
+    }
+
+    public int childElementCount => EnumerateElements(_fragment).Count();
+
+    public string? textContent
+    {
+        get
+        {
+            var sb = new System.Text.StringBuilder();
+            CollectText(_fragment, sb);
+            return sb.ToString();
+        }
+        set
+        {
+            _fragment.Children.Clear();
+            if (!string.IsNullOrEmpty(value))
+                _fragment.AppendChild(new Acrux.Core.Dom.TextNode(value));
+        }
+    }
+
+    private static void CollectText(Acrux.Core.Dom.Node node, System.Text.StringBuilder sb)
+    {
+        if (node is Acrux.Core.Dom.TextNode tn) sb.Append(tn.TextContent);
+        foreach (var child in node.Children) CollectText(child, sb);
+    }
+
+    private static IEnumerable<DomElement> EnumerateElements(Acrux.Core.Dom.Node root)
+    {
+        foreach (var child in root.Children)
+        {
+            if (child is DomElement el)
+            {
+                yield return el;
+                foreach (var d in EnumerateElements(el)) yield return d;
+            }
+        }
+    }
+
+    private object? Wrap(DomElement? el)
+    {
+        if (el == null) return null;
+        var engine = JavaScriptEngine.Current ?? Acrux.Core.JavaScript.JavaScriptEngine.Current;
+        if (engine?.IntegrationService != null)
+            return engine.IntegrationService.WrapDomNode(el);
+        return new ElementHost(el);
+    }
+
+    private object? WrapAnyNode(Acrux.Core.Dom.Node n) =>
+        n switch
+        {
+            DomElement el => Wrap(el),
+            Acrux.Core.Dom.CommentNode c => new CommentHost(c),
+            Acrux.Core.Dom.TextNode t => new TextNodeWrapper(t),
+            _ => null,
+        };
 }
 
 public class DocumentTypeHost
@@ -1346,9 +1532,12 @@ public class NamedNodeMapHost
         return new AttributeHost(kv.Key, kv.Value);
     }
 
-    public string? getNamedItem(string name)
+    public object? getNamedItem(string name)
     {
-        return _element.GetAttribute(name);
+        // NamedNodeMap answers Attr nodes, not the attribute's string value — a page that reads
+        // getNamedItem('id').value would otherwise find 'value' on a plain string.
+        if (!_element.HasAttribute(name)) return null;
+        return new AttributeHost(name, _element.GetAttribute(name));
     }
 
     public object? setNamedItem(object attr)
@@ -1358,11 +1547,13 @@ public class NamedNodeMapHost
         return null;
     }
 
-    public string? removeNamedItem(string name)
+    public object? removeNamedItem(string name)
     {
+        if (!_element.HasAttribute(name))
+            throw new DOMException("NotFoundError", "The named item does not exist.");
         var val = _element.GetAttribute(name);
         _element.RemoveAttribute(name);
-        return val;
+        return new AttributeHost(name, val);
     }
 }
 

@@ -11,6 +11,7 @@ public class ElementHost
     private readonly Element _element;
     private CssStyleDeclaration? _styleHost;
     private readonly Dictionary<string, List<int>> _eventCallbackIds = new();
+    private readonly HashSet<int> _onceCallbacks = new();
     internal JavaScriptEngine? Engine { get; set; }
 
     public ElementHost(Element element)
@@ -124,8 +125,24 @@ public class ElementHost
 
     public string? value
     {
-        get => _element.Value;
+        get
+        {
+            // A select answers the value of its selected option (its text when that option carries
+            // no value attribute); every other element answers its own value.
+            if (string.Equals(_element.TagName, "SELECT", StringComparison.OrdinalIgnoreCase))
+                return SelectedOptionValue();
+            return _element.Value;
+        }
         set => _element.Value = value;
+    }
+
+    private string? SelectedOptionValue()
+    {
+        var opts = _element.Children.OfType<Element>().Where(e => string.Equals(e.TagName, "OPTION", StringComparison.OrdinalIgnoreCase)).ToList();
+        var chosen = opts.FirstOrDefault(o => o.HasAttribute("selected")) ?? opts.FirstOrDefault();
+        if (chosen == null) return "";
+        var v = chosen.GetAttribute("value");
+        return v ?? chosen.TextContent?.Trim();
     }
 
     public int selectionStart
@@ -231,7 +248,7 @@ public class ElementHost
 
     public int childElementCount => _element.Children.OfType<Element>().Count();
 
-    public JsNodeList childNodes => new JsNodeList(_element, Engine);
+    public JsNodeList childNodes => new JsNodeList(_element, Engine, childNodes: true);
 
     public NamedNodeMapHost attributes => new(_element);
 
@@ -278,42 +295,113 @@ public class ElementHost
     public JsHtmlCollection getElementsByClassName(string className) =>
         new JsHtmlCollection(_element, Engine, null, className);
 
-    public void appendChild(object child)
+    /// <summary>The DOM node a script-side wrapper stands for. A node reaches a mutation method
+    /// as the host object the engine handed the page — an element, a text or comment node, or a
+    /// document fragment — and each keeps its own CLR identity, so unwrapping here is what lets
+    /// 'appendChild' accept a fragment or a text node rather than only an element.</summary>
+    internal static Node? UnwrapNode(object? child) => child switch
     {
-        var host = child as ElementHost;
-        if (host == null) return;
-        _element.AppendChild(host.NativeElement);
-    }
+        ElementHost el => el.NativeElement,
+        TextNodeWrapper t => t.NativeNode,
+        CommentHost c => c.NativeNode,
+        DocumentFragmentHost f => f.NativeFragment,
+        Node n => n,
+        _ => null,
+    };
 
-    public void insertBefore(object newChild, object? refChild)
+    // Every mutation method answers the node the specification names: appendChild and
+    // insertBefore give back the child that was inserted (the fragment, when a fragment was
+    // handed in), removeChild and replaceChild give back the node that came away. The page's own
+    // wrapper object is returned so identity holds ('x === node').
+    public object? appendChild(object? child)
     {
-        var newHost = newChild as ElementHost;
-        if (newHost == null) return;
-        Element? refEl = null;
-        if (refChild is ElementHost refHost)
-            refEl = refHost.NativeElement;
-        _element.InsertBefore(newHost.NativeElement, refEl);
-    }
-
-    public void removeChild(object child)
-    {
-        var host = child as ElementHost;
-        if (host == null) return;
-        _element.RemoveChild(host.NativeElement);
-    }
-
-    public void replaceChild(object newChild, object oldChild)
-    {
-        var newHost = newChild as ElementHost;
-        var oldHost = oldChild as ElementHost;
-        if (newHost == null || oldHost == null) return;
-        int idx = _element.Children.IndexOf(oldHost.NativeElement);
-        if (idx >= 0)
+        var node = UnwrapNode(child);
+        if (node == null)
+            throw new DOMException("NotFoundError", "The node to be appended is not a node of this document.");
+        if (node is DocumentFragment frag)
         {
-            _element.Children[idx] = newHost.NativeElement;
-            newHost.NativeElement.Parent = _element;
-            oldHost.NativeElement.Parent = null;
+            foreach (var moved in frag.Children.ToList())
+                _element.AppendChild(moved);
+            return child;
         }
+        _element.AppendChild(node);
+        return child;
+    }
+
+    /// <summary>Element.append(nodes…) inserts each argument at the end, accepting strings as text
+    /// nodes and a fragment as its children (ParentNode mixin).</summary>
+    public void append(params object?[] nodes)
+    {
+        foreach (var n in nodes) InsertChild(n, atEnd: true);
+    }
+
+    public void prepend(params object?[] nodes)
+    {
+        foreach (var n in nodes) InsertChild(n, atEnd: false);
+    }
+
+    private void InsertChild(object? child, bool atEnd)
+    {
+        Node? node = child is string s ? new TextNode(s) : UnwrapNode(child);
+        if (node == null) return;
+        if (node is DocumentFragment frag)
+        {
+            foreach (var moved in frag.Children.ToList())
+            {
+                if (atEnd) _element.AppendChild(moved);
+                else _element.InsertBefore(moved, _element.Children.FirstOrDefault());
+            }
+            return;
+        }
+        if (atEnd) _element.AppendChild(node);
+        else _element.InsertBefore(node, _element.Children.FirstOrDefault());
+    }
+
+    public object? insertBefore(object? newChild, object? refChild)
+    {
+        var node = UnwrapNode(newChild);
+        if (node == null)
+            throw new DOMException("NotFoundError", "The node to be inserted is not a node of this document.");
+        Node? refNode = refChild == null ? null : UnwrapNode(refChild);
+        if (node is DocumentFragment frag)
+        {
+            foreach (var moved in frag.Children.ToList())
+                _element.InsertBefore(moved, refNode);
+            return newChild;
+        }
+        _element.InsertBefore(node, refNode);
+        return newChild;
+    }
+
+    public object? removeChild(object? child)
+    {
+        var node = UnwrapNode(child);
+        if (node == null)
+            throw new DOMException("NotFoundError", "The node to be removed is not a child of this node.");
+        _element.RemoveChild(node);
+        return child;
+    }
+
+    public object? replaceChild(object? newChild, object? oldChild)
+    {
+        var newNode = UnwrapNode(newChild);
+        var oldNode = UnwrapNode(oldChild);
+        if (newNode == null || oldNode == null)
+            throw new DOMException("NotFoundError", "The node to be replaced is not a child of this node.");
+        if (newNode is DocumentFragment frag)
+        {
+            int idx = _element.Children.IndexOf(oldNode);
+            if (idx >= 0)
+            {
+                var moved = frag.Children.ToList();
+                _element.RemoveChild(oldNode);
+                for (int i = 0; i < moved.Count; i++)
+                    _element.InsertBefore(moved[i], idx + i < _element.Children.Count ? _element.Children[idx + i] : null);
+            }
+            return oldChild;
+        }
+        _element.ReplaceChild(newNode, oldNode);
+        return oldChild;
     }
 
     public object cloneNode(bool deep)
@@ -341,12 +429,16 @@ public class ElementHost
         if (engine == null) return;
 
         bool useCapture = false;
+        bool once = false;
         if (options is bool b)
             useCapture = b;
         else if (options != null)
         {
-            // Try to extract capture/once/passive from options object
-            try { useCapture = Convert.ToBoolean(options.GetType().GetProperty("capture")?.GetValue(options) ?? false); } catch { }
+            // A JS options object ({capture:true, once:true}) reaches the host as an interop
+            // value with no CLR members, so its flags are read back through the engine rather
+            // than reflection (DOM 4 §2.7).
+            useCapture = ReadEngineOption(engine, options, "capture");
+            once = ReadEngineOption(engine, options, "once");
         }
 
         int cbId;
@@ -373,6 +465,9 @@ public class ElementHost
         {
             cbId = engine.StoreCallbackRef(callback);
         }
+
+        if (once)
+            _onceCallbacks.Add(cbId);
 
         if (!_eventCallbackIds.TryGetValue(type, out var list))
         {
@@ -403,6 +498,37 @@ public class ElementHost
                 engine.RemoveCallback(cbId);
             list.Clear();
             _eventCallbackIds.Remove(type);
+        }
+    }
+
+    private static int _optProbeCounter;
+
+    /// <summary>Reads one boolean flag off a JS options object handed to a host method. The
+    /// object carries no CLR members, so it is bound to a temporary global and the property is
+    /// evaluated through the engine (DOM 4 §2.7 — the capture/once/passive dictionary).</summary>
+    private static bool ReadEngineOption(JavaScriptEngine? engine, object? options, string name)
+    {
+        if (engine == null || options == null) return false;
+        var adapter = engine.Adapter;
+        if (adapter == null) return false;
+        var tmp = "__opt_probe_" + Interlocked.Increment(ref _optProbeCounter);
+        try
+        {
+            adapter.EmbedHostObject(tmp, options);
+            var v = adapter.Evaluate($"{tmp}.{name}");
+            try { adapter.Execute($"delete {tmp};"); } catch { }
+            return v switch
+            {
+                bool b => b,
+                double d => d != 0,
+                null => false,
+                _ => !(v is string s ? s.Length == 0 || s == "false" : false)
+            };
+        }
+        catch
+        {
+            try { adapter.Execute($"delete {tmp};"); } catch { }
+            return false;
         }
     }
 
@@ -819,6 +945,13 @@ public class ElementHost
                             engine.InvokeCallbackWith(cbId, evt);
                     }
                     catch { }
+                    // A 'once' listener removes itself after its first call, leaving the other
+                    // listeners on the same event untouched (DOM 4 §2.8).
+                    if (_onceCallbacks.Remove(cbId) && cbIds.Contains(cbId))
+                    {
+                        cbIds.Remove(cbId);
+                        engine.RemoveCallback(cbId);
+                    }
                 }
             }
         }
@@ -899,11 +1032,20 @@ public class ElementHost
         return sb.ToString();
     }
 
+    private static readonly HashSet<string> VoidElements = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "area","base","br","col","embed","hr","img","input","link","meta","param","source","track","wbr"
+    };
+
     private static void SerializeNode(Node node, System.Text.StringBuilder sb)
     {
         if (node is TextNode tn)
         {
             sb.Append(System.Net.WebUtility.HtmlEncode(tn.TextContent ?? ""));
+        }
+        else if (node is CommentNode cn)
+        {
+            sb.Append("<!--").Append(cn.Data).Append("-->");
         }
         else if (node is Element el)
         {
@@ -913,6 +1055,13 @@ public class ElementHost
                 sb.Append(' ').Append(attr.Key);
                 if (!string.IsNullOrEmpty(attr.Value))
                     sb.Append("=\"").Append(System.Net.WebUtility.HtmlEncode(attr.Value)).Append('"');
+            }
+            // A void element has no content and closes at its start tag, so it must not grow a
+            // spurious end tag the way 'br'/'img' did before.
+            if (VoidElements.Contains(el.TagName))
+            {
+                sb.Append('>');
+                return;
             }
             sb.Append('>');
             foreach (var child in el.Children)
@@ -981,6 +1130,7 @@ public class ElementHost
     private object WrapNode(Node node)
     {
         if (node is Element e) return WrapWithCache(e) ?? new ElementHost(e);
+        if (node is CommentNode c) return new CommentHost(c);
         return new TextNodeWrapper((TextNode)node);
     }
 
@@ -988,6 +1138,15 @@ public class ElementHost
     // answer 1 for every element, which made '.length' look right and '[0]' undefined.
 
     public bool hasAttributes() => _element.Attributes.Count > 0;
+
+    // DOM 4 §5.3.1: the names of every attribute currently set, as a list.
+    public string[] getAttributeNames()
+    {
+        var names = new string[_element.Attributes.Count];
+        int i = 0;
+        foreach (var a in _element.Attributes) names[i++] = a.Key;
+        return names;
+    }
 
     public ElementHost? firstElementChild
     {
@@ -1070,36 +1229,44 @@ public class ElementHost
         _element.ParentElement?.RemoveChild(_element);
     }
 
-    public object? replaceWith(object newElement)
+    // ParentNode/ChildNode mixin (DOM 4 §5.5). 'replaceWith' takes the place of this node,
+    // 'before'/'after' insert beside it, and each accepts strings (as text nodes), a fragment
+    // (as its children), or plain nodes — the old ElementHost-only forms silently dropped text.
+    public void replaceWith(params object?[] nodes)
     {
-        if (newElement is ElementHost host)
-        {
-            var parent = _element.ParentElement;
-            if (parent != null)
-            {
-                parent.RemoveChild(_element);
-                parent.AppendChild(host._element);
-            }
-        }
-        return null;
+        var parent = _element.Parent;
+        if (parent == null) return;
+        var refNode = _element.NextSibling;
+        parent.RemoveChild(_element);
+        foreach (var n in nodes) InsertBeside(parent, n, refNode);
     }
 
-    public object? before(object newElement)
+    public void before(params object?[] nodes)
     {
-        if (newElement is ElementHost host)
-        {
-            _element.ParentElement?.InsertBefore(host._element, _element);
-        }
-        return null;
+        var parent = _element.Parent;
+        if (parent == null) return;
+        foreach (var n in nodes) InsertBeside(parent, n, _element);
     }
 
-    public object? after(object newElement)
+    public void after(params object?[] nodes)
     {
-        if (newElement is ElementHost host)
+        var parent = _element.Parent;
+        if (parent == null) return;
+        var refNode = _element.NextSibling;
+        foreach (var n in nodes) InsertBeside(parent, n, refNode);
+    }
+
+    private static void InsertBeside(Node parent, object? child, Node? refNode)
+    {
+        Node? node = child is string s ? new TextNode(s) : UnwrapNode(child);
+        if (node == null) return;
+        if (node is DocumentFragment frag)
         {
-            _element.ParentElement?.InsertBefore(host._element, _element.NextSibling);
+            foreach (var moved in frag.Children.ToList())
+                parent.InsertBefore(moved, refNode);
+            return;
         }
-        return null;
+        parent.InsertBefore(node, refNode);
     }
 
     public bool hasAttributeNS(string ns, string name)
@@ -1300,34 +1467,34 @@ public class ElementHost
         return null;
     }
 
-    public void normalize()
+    public void normalize() => NormalizeNode(_element);
+
+    /// <summary>DOM 4 §4.5.1: walk the subtree, drop empty text nodes, and glue each run of
+    /// adjacent text nodes into the first one. Removals go through RemoveChild so a detached
+    /// node's parent pointer is cleared — the old Clear()+AppendChild path left a stale parent on
+    /// every kept child and threw on the re-append.</summary>
+    private static void NormalizeNode(Node node)
     {
-        // Merge adjacent text nodes
-        var newChildren = new List<Node>();
-        TextNode? lastText = null;
-        foreach (var child in _element.Children)
+        foreach (var child in node.Children.ToList())
+            if (child is Element) NormalizeNode(child);
+
+        var kids = node.Children;
+        int i = 0;
+        while (i < kids.Count)
         {
-            if (child is TextNode tn)
+            if (kids[i] is TextNode tn)
             {
-                if (lastText != null)
+                if (string.IsNullOrEmpty(tn.Data)) { node.RemoveChild(tn); continue; }
+                int j = i + 1;
+                while (j < kids.Count && kids[j] is TextNode next)
                 {
-                    lastText.Data += tn.Data;
+                    tn.Data += next.Data;
+                    node.RemoveChild(next);
                 }
-                else
-                {
-                    lastText = tn;
-                    newChildren.Add(tn);
-                }
+                i++;
             }
-            else
-            {
-                lastText = null;
-                newChildren.Add(child);
-            }
+            else i++;
         }
-        _element.Children.Clear();
-        foreach (var child in newChildren)
-            _element.AppendChild(child);
     }
 
     public bool isDefaultNamespace(string ns) => false;
@@ -1520,6 +1687,16 @@ public class ElementHost
 
     public int formLength => formElements.Length;
 
+    /// <summary>HTMLFormElement.elements — the live list of the form's controls. It is the same
+    /// collection the form owns, spelled with its standard name ('length' and indexed reads
+    /// follow). A non-form element answers an empty list.</summary>
+    public object[] elements
+    {
+        get => string.Equals(_element.TagName, "FORM", StringComparison.OrdinalIgnoreCase)
+            ? formElements
+            : Array.Empty<object>();
+    }
+
     public string? formName
     {
         get => _element.GetAttribute("name");
@@ -1611,8 +1788,42 @@ public class ElementHost
     // ===== HTMLAnchorElement specific =====
     public string? href
     {
-        get => _element.GetAttribute("href");
+        get => HrefResolved()?.href;
         set => _element.SetAttribute("href", value);
+    }
+
+    // A hyperlink reflects its URL through the 'URL' interface (HTML): the content attribute is
+    // the (possibly relative) author value, while 'href', 'pathname', 'search' and the rest read
+    // the same value resolved to an absolute URL against the document base.
+    private URLHost? HrefResolved()
+    {
+        var raw = _element.GetAttribute("href");
+        if (string.IsNullOrEmpty(raw)) return null;
+        try
+        {
+            var baseUrl = Engine?.LocationHost?.href
+                ?? JavaScriptEngine.Current?.LocationHost?.href
+                ?? _element.OwnerDocument?.Url;
+            return string.IsNullOrEmpty(baseUrl) ? new URLHost(raw) : new URLHost(raw, baseUrl);
+        }
+        catch { return null; }
+    }
+
+    public string pathname => HrefResolved()?.pathname ?? "";
+    public string search => HrefResolved()?.search ?? "";
+    public string hash => HrefResolved()?.hash ?? "";
+    public string protocol => HrefResolved()?.protocol ?? "";
+    public string host => HrefResolved()?.host ?? "";
+    public string hostname => HrefResolved()?.hostname ?? "";
+    public string port => HrefResolved()?.port ?? "";
+    public string origin => HrefResolved()?.origin ?? "";
+
+    /// <summary>The 'name' content attribute, reflected on the elements that carry a name
+    /// (form controls, hyperlinks, frames). It is the same map the 'name' attribute uses.</summary>
+    public string? name
+    {
+        get => _element.GetAttribute("name");
+        set => _element.SetAttribute("name", value);
     }
 
     public string? rel
@@ -1698,13 +1909,113 @@ public class TextNodeWrapper
 {
     private readonly TextNode _node;
     public TextNodeWrapper(TextNode node) => _node = node;
+    internal TextNode NativeNode => _node;
     public string nodeName => "#text";
     public string? textContent { get => _node.TextContent; set => _node.Data = value ?? ""; }
     public string? data { get => _node.TextContent; set => _node.Data = value ?? ""; }
+    public string? nodeValue { get => _node.TextContent; set => _node.Data = value ?? ""; }
     public int nodeType => 3;
-    public string? wholeText => _node.TextContent;
+    public string? wholeText => _node.WholeText;
     public string? __domType => "Text";
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "Text" };
+    public ElementHost? parentElement
+    {
+        get
+        {
+            var p = _node.ParentElement;
+            if (p == null) return null;
+            var engine = JavaScriptEngine.Current;
+            return engine?.IntegrationService?.WrapDomNode(p) as ElementHost ?? new ElementHost(p);
+        }
+    }
+    public object? parentNode
+    {
+        get
+        {
+            var p = _node.Parent;
+            if (p == null) return null;
+            var engine = JavaScriptEngine.Current;
+            if (p is Element el)
+                return engine?.IntegrationService?.WrapDomNode(el) as ElementHost ?? new ElementHost(el);
+            return p;
+        }
+    }
+    public object? nextSibling
+    {
+        get { var n = _node.NextSibling; return n == null ? null : (object)(n is Element e ? new ElementHost(e) : new TextNodeWrapper((TextNode)n)); }
+    }
+    public object? previousSibling
+    {
+        get { var n = _node.PreviousSibling; return n == null ? null : (object)(n is Element e ? new ElementHost(e) : new TextNodeWrapper((TextNode)n)); }
+    }
+    public object? cloneNode(bool deep)
+    {
+        var cloned = _node.CloneNode(deep);
+        var engine = JavaScriptEngine.Current;
+        return engine?.IntegrationService != null
+            ? engine.IntegrationService.WrapDomNode((Node)cloned)
+            : new TextNodeWrapper((TextNode)cloned);
+    }
+    public void remove() => _node.Parent?.RemoveChild(_node);
+
+    // CharacterData mixin (DOM 4 §4.5): the mutating methods every text/comment node answers,
+    // forwarded to the underlying node that already implements them.
+    public int length => _node.Data?.Length ?? 0;
+    public string? substringData(int offset, int count) => _node.SubstringData(offset, count);
+    public void appendData(string data) => _node.AppendData(data);
+    public void insertData(int offset, string data) => _node.InsertData(offset, data);
+    public void deleteData(int offset, int count) => _node.DeleteData(offset, count);
+    public void replaceData(int offset, int count, string data) => _node.ReplaceData(offset, count, data);
+
+    /// <summary>DOM 4 §4.6: split this text node at an offset, returning the trailing node that
+    /// is inserted as the next sibling (the original keeps the leading characters).</summary>
+    public object? splitText(int offset)
+    {
+        var tail = _node.SplitText(offset);
+        var engine = JavaScriptEngine.Current;
+        return engine?.IntegrationService != null
+            ? engine.IntegrationService.WrapDomNode((Node)tail)
+            : new TextNodeWrapper(tail);
+    }
+}
+
+public class CommentHost
+{
+    private readonly CommentNode _node;
+    public CommentHost(CommentNode node) => _node = node;
+    internal CommentNode NativeNode => _node;
+    public string nodeName => "#comment";
+    public int nodeType => 8;
+    public string? data { get => _node.Data; set => _node.Data = value ?? ""; }
+    public string? nodeValue { get => _node.Data; set => _node.Data = value ?? ""; }
+    public string? textContent { get => _node.Data; set => _node.Data = value ?? ""; }
+    public int length => _node.Data?.Length ?? 0;
+    public string? __domType => "Comment";
+    public string[] __domTypeChain => new[] { "EventTarget", "Node", "CharacterData", "Comment" };
+    public object? parentNode
+    {
+        get
+        {
+            var p = _node.Parent;
+            if (p == null) return null;
+            if (p is Element el)
+            {
+                var engine = JavaScriptEngine.Current;
+                return engine?.IntegrationService?.WrapDomNode(el) as ElementHost ?? new ElementHost(el);
+            }
+            return p;
+        }
+    }
+    public ElementHost? parentElement
+    {
+        get
+        {
+            var p = _node.ParentElement;
+            if (p == null) return null;
+            var engine = JavaScriptEngine.Current;
+            return engine?.IntegrationService?.WrapDomNode(p) as ElementHost ?? new ElementHost(p);
+        }
+    }
 }
 
 public class DomTokenListHost
@@ -1721,6 +2032,21 @@ public class DomTokenListHost
     public bool contains(string className) => _element.classList_contains(className);
     public bool toggle(string className) => _element.classList_toggle(className);
     public string? item(int index) => _element.classList_item(index);
+    // DOMTokenList is a set of tokens that serialises as the space-separated class attribute;
+    // 'value' is that string and 'toString' is what a page gets from String(el.classList).
+    public string value
+    {
+        get => string.Join(" ", _element.NativeElement.ClassList);
+        set => _element.className = value ?? "";
+    }
+    public override string ToString() => value;
+    public bool replace(string token, string newToken)
+    {
+        if (!_element.classList_contains(token)) return false;
+        _element.classList_remove(token);
+        _element.classList_add(newToken);
+        return true;
+    }
 }
 
 public class ScriptEvent

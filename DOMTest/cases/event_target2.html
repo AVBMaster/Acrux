@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head><title>Events target 2 probe</title></head>
+<body>
+<button id="btn">Go</button>
+<script>
+(function () {
+  var d = document;
+  var btn = d.getElementById('btn');
+
+  // --- Event constructor ---
+  var e = new Event('test');
+  __T('Event default bubbles false', e.bubbles === false, 'b=' + e.bubbles);
+  __T('Event default cancelable false', e.cancelable === false, 'c=' + e.cancelable);
+  __T('Event has preventDefault fn', typeof e.preventDefault === 'function');
+  __T('Event has stopPropagation fn', typeof e.stopPropagation === 'function');
+
+  // --- EventTarget on the element: capture-phase listener also gets it at target ---
+  var got = 0;
+  btn.addEventListener('ping', function () { got++; });
+  btn.dispatchEvent(new Event('ping'));
+  __T('listener receives dispatched event', got === 1, 'got=' + got);
+
+  // --- preventDefault visible on dispatch return ---
+  var ev = new Event('cancelme', { cancelable: true });
+  btn.addEventListener('cancelme', function (evt) { evt.preventDefault(); });
+  var notCancelled = btn.dispatchEvent(ev);
+  __T('dispatchEvent returns false when cancelled', notCancelled === false, 'ret=' + notCancelled);
+
+  // --- Event on document (capture up the chain) ---
+  var docGot = 0;
+  d.addEventListener('docping', function () { docGot++; });
+  d.dispatchEvent(new Event('docping'));
+  __T('document listener fires', docGot === 1, 'doc=' + docGot);
+
+  // --- window addEventListener delegates without throwing ---
+  var winGot = 0;
+  try {
+    window.addEventListener('load', function () { winGot++; });
+    __T('window.addEventListener works', true);
+  } catch (e2) { __T('window.addEventListener works', false, e2.message); }
+
+  // --- Event.timeStamp ---
+  var ev2 = new Event('t');
+  __T('timeStamp number', typeof ev2.timeStamp === 'number', 'ts=' + ev2.timeStamp);
+})();
+</script>
+</body>
+</html>

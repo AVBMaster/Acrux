@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style id="sheet1">
+.box { color: rgb(10, 20, 30); padding: 4px; }
+.box .inner { font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="box"><span class="inner">x</span></div>
+<script>
+(function () {
+  var d = document;
+
+  // --- styleSheets collection ---
+  __T('styleSheets present', d.styleSheets && d.styleSheets.length >= 1, 'count=' + (d.styleSheets && d.styleSheets.length));
+  var sheet = d.styleSheets[0];
+  __T('sheet cssRules length', sheet && sheet.cssRules && sheet.cssRules.length === 2, 'rules=' + (sheet && sheet.cssRules && sheet.cssRules.length));
+
+  // --- CSSStyleRule fields ---
+  var rule = sheet && sheet.cssRules && sheet.cssRules[0];
+  __T('rule type STYLE(1)', rule && rule.type === 1, 'type=' + (rule && rule.type));
+  __T('rule selectorText', rule && /box/.test(rule.selectorText), 'sel=' + (rule && rule.selectorText));
+  __T('rule.style is CSSStyleDeclaration', rule && typeof rule.style.getPropertyValue === 'function');
+
+  // --- insertRule / deleteRule ---
+  try {
+    var idx = sheet.insertRule('.inserted { color: red; }', 0);
+    __T('insertRule returns index', idx === 0, 'idx=' + idx);
+    __T('insertRule grew rules', sheet.cssRules.length === 3, 'len=' + sheet.cssRules.length);
+    sheet.deleteRule(0);
+    __T('deleteRule shrank', sheet.cssRules.length === 2, 'len=' + sheet.cssRules.length);
+  } catch (e) { __T('insert/deleteRule', false, e.message); }
+
+  // --- invalid insertRule throws SyntaxError ---
+  try {
+    sheet.insertRule('this is not css', 0);
+    __T('insertRule rejects bad css', false, 'no throw');
+  } catch (e) {
+    __T('insertRule rejects bad css', /SyntaxError/.test(String(e.name || e.message)), 'name=' + e.name + ' msg=' + e.message);
+  }
+
+  // --- CSS constructor helpers ---
+  try {
+    __T('CSS.supports works', typeof CSS.supports === 'function');
+    __T('CSS escapes', typeof CSS.escape === 'function' ? CSS.escape('a b') === 'a\\ b' : false, 'esc=' + (typeof CSS.escape==='function'?CSS.escape('a b'):'none'));
+  } catch (e) { __T('CSS namespace', false, e.message); }
+})();
+</script>
+</body>
+</html>

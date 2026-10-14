@@ -72,7 +72,48 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         return expanded;
     }
 
-    public string getPropertyValue(string propertyName) => GetStyle(propertyName) ?? "";
+    public string getPropertyValue(string propertyName) => StripImportant(GetStyle(propertyName));
+
+    /// <summary>DOM/CSSOM §5.1.4: the third argument of setProperty is the priority, and
+    /// 'getPropertyPriority' answers 'important' (lower-case) for a declaration stored with the
+    /// flag, the empty string otherwise.</summary>
+    public void setProperty(string propertyName, string value, string priority)
+    {
+        // A value that already carries '!important' and a priority argument asking for it are the
+        // same write; the grammar check runs on the value alone, so the flag is split off first.
+        var (clean, inlinePrio) = SplitImportant(value ?? "");
+        bool important = inlinePrio.Length > 0
+            || (!string.IsNullOrEmpty(priority)
+                && priority.Equals("important", StringComparison.OrdinalIgnoreCase));
+        if (important) StoreDeclaration(CssPropertyIdExtensions.CanonicalName(propertyName), clean + " !important");
+        else setProperty(propertyName, value);
+    }
+
+    public string getPropertyPriority(string propertyName)
+    {
+        // The flag has to be read from the stored text itself — GetStyle strips it so the value
+        // reads clean — and through the same legacy-alias the getter resolves.
+        var name = CssPropertyIdExtensions.CanonicalName(propertyName);
+        name = LegacyBreakAlias.ModernName(name) ?? name;
+        SyncWithAttribute();
+        if (!_element.Style.TryGetValue(name, out var raw)) return "";
+        return SplitImportant(raw).prio == "important" ? "important" : "";
+    }
+
+    private static string StripImportant(string? stored) => SplitImportant(stored).value;
+
+    private static (string value, string prio) SplitImportant(string? stored)
+    {
+        if (string.IsNullOrEmpty(stored)) return ("", "");
+        int idx = stored!.LastIndexOf('!');
+        if (idx >= 0 && idx < stored.Length - 1)
+        {
+            var tail = stored.Substring(idx + 1).Trim();
+            if (tail.Equals("important", StringComparison.OrdinalIgnoreCase))
+                return (stored.Substring(0, idx).TrimEnd(), "important");
+        }
+        return (stored, "");
+    }
 
     public void setProperty(string propertyName, string value)
     {
@@ -139,6 +180,7 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         if (aliased != null) name = aliased;
         SyncWithAttribute();
         var direct = _element.Style.TryGetValue(name, out var val) ? val : null;
+        if (direct != null) direct = SplitImportant(direct).value;
         // A shorthand that has nothing to say beyond its longhands' initials reads back as the empty
         // string even though the block carries its text (measured; see SerializeForCssText).
         if (direct != null && CssValueText.ShorthandPrintsEmpty(name, direct)) return "";

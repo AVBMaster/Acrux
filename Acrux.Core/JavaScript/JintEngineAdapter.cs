@@ -100,6 +100,17 @@ public class JintEngineAdapter : IJavaScriptEngineAdapter, IDisposable
         public bool TryConvert(Engine engine, object value, out JsValue? result)
         {
             result = null;
+            // A CLR string array is a sequence the specification calls a JavaScript array
+            // ('navigator.languages', an element's 'relList' tokens). Interop would otherwise hand
+            // the page an array-like object, so 'Array.isArray' answers false on a real list.
+            if (value is string[] strings)
+            {
+                var strs = new JsValue[strings.Length];
+                for (int i = 0; i < strings.Length; i++)
+                    strs[i] = JsValue.FromObject(engine, strings[i]);
+                result = engine.Intrinsics.Array.ConstructFast(strs);
+                return true;
+            }
             if (value is not object?[] items) return false;
             foreach (var item in items)
                 if (item is not null and not CssStyleSheetHost) return false;

@@ -835,6 +835,63 @@ public class JavaScriptEngine : IDisposable
             window.requestIdleCallback = function(cb, opts) { return setTimeout(cb, 50); };
             window.cancelIdleCallback = function(id) { clearTimeout(id); };
 
+            // HTML: 'queueMicrotask' schedules on the same job queue a resolved promise runs on, so
+            // it is that promise spelled as a task — the callback lands before the next timer, after
+            // the current script, exactly as the microtask checkpoint defines it.
+            window.queueMicrotask = function(fn) {
+                if (typeof fn !== 'function') throw new TypeError('queueMicrotask requires a function argument');
+                Promise.resolve().then(function() { fn(); });
+            };
+            // A structural clone is a deep copy that keeps plain data (object/array graph) and
+            // drops what cannot cross — functions and non-serialisable values. The full set of
+            // types (Date, Map, Set, ArrayBuffer, transferables) is out of scope here, but the
+            // everyday JSON-safe graph clones the way the page expects.
+            window.structuredClone = function(value) {
+                if (value === undefined) return undefined;
+                return JSON.parse(JSON.stringify(value));
+            };
+
+            // HTML §6.1.5.2 — the 'on*' IDL event handler attributes. Assigning el.onclick = fn
+            // is one slot, not a stacking listener, and the assignment has to reach dispatch. The
+            // DOM wrappers are host objects whose prototype the engine already rewrote to a plain
+            // JS object, so the handlers are installed as accessors on those prototypes: the setter
+            // registers the function through addEventListener (the path dispatch actually walks)
+            // and remembers it, the getter reads it back, and re-assignment releases the old one.
+            (function () {
+                if (typeof WeakMap !== 'function' || typeof Object.defineProperty !== 'function') return;
+                var store = new WeakMap();
+                var evs = ['click','dblclick','mousedown','mouseup','mousemove','mouseover',
+                    'mouseout','mouseenter','mouseleave','keydown','keyup','keypress','input',
+                    'change','submit','focus','blur','load','error','scroll','wheel',
+                    'touchstart','touchend','touchmove','contextmenu'];
+                function defOn(proto) {
+                    if (!proto) return;
+                    evs.forEach(function (ev) {
+                        var prop = 'on' + ev;
+                        if (Object.prototype.hasOwnProperty.call(proto, prop)) return;
+                        try {
+                            Object.defineProperty(proto, prop, {
+                                configurable: true, enumerable: true,
+                                get: function () { var m = store.get(this); return (m && m[prop]) || null; },
+                                set: function (fn) {
+                                    var m = store.get(this);
+                                    if (!m) { m = {}; store.set(this, m); }
+                                    var old = m[prop];
+                                    if (typeof old === 'function') { try { this.removeEventListener(ev, old); } catch (e) {} }
+                                    var next = (typeof fn === 'function') ? fn : null;
+                                    m[prop] = next;
+                                    if (next) { try { this.addEventListener(ev, next); } catch (e) {} }
+                                }
+                            });
+                        } catch (e) {}
+                    });
+                }
+                var P = window.__domProto;
+                if (P) { for (var k in P) defOn(P[k]); }
+                defOn(window.HTMLElement && window.HTMLElement.prototype);
+                defOn(window.Element && window.Element.prototype);
+            })();
+
             // Descriptor factory for the handful of window attributes that are plain
             // writable strings (HTML: name, status, defaultStatus). The setter has to
             // keep the value: 'var name' at global scope does not create a variable,
@@ -863,14 +920,28 @@ public class JavaScriptEngine : IDisposable
             Object.defineProperty(window, 'screenX', { configurable: true, get: function() { return 0; } });
             Object.defineProperty(window, 'screenY', { configurable: true, get: function() { return 0; } });
 
+            // DOM 4 §5.1.1 — 'new Event(type, init)'. The host keeps the event object
+            // (its type/bubbles/cancelable/composed and the preventDefault/stopPropagation
+            // behaviour dispatch reads), so the constructor builds through createEvent and then
+            // writes the init dictionary over the defaults. A dispatched event reports the same
+            // fields a page switched on, and the flags default to false exactly as the interface
+            // defines them (the older createEvent path left 'bubbles'/'cancelable' true).
+            function Event(type, init) {
+                var evt = document.createEvent('Event');
+                evt.type = String(type === undefined ? '' : type);
+                evt.bubbles = !!(init && init.bubbles);
+                evt.cancelable = !!(init && init.cancelable);
+                evt.composed = !!(init && init.composed);
+                return evt;
+            }
+
             function CustomEvent(type, init) {
                 var evt = document.createEvent('customevent');
-                evt.type = type;
-                if (init) {
-                    if (init.detail !== undefined) evt.detail = init.detail;
-                    if (init.bubbles !== undefined) evt.bubbles = init.bubbles;
-                    if (init.cancelable !== undefined) evt.cancelable = init.cancelable;
-                }
+                evt.type = String(type === undefined ? '' : type);
+                evt.bubbles = !!(init && init.bubbles);
+                evt.cancelable = !!(init && init.cancelable);
+                evt.composed = !!(init && init.composed);
+                evt.detail = (init && init.detail !== undefined) ? init.detail : null;
                 return evt;
             }
 
@@ -1457,6 +1528,43 @@ public class CssObjectHost
         && ((property ?? "").StartsWith("--", StringComparison.Ordinal)
             || Acrux.Core.Css.Tokenizer.CssParserImpl.SupportsConditionIsWellFormed(
                 $"{property}: {value}"));
+
+    /// <summary>CSSOM §4.2 — escape a string so it is safe to use as a CSS identifier. Control
+    /// codes and a leading digit become hex escapes; every other character that is not an
+    /// identifier code point (space, punctuation) is escaped with a single backslash; a bare
+    /// NULL becomes the replacement character. This is what 'CSS.escape('foo[bar]')' answers.</summary>
+    public string escape(string? input)
+    {
+        var value = input ?? "";
+        if (value.Length == 0) return "￼";
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < value.Length; i++)
+        {
+            int cp = value[i];
+            if (cp == 0x0000) { sb.Append('￼'); continue; }
+            if ((cp >= 0x0001 && cp <= 0x001F) || cp == 0x007F) { sb.Append(HexEscape(cp)); continue; }
+            if (i == 0 && cp >= 0x0030 && cp <= 0x0039) { sb.Append(HexEscape(cp)); continue; }
+            // '-digit' as the first two code points, or a lone '-', must not read as a number, so
+            // the leading dash of those forms is escaped while a dash anywhere else is kept.
+            if (cp == 0x002D && i == 0 && value.Length >= 2 && value[1] >= '0' && value[1] <= '9')
+            { sb.Append(HexEscape(cp)); continue; }
+            if (cp >= 0x0080
+                || (cp >= 0x0030 && cp <= 0x0039)
+                || (cp >= 0x0041 && cp <= 0x005A)
+                || (cp >= 0x0061 && cp <= 0x007A)
+                || cp == 0x002D || cp == 0x005F)
+            { sb.Append(value[i]); continue; }
+            sb.Append('\\').Append(value[i]);
+        }
+        return sb.ToString();
+    }
+
+    private static string HexEscape(int codePoint)
+    {
+        var hex = codePoint.ToString("X");
+        var space = hex.Length < 6 ? " " : "";
+        return "\\" + hex + space;
+    }
 }
 
 public class NavigatorHost

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head><title>URL / URLSearchParams probe</title></head>
+<body>
+<script>
+(function () {
+  // --- URL parsing ---
+  try {
+    var u = new URL('https://example.com:8443/a/b?x=1&y=2#frag');
+    __T('URL.protocol', u.protocol === 'https:', 'p=' + u.protocol);
+    __T('URL.host', u.host === 'example.com:8443', 'h=' + u.host);
+    __T('URL.hostname', u.hostname === 'example.com', 'hn=' + u.hostname);
+    __T('URL.pathname', u.pathname === '/a/b', 'pn=' + u.pathname);
+    __T('URL.search', u.search === '?x=1&y=2', 's=' + u.search);
+    __T('URL.hash', u.hash === '#frag', 'hash=' + u.hash);
+    __T('URL.href round-trip', /example\.com/.test(u.href));
+  } catch (e) { __T('URL constructs', false, e.message); }
+
+  // --- URL base resolution ---
+  try {
+    var rel = new URL('/path', 'https://base.example');
+    __T('URL base resolution', rel.href === 'https://base.example/path', 'href=' + rel.href);
+  } catch (e) { __T('URL base', false, e.message); }
+
+  // --- URLSearchParams ---
+  try {
+    var qs = new URLSearchParams('a=1&b=2&a=3');
+    __T('usp.get first', qs.get('a') === '1', 'a=' + qs.get('a'));
+    __T('usp.getAll', qs.getAll('a').length === 2, 'all=' + (qs.getAll && qs.getAll('a').length));
+    __T('usp.has', qs.has('b') === true && qs.has('z') === false);
+    __T('usp.append', (function(){ qs.append('c','9'); return qs.get('c')==='1'||qs.get('c')==='9'; })());
+    qs.set('b', '20');
+    __T('usp.set', qs.get('b') === '20', 'b=' + qs.get('b'));
+    qs.delete('a');
+    __T('usp.delete', qs.has('a') === false);
+    __T('usp.toString', typeof qs.toString() === 'string');
+  } catch (e) { __T('URLSearchParams', false, e.message); }
+})();
+</script>
+</body>
+</html>

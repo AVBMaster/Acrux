@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head><title>DOM misc probe 2</title></head>
+<body>
+<div id="el" class="aa bb" data-one-two="1" data-x="2">A<span>B</span>C</div>
+<script>
+(function () {
+  var d = document;
+  var el = d.getElementById('el');
+
+  // --- getAttributeNames ---
+  try {
+    var names = el.getAttributeNames();
+    var arr = Array.prototype.slice.call(names);
+    __T('getAttributeNames includes class+id', arr.indexOf('class') >= 0 && arr.indexOf('id') >= 0, 'names=' + arr.join(','));
+  } catch (e) { __T('getAttributeNames', false, e.message); }
+
+  // --- dataset camel <-> kebab ---
+  __T('dataset camelCase read', el.dataset.oneTwo === '1', 'v=' + el.dataset.oneTwo);
+  el.dataset.threeFour = '9';
+  __T('dataset camelCase write -> data-three-four', el.getAttribute('data-three-four') === '9', 'attr=' + el.getAttribute('data-three-four'));
+
+  // --- insertAdjacentText ---
+  try {
+    el.insertAdjacentText('beforeend', 'ZZ');
+    __T('insertAdjacentText beforeend', /ZZ$/.test(el.textContent), 'tc=' + el.textContent);
+  } catch (e) { __T('insertAdjacentText', false, e.message); }
+
+  // --- classList value setter ---
+  el.classList.value = 'p q r';
+  __T('classList value setter', el.className === 'p q r', 'cn=' + el.className);
+
+  // --- isEqualNode / isSameNode ---
+  var c = el.cloneNode(true);
+  __T('clone isEqualNode', typeof el.isEqualNode === 'function' ? el.isEqualNode(c) : false);
+  __T('isSameNode self', el.isSameNode(el));
+
+  // --- contains across tree ---
+  __T('contains nested span', el.contains(el.querySelector('span')));
+
+  // --- hasAttributes ---
+  __T('hasAttributes true', el.hasAttributes());
+  var fresh = d.createElement('div');
+  __T('hasAttributes false', fresh.hasAttributes() === false);
+
+  // --- appendChild text node then childNodes reflects it ---
+  var box = d.createElement('div'); d.body.appendChild(box);
+  box.appendChild(d.createTextNode('hi'));
+  __T('append text then childNodes', box.childNodes.length === 1 && box.textContent === 'hi');
+
+  // --- remove on child detaches from parent ---
+  box.remove();
+  __T('remove detaches box', box.parentNode === null || box.parentElement === null);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head><title>ECMAScript / builtins probe</title></head>
+<body>
+<script>
+(function () {
+  // --- ES2020+ syntax support in the interpreter ---
+  try { var o = {}; o?.a?.b; __T('optional chaining', true); } catch (e) { __T('optional chaining', false, e.message); }
+  try { var v = null ?? 'dflt'; __T('nullish coalescing', v === 'dflt', 'v=' + v); } catch (e) { __T('nullish', false, e.message); }
+  __T('globalThis defined', typeof globalThis === 'object');
+
+  // --- Map / Set ---
+  var m = new Map(); m.set('k', 1); m.set('k', 2);
+  __T('Map get/set/size', m.get('k') === 2 && m.size === 1, 'size=' + m.size);
+  __T('Map has/delete', m.has('k') && (m.delete('k') && !m.has('k')));
+  var s = new Set([1, 2, 2, 3]);
+  __T('Set dedup', s.size === 3, 'size=' + s.size);
+  __T('Set has', s.has(2) && !s.has(9));
+
+  // --- WeakMap / WeakSet ---
+  var wm = new WeakMap(); var key = {};
+  wm.set(key, 'v');
+  __T('WeakMap', wm.get(key) === 'v');
+
+  // --- Symbol ---
+  var sym = Symbol('tag');
+  var so = {}; so[sym] = 42;
+  __T('Symbol as key', so[sym] === 42);
+
+  // --- Proxy ---
+  try {
+    var p = new Proxy({}, { get: function (t, k) { return k === 'missing' ? 'intercepted' : t[k]; } });
+    __T('Proxy get trap', p.missing === 'intercepted', 'got=' + p.missing);
+  } catch (e) { __T('Proxy', false, e.message); }
+
+  // --- Reflect ---
+  try {
+    var tgt = { x: 1 };
+    __T('Reflect.get', Reflect.get(tgt, 'x') === 1);
+    __T('Reflect.has', Reflect.has(tgt, 'x'));
+  } catch (e) { __T('Reflect', false, e.message); }
+
+  // --- JSON ---
+  __T('JSON round-trip', JSON.parse(JSON.stringify({ a: [1, 2] })).a[1] === 2);
+
+  // --- Promise microtask ordering ---
+  var seq = [];
+  Promise.resolve().then(function () { seq.push('micro'); });
+  setTimeout(function () { seq.push('timer'); }, 0);
+  __T('promise immediate order pending', true);
+  window.__seqProbe = function () { return seq.join(','); };
+
+  // --- Array extras ---
+  __T('Array.at', [1, 2, 3].at(-1) === 3, 'at=' + [1,2,3].at(-1));
+  __T('Array.flat', [1, [2, [3]]].flat(2).join(',') === '1,2,3');
+  __T('Array.includes', [1, 2, 3].includes(2));
+  __T('Array.find', [1, 2, 3].find(function (x) { return x === 2; }) === 2);
+  __T('Object.entries', Object.entries({ a: 1 }).length === 1);
+  __T('Object.fromEntries', Object.fromEntries([['a', 1]]).a === 1);
+
+  // --- String extras ---
+  __T('String padStart', '5'.padStart(3, '0') === '005');
+  __T('String matchAll', typeof 'a1b2'.matchAll === 'function');
+  __T('String replaceAll', 'a.a'.replaceAll('.', '-') === 'a-a');
+
+  // --- Number / BigInt ---
+  __T('Number.isInteger', Number.isInteger(3) && !Number.isInteger(3.5));
+  __T('Number.isFinite', Number.isFinite(1) && !Number.isFinite(Infinity));
+  try { var big = 10n ** 20n; __T('BigInt pow', typeof big === 'bigint'); } catch (e) { __T('BigInt', false, e.message); }
+})();
+</script>
+</body>
+</html>

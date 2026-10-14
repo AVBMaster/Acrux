@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head><title>CSSStyleDeclaration probe</title></head>
+<body>
+<div id="box" style="color: red; margin-top: 8px; background-color: rgb(0, 128, 0)">x</div>
+<script>
+(function () {
+  var box = document.getElementById('box');
+  var s = box.style;
+
+  // --- inline style reads ---
+  __T('style.color', /red|rgb\(255, ?0, ?0\)/.test(s.color), 'c=' + s.color);
+  __T('style.marginTop camel', s.marginTop === '8px', 'mt=' + s.marginTop);
+  __T('style.backgroundColor', /green|rgb\(0, ?128, ?0\)/.test(s.backgroundColor), 'bg=' + s.backgroundColor);
+
+  // --- getPropertyValue / setProperty / removeProperty ---
+  __T('getPropertyValue dashed', s.getPropertyValue('margin-top') === '8px', 'gm=' + s.getPropertyValue('margin-top'));
+  s.setProperty('border-width', '3px', '');
+  __T('setProperty then read', s.getPropertyValue('border-width') === '3px', 'bw=' + s.getPropertyValue('border-width'));
+  s.removeProperty('border-width');
+  __T('removeProperty', s.getPropertyValue('border-width') === '', 'bw2=' + s.getPropertyValue('border-width'));
+
+  // --- set via camelCase property ---
+  s.paddingLeft = '12px';
+  __T('set paddingLeft', s.paddingLeft === '12px', 'pl=' + s.paddingLeft);
+
+  // --- cssText / length / item ---
+  __T('style.length number', typeof s.length === 'number', 'len=' + s.length);
+  __T('style.item(0)', typeof s.item === 'function' ? true : false, 'hasItem=' + (typeof s.item));
+  __T('cssText present', typeof s.cssText === 'string' && /color/.test(s.cssText), 'cssText=' + s.cssText);
+
+  // --- important priority ---
+  s.setProperty('font-size', '20px', 'important');
+  __T('setProperty important', s.getPropertyValue('font-size') === '20px' && s.getPropertyPriority('font-size') === 'important',
+      'prio=' + (s.getPropertyPriority ? s.getPropertyPriority('font-size') : 'n/a'));
+})();
+</script>
+</body>
+</html>

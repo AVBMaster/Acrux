@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head><title>Form / Anchor reflection probe</title></head>
+<body>
+<a id="link" href="/docs/file.html?x=1#y">link</a>
+<form id="form" action="/submit" method="post">
+  <input id="txt" name="user" type="text" value="abc" maxlength="10">
+  <input id="chk" name="agree" type="checkbox" checked>
+  <select id="sel" name="pick"><option value="1">One</option><option value="2" selected>Two</option></select>
+</form>
+<script>
+(function () {
+  var d = document;
+  var link = d.getElementById('link');
+
+  // --- anchor IDL reflection ---
+  __T('a.href present', typeof link.href === 'string' && link.href.length > 0, 'href=' + link.href);
+  __T('a.pathname', typeof link.pathname === 'string', 'pn=' + link.pathname);
+  __T('a.search', typeof link.search === 'string' && /x=1/.test(link.search), 's=' + link.search);
+  __T('a.hash', link.hash === '#y', 'h=' + link.hash);
+
+  // --- form ---
+  var form = d.getElementById('form');
+  __T('form.elements', form.elements && form.elements.length >= 1, 'el=' + (form.elements && form.elements.length));
+  __T('form.method', /post/i.test(form.method), 'm=' + form.method);
+  __T('form.action present', typeof form.action === 'string' && form.action.length > 0, 'a=' + form.action);
+
+  // --- input reflection ---
+  var txt = d.getElementById('txt');
+  __T('input.value', txt.value === 'abc', 'v=' + txt.value);
+  __T('input.type', txt.type === 'text', 't=' + txt.type);
+  __T('input.name', txt.name === 'user', 'n=' + txt.name);
+  txt.value = 'changed';
+  __T('input.value set', txt.value === 'changed');
+  var chk = d.getElementById('chk');
+  __T('checkbox checked', chk.checked === true);
+
+  // --- select ---
+  var sel = d.getElementById('sel');
+  __T('select.selectedIndex', sel.selectedIndex === 1, 'si=' + sel.selectedIndex);
+  __T('select.options length', sel.options && sel.options.length === 2, 'op=' + (sel.options && sel.options.length));
+  __T('select.value reflects selected option', sel.value === '2', 'sv=' + sel.value);
+})();
+</script>
+</body>
+</html>

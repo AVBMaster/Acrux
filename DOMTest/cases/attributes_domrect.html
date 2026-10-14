@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head><title>Attributes / dataset / DOMRect probe</title></head>
+<body>
+<input id="inp" type="text" value="hello" checked disabled>
+<div id="box" style="width:120px;height:80px;margin:10px;padding:5px;border:2px solid black"></div>
+<script>
+(function () {
+  var d = document;
+  var inp = d.getElementById('inp');
+  var box = d.getElementById('box');
+
+  // --- attributes NamedNodeMap ---
+  var attrs = inp.attributes;
+  __T('attributes.length', attrs.length >= 3, 'len=' + (attrs && attrs.length));
+  __T('attributes.item(0)', typeof attrs.item === 'function' && attrs.item(0) && attrs.item(0).name);
+  var idAttr = attrs.getNamedItem ? attrs.getNamedItem('id') : null;
+  __T('getNamedItem value', idAttr && (idAttr.value === 'inp'), 'v=' + (idAttr && idAttr.value));
+
+  // --- boolean/idl attributes on input ---
+  __T('input.type', inp.type === 'text', 'type=' + inp.type);
+  __T('input.value', inp.value === 'hello', 'val=' + inp.value);
+  __T('input.checked reflects attr', inp.checked === true, 'checked=' + inp.checked);
+  __T('input.disabled', inp.disabled === true);
+  inp.value = 'world';
+  __T('input.value set', inp.value === 'world');
+
+  // --- dataset ---
+  inp.dataset.userId = '7';
+  __T('dataset write maps to attr', inp.getAttribute('data-user-id') === '7', 'attr=' + inp.getAttribute('data-user-id'));
+  inp.setAttribute('data-role', 'admin');
+  __T('dataset reads data-role', inp.dataset.role === 'admin', 'role=' + inp.dataset.role);
+
+  // --- DOMRect / getBoundingClientRect ---
+  try {
+    var r = box.getBoundingClientRect();
+    __T('getBoundingClientRect has width', typeof r.width === 'number', 'w=' + r.width);
+    __T('getBoundingClientRect has top', typeof r.top === 'number');
+  } catch (e) { __T('getBoundingClientRect', false, e.message); }
+
+  // --- style object ---
+  __T('style.width', box.style.width === '120px' || /120px/.test(box.style.width), 'sw=' + box.style.width);
+  box.style.color = 'rgb(1,2,3)';
+  __T('style set color', /rgb\(1, ?2, ?3\)/.test(box.style.color), 'sc=' + box.style.color);
+  __T('style setProperty/getPropertyValue', (function(){
+      box.style.setProperty('background-color','red');
+      return box.style.getPropertyValue('background-color') === 'red';
+  })());
+
+  // --- classList via DOMTokenList ---
+  box.classList.add('one'); box.classList.add('two');
+  __T('classList add two', box.classList.contains('one') && box.classList.contains('two'));
+  __T('classList value/toString', /one/.test(String(box.classList.value)), 'value=' + box.classList.value);
+})();
+</script>
+</body>
+</html>

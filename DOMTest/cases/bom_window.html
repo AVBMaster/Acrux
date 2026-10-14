@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head><title>BOM/window probe</title></head>
+<body>
+<script>
+(function () {
+  // --- window identity ---
+  __T('window===self', window === self);
+  __T('globalThis set', typeof globalThis === 'object');
+  __T('window===top', window === top);
+  __T('window===parent', window === parent);
+
+  // --- document wiring ---
+  __T('window.document', window.document === document);
+  __T('document.documentElement', !!document.documentElement);
+
+  // --- timers ---
+  __T('setTimeout exists', typeof setTimeout === 'function');
+  __T('clearTimeout exists', typeof clearTimeout === 'function');
+  var fired = false;
+  var id = setTimeout(function () { fired = true; }, 0);
+  __T('setTimeout returns id', typeof id === 'number' && id > 0, 'id=' + id);
+  window.__timerFired = function () { return fired; };
+
+  // --- location ---
+  __T('location.href string', typeof location.href === 'string', 'href=' + location.href);
+  __T('location has pathname', typeof location.pathname === 'string');
+
+  // --- navigator ---
+  __T('navigator.userAgent', typeof navigator.userAgent === 'string', 'ua=' + navigator.userAgent);
+
+  // --- history ---
+  __T('history.length number', typeof history.length === 'number', 'len=' + history.length);
+
+  // --- screen ---
+  __T('screen.width', typeof screen.width === 'number' && screen.width > 0, 'w=' + screen.width);
+
+  // --- innerWidth/Height getters ---
+  __T('innerWidth number', typeof window.innerWidth === 'number' && window.innerWidth > 0, 'iw=' + window.innerWidth);
+  __T('innerHeight number', typeof window.innerHeight === 'number' && window.innerHeight > 0);
+
+  // --- storage ---
+  try {
+    localStorage.setItem('k', 'v');
+    __T('localStorage round-trip', localStorage.getItem('k') === 'v');
+    localStorage.removeItem('k');
+    __T('localStorage remove', localStorage.getItem('k') === null);
+  } catch (e) {
+    __T('localStorage works', false, e.message);
+  }
+
+  // --- matchMedia ---
+  try {
+    var mql = window.matchMedia('(min-width: 1px)');
+    __T('matchMedia matches bool', typeof mql.matches === 'boolean');
+  } catch (e) { __T('matchMedia', false, e.message); }
+
+  // --- getComputedStyle ---
+  try {
+    var cs = getComputedStyle(document.body);
+    __T('getComputedStyle returns obj', cs && typeof cs.getPropertyValue === 'function');
+    var disp = cs.getPropertyValue('display');
+    __T('getComputedStyle display', typeof disp === 'string' && disp.length > 0, 'display=' + disp);
+  } catch (e) { __T('getComputedStyle', false, e.message); }
+
+  // --- queueMicrotask ---
+  __T('queueMicrotask is function', typeof queueMicrotask === 'function', 'typeof=' + typeof queueMicrotask);
+  __T('structuredClone is function', typeof structuredClone === 'function', 'typeof=' + typeof structuredClone);
+  try {
+    var src = { a: 1, nested: { b: [1, 2, 3] } };
+    var cl = structuredClone(src);
+    __T('structuredClone deep', cl.nested.b[2] === 3 && cl !== src);
+  } catch (e) { __T('structuredClone works', false, e.message); }
+})();
+</script>
+</body>
+</html>

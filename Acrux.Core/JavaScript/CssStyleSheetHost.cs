@@ -314,6 +314,15 @@ public class CssStyleSheetHost
     private static List<StyleRuleBase> ParseRules(string text, StyleSheetContents into)
     {
         if (string.IsNullOrEmpty(text)) throw RuleParseFailure(text);
+        // A rule the grammar cannot even read must refuse before the parser is asked (CSSOM §5.2.3).
+        // A style rule is a selector plus a '{ block }'; an at-rule opens with '@'. Text that is
+        // neither — 'this is not css' — has already failed to be a rule, and the reference engine
+        // answers SyntaxError rather than inserting an empty declaration block.
+        {
+            var probe = text.TrimStart();
+            if (!probe.StartsWith("@") && text.IndexOf('{') < 0)
+                throw RuleParseFailure(text);
+        }
         StyleRuleBase? rule = null;
         try
         {

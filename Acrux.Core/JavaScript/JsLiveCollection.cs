@@ -1,5 +1,6 @@
 using System.Collections;
 using DomElement = Acrux.Core.Dom.Element;
+using Node = Acrux.Core.Dom.Node;
 
 namespace Acrux.Core.JavaScript;
 
@@ -39,6 +40,8 @@ public class JsHtmlCollection : IList
         var elements = GetFilteredElements();
         return index >= 0 && index < elements.Count ? elements[index] : null;
     }
+
+    public object? item(int index) => GetItem(index);
 
     public object? NamedItem(string name)
     {
@@ -141,7 +144,7 @@ public class JsNodeList : IList
 {
     private readonly DomElement _root;
     private readonly Func<DomElement, List<DomElement>>? _filter;
-    private List<DomElement>? _cached;
+    private readonly bool _childNodes;
     private readonly JavaScriptEngine? _engine;
 
     public JsNodeList(DomElement root, Func<DomElement, List<DomElement>>? filter = null)
@@ -158,6 +161,16 @@ public class JsNodeList : IList
         _filter = filter;
     }
 
+    /// <summary>A childNodes list carries every kind of node child (text and comment included),
+    /// while the default and a selector query stay element-only — the two faces of the same
+    /// array-like differ only by which children they collect (DOM 4 §4.3 vs §5).</summary>
+    internal JsNodeList(DomElement root, JavaScriptEngine? engine, bool childNodes)
+    {
+        _root = root;
+        _engine = engine;
+        _childNodes = childNodes;
+    }
+
     public int length => GetNodes().Count;
     public int Length => GetNodes().Count;
 
@@ -169,7 +182,17 @@ public class JsNodeList : IList
         return index >= 0 && index < nodes.Count ? WrapNode(nodes[index]) : null;
     }
 
-    public IEnumerator<object> GetEnumerator() => GetNodes().Select(WrapNode).GetEnumerator();
+    /// <summary>The indexed read spelled as a method: a NodeList is an indexed collection, and
+    /// DOM 4 gives it <c>item()</c> as well (a live HTMLCollection keeps only the indexed read).</summary>
+    public object? item(int index) => GetItem(index);
+
+    /// <summary>A NodeList is iterable, so <c>[...nodeList]</c> and <c>for (const n of list)</c>
+    /// walk the same nodes the indexed read gives.</summary>
+    public IEnumerator<object> GetEnumerator()
+    {
+        foreach (var n in GetNodes())
+            yield return WrapNode(n)!;
+    }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
@@ -190,18 +213,29 @@ public class JsNodeList : IList
 
     public object?[] ToArray() => GetNodes().Select(WrapNode).ToArray();
 
-    private List<DomElement> GetNodes()
+    private List<Node> GetNodes()
     {
+        if (_childNodes)
+            return _root.Children.ToList();
         if (_filter != null)
-            return _filter(_root);
-        return _root.Children.OfType<DomElement>().ToList();
+            return _filter(_root).Cast<Node>().ToList();
+        return _root.Children.OfType<DomElement>().Cast<Node>().ToList();
     }
 
-    private object WrapNode(DomElement el)
+    private object? WrapNode(Node node)
     {
-        var host = new ElementHost(el);
-        if (host.Engine == null && _engine != null)
-            host.Engine = _engine;
-        return host;
+        if (node is DomElement el)
+        {
+            var engine = JavaScriptEngine.Current ?? _engine;
+            if (engine?.IntegrationService != null)
+                return engine.IntegrationService.WrapDomNode(el);
+            var host = new ElementHost(el);
+            if (host.Engine == null && engine != null)
+                host.Engine = engine;
+            return host;
+        }
+        if (node is Acrux.Core.Dom.CommentNode c)
+            return new CommentHost(c);
+        return new TextNodeWrapper((Acrux.Core.Dom.TextNode)node);
     }
 }
