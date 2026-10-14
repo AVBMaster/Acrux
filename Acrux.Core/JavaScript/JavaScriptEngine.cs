@@ -599,6 +599,21 @@ public class JavaScriptEngine : IDisposable
         return id;
     }
 
+    /// <summary>Beacon (Beacon §2): a POST the page never waits on. The body is queued on the
+    /// shared HTTP client as a fire-and-forget task — a send that fails or outlives the document is
+    /// dropped silently, exactly as the specification permits, because the caller has no way to see
+    /// the outcome.</summary>
+    internal void QueueBeacon(string url, string body)
+    {
+        try
+        {
+            var client = new System.Net.Http.HttpClient();
+            var content = new System.Net.Http.StringContent(body, System.Text.Encoding.UTF8, "text/plain");
+            _ = client.PostAsync(url, content).ContinueWith(_ => { }, TaskScheduler.Default);
+        }
+        catch { }
+    }
+
     internal void CompleteFetch(int id, FetchResult result)
     {
         lock (_fetchLock)
@@ -1423,6 +1438,25 @@ public class JavaScriptEngine : IDisposable
                     };
                 }
             }
+
+            // Array.groupBy (ES2024 §23.1.10): sort an iterable into a null-prototype object keyed
+            // by the string form of the grouper's result. Object.groupBy is the engine's own; the
+            // static on Array is the same operation reached from the iterable side, and the
+            // interpreter does not ship it, so it is filled in here over the iterator protocol.
+            if (typeof Array.groupBy !== 'function') {
+                Array.groupBy = function (iterable, grouper) {
+                    var out = Object.create(null);
+                    var it = iterable && (typeof iterable[Symbol.iterator] === 'function')
+                        ? iterable[Symbol.iterator]()
+                        : (function (arr) { var i = 0; return { next: function () { return i < arr.length ? { value: arr[i++], done: false } : { done: true }; } }; })(iterable || []);
+                    for (var step = it.next(); !step.done; step = it.next()) {
+                        var key = String(grouper(step.value));
+                        if (out[key] === undefined) out[key] = [];
+                        out[key].push(step.value);
+                    }
+                    return out;
+                };
+            }
         ";
     }
 
@@ -2029,6 +2063,28 @@ public class NavigatorHost
     public bool cookieEnabled => true;
     public bool onLine => true;
     public bool javaEnabled() => false;
+
+    /// <summary>Beacon (Beacon §2): a fire-and-forget POST the page never waits on. The body — a
+    /// string, or the text of a Blob/File — is queued as an async request and the call answers
+    /// whether the queue took it, which is all the interface lets a page observe.</summary>
+    public bool sendBeacon(string url, object? data = null)
+    {
+        if (string.IsNullOrEmpty(url)) return false;
+        try
+        {
+            string body;
+            if (data == null) body = "";
+            else
+            {
+                var t = data.GetType();
+                var textGetter = t.GetProperty("__text");
+                body = textGetter != null ? Convert.ToString(textGetter.GetValue(data)) ?? "" : data.ToString() ?? "";
+            }
+            JavaScriptEngine.Current?.QueueBeacon(url, body);
+            return true;
+        }
+        catch { return false; }
+    }
 }
 
 public class LocationHost
@@ -2165,7 +2221,7 @@ public class ScreenOrientationHost
     public void unlock() { }
 }
 
-public class StorageHost
+public class StorageHost : System.Dynamic.DynamicObject
 {
     private readonly Dictionary<string, string> _data = new();
     private readonly string _name;
@@ -2181,4 +2237,32 @@ public class StorageHost
     public void clear() => _data.Clear();
     public string? key(int index) => index >= 0 && index < _data.Count ? _data.ElementAt(index).Key : null;
     public int length => _data.Count;
+
+    // Web Storage is defined with a named getter/setter, so 'localStorage.foo' reads and writes the
+    // item called 'foo' (Web Storage §5). The named methods always answer first; anything else is an
+    // item name. Setting a key that collides with a method name stores nothing, matching a browser.
+    public override bool TryGetMember(System.Dynamic.GetMemberBinder binder, out object? result)
+    {
+        result = _data.TryGetValue(binder.Name, out var v) ? v : null;
+        return true;
+    }
+
+    public override bool TrySetMember(System.Dynamic.SetMemberBinder binder, object? value)
+    {
+        if (IsMethodName(binder.Name)) return false;
+        _data[binder.Name] = value?.ToString() ?? "undefined";
+        return true;
+    }
+
+    public override bool TryDeleteMember(System.Dynamic.DeleteMemberBinder binder)
+    {
+        _data.Remove(binder.Name);
+        return true;
+    }
+
+    private static bool IsMethodName(string name) => name switch
+    {
+        "getItem" or "setItem" or "removeItem" or "clear" or "key" or "length" => true,
+        _ => false,
+    };
 }

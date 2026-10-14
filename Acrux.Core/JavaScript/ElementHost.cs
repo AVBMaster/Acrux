@@ -1771,6 +1771,54 @@ public class ElementHost
         DispatchEvent(evt);
     }
 
+    /// <summary>HTMLFormElement.reset (HTML §4.10.22.5): restore every contained control to the value
+    /// its content attributes declare — a text input to its 'value', a checkbox/radio to 'checked', a
+    /// select to its 'selected' option, a textarea to its text — then fire 'reset'. 'formReset' is the
+    /// host's older spelling of the same reset; this is the name the interface carries.</summary>
+    public void reset()
+    {
+        foreach (var el in DescendantsFormControls(_element))
+            RestoreFormControl(el);
+        var evt = new ScriptEvent("reset", this);
+        DispatchEvent(evt);
+    }
+
+    private static IEnumerable<Element> DescendantsFormControls(Element root)
+    {
+        foreach (var child in root.Children.OfType<Element>())
+        {
+            var tag = child.TagName.ToLowerInvariant();
+            if (tag is "input" or "select" or "textarea" or "button") yield return child;
+            foreach (var d in DescendantsFormControls(child)) yield return d;
+        }
+    }
+
+    private static void RestoreFormControl(Element el)
+    {
+        switch (el.TagName.ToLowerInvariant())
+        {
+            case "input":
+                var type = (el.GetAttribute("type") ?? "text").ToLowerInvariant();
+                if (type is "checkbox" or "radio")
+                {
+                    if (el.HasAttribute("checked")) el.SetAttribute("checked", "");
+                    else el.RemoveAttribute("checked");
+                }
+                else el.Value = el.GetAttribute("value") ?? "";
+                break;
+            case "textarea":
+                el.TextContent = el.GetAttribute("value") ?? el.TextContent ?? "";
+                break;
+            case "select":
+                foreach (var opt in el.Children.OfType<Element>())
+                {
+                    if (opt.HasAttribute("selected")) opt.SetAttribute("selected", "");
+                    else opt.RemoveAttribute("selected");
+                }
+                break;
+        }
+    }
+
     public bool checkValidity() => true;
 
     // ===== HTMLCanvasElement specific =====

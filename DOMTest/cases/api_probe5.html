@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head><title>API probe 5 (ES2019-2023 + browser bits)</title></head>
+<body>
+<form id="f"><input name="q" value="1"></form>
+<script>
+(function () {
+  var d = document;
+  function has(name){ try { return (0, eval)('typeof ' + name); } catch(e){ return 'err'; } }
+
+  // --- array / string methods (ES2019-2023) ---
+  __T('Array.flat exists', [1,[2]].flat.length >= 0 && typeof [].flat === 'function');
+  __T('Array.at', typeof [].at === 'function' ? [7,8,9].at(-1) === 9 : false);
+  __T('Array.findLast', typeof [].findLast === 'function' ? [1,2,3].findLast(function(x){return x<3;}) === 2 : false);
+  __T('Array.toReversed', typeof [].toReversed === 'function' ? [1,2].toReversed()[0] === 2 : false, 'has=' + typeof [].toReversed);
+  __T('Array.toSorted', typeof [].toSorted === 'function' ? [3,1].toSorted()[0] === 1 : false, 'has=' + typeof [].toSorted);
+  __T('Array.toSpliced', typeof [].toSpliced === 'function' ? [1,2].toSpliced(0,1).length === 1 : false, 'has=' + typeof [].toSpliced);
+  __T('Array.with', typeof [].with === 'function' ? [1,2].with(0,9)[0] === 9 : false, 'has=' + typeof [].with);
+  __T('String.replaceAll', typeof ''.replaceAll === 'function' ? 'aa'.replaceAll('a','b') === 'bb' : false);
+  __T('String.at', typeof ''.at === 'function' ? 'abc'.at(-1) === 'c' : false, 'has=' + typeof ''.at);
+  __T('Array.groupBy', has('Array.groupBy') === 'function', 'aGroupBy=' + has('Array.groupBy'));
+  __T('Object.groupBy', has('Object.groupBy') === 'function' ? Object.groupBy([1,2,3], function(x){return x%2?'odd':'even';}).odd.length===2 : false, 'og=' + has('Object.groupBy'));
+
+  // --- Map/Set helpers ---
+  var m = new Map([[1,'a'],[2,'b']]);
+  __T('Map.set chainable size', m.set(3,'c').size === 3, 'sz=' + m.size);
+  var s = new Set([1,2]);
+  __T('Set add/has', s.add(3).has(3));
+
+  // --- Intl pieces ---
+  __T('Intl.Collator', has('Intl.Collator') === 'function' ? new Intl.Collator('en').compare('a','b') < 0 : false, 'c=' + has('Intl.Collator'));
+  __T('Intl.DateTimeFormat', has('Intl.DateTimeFormat') === 'function');
+  __T('Intl.supportedValuesOf', has('Intl.supportedValuesOf'), 'sv=' + has('Intl.supportedValuesOf'));
+
+  // --- document.cookie full parse (attributes) ---
+  try {
+    d.cookie = 'k=v; path=/; max-age=100';
+    __T('cookie sets name=value', /(^|; )k=v/.test(d.cookie), 'c=' + d.cookie);
+  } catch (e) { __T('cookie attributes', false, e.message); }
+
+  // --- localStorage as a property map (proxy-style access) ---
+  try {
+    localStorage.setItem('pk', 'pv');
+    __T('localStorage property access', localStorage.pk === 'pv' || localStorage['pk'] === 'pv', 'viaProp=' + localStorage.pk);
+    localStorage.clear();
+  } catch (e) { __T('localStorage props', false, e.message); }
+
+  // --- navigator.sendBeacon ---
+  __T('navigator.sendBeacon', has('navigator.sendBeacon') === 'function', 'sb=' + has('navigator.sendBeacon'));
+
+  // --- console.assert / time ---
+  __T('console.assert exists', typeof console.assert === 'function', 'a=' + typeof console.assert);
+
+  // --- form submit/reset methods exist ---
+  var f = d.getElementById('f');
+  __T('form.reset function', typeof f.reset === 'function', 'r=' + typeof f.reset);
+  __T('form.submit function', typeof f.submit === 'function', 's=' + typeof f.submit);
+})();
+</script>
+</body>
+</html>
