@@ -16,6 +16,26 @@ public abstract class Element : Node
 
     public override NodeType NodeType => NodeType.Element;
 
+    /// <summary>DOM 4 §4.8: clone this element. A new element of the same kind is made through the
+    /// tag factory (so a specialised element clones as itself, not a bare HtmlElement), carries the
+    /// same attributes, inline-style mirror and namespace, and — for a deep clone — a clone of every
+    /// child. The abstract Node hook threw NotImplementedException, which took 'cloneNode' and the
+    /// whole 'importNode'/'adoptNode' path with it.</summary>
+    protected override Node CloneNodeInternal(bool deep)
+    {
+        HtmlElement clone = Acrux.Core.Dom.Html.HtmlElementFactory.Create(LocalName);
+        clone.TagName = TagName;
+        clone.NamespaceUri = NamespaceUri;
+        clone.Prefix = Prefix;
+        foreach (var kv in Attributes) clone.Attributes[kv.Key] = kv.Value;
+        foreach (var kv in Style) clone.Style[kv.Key] = kv.Value;
+        clone.StyleMirrorText = StyleMirrorText;
+        if (deep)
+            foreach (var child in Children)
+                clone.AppendChild(child.CloneNode(true));
+        return clone;
+    }
+
     public string TagName { get; set; } = string.Empty;
     public string? NamespaceUri { get => InternalState.NamespaceUri; set => InternalState.NamespaceUri = value; }
     public string? Prefix { get => InternalState.Prefix; set => InternalState.Prefix = value; }

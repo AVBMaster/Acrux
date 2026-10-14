@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head><title>Web APIs probe 1</title></head>
+<body>
+<div id="src" class="k">Alpha <b>bold</b></div>
+<script>
+(function () {
+  var d = document;
+  function exists(name){ try { return eval("typeof "+name); } catch(e){ return 'err'; } }
+
+  // --- existence snapshot (what globals the engine already has) ---
+  ['TextEncoder','TextDecoder','crypto','Blob','File','FileReader','DOMParser','XMLSerializer','URL',
+   'Uint8Array','ArrayBuffer','DataView','Intl','WeakRef','Atomics','BigInt'].forEach(function (g) {
+    __T('exists:'+g, exists(g) !== 'undefined', 'typeof=' + exists(g));
+  });
+
+  // --- TextEncoder / TextDecoder round-trip ---
+  try {
+    var enc = new TextEncoder();
+    var bytes = enc.encode('Hi✓');
+    __T('TextEncoder utf8 length', bytes.length === 5, 'len=' + bytes.length + ' t=' + (bytes.constructor && bytes.constructor.name));
+    var dec = new TextDecoder();
+    __T('TextDecoder round-trip', dec.decode(bytes) === 'Hi✓', 'd=' + dec.decode(bytes));
+  } catch (e) { __T('TextEncoder/Decoder', false, e.message); }
+
+  // --- crypto ---
+  try {
+    __T('crypto.randomUUID', typeof crypto.randomUUID === 'function' && /^[0-9a-f-]{36}$/.test(crypto.randomUUID()), 'u=' + (crypto.randomUUID && crypto.randomUUID()));
+  } catch (e) { __T('crypto.randomUUID', false, e.message); }
+  try {
+    var arr = new Uint8Array(4);
+    crypto.getRandomValues(arr);
+    __T('crypto.getRandomValues fills', arr[0] !== undefined && arr instanceof Uint8Array, 'a0=' + arr[0]);
+  } catch (e) { __T('crypto.getRandomValues', false, e.message); }
+
+  // --- Blob ---
+  try {
+    var blob = new Blob(['hello', ' world'], { type: 'text/plain' });
+    __T('Blob size', blob.size === 11, 'size=' + blob.size);
+    __T('Blob type', blob.type === 'text/plain', 'type=' + blob.type);
+    if (typeof blob.text === 'function') {
+      blob.text().then(function (t) { window.__blobText = t; });
+    }
+  } catch (e) { __T('Blob', false, e.message); }
+
+  // --- DOMParser ---
+  try {
+    var parsed = new DOMParser().parseFromString('<p id="pp">hello</p><span>x</span>', 'text/html');
+    __T('DOMParser yields document', parsed && parsed.getElementById && parsed.getElementById('pp'), 'doc=' + (parsed && parsed.nodeType));
+    __T('DOMParser body text', parsed.querySelector('p').textContent === 'hello');
+  } catch (e) { __T('DOMParser', false, e.message); }
+
+  // --- XMLSerializer on an HTML node (outerHTML fallback) ---
+  try {
+    var s = new XMLSerializer().serializeToString(d.getElementById('src'));
+    __T('XMLSerializer output nonempty', typeof s === 'string' && /Alpha/.test(s), 's=' + s);
+  } catch (e) { __T('XMLSerializer', false, e.message); }
+
+  // --- typed arrays basic ---
+  try {
+    var u = new Uint8Array([1,2,3]);
+    __T('Uint8Array index', u[1] === 2 && u.length === 3);
+    var dv = new DataView(new ArrayBuffer(8));
+    dv.setUint32(0, 42);
+    __T('DataView round-trip', dv.getUint32(0) === 42);
+  } catch (e) { __T('typed arrays', false, e.message); }
+
+  // --- Intl basic ---
+  try {
+    var nf = new Intl.NumberFormat('en-US');
+    __T('Intl.NumberFormat', nf.format(1234.5) === '1,234.5', 'fmt=' + nf.format(1234.5));
+  } catch (e) { __T('Intl', false, e.message); }
+})();
+</script>
+</body>
+</html>

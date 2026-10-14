@@ -934,6 +934,7 @@ public class ElementHost
             {
                 foreach (var cbId in cbIds.ToList())
                 {
+                    if (evt.ImmediateStopped) break;
                     try
                     {
                         evt.currentTarget = this;
@@ -957,7 +958,7 @@ public class ElementHost
         }
 
         // Bubbling phase
-        if (evt.bubbles)
+        if (evt.bubbles && !evt.PropagationStopped)
         {
             var parent = _element.ParentElement;
             if (parent != null)
@@ -1173,7 +1174,7 @@ public class ElementHost
         }
     }
 
-    public string? namespaceURI => "http://www.w3.org/1999/xhtml";
+    public string? namespaceURI => _element.NamespaceUri ?? "http://www.w3.org/1999/xhtml";
 
     public string? prefix => null;
 
@@ -1221,7 +1222,36 @@ public class ElementHost
 
     public void insertAdjacentText(string position, string text)
     {
-        insertAdjacentHTML(position, text);
+        InsertAt(position, new TextNode(text ?? ""), asText: true);
+    }
+
+    /// <summary>Element.insertAdjacentElement(position, element) (DOM 4 §5.5): puts the given node
+    /// at one of the four positions and answers the node, or null when the node could not move.</summary>
+    public object? insertAdjacentElement(string position, object? element)
+    {
+        var node = UnwrapNode(element);
+        if (node == null) return null;
+        InsertAt(position, node, asText: false);
+        return element;
+    }
+
+    private void InsertAt(string position, Node node, bool asText)
+    {
+        switch ((position ?? "").ToLowerInvariant())
+        {
+            case "beforebegin":
+                _element.Parent?.InsertBefore(node, _element);
+                break;
+            case "afterbegin":
+                _element.InsertBefore(node, _element.Children.FirstOrDefault());
+                break;
+            case "beforeend":
+                _element.AppendChild(node);
+                break;
+            case "afterend":
+                _element.Parent?.InsertBefore(node, _element.NextSibling);
+                break;
+        }
     }
 
     public void remove()
@@ -1274,68 +1304,10 @@ public class ElementHost
         return _element.HasAttribute(name);
     }
 
-    private static int _datasetProxyCounter;
-    private object? _datasetProxyCache;
-
-    public object? dataset
-    {
-        get
-        {
-            var engine = JavaScriptEngine.Current ?? Engine;
-            if (engine == null)
-                return new DatasetHost(_element);
-
-            if (engine.EngineType == JsEngineType.V8)
-            {
-                if (_datasetProxyCache != null)
-                    return _datasetProxyCache;
-
-                try
-                {
-                    var adapter = engine.Adapter;
-                    if (adapter != null)
-                    {
-                        var tmp = $"__tmp_ds_{Interlocked.Increment(ref _datasetProxyCounter)}";
-                        adapter.EmbedHostObject(tmp, this);
-                        var result = adapter.Evaluate(@"
-                            (function() {
-                                var el = " + tmp + @";
-                                return new Proxy({}, {
-                                    get: function(t, p) {
-                                        if (typeof p === 'string') {
-                                            var v = el.getAttribute('data-' + p);
-                                            return v !== null ? v : undefined;
-                                        }
-                                    },
-                                    set: function(t, p, v) {
-                                        el.setAttribute('data-' + p, v);
-                                        return true;
-                                    },
-                                    deleteProperty: function(t, p) {
-                                        el.removeAttribute('data-' + p);
-                                        return true;
-                                    },
-                                    has: function(t, p) {
-                                        return el.getAttribute('data-' + p) !== null;
-                                    },
-                                    ownKeys: function(t) { return []; },
-                                    getOwnPropertyDescriptor: function(t, p) {
-                                        return { configurable: true, enumerable: true };
-                                    }
-                                });
-                            })()
-                        ");
-                        try { adapter.Evaluate($"delete {tmp};"); } catch { }
-                        _datasetProxyCache = result;
-                        return _datasetProxyCache;
-                    }
-                }
-                catch { }
-            }
-
-            return new DatasetHost(_element);
-        }
-    }
+    // 'dataset' (DOMStringMap) is answered by a JS accessor installed on the element prototypes in
+    // the setup script, which returns a live Proxy over the 'data-*' attributes. The host carries
+    // no 'dataset' member on purpose: a CLR property is resolved ahead of that prototype accessor
+    // and would take 'delete el.dataset.x' back down to a no-op.
 
     public string? dir
     {
@@ -1519,7 +1491,23 @@ public class ElementHost
 
     public int compareDocumentPosition(object? other) => 0;
 
-    public object? getRootNode(object? options) => null;
+    public object? getRootNode() => GetRootNodeCore(null);
+    public object? getRootNode(object? options) => GetRootNodeCore(options);
+
+    private object? GetRootNodeCore(object? options)
+    {
+        // DOM 4 §4.3: the root of the tree the node lives in — the Document for a mounted node, the
+        // top-most ancestor for a detached one. A shadow root would stop here, but the engine has no
+        // attached shadow trees yet, so the document is the root.
+        var engine = JavaScriptEngine.Current ?? Engine;
+        Node current = _element;
+        while (current.Parent != null) current = current.Parent;
+        if (current is Document doc)
+            return engine?.DocumentHost ?? (object)new DocumentHost(doc);
+        if (current is Element el)
+            return engine?.IntegrationService?.WrapDomNode(el) as ElementHost ?? new ElementHost(el);
+        return current;
+    }
 
     public void setPointerCapture(int pointerId) { }
 
@@ -2113,8 +2101,32 @@ public class ScriptEvent
     }
 
     public void preventDefault() => DefaultPrevented = true;
-    public void stopPropagation() => bubbles = false;
-    public void stopImmediatePropagation() => bubbles = false;
+
+    internal bool PropagationStopped;
+    internal bool ImmediateStopped;
+
+    /// <summary>DOM 4 §2.5: the event's path — the target and every ancestor up to the document,
+    /// innermost first. A listener reads this to know the chain a capture/bubble walk will follow.</summary>
+    public object[] composedPath()
+    {
+        var engine = JavaScriptEngine.Current;
+        var start = target ?? currentTarget;
+        var path = new List<object>();
+        if (start == null) return path.ToArray();
+        var el = start.NativeElement;
+        if (el == null) { path.Add(start); return path.ToArray(); }
+        for (var n = (Node)el; n != null; n = n.Parent)
+        {
+            if (n is Acrux.Core.Dom.Document doc)
+                path.Add((object?)engine?.DocumentHost ?? new DocumentHost(doc));
+            else if (n is Element e)
+                path.Add((object?)engine?.IntegrationService?.WrapDomNode(e) ?? new ElementHost(e));
+        }
+        return path.ToArray();
+    }
+
+    public void stopPropagation() { PropagationStopped = true; bubbles = false; }
+    public void stopImmediatePropagation() { PropagationStopped = true; ImmediateStopped = true; bubbles = false; }
     public void initEvent(string type, bool bubbles = true, bool cancelable = true)
     {
         this.type = type;

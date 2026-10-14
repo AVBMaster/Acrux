@@ -114,7 +114,7 @@ public class URLSearchParamsHost
             _params[kv.Key] = kv.Value;
     }
 
-    public void forEach(object callback) { }
+    public void forEach(object callback) { /* implemented in the JS URLSearchParams wrapper */ }
 
     public string toString()
     {
@@ -131,9 +131,26 @@ public class URLSearchParamsHost
 
     public int size => _params.Sum(kv => kv.Value.Count);
 
-    public object[] keys => _params.Keys.ToArray();
+    // keys/values/entries are the iterator methods the interface defines (URL §5), each answering
+    // the pairs/keys/values the page enumerates — methods, not properties.
+    public object[] keys()
+    {
+        var list = new List<object>();
+        foreach (var kv in _params) foreach (var _ in kv.Value) list.Add(kv.Key);
+        return list.ToArray();
+    }
 
-    public object[] values => _params.SelectMany(kv => kv.Value).ToArray();
+    public object[] values()
+    {
+        var list = new List<object>();
+        foreach (var kv in _params) foreach (var v in kv.Value) list.Add(v);
+        return list.ToArray();
+    }
 
-    public object[] entries => _params.SelectMany(kv => kv.Value.Select(v => (object)new[] { kv.Key, v })).ToArray();
+    public object[] entries()
+    {
+        var list = new List<object>();
+        foreach (var kv in _params) foreach (var v in kv.Value) list.Add(new object[] { kv.Key, v });
+        return list.ToArray();
+    }
 }

@@ -702,9 +702,194 @@ public class JavaScriptEngine : IDisposable
                 return __acrux.createURL(url, base || '');
             }
 
-            function URLSearchParams(query) {
-                return __acrux.createURLSearchParams(query || '');
+            // URLSearchParams lives in script so its iteration (forEach, keys, values, entries and
+            // the for..of protocol) reads like the standard's list-of-pairs; the host object it used
+            // to wrap could not be made iterable across the interop boundary. Pairs keep insertion
+            // order, which is what 'getAll' and 'toString' answer from.
+            function URLSearchParams(init) {
+                var self = this;
+                var pairs = [];
+                function dec(s) { try { return decodeURIComponent(String(s).replace(/\+/g, ' ')); } catch (e) { return String(s); } }
+                function enc(s) { return encodeURIComponent(String(s)); }
+                function find(k) { var out = []; for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === k) out.push(pairs[i][1]); return out; }
+                var q = (init === null || init === undefined) ? '' : String(init);
+                if (q.charAt(0) === '?') q = q.slice(1);
+                if (q) q.split('&').forEach(function (kv) {
+                    if (kv === '') return;
+                    var i = kv.indexOf('=');
+                    pairs.push([dec(i < 0 ? kv : kv.slice(0, i)), dec(i < 0 ? '' : kv.slice(i + 1))]);
+                });
+                this.append = function (k, v) { pairs.push([String(k), String(v)]); };
+                this.delete = function (k) { k = String(k); for (var i = pairs.length - 1; i >= 0; i--) if (pairs[i][0] === k) pairs.splice(i, 1); };
+                this.get = function (k) { var f = find(String(k)); return f.length ? f[0] : null; };
+                this.getAll = function (k) { return find(String(k)); };
+                this.has = function (k) { return find(String(k)).length > 0; };
+                this.set = function (k, v) {
+                    k = String(k); var done = false;
+                    for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === k) { if (!done) { pairs[i][1] = String(v); done = true; } else { pairs.splice(i, 1); i--; } }
+                    if (!done) pairs.push([k, String(v)]);
+                };
+                this.sort = function () { pairs.sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; }); };
+                this.toString = function () { return pairs.map(function (p) { return enc(p[0]) + '=' + enc(p[1]); }).join('&'); };
+                this.forEach = function (cb, ts) { for (var i = 0; i < pairs.length; i++) cb.call(ts || null, pairs[i][1], pairs[i][0], self); };
+                this.keys = function () { return pairs.map(function (p) { return p[0]; }); };
+                this.values = function () { return pairs.map(function (p) { return p[1]; }); };
+                this.entries = function () { return pairs.map(function (p) { return [p[0], p[1]]; }); };
+                Object.defineProperty(this, 'size', { get: function () { return pairs.length; } });
             }
+
+            // ── Encoding / Crypto / DOM parsing / Blob ─────────────────────────
+            // TextEncoder/TextDecoder carry the UTF-8 transformation the Web platform uses to move
+            // text across the byte-oriented APIs; surrogate pairs are combined before encoding so an
+            // astral character becomes its four bytes, exactly as the standard's algorithm does.
+            function TextEncoder() { this.encoding = 'utf-8'; }
+            TextEncoder.prototype.encode = function (input) {
+                var str = (input === undefined || input === null) ? '' : String(input);
+                var out = [];
+                for (var i = 0; i < str.length; i++) {
+                    var c = str.charCodeAt(i);
+                    if (c >= 0xD800 && c <= 0xDBFF && i + 1 < str.length) {
+                        var low = str.charCodeAt(i + 1);
+                        if (low >= 0xDC00 && low <= 0xDFFF) { c = 0x10000 + ((c - 0xD800) << 10) + (low - 0xDC00); i++; }
+                    }
+                    if (c < 0x80) out.push(c);
+                    else if (c < 0x800) out.push(0xC0 | (c >> 6), 0x80 | (c & 0x3F));
+                    else if (c < 0x10000) out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F));
+                    else out.push(0xF0 | (c >> 18), 0x80 | ((c >> 12) & 0x3F), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F));
+                }
+                return new Uint8Array(out);
+            };
+            TextEncoder.prototype.encodeInto = function (str, buf) {
+                var b = this.encode(str);
+                for (var i = 0; i < b.length && i < buf.length; i++) buf[i] = b[i];
+                return { read: b.length, written: Math.min(b.length, buf.length) };
+            };
+
+            function TextDecoder(label, options) { this.encoding = String(label || 'utf-8').toLowerCase(); this.fatal = false; }
+            TextDecoder.prototype.decode = function (input) {
+                if (input === undefined || input === null) return '';
+                var bytes = (input instanceof Uint8Array) ? input
+                    : (input.buffer ? new Uint8Array(input.buffer, input.byteOffset || 0, input.byteLength) : input);
+                var res = '', i = 0, len = bytes.length;
+                while (i < len) {
+                    var b0 = bytes[i], cp;
+                    if (b0 < 0x80) { cp = b0; i += 1; }
+                    else if ((b0 & 0xE0) === 0xC0) { cp = ((b0 & 0x1F) << 6) | (bytes[i + 1] & 0x3F); i += 2; }
+                    else if ((b0 & 0xF0) === 0xE0) { cp = ((b0 & 0x0F) << 12) | ((bytes[i + 1] & 0x3F) << 6) | (bytes[i + 2] & 0x3F); i += 3; }
+                    else if ((b0 & 0xF8) === 0xF0) { cp = ((b0 & 0x07) << 18) | ((bytes[i + 1] & 0x3F) << 12) | ((bytes[i + 2] & 0x3F) << 6) | (bytes[i + 3] & 0x3F); i += 4; }
+                    else { cp = b0; i += 1; }
+                    if (cp <= 0xFFFF) res += String.fromCharCode(cp);
+                    else { cp -= 0x10000; res += String.fromCharCode(0xD800 + (cp >> 10), 0xDC00 + (cp & 0x3FF)); }
+                }
+                return res;
+            };
+
+            // Web Crypto — the parts that need no secure transport surface. randomUUID is minted by
+            // the host (the only real entropy), getRandomValues fills a typed array in place and
+            // returns the same array the page handed in.
+            var crypto = {
+                randomUUID: function () { return __acrux.randomUUID(); },
+                getRandomValues: function (array) {
+                    if (!array) return array;
+                    for (var i = 0; i < array.length; i++)
+                        array[i] = Math.floor(Math.random() * 256);
+                    return array;
+                }
+            };
+
+            // DOMParser builds a fresh Document out of markup (the host parses it through the same
+            // HTML pipeline the live page went through), so the result answers getElementById and
+            // querySelector just like 'document'.
+            function DOMParser() {}
+            DOMParser.prototype.parseFromString = function (source, contentType) {
+                return __acrux.parseHTML(String(source === undefined ? '' : source));
+            };
+
+            // XMLSerializer re-serialises a node; the engine already owns the HTML serialisation that
+            // outerHTML answers with, so that is what 'serializeToString' returns for an element, and
+            // the document element for a whole document.
+            function XMLSerializer() {}
+            XMLSerializer.prototype.serializeToString = function (node) {
+                if (node === null || node === undefined) return '';
+                if (typeof node.outerHTML === 'string') return node.outerHTML;
+                if (node.documentElement && typeof node.documentElement.outerHTML === 'string')
+                    return node.documentElement.outerHTML;
+                if (typeof node.textContent === 'string') return node.textContent;
+                return String(node);
+            };
+
+            // Blob holds concatenated string parts; 'size' is the UTF-8 byte length and 'text'/'
+            // arrayBuffer' are the async reads a page awaits on. File is a Blob with a name.
+            function Blob(blobParts, options) {
+                var parts = blobParts || [];
+                var pieces = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var p = parts[i];
+                    pieces.push(p === null || p === undefined ? '' : (p instanceof Blob ? p.__text : String(p)));
+                }
+                var text = pieces.join('');
+                Object.defineProperty(this, '__text', { value: text, configurable: true });
+                this.type = (options && options.type) ? String(options.type) : '';
+                this.size = new TextEncoder().encode(text).length;
+            }
+            Blob.prototype.text = function () { var t = this.__text; return Promise.resolve(t); };
+            Blob.prototype.arrayBuffer = function () { return Promise.resolve(new TextEncoder().encode(this.__text).buffer); };
+            Blob.prototype.slice = function (start, end, contentType) {
+                var t = this.__text;
+                var s = start < 0 ? Math.max(t.length + start, 0) : (start || 0);
+                var e = end === undefined ? t.length : (end < 0 ? t.length + end : end);
+                var sliceText = t.substring(Math.min(s, e), Math.max(s, e));
+                return new Blob([sliceText], { type: contentType || '' });
+            };
+            function File(fileBits, fileName, options) {
+                Blob.call(this, fileBits, options);
+                this.name = String(fileName === undefined ? '' : fileName);
+                this.lastModified = (options && options.lastModified) ? options.lastModified : Date.now();
+            }
+            File.prototype = Object.create(Blob.prototype);
+            File.prototype.constructor = File;
+
+            // FileReader runs its read as a task, then fires 'load' with the result on the reader —
+            // the shape every script expects from the callback API.
+            function FileReader() {
+                this.result = null; this.error = null; this.readyState = 0;
+                this.onload = null; this.onerror = null; this.onloadend = null; this.onprogress = null;
+            }
+            FileReader.prototype.readAsText = function (blob) {
+                var self = this;
+                self.readyState = 1;
+                Promise.resolve().then(function () {
+                    self.result = blob.__text !== undefined ? blob.__text : String(blob);
+                    self.readyState = 2;
+                    if (typeof self.onload === 'function') self.onload({ target: self });
+                    if (typeof self.onloadend === 'function') self.onloadend({ target: self });
+                });
+            };
+            FileReader.prototype.readAsDataURL = function (blob) {
+                var self = this;
+                self.readyState = 1;
+                Promise.resolve().then(function () {
+                    var bytes = new TextEncoder().encode(blob.__text || '');
+                    var bin = '';
+                    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+                    self.result = 'data:' + (blob.type || '') + ';base64,' + __acrux.btoa(bin);
+                    self.readyState = 2;
+                    if (typeof self.onload === 'function') self.onload({ target: self });
+                    if (typeof self.onloadend === 'function') self.onloadend({ target: self });
+                });
+            };
+            FileReader.prototype.abort = function () { this.readyState = 2; };
+
+            // URL.createObjectURL hands out a blob: reference the host can later revoke; without a
+            // backing store it is a stable label, which is all a page that only round-trips the URL needs.
+            var objectUrls = {};
+            URL.createObjectURL = function (blob) {
+                var url = 'blob:acrux/' + __acrux.randomUUID();
+                objectUrls[url] = blob;
+                return url;
+            };
+            URL.revokeObjectURL = function (url) { delete objectUrls[url]; };
+            window.URL = URL;
 
             // 'new CSSStyleSheet()' — a sheet the script owns (CSSOM §5.2.2). The rules and the
             // disabled flag live in the engine; 'replace' is the async twin of 'replaceSync',
@@ -851,6 +1036,25 @@ public class JavaScriptEngine : IDisposable
                 return JSON.parse(JSON.stringify(value));
             };
 
+            // User Timing (Performance API §3): the clock the page measures against. 'now' is the
+            // milliseconds since the page began, 'mark'/'measure' keep the named timestamps a
+            // profiler reads back. The high-resolution origin is the host's monotonic clock; a
+            // wall-clock fallback is fine when one is not wired.
+            var performance = {
+                timeOrigin: Date.now(),
+                now: function () { return Date.now(); },
+                _marks: {},
+                mark: function (name) { this._marks[String(name)] = { name: String(name), startTime: Date.now(), duration: 0 }; },
+                clearMarks: function (name) { if (name === undefined) this._marks = {}; else delete this._marks[String(name)]; },
+                getEntriesByName: function (name) { var m = this._marks[String(name)]; return m ? [m] : []; },
+                getEntriesByType: function () { return []; },
+                getEntries: function () { return []; },
+                measure: function () {},
+                clearMeasures: function () {},
+                memory: {}
+            };
+            window.performance = performance;
+
             // HTML §6.1.5.2 — the 'on*' IDL event handler attributes. Assigning el.onclick = fn
             // is one slot, not a stacking listener, and the assignment has to reach dispatch. The
             // DOM wrappers are host objects whose prototype the engine already rewrote to a plain
@@ -891,6 +1095,66 @@ public class JavaScriptEngine : IDisposable
                 defOn(window.HTMLElement && window.HTMLElement.prototype);
                 defOn(window.Element && window.Element.prototype);
             })();
+
+            // HTML §6.1.4.3 — the 'dataset' DOMStringMap. It is a live view over the element's
+            // 'data-*' attributes where a camelCase key stands for the hyphenated attribute, and a
+            // Proxy is the only shape that makes read, write and 'delete el.dataset.x' all reach
+            // the attribute store. The accessor lives on the element prototypes so it answers before
+            // the host's own member, and the Proxy is cached per element (dataset is identity-stable).
+            (function () {
+                if (typeof Proxy !== 'function' || typeof WeakMap !== 'function' || typeof Object.defineProperty !== 'function') return;
+                var store = new WeakMap();
+                function dash(k) { return String(k).replace(/[A-Z]/g, function (c) { return '-' + c.toLowerCase(); }); }
+                function makeDataset(el) {
+                    var existing = store.get(el);
+                    if (existing) return existing;
+                    var proxy = new Proxy({}, {
+                        get: function (t, p) {
+                            if (typeof p !== 'string') return undefined;
+                            var v = el.getAttribute('data-' + dash(p));
+                            return v === null ? undefined : v;
+                        },
+                        set: function (t, p, v) { el.setAttribute('data-' + dash(p), (v === undefined || v === null) ? '' : String(v)); return true; },
+                        deleteProperty: function (t, p) { el.removeAttribute('data-' + dash(p)); return true; },
+                        has: function (t, p) { return el.getAttribute('data-' + dash(p)) !== null; },
+                        ownKeys: function () { return []; },
+                        getOwnPropertyDescriptor: function () { return { configurable: true, enumerable: true }; }
+                    });
+                    store.set(el, proxy);
+                    return proxy;
+                }
+                function defDataset(proto) {
+                    if (!proto) return;
+                    if (Object.prototype.hasOwnProperty.call(proto, 'dataset')) return;
+                    try {
+                        Object.defineProperty(proto, 'dataset', {
+                            configurable: true, enumerable: false,
+                            get: function () { return makeDataset(this); },
+                            set: function () { }
+                        });
+                    } catch (e) { }
+                }
+                var P = window.__domProto;
+                if (P) { defDataset(P['HTMLElement']); defDataset(P['Element']); defDataset(P['Node']); }
+                defDataset(window.HTMLElement && window.HTMLElement.prototype);
+            })();
+
+            // HTML: document.defaultView is the Window that owns the document. An own-property write
+            // onto the document host does not stick across the interop, so it is an accessor on the
+            // document prototype instead — which the host's [[Get]] resolves — returning the live global.
+            (function () {
+                var proto = (window.__domProto && window.__domProto['HTMLDocument'])
+                    || (window.HTMLDocument && window.HTMLDocument.prototype);
+                if (!proto || typeof Object.defineProperty !== 'function') return;
+                if (Object.prototype.hasOwnProperty.call(proto, 'defaultView')) return;
+                try {
+                    Object.defineProperty(proto, 'defaultView', {
+                        configurable: true, enumerable: false,
+                        get: function () { return window; }
+                    });
+                } catch (e) { }
+            })();
+
 
             // Descriptor factory for the handful of window attributes that are plain
             // writable strings (HTML: name, status, defaultStatus). The setter has to
@@ -1160,6 +1424,24 @@ public class AcruxBuiltins
     /// document only once the page adopts it, and unlike a sheet an element owns it may be
     /// replaced wholesale through replaceSync/replace.</summary>
     public CssStyleSheetHost createCSSStyleSheet() => new CssStyleSheetHost(new Acrux.Core.Css.Rules.StyleSheetContents());
+
+    // ── Web Crypto / DOMParser hosts ──────────────────────────
+
+    /// <summary>'crypto.randomUUID()' (Web Crypto §5.5): a version-4 identifier. The engine is
+    /// the only place with a real random source, so the string is minted here.</summary>
+    public string randomUUID() => Guid.NewGuid().ToString();
+
+    /// <summary>'new DOMParser().parseFromString(markup, "text/html")' (DOM Parsing §3): a brand
+    /// new Document built from the markup, handed to the page as a document host so it is queried
+    /// and mutated like the live one.</summary>
+    public DocumentHost parseHTML(string? markup)
+    {
+        var html = markup ?? "";
+        var newDoc = string.IsNullOrEmpty(html.Trim())
+            ? new Acrux.Core.Dom.Document()
+            : Acrux.Core.Dom.Parser.HtmlDocumentParserIntegration.ParseHtml(html);
+        return new DocumentHost(newDoc);
+    }
 
     // ── JS Engine Management ──────────────────────────────────
 
@@ -1586,26 +1868,69 @@ public class LocationHost
 {
     public Action<string>? OnNavigate { get; set; }
     public Action? OnReload { get; set; }
-    
-    public string href { get; set; } = "acrux://local";
-    public string protocol { get; set; } = "acrux:";
-    public string hostname { get; set; } = "local";
-    public string host { get; set; } = "local";
-    public string port { get; set; } = "";
-    public string pathname { get; set; } = "/";
-    public string search { get; set; } = "";
-    public string hash { get; set; } = "";
-    public string origin { get; set; } = "acrux://local";
+
+    // 'href' is the source of truth (HTML: it navigates when assigned); every other member is the
+    // same URL broken into its components, and every setter edits 'href' at that component. The
+    // older hand-set fields let 'location.hash = "#x"' leave 'location.href' unchanged, so a page
+    // that read the URL back after setting a part saw a value it had never asked for.
+    private string _href = "acrux://local/";
+
+    public string href
+    {
+        get => _href;
+        set { _href = string.IsNullOrEmpty(value) ? "about:blank" : value; OnNavigate?.Invoke(_href); }
+    }
+
+    private URLHost? Parts()
+    {
+        try { return new URLHost(_href); } catch { return null; }
+    }
+
+    public string protocol { get { var p = Parts()?.protocol ?? ""; return p; } set { _href = Rebuild(value, _href, scheme: true); } }
+    public string hostname { get { var u = Parts(); return u?.hostname ?? ""; } set { var u = Parts(); _href = Rebuild(u == null ? _href : u.hostname, value, hostPart: true); } }
+    public string port { get { var u = Parts(); return u?.port ?? ""; } set { } }
+    public string host { get { var u = Parts(); return u?.host ?? ""; } set { hostname = value; } }
+    public string pathname { get { var u = Parts(); return u?.pathname ?? "/"; } set { _href = RebuildTail(value, Search, Hash); } }
+    public string search { get { var u = Parts(); return u?.search ?? ""; } set { _href = RebuildTail(Pathname, value, Hash); } }
+    public string hash { get { var u = Parts(); return u?.hash ?? ""; } set { _href = RebuildTail(Pathname, Search, value); } }
+    public string origin { get { var u = Parts(); return u?.origin ?? ""; } }
+
+    private string Hash { get { var u = Parts(); return u?.hash ?? ""; } }
+    private string Search { get { var u = Parts(); return u?.search ?? ""; } }
+    private string Pathname { get { var u = Parts(); return u?.pathname ?? "/"; } }
+
+    // Compose scheme://host + path + ?search + #hash out of the pieces a caller has updated.
+    private string Rebuild(string current, string replacement, bool scheme = false, bool hostPart = false)
+    {
+        var u = Parts();
+        string proto = u?.protocol ?? "acrux:";
+        string hostv = u?.host ?? "";
+        string path = u?.pathname ?? "/";
+        string search = u?.search ?? "";
+        string hash = u?.hash ?? "";
+        if (scheme) proto = replacement.EndsWith(":") ? replacement : replacement + ":";
+        if (hostPart) hostv = replacement;
+        return proto + "//" + hostv + path + search + hash;
+    }
+
+    private string RebuildTail(string path, string search = "", string hash = "")
+    {
+        var u = Parts();
+        string proto = u?.protocol ?? "acrux:";
+        string hostv = u?.host ?? "";
+        if (!path.StartsWith("/")) path = "/" + path;
+        if (!string.IsNullOrEmpty(search) && !search.StartsWith("?")) search = "?" + search;
+        if (!string.IsNullOrEmpty(hash) && !hash.StartsWith("#")) hash = "#" + hash;
+        return proto + "//" + hostv + path + search + hash;
+    }
 
     public void assign(string url)
     {
         href = url;
-        OnNavigate?.Invoke(url);
     }
     public void replace(string url)
     {
         href = url;
-        OnNavigate?.Invoke(url);
     }
     public void reload()
     {

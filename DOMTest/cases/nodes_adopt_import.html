@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head><title>Nodes: import/adopt/fragment probe</title></head>
+<body>
+<div id="host">x</div>
+<script>
+(function () {
+  var d = document;
+
+  // --- DOMParser document is usable ---
+  try {
+    var parsed = new DOMParser().parseFromString('<div id="p1">hello <b>bold</b></div>', 'text/html');
+    __T('parsed doc nodeType 9', parsed.nodeType === 9, 'nt=' + parsed.nodeType);
+    var imp = parsed.getElementById('p1');
+    __T('parsed getElementById', imp && imp.textContent === 'hello bold', 'tc=' + (imp && imp.textContent));
+
+    // importNode then append into the live document
+    var imported = d.importNode(imp, true);
+    __T('importNode returns node', imported && imported.tagName === 'DIV', 'tag=' + (imported && imported.tagName));
+    d.getElementById('host').appendChild(imported);
+    __T('imported appended', !!d.querySelector('#host #p1') || d.getElementById('host').querySelector('#p1'), 'ok');
+  } catch (e) { __T('importNode path', false, e.message); }
+
+  // --- adoptNode ---
+  try {
+    var p2 = new DOMParser().parseFromString('<span id="s1">sp</span>', 'text/html').getElementById('s1');
+    var adopted = d.adoptNode(p2);
+    __T('adoptNode returns node', adopted && adopted.tagName === 'SPAN', 'tag=' + (adopted && adopted.tagName));
+  } catch (e) { __T('adoptNode', false, e.message); }
+
+  // --- createDocumentFragment real mutation ---
+  try {
+    var frag = d.createDocumentFragment();
+    var a = d.createElement('i'); var b = d.createElement('b');
+    frag.appendChild(a); frag.appendChild(b);
+    __T('fragment childNodes length', frag.childNodes.length === 2, 'cn=' + frag.childNodes.length);
+    frag.removeChild(a);
+    __T('fragment removeChild', frag.childNodes.length === 1, 'cn2=' + frag.childNodes.length);
+  } catch (e) { __T('fragment mutation', false, e.message); }
+
+  // --- createElementNS + namespaceURI ---
+  try {
+    var svgish = d.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    __T('createElementNS tagName', (svgish.tagName || '').toLowerCase() === 'circle', 'tag=' + svgish.tagName);
+    __T('createElementNS namespaceURI', /svg/.test(svgish.namespaceURI || ''), 'ns=' + svgish.namespaceURI);
+  } catch (e) { __T('createElementNS', false, e.message); }
+
+  // --- XMLSerializer on a fresh element ---
+  try {
+    var e2 = d.createElement('em'); e2.textContent = 'ital';
+    var xml = new XMLSerializer().serializeToString(e2);
+    __T('XMLSerializer em', /<em>ital<\/em>/.test(xml), 'xml=' + xml);
+  } catch (e) { __T('XMLSerializer element', false, e.message); }
+})();
+</script>
+</body>
+</html>

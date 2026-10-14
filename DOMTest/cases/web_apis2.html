@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head><title>Web APIs probe 2</title></head>
+<body>
+<div id="host"><p id="p1">a</p></div>
+<div id="del" data-keep="1" data-drop="2">x</div>
+<script>
+(function () {
+  var d = document;
+
+  // --- performance ---
+  try {
+    __T('performance.now number', typeof performance.now === 'function' && typeof performance.now() === 'number');
+    __T('performance.timeOrigin', typeof performance.timeOrigin === 'number' || performance.timeOrigin === undefined);
+  } catch (e) { __T('performance', false, e.message); }
+
+  // --- dataset delete ---
+  try {
+    var el = d.getElementById('del');
+    delete el.dataset.drop;
+    __T('dataset delete removes attribute', el.getAttribute('data-drop') === null, 'attr=' + el.getAttribute('data-drop'));
+    __T('dataset keeps others', el.dataset.keep === '1', 'keep=' + el.dataset.keep);
+  } catch (e) { __T('dataset delete', false, e.message); }
+
+  // --- insertAdjacentElement ---
+  try {
+    var host = d.getElementById('host');
+    var node = d.createElement('h2'); node.id = 'h2n';
+    var ret = host.insertAdjacentElement('afterbegin', node);
+    __T('insertAdjacentElement returns node', ret === node || (ret && ret.id === 'h2n'));
+    __T('insertAdjacentElement placed first', host.firstElementChild && host.firstElementChild.id === 'h2n', 'fc=' + (host.firstElementChild && host.firstElementChild.id));
+  } catch (e) { __T('insertAdjacentElement', false, e.message); }
+
+  // --- Event composedPath / stopImmediatePropagation ---
+  try {
+    var ev = new Event('x');
+    __T('Event.composedPath fn', typeof ev.composedPath === 'function', 'cp=' + typeof ev.composedPath);
+    var order = [];
+    var b = d.getElementById('host');
+    b.addEventListener('zz', function(){ order.push('a'); });
+    b.addEventListener('zz', function(e){ order.push('b'); e.stopImmediatePropagation(); });
+    b.addEventListener('zz', function(){ order.push('c'); });
+    b.dispatchEvent(new Event('zz'));
+    __T('stopImmediatePropagation halts', order.join('') === 'ab', 'order=' + order.join(''));
+  } catch (e) { __T('Event methods', false, e.message); }
+
+  // --- URLSearchParams iteration ---
+  try {
+    var usp = new URLSearchParams('a=1&b=2');
+    var names = [];
+    if (typeof usp.forEach === 'function') usp.forEach(function(v,k){ names.push(k+'='+v); });
+    var ent = usp.entries();
+    var ks = usp.keys();
+    __T('URLSearchParams methods + forEach',
+        typeof usp.entries === 'function' && typeof usp.keys === 'function' && typeof usp.values === 'function'
+        && ent.length === 2 && ks.length === 2 && names.length === 2,
+        'ent=' + ent.length + ' keys=' + ks.length + ' forEach=' + names.join('|'));
+  } catch (e) { __T('usp iteration', false, e.message); }
+
+  // --- Node.getRootNode / isDefaultNamespace ---
+  try {
+    var p = d.getElementById('p1');
+    __T('getRootNode is document', p.getRootNode && (p.getRootNode() === d || p.getRootNode().nodeType === 9 || p.getRootNode().nodeName === '#document'), 'rn=' + (p.getRootNode && p.getRootNode().nodeName));
+  } catch (e) { __T('getRootNode', false, e.message); }
+
+  // --- document.baseURI / documentElement.lang ---
+  __T('document.baseURI string', typeof d.baseURI === 'string', 'base=' + d.baseURI);
+})();
+</script>
+</body>
+</html>

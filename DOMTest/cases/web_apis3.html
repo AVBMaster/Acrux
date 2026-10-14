@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head><title>Web APIs probe 3 (storage / window misc)</title></head>
+<body>
+<script>
+(function () {
+  var d = document;
+
+  // --- localStorage full surface ---
+  try {
+    localStorage.clear();
+    localStorage.setItem('a', '1');
+    localStorage.setItem('b', '2');
+    __T('localStorage length', localStorage.length === 2, 'len=' + localStorage.length);
+    __T('localStorage key(0)', typeof localStorage.key === 'function' && localStorage.key(0) === 'a', 'k0=' + (localStorage.key && localStorage.key(0)));
+    __T('localStorage getItem', localStorage.getItem('a') === '1');
+    localStorage.removeItem('a');
+    __T('localStorage removeItem', localStorage.getItem('a') === null);
+    __T('localStorage clear', (function(){ localStorage.clear(); return localStorage.length === 0; })());
+  } catch (e) { __T('localStorage surface', false, e.message); }
+
+  // --- sessionStorage exists ---
+  try {
+    sessionStorage.setItem('x', 'y');
+    __T('sessionStorage round-trip', sessionStorage.getItem('x') === 'y');
+    sessionStorage.clear();
+  } catch (e) { __T('sessionStorage', false, e.message); }
+
+  // --- document.location is the same location as the global ---
+  try {
+    __T('document.location === location', d.location === location, 'eq=' + (d.location === location));
+  } catch (e) { __T('document.location', false, e.message); }
+
+  // --- location.hash / search setters reflect ---
+  try {
+    var base = location.href;
+    location.hash = '#frag1';
+    __T('location.hash set', /#frag1$/.test(location.href), 'href=' + location.href);
+    location.href = base;
+  } catch (e) { __T('location.hash set', false, e.message); }
+
+  // --- console methods ---
+  ['log','info','warn','error','debug','table','group'].forEach(function (m) {
+    __T('console.'+m, typeof console[m] === 'function', 't=' + typeof console[m]);
+  });
+
+  // --- element scroll setters no-throw ---
+  try {
+    var div = d.createElement('div'); d.body.appendChild(div);
+    div.scrollTop = 10; div.scrollLeft = 5;
+    __T('scrollTop settable', typeof div.scrollTop === 'number');
+    div.scrollIntoView();
+    __T('scrollIntoView no-throw', true);
+  } catch (e) { __T('scroll ops', false, e.message); }
+})();
+</script>
+</body>
+</html>
