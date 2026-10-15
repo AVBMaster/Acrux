@@ -151,15 +151,17 @@ public class StyleAdjuster
         };
     }
 
+    /// <summary>Which boxes a 'z-index' orders (CSS 2.1 §E.2, CSS Flexbox 1 §4.3, CSS Grid 1 §5.3):
+    /// a positioned box, and a child of a flex or grid container. The number itself stays on the
+    /// style either way — it is the property's computed value, and the reference engine prints it for
+    /// a static box too (measured) — so the answer lives in <c>ZIndexAffectsStacking</c> and every
+    /// paint-side reader asks that instead of reading 'auto' into existence.</summary>
     private static void AdjustZIndex(ComputedStyle style, ComputedStyle? parentStyle)
     {
-        if (style.Position == PositionType.Static)
-        {
-            bool parentIsFlexOrGrid = parentStyle?.Display is DisplayType.Flex or DisplayType.InlineFlex
-                or DisplayType.Grid or DisplayType.InlineGrid;
-            if (!parentIsFlexOrGrid)
-                style.ZIndex = null;
-        }
+        bool parentIsFlexOrGrid = parentStyle?.Display is DisplayType.Flex or DisplayType.InlineFlex
+            or DisplayType.Grid or DisplayType.InlineGrid;
+        style.ZIndexAffectsStacking = style.ZIndex is not null
+            && (style.Position != PositionType.Static || parentIsFlexOrGrid);
     }
 
     /// <summary>

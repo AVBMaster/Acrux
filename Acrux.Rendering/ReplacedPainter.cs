@@ -127,7 +127,7 @@ internal static class HtmlCanvasPainter
         op.SourceRect = new SKRect(0, 0, snapshot.Width, snapshot.Height);
         op.DestRect = content;
         op.Fit = ImageFit.Fill;
-        op.ZIndex = style.ZIndex ?? 0;
+        op.ZIndex = style.ZIndexAffectsStacking ? style.ZIndex ?? 0 : 0;
         op.Bounds = content;
         displayList.Add(op);
     }
@@ -196,7 +196,7 @@ internal static class ReplacedPaintHelpers
         op.SourceRect = srcRect;
         op.DestRect = destRect;
         op.Fit = ImageFit.Fill;
-        op.ZIndex = style.ZIndex ?? 0;
+        op.ZIndex = style.ZIndexAffectsStacking ? style.ZIndex ?? 0 : 0;
         op.Bounds = destRect;
         displayList.Add(op);
     }

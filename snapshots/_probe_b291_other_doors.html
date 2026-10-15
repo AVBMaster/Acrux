@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b291 probe 5 &#8212; the four-component origin through its other doors</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+#host { width: 200px; }
+#host > div { height: 20px; }
+#s-2 { perspective-origin: right 10px bottom 20px; }
+#s-3 { border-spacing: 2px 3px; }
+#p-a { perspective-origin: top 30px left 40px; }
+#c-a { width: 100px; height: 30px; }</style></head><body>
+<div id="host">
+  <div id="s-2"></div>
+  <table id="s-3"><tr><td>x</td></tr></table>
+  <div id="p-a"><div id="c-a"></div></div>
+</div>
+<pre id="report"></pre>
+<script>
+/* The same declaration reached through the doors the CSSOM probe does not use: a style attribute, a
+ * stylesheet rule, removeProperty, the IDL setter, and inheritance to a box of another size. */
+var out = [];
+function names(d) { var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i)); return a.join(','); }
+
+var a = document.createElement('div');
+document.getElementById('host').appendChild(a);
+a.setAttribute('style', 'perspective-origin: top 30px left 40px');
+void a.offsetHeight;
+out.push('attr|names=' + names(a) + '|echo=' + a.style.getPropertyValue('perspective-origin')
+  + '|attr=' + a.getAttribute('style') + '|text=' + a.style.cssText
+  + '|comp=' + getComputedStyle(a).getPropertyValue('perspective-origin'));
+
+var s = document.getElementById('s-2');
+void s.offsetHeight;
+out.push('sheet|names=' + names(s) + '|echo=' + s.style.getPropertyValue('perspective-origin')
+  + '|comp=' + getComputedStyle(s).getPropertyValue('perspective-origin')
+  + '|support=' + (CSS.supports('perspective-origin', 'right 10px bottom 20px') ? '1' : '0'));
+
+var r = document.createElement('div');
+document.getElementById('host').appendChild(r);
+r.style.setProperty('perspective-origin', 'left 10px top 20px');
+r.style.removeProperty('perspective-origin');
+void r.offsetHeight;
+out.push('remove|n=' + r.style.length + '|text=' + r.style.cssText
+  + '|comp=' + getComputedStyle(r).getPropertyValue('perspective-origin'));
+
+var w = document.createElement('div');
+document.getElementById('host').appendChild(w);
+w.style.perspectiveOrigin = 'left 10px top 20px';
+void w.offsetHeight;
+out.push('idlset|n=' + w.style.length + '|text=' + w.style.cssText
+  + '|echo=' + w.style.getPropertyValue('perspective-origin')
+  + '|comp=' + getComputedStyle(w).getPropertyValue('perspective-origin'));
+
+var t = document.createElement('div');
+document.getElementById('host').appendChild(t);
+t.style.setProperty('transform-origin', 'left 10px top 20px');
+void t.offsetHeight;
+out.push('to4|n=' + t.style.length + '|text=' + t.style.cssText
+  + '|echo=' + t.style.getPropertyValue('transform-origin')
+  + '|comp=' + getComputedStyle(t).getPropertyValue('transform-origin')
+  + '|support=' + (CSS.supports('transform-origin', 'left 10px top 20px') ? '1' : '0'));
+
+var pa = document.getElementById('p-a'), ca = document.getElementById('c-a');
+void ca.offsetHeight;
+out.push('inherit|pcomp=' + getComputedStyle(pa).getPropertyValue('perspective-origin')
+  + '|ccomp=' + getComputedStyle(ca).getPropertyValue('perspective-origin')
+  + '|pwidth=' + pa.getBoundingClientRect().width.toFixed(1)
+  + '|cwidth=' + ca.getBoundingClientRect().width.toFixed(1));
+
+var sp = document.getElementById('s-3');
+void sp.offsetHeight;
+out.push('bssheet|names=' + names(sp) + '|echo=' + sp.style.getPropertyValue('border-spacing')
+  + '|h=' + sp.style.getPropertyValue('-webkit-border-horizontal-spacing')
+  + '|v=' + sp.style.getPropertyValue('-webkit-border-vertical-spacing')
+  + '|ch=' + getComputedStyle(sp).getPropertyValue('-webkit-border-horizontal-spacing')
+  + '|cv=' + getComputedStyle(sp).getPropertyValue('-webkit-border-vertical-spacing'));
+
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

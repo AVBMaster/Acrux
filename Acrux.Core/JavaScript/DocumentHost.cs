@@ -1203,6 +1203,7 @@ public class ComputedStyleHost
     private static string? TransformOriginUsed(string text, double width, double height)
     {
         var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 4) return PositionedOriginUsed(parts, width, height);
         if (parts.Length != 2 && parts.Length != 3) return null;
         var x = OriginEndpointUsed(parts[0], width);
         var y = OriginEndpointUsed(parts[1], height);
@@ -1215,6 +1216,35 @@ public class ComputedStyleHost
             return z == null ? null : $"{x} {y} {z}";
         }
         return $"{x} {y}";
+    }
+
+    /// <summary>The four-component &lt;position&gt;: each axis is an edge keyword with a length
+    /// measured from it, in either order (CSS Position 3 §5.2). Measured against a 200×0 box:
+    /// 'right 10px bottom 20px' resolves to '190px -20px', 'left 10px top 20px' to '10px 20px' and
+    /// 'left 10% top 20%' to '20px 0px' — so the offset is priced against the axis it sits on, the
+    /// same box the keyword names rather than nothing.</summary>
+    private static string? PositionedOriginUsed(string[] parts, double width, double height)
+    {
+        string? x = null, y = null;
+        for (int i = 0; i + 1 < parts.Length; i += 2)
+        {
+            var keyword = parts[i].ToLowerInvariant();
+            bool horizontal = keyword is "left" or "right";
+            double size = horizontal ? width : height;
+            var length = OriginEndpointUsed(parts[i + 1], size);
+            if (length == null || !TryNumber(length[..^2], out var px)) return null;
+            double offset = keyword switch
+            {
+                "left" or "top" => px,
+                "right" or "bottom" => size - px,
+                "center" => size / 2 + px,
+                _ => double.NaN,
+            };
+            if (double.IsNaN(offset)) return null;
+            var resolved = Px(LayoutUnit((float)offset));
+            if (horizontal) x = resolved; else y = resolved;
+        }
+        return x == null || y == null ? null : $"{x} {y}";
     }
 
     private static string? OriginEndpointUsed(string token, double size)

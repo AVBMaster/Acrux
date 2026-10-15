@@ -431,6 +431,10 @@ public enum CssPropertyId
     ScrollbarGutter,
     FieldSizing,
     AnchorName,
+    /// <summary>'baseline-source' (CSS Inline 3 §3.1). The id exists so the cascade stores the
+    /// keyword and 'getComputedStyle' has something to print: measured, the reference engine answers
+    /// 'auto' for a box that declares nothing, and 'none' is not a value of this property.</summary>
+    BaselineSource,
     PositionAnchor,
     AnchorDefault,
     AnchorScope,
@@ -487,6 +491,15 @@ public enum CssPropertyId
     WebkitTextOrientation,
     WebkitTextSecurity,
     WebkitWritingMode,
+    // The two halves 'border-spacing' expands to. They are not aliases of an unprefixed twin — they
+    // are one axis of it each — so they take no <see cref="CssPropertyIdExtensions.BehaviourId"/>
+    // entry; they need ids for the reason 'caret-shape' did: a stylesheet writes the shorthand, the
+    // cascade expands it into these two names, and without an id the parser answers Invalid and the
+    // gaps a table's cells sit at disappear before the declaration reaches the applier (measured: a
+    // sheet rule 'border-spacing: 4px 6px' left the cells touching while the same value written
+    // through the CSSOM gapped them by 4px and 6px).
+    WebkitBorderHorizontalSpacing,
+    WebkitBorderVerticalSpacing,
     // 'caret-shape' is read, validated, stored and echoed but never consumed (the platform caret is
     // one shape). It needs an id so the cascade dispatches the declaration to the applier at all —
     // without one FromString answers Invalid and the value is dropped before it can reach the field

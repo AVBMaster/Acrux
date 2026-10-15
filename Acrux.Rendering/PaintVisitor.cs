@@ -879,7 +879,7 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
                 .Where(c => c.ComputedStyle != null && c.ComputedStyle.Display != DisplayType.None)
                 .ToList();
 
-            foreach (var childElement in ChildrenInStackingOrder(children))
+            foreach (var childElement in ChildrenInStackingOrder(children, element))
                 VisitElement(childElement);
         }
 
@@ -893,13 +893,20 @@ _scrollableAreaPainter = new ScrollableAreaPainter(_displayList);
     /// boxes; each group keeps its document order (or z-index order where the spec
     /// sorts by it).
     /// </summary>
-    private static IEnumerable<Element> ChildrenInStackingOrder(List<Element> children)
+    private static IEnumerable<Element> ChildrenInStackingOrder(List<Element> children, Element parent)
     {
+        // A z-index only orders a box it applies to (see ComputedStyle.ZIndexAffectsStacking): the
+        // cascade keeps the number for every box, because that is the property's computed value, so
+        // the question "does it order this one" is asked here rather than answered by erasing it.
+        bool parentIsFlexOrGrid = parent.ComputedStyle?.Display is DisplayType.Flex or DisplayType.InlineFlex
+            or DisplayType.Grid or DisplayType.InlineGrid;
         List<Element>? negative = null, flow = null, floats = null, positioned = null;
         foreach (var child in children)
         {
             var style = child.ComputedStyle!;
-            int z = style.ZIndex ?? 0;
+            bool orders = style.ZIndexAffectsStacking
+                || (style.ZIndex is not null && parentIsFlexOrGrid);
+            int z = orders ? style.ZIndex ?? 0 : 0;
             if (z < 0)
                 (negative ??= new List<Element>()).Add(child);
             else if (style.Position != PositionType.Static)

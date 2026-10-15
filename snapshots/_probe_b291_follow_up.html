@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b291 probe 2 &#8212; what the second batch of families takes</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }</style></head><body>
+<pre id="report"></pre>
+<script>
+/* The same harness as probe 1, on the cases the first batch raised: the math spellings of the
+ * integer properties, the percentage that a spacing property keeps rather than resolves, the two
+ * origin properties that print a pair, the legacy pair 'border-spacing' enumerates as, and the
+ * keyword sets' refusals. */
+var CASES = [
+"order: calc(1 + 1)",
+  "order: +1",
+  "order: 1e2",
+  "order: 1.0",
+  "z-index: calc(1 + 1)",
+  "z-index: +1",
+  "z-index: 1.0",
+  "z-index: 2",
+  "z-index: normal",
+  "opacity: calc(0.5)",
+  "opacity: 1e2",
+  "opacity: 101%",
+  "opacity: -5%",
+  "opacity: 50%",
+  "grid-auto-rows: min-content",
+  "grid-auto-rows: max-content",
+  "grid-auto-rows: fit-content(10px)",
+  "grid-auto-rows: 1fr 2fr",
+  "grid-auto-rows: auto auto",
+  "grid-auto-rows: repeat(auto-fill, 10px)",
+  "grid-auto-rows: minmax(auto, 1fr)",
+  "grid-auto-rows: bogus auto",
+  "grid-auto-columns: 1fr",
+  "letter-spacing: calc(1px + 1px)",
+  "letter-spacing: 0px",
+  "letter-spacing: 0em",
+  "letter-spacing: 50%",
+  "word-spacing: 0",
+  "word-spacing: normal",
+  "word-spacing: 0px",
+  "word-spacing: 50%",
+  "perspective: calc(10px)",
+  "perspective: 1e2px",
+  "perspective: 0px",
+  "perspective: none",
+  "border-spacing: 0 0",
+  "border-spacing: calc(1px)",
+  "border-spacing: 1px -1px",
+  "border-spacing: 50%",
+  "border-spacing: 2px 4px",
+  "overflow-clip-margin: 0px",
+  "overflow-clip-margin: border-box",
+  "overflow-clip-margin: padding-box",
+  "overflow-clip-margin: content-box 10px",
+  "text-decoration-thickness: 1",
+  "text-decoration-thickness: calc(1px)",
+  "text-decoration-thickness: 50%",
+  "text-underline-offset: 1",
+  "text-underline-offset: 50% auto",
+  "text-underline-offset: 50%",
+  "text-transform: capitalize full-width",
+  "mix-blend-mode: normal, multiply",
+  "ruby-position: over under",
+  "caption-side: block-start",
+  "visibility: hidden visible",
+  "image-rendering: auto auto",
+  "scrollbar-width: 10px",
+  "scrollbar-color: red red",
+  "scrollbar-color: #f00",
+  "scrollbar-color: currentcolor blue",
+  "background-blend-mode: screen, multiply, auto",
+  "background-blend-mode: multiply, screen",
+  "text-shadow: 1px 2px red",
+  "text-shadow: none",
+  "text-shadow: 1px 2px 3px 4px red",
+  "text-shadow: 1px 2px red, 3px 4px",
+  "baseline-source: AUTO",
+  "baseline-source: none",
+  "clear: left right",
+  "clear: none",
+  "perspective-origin: left top",
+  "perspective-origin: 10px",
+  "perspective-origin: center",
+  "perspective-origin: right bottom",
+  "perspective-origin: 10% 20% 30%",
+  "perspective-origin: left 10px top 20px",
+  "perspective-origin: top left 10px",
+  "object-fit: FILL",
+  "table-layout: AUTO",
+  "transform-style: preserve-3d flat",
+  "backface-visibility: VISIBLE",
+  "text-indent: 10px hanging each-line",
+  "text-indent: 10px 20px",
+  "text-indent: hanging",
+  "text-indent: each-line hanging",
+  "text-indent: 50% hanging",
+  "line-height: 0",
+  "line-height: -1px",
+  "aspect-ratio: 1 / 0",
+  "align-tracks: normal bogus",
+  "transform-origin: left",
+  "transform-origin: 10px",
+  "transform-origin: left top 10px",
+  "transform-origin: top left",
+  "transform-origin: bogus",
+  "text-indent: each-line"
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var decl = CASES[i];
+  var prop = decl.slice(0, decl.indexOf(':')).trim();
+  var value = decl.slice(decl.indexOf(':') + 1).trim();
+  var d = document.createElement('div');
+  document.body.appendChild(d);
+  d.style.setProperty(prop, value);
+  var names = [];
+  for (var j = 0; j < d.style.length; j++) names.push(d.style.item(j));
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) {}
+  var extra = '';
+  if (prop === 'border-spacing') {
+    extra = '|h=' + d.style.getPropertyValue('-webkit-border-horizontal-spacing')
+          + '|v=' + d.style.getPropertyValue('-webkit-border-vertical-spacing');
+  }
+  out.push(i + '|' + prop + '|' + value + '|n=' + d.style.length + '|names=' + names.join(',')
+           + '|echo=' + d.style.getPropertyValue(prop) + '|comp=' + getComputedStyle(d).getPropertyValue(prop)
+           + '|sup=' + sup + extra + '|text=' + d.style.cssText);
+}
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

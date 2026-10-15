@@ -253,11 +253,17 @@ public static class ComputedValueSerializer
                     : Px(style.LineHeightPx is float lhm && style.LineHeightFromMath
                         ? (float)(System.Math.Floor(lhm * 64) / 64)
                         : (style.LineHeightPx ?? style.LineHeight * style.FontSize));
-            case "letter-spacing": return style.LetterSpacingIsNormal ? "normal" : Px(style.LetterSpacing);
-            // 'word-spacing' has no keyword in its computed value (CSS Text 4 §5.1, measured):
-            // 'normal' is the zero of the property and reads back as '0px'. 'letter-spacing'
-            // keeps its keyword, which is why the two do not share a line here.
-            case "word-spacing": return style.WordSpacingIsNormal ? "0px" : Px(style.WordSpacing);
+            // An authored percentage is priced only at used-value time, so both properties answer it
+            // unchanged (measured: 'letter-spacing: 50%' and 'word-spacing: 50%' each compute '50%').
+            // Beyond that the two differ: 'letter-spacing' calls its zero 'normal' as well as its
+            // keyword (measured: 'letter-spacing: 0' and '0em' both compute 'normal'), while
+            // 'word-spacing' has no keyword left in its computed value and says '0px' (measured).
+            case "letter-spacing": return style.LetterSpacingPercent != 0
+                    ? CssValueTokenizer.Num(style.LetterSpacingPercent) + "%"
+                    : style.LetterSpacingIsNormal || style.LetterSpacing == 0 ? "normal" : Px(style.LetterSpacing);
+            case "word-spacing": return style.WordSpacingPercent != 0
+                    ? CssValueTokenizer.Num(style.WordSpacingPercent) + "%"
+                    : style.WordSpacingIsNormal ? "0px" : Px(style.WordSpacing);
             // The computed value of 'text-indent' is the resolved length with the two flags still
             // attached, in the engine's own order (measured: '3em hanging' reads '48px hanging').
             case "text-indent": {
@@ -564,9 +570,12 @@ public static class ComputedValueSerializer
             // The ratio of two numbers, printed as the pair it was authored with (measured:
             // '1/2' reads back as '1 / 2', '0.5' as '0.5 / 1') — not as their quotient.
             case "aspect-ratio":
-                return style.AspectRatio > 0
-                    ? style.AspectRatioPair ?? $"{CssValueTokenizer.Num(style.AspectRatio)} / 1"
-                    : "auto";
+                // The pair the page wrote wins over the quotient, because a quotient cannot say
+                // '0 / 1' or '1 / 0' (measured: both compute as written).
+                return style.AspectRatioPair
+                    ?? (style.AspectRatio > 0
+                        ? $"{CssValueTokenizer.Num(style.AspectRatio)} / 1"
+                        : "auto");
 
             // -------------------------------------------------------- numbers
             case "opacity": return CssValueTokenizer.Num(style.Opacity);
@@ -695,7 +704,14 @@ public static class ComputedValueSerializer
                         ? CssValueTokenizer.Num(style.TextDecorationThicknessPercent) + "%"
                         : Px(style.TextDecorationThickness);
             case "text-underline-offset":
-                return style.TextUnderlineOffsetIsAuto ? "auto" : Px(style.TextUnderlineOffset);
+                // The percentage is kept the way the thickness keeps its own (measured: '50%'
+                // computes '50%'), and 'auto' is the initial.
+                return style.TextUnderlineOffsetIsAuto ? "auto"
+                    : style.TextUnderlineOffsetPercent != 0
+                        ? CssValueTokenizer.Num(style.TextUnderlineOffsetPercent) + "%"
+                        : Px(style.TextUnderlineOffset);
+            // CSS Inline 3 §3.1: one of three keywords, 'auto' the initial (measured).
+            case "baseline-source": return style.BaselineSource;
             // 'filled' is the initial shape style, and the reference engine leaves it out of the
             // computed value (measured: 'text-emphasis: filled circle' reads back as 'circle').
             case "text-emphasis-style": return TextEmphasisStyleText(style.TextEmphasisStyle);
@@ -845,8 +861,8 @@ public static class ComputedValueSerializer
                     GridAutoFlowType.ColumnDense => "column dense",
                     _ => "row",
                 };
-            case "grid-auto-columns": return style.GridAutoColumns ?? "auto";
-            case "grid-auto-rows": return style.GridAutoRows ?? "auto";
+            case "grid-auto-columns": return TrackListText(style.GridAutoColumns ?? "auto");
+            case "grid-auto-rows": return TrackListText(style.GridAutoRows ?? "auto");
             case "grid-template-areas": return style.GridTemplateAreas ?? "none";
             // A track list reads back the sizes LAYOUT gave the tracks, not the list the author
             // wrote: 'grid-template-columns: 1fr 2fr' in a 100px grid is '33.3281px 66.6719px'
@@ -861,6 +877,11 @@ public static class ComputedValueSerializer
                 return style.BorderRowSpacing is null || Almost(style.BorderSpacing, style.BorderRowSpacing.Value)
                     ? Px(style.BorderSpacing)
                     : $"{Px(style.BorderSpacing)} {Px(style.BorderRowSpacing.Value)}";
+            // The same two fields under the legacy longhand names the shorthand enumerates as, which
+            // a page reads on their own (measured: a table whose sheet says 'border-spacing: 2px 3px'
+            // answers '-webkit-border-horizontal-spacing' with '2px' and the vertical with '3px').
+            case "-webkit-border-horizontal-spacing": return Px(style.BorderSpacing);
+            case "-webkit-border-vertical-spacing": return Px(style.UsedBorderRowSpacing);
             case "zoom": return CssValueTokenizer.Num(style.Zoom);
         }
 
@@ -868,6 +889,50 @@ public static class ComputedValueSerializer
     }
 
     private static bool Almost(float a, float b) => Math.Abs(a - b) < 0.001f;
+
+    /// <summary>A track whose minimum is <c>auto</c> has nothing to say beyond its maximum: CSS Grid
+    /// 1 §7.2.3 stores one sizing function for it, and the reference engine prints that one (measured:
+    /// 'grid-auto-rows: minmax(auto, 1fr)' computes '1fr' while 'minmax(10px, 20px)' keeps both
+    /// sides). Split at the top level so a nested comma inside calc() is not a separator.</summary>
+    private static string TrackListText(string authored)
+    {
+        var tracks = SplitTrackTokensWithNames(authored);
+        if (tracks.Count == 0) return authored;
+        var changed = false;
+        for (int i = 0; i < tracks.Count; i++)
+        {
+            var token = tracks[i].Trim();
+            if (!token.StartsWith("minmax(", StringComparison.OrdinalIgnoreCase)) continue;
+            int close = token.LastIndexOf(')');
+            if (close < 0) continue;
+            var args = SplitTopLevelOutside(token[7..close], ',');
+            if (args.Count != 2 || args[0].Trim().ToLowerInvariant() != "auto") continue;
+            tracks[i] = args[1].Trim();
+            changed = true;
+        }
+        return changed ? string.Join(" ", tracks) : authored;
+    }
+
+    /// <summary>The comma-separated parts of a function's argument list, ignoring commas that sit
+    /// inside a nested function or a bracketed line-name group.</summary>
+    private static List<string> SplitTopLevelOutside(string text, char separator)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c is '(' or '[') depth++;
+            else if (c is ')' or ']') { if (depth > 0) depth--; }
+            else if (c == separator && depth == 0)
+            {
+                parts.Add(text[start..i]);
+                start = i + 1;
+            }
+        }
+        parts.Add(text[start..]);
+        return parts;
+    }
 
     /// <summary>Two axis keywords sharing one shorthand value: equal axes are written once
     /// (CSS Overscroll Behavior 1 §3, measured: 'contain' for both, 'contain auto' when only
@@ -1232,6 +1297,11 @@ public static class ComputedValueSerializer
         if (string.IsNullOrWhiteSpace(origin)) return "50% 50%";
         var parts = origin.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0) return "50% 50%";
+        // 'perspective-origin: right 10px bottom 20px' names an edge and measures from it, which is
+        // two offsets the box has to price; the host that knows the box does that (see
+        // DocumentHost.TransformOriginUsed), so the four-component spelling is passed along as
+        // written rather than folded into a wrong pair of keywords.
+        if (parts.Length == 4) return origin.Trim();
         static string Fold(string token) => token.ToLowerInvariant() switch
         {
             "left" => "0%",
@@ -1420,8 +1490,11 @@ public static class ComputedValueSerializer
             if (sb.Length > 0) sb.Append(", ");
             // 'text-shadow' has no spread, so its fourth length would be a grammar error; the
             // reference engine still prints the blur and stops (measured: '1px 2px 0px').
-            sb.Append(ShadowText(s.Color, s.OffsetX, s.OffsetY, s.BlurRadius, 0, false,
-                withSpread: false));
+            // A shadow with no colour of its own is the text's colour, resolved at computed-value
+            // time like the box shadow's is (measured: 'text-shadow: 1px 2px' on a page whose colour
+            // is rgb(9,9,9) reads 'rgb(9, 9, 9) 1px 2px 0px').
+            sb.Append(ShadowText(s.ColorIsCurrentColor ? style.Color : s.Color,
+                s.OffsetX, s.OffsetY, s.BlurRadius, 0, false, withSpread: false));
         }
         return sb.ToString();
     }
@@ -1803,7 +1876,7 @@ public static class ComputedValueSerializer
     private static string GridTrackListText(string? specified, float[]? used)
     {
         var authored = string.IsNullOrWhiteSpace(specified) ? null : specified!.Trim();
-        if (used == null || used.Length == 0) return authored ?? "none";
+        if (used == null || used.Length == 0) return authored == null ? "none" : TrackListText(authored);
         var sizes = used.Select(v => Px(v)).ToList();
         if (authored == null || authored == "none") return string.Join(" ", sizes);
         return InterleaveLineNames(authored, sizes) ?? string.Join(" ", sizes);

@@ -188,11 +188,20 @@ public static class IndividualTransforms
     /// or percentage for either — and, for 'transform-origin' only, a third bare <c>&lt;length&gt;</c>
     /// that is the depth. Measured consequences: 'right 10px' is x=right, y=10px and NOT an offset
     /// from the right edge, a keyword cannot be used twice, and a percentage in the depth position
-    /// takes the whole declaration down with it.</summary>
-    public static string? CanonicalOrigin(string? value, ComputedStyle style, bool allowDepth)
+    /// takes the whole declaration down with it. Where no depth can sit, the four-component
+    /// <c>&lt;position&gt;</c> of CSS Position 3 §5.2 takes its place — two edge keywords, each with
+    /// the offset measured from it, in either order — and there the keywords are kept, because an
+    /// offset is priced from the edge it names rather than from the axis's start.</summary>
+    public static string? CanonicalOrigin(string? value, ComputedStyle? style, bool allowDepth)
     {
         if (!TryTokens(value, out var tokens)) return null;
-        if (tokens.Length == 0 || tokens.Length > 3) return null;
+        if (tokens.Length == 0 || tokens.Length > 4) return null;
+
+        if (tokens.Length == 4)
+        {
+            if (allowDepth) return null;
+            return CanonicalPositionedOrigin(tokens, style);
+        }
 
         string? depth = null;
         if (tokens.Length == 3)
@@ -242,6 +251,33 @@ public static class IndividualTransforms
         y ??= "50%";
         if (depth != null && !IsZeroPixels(depth)) return $"{x} {y} {depth}";
         return $"{x} {y}";
+    }
+
+    /// <summary>The four-component <c>&lt;position&gt;</c>: one edge keyword and the length measured
+    /// from it per axis, the two pairs in either order (measured: 'left 10px top 20px' and
+    /// 'top 20px left 10px' are the same declaration and both compute '10px 20px' on a 200×0 box,
+    /// while 'center 10px top 20px' — a center that owns no edge to measure from — and
+    /// 'left 10px right 20px' — one axis twice — are each dropped).</summary>
+    private static string? CanonicalPositionedOrigin(string[] tokens, ComputedStyle? style)
+    {
+        string? horizontal = null, vertical = null;
+        for (int i = 0; i < tokens.Length; i += 2)
+        {
+            var keyword = tokens[i].ToLowerInvariant();
+            if (keyword is not ("left" or "right" or "top" or "bottom")) return null;
+            if (!TryLengthText(tokens[i + 1], style, allowPercent: true, out var offset)) return null;
+            if (keyword is "left" or "right")
+            {
+                if (horizontal != null) return null;
+                horizontal = $"{keyword} {offset}";
+            }
+            else
+            {
+                if (vertical != null) return null;
+                vertical = $"{keyword} {offset}";
+            }
+        }
+        return horizontal == null || vertical == null ? null : $"{horizontal} {vertical}";
     }
 
     /// <summary>The axis a rotation vector names: one of the three coordinate axes, or null for a
@@ -308,8 +344,9 @@ public static class IndividualTransforms
     /// <summary>One &lt;length&gt; or &lt;length-percentage&gt; in the spelling the reference engine
     /// uses. Returns null when the token is not a length at all, or is one the property's grammar
     /// does not allow (a percentage where <paramref name="allowPercent"/> is false, 'auto',
-    /// 'max-content').</summary>
-    private static bool TryLengthText(string token, ComputedStyle style, bool allowPercent, out string text)
+    /// 'max-content'). A null <paramref name="style"/> prices an <c>em</c> against the medium font
+    /// size, which is what a grammar-only question has to do.</summary>
+    private static bool TryLengthText(string token, ComputedStyle? style, bool allowPercent, out string text)
     {
         text = token;
         if (!Length.IsLength(token))

@@ -1018,6 +1018,12 @@ public class ComputedStyle
     public string CaretShape { get; set; } = "auto";
     public VisibilityType Visibility { get; set; } = VisibilityType.Visible;
     public int? ZIndex { get; set; }
+    /// <summary>Whether this box's <c>z-index</c> says anything about the painting order. CSS 2.1
+    /// §E.2 gives one to a positioned box and CSS Flexbox 1 §4.3 / CSS Grid 1 §5.3 to a flex or grid
+    /// item; a static in-flow box keeps the number as its <i>computed value</i> — measured, a plain
+    /// div with 'z-index: 2' answers '2' — and paints with nothing. The cascade used to erase the
+    /// number instead, which is what made the CSSOM read 'auto'.</summary>
+    public bool ZIndexAffectsStacking { get; set; }
     public string? Cursor { get; set; } = "auto";
     public float Opacity { get; set; } = 1.0f;
     public List<BoxShadowValue>? BoxShadow { get; set; }
@@ -1150,6 +1156,15 @@ public class ComputedStyle
     /// but they are different computed values, and the CSSOM has to tell them apart.</summary>
     public bool LetterSpacingIsNormal { get; set; } = true;
     public bool WordSpacingIsNormal { get; set; } = true;
+    /// <summary>An authored percentage on the two spacing properties. A percentage is priced only at
+    /// used-value time, so the computed value keeps it as the page wrote it (measured:
+    /// 'letter-spacing: 50%' computes '50%', and a child inherits that same '50%') while the fields
+    /// above still carry the font-relative pixels the line layouter uses. Zero means none was
+    /// authored. The two properties differ on nothing else — but 'letter-spacing' also calls a zero
+    /// length 'normal' on the computed surface (measured: '0' and '0em' both read 'normal'), which
+    /// 'word-spacing' does not ('0' reads '0px').</summary>
+    public float LetterSpacingPercent { get; set; }
+    public float WordSpacingPercent { get; set; }
     public float TextIndent { get; set; }
     /// <summary>'text-indent: hanging' inverts the indent: the first line stays at
     /// the start edge and the remaining lines are indented (CSS Text 3 §5.2).</summary>
@@ -1202,6 +1217,12 @@ public float TextDecorationThicknessPercent { get; set; }
 /// <summary>Authored 'auto' keyword of 'text-underline-offset'.</summary>
 public bool TextUnderlineOffsetIsAuto { get; set; } = true;
 public float TextUnderlineOffset { get; set; }
+/// <summary>An authored percentage of 'text-underline-offset', kept on the computed surface the way
+/// the thickness percentage is (measured: 'text-underline-offset: 50%' computes '50%').</summary>
+public float TextUnderlineOffsetPercent { get; set; }
+/// <summary>'baseline-source' (CSS Inline 3 §3.1): the three keywords of the set, 'auto' the initial
+/// (measured — 'none' is not one of them, and a box that declares nothing answers 'auto').</summary>
+public string BaselineSource { get; set; } = "auto";
 /// <summary>'text-underline-position' (CSS Text Decoration 4 §3.2).</summary>
 public TextUnderlinePositionType TextUnderlinePosition { get; set; } = TextUnderlinePositionType.Auto;
 /// <summary>'text-decoration-skip-ink' (CSS Text Decoration 4 §2.1).</summary>
@@ -1798,6 +1819,8 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             PointerEvents = PointerEvents, UserSelect = UserSelect,
             Direction = Direction, LetterSpacing = LetterSpacing, WordSpacing = WordSpacing,
             LetterSpacingIsNormal = LetterSpacingIsNormal, WordSpacingIsNormal = WordSpacingIsNormal,
+            LetterSpacingPercent = LetterSpacingPercent, WordSpacingPercent = WordSpacingPercent,
+            ZIndexAffectsStacking = ZIndexAffectsStacking,
             // Carried so a style cloned before adjustment still gets its logical
             // properties re-mapped; replaying an already-mapped pair is idempotent.
             PendingBoxEdgeProperties = PendingBoxEdgeProperties == null
@@ -1813,6 +1836,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             TextDecorationThicknessFromFont = TextDecorationThicknessFromFont,
             TextDecorationThicknessPercent = TextDecorationThicknessPercent,
             TextUnderlineOffset = TextUnderlineOffset, TextUnderlineOffsetIsAuto = TextUnderlineOffsetIsAuto,
+            TextUnderlineOffsetPercent = TextUnderlineOffsetPercent, BaselineSource = BaselineSource,
             TextUnderlinePosition = TextUnderlinePosition, TextDecorationSkipInk = TextDecorationSkipInk,
             BoxDecorationBreak = BoxDecorationBreak,
             TextEmphasis = TextEmphasis, TextEmphasisColor = TextEmphasisColor, TextEmphasisStyle = TextEmphasisStyle,
@@ -2016,6 +2040,9 @@ public static class CssFloatKeywords
             case "both": result = ClearType.Both; return true;
             case "inline-start": result = ClearType.InlineStart; return true;
             case "inline-end": result = ClearType.InlineEnd; return true;
+            // CSS 2.1 §10.5.2's own keyword, which the reference engine still takes: 'clear: none'
+            // is a declaration and not a dropped one (measured), so the parse has to say so too.
+            case "none": result = ClearType.None; return true;
             default: result = ClearType.None; return false;
         }
     }
@@ -2313,7 +2340,8 @@ public enum GridAutoFlowType { Row, Column, Dense, ColumnDense }
 public enum ZoomType { Normal, Reset }
 
 public record BoxShadowValue(SKColor Color, float OffsetX, float OffsetY, float BlurRadius, float Spread, bool Inset = false, bool ColorIsCurrentColor = false);
-public record TextShadowValue(SKColor Color, float OffsetX, float OffsetY, float BlurRadius);
+public record TextShadowValue(SKColor Color, float OffsetX, float OffsetY, float BlurRadius,
+    bool ColorIsCurrentColor = false);
 
 public enum ReflectionDirectionType
 {

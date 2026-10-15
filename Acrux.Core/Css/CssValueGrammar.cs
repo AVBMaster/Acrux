@@ -875,7 +875,7 @@ public static class CssValueGrammar
             if (word.Equals("auto", StringComparison.OrdinalIgnoreCase)
                 || word.Equals("content", StringComparison.OrdinalIgnoreCase)) return true;
             if (IsMathFunctionCall(word, IsLengthOrPercentage)) return true;
-            return IsNonNegativeLengthOrPercentage(word);
+            return !IsFitContentFunction(word) && IsNonNegativeLengthOrPercentage(word);
         },
         // CSS Color Adjustment 1 §5.2: 'normal' alone, or a list of scheme keywords and custom
         // names. Measured word by word: 'light dark', 'light only' and even 'brown' stand, 'normal
@@ -917,7 +917,9 @@ public static class CssValueGrammar
                     if (box != null) return false;
                     box = p;
                 }
-                else if (length == null && IsLengthOrPercentage(word)) length = p;
+                // A bare number is no length for this property (measured: 'overflow-clip-margin: 0'
+                // falls while '0px' stands), which is the one place the zero is not allowed through.
+                else if (length == null && IsDimensionedLength(word)) length = p;
                 else return false;
             }
             return box != null || length != null;
@@ -974,9 +976,13 @@ public static class CssValueGrammar
             "xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "xxx-large",
             "larger", "smaller", "caption", "icon", "menu", "message-box", "small-caption",
             "status-bar", "math", "auto"),
-        // CSS Text 4 §5.1: a length or a percentage plus the 'normal' keyword.
+        // CSS Text 4 §5.1: a length or a percentage plus the 'normal' keyword — and the number has
+        // to say what it is measured in, so 'letter-spacing: 1' is dropped while 'letter-spacing: 0'
+        // and '50%' stand (measured, all three; the percentage is also what the computed value keeps).
         CssPropertyId.LetterSpacing or CssPropertyId.WordSpacing
-            => static text => IsLengthList(text, "normal"),
+            => static text => SplitComponents(text).Count >= 1 && SplitComponents(text).All(word =>
+                word.Equals("normal", StringComparison.OrdinalIgnoreCase)
+                || IsDimensionedLengthPercentageOrZero(word)),
         // CSS Sizing 3, measured keyword by keyword and one component at a time: a size takes ONE
         // value, so 'width: auto 30px' and 'max-width: none none' are no declaration. 'auto' belongs
         // to the sizes and the minimums, 'none' ONLY to the maximums (the reference engine drops
@@ -1168,10 +1174,14 @@ public static class CssValueGrammar
         // Numbers and integers, with the keywords the property adds: 'opacity' takes any number
         // (out of range is clamped later, not rejected now) and 'z-index' takes an integer or
         // 'auto' (measured: 'opacity: bogus' and 'z-index: bogus' are both no condition).
-        CssPropertyId.Opacity => static text => IsNumberList(text, "initial", "inherit"),
+        CssPropertyId.Opacity => static text =>
+            SplitComponents(text).Count == 1 && IsOpacityNumber(text.Trim()),
         CssPropertyId.ZIndex => static text => IsOneOf(text, "auto") || IsIntegerList(text),
-        CssPropertyId.LineHeight
-            => static text => IsLengthList(text, "normal") || IsNumberOnly(text),
+        // CSS 2.1 §10.8 / CSS Line Grid: a used line height of less than nothing is out of range,
+        // so a negative length and a negative number are each dropped ('-1px', '-1'), while the
+        // zero that spells itself either way stands (measured: '-0px' and '0' are both values).
+        CssPropertyId.LineHeight => static text =>
+            (IsLengthList(text, "normal") || IsNumberOnly(text)) && !IsNegativeValue(text),
         CssPropertyId.ScrollbarGutter => IsScrollbarGutter,
         // CSS Text 3 §3.5: one keyword per axis, and a string may stand in for the ellipsis. The
         // reference engine takes 'clip ellipsis' and 'text-overflow: "…"' and refuses
@@ -1376,7 +1386,116 @@ public static class CssValueGrammar
         // (measured: 'widows: auto', 'widows: 0' and 'widows: 1.5' all fall).
         CssPropertyId.Widows or CssPropertyId.Orphans => static text =>
             IsIntegerText(text) && int.TryParse(text.Trim(), out var count) && count >= 1,
+        // ===== The property families measured value by value in b291 (268 cases,
+        // snapshots/_probe_b291_unswept_families.html). Not one of these had a grammar arm before,
+        // so each of them took whatever word a page wrote.
+        // CSS Images 3 §5.1: one keyword of the five.
+        CssPropertyId.ObjectFit => static text => IsOneWordOnly(text,
+            "fill", "contain", "cover", "none", "scale-down"),
+        // CSS Images 3 §5.3: three words. 'smooth', 'high-quality' and 'low-quality' are the
+        // Compositing draft's vocabulary and the reference engine drops all three (measured).
+        CssPropertyId.ImageRendering => static text => IsOneWordOnly(text,
+            "auto", "crisp-edges", "pixelated"),
+        // CSS Blend 1 §3: the sixteen, one at a time — 'plus-darker' belongs to the Compositing
+        // draft and is dropped here (measured).
+        CssPropertyId.MixBlendMode => static text => IsOneWordOnly(text, BlendModeWords),
+        // The background's is a COMMA list, one blend per layer; the same words separated by a space
+        // are no value (measured: 'multiply, screen' stands, 'multiply screen' falls).
+        CssPropertyId.BackgroundBlendMode => static text =>
+        {
+            var layers = SplitTopLevel(text, ',');
+            return layers.Count > 0 && layers.All(layer =>
+            {
+                var words = SplitComponents(layer);
+                return words.Count == 1 && IsOneOf(words[0], BlendModeWords);
+            });
+        },
+        // CSS Text 3 §5.3: the four. 'full-width' and 'full-size-kana' are §5.4's feature, which the
+        // reference engine does not answer here (measured: both dropped).
+        CssPropertyId.TextTransform => static text => IsOneWordOnly(text,
+            "none", "capitalize", "uppercase", "lowercase"),
+        // CSS Ruby 1 §4.1: 'over' and 'under' only. The vertical writing modes' 'left'/'right', the
+        // draft's 'alternate' and the two-word form are each dropped (measured).
+        CssPropertyId.RubyPosition => static text => IsOneWordOnly(text, "over", "under"),
+        // CSS Scrollbars 1 §3.2: one keyword.
+        CssPropertyId.ScrollbarWidth => static text => IsOneWordOnly(text, "auto", "thin", "none"),
+        // CSS Adjust 1 §4.2: one keyword.
+        CssPropertyId.ForcedColorAdjust => static text => IsOneWordOnly(text, "auto", "none"),
+        // CSS Tables 1 §4.2: 'top' and 'bottom'. The side captions CSS 2.1 §11.2.2 spelled
+        // 'left'/'right' — and the logical pair a later draft added — are dropped (measured).
+        CssPropertyId.CaptionSide => static text => IsOneWordOnly(text, "top", "bottom"),
+        CssPropertyId.TableLayout => static text => IsOneWordOnly(text, "auto", "fixed"),
+        CssPropertyId.BorderCollapse => static text => IsOneWordOnly(text, "collapse", "separate"),
+        // CSS Transforms 2 §3: the two spellings, one at a time.
+        CssPropertyId.TransformStyle => static text => IsOneWordOnly(text, "flat", "preserve-3d"),
+        CssPropertyId.BackfaceVisibility => static text => IsOneWordOnly(text, "visible", "hidden"),
+        // CSS Display 3 §4.1: the three.
+        CssPropertyId.Visibility => static text => IsOneWordOnly(text, "visible", "hidden", "collapse"),
+        // CSS Transforms 2 §3: 'none' or a non-negative &lt;length&gt; that says what it is measured
+        // in — 'perspective: 10' is a number and no length, and '-10px' measures backwards, so both
+        // fall while '0', '0px' and '1e2px' stand (measured, each).
+        CssPropertyId.Perspective => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count != 1) return false;
+            if (words[0].Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
+            return IsNonNegativeDimensionedLength(words[0]);
+        },
+        // CSS Tables 1 §4.11: one or two non-negative lengths. A percentage measures nothing against
+        // a table (measured: 'border-spacing: 50%' falls), three values fall, and a negative with them.
+        CssPropertyId.BorderSpacing => static text =>
+        {
+            var words = SplitComponents(text);
+            return words.Count is 1 or 2 && words.All(IsNonNegativeDimensionedLength);
+        },
+        // CSS Flexbox 1 §4.5: an integer. 'order: 1.5' and 'order: 1e2' are each dropped (measured),
+        // and 'order: calc(1 + 1)' is the one math spelling an integer property does take.
+        CssPropertyId.Order => static text => IsIntegerList(text),
+        // CSS Grid 1 §7.2/§7.3: a track list of breadths, and none of the 'repeat()' notation the
+        // explicit templates take (measured: 'grid-auto-rows: repeat(2, 10px)' falls while
+        // 'minmax(auto, 1fr)', 'fit-content(10px)' and '1fr 2fr' stand).
+        CssPropertyId.GridAutoRows or CssPropertyId.GridAutoColumns => IsTrackList,
+        // CSS Text Decoration 4 §4.2: a length-percentage or one of the two keywords. A bare number
+        // is no thickness (measured: 'text-decoration-thickness: 1' falls, '0' and '10%' stand).
+        CssPropertyId.TextDecorationThickness => static text =>
+            IsOneOf(text.Trim(), "auto", "from-font")
+            || (SplitComponents(text).Count == 1
+                && IsDimensionedLengthPercentageOrZero(text.Trim())),
+        // §4.4: the same shape with 'auto' as its only keyword.
+        CssPropertyId.TextUnderlineOffset => static text =>
+            IsOneWordOnly(text, "auto")
+            || (SplitComponents(text).Count == 1
+                && IsDimensionedLengthPercentageOrZero(text.Trim())),
+        // CSS Inline 3 §3.1: one keyword, and 'none' is not one of them (measured).
+        CssPropertyId.BaselineSource => static text => IsOneWordOnly(text, "auto", "first", "last"),
+        // CSS Transforms 2 §3: 'perspective-origin' is one &lt;position&gt; with no depth — the four
+        // component spelling of CSS Position 3 §5.2 stands and a third length does not (measured:
+        // 'left 10px top 20px' is a value, 'top left 10px' and '10% 20% 30%' are each dropped).
+        CssPropertyId.PerspectiveOrigin => static text =>
+            ShorthandExpander.IsBackgroundPositionValue(text) && SplitComponents(text).Count != 3,
+        // 'transform-origin' is the mirror image: one length of depth is allowed and the four
+        // component spelling is not (measured: 'left top 10px', '10px 20px 30px' and
+        // 'center 10px 20px' each stand, 'right 10px bottom 20px' and 'left 10px center 20px' are
+        // each dropped, leaving the initial '50% 50%'). The third component is the depth, which a
+        // percentage cannot measure.
+        CssPropertyId.TransformOrigin => static text =>
+        {
+            var parts = SplitComponents(text);
+            if (parts.Count == 3)
+                return ShorthandExpander.IsBackgroundPositionValue(parts[0] + " " + parts[1])
+                    && IsDimensionedLength(parts[2]);
+            return ShorthandExpander.IsBackgroundPositionValue(text) && parts.Count != 4;
+        },
         _ => null,
+    };
+
+    /// <summary>CSS Blend 1 §3's sixteen, shared by 'mix-blend-mode' and 'background-blend-mode' —
+    /// one list, because the two properties would otherwise disagree about 'plus-darker'.</summary>
+    private static readonly string[] BlendModeWords =
+    {
+        "normal", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn",
+        "hard-light", "soft-light", "difference", "exclusion", "hue", "saturation", "color",
+        "luminosity",
     };
 
     /// <summary>CSS Anchor Positioning 1 §4.1: the inset-area vocabulary, split by the axis each
@@ -2263,6 +2382,82 @@ public static class CssValueGrammar
     /// <summary>A &lt;length-percentage&gt; that is not negative. A negative basis measures less than
     /// nothing, so <c>flex-basis: -5px</c> is no value at all — and the same negative written the other
     /// way round in the shorthand falls with it (measured, both).</summary>
+    /// <summary>A &lt;length&gt; that says what it is measured in — with one exception CSS 2.1 made
+    /// and the reference engine still keeps: a bare <c>0</c> is such a length, while a bare
+    /// <c>1</c> is not. Measured on each of the properties that take one: 'border-spacing: 0' and
+    /// 'perspective: 0' are values, 'letter-spacing: 1', 'perspective: 10',
+    /// 'text-decoration-thickness: 1' and 'text-underline-offset: 1' are not. 'overflow-clip-margin'
+    /// is the one that does not even take the bare zero (measured: '0' falls, '0px' stands), so it
+    /// asks for <see cref="IsDimensionedLength"/> instead.</summary>
+    private static bool IsDimensionedLengthOrZero(string token) =>
+        IsDimensionedLength(token) || IsBareZero(token);
+
+    /// <summary>The same &lt;length&gt; with the bare zero left out: a unit or a percentage on the
+    /// number, nothing else.</summary>
+    private static bool IsDimensionedLength(string token)
+    {
+        if (IsMathFunctionCall(token, IsLengthOrPercentage)) return true;
+        if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out _, out var unit))
+            return false;
+        return unit.Length > 0 && unit != "%" && IsLengthOrPercentage(token);
+    }
+
+    private static bool IsBareZero(string token) =>
+        Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out var number, out var unit)
+        && unit.Length == 0 && number == 0;
+
+    /// <summary>A &lt;length-percentage&gt; that says what it is measured in, the bare zero included:
+    /// the spacing and decoration-offset family, where '50%' is a value and '1' is not (measured).
+    /// </summary>
+    private static bool IsDimensionedLengthPercentageOrZero(string token) =>
+        IsDimensionedLengthOrZero(token)
+        || (Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out _, out var unit)
+            && unit == "%");
+
+    /// <summary>The same length with nothing negative about it — the range 'border-spacing' and
+    /// 'perspective' are defined on (measured: 'border-spacing: 1px -1px' and 'perspective: -10px'
+    /// are each dropped, while a negative written inside a calc() is left to the type check).</summary>
+    private static bool IsNonNegativeDimensionedLength(string token)
+    {
+        if (!IsDimensionedLengthOrZero(token)) return false;
+        return !Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out var number, out _)
+            || number >= 0;
+    }
+
+    /// <summary>One &lt;track-breadth&gt; of a grid track list (CSS Grid 1 §7.2): a keyword, a
+    /// dimensioned length, a flex, or one of the functions that take arguments. 'repeat()' is the
+    /// track-list notation the auto tracks do not take (measured: 'grid-auto-rows:
+    /// repeat(auto-fill, 10px)' is dropped while 'minmax(auto, 1fr)' and 'fit-content(10px)' stand).
+    /// </summary>
+    private static bool IsTrackBreadth(string token)
+    {
+        var lower = token.ToLowerInvariant();
+        if (lower is "auto" or "min-content" or "max-content") return true;
+        if (lower.StartsWith("minmax(", StringComparison.Ordinal)
+            || lower.StartsWith("fit-content(", StringComparison.Ordinal)
+            || lower.StartsWith("calc(", StringComparison.Ordinal)) return true;
+        if (Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out _, out var unit))
+            return unit.Equals("fr", StringComparison.OrdinalIgnoreCase)
+                || IsDimensionedLengthOrZero(token);
+        return false;
+    }
+
+    /// <summary>A track list: the breadths separated by spaces, with commas allowed between the
+    /// items (the reference engine reads 'grid-auto-rows: 1fr, 2fr' and '1fr 2fr' alike). Split at
+    /// the top level so a function's own comma is not a separator.</summary>
+    private static bool IsTrackList(string text)
+    {
+        var items = SplitTopLevel(text, ',');
+        if (items.Count == 0) return false;
+        foreach (var item in items)
+        {
+            var words = SplitTopLevel(item, ' ');
+            if (words.Count == 0) return false;
+            if (!words.All(IsTrackBreadth)) return false;
+        }
+        return true;
+    }
+
     private static bool IsNonNegativeLengthOrPercentage(string token)
     {
         if (!IsLengthOrPercentage(token)) return false;
@@ -2298,6 +2493,18 @@ public static class CssValueGrammar
         }
         return true;
     }
+
+    /// <summary>One &lt;number&gt; or &lt;percentage&gt; for 'opacity', whose range is closed by the
+    /// clamping that happens later: 'opacity: 1e2' is a number and prints as '100', and '100%' is the
+    /// same value written the other way and prints as '1' (measured, both).</summary>
+    private static bool IsOpacityNumber(string token) =>
+        IsNumber(token)
+        // The tokenizer reads the exponent and sign spellings a number also has: 'opacity: 1e2' is
+        // a number the reference engine takes and prints as '100' (measured), while 'IsNumber' above
+        // is the spelling the other grammars ask for.
+        || (Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out _, out var unit)
+            && (unit == "%" || unit.Length == 0))
+        || IsMathFunctionCall(token, IsLengthOrPercentage);
 
     private static bool IsNumberOnly(string text) =>
         SplitComponents(text).Count == 1 && IsNumber(text.Trim());
@@ -2932,8 +3139,23 @@ public static class CssValueGrammar
     private static bool IsSingleLength(string text, params string[] keywords)
     {
         var parts = SplitComponents(text);
-        return parts.Count == 1 && IsLengthList(parts[0], keywords);
+        return parts.Count == 1 && !IsFitContentFunction(parts[0]) && IsLengthList(parts[0], keywords);
     }
+
+    /// <summary>CSS Sizing 4 §4: the bare <c>fit-content</c> keyword is a size, the functional
+    /// <c>fit-content()</c> is not one — 'width: fit-content(200px)', 'min-height: fit-content(10px)'
+    /// and 'flex-basis: fit-content(10px)' are each dropped (measured) while a grid track list keeps
+    /// the very same function (CSS Grid 1 §7.2.3, measured: 'grid-auto-rows: fit-content(10px) 20px'
+    /// stands). Other functions a size does take: 'attr(x px)' and 'min(10px, 20px)' both stand
+    /// (measured), so this is a refusal of one name and not of parentheses in general.</summary>
+    /// <summary>Whether a one-word value says a negative number — the range test 'line-height' uses
+    /// (measured: '-1px' and '-1' are both refused, '-0px' is not negative and stands).</summary>
+    private static bool IsNegativeValue(string text) =>
+        Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(
+            text.Trim(), out var number, out _) && number < 0;
+
+    private static bool IsFitContentFunction(string token) =>
+        token.StartsWith("fit-content(", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>'font-synthesis: none | [ weight || style || small-caps ]' (CSS Fonts 4 §9.3):
     /// 'none' stands alone, otherwise each kind appears at most once. A word that is not one of the

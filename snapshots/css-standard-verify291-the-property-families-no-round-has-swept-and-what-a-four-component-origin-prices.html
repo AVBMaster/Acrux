@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify291 &#8212; the property families no round has swept, and what a four-component origin prices</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: rgb(255,255,255); }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+/* Every probed element sits in a box that states its own size, so a value that resolves against its
+ * containing block &#8212; the two origin properties price a percentage against the box they sit on &#8212;
+ * prices the same in two engines with different viewport widths. No cell needed the '~' escape. */
+#box { width: 200px; }
+#box > div { height: 20px; }
+#host { width: 200px; }
+#host > div { height: 20px; }
+#s-sheet { perspective-origin: right 10px bottom 20px; }
+#s-table { border-spacing: 2px 3px; table-layout: fixed; width: 120px; }
+#s-table td { height: 10px; }
+#p-a { perspective-origin: top 30px left 40px; }
+#c-a { width: 100px; height: 30px; }
+/* paint guards */
+.bar { display: block; width: 40px; height: 10px; }
+#g-1 { display: flex; width: 200px; height: 12px; background: rgb(240,240,240); }
+#g-2 { caption-side: bottom; border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 120px; }
+#g-2c { height: 10px; background: rgb(255,0,0); }
+#g-2 td { height: 10px; }
+#g-3 { table-layout: fixed; width: 120px; border-spacing: 4px 6px; }
+#g-3 td { height: 10px; background: rgb(200,200,200); }
+#g-4 { table-layout: fixed; width: 120px; border-collapse: collapse; border-spacing: 4px 6px; }
+#g-4 td { height: 10px; background: rgb(200,200,200); }
+#g-5 { display: grid; grid-auto-rows: 40px; width: 60px; }
+#g-6 { width: 100px; height: 20px; visibility: hidden; background: rgb(0,255,0); }
+#g-6next { width: 100px; height: 20px; background: rgb(0,0,255); }
+#g-7 { display: flex; width: 200px; height: 12px; background: rgb(240,240,240); }
+#g-7c { order: 1; }
+/* ink guards: boxes absolutely placed inside a host that states its own size, so --pixels reads the
+ * same coordinate in two engines (an absolutely placed box with no positioned ancestor is anchored
+ * to the viewport by one engine and to the body by the other — filed as a gap of its own). */
+#ink-host { position: relative; height: 140px; }
+.ink { position: absolute; left: 340px; width: 60px; height: 20px; }
+#i-0 { top: 8px; background: rgb(255,0,0); }
+#i-0b { width: 60px; height: 20px; background: rgb(0,0,255); mix-blend-mode: multiply; }
+#i-1 { top: 30px; background: rgb(0,128,0); opacity: 0.5; }
+#i-2 { top: 52px; background: rgb(255,255,255); color: rgb(9,9,9); text-transform: uppercase; }
+#i-3 { top: 74px; background: rgb(255,255,255); color: rgb(9,9,9); letter-spacing: 6px; }
+#i-4 { top: 96px; background: rgb(255,255,255); color: rgb(9,9,9); text-decoration: underline; text-decoration-thickness: 6px; }
+#i-5 { top: 118px; background: rgb(240,240,240); }
+#i-5 img { display: block; width: 60px; height: 20px; object-fit: none; object-position: left 10px top 0px; }
+</style></head><body>
+<h2>the ink the swept properties have to reach (blend, opacity, the two text spellings, a decoration thickness, a fitted image)</h2>
+<div id="ink-host"><div class="ink" id="i-0"><div id="i-0b"></div></div>
+<div class="ink" id="i-1"></div>
+<div class="ink" id="i-2">abc</div>
+<div class="ink" id="i-3">abc</div>
+<div class="ink" id="i-4">abc</div>
+<div class="ink" id="i-5"><img id="fit" alt="x"></div></div>
+<h2>the geometry the swept properties have to reach</h2>
+<div id="g-1"><span class="bar" id="g-1a" style="background:rgb(255,128,128)"></span><span class="bar" id="g-1b" style="background:rgb(128,255,128)"></span><span class="bar" id="g-1c" style="background:rgb(128,128,255);order:-1"></span></div>
+<table id="g-2"><caption id="g-2c"></caption><tr id="g-2r"><td></td></tr></table>
+<table id="g-3"><tr><td id="g-3a"></td><td id="g-3b"></td></tr><tr><td id="g-3c"></td><td id="g-3d"></td></tr></table>
+<table id="g-4"><tr><td id="g-4a"></td><td id="g-4b"></td></tr><tr><td id="g-4c"></td><td id="g-4d"></td></tr></table>
+<div id="g-5"><span id="g-5a"></span><span id="g-5b"></span></div>
+<div><div id="g-6"></div><div id="g-6next"></div></div>
+<div id="g-7"><span class="bar" id="g-7a" style="background:rgb(255,128,128)"></span><span class="bar" id="g-7b" style="background:rgb(128,255,128)"></span><span class="bar" id="g-7c" style="background:rgb(128,128,255)"></span></div>
+<h2>the other doors a four-component origin comes in by</h2>
+<div id="host">
+  <div id="s-sheet"></div>
+  <table id="s-table"><tr id="s-row"><td id="s-cell-a"></td><td id="s-cell-b"></td></tr><tr><td id="s-cell-c"></td><td></td></tr></table>
+  <div id="p-a"><div id="c-a"></div></div>
+</div>
+<h2>the families, measured value by value</h2>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* Every want in E, S and G is a transcription of what the reference engine printed for the same
+ * page (snapshots/out/_b291_ref_probe4.txt, _b291_ref_probe5.txt and _b291_ref_probe2_guards.txt);
+ * nothing here is derived from a rule. E is one declaration written through the CSSOM on a fresh div
+ * inside a 200x20 box and read back through every surface at once &#8212; the block's length, its item(i)
+ * sequence, getPropertyValue, getComputedStyle, CSS.supports and cssText; the 'border-spacing' rows
+ * also read the two legacy longhands the shorthand enumerates as. S is the same declaration reached
+ * through a style attribute, a stylesheet rule, removeProperty, the IDL setter, the property it must
+ * NOT accept, and inheritance to a box of another size. G is the geometry: a flex order that moves a
+ * bar, a caption that moves under its table, the gaps border-spacing puts between fixed-layout cells
+ * and the gaps border-collapse takes away, the row height grid-auto-rows pays, and a hidden box that
+ * still holds its space.
+ *
+ * No cell is marked '~': every probed element sits in a box that states its own size, which is the
+ * one thing that made the two origin properties' percentage compares agree between an engine with a
+ * real window and one whose viewport is zero wide.
+ */
+var E = [
+  ["object-fit", "fill", "1", "object-fit", "fill", "fill", "1", "object-fit: fill;"],
+  ["object-fit", "contain", "1", "object-fit", "contain", "contain", "1", "object-fit: contain;"],
+  ["object-fit", "cover", "1", "object-fit", "cover", "cover", "1", "object-fit: cover;"],
+  ["object-fit", "none", "1", "object-fit", "none", "none", "1", "object-fit: none;"],
+  ["object-fit", "scale-down", "1", "object-fit", "scale-down", "scale-down", "1", "object-fit: scale-down;"],
+  ["object-fit", "bogus", "0", "", "", "fill", "0", ""],
+  ["object-position", "50% 50%", "1", "object-position", "50% 50%", "50% 50%", "1", "object-position: 50% 50%;"],
+  ["object-position", "left top", "1", "object-position", "left top", "0% 0%", "1", "object-position: left top;"],
+  ["object-position", "10px", "1", "object-position", "10px center", "10px 50%", "1", "object-position: 10px center;"],
+  ["object-position", "10px 20px", "1", "object-position", "10px 20px", "10px 20px", "1", "object-position: 10px 20px;"],
+  ["object-position", "bogus", "0", "", "", "50% 50%", "0", ""],
+  ["object-position", "left right", "0", "", "", "50% 50%", "0", ""],
+  ["image-rendering", "auto", "1", "image-rendering", "auto", "auto", "1", "image-rendering: auto;"],
+  ["image-rendering", "smooth", "0", "", "", "auto", "0", ""],
+  ["image-rendering", "crisp-edges", "1", "image-rendering", "crisp-edges", "crisp-edges", "1", "image-rendering: crisp-edges;"],
+  ["image-rendering", "pixelated", "1", "image-rendering", "pixelated", "pixelated", "1", "image-rendering: pixelated;"],
+  ["image-rendering", "high-quality", "0", "", "", "auto", "0", ""],
+  ["image-rendering", "low-quality", "0", "", "", "auto", "0", ""],
+  ["image-rendering", "bogus", "0", "", "", "auto", "0", ""],
+  ["image-orientation", "from-image", "1", "image-orientation", "from-image", "from-image", "1", "image-orientation: from-image;"],
+  ["image-orientation", "none", "1", "image-orientation", "none", "none", "1", "image-orientation: none;"],
+  ["image-orientation", "0deg", "0", "", "", "from-image", "0", ""],
+  ["image-orientation", "90deg", "0", "", "", "from-image", "0", ""],
+  ["image-orientation", "90deg from-image", "0", "", "", "from-image", "0", ""],
+  ["image-orientation", "flip", "0", "", "", "from-image", "0", ""],
+  ["image-orientation", "90deg flip", "0", "", "", "from-image", "0", ""],
+  ["image-orientation", "bogus", "0", "", "", "from-image", "0", ""],
+  ["mix-blend-mode", "normal", "1", "mix-blend-mode", "normal", "normal", "1", "mix-blend-mode: normal;"],
+  ["mix-blend-mode", "multiply", "1", "mix-blend-mode", "multiply", "multiply", "1", "mix-blend-mode: multiply;"],
+  ["mix-blend-mode", "screen", "1", "mix-blend-mode", "screen", "screen", "1", "mix-blend-mode: screen;"],
+  ["mix-blend-mode", "overlay", "1", "mix-blend-mode", "overlay", "overlay", "1", "mix-blend-mode: overlay;"],
+  ["mix-blend-mode", "darken", "1", "mix-blend-mode", "darken", "darken", "1", "mix-blend-mode: darken;"],
+  ["mix-blend-mode", "lighten", "1", "mix-blend-mode", "lighten", "lighten", "1", "mix-blend-mode: lighten;"],
+  ["mix-blend-mode", "color-dodge", "1", "mix-blend-mode", "color-dodge", "color-dodge", "1", "mix-blend-mode: color-dodge;"],
+  ["mix-blend-mode", "color-burn", "1", "mix-blend-mode", "color-burn", "color-burn", "1", "mix-blend-mode: color-burn;"],
+  ["mix-blend-mode", "hard-light", "1", "mix-blend-mode", "hard-light", "hard-light", "1", "mix-blend-mode: hard-light;"],
+  ["mix-blend-mode", "soft-light", "1", "mix-blend-mode", "soft-light", "soft-light", "1", "mix-blend-mode: soft-light;"],
+  ["mix-blend-mode", "difference", "1", "mix-blend-mode", "difference", "difference", "1", "mix-blend-mode: difference;"],
+  ["mix-blend-mode", "exclusion", "1", "mix-blend-mode", "exclusion", "exclusion", "1", "mix-blend-mode: exclusion;"],
+  ["mix-blend-mode", "hue", "1", "mix-blend-mode", "hue", "hue", "1", "mix-blend-mode: hue;"],
+  ["mix-blend-mode", "saturation", "1", "mix-blend-mode", "saturation", "saturation", "1", "mix-blend-mode: saturation;"],
+  ["mix-blend-mode", "color", "1", "mix-blend-mode", "color", "color", "1", "mix-blend-mode: color;"],
+  ["mix-blend-mode", "luminosity", "1", "mix-blend-mode", "luminosity", "luminosity", "1", "mix-blend-mode: luminosity;"],
+  ["mix-blend-mode", "plus-darker", "0", "", "", "normal", "0", ""],
+  ["mix-blend-mode", "bogus", "0", "", "", "normal", "0", ""],
+  ["background-blend-mode", "normal", "1", "background-blend-mode", "normal", "normal", "1", "background-blend-mode: normal;"],
+  ["background-blend-mode", "multiply", "1", "background-blend-mode", "multiply", "multiply", "1", "background-blend-mode: multiply;"],
+  ["background-blend-mode", "multiply, screen", "1", "background-blend-mode", "multiply, screen", "multiply", "1", "background-blend-mode: multiply, screen;"],
+  ["background-blend-mode", "multiply screen", "0", "", "", "normal", "0", ""],
+  ["background-blend-mode", "plus-darker", "0", "", "", "normal", "0", ""],
+  ["background-blend-mode", "bogus", "0", "", "", "normal", "0", ""],
+  ["backdrop-filter", "none", "1", "backdrop-filter", "none", "none", "1", "backdrop-filter: none;"],
+  ["backdrop-filter", "blur(2px)", "1", "backdrop-filter", "blur(2px)", "blur(2px)", "1", "backdrop-filter: blur(2px);"],
+  ["backdrop-filter", "invert(50%)", "1", "backdrop-filter", "invert(50%)", "invert(0.5)", "1", "backdrop-filter: invert(50%);"],
+  ["backdrop-filter", "blur(2px) invert(50%)", "1", "backdrop-filter", "blur(2px) invert(50%)", "blur(2px) invert(0.5)", "1", "backdrop-filter: blur(2px) invert(50%);"],
+  ["backdrop-filter", "brightness(150%)", "1", "backdrop-filter", "brightness(150%)", "brightness(1.5)", "1", "backdrop-filter: brightness(150%);"],
+  ["backdrop-filter", "url(#f)", "1", "backdrop-filter", "url(\"#f\")", "url(\"#f\")", "1", "backdrop-filter: url(\"#f\");"],
+  ["backdrop-filter", "bogus", "0", "", "", "none", "0", ""],
+  ["text-transform", "none", "1", "text-transform", "none", "none", "1", "text-transform: none;"],
+  ["text-transform", "capitalize", "1", "text-transform", "capitalize", "capitalize", "1", "text-transform: capitalize;"],
+  ["text-transform", "uppercase", "1", "text-transform", "uppercase", "uppercase", "1", "text-transform: uppercase;"],
+  ["text-transform", "lowercase", "1", "text-transform", "lowercase", "lowercase", "1", "text-transform: lowercase;"],
+  ["text-transform", "full-width", "0", "", "", "none", "0", ""],
+  ["text-transform", "full-size-kana", "0", "", "", "none", "0", ""],
+  ["text-transform", "bogus", "0", "", "", "none", "0", ""],
+  ["ruby-position", "over", "1", "ruby-position", "over", "over", "1", "ruby-position: over;"],
+  ["ruby-position", "under", "1", "ruby-position", "under", "under", "1", "ruby-position: under;"],
+  ["ruby-position", "right", "0", "", "", "over", "0", ""],
+  ["ruby-position", "left", "0", "", "", "over", "0", ""],
+  ["ruby-position", "alternate", "0", "", "", "over", "0", ""],
+  ["ruby-position", "over right", "0", "", "", "over", "0", ""],
+  ["ruby-position", "bogus", "0", "", "", "over", "0", ""],
+  ["ruby-align", "start", "1", "ruby-align", "start", "start", "1", "ruby-align: start;"],
+  ["ruby-align", "center", "1", "ruby-align", "center", "center", "1", "ruby-align: center;"],
+  ["ruby-align", "space-around", "1", "ruby-align", "space-around", "space-around", "1", "ruby-align: space-around;"],
+  ["ruby-align", "space-between", "1", "ruby-align", "space-between", "space-between", "1", "ruby-align: space-between;"],
+  ["ruby-align", "right", "0", "", "", "space-around", "0", ""],
+  ["ruby-align", "bogus", "0", "", "", "space-around", "0", ""],
+  ["scrollbar-width", "auto", "1", "scrollbar-width", "auto", "auto", "1", "scrollbar-width: auto;"],
+  ["scrollbar-width", "thin", "1", "scrollbar-width", "thin", "thin", "1", "scrollbar-width: thin;"],
+  ["scrollbar-width", "none", "1", "scrollbar-width", "none", "none", "1", "scrollbar-width: none;"],
+  ["scrollbar-width", "bogus", "0", "", "", "auto", "0", ""],
+  ["scrollbar-color", "auto", "1", "scrollbar-color", "auto", "auto", "1", "scrollbar-color: auto;"],
+  ["scrollbar-color", "red", "0", "", "", "auto", "0", ""],
+  ["scrollbar-color", "red blue", "1", "scrollbar-color", "red blue", "rgb(255, 0, 0) rgb(0, 0, 255)", "1", "scrollbar-color: red blue;"],
+  ["scrollbar-color", "#f00 #00f", "1", "scrollbar-color", "rgb(255, 0, 0) rgb(0, 0, 255)", "rgb(255, 0, 0) rgb(0, 0, 255)", "1", "scrollbar-color: rgb(255, 0, 0) rgb(0, 0, 255);"],
+  ["scrollbar-color", "bogus", "0", "", "", "auto", "0", ""],
+  ["scrollbar-gutter", "auto", "1", "scrollbar-gutter", "auto", "auto", "1", "scrollbar-gutter: auto;"],
+  ["scrollbar-gutter", "stable", "1", "scrollbar-gutter", "stable", "stable", "1", "scrollbar-gutter: stable;"],
+  ["scrollbar-gutter", "stable both-edges", "1", "scrollbar-gutter", "stable both-edges", "stable both-edges", "1", "scrollbar-gutter: stable both-edges;"],
+  ["scrollbar-gutter", "both-edges", "0", "", "", "auto", "0", ""],
+  ["scrollbar-gutter", "bogus", "0", "", "", "auto", "0", ""],
+  ["print-color-adjust", "economy", "1", "print-color-adjust", "economy", "economy", "1", "print-color-adjust: economy;"],
+  ["print-color-adjust", "exact", "1", "print-color-adjust", "exact", "exact", "1", "print-color-adjust: exact;"],
+  ["print-color-adjust", "bogus", "0", "", "", "economy", "0", ""],
+  ["forced-color-adjust", "auto", "1", "forced-color-adjust", "auto", "auto", "1", "forced-color-adjust: auto;"],
+  ["forced-color-adjust", "none", "1", "forced-color-adjust", "none", "none", "1", "forced-color-adjust: none;"],
+  ["forced-color-adjust", "bogus", "0", "", "", "auto", "0", ""],
+  ["align-tracks", "start", "0", "", "", "", "0", ""],
+  ["align-tracks", "end", "0", "", "", "", "0", ""],
+  ["align-tracks", "center", "0", "", "", "", "0", ""],
+  ["align-tracks", "space-between", "0", "", "", "", "0", ""],
+  ["align-tracks", "space-around", "0", "", "", "", "0", ""],
+  ["align-tracks", "space-evenly", "0", "", "", "", "0", ""],
+  ["align-tracks", "normal", "0", "", "", "", "0", ""],
+  ["align-tracks", "bogus", "0", "", "", "", "0", ""],
+  ["align-tracks", "start end", "0", "", "", "", "0", ""],
+  ["justify-tracks", "center", "0", "", "", "", "0", ""],
+  ["justify-tracks", "bogus", "0", "", "", "", "0", ""],
+  ["baseline-source", "auto", "1", "baseline-source", "auto", "auto", "1", "baseline-source: auto;"],
+  ["baseline-source", "first", "1", "baseline-source", "first", "first", "1", "baseline-source: first;"],
+  ["baseline-source", "last", "1", "baseline-source", "last", "last", "1", "baseline-source: last;"],
+  ["baseline-source", "bogus", "0", "", "", "auto", "0", ""],
+  ["row-axis", "inline-block", "0", "", "", "", "0", ""],
+  ["row-axis", "block", "0", "", "", "", "0", ""],
+  ["row-axis", "inline", "0", "", "", "", "0", ""],
+  ["row-axis", "bogus", "0", "", "", "", "0", ""],
+  ["column-axis", "block", "0", "", "", "", "0", ""],
+  ["column-axis", "bogus", "0", "", "", "", "0", ""],
+  ["caption-side", "top", "1", "caption-side", "top", "top", "1", "caption-side: top;"],
+  ["caption-side", "bottom", "1", "caption-side", "bottom", "bottom", "1", "caption-side: bottom;"],
+  ["caption-side", "left", "0", "", "", "top", "0", ""],
+  ["caption-side", "right", "0", "", "", "top", "0", ""],
+  ["caption-side", "inline-start", "0", "", "", "top", "0", ""],
+  ["caption-side", "inline-end", "0", "", "", "top", "0", ""],
+  ["caption-side", "bogus", "0", "", "", "top", "0", ""],
+  ["table-layout", "auto", "1", "table-layout", "auto", "auto", "1", "table-layout: auto;"],
+  ["table-layout", "fixed", "1", "table-layout", "fixed", "fixed", "1", "table-layout: fixed;"],
+  ["table-layout", "bogus", "0", "", "", "auto", "0", ""],
+  ["border-collapse", "collapse", "1", "border-collapse", "collapse", "collapse", "1", "border-collapse: collapse;"],
+  ["border-collapse", "separate", "1", "border-collapse", "separate", "separate", "1", "border-collapse: separate;"],
+  ["border-collapse", "bogus", "0", "", "", "separate", "0", ""],
+  ["border-spacing", "0", "2", "-webkit-border-horizontal-spacing,-webkit-border-vertical-spacing", "0px", "0px", "1", "border-spacing: 0px;", "0px", "0px"],
+  ["border-spacing", "1px", "2", "-webkit-border-horizontal-spacing,-webkit-border-vertical-spacing", "1px", "1px", "1", "border-spacing: 1px;", "1px", "1px"],
+  ["border-spacing", "1px 2px", "2", "-webkit-border-horizontal-spacing,-webkit-border-vertical-spacing", "1px 2px", "1px 2px", "1", "border-spacing: 1px 2px;", "1px", "2px"],
+  ["border-spacing", "-1px", "0", "", "", "0px", "0", "", "", ""],
+  ["border-spacing", "bogus", "0", "", "", "0px", "0", "", "", ""],
+  ["border-spacing", "1px 2px 3px", "0", "", "", "0px", "0", "", "", ""],
+  ["perspective", "none", "1", "perspective", "none", "none", "1", "perspective: none;"],
+  ["perspective", "0", "1", "perspective", "0px", "0px", "1", "perspective: 0px;"],
+  ["perspective", "10px", "1", "perspective", "10px", "10px", "1", "perspective: 10px;"],
+  ["perspective", "10", "0", "", "", "none", "0", ""],
+  ["perspective", "-10px", "0", "", "", "none", "0", ""],
+  ["perspective", "bogus", "0", "", "", "none", "0", ""],
+  ["perspective-origin", "50% 50%", "1", "perspective-origin", "50% 50%", "100px 10px", "1", "perspective-origin: 50% 50%;"],
+  ["perspective-origin", "left", "1", "perspective-origin", "left center", "0px 10px", "1", "perspective-origin: left center;"],
+  ["perspective-origin", "10px 20px", "1", "perspective-origin", "10px 20px", "10px 20px", "1", "perspective-origin: 10px 20px;"],
+  ["perspective-origin", "bogus", "0", "", "", "100px 10px", "0", ""],
+  ["transform-style", "flat", "1", "transform-style", "flat", "flat", "1", "transform-style: flat;"],
+  ["transform-style", "preserve-3d", "1", "transform-style", "preserve-3d", "preserve-3d", "1", "transform-style: preserve-3d;"],
+  ["transform-style", "bogus", "0", "", "", "flat", "0", ""],
+  ["backface-visibility", "visible", "1", "backface-visibility", "visible", "visible", "1", "backface-visibility: visible;"],
+  ["backface-visibility", "hidden", "1", "backface-visibility", "hidden", "hidden", "1", "backface-visibility: hidden;"],
+  ["backface-visibility", "bogus", "0", "", "", "visible", "0", ""],
+  ["letter-spacing", "normal", "1", "letter-spacing", "normal", "normal", "1", "letter-spacing: normal;"],
+  ["letter-spacing", "0", "1", "letter-spacing", "0px", "normal", "1", "letter-spacing: 0px;"],
+  ["letter-spacing", "1px", "1", "letter-spacing", "1px", "1px", "1", "letter-spacing: 1px;"],
+  ["letter-spacing", "1em", "1", "letter-spacing", "1em", "14px", "1", "letter-spacing: 1em;"],
+  ["letter-spacing", "100%", "1", "letter-spacing", "100%", "100%", "1", "letter-spacing: 100%;"],
+  ["letter-spacing", "1", "0", "", "", "normal", "0", ""],
+  ["letter-spacing", "bogus", "0", "", "", "normal", "0", ""],
+  ["word-spacing", "normal", "1", "word-spacing", "normal", "0px", "1", "word-spacing: normal;"],
+  ["word-spacing", "0", "1", "word-spacing", "0px", "0px", "1", "word-spacing: 0px;"],
+  ["word-spacing", "1px", "1", "word-spacing", "1px", "1px", "1", "word-spacing: 1px;"],
+  ["word-spacing", "1", "0", "", "", "0px", "0", ""],
+  ["word-spacing", "bogus", "0", "", "", "0px", "0", ""],
+  ["text-indent", "0", "1", "text-indent", "0px", "0px", "1", "text-indent: 0px;"],
+  ["text-indent", "10px", "1", "text-indent", "10px", "10px", "1", "text-indent: 10px;"],
+  ["text-indent", "50%", "1", "text-indent", "50%", "50%", "1", "text-indent: 50%;"],
+  ["text-indent", "hanging 10px", "1", "text-indent", "10px hanging", "10px hanging", "1", "text-indent: 10px hanging;"],
+  ["text-indent", "10px hanging", "1", "text-indent", "10px hanging", "10px hanging", "1", "text-indent: 10px hanging;"],
+  ["text-indent", "each-line", "0", "", "", "0px", "0", ""],
+  ["text-indent", "10px each-line hanging 5px", "0", "", "", "0px", "0", ""],
+  ["text-indent", "bogus", "0", "", "", "0px", "0", ""],
+  ["line-height", "normal", "1", "line-height", "normal", "normal", "1", "line-height: normal;"],
+  ["line-height", "1", "1", "line-height", "1", "14px", "1", "line-height: 1;"],
+  ["line-height", "1.5", "1", "line-height", "1.5", "21px", "1", "line-height: 1.5;"],
+  ["line-height", "12px", "1", "line-height", "12px", "12px", "1", "line-height: 12px;"],
+  ["line-height", "50%", "1", "line-height", "50%", "7px", "1", "line-height: 50%;"],
+  ["line-height", "bogus", "0", "", "", "18px", "0", ""],
+  ["text-decoration-thickness", "auto", "1", "text-decoration-thickness", "auto", "auto", "1", "text-decoration-thickness: auto;"],
+  ["text-decoration-thickness", "from-font", "1", "text-decoration-thickness", "from-font", "from-font", "1", "text-decoration-thickness: from-font;"],
+  ["text-decoration-thickness", "0", "1", "text-decoration-thickness", "0px", "0px", "1", "text-decoration-thickness: 0px;"],
+  ["text-decoration-thickness", "2px", "1", "text-decoration-thickness", "2px", "2px", "1", "text-decoration-thickness: 2px;"],
+  ["text-decoration-thickness", "10%", "1", "text-decoration-thickness", "10%", "10%", "1", "text-decoration-thickness: 10%;"],
+  ["text-decoration-thickness", "bogus", "0", "", "", "auto", "0", ""],
+  ["text-underline-offset", "auto", "1", "text-underline-offset", "auto", "auto", "1", "text-underline-offset: auto;"],
+  ["text-underline-offset", "0", "1", "text-underline-offset", "0px", "0px", "1", "text-underline-offset: 0px;"],
+  ["text-underline-offset", "2px", "1", "text-underline-offset", "2px", "2px", "1", "text-underline-offset: 2px;"],
+  ["text-underline-offset", "1em", "1", "text-underline-offset", "1em", "14px", "1", "text-underline-offset: 1em;"],
+  ["text-underline-offset", "50%", "1", "text-underline-offset", "50%", "50%", "1", "text-underline-offset: 50%;"],
+  ["text-underline-offset", "bogus", "0", "", "", "auto", "0", ""],
+  ["content-visibility", "visible", "1", "content-visibility", "visible", "visible", "1", "content-visibility: visible;"],
+  ["content-visibility", "auto", "1", "content-visibility", "auto", "auto", "1", "content-visibility: auto;"],
+  ["content-visibility", "hidden", "1", "content-visibility", "hidden", "hidden", "1", "content-visibility: hidden;"],
+  ["content-visibility", "bogus", "0", "", "", "visible", "0", ""],
+  ["view-transition-name", "none", "1", "view-transition-name", "none", "none", "1", "view-transition-name: none;"],
+  ["view-transition-name", "auto", "0", "", "", "none", "0", ""],
+  ["view-transition-name", "test", "1", "view-transition-name", "test", "test", "1", "view-transition-name: test;"],
+  ["view-transition-name", "bogus", "1", "view-transition-name", "bogus", "bogus", "1", "view-transition-name: bogus;"],
+  ["overflow-clip-margin", "0", "0", "", "", "0px", "0", ""],
+  ["overflow-clip-margin", "10px", "1", "overflow-clip-margin", "10px", "10px", "1", "overflow-clip-margin: 10px;"],
+  ["overflow-clip-margin", "content-box", "1", "overflow-clip-margin", "content-box", "content-box", "1", "overflow-clip-margin: content-box;"],
+  ["overflow-clip-margin", "10px content-box", "1", "overflow-clip-margin", "content-box 10px", "content-box 10px", "1", "overflow-clip-margin: content-box 10px;"],
+  ["overflow-clip-margin", "bogus", "0", "", "", "0px", "0", ""],
+  ["-webkit-box-orient", "horizontal", "1", "-webkit-box-orient", "horizontal", "horizontal", "1", "-webkit-box-orient: horizontal;"],
+  ["-webkit-box-orient", "vertical", "1", "-webkit-box-orient", "vertical", "vertical", "1", "-webkit-box-orient: vertical;"],
+  ["-webkit-box-orient", "inline", "0", "", "", "horizontal", "0", ""],
+  ["-webkit-box-orient", "block", "0", "", "", "horizontal", "0", ""],
+  ["-webkit-box-orient", "bogus", "0", "", "", "horizontal", "0", ""],
+  ["clear", "left", "1", "clear", "left", "left", "1", "clear: left;"],
+  ["clear", "right", "1", "clear", "right", "right", "1", "clear: right;"],
+  ["clear", "both", "1", "clear", "both", "both", "1", "clear: both;"],
+  ["clear", "none", "1", "clear", "none", "none", "1", "clear: none;"],
+  ["clear", "inline-start", "1", "clear", "inline-start", "inline-start", "1", "clear: inline-start;"],
+  ["clear", "inline-end", "1", "clear", "inline-end", "inline-end", "1", "clear: inline-end;"],
+  ["clear", "bogus", "0", "", "", "none", "0", ""],
+  ["opacity", "1", "1", "opacity", "1", "1", "1", "opacity: 1;"],
+  ["opacity", "0", "1", "opacity", "0", "0", "1", "opacity: 0;"],
+  ["opacity", "0.5", "1", "opacity", "0.5", "0.5", "1", "opacity: 0.5;"],
+  ["opacity", "-1", "1", "opacity", "-1", "0", "1", "opacity: -1;"],
+  ["opacity", "2", "1", "opacity", "2", "1", "1", "opacity: 2;"],
+  ["opacity", "50%", "1", "opacity", "0.5", "0.5", "1", "opacity: 0.5;"],
+  ["opacity", "bogus", "0", "", "", "1", "0", ""],
+  ["visibility", "visible", "1", "visibility", "visible", "visible", "1", "visibility: visible;"],
+  ["visibility", "hidden", "1", "visibility", "hidden", "hidden", "1", "visibility: hidden;"],
+  ["visibility", "collapse", "1", "visibility", "collapse", "collapse", "1", "visibility: collapse;"],
+  ["visibility", "bogus", "0", "", "", "visible", "0", ""],
+  ["z-index", "auto", "1", "z-index", "auto", "auto", "1", "z-index: auto;"],
+  ["z-index", "0", "1", "z-index", "0", "0", "1", "z-index: 0;"],
+  ["z-index", "1", "1", "z-index", "1", "1", "1", "z-index: 1;"],
+  ["z-index", "-1", "1", "z-index", "-1", "-1", "1", "z-index: -1;"],
+  ["z-index", "1.5", "0", "", "", "auto", "0", ""],
+  ["z-index", "1e2", "0", "", "", "auto", "0", ""],
+  ["z-index", "bogus", "0", "", "", "auto", "0", ""],
+  ["order", "0", "1", "order", "0", "0", "1", "order: 0;"],
+  ["order", "1", "1", "order", "1", "1", "1", "order: 1;"],
+  ["order", "-1", "1", "order", "-1", "-1", "1", "order: -1;"],
+  ["order", "1.5", "0", "", "", "0", "0", ""],
+  ["order", "bogus", "0", "", "", "0", "0", ""],
+  ["aspect-ratio", "auto", "1", "aspect-ratio", "auto", "auto", "1", "aspect-ratio: auto;"],
+  ["aspect-ratio", "1", "1", "aspect-ratio", "1 / 1", "1 / 1", "1", "aspect-ratio: 1 / 1;"],
+  ["aspect-ratio", "1/2", "1", "aspect-ratio", "1 / 2", "1 / 2", "1", "aspect-ratio: 1 / 2;"],
+  ["aspect-ratio", "0.5", "1", "aspect-ratio", "0.5 / 1", "0.5 / 1", "1", "aspect-ratio: 0.5 / 1;"],
+  ["aspect-ratio", "bogus", "0", "", "", "auto", "0", ""],
+  ["aspect-ratio", "1 / 2 / 3", "0", "", "", "auto", "0", ""],
+  ["grid-auto-flow", "row", "1", "grid-auto-flow", "row", "row", "1", "grid-auto-flow: row;"],
+  ["grid-auto-flow", "column", "1", "grid-auto-flow", "column", "column", "1", "grid-auto-flow: column;"],
+  ["grid-auto-flow", "dense", "1", "grid-auto-flow", "dense", "dense", "1", "grid-auto-flow: dense;"],
+  ["grid-auto-flow", "row dense", "1", "grid-auto-flow", "dense", "dense", "1", "grid-auto-flow: dense;"],
+  ["grid-auto-flow", "dense row", "1", "grid-auto-flow", "dense", "dense", "1", "grid-auto-flow: dense;"],
+  ["grid-auto-flow", "bogus", "0", "", "", "row", "0", ""],
+  ["grid-auto-rows", "auto", "1", "grid-auto-rows", "auto", "auto", "1", "grid-auto-rows: auto;"],
+  ["grid-auto-rows", "100px", "1", "grid-auto-rows", "100px", "100px", "1", "grid-auto-rows: 100px;"],
+  ["grid-auto-rows", "1fr", "1", "grid-auto-rows", "1fr", "1fr", "1", "grid-auto-rows: 1fr;"],
+  ["grid-auto-rows", "minmax(10px, 20px)", "1", "grid-auto-rows", "minmax(10px, 20px)", "minmax(10px, 20px)", "1", "grid-auto-rows: minmax(10px, 20px);"],
+  ["grid-auto-rows", "repeat(2, 10px)", "0", "", "", "auto", "0", ""],
+  ["grid-auto-rows", "bogus", "0", "", "", "auto", "0", ""],
+  ["text-shadow", "none", "1", "text-shadow", "none", "none", "1", "text-shadow: none;"],
+  ["text-shadow", "1px 2px", "1", "text-shadow", "1px 2px", "rgb(9, 9, 9) 1px 2px 0px", "1", "text-shadow: 1px 2px;"],
+  ["text-shadow", "1px 2px 3px red", "1", "text-shadow", "red 1px 2px 3px", "rgb(255, 0, 0) 1px 2px 3px", "1", "text-shadow: red 1px 2px 3px;"],
+  ["text-shadow", "1px 2px red, 3px 4px blue", "1", "text-shadow", "red 1px 2px, blue 3px 4px", "rgb(255, 0, 0) 1px 2px 0px, rgb(0, 0, 255) 3px 4px 0px", "1", "text-shadow: red 1px 2px, blue 3px 4px;"],
+  ["text-shadow", "bogus", "0", "", "", "none", "0", ""],
+  ["box-shadow", "none", "1", "box-shadow", "none", "none", "1", "box-shadow: none;"],
+  ["box-shadow", "1px 2px", "1", "box-shadow", "1px 2px", "rgb(9, 9, 9) 1px 2px 0px 0px", "1", "box-shadow: 1px 2px;"],
+  ["box-shadow", "inset 1px 2px", "1", "box-shadow", "1px 2px inset", "rgb(9, 9, 9) 1px 2px 0px 0px inset", "1", "box-shadow: 1px 2px inset;"],
+  ["box-shadow", "1px 2px 3px 4px red", "1", "box-shadow", "red 1px 2px 3px 4px", "rgb(255, 0, 0) 1px 2px 3px 4px", "1", "box-shadow: red 1px 2px 3px 4px;"],
+  ["box-shadow", "bogus", "0", "", "", "none", "0", ""],
+  ["order", "calc(1 + 1)", "1", "order", "calc(2)", "2", "1", "order: calc(2);"],
+  ["order", "+1", "1", "order", "1", "1", "1", "order: 1;"],
+  ["order", "1e2", "0", "", "", "0", "0", ""],
+  ["order", "1.0", "0", "", "", "0", "0", ""],
+  ["z-index", "calc(1 + 1)", "1", "z-index", "calc(2)", "2", "1", "z-index: calc(2);"],
+  ["z-index", "+1", "1", "z-index", "1", "1", "1", "z-index: 1;"],
+  ["z-index", "1.0", "0", "", "", "auto", "0", ""],
+  ["z-index", "2", "1", "z-index", "2", "2", "1", "z-index: 2;"],
+  ["z-index", "normal", "0", "", "", "auto", "0", ""],
+  ["opacity", "calc(0.5)", "1", "opacity", "calc(0.5)", "0.5", "1", "opacity: calc(0.5);"],
+  ["opacity", "1e2", "1", "opacity", "100", "1", "1", "opacity: 100;"],
+  ["opacity", "101%", "1", "opacity", "1.01", "1", "1", "opacity: 1.01;"],
+  ["opacity", "-5%", "1", "opacity", "-0.05", "0", "1", "opacity: -0.05;"],
+  ["grid-auto-rows", "min-content", "1", "grid-auto-rows", "min-content", "min-content", "1", "grid-auto-rows: min-content;"],
+  ["grid-auto-rows", "max-content", "1", "grid-auto-rows", "max-content", "max-content", "1", "grid-auto-rows: max-content;"],
+  ["grid-auto-rows", "fit-content(10px)", "1", "grid-auto-rows", "fit-content(10px)", "fit-content(10px)", "1", "grid-auto-rows: fit-content(10px);"],
+  ["grid-auto-rows", "1fr 2fr", "1", "grid-auto-rows", "1fr 2fr", "1fr 2fr", "1", "grid-auto-rows: 1fr 2fr;"],
+  ["grid-auto-rows", "auto auto", "1", "grid-auto-rows", "auto auto", "auto auto", "1", "grid-auto-rows: auto auto;"],
+  ["grid-auto-rows", "repeat(auto-fill, 10px)", "0", "", "", "auto", "0", ""],
+  ["grid-auto-rows", "minmax(auto, 1fr)", "1", "grid-auto-rows", "minmax(auto, 1fr)", "1fr", "1", "grid-auto-rows: minmax(auto, 1fr);"],
+  ["grid-auto-rows", "bogus auto", "0", "", "", "auto", "0", ""],
+  ["grid-auto-columns", "1fr", "1", "grid-auto-columns", "1fr", "1fr", "1", "grid-auto-columns: 1fr;"],
+  ["letter-spacing", "calc(1px + 1px)", "1", "letter-spacing", "calc(2px)", "2px", "1", "letter-spacing: calc(2px);"],
+  ["letter-spacing", "0px", "1", "letter-spacing", "0px", "normal", "1", "letter-spacing: 0px;"],
+  ["letter-spacing", "0em", "1", "letter-spacing", "0em", "normal", "1", "letter-spacing: 0em;"],
+  ["letter-spacing", "50%", "1", "letter-spacing", "50%", "50%", "1", "letter-spacing: 50%;"],
+  ["word-spacing", "0px", "1", "word-spacing", "0px", "0px", "1", "word-spacing: 0px;"],
+  ["word-spacing", "50%", "1", "word-spacing", "50%", "50%", "1", "word-spacing: 50%;"],
+  ["perspective", "calc(10px)", "1", "perspective", "calc(10px)", "10px", "1", "perspective: calc(10px);"],
+  ["perspective", "1e2px", "1", "perspective", "100px", "100px", "1", "perspective: 100px;"],
+  ["perspective", "0px", "1", "perspective", "0px", "0px", "1", "perspective: 0px;"],
+  ["border-spacing", "0 0", "2", "-webkit-border-horizontal-spacing,-webkit-border-vertical-spacing", "0px", "0px", "1", "border-spacing: 0px;", "0px", "0px"],
+  ["border-spacing", "calc(1px)", "2", "-webkit-border-horizontal-spacing,-webkit-border-vertical-spacing", "calc(1px)", "1px", "1", "border-spacing: calc(1px);", "calc(1px)", "calc(1px)"],
+  ["border-spacing", "1px -1px", "0", "", "", "0px", "0", "", "", ""],
+  ["border-spacing", "50%", "0", "", "", "0px", "0", "", "", ""],
+  ["border-spacing", "2px 4px", "2", "-webkit-border-horizontal-spacing,-webkit-border-vertical-spacing", "2px 4px", "2px 4px", "1", "border-spacing: 2px 4px;", "2px", "4px"],
+  ["overflow-clip-margin", "0px", "1", "overflow-clip-margin", "0px", "0px", "1", "overflow-clip-margin: 0px;"],
+  ["overflow-clip-margin", "border-box", "1", "overflow-clip-margin", "border-box", "border-box", "1", "overflow-clip-margin: border-box;"],
+  ["overflow-clip-margin", "padding-box", "1", "overflow-clip-margin", "0px", "0px", "1", "overflow-clip-margin: 0px;"],
+  ["overflow-clip-margin", "content-box 10px", "1", "overflow-clip-margin", "content-box 10px", "content-box 10px", "1", "overflow-clip-margin: content-box 10px;"],
+  ["text-decoration-thickness", "1", "0", "", "", "auto", "0", ""],
+  ["text-decoration-thickness", "calc(1px)", "1", "text-decoration-thickness", "calc(1px)", "1px", "1", "text-decoration-thickness: calc(1px);"],
+  ["text-decoration-thickness", "50%", "1", "text-decoration-thickness", "50%", "50%", "1", "text-decoration-thickness: 50%;"],
+  ["text-underline-offset", "1", "0", "", "", "auto", "0", ""],
+  ["text-underline-offset", "50% auto", "0", "", "", "auto", "0", ""],
+  ["text-transform", "capitalize full-width", "0", "", "", "none", "0", ""],
+  ["mix-blend-mode", "normal, multiply", "0", "", "", "normal", "0", ""],
+  ["ruby-position", "over under", "0", "", "", "over", "0", ""],
+  ["caption-side", "block-start", "0", "", "", "top", "0", ""],
+  ["visibility", "hidden visible", "0", "", "", "visible", "0", ""],
+  ["image-rendering", "auto auto", "0", "", "", "auto", "0", ""],
+  ["scrollbar-width", "10px", "0", "", "", "auto", "0", ""],
+  ["scrollbar-color", "red red", "1", "scrollbar-color", "red red", "rgb(255, 0, 0) rgb(255, 0, 0)", "1", "scrollbar-color: red red;"],
+  ["scrollbar-color", "#f00", "0", "", "", "auto", "0", ""],
+  ["scrollbar-color", "currentcolor blue", "1", "scrollbar-color", "currentcolor blue", "rgb(9, 9, 9) rgb(0, 0, 255)", "1", "scrollbar-color: currentcolor blue;"],
+  ["background-blend-mode", "screen, multiply, auto", "0", "", "", "normal", "0", ""],
+  ["text-shadow", "1px 2px red", "1", "text-shadow", "red 1px 2px", "rgb(255, 0, 0) 1px 2px 0px", "1", "text-shadow: red 1px 2px;"],
+  ["text-shadow", "1px 2px 3px 4px red", "0", "", "", "none", "0", ""],
+  ["text-shadow", "1px 2px red, 3px 4px", "1", "text-shadow", "red 1px 2px, 3px 4px", "rgb(255, 0, 0) 1px 2px 0px, rgb(9, 9, 9) 3px 4px 0px", "1", "text-shadow: red 1px 2px, 3px 4px;"],
+  ["baseline-source", "AUTO", "1", "baseline-source", "auto", "auto", "1", "baseline-source: auto;"],
+  ["baseline-source", "none", "0", "", "", "auto", "0", ""],
+  ["clear", "left right", "0", "", "", "none", "0", ""],
+  ["perspective-origin", "left top", "1", "perspective-origin", "left top", "0px 0px", "1", "perspective-origin: left top;"],
+  ["perspective-origin", "10px", "1", "perspective-origin", "10px center", "10px 10px", "1", "perspective-origin: 10px center;"],
+  ["perspective-origin", "center", "1", "perspective-origin", "center center", "100px 10px", "1", "perspective-origin: center center;"],
+  ["perspective-origin", "right bottom", "1", "perspective-origin", "right bottom", "200px 20px", "1", "perspective-origin: right bottom;"],
+  ["perspective-origin", "10% 20% 30%", "0", "", "", "100px 10px", "0", ""],
+  ["perspective-origin", "left 10px top 20px", "1", "perspective-origin", "left 10px top 20px", "10px 20px", "1", "perspective-origin: left 10px top 20px;"],
+  ["perspective-origin", "top left 10px", "0", "", "", "100px 10px", "0", ""],
+  ["object-fit", "FILL", "1", "object-fit", "fill", "fill", "1", "object-fit: fill;"],
+  ["table-layout", "AUTO", "1", "table-layout", "auto", "auto", "1", "table-layout: auto;"],
+  ["transform-style", "preserve-3d flat", "0", "", "", "flat", "0", ""],
+  ["backface-visibility", "VISIBLE", "1", "backface-visibility", "visible", "visible", "1", "backface-visibility: visible;"],
+  ["text-indent", "10px hanging each-line", "1", "text-indent", "10px hanging each-line", "10px hanging each-line", "1", "text-indent: 10px hanging each-line;"],
+  ["text-indent", "10px 20px", "0", "", "", "0px", "0", ""],
+  ["text-indent", "hanging", "0", "", "", "0px", "0", ""],
+  ["text-indent", "each-line hanging", "0", "", "", "0px", "0", ""],
+  ["text-indent", "50% hanging", "1", "text-indent", "50% hanging", "50% hanging", "1", "text-indent: 50% hanging;"],
+  ["line-height", "0", "1", "line-height", "0", "0px", "1", "line-height: 0;"],
+  ["line-height", "-1px", "0", "", "", "18px", "0", ""],
+  ["aspect-ratio", "1 / 0", "1", "aspect-ratio", "1 / 0", "1 / 0", "1", "aspect-ratio: 1 / 0;"],
+  ["align-tracks", "normal bogus", "0", "", "", "", "0", ""],
+  ["transform-origin", "left", "1", "transform-origin", "left center", "0px 10px", "1", "transform-origin: left center;"],
+  ["transform-origin", "10px", "1", "transform-origin", "10px center", "10px 10px", "1", "transform-origin: 10px center;"],
+  ["transform-origin", "left top 10px", "1", "transform-origin", "left top 10px", "0px 0px 10px", "1", "transform-origin: left top 10px;"],
+  ["transform-origin", "top left", "1", "transform-origin", "left top", "0px 0px", "1", "transform-origin: left top;"],
+  ["transform-origin", "bogus", "0", "", "", "100px 10px", "0", ""],
+  ["perspective-origin", "top 20px left 10px", "1", "perspective-origin", "left 10px top 20px", "10px 20px", "1", "perspective-origin: left 10px top 20px;"],
+  ["perspective-origin", "right 10px bottom 20px", "1", "perspective-origin", "right 10px bottom 20px", "190px 0px", "1", "perspective-origin: right 10px bottom 20px;"],
+  ["perspective-origin", "bottom 20px right 10px", "1", "perspective-origin", "right 10px bottom 20px", "190px 0px", "1", "perspective-origin: right 10px bottom 20px;"],
+  ["perspective-origin", "left 10% top 20%", "1", "perspective-origin", "left 10% top 20%", "20px 4px", "1", "perspective-origin: left 10% top 20%;"],
+  ["perspective-origin", "left calc(10px) top 20px", "1", "perspective-origin", "left calc(10px) top 20px", "10px 20px", "1", "perspective-origin: left calc(10px) top 20px;"],
+  ["perspective-origin", "center 10px top 20px", "0", "", "", "100px 10px", "0", ""],
+  ["perspective-origin", "left 10px center 20px", "0", "", "", "100px 10px", "0", ""],
+  ["perspective-origin", "left 10px right 20px", "0", "", "", "100px 10px", "0", ""],
+  ["perspective-origin", "top 10px bottom 20px", "0", "", "", "100px 10px", "0", ""],
+  ["perspective-origin", "left 10px top", "0", "", "", "100px 10px", "0", ""],
+  ["perspective-origin", "left 10px top 20px 30px", "0", "", "", "100px 10px", "0", ""],
+  ["perspective-origin", "10px 20px 30%", "0", "", "", "100px 10px", "0", ""],
+  ["transform-origin", "left 10px top 20px", "0", "", "", "100px 10px", "0", ""],
+  ["transform-origin", "top 20px left 10px", "0", "", "", "100px 10px", "0", ""],
+  ["transform-origin", "right 10px bottom 20px", "0", "", "", "100px 10px", "0", ""],
+  ["transform-origin", "left 10px top 20px 30px", "0", "", "", "100px 10px", "0", ""],
+  ["transform-origin", "10px 20px 30px", "1", "transform-origin", "10px 20px 30px", "10px 20px 30px", "1", "transform-origin: 10px 20px 30px;"],
+  ["transform-origin", "center 10px 20px", "1", "transform-origin", "center 10px 20px", "100px 10px 20px", "1", "transform-origin: center 10px 20px;"],
+  ["transform-origin", "left 10px center 20px", "0", "", "", "100px 10px", "0", ""],
+  ["object-position", "left 10px top 20px", "1", "object-position", "left 10px top 20px", "10px 20px", "1", "object-position: left 10px top 20px;"],
+  ["background-position", "left 10px top 20px", "2", "background-position-x,background-position-y", "left 10px top 20px", "10px 20px", "1", "background-position: left 10px top 20px;"]
+];
+var S = [
+  "attr|names=perspective-origin|echo=left 40px top 30px|attr=perspective-origin: top 30px left 40px|text=perspective-origin: left 40px top 30px;|comp=40px 30px",
+  "sheet|names=|echo=|comp=190px 0px|support=1",
+  "remove|n=0|text=|comp=100px 10px",
+  "idlset|n=1|text=perspective-origin: left 10px top 20px;|echo=left 10px top 20px|comp=10px 20px",
+  "to4|n=0|text=|echo=|comp=100px 10px|support=0",
+  "inherit|pcomp=40px 30px|ccomp=50px 15px|pwidth=200.0|cwidth=100.0",
+  "bssheet|names=|echo=|h=|v=|ch=2px|cv=3px"
+];
+var G = [
+  "g1|cfirst=0.0|asecond=40.0|bthird=80.0|cwidth=40.0",
+  "g2|capBelowRow=0.0|capHeight=10.0|tableWidth=120.0",
+  "g3|hgap=4.0|vgap=6.0|leftpad=4.0|cellwidth=54.0",
+  "g4|hgap=0.0|vgap=0.0|cellwidth=60.0",
+  "g5|rowh=40.0|secondTop=40.0",
+  "g6|hiddenHolds=20.0|hiddenWidth=100.0",
+  "g7|aFirst=0.0|bSecond=40.0|cLast=80.0"
+];
+
+var box = document.getElementById('box'), pass = 0, fail = 0, out = [];
+
+function names(d) { var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i)); return a.join(','); }
+
+for (var i = 0; i < E.length; i++) {
+  var prop = E[i][0], value = E[i][1];
+  var d = document.createElement('div');
+  box.appendChild(d);
+  d.style.setProperty(prop, value);
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) { sup = 'ERR'; }
+  var got = ['' + d.style.length, names(d), d.style.getPropertyValue(prop),
+             getComputedStyle(d).getPropertyValue(prop), sup, d.style.cssText];
+  if (prop === 'border-spacing') {
+    got.push(d.style.getPropertyValue('-webkit-border-horizontal-spacing'));
+    got.push(d.style.getPropertyValue('-webkit-border-vertical-spacing'));
+  }
+  var want = E[i].slice(2);
+  var bad = [];
+  for (var j = 0; j < want.length; j++) {
+    if (want[j] === '~') continue;
+    if (got[j] !== want[j]) bad.push('c' + j + ' got[' + got[j] + '] want[' + want[j] + ']');
+  }
+  if (bad.length) { fail++; out.push('FAIL E' + i + ' ' + prop + ': ' + value + ' | ' + bad.join(' | ')); }
+  else pass++;
+}
+
+/* S: the doors the CSSOM loop does not use. Each row is the whole line the probe printed. */
+function line(tag, extra) { return tag + '|' + extra; }
+var sd = [];
+var a = document.createElement('div');
+document.getElementById('host').appendChild(a);
+a.setAttribute('style', 'perspective-origin: top 30px left 40px');
+void a.offsetHeight;
+sd.push(line('attr', 'names=' + names(a) + '|echo=' + a.style.getPropertyValue('perspective-origin')
+  + '|attr=' + a.getAttribute('style') + '|text=' + a.style.cssText
+  + '|comp=' + getComputedStyle(a).getPropertyValue('perspective-origin')));
+var s = document.getElementById('s-sheet');
+void s.offsetHeight;
+sd.push(line('sheet', 'names=' + names(s) + '|echo=' + s.style.getPropertyValue('perspective-origin')
+  + '|comp=' + getComputedStyle(s).getPropertyValue('perspective-origin')
+  + '|support=' + (CSS.supports('perspective-origin', 'right 10px bottom 20px') ? '1' : '0')));
+var rr = document.createElement('div');
+document.getElementById('host').appendChild(rr);
+rr.style.setProperty('perspective-origin', 'left 10px top 20px');
+rr.style.removeProperty('perspective-origin');
+void rr.offsetHeight;
+sd.push(line('remove', 'n=' + rr.style.length + '|text=' + rr.style.cssText
+  + '|comp=' + getComputedStyle(rr).getPropertyValue('perspective-origin')));
+var w = document.createElement('div');
+document.getElementById('host').appendChild(w);
+w.style.perspectiveOrigin = 'left 10px top 20px';
+void w.offsetHeight;
+sd.push(line('idlset', 'n=' + w.style.length + '|text=' + w.style.cssText
+  + '|echo=' + w.style.getPropertyValue('perspective-origin')
+  + '|comp=' + getComputedStyle(w).getPropertyValue('perspective-origin')));
+var t = document.createElement('div');
+document.getElementById('host').appendChild(t);
+t.style.setProperty('transform-origin', 'left 10px top 20px');
+void t.offsetHeight;
+sd.push(line('to4', 'n=' + t.style.length + '|text=' + t.style.cssText
+  + '|echo=' + t.style.getPropertyValue('transform-origin')
+  + '|comp=' + getComputedStyle(t).getPropertyValue('transform-origin')
+  + '|support=' + (CSS.supports('transform-origin', 'left 10px top 20px') ? '1' : '0')));
+var pa = document.getElementById('p-a'), ca = document.getElementById('c-a');
+void ca.offsetHeight;
+sd.push(line('inherit', 'pcomp=' + getComputedStyle(pa).getPropertyValue('perspective-origin')
+  + '|ccomp=' + getComputedStyle(ca).getPropertyValue('perspective-origin')
+  + '|pwidth=' + pa.getBoundingClientRect().width.toFixed(1)
+  + '|cwidth=' + ca.getBoundingClientRect().width.toFixed(1)));
+var sp = document.getElementById('s-table');
+void sp.offsetHeight;
+sd.push(line('bssheet', 'names=' + names(sp) + '|echo=' + sp.style.getPropertyValue('border-spacing')
+  + '|h=' + sp.style.getPropertyValue('-webkit-border-horizontal-spacing')
+  + '|v=' + sp.style.getPropertyValue('-webkit-border-vertical-spacing')
+  + '|ch=' + getComputedStyle(sp).getPropertyValue('-webkit-border-horizontal-spacing')
+  + '|cv=' + getComputedStyle(sp).getPropertyValue('-webkit-border-vertical-spacing')));
+for (var i = 0; i < S.length; i++) {
+  var name = S[i].split('|')[0], gotLine = null;
+  for (var k = 0; k < sd.length; k++) if (sd[k].split('|')[0] === name) gotLine = sd[k];
+  if (gotLine !== S[i]) { fail++; out.push('FAIL S' + i + ' got[' + gotLine + '] want[' + S[i] + ']'); }
+  else pass++;
+}
+
+/* G: the geometry. */
+function r(id) { var b = document.getElementById(id).getBoundingClientRect(); return { l: b.left, t: b.top, w: b.width, h: b.height, r: b.right, b: b.bottom }; }
+function n1(v) { return v.toFixed(1); }
+var gd = [];
+var g1 = r('g-1');
+gd.push(line('g1', 'cfirst=' + n1(r('g-1c').l - g1.l) + '|asecond=' + n1(r('g-1a').l - g1.l)
+  + '|bthird=' + n1(r('g-1b').l - g1.l) + '|cwidth=' + n1(r('g-1c').w)));
+gd.push(line('g2', 'capBelowRow=' + n1(r('g-2c').t - r('g-2r').b) + '|capHeight=' + n1(r('g-2c').h)
+  + '|tableWidth=' + n1(r('g-2').w)));
+gd.push(line('g3', 'hgap=' + n1(r('g-3b').l - r('g-3a').r) + '|vgap=' + n1(r('g-3c').t - r('g-3a').b)
+  + '|leftpad=' + n1(r('g-3a').l - r('g-3').l) + '|cellwidth=' + n1(r('g-3a').w)));
+gd.push(line('g4', 'hgap=' + n1(r('g-4b').l - r('g-4a').r) + '|vgap=' + n1(r('g-4c').t - r('g-4a').b)
+  + '|cellwidth=' + n1(r('g-4a').w)));
+gd.push(line('g5', 'rowh=' + n1(r('g-5a').h) + '|secondTop=' + n1(r('g-5b').t - r('g-5a').t)));
+gd.push(line('g6', 'hiddenHolds=' + n1(r('g-6next').t - r('g-6').t) + '|hiddenWidth=' + n1(r('g-6').w)));
+var g7 = r('g-7');
+gd.push(line('g7', 'aFirst=' + n1(r('g-7a').l - g7.l) + '|bSecond=' + n1(r('g-7b').l - g7.l)
+  + '|cLast=' + n1(r('g-7c').l - g7.l)));
+for (var i = 0; i < G.length; i++) {
+  var tag = G[i].split('|')[0], gotLine = null;
+  for (var k = 0; k < gd.length; k++) if (gd[k].split('|')[0] === tag) gotLine = gd[k];
+  if (gotLine !== G[i]) { fail++; out.push('FAIL G' + i + ' got[' + gotLine + '] want[' + G[i] + ']'); }
+  else pass++;
+}
+
+out.unshift((fail === 0 ? 'ALLPASS' : 'FAILURES') + ' b291: ' + pass + '/' + (pass + fail) + ' rows pass');
+var text = out.join('\n');
+document.getElementById('fit').src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAIAAAADnC86AAAAMklEQVR4nO3NwQ0AAATAQOy/Mzvwk+u/uezYl7G/6+CeAoPBYDAYDAaDwWAwGAwGf4QHhpsCT0Vc+eUAAAAASUVORK5CYII=';
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

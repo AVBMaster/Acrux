@@ -39,7 +39,12 @@ public static class CssFunctionEvaluator
         _customProperties.Clear();
     }
 
-    public static string Evaluate(string value, Element? context = null, float parentFontSize = 16, float rootFontSize = 16, float viewportWidth = 0, float viewportHeight = 0, int maxRecursion = 10, bool forceMath = false)
+    /// <param name="property">The name the value is being applied under. CSS Grid 1 §7.2.3: a track
+    /// list keeps its <c>fit-content()</c> function through the cascade — the layout is what prices
+    /// it (measured: 'grid-auto-rows: fit-content(10px) 20px' computes exactly what was written) —
+    /// and the rule is asked here rather than at each call site, because the cascade has two of
+    /// those and a rule a caller can forget is a rule that gets forgotten.</param>
+    public static string Evaluate(string value, Element? context = null, float parentFontSize = 16, float rootFontSize = 16, float viewportWidth = 0, float viewportHeight = 0, int maxRecursion = 10, bool forceMath = false, string? property = null)
     {
         if (string.IsNullOrEmpty(value) || maxRecursion <= 0) return value;
 
@@ -53,7 +58,8 @@ public static class CssFunctionEvaluator
         // layout owns them.
         if (forceMath || !HasMathFunctionWithPercent(result))
         {
-            result = EvaluateFitContent(result, parentFontSize, rootFontSize, viewportWidth, viewportHeight);
+            if (!IsTrackListProperty(property))
+                result = EvaluateFitContent(result, parentFontSize, rootFontSize, viewportWidth, viewportHeight);
             result = EvaluateCounter(result, context);
             result = EvaluateCounters(result, context);
         }
@@ -929,6 +935,16 @@ public static class CssFunctionEvaluator
             _ => value
         };
     }
+
+    /// <summary>The four properties whose value is a grid track list (CSS Grid 1 §7.2): each keeps
+    /// 'fit-content()' and 'minmax()' as written, since it is the track layout that prices them.</summary>
+    private static bool IsTrackListProperty(string? name) =>
+        name is not null && name.ToLowerInvariant() switch
+        {
+            "grid-template-rows" or "grid-template-columns" or "grid-auto-rows" or "grid-auto-columns"
+                => true,
+            _ => false,
+        };
 
     private static string EvaluateFitContent(string value, float parentFontSize, float rootFontSize, float viewportWidth, float viewportHeight)
     {

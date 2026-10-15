@@ -359,7 +359,7 @@ public class CascadeResolverState
             ? CssFunctionEvaluator.EvaluateForContent(text, Element,
                 FontSize, RootFontSize, ViewportWidth, ViewportHeight)
             : CssFunctionEvaluator.Evaluate(text, Element,
-                FontSize, RootFontSize, ViewportWidth, ViewportHeight);
+                FontSize, RootFontSize, ViewportWidth, ViewportHeight, property: name);
         if (CssPropertyTraits.TryApplyCssWideKeyword(style, name, text, ParentStyle))
             return;
         // Font properties are deliberately not in CssPropertyApplier.Apply's

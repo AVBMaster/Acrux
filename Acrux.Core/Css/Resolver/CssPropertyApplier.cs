@@ -554,6 +554,13 @@ public static class CssPropertyApplier
             case "border-end-end-radius": ApplyRadiusPair(style, value, LogicalCorner(style, 2, 3)); break;
             case "border-collapse": style.BorderCollapse = value.ToLowerInvariant() == "collapse"; break;
             case "border-spacing": ApplyBorderSpacing(style, value); break;
+            // The two legacy spellings CSS Tables 1 §4.11 gives the shorthand's halves, and the pair
+            // 'border-spacing' expands to — so a declaration that arrives as either of them has to
+            // reach the same two fields the shorthand writes (measured: a sheet rule
+            // 'border-spacing: 4px 6px' gaps the cells by 4px and 6px, and a page that writes
+            // '-webkit-border-vertical-spacing: 9px' sets the row gap alone).
+            case "-webkit-border-horizontal-spacing": ApplyBorderAxis(style, value, row: false); break;
+            case "-webkit-border-vertical-spacing": ApplyBorderAxis(style, value, row: true); break;
             case "border-image": ParseBorderImageShorthand(value, style); break;
             case "border-image-source":
                 style.BorderImageSource = NormalizeImageSource(value);
@@ -574,7 +581,25 @@ public static class CssPropertyApplier
                 style.BorderImageOutset = CssValueGrammar.CanonicalBorderImageOutset(value) ?? "0";
                 break;
             case "box-sizing": style.BoxSizing = value.Contains("border") ? BoxSizingType.BorderBox : BoxSizingType.ContentBox; style.BoxSizingIsAuthored = true; break;
-            case "opacity": if (float.TryParse(value, out var o)) style.Opacity = Math.Clamp(o, 0, 1); break;
+            case "opacity":
+                // A percentage is the same number written the other way: 'opacity: 50%' is '0.5'
+                // (measured — and the specified value prints the folded number too, which the echo
+                // canonicaliser does). Out of range is clamped here, not refused.
+                if (float.TryParse(value, out var o)) style.Opacity = Math.Clamp(o, 0, 1);
+                else if (Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(
+                             value.Trim(), out var op, out var opUnit) && opUnit == "%")
+                    style.Opacity = (float)Math.Clamp(op / 100f, 0, 1);
+                break;
+            case "baseline-source":
+                // CSS Inline 3 §3.1: one of three keywords, 'auto' the initial. The grammar has
+                // already refused anything else, so an unknown word leaves the value alone.
+                switch (value.Trim().ToLowerInvariant())
+                {
+                    case "auto": case "first": case "last":
+                        style.BaselineSource = value.Trim().ToLowerInvariant();
+                        break;
+                }
+                break;
             case "box-shadow": style.BoxShadow = ParseBoxShadow(value); break;
             case "flex-direction": style.FlexDirection = ParseFlexDirection(value); break;
             case "flex-wrap": style.FlexWrap = ParseFlexWrap(value); break;
@@ -851,6 +876,7 @@ public static class CssPropertyApplier
                 {
                     style.LetterSpacing = ls.ToPixels(style.FontSize, style.FontSize, 0, 0);
                     style.LetterSpacingIsNormal = false;
+                    style.LetterSpacingPercent = PercentOf(value);
                 }
                 break;
             case "word-spacing":
@@ -863,6 +889,7 @@ public static class CssPropertyApplier
                 {
                     style.WordSpacing = ws.ToPixels(style.FontSize, style.FontSize, 0, 0);
                     style.WordSpacingIsNormal = false;
+                    style.WordSpacingPercent = PercentOf(value);
                 }
                 break;
             case "direction": style.Direction = value.ToLowerInvariant() == "rtl" ? "rtl" : "ltr"; break;
@@ -971,9 +998,13 @@ public static class CssPropertyApplier
                     { num = single; den = 1f; }
                     else if (sides.Count == 2 && TryRatioSide(sides[0], out var av)
                         && TryRatioSide(sides[1], out var bv)) { num = av; den = bv; }
-                    if (num is > 0 && den is > 0)
+                    // Both sides are [0,∞): 'aspect-ratio: 0' is the value '0 / 1' and '1 / 0' stands
+                    // as written (measured), while the grammar has already refused a negative. A zero
+                    // denominator prices nothing, so layout is given no ratio and the printed pair
+                    // carries what the page said.
+                    if (num is >= 0 && den is >= 0)
                     {
-                        style.AspectRatio = num.Value / den.Value;
+                        style.AspectRatio = den > 0 ? num.Value / den.Value : 0f;
                         var pair = $"{Acrux.Core.Dom.Animations.CssValueTokenizer.Num(num.Value)} / "
                             + $"{Acrux.Core.Dom.Animations.CssValueTokenizer.Num(den.Value)}";
                         style.AspectRatioPair = ratioAuto ? "auto " + pair : pair;
@@ -2789,6 +2820,15 @@ public static class CssPropertyApplier
         style.BorderRowSpacing = parts.Count > 1 ? Math.Max(0, ParseSize(parts[1]) ?? inlineSpacing) : null;
     }
 
+    /// <summary>One half of 'border-spacing' arriving under its legacy longhand name, written on its
+    /// own: the column gap or the row gap, leaving the other half as the cascade set it.</summary>
+    private static void ApplyBorderAxis(ComputedStyle style, string value, bool row)
+    {
+        var px = Math.Max(0, ParseSize(value) ?? 0);
+        if (row) style.BorderRowSpacing = px;
+        else style.BorderSpacing = px;
+    }
+
     public static void ParseBorderWidth(string value, ComputedStyle style)
     {
         var widths = ShorthandExpander.SplitShorthand(value);
@@ -3708,6 +3748,14 @@ public static class CssPropertyApplier
 
     /// <summary>'text-underline-offset: auto | &lt;length&gt; | &lt;percentage&gt;'
     /// (CSS Text Decoration 4 §3.2); percentages resolve against the font size.</summary>
+    /// <summary>The percentage of a length-percentage token, in percent units ('50%' gives 50), or
+    /// zero when the value carried no percentage. The spacing properties and the underline offset all
+    /// keep an authored percentage on the computed surface (measured, each), so they all read it the
+    /// same way.</summary>
+    private static float PercentOf(string token) =>
+        Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token.Trim(), out var number, out var unit)
+        && unit == "%" ? (float)number : 0f;
+
     private static void ApplyTextUnderlineOffset(ComputedStyle style, string value)
     {
         var token = value.Trim().ToLowerInvariant();
@@ -3718,6 +3766,12 @@ public static class CssPropertyApplier
             return;
         }
         style.TextUnderlineOffsetIsAuto = false;
+        // A percentage is priced at used-value time, so the computed surface keeps the percentage the
+        // page wrote (measured: 'text-underline-offset: 50%' computes '50%'), while the field the
+        // painter reads still carries the font-relative pixels.
+        style.TextUnderlineOffsetPercent =
+            Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out var percent, out var unit)
+            && unit == "%" ? (float)percent : 0f;
         style.TextUnderlineOffset = length.ToPixels(style.FontSize, style.FontSize, 0, 0);
     }
 
@@ -3852,11 +3906,17 @@ public static class CssPropertyApplier
                 color.Add(token);
             }
             if (lengths.Count is < 2 or > 3 || color.Count > 1) continue;
+            // A shadow with no colour is painted with the text's own colour, and the computed value
+            // says so (measured: 'text-shadow: 1px 2px' on a page whose colour is rgb(9,9,9) reads
+            // 'rgb(9, 9, 9) 1px 2px 0px'). 'currentcolor' written out is the same value and is
+            // resolved the same way.
             var shadowColor = color.Count > 0
                 ? ColorParser.Parse(string.Join(" ", color))
                 : new SKColor(0, 0, 0, 255);
             shadows.Add(new TextShadowValue(shadowColor, lengths[0], lengths[1],
-                lengths.Count > 2 ? lengths[2] : 0f));
+                lengths.Count > 2 ? lengths[2] : 0f,
+                ColorIsCurrentColor: color.Count == 0
+                    || string.Join(" ", color).Equals("currentcolor", StringComparison.OrdinalIgnoreCase)));
         }
         return shadows;
     }
@@ -4442,7 +4502,12 @@ public static class CssPropertyApplier
         _ => MixBlendModeType.Normal
     };
 
-    public static BackgroundBlendModeType ParseBackgroundBlendMode(string value) => value.ToLowerInvariant() switch
+    /// <summary>'background-blend-mode' is a list, one blend per background layer, and this engine
+    /// paints one blend for the box: the reference engine's computed value is the FIRST layer's word
+    /// (measured: 'multiply, screen' computes 'multiply' while the CSSOM still echoes both). A pair
+    /// written without the commas is refused by the grammar, so only a list reaches here.</summary>
+    public static BackgroundBlendModeType ParseBackgroundBlendMode(string value)
+        => value.Split(',')[0].Trim().ToLowerInvariant() switch
     {
         "multiply" => BackgroundBlendModeType.Multiply,
         "screen" => BackgroundBlendModeType.Screen,

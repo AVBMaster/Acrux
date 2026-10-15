@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b291 probe 3 &#8212; the four-component origin</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+#box { width: 200px; height: 100px; }</style></head><body>
+<div id="box"></div>
+<pre id="report"></pre>
+<script>
+/* The four-component &lt;position&gt; for the two origin properties, measured beside a box of a known
+ * size so the used value prices both axes. */
+var CASES = [
+  "perspective-origin: left 10px top 20px",
+  "perspective-origin: top 20px left 10px",
+  "perspective-origin: right 10px bottom 20px",
+  "perspective-origin: bottom 20px right 10px",
+  "perspective-origin: left 10% top 20%",
+  "perspective-origin: left calc(10px) top 20px",
+  "perspective-origin: center 10px top 20px",
+  "perspective-origin: left 10px center 20px",
+  "perspective-origin: left 10px right 20px",
+  "perspective-origin: top 10px bottom 20px",
+  "perspective-origin: left 10px top",
+  "perspective-origin: left 10px top 20px 30px",
+  "perspective-origin: 10px 20px 30%",
+  "transform-origin: left 10px top 20px",
+  "transform-origin: top 20px left 10px",
+  "transform-origin: right 10px bottom 20px",
+  "transform-origin: left 10px top 20px 30px",
+  "transform-origin: left top 10px",
+  "transform-origin: 10px 20px 30px",
+  "transform-origin: center 10px 20px",
+  "transform-origin: left 10px center 20px",
+  "object-position: left 10px top 20px",
+  "background-position: left 10px top 20px"
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var decl = CASES[i];
+  var prop = decl.slice(0, decl.indexOf(':')).trim();
+  var value = decl.slice(decl.indexOf(':') + 1).trim();
+  var d = document.createElement('div');
+  document.getElementById('box').appendChild(d);
+  d.style.setProperty(prop, value);
+  var names = [];
+  for (var j = 0; j < d.style.length; j++) names.push(d.style.item(j));
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) {}
+  out.push(i + '|' + prop + '|' + value + '|n=' + d.style.length + '|names=' + names.join(',')
+    + '|echo=' + d.style.getPropertyValue(prop) + '|comp=' + getComputedStyle(d).getPropertyValue(prop)
+    + '|sup=' + sup);
+}
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script>
+</body></html>

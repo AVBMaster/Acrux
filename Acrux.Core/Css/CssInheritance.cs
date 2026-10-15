@@ -73,6 +73,10 @@ public static class CssInheritance
         child.WordSpacing = parent.WordSpacing;
         child.LetterSpacingIsNormal = parent.LetterSpacingIsNormal;
         child.WordSpacingIsNormal = parent.WordSpacingIsNormal;
+        // An authored percentage is inherited with the property, and stays a percentage on the
+        // computed surface of the child too (measured: a child of 'letter-spacing: 50%' reads '50%').
+        child.LetterSpacingPercent = parent.LetterSpacingPercent;
+        child.WordSpacingPercent = parent.WordSpacingPercent;
         child.TextIndent = parent.TextIndent;
         child.TextIndentPercent = parent.TextIndentPercent;
         child.TextIndentHanging = parent.TextIndentHanging;

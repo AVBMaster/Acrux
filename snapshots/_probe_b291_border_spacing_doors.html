@@ -1,0 +1,20 @@
+<!DOCTYPE html><html><head><style>
+body{font:14px/18px monospace;margin:8px}
+#t1 { border-spacing: 2px 3px; }
+#t2 { border-spacing: 2px 3px; table-layout: fixed; width: 120px; }
+td { height: 10px; }
+</style></head><body>
+<table id="t1"><tr><td id="a"></td><td id="b"></td></tr></table>
+<table id="t2"><tr><td id="c"></td><td id="d"></td></tr></table>
+<pre id="report"></pre>
+<script>
+function g(el){var cs=getComputedStyle(el);return 'bs='+cs.getPropertyValue('border-spacing')
+ + '|h='+cs.getPropertyValue('-webkit-border-horizontal-spacing')
+ + '|v='+cs.getPropertyValue('-webkit-border-vertical-spacing')
+ + '|idlh='+cs.webkitBorderHorizontalSpacing+'|idlv='+cs.webkitBorderVerticalSpacing;}
+var out=[];
+out.push('t1|'+g(document.getElementById('t1')));
+out.push('t2|'+g(document.getElementById('t2')));
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

@@ -1,0 +1,16 @@
+<!DOCTYPE html><html><head><style>
+body { margin: 8px; font: 14px/18px monospace; }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+.ink { position: absolute; left: 340px; width: 60px; height: 20px; background: rgb(0,255,0); }
+#i-0 { top: 8px; } #i-1 { top: 30px; }
+</style></head><body>
+<h2>the ink the swept properties have to reach (blend, opacity, the two text spellings,a decorationthickness,a fitted image)</h2>
+<div class="ink" id="i-0"></div>
+<div class="ink" id="i-1"></div>
+<pre id="report"></pre>
+<script>
+var out = [];
+['i-0','i-1'].forEach(function(id){ var b=document.getElementById(id).getBoundingClientRect(); out.push(id+'|'+b.left.toFixed(1)+','+b.top.toFixed(1)+','+b.width.toFixed(1)+','+b.height.toFixed(1)); });
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

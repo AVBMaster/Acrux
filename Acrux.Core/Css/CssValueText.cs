@@ -245,6 +245,8 @@ public static class CssValueText
                 // 'font-family: FOO' keep the author's case (measured) because no grammar of
                 // theirs owns those words.
                 result = FoldColorWords(result, property);
+                result = CanonicalizeOpacityNumber(result, property);
+                result = CanonicalizeBorderSpacing(result, property);
                 result = FoldKeywordCase(result, property);
                 if (property.Equals("font", StringComparison.OrdinalIgnoreCase))
                 {
@@ -1169,8 +1171,14 @@ public static class CssValueText
     /// 'center top').</summary>
     private static string CanonicalizePositionPair(string text, string property)
     {
+        // The same &lt;position&gt; printed the same way: a one-sided value gains the center of the
+        // other axis (measured for each of the four — 'background-position: top', 'object-position:
+        // top', 'perspective-origin: left' and 'transform-origin: 10px' read back 'center top',
+        // 'center top', 'left center' and '10px center').
         if (!property.Equals("object-position", StringComparison.OrdinalIgnoreCase)
-            && !property.Equals("background-position", StringComparison.OrdinalIgnoreCase)) return text;
+            && !property.Equals("background-position", StringComparison.OrdinalIgnoreCase)
+            && !property.Equals("perspective-origin", StringComparison.OrdinalIgnoreCase)
+            && !property.Equals("transform-origin", StringComparison.OrdinalIgnoreCase)) return text;
         if (text.Contains(',')) return text;
         return ShorthandExpander.PositionPairText(text.Trim()) ?? text;
     }
@@ -1283,7 +1291,10 @@ public static class CssValueText
             else if (IsBareZero(p)) length = "0px";
             else return null;
         }
-        if (length == null && hanging == null && eachLine == null) return null;
+        // The flags are additions to an indent, not an indent of their own: 'text-indent: hanging'
+        // and 'text-indent: each-line' are each dropped (measured), while '10px hanging each-line'
+        // stands.
+        if (length == null) return null;
         var parts = new List<string>();
         if (length != null) parts.Add(length);
         if (hanging == true) parts.Add("hanging");
@@ -1337,9 +1348,14 @@ public static class CssValueText
     /// 'aspect-ratio: calc(1 + 1)' as the ratio it prints 'calc(2) / 1' and leaves
     /// 'aspect-ratio: calc(1px)' out of the cascade altogether (measured, both) — a length is no
     /// count whatever number it is written with.</summary>
+    /// <summary>A side of a ratio is a number that is not negative: 'aspect-ratio: 0' is the value
+    /// '0 / 1', '1 / 0' stands as written, and '-1' is dropped (measured, all three) — the reference
+    /// engine asks for [0,∞) on both sides and does not divide by the second one at computed time.</summary>
     private static bool PositiveRatioSide(string text)
     {
-        if (text.IndexOf('(') < 0) return PositiveNumber(text);
+        if (text.IndexOf('(') < 0)
+            return Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(
+                text, out var number, out var unit) && unit.Length == 0 && number >= 0;
         return CssMathValue.WellTyped(text, out var category)
             && (category == "number" || category == null);
     }
@@ -1562,6 +1578,30 @@ public static class CssValueText
     /// parses it to (measured over 33 spellings: '#F00' and 'hsl(0,100%,50%)' both read
     /// 'rgb(255, 0, 0)', 'rgb(1 2 3 / 0.5)' reads 'rgba(1, 2, 3, 0.5)', 'TRANSPARENT' reads
     /// 'transparent', and 'currentColor' reads 'currentcolor' because it names no colour yet).</summary>
+    /// <summary>'opacity' is a &lt;number&gt;, and a percentage is the same number written the other
+    /// way: the reference engine folds it on the way in, so 'opacity: 50%' is stored, echoed and
+    /// computed as '0.5' and 'opacity: 101%' as '1.01' (measured, both — the clamp to the property's
+    /// range happens later, on the computed value only).</summary>
+    private static string CanonicalizeOpacityNumber(string text, string property)
+    {
+        if (!property.Equals("opacity", StringComparison.OrdinalIgnoreCase)) return text;
+        var token = text.Trim();
+        if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out var number, out var unit)
+            || unit != "%") return text;
+        return Acrux.Core.Dom.Animations.CssValueTokenizer.Num(number / 100f);
+    }
+
+    /// <summary>'border-spacing' is the pair of table axes and prints the shortest spelling that
+    /// says the same thing: '0 0' is '0px' and '1px 1px' is '1px', while two different axes keep both
+    /// words (measured). The same rule the four-side shorthands follow, on two sides.</summary>
+    private static string CanonicalizeBorderSpacing(string text, string property)
+    {
+        if (!property.Equals("border-spacing", StringComparison.OrdinalIgnoreCase)) return text;
+        var words = SplitTopLevelWords(text);
+        if (words.Count != 2) return text;
+        return words[0].Equals(words[1], StringComparison.OrdinalIgnoreCase) ? words[0] : text;
+    }
+
     private static string FoldColorWords(string text, string property)
     {
         if (!Resolver.CssPropertyTraits.TakesColorValue(property)) return text;

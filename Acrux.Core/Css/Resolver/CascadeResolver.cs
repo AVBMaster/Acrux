@@ -847,7 +847,7 @@ public class CascadeResolver
                 ? CssFunctionEvaluator.EvaluateForContent(value, element,
                     style.FontSize, RootFontSize(), _viewportWidth, _viewportHeight)
                 : CssFunctionEvaluator.Evaluate(value, element,
-                    style.FontSize, RootFontSize(), _viewportWidth, _viewportHeight);
+                    style.FontSize, RootFontSize(), _viewportWidth, _viewportHeight, property: name);
             if (TryApplyCssWideKeyword(style, name, evaluated, parentStyle))
                 continue;
             ApplyProperty(style, name, evaluated);

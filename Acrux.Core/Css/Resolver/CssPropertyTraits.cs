@@ -115,7 +115,8 @@ public static class CssPropertyTraits
     /// against the reference engine's own CSSOM output.
     /// </summary>
     private static readonly HashSet<string> ColorValued = new(StringComparer.OrdinalIgnoreCase)
-    {
+    {        "scrollbar-color",
+
         "color", "background-color", "caret-color", "accent-color", "outline-color",
         "column-rule-color", "text-decoration-color", "text-emphasis-color", "text-emphasis",
         "border-color", "border-top-color", "border-right-color", "border-bottom-color",
@@ -595,13 +596,15 @@ public static class CssPropertyTraits
             case "word-break": to.WordBreak = from.WordBreak; break;
             case "overflow-wrap": to.OverflowWrap = from.OverflowWrap; break;
             case "letter-spacing": to.LetterSpacing = from.LetterSpacing;
-                to.LetterSpacingIsNormal = from.LetterSpacingIsNormal; break;
+                to.LetterSpacingIsNormal = from.LetterSpacingIsNormal;
+                to.LetterSpacingPercent = from.LetterSpacingPercent; break;
             // 'hyphens' had no Copy case at all, so 'hyphens: inherit' and
             // 'initial' silently kept whatever the element already had.
             case "hyphens": to.Hyphens = from.Hyphens; break;
             case "hyphenate-character": to.HyphenateCharacter = from.HyphenateCharacter; break;
             case "word-spacing": to.WordSpacing = from.WordSpacing;
-                to.WordSpacingIsNormal = from.WordSpacingIsNormal; break;
+                to.WordSpacingIsNormal = from.WordSpacingIsNormal;
+                to.WordSpacingPercent = from.WordSpacingPercent; break;
             case "text-indent": to.TextIndent = from.TextIndent; to.TextIndentHanging = from.TextIndentHanging;
                 to.TextIndentEachLine = from.TextIndentEachLine;
                 to.TextIndentPercent = from.TextIndentPercent; break;

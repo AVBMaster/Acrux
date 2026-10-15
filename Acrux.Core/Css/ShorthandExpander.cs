@@ -68,6 +68,8 @@ public static class ShorthandExpander
                 "overscroll-behavior-y", "auto"); break;
             case "position-try": ExpandPositionTry(result, value); break;
             case "gap": ExpandGap(result, value); break;
+            case "border-spacing": ExpandPair(result, value, "-webkit-border-horizontal-spacing",
+                "-webkit-border-vertical-spacing", "0px"); break;
         case "columns": ExpandColumns(result, value); break;
         case "column-rule": ExpandColumnRule(result, value); break;
             case "place-content": ExpandPlace(result, value, "align-content", "justify-content"); break;
@@ -218,6 +220,7 @@ public static class ShorthandExpander
         "animation", "transition", "inset", "inset-block", "inset-inline",
         "margin-block", "margin-inline", "padding-block",
         "padding-inline", "overflow", "contain-intrinsic-size", "mask", "gap", "columns",
+        "border-spacing",
         "column-rule", "flex-flow", "text-decoration", "text-emphasis", "grid-column",
         "overscroll-behavior", "position-try",
         "grid-row", "grid-area",
@@ -260,14 +263,25 @@ public static class ShorthandExpander
             var index = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             foreach (var shorthand in ShorthandNames)
             {
+                // Both tables answer "which longhands does this shorthand cover", and they are not
+                // the same list: the cascade's is by id and so cannot name a property this engine
+                // has no id for, while the CSSOM's is by name and does — 'border-spacing' enumerates
+                // as '-webkit-border-horizontal-spacing' and '-webkit-border-vertical-spacing',
+                // neither of which is an id here, and a read of either has to find the shorthand
+                // beside it (measured). Indexing the union is what keeps one question one answer.
+                var names = new List<string>();
                 foreach (var id in GetControlledLonghands(shorthand))
                 {
                     // The dashed name, not the enum member: an extension method never wins an
                     // instance call, so 'id.ToString()' here would index 'BackgroundColor' and
                     // every lookup for 'background-color' would miss.
-                    var name = CssPropertyIdExtensions.ToString(id);
+                    names.Add(CssPropertyIdExtensions.ToString(id));
+                }
+                if (CssomLonghands(shorthand) is { } cssom) names.AddRange(cssom);
+                foreach (var name in names)
+                {
                     if (!index.TryGetValue(name, out var list)) index[name] = list = new List<string>(2);
-                    list.Add(shorthand);
+                    if (!list.Contains(shorthand, StringComparer.OrdinalIgnoreCase)) list.Add(shorthand);
                 }
             }
             _longhandToShorthands = index;
@@ -1027,6 +1041,14 @@ public static class ShorthandExpander
             "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode",
         },
         "gap" => new[] { "row-gap", "column-gap" },
+        // CSS Tables 1 §4.11: 'border-spacing' enumerates as the two legacy spellings the reference
+        // engine still answers them by (measured: 'border-spacing: 2px 4px' has length 2, item(0)
+        // '-webkit-border-horizontal-spacing' reading '2px' and item(1)
+        // '-webkit-border-vertical-spacing' reading '4px', while cssText prints 'border-spacing'.
+        // The cascade's own table does not carry this pair: the two names reset nothing that
+        // 'border-spacing' does not already write.
+        "border-spacing" => new[] { "-webkit-border-horizontal-spacing",
+                                    "-webkit-border-vertical-spacing" },
         // Three the engine expands but did not enumerate: each names the longhands it covers even
         // when the value carries only one of them (measured, in this order —
         // 'white-space: normal' enumerates [white-space-collapse, text-wrap-mode] with length 2,

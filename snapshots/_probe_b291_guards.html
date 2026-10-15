@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b291 probe 6 &#8212; the families that also reach the drawn page</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+.bar { display: block; width: 40px; height: 10px; }
+#g-1 { display: flex; width: 200px; height: 12px; background: rgb(240,240,240); }
+#g-2 { caption-side: bottom; border-collapse: separate; border-spacing: 0; }
+#g-2c { height: 10px; background: rgb(255,0,0); }
+#g-2 td { width: 30px; height: 10px; }
+#g-3 { border-spacing: 4px 6px; }
+#g-3 td { width: 20px; height: 10px; background: rgb(200,200,200); }
+#g-4 { display: grid; grid-auto-rows: 40px; width: 60px; }
+#g-5row { width: 200px; }
+#g-5 { width: 100px; height: 20px; visibility: hidden; background: rgb(0,255,0); }
+#g-5next { width: 100px; height: 20px; background: rgb(0,0,255); }
+#g-6 { position: relative; width: 200px; height: 60px; }
+#g-6a { transform: rotate(90deg); transform-origin: 0 0; }
+#g-6b { transform: rotate(90deg); transform-origin: 0 0 30px; }
+#g-7 { display: flex; width: 200px; height: 12px; background: rgb(240,240,240); }
+#g-7c { order: 1; }
+</style></head><body>
+<div id="g-1"><span class="bar" id="g-1a" style="background:rgb(255,128,128)"></span><span class="bar" id="g-1b" style="background:rgb(128,255,128)"></span><span class="bar" id="g-1c" style="background:rgb(128,128,255);order:-1"></span></div>
+<table id="g-2"><caption id="g-2c"></caption><tr id="g-2r"><td></td></tr></table>
+<table id="g-3"><tr><td id="g-3a"></td><td id="g-3b"></td></tr><tr><td id="g-3c"></td><td></td></tr></table>
+<div id="g-4"><span id="g-4a"></span><span id="g-4b"></span></div>
+<div id="g-5row"><div id="g-5"></div><div id="g-5next"></div></div>
+<div id="g-6"><span class="bar" id="g-6a"></span><span class="bar" id="g-6b"></span></div>
+<div id="g-7"><span class="bar" id="g-7a" style="background:rgb(255,128,128)"></span><span class="bar" id="g-7b" style="background:rgb(128,255,128)"></span><span class="bar" id="g-7c" style="background:rgb(128,128,255)"></span></div>
+<pre id="report"></pre>
+<script>
+/* Six declarations that a page can also see: the flex order that moves a bar, the caption that
+ * moves under its table, the gap border-spacing puts between cells, the track height grid-auto-rows
+ * pays, a hidden box that still holds its space, and a transform depth that must not move a 2D
+ * rotation. Every number is a distance in CSS pixels, so no font metric enters. */
+function r(id) { var e = document.getElementById(id); var b = e.getBoundingClientRect(); return { l: b.left, t: b.top, w: b.width, h: b.height, r: b.right, b: b.bottom }; }
+function n(v) { return v.toFixed(1); }
+function r2(id) { var b = document.getElementById(id).getBoundingClientRect(); return { l: b.left, t: b.top, w: b.width, h: b.height, r: b.right, b: b.bottom }; }
+var out = [];
+var g1 = r('g-1'), a = r('g-1a'), b = r('g-1b'), c = r('g-1c');
+out.push('g1|cfirst=' + n(c.l - g1.l) + '|asecond=' + n(a.l - g1.l) + '|bthird=' + n(b.l - g1.l) + '|cwidth=' + n(c.w));
+var t2 = r('g-2'), cap = r('g-2c'), row = r2('g-2r');
+out.push('g2|capBelowRow=' + n(cap.t - row.b) + '|capHeight=' + n(cap.h) + '|tableTop=' + n(t2.t));
+var a3 = r('g-3a'), b3 = r('g-3b'), c3 = r('g-3c');
+out.push('g3|hgap=' + n(b3.l - a3.r) + '|vgap=' + n(c3.t - a3.b) + '|leftpad=' + n(a3.l - r('g-3').l));
+var a4 = r('g-4a'), b4 = r('g-4b');
+out.push('g4|rowh=' + n(a4.h) + '|secondTop=' + n(b4.t - a4.t));
+var h5 = r('g-5'), x5 = r('g-5next');
+out.push('g5|hiddenHolds=' + n(x5.t - h5.t) + '|hiddenWidth=' + n(h5.w));
+var p6 = r('g-6'), a6 = r('g-6a'), b6 = r('g-6b');
+out.push('g6|aW=' + n(a6.w) + '|aH=' + n(a6.h) + '|aLeft=' + n(a6.l - p6.l) + '|aTop=' + n(a6.t - p6.t)
+  + '|sameAsDepth=' + n(a6.l - b6.l) + ',' + n(a6.t - b6.t) + ',' + n(a6.w - b6.w) + ',' + n(a6.h - b6.h));
+var g7 = r('g-7'), a7 = r('g-7a'), b7 = r('g-7b'), c7 = r('g-7c');
+out.push('g7|aFirst=' + n(a7.l - g7.l) + '|bSecond=' + n(b7.l - g7.l) + '|cLast=' + n(c7.l - g7.l));
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
