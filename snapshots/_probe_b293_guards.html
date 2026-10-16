@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b293 guards &#8212; what the rem fold, the string printer and the paint parser touch</title>
+<style>
+/* Every number here is read the same way in both engines. The stage is the origin the guard rects are
+ * measured from, the root font is named so a 'rem' has one answer, and the boxes state their own size
+ * so a percentage never prices against a viewport the two engines differ about. */
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 0; background: rgb(255,255,255); }
+html { font-size: 16px; }
+#stage { position: relative; width: 400px; height: 300px; }
+#stage > div { position: absolute; }
+/* A 'rem' written as an expression is priced by the cascade, so these five boxes are the geometry a
+ * math length has to reach. The plain 'rem' pair below is the computed surface's answer only,
+ * because a plain font-relative length is invisible to the layout paths that read a pixel length
+ * (gap #298) — those two boxes are therefore read through getComputedStyle, not through a rect. */
+#g-1 { left: 0; top: 0; width: calc(1rem); height: calc(1rem); background: rgb(200,200,200); }
+#g-2 { left: 0; top: 20px; width: calc(1rem + 1em); height: 4px; background: rgb(200,200,200); }
+#g-3 { left: 0; top: 30px; width: 50px; height: 4px; margin-left: calc(2rem); background: rgb(200,200,200); }
+#g-4 { left: 0; top: 40px; font-size: calc(1rem); line-height: 1; }
+#g-5 { left: 0; top: 60px; width: 120px; height: 40px; padding: calc(0.5rem); box-sizing: border-box;
+       background: rgb(255,128,128); }
+#g-6 { left: 0; top: 110px; width: 60px; height: 20px; border-left: calc(1rem) solid rgb(0,0,255);
+       border-right: 0; border-top: 0; border-bottom: 0; }
+#g-7 { left: 0; top: 140px; font-size: 0; line-height: 0; white-space: nowrap; }
+#g-7 span { display: inline-block; width: 20px; height: 10px; background: rgb(200,200,200);
+            vertical-align: calc(1rem); }
+#p-plain { left: 250px; top: 0; width: 1rem; height: 2rem; }
+/* The paint the new parser reads, declared in a stylesheet rather than as a presentation attribute
+ * (an SVG presentation attribute reaches no property in this engine yet — gap #299). */
+.p-fill-ref { fill: url(#grad) rgb(255,128,128); }
+.p-fill-missing { fill: url(#nope) rgb(0,200,0); }
+.p-fill-empty { fill: url() red; }
+.p-stroke-current { stroke: url(#grad) currentcolor; color: rgb(9,9,9); }
+.p-width-math { stroke-width: calc(6); }
+.p-width-mixed { stroke-width: calc(50% + 10px); }
+.p-dash-math { stroke-dasharray: calc(4) 4; stroke-width: 4; }
+.p-marker { marker-end: url(#mk); }
+/* The strokes a presentation attribute would have carried are written in CSS here, because a
+ * presentation attribute reaches no property in this engine yet (gap #299) and a self-closing tag in
+ * a foreign-content region does not close its element either, which would make each shape inherit
+ * its predecessor's paint (gap #300). */
+.p-stroke-red { stroke: rgb(255,0,0); }
+.p-stroke-blue { stroke: rgb(0,0,255); }
+.p-stroke-black { stroke: rgb(0,0,0); stroke-width: 2; }
+.p-baseline { baseline-shift: calc(2); }
+.p-limit { hyphenate-limit-chars: auto 5; }
+.p-page { page: --a; }
+.p-vtgroup { view-transition-group: none; }
+</style></head><body>
+<div id="stage">
+  <div id="g-1"></div>
+  <div id="g-2"></div>
+  <div id="g-3"></div>
+  <div id="g-4">0123456789</div>
+  <div id="g-5"></div>
+  <div id="g-6"></div>
+  <div id="g-7"><span></span><span id="g-7b"></span><span></span></div>
+  <div id="p-plain"></div>
+  <svg id="g-svg" width="200" height="90" style="left:150px;top:180px" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="grad"><stop offset="0" stop-color="rgb(255,0,0)"/>
+        <stop offset="1" stop-color="rgb(0,0,255)"/></linearGradient>
+      <marker id="mk" markerWidth="6" markerHeight="6" refX="3" refY="3"><circle cx="3" cy="3" r="3" fill="rgb(0,128,0)"/></marker>
+    </defs>
+    <rect id="r1" class="p-fill-ref" x="4" y="4" width="40" height="20"></rect>
+    <rect id="r2" class="p-fill-missing" x="4" y="34" width="40" height="20"></rect>
+    <rect id="r7" class="p-fill-empty" x="50" y="4" width="10" height="10"></rect>
+    <line id="r3" class="p-stroke-current p-width-math" x1="60" y1="8" x2="60" y2="60"></line>
+    <line id="r4" class="p-stroke-red p-width-mixed" x1="80" y1="8" x2="80" y2="60"></line>
+    <line id="r5" class="p-stroke-blue p-dash-math" x1="100" y1="8" x2="100" y2="60"></line>
+    <path id="r6" class="p-stroke-black p-marker" d="M120 10 L170 10"></path>
+  </svg>
+</div>
+<pre id="report"></pre>
+<script>
+var out = [];
+var stage = document.getElementById('stage');
+function rect(id) {
+  var e = document.getElementById(id); void e.offsetHeight; var r = e.getBoundingClientRect();
+  var s = stage.getBoundingClientRect();
+  return id + '=' + (r.width).toFixed(1) + ',' + (r.height).toFixed(1) + ','
+    + (r.left - s.left).toFixed(1) + ',' + (r.top - s.top).toFixed(1);
+}
+out.push('G1|' + ['g-1', 'g-2', 'g-3', 'g-5', 'g-6', 'g-7b'].map(rect).join('|'));
+var g4 = document.getElementById('g-4'); void g4.offsetHeight;
+out.push('G2|fontSize=' + getComputedStyle(g4).fontSize + '|w=' + g4.getBoundingClientRect().width.toFixed(1));
+/* The plain-rem pair, read where it is answered: the computed surface. */
+var plain = document.getElementById('p-plain'); void plain.offsetHeight;
+var ps = getComputedStyle(plain);
+out.push('G3|width=' + ps.width + '|height=' + ps.height + '|borderLeftWidth='
+  + getComputedStyle(document.getElementById('g-6')).borderLeftWidth);
+/* The string the page escaped is the string the page meant. */
+function esc(value, tag) {
+  var d = document.createElement('div'); stage.appendChild(d);
+  d.style.setProperty('hyphenate-character', value); void d.offsetHeight;
+  return tag + '|echo=' + d.style.getPropertyValue('hyphenate-character')
+    + '|comp=' + getComputedStyle(d).getPropertyValue('hyphenate-character');
+}
+out.push(esc('"\\2014 a"', 'G4'));
+out.push(esc('"\\2014  b"', 'G5'));
+out.push(esc('"\\2014-x"', 'G6'));
+out.push(esc('"\\n"', 'G7'));
+out.push(esc('"\\0041 B"', 'G8'));
+var q = document.createElement('div'); stage.appendChild(q);
+q.style.setProperty('quotes', '"\\201C" "\\201D"'); void q.offsetHeight;
+out.push('G9|quotes=' + q.style.getPropertyValue('quotes')
+  + '|content=' + (function () {
+      var e = document.createElement('div'); stage.appendChild(e);
+      e.style.setProperty('content', '"\\2014 a"'); void e.offsetHeight;
+      return e.style.getPropertyValue('content');
+    })());
+/* The paint, the math lengths and the new names, read through a stylesheet rule. */
+var SEL = { r1: '.p-fill-ref', r2: '.p-fill-missing', r3: '.p-stroke-current', r4: '.p-width-mixed',
+            r5: '.p-dash-math', r6: '.p-marker', r7: '.p-fill-empty' };
+['r1', 'r2', 'r7', 'r3', 'r4', 'r5', 'r6'].forEach(function (id) {
+  var e = document.getElementById(id);
+  var p = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'marker-end'];
+  out.push('C|' + id + '|' + p.map(function (n) { return n + '=' + getComputedStyle(e).getPropertyValue(n); }).join('|'));
+});
+var bs = document.createElement('div'); bs.className = 'p-baseline'; stage.appendChild(bs); void bs.offsetHeight;
+out.push('C|baseline|comp=' + getComputedStyle(bs).getPropertyValue('baseline-shift'));
+var lc = document.createElement('div'); lc.className = 'p-limit'; stage.appendChild(lc); void lc.offsetHeight;
+out.push('C|limit|echo=' + lc.style.getPropertyValue('hyphenate-limit-chars')
+  + '|comp=' + getComputedStyle(lc).getPropertyValue('hyphenate-limit-chars'));
+var pg = document.createElement('div'); pg.className = 'p-page'; stage.appendChild(pg); void pg.offsetHeight;
+out.push('C|page|comp=' + getComputedStyle(pg).getPropertyValue('page'));
+var vt = document.createElement('div'); vt.className = 'p-vtgroup'; stage.appendChild(vt); void vt.offsetHeight;
+out.push('C|vtgroup|comp=' + getComputedStyle(vt).getPropertyValue('view-transition-group'));
+text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

@@ -38,7 +38,17 @@ public static class EchoedProperties
         /// font. The style is handed to the hook for that alone; an entry that only re-spells a
         /// keyword ignores it.</summary>
         public Func<string, Acrux.Core.Dom.ComputedStyle, string>? ComputedText { get; init; }
+        /// <summary>Set when the computed value keeps the math expression the page wrote rather than
+        /// the number it works out to — the <c>stroke-width: calc(2)</c> that reads back
+        /// <c>calc(2px)</c> (measured). The cascade prices an expression on its way through, so an
+        /// entry with this flag is handed the text before that happens; without it the printer would
+        /// be given a pixel count and no expression to put the unit in.</summary>
+        public bool KeepsMath { get; init; }
     }
+
+    /// <summary>Whether the property's computed value is the expression the page wrote, so that the
+    /// cascade must substitute what the text refers to but leave the arithmetic standing.</summary>
+    public static bool KeepsMathExpression(string name) => Find(name)?.KeepsMath == true;
 
     /// <summary>The entry for a property name, or null when the property is not echo-only.</summary>
     public static Entry? Find(string name)
@@ -231,11 +241,34 @@ public static class EchoedProperties
             new() { Name = "-webkit-print-color-adjust", Initial = "economy", Inherited = true,
                 Normalize = Single("economy", "exact") },
             new() { Name = "hyphenate-limit-chars", Initial = "auto", Inherited = true,
-                Normalize = NormalizeHyphenateLimitChars },
+                Normalize = NormalizeHyphenateLimitChars,
+                ComputedText = HyphenateLimitCharsComputed },
 
             // ===== Masks 1 §3.3 and MathML 4 §3.3.2.
             new() { Name = "mask-type", Initial = "luminance",
                 Normalize = Single("luminance", "alpha") },
+            // 'mask-mode' is NOT in this table though it looks like the rest: the mask painter reads
+            // it, so it keeps its own field, its own applier case and its own computed case. An
+            // entry here would answer the cascade before that applier runs — which is what happened,
+            // and the four masked boxes of batch 28 lost their mask with it.
+            // CSS View Transitions 1 §6/§7 and CSS Paged Media 3 §3.5.
+            new() { Name = "view-transition-group", Initial = "normal",
+                Normalize = NormalizeViewTransitionGroup },
+            // CSS Fonts 4 §7.7: which emoji presentation the text asks for. One word, and the
+            // reference engine answers it back from the computed surface as well (measured).
+            new() { Name = "font-variant-emoji", Initial = "normal", Inherited = true,
+                Normalize = Single("normal", "unicode", "emoji", "text") },
+            // SVG 2 §11.7 / CSS Inline 3 §3.3: the baseline a box sits on, either named or moved.
+            // 'baseline' is the zero position and prints as one (measured: it computes '0px' while
+            // 'sub' and 'super' compute themselves), a length is priced against the element's own
+            // font and a percentage is left alone. None of it inherits: the shift belongs to the box
+            // that asks for it (measured: a child of a 'sub' parent computes '0px').
+            new() { Name = "baseline-shift", Initial = "0px",
+                Normalize = NormalizeBaselineShift, ComputedText = BaselineShiftComputed,
+                KeepsMath = true },
+            new() { Name = "view-transition-class", Initial = "none",
+                Normalize = NormalizeViewTransitionClass },
+            new() { Name = "page", Initial = "auto", Normalize = NormalizePageName },
             new() { Name = "math-depth", Initial = "0", Normalize = NormalizeMathDepth,
                 ComputedText = MathDepthComputed },
 
@@ -261,7 +294,7 @@ public static class EchoedProperties
                 Normalize = Single("start", "middle", "end") },
             new() { Name = "dominant-baseline", Initial = "auto", Inherited = true,
                 Normalize = Single("auto", "alphabetic", "hanging", "ideographic", "middle",
-                    "mathematical", "central") },
+                    "mathematical", "central", "use-script") },
             new() { Name = "alignment-baseline", Initial = "auto", Inherited = true,
                 Normalize = Single("auto", "baseline", "before-edge", "text-before-edge", "middle",
                     "central", "after-edge", "text-after-edge", "ideographic", "alphabetic",
@@ -287,22 +320,37 @@ public static class EchoedProperties
                 Normalize = NormalizePaint, ComputedText = PaintComputed },
             new() { Name = "stroke", Initial = "none", Inherited = true,
                 Normalize = NormalizePaint, ComputedText = PaintComputed },
-            new() { Name = "stop-color", Initial = "rgb(0, 0, 0)", Inherited = true,
-                Normalize = NormalizePaint, ComputedText = PaintComputed },
+            new() { Name = "stop-color", Initial = "rgb(0, 0, 0)",
+                Normalize = NormalizeColorOnly, ComputedText = PaintComputed },
+            // CSS Filter Effects 1 §14.1/§16.4: the filter primitives' own colour and coverage.
+            // 'none' is no colour for them, and their initials differ — 'flood-color' starts black
+            // where 'lighting-color' starts white (all measured). None of the five inherits: each
+            // belongs to the primitive it paints, and a child of a red parent says its own initial
+            // (measured: 'flood-color', 'flood-opacity', 'lighting-color', 'stop-color' and
+            // 'stop-opacity' all leave a child at its initial).
+            new() { Name = "flood-color", Initial = "rgb(0, 0, 0)",
+                Normalize = NormalizeColorOnly, ComputedText = PaintComputed },
+            new() { Name = "flood-opacity", Initial = "1",
+                Normalize = NormalizeOpacityValue, ComputedText = OpacityComputed },
+            new() { Name = "lighting-color", Initial = "rgb(255, 255, 255)",
+                Normalize = NormalizeColorOnly, ComputedText = PaintComputed },
             new() { Name = "fill-opacity", Initial = "1", Inherited = true,
-                Normalize = NormalizeOpacityValue },
+                Normalize = NormalizeOpacityValue, ComputedText = OpacityComputed },
             new() { Name = "stroke-opacity", Initial = "1", Inherited = true,
-                Normalize = NormalizeOpacityValue },
-            new() { Name = "stop-opacity", Initial = "1", Inherited = true,
-                Normalize = NormalizeOpacityValue },
+                Normalize = NormalizeOpacityValue, ComputedText = OpacityComputed },
+            new() { Name = "stop-opacity", Initial = "1",
+                Normalize = NormalizeOpacityValue, ComputedText = OpacityComputed },
             new() { Name = "stroke-width", Initial = "1px", Inherited = true,
-                Normalize = NormalizeSvgLength, ComputedText = SvgLengthComputed },
+                Normalize = NormalizeNonNegativeSvgLength, ComputedText = SvgLengthComputed,
+                KeepsMath = true },
             new() { Name = "stroke-dashoffset", Initial = "0px", Inherited = true,
-                Normalize = NormalizeSvgLength, ComputedText = SvgLengthComputed },
+                Normalize = NormalizeSvgLength, ComputedText = SvgLengthComputed,
+                KeepsMath = true },
             new() { Name = "stroke-miterlimit", Initial = "4", Inherited = true,
                 Normalize = NormalizePositiveNumber },
             new() { Name = "stroke-dasharray", Initial = "none", Inherited = true,
-                Normalize = NormalizeDashArray, ComputedText = DashArrayComputed },
+                Normalize = NormalizeDashArray, ComputedText = DashArrayComputed,
+                KeepsMath = true },
 
             // ===== SVG 2 §11.3. The three marker properties name one image or nothing at all. The
             // specified value keeps the address the page wrote in the url() spelling the CSSOM
@@ -885,20 +933,53 @@ public static class EchoedProperties
 
     /// <summary>CSS Text 4 §5.6.3: <c>auto</c>, or one to three integers where the first is the
     /// whole-word minimum. Zero is not a minimum, so '0' is no value (measured).</summary>
+    /// <summary>CSS Text 4 §6.5: one, two or three integers of at least one, each of which may be
+    /// the word 'auto' instead — and the words may stand in any order, so 'auto 5' and '5 auto' are
+    /// both values (measured). A math expression is a number written another way
+    /// ('calc(5) calc(6)' stands), and '0', '1.5' and '-1' are not the integers the property asks
+    /// for.</summary>
     private static string? NormalizeHyphenateLimitChars(string text)
     {
         var words = Words(text);
         if (words.Length == 1 && words[0].Equals("auto", StringComparison.OrdinalIgnoreCase))
             return "auto";
         if (words.Length is < 1 or > 3) return null;
-        var parts = new List<string>();
+        var printed = new List<string>();
         foreach (var w in words)
         {
+            if (w.Equals("auto", StringComparison.OrdinalIgnoreCase))
+            {
+                printed.Add("auto");
+                continue;
+            }
+            if (Acrux.Core.Css.CssFunctionEvaluator.IsMathFunctionText(w))
+            {
+                if (!MathNamesOneOf(w, "number")) return null;
+                printed.Add(w);
+                continue;
+            }
             if (!int.TryParse(w, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) || n < 1)
                 return null;
-            parts.Add(n.ToString(CultureInfo.InvariantCulture));
+            printed.Add(n.ToString(CultureInfo.InvariantCulture));
         }
-        return string.Join(" ", parts);
+        return string.Join(" ", printed);
+    }
+
+    /// <summary>The computed limit list: each number priced or folded, and the trailing 'auto'
+    /// words dropped because they say nothing the initial would not (measured: '5 auto' computes
+    /// '5', '5 5 auto' computes '5 5', 'auto 5' computes 'auto 5' and 'auto' alone stays 'auto').</summary>
+    private static string HyphenateLimitCharsComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
+    {
+        var words = canonical.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        int last = words.Length;
+        while (last > 0 && words[last - 1].Equals("auto", StringComparison.OrdinalIgnoreCase)) last--;
+        if (last == 0) return "auto";
+        var printed = new List<string>(last);
+        for (int i = 0; i < last; i++)
+            printed.Add(Acrux.Core.Css.CssFunctionEvaluator.IsMathFunctionText(words[i])
+                ? MathNumber(words[i])
+                : words[i]);
+        return string.Join(" ", printed);
     }
 
     /// <summary>MathML 4 §3.3.2: the specified value is <c>auto-add</c>, <c>add(</c>integer<c>)</c>
@@ -1584,8 +1665,10 @@ public static class EchoedProperties
         var w = words[0];
         if (w.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
         // 'auto' is reserved for the engine, and a keyword of another property is no custom name
-        // (measured: 'view-transition-name: auto' is refused).
-        return IsCustomIdent(w) && !w.Equals("auto", StringComparison.OrdinalIgnoreCase) ? w : null;
+        // (measured: 'view-transition-name: auto' is refused). A dashed ident is a name an author
+        // invented, which is exactly what this property takes (measured: '--a' reads '--a').
+        return (IsCustomIdent(w) || IsDashedIdent(w)) && !w.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            ? w : null;
     }
 
     private static string? NormalizePositionAnchor(string text)
@@ -1653,10 +1736,45 @@ public static class EchoedProperties
     /// or a colour. A colour written as a name keeps it, and any other spelling becomes the rgb()
     /// form the engine prints (measured: 'stroke: blue' reads 'blue' while 'fill: #00ff00' reads
     /// 'rgb(0, 255, 0)') — the same split every other colour property in this engine already makes.</summary>
-    private static string? NormalizePaint(string text)
+    private static string? NormalizePaint(string text) => NormalizePaintCore(text, noneAllowed: true);
+
+    /// <summary>CSS Fill and Stroke 3 §4: a colour, 'none', 'currentcolor' or an image reference —
+    /// and the reference may carry its own fallback, which is a colour or the word 'none' (measured:
+    /// 'fill: url(#g)' specifies 'url("#g")' and computes the same, 'fill: url(#g) red' computes the
+    /// pair, 'fill: url()' is a reference with nothing in it and still a value, and a second url is
+    /// no fallback at all ('fill: url(#g) url(#h)' is dropped).</summary>
+    private static string? NormalizePaintCore(string text, bool noneAllowed)
     {
         var trimmed = text.Trim();
-        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
+        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase))
+            return noneAllowed ? "none" : null;
+        if (trimmed.Equals("currentcolor", StringComparison.OrdinalIgnoreCase)) return "currentcolor";
+        if (!trimmed.StartsWith("url(", StringComparison.OrdinalIgnoreCase))
+            return NormalizeColorOnly(trimmed);
+        int open = trimmed.IndexOf('(');
+        int close = MatchingParen(trimmed, open);
+        if (close < 0) return null;
+        // The address is the whole argument, quoted or not, and an empty one is an address the
+        // engine still prints ('url( "" )' is 'url("")', measured).
+        var inner = trimmed[(open + 1)..close].Trim();
+        var address = IsQuotedString(inner) ? Unquote(inner) : inner;
+        var painted = "url(\"" + address + "\")";
+        var after = trimmed[(close + 1)..].Trim();
+        if (after.Length == 0) return painted;
+        if (after.Equals("none", StringComparison.OrdinalIgnoreCase) && noneAllowed)
+            return painted + " none";
+        // A fallback is one &lt;paint&gt; of its own and nothing else: a second image, a third
+        // component or a word the colour parser cannot read all leave the declaration out.
+        if (after.StartsWith("url(", StringComparison.OrdinalIgnoreCase)) return null;
+        return NormalizeColorOnly(after) is { } fallback ? painted + " " + fallback : null;
+    }
+
+    /// <summary>One colour in the spelling the reference engine prints it in. 'stop-color',
+    /// 'flood-color' and 'lighting-color' take a colour and nothing else — 'none' is no colour and
+    /// each of them is dropped for it (measured).</summary>
+    private static string? NormalizeColorOnly(string text)
+    {
+        var trimmed = text.Trim();
         if (trimmed.Equals("currentcolor", StringComparison.OrdinalIgnoreCase)) return "currentcolor";
         if (!Acrux.Core.Css.ColorParser.IsColorToken(trimmed)) return null;
         bool isName = char.IsAsciiLetter(trimmed[0])
@@ -1668,13 +1786,31 @@ public static class EchoedProperties
 
     /// <summary>The computed <c>&lt;paint&gt;</c>: 'currentColor' becomes the element's own colour,
     /// which is the one place the keyword never survives, and a named colour becomes the rgb() triple
-    /// it stands for (measured: 'fill: red' specifies 'red' and computes 'rgb(255, 0, 0)').</summary>
+    /// it stands for (measured: 'fill: red' specifies 'red' and computes 'rgb(255, 0, 0)'). A
+    /// reference keeps its own address with its fallback printed beside it, resolved like the paint
+    /// standing behind it (measured: 'stroke: url(#g) currentcolor' computes
+    /// <c>url("#g") rgb(9, 9, 9)</c>), and an address with nothing in it is never made absolute
+    /// ('fill: url()' computes <c>url("")</c>).</summary>
     public static string PaintComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
     {
         if (canonical.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
             return style == null ? "rgb(0, 0, 0)"
                 : Acrux.Core.Dom.Animations.ComputedValueSerializer.ColorText(style.Color);
         if (canonical.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
+        if (canonical.StartsWith("url(", StringComparison.OrdinalIgnoreCase))
+        {
+            int open = canonical.IndexOf('(');
+            int close = MatchingParen(canonical, open);
+            if (close < 0) return canonical;
+            var painted = canonical[..(close + 1)];
+            var address = painted[(open + 1)..close].Trim();
+            var printed = address.Length == 0
+                ? "url(\"\")"
+                : Acrux.Core.Css.ImageValueCanonicalizer.Canonicalize(painted);
+            if (string.IsNullOrWhiteSpace(printed)) printed = painted;
+            var after = canonical[(close + 1)..].Trim();
+            return after.Length == 0 ? printed : printed + " " + PaintComputed(after, style);
+        }
         if (!canonical.Contains('('))
             return Acrux.Core.Dom.Animations.ComputedValueSerializer
                 .ColorText(Acrux.Core.Css.ColorParser.Parse(canonical));
@@ -1682,34 +1818,87 @@ public static class EchoedProperties
     }
 
     /// <summary>A <c>&lt;number&gt;</c> or <c>&lt;percentage&gt;</c>, echoed in the digits it stands
-    /// for. The opacity properties take one; a negative or a non-number is no value.</summary>
+    /// for. The opacity properties take one; a negative or a non-number is no value, and a math
+    /// expression has to name one type: an &lt;alpha-value&gt; is a number OR a percentage and never
+    /// a sum of the two (measured: 'fill-opacity: calc(50% + 0)' and 'calc(1px)' are each dropped
+    /// while 'calc(100% * 0.5)' stands).</summary>
     private static string? NormalizeOpacityValue(string text)
     {
         var trimmed = text.Trim();
+        // A percentage is the fraction it stands for and is printed as one (measured:
+        // 'fill-opacity: 50%' specifies '0.5'); a negative number is still a value, and the
+        // computed surface is what clamps it.
         if (trimmed.EndsWith("%", StringComparison.Ordinal))
-        {
             return double.TryParse(trimmed[..^1], NumberStyles.Float, CultureInfo.InvariantCulture,
-                out var percent) && percent >= 0
-                ? Number(percent) + "%" : null;
-        }
+                out var percent) ? Number(percent / 100d) : null;
+        if (Acrux.Core.Css.CssFunctionEvaluator.IsMathFunctionText(trimmed))
+            return MathNamesOneOf(trimmed, "number", "percentage") ? trimmed : null;
+        return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+            ? Number(number) : null;
+    }
+
+    /// <summary>The computed opacity: whatever the page wrote, kept inside [0, 1] (measured:
+    /// 'fill-opacity: -1' computes '0', '2' computes '1' and 'calc(0.5)' computes '0.5').</summary>
+    public static string OpacityComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
+    {
+        var text = canonical;
+        if (Acrux.Core.Css.CssFunctionEvaluator.IsMathFunctionText(text))
+            text = Acrux.Core.Css.CssFunctionEvaluator.EvaluateConstantNumber(text);
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            return canonical;
+        return Number(Math.Clamp(value, 0d, 1d));
+    }
+
+    /// <summary>A <c>&lt;number&gt;</c> that is not less than nothing, which is what
+    /// 'stroke-miterlimit' measures — and a math expression of numbers is one of them, because the
+    /// limit is a number whatever spelling carries it (measured: 'calc(2 + 2)' specifies
+    /// 'calc(4)' and computes '4', while 'calc(4px)' is a length and is dropped).</summary>
+    private static string? NormalizePositiveNumber(string text)
+    {
+        var trimmed = text.Trim();
+        if (Acrux.Core.Css.CssFunctionEvaluator.IsMathFunctionText(trimmed))
+            return MathNamesOneOf(trimmed, "number") ? trimmed : null;
+        // 'stroke-miterlimit: 0' is a value the reference engine keeps (measured) — the limit is
+        // non-negative rather than positive — while a negative one is dropped.
         return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
             && number >= 0 ? Number(number) : null;
     }
 
-    /// <summary>A positive <c>&lt;number&gt;</c>, which is what 'stroke-miterlimit' measures.</summary>
-    private static string? NormalizePositiveNumber(string text)
-    {
-        var trimmed = text.Trim();
-        return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
-            && number > 0 ? Number(number) : null;
-    }
+    /// <summary>The number a math expression means, or null when it is not a constant one.</summary>
+    private static string MathNumber(string text)
+        => Acrux.Core.Css.CssFunctionEvaluator.EvaluateConstantNumber(
+            Acrux.Core.Css.CssMathValue.Fold(text));
+
+    /// <summary>Whether a math expression names a type of its own and that type is one of the words
+    /// given. An expression carrying a variable names no type yet and is left to the property's own
+    /// reading; an expression that mixes a percentage with a number, or a length with a number,
+    /// names nothing at all and is refused everywhere.</summary>
+    private static bool MathNamesOneOf(string text, params string[] types)
+        => Acrux.Core.Css.CssMathValue.WellTyped(text, out var category)
+            && (category == null || System.Array.IndexOf(types, category) >= 0);
 
     /// <summary>CSS Fill and Stroke 3 §4.5: a <c>&lt;length&gt;</c>, a <c>&lt;percentage&gt;</c> or a
     /// bare number, which is a number of pixels. The specified value keeps the spelling the page
     /// wrote (measured: 'stroke-width: 2' reads '2'), so only the digits are normalised.</summary>
-    private static string? NormalizeSvgLength(string text)
+    /// <summary>A &lt;length&gt;, &lt;percentage&gt; or bare number that is not less than nothing:
+    /// 'stroke-width' measures a band and -1px is no band (measured: it is dropped), while
+    /// 'stroke-dashoffset: -2px' stands because an offset may run backwards.</summary>
+    private static string? NormalizeNonNegativeSvgLength(string text) =>
+        NormalizeSvgLengthCore(text, negativeAllowed: false);
+
+    private static string? NormalizeSvgLength(string text) => NormalizeSvgLengthCore(text, true);
+
+    private static string? NormalizeSvgLengthCore(string text, bool negativeAllowed)
     {
         var trimmed = text.Trim();
+        if (trimmed.StartsWith("-", StringComparison.Ordinal) && !negativeAllowed) return null;
+        // A math expression is a value only when it names one type: an SVG length is a length, a
+        // percentage or a number, and a sum that mixes them names none of those (measured:
+        // 'stroke-width: calc(2px + 3)' and 'min(2, 3px)' are each dropped while 'calc(2)' stands).
+        // The specified value keeps the expression as it folds to, and the computed surface prices
+        // it with the unit it will get.
+        if (Acrux.Core.Css.CssFunctionEvaluator.IsMathFunctionText(trimmed))
+            return MathNamesOneOf(trimmed, "length", "percentage", "number") ? trimmed : null;
         if (trimmed.EndsWith("%", StringComparison.Ordinal))
             return double.TryParse(trimmed[..^1], NumberStyles.Float, CultureInfo.InvariantCulture,
                 out var percent) ? Number(percent) + "%" : null;
@@ -1727,12 +1916,136 @@ public static class EchoedProperties
     /// and '50%' computes '50%').</summary>
     public static string SvgLengthComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
     {
+        if (Acrux.Core.Css.CssFunctionEvaluator.IsMathFunctionText(canonical))
+            return MathLengthComputed(canonical, style);
         if (canonical.EndsWith("%", StringComparison.Ordinal) || style == null) return canonical;
         if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(canonical, out var number,
                 out var unit)) return canonical;
         if (unit.Length == 0) return Number(number) + "px";
         var length = Acrux.Core.Dom.Length.Parse(canonical.ToLowerInvariant());
         return length is Acrux.Core.Dom.AutoLength ? canonical : style.ComputedLengthCss(length);
+    }
+
+    /// <summary>The computed value of a math expression that stands for an SVG length. The type the
+    /// expression names decides the spelling: a percentage prints the share it means with no wrapper
+    /// around it, a number keeps the expression and gains the unit it stands for, a length is priced
+    /// the way any other length is — with a percentage it cannot price left inside the expression —
+    /// and a zero, which names no type of its own, prints as the percentage it could be (all
+    /// measured: 'calc(50%)' computes '50%', 'calc(2)' computes 'calc(2px)', 'calc(1rem)' computes
+    /// '16px', 'calc(50% + 1em)' computes 'calc(50% + 14px)' and 'calc(0)' computes '0%').</summary>
+    private static string MathLengthComputed(string text, Acrux.Core.Dom.ComputedStyle? style)
+    {
+        var folded = Acrux.Core.Css.CssMathValue.Fold(text);
+        // A folded expression of one term can lose its wrapper, and the spelling the computed
+        // surface wants is a calc() of that term, so it is put back before anything is decided.
+        if (!Acrux.Core.Css.CssFunctionEvaluator.IsMathFunctionText(folded))
+            folded = "calc(" + folded + ")";
+        int open = folded.IndexOf('(');
+        var inner = folded[(open + 1)..^1];
+        var terms = SplitMathTerms(inner);
+        bool anyPercent = terms.Exists(t => t.Text.EndsWith("%", StringComparison.Ordinal));
+        bool anyUnit = terms.Exists(t => HasUnit(t.Text));
+        // One share of a box the computed surface has not been given: the wrapper carried no
+        // arithmetic, so it goes and the percentage answers on its own.
+        if (terms.Count == 1 && IsPlainPercentage(terms[0].Text)) return terms[0].Text;
+        // Nothing but bare numbers: the expression keeps its wrapper and every number in it gains
+        // the pixel unit it stands for — except a zero, which names no type at all and is printed
+        // as the percentage it could have been.
+        if (!anyPercent && !anyUnit)
+        {
+            return double.TryParse(MathNumber(folded), NumberStyles.Float, CultureInfo.InvariantCulture,
+                out var value) && value == 0
+                ? "0%"
+                : Acrux.Core.Css.CssFunctionEvaluator.NumberlessMathToPixels(folded);
+        }
+        if (style == null || !anyPercent)
+        {
+            if (anyPercent) return folded;
+            var length = Acrux.Core.Dom.Length.Parse(folded.ToLowerInvariant());
+            return length is null or Acrux.Core.Dom.AutoLength ? folded : style.ComputedLengthCss(length);
+        }
+        // A percentage with no box to price it against stays in the expression, and every term the
+        // element can price on its own is priced beside it.
+        var parts = new List<string>(terms.Count);
+        foreach (var term in terms)
+        {
+            var printed = term.Text.EndsWith("%", StringComparison.Ordinal)
+                ? term.Text
+                : PriceMathTerm(term.Text, style);
+            parts.Add(term.Op.Length == 0 ? printed : term.Op + " " + printed);
+        }
+        return folded[..(open + 1)] + string.Join(" ", parts) + ")";
+    }
+
+    /// <summary>The term of an expression priced as the length it is, or left as written when it is
+    /// not one the element can price.</summary>
+    private static string PriceMathTerm(string term, Acrux.Core.Dom.ComputedStyle style)
+    {
+        var length = Acrux.Core.Dom.Length.Parse(term.ToLowerInvariant());
+        return length is null or Acrux.Core.Dom.AutoLength ? term : style.ComputedLengthCss(length);
+    }
+
+    /// <summary>Whether a term is one percentage and nothing else — the only case where a wrapper
+    /// around it says less than the term does ('min(50%, 100%)' is a list, not a share).</summary>
+    private static bool IsPlainPercentage(string term)
+    {
+        if (!term.EndsWith("%", StringComparison.Ordinal)) return false;
+        return double.TryParse(term[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out _);
+    }
+
+    /// <summary>The terms of a folded expression's sum, each with the operator that joins it to the
+    /// term before. Only a top-level '+' or '-' divides them: the arguments of a 'min()' are a
+    /// choice rather than an addition, an exponent's sign belongs to its number, and a leading sign
+    /// belongs to the term it stands in front of.</summary>
+    private static List<(string Op, string Text)> SplitMathTerms(string inner)
+    {
+        var terms = new List<(string Op, string Text)>();
+        int depth = 0;
+        var current = new System.Text.StringBuilder();
+        string op = "";
+        for (int i = 0; i < inner.Length; i++)
+        {
+            char c = inner[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            bool splits = depth == 0 && (c == '+' || c == '-') && current.Length > 0;
+            if (splits)
+            {
+                // '1e-3' is one number, so a sign that follows the 'e' of an exponent is not an
+                // operator; and a sign right after another operator is the term's own.
+                char previous = LastNonSpace(current);
+                if (previous == 'e' || previous == 'E' || previous is '+' or '-' or '*' or '/')
+                    splits = false;
+            }
+            if (splits)
+            {
+                var text = current.ToString().Trim();
+                if (text.Length > 0) terms.Add((op, text));
+                op = c.ToString();
+                current = new System.Text.StringBuilder();
+                continue;
+            }
+            current.Append(c);
+        }
+        var last = current.ToString().Trim();
+        if (last.Length > 0) terms.Add((op, last));
+        return terms;
+    }
+
+    private static char LastNonSpace(System.Text.StringBuilder builder)
+    {
+        for (int i = builder.Length - 1; i >= 0; i--)
+            if (!char.IsWhiteSpace(builder[i])) return builder[i];
+        return '\0';
+    }
+
+    /// <summary>Whether a term carries a unit of its own — a length written in 'px', an 'em', a
+    /// 'vw' — as opposed to being a bare number or a percentage.</summary>
+    private static bool HasUnit(string term)
+    {
+        foreach (var c in term)
+            if (char.IsLetter(c)) return true;
+        return false;
     }
 
     /// <summary>CSS Fill and Stroke 3 §5.5: 'none' or a list of lengths, numbers and percentages.
@@ -1748,7 +2061,7 @@ public static class EchoedProperties
         var printed = new List<string>();
         foreach (var part in parts)
         {
-            if (NormalizeSvgLength(part) is not { } one) return null;
+            if (NormalizeNonNegativeSvgLength(part) is not { } one) return null;
             printed.Add(one);
         }
         return string.Join(", ", printed);
@@ -1767,7 +2080,76 @@ public static class EchoedProperties
 
     /// <summary>SVG 2 §11.3: a marker is <c>none</c> or one <c>url()</c>. A bare ident names no
     /// image, so 'marker-start: bogus' is refused (measured).</summary>
-    private static string? NormalizeMarker(string text)
+    /// <summary>CSS View Transitions 1 §7: the class list a snapshot element belongs to. 'none'
+    /// alone, or one or more custom idents, each kept in the author's case (measured: 'foo' reads
+    /// back 'foo').</summary>
+    private static string? NormalizeBaselineShift(string text)
+    {
+        var trimmed = text.Trim();
+        if (IsOneOfWord(trimmed, "baseline", "sub", "super")) return trimmed.ToLowerInvariant();
+        return NormalizeSvgLength(trimmed);
+    }
+
+    private static string BaselineShiftComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style) =>
+        canonical.Equals("baseline", StringComparison.OrdinalIgnoreCase)
+            ? "0px"
+            // A length, a percentage or a number written as one of those: priced the way the
+            // SVG lengths are, because it is the same kind of value (measured: '1em' of a 14px box
+            // computes '14px', '0' computes '0px', '3%' stays '3%' and 'calc(2)' computes
+            // 'calc(2px)').
+            : SvgLengthComputed(canonical, style);
+
+    /// <summary>CSS View Transitions 1 §6: how a snapshot group is sized. The four words the
+    /// property names, and a dashed ident beside them — a group can be named after a custom
+    /// ident of its own (measured: '--a' reads back '--a' while '1' is dropped).</summary>
+    private static string? NormalizeViewTransitionGroup(string text)
+    {
+        var trimmed = text.Trim();
+        if (IsOneOfWord(trimmed, "normal", "contain", "allow-discrete", "none", "auto"))
+            return trimmed.ToLowerInvariant();
+        return IsDashedIdent(trimmed) ? trimmed : null;
+    }
+
+    private static bool IsOneOfWord(string text, params string[] words)
+    {
+        foreach (var word in words)
+            if (text.Equals(word, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static string? NormalizeViewTransitionClass(string text)
+    {
+        var words = text.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0) return null;
+        if (words.Length == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+            return "none";
+        var printed = new List<string>(words.Length);
+        foreach (var word in words)
+        {
+            if (word.Equals("none", StringComparison.OrdinalIgnoreCase)) return null;
+            // A class of a snapshot element is a custom ident, and the dashed spelling a page
+            // uses for its own names is one of those (measured: '--a' reads '--a', '1' is dropped).
+            if (!Acrux.Core.Css.CssValueGrammar.IsCustomIdent(word) && !IsDashedIdent(word))
+                return null;
+            printed.Add(word);
+        }
+        return string.Join(" ", printed);
+    }
+
+    /// <summary>CSS Paged Media 3 §3.5: the named page a box asks for, or 'auto'. A custom ident is
+    /// the author's own case and a string is no name (measured: 'page: "a"' falls, 'page: ident'
+    /// stands and reads back as it was written).</summary>
+    private static string? NormalizePageName(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Equals("auto", StringComparison.OrdinalIgnoreCase)) return "auto";
+        // A page box is a name of its own, and a name the author invented with '--' is one of
+        // those too (measured: 'page: --a' reads '--a' while 'page: "a"' and 'page: 1' are dropped).
+        return Acrux.Core.Css.CssValueGrammar.IsCustomIdent(trimmed) || IsDashedIdent(trimmed)
+            ? trimmed : null;
+    }
+
+    public static string? NormalizeMarker(string text)
     {
         var trimmed = text.Trim();
         if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
@@ -1792,6 +2174,27 @@ public static class EchoedProperties
         && (text[0] == '"' || text[0] == '\'') && text[text.Length - 1] == text[0];
 
     private static string Unquote(string text) => text[1..^1];
+
+    /// <summary>The index of the ')' that closes the '(' at <paramref name="open"/>, quotes skipped
+    /// so a parenthesis inside an address cannot end the function early, or -1 when the argument
+    /// list never closes.</summary>
+    private static int MatchingParen(string text, int open)
+    {
+        int depth = 0;
+        for (int i = open; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c is '"' or '\'')
+            {
+                for (i++; i < text.Length && text[i] != c; i++)
+                    if (text[i] == '\\') i++;
+                continue;
+            }
+            if (c == '(') depth++;
+            else if (c == ')' && --depth == 0) return i;
+        }
+        return -1;
+    }
 
     private static bool IsDashedIdent(string w) => w.Length > 2 && w[0] == '-' && w[1] == '-'
         && IsIdentChars(w[2..]);

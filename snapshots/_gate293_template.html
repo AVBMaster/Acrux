@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify293 &#8212; the paint a reference carries, the math a length names and the strings a page escapes</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: rgb(255,255,255); }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+/* Every probed element sits in a box that states its own size, so a value that resolves against its
+ * containing block prices the same in two engines with different viewport widths. The root font is
+ * named too: a 'rem' has one answer only when both engines know the number it is a share of. */
+html { font-size: 16px; }
+#box { width: 200px; }
+#box > div { height: 20px; }
+.sheet-fill { fill: url(#g) red; }
+.sheet-hc { hyphenate-character: "\2014 a"; }
+#stage { position: relative; width: 400px; height: 300px; }
+#stage > div { position: absolute; }
+#g-1 { left: 0; top: 0; width: calc(1rem); height: calc(1rem); background: rgb(200,200,200); }
+#g-2 { left: 0; top: 20px; width: calc(1rem + 1em); height: 4px; background: rgb(200,200,200); }
+#g-3 { left: 0; top: 30px; width: 50px; height: 4px; margin-left: calc(2rem); background: rgb(200,200,200); }
+#g-4 { left: 0; top: 40px; font-size: calc(1rem); line-height: 1; }
+#g-5 { left: 0; top: 60px; width: 120px; height: 40px; padding: calc(0.5rem); box-sizing: border-box;
+       background: rgb(255,128,128); }
+#g-6 { left: 0; top: 110px; width: 60px; height: 20px; border-left: calc(1rem) solid rgb(0,0,255);
+       border-right: 0; border-top: 0; border-bottom: 0; }
+#g-7 { left: 0; top: 140px; font-size: 0; line-height: 0; white-space: nowrap; }
+#g-7 span { display: inline-block; width: 20px; height: 10px; background: rgb(200,200,200);
+            vertical-align: calc(1rem); }
+/* A 'rem' written as an expression is priced by the cascade, so the boxes above are the geometry a
+ * math length has to reach. This pair is a plain 'rem', read through getComputedStyle only: a plain
+ * font-relative length is invisible to the layout paths that read a pixel length (gap #298). */
+#p-plain { left: 250px; top: 0; width: 1rem; height: 2rem; }
+/* The paint the new parser reads, declared in a stylesheet rather than as a presentation attribute
+ * (an SVG presentation attribute reaches no property in this engine yet — gap #299). */
+.p-fill-ref { fill: url(#grad) rgb(255,128,128); }
+.p-fill-missing { fill: url(#nope) rgb(0,200,0); }
+.p-fill-empty { fill: url() red; }
+.p-stroke-current { stroke: url(#grad) currentcolor; color: rgb(9,9,9); }
+.p-width-math { stroke-width: calc(6); }
+.p-width-mixed { stroke-width: calc(50% + 10px); }
+.p-dash-math { stroke-dasharray: calc(4) 4; stroke-width: 4; }
+.p-marker { marker-end: url(#mk); }
+/* The strokes a presentation attribute would have carried are written in CSS here, because a
+ * presentation attribute reaches no property in this engine yet (gap #299) and a self-closing tag in
+ * a foreign-content region does not close its element either, which would make each shape inherit
+ * its predecessor's paint (gap #300). */
+.p-stroke-red { stroke: rgb(255,0,0); }
+.p-stroke-blue { stroke: rgb(0,0,255); }
+.p-stroke-black { stroke: rgb(0,0,0); stroke-width: 2; }
+.p-baseline { baseline-shift: calc(2); }
+.p-limit { hyphenate-limit-chars: auto 5; }
+.p-page { page: --a; }
+.p-vtgroup { view-transition-group: none; }
+svg { overflow: visible; }
+#g-svg { left: 150px; top: 180px; }
+</style></head><body>
+<h2>the geometry and the ink a math length, an escaped string and a paint reference have to reach</h2>
+<div id="stage">
+  <div id="g-1"></div>
+  <div id="g-2"></div>
+  <div id="g-3"></div>
+  <div id="g-4">0123456789</div>
+  <div id="g-5"></div>
+  <div id="g-6"></div>
+  <div id="g-7"><span></span><span id="g-7b"></span><span></span></div>
+  <div id="p-plain"></div>
+  <svg id="g-svg" width="200" height="90" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="grad"><stop offset="0" stop-color="rgb(255,0,0)"/>
+        <stop offset="1" stop-color="rgb(0,0,255)"/></linearGradient>
+      <marker id="mk" markerWidth="6" markerHeight="6" refX="3" refY="3"><circle cx="3" cy="3" r="3" fill="rgb(0,128,0)"/></marker>
+    </defs>
+    <rect id="r1" class="p-fill-ref" x="4" y="4" width="40" height="20"></rect>
+    <rect id="r2" class="p-fill-missing" x="4" y="34" width="40" height="20"></rect>
+    <rect id="r7" class="p-fill-empty" x="50" y="4" width="10" height="10"></rect>
+    <line id="r3" class="p-stroke-current p-width-math" x1="60" y1="8" x2="60" y2="60"></line>
+    <line id="r4" class="p-stroke-red p-width-mixed" x1="80" y1="8" x2="80" y2="60"></line>
+    <line id="r5" class="p-stroke-blue p-dash-math" x1="100" y1="8" x2="100" y2="60"></line>
+    <path id="r6" class="p-stroke-black p-marker" d="M120 10 L170 10"></path>
+  </svg>
+</div>
+<h2>the doors a declaration comes in by</h2>
+<div id="host"></div>
+<h2>the inheritors</h2>
+<div id="ihost"></div>
+<h2>the families, measured value by value</h2>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* Every want in E, I, A and G is a transcription of what the reference engine printed for the same
+ * page (snapshots/out/_b293_ref_probeA.txt, _b293_ref_probeB.txt, _b293_ref_probeC.txt and
+ * _b293_ref_guards.txt, each line as the reference answered it); nothing here is derived from a
+ * rule. E is one declaration written through the CSSOM on a fresh div inside a 200x20 box and read
+ * back through every surface at once — the block's length, its item(i) sequence, getPropertyValue,
+ * getComputedStyle, CSS.supports and cssText. I is one property written on a parent and read on the
+ * child that wrote nothing, which is the only way an inheritance flag is a measurement rather than a
+ * guess. A is the same declaration reached through a style attribute, a stylesheet rule,
+ * removeProperty, the IDL setter and an escaped string. G is the geometry and the ink: a 'rem'
+ * priced against the root's 16px beside an 'em' priced against the element's 14px, a border, a
+ * padding and a font size that all say the same number, the string a page escaped, and the six SVG
+ * boxes whose paint the parser now reads.
+ */
+var E = [
+@@E@@
+];
+var I = [
+@@I@@
+];
+var A = [
+@@A@@
+];
+var G = [
+@@G@@
+];
+
+var box = document.getElementById('box'), pass = 0, fail = 0, out = [];
+
+function names(d) { var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i)); return a.join(','); }
+
+for (var i = 0; i < E.length; i++) {
+  var prop = E[i][0], value = E[i][1];
+  var d = document.createElement('div');
+  box.appendChild(d);
+  d.style.setProperty(prop, value);
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) { sup = 'ERR'; }
+  var got = ['' + d.style.length, names(d), d.style.getPropertyValue(prop),
+             getComputedStyle(d).getPropertyValue(prop), sup, d.style.cssText];
+  var want = E[i].slice(2);
+  var bad = [];
+  for (var j = 0; j < want.length; j++) {
+    if (want[j] === '~') continue;
+    if (got[j] !== want[j]) bad.push('c' + j + ' got[' + got[j] + '] want[' + want[j] + ']');
+  }
+  if (bad.length) { fail++; out.push('FAIL E' + i + ' ' + prop + ': ' + value + ' | ' + bad.join(' | ')); }
+  else pass++;
+}
+
+/* I: which properties a child is left with. Row is [property, value, wantParent, wantChild]. */
+var ihost = document.getElementById('ihost');
+for (var i = 0; i < I.length; i++) {
+  var name = I[i][0], word = I[i][1];
+  var p = document.createElement('div'); ihost.appendChild(p);
+  p.style.setProperty(name, word);
+  var c = document.createElement('div'); p.appendChild(c); void c.offsetHeight;
+  var gp = getComputedStyle(p).getPropertyValue(name), gc = getComputedStyle(c).getPropertyValue(name);
+  if (gp !== I[i][2] || gc !== I[i][3]) {
+    fail++;
+    out.push('FAIL I' + i + ' ' + name + ': ' + word + ' | parent got[' + gp + '] want[' + I[i][2]
+      + '] | child got[' + gc + '] want[' + I[i][3] + ']');
+  } else pass++;
+}
+
+/* A: the doors. Each row is the whole line the probe printed. */
+function door(n, tag, d, prop) {
+  var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i));
+  return 'A' + n + '|' + tag + '|' + prop + '|names=' + a.join(',') + '|echo=' + d.style.getPropertyValue(prop)
+    + '|comp=' + getComputedStyle(d).getPropertyValue(prop) + '|text=' + d.style.cssText;
+}
+var host = document.getElementById('host'), ad = [];
+var a1 = document.createElement('div'); host.appendChild(a1);
+a1.setAttribute('style', 'fill: url(#g) red'); void a1.offsetHeight;
+ad.push(door(0, 'attr', a1, 'fill'));
+var a2 = document.createElement('div'); a2.className = 'sheet-fill'; host.appendChild(a2); void a2.offsetHeight;
+ad.push(door(1, 'sheet', a2, 'fill'));
+var a3 = document.createElement('div'); host.appendChild(a3);
+a3.style.setProperty('marker', 'url(#m)'); a3.style.removeProperty('marker-start'); void a3.offsetHeight;
+ad.push(door(2, 'remove', a3, 'marker'));
+var a4 = document.createElement('div'); host.appendChild(a4);
+a4.style.fillOpacity = '50%'; void a4.offsetHeight;
+ad.push(door(3, 'idlset', a4, 'fill-opacity'));
+var a5 = document.createElement('div'); host.appendChild(a5);
+a5.style.setProperty('hyphenate-character', '"\\2014"'); void a5.offsetHeight;
+ad.push(door(4, 'escape', a5, 'hyphenate-character'));
+var a6 = document.createElement('div'); a6.className = 'sheet-hc'; host.appendChild(a6); void a6.offsetHeight;
+ad.push(door(5, 'sheetscape', a6, 'hyphenate-character'));
+for (var i = 0; i < A.length; i++) {
+  var tag = A[i].split('|')[1], gotLine = null;
+  for (var k = 0; k < ad.length; k++) if (ad[k].split('|')[1] === tag) gotLine = ad[k];
+  if (gotLine !== A[i]) { fail++; out.push('FAIL A' + i + ' got[' + gotLine + '] want[' + A[i] + ']'); }
+  else pass++;
+}
+
+/* G: the geometry, the strings and the ink. Every number is read relative to the stage, because the
+ * want lines were measured with the stage at the page's origin and this page puts a heading above it. */
+var stage = document.getElementById('stage');
+function r(id) {
+  var b = document.getElementById(id).getBoundingClientRect();
+  var s = stage.getBoundingClientRect();
+  return { l: b.left - s.left, t: b.top - s.top, w: b.width, h: b.height };
+}
+function n1(v) { return v.toFixed(1); }
+function rect(id) { var b = r(id); return id + '=' + n1(b.w) + ',' + n1(b.h) + ',' + n1(b.l) + ',' + n1(b.t); }
+function esc(value, tag) {
+  var d = document.createElement('div'); stage.appendChild(d);
+  d.style.setProperty('hyphenate-character', value); void d.offsetHeight;
+  return tag + '|echo=' + d.style.getPropertyValue('hyphenate-character')
+    + '|comp=' + getComputedStyle(d).getPropertyValue('hyphenate-character');
+}
+var gd = [];
+gd.push('G1|' + ['g-1', 'g-2', 'g-3', 'g-5', 'g-6', 'g-7b'].map(rect).join('|'));
+var g4 = document.getElementById('g-4'); void g4.offsetHeight;
+gd.push('G2|fontSize=' + getComputedStyle(g4).fontSize + '|w=' + n1(g4.getBoundingClientRect().width));
+var plain = document.getElementById('p-plain'); void plain.offsetHeight;
+var ps = getComputedStyle(plain);
+gd.push('G3|width=' + ps.width + '|height=' + ps.height + '|borderLeftWidth='
+  + getComputedStyle(document.getElementById('g-6')).borderLeftWidth);
+gd.push(esc('"\\2014 a"', 'G4'));
+gd.push(esc('"\\2014  b"', 'G5'));
+gd.push(esc('"\\2014-x"', 'G6'));
+gd.push(esc('"\\n"', 'G7'));
+gd.push(esc('"\\0041 B"', 'G8'));
+var q = document.createElement('div'); stage.appendChild(q);
+q.style.setProperty('quotes', '"\\201C" "\\201D"'); void q.offsetHeight;
+var cq = document.createElement('div'); stage.appendChild(cq);
+cq.style.setProperty('content', '"\\2014 a"'); void cq.offsetHeight;
+gd.push('G9|quotes=' + q.style.getPropertyValue('quotes') + '|content=' + cq.style.getPropertyValue('content'));
+['r1', 'r2', 'r7', 'r3', 'r4', 'r5', 'r6'].forEach(function (id) {
+  var e = document.getElementById(id);
+  var p = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'marker-end'];
+  gd.push('C|' + id + '|' + p.map(function (n) { return n + '=' + getComputedStyle(e).getPropertyValue(n); }).join('|'));
+});
+var bs = document.createElement('div'); bs.className = 'p-baseline'; stage.appendChild(bs); void bs.offsetHeight;
+gd.push('C|baseline|comp=' + getComputedStyle(bs).getPropertyValue('baseline-shift'));
+var lc = document.createElement('div'); lc.className = 'p-limit'; stage.appendChild(lc); void lc.offsetHeight;
+gd.push('C|limit|echo=' + lc.style.getPropertyValue('hyphenate-limit-chars')
+  + '|comp=' + getComputedStyle(lc).getPropertyValue('hyphenate-limit-chars'));
+var pg = document.createElement('div'); pg.className = 'p-page'; stage.appendChild(pg); void pg.offsetHeight;
+gd.push('C|page|comp=' + getComputedStyle(pg).getPropertyValue('page'));
+var vt = document.createElement('div'); vt.className = 'p-vtgroup'; stage.appendChild(vt); void vt.offsetHeight;
+gd.push('C|vtgroup|comp=' + getComputedStyle(vt).getPropertyValue('view-transition-group'));
+function keyOf(line) { return line.indexOf('C|') === 0 ? line.split('|').slice(0, 2).join('|') : line.split('|')[0]; }
+for (var i = 0; i < G.length; i++) {
+  var want = G[i], gotLine = null;
+  for (var k = 0; k < gd.length; k++) if (keyOf(gd[k]) === keyOf(want)) gotLine = gd[k];
+  if (gotLine !== want) { fail++; out.push('FAIL G' + i + ' got[' + gotLine + '] want[' + want + ']'); }
+  else pass++;
+}
+
+out.unshift((fail === 0 ? 'ALLPASS' : 'FAILURES') + ' b293: ' + pass + '/' + (pass + fail) + ' rows pass');
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

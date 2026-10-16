@@ -70,6 +70,11 @@ public static class ShorthandExpander
             case "gap": ExpandGap(result, value); break;
             case "border-spacing": ExpandPair(result, value, "-webkit-border-horizontal-spacing",
                 "-webkit-border-vertical-spacing", "0px"); break;
+            // CSS Markers 1 §3: one reference written three times. The grammar has already refused
+            // anything but 'none' or a single url() by now, so the expansion cannot invent a longhand
+            // the parser would drop (the trap 'border-spacing' walked into — docs §49.1).
+            case "marker": ExpandTriple(result, value, "marker-start", "marker-mid", "marker-end");
+                break;
         case "columns": ExpandColumns(result, value); break;
         case "column-rule": ExpandColumnRule(result, value); break;
             case "place-content": ExpandPlace(result, value, "align-content", "justify-content"); break;
@@ -170,6 +175,7 @@ public static class ShorthandExpander
             "offset" => new[] { "offset-path", "offset-distance", "offset-rotate", "offset-anchor",
                                 "offset-position" },
             "gap" => new[] { "row-gap", "column-gap" },
+            "marker" => new[] { "marker-start", "marker-mid", "marker-end" },
             "columns" => new[] { "column-width", "column-count" },
             "column-rule" => new[] { "column-rule-width", "column-rule-style", "column-rule-color" },
             "flex-flow" => new[] { "flex-direction", "flex-wrap" },
@@ -220,7 +226,7 @@ public static class ShorthandExpander
         "animation", "transition", "inset", "inset-block", "inset-inline",
         "margin-block", "margin-inline", "padding-block",
         "padding-inline", "overflow", "contain-intrinsic-size", "mask", "gap", "columns",
-        "border-spacing",
+        "border-spacing", "marker",
         "column-rule", "flex-flow", "text-decoration", "text-emphasis", "grid-column",
         "overscroll-behavior", "position-try",
         "grid-row", "grid-area",
@@ -1041,6 +1047,11 @@ public static class ShorthandExpander
             "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode",
         },
         "gap" => new[] { "row-gap", "column-gap" },
+        // CSS Markers 1 §3: the shorthand enumerates as the three places a marker is drawn, in the
+        // order the reference engine lists them (measured: 'marker: none' has length 3, item(0)
+        // 'marker-start', item(1) 'marker-mid', item(2) 'marker-end', while cssText prints the
+        // shorthand). Its cascade table is the same three, which is also what it resets.
+        "marker" => new[] { "marker-start", "marker-mid", "marker-end" },
         // CSS Tables 1 §4.11: 'border-spacing' enumerates as the two legacy spellings the reference
         // engine still answers them by (measured: 'border-spacing: 2px 4px' has length 2, item(0)
         // '-webkit-border-horizontal-spacing' reading '2px' and item(1)
@@ -2430,6 +2441,17 @@ public static class ShorthandExpander
 
     /// <summary>The two-axis shorthands that say one word per axis, with the axis the page left out
     /// standing at its own initial (CSS Overscroll Behavior 1 §3.1).</summary>
+    /// <summary>One value written to three longhands, the way 'marker' and the logical pairs do it.</summary>
+    private static void ExpandTriple(IDictionary<string, string> result, string value,
+        string first, string second, string third)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length == 0) return;
+        result[first] = trimmed;
+        result[second] = trimmed;
+        result[third] = trimmed;
+    }
+
     private static void ExpandPair(Dictionary<string, string> result, string value,
         string first, string second, string fallback)
     {

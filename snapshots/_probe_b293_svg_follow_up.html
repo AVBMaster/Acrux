@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b293 probe B &#8212; the fallbacks, the math and the doors</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+#box { width: 200px; }
+#box > div { height: 20px; }
+.sheet-fill { fill: url(#g) red; }</style></head><body>
+<div id="box"></div>
+<pre id="report"></pre>
+<script>
+/* The SVG paint properties, the rendering hints, the hyphenation and font-variant leftovers, the
+ * legacy box model and the new UI names, with every probed element inside a 200x20 box so that a
+ * value which resolves against its containing block prices the same in two engines. */
+var CASES = [
+  "fill: url(#g) red",
+  "fill: url(#g) none",
+  "fill: url(\"#g\")",
+  "fill: URL(#g)",
+  "fill: url()",
+  "fill: url(#g) url(#h)",
+  "fill: UPPERCASE",
+  "fill: rgb(1 2 3)",
+  "fill: hsl(0 100% 50%)",
+  "fill: color-mix(in srgb, red 50%, blue)",
+  "stroke: url(#g) currentcolor",
+  "stroke: url(#g) bogus",
+  "stop-color: currentcolor",
+  "stop-color: rgb(1, 2, 3)",
+  "stop-color: url(#g)",
+  "flood-color: url(#g)",
+  "flood-color: hsl(0, 0%, 50%)",
+  "flood-opacity: 50%",
+  "lighting-color: url(#g)",
+  "lighting-color: #fff",
+  "fill-opacity: 120%",
+  "fill-opacity: -50%",
+  "fill-opacity: calc(1 + 1)",
+  "fill-opacity: calc(50% + 0)",
+  "fill-opacity: 1e2",
+  "stroke-width: calc(2px)",
+  "stroke-width: calc(1px + 1px)",
+  "stroke-width: 2em",
+  "stroke-width: 1rem",
+  "stroke-width: 0",
+  "stroke-width: 0px",
+  "stroke-width: 50%",
+  "stroke-dasharray: 0",
+  "stroke-dasharray: none none",
+  "stroke-dasharray: 1, 2, 3",
+  "stroke-dasharray: calc(2)",
+  "stroke-dashoffset: calc(2)",
+  "stroke-miterlimit: calc(4)",
+  "stroke-miterlimit: 1e2",
+  "stroke-linecap: BUTT",
+  "stroke-linejoin: MITER",
+  "fill-rule: NONZERO",
+  "marker: url(\"#m\")",
+  "marker: none none",
+  "marker-start: url(#m) red",
+  "marker-start: URL(#m)",
+  "marker-end: bogus",
+  "baseline-shift: calc(1px)",
+  "baseline-shift: 1em",
+  "baseline-shift: BASELINE",
+  "baseline-shift: 0",
+  "baseline-shift: 0px",
+  "baseline-shift: percentage",
+  "dominant-baseline: USE-SCRIPT",
+  "dominant-baseline: text-top",
+  "alignment-baseline: use-script",
+  "alignment-baseline: BASELINE",
+  "mask-mode: MATCH-SOURCE",
+  "mask-mode: LUMINANCE",
+  "mask-type: ALPHA",
+  "hyphenate-character: \"\\2014\"",
+  "hyphenate-character: \"-\"",
+  "hyphenate-character: auto auto",
+  "hyphenate-limit-chars: auto 5",
+  "hyphenate-limit-chars: 5 auto",
+  "hyphenate-limit-chars: 5 3 3 4",
+  "unicode-bidi: ISOLATE-OVERRIDE",
+  "isolation: isolate-override",
+  "page: auto auto",
+  "page: none",
+  "page: --a",
+  "page: 1",
+  "font-variant-emoji: NORMAL",
+  "font-variant-emoji: emoji text",
+  "font-variant-emoji: auto",
+  "view-transition-group: NORMAL",
+  "view-transition-group: allow-discrete",
+  "view-transition-group: none",
+  "view-transition-class: a b",
+  "view-transition-class: none none",
+  "view-transition-class: --a",
+  "view-transition-class: 1",
+  "text-rendering: AUTO",
+  "shape-rendering: CRISPEDGES",
+  "color-interpolation: LINEARRGB",
+  "color-interpolation-filters: linearrgb",
+  "paint-order: normal fill",
+  "paint-order: stroke fill markers normal",
+  "paint-order: fill fill",
+  "vector-effect: non-scaling-stroke none",
+  "vector-effect: fixed-position"
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var decl = CASES[i];
+  var prop = decl.slice(0, decl.indexOf(':')).trim();
+  var value = decl.slice(decl.indexOf(':') + 1).trim();
+  var d = document.createElement('div');
+  document.getElementById('box').appendChild(d);
+  d.style.setProperty(prop, value);
+  var names = [];
+  for (var j = 0; j < d.style.length; j++) names.push(d.style.item(j));
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) {}
+  var extra = '';
+  if (prop === 'border-spacing') {
+    extra = '|h=' + d.style.getPropertyValue('-webkit-border-horizontal-spacing')
+          + '|v=' + d.style.getPropertyValue('-webkit-border-vertical-spacing');
+  }
+  out.push(i + '|' + prop + '|' + value + '|n=' + d.style.length + '|names=' + names.join(',')
+    + '|echo=' + d.style.getPropertyValue(prop) + '|comp=' + getComputedStyle(d).getPropertyValue(prop)
+    + '|sup=' + sup + '|text=' + d.style.cssText + extra);
+}
+
+
+function door(d, prop) {
+  var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i));
+  return 'D|' + d.dataset.tag + '|names=' + a.join(',') + '|echo=' + d.style.getPropertyValue(prop)
+    + '|comp=' + getComputedStyle(d).getPropertyValue(prop) + '|text=' + d.style.cssText;
+}
+var host = document.getElementById('box'), sd = [];
+function mk(tag) { var e = document.createElement('div'); e.dataset.tag = tag; host.appendChild(e); return e; }
+var a = mk('attr'); a.setAttribute('style', 'fill: url(#g) red'); void a.offsetHeight;
+sd.push(door(a, 'fill'));
+var s = mk('sheet'); s.className = 'sheet-fill'; void s.offsetHeight;
+sd.push(door(s, 'fill'));
+var rr = mk('remove'); rr.style.setProperty('marker', 'url(#m)');
+rr.style.removeProperty('marker-start'); void rr.offsetHeight;
+sd.push(door(rr, 'marker'));
+var w = mk('idlset'); w.style.fillOpacity = '50%'; void w.offsetHeight;
+sd.push(door(w, 'fill-opacity'));
+var p = mk('inherit'); p.style.setProperty('fill', 'url(#g)');
+p.style.setProperty('stroke-width', '3'); p.style.setProperty('dominant-baseline', 'use-script');
+p.style.setProperty('baseline-shift', 'sub'); p.style.setProperty('mask-mode', 'alpha');
+p.style.setProperty('flood-color', 'red');
+var c = document.createElement('div'); p.appendChild(c); void c.offsetHeight;
+out.push('D|inherit|parent=' + ['fill','stroke-width','dominant-baseline','baseline-shift','mask-mode','flood-color']
+  .map(function(n){ return getComputedStyle(p).getPropertyValue(n); }).join('/')
+  + '|child=' + ['fill','stroke-width','dominant-baseline','baseline-shift','mask-mode','flood-color']
+  .map(function(n){ return getComputedStyle(c).getPropertyValue(n); }).join('/'));
+text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

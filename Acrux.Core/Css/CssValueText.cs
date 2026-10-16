@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Text;
 
 namespace Acrux.Core.Css;
 
@@ -2193,21 +2194,48 @@ public static class CssValueText
         return printed.Append('"').ToString();
     }
 
-    /// <summary>Copies the string token that starts at <paramref name="start"/> (quotes and
-    /// escapes included) and returns the index after its closing quote.</summary>
+    /// <summary>Copies the string token that starts at <paramref name="start"/>, and returns the
+    /// index after its closing quote.
+    ///
+    /// The characters a page escaped are printed as the characters they mean, and the quote the
+    /// string was written with is the one the engine writes it back with (measured:
+    /// <c>hyphenate-character: "\2014"</c> reads <c>"—"</c>, <c>'x'</c> reads <c>"x"</c> and
+    /// <c>quotes: "\201C" "\201D"</c> reads <c>"“" "”"</c> — the same answer the computed surface
+    /// gives, because it is the same string). A character that cannot be written bare — a backslash,
+    /// the quote itself, or a control character — keeps an escape of its own.</summary>
     private static int CopyQuoted(string text, int start, System.Text.StringBuilder into)
     {
         char quote = text[start];
-        into.Append(quote);
         int i = start + 1;
+        var raw = new StringBuilder();
         while (i < text.Length)
         {
             char c = text[i];
-            into.Append(c);
             i++;
-            if (c == '\\' && i < text.Length) { into.Append(text[i]); i++; continue; }
+            if (c == '\\' && i < text.Length)
+            {
+                raw.Append('\\');
+                raw.Append(text[i]);
+                i++;
+                continue;
+            }
             if (c == quote) break;
+            raw.Append(c);
         }
+        into.Append('"');
+        foreach (var c in Acrux.Core.Css.Resolver.CssPropertyApplier.UnescapeCssString(raw.ToString()))
+        {
+            if (c == '\\' || c == '"') { into.Append('\\').Append(c); continue; }
+            if (c < 0x20 || c == 0x7f)
+            {
+                // A control character is written as the hex escape the reference engine writes:
+                // its digits end with a space, which is part of the escape and not of the text.
+                into.Append('\\').Append(((int) c).ToString("x")).Append(' ');
+                continue;
+            }
+            into.Append(c);
+        }
+        into.Append('"');
         return i;
     }
 

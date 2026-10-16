@@ -413,6 +413,22 @@ public static class ComputedValueSerializer
                 return Pair(Longhand(style, "scroll-margin-block-start"), Longhand(style, "scroll-margin-block-end"));
             case "scroll-margin-inline":
                 return Pair(Longhand(style, "scroll-margin-inline-start"), Longhand(style, "scroll-margin-inline-end"));
+            // CSS Markers 1 §3: the shorthand answers what its three longhands answer together, so
+            // it is one value written three times or nothing at all (measured: 'marker: none'
+            // computes 'none', a box that wrote nothing computes 'none' too, 'marker: url(#m)'
+            // computes the reference, and a box that had 'marker-start' taken back out of a
+            // complete 'marker' computes the empty string — three longhands that no longer agree
+            // leave the shorthand with no value to say). The longhands are asked through Get, not
+            // ValueOf: they live in the echo table, and that table is where an untouched box is
+            // given its initial and a relative address is turned into the one the image is fetched
+            // at.
+            case "marker":
+            {
+                var start = Get(style, "marker-start", true);
+                var mid = Get(style, "marker-mid", true);
+                var end = Get(style, "marker-end", true);
+                return start == mid && mid == end ? start ?? "" : "";
+            }
             case "scroll-padding-block":
                 return Pair(Longhand(style, "scroll-padding-block-start"), Longhand(style, "scroll-padding-block-end"));
             case "scroll-padding-inline":

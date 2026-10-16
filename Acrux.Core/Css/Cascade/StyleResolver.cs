@@ -23,6 +23,13 @@ public class StyleResolver
     private int _treeOrderCounter;
     private float _viewportWidth = 1024;
     private float _viewportHeight = 768;
+    /// <summary>The root element's computed font size, recorded while the document is walked. A
+    /// 'rem' written by any element at any depth is a share of this number, so every style the walk
+    /// produces carries it (CSS Values 4 §6.3).</summary>
+    private float _rootFontSize = 16;
+    /// <summary>The element the document walk started at. Its settled font size is the one every
+    /// 'rem' in the document is a share of, so the walk has to know which element it was.</summary>
+    private Element? _rootElement;
     private string _colorScheme = "light";
     /// <summary>The one environment every '@media' condition in this resolve is asked against.
     /// It is rebuilt by <see cref="SetViewport"/> rather than read per rule, so a rule and
@@ -67,6 +74,10 @@ public class StyleResolver
         // number the layout will use.
         style.ComputedViewportWidth = _viewportWidth;
         style.ComputedViewportHeight = _viewportHeight;
+        // The root's font belongs to the style from its first moment: a 'rem' the cascade prices
+        // while it runs reads it off the ambient style, and a style that has not been told yet makes
+        // every expression fall back to the font of the element that wrote it (CSS Values 4 §6.3).
+        style.RootFontSize = _rootFontSize;
         if (parentStyle != null)
             InheritProperties(style, parentStyle);
 
@@ -76,7 +87,7 @@ public class StyleResolver
             ParentStyle = parentStyle,
             ViewportWidth = _viewportWidth,
             ViewportHeight = _viewportHeight,
-            RootFontSize = parentStyle?.FontSize ?? 16,
+            RootFontSize = _rootFontSize,
             ColorScheme = _colorScheme,
         };
         element.ComputedStyle = style;
@@ -108,6 +119,13 @@ public class StyleResolver
         // value rather than an animated one.
         _adjuster.AdjustComputedStyle(style, element, parentStyle);
 
+        // The root's font is the number every 'rem' in the document is a share of, and it is only
+        // known once the root's own style has settled: the walk starts at the element ResolveDocument
+        // was given, so that one — not 'the element with no parent', which is the body on a page
+        // whose document element was never reached — fixes it for every element after it.
+        if (ReferenceEquals(element, _rootElement)) _rootFontSize = style.FontSize;
+        style.RootFontSize = _rootFontSize;
+
         return style;
     }
 
@@ -124,6 +142,11 @@ public class StyleResolver
         var rootStyle = new ComputedStyle();
         ElementStyleRegistry.ApplyUserAgentStyle(rootStyle, root.TagName, root);
         rootStyle.FontSize = 16;
+        // Every 'rem' in the document is a share of this number, whatever font the element that
+        // wrote it ends up with (CSS Values 4 §6.3).
+        _rootElement = root;
+        _rootFontSize = rootStyle.FontSize;
+        rootStyle.RootFontSize = _rootFontSize;
 
         ResolveTree(root, rootStyle);
     }

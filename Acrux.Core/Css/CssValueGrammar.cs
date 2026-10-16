@@ -794,6 +794,15 @@ public static class CssValueGrammar
             return layers.All(layer => IsSingleKeywordWord(layer,
                 new[] { "add", "subtract", "intersect", "exclude" }));
         },
+        // CSS Masking 1 §11.2: one colour space per layer, so 'bogus' is nobody's mask mode and two
+        // words inside one layer are no value (measured through 'mask-mode' and 'CSS.supports').
+        CssPropertyId.MaskMode => static text =>
+        {
+            var layers = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(text, ',');
+            if (layers.Count == 0) return false;
+            return layers.All(layer => IsSingleKeywordWord(layer,
+                new[] { "match-source", "luminance", "alpha" }));
+        },
         CssPropertyId.TextWrap => IsTextWrapValue,
         // CSS Text 4 §1: ONE of the six words. The two-value form the current draft adds
         // ('white-space: pre nowrap') and the 'stable' keyword are not values this engine's
@@ -993,8 +1002,6 @@ public static class CssValueGrammar
             "horizontal-tb", "vertical-rl", "vertical-lr", "sideways-rl", "sideways-lr"),
         // CSS Text 4 §2.1: the five keywords. The legacy '-isolate' and '-plaintext' spellings are
         // not values the reference engine takes any more (measured: both read back empty).
-        CssPropertyId.UnicodeBidi => static text => IsOneWordOnly(text,
-            "normal", "embed", "isolate", "bidi-override", "plaintext"),
         CssPropertyId.Isolation => static text => IsOneWordOnly(text, "auto", "isolate"),
         CssPropertyId.Display => static text => CssPropertyApplier.TryParseDisplay(text, out _, out _),
         CssPropertyId.Float => static text => CssFloatKeywords.TryParseFloat(text, out _),
@@ -1303,15 +1310,6 @@ public static class CssValueGrammar
         CssPropertyId.VectorEffect
             => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
                 text, "none", "non-scaling-stroke"),
-        CssPropertyId.ShapeRendering
-            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
-                text, "auto", "optimizeSpeed", "crispEdges", "geometricPrecision"),
-        CssPropertyId.ColorRendering
-            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
-                text, "auto", "optimizeSpeed", "optimizeQuality"),
-        CssPropertyId.ColorInterpolation or CssPropertyId.ColorInterpolationFilters
-            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsOneOfLower(
-                text, "auto", "sRGB", "linearRGB"),
         // CSS Images 3 §5.1: the two words, and no angle. Measured: '0deg' and '90deg' are both
         // dropped (the rotation the draft allowed is not what this engine answers), and 'flip'
         // alone or beside another word is dropped with them.
@@ -1637,6 +1635,41 @@ public static class CssValueGrammar
         // CSS Transitions 1 §4: one of the two behaviour words per item.
         CssPropertyId.TransitionBehavior => static text =>
             IsKeywordList(text, "normal", "allow-discrete"),
+        // SVG 2 §11.7/the rendering hints: one keyword from a closed set, and a word outside it is
+        // no hint (measured: 'text-rendering: bogus' falls while 'optimizeLegibility' stands).
+        CssPropertyId.TextRendering => static text =>
+            IsOneWordOnly(text, "auto", "optimizeSpeed", "optimizeLegibility",
+                "geometricPrecision"),
+        CssPropertyId.ColorRendering => static text =>
+            IsOneWordOnly(text, "auto", "optimizeSpeed", "optimizeQuality"),
+        CssPropertyId.ColorInterpolation => static text =>
+            IsOneWordOnly(text, "auto", "sRGB", "linearRGB"),
+        CssPropertyId.ColorInterpolationFilters => static text =>
+            IsOneWordOnly(text, "auto", "sRGB", "linearRGB"),
+        CssPropertyId.ShapeRendering => static text =>
+            IsOneWordOnly(text, "auto", "optimizeSpeed", "crispEdges", "geometricPrecision",
+                "non-scaling-stroke", "non-scaling-size", "non-rotation", "fixed-position"),
+        // CSS Writing Modes 4 §5.2 and CSS Bidi: the six modes, 'isolate-override' among them
+        // (measured: it stands where 'bogus' falls).
+        CssPropertyId.UnicodeBidi => static text =>
+            IsOneWordOnly(text, "normal", "embed", "isolate", "bidi-override",
+                "isolate-override", "plaintext"),
+        // CSS Text 3 §4.5: 'auto' or one string, and a bare dash is neither (measured:
+        // 'hyphenate-character: -' falls, '"--"' stands, and 'none' is not a word it takes).
+        CssPropertyId.HyphenateCharacter => static text =>
+        {
+            var trimmed = text.Trim();
+            if (trimmed.Equals("auto", StringComparison.OrdinalIgnoreCase)) return true;
+            return IsContentString(trimmed);
+        },
+        // CSS Markers 1 §3: the shorthand is one marker reference or 'none' — the three-longhand
+        // spelling the older draft sketched is no value (measured: two and four references fall).
+        CssPropertyId.Marker => static text =>
+        {
+            var parts = SplitComponents(text);
+            if (parts.Count != 1) return false;
+            return Resolver.EchoedProperties.NormalizeMarker(parts[0]) != null;
+        },
         _ => null,
     };
 
@@ -2763,6 +2796,19 @@ public static class CssValueGrammar
     private static bool IsIntegerWord(string text) =>
         int.TryParse(text, System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out _);
+
+    /// <summary>A &lt;custom-ident&gt;: the identifier characters, and it does not begin with a digit
+    /// or with the '--' a custom property wears. Case is the author's own — this is the question a
+    /// name asks, not the question a keyword asks.</summary>
+    public static bool IsCustomIdent(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        if (char.IsAsciiDigit(text[0])) return false;
+        if (text.StartsWith("--", StringComparison.Ordinal)) return false;
+        foreach (var c in text)
+            if (!char.IsLetter(c) && !char.IsAsciiDigit(c) && c is not ('-' or '_' or '\\')) return false;
+        return true;
+    }
 
     internal static bool IsIdentifierLike(string text)
     {

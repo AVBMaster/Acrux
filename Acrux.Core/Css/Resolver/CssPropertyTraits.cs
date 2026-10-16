@@ -29,6 +29,10 @@ public static class CssPropertyTraits
         // parent's 'disc' and the child's run is bullets).
         "text-security",
         "word-spacing", "writing-mode", "overflow-wrap", "ruby-position",
+        // SVG 2 §13: the rendering hints are part of the paint a subtree is drawn with, so each
+        // runs down the tree like 'fill' does (measured: a child of a 'crispedges' parent says
+        // 'crispedges' and not the 'auto' it started with).
+        "shape-rendering", "color-rendering", "color-interpolation",
         "text-emphasis", "text-emphasis-color", "text-emphasis-style", "text-emphasis-position",
     };
 
@@ -298,7 +302,7 @@ public static class CssPropertyTraits
     private static readonly HashSet<string> ReferenceDeclared = new(StringComparer.Ordinal)
     {
         "baseline-source",
-        "font-variant-emoji", "overflow-block", "overflow-inline", "paint-order",
+        "overflow-block", "overflow-inline", "paint-order",
         "x", "y",
     };
 

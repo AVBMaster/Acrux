@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b293 probe C &#8212; the math, the inheritors and the strings</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+#box { width: 200px; }
+#box > div { height: 20px; }
+.sheet-fill { fill: url(#g) red; }
+.sheet-hc { hyphenate-character: "\2014 a"; }</style></head><body>
+<div id="box"></div>
+<pre id="report"></pre>
+<script>
+/* The three questions probe B left open: what a math expression does to an SVG length or an alpha
+ * value once computed, which of the paint family actually inherits, and how a string value prints
+ * the escapes the page wrote. Every probed element sits inside a 200x20 box so a percentage prices
+ * the same in both engines, and the body's own font is 14px against a 16px root so 'em' and 'rem'
+ * can never be confused for one another. */
+var CASES = [
+  "fill-opacity: calc(50% + 0%)",
+  "fill-opacity: calc(100% * 0.5)",
+  "fill-opacity: calc(0.5 + 0.5)",
+  "fill-opacity: calc(50% + 50%)",
+  "fill-opacity: calc(1px)",
+  "fill-opacity: min(0.5, 1)",
+  "fill-opacity: clamp(0%, 50%, 100%)",
+  "fill-opacity: calc(2 + 3)",
+  "stroke-opacity: calc(50% + 0)",
+  "fill-opacity: calc(1 + 1)",
+  "stroke-width: calc(2 + 2)",
+  "stroke-width: calc(1 + 1)",
+  "stroke-width: calc(2 * 3)",
+  "stroke-width: calc(2px + 3)",
+  "stroke-width: calc(50%)",
+  "stroke-width: calc(1rem)",
+  "stroke-width: min(2, 3)",
+  "stroke-width: 3rem",
+  "stroke-width: 1em",
+  "stroke-width: 2.5e1",
+  "stroke-width: +2",
+  "stroke-width: calc(0)",
+  "stroke-width: calc(2) px",
+  "stroke-width: calc(2%)",
+  "stroke-width: max(2px, 3px)",
+  "stroke-width: min(2, 3px)",
+  "stroke-width: calc(2em)",
+  "stroke-width: calc(1em + 1em)",
+  "stroke-width: calc(2 + 2 + 2)",
+  "stroke-width: calc(1rem + 1rem)",
+  "fill-opacity: min(50%, 100%)",
+  "fill-opacity: clamp(0, 1, 2)",
+  "fill-opacity: calc(2 + 2 + 2)",
+  "stroke-dasharray: calc(2) 3",
+  "stroke-dasharray: calc(50%) 2",
+  "stroke-dashoffset: calc(2px + 3)",
+  "stroke-miterlimit: calc(2 + 2)",
+  "stroke-miterlimit: min(4, 5)",
+  "stroke-miterlimit: calc(4px)",
+  "stroke-miterlimit: 0.5",
+  "stroke-miterlimit: -1",
+  "stroke-miterlimit: 1e2",
+  "baseline-shift: 0",
+  "baseline-shift: 0px",
+  "baseline-shift: 1em",
+  "baseline-shift: 1rem",
+  "baseline-shift: 50%",
+  "baseline-shift: calc(1px)",
+  "baseline-shift: calc(1em + 1px)",
+  "baseline-shift: sub",
+  "baseline-shift: super",
+  "baseline-shift: baseline",
+  "baseline-shift: bogus",
+  "baseline-shift: 2",
+  "baseline-shift: -1em",
+  "baseline-shift: 3%",
+  "hyphenate-character: \"\\2014\"",
+  "hyphenate-character: \"-\"",
+  "hyphenate-character: \"a b\"",
+  "hyphenate-character: none",
+  "hyphenate-character: auto",
+  "hyphenate-character: \"\"",
+  "hyphenate-character: \"\\0041\"",
+  "hyphenate-character: 'x'",
+  "hyphenate-character: url(#g)",
+  "quotes: \"\\201C\" \"\\201D\"",
+  "list-style-type: \"\\2089\"",
+  "content: \"\\2014\"",
+  "hyphenate-limit-chars: auto",
+  "hyphenate-limit-chars: 5",
+  "hyphenate-limit-chars: 5 5",
+  "hyphenate-limit-chars: 5 5 5",
+  "hyphenate-limit-chars: auto 5",
+  "hyphenate-limit-chars: 5 auto",
+  "hyphenate-limit-chars: 5 5 auto",
+  "hyphenate-limit-chars: auto auto 5",
+  "hyphenate-limit-chars: 0",
+  "hyphenate-limit-chars: 1.5",
+  "hyphenate-limit-chars: calc(5)",
+  "hyphenate-limit-chars: -1",
+  "hyphenate-limit-chars: bogus",
+  "page: auto",
+  "page: --a",
+  "page: a",
+  "page: \"a\"",
+  "page: none",
+  "page: 1",
+  "page: A-b",
+  "view-transition-group: normal",
+  "view-transition-group: contain",
+  "view-transition-group: allow-discrete",
+  "view-transition-group: none",
+  "view-transition-group: auto",
+  "view-transition-group: --a",
+  "view-transition-class: none",
+  "view-transition-class: a",
+  "view-transition-class: a b",
+  "view-transition-class: --a",
+  "view-transition-class: 1",
+  "view-transition-class: normal",
+  "view-transition-class: \"a\"",
+  "font-variant-emoji: normal",
+  "font-variant-emoji: emoji",
+  "fill: url(#g) rgb(1, 2, 3)",
+  "fill: url() red",
+  "fill: url( \"\" )",
+  "fill: paint(none)",
+  "stroke: url(#g) url(#h)",
+  "stroke-width: 1rem",
+  "stroke-width: calc(50% + 10px)",
+  "stroke-width: calc(1em + 50%)",
+  "stroke-width: calc(2 + 2px)",
+  "stroke-dashoffset: calc(0)",
+  "stroke-dashoffset: calc(2)",
+  "baseline-shift: calc(2)",
+  "baseline-shift: calc(50% + 10px)",
+  "fill: currentcolor red",
+  "fill: url(#g) red blue",
+  "fill: url(#g)auto",
+  "hyphenate-character: \"\\2014 a\"",
+  "hyphenate-character: \"\\0041 B\"",
+  "hyphenate-character: \"\\2014  b\"",
+  "hyphenate-character: \"a\\\\b\"",
+  "hyphenate-character: \"he said \\\"hi\\\"\"",
+  "hyphenate-limit-chars: calc(5) calc(6)",
+  "hyphenate-limit-chars: calc(5) auto",
+  "view-transition-name: --a",
+  "view-transition-name: none none",
+  "hyphenate-character: \"\\n\"",
+  "hyphenate-character: \"\\2014-x\"",
+  "hyphenate-character: \"\\0041\"",
+  "hyphenate-character: \"\\\\\"",
+  "content: \"\\2014 a\"",
+  "list-style-type: \"\\0041\""
+];
+
+/* One row per property that the paint family is made of: what the parent says, and what the child
+ * is left with. A property that inherits answers the child with its parent's value. */
+var INHERIT = [
+  ["fill", "red"], ["stroke", "red"], ["stroke-width", "3"], ["stroke-dasharray", "5 3"],
+  ["stroke-dashoffset", "2"], ["stroke-miterlimit", "6"], ["stroke-linecap", "round"],
+  ["stroke-linejoin", "bevel"], ["stroke-opacity", "0.5"], ["stroke-dasharray", "none"],
+  ["fill-opacity", "0.5"], ["fill-rule", "evenodd"], ["color-interpolation", "linearrgb"],
+  ["color-interpolation-filters", "linearrgb"], ["color-rendering", "optimizeQuality"],
+  ["shape-rendering", "crispEdges"], ["text-rendering", "geometricPrecision"],
+  ["dominant-baseline", "use-script"], ["alignment-baseline", "use-script"],
+  ["baseline-shift", "sub"], ["mask-mode", "alpha"], ["clip-rule", "evenodd"],
+  ["flood-color", "red"], ["flood-opacity", "0.5"], ["lighting-color", "red"],
+  ["stop-color", "red"], ["stop-opacity", "0.5"], ["marker-start", "url(#m)"],
+  ["vector-effect", "non-scaling-stroke"], ["paint-order", "stroke"], ["image-rendering", "pixelated"],
+  ["hyphenate-character", "\"-\""], ["hyphenate-limit-chars", "5"], ["page", "a"],
+  ["view-transition-group", "contain"], ["view-transition-class", "a"],
+  ["font-variant-emoji", "emoji"], ["writing-mode", "vertical-rl"], ["direction", "rtl"],
+  ["text-anchor", "middle"], ["letter-spacing", "2px"]
+];
+
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var decl = CASES[i];
+  var prop = decl.slice(0, decl.indexOf(':')).trim();
+  var value = decl.slice(decl.indexOf(':') + 1).trim();
+  var d = document.createElement('div');
+  document.getElementById('box').appendChild(d);
+  d.style.setProperty(prop, value);
+  var names = [];
+  for (var j = 0; j < d.style.length; j++) names.push(d.style.item(j));
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) {}
+  out.push(i + '|' + prop + '|' + value + '|n=' + d.style.length + '|names=' + names.join(',')
+    + '|echo=' + d.style.getPropertyValue(prop) + '|comp=' + getComputedStyle(d).getPropertyValue(prop)
+    + '|sup=' + sup + '|text=' + d.style.cssText);
+}
+
+var host = document.getElementById('box');
+for (var k = 0; k < INHERIT.length; k++) {
+  var name = INHERIT[k][0], word = INHERIT[k][1];
+  var p = document.createElement('div');
+  host.appendChild(p);
+  p.style.setProperty(name, word);
+  var c = document.createElement('div');
+  p.appendChild(c);
+  void c.offsetHeight;
+  out.push('I' + k + '|' + name + '|' + word + '|parent=' + getComputedStyle(p).getPropertyValue(name)
+    + '|child=' + getComputedStyle(c).getPropertyValue(name));
+}
+
+/* The four doors a declaration can come through, measured for the value probe B found refused:
+ * the style attribute, a stylesheet, an incomplete shorthand and the camel-cased IDL setter. */
+function door(n, tag, d, prop) {
+  var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i));
+  return 'A' + n + '|' + tag + '|' + prop + '|names=' + a.join(',') + '|echo=' + d.style.getPropertyValue(prop)
+    + '|comp=' + getComputedStyle(d).getPropertyValue(prop) + '|text=' + d.style.cssText;
+}
+var a1 = document.createElement('div'); host.appendChild(a1);
+a1.setAttribute('style', 'fill: url(#g) red'); void a1.offsetHeight;
+out.push(door(0, 'attr', a1, 'fill'));
+var a2 = document.createElement('div'); a2.className = 'sheet-fill'; host.appendChild(a2); void a2.offsetHeight;
+out.push(door(1, 'sheet', a2, 'fill'));
+var a3 = document.createElement('div'); host.appendChild(a3);
+a3.style.setProperty('marker', 'url(#m)'); a3.style.removeProperty('marker-start'); void a3.offsetHeight;
+out.push(door(2, 'remove', a3, 'marker'));
+var a4 = document.createElement('div'); host.appendChild(a4);
+a4.style.fillOpacity = '50%'; void a4.offsetHeight;
+out.push(door(3, 'idlset', a4, 'fill-opacity'));
+var a5 = document.createElement('div'); host.appendChild(a5);
+a5.style.setProperty('hyphenate-character', '"\\2014"'); void a5.offsetHeight;
+out.push(door(4, 'escape', a5, 'hyphenate-character'));
+var a6 = document.createElement('div'); a6.className = 'sheet-hc'; host.appendChild(a6); void a6.offsetHeight;
+out.push(door(5, 'sheetscape', a6, 'hyphenate-character'));
+text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

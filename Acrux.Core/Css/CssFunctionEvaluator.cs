@@ -44,6 +44,77 @@ public static class CssFunctionEvaluator
     /// it (measured: 'grid-auto-rows: fit-content(10px) 20px' computes exactly what was written) —
     /// and the rule is asked here rather than at each call site, because the cascade has two of
     /// those and a rule a caller can forget is a rule that gets forgotten.</param>
+    /// <summary>Whether a whole value is one call of a math function. The opacity and length
+    /// properties of CSS Fill and Stroke 3 accept a math expression where a number would go, and
+    /// they print it as written rather than folding it, so the first question is what kind of text
+    /// the value is at all.</summary>
+    public static bool IsMathFunctionText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var trimmed = text.Trim();
+        if (!trimmed.EndsWith(")", StringComparison.Ordinal)) return false;
+        int open = trimmed.IndexOf('(');
+        if (open <= 0) return false;
+        return trimmed[..open].Trim().ToLowerInvariant() switch
+        {
+            "calc" or "min" or "max" or "clamp" or "round" or "mod" => true,
+            _ => false,
+        };
+    }
+
+    /// <summary>A math expression whose value is known without a box: the expression is evaluated
+    /// and printed as the number it means, and anything with a percentage or a unit in it comes
+    /// back unchanged because no engine can price it without one (measured: 'fill-opacity:
+    /// calc(0.5)' computes '0.5').</summary>
+    public static string EvaluateConstantNumber(string text)
+    {
+        if (!IsMathFunctionText(text)) return text;
+        var inner = text.Trim();
+        int open = inner.IndexOf('(');
+        var body = inner[(open + 1)..^1].Trim();
+        if (inner[..open].Trim().ToLowerInvariant() != "calc") return text;
+        if (body.IndexOf('%') >= 0 || body.IndexOfAny("emexnpx".ToCharArray()) < 0)
+        {
+            // Only a plain arithmetic expression of bare numbers is a constant here.
+            if (body.IndexOfAny("emexnpx".ToCharArray()) >= 0) return text;
+            double total = 0; int sign = 1; bool any = false; var current = "";
+            void Flush()
+            {
+                if (current.Length == 0) return;
+                if (double.TryParse(current.Trim(), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var value))
+                { total += sign * value; any = true; }
+                else { any = false; }
+                current = "";
+            }
+            for (int i = 0; i < body.Length; i++)
+            {
+                char c = body[i];
+                if (c is '+' or '-') { Flush(); sign = c == '-' ? -1 : 1; }
+                else current += c;
+            }
+            Flush();
+            if (any) return Acrux.Core.Dom.Animations.CssValueTokenizer.Num(total);
+        }
+        return text;
+    }
+
+    /// <summary>A math expression over bare numbers, printed with the unit the property will give
+    /// them: 'stroke-width' is a length, so 'calc(2)' computes 'calc(2px)' (measured) — the
+    /// expression stays an expression, only its numbers gain the unit.</summary>
+    public static string NumberlessMathToPixels(string text)
+    {
+        if (!IsMathFunctionText(text)) return text;
+        var trimmed = text.Trim();
+        int open = trimmed.IndexOf('(');
+        var head = trimmed[..(open + 1)];
+        var body = trimmed[(open + 1)..^1];
+        if (body.IndexOf('%') >= 0 || body.IndexOfAny("emexnpx".ToCharArray()) >= 0) return text;
+        var printed = System.Text.RegularExpressions.Regex.Replace(body,
+            @"(\d+(?:\.\d+)?)(?![\w.])", "$1px");
+        return head + printed + ")";
+    }
+
     public static string Evaluate(string value, Element? context = null, float parentFontSize = 16, float rootFontSize = 16, float viewportWidth = 0, float viewportHeight = 0, int maxRecursion = 10, bool forceMath = false, string? property = null)
     {
         if (string.IsNullOrEmpty(value) || maxRecursion <= 0) return value;
@@ -65,6 +136,22 @@ public static class CssFunctionEvaluator
         }
 
         return result;
+    }
+
+    /// <summary>The cascade's substitutions with no arithmetic: what a <c>var()</c> stands for and
+    /// what an <c>attr()</c> carries are resolved, while a math expression is left exactly as the
+    /// page wrote it. A property whose computed value keeps the expression — 'stroke-width' is a
+    /// length, so <c>calc(2)</c> reads back <c>calc(2px)</c> rather than <c>2px</c> (measured) — has
+    /// to be handed the expression itself, because a number priced here cannot be turned back into
+    /// one.</summary>
+    public static string EvaluateSubstitutionsOnly(string value, Element? context = null,
+        float parentFontSize = 16, float rootFontSize = 16, float viewportWidth = 0,
+        float viewportHeight = 0, int maxRecursion = 10)
+    {
+        if (string.IsNullOrEmpty(value) || maxRecursion <= 0) return value;
+        var result = EvaluateVar(value, context, parentFontSize, rootFontSize,
+            viewportWidth, viewportHeight, maxRecursion);
+        return EvaluateAttr(result, context);
     }
 
     /// <summary>The cascade's read of <c>content</c>: substitutions that the property's own value
@@ -871,6 +958,12 @@ public static class CssFunctionEvaluator
         // glyph metrics when a style context is active (CSS Values 4 §6.3);
         // the ratios below are only the no-context fallback.
         var fontStyle = Acrux.Core.Dom.FontUnitContext.Current;
+        // 'rem' is a share of the ROOT's font (CSS Values 4 §6.3), not of the font of the element
+        // whose metrics are in scope: the style carries the number the document started with, and a
+        // resolution with no style at all falls back to the caller's argument. Measured on a 14px
+        // box inside a 16px root: 'calc(1rem)' is 16px, '1em' is 14px and 'calc(1rem + 1em)' is 30px.
+        if (unit == "rem")
+            return value * (fontStyle is { RootFontSize: > 0 } ? fontStyle.RootFontSize : rootFontSize);
         if (fontStyle != null && fontStyle.FontSize > 0)
         {
             var fm = Acrux.Core.Fonts.FontMetricsProvider.GetForStyle(fontStyle);
@@ -973,8 +1066,11 @@ public static class CssFunctionEvaluator
         value = value.Trim();
 
         if (value.EndsWith("px") && float.TryParse(value[..^2], out var px)) return px;
-        if (value.EndsWith("em") && float.TryParse(value[..^2], out var em)) return em * parentFontSize;
+        // 'rem' has to be asked before 'em': the one ends with the other's characters, and reading
+        // '1rem' as an 'em' priced a share of the root's font at the element's own (measured: a 14px
+        // box inside a 16px root resolves 'calc(1rem)' as 16px and 'calc(1rem + 1em)' as 30px).
         if (value.EndsWith("rem") && float.TryParse(value[..^2], out var rem)) return rem * rootFontSize;
+        if (value.EndsWith("em") && float.TryParse(value[..^2], out var em)) return em * parentFontSize;
         if (value.EndsWith("%") && float.TryParse(value[..^1], out var pct)) return pct / 100f * parentFontSize;
         if (value.EndsWith("vw") && float.TryParse(value[..^2], out var vw)) return vw * viewportWidth / 100f;
         if (value.EndsWith("vh") && float.TryParse(value[..^2], out var vh)) return vh * viewportHeight / 100f;

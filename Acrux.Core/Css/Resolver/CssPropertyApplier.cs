@@ -3323,29 +3323,34 @@ public static class CssPropertyApplier
 
     /// <summary>Resolve the escapes a quoted CSS &lt;string&gt; may carry: a backslash
     /// before a literal character, and up to six hex digits for a codepoint optionally
-    /// followed by one space that belongs to the escape rather than to the text.</summary>
+    /// followed by one whitespace character that belongs to the escape rather than to the
+    /// text (CSS Syntax 3 §4.3.8). Measured: <c>"\2014 a"</c> is the two characters '—a' and
+    /// <c>"\0041 B"</c> is 'AB', so the space after four, five or six digits is consumed all the
+    /// same — and the character that stopped the digits is not, because a page that wrote
+    /// <c>"\2014-x"</c> meant the dash.</summary>
     internal static string UnescapeCssString(string text)
     {
         if (text.IndexOf('\\') < 0) return text;
         var outText = new StringBuilder(text.Length);
-        for (int i = 0; i < text.Length; i++)
+        int i = 0;
+        while (i < text.Length)
         {
             char c = text[i];
             if (c != '\\' || i + 1 >= text.Length)
             {
                 outText.Append(c);
+                i++;
                 continue;
             }
             i++;
             char next = text[i];
             if (!IsHexDigit(next))
             {
-                outText.Append(next switch
-                {
-                    'n' => '\n',
-                    't' => '\t',
-                    _ => next,
-                });
+                // A backslash in front of a character that is not a hex digit is that character:
+                // '\n' is the letter 'n', not a line feed (CSS Syntax 3 §4.3.8, measured:
+                // 'hyphenate-character: "\n"' reads back '"n"').
+                outText.Append(next);
+                i++;
                 continue;
             }
             int code = 0, taken = 0;
@@ -3355,8 +3360,10 @@ public static class CssPropertyApplier
                 i++;
                 taken++;
             }
-            // A space right after the digits terminates the escape; it is not content.
-            if (taken == 6 && i < text.Length && text[i] == ' ') i++;
+            // One whitespace character after the digits ends the escape and is not content; the
+            // character that stopped the digits is left for the next turn of the loop to append.
+            if (i < text.Length && (text[i] == ' ' || text[i] == '\t' || text[i] == '\n'
+                    || text[i] == '\r' || text[i] == '\f')) i++;
             if (code is > 0 and <= 0x10FFFF)
                 outText.Append(char.ConvertFromUtf32(code));
         }

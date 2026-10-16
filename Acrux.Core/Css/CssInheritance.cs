@@ -133,6 +133,12 @@ public static class CssInheritance
         // like the rest of the SVG family (measured: a child of 'paint-order: stroke' reads
         // 'stroke', where 'grid-auto-flow' beside it stays at its initial 'row').
         child.PaintOrder = parent.PaintOrder;
+        // SVG 2 §13: the three rendering hints ask how the subtree is to be drawn, so each runs
+        // down the tree with 'paint-order' (measured: a child of 'crispEdges' reads 'crispEdges',
+        // where a box that wrote nothing beside it keeps the 'auto' it started with).
+        child.ShapeRendering = parent.ShapeRendering;
+        child.ColorRendering = parent.ColorRendering;
+        child.ColorInterpolation = parent.ColorInterpolation;
         child.Cursor = parent.Cursor;
         child.Direction = parent.Direction;
         child.WritingMode = parent.WritingMode;

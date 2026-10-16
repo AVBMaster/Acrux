@@ -488,6 +488,15 @@ public enum CssPropertyId
     WebkitBorderImage,
     WebkitBoxDecorationBreak,
     WebkitLineBreak,
+    // Three names the reference engine declares, validates and answers a computed value for, and
+    // that this engine reads from no layout step: they need ids so the cascade dispatches the
+    // declaration at all, and their value set lives in the one table that echoes them
+    // (Acrux.Core.Css.Resolver.EchoedProperties). Without an id the CSSOM keeps the text and the
+    // computed surface answers the initial — which is two answers to one question (measured:
+    // 'baseline-shift: sub' and 'font-variant-emoji: emoji' each read back what was written).
+    BaselineShift,
+    FontVariantEmoji,
+    ViewTransitionGroup,
     WebkitTextOrientation,
     WebkitTextSecurity,
     WebkitWritingMode,

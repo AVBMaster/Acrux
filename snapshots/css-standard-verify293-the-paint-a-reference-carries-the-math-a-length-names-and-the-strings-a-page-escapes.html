@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify293 &#8212; the paint a reference carries, the math a length names and the strings a page escapes</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: rgb(255,255,255); }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+/* Every probed element sits in a box that states its own size, so a value that resolves against its
+ * containing block prices the same in two engines with different viewport widths. The root font is
+ * named too: a 'rem' has one answer only when both engines know the number it is a share of. */
+html { font-size: 16px; }
+#box { width: 200px; }
+#box > div { height: 20px; }
+.sheet-fill { fill: url(#g) red; }
+.sheet-hc { hyphenate-character: "\2014 a"; }
+#stage { position: relative; width: 400px; height: 300px; }
+#stage > div { position: absolute; }
+#g-1 { left: 0; top: 0; width: calc(1rem); height: calc(1rem); background: rgb(200,200,200); }
+#g-2 { left: 0; top: 20px; width: calc(1rem + 1em); height: 4px; background: rgb(200,200,200); }
+#g-3 { left: 0; top: 30px; width: 50px; height: 4px; margin-left: calc(2rem); background: rgb(200,200,200); }
+#g-4 { left: 0; top: 40px; font-size: calc(1rem); line-height: 1; }
+#g-5 { left: 0; top: 60px; width: 120px; height: 40px; padding: calc(0.5rem); box-sizing: border-box;
+       background: rgb(255,128,128); }
+#g-6 { left: 0; top: 110px; width: 60px; height: 20px; border-left: calc(1rem) solid rgb(0,0,255);
+       border-right: 0; border-top: 0; border-bottom: 0; }
+#g-7 { left: 0; top: 140px; font-size: 0; line-height: 0; white-space: nowrap; }
+#g-7 span { display: inline-block; width: 20px; height: 10px; background: rgb(200,200,200);
+            vertical-align: calc(1rem); }
+/* A 'rem' written as an expression is priced by the cascade, so the boxes above are the geometry a
+ * math length has to reach. This pair is a plain 'rem', read through getComputedStyle only: a plain
+ * font-relative length is invisible to the layout paths that read a pixel length (gap #298). */
+#p-plain { left: 250px; top: 0; width: 1rem; height: 2rem; }
+/* The paint the new parser reads, declared in a stylesheet rather than as a presentation attribute
+ * (an SVG presentation attribute reaches no property in this engine yet — gap #299). */
+.p-fill-ref { fill: url(#grad) rgb(255,128,128); }
+.p-fill-missing { fill: url(#nope) rgb(0,200,0); }
+.p-fill-empty { fill: url() red; }
+.p-stroke-current { stroke: url(#grad) currentcolor; color: rgb(9,9,9); }
+.p-width-math { stroke-width: calc(6); }
+.p-width-mixed { stroke-width: calc(50% + 10px); }
+.p-dash-math { stroke-dasharray: calc(4) 4; stroke-width: 4; }
+.p-marker { marker-end: url(#mk); }
+/* The strokes a presentation attribute would have carried are written in CSS here, because a
+ * presentation attribute reaches no property in this engine yet (gap #299) and a self-closing tag in
+ * a foreign-content region does not close its element either, which would make each shape inherit
+ * its predecessor's paint (gap #300). */
+.p-stroke-red { stroke: rgb(255,0,0); }
+.p-stroke-blue { stroke: rgb(0,0,255); }
+.p-stroke-black { stroke: rgb(0,0,0); stroke-width: 2; }
+.p-baseline { baseline-shift: calc(2); }
+.p-limit { hyphenate-limit-chars: auto 5; }
+.p-page { page: --a; }
+.p-vtgroup { view-transition-group: none; }
+svg { overflow: visible; }
+#g-svg { left: 150px; top: 180px; }
+</style></head><body>
+<h2>the geometry and the ink a math length, an escaped string and a paint reference have to reach</h2>
+<div id="stage">
+  <div id="g-1"></div>
+  <div id="g-2"></div>
+  <div id="g-3"></div>
+  <div id="g-4">0123456789</div>
+  <div id="g-5"></div>
+  <div id="g-6"></div>
+  <div id="g-7"><span></span><span id="g-7b"></span><span></span></div>
+  <div id="p-plain"></div>
+  <svg id="g-svg" width="200" height="90" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="grad"><stop offset="0" stop-color="rgb(255,0,0)"/>
+        <stop offset="1" stop-color="rgb(0,0,255)"/></linearGradient>
+      <marker id="mk" markerWidth="6" markerHeight="6" refX="3" refY="3"><circle cx="3" cy="3" r="3" fill="rgb(0,128,0)"/></marker>
+    </defs>
+    <rect id="r1" class="p-fill-ref" x="4" y="4" width="40" height="20"></rect>
+    <rect id="r2" class="p-fill-missing" x="4" y="34" width="40" height="20"></rect>
+    <rect id="r7" class="p-fill-empty" x="50" y="4" width="10" height="10"></rect>
+    <line id="r3" class="p-stroke-current p-width-math" x1="60" y1="8" x2="60" y2="60"></line>
+    <line id="r4" class="p-stroke-red p-width-mixed" x1="80" y1="8" x2="80" y2="60"></line>
+    <line id="r5" class="p-stroke-blue p-dash-math" x1="100" y1="8" x2="100" y2="60"></line>
+    <path id="r6" class="p-stroke-black p-marker" d="M120 10 L170 10"></path>
+  </svg>
+</div>
+<h2>the doors a declaration comes in by</h2>
+<div id="host"></div>
+<h2>the inheritors</h2>
+<div id="ihost"></div>
+<h2>the families, measured value by value</h2>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* Every want in E, I, A and G is a transcription of what the reference engine printed for the same
+ * page (snapshots/out/_b293_ref_probeA.txt, _b293_ref_probeB.txt, _b293_ref_probeC.txt and
+ * _b293_ref_guards.txt, each line as the reference answered it); nothing here is derived from a
+ * rule. E is one declaration written through the CSSOM on a fresh div inside a 200x20 box and read
+ * back through every surface at once — the block's length, its item(i) sequence, getPropertyValue,
+ * getComputedStyle, CSS.supports and cssText. I is one property written on a parent and read on the
+ * child that wrote nothing, which is the only way an inheritance flag is a measurement rather than a
+ * guess. A is the same declaration reached through a style attribute, a stylesheet rule,
+ * removeProperty, the IDL setter and an escaped string. G is the geometry and the ink: a 'rem'
+ * priced against the root's 16px beside an 'em' priced against the element's 14px, a border, a
+ * padding and a font size that all say the same number, the string a page escaped, and the six SVG
+ * boxes whose paint the parser now reads.
+ */
+var E = [
+  ["fill", "red", "1", "fill", "red", "rgb(255, 0, 0)", "1", "fill: red;"],
+  ["fill", "currentcolor", "1", "fill", "currentcolor", "rgb(9, 9, 9)", "1", "fill: currentcolor;"],
+  ["fill", "none", "1", "fill", "none", "none", "1", "fill: none;"],
+  ["fill", "#f00", "1", "fill", "rgb(255, 0, 0)", "rgb(255, 0, 0)", "1", "fill: rgb(255, 0, 0);"],
+  ["fill", "rgb(1, 2, 3)", "1", "fill", "rgb(1, 2, 3)", "rgb(1, 2, 3)", "1", "fill: rgb(1, 2, 3);"],
+  ["fill", "transparent", "1", "fill", "transparent", "rgba(0, 0, 0, 0)", "1", "fill: transparent;"],
+  ["fill", "bogus", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["fill", "3px", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["fill", "url(#g)", "1", "fill", "url(\"#g\")", "url(\"#g\")", "1", "fill: url(\"#g\");"],
+  ["fill", "url(a.png)", "1", "fill", "url(\"a.png\")", "url(\"file:///home/master/Acrux/snapshots/a.png\")", "1", "fill: url(\"a.png\");"],
+  ["stroke", "red", "1", "stroke", "red", "rgb(255, 0, 0)", "1", "stroke: red;"],
+  ["stroke", "currentcolor", "1", "stroke", "currentcolor", "rgb(9, 9, 9)", "1", "stroke: currentcolor;"],
+  ["stroke", "none", "1", "stroke", "none", "none", "1", "stroke: none;"],
+  ["stroke", "#00f", "1", "stroke", "rgb(0, 0, 255)", "rgb(0, 0, 255)", "1", "stroke: rgb(0, 0, 255);"],
+  ["stroke", "transparent", "1", "stroke", "transparent", "rgba(0, 0, 0, 0)", "1", "stroke: transparent;"],
+  ["stroke", "bogus", "0", "", "", "none", "0", ""],
+  ["stroke", "3px", "0", "", "", "none", "0", ""],
+  ["stroke", "url(#g)", "1", "stroke", "url(\"#g\")", "url(\"#g\")", "1", "stroke: url(\"#g\");"],
+  ["stop-color", "red", "1", "stop-color", "red", "rgb(255, 0, 0)", "1", "stop-color: red;"],
+  ["stop-color", "currentcolor", "1", "stop-color", "currentcolor", "rgb(9, 9, 9)", "1", "stop-color: currentcolor;"],
+  ["stop-color", "none", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["stop-color", "bogus", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["flood-color", "red", "1", "flood-color", "red", "rgb(255, 0, 0)", "1", "flood-color: red;"],
+  ["flood-color", "currentcolor", "1", "flood-color", "currentcolor", "rgb(9, 9, 9)", "1", "flood-color: currentcolor;"],
+  ["flood-color", "none", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["flood-color", "bogus", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["lighting-color", "red", "1", "lighting-color", "red", "rgb(255, 0, 0)", "1", "lighting-color: red;"],
+  ["lighting-color", "currentcolor", "1", "lighting-color", "currentcolor", "rgb(9, 9, 9)", "1", "lighting-color: currentcolor;"],
+  ["lighting-color", "none", "0", "", "", "rgb(255, 255, 255)", "0", ""],
+  ["lighting-color", "bogus", "0", "", "", "rgb(255, 255, 255)", "0", ""],
+  ["fill-opacity", "0", "1", "fill-opacity", "0", "0", "1", "fill-opacity: 0;"],
+  ["fill-opacity", "0.5", "1", "fill-opacity", "0.5", "0.5", "1", "fill-opacity: 0.5;"],
+  ["fill-opacity", "1", "1", "fill-opacity", "1", "1", "1", "fill-opacity: 1;"],
+  ["fill-opacity", "50%", "1", "fill-opacity", "0.5", "0.5", "1", "fill-opacity: 0.5;"],
+  ["fill-opacity", "-1", "1", "fill-opacity", "-1", "0", "1", "fill-opacity: -1;"],
+  ["fill-opacity", "2", "1", "fill-opacity", "2", "1", "1", "fill-opacity: 2;"],
+  ["fill-opacity", "bogus", "0", "", "", "1", "0", ""],
+  ["fill-opacity", "1px", "0", "", "", "1", "0", ""],
+  ["fill-opacity", "calc(0.5)", "1", "fill-opacity", "calc(0.5)", "0.5", "1", "fill-opacity: calc(0.5);"],
+  ["stop-opacity", "0", "1", "stop-opacity", "0", "0", "1", "stop-opacity: 0;"],
+  ["stop-opacity", "0.5", "1", "stop-opacity", "0.5", "0.5", "1", "stop-opacity: 0.5;"],
+  ["stop-opacity", "50%", "1", "stop-opacity", "0.5", "0.5", "1", "stop-opacity: 0.5;"],
+  ["stop-opacity", "bogus", "0", "", "", "1", "0", ""],
+  ["flood-opacity", "0", "1", "flood-opacity", "0", "0", "1", "flood-opacity: 0;"],
+  ["flood-opacity", "0.5", "1", "flood-opacity", "0.5", "0.5", "1", "flood-opacity: 0.5;"],
+  ["flood-opacity", "2", "1", "flood-opacity", "2", "1", "1", "flood-opacity: 2;"],
+  ["flood-opacity", "bogus", "0", "", "", "1", "0", ""],
+  ["stroke-opacity", "0", "1", "stroke-opacity", "0", "0", "1", "stroke-opacity: 0;"],
+  ["stroke-opacity", "0.5", "1", "stroke-opacity", "0.5", "0.5", "1", "stroke-opacity: 0.5;"],
+  ["stroke-opacity", "bogus", "0", "", "", "1", "0", ""],
+  ["stroke-width", "0", "1", "stroke-width", "0", "0px", "1", "stroke-width: 0;"],
+  ["stroke-width", "2", "1", "stroke-width", "2", "2px", "1", "stroke-width: 2;"],
+  ["stroke-width", "2px", "1", "stroke-width", "2px", "2px", "1", "stroke-width: 2px;"],
+  ["stroke-width", "50%", "1", "stroke-width", "50%", "50%", "1", "stroke-width: 50%;"],
+  ["stroke-width", "-1", "0", "", "", "1px", "0", ""],
+  ["stroke-width", "bogus", "0", "", "", "1px", "0", ""],
+  ["stroke-width", "thin", "0", "", "", "1px", "0", ""],
+  ["stroke-width", "calc(2)", "1", "stroke-width", "calc(2)", "calc(2px)", "1", "stroke-width: calc(2);"],
+  ["stroke-miterlimit", "1", "1", "stroke-miterlimit", "1", "1", "1", "stroke-miterlimit: 1;"],
+  ["stroke-miterlimit", "4", "1", "stroke-miterlimit", "4", "4", "1", "stroke-miterlimit: 4;"],
+  ["stroke-miterlimit", "0", "1", "stroke-miterlimit", "0", "0", "1", "stroke-miterlimit: 0;"],
+  ["stroke-miterlimit", "-1", "0", "", "", "4", "0", ""],
+  ["stroke-miterlimit", "bogus", "0", "", "", "4", "0", ""],
+  ["stroke-miterlimit", "1.5", "1", "stroke-miterlimit", "1.5", "1.5", "1", "stroke-miterlimit: 1.5;"],
+  ["stroke-dashoffset", "0", "1", "stroke-dashoffset", "0", "0px", "1", "stroke-dashoffset: 0;"],
+  ["stroke-dashoffset", "2", "1", "stroke-dashoffset", "2", "2px", "1", "stroke-dashoffset: 2;"],
+  ["stroke-dashoffset", "2px", "1", "stroke-dashoffset", "2px", "2px", "1", "stroke-dashoffset: 2px;"],
+  ["stroke-dashoffset", "50%", "1", "stroke-dashoffset", "50%", "50%", "1", "stroke-dashoffset: 50%;"],
+  ["stroke-dashoffset", "-2px", "1", "stroke-dashoffset", "-2px", "-2px", "1", "stroke-dashoffset: -2px;"],
+  ["stroke-dashoffset", "bogus", "0", "", "", "0px", "0", ""],
+  ["stroke-dasharray", "none", "1", "stroke-dasharray", "none", "none", "1", "stroke-dasharray: none;"],
+  ["stroke-dasharray", "5", "1", "stroke-dasharray", "5", "5px", "1", "stroke-dasharray: 5;"],
+  ["stroke-dasharray", "5 5", "1", "stroke-dasharray", "5, 5", "5px, 5px", "1", "stroke-dasharray: 5, 5;"],
+  ["stroke-dasharray", "5px, 5px", "1", "stroke-dasharray", "5px, 5px", "5px, 5px", "1", "stroke-dasharray: 5px, 5px;"],
+  ["stroke-dasharray", "5px 5px", "1", "stroke-dasharray", "5px, 5px", "5px, 5px", "1", "stroke-dasharray: 5px, 5px;"],
+  ["stroke-dasharray", "2, 3, 4", "1", "stroke-dasharray", "2, 3, 4", "2px, 3px, 4px", "1", "stroke-dasharray: 2, 3, 4;"],
+  ["stroke-dasharray", "-1", "0", "", "", "none", "0", ""],
+  ["stroke-dasharray", "bogus", "0", "", "", "none", "0", ""],
+  ["stroke-dasharray", "50%", "1", "stroke-dasharray", "50%", "50%", "1", "stroke-dasharray: 50%;"],
+  ["stroke-linecap", "butt", "1", "stroke-linecap", "butt", "butt", "1", "stroke-linecap: butt;"],
+  ["stroke-linecap", "round", "1", "stroke-linecap", "round", "round", "1", "stroke-linecap: round;"],
+  ["stroke-linecap", "square", "1", "stroke-linecap", "square", "square", "1", "stroke-linecap: square;"],
+  ["stroke-linecap", "none", "0", "", "", "butt", "0", ""],
+  ["stroke-linecap", "bogus", "0", "", "", "butt", "0", ""],
+  ["stroke-linejoin", "miter", "1", "stroke-linejoin", "miter", "miter", "1", "stroke-linejoin: miter;"],
+  ["stroke-linejoin", "round", "1", "stroke-linejoin", "round", "round", "1", "stroke-linejoin: round;"],
+  ["stroke-linejoin", "bevel", "1", "stroke-linejoin", "bevel", "bevel", "1", "stroke-linejoin: bevel;"],
+  ["stroke-linejoin", "miter-clip", "0", "", "", "miter", "0", ""],
+  ["stroke-linejoin", "bogus", "0", "", "", "miter", "0", ""],
+  ["fill-rule", "nonzero", "1", "fill-rule", "nonzero", "nonzero", "1", "fill-rule: nonzero;"],
+  ["fill-rule", "evenodd", "1", "fill-rule", "evenodd", "evenodd", "1", "fill-rule: evenodd;"],
+  ["fill-rule", "bogus", "0", "", "", "nonzero", "0", ""],
+  ["fill-rule", "inherit", "1", "fill-rule", "inherit", "nonzero", "1", "fill-rule: inherit;"],
+  ["clip-rule", "nonzero", "1", "clip-rule", "nonzero", "nonzero", "1", "clip-rule: nonzero;"],
+  ["clip-rule", "evenodd", "1", "clip-rule", "evenodd", "evenodd", "1", "clip-rule: evenodd;"],
+  ["clip-rule", "bogus", "0", "", "", "nonzero", "0", ""],
+  ["shape-rendering", "auto", "1", "shape-rendering", "auto", "auto", "1", "shape-rendering: auto;"],
+  ["shape-rendering", "optimizeSpeed", "1", "shape-rendering", "optimizespeed", "optimizespeed", "1", "shape-rendering: optimizespeed;"],
+  ["shape-rendering", "crispEdges", "1", "shape-rendering", "crispedges", "crispedges", "1", "shape-rendering: crispedges;"],
+  ["shape-rendering", "geometricPrecision", "1", "shape-rendering", "geometricprecision", "geometricprecision", "1", "shape-rendering: geometricprecision;"],
+  ["shape-rendering", "none", "0", "", "", "auto", "0", ""],
+  ["shape-rendering", "fill", "0", "", "", "auto", "0", ""],
+  ["shape-rendering", "strokes", "0", "", "", "auto", "0", ""],
+  ["shape-rendering", "bogus", "0", "", "", "auto", "0", ""],
+  ["text-rendering", "auto", "1", "text-rendering", "auto", "auto", "1", "text-rendering: auto;"],
+  ["text-rendering", "optimizeLegibility", "1", "text-rendering", "optimizelegibility", "optimizelegibility", "1", "text-rendering: optimizelegibility;"],
+  ["text-rendering", "optimizeSpeed", "1", "text-rendering", "optimizespeed", "optimizespeed", "1", "text-rendering: optimizespeed;"],
+  ["text-rendering", "geometricPrecision", "1", "text-rendering", "geometricprecision", "geometricprecision", "1", "text-rendering: geometricprecision;"],
+  ["text-rendering", "bogus", "0", "", "", "auto", "0", ""],
+  ["color-rendering", "auto", "1", "color-rendering", "auto", "auto", "1", "color-rendering: auto;"],
+  ["color-rendering", "optimizeSpeed", "1", "color-rendering", "optimizespeed", "optimizespeed", "1", "color-rendering: optimizespeed;"],
+  ["color-rendering", "optimizeQuality", "1", "color-rendering", "optimizequality", "optimizequality", "1", "color-rendering: optimizequality;"],
+  ["color-rendering", "bogus", "0", "", "", "auto", "0", ""],
+  ["color-interpolation", "auto", "1", "color-interpolation", "auto", "auto", "1", "color-interpolation: auto;"],
+  ["color-interpolation", "sRGB", "1", "color-interpolation", "srgb", "srgb", "1", "color-interpolation: srgb;"],
+  ["color-interpolation", "linearRGB", "1", "color-interpolation", "linearrgb", "linearrgb", "1", "color-interpolation: linearrgb;"],
+  ["color-interpolation", "srgb", "1", "color-interpolation", "srgb", "srgb", "1", "color-interpolation: srgb;"],
+  ["color-interpolation", "bogus", "0", "", "", "srgb", "0", ""],
+  ["color-interpolation-filters", "auto", "1", "color-interpolation-filters", "auto", "auto", "1", "color-interpolation-filters: auto;"],
+  ["color-interpolation-filters", "sRGB", "1", "color-interpolation-filters", "srgb", "srgb", "1", "color-interpolation-filters: srgb;"],
+  ["color-interpolation-filters", "linearRGB", "1", "color-interpolation-filters", "linearrgb", "linearrgb", "1", "color-interpolation-filters: linearrgb;"],
+  ["color-interpolation-filters", "bogus", "0", "", "", "linearrgb", "0", ""],
+  ["paint-order", "normal", "1", "paint-order", "normal", "normal", "1", "paint-order: normal;"],
+  ["paint-order", "fill", "1", "paint-order", "fill", "fill", "1", "paint-order: fill;"],
+  ["paint-order", "stroke", "1", "paint-order", "stroke", "stroke", "1", "paint-order: stroke;"],
+  ["paint-order", "markers", "1", "paint-order", "markers", "markers", "1", "paint-order: markers;"],
+  ["paint-order", "stroke fill", "1", "paint-order", "stroke", "stroke", "1", "paint-order: stroke;"],
+  ["paint-order", "fill stroke markers", "1", "paint-order", "fill", "fill", "1", "paint-order: fill;"],
+  ["paint-order", "markers stroke fill", "1", "paint-order", "markers stroke", "markers stroke", "1", "paint-order: markers stroke;"],
+  ["paint-order", "stroke stroke", "0", "", "", "normal", "0", ""],
+  ["paint-order", "bogus", "0", "", "", "normal", "0", ""],
+  ["paint-order", "fill 2", "0", "", "", "normal", "0", ""],
+  ["vector-effect", "none", "1", "vector-effect", "none", "none", "1", "vector-effect: none;"],
+  ["vector-effect", "non-scaling-stroke", "1", "vector-effect", "non-scaling-stroke", "non-scaling-stroke", "1", "vector-effect: non-scaling-stroke;"],
+  ["vector-effect", "scaling-stroke", "0", "", "", "none", "0", ""],
+  ["vector-effect", "non-scaling-size", "0", "", "", "none", "0", ""],
+  ["vector-effect", "non-rotation", "0", "", "", "none", "0", ""],
+  ["vector-effect", "fixed-position", "0", "", "", "none", "0", ""],
+  ["vector-effect", "bogus", "0", "", "", "none", "0", ""],
+  ["vector-effect", "non-scaling-stroke fixed-position", "0", "", "", "none", "0", ""],
+  ["marker", "none", "3", "marker-start,marker-mid,marker-end", "none", "none", "1", "marker: none;"],
+  ["marker", "url(#m)", "3", "marker-start,marker-mid,marker-end", "url(\"#m\")", "url(\"#m\")", "1", "marker: url(\"#m\");"],
+  ["marker", "url(#m) url(#a) url(#b)", "0", "", "", "none", "0", ""],
+  ["marker", "url(#m) url(#a) url(#b) url(#c)", "0", "", "", "none", "0", ""],
+  ["marker", "bogus", "0", "", "", "none", "0", ""],
+  ["marker", "red", "0", "", "", "none", "0", ""],
+  ["marker-start", "none", "1", "marker-start", "none", "none", "1", "marker-start: none;"],
+  ["marker-start", "url(#m)", "1", "marker-start", "url(\"#m\")", "url(\"#m\")", "1", "marker-start: url(\"#m\");"],
+  ["marker-start", "bogus", "0", "", "", "none", "0", ""],
+  ["marker-start", "red", "0", "", "", "none", "0", ""],
+  ["marker-mid", "url(#m)", "1", "marker-mid", "url(\"#m\")", "url(\"#m\")", "1", "marker-mid: url(\"#m\");"],
+  ["marker-end", "none", "1", "marker-end", "none", "none", "1", "marker-end: none;"],
+  ["marker-end", "bogus", "0", "", "", "none", "0", ""],
+  ["dominant-baseline", "auto", "1", "dominant-baseline", "auto", "auto", "1", "dominant-baseline: auto;"],
+  ["dominant-baseline", "alphabetic", "1", "dominant-baseline", "alphabetic", "alphabetic", "1", "dominant-baseline: alphabetic;"],
+  ["dominant-baseline", "central", "1", "dominant-baseline", "central", "central", "1", "dominant-baseline: central;"],
+  ["dominant-baseline", "middle", "1", "dominant-baseline", "middle", "middle", "1", "dominant-baseline: middle;"],
+  ["dominant-baseline", "hanging", "1", "dominant-baseline", "hanging", "hanging", "1", "dominant-baseline: hanging;"],
+  ["dominant-baseline", "text-bottom", "0", "", "", "auto", "0", ""],
+  ["dominant-baseline", "mathematical", "1", "dominant-baseline", "mathematical", "mathematical", "1", "dominant-baseline: mathematical;"],
+  ["dominant-baseline", "use-script", "1", "dominant-baseline", "use-script", "use-script", "1", "dominant-baseline: use-script;"],
+  ["dominant-baseline", "bogus", "0", "", "", "auto", "0", ""],
+  ["alignment-baseline", "auto", "1", "alignment-baseline", "auto", "auto", "1", "alignment-baseline: auto;"],
+  ["alignment-baseline", "alphabetic", "1", "alignment-baseline", "alphabetic", "alphabetic", "1", "alignment-baseline: alphabetic;"],
+  ["alignment-baseline", "central", "1", "alignment-baseline", "central", "central", "1", "alignment-baseline: central;"],
+  ["alignment-baseline", "baseline", "1", "alignment-baseline", "baseline", "baseline", "1", "alignment-baseline: baseline;"],
+  ["alignment-baseline", "before-edge", "1", "alignment-baseline", "before-edge", "before-edge", "1", "alignment-baseline: before-edge;"],
+  ["alignment-baseline", "bogus", "0", "", "", "auto", "0", ""],
+  ["baseline-shift", "baseline", "1", "baseline-shift", "baseline", "0px", "1", "baseline-shift: baseline;"],
+  ["baseline-shift", "sub", "1", "baseline-shift", "sub", "sub", "1", "baseline-shift: sub;"],
+  ["baseline-shift", "super", "1", "baseline-shift", "super", "super", "1", "baseline-shift: super;"],
+  ["baseline-shift", "10px", "1", "baseline-shift", "10px", "10px", "1", "baseline-shift: 10px;"],
+  ["baseline-shift", "50%", "1", "baseline-shift", "50%", "50%", "1", "baseline-shift: 50%;"],
+  ["baseline-shift", "-10px", "1", "baseline-shift", "-10px", "-10px", "1", "baseline-shift: -10px;"],
+  ["baseline-shift", "bogus", "0", "", "", "0px", "0", ""],
+  ["mask-type", "luminance", "1", "mask-type", "luminance", "luminance", "1", "mask-type: luminance;"],
+  ["mask-type", "alpha", "1", "mask-type", "alpha", "alpha", "1", "mask-type: alpha;"],
+  ["mask-type", "bogus", "0", "", "", "luminance", "0", ""],
+  ["mask-mode", "match-source", "1", "mask-mode", "match-source", "match-source", "1", "mask-mode: match-source;"],
+  ["mask-mode", "luminance", "1", "mask-mode", "luminance", "luminance", "1", "mask-mode: luminance;"],
+  ["mask-mode", "alpha", "1", "mask-mode", "alpha", "alpha", "1", "mask-mode: alpha;"],
+  ["mask-mode", "bogus", "0", "", "", "match-source", "0", ""],
+  ["hyphenate-character", "auto", "1", "hyphenate-character", "auto", "auto", "1", "hyphenate-character: auto;"],
+  ["hyphenate-character", "none", "0", "", "", "auto", "0", ""],
+  ["hyphenate-character", "\"-\"", "1", "hyphenate-character", "\"-\"", "\"-\"", "1", "hyphenate-character: \"-\";"],
+  ["hyphenate-character", "\"--\"", "1", "hyphenate-character", "\"--\"", "\"--\"", "1", "hyphenate-character: \"--\";"],
+  ["hyphenate-character", "-", "0", "", "", "auto", "0", ""],
+  ["hyphenate-character", "bogus", "0", "", "", "auto", "0", ""],
+  ["hyphenate-limit-chars", "auto", "1", "hyphenate-limit-chars", "auto", "auto", "1", "hyphenate-limit-chars: auto;"],
+  ["hyphenate-limit-chars", "5", "1", "hyphenate-limit-chars", "5", "5", "1", "hyphenate-limit-chars: 5;"],
+  ["hyphenate-limit-chars", "5 3", "1", "hyphenate-limit-chars", "5 3", "5 3", "1", "hyphenate-limit-chars: 5 3;"],
+  ["hyphenate-limit-chars", "5 3 3", "1", "hyphenate-limit-chars", "5 3 3", "5 3 3", "1", "hyphenate-limit-chars: 5 3 3;"],
+  ["hyphenate-limit-chars", "5 3 3 3", "0", "", "", "auto", "0", ""],
+  ["hyphenate-limit-chars", "bogus", "0", "", "", "auto", "0", ""],
+  ["hyphenate-limit-chars", "-1", "0", "", "", "auto", "0", ""],
+  ["hyphenate-limit-chars", "0", "0", "", "", "auto", "0", ""],
+  ["hanging-punctuation", "none", "0", "", "", "", "0", ""],
+  ["hanging-punctuation", "first", "0", "", "", "", "0", ""],
+  ["hanging-punctuation", "end", "0", "", "", "", "0", ""],
+  ["hanging-punctuation", "force-end", "0", "", "", "", "0", ""],
+  ["hanging-punctuation", "allow-end", "0", "", "", "", "0", ""],
+  ["hanging-punctuation", "last", "0", "", "", "", "0", ""],
+  ["hanging-punctuation", "first force-end", "0", "", "", "", "0", ""],
+  ["hanging-punctuation", "first last", "0", "", "", "", "0", ""],
+  ["hanging-punctuation", "allow-end force-end", "0", "", "", "", "0", ""],
+  ["hanging-punctuation", "bogus", "0", "", "", "", "0", ""],
+  ["unicode-bidi", "normal", "1", "unicode-bidi", "normal", "normal", "1", "unicode-bidi: normal;"],
+  ["unicode-bidi", "embed", "1", "unicode-bidi", "embed", "embed", "1", "unicode-bidi: embed;"],
+  ["unicode-bidi", "isolate", "1", "unicode-bidi", "isolate", "isolate", "1", "unicode-bidi: isolate;"],
+  ["unicode-bidi", "bidi-override", "1", "unicode-bidi", "bidi-override", "bidi-override", "1", "unicode-bidi: bidi-override;"],
+  ["unicode-bidi", "isolate-override", "1", "unicode-bidi", "isolate-override", "isolate-override", "1", "unicode-bidi: isolate-override;"],
+  ["unicode-bidi", "plaintext", "1", "unicode-bidi", "plaintext", "plaintext", "1", "unicode-bidi: plaintext;"],
+  ["unicode-bidi", "bogus", "0", "", "", "isolate", "0", ""],
+  ["isolation", "auto", "1", "isolation", "auto", "auto", "1", "isolation: auto;"],
+  ["isolation", "isolate", "1", "isolation", "isolate", "isolate", "1", "isolation: isolate;"],
+  ["isolation", "isolate-override", "0", "", "", "auto", "0", ""],
+  ["isolation", "bogus", "0", "", "", "auto", "0", ""],
+  ["page", "auto", "1", "page", "auto", "auto", "1", "page: auto;"],
+  ["page", "bogus", "1", "page", "bogus", "bogus", "1", "page: bogus;"],
+  ["page", "\"a\"", "0", "", "", "auto", "0", ""],
+  ["page", "ident", "1", "page", "ident", "ident", "1", "page: ident;"],
+  ["overflow-anchor", "auto", "1", "overflow-anchor", "auto", "auto", "1", "overflow-anchor: auto;"],
+  ["overflow-anchor", "none", "1", "overflow-anchor", "none", "none", "1", "overflow-anchor: none;"],
+  ["overflow-anchor", "bogus", "0", "", "", "auto", "0", ""],
+  ["text-security", "none", "0", "", "", "", "0", ""],
+  ["text-security", "circle", "0", "", "", "", "0", ""],
+  ["text-security", "disc", "0", "", "", "", "0", ""],
+  ["text-security", "square", "0", "", "", "", "0", ""],
+  ["text-security", "star", "0", "", "", "", "0", ""],
+  ["text-security", "bogus", "0", "", "", "", "0", ""],
+  ["-webkit-text-security", "none", "1", "-webkit-text-security", "none", "none", "1", "-webkit-text-security: none;"],
+  ["-webkit-text-security", "disc", "1", "-webkit-text-security", "disc", "disc", "1", "-webkit-text-security: disc;"],
+  ["-webkit-text-security", "bogus", "0", "", "", "none", "0", ""],
+  ["font-numeric", "oldstyle-nums", "0", "", "", "", "0", ""],
+  ["font-numeric", "slashed-zero", "0", "", "", "", "0", ""],
+  ["font-variant-position", "normal", "1", "font-variant-position", "normal", "normal", "1", "font-variant-position: normal;"],
+  ["font-variant-position", "sub", "1", "font-variant-position", "sub", "sub", "1", "font-variant-position: sub;"],
+  ["font-variant-position", "super", "1", "font-variant-position", "super", "super", "1", "font-variant-position: super;"],
+  ["font-variant-position", "ordinal", "0", "", "", "normal", "0", ""],
+  ["font-variant-position", "bogus", "0", "", "", "normal", "0", ""],
+  ["font-variant-east-asian", "normal", "1", "font-variant-east-asian", "normal", "normal", "1", "font-variant-east-asian: normal;"],
+  ["font-variant-east-asian", "full-width", "1", "font-variant-east-asian", "full-width", "full-width", "1", "font-variant-east-asian: full-width;"],
+  ["font-variant-east-asian", "simplified", "1", "font-variant-east-asian", "simplified", "simplified", "1", "font-variant-east-asian: simplified;"],
+  ["font-variant-east-asian", "jis78", "1", "font-variant-east-asian", "jis78", "jis78", "1", "font-variant-east-asian: jis78;"],
+  ["font-variant-east-asian", "ruby", "1", "font-variant-east-asian", "ruby", "ruby", "1", "font-variant-east-asian: ruby;"],
+  ["font-variant-east-asian", "full-width simplified", "1", "font-variant-east-asian", "simplified full-width", "simplified full-width", "1", "font-variant-east-asian: simplified full-width;"],
+  ["font-variant-east-asian", "bogus", "0", "", "", "normal", "0", ""],
+  ["font-variant-ligatures", "normal", "1", "font-variant-ligatures", "normal", "normal", "1", "font-variant-ligatures: normal;"],
+  ["font-variant-ligatures", "none", "1", "font-variant-ligatures", "none", "none", "1", "font-variant-ligatures: none;"],
+  ["font-variant-ligatures", "common-ligatures", "1", "font-variant-ligatures", "common-ligatures", "common-ligatures", "1", "font-variant-ligatures: common-ligatures;"],
+  ["font-variant-ligatures", "no-common-ligatures", "1", "font-variant-ligatures", "no-common-ligatures", "no-common-ligatures", "1", "font-variant-ligatures: no-common-ligatures;"],
+  ["font-variant-ligatures", "discretionary-ligatures", "1", "font-variant-ligatures", "discretionary-ligatures", "discretionary-ligatures", "1", "font-variant-ligatures: discretionary-ligatures;"],
+  ["font-variant-ligatures", "bogus", "0", "", "", "normal", "0", ""],
+  ["font-variant-numeric", "normal", "1", "font-variant-numeric", "normal", "normal", "1", "font-variant-numeric: normal;"],
+  ["font-variant-numeric", "oldstyle-nums", "1", "font-variant-numeric", "oldstyle-nums", "oldstyle-nums", "1", "font-variant-numeric: oldstyle-nums;"],
+  ["font-variant-numeric", "ordinal slashed-zero", "1", "font-variant-numeric", "ordinal slashed-zero", "ordinal slashed-zero", "1", "font-variant-numeric: ordinal slashed-zero;"],
+  ["font-variant-numeric", "diagonal-fractions", "1", "font-variant-numeric", "diagonal-fractions", "diagonal-fractions", "1", "font-variant-numeric: diagonal-fractions;"],
+  ["font-variant-numeric", "line-fractions", "0", "", "", "normal", "0", ""],
+  ["font-variant-numeric", "stacked-fractions", "1", "font-variant-numeric", "stacked-fractions", "stacked-fractions", "1", "font-variant-numeric: stacked-fractions;"],
+  ["font-variant-numeric", "proportional-nums", "1", "font-variant-numeric", "proportional-nums", "proportional-nums", "1", "font-variant-numeric: proportional-nums;"],
+  ["font-variant-numeric", "tabular-nums", "1", "font-variant-numeric", "tabular-nums", "tabular-nums", "1", "font-variant-numeric: tabular-nums;"],
+  ["font-variant-numeric", "scientific-digits", "0", "", "", "normal", "0", ""],
+  ["font-variant-numeric", "fractional-digits", "0", "", "", "normal", "0", ""],
+  ["font-variant-numeric", "bogus", "0", "", "", "normal", "0", ""],
+  ["font-variant-numeric", "oldstyle-nums lining-nums", "0", "", "", "normal", "0", ""],
+  ["font-variant-emoji", "normal", "1", "font-variant-emoji", "normal", "normal", "1", "font-variant-emoji: normal;"],
+  ["font-variant-emoji", "unicode", "1", "font-variant-emoji", "unicode", "unicode", "1", "font-variant-emoji: unicode;"],
+  ["font-variant-emoji", "emoji", "1", "font-variant-emoji", "emoji", "emoji", "1", "font-variant-emoji: emoji;"],
+  ["font-variant-emoji", "text", "1", "font-variant-emoji", "text", "text", "1", "font-variant-emoji: text;"],
+  ["font-variant-emoji", "bogus", "0", "", "", "normal", "0", ""],
+  ["font-variant-alternates", "normal", "1", "font-variant-alternates", "normal", "normal", "1", "font-variant-alternates: normal;"],
+  ["font-variant-alternates", "historical-forms", "1", "font-variant-alternates", "historical-forms", "historical-forms", "1", "font-variant-alternates: historical-forms;"],
+  ["font-variant-alternates", "styleset(ss01)", "1", "font-variant-alternates", "styleset(ss01)", "styleset(ss01)", "1", "font-variant-alternates: styleset(ss01);"],
+  ["font-variant-alternates", "bogus", "0", "", "", "normal", "0", ""],
+  ["font-named-instance", "auto", "0", "", "", "", "0", ""],
+  ["font-named-instance", "none", "0", "", "", "", "0", ""],
+  ["font-named-instance", "\"Book\"", "0", "", "", "", "0", ""],
+  ["font-named-instance", "bogus", "0", "", "", "", "0", ""],
+  ["box-orient", "horizontal", "0", "", "", "", "0", ""],
+  ["box-orient", "vertical", "0", "", "", "", "0", ""],
+  ["box-orient", "inline-axis", "0", "", "", "", "0", ""],
+  ["box-orient", "bogus", "0", "", "", "", "0", ""],
+  ["box-flex", "1", "0", "", "", "", "0", ""],
+  ["box-flex", "0", "0", "", "", "", "0", ""],
+  ["box-flex", "-1", "0", "", "", "", "0", ""],
+  ["box-flex", "bogus", "0", "", "", "", "0", ""],
+  ["box-pack", "start", "0", "", "", "", "0", ""],
+  ["box-pack", "center", "0", "", "", "", "0", ""],
+  ["box-pack", "end", "0", "", "", "", "0", ""],
+  ["box-pack", "justify", "0", "", "", "", "0", ""],
+  ["box-pack", "bogus", "0", "", "", "", "0", ""],
+  ["box-align", "start", "0", "", "", "", "0", ""],
+  ["box-align", "center", "0", "", "", "", "0", ""],
+  ["box-align", "end", "0", "", "", "", "0", ""],
+  ["box-align", "bogus", "0", "", "", "", "0", ""],
+  ["box-direction", "normal", "0", "", "", "", "0", ""],
+  ["box-direction", "reverse", "0", "", "", "", "0", ""],
+  ["box-direction", "bogus", "0", "", "", "", "0", ""],
+  ["box-lines", "single", "0", "", "", "", "0", ""],
+  ["box-lines", "multiple", "0", "", "", "", "0", ""],
+  ["box-lines", "bogus", "0", "", "", "", "0", ""],
+  ["box-ordinal-group", "1", "0", "", "", "", "0", ""],
+  ["box-ordinal-group", "0", "0", "", "", "", "0", ""],
+  ["box-ordinal-group", "bogus", "0", "", "", "", "0", ""],
+  ["nav-index", "auto", "0", "", "", "", "0", ""],
+  ["nav-index", "1", "0", "", "", "", "0", ""],
+  ["nav-index", "bogus", "0", "", "", "", "0", ""],
+  ["nav-up", "auto", "0", "", "", "", "0", ""],
+  ["nav-up", "#a", "0", "", "", "", "0", ""],
+  ["nav-up", "bogus", "0", "", "", "", "0", ""],
+  ["text-orientation", "mixed", "1", "text-orientation", "mixed", "mixed", "1", "text-orientation: mixed;"],
+  ["text-orientation", "upright", "1", "text-orientation", "upright", "upright", "1", "text-orientation: upright;"],
+  ["text-orientation", "sideways", "1", "text-orientation", "sideways", "sideways", "1", "text-orientation: sideways;"],
+  ["text-orientation", "bogus", "0", "", "", "mixed", "0", ""],
+  ["line-clamp", "none", "0", "", "", "", "0", ""],
+  ["line-clamp", "2", "0", "", "", "", "0", ""],
+  ["line-clamp", "0", "0", "", "", "", "0", ""],
+  ["line-clamp", "bogus", "0", "", "", "", "0", ""],
+  ["-webkit-line-clamp", "none", "1", "-webkit-line-clamp", "none", "none", "1", "-webkit-line-clamp: none;"],
+  ["-webkit-line-clamp", "2", "1", "-webkit-line-clamp", "2", "2", "1", "-webkit-line-clamp: 2;"],
+  ["-webkit-line-clamp", "bogus", "0", "", "", "none", "0", ""],
+  ["max-lines", "2", "0", "", "", "", "0", ""],
+  ["block-ellipsis", "auto", "0", "", "", "", "0", ""],
+  ["block-ellipsis", "none", "0", "", "", "", "0", ""],
+  ["block-ellipsis", "\"…\"", "0", "", "", "", "0", ""],
+  ["inline-sizing", "normal", "0", "", "", "", "0", ""],
+  ["inline-sizing", "stretch", "0", "", "", "", "0", ""],
+  ["leading-trim", "normal", "0", "", "", "", "0", ""],
+  ["text-spacing-trim", "normal", "1", "text-spacing-trim", "normal", "normal", "1", "text-spacing-trim: normal;"],
+  ["text-spacing-trim", "space-all", "1", "text-spacing-trim", "space-all", "space-all", "1", "text-spacing-trim: space-all;"],
+  ["overlay", "none", "1", "overlay", "none", "none", "1", "overlay: none;"],
+  ["overlay", "auto", "1", "overlay", "auto", "none", "1", "overlay: auto;"],
+  ["view-transition-class", "none", "1", "view-transition-class", "none", "none", "1", "view-transition-class: none;"],
+  ["view-transition-class", "foo", "1", "view-transition-class", "foo", "foo", "1", "view-transition-class: foo;"],
+  ["view-transition-group", "normal", "1", "view-transition-group", "normal", "normal", "1", "view-transition-group: normal;"],
+  ["view-transition-group", "contain", "1", "view-transition-group", "contain", "contain", "1", "view-transition-group: contain;"],
+  ["view-transition-duration", "auto", "0", "", "", "", "0", ""],
+  ["view-transition-duration", "1s", "0", "", "", "", "0", ""],
+  ["scroll-marker-group", "none", "1", "scroll-marker-group", "none", "none", "1", "scroll-marker-group: none;"],
+  ["scroll-marker-group", "before", "1", "scroll-marker-group", "before", "before links", "1", "scroll-marker-group: before;"],
+  ["scroll-marker-group", "after", "1", "scroll-marker-group", "after", "after links", "1", "scroll-marker-group: after;"],
+  ["anchor-scope", "none", "1", "anchor-scope", "none", "none", "1", "anchor-scope: none;"],
+  ["anchor-scope", "--a", "1", "anchor-scope", "--a", "--a", "1", "anchor-scope: --a;"],
+  ["anchor-scope", "all", "1", "anchor-scope", "all", "all", "1", "anchor-scope: all;"],
+  ["position-animation-type", "auto", "0", "", "", "", "0", ""],
+  ["position-animation-type", "anchored", "0", "", "", "", "0", ""],
+  ["position-try-order", "normal", "1", "position-try-order", "normal", "normal", "1", "position-try-order: normal;"],
+  ["position-try-order", "most-height", "1", "position-try-order", "most-height", "most-height", "1", "position-try-order: most-height;"],
+  ["position-area", "left top", "1", "position-area", "left top", "left top", "1", "position-area: left top;"],
+  ["position-area", "bogus", "0", "", "", "none", "0", ""],
+  ["fill", "url(#g) red", "1", "fill", "url(\"#g\") red", "url(\"#g\") rgb(255, 0, 0)", "1", "fill: url(\"#g\") red;"],
+  ["fill", "url(#g) none", "1", "fill", "url(\"#g\") none", "url(\"#g\") none", "1", "fill: url(\"#g\") none;"],
+  ["fill", "url(\"#g\")", "1", "fill", "url(\"#g\")", "url(\"#g\")", "1", "fill: url(\"#g\");"],
+  ["fill", "URL(#g)", "1", "fill", "url(\"#g\")", "url(\"#g\")", "1", "fill: url(\"#g\");"],
+  ["fill", "url()", "1", "fill", "url(\"\")", "url(\"\")", "1", "fill: url(\"\");"],
+  ["fill", "url(#g) url(#h)", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["fill", "UPPERCASE", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["fill", "rgb(1 2 3)", "1", "fill", "rgb(1, 2, 3)", "rgb(1, 2, 3)", "1", "fill: rgb(1, 2, 3);"],
+  ["fill", "hsl(0 100% 50%)", "1", "fill", "rgb(255, 0, 0)", "rgb(255, 0, 0)", "1", "fill: rgb(255, 0, 0);"],
+  ["fill", "color-mix(in srgb, red 50%, blue)", "1", "fill", "~", "~", "1", "~"],
+  ["stroke", "url(#g) currentcolor", "1", "stroke", "url(\"#g\") currentcolor", "url(\"#g\") rgb(9, 9, 9)", "1", "stroke: url(\"#g\") currentcolor;"],
+  ["stroke", "url(#g) bogus", "0", "", "", "none", "0", ""],
+  ["stop-color", "currentcolor", "1", "stop-color", "currentcolor", "rgb(9, 9, 9)", "1", "stop-color: currentcolor;"],
+  ["stop-color", "rgb(1, 2, 3)", "1", "stop-color", "rgb(1, 2, 3)", "rgb(1, 2, 3)", "1", "stop-color: rgb(1, 2, 3);"],
+  ["stop-color", "url(#g)", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["flood-color", "url(#g)", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["flood-color", "hsl(0, 0%, 50%)", "1", "flood-color", "rgb(128, 128, 128)", "rgb(128, 128, 128)", "1", "flood-color: rgb(128, 128, 128);"],
+  ["flood-opacity", "50%", "1", "flood-opacity", "0.5", "0.5", "1", "flood-opacity: 0.5;"],
+  ["lighting-color", "url(#g)", "0", "", "", "rgb(255, 255, 255)", "0", ""],
+  ["lighting-color", "#fff", "1", "lighting-color", "rgb(255, 255, 255)", "rgb(255, 255, 255)", "1", "lighting-color: rgb(255, 255, 255);"],
+  ["fill-opacity", "120%", "1", "fill-opacity", "1.2", "1", "1", "fill-opacity: 1.2;"],
+  ["fill-opacity", "-50%", "1", "fill-opacity", "-0.5", "0", "1", "fill-opacity: -0.5;"],
+  ["fill-opacity", "calc(1 + 1)", "1", "fill-opacity", "calc(2)", "1", "1", "fill-opacity: calc(2);"],
+  ["fill-opacity", "calc(50% + 0)", "0", "", "", "1", "0", ""],
+  ["fill-opacity", "1e2", "1", "fill-opacity", "100", "1", "1", "fill-opacity: 100;"],
+  ["stroke-width", "calc(2px)", "1", "stroke-width", "calc(2px)", "2px", "1", "stroke-width: calc(2px);"],
+  ["stroke-width", "calc(1px + 1px)", "1", "stroke-width", "calc(2px)", "2px", "1", "stroke-width: calc(2px);"],
+  ["stroke-width", "2em", "1", "stroke-width", "2em", "28px", "1", "stroke-width: 2em;"],
+  ["stroke-width", "1rem", "1", "stroke-width", "1rem", "16px", "1", "stroke-width: 1rem;"],
+  ["stroke-width", "0", "1", "stroke-width", "0", "0px", "1", "stroke-width: 0;"],
+  ["stroke-width", "0px", "1", "stroke-width", "0px", "0px", "1", "stroke-width: 0px;"],
+  ["stroke-width", "50%", "1", "stroke-width", "50%", "50%", "1", "stroke-width: 50%;"],
+  ["stroke-dasharray", "0", "1", "stroke-dasharray", "0", "0px", "1", "stroke-dasharray: 0;"],
+  ["stroke-dasharray", "none none", "0", "", "", "none", "0", ""],
+  ["stroke-dasharray", "1, 2, 3", "1", "stroke-dasharray", "1, 2, 3", "1px, 2px, 3px", "1", "stroke-dasharray: 1, 2, 3;"],
+  ["stroke-dasharray", "calc(2)", "1", "stroke-dasharray", "calc(2)", "calc(2px)", "1", "stroke-dasharray: calc(2);"],
+  ["stroke-dashoffset", "calc(2)", "1", "stroke-dashoffset", "calc(2)", "calc(2px)", "1", "stroke-dashoffset: calc(2);"],
+  ["stroke-miterlimit", "calc(4)", "1", "stroke-miterlimit", "calc(4)", "4", "1", "stroke-miterlimit: calc(4);"],
+  ["stroke-miterlimit", "1e2", "1", "stroke-miterlimit", "100", "100", "1", "stroke-miterlimit: 100;"],
+  ["stroke-linecap", "BUTT", "1", "stroke-linecap", "butt", "butt", "1", "stroke-linecap: butt;"],
+  ["stroke-linejoin", "MITER", "1", "stroke-linejoin", "miter", "miter", "1", "stroke-linejoin: miter;"],
+  ["fill-rule", "NONZERO", "1", "fill-rule", "nonzero", "nonzero", "1", "fill-rule: nonzero;"],
+  ["marker", "url(\"#m\")", "3", "marker-start,marker-mid,marker-end", "url(\"#m\")", "url(\"#m\")", "1", "marker: url(\"#m\");"],
+  ["marker", "none none", "0", "", "", "none", "0", ""],
+  ["marker-start", "url(#m) red", "0", "", "", "none", "0", ""],
+  ["marker-start", "URL(#m)", "1", "marker-start", "url(\"#m\")", "url(\"#m\")", "1", "marker-start: url(\"#m\");"],
+  ["marker-end", "bogus", "0", "", "", "none", "0", ""],
+  ["baseline-shift", "calc(1px)", "1", "baseline-shift", "calc(1px)", "1px", "1", "baseline-shift: calc(1px);"],
+  ["baseline-shift", "1em", "1", "baseline-shift", "1em", "14px", "1", "baseline-shift: 1em;"],
+  ["baseline-shift", "BASELINE", "1", "baseline-shift", "baseline", "0px", "1", "baseline-shift: baseline;"],
+  ["baseline-shift", "0", "1", "baseline-shift", "0", "0px", "1", "baseline-shift: 0;"],
+  ["baseline-shift", "0px", "1", "baseline-shift", "0px", "0px", "1", "baseline-shift: 0px;"],
+  ["baseline-shift", "percentage", "0", "", "", "0px", "0", ""],
+  ["dominant-baseline", "USE-SCRIPT", "1", "dominant-baseline", "use-script", "use-script", "1", "dominant-baseline: use-script;"],
+  ["dominant-baseline", "text-top", "0", "", "", "auto", "0", ""],
+  ["alignment-baseline", "use-script", "0", "", "", "auto", "0", ""],
+  ["alignment-baseline", "BASELINE", "1", "alignment-baseline", "baseline", "baseline", "1", "alignment-baseline: baseline;"],
+  ["mask-mode", "MATCH-SOURCE", "1", "mask-mode", "match-source", "match-source", "1", "mask-mode: match-source;"],
+  ["mask-mode", "LUMINANCE", "1", "mask-mode", "luminance", "luminance", "1", "mask-mode: luminance;"],
+  ["mask-type", "ALPHA", "1", "mask-type", "alpha", "alpha", "1", "mask-type: alpha;"],
+  ["hyphenate-character", "\"\\2014\"", "1", "hyphenate-character", "\"—\"", "\"—\"", "1", "hyphenate-character: \"—\";"],
+  ["hyphenate-character", "\"-\"", "1", "hyphenate-character", "\"-\"", "\"-\"", "1", "hyphenate-character: \"-\";"],
+  ["hyphenate-character", "auto auto", "0", "", "", "auto", "0", ""],
+  ["hyphenate-limit-chars", "auto 5", "1", "hyphenate-limit-chars", "auto 5", "auto 5", "1", "hyphenate-limit-chars: auto 5;"],
+  ["hyphenate-limit-chars", "5 auto", "1", "hyphenate-limit-chars", "5 auto", "5", "1", "hyphenate-limit-chars: 5 auto;"],
+  ["hyphenate-limit-chars", "5 3 3 4", "0", "", "", "auto", "0", ""],
+  ["unicode-bidi", "ISOLATE-OVERRIDE", "1", "unicode-bidi", "isolate-override", "isolate-override", "1", "unicode-bidi: isolate-override;"],
+  ["isolation", "isolate-override", "0", "", "", "auto", "0", ""],
+  ["page", "auto auto", "0", "", "", "auto", "0", ""],
+  ["page", "none", "1", "page", "none", "none", "1", "page: none;"],
+  ["page", "--a", "1", "page", "--a", "--a", "1", "page: --a;"],
+  ["page", "1", "0", "", "", "auto", "0", ""],
+  ["font-variant-emoji", "NORMAL", "1", "font-variant-emoji", "normal", "normal", "1", "font-variant-emoji: normal;"],
+  ["font-variant-emoji", "emoji text", "0", "", "", "normal", "0", ""],
+  ["font-variant-emoji", "auto", "0", "", "", "normal", "0", ""],
+  ["view-transition-group", "NORMAL", "1", "view-transition-group", "normal", "normal", "1", "view-transition-group: normal;"],
+  ["view-transition-group", "allow-discrete", "1", "view-transition-group", "allow-discrete", "allow-discrete", "1", "view-transition-group: allow-discrete;"],
+  ["view-transition-group", "none", "1", "view-transition-group", "none", "none", "1", "view-transition-group: none;"],
+  ["view-transition-class", "a b", "1", "view-transition-class", "a b", "a b", "1", "view-transition-class: a b;"],
+  ["view-transition-class", "none none", "0", "", "", "none", "0", ""],
+  ["view-transition-class", "--a", "1", "view-transition-class", "--a", "--a", "1", "view-transition-class: --a;"],
+  ["view-transition-class", "1", "0", "", "", "none", "0", ""],
+  ["text-rendering", "AUTO", "1", "text-rendering", "auto", "auto", "1", "text-rendering: auto;"],
+  ["shape-rendering", "CRISPEDGES", "1", "shape-rendering", "crispedges", "crispedges", "1", "shape-rendering: crispedges;"],
+  ["color-interpolation", "LINEARRGB", "1", "color-interpolation", "linearrgb", "linearrgb", "1", "color-interpolation: linearrgb;"],
+  ["color-interpolation-filters", "linearrgb", "1", "color-interpolation-filters", "linearrgb", "linearrgb", "1", "color-interpolation-filters: linearrgb;"],
+  ["paint-order", "normal fill", "0", "", "", "normal", "0", ""],
+  ["paint-order", "stroke fill markers normal", "0", "", "", "normal", "0", ""],
+  ["paint-order", "fill fill", "0", "", "", "normal", "0", ""],
+  ["vector-effect", "non-scaling-stroke none", "0", "", "", "none", "0", ""],
+  ["vector-effect", "fixed-position", "0", "", "", "none", "0", ""],
+  ["fill-opacity", "calc(50% + 0%)", "1", "fill-opacity", "calc(50%)", "0.5", "1", "fill-opacity: calc(50%);"],
+  ["fill-opacity", "calc(100% * 0.5)", "1", "fill-opacity", "calc(50%)", "0.5", "1", "fill-opacity: calc(50%);"],
+  ["fill-opacity", "calc(0.5 + 0.5)", "1", "fill-opacity", "calc(1)", "1", "1", "fill-opacity: calc(1);"],
+  ["fill-opacity", "calc(50% + 50%)", "1", "fill-opacity", "calc(100%)", "1", "1", "fill-opacity: calc(100%);"],
+  ["fill-opacity", "calc(1px)", "0", "", "", "1", "0", ""],
+  ["fill-opacity", "min(0.5, 1)", "1", "fill-opacity", "calc(0.5)", "0.5", "1", "fill-opacity: calc(0.5);"],
+  ["fill-opacity", "clamp(0%, 50%, 100%)", "1", "fill-opacity", "clamp(0%, 50%, 100%)", "0.5", "1", "fill-opacity: clamp(0%, 50%, 100%);"],
+  ["fill-opacity", "calc(2 + 3)", "1", "fill-opacity", "calc(5)", "1", "1", "fill-opacity: calc(5);"],
+  ["stroke-opacity", "calc(50% + 0)", "0", "", "", "1", "0", ""],
+  ["fill-opacity", "calc(1 + 1)", "1", "fill-opacity", "calc(2)", "1", "1", "fill-opacity: calc(2);"],
+  ["stroke-width", "calc(2 + 2)", "1", "stroke-width", "calc(4)", "calc(4px)", "1", "stroke-width: calc(4);"],
+  ["stroke-width", "calc(1 + 1)", "1", "stroke-width", "calc(2)", "calc(2px)", "1", "stroke-width: calc(2);"],
+  ["stroke-width", "calc(2 * 3)", "1", "stroke-width", "calc(6)", "calc(6px)", "1", "stroke-width: calc(6);"],
+  ["stroke-width", "calc(2px + 3)", "0", "", "", "1px", "0", ""],
+  ["stroke-width", "calc(50%)", "1", "stroke-width", "calc(50%)", "50%", "1", "stroke-width: calc(50%);"],
+  ["stroke-width", "calc(1rem)", "1", "stroke-width", "calc(1rem)", "16px", "1", "stroke-width: calc(1rem);"],
+  ["stroke-width", "min(2, 3)", "1", "stroke-width", "calc(2)", "calc(2px)", "1", "stroke-width: calc(2);"],
+  ["stroke-width", "3rem", "1", "stroke-width", "3rem", "48px", "1", "stroke-width: 3rem;"],
+  ["stroke-width", "1em", "1", "stroke-width", "1em", "14px", "1", "stroke-width: 1em;"],
+  ["stroke-width", "2.5e1", "1", "stroke-width", "25", "25px", "1", "stroke-width: 25;"],
+  ["stroke-width", "+2", "1", "stroke-width", "2", "2px", "1", "stroke-width: 2;"],
+  ["stroke-width", "calc(0)", "1", "stroke-width", "calc(0)", "0%", "1", "stroke-width: calc(0);"],
+  ["stroke-width", "calc(2) px", "0", "", "", "1px", "0", ""],
+  ["stroke-width", "calc(2%)", "1", "stroke-width", "calc(2%)", "2%", "1", "stroke-width: calc(2%);"],
+  ["stroke-width", "max(2px, 3px)", "1", "stroke-width", "calc(3px)", "3px", "1", "stroke-width: calc(3px);"],
+  ["stroke-width", "min(2, 3px)", "0", "", "", "1px", "0", ""],
+  ["stroke-width", "calc(2em)", "1", "stroke-width", "calc(2em)", "28px", "1", "stroke-width: calc(2em);"],
+  ["stroke-width", "calc(1em + 1em)", "1", "stroke-width", "calc(2em)", "28px", "1", "stroke-width: calc(2em);"],
+  ["stroke-width", "calc(2 + 2 + 2)", "1", "stroke-width", "calc(6)", "calc(6px)", "1", "stroke-width: calc(6);"],
+  ["stroke-width", "calc(1rem + 1rem)", "1", "stroke-width", "calc(2rem)", "32px", "1", "stroke-width: calc(2rem);"],
+  ["fill-opacity", "min(50%, 100%)", "1", "fill-opacity", "min(50%, 100%)", "0.5", "1", "fill-opacity: min(50%, 100%);"],
+  ["fill-opacity", "clamp(0, 1, 2)", "1", "fill-opacity", "calc(1)", "1", "1", "fill-opacity: calc(1);"],
+  ["fill-opacity", "calc(2 + 2 + 2)", "1", "fill-opacity", "calc(6)", "1", "1", "fill-opacity: calc(6);"],
+  ["stroke-dasharray", "calc(2) 3", "1", "stroke-dasharray", "calc(2), 3", "calc(2px), 3px", "1", "stroke-dasharray: calc(2), 3;"],
+  ["stroke-dasharray", "calc(50%) 2", "1", "stroke-dasharray", "calc(50%), 2", "50%, 2px", "1", "stroke-dasharray: calc(50%), 2;"],
+  ["stroke-dashoffset", "calc(2px + 3)", "0", "", "", "0px", "0", ""],
+  ["stroke-miterlimit", "calc(2 + 2)", "1", "stroke-miterlimit", "calc(4)", "4", "1", "stroke-miterlimit: calc(4);"],
+  ["stroke-miterlimit", "min(4, 5)", "1", "stroke-miterlimit", "calc(4)", "4", "1", "stroke-miterlimit: calc(4);"],
+  ["stroke-miterlimit", "calc(4px)", "0", "", "", "4", "0", ""],
+  ["stroke-miterlimit", "0.5", "1", "stroke-miterlimit", "0.5", "0.5", "1", "stroke-miterlimit: 0.5;"],
+  ["stroke-miterlimit", "-1", "0", "", "", "4", "0", ""],
+  ["stroke-miterlimit", "1e2", "1", "stroke-miterlimit", "100", "100", "1", "stroke-miterlimit: 100;"],
+  ["baseline-shift", "0", "1", "baseline-shift", "0", "0px", "1", "baseline-shift: 0;"],
+  ["baseline-shift", "0px", "1", "baseline-shift", "0px", "0px", "1", "baseline-shift: 0px;"],
+  ["baseline-shift", "1em", "1", "baseline-shift", "1em", "14px", "1", "baseline-shift: 1em;"],
+  ["baseline-shift", "1rem", "1", "baseline-shift", "1rem", "16px", "1", "baseline-shift: 1rem;"],
+  ["baseline-shift", "50%", "1", "baseline-shift", "50%", "50%", "1", "baseline-shift: 50%;"],
+  ["baseline-shift", "calc(1px)", "1", "baseline-shift", "calc(1px)", "1px", "1", "baseline-shift: calc(1px);"],
+  ["baseline-shift", "calc(1em + 1px)", "1", "baseline-shift", "calc(1em + 1px)", "15px", "1", "baseline-shift: calc(1em + 1px);"],
+  ["baseline-shift", "sub", "1", "baseline-shift", "sub", "sub", "1", "baseline-shift: sub;"],
+  ["baseline-shift", "super", "1", "baseline-shift", "super", "super", "1", "baseline-shift: super;"],
+  ["baseline-shift", "baseline", "1", "baseline-shift", "baseline", "0px", "1", "baseline-shift: baseline;"],
+  ["baseline-shift", "bogus", "0", "", "", "0px", "0", ""],
+  ["baseline-shift", "2", "1", "baseline-shift", "2", "2px", "1", "baseline-shift: 2;"],
+  ["baseline-shift", "-1em", "1", "baseline-shift", "-1em", "-14px", "1", "baseline-shift: -1em;"],
+  ["baseline-shift", "3%", "1", "baseline-shift", "3%", "3%", "1", "baseline-shift: 3%;"],
+  ["hyphenate-character", "\"\\2014\"", "1", "hyphenate-character", "\"—\"", "\"—\"", "1", "hyphenate-character: \"—\";"],
+  ["hyphenate-character", "\"-\"", "1", "hyphenate-character", "\"-\"", "\"-\"", "1", "hyphenate-character: \"-\";"],
+  ["hyphenate-character", "\"a b\"", "1", "hyphenate-character", "\"a b\"", "\"a b\"", "1", "hyphenate-character: \"a b\";"],
+  ["hyphenate-character", "none", "0", "", "", "auto", "0", ""],
+  ["hyphenate-character", "auto", "1", "hyphenate-character", "auto", "auto", "1", "hyphenate-character: auto;"],
+  ["hyphenate-character", "\"\"", "1", "hyphenate-character", "\"\"", "\"\"", "1", "hyphenate-character: \"\";"],
+  ["hyphenate-character", "\"\\0041\"", "1", "hyphenate-character", "\"A\"", "\"A\"", "1", "hyphenate-character: \"A\";"],
+  ["hyphenate-character", "'x'", "1", "hyphenate-character", "\"x\"", "\"x\"", "1", "hyphenate-character: \"x\";"],
+  ["hyphenate-character", "url(#g)", "0", "", "", "auto", "0", ""],
+  ["quotes", "\"\\201C\" \"\\201D\"", "1", "quotes", "\"“\" \"”\"", "\"“\" \"”\"", "1", "quotes: \"“\" \"”\";"],
+  ["list-style-type", "\"\\2089\"", "1", "list-style-type", "\"₉\"", "\"₉\"", "1", "list-style-type: \"₉\";"],
+  ["content", "\"\\2014\"", "1", "content", "\"—\"", "\"—\"", "1", "content: \"—\";"],
+  ["hyphenate-limit-chars", "auto", "1", "hyphenate-limit-chars", "auto", "auto", "1", "hyphenate-limit-chars: auto;"],
+  ["hyphenate-limit-chars", "5", "1", "hyphenate-limit-chars", "5", "5", "1", "hyphenate-limit-chars: 5;"],
+  ["hyphenate-limit-chars", "5 5", "1", "hyphenate-limit-chars", "5 5", "5 5", "1", "hyphenate-limit-chars: 5 5;"],
+  ["hyphenate-limit-chars", "5 5 5", "1", "hyphenate-limit-chars", "5 5 5", "5 5 5", "1", "hyphenate-limit-chars: 5 5 5;"],
+  ["hyphenate-limit-chars", "auto 5", "1", "hyphenate-limit-chars", "auto 5", "auto 5", "1", "hyphenate-limit-chars: auto 5;"],
+  ["hyphenate-limit-chars", "5 auto", "1", "hyphenate-limit-chars", "5 auto", "5", "1", "hyphenate-limit-chars: 5 auto;"],
+  ["hyphenate-limit-chars", "5 5 auto", "1", "hyphenate-limit-chars", "5 5 auto", "5 5", "1", "hyphenate-limit-chars: 5 5 auto;"],
+  ["hyphenate-limit-chars", "auto auto 5", "1", "hyphenate-limit-chars", "auto auto 5", "auto auto 5", "1", "hyphenate-limit-chars: auto auto 5;"],
+  ["hyphenate-limit-chars", "0", "0", "", "", "auto", "0", ""],
+  ["hyphenate-limit-chars", "1.5", "0", "", "", "auto", "0", ""],
+  ["hyphenate-limit-chars", "calc(5)", "1", "hyphenate-limit-chars", "calc(5)", "5", "1", "hyphenate-limit-chars: calc(5);"],
+  ["hyphenate-limit-chars", "-1", "0", "", "", "auto", "0", ""],
+  ["hyphenate-limit-chars", "bogus", "0", "", "", "auto", "0", ""],
+  ["page", "auto", "1", "page", "auto", "auto", "1", "page: auto;"],
+  ["page", "--a", "1", "page", "--a", "--a", "1", "page: --a;"],
+  ["page", "a", "1", "page", "a", "a", "1", "page: a;"],
+  ["page", "\"a\"", "0", "", "", "auto", "0", ""],
+  ["page", "none", "1", "page", "none", "none", "1", "page: none;"],
+  ["page", "1", "0", "", "", "auto", "0", ""],
+  ["page", "A-b", "1", "page", "A-b", "A-b", "1", "page: A-b;"],
+  ["view-transition-group", "normal", "1", "view-transition-group", "normal", "normal", "1", "view-transition-group: normal;"],
+  ["view-transition-group", "contain", "1", "view-transition-group", "contain", "contain", "1", "view-transition-group: contain;"],
+  ["view-transition-group", "allow-discrete", "1", "view-transition-group", "allow-discrete", "allow-discrete", "1", "view-transition-group: allow-discrete;"],
+  ["view-transition-group", "none", "1", "view-transition-group", "none", "none", "1", "view-transition-group: none;"],
+  ["view-transition-group", "auto", "1", "view-transition-group", "auto", "auto", "1", "view-transition-group: auto;"],
+  ["view-transition-group", "--a", "1", "view-transition-group", "--a", "--a", "1", "view-transition-group: --a;"],
+  ["view-transition-class", "none", "1", "view-transition-class", "none", "none", "1", "view-transition-class: none;"],
+  ["view-transition-class", "a", "1", "view-transition-class", "a", "a", "1", "view-transition-class: a;"],
+  ["view-transition-class", "a b", "1", "view-transition-class", "a b", "a b", "1", "view-transition-class: a b;"],
+  ["view-transition-class", "--a", "1", "view-transition-class", "--a", "--a", "1", "view-transition-class: --a;"],
+  ["view-transition-class", "1", "0", "", "", "none", "0", ""],
+  ["view-transition-class", "normal", "1", "view-transition-class", "normal", "normal", "1", "view-transition-class: normal;"],
+  ["view-transition-class", "\"a\"", "0", "", "", "none", "0", ""],
+  ["font-variant-emoji", "normal", "1", "font-variant-emoji", "normal", "normal", "1", "font-variant-emoji: normal;"],
+  ["font-variant-emoji", "emoji", "1", "font-variant-emoji", "emoji", "emoji", "1", "font-variant-emoji: emoji;"],
+  ["fill", "url(#g) rgb(1, 2, 3)", "1", "fill", "url(\"#g\") rgb(1, 2, 3)", "url(\"#g\") rgb(1, 2, 3)", "1", "fill: url(\"#g\") rgb(1, 2, 3);"],
+  ["fill", "url() red", "1", "fill", "url(\"\") red", "url(\"\") rgb(255, 0, 0)", "1", "fill: url(\"\") red;"],
+  ["fill", "url( \"\" )", "1", "fill", "url(\"\")", "url(\"\")", "1", "fill: url(\"\");"],
+  ["fill", "paint(none)", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["stroke", "url(#g) url(#h)", "0", "", "", "none", "0", ""],
+  ["stroke-width", "1rem", "1", "stroke-width", "1rem", "16px", "1", "stroke-width: 1rem;"],
+  ["stroke-width", "calc(50% + 10px)", "1", "stroke-width", "calc(50% + 10px)", "calc(50% + 10px)", "1", "stroke-width: calc(50% + 10px);"],
+  ["stroke-width", "calc(1em + 50%)", "1", "stroke-width", "calc(50% + 1em)", "calc(50% + 14px)", "1", "stroke-width: calc(50% + 1em);"],
+  ["stroke-width", "calc(2 + 2px)", "0", "", "", "1px", "0", ""],
+  ["stroke-dashoffset", "calc(0)", "1", "stroke-dashoffset", "calc(0)", "0%", "1", "stroke-dashoffset: calc(0);"],
+  ["stroke-dashoffset", "calc(2)", "1", "stroke-dashoffset", "calc(2)", "calc(2px)", "1", "stroke-dashoffset: calc(2);"],
+  ["baseline-shift", "calc(2)", "1", "baseline-shift", "calc(2)", "calc(2px)", "1", "baseline-shift: calc(2);"],
+  ["baseline-shift", "calc(50% + 10px)", "1", "baseline-shift", "calc(50% + 10px)", "calc(50% + 10px)", "1", "baseline-shift: calc(50% + 10px);"],
+  ["fill", "currentcolor red", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["fill", "url(#g) red blue", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["fill", "url(#g)auto", "0", "", "", "rgb(0, 0, 0)", "0", ""],
+  ["hyphenate-character", "\"\\2014 a\"", "1", "hyphenate-character", "\"—a\"", "\"—a\"", "1", "hyphenate-character: \"—a\";"],
+  ["hyphenate-character", "\"\\0041 B\"", "1", "hyphenate-character", "\"AB\"", "\"AB\"", "1", "hyphenate-character: \"AB\";"],
+  ["hyphenate-character", "\"\\2014  b\"", "1", "hyphenate-character", "\"— b\"", "\"— b\"", "1", "hyphenate-character: \"— b\";"],
+  ["hyphenate-character", "\"a\\\\b\"", "1", "hyphenate-character", "\"a\\\\b\"", "\"a\\\\b\"", "1", "hyphenate-character: \"a\\\\b\";"],
+  ["hyphenate-character", "\"he said \\\"hi\\\"\"", "1", "hyphenate-character", "\"he said \\\"hi\\\"\"", "\"he said \\\"hi\\\"\"", "1", "hyphenate-character: \"he said \\\"hi\\\"\";"],
+  ["hyphenate-limit-chars", "calc(5) calc(6)", "1", "hyphenate-limit-chars", "calc(5) calc(6)", "5 6", "1", "hyphenate-limit-chars: calc(5) calc(6);"],
+  ["hyphenate-limit-chars", "calc(5) auto", "1", "hyphenate-limit-chars", "calc(5) auto", "5", "1", "hyphenate-limit-chars: calc(5) auto;"],
+  ["view-transition-name", "--a", "1", "view-transition-name", "--a", "--a", "1", "view-transition-name: --a;"],
+  ["view-transition-name", "none none", "0", "", "", "none", "0", ""],
+  ["hyphenate-character", "\"\\n\"", "1", "hyphenate-character", "\"n\"", "\"n\"", "1", "hyphenate-character: \"n\";"],
+  ["hyphenate-character", "\"\\2014-x\"", "1", "hyphenate-character", "\"—-x\"", "\"—-x\"", "1", "hyphenate-character: \"—-x\";"],
+  ["hyphenate-character", "\"\\0041\"", "1", "hyphenate-character", "\"A\"", "\"A\"", "1", "hyphenate-character: \"A\";"],
+  ["hyphenate-character", "\"\\\\\"", "1", "hyphenate-character", "\"\\\\\"", "\"\\\\\"", "1", "hyphenate-character: \"\\\\\";"],
+  ["content", "\"\\2014 a\"", "1", "content", "\"—a\"", "\"—a\"", "1", "content: \"—a\";"],
+  ["list-style-type", "\"\\0041\"", "1", "list-style-type", "\"A\"", "\"A\"", "1", "list-style-type: \"A\";"]
+];
+var I = [
+  ["fill", "red", "rgb(255, 0, 0)", "rgb(255, 0, 0)"],
+  ["stroke", "red", "rgb(255, 0, 0)", "rgb(255, 0, 0)"],
+  ["stroke-width", "3", "3px", "3px"],
+  ["stroke-dasharray", "5 3", "5px, 3px", "5px, 3px"],
+  ["stroke-dashoffset", "2", "2px", "2px"],
+  ["stroke-miterlimit", "6", "6", "6"],
+  ["stroke-linecap", "round", "round", "round"],
+  ["stroke-linejoin", "bevel", "bevel", "bevel"],
+  ["stroke-opacity", "0.5", "0.5", "0.5"],
+  ["stroke-dasharray", "none", "none", "none"],
+  ["fill-opacity", "0.5", "0.5", "0.5"],
+  ["fill-rule", "evenodd", "evenodd", "evenodd"],
+  ["color-interpolation", "linearrgb", "linearrgb", "linearrgb"],
+  ["color-interpolation-filters", "linearrgb", "linearrgb", "linearrgb"],
+  ["color-rendering", "optimizeQuality", "optimizequality", "optimizequality"],
+  ["shape-rendering", "crispEdges", "crispedges", "crispedges"],
+  ["text-rendering", "geometricPrecision", "geometricprecision", "geometricprecision"],
+  ["dominant-baseline", "use-script", "use-script", "use-script"],
+  ["alignment-baseline", "use-script", "auto", "auto"],
+  ["baseline-shift", "sub", "sub", "0px"],
+  ["mask-mode", "alpha", "alpha", "match-source"],
+  ["clip-rule", "evenodd", "evenodd", "evenodd"],
+  ["flood-color", "red", "rgb(255, 0, 0)", "rgb(0, 0, 0)"],
+  ["flood-opacity", "0.5", "0.5", "1"],
+  ["lighting-color", "red", "rgb(255, 0, 0)", "rgb(255, 255, 255)"],
+  ["stop-color", "red", "rgb(255, 0, 0)", "rgb(0, 0, 0)"],
+  ["stop-opacity", "0.5", "0.5", "1"],
+  ["marker-start", "url(#m)", "url(\"#m\")", "url(\"#m\")"],
+  ["vector-effect", "non-scaling-stroke", "non-scaling-stroke", "none"],
+  ["paint-order", "stroke", "stroke", "stroke"],
+  ["image-rendering", "pixelated", "pixelated", "pixelated"],
+  ["hyphenate-character", "\"-\"", "\"-\"", "\"-\""],
+  ["hyphenate-limit-chars", "5", "5", "5"],
+  ["page", "a", "a", "auto"],
+  ["view-transition-group", "contain", "contain", "normal"],
+  ["view-transition-class", "a", "a", "none"],
+  ["font-variant-emoji", "emoji", "emoji", "emoji"],
+  ["writing-mode", "vertical-rl", "vertical-rl", "vertical-rl"],
+  ["direction", "rtl", "rtl", "rtl"],
+  ["text-anchor", "middle", "middle", "middle"],
+  ["letter-spacing", "2px", "2px", "2px"]
+];
+var A = [
+  "A0|attr|fill|names=fill|echo=url(\"#g\") red|comp=url(\"#g\") rgb(255, 0, 0)|text=fill: url(\"#g\") red;",
+  "A1|sheet|fill|names=|echo=|comp=url(\"#g\") rgb(255, 0, 0)|text=",
+  "A2|remove|marker|names=marker-mid,marker-end|echo=|comp=|text=marker-mid: url(\"#m\"); marker-end: url(\"#m\");",
+  "A3|idlset|fill-opacity|names=fill-opacity|echo=0.5|comp=0.5|text=fill-opacity: 0.5;",
+  "A4|escape|hyphenate-character|names=hyphenate-character|echo=\"—\"|comp=\"—\"|text=hyphenate-character: \"—\";",
+  "A5|sheetscape|hyphenate-character|names=|echo=|comp=\"—a\"|text="
+];
+var G = [
+  "G1|g-1=16.0,16.0,0.0,0.0|g-2=30.0,4.0,0.0,20.0|g-3=50.0,4.0,32.0,30.0|g-5=120.0,40.0,0.0,60.0|g-6=76.0,20.0,0.0,110.0|g-7b=20.0,10.0,20.0,140.0",
+  "G2|fontSize=16px|w=80.0",
+  "G3|width=16px|height=32px|borderLeftWidth=16px",
+  "G4|echo=\"—a\"|comp=\"—a\"",
+  "G5|echo=\"— b\"|comp=\"— b\"",
+  "G6|echo=\"—-x\"|comp=\"—-x\"",
+  "G7|echo=\"n\"|comp=\"n\"",
+  "G8|echo=\"AB\"|comp=\"AB\"",
+  "G9|quotes=\"“\" \"”\"|content=\"—a\"",
+  "C|r1|fill=url(\"#grad\") rgb(255, 128, 128)|stroke=none|stroke-width=1px|stroke-dasharray=none|marker-end=none",
+  "C|r2|fill=url(\"#nope\") rgb(0, 200, 0)|stroke=none|stroke-width=1px|stroke-dasharray=none|marker-end=none",
+  "C|r7|fill=url(\"\") rgb(255, 0, 0)|stroke=none|stroke-width=1px|stroke-dasharray=none|marker-end=none",
+  "C|r3|fill=rgb(0, 0, 0)|stroke=url(\"#grad\") rgb(9, 9, 9)|stroke-width=calc(6px)|stroke-dasharray=none|marker-end=none",
+  "C|r4|fill=rgb(0, 0, 0)|stroke=rgb(255, 0, 0)|stroke-width=calc(50% + 10px)|stroke-dasharray=none|marker-end=none",
+  "C|r5|fill=rgb(0, 0, 0)|stroke=rgb(0, 0, 255)|stroke-width=4px|stroke-dasharray=calc(4px), 4px|marker-end=none",
+  "C|r6|fill=rgb(0, 0, 0)|stroke=rgb(0, 0, 0)|stroke-width=2px|stroke-dasharray=none|marker-end=url(\"#mk\")",
+  "C|baseline|comp=calc(2px)",
+  "C|limit|echo=|comp=auto 5",
+  "C|page|comp=--a",
+  "C|vtgroup|comp=none"
+];
+
+var box = document.getElementById('box'), pass = 0, fail = 0, out = [];
+
+function names(d) { var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i)); return a.join(','); }
+
+for (var i = 0; i < E.length; i++) {
+  var prop = E[i][0], value = E[i][1];
+  var d = document.createElement('div');
+  box.appendChild(d);
+  d.style.setProperty(prop, value);
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) { sup = 'ERR'; }
+  var got = ['' + d.style.length, names(d), d.style.getPropertyValue(prop),
+             getComputedStyle(d).getPropertyValue(prop), sup, d.style.cssText];
+  var want = E[i].slice(2);
+  var bad = [];
+  for (var j = 0; j < want.length; j++) {
+    if (want[j] === '~') continue;
+    if (got[j] !== want[j]) bad.push('c' + j + ' got[' + got[j] + '] want[' + want[j] + ']');
+  }
+  if (bad.length) { fail++; out.push('FAIL E' + i + ' ' + prop + ': ' + value + ' | ' + bad.join(' | ')); }
+  else pass++;
+}
+
+/* I: which properties a child is left with. Row is [property, value, wantParent, wantChild]. */
+var ihost = document.getElementById('ihost');
+for (var i = 0; i < I.length; i++) {
+  var name = I[i][0], word = I[i][1];
+  var p = document.createElement('div'); ihost.appendChild(p);
+  p.style.setProperty(name, word);
+  var c = document.createElement('div'); p.appendChild(c); void c.offsetHeight;
+  var gp = getComputedStyle(p).getPropertyValue(name), gc = getComputedStyle(c).getPropertyValue(name);
+  if (gp !== I[i][2] || gc !== I[i][3]) {
+    fail++;
+    out.push('FAIL I' + i + ' ' + name + ': ' + word + ' | parent got[' + gp + '] want[' + I[i][2]
+      + '] | child got[' + gc + '] want[' + I[i][3] + ']');
+  } else pass++;
+}
+
+/* A: the doors. Each row is the whole line the probe printed. */
+function door(n, tag, d, prop) {
+  var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i));
+  return 'A' + n + '|' + tag + '|' + prop + '|names=' + a.join(',') + '|echo=' + d.style.getPropertyValue(prop)
+    + '|comp=' + getComputedStyle(d).getPropertyValue(prop) + '|text=' + d.style.cssText;
+}
+var host = document.getElementById('host'), ad = [];
+var a1 = document.createElement('div'); host.appendChild(a1);
+a1.setAttribute('style', 'fill: url(#g) red'); void a1.offsetHeight;
+ad.push(door(0, 'attr', a1, 'fill'));
+var a2 = document.createElement('div'); a2.className = 'sheet-fill'; host.appendChild(a2); void a2.offsetHeight;
+ad.push(door(1, 'sheet', a2, 'fill'));
+var a3 = document.createElement('div'); host.appendChild(a3);
+a3.style.setProperty('marker', 'url(#m)'); a3.style.removeProperty('marker-start'); void a3.offsetHeight;
+ad.push(door(2, 'remove', a3, 'marker'));
+var a4 = document.createElement('div'); host.appendChild(a4);
+a4.style.fillOpacity = '50%'; void a4.offsetHeight;
+ad.push(door(3, 'idlset', a4, 'fill-opacity'));
+var a5 = document.createElement('div'); host.appendChild(a5);
+a5.style.setProperty('hyphenate-character', '"\\2014"'); void a5.offsetHeight;
+ad.push(door(4, 'escape', a5, 'hyphenate-character'));
+var a6 = document.createElement('div'); a6.className = 'sheet-hc'; host.appendChild(a6); void a6.offsetHeight;
+ad.push(door(5, 'sheetscape', a6, 'hyphenate-character'));
+for (var i = 0; i < A.length; i++) {
+  var tag = A[i].split('|')[1], gotLine = null;
+  for (var k = 0; k < ad.length; k++) if (ad[k].split('|')[1] === tag) gotLine = ad[k];
+  if (gotLine !== A[i]) { fail++; out.push('FAIL A' + i + ' got[' + gotLine + '] want[' + A[i] + ']'); }
+  else pass++;
+}
+
+/* G: the geometry, the strings and the ink. Every number is read relative to the stage, because the
+ * want lines were measured with the stage at the page's origin and this page puts a heading above it. */
+var stage = document.getElementById('stage');
+function r(id) {
+  var b = document.getElementById(id).getBoundingClientRect();
+  var s = stage.getBoundingClientRect();
+  return { l: b.left - s.left, t: b.top - s.top, w: b.width, h: b.height };
+}
+function n1(v) { return v.toFixed(1); }
+function rect(id) { var b = r(id); return id + '=' + n1(b.w) + ',' + n1(b.h) + ',' + n1(b.l) + ',' + n1(b.t); }
+function esc(value, tag) {
+  var d = document.createElement('div'); stage.appendChild(d);
+  d.style.setProperty('hyphenate-character', value); void d.offsetHeight;
+  return tag + '|echo=' + d.style.getPropertyValue('hyphenate-character')
+    + '|comp=' + getComputedStyle(d).getPropertyValue('hyphenate-character');
+}
+var gd = [];
+gd.push('G1|' + ['g-1', 'g-2', 'g-3', 'g-5', 'g-6', 'g-7b'].map(rect).join('|'));
+var g4 = document.getElementById('g-4'); void g4.offsetHeight;
+gd.push('G2|fontSize=' + getComputedStyle(g4).fontSize + '|w=' + n1(g4.getBoundingClientRect().width));
+var plain = document.getElementById('p-plain'); void plain.offsetHeight;
+var ps = getComputedStyle(plain);
+gd.push('G3|width=' + ps.width + '|height=' + ps.height + '|borderLeftWidth='
+  + getComputedStyle(document.getElementById('g-6')).borderLeftWidth);
+gd.push(esc('"\\2014 a"', 'G4'));
+gd.push(esc('"\\2014  b"', 'G5'));
+gd.push(esc('"\\2014-x"', 'G6'));
+gd.push(esc('"\\n"', 'G7'));
+gd.push(esc('"\\0041 B"', 'G8'));
+var q = document.createElement('div'); stage.appendChild(q);
+q.style.setProperty('quotes', '"\\201C" "\\201D"'); void q.offsetHeight;
+var cq = document.createElement('div'); stage.appendChild(cq);
+cq.style.setProperty('content', '"\\2014 a"'); void cq.offsetHeight;
+gd.push('G9|quotes=' + q.style.getPropertyValue('quotes') + '|content=' + cq.style.getPropertyValue('content'));
+['r1', 'r2', 'r7', 'r3', 'r4', 'r5', 'r6'].forEach(function (id) {
+  var e = document.getElementById(id);
+  var p = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'marker-end'];
+  gd.push('C|' + id + '|' + p.map(function (n) { return n + '=' + getComputedStyle(e).getPropertyValue(n); }).join('|'));
+});
+var bs = document.createElement('div'); bs.className = 'p-baseline'; stage.appendChild(bs); void bs.offsetHeight;
+gd.push('C|baseline|comp=' + getComputedStyle(bs).getPropertyValue('baseline-shift'));
+var lc = document.createElement('div'); lc.className = 'p-limit'; stage.appendChild(lc); void lc.offsetHeight;
+gd.push('C|limit|echo=' + lc.style.getPropertyValue('hyphenate-limit-chars')
+  + '|comp=' + getComputedStyle(lc).getPropertyValue('hyphenate-limit-chars'));
+var pg = document.createElement('div'); pg.className = 'p-page'; stage.appendChild(pg); void pg.offsetHeight;
+gd.push('C|page|comp=' + getComputedStyle(pg).getPropertyValue('page'));
+var vt = document.createElement('div'); vt.className = 'p-vtgroup'; stage.appendChild(vt); void vt.offsetHeight;
+gd.push('C|vtgroup|comp=' + getComputedStyle(vt).getPropertyValue('view-transition-group'));
+function keyOf(line) { return line.indexOf('C|') === 0 ? line.split('|').slice(0, 2).join('|') : line.split('|')[0]; }
+for (var i = 0; i < G.length; i++) {
+  var want = G[i], gotLine = null;
+  for (var k = 0; k < gd.length; k++) if (keyOf(gd[k]) === keyOf(want)) gotLine = gd[k];
+  if (gotLine !== want) { fail++; out.push('FAIL G' + i + ' got[' + gotLine + '] want[' + want + ']'); }
+  else pass++;
+}
+
+out.unshift((fail === 0 ? 'ALLPASS' : 'FAILURES') + ' b293: ' + pass + '/' + (pass + fail) + ' rows pass');
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

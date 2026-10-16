@@ -355,11 +355,17 @@ public class CascadeResolverState
         // as written, because the substitution below has already turned the fallback into a string.
         if (name.Equals("content", StringComparison.OrdinalIgnoreCase)
             && CssPropertyApplier.ContentHasUnusableAttrFallback(text)) return;
+        // A property whose computed value is the expression itself — the SVG lengths and
+        // 'baseline-shift' — is only substituted, never worked out: pricing 'calc(2)' here would
+        // leave its printer with '2px' and no expression to put the unit inside (measured).
         text = name.Equals("content", StringComparison.OrdinalIgnoreCase)
             ? CssFunctionEvaluator.EvaluateForContent(text, Element,
                 FontSize, RootFontSize, ViewportWidth, ViewportHeight)
-            : CssFunctionEvaluator.Evaluate(text, Element,
-                FontSize, RootFontSize, ViewportWidth, ViewportHeight, property: name);
+            : Acrux.Core.Css.Resolver.EchoedProperties.KeepsMathExpression(name)
+                ? CssFunctionEvaluator.EvaluateSubstitutionsOnly(text, Element,
+                    FontSize, RootFontSize, ViewportWidth, ViewportHeight)
+                : CssFunctionEvaluator.Evaluate(text, Element,
+                    FontSize, RootFontSize, ViewportWidth, ViewportHeight, property: name);
         if (CssPropertyTraits.TryApplyCssWideKeyword(style, name, text, ParentStyle))
             return;
         // Font properties are deliberately not in CssPropertyApplier.Apply's

@@ -31,7 +31,8 @@ def our_rows(page, width):
                 rows.append(match.group(1))
                 started = True
             continue
-        if re.match(r'^\S+\|', line) and ('|n=' in line or '|names=' in line):
+        if re.match(r'^\S+\|', line) and ('|n=' in line or '|names=' in line
+                or '|comp=' in line or '|parent=' in line):
             rows.append(line)
         else:
             break

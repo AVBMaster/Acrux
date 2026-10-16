@@ -560,8 +560,11 @@ public class LayoutEngine
     private static float ParsePseudoFontSize(string v)
     {
         if (v.EndsWith("px") && float.TryParse(v[..^2], out var px)) return px;
+        // 'rem' before 'em': one ends with the other's characters, and reading '1.5rem' as an 'em'
+        // left the digits '1.5r' for BOTH branches, so a pseudo-element's rem font size answered the
+        // 16px default whatever the page said (CSS Fonts 4 §7.1, CSS Values 4 §6.3).
+        if (v.EndsWith("rem") && float.TryParse(v[..^3], out var rem)) return rem * 16;
         if (v.EndsWith("em") && float.TryParse(v[..^2], out var em)) return em * 16;
-        if (v.EndsWith("rem") && float.TryParse(v[..^2], out var rem)) return rem * 16;
         if (float.TryParse(v, out var f)) return f;
         return 16;
     }

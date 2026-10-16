@@ -825,6 +825,13 @@ public class ComputedStyle
     /// charge.</summary>
     public float ComputedViewportWidth { get; set; }
     public float ComputedViewportHeight { get; set; }
+    /// <summary>The root element's computed font size, recorded by the resolver that produced this
+    /// style. A 'rem' is a share of the ROOT's font (CSS Values 4 §6.3), not of the font of the
+    /// element that wrote it, so every printer that prices a length needs the number the document
+    /// started with: measured, a box of <c>font: 14px</c> inside a 16px root computes
+    /// <c>stroke-width: 1rem</c> as 16px and <c>1em</c> as 14px. Zero means the resolver never said,
+    /// which leaves a caller's own argument in charge.</summary>
+    public float RootFontSize { get; set; }
     /// <summary>True while 'font-size' has never been given a real value anywhere up
     /// the chain — nothing declared, or only the initial keyword 'medium' (and
     /// descendants inheriting that). The generic 'monospace' carries its own size in a
@@ -1715,12 +1722,16 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
         // a BOX as its reference, and without this context a '1em' would be priced against that box
         // (measured: 'margin-bottom: calc(1em + 5%)' of a 400px containing block is 36px, not 420px).
         using var _fontContext = FontUnitContext.Use(this);
+        // 'rem' is a share of the ROOT's font wherever a length is priced (CSS Values 4 §6.3): the
+        // element's own size answers for 'em' and the root's for 'rem', so a box of 14px inside a
+        // 16px root computes '1rem' as 16px (measured).
+        float root = RootFontSize > 0 ? RootFontSize : 16f;
         var px = resolvesPercentage
-            ? ((MathLength)length).ToPixelsAgainstPercentageBase(percentageBase!.Value, FontSize,
+            ? ((MathLength)length).ToPixelsAgainstPercentageBase(percentageBase!.Value, root,
                 viewportWidth > 0 ? viewportWidth : ComputedViewportWidth,
                 viewportHeight > 0 ? viewportHeight : ComputedViewportHeight)
             : length.ToPixels(FontSize > 0 ? FontSize : 16f,
-                FontSize,
+                root,
                 viewportWidth > 0 ? viewportWidth : ComputedViewportWidth,
                 viewportHeight > 0 ? viewportHeight : ComputedViewportHeight);
         return float.IsNaN(px) ? length.ToString()
@@ -1749,6 +1760,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
         {
             ComputedViewportWidth = ComputedViewportWidth,
             ComputedViewportHeight = ComputedViewportHeight,
+            RootFontSize = RootFontSize,
             Width = Width, Height = Height,
             Top = Top, Left = Left, Right = Right, Bottom = Bottom,
             MarginTop = MarginTop, MarginRight = MarginRight, MarginBottom = MarginBottom, MarginLeft = MarginLeft,
