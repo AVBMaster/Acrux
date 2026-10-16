@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head><title>The form control interfaces, the tables and the link's URL (HTML §4.9.11, §4.10.3–§4.10.19, §4.5.2, DOM §4.2.2, §5.4, URL §2.4/§2.6)</title></head>
+<body>
+<table id="tb"><caption>cap</caption><thead><tr><th>h</th></tr></thead><tbody><tr id="r1"><td id="c1" colspan="2" headers="h1 h2">a</td><td>b</td></tr><tr><td>c</td></tr></tbody><tfoot><tr><td>f</td></tr></tfoot></table>
+<a id="a" href="sub/page.html?q=1#frag">l</a>
+<form id="f"><input id="num" type="number" name="n" value="7" min="0" max="20" step="2"><input id="txt" type="text" value="hello" minlength="2" required><input id="cb" type="checkbox" checked><label id="lab" for="txt">L</label><textarea id="ta" rows="3" cols="10" wrap="hard">abc</textarea><select id="sel"><option value="v0">o0</option><option value="v1" selected>o1</option></select><fieldset id="fs"><input id="inner" name="in"><input id="inner2" name="in2"></fieldset><output id="out" for="num inner">o</output><progress id="pg" max="8" value="2"></progress><meter id="mt" max="8" value="4"></meter></form>
+<script>
+// The numbers, shapes and messages below were read off the reference browser in this session (the
+// measurement pages are kept in out/reference_probes). Two of its answers are worth naming: a control's
+// 'value' and the 'value' attribute are different things — writing the value leaves the attribute and
+// 'defaultValue' alone — and the validation messages are localised to the reference's own UI language,
+// so only their being there is checkable, never the sentence.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+var $ = function (id) { return document.getElementById(id); };
+
+// ── A. the table's sections, rows and cells ──────────────────────────────────
+ck('A1 the table answers its sections', function () {
+    var tb = $('tb');
+    return tb.rows.length === 4 && tb.tBodies.length === 1 && tb.tHead.rows.length === 1
+        && tb.tFoot.rows.length === 1 && tb.tBodies[0].rows.length === 2
+        && tb.rows[0].cells.length === 1 && tb.caption.localName === 'caption'
+        && tb.rows[0].localName === 'tr';
+}, function () { var tb = $('tb'); return [tb.rows.length, tb.tBodies.length, String(tb.tHead), String(tb.tFoot)].join('/'); });
+ck('A2 the row and cell indexes', function () {
+    return $('r1').rowIndex === 1 && $('r1').sectionRowIndex === 0 && $('c1').cellIndex === 0
+        && $('c1').rowIndex == null && $('c1').sectionRowIndex == null && $('r1').cells.length === 2;
+}, function () { return [$('r1').rowIndex, $('r1').sectionRowIndex, $('c1').cellIndex, String($('c1').rowIndex)].join('/'); });
+ck('A3 the collections are live and wrap one object each', function () {
+    var tb = $('tb');
+    return tb.rows.item(1) === $('r1') && tb.rows.namedItem('r1') === $('r1')
+        && tb.rows[1] === $('r1') && tb.rows.namedItem('nope') === null;
+}, function () { var tb = $('tb'); return String(tb.rows.item(1) === $('r1')) + '/' + String(tb.rows.namedItem('r1') === $('r1')); });
+ck('A4 insertRow and insertCell put the new node where asked', function () {
+    var tb = $('tb');
+    var made = tb.tBodies[0].insertRow(0);
+    // The head's row stays first in 'rows', because that collection walks the sections in order.
+    var first = tb.tBodies[0].rows[0] === made && tb.rows[1] === made && made.rowIndex === 1
+        && made.sectionRowIndex === 0;
+    var cell = made.insertCell(0);
+    var inCell = cell.localName === 'td' && made.cells[0] === cell && cell.cellIndex === 0;
+    made.deleteCell(0);
+    tb.tBodies[0].deleteRow(0);
+    return first && inCell && made.cells.length === 0 && tb.tBodies[0].rows.length === 2;
+}, function () { var tb = $('tb'); return tb.tBodies[0].rows.length + '/' + tb.rows.length; });
+ck('A5 insertRow appends when the index is left out or -1', function () {
+    var tb = $('tb');
+    var before = tb.rows.length;
+    var tail = tb.tBodies[0].insertRow(-1);
+    var appended = tb.tBodies[0].rows[tb.tBodies[0].rows.length - 1] === tail;
+    tb.tBodies[0].deleteRow(tb.tBodies[0].rows.length - 1);
+    var head = tb.tBodies[0].insertRow();
+    tb.tBodies[0].deleteRow(tb.tBodies[0].rows.length - 1);
+    return appended && tb.rows.length === before;
+}, function () { var tb = $('tb'); return tb.rows.length; });
+ck('A6 an index outside the range is refused', function () {
+    var tb = $('tb'), name = '', message = '';
+    try { tb.tBodies[0].insertRow(9); return 'no throw'; }
+    catch (e) { name = e.name; message = String(e.message); }
+    return name === 'IndexSizeError' && /insertRow/.test(message)
+        && /HTMLTableSectionElement/.test(message) && /-1/.test(message);
+}, function () { return 'n/a'; });
+ck('A7 the row is refused on the cell too, in the row sentence', function () {
+    var row = $('r1'), name = '', message = '';
+    try { row.insertCell(9); return 'no throw'; }
+    catch (e) { name = e.name; message = String(e.message); }
+    return name === 'IndexSizeError' && /insertCell/.test(message) && /HTMLTableRowElement/.test(message)
+        && /The value provided/.test(message);
+}, function () { return 'n/a'; });
+ck('A8 deleteRow refuses what it cannot delete', function () {
+    var tb = $('tb'), name = '';
+    try { tb.tBodies[0].deleteRow(9); return 'no throw'; } catch (e) { name = e.name; }
+    return name === 'IndexSizeError';
+}, function () { return 'n/a'; });
+ck('A9 a table builds its head, foot and caption once each', function () {
+    var box = document.createElement('table');
+    var head = box.createTHead();
+    var again = box.createTHead();
+    var foot = box.createTFoot();
+    var cap = box.createCaption();
+    var built = head.localName === 'thead' && again === head && box.tHead === head
+        && foot.localName === 'tfoot' && cap.localName === 'caption' && box.children.length === 3;
+    box.deleteTHead(); box.deleteTFoot(); box.deleteCaption();
+    return built && box.children.length === 0 && box.tHead === null && box.tFoot === null
+        && box.caption === null;
+}, function () { var box = document.createElement('table'); box.createTHead(); return box.children.length + '/' + String(box.tHead); });
+ck('A10 a row moved between sections changes both counts', function () {
+    var tb = $('tb');
+    var row = tb.tBodies[0].rows[0];
+    tb.tHead.appendChild(row);
+    var moved = tb.tHead.rows.length === 2 && tb.tBodies[0].rows.length === 1
+        && row.sectionRowIndex === 1 && row.rowIndex === 1 && tb.rows.length === 4;
+    tb.tBodies[0].insertBefore(row, tb.tBodies[0].rows[0]);
+    return moved && tb.tHead.rows.length === 1 && tb.tBodies[0].rows.length === 2;
+}, function () { var tb = $('tb'); return tb.tHead.rows.length + '/' + tb.tBodies[0].rows.length; });
+ck('A11 the cell spans and headers reflect', function () {
+    var c = $('c1');
+    return c.colSpan === 2 && c.rowSpan === 1 && c.headers.length === 2 && c.headers[0] === 'h1'
+        && c.scope === '' && c.abbr === '';
+}, function () { var c = $('c1'); return [c.colSpan, c.rowSpan, c.headers.length, String(c.headers.item(1))].join('/'); });
+
+// ── B. the link's URL, read and written by parts ─────────────────────────────
+ck('B1 the link resolves its href against the document', function () {
+    var a = $('a');
+    return /^file:\/\/\//.test(a.href) && a.pathname.slice(-9) === 'page.html'
+        && a.search === '?q=1' && a.hash === '#frag' && a.protocol === 'file:' && a.hostname === '';
+}, function () { return [a0href(), a0pathname(), a0hash()].join('/'); });
+function a0href() { return $('a').href; }
+function a0pathname() { return $('a').pathname; }
+function a0hash() { return $('a').hash; }
+ck('B2 every part reads the resolved URL', function () {
+    var a = document.createElement('a');
+    a.href = 'https://example.org:8443/p/q?s=1#h';
+    return [a.protocol, a.hostname, a.host, a.port, a.pathname, a.search, a.hash, a.origin].join(',')
+        === 'https:,example.org,example.org:8443,8443,/p/q,?s=1,#h,https://example.org:8443';
+}, function () {
+    var a = document.createElement('a'); a.href = 'https://example.org:8443/p/q?s=1#h';
+    return [a.protocol, a.hostname, a.host, a.port, a.pathname, a.search, a.hash, a.origin].join(',');
+});
+ck('B3 writing a part rebuilds the href and keeps the rest', function () {
+    var a = document.createElement('a');
+    a.href = 'https://example.org:8443/p/q?s=1#h';
+    a.pathname = '/other';
+    var afterPath = a.href === 'https://example.org:8443/other?s=1#h';
+    a.search = '?z=2';
+    var afterSearch = a.href === 'https://example.org:8443/other?z=2#h';
+    a.hash = 'frag2';
+    var afterHash = a.href === 'https://example.org:8443/other?z=2#frag2';
+    a.hostname = 'example.com';
+    return afterPath && afterSearch && afterHash && a.href === 'https://example.com:8443/other?z=2#frag2';
+}, function () {
+    var a = document.createElement('a'); a.href = 'https://example.org/p'; a.pathname = '/other';
+    return a.href;
+});
+ck('B4 a link with no href answers nothing', function () {
+    var a = document.createElement('a');
+    return a.href === '' && a.pathname === '' && a.search === '' && a.hash === '' && a.protocol === '';
+}, function () { var a = document.createElement('a'); return JSON.stringify(a.href) + '/' + JSON.stringify(a.pathname); });
+ck('B5 the reflected strings are empty, not missing', function () {
+    var a = document.createElement('a');
+    return a.target === '' && a.download === '' && a.rel === '' && a.hreflang === ''
+        && a.shape === '' && a.coords === '' && a.referrerPolicy === '' && a.text === '';
+}, function () { var a = document.createElement('a'); return [a.target, a.download, a.rel, a.hreflang].join('/'); });
+ck('B6 the rel attribute keeps what was written, the list folds it', function () {
+    var a = document.createElement('a');
+    a.rel = 'nofollow  me';
+    return a.rel === 'nofollow  me' && a.relList.length === 2 && a.relList.contains('me')
+        && a.relList.value === 'nofollow  me';
+}, function () { var a = document.createElement('a'); a.rel = 'nofollow  me'; return a.rel + '/' + a.relList.length; });
+ck('B7 the base element is what a relative link resolves against', function () {
+    var base = document.createElement('base');
+    base.href = 'https://example.com/dir/index.html';
+    document.head.insertBefore(base, document.head.firstChild);
+    var a = document.createElement('a');
+    a.href = '../up/x.html?1#2';
+    var got = a.href === 'https://example.com/up/x.html?1#2' && a.pathname === '/up/x.html'
+        && a.host === 'example.com' && a.origin === 'https://example.com';
+    base.remove();
+    return got;
+}, function () {
+    var base = document.createElement('base'); base.href = 'https://example.com/dir/index.html';
+    document.head.insertBefore(base, document.head.firstChild);
+    var a = document.createElement('a'); a.href = '../up/x.html?1#2';
+    var out = a.href; base.remove(); return out;
+});
+
+// ── C. the controls: value, default value, and the numbers ───────────────────
+ck('C1 the value is the live write and the attribute is the default', function () {
+    var n = $('num');
+    n.value = '9';
+    var wrote = n.value === '9' && n.defaultValue === '7' && n.getAttribute('value') === '7';
+    n.value = '7';
+    return wrote;
+}, function () { var n = $('num'); return n.value + '/' + n.defaultValue; });
+ck('C2 a number control answers its value as a number', function () {
+    var n = $('num');
+    n.value = '7';
+    var start = n.valueAsNumber === 7;
+    n.stepUp();
+    var up = n.value === '8' && n.valueAsNumber === 8;
+    n.stepDown(2);
+    var down = n.value === '4' && n.valueAsNumber === 4;
+    n.value = '19'; n.stepUp();
+    var clampedMax = n.value === '20';
+    n.value = '-5'; n.stepDown();
+    var clampedMin = n.value === '0';
+    n.value = '7';
+    return start && up && down && clampedMax && clampedMin;
+}, function () { var n = $('num'); n.value = '7'; n.stepUp(); return n.value + '/' + n.valueAsNumber; });
+ck('C3 a value that is not a number leaves the control empty', function () {
+    var n = $('num');
+    n.value = 'abc';
+    var got = n.value === '' && n.valueAsNumber !== n.valueAsNumber;
+    n.value = '7';
+    return got;
+}, function () { var n = $('num'); n.value = 'abc'; return n.value + '/' + String(n.valueAsNumber); });
+ck('C4 the range attributes are text on a field and numbers on a gauge', function () {
+    var n = $('num'), pg = $('pg'), mt = $('mt');
+    return typeof n.min === 'string' && n.min === '0' && n.max === '20' && n.step === '2'
+        && pg.max === 8 && pg.value === 2 && pg.position === 0.25 && pg.min === null
+        && mt.value === 4 && mt.max === 8 && mt.low === 0 && mt.high === 8 && mt.optimum === 4;
+}, function () { var n = $('num'); return typeof n.min + '/' + n.min + '/' + String($('pg').max); });
+ck('C5 the checkbox keeps its state apart from its markup', function () {
+    var c = $('cb');
+    var read = c.checked === true && c.defaultChecked === true;
+    c.checked = false;
+    var off = c.checked === false && c.defaultChecked === true;
+    c.checked = true;
+    return read && off;
+}, function () { var c = $('cb'); return c.checked + '/' + c.defaultChecked; });
+ck('C6 text-control lengths, size and the selection', function () {
+    var x = $('txt');
+    var reflects = x.minLength === 2 && x.maxLength === -1 && x.size === 20 && x.selectionStart === 0
+        && x.selectionDirection === 'forward' && x.readOnly === false;
+    x.setSelectionRange(1, 3);
+    var range = x.selectionStart === 1 && x.selectionEnd === 3;
+    x.setRangeText('ELL', 1, 3, 'end');
+    var replaced = x.value === 'hELLlo' && x.selectionStart === 4;
+    x.value = 'hello';
+    x.select();
+    var selected = x.selectionStart === 0 && x.selectionEnd === 5;
+    x.value = 'hello';
+    return reflects && range && replaced && selected;
+}, function () { var x = $('txt'); return [x.minLength, x.maxLength, x.size, x.value].join('/'); });
+ck('C7 the text area reads its own markup', function () {
+    var ta = $('ta');
+    return ta.rows === 3 && ta.cols === 10 && ta.wrap === 'hard' && ta.value === 'abc'
+        && ta.defaultValue === 'abc' && ta.textLength === 3 && ta.type === 'textarea';
+}, function () { var ta = $('ta'); return [ta.rows, ta.cols, ta.wrap, ta.textLength].join('/'); });
+ck('C8 a text area write leaves its text alone', function () {
+    var ta = $('ta');
+    ta.value = 'written';
+    var got = ta.value === 'written' && ta.firstChild && ta.firstChild.data === 'abc';
+    ta.value = 'abc';
+    return !!got;
+}, function () { var ta = $('ta'); return ta.value + '/' + (ta.firstChild ? ta.firstChild.data : 'none'); });
+
+// ── D. select, option, fieldset, output ──────────────────────────────────────
+ck('D1 the select answers its chosen option', function () {
+    var sel = $('sel');
+    return sel.options.length === 2 && sel.selectedIndex === 1 && sel.value === 'v1'
+        && sel.selectedOptions.length === 1 && sel.selectedOptions[0].value === 'v1'
+        && sel.type === 'select-one' && sel.size === 0 && sel.multiple === false;
+}, function () { var sel = $('sel'); return [sel.options.length, sel.selectedIndex, sel.value, sel.type].join('/'); });
+ck('D2 the option answers its index, text and default', function () {
+    var sel = $('sel'), one = sel.options[0], two = sel.options[1];
+    return one.index === 0 && two.index === 1 && one.value === 'v0' && one.text === 'o0'
+        && one.defaultSelected === false && two.defaultSelected === true
+        && one.label === 'o0';
+}, function () { var o = $('sel').options[0]; return [o.index, o.value, o.text, o.defaultSelected].join('/'); });
+ck('D3 an option with no value answers its text, folded', function () {
+    var o = document.createElement('option');
+    o.textContent = '  a  b  ';
+    return o.value === 'a b' && o.text === 'a b';
+}, function () { var o = document.createElement('option'); o.textContent = '  a  b  '; return o.value + '/' + o.text; });
+ck('D4 writing the select value chooses the option', function () {
+    var sel = $('sel');
+    sel.value = 'v0';
+    var chose = sel.selectedIndex === 0 && sel.options[0].hasAttribute('selected')
+        && !sel.options[1].hasAttribute('selected');
+    sel.value = 'v1';
+    return chose;
+}, function () { var sel = $('sel'); sel.value = 'v0'; return sel.selectedIndex + '/' + sel.value; });
+ck('D5 remove takes the option out of the list', function () {
+    var sel = document.createElement('select');
+    var one = document.createElement('option'); one.value = 'a';
+    var two = document.createElement('option'); two.value = 'b';
+    sel.appendChild(one); sel.appendChild(two);
+    sel.remove(0);
+    // The first option is gone and the select itself is still where it was put.
+    return sel.options.length === 1 && sel.options[0].value === 'b' && one.parentNode === null
+        && sel.parentNode === null;
+}, function () { var s = document.createElement('select'); var o = document.createElement('option'); s.appendChild(o); s.remove(0); return s.options.length; });
+ck('D6 the fieldset groups its controls and the output names them', function () {
+    var fs = $('fs'), out = $('out');
+    return fs.type === 'fieldset' && fs.elements.length === 2 && fs.elements[0].id === 'inner'
+        && fs.elements.namedItem('in') === $('inner') && out.value === 'o' && out.type === 'output'
+        && out.htmlFor.length === 2 && out.htmlFor[0] === 'num' && out.labels.length >= 0;
+}, function () { var fs = $('fs'); return [fs.type, fs.elements.length, String(fs.elements.namedItem('in') === $('inner')), $('out').htmlFor.length].join('/'); });
+ck('D7 a control reads its form and its labels', function () {
+    var n = $('num'), x = $('txt');
+    return n.form === $('f') && x.form === $('f') && x.labels.length === 1 && x.labels[0] === $('lab')
+        && n.labels.length === 0;
+}, function () { var x = $('txt'); return [String($('num').form === $('f')), x.labels.length, String(x.labels[0] === $('lab'))].join('/'); });
+
+// ── E. constraint validation, in the flags rather than the sentences ─────────
+ck('E1 the validity object answers every flag', function () {
+    var x = $('txt');
+    var v = x.validity;
+    var names = ['valid', 'valueMissing', 'typeMismatch', 'patternMismatch', 'tooLong', 'tooShort',
+        'rangeUnderflow', 'rangeOverflow', 'stepMismatch', 'badInput', 'customError'];
+    for (var i = 0; i < names.length; i++) if (typeof v[names[i]] !== 'boolean') return 'missing ' + names[i];
+    return v.valueMissing === false && v.valid === true && x.checkValidity() === true
+        && x.willValidate === true && x.validationMessage === '';
+}, function () { var v = $('txt').validity; return String(v.valueMissing) + '/' + String(v.valid); });
+ck('E2 an empty required control fails and says so', function () {
+    var x = $('txt');
+    var before = x.value;
+    x.value = '';
+    var got = x.validity.valueMissing === true && x.validity.valid === false
+        && x.validationMessage.length > 0 && x.checkValidity() === false;
+    x.value = before;
+    return got;
+}, function () { var x = $('txt'); return String(x.validity.valueMissing); });
+ck('E3 the custom message is both the flag and the text', function () {
+    var x = $('txt');
+    x.setCustomValidity('mine');
+    var got = x.validity.customError === true && x.validationMessage === 'mine'
+        && x.checkValidity() === false;
+    x.setCustomValidity('');
+    return got && x.validity.customError === false && x.validationMessage === '';
+}, function () { var x = $('txt'); x.setCustomValidity('q'); var r = x.validationMessage; x.setCustomValidity(''); return r; });
+ck('E4 the invalid event is raised by both members', function () {
+    var x = $('txt'), hits = 0;
+    var fn = function () { hits++; };
+    x.addEventListener('invalid', fn);
+    var before = x.value;
+    x.value = '';
+    x.checkValidity(); x.reportValidity();
+    x.value = before;
+    x.removeEventListener('invalid', fn);
+    return hits === 2;
+}, function () { return 'n/a'; });
+ck('E5 a disabled control takes no part', function () {
+    var box = document.createElement('input');
+    box.required = true; box.disabled = true;
+    document.getElementById('f').appendChild(box);
+    var got = box.willValidate === false && box.checkValidity() === true && box.validationMessage === '';
+    box.remove();
+    return got;
+}, function () { return 'n/a'; });
+ck('E6 the range and step flags answer for a number field', function () {
+    var n = $('num'), before = n.value;
+    n.value = '-5';
+    var under = n.validity.rangeUnderflow === true && n.validity.rangeOverflow === false;
+    n.value = '21';
+    var over = n.validity.rangeOverflow === true;
+    n.value = '7';
+    var mismatch = n.validity.stepMismatch === true;
+    n.value = '8';
+    var clean = n.validity.stepMismatch === false && n.validity.valid === true;
+    n.value = before;
+    return under && over && mismatch && clean;
+}, function () { var n = $('num'); n.value = '7'; var r = n.validity.stepMismatch; n.value = '8'; return String(r); });
+
+// ── F. the namespace axis and the document collections ───────────────────────
+ck('F1 the declarations in the ancestry answer the axis', function () {
+    var box = document.createElement('div');
+    box.setAttribute('xmlns:x', 'urn:x');
+    var child = document.createElementNS('urn:x', 'x:c');
+    box.appendChild(child);
+    return child.lookupNamespaceURI('x') === 'urn:x' && child.lookupPrefix('urn:x') === 'x'
+        && child.lookupNamespaceURI('nope') === null && child.isDefaultNamespace('urn:x') === false
+        && child.namespaceURI === 'urn:x' && child.prefix === 'x' && child.localName === 'c'
+        && child.nodeName === 'x:c';
+}, function () {
+    var box = document.createElement('div'); box.setAttribute('xmlns:x', 'urn:x');
+    var c = document.createElementNS('urn:x', 'x:c'); box.appendChild(c);
+    return [c.lookupNamespaceURI('x'), c.lookupPrefix('urn:x'), c.prefix, c.nodeName].join('/');
+});
+ck('F2 the xml and xmlns prefixes need no declaration', function () {
+    var box = document.createElement('div');
+    return box.lookupNamespaceURI('xml') === 'http://www.w3.org/XML/1998/namespace'
+        && box.lookupNamespaceURI('xmlns') === 'http://www.w3.org/2000/xmlns/'
+        && box.lookupPrefix('http://www.w3.org/1999/xhtml') === null
+        && box.lookupPrefix('http://www.w3.org/XML/1998/namespace') === 'xml';
+}, function () { var box = document.createElement('div'); return [box.lookupNamespaceURI('xml'), box.lookupNamespaceURI('nope')].join('/'); });
+ck('F3 a class list is the intersection of every name given', function () {
+    var box = document.createElement('div');
+    box.className = 'g1 g2';
+    document.body.appendChild(box);
+    var list = document.getElementsByClassName('g1');
+    var got = list.length === 1 && list[0] === box && list.item(0) === box
+        && document.getElementsByClassName('g2 g1').length === 1
+        && document.getElementsByClassName('g1 nope').length === 0
+        && document.getElementsByClassName('zz').length === 0
+        && document.body.getElementsByClassName('g1').length === 1
+        && box.getElementsByClassName('g1').length === 0;
+    box.className = 'g3';
+    var lived = list.length === 0;
+    document.body.removeChild(box);
+    return got && lived;
+}, function () { var box = document.createElement('div'); box.className = 'g1'; document.body.appendChild(box); var n = document.getElementsByClassName('g1').length; document.body.removeChild(box); return String(n); });
+ck('F4 the document answers its own state', function () {
+    return typeof document.hasFocus === 'function' && document.dir === ''
+        && document.visibilityState === 'visible' && document.hidden === false
+        && document.documentElement.dir === '';
+}, function () { return [String(document.dir), document.visibilityState, String(document.hidden)].join('/'); });
+
+// ── G. URL, static members ───────────────────────────────────────────────────
+ck('G1 URL.parse answers a url or nothing', function () {
+    var made = URL.parse('https://example.com/a', 'https://base.example/');
+    return !!made && made.pathname === '/a' && URL.parse('not a url%') === null
+        && URL.parse('relative/thing') === null;
+}, function () { return String(URL.parse('not a url%')) + '/' + String(URL.parse('https://example.com/a')); });
+ck('G2 URL.parse refuses to be called with nothing', function () {
+    try { URL.parse(); return 'no throw'; }
+    catch (e) { return e.name === 'TypeError' && /parse/.test(String(e.message)) && /URL/.test(String(e.message)); }
+}, function () { try { URL.parse(); } catch (e) { return e.name + '/' + e.message; } });
+ck('G3 the origin carries a port that is not the default', function () {
+    var u = new URL('https://example.org:8443/p/q?s=1#h');
+    return u.origin === 'https://example.org:8443' && /^file:\/\//.test(document.baseURI)
+        && location.origin === 'file://';
+}, function () { var u = new URL('https://example.org:8443/p'); return u.origin + '/' + location.origin; });
+</script>
+</body>
+</html>

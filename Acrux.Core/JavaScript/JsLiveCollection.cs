@@ -136,10 +136,17 @@ public class JsHtmlCollection : IList
 
     private void CollectByClassName(DomElement root, string className, List<object> result)
     {
+        // DOM §4.2.2: the argument is a list of names separated by space, and an element matches when it
+        // carries every one of them — 'getElementsByClassName("a b")' is the intersection, not a class
+        // whose name happens to hold a space (measured: two elements with both classes read as 2).
+        var wanted = (className ?? "").Split(new[] { ' ', '\t', '\n', '\f', '\r' },
+            StringSplitOptions.RemoveEmptyEntries);
         foreach (var child in root.Children.OfType<DomElement>())
         {
-            if (child.HasClass(className))
-                result.Add(WrapDom(child));
+            var holds = wanted.Length > 0;
+            foreach (var name in wanted)
+                if (!child.HasClass(name)) { holds = false; break; }
+            if (holds) result.Add(WrapDom(child));
             CollectByClassName(child, className, result);
         }
     }

@@ -474,11 +474,36 @@ public class DocumentHost : IDomPrototypeHost
 
     public string? defaultCharset => "UTF-8";
 
-    public string? dir => "ltr";
+    /// <summary>HTML §13.2.2: the document's 'dir' is the attribute on its root element, and a document
+    /// whose root does not carry it answers the empty string (measured) rather than a direction the
+    /// engine picked for it.</summary>
+    public string dir
+    {
+        get => _document.DocumentElement?.GetAttribute("dir") ?? "";
+        set
+        {
+            var root = _document.DocumentElement;
+            if (root == null) return;
+            if (string.IsNullOrEmpty(value)) root.RemoveAttribute("dir");
+            else root.SetAttribute("dir", value);
+        }
+    }
 
-    public string? visibilityState => "visible";
+    public string visibilityState => "visible";
 
-    public bool hidden => false;
+    /// <summary>HTML §13.2.2: the document is hidden exactly when it is not visible.</summary>
+    public bool hidden => visibilityState != "visible";
+
+    /// <summary>DOM §5.4: a document answers the namespace axis from its root element, which is where
+    /// the declarations an XML document carries sit.</summary>
+    public string? lookupNamespaceURI(string? prefix)
+        => Acrux.Core.JavaScript.NamespaceAxis.LookupNamespace(_document.DocumentElement, prefix);
+
+    public string? lookupPrefix(string? ns)
+        => Acrux.Core.JavaScript.NamespaceAxis.LookupPrefix(_document.DocumentElement, ns);
+
+    public bool isDefaultNamespace(string? ns)
+        => Acrux.Core.JavaScript.NamespaceAxis.IsDefaultNamespace(_document.DocumentElement, ns);
 
     public object? doctype
     {

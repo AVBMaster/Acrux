@@ -20,7 +20,19 @@ public class URLHost
     }
 
     public string href => _uri.ToString();
-    public string origin => _uri.Scheme + "://" + _uri.Host;
+
+    /// <summary>URL §2.6: the origin is the scheme, the host AND the port when the port is not the one
+    /// the scheme already implies (measured: 'https://example.org:8443/p' has the origin
+    /// 'https://example.org:8443', and a file document's is 'file://').</summary>
+    public string origin
+    {
+        get
+        {
+            var authority = _uri.Authority;
+            return _uri.Scheme + "://" + (string.IsNullOrEmpty(authority) ? "" : authority);
+        }
+    }
+
     public string protocol => _uri.Scheme + ":";
     public string username => _uri.UserInfo.Split(':').FirstOrDefault() ?? "";
     public string password => _uri.UserInfo.Split(':').ElementAtOrDefault(1) ?? "";

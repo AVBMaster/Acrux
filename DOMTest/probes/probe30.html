@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html><head><title>Probe 30</title></head><body>
+<a id="a" href="sub/page.html?q=1#frag"></a>
+<script>
+(function () {
+  function t(name, fn, info) {
+    var ok = false, got = '';
+    try { var v = fn(); ok = !!v; } catch (e) { got = 'threw ' + (e && e.name) + ': ' + (e && e.message); }
+    if (!ok && !got) { try { got = String(typeof info === 'function' ? info() : (info === undefined ? '' : info)); } catch (e) { got = 'info threw'; } }
+    __T(name, ok, got);
+  }
+  var a = document.getElementById('a');
+  t('live anchor parts', function () {
+    return [a.protocol, a.hostname, a.pathname, a.search, a.hash].join(',') === ',,,'
+      || a.pathname.length > 0;
+  }, function () { return [a.href, a.protocol, JSON.stringify(a.hostname), JSON.stringify(a.pathname), a.search, a.hash].join(' | '); });
+  t('created anchor with absolute href', function () {
+    var b = document.createElement('a');
+    b.href = 'https://example.org:8443/p/q?s=1#h';
+    return b.pathname === '/p/q';
+  }, function () {
+    var b = document.createElement('a');
+    b.href = 'https://example.org:8443/p/q?s=1#h';
+    return [b.href, b.protocol, b.hostname, b.port, JSON.stringify(b.pathname), b.search, b.hash, b.host].join(' | ');
+  });
+  t('URL instance pathname for the same href', function () {
+    var u = new URL('https://example.org:8443/p/q?s=1#h');
+    return u.pathname === '/p/q';
+  }, function () { var u = new URL('https://example.org:8443/p/q?s=1#h'); return JSON.stringify(u.pathname) + '/' + u.href; });
+  t('anchor pathname write rebuilds', function () {
+    var b = document.createElement('a');
+    b.href = 'https://example.org/p?s=1#h';
+    b.pathname = '/other';
+    return b.href === 'https://example.org/other?s=1#h';
+  }, function () { var b = document.createElement('a'); b.href = 'https://example.org/p'; b.pathname = '/other'; return b.href + '/' + JSON.stringify(b.pathname); });
+  t('anchor with no href answers empty parts', function () {
+    var b = document.createElement('a');
+    return b.href === '' && b.pathname === '';
+  }, function () { var b = document.createElement('a'); return JSON.stringify(b.href) + '/' + JSON.stringify(b.pathname); });
+  t('cell has no row index', function () {
+    var cell = document.getElementById('c');
+    return cell.rowIndex === undefined || cell.rowIndex === null;
+  }, function () { return 'n/a'; });
+})();
+</script>
+<div id="tb2"><table><tr><td id="c">x</td></tr></table></div>
+</body></html>

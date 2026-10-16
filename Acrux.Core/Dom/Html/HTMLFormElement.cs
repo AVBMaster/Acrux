@@ -73,22 +73,20 @@ public class HTMLFormElement : HtmlElement
                         string? type = e.GetAttribute("type")?.ToLowerInvariant();
                         if (type == "checkbox" || type == "radio")
                         {
-                            bool defChecked = e.GetAttribute("checked") != null;
-                            if (!defChecked && e.HasAttribute("checked"))
-                                e.RemoveAttribute("checked");
-                            else if (defChecked && !e.HasAttribute("checked"))
-                                e.SetAttribute("checked", "");
+                            // The reset steps hand the control back to its attribute: the state the user
+                            // left it in is dropped rather than written into the markup (HTML §4.10.13.6).
+                            e.ResetChecked();
                         }
                         else
                         {
-                            // text, password, email, etc. — restore default value
-                            string? defValue = e.GetAttribute("value");
-                            e.Value = defValue ?? "";
+                            // text, password, email, etc. — the value the markup gave, by dropping the
+                            // page's own write rather than copying the attribute over it.
+                            e.ResetValue();
                         }
                     }
                     else if (tag == "textarea")
                     {
-                        e.Value = e.GetAttribute("value") ?? e.TextContent ?? "";
+                        e.ResetValue();
                     }
                     else if (tag == "select")
                     {

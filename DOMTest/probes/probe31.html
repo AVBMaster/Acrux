@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html><head><title>Probe 31</title></head><body>
+<form id="f"><input id="num" type="number" name="n" value="7" min="0" max="20" step="2"><input id="txt" type="text" value="hello" required><meter id="mt" max="8" value="4"></meter><progress id="pg" max="8" value="2"></progress></form>
+<script>
+(function () {
+  var n = document.getElementById('num');
+  var txt = document.getElementById('txt');
+  var b = document.createElement('a');
+  b.href = 'https://example.org:8443/p/q?s=1#h';
+  var log = [];
+  function p(label, v) { log.push(label + '=' + JSON.stringify(v)); }
+  p('a.protocol', b.protocol); p('a.host', b.host); p('a.hostname', b.hostname);
+  p('a.port', b.port); p('a.pathname', b.pathname); p('a.search', b.search);
+  p('a.hash', b.hash); p('a.origin', b.origin); p('a.href', b.href);
+  b.pathname = '/other'; p('afterPathname', b.href);
+  b.hash = 'frag2'; p('afterHash', b.href);
+  var fresh = document.createElement('a'); p('noHref.href', fresh.href); p('noHref.pathname', fresh.pathname);
+
+  p('n.type', n.type); p('n.value', n.value); p('n.valueAsNumber', n.valueAsNumber);
+  p('n.min', n.min); p('n.max', n.max); p('n.step', n.step);
+  n.stepUp(); p('afterStepUp.value', n.value); p('afterStepUp.number', n.valueAsNumber);
+  n.stepDown(2); p('afterStepDown.value', n.value);
+  n.value = '7'; p('reset', n.value);
+
+  p('txt.value', txt.value); p('txt.selectionStart', txt.selectionStart);
+  txt.setSelectionRange(1, 3);
+  p('afterSelect.start', txt.selectionStart); p('afterSelect.end', txt.selectionEnd);
+  txt.setRangeText('ELL', 1, 3, 'end');
+  p('afterRange.value', txt.value); p('afterRange.start', txt.selectionStart);
+
+  var mt = document.getElementById('mt'), pg = document.getElementById('pg');
+  p('mt.value', mt.value); p('mt.max', mt.max); p('mt.low', mt.low); p('mt.position', mt.position);
+  p('pg.value', pg.value); p('pg.max', pg.max); p('pg.position', pg.position); p('pg.definedValue', pg.definedValue);
+
+  __T('printed', true, log.join('  '));
+})();
+</script></body></html>

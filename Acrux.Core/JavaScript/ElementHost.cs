@@ -6,7 +6,7 @@ using Acrux.Core.Dom.Html;
 
 namespace Acrux.Core.JavaScript;
 
-public class ElementHost : IDomPrototypeHost
+public partial class ElementHost : IDomPrototypeHost
 {
     private readonly Element _element;
     private CssStyleDeclaration? _styleHost;
@@ -165,26 +165,9 @@ public class ElementHost : IDomPrototypeHost
         string.Equals(element.TagName, "STYLE", StringComparison.OrdinalIgnoreCase)
         || string.Equals(element.TagName, "LINK", StringComparison.OrdinalIgnoreCase);
 
-    public string? value
-    {
-        get
-        {
-            // A select answers the value of its selected option (its text when that option carries
-            // no value attribute); a textarea answers its text content; every other element answers
-            // its own value.
-            if (string.Equals(_element.TagName, "SELECT", StringComparison.OrdinalIgnoreCase))
-                return SelectedOptionValue();
-            if (string.Equals(_element.TagName, "TEXTAREA", StringComparison.OrdinalIgnoreCase))
-                return _element.TextContent ?? "";
-            return _element.Value;
-        }
-        set
-        {
-            if (string.Equals(_element.TagName, "TEXTAREA", StringComparison.OrdinalIgnoreCase))
-                _element.TextContent = value ?? "";
-            else _element.Value = value;
-        }
-    }
+    // The control's 'value' — the live write for a text control, the chosen option for a select, the
+    // number for a progress bar or meter — is with the rest of the form control interface in
+    // ElementHost.Forms.cs.
 
     private string? SelectedOptionValue()
     {
@@ -1518,10 +1501,10 @@ public class ElementHost : IDomPrototypeHost
     // no 'dataset' member on purpose: a CLR property is resolved ahead of that prototype accessor
     // and would take 'delete el.dataset.x' back down to a no-op.
 
-    public string? dir
+    public string dir
     {
-        get => _element.GetAttribute("dir");
-        set => _element.SetAttribute("dir", value);
+        get => _element.GetAttribute("dir") ?? "";
+        set => _element.SetAttribute("dir", value ?? "");
     }
 
     public string? lang
@@ -1723,11 +1706,8 @@ public class ElementHost : IDomPrototypeHost
         }
     }
 
-    public bool isDefaultNamespace(string ns) => false;
-
-    public string? lookupNamespaceURI(string prefix) => null;
-
-    public string? lookupPrefix(string ns) => null;
+    // The three namespace helpers live with the table and URL reflections in ElementHost.Tables.cs,
+    // where they read the declarations the ancestry carries (DOM §5.4).
 
     public bool isEqualNode(object? other)
     {
@@ -1832,6 +1812,10 @@ public class ElementHost : IDomPrototypeHost
             if (tag.Equals("TEXTAREA", StringComparison.OrdinalIgnoreCase)) return "textarea";
             if (tag.Equals("OPTION", StringComparison.OrdinalIgnoreCase)) return "option";
             if (tag.Equals("OPTGROUP", StringComparison.OrdinalIgnoreCase)) return "optgroup";
+            // §4.10.19 and §4.10.17: the two elements whose 'type' is a fixed word rather than the
+            // attribute the markup wrote.
+            if (tag.Equals("FIELDSET", StringComparison.OrdinalIgnoreCase)) return "fieldset";
+            if (tag.Equals("OUTPUT", StringComparison.OrdinalIgnoreCase)) return "output";
             if (tag.Equals("BUTTON", StringComparison.OrdinalIgnoreCase))
                 return written is "reset" or "button" ? written : "submit";
             if (tag.Equals("INPUT", StringComparison.OrdinalIgnoreCase))
@@ -1846,14 +1830,18 @@ public class ElementHost : IDomPrototypeHost
         set => _element.SetAttribute("type", value);
     }
 
+    /// <summary>HTML §4.10.5: the state the control is in now, and the one its markup gave — a write to
+    /// 'checked' leaves the 'defaultChecked' answer and the attribute behind.</summary>
     public bool inputChecked
     {
-        get => _element.HasAttribute("checked");
-        set
-        {
-            if (value) _element.SetAttribute("checked", "");
-            else _element.RemoveAttribute("checked");
-        }
+        get => _element.Checked;
+        set => _element.Checked = value;
+    }
+
+    public bool defaultChecked
+    {
+        get => _element.DefaultChecked;
+        set => _element.DefaultChecked = value;
     }
 
     public bool @checked
@@ -1932,14 +1920,19 @@ public class ElementHost : IDomPrototypeHost
         set => _element.SetAttribute("height", value.ToString());
     }
 
+    /// <summary>HTML §4.10.6: 'select()' puts the whole value into the selection and tells the control
+    /// it happened — both halves of what the reference does (a page reads the range back after it).</summary>
     public void select()
     {
+        var text = System.Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        _element.SelectionStart = 0;
+        _element.SelectionEnd = text.Length;
         var evt = new ScriptEvent("select", this);
         DispatchEvent(evt);
     }
 
-    public void setRangeText(string replacement, int? start = null, int? end = null, string? selectionMode = null) { }
-
+    // 'setRangeText', the selection members and the validation surface live with the rest of the form
+    // control interface in ElementHost.Forms.cs.
     public void setSelectionRange(int start, int end, string? direction = null)
     {
         _element.SelectionStart = start;
@@ -1947,12 +1940,8 @@ public class ElementHost : IDomPrototypeHost
     }
 
     // ===== HTMLTextAreaElement specific =====
-    public int rows
-    {
-        get => int.TryParse(_element.GetAttribute("rows"), out var v) ? v : 2;
-        set => _element.SetAttribute("rows", value.ToString());
-    }
-
+    // 'rows' lives with the table interfaces, which answer the collection a table and a section carry
+    // and the number a text area does; 'cols' stays here because only the text area has it.
     public int cols
     {
         get => int.TryParse(_element.GetAttribute("cols"), out var v) ? v : 20;
@@ -2055,7 +2044,10 @@ public class ElementHost : IDomPrototypeHost
     /// A non-form element answers an empty list.</summary>
     public object elements
     {
-        get => string.Equals(_element.TagName, "FORM", StringComparison.OrdinalIgnoreCase)
+        // HTML §4.10.22 and §4.10.19: both the form and the fieldset answer their grouped controls, so
+        // the same live collection serves either receiver; anything else holds no list.
+        get => _element.TagName.Equals("FORM", StringComparison.OrdinalIgnoreCase)
+               || _element.TagName.Equals("FIELDSET", StringComparison.OrdinalIgnoreCase)
             ? new JsFormControlsCollection(_element, JavaScriptEngine.Current ?? Engine)
             : Array.Empty<object>();
     }
@@ -2166,7 +2158,9 @@ public class ElementHost : IDomPrototypeHost
         }
     }
 
-    public bool checkValidity() => true;
+    // The constraint-validation members (checkValidity, reportValidity, validity,
+    // setCustomValidity, validationMessage) are with the rest of the form control interface in
+    // ElementHost.Forms.cs.
 
     // ===== HTMLCanvasElement specific =====
     public ulong canvasWidth
@@ -2218,38 +2212,140 @@ public class ElementHost : IDomPrototypeHost
         set => _element.SetAttribute("src", value ?? "");
     }
 
-    // ===== HTMLAnchorElement specific =====
-    public string? href
+    // ===== HTMLAnchorElement / HTMLAreaElement specific =====
+    // A hyperlink reflects its URL through the 'URL' interface (HTML §4.5.2): the content attribute is
+    // the (possibly relative) author value, while 'href' and every part read that same value resolved
+    // against the document's base URL. Each part the interface also lets the page WRITE rebuilds that
+    // absolute URL and leaves the attribute holding the new whole — measured: 'a.pathname = "/other"'
+    // keeps the search, the hash and the port and drops the old path, and 'a.hostname' keeps the port.
+    public string href
     {
-        get => HrefResolved()?.href;
-        set => _element.SetAttribute("href", value);
+        get => HrefResolved()?.href ?? "";
+        set => _element.SetAttribute("href", AbsoluteOrNull(value));
     }
 
-    // A hyperlink reflects its URL through the 'URL' interface (HTML): the content attribute is
-    // the (possibly relative) author value, while 'href', 'pathname', 'search' and the rest read
-    // the same value resolved to an absolute URL against the document base.
-    private URLHost? HrefResolved()
+    /// <summary>The URL the page wrote, read against the base the document carries: 'href' is settable
+    /// with a relative value and the attribute ends up holding the absolute one.</summary>
+    private string? AbsoluteOrNull(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        var baseUrl = BaseUrlForHref();
+        try { return baseUrl == null ? value : new URLHost(value, baseUrl).href; }
+        catch { return value; }
+    }
+
+    /// <summary>The address a relative href is read against: the document's base URL, which is the
+    /// first base element's href when the page declared one (HTML §2.7.3) and its own address
+    /// otherwise (measured: with 'base href="https://example.com/dir/index.html"' a link to
+    /// '../up/x.html' resolves under example.com, not under the file the page was read from).</summary>
+    private string? BaseUrlForHref()
+    {
+        var fromDocument = _element.OwnerDocument?.BaseUrl;
+        if (!string.IsNullOrEmpty(fromDocument)) return fromDocument;
+        var fromEngine = Engine?.LocationHost?.href ?? JavaScriptEngine.Current?.LocationHost?.href;
+        return string.IsNullOrEmpty(fromEngine) ? null : fromEngine;
+    }
+
+    // Reading a link's URL answers nothing at all when the element has no 'href' to read (measured: a
+    // fresh anchor's 'href' and every part of it are the empty string), while writing a part starts
+    // from the document's own address, because that is the base the new URL is resolved against.
+    private URLHost? HrefResolved(bool writtenPartStartsFromTheDocument = false)
     {
         var raw = _element.GetAttribute("href");
-        if (string.IsNullOrEmpty(raw)) return null;
         try
         {
-            var baseUrl = Engine?.LocationHost?.href
-                ?? JavaScriptEngine.Current?.LocationHost?.href
-                ?? _element.OwnerDocument?.Url;
-            return string.IsNullOrEmpty(baseUrl) ? new URLHost(raw) : new URLHost(raw, baseUrl);
+            var baseUrl = BaseUrlForHref();
+            if (string.IsNullOrEmpty(raw))
+                return writtenPartStartsFromTheDocument && !string.IsNullOrEmpty(baseUrl)
+                    ? new URLHost(baseUrl!) : null;
+            return string.IsNullOrEmpty(baseUrl) ? new URLHost(raw!) : new URLHost(raw!, baseUrl);
         }
         catch { return null; }
     }
 
-    public string pathname => HrefResolved()?.pathname ?? "";
-    public string search => HrefResolved()?.search ?? "";
-    public string hash => HrefResolved()?.hash ?? "";
-    public string protocol => HrefResolved()?.protocol ?? "";
-    public string host => HrefResolved()?.host ?? "";
-    public string hostname => HrefResolved()?.hostname ?? "";
-    public string port => HrefResolved()?.port ?? "";
+    private const int PartProtocol = 0, PartHost = 1, PartHostname = 2, PartPort = 3,
+        PartPathname = 4, PartSearch = 5, PartHash = 6;
+
+    public string pathname
+    {
+        get => HrefResolved()?.pathname ?? "";
+        set => ApplyHrefPart(PartPathname, value);
+    }
+
+    public string search
+    {
+        get => HrefResolved()?.search ?? "";
+        set => ApplyHrefPart(PartSearch, value);
+    }
+
+    public string hash
+    {
+        get => HrefResolved()?.hash ?? "";
+        set => ApplyHrefPart(PartHash, value);
+    }
+
+    public string protocol
+    {
+        get => HrefResolved()?.protocol ?? "";
+        set => ApplyHrefPart(PartProtocol, value);
+    }
+
+    public string host
+    {
+        get => HrefResolved()?.host ?? "";
+        set => ApplyHrefPart(PartHost, value);
+    }
+
+    public string hostname
+    {
+        get => HrefResolved()?.hostname ?? "";
+        set => ApplyHrefPart(PartHostname, value);
+    }
+
+    public string port
+    {
+        get => HrefResolved()?.port ?? "";
+        set => ApplyHrefPart(PartPort, value);
+    }
+
     public string origin => HrefResolved()?.origin ?? "";
+
+    /// <summary>The URL read from the parts the interface keeps, with one of them replaced, written
+    /// back as the resolved form the reference leaves in the attribute (measured: 'a.href' after
+    /// 'a.hash = "frag2"' is the same URL with the new fragment and no double '#').</summary>
+    private void ApplyHrefPart(int which, string? replacement)
+    {
+        var url = HrefResolved(writtenPartStartsFromTheDocument: true);
+        var proto = url?.protocol ?? "https:";
+        var host = url?.hostname ?? "";
+        var port = url?.port ?? "";
+        var path = url?.pathname ?? "/";
+        var search = url?.search ?? "";
+        var hash = url?.hash ?? "";
+        var text = replacement ?? "";
+        switch (which)
+        {
+            case PartProtocol:
+                proto = text.EndsWith(":", StringComparison.Ordinal) ? text : text + ":";
+                break;
+            case PartHost:
+                var colon = text.LastIndexOf(':');
+                if (colon > 0 && colon < text.Length - 1) { host = text.Substring(0, colon); port = text.Substring(colon + 1); }
+                else { host = text; }
+                break;
+            case PartHostname: host = text; break;
+            case PartPort: port = text; break;
+            case PartPathname: path = text.StartsWith("/", StringComparison.Ordinal) ? text : "/" + text; break;
+            case PartSearch:
+                search = text.Length == 0 ? "" : (text.StartsWith("?", StringComparison.Ordinal) ? text : "?" + text);
+                break;
+            case PartHash:
+                hash = text.Length == 0 ? "" : (text.StartsWith("#", StringComparison.Ordinal) ? text : "#" + text);
+                break;
+        }
+        _element.SetAttribute("href", proto + "//" + host + (port.Length > 0 ? ":" + port : "")
+                                   + path + search + hash);
+    }
 
     /// <summary>The 'name' content attribute, reflected on the elements that carry a name
     /// (form controls, hyperlinks, frames). It is the same map the 'name' attribute uses.</summary>
@@ -2259,25 +2355,72 @@ public class ElementHost : IDomPrototypeHost
         set => _element.SetAttribute("name", value);
     }
 
-    public string? rel
+    public string rel
     {
-        get => _element.GetAttribute("rel");
-        set => _element.SetAttribute("rel", value);
+        get => _element.GetAttribute("rel") ?? "";
+        set => _element.SetAttribute("rel", value ?? "");
     }
 
     public RelTokenListHost relList => _relList ??= new(this);
 
-    // Reflected content attributes the standard names directly on the element interface.
-    public string? download
+    // Reflected content attributes the standard names directly on the element interface. A reflected
+    // DOMString is the empty string when the attribute is not there — not null (measured: 'a.download',
+    // 'a.target', 'a.type', 'a.shape' and 'a.coords' all answer '' on a link that does not carry them).
+    public string download
     {
-        get => _element.GetAttribute("download");
-        set => _element.SetAttribute("download", value);
+        get => _element.GetAttribute("download") ?? "";
+        set => _element.SetAttribute("download", value ?? "");
     }
 
-    public string? alt
+    public string alt
     {
-        get => _element.GetAttribute("alt");
-        set => _element.SetAttribute("alt", value);
+        get => _element.GetAttribute("alt") ?? "";
+        set => _element.SetAttribute("alt", value ?? "");
+    }
+
+    public string hreflang
+    {
+        get => _element.GetAttribute("hreflang") ?? "";
+        set => _element.SetAttribute("hreflang", value ?? "");
+    }
+
+    /// <summary>HTML §4.5.2: the language the link points at, from the document's own content language
+    /// when the attribute is missing.</summary>
+    public string language
+    {
+        get => _element.GetAttribute("language") ?? "";
+        set => _element.SetAttribute("language", value ?? "");
+    }
+
+    public string shape
+    {
+        get => _element.GetAttribute("shape") ?? "";
+        set => _element.SetAttribute("shape", value ?? "");
+    }
+
+    public string coords
+    {
+        get => _element.GetAttribute("coords") ?? "";
+        set => _element.SetAttribute("coords", value ?? "");
+    }
+
+    /// <summary>HTML §4.5.2: the referrer policy the link asks for, and the name the browsing context
+    /// it opens is given, both reflected as the empty string when absent.</summary>
+    public string referrerPolicy
+    {
+        get => _element.GetAttribute("referrerpolicy") ?? "";
+        set => _element.SetAttribute("referrerpolicy", value ?? "");
+    }
+
+    /// <summary>HTML §4.5.2 and §4.10.11: the text the hyperlink says, and the text an option shows —
+    /// the option's is its content with the runs of space the markup scattered folded together, which is
+    /// what the option's value falls back to as well.</summary>
+    public string text
+    {
+        get => TagIs(_element, "OPTION")
+            ? CollapseSpaces(_element.TextContent ?? "")
+            : _element.TextContent ?? "";
+        set => _element.TextContent = value ?? "";
     }
 
     public bool multiple
@@ -2305,16 +2448,35 @@ public class ElementHost : IDomPrototypeHost
     public object[] selectedOptions
         => SelectedOptionElements().Select(opt => WrapWithCache(opt) ?? new ElementHost(opt)).ToArray();
 
-    public string? htmlFor
+    /// <summary>HTML §4.10.3 and §4.10.17: a label's 'htmlFor' is the id it names, read as the string
+    /// the attribute holds, while an output's is the list of ids it is about — the interface gives the
+    /// two receivers different shapes (measured: an output's 'htmlFor' is a DOMTokenList of length 2).</summary>
+    public object htmlFor
     {
-        get => _element.GetAttribute("for");
-        set => _element.SetAttribute("for", value);
+        get
+        {
+            if (TagIs(_element, "OUTPUT"))
+                return new DomTokenListHostByAttribute(this, "for");
+            return _element.GetAttribute("for") ?? "";
+        }
+        set
+        {
+            var text = value?.ToString() ?? "";
+            if (TagIs(_element, "OUTPUT"))
+            {
+                foreach (var token in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    _element.SetAttribute("for", text);
+                if (text.Length == 0) _element.RemoveAttribute("for");
+                return;
+            }
+            _element.SetAttribute("for", text);
+        }
     }
 
-    public string? target
+    public string target
     {
-        get => _element.GetAttribute("target");
-        set => _element.SetAttribute("target", value);
+        get => _element.GetAttribute("target") ?? "";
+        set => _element.SetAttribute("target", value ?? "");
     }
 
     // ===== HTMLImageElement specific =====

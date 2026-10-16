@@ -301,16 +301,51 @@ public abstract class Element : Node
     public float IntrinsicWidth { get; set; }
     public float IntrinsicHeight { get; set; }
 
+    // HTML §4.10.7.1: a control holds two values — the one the markup wrote, which the page reads as
+    // 'defaultValue' and which the reset steps hand back, and the live one the page or the user wrote.
+    // Writing the live value leaves the attribute alone (measured: after 'input.value = "x"' the
+    // 'value' attribute still says what the tag said), and an unwritten control answers its attribute.
     private string? _value;
+    private bool? _checked;
+
     public string? Value
     {
-        get => _value ??= GetAttribute("value");
+        get => _value ?? GetAttribute("value");
+        set => _value = value;
+    }
+
+    /// <summary>The 'value' content attribute — what the control was given when it was written out.</summary>
+    public string? DefaultValue
+    {
+        get => GetAttribute("value");
+        set => SetAttribute("value", value);
+    }
+
+    /// <summary>Whether the control carries a value its page or user wrote rather than the markup's —
+    /// the flag the reset steps clear and the form serialization checks.</summary>
+    public bool HasDirtyValue => _value != null;
+
+    internal void ResetValue() => _value = null;
+
+    /// <summary>HTML §4.10.5: 'checked' is the state the user left the control in and 'defaultChecked'
+    /// is the attribute, so the two answer separately for as long as the control is dirty.</summary>
+    public bool Checked
+    {
+        get => _checked ?? HasAttribute("checked");
+        set => _checked = value;
+    }
+
+    public bool DefaultChecked
+    {
+        get => HasAttribute("checked");
         set
         {
-            _value = value;
-            SetAttribute("value", value ?? "");
+            if (value) SetAttribute("checked", "");
+            else RemoveAttribute("checked");
         }
     }
+
+    internal void ResetChecked() => _checked = null;
 
     public string? Name => GetAttribute("name");
     public string? InputType => GetAttribute("type");

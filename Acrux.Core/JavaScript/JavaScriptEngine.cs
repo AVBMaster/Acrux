@@ -1217,6 +1217,23 @@ public class JavaScriptEngine : IDisposable
                 } catch (e) { return false; }
             };
 
+            // URL §2.4.1: 'parse' is the constructor asked as a question — the same parse, but a url the
+            // base cannot resolve answers null instead of throwing (measured: 'URL.parse('not a url%')'
+            // is null while 'URL.parse('https://example.com/a', base)' reads its pathname).
+            URL.parse = function (url, base) {
+                if (arguments.length < 1) {
+                    throw new TypeError('Failed to execute \'parse\' on \'URL\': 1 argument'
+                        + ' required, but only 0 present.');
+                }
+                // The host constructor is lenient about what it makes, so a run that is not absolute and
+                // has no absolute base to lean on is refused here the way the constructor refuses it.
+                if (!URL.canParse(url, base)) return null;
+                try {
+                    var made = new URL(String(url), (base === undefined || base === null) ? '' : String(base));
+                    return made && typeof made.href === 'string' && made.href.length > 0 ? made : null;
+                } catch (e) { return null; }
+            };
+
             // 'reportError' takes a value the page raised without throwing it: it arrives as the
             // error event the window would have got, with the message the reference writes —
             // 'Uncaught ' plus the name and message of an error, or the value as text for anything
