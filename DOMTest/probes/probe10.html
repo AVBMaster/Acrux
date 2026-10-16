@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html><head><title>Probe 10</title></head><body>
+<script>
+(function () {
+  var e = new Event('ping');
+  __T('event instanceof Event', e instanceof Event, Object.prototype.toString.call(e));
+  __T('event own keys', Object.keys(e).length < 20, String(Object.keys(e).length));
+  var m = new MouseEvent('click', { clientX: 5, clientY: 6, button: 2 });
+  __T('mouse instanceof', m instanceof MouseEvent && m instanceof Event, Object.prototype.toString.call(m));
+  __T('mouse fields', m.clientX === 5 && m.clientY === 6 && m.button === 2, [m.clientX, m.clientY, m.button].join('/'));
+  var p = new PointerEvent('pointerdown', { pointerId: 7, pointerType: 'pen', isPrimary: true });
+  __T('pointer extras', p.pointerId === 7 && p.pointerType === 'pen' && p.isPrimary === true, [p.pointerId, p.pointerType, p.isPrimary].join('/'));
+  __T('pointer base', p instanceof PointerEvent && p instanceof MouseEvent, String(Object.prototype.toString.call(p)));
+  var i = new InputEvent('input', { inputType: 'insertText', data: 'ab', isComposing: false });
+  __T('input fields', i.inputType === 'insertText' && i.data === 'ab', [i.inputType, i.data].join('/'));
+  var c = new CloseEvent('close', { code: 1000, reason: 'done', wasClean: true });
+  __T('close fields', c.code === 1000 && c.reason === 'done' && c.wasClean === true, [c.code, c.reason, c.wasClean].join('/'));
+  var ps = new PopStateEvent('popstate', { state: { a: 1 } });
+  __T('popstate state', ps.state && ps.state.a === 1, JSON.stringify(ps.state));
+  var t = new TouchEvent('touchstart', { touches: [new Touch({ identifier: 3, target: document.body })] });
+  __T('touch list', t.touches.length === 1 && t.touches[0].identifier === 3, String(t.touches.length));
+  var a = new AnimationEvent('animationend', { animationName: 'fade', elapsedTime: 1.5, pseudoElement: '::before' });
+  __T('animation fields', a.animationName === 'fade' && a.elapsedTime === 1.5 && a.pseudoElement === '::before', [a.animationName, a.elapsedTime, a.pseudoElement].join('/'));
+  __T('method on proto', typeof e.preventDefault === 'function' && typeof e.stopImmediatePropagation === 'function' && typeof e.composedPath === 'function', typeof e.composedPath);
+  var seen = 0;
+  document.body.addEventListener('ping2', function (ev) { seen++; __T('dispatch keeps fields', ev.detail === 42, 'detail=' + ev.detail); });
+  document.body.dispatchEvent(new CustomEvent('ping2', { detail: 42, bubbles: true }));
+  __T('dispatched once', seen === 1, 'seen=' + seen);
+  __T('focus event type', Object.prototype.toString.call(new FocusEvent('focus')) === '[object FocusEvent]', Object.prototype.toString.call(new FocusEvent('focus')));
+  __T('wheel fields', (function () { var w = new WheelEvent('wheel', { deltaY: 120, deltaMode: 1 }); return w.deltaY === 120 && w.deltaMode === 1; })(), 'x');
+  __T('illegal element ctor', (function () { try { new HTMLInputElement(); return 'no throw'; } catch (err) { return err.name + '|' + err.message; } })(), 'x');
+  __T('input instanceof', document.createElement('input') instanceof HTMLInputElement, 'x');
+})();
+</script></body></html>

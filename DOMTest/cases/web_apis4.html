@@ -8,13 +8,16 @@
   function exists(n){ try { return (0, eval)('typeof ' + n); } catch(e){ return 'err'; } }
 
   ['Headers','FormData','AbortController','AbortSignal','DOMImplementation','TreeWalker','NodeIterator',
-   'Image','Option','BroadcastChannel','MessageChannel','MessagePort','MessageEvent'].forEach(function (g) {
+   'Image','Option','BroadcastChannel','MessageChannel','MessagePort','MessageEvent',
+   // The name the canvas measures with exists as an interface even though this engine has no 2D
+   // context to hand one out from; only its constructor refuses.
+   'TextMetrics'].forEach(function (g) {
     __T('exists:'+g, exists(g) === 'function', 'typeof=' + exists(g));
   });
 
-  // Genuinely-absent subsystems (no XSLT engine / no canvas text metrics yet):
-  // their names must NOT be defined, so a feature check on them answers false rather than lying.
-  ['XSLTProcessor','TextMetrics'].forEach(function (g) {
+  // Genuinely-absent subsystems (no XSLT engine yet): their names must NOT be defined, so a feature
+  // check on them answers false rather than lying.
+  ['XSLTProcessor'].forEach(function (g) {
     __T('absent:'+g, exists(g) === 'undefined', 'typeof=' + exists(g));
   });
 

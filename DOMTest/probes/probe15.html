@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html><body>
+<template id="doc"><p>doc-in</p><span>two</span></template>
+<div id="d1"><template id="nested"><i>inner</i></template></div>
+<script>
+(function () {
+  var t = document.getElementById('doc');
+  __T('document template', t.childNodes.length === 0 && t.content.childNodes.length === 2
+      && t.content.firstChild.nodeName === 'P' && t.content.childNodes[1].nodeName === 'SPAN',
+      'kids=' + t.childNodes.length + ' content=' + t.content.childNodes.length);
+  var n = document.getElementById('nested');
+  __T('nested template', n.content.childNodes.length === 1 && n.content.firstChild.tagName === 'I',
+      'content=' + n.content.childNodes.length);
+  var holder = document.createElement('div');
+  document.body.appendChild(holder);
+  holder.innerHTML = '<template id="frag"><b>frag</b><u>kit</u></template>';
+  var f = document.getElementById('frag');
+  __T('fragment template', !!f && f.content.childNodes.length === 2 && f.childNodes.length === 0,
+      'found=' + !!f + ' content=' + (f && f.content.childNodes.length));
+  __T('template not rendered', holder.querySelector('b') === null && f.content.querySelector('b') !== null,
+      String(holder.querySelector('b')));
+})();
+</script></body></html>

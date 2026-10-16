@@ -96,6 +96,13 @@ public class DocumentHost : IDomPrototypeHost
     // the document element; the rest (doctype, comments) are non-element children.
     public object[] children => _document.Children.OfType<DomElement>().Select(e => (object)WrapElement(e)!).ToArray();
     public object[] childNodes => _document.Children.Select(WrapAnyDocumentNode).Where(x => x != null).Select(x => x!).ToArray();
+    // The tree reads a document answers as well as an element does (§4.1): 'document.firstChild' is
+    // the doctype on a page the parser built, and 'previousSibling' of the root is how a page finds it.
+    public object? firstChild => WrapAnyDocumentNode(_document.Children.FirstOrDefault());
+    public object? lastChild => WrapAnyDocumentNode(_document.Children.LastOrDefault());
+    public object? parentElement => null;
+    public object? nextSibling => null;
+    public object? previousSibling => null;
     public ElementHost? firstElementChild => _document.DocumentElement != null ? WrapElement(_document.DocumentElement) : null;
     public ElementHost? lastElementChild => firstElementChild;
     public int childElementCount => _document.Children.OfType<DomElement>().Count();
@@ -347,6 +354,54 @@ public class DocumentHost : IDomPrototypeHost
 
     public object[] elementsFromPoint(double x, double y) => Array.Empty<object>();
 
+    /// <summary>DOM §4.4 (ParentNode): the document builds trees the same way an element does, so the
+    /// mixin's three methods are here rather than only on an element — a page that calls
+    /// 'document.append(frag)' before the body exists expects the nodes to land on the document.</summary>
+    public void append(params object?[] nodes)
+    {
+        foreach (var n in nodes) InsertOnDocument(n, atEnd: true);
+    }
+
+    public void prepend(params object?[] nodes)
+    {
+        foreach (var n in nodes) InsertOnDocument(n, atEnd: false);
+    }
+
+    public void replaceChildren(params object?[] nodes)
+    {
+        for (var i = _document.Children.Count - 1; i >= 0; i--)
+            _document.RemoveChild(_document.Children[i]);
+        foreach (var n in nodes) InsertOnDocument(n, atEnd: true);
+    }
+
+    private void InsertOnDocument(object? child, bool atEnd)
+    {
+        Node? node = child is string text ? new TextNode(text) : ElementHost.UnwrapNode(child);
+        if (node == null) return;
+        if (node is DocumentFragment frag)
+        {
+            foreach (var moved in frag.Children.ToList())
+            {
+                if (atEnd) _document.AppendChild(moved);
+                else _document.InsertBefore(moved, _document.Children.FirstOrDefault());
+            }
+            return;
+        }
+        if (atEnd) _document.AppendChild(node);
+        else _document.InsertBefore(node, _document.Children.FirstOrDefault());
+    }
+
+    /// <summary>DOM §4.1: 'document.contains(other)' is the ancestor question asked from the root of
+    /// the tree — a node the document holds, including its own document element, answers true.</summary>
+    public bool contains(object? other)
+    {
+        var node = ElementHost.UnwrapNode(other);
+        if (node == null) return false;
+        for (var current = node; current != null; current = current.ParentNode)
+            if (ReferenceEquals(current, _document)) return true;
+        return false;
+    }
+
     public ElementHost? activeElement
     {
         get
@@ -593,7 +648,7 @@ public class DocumentHost : IDomPrototypeHost
 
     public bool fullscreenEnabled() => false;
 
-    public bool exitFullscreen() => false;
+
 
     public string? currentScript => null;
 
@@ -880,15 +935,41 @@ public class DocumentHost : IDomPrototypeHost
         return d;
     }
 
+    /// <summary>HTML §2.8.2: the legacy 'createEvent' answers by event family, and the same door is
+    /// what a page-built event comes through — the family is recorded on the event so its wrapper can
+    /// be stamped with the interface it names (DOM §4.5.2, UI Events §2).</summary>
     public object? createEvent(string type)
     {
-        return type?.ToLowerInvariant() switch
+        var given = type ?? "Event";
+        var name = given.ToLowerInvariant() switch
         {
-            "customevent" => new ScriptEvent("Custom", null),
-            "mouseevent" => new ScriptEvent("Mouse", null),
-            "keyevent" => new ScriptEvent("Key", null),
-            _ => new ScriptEvent(type ?? "Event", null)
+            "event" => "Event",
+            "customevent" => "CustomEvent",
+            "uievent" or "uievents" => "UIEvent",
+            "mouseevent" or "mouseevents" => "MouseEvent",
+            "keyevent" or "keyevents" or "keyboardevent" => "KeyboardEvent",
+            "focusevent" => "FocusEvent",
+            "pointerevent" or "pointerevents" => "PointerEvent",
+            "wheelevent" => "WheelEvent",
+            "inputevent" => "InputEvent",
+            "compositionevent" => "CompositionEvent",
+            "dragevent" => "DragEvent",
+            "touchevent" => "TouchEvent",
+            "clipboardevent" => "ClipboardEvent",
+            "animationevent" or "animationevents" => "AnimationEvent",
+            "transitionevent" or "transitionevents" => "TransitionEvent",
+            "mutationevent" => "MutationEvent",
+            "closeevent" => "CloseEvent",
+            "storageevent" => "StorageEvent",
+            "hashchangeevent" => "HashChangeEvent",
+            "popstateevent" => "PopStateEvent",
+            "pagetransitionevent" => "PageTransitionEvent",
+            "beforeunloadevent" => "BeforeUnloadEvent",
+            "promiserejectionevent" => "PromiseRejectionEvent",
+            "progressevent" => "ProgressEvent",
+            _ => given
         };
+        return new ScriptEvent(name, null) { Kind = name };
     }
 
     private ElementHost? WrapElement(Element? element)
@@ -1587,6 +1668,26 @@ public class DocumentFragmentHost : IDomPrototypeHost
     // builds a subtree up answer the same as an element's do (DOM §3.7).
     public object? ownerDocument => WrapAnyNode(_fragment.OwnerDocument);
     public object? parentElement => _fragment.ParentElement == null ? null : WrapAnyNode(_fragment.ParentElement);
+    // ParentNode's element reads, which a template's content is used through more than anywhere
+    // else in the platform (§4.12.3): 'content.firstElementChild' is the idiom a page clones by.
+    public object? firstElementChild
+    {
+        get
+        {
+            foreach (var child in _fragment.Children)
+                if (child is DomElement) return WrapAnyNode(child);
+            return null;
+        }
+    }
+    public object? lastElementChild
+    {
+        get
+        {
+            for (var i = _fragment.Children.Count - 1; i >= 0; i--)
+                if (_fragment.Children[i] is DomElement) return WrapAnyNode(_fragment.Children[i]);
+            return null;
+        }
+    }
     public object? firstChild => WrapAnyNode(_fragment.FirstChild);
     public object? lastChild => WrapAnyNode(_fragment.LastChild);
     public object? parentNode => WrapAnyNode(_fragment.ParentNode);

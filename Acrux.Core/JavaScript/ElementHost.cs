@@ -49,9 +49,43 @@ public class ElementHost : IDomPrototypeHost
 
     public string nodeName => _element.NodeName;
 
-    public string __domType => "HTMLElement";
+    // The interface an element is read as belongs to its tag and its namespace (HTML §4.1): the page
+    // asks 'input instanceof HTMLInputElement' and 'circle instanceof SVGElement', and the wrapper's
+    // prototype is stamped from the name the chain ends with.
+    public string __domType => InterfaceName;
 
-    public string[] __domTypeChain => new[] { "EventTarget", "Node", "Element", "HTMLElement" };
+    public string[] __domTypeChain
+    {
+        get
+        {
+            var name = InterfaceName;
+            // The table stores the interfaces each one inherits from — the same line of descent the
+            // constructor registration reads — and the chain a wrapper declares ends with the
+            // interface itself, which is the level the prototype is taken from.
+            if (Acrux.Core.Dom.Html.HtmlElementFactory.Interfaces.TryGetValue(name, out var bases))
+            {
+                var full = new string[bases.Length + 1];
+                bases.CopyTo(full, 0);
+                full[bases.Length] = name;
+                return full;
+            }
+            return new[] { "Object", "EventTarget", "Node", "Element", name };
+        }
+    }
+
+    private string InterfaceName
+    {
+        get
+        {
+            var ns = _element.NamespaceUri;
+            if (ns == "http://www.w3.org/2000/svg")
+                return _element.LocalName.Equals("svg", StringComparison.OrdinalIgnoreCase)
+                    ? "SVGSVGElement" : "SVGElement";
+            if (ns == "http://www.w3.org/1998/Math/MathML") return "MathMLElement";
+            if (ns != null && ns != "http://www.w3.org/1999/xhtml") return "Element";
+            return Acrux.Core.Dom.Html.HtmlElementFactory.InterfaceNameFor(_element.LocalName);
+        }
+    }
 
     public string? textContent
     {
@@ -151,8 +185,7 @@ public class ElementHost : IDomPrototypeHost
 
     private string? SelectedOptionValue()
     {
-        var opts = _element.Children.OfType<Element>().Where(e => string.Equals(e.TagName, "OPTION", StringComparison.OrdinalIgnoreCase)).ToList();
-        var chosen = opts.FirstOrDefault(o => o.HasAttribute("selected")) ?? opts.FirstOrDefault();
+        var chosen = SelectedOptionElements().FirstOrDefault();
         if (chosen == null) return "";
         var v = chosen.GetAttribute("value");
         return v ?? chosen.TextContent?.Trim();
@@ -187,7 +220,10 @@ public class ElementHost : IDomPrototypeHost
         get => WrapWithCache(_element.ParentElement);
     }
 
-    public ElementHost? parentNode => parentElement;
+    /// <summary>DOM §4.1: a node's parent is whatever holds it — for the document element that is the
+    /// Document itself and for a child of a fragment the fragment, and neither of those is an element,
+    /// so the read cannot be borrowed from 'parentElement' the way it was.</summary>
+    public object? parentNode => JsIntegrationService.WrapAny(_element.ParentNode);
 
     public object? previousElementSibling
     {
@@ -1278,9 +1314,30 @@ public class ElementHost : IDomPrototypeHost
         }
     }
 
-    public void remove()
+    /// <summary>ChildNode.remove (§5.5) takes this node out of whatever holds it — a parent that is a
+    /// document or a fragment counts, not only a parent element. On a select the same name takes an
+    /// index instead, and the option at that place is what leaves the list (HTML §4.10.9).</summary>
+    public void remove(object? index = null)
     {
-        _element.ParentElement?.RemoveChild(_element);
+        if (index != null && _element.TagName.Equals("SELECT", StringComparison.OrdinalIgnoreCase))
+        {
+            var options = _element.Children.OfType<Element>().ToList();
+            var at = ToInt(index, -1);
+            if (at >= 0 && at < options.Count) _element.RemoveChild(options[at]);
+            return;
+        }
+        (_element.ParentNode as Node)?.RemoveChild(_element);
+    }
+
+    private static int ToInt(object? value, int fallback)
+    {
+        try
+        {
+            if (value == null) return fallback;
+            var text = value.ToString() ?? "";
+            return int.TryParse(text, out var parsed) ? parsed : fallback;
+        }
+        catch { return fallback; }
     }
 
     // ParentNode/ChildNode mixin (DOM 4 §5.5). 'replaceWith' takes the place of this node,
@@ -1605,10 +1662,28 @@ public class ElementHost : IDomPrototypeHost
 
     public bool hasPointerCapture(int pointerId) => false;
 
-    // ===== HTMLInputElement / HTMLTextAreaElement specific =====
+    /// <summary>The 'type' the interface answers is a different reflection per family (HTML §4.10.5,
+    /// §4.10.6, §4.10.9): an input reads its attribute and defaults to 'text', a button defaults to
+    /// 'submit', a select derives its word from 'multiple' and never reads an attribute, and a
+    /// textarea or an option answers the family's own name. The other families — link, script, style,
+    /// source, track — answer the attribute the page wrote, which is the MIME hint they carry.</summary>
     public string? type
     {
-        get => inputType;
+        get
+        {
+            var tag = _element.TagName;
+            var written = _element.GetAttribute("type");
+            if (tag.Equals("SELECT", StringComparison.OrdinalIgnoreCase))
+                return multiple ? "select-multiple" : "select-one";
+            if (tag.Equals("TEXTAREA", StringComparison.OrdinalIgnoreCase)) return "textarea";
+            if (tag.Equals("OPTION", StringComparison.OrdinalIgnoreCase)) return "option";
+            if (tag.Equals("OPTGROUP", StringComparison.OrdinalIgnoreCase)) return "optgroup";
+            if (tag.Equals("BUTTON", StringComparison.OrdinalIgnoreCase))
+                return written is "reset" or "button" ? written : "submit";
+            if (tag.Equals("INPUT", StringComparison.OrdinalIgnoreCase))
+                return string.IsNullOrEmpty(written) ? "text" : written;
+            return written;
+        }
         set => inputType = value;
     }
     public string? inputType
@@ -1733,10 +1808,14 @@ public class ElementHost : IDomPrototypeHost
     // ===== HTMLSelectElement specific =====
     public int selectedIndex
     {
-        get => _element.Children.OfType<Element>().ToList().FindIndex(e => e.HasAttribute("selected"));
+        get
+        {
+            var chosen = SelectedOptionElements().FirstOrDefault();
+            return chosen == null ? -1 : OptionElements().IndexOf(chosen);
+        }
         set
         {
-            var options = _element.Children.OfType<Element>().ToList();
+            var options = OptionElements();
             for (int i = 0; i < options.Count; i++)
             {
                 if (i == value) options[i].SetAttribute("selected", "");
@@ -1745,12 +1824,42 @@ public class ElementHost : IDomPrototypeHost
         }
     }
 
-    public object[] options
+    public object[] options => OptionElements()
+        .Select(e => (object)(WrapWithCache(e) ?? new ElementHost(e))).ToArray();
+
+    public int selectLength => OptionElements().Count;
+
+    /// <summary>HTML §4.10.9: the select's list of options is every option it contains, the ones
+    /// inside an option group included, in tree order.</summary>
+    private List<Element> OptionElements()
     {
-        get => _element.Children.OfType<Element>().Select(e => (object)(WrapWithCache(e) ?? new ElementHost(e))).ToArray();
+        var list = new List<Element>();
+        CollectOptions(_element, list);
+        return list;
     }
 
-    public int selectLength => _element.Children.OfType<Element>().Count();
+    private static void CollectOptions(Node root, List<Element> into)
+    {
+        foreach (var child in root.Children.OfType<Element>())
+        {
+            var tag = child.TagName;
+            if (tag.Equals("OPTION", StringComparison.OrdinalIgnoreCase)) into.Add(child);
+            else if (tag.Equals("OPTGROUP", StringComparison.OrdinalIgnoreCase)) CollectOptions(child, into);
+        }
+    }
+
+    /// <summary>Which options the select answers as chosen: the ones the page marked, and — for a
+    /// single-choice select with nothing marked — its first option, which is what the reference
+    /// reports before a page touches the list at all (measured: 'selectedIndex' is 0 and
+    /// 'selectedOptions' holds one option for a fresh select with an option in it).</summary>
+    private List<Element> SelectedOptionElements()
+    {
+        var options = OptionElements();
+        var marked = options.Where(o => o.HasAttribute("selected")).ToList();
+        if (marked.Count > 0) return multiple ? marked : new List<Element> { marked[0] };
+        if (!multiple && options.Count > 0) return new List<Element> { options[0] };
+        return marked;
+    }
 
     // ===== HTMLFormElement specific =====
     public object[] formElements
@@ -1808,6 +1917,28 @@ public class ElementHost : IDomPrototypeHost
     public void formReset()
     {
         var evt = new ScriptEvent("reset", this);
+        DispatchEvent(evt);
+    }
+
+    /// <summary>HTMLFormElement.requestSubmit (HTML §4.10.22.6): the form asks to be submitted the way
+    /// a button would — the 'submit' event runs first and a cancelled one stops the submission, which
+    /// is the difference from 'submit()' that the interface defines. A submitter that is not a control
+    /// of this form is refused.</summary>
+    public void requestSubmit(object? submitter = null)
+    {
+        if (submitter != null && submitter is not ElementHost)
+            throw new DOMException("Failed to execute 'requestSubmit' on 'HTMLFormElement': parameter 1"
+                                   + " is not of type 'HTMLElement'.", "TypeError");
+        if (!_element.TagName.Equals("FORM", StringComparison.OrdinalIgnoreCase)) return;
+        // The submitter is clicked first, and the form's own 'submit' runs after it — both through
+        // the host's dispatch, so a listener the page wrote sees them and can cancel the second
+        // (§4.10.22.6). The engine has no form navigation to run for a request that stands.
+        if (submitter is ElementHost button)
+        {
+            var click = new ScriptEvent("click", button);
+            button.DispatchEvent(click);
+        }
+        var evt = new ScriptEvent("submit", this) { cancelable = true };
         DispatchEvent(evt);
     }
 
@@ -1979,19 +2110,24 @@ public class ElementHost : IDomPrototypeHost
         set { if (value) _element.SetAttribute("multiple", ""); else _element.RemoveAttribute("multiple"); }
     }
 
-    /// <summary>HTMLSelectElement.selectedOptions — the option children whose 'selected' flag is
-    /// set, in tree order.</summary>
-    public object[] selectedOptions
+    /// <summary>HTML §4.12.3: the template's content fragment. The parser fills a template's children
+    /// the way it fills any other element, so the first time the fragment is asked for, those children
+    /// move into it — which is where the specification keeps them, and why 'template.children' is read
+    /// as empty while 'template.content.firstChild' holds the markup the page wrote. The fragment is
+    /// the element's own, so 'tpl.content === tpl.content' holds.</summary>
+    public object? __templateContent()
     {
-        get
-        {
-            var list = new List<object>();
-            foreach (var opt in _element.Children.OfType<Element>())
-                if (string.Equals(opt.TagName, "OPTION", StringComparison.OrdinalIgnoreCase) && opt.HasAttribute("selected"))
-                    list.Add(WrapWithCache(opt) ?? new ElementHost(opt));
-            return list.ToArray();
-        }
+        if (!_element.TagName.Equals("TEMPLATE", StringComparison.OrdinalIgnoreCase)) return null;
+        if (_element is not Acrux.Core.Dom.Html.HTMLTemplateElement template) return null;
+        var fragment = template.Content;
+        if (fragment.OwnerDocument == null) fragment.OwnerDocument = _element.OwnerDocument;
+        foreach (var child in _element.Children.ToList()) fragment.AppendChild(child);
+        return JsIntegrationService.WrapAny(fragment);
     }
+
+    /// <summary>HTMLSelectElement.selectedOptions — the options the select answers as chosen (§4.10.9).</summary>
+    public object[] selectedOptions
+        => SelectedOptionElements().Select(opt => WrapWithCache(opt) ?? new ElementHost(opt)).ToArray();
 
     public string? htmlFor
     {
@@ -2296,8 +2432,17 @@ public class DomTokenListHost
     }
 }
 
-public class ScriptEvent
+public class ScriptEvent : IDomPrototypeHost
 {
+    /// <summary>The interface this event reads as (DOM §4.5.2, UI Events §2 and the families built on
+    /// top of them). A page that calls 'new WheelEvent(...)' asks the document for an event of that
+    /// kind, and the kind is what stamps the wrapper with that interface's prototype — so
+    /// 'wheel instanceof WheelEvent' and '[object WheelEvent]' both follow from it.</summary>
+    internal string Kind = "Event";
+
+    string[] IDomPrototypeHost.__domTypeChain =>
+        Kind == "Event" ? new[] { "Event" } : new[] { "Event", Kind };
+
     public string type { get; set; }
     public ElementHost? target { get; }
     public ElementHost? currentTarget { get; set; }
@@ -2315,7 +2460,6 @@ public class ScriptEvent
 
     // Keyboard event properties
     public string? key { get; set; }
-    public string? code { get; set; }
     public bool ctrlKey { get; set; }
     public bool shiftKey { get; set; }
     public bool altKey { get; set; }

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html><body><script>
+(function () {
+  var re = /(matrix|matrix3d|translate|translateX|translateY|translateZ|translate3d|scale|scaleX|scaleY|scaleZ|scale3d|rotate|rotateX|rotateY|rotateZ|rotateAxis3d|skew|skewX|skewY)\(([^)]*)\)/g;
+  var s = 'rotate(90deg)';
+  var m2 = re.exec(s);
+  __T('regex', !!m2, m2 ? (m2[1] + '/' + m2[2]) : 'no match');
+  var parts = m2 ? m2[2].split(/[,\s]+/).filter(function (p) { return p.length; }).map(function (p) { return parseFloat(p); }) : [];
+  __T('parts', parts.length === 1, JSON.stringify(parts) + ' cos=' + Math.cos(parts[0] * Math.PI / 180));
+  var r2 = new DOMMatrix('rotate(90deg)');
+  var r3 = new DOMMatrix('matrix(0, 1, -1, 0, 0, 0)');
+  __T('compare', true, 'rot=[' + r2.a + ',' + r2.b + ',' + r2.c + ',' + r2.d + '] mat=[' + r3.a + ',' + r3.b + ',' + r3.c + ',' + r3.d + ']');
+  var r4 = new DOMMatrix('translate(3px, 4px)');
+  __T('translate px', true, 'e=' + r4.e + ' f=' + r4.f + ' m41=' + r4.m41);
+})();
+</script></body></html>

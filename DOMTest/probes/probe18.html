@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html><body><script>
+(function () {
+  var de = document.documentElement;
+  __T('documentElement parent', de.parentNode === document, typeof de.parentNode + '/' + String(de.parentNode === document));
+  var p = document.createElement('p');
+  document.append(p);
+  __T('appended to document', p.parentNode === document, typeof p.parentNode + '/' + String(p.parentNode) + ' kids=' + document.childNodes.length + ' first=' + (document.firstChild && document.firstChild.nodeName));
+  __T('childNodes contains', Array.prototype.indexOf.call(document.childNodes, p) >= 0, String(document.childNodes.length));
+})();
+</script></body></html>

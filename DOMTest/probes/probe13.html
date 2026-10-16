@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html><head><title>Probe 13</title></head><body>
+<script>
+(function () {
+  var PL = PointerEvent.prototype, ML = MouseEvent.prototype, UL = UIEvent.prototype, EL = Event.prototype;
+  function tag(o) { try { return String(o[Symbol.toStringTag]); } catch (e) { return 'err'; } }
+  __T('links', Object.getPrototypeOf(PL) === ML,
+      'PL.next.tag=' + tag(Object.getPrototypeOf(PL)) + ' ML.tag=' + tag(ML) +
+      ' ML.next.tag=' + tag(Object.getPrototypeOf(ML)) + ' UL.next.tag=' + tag(Object.getPrototypeOf(UL)) +
+      ' EL.next.tag=' + tag(Object.getPrototypeOf(EL)) +
+      ' MLisProtoOfPL=' + (Object.getPrototypeOf(PL) === ML) + ' ML===dom?' + (ML === (window.__domProto||{}).MouseEvent));
+  var p = new PointerEvent('x');
+  __T('instanceof now', p instanceof PointerEvent && p instanceof MouseEvent && p instanceof UIEvent && p instanceof Event,
+      [p instanceof PointerEvent, p instanceof MouseEvent, p instanceof UIEvent, p instanceof Event].join('/'));
+  var d = document.createElement('div');
+  __T('div instanceof chain', d instanceof HTMLDivElement && d instanceof HTMLElement && d instanceof Element && d instanceof Node,
+      [d instanceof HTMLDivElement, d instanceof HTMLElement, d instanceof Element, d instanceof Node].join('/'));
+  var i = document.createElement('input');
+  __T('input instanceof chain', i instanceof HTMLInputElement && i instanceof HTMLElement && i instanceof Element,
+      [i instanceof HTMLInputElement, i instanceof HTMLElement, i instanceof Element].join('/'));
+})();
+</script></body></html>

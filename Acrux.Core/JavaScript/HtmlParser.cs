@@ -48,13 +48,22 @@ public static class HtmlParser
         var el = HtmlElementFactory.Create(element.LocalName);
         foreach (var attr in element.Attributes)
             el.Attributes[attr.Name] = attr.Value;
+        // A template's markup is not its children: the parser keeps it in the element's content
+        // fragment, and AngleSharp has already put it there — copying 'ChildNodes' would drop it
+        // (HTML §13.2.6.5, §4.12.3).
+        var source = element is AngleSharp.Html.Dom.IHtmlTemplateElement templateElement
+            ? templateElement.Content.ChildNodes
+            : element.ChildNodes;
+        var into = element is AngleSharp.Html.Dom.IHtmlTemplateElement && el is Acrux.Core.Dom.Html.HTMLTemplateElement contented
+            ? (Node)contented.Content
+            : el;
         // AppendChild rather than the child list: the parent link is part of the
         // tree, and numbering, style inheritance and 'closest()' all walk it.
-        foreach (var child in element.ChildNodes)
+        foreach (var child in source)
         {
             var converted = Convert(child);
             if (converted != null)
-                el.AppendChild(converted);
+                into.AppendChild(converted);
         }
         return el;
     }

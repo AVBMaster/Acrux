@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html><head><title>Probe 11</title></head><body>
+<script>
+(function () {
+  var tp = new Touch({ identifier: 3, target: document.body, clientX: 7 });
+  __T('touch identifier', tp.identifier === 3, typeof tp.identifier + '/' + String(tp.identifier));
+  __T('touch clientX', tp.clientX === 7, String(tp.clientX));
+  var ev = new CloseEvent('close', { code: 1000 });
+  __T('close code number', ev.code === 1000, typeof ev.code + '/' + String(ev.code));
+  var kb = new KeyboardEvent('keydown', { code: 'KeyA', key: 'a' });
+  __T('keyboard code', kb.code === 'KeyA' && kb.key === 'a', typeof kb.code + '/' + String(kb.code));
+  var t = new TouchEvent('touchstart', { touches: [tp] });
+  __T('touches pass through', t.touches.length === 1 && t.touches[0] === tp && t.touches[0].identifier === 3,
+      t.touches.length + '/' + String(t.touches[0] === tp) + '/' + String(t.touches[0] && t.touches[0].identifier));
+  var e = new Event('x');
+  __T('event instanceof Event', e instanceof Event,
+      Object.prototype.toString.call(e) + ' chain=' + (window.Event.prototype === Object.getPrototypeOf(Object.getPrototypeOf(e))));
+  var m = new MouseEvent('click');
+  __T('mouse instanceof', m instanceof MouseEvent && m instanceof Event,
+      Object.prototype.toString.call(m) + ' mp=' + (m instanceof MouseEvent));
+})();
+</script></body></html>

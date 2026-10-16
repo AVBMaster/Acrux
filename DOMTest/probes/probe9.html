@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html><head><title>Probe 9</title></head><body><template id="tp"></template><select id="se"></select>
+<script>
+(function () {
+  var tp = document.getElementById('tp');
+  var made = document.createElement('template');
+  function j(v) { try { return JSON.stringify(v); } catch (e) { return String(v); } }
+  __T('tp local/ns', tp.localName + '|' + tp.namespaceURI, tp.localName + '|' + String(tp.namespaceURI));
+  __T('tp type member', String(tp.__domType), j(tp.__domTypeChain));
+  __T('made type member', String(made.__domType), j(made.__domTypeChain));
+  __T('tp toString', Object.prototype.toString.call(tp), String(tp instanceof HTMLTemplateElement));
+  __T('made toString', Object.prototype.toString.call(made), String(made instanceof HTMLTemplateElement));
+  __T('se toString', Object.prototype.toString.call(document.getElementById('se')), 'x');
+  var cloneHost = document.querySelector('template');
+  __T('querySelector toString', Object.prototype.toString.call(cloneHost), String(cloneHost === tp));
+})();
+</script></body></html>

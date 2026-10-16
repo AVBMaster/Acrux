@@ -389,8 +389,13 @@ internal class HtmlTreeBuilder
                 break;
 
             case InsertionMode.TemplateContents:
+                // HTML §13.2.6.5: inside a template the only end tag with a rule of its own is the
+                // one that closes the template; every other end tag is handled as it would be in the
+                // body, which is what keeps '</p>' from leaving a paragraph open over the rest.
                 if (tagName == "template")
                     ProcessTemplateEndTag(token);
+                else
+                    ProcessEndTagForInBody(token);
                 break;
 
             default:
@@ -1246,7 +1251,12 @@ internal class HtmlTreeBuilder
         if (!_tree.OpenElements.HasTemplateInHtmlScope)
             return false;
         _tree.GenerateImpliedEndTags();
+        // The element the parser filled while in template mode is the one being closed; its markup
+        // belongs to the content fragment from here on (§4.12.3).
+        var closing = (_tree.CurrentStackItem?.Node) as Acrux.Core.Dom.Html.HTMLTemplateElement;
         _tree.OpenElements.PopUntilPopped("template");
+        if (closing != null)
+            foreach (var child in closing.Children.ToList()) closing.Content.AppendChild(child);
         _tree.ActiveFormattingElements.ClearToLastMarker();
         if (_templateInsertionModes.Count > 0)
             _templateInsertionModes.RemoveAt(_templateInsertionModes.Count - 1);

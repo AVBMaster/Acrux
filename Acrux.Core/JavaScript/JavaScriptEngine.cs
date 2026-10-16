@@ -1612,17 +1612,74 @@ public class JavaScriptEngine : IDisposable
             // milliseconds since the page began, 'mark'/'measure' keep the named timestamps a
             // profiler reads back. The high-resolution origin is the host's monotonic clock; a
             // wall-clock fallback is fine when one is not wired.
+            // Performance Timeline §3.4, §3.5: the clock a page measures with runs from the time
+            // origin, and a mark or a measure is an entry the buffer keeps until it is cleared —
+            // 'getEntries' answers them in the order they started, and 'now' is the milliseconds
+            // since the origin rather than the wall clock.
+            var perfOrigin = Date.now();
+            var perfBuffer = { mark: [], measure: [] };
+            function perfEntry(type, name, startTime, duration) {
+                return { name: String(name), entryType: type,
+                    startTime: Number(startTime) || 0, duration: Number(duration) || 0,
+                    toJSON: function () {
+                        return { name: this.name, entryType: this.entryType,
+                            startTime: this.startTime, duration: this.duration };
+                    },
+                    detail: null };
+            }
+            function perfSorted(type) {
+                var list = type === undefined ? perfBuffer.mark.concat(perfBuffer.measure)
+                    : (perfBuffer[type] || []).slice();
+                return list.sort(function (a, b) { return a.startTime - b.startTime; });
+            }
+            function perfMarkStart(name) {
+                var found = perfBuffer.mark.concat(perfBuffer.measure);
+                for (var i = 0; i < found.length; i++) if (found[i].name === String(name)) return found[i].startTime;
+                return undefined;
+            }
             var performance = {
-                timeOrigin: Date.now(),
-                now: function () { return Date.now(); },
-                _marks: {},
-                mark: function (name) { this._marks[String(name)] = { name: String(name), startTime: Date.now(), duration: 0 }; },
-                clearMarks: function (name) { if (name === undefined) this._marks = {}; else delete this._marks[String(name)]; },
-                getEntriesByName: function (name) { var m = this._marks[String(name)]; return m ? [m] : []; },
-                getEntriesByType: function () { return []; },
-                getEntries: function () { return []; },
-                measure: function () {},
-                clearMeasures: function () {},
+                timeOrigin: perfOrigin,
+                now: function () { return Date.now() - perfOrigin; },
+                mark: function (name) {
+                    var made = perfEntry('mark', name === undefined ? '' : name, this.now(), 0);
+                    perfBuffer.mark.push(made);
+                    return made;
+                },
+                measure: function (name, startOrOptions, end) {
+                    var start = 0, duration = 0;
+                    if (startOrOptions && typeof startOrOptions === 'object') {
+                        start = startOrOptions.start === undefined
+                            ? (perfMarkStart(startOrOptions.startMark) || 0)
+                            : Number(startOrOptions.start) || 0;
+                        duration = startOrOptions.duration === undefined
+                            ? (startOrOptions.end === undefined ? 0
+                                : (Number(startOrOptions.end) || 0) - start)
+                            : Number(startOrOptions.duration) || 0;
+                    } else if (startOrOptions === undefined) {
+                        start = 0;
+                    } else {
+                        var from = perfMarkStart(startOrOptions);
+                        var to = perfMarkStart(end);
+                        start = from === undefined ? this.now() : from;
+                        duration = (to === undefined ? this.now() : to) - start;
+                    }
+                    var made = perfEntry('measure', name === undefined ? '' : name, start, duration);
+                    perfBuffer.measure.push(made);
+                    return made;
+                },
+                clearMarks: function (name) {
+                    if (name === undefined) { perfBuffer.mark = []; return; }
+                    perfBuffer.mark = perfBuffer.mark.filter(function (e) { return e.name !== String(name); });
+                },
+                clearMeasures: function (name) {
+                    if (name === undefined) { perfBuffer.measure = []; return; }
+                    perfBuffer.measure = perfBuffer.measure.filter(function (e) { return e.name !== String(name); });
+                },
+                getEntries: function () { return perfSorted(); },
+                getEntriesByType: function (type) { return perfSorted(String(type)); },
+                getEntriesByName: function (name) {
+                    return perfSorted().filter(function (e) { return e.name === String(name); });
+                },
                 memory: {}
             };
             window.performance = performance;
@@ -2611,6 +2668,1210 @@ public class JavaScriptEngine : IDisposable
                 };
             })();
 
+            // ── The element interfaces a tag names (HTML §4.1, §1.9) ───────────
+            // A wrapper is stamped with the interface its tag and namespace name (HTML §4.1), so
+            // 'input instanceof HTMLInputElement' and '[object HTMLDivElement]' read from the same
+            // table the element factory builds its classes from. Those interfaces are not page-side
+            // constructors — 'new HTMLInputElement()' refuses — but a custom element class that
+            // derives from one still gets its element through 'super()', so the refusal runs only
+            // when nothing is being built (§1.9).
+            (function () {
+                var tagShape = /^(HTML|SVG|MathML)[A-Za-z0-9]*Element$/;
+                var protoMap = window.__domProto || {};
+                var names = Object.getOwnPropertyNames(window);
+                function illegalise(name, proto) {
+                    var Ctor = function () {
+                        if (window.__ceTakeElement) {
+                            var taken = window.__ceTakeElement(
+                                typeof new.target === 'function' ? new.target : null);
+                            if (taken) {
+                                try { Object.setPrototypeOf(taken, proto); } catch (e) { }
+                                return taken;
+                            }
+                        }
+                        throw new TypeError('Failed to construct \'' + name
+                            + '\': Illegal constructor');
+                    };
+                    Object.defineProperty(Ctor, 'name', { value: name, configurable: true });
+                    Ctor.prototype = proto;
+                    return Ctor;
+                }
+                for (var i = 0; i < names.length; i++) {
+                    var name = names[i];
+                    if (!tagShape.test(name) || name === 'HTMLElement') continue;
+                    var level = protoMap[name];
+                    var Ctor = window[name];
+                    // Only the interfaces the DOM prototype system built: a page's own class that
+                    // happens to be named like one of them is left alone.
+                    if (!level || typeof Ctor !== 'function' || Ctor.prototype !== level) continue;
+                    window[name] = illegalise(name, level);
+                }
+            })();
+
+            // ── Window members a page reads (HTML §7.3, §9.2; CSSOM View §9) ──
+            (function () {
+                function constant(name, value) {
+                    Object.defineProperty(window, name, { configurable: true, enumerable: true,
+                        get: function () { return value; } });
+                }
+                Object.defineProperty(window, 'origin', {
+                    configurable: true, enumerable: true,
+                    get: function () {
+                        try { return String(location.origin || location.href); } catch (e) { return ''; }
+                    }
+                });
+                // A page the engine opens over a scheme the reference treats as trustworthy is a
+                // secure context, and the cross-origin isolation the engine never asks for is off.
+                constant('isSecureContext', true);
+                constant('crossOriginIsolated', false);
+                // A window that is not itself in a frame has no element that represents it (§7.3).
+                constant('frameElement', null);
+                constant('external', { AddSearchProvider: function () { },
+                    IsSearchProviderInstalled: function () { return 0; } });
+                // The visual viewport (CSSOM View §9) reports the area the host lays the page out in,
+                // at scale one — the zoom interface has no separate state to read from.
+                var viewport = { offsetLeft: 0, offsetTop: 0, scale: 1,
+                    onresize: null, onscroll: null };
+                viewport.addEventListener = function () { };
+                viewport.removeEventListener = function () { };
+                viewport.dispatchEventListener = undefined;
+                Object.defineProperty(viewport, 'width', { configurable: true, enumerable: true,
+                    get: function () { try { return window.innerWidth; } catch (e) { return 0; } } });
+                Object.defineProperty(viewport, 'height', { configurable: true, enumerable: true,
+                    get: function () { try { return window.innerHeight; } catch (e) { return 0; } } });
+                Object.defineProperty(viewport, 'pageLeft', { configurable: true, enumerable: true,
+                    get: function () { try { return window.scrollX; } catch (e) { return 0; } } });
+                Object.defineProperty(viewport, 'pageTop', { configurable: true, enumerable: true,
+                    get: function () { try { return window.scrollY; } catch (e) { return 0; } } });
+                try {
+                    Object.defineProperty(viewport, Symbol.toStringTag,
+                        { value: 'VisualViewport', configurable: true });
+                } catch (e) { }
+                constant('visualViewport', viewport);
+                // An image bitmap needs decoded bytes; the engine decodes an image inside its own
+                // pipeline, so the promise is refused the way the interface refuses a source it
+                // cannot read rather than throwing out of the call (HTML §9.2).
+                window.createImageBitmap = function () {
+                    return Promise.reject(new DOMException('The source given could not be decoded.',
+                        'InvalidStateError'));
+                };
+                // Web Animations §4.6: the timeline the window and the document report. The engine
+                // runs its animations from the style pass, and the document's animation list is the
+                // host's answer (empty until 'element.animate' hands an animation back).
+                var timeline = { currentTime: 0, phase: 'active', playbackRate: 1 };
+                try {
+                    Object.defineProperty(timeline, Symbol.toStringTag,
+                        { value: 'DocumentTimeline', configurable: true });
+                } catch (e) { }
+                Object.defineProperty(document, 'timeline', { configurable: true, enumerable: true,
+                    get: function () { return timeline; } });
+                window.getAnimations = function () { return document.getAnimations(); };
+                // Fullscreen §5: nothing in this engine takes a window over, so the element is null,
+                // the flag is off and the exit is refused the way a document that is not in
+                // fullscreen is.
+                Object.defineProperty(document, 'fullscreenElement', { configurable: true,
+                    enumerable: true, get: function () { return null; } });
+                Object.defineProperty(document, 'fullscreenEnabled', { configurable: true,
+                    enumerable: true, get: function () { return false; } });
+                Object.defineProperty(document, 'pictureInPictureEnabled', { configurable: true,
+                    enumerable: true, get: function () { return false; } });
+                document.exitFullscreen = function () {
+                    return Promise.reject(new DOMException(
+                        'The document is not fullscreen.', 'NotFoundError'));
+                };
+                document.exitPictureInPicture = function () {
+                    return Promise.reject(new DOMException(
+                        'The document is not in picture-in-picture mode.', 'NotFoundError'));
+                };
+                // DOM String list (§2.7): the ordered set with an index face, a length and 'item'.
+                function DOMStringList(items) {
+                    var list = items || [];
+                    var self = this;
+                    this.length = list.length;
+                    this.item = function (n) {
+                        n = Number(n);
+                        return n >= 0 && n < list.length ? list[n] : null;
+                    };
+                    this.contains = function (value) { return list.indexOf(String(value)) >= 0; };
+                    for (var i = 0; i < list.length; i++) self[i] = list[i];
+                }
+                window.DOMStringList = DOMStringList;
+                if (typeof __acrux !== 'undefined' && typeof __acrux.hardwareConcurrency === 'function') {
+                    Object.defineProperty(navigator, 'hardwareConcurrency', { configurable: true,
+                        enumerable: true, get: function () { return __acrux.hardwareConcurrency(); } });
+                }
+            })();
+
+            // ── The event families a page builds (UI Events §3–§7, DOM §4.5.2) ───
+            // 'new WheelEvent(type, init)' and its relatives: the engine's own event object carries
+            // the members its dispatch needs, a member it does not carry is kept beside the event,
+            // keyed by it, and read through the interface's prototype — the shape the element dataset
+            // already uses. The interface the event was built for stamps the wrapper, so
+            // 'wheel instanceof WheelEvent' and '[object WheelEvent]' both answer from that.
+            (function () {
+                var protoMap = window.__domProto || {};
+                function defineInterface(name, baseName, construct) {
+                    var base = baseName ? protoMap[baseName] : null;
+                    var proto = protoMap[name] || Object.create(base || Object.prototype);
+                    if (!protoMap[name]) protoMap[name] = proto;
+                    // A name the script already gave a constructor of its own — 'Event', 'MouseEvent'
+                    // — keeps whatever its prototype declares: the level inherits from it, so the
+                    // 'initEvent' spellings written there stay reachable on the objects the host makes.
+                    // A level is never hung below a script constructor's prototype: the stamping
+                    // that gives a host object its interface uses the level itself, so the level's
+                    // own place in the chain is the only one that matters. A level rebuilt for a new
+                    // document (the setup script runs once per document) starts from this document's
+                    // base level, which is why a page that has the same interface twice still walks
+                    // from a pointer event down to 'Event'.
+                    var Ctor = construct || function () {
+                        throw new TypeError('Failed to construct \'' + name
+                            + '\': Illegal constructor');
+                    };
+                    Object.defineProperty(Ctor, 'name', { value: name, configurable: true });
+                    Ctor.prototype = proto;
+                    Object.defineProperty(proto, 'constructor',
+                        { value: Ctor, writable: true, configurable: true });
+                    try {
+                        Object.defineProperty(proto, Symbol.toStringTag,
+                            { value: name, writable: false, enumerable: false, configurable: true });
+                    } catch (e) { }
+                    // The wrapper a host object gets is stamped with the interface's level, so the
+                    // constructor the page sees has to carry that same object — otherwise
+                    // 'e instanceof Event' compares against a prototype no event wears. A name the
+                    // script already gave a constructor of its own keeps everything it declared: the
+                    // level inherits from its prototype above.
+                    Ctor.prototype = proto;
+                    window[name] = Ctor;
+                    return proto;
+                }
+                function eventCtor(name, members, initOnly) {
+                    // A Touch is the one event the interfaces build from a dictionary alone: there
+                    // is no type to name it, the identifier and the coordinates are the whole thing.
+                    // Which interface each family hangs on (UI Events §3–§7): the pointer and drag
+                    // events carry every mouse member, so they are mouse events; the focus, wheel,
+                    // input, composition and touch events are user-interface events without a mouse
+                    // shape; the rest extend Event directly.
+                    var baseName = name === 'UIEvent' ? 'Event'
+                        : (name === 'PointerEvent' || name === 'DragEvent') ? 'MouseEvent'
+                            : (name === 'WheelEvent' || name === 'InputEvent'
+                                || name === 'CompositionEvent' || name === 'TouchEvent'
+                                || name === 'FocusEvent') ? 'UIEvent' : 'Event';
+                    var proto = defineInterface(name, baseName,
+                        function (type, init) {
+                            var evt = document.createEvent(name);
+                            if (initOnly) { init = type; }
+                            else evt.type = String(type === undefined ? '' : type);
+                            init = init || { };
+                            if (init.bubbles !== undefined) { try { evt.bubbles = !!init.bubbles; } catch (e) { } }
+                            if (init.cancelable !== undefined) { try { evt.cancelable = !!init.cancelable; } catch (e) { } }
+                            if (init.composed !== undefined) { try { evt.composed = !!init.composed; } catch (e) { } }
+                            for (var k = 0; k < members.length; k++) {
+                                var key = members[k][0];
+                                var value;
+                                if (init[key] !== undefined) value = init[key];
+                                else if (typeof members[k][1] === 'function') continue;
+                                else if (members[k][1] !== undefined) value = members[k][1];
+                                else continue;
+                                // The page's value goes through to the host when the engine carries
+                                // that member — so a dispatch reads what the page wrote — and is kept
+                                // on the event itself, non-enumerably, so the read answers exactly the
+                                // value the dictionary held even where the host stores another shape.
+                                try { evt[key] = value; } catch (e) { }
+                                try {
+                                    Object.defineProperty(evt, key, { value: value, writable: true,
+                                        enumerable: false, configurable: true });
+                                } catch (e) { }
+                            }
+                            try { Object.setPrototypeOf(evt, proto); } catch (e) { }
+                            return evt;
+                        });
+                    // The methods an interface declares are shared, so they live on the prototype.
+                    for (var i = 0; i < members.length; i++) {
+                        if (typeof members[i][1] !== 'function') continue;
+                        if (Object.prototype.hasOwnProperty.call(proto, members[i][0])) continue;
+                        try {
+                            Object.defineProperty(proto, members[i][0],
+                                { value: members[i][1], writable: true, enumerable: false, configurable: true });
+                        } catch (e) { }
+                    }
+                    return proto;
+                }
+
+                // The names the script already gave a constructor of its own — 'Event', 'MouseEvent'
+                // and friends — must hand out the level the host stamps its objects with, or
+                // 'event instanceof Event' compares against a prototype no event ever wears. The
+                // level inherits whatever that prototype declared first, so nothing written there is
+                // lost.
+                // The methods every event shares live on the Event prototype, where a page looks for
+                // them; a host event answers its own engine-driven version of the name first, so these
+                // are what a plain object built like an event falls back to (§2.3).
+                var sharedMethods = ['preventDefault', 'stopPropagation', 'stopImmediatePropagation'];
+                var eventLevel = protoMap.Event || (protoMap.Event = Object.create(Object.prototype));
+                for (var sm = 0; sm < sharedMethods.length; sm++) {
+                    (function (key) {
+                        if (Object.prototype.hasOwnProperty.call(eventLevel, key)) return;
+                        Object.defineProperty(eventLevel, key, {
+                            value: function () { }, writable: true, configurable: true, enumerable: false
+                        });
+                    })(sharedMethods[sm]);
+                }
+                if (!eventLevel.composedPath) {
+                    Object.defineProperty(eventLevel, 'composedPath', {
+                        value: function () { return []; }, writable: true, configurable: true });
+                }
+                var aligned = ['Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'UIEvent'];
+                for (var al = 0; al < aligned.length; al++) {
+                    var level = protoMap[aligned[al]];
+                    var earlier = window[aligned[al]];
+                    if (!level || typeof earlier !== 'function' || earlier.prototype === level) continue;
+                    try {
+                        // The level keeps its place in the chain; the constructor is what is moved
+                        // onto it, so 'x instanceof Event' tests the object the host stamps with.
+                        earlier.prototype = level;
+                        Object.defineProperty(level, 'constructor',
+                            { value: earlier, writable: true, configurable: true });
+                    } catch (e) { }
+                }
+
+                eventCtor('UIEvent', [['detail', 0], ['view', null], ['which', 0]]);
+                eventCtor('MouseEvent', [['screenX', 0], ['screenY', 0], ['clientX', 0], ['clientY', 0],
+                    ['pageX', function () { return this.clientX; }],
+                    ['pageY', function () { return this.clientY; }],
+                    ['movementX', 0], ['movementY', 0], ['button', 0], ['buttons', 0],
+                    ['ctrlKey', false], ['shiftKey', false], ['altKey', false], ['metaKey', false],
+                    ['relatedTarget', null], ['region', '']]);
+                eventCtor('KeyboardEvent', [['key', ''], ['code', ''], ['location', 0],
+                    ['repeat', false], ['isComposing', false], ['ctrlKey', false],
+                    ['shiftKey', false], ['altKey', false], ['metaKey', false], ['altGraphKey', false],
+                    ['getModifierState', function (name) {
+                        var key = String(name);
+                        if (key === 'Shift') return !!this.shiftKey;
+                        if (key === 'Control') return !!this.ctrlKey;
+                        if (key === 'Alt') return !!this.altKey;
+                        if (key === 'Meta') return !!this.metaKey;
+                        if (key === 'AltGraph') return !!this.altGraphKey;
+                        return false;
+                    }]]);
+                eventCtor('FocusEvent', [['relatedTarget', null], ['detail', 0]]);
+                eventCtor('WheelEvent', [['deltaX', 0], ['deltaY', 0], ['deltaZ', 0], ['deltaMode', 0],
+                    ['wheelDelta', 0], ['wheelDeltaX', 0], ['wheelDeltaY', 0]]);
+                eventCtor('PointerEvent', [['pointerId', 0], ['width', 1], ['height', 1],
+                    ['pressure', 0], ['tangentialPressure', 0], ['tiltX', 0], ['tiltY', 0],
+                    ['twist', 0], ['altitudeAngle', 0], ['azimuthAngle', 0],
+                    // Measured: an uninitialised pointer event names no pointer type and is not the
+                    // primary one — the values are the defaults the dictionary leaves alone.
+                    ['pointerType', ''], ['isPrimary', false]]);
+                eventCtor('InputEvent', [['inputType', ''], ['data', null], ['isComposing', false],
+                    ['dataTransfer', null], ['targetRanges', []],
+                    ['getTargetRanges', function () { return []; }]]);
+                eventCtor('CompositionEvent', [['data', ''], ['locale', '']]);
+                eventCtor('DragEvent', [['dataTransfer', null]]);
+                var touchMembers = [['identifier', undefined], ['clientX', 0], ['clientY', 0],
+                    ['screenX', 0], ['screenY', 0], ['pageX', 0], ['pageY', 0], ['radiusX', 0],
+                    ['radiusY', 0], ['rotationAngle', 0], ['force', 0], ['target', undefined]];
+                // A Touch is not an event — it is a plain record of one finger's state, carried inside
+                // a TouchEvent — so it is built as an object of its own rather than as a host event,
+                // and the dictionary's own values are what the reads answer (§7.1).
+                var Touch = function Touch(init) {
+                    var required = ['identifier', 'target'];
+                    for (var r = 0; r < required.length; r++) {
+                        if (!init || init[required[r]] === undefined) {
+                            throw new TypeError('Failed to construct \'Touch\': Failed to read the'
+                                + ' \'' + required[r] + '\' property from \'TouchInit\':'
+                                + ' Required member is undefined.');
+                        }
+                    }
+                    var self = this;
+                    for (var m = 0; m < touchMembers.length; m++) {
+                        var key = touchMembers[m][0];
+                        var value = init[key] !== undefined ? init[key] : touchMembers[m][1];
+                        if (value === undefined) continue;
+                        try {
+                            Object.defineProperty(self, key, { value: value, writable: true,
+                                enumerable: false, configurable: true });
+                        } catch (e) { }
+                    }
+                };
+                var touchProto = defineInterface('Touch', null, Touch);
+                window.Touch = Touch;
+                eventCtor('TouchEvent', [['touches', []], ['targetTouches', []],
+                    ['changedTouches', []], ['altKey', false], ['ctrlKey', false],
+                    ['metaKey', false], ['shiftKey', false]]);
+                eventCtor('ClipboardEvent', [['clipboardData', null]]);
+                eventCtor('AnimationEvent', [['animationName', ''], ['elapsedTime', 0],
+                    ['pseudoElement', '']]);
+                eventCtor('TransitionEvent', [['propertyName', ''], ['elapsedTime', 0],
+                    ['pseudoElement', '']]);
+                eventCtor('MutationEvent', [['relatedNode', null], ['attrName', ''],
+                    ['attrChange', 0], ['prevValue', ''], ['newValue', ''],
+                    ['isCharacterData', false], ['modType', '']]);
+                eventCtor('CloseEvent', [['wasClean', false], ['code', 0], ['reason', '']]);
+                eventCtor('StorageEvent', [['key', null], ['oldValue', null], ['newValue', null],
+                    ['url', ''], ['storageArea', null]]);
+                eventCtor('HashChangeEvent', [['oldURL', ''], ['newURL', '']]);
+                eventCtor('PopStateEvent', [['state', null]]);
+                eventCtor('PageTransitionEvent', [['persisted', false]]);
+                eventCtor('BeforeUnloadEvent', [['returnValue', '']]);
+                eventCtor('PromiseRejectionEvent', [['reason', undefined], ['promise', undefined]]);
+                eventCtor('ProgressEvent', [['lengthComputable', false], ['loaded', 0], ['total', 0]]);
+                defineInterface('EventSource', 'EventTarget');
+                // The interface a canvas 2D context measures with. This engine has no 2D context to
+                // hand one out from, so the name exists and the constructor refuses, which is what a
+                // page finds on a browser that never made one for it.
+                defineInterface('TextMetrics');
+                defineInterface('ShadowRoot', 'DocumentFragment');
+                defineInterface('ElementInternals');
+                defineInterface('ValidityState');
+                defineInterface('DocumentOrShadowRoot');
+                defineInterface('DOMStringMap');
+                defineInterface('DocumentTimeline', 'GlobalTimeline', function () { });
+                defineInterface('Navigator', 'EventTarget');
+                defineInterface('Location');
+                defineInterface('History');
+                defineInterface('Screen');
+                defineInterface('Slot', 'Element');
+                defineInterface('EventListener');
+                // The 'touchAction' style the interface reads, and the string list a name is a part of.
+                function DOMStringList(items) {
+                    var list = items || [];
+                    var self = this;
+                    this.length = list.length;
+                    this.item = function (n) {
+                        n = Number(n);
+                        return n >= 0 && n < list.length ? list[n] : null;
+                    };
+                    this.contains = function (value) { return list.indexOf(String(value)) >= 0; };
+                    for (var i = 0; i < list.length; i++) self[i] = list[i];
+                }
+                Object.defineProperty(DOMStringList.prototype, Symbol.toStringTag,
+                    { value: 'DOMStringList', configurable: true });
+                window.DOMStringList = DOMStringList;
+                protoMap.DOMStringList = DOMStringList.prototype;
+            })();
+
+            // ── ES2024 Array.prototype.group (Array grouping §2.3) ──────────────
+            // The grouping the page asked for, in the order the elements came, with the same property
+            // names and the null-prototype object Object.groupBy answers.
+            if (!Array.prototype.group) {
+                Object.defineProperty(Array.prototype, 'group', {
+                    value: function (callbackfn, thisArg) {
+                        if (typeof callbackfn !== 'function') {
+                            throw new TypeError('callbackfn is not a function');
+                        }
+                        var out = Object.create(null);
+                        var len = this.length >>> 0;
+                        for (var i = 0; i < len; i++) {
+                            if (!(i in this)) continue;
+                            var key = String(callbackfn.call(thisArg, this[i], i, this));
+                            if (!Object.prototype.hasOwnProperty.call(out, key)) out[key] = [];
+                            out[key].push(this[i]);
+                        }
+                        return out;
+                    },
+                    writable: true, configurable: true
+                });
+            }
+
+            // ── The accessors an interface declares that the host does not model ─
+            // A host object answers its own members first, so a getter installed on the interface's
+            // prototype is the place for what the engine reports as a constant or builds on the spot
+            // (HTML §7.3, Fullscreen §5, CSSOM View §9, URL §2.5).
+            (function () {
+                var protoMap = window.__domProto || {};
+                function accessor(iface, name, get, isAsync) {
+                    var proto = protoMap[iface];
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, {
+                            configurable: true, enumerable: true,
+                            get: get,
+                            set: isAsync ? undefined : function () { }
+                        });
+                    } catch (e) { }
+                }
+                accessor('Document', 'fullscreenElement', function () { return null; });
+                accessor('Document', 'fullscreenEnabled', function () { return false; });
+                accessor('Document', 'pictureInPictureElement', function () { return null; });
+                accessor('Document', 'pictureInPictureEnabled', function () { return false; });
+                accessor('Document', 'pointerLockElement', function () { return null; });
+                // Web Animations §4.6: one timeline per document, and its time is the clock the host
+                // runs its animations from.
+                var timelines = new WeakMap();
+                accessor('Document', 'timeline', function () {
+                    var doc = this;
+                    var made = timelines.get(doc);
+                    if (!made) {
+                        made = { currentTime: 0, phase: 'active', playbackRate: 1 };
+                        try {
+                            Object.defineProperty(made, Symbol.toStringTag,
+                                { value: 'DocumentTimeline', configurable: true });
+                        } catch (e) { }
+                        timelines.set(doc, made);
+                    }
+                    return made;
+                });
+                if (protoMap.Document) {
+                    // Web Animations §4.6: the document's animation set. The engine runs its
+                    // animations from the style pass and hands none back as an Animation object yet,
+                    // so the answer is the empty sequence the interface describes — an Array, which is
+                    // what a host array would not have been.
+                    protoMap.Document.getAnimations = function () { return []; };
+                    protoMap.Document.exitFullscreen = function () {
+                        return Promise.reject(new DOMException(
+                            'The document is not fullscreen.', 'NotFoundError'));
+                    };
+                    protoMap.Document.exitPictureInPicture = function () {
+                        return Promise.reject(new DOMException(
+                            'The document is not in picture-in-picture mode.', 'NotFoundError'));
+                    };
+                    protoMap.Document.exitPointerLock = function () {
+                        return Promise.resolve(undefined);
+                    };
+                }
+                // The Clipboard API (§3.3) and the service-worker registration (SW §2.6): the engine
+                // has neither a clipboard permission prompt nor a worker host, so both answer the
+                // rejection the interface gives for a context that cannot do the work rather than
+                // leaving the page to read undefined and throw.
+                var clipboard = {
+                    write: function () {
+                        return Promise.reject(new DOMException('The Clipboard API is not available in '
+                            + 'this context.', 'NotAllowedError'));
+                    },
+                    read: function () {
+                        return Promise.reject(new DOMException('The Clipboard API is not available in '
+                            + 'this context.', 'NotAllowedError'));
+                    },
+                    writeText: function () {
+                        return Promise.reject(new DOMException('The Clipboard API is not available in '
+                            + 'this context.', 'NotAllowedError'));
+                    },
+                    readText: function () {
+                        return Promise.reject(new DOMException('The Clipboard API is not available in '
+                            + 'this context.', 'NotAllowedError'));
+                    },
+                    addEventListener: function () { },
+                    removeEventListener: function () { }
+                };
+                try {
+                    Object.defineProperty(clipboard, Symbol.toStringTag,
+                        { value: 'Clipboard', configurable: true });
+                } catch (e) { }
+                var registrations = Promise.reject(new DOMException('Service workers are not '
+                    + 'supported in this context.', 'NotSupportedError'));
+                var serviceWorker = {
+                    ready: registrations,
+                    controller: null,
+                    register: function () { return registrations; },
+                    getRegistration: function () { return Promise.resolve(undefined); },
+                    getRegistrations: function () { return Promise.resolve([]); },
+                    addEventListener: function () { },
+                    removeEventListener: function () { },
+                    onmessage: null
+                };
+                accessor('Navigator', 'clipboard', function () { return clipboard; });
+                accessor('Navigator', 'serviceWorker', function () { return serviceWorker; });
+                accessor('Navigator', 'mediaDevices', function () { return null; });
+                accessor('Navigator', 'wakeLock', function () { return null; });
+                accessor('Navigator', 'keyboard', function () { return null; });
+                accessor('Navigator', 'managed', function () { return null; });
+                if (typeof __acrux !== 'undefined' && typeof __acrux.hardwareConcurrency === 'function') {
+                    accessor('Navigator', 'hardwareConcurrency',
+                        function () { return __acrux.hardwareConcurrency(); });
+                }
+                // URL §2.5: the ancestors of a window this engine never nests are an empty list.
+                accessor('Location', 'ancestorOrigins', function () {
+                    return typeof DOMStringList === 'function' ? new DOMStringList([]) : [];
+                });
+                // Navigation Timing §4: the legacy 'performance.timing' object the reference still
+                // answers. Every mark is the same instant for an engine that stamps no navigation
+                // milestones, and the deprecated 'loadEventEnd' sentinel of 0 is what the interface
+                // reports while a load is still running.
+                if (window.performance) {
+                    var timing = { navigationStart: 0, unloadEventStart: 0, unloadEventEnd: 0,
+                        redirectStart: 0, redirectEnd: 0, fetchStart: 0, domainLookupStart: 0,
+                        domainLookupEnd: 0, connectStart: 0, connectEnd: 0, secureConnectionStart: 0,
+                        requestStart: 0, responseStart: 0, responseEnd: 0, domLoading: 0,
+                        domInteractive: 0, domContentLoadedEventStart: 0, domContentLoadedEventEnd: 0,
+                        domComplete: 0, loadEventStart: 0, loadEventEnd: 0 };
+                    try {
+                        Object.defineProperty(timing, Symbol.toStringTag,
+                            { value: 'PerformanceTiming', configurable: true });
+                    } catch (e) { }
+                    Object.defineProperty(window.performance, 'timing', { configurable: true,
+                        get: function () { return timing; } });
+                    if (typeof window.performance.navigation === 'undefined') {
+                        Object.defineProperty(window.performance, 'navigation', { configurable: true,
+                            get: function () { return { type: 0, redirectCount: 0 }; } });
+                    }
+                }
+            })();
+
+            // ── The observers (Intersection Observer §2, Resize Observer §2,
+            //    Performance Timeline §3.6, Reporting API §5) ─────────────────────
+            // Each one is a queue the page registers interest in and the platform drains at the next
+            // opportunity. The engine has no rendering step to hang that on in a headless run, so the
+            // queue is delivered on the timer the host already runs: an observation made now is
+            // reported in a later task, never inside the call that made it, which is what a page
+            // switching on the asynchronous shape depends on.
+            (function () {
+                function rectOf(node) {
+                    var rect = null;
+                    try { rect = node.getBoundingClientRect(); } catch (e) { return null; }
+                    if (!rect) return null;
+                    return { x: Number(rect.x) || 0, y: Number(rect.y) || 0,
+                        width: Number(rect.width) || 0, height: Number(rect.height) || 0,
+                        top: Number(rect.top) || 0, left: Number(rect.left) || 0,
+                        right: Number(rect.right) || 0, bottom: Number(rect.bottom) || 0 };
+                }
+                function entryInterface(name, fields) {
+                    var proto = (window.__domProto || {})[name] || Object.create(Object.prototype);
+                    (window.__domProto || {})[name] = proto;
+                    var Ctor = function () {
+                        throw new TypeError('Failed to construct \'' + name
+                            + '\': Illegal constructor');
+                    };
+                    Object.defineProperty(Ctor, 'name', { value: name, configurable: true });
+                    Ctor.prototype = proto;
+                    for (var i = 0; i < fields.length; i++) {
+                        (function (key) {
+                            Object.defineProperty(proto, key, { configurable: true, enumerable: true,
+                                get: function () { return this['__' + key]; } });
+                        })(fields[i]);
+                    }
+                    window[name] = Ctor;
+                    return proto;
+                }
+                entryInterface('IntersectionObserverEntry', ['time', 'target', 'rootBounds',
+                    'boundingClientRect', 'intersectionRect', 'intersectionRatio', 'isIntersecting']);
+                entryInterface('ResizeObserverEntry', ['target', 'contentRect', 'contentBoxSize',
+                    'borderBoxSize', 'devicePixelContentBoxSize']);
+                entryInterface('PerformanceEntry', ['name', 'entryType', 'startTime', 'duration']);
+
+                function makeObserver(ctorName, compute) {
+                    var states = new WeakMap();
+                    var proto = (window.__domProto || {})[ctorName] || Object.create(Object.prototype);
+                    (window.__domProto || {})[ctorName] = proto;
+                    var Ctor = function (callback, options) {
+                        if (typeof callback !== 'function') {
+                            throw new TypeError('Failed to construct \'' + ctorName
+                                + '\': parameter 1 is not of type \'Function\'.');
+                        }
+                        var self = this;
+                        var targets = [];
+                        var pending = [];
+                        var scheduled = false;
+                        var closed = false;
+                        // The state an observer carries is kept beside it rather than on it, so the
+                        // object a page holds has no own properties of its own (§2 of each interface).
+                        var state = {
+                            targets: targets, options: options || { }, record: record,
+                            takeRecords: function () { return pending.splice(0, pending.length); },
+                            disconnect: function () {
+                                targets.length = 0; pending.length = 0; closed = true;
+                            }
+                        };
+                        states.set(this, state);
+                        function flush() {
+                            scheduled = false;
+                            if (closed) return;
+                            var list = pending.splice(0, pending.length);
+                            for (var i = 0; i < targets.length; i++) {
+                                var made = compute(self, targets[i], { });
+                                if (made) list.push(made);
+                            }
+                            if (!list.length) return;
+                            try { callback.call(self, list, self); } catch (e) { }
+                        }
+                        function schedule() {
+                            if (scheduled || closed) return;
+                            scheduled = true;
+                            setTimeout(flush, 0);
+                        }
+                        function record(target, opts) {
+                            if (closed) return;
+                            var isElement = false;
+                            try { isElement = target && target.nodeType === 1; } catch (e) { }
+                            if (!isElement) {
+                                throw new TypeError('Failed to execute \'observe\' on \'' + ctorName
+                                    + '\': parameter 1 is not of type \'Element\'.');
+                            }
+                            if (targets.indexOf(target) < 0) targets.push(target);
+                            // The observation is not a record yet: the interface reports what the
+                            // target looks like when the platform next looks at it, so the queue is
+                            // filled at the flush and 'takeRecords' right after 'observe' is empty.
+                            schedule();
+                        }
+                    };
+                    Object.defineProperty(proto, 'observe', {
+                        configurable: true, writable: true, enumerable: false,
+                        value: function (target, opts) {
+                            var st = states.get(this);
+                            if (!st) return;
+                            var isElement = false;
+                            try { isElement = target && target.nodeType === 1; } catch (e) { }
+                            if (!isElement) {
+                                throw new TypeError('Failed to execute \'observe\' on \'' + ctorName
+                                    + '\': parameter 1 is not of type \'Element\'.');
+                            }
+                            if (st.targets.indexOf(target) < 0) st.targets.push(target);
+                            st.record(target, opts);
+                        }
+                    });
+                    Object.defineProperty(proto, 'unobserve', {
+                        configurable: true, writable: true, enumerable: false,
+                        value: function (target) {
+                            var st = states.get(this);
+                            if (!st) return;
+                            for (var i = 0; i < st.targets.length; i++) {
+                                if (st.targets[i] === target) { st.targets.splice(i, 1); break; }
+                            }
+                        }
+                    });
+                    Object.defineProperty(proto, 'takeRecords', {
+                        configurable: true, writable: true, enumerable: false,
+                        value: function () {
+                            var st = states.get(this);
+                            return st ? st.takeRecords() : [];
+                        }
+                    });
+                    Object.defineProperty(proto, 'disconnect', {
+                        configurable: true, writable: true, enumerable: false,
+                        value: function () {
+                            var st = states.get(this);
+                            if (!st) return;
+                            st.disconnect();
+                        }
+                    });
+                    Object.defineProperty(Ctor, 'name', { value: ctorName, configurable: true });
+                    Ctor.prototype = proto;
+                    Object.defineProperty(proto, 'constructor',
+                        { value: Ctor, writable: true, configurable: true });
+                    try {
+                        Object.defineProperty(proto, Symbol.toStringTag,
+                            { value: ctorName, configurable: true });
+                    } catch (e) { }
+                    window[ctorName] = Ctor;
+                    return Ctor;
+                }
+
+                function intersectionEntry(observer, target)
+                {
+                    var rect = rectOf(target);
+                    var made = Object.create((window.__domProto || {}).IntersectionObserverEntry
+                        || Object.prototype);
+                    var ratio = 0;
+                    var box = rect || { x: 0, y: 0, width: 0, height: 0, top: 0, left: 0,
+                        right: 0, bottom: 0 };
+                    // The root is the viewport unless the page gave a root element; an area of zero
+                    // never intersects, which is what a page reads in an engine that laid nothing out.
+                    made.__time = (window.performance && performance.now) ? performance.now() : 0;
+                    made.__target = target;
+                    made.__boundingClientRect = box;
+                    made.__rootBounds = box;
+                    made.__intersectionRect = box;
+                    made.__intersectionRatio = ratio;
+                    made.__isIntersecting = false;
+                    return made;
+                }
+                var IntersectionObserver = makeObserver('IntersectionObserver', intersectionEntry);
+
+                function resizeEntry(observer, target) {
+                    var rect = rectOf(target) || { x: 0, y: 0, width: 0, height: 0, top: 0,
+                        left: 0, right: 0, bottom: 0 };
+                    var made = Object.create((window.__domProto || {}).ResizeObserverEntry
+                        || Object.prototype);
+                    made.__target = target;
+                    made.__contentRect = rect;
+                    var size = { inlineSize: rect.width, blockSize: rect.height };
+                    made.__contentBoxSize = [size];
+                    made.__borderBoxSize = [size];
+                    made.__devicePixelContentBoxSize = [size];
+                    return made;
+                }
+                makeObserver('ResizeObserver', resizeEntry);
+                makeObserver('ReportingObserver', function () { return null; });
+
+                // Performance Timeline §3.6: the entries the buffer already holds, filtered to the
+                // types the page asked for. 'buffered' replays what was recorded before the observer
+                // was made, which is the reason the interface has the flag.
+                // The types the reference names, in its own order (§3.7): the page switches on the
+                // list rather than on any one entry.
+                var supportedTypes = ['element', 'event', 'first-input', 'largest-contentful-paint',
+                    'layout-shift', 'long-animation-frame', 'longtask', 'navigation', 'paint',
+                    'resource'];
+                function PerformanceObserver(callback, options) {
+                    if (typeof callback !== 'function') {
+                        throw new TypeError('Failed to construct \'PerformanceObserver\': parameter 1'
+                            + ' is not of type \'Function\'.');
+                        }
+                    var self = this;
+                    var wanted = [];
+                    var scheduled = false;
+                    var seen = [];
+                    function entryList(records) {
+                        var list = Object.create(Object.prototype);
+                        list.getEntries = function () { return records.slice(); };
+                        list.getEntriesByType = function (type) {
+                            return records.filter(function (e) { return e.entryType === type; });
+                        };
+                        list.buffered = !!options && !!options.buffered;
+                        return list;
+                    }
+                    function collect() {
+                        var out = [];
+                        var all = [];
+                        try { all = Array.from(window.performance.getEntries ? performance.getEntries() : []); }
+                        catch (e) { all = []; }
+                        for (var i = 0; i < all.length; i++) {
+                            var raw = all[i];
+                            if (!raw || wanted.indexOf(String(raw.entryType)) < 0) continue;
+                            if (seen.indexOf(raw) >= 0) continue;
+                            seen.push(raw);
+                            var made = Object.create((window.__domProto || {}).PerformanceEntry
+                                || Object.prototype);
+                            made.__name = raw.name; made.__entryType = raw.entryType;
+                            made.__startTime = raw.startTime; made.__duration = raw.duration;
+                            out.push(made);
+                        }
+                        return out;
+                    }
+                    function flush() {
+                        scheduled = false;
+                        var records = collect();
+                        if (!records.length) return;
+                        try { callback.call(self, entryList(records), self); } catch (e) { }
+                    }
+                    this.observe = function (opts) {
+                        opts = opts || { };
+                        var types = opts.entryTypes || (opts.type ? [opts.type] : []);
+                        for (var i = 0; i < types.length; i++) {
+                            if (wanted.indexOf(String(types[i])) < 0) wanted.push(String(types[i]));
+                        }
+                        if (!scheduled) { scheduled = true; setTimeout(flush, 0); }
+                    };
+                    this.takeRecords = function () {
+                        var records = collect();
+                        return entryList(records);
+                    };
+                    this.disconnect = function () { wanted.length = 0; seen.length = 0; };
+                    Object.defineProperty(this, 'supportedEntryTypes', { configurable: true,
+                        get: function () { return supportedTypes; } });
+                }
+                Object.defineProperty(PerformanceObserver, 'supportedEntryTypes', { configurable: true,
+                    get: function () { return supportedTypes.slice(); } });
+                (window.__domProto || {}).PerformanceObserver = PerformanceObserver.prototype;
+                window.PerformanceObserver = PerformanceObserver;
+
+                // The 'Audio' convenience the HTML defines over an audio element (HTML §4.8.10).
+                window.Audio = function Audio(src) {
+                    var el = document.createElement('audio');
+                    if (src !== undefined && src !== null) el.src = String(src);
+                    return el;
+                };
+                // The interface's prototype is the audio element's, so 'new Audio() instanceof Audio'
+                // reads the way the element it builds does (HTML §4.8.10).
+                window.Audio.prototype = (window.__domProto || {}).HTMLAudioElement
+                    || Object.create(Object.prototype);
+            })();
+
+            // ── Members an element interface declares over the shared host (HTML §4.10.9,
+            //    §4.12.3) ────────────────────────────────────────────────────────
+            // The host answers every element with one object, so the members that belong to one
+            // interface and not to the element in general are installed on that interface's
+            // prototype: the host answers what it carries first, and the page reads the rest
+            // through the level its element was stamped with.
+            (function () {
+                var protoMap = window.__domProto || {};
+                var select = protoMap.HTMLSelectElement;
+                if (select) {
+                    Object.defineProperty(select, 'length', {
+                        configurable: true, enumerable: true,
+                        get: function () { var list = this.options; return list ? list.length : 0; },
+                        set: function (wanted) {
+                            wanted = Number(wanted) || 0;
+                            var list = this.options ? Array.prototype.slice.call(this.options) : [];
+                            for (var i = list.length - 1; i >= wanted; i--) this.remove(i);
+                        }
+                    });
+                    Object.defineProperty(select, 'size', {
+                        configurable: true, enumerable: true,
+                        get: function () {
+                            var written = parseInt(this.getAttribute('size'), 10);
+                            return isNaN(written) || written < 0 ? 0 : written;
+                        },
+                        set: function (value) { this.setAttribute('size', String(Number(value) || 0)); }
+                    });
+                    // 'add' takes the option into the list before the anchor it is given — an index,
+                    // or the option itself — or at the end when there is no anchor (§4.10.9).
+                    select.add = function (option, before) {
+                        var isElement = false;
+                        try { isElement = !!option && option.nodeType === 1; } catch (e) { }
+                        if (!isElement) {
+                            throw new TypeError('Failed to execute \'add\' on \'HTMLSelectElement\':'
+                                + ' parameter 1 is not of type \'HTMLOptionElement\'.');
+                        }
+                        var list = this.options ? Array.prototype.slice.call(this.options) : [];
+                        var anchor = null;
+                        if (before !== undefined && before !== null) {
+                            anchor = typeof before === 'number'
+                                ? (before >= 0 && before < list.length ? list[before] : null)
+                                : (list.indexOf(before) >= 0 ? before : null);
+                        }
+                        if (anchor) this.insertBefore(option, anchor);
+                        else this.appendChild(option);
+                    };
+                }
+                var form = protoMap.HTMLFormElement;
+                if (form) {
+                    // The length a form answers is its element list's length (§4.10.22), read through
+                    // the collection the host already maintains rather than kept beside it.
+                    Object.defineProperty(form, 'length', { configurable: true, enumerable: true,
+                        get: function () { var list = this.elements; return list ? list.length : 0; } });
+                }
+                var template = protoMap.HTMLTemplateElement;
+                if (template) {
+                    Object.defineProperty(template, 'content', {
+                        configurable: true, enumerable: true,
+                        get: function () {
+                            return typeof this.__templateContent === 'function'
+                                ? this.__templateContent() : null;
+                        }
+                    });
+                }
+                // The singletons the window hands out are host objects too: they are stamped with
+                // their interface so the accessors declared above — and every accessor a family
+                // declares later — are reachable on the object a page actually holds.
+                var singletons = [['navigator', 'Navigator'], ['location', 'Location'],
+                                  ['history', 'History'], ['screen', 'Screen']];
+                for (var i = 0; i < singletons.length; i++) {
+                    var object = window[singletons[i][0]];
+                    var level = protoMap[singletons[i][1]];
+                    if (!object || !level) continue;
+                    try { Object.setPrototypeOf(object, level); } catch (e) { }
+                }
+
+                // ── Geometry Interfaces §3, §4, §5 ─────────────────────────────
+                // A matrix is the 4x4 column list the interface names, held as sixteen numbers, with
+                // the 2D view the page reads most (a,b,c,d,e,f) beside it. The operations are the
+                // ones the interface defines; a matrix built from a transform list applies the list
+                // in order, starting from the identity.
+                function identity() {
+                    return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+                }
+                function multiply(left, right) {
+                    var out = new Array(16);
+                    for (var col = 0; col < 4; col++) {
+                        for (var row = 0; row < 4; row++) {
+                            var sum = 0;
+                            for (var k = 0; k < 4; k++) sum += left[k * 4 + row] * right[col * 4 + k];
+                            out[col * 4 + row] = sum;
+                        }
+                    }
+                    return out;
+                }
+                // The string a matrix is built from is a transform list, and the list is held to the
+                // grammar the CSS names: an angle carries a unit, a length carries one too, 'matrix'
+                // takes exactly six numbers and 'matrix3d' sixteen. Anything else is refused with the
+                // sentence the reference writes, naming the whole string it could not read.
+                var number = /^-?(?:\d+\.?\d*|\.\d+)$/;
+                var lengthArg = /^-?(?:\d+\.?\d*|\.\d+)(px)?$/;
+                var angleArg = /^-?(?:\d+\.?\d*|\.\d+)(deg|grad|rad|turn)$/;
+                function argsAre(parts, pattern, count) {
+                    if (count && parts.length !== count) return false;
+                    for (var i = 0; i < parts.length; i++) if (!pattern.test(parts[i])) return false;
+                    return parts.length > 0;
+                }
+                function validTransformList(text) {
+                    var re = /^\s*(?:(matrix|matrix3d|translate|translate3d|translateX|translateY|translateZ|scale|scale3d|scaleX|scaleY|scaleZ|rotate|rotate3d|rotateX|rotateY|rotateZ|skew|skewX|skewY)\s*\(([^()]*)\)\s*)+$/;
+                    var whole = re.exec(String(text));
+                    if (!whole) return false;
+                    var each = /(matrix|matrix3d|translate|translate3d|translateX|translateY|translateZ|scale|scale3d|scaleX|scaleY|scaleZ|rotate|rotate3d|rotateX|rotateY|rotateZ|skew|skewX|skewY)\s*\(([^()]*)\)/g;
+                    var match;
+                    while ((match = each.exec(String(text))) !== null) {
+                        var word = match[1];
+                        var raw = match[2].split(/[\s,]+/).filter(function (p) { return p.length; });
+                        if (word === 'matrix' && !argsAre(raw, number, 6)) return false;
+                        else if (word === 'matrix3d' && !argsAre(raw, number, 16)) return false;
+                        else if (word === 'scale' || word === 'scaleX' || word === 'scaleY'
+                            || word === 'scaleZ') { if (!argsAre(raw, number)) return false; }
+                        else if (word === 'rotate' || word === 'rotateX' || word === 'rotateY'
+                            || word === 'rotateZ' || word === 'skew' || word === 'skewX'
+                            || word === 'skewY') {
+                            if (word === 'rotate' && raw.length !== 1) return false;
+                            if (!argsAre(raw, angleArg)) return false;
+                        } else if (word === 'translate' || word === 'translateX'
+                            || word === 'translateY' || word === 'translateZ'
+                            || word === 'translate3d') {
+                            if (!argsAre(raw, lengthArg)) return false;
+                        }
+                    }
+                    return true;
+                }
+                // The arguments of a transform function are numbers with the unit the grammar allows:
+                // an angle arrives in degrees whatever it was written in (Geometry Interfaces §3.2
+                // reads CSS angles), and a length in pixels or the font-relative units the host lays
+                // out with. Reading the prefix by hand rather than with the number parser is what
+                // keeps '90deg' from becoming nothing at all.
+                function unitValue(raw, kind) {
+                    var text = String(raw).trim();
+                    var num = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/.exec(text);
+                    if (!num) return NaN;
+                    var value = Number(num[0]);
+                    var unit = text.slice(num[0].length).toLowerCase();
+                    if (kind === 'angle') {
+                        if (unit === '' || unit === 'deg') return value;
+                        if (unit === 'grad') return value * 0.9;
+                        if (unit === 'rad') return value * 180 / Math.PI;
+                        if (unit === 'turn') return value * 360;
+                        return NaN;
+                    }
+                    if (unit === '' || unit === 'px') return value;
+                    if (unit === 'em' || unit === 'rem') return value * 16;
+                    if (unit === 'cm') return value * 96 / 2.54;
+                    if (unit === 'mm') return value * 96 / 25.4;
+                    if (unit === 'in') return value * 96;
+                    if (unit === 'pt') return value * 96 / 72;
+                    if (unit === 'pc') return value * 16;
+                    return NaN;
+                }
+                function toNumbers(body, word) {
+                    var kind = /rotate|skew/.test(word) ? 'angle' : 'length';
+                    var raw = String(body).split(/[,\s]+/).filter(function (p) { return p.length; });
+                    var out = [];
+                    for (var i = 0; i < raw.length; i++) {
+                        var value = unitValue(raw[i], kind);
+                        if (isNaN(value)) return [];
+                        out.push(value);
+                    }
+                    return out;
+                }
+                function parseTransformList(text) {
+                    var current = identity();
+                    var re = /(matrix|matrix3d|translate|translateX|translateY|translateZ|translate3d|scale|scaleX|scaleY|scaleZ|scale3d|rotate|rotateX|rotateY|rotateZ|rotateAxis3d|skew|skewX|skewY)\(([^)]*)\)/g;
+                    var match;
+                    while ((match = re.exec(String(text))) !== null) {
+                        var word = match[1];
+                        var parts = /matrix|matrix3d|scale/.test(word)
+                            ? toNumbers(match[2], 'number') : toNumbers(match[2], word);
+                        var step = identity();
+                        var a = parts[0] || 0, b = parts[1] || 0;
+                        if (word === 'matrix' && parts.length >= 6) {
+                            // 'matrix(a, b, c, d, e, f)' is the 2D view of a column-major 4x4: a and
+                            // b are the first column, c and d the second, and the pair (e, f) that
+                            // translates lives in the fourth column.
+                            step[0] = parts[0]; step[1] = parts[1];
+                            step[4] = parts[2]; step[5] = parts[3];
+                            step[12] = parts[4]; step[13] = parts[5];
+                        } else if (word === 'translateX') step[12] = a;
+                        else if (word === 'translateY') step[13] = a;
+                        else if (word === 'translate' || word === 'translateZ' || word === 'translate3d') {
+                            step[12] = parts[0] || 0;
+                            step[13] = parts.length > 1 && word !== 'translateZ' ? (parts[1] || 0) : 0;
+                            if (word === 'translateZ') step[14] = a;
+                        } else if (word === 'scaleX') { step[0] = a; step[5] = 0 === a ? 0 : 1; }
+                        else if (word === 'scaleY') { step[5] = a; }
+                        else if (word === 'scale') {
+                            step[0] = a; step[5] = parts.length > 1 ? parts[1] : a; step[10] = 1;
+                        } else if (word === 'rotate') {
+                            var rad = a * Math.PI / 180;
+                            step[0] = Math.cos(rad); step[1] = Math.sin(rad);
+                            step[4] = -Math.sin(rad); step[5] = Math.cos(rad);
+                        } else if (word === 'skewX') step[2] = Math.tan(a * Math.PI / 180);
+                        else if (word === 'skewY') step[1] = Math.tan(a * Math.PI / 180);
+                        else if (word === 'skew') {
+                            step[2] = Math.tan(a * Math.PI / 180);
+                            step[1] = Math.tan((parts[1] || 0) * Math.PI / 180);
+                        } else if (word === 'rotateZ') {
+                            var rz = a * Math.PI / 180;
+                            step[0] = Math.cos(rz); step[1] = Math.sin(rz);
+                            step[4] = -Math.sin(rz); step[5] = Math.cos(rz);
+                        }
+                        current = multiply(current, step);
+                    }
+                    return current;
+                }
+                function DOMMatrixReadOnly(source) {
+                    var numbers = identity();
+                    if (typeof source === 'string' && source.length && !validTransformList(source)) {
+                        throw new SyntaxError('Failed to construct \'' + (this && this.constructor
+                            && this.constructor.name ? this.constructor.name : 'DOMMatrix')
+                            + '\': Failed to parse \'' + source + '\'.');
+                    }
+                    if (typeof source === 'string') numbers = parseTransformList(source);
+                    else if (source && typeof source === 'object' && source.m11 !== undefined) {
+                        for (var i = 0; i < 16; i++) {
+                            var key = 'm' + (((i % 4) + 1)) + (Math.floor(i / 4) + 1);
+                            if (source[key] !== undefined) numbers[i] = Number(source[key]);
+                        }
+                    } else if (source && typeof source.length === 'number' && source.length >= 16) {
+                        for (var j = 0; j < 16; j++) numbers[j] = Number(source[j]);
+                    } else if (source && typeof source.length === 'number' && source.length === 6) {
+                        numbers[0] = Number(source[0]); numbers[1] = Number(source[1]);
+                        numbers[4] = Number(source[2]); numbers[5] = Number(source[3]);
+                        numbers[12] = Number(source[4]); numbers[13] = Number(source[5]);
+                    }
+                    var self = this;
+                    function at(col, row) { return numbers[col * 4 + row]; }
+                    var twoD = numbers[2] === 0 && numbers[3] === 0 && numbers[6] === 0
+                        && numbers[7] === 0 && numbers[8] === 0 && numbers[9] === 0
+                        && numbers[11] === 0 && numbers[14] === 0 && numbers[15] === 1;
+                    Object.defineProperty(this, 'is2D', { configurable: true, get: function () { return twoD; } });
+                    Object.defineProperty(this, 'isIdentity', { configurable: true, get: function () {
+                        var base = identity();
+                        for (var k = 0; k < 16; k++) if (Math.abs(numbers[k] - base[k]) > 1e-10) return false;
+                        return true; } });
+                    var short2D = ['a', 'b', 'c', 'd', 'e', 'f'];
+                    var shortIndex = [0, 1, 4, 5, 12, 13];
+                    for (var s = 0; s < 6; s++) {
+                        (function (index, position) {
+                            Object.defineProperty(self, index, { configurable: true, enumerable: true,
+                                get: function () { return numbers[position]; } });
+                        })(short2D[s], shortIndex[s]);
+                    }
+                    for (var col = 1; col <= 4; col++) {
+                        for (var row = 1; row <= 4; row++) {
+                            (function (r, c) {
+                                var key = 'm' + r + c;
+                                Object.defineProperty(self, key, { configurable: true, enumerable: true,
+                                    // The list is the rows laid end to end: m11, m12, m13, m14, m21,
+                                    // … — so the row leads the index (Geometry Interfaces §3.1).
+                                    get: function () { return numbers[(r - 1) * 4 + (c - 1)]; } });
+                            })(row, col);
+                        }
+                    }
+                    // The 'm21' spelling is the row/column read; the CSS naming (a..f) above is the
+                    // same numbers seen as a 2D matrix.
+                    this.inverse = function () { return new DOMMatrixReadOnly(invert(numbers)); };
+                    this.multiply = function (other) {
+                        return new DOMMatrixReadOnly(multiply(numbers, matrixOf(other)));
+                    };
+                    this.translate = function (tx, ty, tz) {
+                        var step = identity();
+                        step[12] = Number(tx) || 0;
+                        step[13] = Number(ty) || 0;
+                        step[14] = Number(tz) || 0;
+                        return new DOMMatrixReadOnly(multiply(numbers, step));
+                    };
+                    this.scale = function (sx, sy, sz) {
+                        var step = identity();
+                        step[0] = Number(sx) || 0;
+                        step[5] = (sy === undefined ? Number(sx) : Number(sy)) || 0;
+                        step[10] = (sz === undefined ? 1 : Number(sz)) || 0;
+                        return new DOMMatrixReadOnly(multiply(numbers, step));
+                    };
+                    this.rotate = function (alpha, beta, gamma) {
+                        var rad = (Number(alpha) || 0) * Math.PI / 180;
+                        var step = identity();
+                        if (beta === undefined && gamma === undefined) {
+                            step[0] = Math.cos(rad); step[1] = Math.sin(rad);
+                            step[4] = -Math.sin(rad); step[5] = Math.cos(rad);
+                        } else {
+                            step[0] = Math.cos(rad); step[1] = Math.sin(rad);
+                        }
+                        return new DOMMatrixReadOnly(multiply(numbers, step));
+                    };
+                    this.transformPoint = function (point) {
+                        var p = point && point.x !== undefined ? point : { x: 0, y: 0, z: 0, w: 1 };
+                        var x = Number(p.x) || 0, y = Number(p.y) || 0, z = Number(p.z) || 0;
+                        var w = p.w === undefined ? 1 : Number(p.w);
+                        var out = {
+                            x: at(0, 0) * x + at(1, 0) * y + at(2, 0) * z + at(3, 0) * w,
+                            y: at(0, 1) * x + at(1, 1) * y + at(2, 1) * z + at(3, 1) * w,
+                            z: at(0, 2) * x + at(1, 2) * y + at(2, 2) * z + at(3, 2) * w,
+                            w: at(0, 3) * x + at(1, 3) * y + at(2, 3) * z + at(3, 3) * w
+                        };
+                        return new DOMPoint(out.x, out.y, out.z, out.w);
+                    };
+                    this.toFloat64Array = function () { return numbers.slice(0); };
+                    this.toJSON = function () {
+                        var out = { is2D: twoD, isIdentity: this.isIdentity };
+                        for (var r = 1; r <= 4; r++) for (var c = 1; c <= 4; c++)
+                            out['m' + r + c] = numbers[(r - 1) * 4 + (c - 1)];
+                        return out;
+                    };
+                }
+                function matrixOf(value) {
+                    if (!value) return identity();
+                    if (typeof value.toFloat64Array === 'function') return value.toFloat64Array();
+                    if (typeof value === 'string') return parseTransformList(value);
+                    if (value.m11 !== undefined) {
+                        var numbers = identity();
+                        for (var i = 0; i < 16; i++) {
+                            var key = 'm' + ((i % 4) + 1) + (Math.floor(i / 4) + 1);
+                            if (value[key] !== undefined) numbers[i] = Number(value[key]);
+                        }
+                        return numbers;
+                    }
+                    return identity();
+                }
+                function invert(source) {
+                    // The 2D inverse is all a page that works in CSS transforms needs; a 3D matrix is
+                    // inverted by its upper-left block the same way, which leaves the translation row
+                    // for the caller to reapply.
+                    var out = identity();
+                    var a = source[0], b = source[1], c = source[4], d = source[5],
+                        e = source[12], f = source[13];
+                    var det = a * d - b * c;
+                    if (Math.abs(det) < 1e-12) return out;
+                    out[0] = d / det; out[1] = -b / det;
+                    out[4] = -c / det; out[5] = a / det;
+                    out[12] = (c * f - d * e) / det;
+                    out[13] = (b * e - a * f) / det;
+                    return out;
+                }
+                function DOMMatrix(source) { DOMMatrixReadOnly.call(this, source); }
+                DOMMatrix.prototype = Object.create(DOMMatrixReadOnly.prototype);
+                DOMMatrix.prototype.constructor = DOMMatrix;
+                DOMMatrixReadOnly.fromMatrix = function (other) { return new DOMMatrixReadOnly(matrixOf(other)); };
+                DOMMatrixReadOnly.fromTransform = DOMMatrixReadOnly.fromMatrix;
+                DOMMatrixReadOnly.fromFloat64Array = function (list) { return new DOMMatrixReadOnly(list); };
+                DOMMatrixReadOnly.fromSVGMatrix = DOMMatrixReadOnly.fromMatrix;
+                DOMMatrix.fromMatrix = function (other) { return new DOMMatrix(matrixOf(other)); };
+                DOMMatrix.fromTransform = DOMMatrix.fromMatrix;
+                DOMMatrix.identity = function () { return new DOMMatrix(); };
+                DOMMatrix.prototype.multiplyRight = DOMMatrix.prototype.multiply;
+                var geometryProtos = { DOMMatrixReadOnly: DOMMatrixReadOnly, DOMMatrix: DOMMatrix };
+                for (var key in geometryProtos) {
+                    (window.__domProto || {})[key] = geometryProtos[key].prototype;
+                }
+                window.DOMMatrixReadOnly = DOMMatrixReadOnly;
+                window.DOMMatrix = DOMMatrix;
+
+                // DOMQuad (§5.3): the four corners of a rotated rectangle.
+                function DOMQuad(p1, p2, p3, p4) {
+                    this.p1 = p1 || new DOMPoint();
+                    this.p2 = p2 || new DOMPoint();
+                    this.p3 = p3 || new DOMPoint();
+                    this.p4 = p4 || new DOMPoint();
+                    this.toJSON = function () {
+                        return { p1: this.p1.toJSON(), p2: this.p2.toJSON(),
+                            p3: this.p3.toJSON(), p4: this.p4.toJSON() };
+                    };
+                }
+                DOMQuad.fromRect = function (rect) {
+                    return new DOMQuad(
+                        new DOMPoint(rect.x, rect.y), new DOMPoint(rect.x + rect.width, rect.y),
+                        new DOMPoint(rect.x + rect.width, rect.y + rect.height),
+                        new DOMPoint(rect.x, rect.y + rect.height));
+                    };
+                DOMQuad.fromPoint = function (p1, p2, p3, p4) {
+                    return new DOMQuad(p1, p2, p3, p4);
+                };
+                Object.defineProperty(DOMQuad.prototype, Symbol.toStringTag,
+                    { value: 'DOMQuad', configurable: true });
+                window.DOMQuad = DOMQuad;
+                (window.__domProto || {}).DOMQuad = DOMQuad.prototype;
+
+                // Performance Timeline §3.7: the list a performance observer's callback is handed.
+                function PerformanceObserverEntryList() { }
+                PerformanceObserverEntryList.prototype.getEntries = function () { return []; };
+                PerformanceObserverEntryList.prototype.getEntriesByType = function () { return []; };
+                PerformanceObserverEntryList.prototype.getEntriesByName = function () { return []; };
+                Object.defineProperty(PerformanceObserverEntryList.prototype, Symbol.toStringTag,
+                    { value: 'PerformanceObserverEntryList', configurable: true });
+                window.PerformanceObserverEntryList = PerformanceObserverEntryList;
+            })();
+
             // ── NodeFilter (DOM §4.6.2) ─────────────────────────────────────────
             // The whatToShow bitmask and the three answers a filter callback gives. SHOW_ALL is
             // the unsigned 0xffffffff the reference reports (measured: 4294967295, not -1), and the
@@ -3222,6 +4483,10 @@ public class AcruxBuiltins
     /// first element the engine's tree operations never cross the boundary for a callback.</summary>
     public void ceDefine(string name) => CustomElements.NoteDefinition(name ?? "");
 
+    /// <summary>'navigator.hardwareConcurrency' (Device Interface §3.1): the number of logical
+    /// processors the engine can run work on, which only the host can answer.</summary>
+    public int hardwareConcurrency() => System.Environment.ProcessorCount;
+
     /// <summary>'new DOMParser().parseFromString(markup, "text/html")' (DOM Parsing §3): a brand
     /// new Document built from the markup, handed to the page as a document host so it is queried
     /// and mutated like the live one.</summary>
@@ -3680,8 +4945,12 @@ public class CssObjectHost
     }
 }
 
-public class NavigatorHost
+public class NavigatorHost : IDomPrototypeHost
 {
+    // The interface a page reads the navigator as (HTML §7.3), so an accessor the interface
+    // declares — a clipboard, a service worker registration — is reachable on the host object.
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "EventTarget", "Navigator" };
+
     public string userAgent => "Acrux/1.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
     public string appCodeName => "Mozilla";
     public string appName => "Acrux";
@@ -3717,8 +4986,10 @@ public class NavigatorHost
     }
 }
 
-public class LocationHost
+public class LocationHost : IDomPrototypeHost
 {
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "Location" };
+
     public Action<string>? OnNavigate { get; set; }
     public Action? OnReload { get; set; }
 
@@ -3791,8 +5062,10 @@ public class LocationHost
     }
 }
 
-public class HistoryHost
+public class HistoryHost : IDomPrototypeHost
 {
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "History" };
+
     private readonly List<object?> _stack = new();
     private int _currentIndex = -1;
     private readonly LocationHost _location;
@@ -3826,8 +5099,10 @@ public class HistoryHost
     }
 }
 
-public class ScreenHost
+public class ScreenHost : IDomPrototypeHost
 {
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "Screen" };
+
     // The device media features read the same numbers this object hands to a page, so
     // '(device-width: screen.width + "px")' cannot be false (CSS Media Queries 4 §7.4).
     public int width => Acrux.Core.Display.ScreenMetrics.Width;

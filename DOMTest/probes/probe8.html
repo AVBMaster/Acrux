@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html><head><title>Probe 8</title></head><body>
+<div id="root"></div>
+<script>
+(function () {
+  var root = document.getElementById('root');
+  root.innerHTML = '<template id="tp"><p>x</p></template>' +
+    '<select id="se"><option value="a">A</option><option value="b">B</option></select>';
+  var tp = document.getElementById('tp'), se = document.getElementById('se');
+  __T('tp toString', Object.prototype.toString.call(tp) === '[object HTMLTemplateElement]',
+      Object.prototype.toString.call(tp) + '/' + (tp instanceof HTMLTemplateElement));
+  __T('tp has __templateContent', typeof tp.__templateContent === 'function', typeof tp.__templateContent);
+  __T('tp content', (function () { try { var c = tp.content; return !!c && c.nodeType === 11; } catch (e) { return 'threw ' + e.message; } })(),
+      String(tp.content));
+  __T('tp children', tp.children.length + '/' + tp.content.childNodes.length);
+  __T('se toString', Object.prototype.toString.call(se), String(se instanceof HTMLSelectElement));
+  __T('se add', typeof se.add === 'function', typeof se.add);
+  __T('se remove', typeof se.remove === 'function', typeof se.remove);
+  __T('se length', se.length === 2, String(se.length));
+  __T('se value', se.value === 'a', String(se.value));
+  __T('se type', se.type === 'select-one', String(se.type));
+  var o = document.createElement('option'); o.value = 'c'; o.text = 'C';
+  se.add(o);
+  __T('se after add', se.options.length === 3, String(se.options.length));
+  se.remove(0);
+  __T('se after remove', se.options.length === 2, String(se.options.length));
+  var f = document.createElement('form'); f.innerHTML = '<input name="q" value="1">';
+  document.body.appendChild(f);
+  __T('form requestSubmit', typeof f.requestSubmit === 'function', typeof f.requestSubmit);
+  __T('form elements length', f.elements && f.elements.length === 1, String(f.elements && f.elements.length));
+  var div = document.createElement('div');
+  __T('div type is undefined', String(div.type), typeof div.type);
+  __T('btn type default', document.createElement('button').type === 'submit', document.createElement('button').type);
+  __T('input type default', document.createElement('input').type === 'text', document.createElement('input').type);
+})();
+</script></body></html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html><body><script>
+(function () {
+  var M = new DOMMatrix('matrix(1, 2, 3, 4, 5, 6)');
+  var S = new DOMMatrix().scale(2, 2);
+  var MS = M.multiply(S);
+  __T('multiply parts', MS.a === 2 && MS.b === 4 && MS.c === 6 && MS.d === 8 && MS.e === 5 && MS.f === 6,
+      [MS.a, MS.b, MS.c, MS.d, MS.e, MS.f].join(','));
+  var sm = new DOMMatrix().scale(2, 3);
+  var rot = new DOMMatrix('rotate(45deg)');
+  var id = new DOMMatrix();
+  __T('scale', sm.a === 2 && sm.d === 3, [sm.a, sm.d, sm.c].join(','));
+  __T('rotate', Math.abs(rot.a - Math.SQRT1_2) < 1e-9, String(rot.a));
+  __T('identity inverse', id.isIdentity === true && id.inverse().a === 1, [id.isIdentity, id.inverse().a].join(','));
+  var translate = id.translate(10, 20);
+  __T('translate m41', translate.m41 === 10 && translate.m42 === 20 && translate.e === 10 && translate.f === 20,
+      [translate.m41, translate.m42, translate.e, translate.f].join(','));
+  __T('exitFullscreen type', typeof document.exitFullscreen === 'function'
+      && document.exitFullscreen() && typeof document.exitFullscreen().then === 'function',
+      typeof document.exitFullscreen + '/' + String(document.exitFullscreen()));
+  var before = document.firstChild && document.firstChild.nodeType;
+  var threw = 'none';
+  try { document.prepend(document.createTextNode('x')); } catch (e) { threw = e.name + '|' + e.message; }
+  __T('document prepend', 'kids=' + document.childNodes.length + ' first=' + String(before) + ' threw=' + threw,
+      'after=' + (document.firstChild && document.firstChild.nodeType) + ' htmlPrev=' + String(before));
+})();
+</script></body></html>

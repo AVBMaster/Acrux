@@ -147,6 +147,69 @@ public static class HtmlElementFactory
 
     private static void Register(string tag, Constructor ctor) => _constructors[tag] = ctor;
 
+    /// <summary>The interface each tag's element class is named for (HTML §4.1), read off the class
+    /// the factory itself hands out so the tag→class table stays the only place that knows the
+    /// answer, with the chain of interfaces it inherits: the page reads 'input instanceof
+    /// HTMLInputElement' and 'Object.prototype.toString.call(input)' from this.</summary>
+    private static Dictionary<string, string[]>? _interfaces;
+
+    /// <summary>Built on first read: the tag table is filled by the static constructor, and a field
+    /// initializer would run before it.</summary>
+    public static Dictionary<string, string[]> Interfaces => _interfaces ??= BuildInterfaces();
+
+    private static string Normalize(System.Type type)
+    {
+        var name = type.Name;
+        if (name == nameof(HtmlElement)) return "HTMLElement";
+        return name;
+    }
+
+    /// <summary>The interfaces an element of this tag answers, most general first: the chain a
+    /// wrapper is stamped with, ending at the tag's own interface.</summary>
+    private static string[] ChainFor(string interfaceName)
+    {
+        var root = new[] { "Object", "EventTarget", "Node", "Element" };
+        if (interfaceName is "SVGElement" or "MathMLElement") return root;
+        if (interfaceName == "SVGSVGElement") return root.Append("SVGElement").ToArray();
+        var html = root.Append("HTMLElement").ToArray();
+        return interfaceName is "HTMLAudioElement" or "HTMLVideoElement" or "HTMLTrackElement"
+            ? html.Append("HTMLMediaElement").ToArray()
+            : html;
+    }
+
+    private static Dictionary<string, string[]> BuildInterfaces()
+    {
+        var found = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        foreach (var entry in _constructors)
+        {
+            string name;
+            try { name = Normalize(entry.Value(entry.Key).GetType()); }
+            catch { continue; }
+            if (!found.ContainsKey(name)) found[name] = ChainFor(name);
+        }
+        // The generic element and the unknown one are interfaces of their own whether or not a tag
+        // happened to be registered with them, and a page checks both.
+        found.TryAdd("HTMLElement", ChainFor("HTMLElement"));
+        found.TryAdd("HTMLUnknownElement", ChainFor("HTMLUnknownElement"));
+        found.TryAdd("SVGElement", ChainFor("SVGElement"));
+        found.TryAdd("SVGSVGElement", ChainFor("SVGSVGElement"));
+        found.TryAdd("MathMLElement", ChainFor("MathMLElement"));
+        return found;
+    }
+
+    /// <summary>The interface name a page reads an element of this tag as. A tag the table does not
+    /// know is an unknown element, which is what the factory builds for it.</summary>
+    public static string InterfaceNameFor(string localName)
+    {
+        var lower = localName.ToLowerInvariant();
+        if (_constructors.TryGetValue(lower, out var ctor))
+        {
+            try { return Normalize(ctor(lower).GetType()); } catch { }
+        }
+        return lower.Length > 0 && lower[0] >= 'a' && lower[0] <= 'z' && lower.Contains('-')
+            ? "HTMLElement" : "HTMLUnknownElement";
+    }
+
     /// <summary>Creates the appropriate element class for the given tag name.</summary>
     public static HtmlElement Create(string tagName)
     {

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html><head><title>Probe 14</title></head><body>
+<div id="holder"></div>
+<script>
+(function () {
+  var holder = document.getElementById('holder');
+  holder.innerHTML = '<template id="tp"><p>in</p><span>also</span></template><b>after</b>';
+  var tp = document.getElementById('tp');
+  __T('holder html', holder.innerHTML.length > 0, holder.innerHTML.replace(/\s+/g, ' ').slice(0, 180));
+  __T('tp html', String(tp.innerHTML).replace(/\s+/g,' ').slice(0,80) + ' children=' + tp.childNodes.length,
+      tp.outerHTML.replace(/\s+/g, ' ').slice(0, 90));
+  __T('tp content', tp.content.childNodes.length + '/' + tp.content.constructor.name, 'x');
+  var fresh = document.createElement('template');
+  fresh.content.appendChild(document.createElement('i'));
+  __T('fresh append', fresh.content.childNodes.length === 1 && fresh.childNodes.length === 0,
+      fresh.content.childNodes.length + '/' + fresh.childNodes.length);
+  var tpl2 = document.createElement('template');
+  tpl2.innerHTML = '<u>x</u>';
+  __T('tpl innerHTML', tpl2.innerHTML.replace(/\s/g,'') === '<u>x</u>' || tpl2.content.childNodes.length === 1,
+      'innerHTML=' + tpl2.innerHTML + ' content=' + tpl2.content.childNodes.length + ' children=' + tpl2.childNodes.length);
+})();
+</script></body></html>

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html><head><title>Probe 12</title></head><body>
+<script>
+(function () {
+  var tp = new Touch({ identifier: 3, target: document.body });
+  var names = [];
+  try { names = Object.getOwnPropertyNames(tp); } catch (e) { names = ['err']; }
+  __T('touch shape', names.length > 0 || 'in' in tp,
+      'own=' + names.slice(0, 6).join(',') + ' hasIdent=' + ('identifier' in tp) +
+      ' toString=' + Object.prototype.toString.call(tp) + ' type=' + String(tp.type) +
+      ' host=' + (tp.__domType === undefined ? 'none' : String(tp.__domType)));
+  var raw = document.createEvent('Touch');
+  __T('raw touch identifier', String(raw.identifier) + '/' + typeof raw.identifier, Object.prototype.toString.call(raw));
+  __T('proto of tp', Object.getPrototypeOf(tp) === (window.__domProto || {}).Touch,
+      String(Object.getPrototypeOf(tp) === Touch.prototype));
+})();
+</script></body></html>

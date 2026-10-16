@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html><head><title>Probe 7: interface objects and members still missing</title></head><body>
+<div id="root"></div>
+<script>
+(function () {
+  function t(name) { try { return (0, eval)('typeof ' + name); } catch (e) { return 'err'; } }
+  var iface = ['HTMLTemplateElement','HTMLIFrameElement','HTMLInputElement','HTMLFormElement',
+    'HTMLAnchorElement','HTMLButtonElement','HTMLSelectElement','HTMLOptionElement','HTMLOptionElement',
+    'HTMLTextAreaElement','HTMLImageElement','HTMLScriptElement','HTMLStyleElement','HTMLLinkElement',
+    'HTMLCanvasElement','HTMLVideoElement','HTMLAudioElement','HTMLTableElement','HTMLSlotElement',
+    'HTMLUnknownElement','HTMLDivElement','HTMLSpanElement','HTMLLabelElement','HTMLProgressElement',
+    'HTMLDialogElement','HTMLDetailsElement','SVGElement','MathMLElement','ElementInternals',
+    'ValidityState','ShadowRoot','DocumentFragment','DocumentOrShadowRoot','XPathResult','XPathEvaluator',
+    'XSLTProcessor','DOMStringList','DOMStringMap','DOMQuad','DOMMatrixReadOnly','DOMMatrix',
+    'IntersectionObserver','IntersectionObserverEntry','ResizeObserver','ResizeObserverEntry',
+    'PerformanceObserver','PerformanceObserverEntryList','ReportingObserver','EventSource',
+    'EventTarget','EventListener','FocusEvent','PointerEvent','WheelEvent','InputEvent',
+    'CompositionEvent','DragEvent','TouchEvent','Touch','ClipboardEvent','AnimationEvent',
+    'TransitionEvent','MutationEvent','CloseEvent','StorageEvent','HashChangeEvent','PopStateEvent',
+    'PageTransitionEvent','BeforeUnloadEvent','PromiseRejectionEvent','TextMetrics','CanvasRenderingContext2D',
+    'Image','Audio','Option','HTMLElement','Element','Node','CharacterData','Slot',
+    'Float16Array','Iterator','AsyncIterator','Iterator.from','Iterator.prototype.map',
+    'Promise.withResolvers','Promise.try','Object.groupBy','Array.prototype.group','Array.fromAsync',
+    'String.prototype.isWellFormed','Uint8Array.prototype.toBase64','Uint8Array.fromBase64',
+    'Math.sumPrecise','Error.isError','RegExp.prototype.hasIndices','Atomics.waitAsync',
+    'JSON.parse','structuredClone','Temporal'];
+  for (var i = 0; i < iface.length; i++) __T('iface ' + iface[i], t(iface[i]) !== 'undefined' && t(iface[i]) !== 'err', 'typeof=' + t(iface[i]));
+
+  var win = ['alert','confirm','prompt','print','open','close','stop','focus','blur','moveTo','resizeTo',
+    'external','frames','parent','top','opener','closed','name','origin','isSecureContext',
+    'crossOriginIsolated','screenX','screenY','screenLeft','screenTop','frameElement','history','screen',
+    'crypto','performance','navigator','visualViewport','matchMedia','createImageBitmap','requestAnimationFrame',
+    'getSelection','scroll','scrollBy','scrollTo','postMessage','structuredClone','reportError','customElements'];
+  for (var w = 0; w < win.length; w++) __T('win ' + win[w], t('window.' + win[w]) !== 'undefined', 'typeof=' + t('window.' + win[w]));
+
+  var members = ['document.cookie','document.documentElement','document.pictureInPictureEnabled',
+    'document.exitFullscreen','document.fullscreenElement','document.hidden','document.visibilityState',
+    'document.activeElement','document.defaultView','document.scripts','document.links','document.forms',
+    'document.images','document.embeds','document.styleSheets','document.adoptedStyleSheets',
+    'document.createElementNS','document.write','document.writeln','document.open','document.close',
+    'document.contains','document.hasFocus','document.querySelector','document.prepend',
+    'document.fonts','document.getAnimations','document.timeline',
+    'history.pushState','history.replaceState','history.back','history.forward','history.go','history.length','history.state',
+    'location.assign','location.replace','location.reload','location.origin','location.ancestorOrigins',
+    'navigator.sendBeacon','navigator.clipboard','navigator.serviceWorker','navigator.userAgent',
+    'navigator.platform','navigator.language','navigator.languages','navigator.onLine','navigator.hardwareConcurrency',
+    'screen.width','screen.height','screen.availWidth','screen.colorDepth','screen.pixelDepth','screen.orientation',
+    'performance.now','performance.mark','performance.measure','performance.timing','performance.getEntries',
+    'performance.memory','crypto.getRandomValues','crypto.randomUUID','crypto.subtle',
+    'range.surroundContents','range.cloneContents','range.deleteContents','range.extractContents',
+    'range.comparePoint','range.collapse','range.cloneRange','range.setStartBefore','range.selectNode',
+    'range.getClientRects','range.compareBoundaryPoints','range.detach',
+    'selection.addRange','selection.removeRange','selection.getRangeAt','selection.setBaseAndExtent',
+    'selection.extend','selection.selectAllChildren','selection.deleteFromDocument',
+    'node.compareDocumentPosition','node.getRootNode','node.isSameNode','node.isEqualNode','node.normalize',
+    'element.insertAdjacentElement','element.insertAdjacentHTML','element.replaceChildren',
+    'element.animate','element.getAnimations','element.attachShadow','element.shadowRoot','element.closest',
+    'element.matches','element.scrollIntoView','element.dataset','element.classList','element.attributes',
+    'template.content','input.select','input.setSelectionRange','input.setRangeText','form.requestSubmit',
+    'select.add','select.remove','option.selected','textarea.selectionStart','anchor.origin','anchor.toJSON',
+    'style.setProperty','style.cssText','cssRule.selectorText'];
+  for (var m = 0; m < members.length; m++) __T('member ' + members[m], t(members[m]) !== 'undefined', 'typeof=' + t(members[m]));
+
+  // behaviour probes
+  try {
+    var root = document.getElementById('root');
+    root.innerHTML = '<template id="tp"><p>in</p></template><input id="ip" value="abc">' +
+      '<select id="se"><option value="a">A</option><option value="b">B</option></select>' +
+      '<form id="fm"><input name="q" value="1"></form><a id="an" href="/x?y=1#z">l</a>';
+    __T('template.content is a fragment', (function () {
+      var tp = document.getElementById('tp');
+      return !!tp.content && tp.content.nodeType === 11;
+    })(), JSON.stringify(Object.keys(document.getElementById('tp'))));
+    var ip = document.getElementById('ip');
+    __T('input.select works', typeof ip.select === 'function', 'select=' + typeof ip.select);
+    var an = document.getElementById('an');
+    __T('anchor URL parts', an.protocol !== undefined && an.hostname !== undefined && an.search === '?y=1' && an.hash === '#z' && an.origin !== undefined,
+      [an.protocol, an.hostname, an.search, an.hash, an.origin].join('/'));
+    var se = document.getElementById('se');
+    __T('select add/remove/value', typeof se.add === 'function' && typeof se.remove === 'function' && se.value === 'a',
+      'add=' + typeof se.add + ' value=' + se.value);
+    var fm = document.getElementById('fm');
+    __T('form.requestSubmit', typeof fm.requestSubmit === 'function', 'rs=' + typeof fm.requestSubmit);
+    __T('node.compareDocumentPosition', typeof ip.compareDocumentPosition === 'function' &&
+      (ip.compareDocumentPosition(document.getElementById('se')) & 4) === 4,
+      'cdp=' + typeof ip.compareDocumentPosition);
+    __T('document.cookie readable', typeof document.cookie === 'string', 'cookie=' + typeof document.cookie);
+    __T('history.pushState', typeof history.pushState === 'function', 'ps=' + typeof history.pushState);
+    __T('location.assign', typeof location.assign === 'function', 'as=' + typeof location.assign);
+    __T('event.composedPath', typeof (new Event('x')).composedPath === 'function', 'cp=' + typeof (new Event('x')).composedPath);
+  } catch (e) { __T('behaviour probes', false, 'threw ' + e.name + ': ' + e.message); }
+})();
+</script></body></html>

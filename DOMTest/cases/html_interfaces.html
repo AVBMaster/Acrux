@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html>
+<head><title>HTML element interfaces, the event families, the observers and the geometry matrices (HTML §4.1, §4.10.9, §4.10.22, §4.12.3, UI Events §3–§7, Intersection Observer §2, Resize Observer §2, Performance Timeline §3.7, Geometry Interfaces §3–§5)</title></head>
+<body>
+<div id="holder"></div>
+<script>
+// Every default, message and chain here was read off the reference browser in this session (the
+// probes and their measurements are kept in out/). An element is an instance of the interface its
+// tag names; an event is an instance of the family it was built for and carries the defaults that
+// dictionary leaves alone; an observer reports at the next opportunity, never inside the call.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+function ckErr(name, wantName, wantMsg, fn) {
+    var e = null;
+    try { fn(); } catch (x) { e = x; }
+    var got = e ? (e.name + ' | ' + e.message) : 'no throw';
+    __T(name, !!e && e.name === wantName && String(e.message) === wantMsg, got === wantName + ' | ' + wantMsg ? '' : 'got: ' + got);
+}
+function ckOk(name, fn, info) {
+    var threw = null;
+    try { fn(); } catch (e) { threw = e; }
+    __T(name, !threw, threw ? 'threw ' + (threw.name || '') + ': ' + threw.message
+        : (info === undefined ? '' : String(typeof info === 'function' ? info() : info)));
+}
+
+// ── A. the interface a tag names ───────────────────────────────────────────
+ck('A1 an input is an HTMLInputElement down to Node', function () {
+    var i = document.createElement('input');
+    return i instanceof HTMLInputElement && i instanceof HTMLElement && i instanceof Element
+        && i instanceof Node && Object.prototype.toString.call(i) === '[object HTMLInputElement]';
+}, function () { var i = document.createElement('input'); return Object.prototype.toString.call(i); });
+ck('A2 each of the read-only families names its own interface', function () {
+    var tags = [['div', 'HTMLDivElement'], ['span', 'HTMLSpanElement'], ['p', 'HTMLParagraphElement'],
+        ['a', 'HTMLAnchorElement'], ['button', 'HTMLButtonElement'], ['form', 'HTMLFormElement'],
+        ['select', 'HTMLSelectElement'], ['option', 'HTMLOptionElement'], ['textarea', 'HTMLTextAreaElement'],
+        ['table', 'HTMLTableElement'], ['script', 'HTMLScriptElement'], ['style', 'HTMLStyleElement'],
+        ['img', 'HTMLImageElement'], ['iframe', 'HTMLIFrameElement'], ['canvas', 'HTMLCanvasElement'],
+        ['label', 'HTMLLabelElement'], ['ul', 'HTMLUListElement'], ['li', 'HTMLLIElement']];
+    for (var i = 0; i < tags.length; i++) {
+        var el = document.createElement(tags[i][0]);
+        var iface = window[tags[i][1]];
+        if (typeof iface !== 'function') return false;
+        if (!(el instanceof iface)) return false;
+        if (Object.prototype.toString.call(el) !== '[object ' + tags[i][1] + ']') return false;
+    }
+    return true;
+}, function () {
+    var el = document.createElement('canvas');
+    return Object.prototype.toString.call(el) + '/' + typeof HTMLCanvasElement;
+});
+ck('A3 an element made in another namespace is not an HTML element', function () {
+    var SVGNS = 'http://www.w3.org/2000/svg';
+    var circle = document.createElementNS(SVGNS, 'circle');
+    var root = document.createElementNS(SVGNS, 'svg');
+    return circle instanceof SVGElement && !(circle instanceof HTMLElement)
+        && root instanceof SVGSVGElement && root instanceof SVGElement
+        && Object.prototype.toString.call(circle) === '[object SVGElement]';
+}, function () {
+    var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    return Object.prototype.toString.call(c) + '/' + (c instanceof HTMLElement);
+});
+ckErr('A4 an element interface is not a page-side constructor', 'TypeError',
+    'Failed to construct \'HTMLInputElement\': Illegal constructor', function () { new HTMLInputElement(); });
+ckErr('A4b the same refusal for a div', 'TypeError',
+    'Failed to construct \'HTMLDivElement\': Illegal constructor', function () { new HTMLDivElement(); });
+ck('A5 the type a family derives, not the attribute it lacks', function () {
+    var b = document.createElement('button');
+    var i = document.createElement('input');
+    var t = document.createElement('textarea');
+    var s = document.createElement('select');
+    s.multiple = true;
+    return b.type === 'submit' && i.type === 'text' && t.type === 'textarea' && s.type === 'select-multiple';
+}, function () {
+    return [document.createElement('button').type, document.createElement('input').type,
+        document.createElement('textarea').type, document.createElement('select').type].join('/');
+});
+ck('A6 a button with a type written reads it, and a wrong one falls to submit', function () {
+    var reset = document.createElement('button');
+    reset.setAttribute('type', 'reset');
+    var bogus = document.createElement('button');
+    bogus.setAttribute('type', 'bogus');
+    return reset.type === 'reset' && bogus.type === 'submit';
+});
+
+// ── B. the template's content fragment ─────────────────────────────────────
+ck('B1 a template holds its markup in a fragment, not as children', function () {
+    var holder = document.getElementById('holder');
+    holder.innerHTML = '<template id="tp"><p>in</p><span>also</span></template>';
+    var tp = document.getElementById('tp');
+    return tp.children.length === 0 && tp.content && tp.content.nodeType === 11
+        && tp.content.childNodes.length === 2
+        && tp.content.firstElementChild.tagName === 'P'
+        && tp.content.ownerDocument === document && tp.content === tp.content;
+}, function () {
+    var tp = document.getElementById('tp');
+    return [tp.children.length, tp.content && tp.content.nodeType,
+        tp.content && tp.content.childNodes.length].join('/');
+});
+ck('B2 the cloned content is a live subtree of its own', function () {
+    var tp = document.getElementById('tp');
+    var copy = tp.content.cloneNode(true);
+    tp.content.removeChild(tp.content.firstChild);
+    return copy.childNodes.length === 2 && tp.content.childNodes.length === 1;
+});
+ck('B3 a template made empty has an empty fragment', function () {
+    var made = document.createElement('template');
+    return made.content.childNodes.length === 0 && made.content instanceof DocumentFragment;
+});
+
+// ── C. the select's list ───────────────────────────────────────────────────
+ck('C1 the option list is the select interface reading its children', function () {
+    var holder = document.getElementById('holder');
+    holder.innerHTML = '<select id="se"><option value="a">A</option><option value="b">B</option></select>';
+    var se = document.getElementById('se');
+    return se.options.length === 2 && se.length === 2 && se.value === 'a'
+        && se.selectedIndex === 0 && se.type === 'select-one' && se.size === 0
+        && se.selectedOptions.length === 1;
+}, function () {
+    var se = document.getElementById('se');
+    return [se.options.length, se.length, se.value, se.type, se.size].join('/');
+});
+ck('C2 add puts an option in the list, before an anchor when given one', function () {
+    var se = document.getElementById('se');
+    var c = document.createElement('option');
+    c.value = 'c';
+    se.add(c);
+    var appended = se.options.length === 3 && se.options[2] === c;
+    var d = document.createElement('option');
+    d.value = 'd';
+    se.add(d, c);
+    return appended && se.options[2] === d && se.options[3] === c;
+}, function () {
+    var se = document.getElementById('se');
+    return Array.prototype.map.call(se.options, function (o) { return o.value; }).join(',');
+});
+var seRef = null;
+ck('C3 remove takes an index out of the list, or the select out of the tree', function () {
+    var se = seRef = document.getElementById('se');
+    se.remove(0);
+    var first = se.options.length === 3 && se.options[0].value === 'b';
+    var holder = document.getElementById('holder');
+    holder.appendChild(se);
+    se.remove();
+    return first && se.parentNode === null;
+}, function () { return seRef ? [seRef.options.length, String(seRef.parentNode)].join('/') : 'gone'; });
+ckErr('C4 add refuses something that is not an element', 'TypeError',
+    'Failed to execute \'add\' on \'HTMLSelectElement\': parameter 1 is not of type \'HTMLOptionElement\'.',
+    function () { seRef.add('nope'); });
+ck('C5 multiple and size travel on the attributes they are written to', function () {
+    var se = document.createElement('select');
+    se.multiple = true;
+    se.size = 4;
+    return se.hasAttribute('multiple') && se.getAttribute('size') === '4'
+        && se.size === 4 && se.type === 'select-multiple';
+});
+var docMade = null;
+var fmRef = null;
+ck('C6 a form submits when the page asks it to, through the submit event', function () {
+    var holder = document.getElementById('holder');
+    holder.innerHTML = '<form id="fm"><input name="q" value="1"><button id="bt" type="submit">go</button></form>';
+    var fm = fmRef = document.getElementById('fm');
+    var seen = seenSubmit = 0;
+    fm.addEventListener('submit', function (e) { seen++; e.preventDefault(); });
+    fm.requestSubmit();
+    var cancelled = seen === 1 && fm.parentNode !== null;
+    fm.requestSubmit(document.getElementById('bt'));
+    return cancelled && seen === 2 && fm.elements.length === 2 && fm.length === 2;
+}, function () { return seenSubmit + '/' + (fmRef && fmRef.elements.length) + '/' + (fmRef && fmRef.length); });
+ckErr('C7 requestSubmit refuses something that is not an element', 'TypeError',
+    'Failed to execute \'requestSubmit\' on \'HTMLFormElement\': parameter 1 is not of type \'HTMLElement\'.',
+    function () { document.getElementById('fm').requestSubmit('nope'); });
+
+// ── D. the event families ──────────────────────────────────────────────────
+ck('D1 an event is an instance of the family it was built for', function () {
+    var e = new Event('ping');
+    var u = new UIEvent('focus');
+    var m = new MouseEvent('click', { clientX: 5 });
+    var p = new PointerEvent('pointerdown', { pointerId: 7 });
+    return e instanceof Event && !(e instanceof UIEvent) && u instanceof UIEvent
+        && u instanceof Event && m instanceof MouseEvent && m instanceof UIEvent
+        && p instanceof PointerEvent && p instanceof MouseEvent && p instanceof Event;
+}, function () {
+    var p = new PointerEvent('x');
+    return [p instanceof PointerEvent, p instanceof MouseEvent, p instanceof Event,
+        Object.prototype.toString.call(p)].join('/');
+});
+ck('D2 the dictionary the page wrote is what the event answers', function () {
+    var m = new MouseEvent('click', { clientX: 5, clientY: 6, button: 2, ctrlKey: true, bubbles: true });
+    var w = new WheelEvent('wheel', { deltaY: 120, deltaMode: 1 });
+    var i = new InputEvent('input', { inputType: 'insertText', data: 'ab' });
+    var c = new CloseEvent('close', { code: 1000, reason: 'done', wasClean: true });
+    var ps = new PopStateEvent('popstate', { state: { a: 1 } });
+    var an = new AnimationEvent('animationend', { animationName: 'fade', elapsedTime: 1.5, pseudoElement: '::before' });
+    return m.clientX === 5 && m.clientY === 6 && m.button === 2 && m.ctrlKey === true
+        && m.bubbles === true && w.deltaY === 120 && w.deltaMode === 1
+        && i.inputType === 'insertText' && i.data === 'ab' && c.code === 1000
+        && c.reason === 'done' && c.wasClean === true && ps.state.a === 1
+        && an.animationName === 'fade' && an.elapsedTime === 1.5 && an.pseudoElement === '::before';
+}, function () {
+    var c = new CloseEvent('close', { code: 1000 });
+    return [typeof c.code, c.code, Object.prototype.toString.call(c)].join('/');
+});
+ck('D3 the defaults a dictionary leaves alone are the interface names', function () {
+    var p = new PointerEvent('x');
+    var u = new UIEvent('x');
+    var m = new MouseEvent('x');
+    var i = new InputEvent('x');
+    return p.width === 1 && p.height === 1 && p.pressure === 0 && p.pointerId === 0
+        && p.pointerType === '' && p.isPrimary === false && u.detail === 0 && u.view === null
+        && u.which === 0 && m.screenX === 0 && m.relatedTarget === null && m.buttons === 0
+        && i.inputType === '' && i.data === null && i.isComposing === false
+        && Array.isArray(i.getTargetRanges());
+}, function () {
+    var p = new PointerEvent('x');
+    return [p.width, p.pointerType, p.isPrimary, new UIEvent('x').view, new InputEvent('x').data].join('/');
+});
+ck('D4 the methods live on the prototype, not on the event', function () {
+    var e = new Event('x');
+    var own = Object.keys(e).length;
+    return typeof Event.prototype.preventDefault === 'function'
+        && typeof Event.prototype.stopPropagation === 'function'
+        && typeof Event.prototype.stopImmediatePropagation === 'function'
+        && typeof Event.prototype.composedPath === 'function' && own < 4;
+}, function () { return String(Object.keys(new Event('x')).length); });
+ckErr('D5 a Touch is built from a dictionary with its required members', 'TypeError',
+    'Failed to construct \'Touch\': Failed to read the \'identifier\' property from \'TouchInit\':'
+    + ' Required member is undefined.',
+    function () { new Touch({ target: document.body }); });
+ckErr('D5b the target is required too', 'TypeError',
+    'Failed to construct \'Touch\': Failed to read the \'target\' property from \'TouchInit\':'
+    + ' Required member is undefined.',
+    function () { new Touch({ identifier: 1 }); });
+ck('D6 a touch list carries the touches the page handed it', function () {
+    var body = document.body;
+    var t = new Touch({ identifier: 3, target: body, clientX: 7 });
+    var ev = new TouchEvent('touchstart', { touches: [t], targetTouches: [t], changedTouches: [t] });
+    return t.identifier === 3 && t.target === body && t.clientX === 7 && t.force === 0
+        && ev.touches.length === 1 && ev.touches[0] === t && ev.changedTouches[0] === t
+        && ev instanceof TouchEvent && ev instanceof UIEvent && ev instanceof Event;
+}, function () {
+    var body = document.body;
+    var t = new Touch({ identifier: 3, target: body, clientX: 7 });
+    var ev = new TouchEvent('touchstart', { touches: [t] });
+    return [t.identifier, String(t.target === body), t.clientX, t.force,
+        ev.touches.length, String(ev.touches[0] === t), String(ev instanceof TouchEvent),
+        String(ev instanceof UIEvent), String(ev instanceof Event)].join('/');
+});
+var seenEvent = null;
+ck('D7 a dispatched event reaches the listeners with the fields intact', function () {
+    var got = null;
+    var handler = function (e) { got = seenEvent = e; };
+    document.getElementById('holder').addEventListener('family', handler);
+    document.getElementById('holder').dispatchEvent(
+        new CustomEvent('family', { detail: { deep: 1 }, bubbles: true }));
+    document.getElementById('holder').removeEventListener('family', handler);
+    return got !== null && got.detail.deep === 1 && got.type === 'family' && got instanceof CustomEvent;
+}, function () { return seenEvent ? String(seenEvent.detail && seenEvent.detail.deep) : 'none'; });
+
+// ── E. the observers ───────────────────────────────────────────────────────
+ck('E1 an observation is not reported inside the call that made it', function () {
+    var calls = 0;
+    var io = new IntersectionObserver(function (entries) { calls += entries.length; });
+    io.observe(document.getElementById('holder'));
+    var synced = calls;
+    var records = io.takeRecords();
+    setTimeout(function () {
+        __T('E1a the queue is empty right after observing', records.length === 0 && Array.isArray(records),
+            'records=' + records.length);
+        __T('E1b the callback came later', calls > synced,
+            'calls=' + calls + ' synced=' + synced);
+    }, 0);
+    return synced === 0;
+}, function () { return 'skipped'; });
+ck('E2 the entries name their target and the rectangle it has', function () {
+    var got = null;
+    var ro = new ResizeObserver(function (entries) { got = entries; });
+    var target = document.createElement('div');
+    document.body.appendChild(target);
+    ro.observe(target);
+    setTimeout(function () {
+        var first = got && got[0];
+        __T('E2a the resize entry describes the target', !!first && first.target === target
+            && !!first.contentRect && typeof first.contentRect.width === 'number'
+            && Array.isArray(first.contentBoxSize) && first.contentBoxSize.length === 1
+            && typeof first.contentBoxSize[0].inlineSize === 'number',
+            first ? String(first.target === target) : 'no entry');
+    }, 0);
+    return true;
+});
+var ioRef = null;
+ck('E3 disconnect stops the reports and unobserve drops one target', function () {
+    var calls = 0;
+    var io = ioRef = new IntersectionObserver(function () { calls++; });
+    io.observe(document.body);
+    var reported = 0;
+    var io2 = new IntersectionObserver(function (list) { reported = list.length; });
+    io.unobserve(document.body);
+    io.disconnect();
+    setTimeout(function () {
+        __T('E3a nothing is reported after a disconnect', reported === 0, 'reported=' + reported);
+    }, 2);
+    return typeof io.takeRecords === 'function' && typeof io.disconnect === 'function'
+        && typeof io.observe === 'function' && typeof io.unobserve === 'function'
+        && Object.keys(io).length === 0;
+}, function () { return ioRef ? 'own=' + Object.keys(ioRef).length : 'gone'; });
+ck('E4 the observer interface objects are there to be detected', function () {
+    return typeof IntersectionObserver === 'function' && typeof IntersectionObserverEntry === 'function'
+        && typeof ResizeObserver === 'function' && typeof ResizeObserverEntry === 'function'
+        && typeof PerformanceObserver === 'function'
+        && typeof PerformanceObserverEntryList === 'function'
+        && typeof ReportingObserver === 'function'
+        && Array.isArray(PerformanceObserver.supportedEntryTypes)
+        && PerformanceObserver.supportedEntryTypes[0] === 'element'
+        && PerformanceObserver.supportedEntryTypes.indexOf('layout-shift') >= 0;
+}, function () { return String(PerformanceObserver.supportedEntryTypes[0]); });
+ck('E5 a performance observer watches the types it asked for', function () {
+    var got = null;
+    var po = new PerformanceObserver(function (list) { got = list; });
+    performance.mark('iface-probe-mark');
+    po.observe({ entryTypes: ['mark'] });
+    setTimeout(function () {
+        var entries = got && got.getEntries ? got.getEntries() : [];
+        var names = [];
+        for (var i = 0; i < entries.length; i++) names.push(entries[i].name);
+        __T('E5a the mark was reported once', !!got && names.indexOf('iface-probe-mark') >= 0
+            && entries[0].entryType === 'mark' && typeof entries[0].startTime === 'number',
+            names.join(','));
+    }, 0);
+    return true;
+});
+ckErr('E6 an observer needs a callback', 'TypeError',
+    'Failed to construct \'IntersectionObserver\': parameter 1 is not of type \'Function\'.',
+    function () { new IntersectionObserver(); });
+ckErr('E6b the same for a resize observer', 'TypeError',
+    'Failed to construct \'ResizeObserver\': parameter 1 is not of type \'Function\'.',
+    function () { new ResizeObserver(null); });
+
+// ── F. the geometry a matrix carries ───────────────────────────────────────
+ck('F1 a matrix string fills the six 2D slots and the sixteen numbered ones', function () {
+    var m = new DOMMatrix('matrix(1, 2, 3, 4, 5, 6)');
+    return m.a === 1 && m.b === 2 && m.c === 3 && m.d === 4 && m.e === 5 && m.f === 6
+        && m.m11 === 1 && m.m12 === 2 && m.m21 === 3 && m.m22 === 4 && m.m41 === 5
+        && m.m42 === 6 && m.is2D === true && m.isIdentity === false;
+}, function () { var m = new DOMMatrix('matrix(1, 2, 3, 4, 5, 6)'); return [m.a, m.m41, m.is2D].join('/'); });
+ck('F2 the identity matrix and the operations on it', function () {
+    var id = new DOMMatrix();
+    var moved = id.translate(10, 20);
+    var point = moved.transformPoint(new DOMPoint(1, 1));
+    var scaled = id.scale(2, 3);
+    var turned = new DOMMatrix('rotate(45deg)');
+    return id.isIdentity === true && moved.e === 10 && moved.f === 20 && point.x === 11
+        && point.y === 21 && scaled.a === 2 && scaled.d === 3
+        && Math.abs(turned.a - Math.SQRT1_2) < 1e-9 && id.inverse().a === 1;
+}, function () {
+    var moved = new DOMMatrix().translate(10, 20);
+    return [moved.e, moved.f, moved.transformPoint(new DOMPoint(1, 1)).x].join('/');
+});
+ckErr('F3 a transform list the interface cannot read is refused', 'SyntaxError',
+    'Failed to construct \'DOMMatrix\': Failed to parse \'rotate(45)\'.',
+    function () { new DOMMatrix('rotate(45)'); });
+ck('F4 a matrix multiplies and a quad reads a rect', function () {
+    var m = new DOMMatrix('matrix(1, 2, 3, 4, 5, 6)');
+    var twice = m.multiply(new DOMMatrix().scale(2, 2));
+    var quad = DOMQuad.fromRect(new DOMRect(1, 2, 3, 4));
+    return twice.a === 2 && twice.b === 4 && twice.c === 6 && twice.d === 8
+        && twice.e === 5 && twice.f === 6
+        && quad.p1.x === 1 && quad.p1.y === 2 && quad.p3.x === 4 && quad.p3.y === 6
+        && typeof DOMMatrixReadOnly.fromMatrix === 'function'
+        && DOMMatrixReadOnly.fromMatrix(m).b === 2;
+}, function () {
+    var m = new DOMMatrix('matrix(1, 2, 3, 4, 5, 6)').multiply(new DOMMatrix().scale(2, 2));
+    return [m.a, m.e].join('/');
+});
+
+// ── G. what the window and the document answer ─────────────────────────────
+ck('G1 the window answers its own identity members', function () {
+    return typeof window.origin === 'string' && window.isSecureContext === true
+        && window.crossOriginIsolated === false && window.frameElement === null
+        && window.external && typeof window.external.AddSearchProvider === 'function'
+        && window.visualViewport && typeof window.visualViewport.width === 'number'
+        && window.visualViewport.scale === 1;
+}, function () { return [typeof window.origin, window.isSecureContext, String(window.frameElement)].join('/'); });
+ck('G2 createImageBitmap answers a rejected promise rather than throwing', function () {
+    var state = 'pending';
+    window.createImageBitmap(document.body).then(function () { state = 'resolved'; },
+        function (e) { state = e.name; });
+    setTimeout(function () { __T('G2a the rejection arrived', state === 'InvalidStateError', 'state=' + state); }, 0);
+    return true;
+});
+ck('G3 the clipboard and the worker registration refuse the way the interface does', function () {
+    var state = 'pending', sw = 'pending';
+    navigator.clipboard.writeText('x').then(function () { state = 'resolved'; },
+        function (e) { state = e.name; });
+    navigator.serviceWorker.register('/no.js').then(function () { sw = 'resolved'; },
+        function (e) { sw = e.name; });
+    setTimeout(function () {
+        __T('G3a the clipboard refused', state === 'NotAllowedError', 'state=' + state);
+        __T('G3b the worker refused', sw === 'NotSupportedError', 'sw=' + sw);
+        __T('G3c the registration promise is the one the interface names',
+            navigator.serviceWorker.ready instanceof Promise, typeof navigator.serviceWorker.ready);
+    }, 0);
+    return typeof navigator.clipboard.write === 'function'
+        && typeof navigator.clipboard.readText === 'function'
+        && typeof navigator.serviceWorker.getRegistrations === 'function';
+});
+ck('G4 a window that is not framed has no ancestor origins', function () {
+    var list = location.ancestorOrigins;
+    return !!list && list.length === 0 && list.item(0) === null && list.contains('http://a') === false
+        && typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency >= 1;
+}, function () { return String(location.ancestorOrigins && location.ancestorOrigins.length); });
+ck('G5a the document answers the ParentNode mixin', function () {
+    var made = docMade = document.createElement('p');
+    var frag = document.createDocumentFragment();
+    frag.appendChild(made);
+    document.append(frag);
+    var appended = made.parentNode === document;
+    document.prepend(document.createTextNode('x'));
+    return appended && made.parentNode === document && document.contains(made) === true
+        && document.contains(document.createElement('div')) === false;
+}, function () {
+    var other = document.createElement('span');
+    return [String(docMade && docMade.parentNode === document), String(document.contains(docMade)),
+        String(document.contains(other))].join('/');
+});
+ck('G5b the document answers its own state reads', function () {
+    return document.fullscreenElement === null && document.fullscreenEnabled === false
+        && document.pictureInPictureElement === null && document.pictureInPictureEnabled === false
+        && document.pointerLockElement === null && Array.isArray(document.getAnimations())
+        && document.firstChild === docMade.parentNode.firstChild || document.firstChild !== null;
+}, function () {
+    return [String(document.fullscreenElement), String(document.fullscreenEnabled),
+        String(document.firstChild && document.firstChild.nodeType),
+        String(document.lastChild && document.lastChild.nodeType)].join('/');
+});
+ck('G6 exiting a fullscreen that was never entered is refused', function () {
+    var state = 'pending';
+    document.exitFullscreen().then(function () { state = 'resolved'; },
+        function (e) { state = e.name + ' | ' + e.message; });
+    setTimeout(function () {
+        __T('G6a the rejection arrived', state === 'NotFoundError | The document is not fullscreen.',
+            'state=' + state);
+    }, 0);
+    return true;
+});
+ck('G7 the document timeline is one object with the clock the host runs from', function () {
+    return document.timeline === document.timeline && document.timeline.phase === 'active'
+        && document.timeline.playbackRate === 1
+        && typeof document.timeline.currentTime === 'number'
+        && Object.prototype.toString.call(document.timeline) === '[object DocumentTimeline]';
+}, function () { return Object.prototype.toString.call(document.timeline); });
+ck('G8 performance still answers the legacy timing object', function () {
+    return performance.timing && typeof performance.timing.navigationStart === 'number'
+        && Object.prototype.toString.call(performance.timing) === '[object PerformanceTiming]'
+        && performance.navigation.type === 0;
+}, function () { return Object.prototype.toString.call(performance.timing); });
+
+// ── H. the ES additions the platform carries ───────────────────────────────
+ck('H1 Array.prototype.group groups as Object.groupBy does', function () {
+    var out = [1, 2, 3, 4].group(function (n) { return n % 2 ? 'odd' : 'even'; });
+    return out.odd.length === 2 && out.even.length === 2 && out.odd[0] === 1
+        && Object.getPrototypeOf(out) === null;
+}, function () { return JSON.stringify([1, 2].group(function (n) { return 'k'; })); });
+ck('H2 an iterator helper still walks the same sequence', function () {
+    var seen = 0;
+    new Set([1, 2, 3]).values().filter(function (n) { return n > 1; }).forEach(function () { seen++; });
+    return seen === 2;
+});
+</script>
+</body>
+</html>

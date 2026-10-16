@@ -70,6 +70,15 @@ public class JsDomPrototypeSystem
         };
         ctor.prototype = own || {};
         ctor.prototype.constructor = ctor;
+        // What 'Object.prototype.toString.call(el)' answers for an interface is the interface's own
+        // name (DOM §6.1) — the level prototype carries it, so an element reads as the interface its
+        // tag names rather than as a bare wrapper.
+        if (typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+            try {
+                Object.defineProperty(ctor.prototype, Symbol.toStringTag,
+                    { value: name, writable: false, enumerable: false, configurable: true });
+            } catch (e) { }
+        }
 
         // Store prototype chain for instanceof support
         protoChains[name] = allNames;
@@ -232,5 +241,15 @@ public class JsDomPrototypeSystem
 
         RegisterConstructor("URL", new[] { "Object" }, _ => null);
         RegisterConstructor("URLSearchParams", new[] { "Object" }, _ => null);
+
+        // HTML §4.1: every tag has its own element interface, and a wrapper is stamped with the one
+        // its tag names — 'input instanceof HTMLInputElement' and '[object HTMLInputElement]' both
+        // come from this. The list is the factory's own tag→class table, so the two cannot drift.
+        foreach (var entry in Acrux.Core.Dom.Html.HtmlElementFactory.Interfaces)
+        {
+            if (entry.Key == "HTMLElement") continue;   // registered above, with the core chain
+            RegisterConstructor(entry.Key, entry.Value, _ => null);
+        }
+        RegisterConstructor("HTMLMediaElement", new[] { "Object", "EventTarget", "Node", "Element", "HTMLElement" }, _ => null);
     }
 }
