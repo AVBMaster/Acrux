@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head><title>API probe 6: the interface names a page can reach</title></head>
+<body>
+<script>
+// A sweep over the interface names the platform is asked for, recorded as it stands. The candidates
+// that are NOT here are kept in out/api_probe6.log — the observers that need geometry
+// (IntersectionObserver, ResizeObserver, PerformanceObserver), the shadow tree (ShadowRoot,
+// attachShadow, Slot, HTMLSlotElement), the animation interface (Element.animate, getAnimations),
+// the specialised element hosts (HTMLTemplateElement, HTMLIFrameElement, HTMLScriptElement,
+// HTMLStyleElement, and with them the 'HTMLElement.prototype.*' face of the members a host answers
+// directly), the storage and crypto back ends (StorageManager, navigator.storage, crypto.subtle),
+// URLPattern, TextEncoderStream, CSS.registerProperty, document.featurePolicy, wasActive,
+// currentCSSZoom and window.find. A page that asks for one of those gets 'undefined', and the gap
+// is a case to open rather than a silence.
+(function () {
+  function has(name) { try { return (0, eval)('typeof ' + name); } catch (e) { return 'err'; } }
+  var present = [
+    'CSS.escape', 'CSS.supports', 'getComputedStyle', 'scrollTo', 'getSelection',
+    'DOMParser', 'XMLSerializer', 'Text', 'Comment', 'CDATASection', 'ProcessingInstruction',
+    'DocumentType', 'MutationRecord', 'MutationObserver', 'BroadcastChannel',
+    'CustomElementRegistry', 'customElements.getName', 'customElements.whenDefined',
+    'customElements.upgrade', 'requestIdleCallback', 'queueMicrotask', 'structuredClone',
+    'reportError', 'Intl.Segmenter', 'URL.canParse', 'URL.createObjectURL',
+    'AbortSignal.timeout', 'AbortSignal.any', 'AbortSignal.abort',
+    'Request', 'Response', 'Response.json', 'Response.error', 'Response.redirect',
+    'Headers', 'FormData', 'DOMRect', 'DOMRectList', 'DOMPoint', 'DOMPointReadOnly',
+    'window.performance.memory', 'BroadcastChannel', 'MessageChannel', 'MessageEvent'
+  ];
+  for (var i = 0; i < present.length; i++) {
+    var t = has(present[i]);
+    __T('has ' + present[i], t === 'function' || t === 'object', 'typeof=' + t);
+  }
+  // The window event surface the error path needs: an ErrorEvent is a thing a page can build and
+  // hear, and reportError reaches the listener rather than throwing past it.
+  __T('has ErrorEvent', has('ErrorEvent') === 'function', 'typeof=' + has('ErrorEvent'));
+  var heard = null;
+  var handler = function (e) { heard = e; };
+  window.addEventListener('error', handler);
+  reportError(new Error('probe-error'));
+  window.removeEventListener('error', handler);
+  __T('reportError reaches the window listener', heard !== null && heard.message === 'Uncaught Error: probe-error',
+      'msg=' + (heard && heard.message));
+})();
+</script>
+</body>
+</html>

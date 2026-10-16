@@ -742,7 +742,20 @@ public class JavaScriptEngine : IDisposable
                     if (signal && typeof signal.addEventListener === 'function') {
                         signal.addEventListener('abort', onAbort);
                     }
-                    var rid = __g_store(function (v) { if (settled) return; settled = true; resolve(v); });
+                    var rid = __g_store(function (v) {
+                        if (settled) return;
+                        settled = true;
+                        // The page gets a Response, not the host's payload: the status and the reason
+                        // phrase, the headers as a Headers object and the body behind the read
+                        // methods all belong to the interface (§6).
+                        if (v && typeof v === 'object' && v.status !== undefined) {
+                            resolve(new Response(v.data === undefined ? '' : String(v.data), {
+                                status: v.status,
+                                statusText: v.statusText === undefined ? '' : String(v.statusText),
+                                headers: v.headers || null, url: String(url), type: 'basic'
+                            }));
+                        } else resolve(v);
+                    });
                     var rjid = __g_store(function (e) { if (settled) return; settled = true; reject(e); });
                     handle = __acrux._fetch(url, JSON.stringify(send), rid, rjid);
                 });
@@ -845,8 +858,17 @@ public class JavaScriptEngine : IDisposable
                     (init && typeof init.headers === 'object' && typeof init.headers.forEach === 'function')
                         ? init.headers : init);
                 function key(k) { return String(k).toLowerCase(); }
-                this.get = function (k) { var a = map[key(k)]; return a ? a[0] : null; };
+                // A name written twice reads back as the pair the fetch spec joins — the same value
+                // 'forEach' and 'values' hand out, and 'getAll' is the view that keeps them apart.
+                this.get = function (k) { var a = map[key(k)]; return a ? a.join(', ') : null; };
                 this.getAll = function (k) { var a = map[key(k)]; return a ? a.slice() : []; };
+                // 'set-cookie' is the one name a response keeps its repetitions apart for — a
+                // comma-joined read would fold the attributes of each cookie together — so the
+                // interface adds a getter that hands the stored list back (Fetch §5.4).
+                this.getSetCookie = function () {
+                    var a = map['set-cookie'];
+                    return a ? a.slice() : [];
+                };
                 this.has = function (k) { return map[key(k)] !== undefined; };
                 this.set = function (k, v) { map[key(k)] = [String(v)]; };
                 this.append = function (k, v) {
@@ -895,7 +917,14 @@ public class JavaScriptEngine : IDisposable
             // ── AbortController / AbortSignal (DOM §4.6) ────────────────────────
             // The signal is an EventTarget once the controller aborts it — the engine's event bridge
             // runs the listeners, so the abort reaches every registered handler exactly once.
+            // The signal is not a page-side constructor (§4.6): only a controller, a timeout, an
+            // abort or a combination makes one, so the internal factory carries the sentinel the
+            // constructor insists on.
+            var __signalCraft = 0;
             function AbortSignal() {
+                if (!__signalCraft) {
+                    throw new TypeError('Failed to construct \'AbortSignal\': Illegal constructor');
+                }
                 var self = this;
                 this._aborted = false;
                 this._reason = undefined;
@@ -927,8 +956,21 @@ public class JavaScriptEngine : IDisposable
                 }
                 if (typeof self.onabort === 'function') { try { self.onabort(ev); } catch (e) { } }
             };
+            AbortSignal._make = function () {
+                __signalCraft++;
+                try { return new AbortSignal(); } finally { __signalCraft--; }
+            };
+            // The one way a signal turns aborted: the reason it carries, then the listeners it has.
+            AbortSignal._abort = function (signal, reason) {
+                if (signal._aborted) return signal;
+                signal._aborted = true;
+                signal._reason = (reason === undefined)
+                    ? new DOMException('The operation was aborted.', 'AbortError') : reason;
+                signal._fire();
+                return signal;
+            };
             AbortSignal.abort = function (reason) {
-                var s = new AbortSignal();
+                var s = AbortSignal._make();
                 s._aborted = true;
                 s._reason = (reason === undefined) ? new DOMException('The operation was aborted.', 'AbortError') : reason;
                 return s;
@@ -936,7 +978,7 @@ public class JavaScriptEngine : IDisposable
             // A timeout signal aborts on its own, with the TimeoutError the spec names, and the
             // timer is the engine's own so it runs at the same clock setTimeout does.
             AbortSignal.timeout = function (ms) {
-                var s = new AbortSignal();
+                var s = AbortSignal._make();
                 setTimeout(function () {
                     if (s._aborted) return;
                     s._aborted = true;
@@ -948,14 +990,8 @@ public class JavaScriptEngine : IDisposable
 
             function AbortController() {
                 var self = this;
-                this.signal = new AbortSignal();
-                this.abort = function (reason) {
-                    if (self.signal._aborted) return;
-                    self.signal._aborted = true;
-                    self.signal._reason = (reason === undefined)
-                        ? new DOMException('The operation was aborted.', 'AbortError') : reason;
-                    self.signal._fire();
-                };
+                this.signal = AbortSignal._make();
+                this.abort = function (reason) { AbortSignal._abort(self.signal, reason); };
             }
 
             // The Option and Image constructors the HTML defines as convenience wrappers over a
@@ -1129,6 +1165,283 @@ public class JavaScriptEngine : IDisposable
             URL.revokeObjectURL = function (url) { delete objectUrls[url]; };
             window.URL = URL;
 
+            // ── URL.canParse, reportError, AbortSignal.any (URL §2.5, HTML §8.8, DOM §4.6) ──
+            // 'canParse' is the question the constructor answers without building anything, so it is a
+            // static of the URL interface rather than a method of an instance.
+            URL.canParse = function (url, base) {
+                if (arguments.length < 1) {
+                    throw new TypeError('Failed to execute \'canParse\' on \'URL\': 1 argument'
+                        + ' required, but only 0 present.');
+                }
+                var text = String(url === undefined ? '' : url);
+                if (!text) return false;
+                // A url that is not absolute is only parseable against a base that is, and the host
+                // constructor is lenient about what it makes — so the shape is asked here.
+                var scheme = /^[a-zA-Z][a-zA-Z0-9+.\-]*:/;
+                var root = (base === undefined || base === null) ? '' : String(base);
+                if (!scheme.test(text) && !scheme.test(root)) return false;
+                try {
+                    var made = new URL(text, root);
+                    return !!made && typeof made.href === 'string' && made.href.length > 0;
+                } catch (e) { return false; }
+            };
+
+            // 'reportError' takes a value the page raised without throwing it: it arrives as the
+            // error event the window would have got, with the message the reference writes —
+            // 'Uncaught ' plus the name and message of an error, or the value as text for anything
+            // else, and the value itself still reachable from the event.
+            // The event the error carries is the interface's own: the message the reference writes,
+            // the value still reachable from 'error', and the position fields left empty.
+            function ErrorEvent(type, init) {
+                init = init || { };
+                var evt = new Event(String(type === undefined ? '' : type),
+                    { bubbles: !!init.bubbles, cancelable: !!init.cancelable });
+                evt.message = init.message === undefined ? '' : String(init.message);
+                evt.error = init.error;
+                evt.filename = init.filename === undefined ? '' : String(init.filename);
+                evt.lineno = Number(init.lineno) || 0;
+                evt.colno = Number(init.colno) || 0;
+                return evt;
+            }
+            window.ErrorEvent = ErrorEvent;
+            window.reportError = function (value) {
+                var message = 'Uncaught ';
+                if (value && typeof value === 'object' && value.name && value.message)
+                    message += String(value.name) + ': ' + String(value.message);
+                else message += String(value);
+                var event = null;
+                try {
+                    event = new ErrorEvent('error', { message: message, error: value,
+                        filename: '', lineno: 0, colno: 0 });
+                } catch (e) { return; }
+                try { window.dispatchEvent(event); } catch (e) { }
+                // The window's own listeners are what a page sets to hear about its errors, and the
+                // handler written as a property is called first (HTML §8.8).
+                var handler = typeof window.onerror === 'function' ? window.onerror : null;
+                if (handler) { try { handler.call(window, message, '', 0, 0, value); } catch (e) { } }
+                var bag = window.__winError || [];
+                var copy = bag.slice();
+                for (var i = 0; i < copy.length; i++) {
+                    var fn = copy[i];
+                    try { (typeof fn === 'function' ? fn : fn.handleEvent).call(window, event); }
+                    catch (e) { }
+                }
+            };
+
+            // The signals of a list, combined: the one the page gets is aborted as soon as any of them
+            // is and carries that signal's reason; an input already aborted aborts it at once (§4.6).
+            AbortSignal.any = function (signals) {
+                var list;
+                if (signals !== null && signals !== undefined
+                    && typeof signals[Symbol.iterator] === 'function') {
+                    list = Array.from(signals);
+                } else {
+                    // A sequence is asked for, and a value with nothing iterable about it is not one.
+                    throw new TypeError('Failed to execute \'any\' on \'AbortSignal\': The provided'
+                        + ' value cannot be converted to a sequence.');
+                }
+                for (var i = 0; i < list.length; i++) {
+                    var item = list[i];
+                    if (!item || item.aborted === undefined || typeof item.addEventListener !== 'function') {
+                        throw new TypeError('Failed to execute \'any\' on \'AbortSignal\': Failed to'
+                            + ' convert value to \'AbortSignal\'.');
+                    }
+                }
+                var made = AbortSignal._make();
+                for (var j = 0; j < list.length; j++) {
+                    if (list[j].aborted) return AbortSignal._abort(made, list[j].reason);
+                }
+                for (var k = 0; k < list.length; k++) {
+                    (function (source) {
+                        source.addEventListener('abort', function () {
+                            AbortSignal._abort(made, source.reason);
+                        });
+                    })(list[k]);
+                }
+                return made;
+            };
+
+            // ── DOMPoint, DOMRectList (Geometry Interfaces §3, §5) ─────────────
+            function DOMPointReadOnly(x, y, z, w) {
+                var self = this;
+                this.x = x === undefined ? 0 : Number(x);
+                this.y = y === undefined ? 0 : Number(y);
+                this.z = z === undefined ? 0 : Number(z);
+                this.w = w === undefined ? 1 : Number(w);
+                this.toJSON = function () {
+                    return { x: self.x, y: self.y, z: self.z, w: self.w };
+                };
+            }
+            DOMPointReadOnly.fromPoint = function (other) {
+                other = other || { };
+                return new DOMPointReadOnly(other.x, other.y, other.z, other.w);
+            };
+            DOMPointReadOnly.prototype.matrixTransform = function () {
+                return new DOMPointReadOnly(this.x, this.y, this.z, this.w);
+            };
+            function DOMPoint(x, y, z, w) {
+                DOMPointReadOnly.call(this, x, y, z, w);
+            }
+            DOMPoint.prototype = Object.create(DOMPointReadOnly.prototype);
+            DOMPoint.prototype.constructor = DOMPoint;
+            DOMPoint.fromPoint = function (other) {
+                other = other || { };
+                return new DOMPoint(other.x, other.y, other.z, other.w);
+            };
+
+            // The list a geometry read answers is the array-like face of the interface: the items in
+            // order, a length, and 'item' for the out-of-range answer of null.
+            function DOMRectList(items) {
+                var list = items || [];
+                var self = this;
+                this.length = list.length;
+                this.item = function (index) {
+                    index = Number(index);
+                    return index >= 0 && index < list.length ? list[index] : null;
+                };
+                for (var i = 0; i < list.length; i++) self[i] = list[i];
+            }
+
+            // ── Request and Response (Fetch §3, §6, §7) ────────────────────────
+            // A body is held as text here: the page-facing half of the interface is the shape around
+            // it — the headers as a Headers object, 'ok', 'type' and 'url' derived from the exchange,
+            // and the read methods each handing back a promise that can only be taken once (§6.3).
+            function bodyToText(body) {
+                if (body === undefined || body === null) return '';
+                if (typeof body === 'string') return body;
+                if (typeof body === 'object' && typeof body._text === 'string') return body._text;
+                return String(body);
+            }
+            function readBody(state) {
+                if (state.used) throw new TypeError('Body already read');
+                state.used = true;
+            }
+            function bodyMethods(state, headers) {
+                var self = this;
+                this.text = function () {
+                    readBody(state);
+                    return Promise.resolve(state.text);
+                };
+                this.json = function () {
+                    readBody(state);
+                    try { return Promise.resolve(JSON.parse(state.text)); }
+                    catch (e) { return Promise.reject(new SyntaxError(String(e.message))); }
+                };
+                this.arrayBuffer = function () {
+                    readBody(state);
+                    var bytes = [];
+                    var source = state.text;
+                    for (var i = 0; i < source.length; i++) {
+                        var code = source.charCodeAt(i);
+                        if (code < 128) bytes.push(code);
+                        else if (code < 2048) {
+                            bytes.push(192 | (code >> 6));
+                            bytes.push(128 | (code & 63));
+                        } else {
+                            bytes.push(224 | (code >> 12));
+                            bytes.push(128 | ((code >> 6) & 63));
+                            bytes.push(128 | (code & 63));
+                        }
+                    }
+                    return Promise.resolve(typeof Uint8Array === 'function' ? new Uint8Array(bytes) : bytes);
+                };
+                this.blob = function () {
+                    readBody(state);
+                    return Promise.resolve(new Blob([state.text],
+                        { type: headers.get('content-type') || '' }));
+                };
+                Object.defineProperty(this, 'bodyUsed', {
+                    configurable: true,
+                    get: function () { return state.used; }
+                });
+            }
+
+            function Response(body, init) {
+                var self = this;
+                init = init || { };
+                var state = { text: bodyToText(body), used: false };
+                var status = init.status === undefined ? 200 : Number(init.status);
+                this.headers = new Headers(init.headers || { });
+                if (state.text.length && !this.headers.has('content-type'))
+                    this.headers.set('content-type', 'text/plain;charset=UTF-8');
+                this.url = init.url === undefined ? '' : String(init.url);
+                this.redirected = !!init.redirected;
+                this.type = init.type === undefined ? 'default' : String(init.type);
+                this.status = status;
+                this.statusText = init.statusText === undefined ? '' : String(init.statusText);
+                this.ok = status >= 200 && status <= 299;
+                this.body = state.text.length ? state.text : null;
+                bodyMethods.call(this, state, this.headers);
+                this.clone = function () {
+                    return new Response(state.text, { status: self.status, statusText: self.statusText,
+                        headers: self.headers, url: self.url, type: self.type });
+                };
+            }
+            Response.error = function () { return new Response('', { status: 0, type: 'error' }); };
+            Response.redirect = function (url, status) {
+                var made = new Response('', { status: status === undefined ? 302 : Number(status) });
+                made.headers.set('location', String(url));
+                return made;
+            };
+            Response.json = function (data, init) {
+                var text;
+                try { text = JSON.stringify(data); }
+                catch (e) { text = undefined; }
+                if (text === undefined) {
+                    throw new TypeError('Failed to execute \'json\' on \'Response\':'
+                        + ' The data is not JSON');
+                }
+                var made = new Response(text, init);
+                made.headers.set('content-type', 'application/json');
+                return made;
+            };
+
+            function Request(input, init) {
+                var self = this;
+                init = init || { };
+                var copied = (input && typeof input === 'object' && input.url !== undefined) ? input : null;
+                var target = copied ? copied.url : String(input === undefined ? '' : input);
+                var base = '';
+                try { base = window.location ? window.location.href : ''; } catch (e) { base = ''; }
+                try { if (base) target = new URL(target, base).href; } catch (e) { }
+                var body = init.body !== undefined ? init.body : (copied ? copied.body : undefined);
+                var state = { text: bodyToText(body), used: false };
+                this.url = target;
+                this.method = String(init.method !== undefined ? init.method
+                    : (copied ? copied.method : 'GET')).toUpperCase();
+                this.headers = new Headers(init.headers !== undefined ? init.headers
+                    : (copied ? copied.headers : null));
+                this.mode = init.mode !== undefined ? String(init.mode) : (copied ? copied.mode : 'cors');
+                this.credentials = init.credentials !== undefined ? String(init.credentials)
+                    : (copied ? copied.credentials : 'same-origin');
+                this.cache = init.cache !== undefined ? String(init.cache) : 'default';
+                this.redirect = init.redirect !== undefined ? String(init.redirect) : 'follow';
+                this.referrer = init.referrer !== undefined ? String(init.referrer) : '';
+                this.referrerPolicy = init.referrerPolicy !== undefined
+                    ? String(init.referrerPolicy) : '';
+                this.integrity = init.integrity !== undefined ? String(init.integrity) : '';
+                this.keepalive = !!init.keepalive;
+                this.destination = init.destination !== undefined ? String(init.destination) : '';
+                this.isHistoryDownload = false;
+                this.isReloaded = false;
+                this.isClientNavigate = false;
+                this.signal = (init.signal !== undefined && init.signal !== null)
+                    ? init.signal : AbortSignal._make();
+                this.body = state.text.length ? state.text : null;
+                bodyMethods.call(this, state, this.headers);
+                this.clone = function () {
+                    return new Request(self.url, { method: self.method, headers: self.headers,
+                        body: state.text, mode: self.mode, credentials: self.credentials,
+                        referrerPolicy: self.referrerPolicy });
+                };
+            }
+            window.DOMPoint = DOMPoint;
+            window.DOMPointReadOnly = DOMPointReadOnly;
+            window.DOMRectList = DOMRectList;
+            window.Response = Response;
+            window.Request = Request;
+
+
             // 'new CSSStyleSheet()' — a sheet the script owns (CSSOM §5.2.2). The rules and the
             // disabled flag live in the engine; 'replace' is the async twin of 'replaceSync',
             // so it is built here out of a Promise rather than reaching into the host.
@@ -1159,8 +1472,11 @@ public class JavaScriptEngine : IDisposable
                 }
                 // A 'message' event is fired on the Window rather than on the tree, so the window
                 // keeps its own copy of these listeners for window.postMessage to reach (HTML §8.6).
-                if (type === 'message' && listener) {
-                    var ml = window.__winMessage = window.__winMessage || [];
+                // The same holds for the error an 'reportError' raises: it belongs to the window,
+                // and the tree root never sees it (HTML §8.8).
+                if ((type === 'message' || type === 'error') && listener) {
+                    var ml = window[type === 'message' ? '__winMessage' : '__winError']
+                        = window[type === 'message' ? '__winMessage' : '__winError'] || [];
                     if (ml.indexOf(listener) < 0) ml.push(listener);
                 }
             };
@@ -1168,10 +1484,10 @@ public class JavaScriptEngine : IDisposable
                 if (document && document.removeEventListener) {
                     document.removeEventListener(type, listener, options);
                 }
-                if (type === 'message' && window.__winMessage) {
-                    var ml = window.__winMessage;
-                    var i = ml.indexOf(listener);
-                    if (i >= 0) ml.splice(i, 1);
+                var bag = type === 'message' ? window.__winMessage : (type === 'error' ? window.__winError : null);
+                if (bag) {
+                    var i = bag.indexOf(listener);
+                    if (i >= 0) bag.splice(i, 1);
                 }
             };
             // A Window is an EventTarget; the listeners registered through window.addEventListener

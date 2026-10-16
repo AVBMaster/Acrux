@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head><title>URL.canParse, reportError, AbortSignal.any, Headers.getSetCookie, Request and Response, DOMPoint (URL §2.5, DOM §4.6, Fetch §3/§5/§6/§7, HTML §8.8, Geometry §3/§5)</title></head>
+<body>
+<script>
+// Each message and each default here was read off the reference browser in this session; the probes
+// are kept in out/. The body of a response is only read once, a signal is only made by the platform,
+// and the combined signal of a list carries the reason of whichever input aborted first.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+function ckErr(name, wantName, wantMsg, fn) {
+    var e = null;
+    try { fn(); } catch (x) { e = x; }
+    var got = e ? (e.name + ' | ' + e.message) : 'no throw';
+    __T(name, !!e && e.name === wantName && String(e.message) === wantMsg, got === wantName + ' | ' + wantMsg ? '' : 'got: ' + got);
+}
+
+// ── A. URL.canParse ────────────────────────────────────────────────────────
+ck('A1 canParse answers for what the constructor would take', function () {
+    return URL.canParse('http://a/b') === true && URL.canParse('/x', 'http://a/b') === true
+        && URL.canParse('notaurl') === false && URL.canParse('', '') === false;
+}, function () { return [URL.canParse('http://a/b'), URL.canParse('notaurl'), URL.canParse('/x', 'http://a/b')].join(','); });
+ckErr('A2 the static needs the url it is asked about', 'TypeError',
+    'Failed to execute \'canParse\' on \'URL\': 1 argument required, but only 0 present.',
+    function () { URL.canParse(); });
+ck('A3 it is a static, not a method of an instance', function () {
+    return typeof URL.canParse === 'function' && (new URL('http://a/b')).canParse === undefined;
+}, function () { return typeof URL.canParse + '/' + String((new URL('http://a/b')).canParse); });
+
+// ── B. reportError ─────────────────────────────────────────────────────────
+var got1 = null, got2 = null;
+ck('B1 an error raised by a page arrives as the window error event', function () {
+    var handler = function (e) { got1 = e; };
+    window.addEventListener('error', handler);
+    reportError(new Error('re-one'));
+    window.removeEventListener('error', handler);
+    return got1 !== null && got1.type === 'error' && got1.message === 'Uncaught Error: re-one'
+        && got1.error instanceof Error && got1.error.message === 're-one';
+}, function () { return String(got1 && got1.message); });
+ck('B2 a value that is not an error still reaches the page', function () {
+    var handler = function (e) { got2 = e; };
+    window.addEventListener('error', handler);
+    reportError('plain string');
+    window.removeEventListener('error', handler);
+    return got2 !== null && got2.message === 'Uncaught plain string' && got2.error === 'plain string';
+}, function () { return got2 ? (got2.message + '/' + String(got2.error)) : 'none'; });
+
+// ── C. AbortSignal ─────────────────────────────────────────────────────────
+ckErr('C1 the signal is not a page-side constructor', 'TypeError',
+    'Failed to construct \'AbortSignal\': Illegal constructor', function () { new AbortSignal(); });
+ck('C2 a combined signal follows the first of its inputs', function () {
+    var a = new AbortController(), b = new AbortController();
+    var any = AbortSignal.any([a.signal, b.signal]);
+    if (any.aborted) return false;
+    b.abort('second reason');
+    return any.aborted === true && any.reason === 'second reason' && a.signal.aborted === false;
+});
+ck('C3 an input already aborted aborts the combination at once', function () {
+    var c = new AbortController();
+    c.abort('was already');
+    var any = AbortSignal.any([new AbortController().signal, c.signal]);
+    return any.aborted === true && any.reason === 'was already';
+});
+ck('C4 an aborted signal without a reason carries AbortError', function () {
+    var c = new AbortController();
+    c.abort();
+    var any = AbortSignal.any([c.signal]);
+    return any.aborted && any.reason && any.reason.name === 'AbortError';
+}, function () { var c = new AbortController(); c.abort(); var r = AbortSignal.any([c.signal]).reason; return r && r.name; });
+ck('C5 the combination listens rather than copies', function () {
+    var c = new AbortController();
+    var any = AbortSignal.any([c.signal]);
+    var fired = 0;
+    any.addEventListener('abort', function () { fired++; });
+    c.abort('late');
+    return fired === 1 && any.reason === 'late';
+});
+ckErr('C6 a list is required', 'TypeError',
+    'Failed to execute \'any\' on \'AbortSignal\': The provided value cannot be converted to a sequence.',
+    function () { AbortSignal.any(5); });
+ckErr('C7 every element has to be a signal', 'TypeError',
+    'Failed to execute \'any\' on \'AbortSignal\': Failed to convert value to \'AbortSignal\'.',
+    function () { AbortSignal.any([1]); });
+ck('C8 an empty list is a signal that is not aborted', function () {
+    return AbortSignal.any([]).aborted === false;
+});
+
+// ── D. a header name that keeps its repetitions apart ─────────────────────
+ck('D1 getSetCookie hands back each cookie on its own', function () {
+    var h = new Headers();
+    h.append('set-cookie', 'a=1; Path=/');
+    h.append('set-cookie', 'b=2; Expires=Wed, 21 Oct 2015 07:28:00 GMT');
+    var list = h.getSetCookie();
+    return list.length === 2 && list[0] === 'a=1; Path=/' && list[1].charAt(0) === 'b'
+        && h.get('set-cookie').indexOf(', ') > 0;
+}, function () {
+    var h = new Headers(); h.append('set-cookie', 'a=1');
+    return JSON.stringify(h.getSetCookie());
+});
+ck('D2 a collection with no cookies answers an empty list', function () {
+    return new Headers({ 'content-type': 'text/plain' }).getSetCookie().length === 0;
+});
+
+// ── E. Response ────────────────────────────────────────────────────────────
+ck('E1 a response carries the status face of the exchange', function () {
+    var r = new Response('hello', { status: 201, statusText: 'Created', url: 'http://a/b' });
+    return r.status === 201 && r.statusText === 'Created' && r.ok === true && r.url === 'http://a/b'
+        && r.type === 'default' && r.status < 300 && r.headers instanceof Headers;
+}, function () { var r = new Response('x'); return [r.status, r.ok, r.type, r.url].join('/'); });
+ck('E2 a body is read as text, then as json', function () {
+    var r = new Response('{"k":1}');
+    r.json().then(function (v) { __T('E2a the json read arrived', v && v.k === 1, JSON.stringify(v)); });
+    var r2 = new Response('plain');
+    r2.text().then(function (t) { __T('E2b the text read arrived', t === 'plain', t); });
+    return true;
+});
+ck('E3 a body can only be taken once', function () {
+    var r = new Response('one');
+    var first = r.bodyUsed === false;
+    r.text();
+    var threw = false;
+    try { r.text(); } catch (e) { threw = true; }
+    return first && r.bodyUsed === true && threw;
+}, function () { var r = new Response('t'); r.text(); try { r.text(); return 'no throw'; } catch (e) { return e.name; } });
+ck('E4 a clone is a response of the same parts', function () {
+    var r = new Response('cloned', { status: 404, statusText: 'Missing' });
+    var c = r.clone();
+    return c !== r && c.status === 404 && c.statusText === 'Missing' && c.ok === false;
+});
+ck('E5 the three constructed responses the interface gives', function () {
+    var err = Response.error();
+    var red = Response.redirect('http://a/x', 301);
+    var js = Response.json({ a: 1 }, { status: 201 });
+    return err.status === 0 && err.type === 'error' && err.ok === false
+        && red.status === 301 && red.headers.get('location') === 'http://a/x'
+        && js.status === 201 && js.headers.get('content-type') === 'application/json';
+}, function () {
+    var js = Response.json({ a: 1 });
+    return [Response.error().status, Response.redirect('http://a').status, js.headers.get('content-type')].join('/');
+});
+ckErr('E6 a value that cannot be serialised is refused', 'TypeError',
+    'Failed to execute \'json\' on \'Response\': The data is not JSON',
+    function () { Response.json(function () { }); });
+ck('E7 the body read answers a promise of bytes too', function () {
+    var r = new Response('abc');
+    r.arrayBuffer().then(function (b) {
+        __T('E7a the bytes arrived', b && b.length === 3 && b[0] === 97, b ? String(b.length) : 'none');
+    });
+    var r2 = new Response('x');
+    r2.blob().then(function (b) { __T('E7b the blob arrived', !!b && b.size === 1, b ? String(b.size) : 'none'); });
+    return true;
+});
+
+// ── F. Request ─────────────────────────────────────────────────────────────
+ck('F1 a request made from a url carries the defaults the interface names', function () {
+    var q = new Request('http://a/b', { method: 'post', body: 'x' });
+    return q.url === 'http://a/b' && q.method === 'POST' && q.cache === 'default'
+        && q.credentials === 'same-origin' && q.mode === 'cors' && q.redirect === 'follow'
+        && q.destination === '' && q.referrer === '' && q.referrerPolicy === ''
+        && q.integrity === '' && q.keepalive === false && q.isHistoryDownload === false
+        && q.signal && q.signal.aborted === false && q.headers instanceof Headers;
+}, function () {
+    var q = new Request('http://a/b');
+    return [q.method, q.cache, q.credentials, q.mode, q.destination].join('/');
+});
+ck('F2 a relative url is resolved against the document', function () {
+    var q = new Request('/rel');
+    return q.url.charAt(0) === '/' || q.url.indexOf('rel') > 0;
+}, function () { return new Request('/rel').url; });
+ck('F3 the body of a request reads the same way', function () {
+    var q = new Request('http://a/b', { method: 'PUT', body: '{"v":2}' });
+    var before = q.bodyUsed === false;
+    q.json().then(function (v) { __T('F3a the request body read arrived', v && v.v === 2, JSON.stringify(v)); });
+    return before && q.bodyUsed === true;
+});
+ck('F4 a clone is a request of the same parts', function () {
+    var q = new Request('http://a/b', { method: 'DELETE', credentials: 'include' });
+    var c = q.clone();
+    return c !== q && c.url === q.url && c.method === 'DELETE' && c.credentials === 'include';
+});
+ck('F5 the signal the page gave is the signal the request keeps', function () {
+    var c = new AbortController();
+    var q = new Request('http://a/b', { signal: c.signal });
+    c.abort('gone');
+    return q.signal === c.signal && q.signal.aborted === true;
+});
+
+// ── G. the geometry interfaces the reads answer with ───────────────────────
+ck('G1 a point is four numbers and a json of them', function () {
+    var p = new DOMPoint(1, 2, 3, 4);
+    var json = JSON.parse(JSON.stringify(p.toJSON()));
+    return p.x === 1 && p.y === 2 && p.z === 3 && p.w === 4 && p instanceof DOMPointReadOnly
+        && json.x === 1 && json.w === 4;
+}, function () { var p = new DOMPoint(1, 2, 3, 4); return [p.x, p.y, p.z, p.w].join('/'); });
+ck('G2 a point made from another keeps the defaults it lacks', function () {
+    var p = DOMPoint.fromPoint({ x: 5, y: 6 });
+    return p instanceof DOMPoint && p.x === 5 && p.y === 6 && p.z === 0 && p.w === 1;
+}, function () { var p = DOMPoint.fromPoint({ x: 5, y: 6 }); return [p.x, p.y, p.z, p.w].join('/'); });
+ck('G3 a readonly point is the base of a point', function () {
+    return typeof DOMPointReadOnly.fromPoint === 'function'
+        && DOMPointReadOnly.fromPoint({ x: 1 }).x === 1;
+});
+ck('G4 a rect list is the array-like face of the read', function () {
+    var a = new DOMRect(1, 2, 3, 4), b = new DOMRect(5, 6, 7, 8);
+    var list = new DOMRectList([a, b]);
+    return list.length === 2 && list[0] === a && list.item(1) === b && list.item(9) === null;
+});
+</script>
+</body>
+</html>
