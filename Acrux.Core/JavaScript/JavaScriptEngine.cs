@@ -701,11 +701,50 @@ public class JavaScriptEngine : IDisposable
             function atob(str) { return __acrux.atob(str); }
             function btoa(str) { return __acrux.btoa(str); }
 
+            // Fetch §5.1: an aborted signal rejects with the reason it carries, and a reason the
+            // page did not supply is the AbortError DOMException the spec names.
+            function abortReason(signal) {
+                var reason = signal ? signal.reason : undefined;
+                if (reason !== undefined && reason !== null) return reason;
+                return new DOMException('The operation was aborted.', 'AbortError');
+            }
+
             function fetch(url, opts) {
-                return new Promise(function(resolve, reject) {
-                    var rid = __g_store(resolve);
-                    var rjid = __g_store(reject);
-                    __acrux._fetch(url, JSON.stringify(opts || {}), rid, rjid);
+                opts = opts || {};
+                // Only what the request itself needs crosses to the host: an AbortSignal is a
+                // page-side object whose members cannot be serialised into the options.
+                var send = {};
+                if (opts.method !== undefined && opts.method !== null) send.method = String(opts.method);
+                if (opts.body !== undefined && opts.body !== null) send.body = String(opts.body);
+                if (opts.headers !== undefined && opts.headers !== null) {
+                    var headers = {};
+                    if (typeof opts.headers.forEach === 'function') {
+                        opts.headers.forEach(function (value, key) { headers[String(key)] = String(value); });
+                    } else {
+                        var names = Object.keys(opts.headers);
+                        for (var i = 0; i < names.length; i++) headers[names[i]] = String(opts.headers[names[i]]);
+                    }
+                    send.headers = headers;
+                }
+                return new Promise(function (resolve, reject) {
+                    var signal = opts.signal;
+                    if (signal && signal.aborted) { reject(abortReason(signal)); return; }
+                    var settled = false;
+                    var handle = 0;
+                    var onAbort = function () {
+                        if (settled) return;
+                        settled = true;
+                        // The request is cancelled at the socket, not only at the promise: an
+                        // abandoned download still costs bandwidth.
+                        if (handle) __acrux.abortFetch(handle);
+                        reject(abortReason(signal));
+                    };
+                    if (signal && typeof signal.addEventListener === 'function') {
+                        signal.addEventListener('abort', onAbort);
+                    }
+                    var rid = __g_store(function (v) { if (settled) return; settled = true; resolve(v); });
+                    var rjid = __g_store(function (e) { if (settled) return; settled = true; reject(e); });
+                    handle = __acrux._fetch(url, JSON.stringify(send), rid, rjid);
                 });
             }
 
@@ -860,34 +899,61 @@ public class JavaScriptEngine : IDisposable
                 var self = this;
                 this._aborted = false;
                 this._reason = undefined;
+                this._listeners = [];
                 Object.defineProperty(this, 'aborted', { get: function () { return self._aborted; } });
                 Object.defineProperty(this, 'reason', { get: function () { return self._reason; } });
                 this.onabort = null;
-                this.throwIfAborted = function () {
-                    if (self._aborted) { var e = (self._reason instanceof Error) ? self._reason : new Error('Aborted'); e.name = 'AbortError'; throw e; }
-                };
-                AbortSignal.prototype.addEventListener = function (t, l) {
-                    if (t === 'abort') this._listeners = (this._listeners || []).concat([l]);
-                };
-                AbortSignal.prototype.removeEventListener = function (t, l) {
-                    if (t === 'abort' && this._listeners) this._listeners = this._listeners.filter(function (f) { return f !== l; });
-                };
-                this._fire = function () {
-                    var ev = new Event('abort');
-                    try { ev.target = self; } catch (e) { }
-                    (self._listeners || []).forEach(function (l) { try { (typeof l === 'function' ? l : l.handleEvent).call(self, ev); } catch (e) { } });
-                    if (typeof self.onabort === 'function') { try { self.onabort(ev); } catch (e) { } }
-                };
             }
-            AbortSignal.abort = function (reason) { var s = new AbortSignal(); s._aborted = true; s._reason = reason; return s; };
-            AbortSignal.timeout = function () { var s = new AbortSignal(); return s; };
+            AbortSignal.prototype.addEventListener = function (t, l) {
+                if (t === 'abort' && l && this._listeners.indexOf(l) < 0) this._listeners.push(l);
+            };
+            AbortSignal.prototype.removeEventListener = function (t, l) {
+                if (t !== 'abort') return;
+                var i = this._listeners.indexOf(l);
+                if (i >= 0) this._listeners.splice(i, 1);
+            };
+            AbortSignal.prototype.throwIfAborted = function () {
+                if (!this.aborted) return;
+                throw abortReason(this);
+            };
+            AbortSignal.prototype._fire = function () {
+                var self = this;
+                var ev = new Event('abort');
+                try { ev.target = self; } catch (e) { }
+                var list = self._listeners.slice();
+                for (var i = 0; i < list.length; i++) {
+                    var l = list[i];
+                    try { (typeof l === 'function' ? l : l.handleEvent).call(self, ev); } catch (e) { }
+                }
+                if (typeof self.onabort === 'function') { try { self.onabort(ev); } catch (e) { } }
+            };
+            AbortSignal.abort = function (reason) {
+                var s = new AbortSignal();
+                s._aborted = true;
+                s._reason = (reason === undefined) ? new DOMException('The operation was aborted.', 'AbortError') : reason;
+                return s;
+            };
+            // A timeout signal aborts on its own, with the TimeoutError the spec names, and the
+            // timer is the engine's own so it runs at the same clock setTimeout does.
+            AbortSignal.timeout = function (ms) {
+                var s = new AbortSignal();
+                setTimeout(function () {
+                    if (s._aborted) return;
+                    s._aborted = true;
+                    s._reason = new DOMException('Timing provided for the signal elapsed', 'TimeoutError');
+                    s._fire();
+                }, ms || 0);
+                return s;
+            };
 
             function AbortController() {
                 var self = this;
                 this.signal = new AbortSignal();
                 this.abort = function (reason) {
                     if (self.signal._aborted) return;
-                    self.signal._aborted = true; self.signal._reason = reason;
+                    self.signal._aborted = true;
+                    self.signal._reason = (reason === undefined)
+                        ? new DOMException('The operation was aborted.', 'AbortError') : reason;
                     self.signal._fire();
                 };
             }
@@ -906,9 +972,9 @@ public class JavaScriptEngine : IDisposable
             // The interface names the platform exposes but that a page never constructs directly.
             // They exist as globals (typeof answers 'function'); constructing one refuses, exactly as
             // the 'Illegal constructor' the reference engines give (DOM 4 §3/§4.9).
+            // TreeWalker and NodeIterator are declared properly further down, where their prototype
+            // carries the accessors the host cannot answer.
             function DOMImplementation() { throw new TypeError('Illegal constructor'); }
-            function TreeWalker() { throw new TypeError('Illegal constructor'); }
-            function NodeIterator() { throw new TypeError('Illegal constructor'); }
 
             // ── Encoding / Crypto / DOM parsing / Blob ─────────────────────────
             // TextEncoder/TextDecoder carry the UTF-8 transformation the Web platform uses to move
@@ -1091,10 +1157,21 @@ public class JavaScriptEngine : IDisposable
                 if (document && document.addEventListener) {
                     document.addEventListener(type, listener, options);
                 }
+                // A 'message' event is fired on the Window rather than on the tree, so the window
+                // keeps its own copy of these listeners for window.postMessage to reach (HTML §8.6).
+                if (type === 'message' && listener) {
+                    var ml = window.__winMessage = window.__winMessage || [];
+                    if (ml.indexOf(listener) < 0) ml.push(listener);
+                }
             };
             window.removeEventListener = function(type, listener, options) {
                 if (document && document.removeEventListener) {
                     document.removeEventListener(type, listener, options);
+                }
+                if (type === 'message' && window.__winMessage) {
+                    var ml = window.__winMessage;
+                    var i = ml.indexOf(listener);
+                    if (i >= 0) ml.splice(i, 1);
                 }
             };
             // A Window is an EventTarget; the listeners registered through window.addEventListener
@@ -1194,8 +1271,8 @@ public class JavaScriptEngine : IDisposable
             window.moveTo = function(x, y) {};
             window.resizeBy = function(x, y) {};
             window.resizeTo = function(x, y) {};
-            window.postMessage = function(message, targetOrigin, transfer) {};
-            window.getSelection = function() { return null; };
+            // 'postMessage' and 'getSelection' are built with the rest of the DOM surface below,
+            // where the message event and the selection range actually live.
             window.requestIdleCallback = function(cb, opts) { return setTimeout(cb, 50); };
             window.cancelIdleCallback = function(id) { clearTimeout(id); };
 
@@ -1438,6 +1515,843 @@ public class JavaScriptEngine : IDisposable
                     };
                 }
             }
+
+            // ── DOMException (WebIDL §2.9) ───────────────────────────────────────
+            // The object a specification names for a refused call. A page tests the name, so the
+            // exception is built on the one prototype every engine already unwinds through catch.
+            function DOMException(message, name) {
+                var err = new Error(message || '');
+                err.name = name || 'Error';
+                err.message = message || '';
+                err.code = domExceptionLegacyCode(err.name);
+                return err;
+            }
+            DOMException.prototype = Error.prototype;
+
+            function domExceptionLegacyCode(name) {
+                // The numeric codes legacy pages still read; 0 says none of the old ones.
+                switch (name) {
+                    case 'IndexSizeError': return 1;
+                    case 'HierarchyRequestError': return 3;
+                    case 'WrongDocumentError': return 4;
+                    case 'InvalidCharacterError': return 5;
+                    case 'NoModificationAllowedError': return 7;
+                    case 'NotFoundError': return 8;
+                    case 'NotSupportedError': return 9;
+                    case 'TypeMismatchError': return 17;
+                    case 'SecurityError': return 18;
+                    case 'NetworkError': return 19;
+                    case 'AbortError': return 20;
+                    case 'TimeoutError': return 23;
+                    case 'InvalidStateError': return 11;
+                    case 'SyntaxError': return 12;
+                    case 'InvalidModificationError': return 13;
+                    default: return 0;
+                }
+            }
+
+            // ── MutationObserver (DOM §4.5) ──────────────────────────────────────
+            // The engine keeps no per-node mutation history, so records are made by comparing the
+            // shape of each observed subtree against the shape it had at the last look: added and
+            // removed nodes, the attribute that changed and the value it had, the text that was
+            // retyped. takeRecords() answers them on the spot; the checkpoint delivers the same
+            // list to the callback, in observer creation order, the way §4.5.6.1 puts it.
+            var MutationObserver = function MutationObserver(callback) {
+                if (typeof callback !== 'function') {
+                    throw new TypeError('parameter 1 is not of type function');
+                }
+                this._callback = callback;
+            };
+
+            (function () {
+                var observers = [];
+                var flushing = false;
+
+                // DOM §4.5.7: the old value a characterData record carries is the data the node held
+                // before that one edit, and an edit that happens between two checkpoints leaves no
+                // trace in a snapshot comparison — the node may not have been in the tree yet at
+                // the last look. So the host records each text mutation as it happens and the
+                // observer drains those entries here, one record per mutation, in order.
+                var pendingCharData = new Map();
+                var charGeneration = 0;
+
+                function collectCharData() {
+                    if (typeof __acrux === 'undefined'
+                        || typeof __acrux.takeCharacterDataChanges !== 'function') return;
+                    var list;
+                    try { list = __acrux.takeCharacterDataChanges(); } catch (e) { return; }
+                    if (!list || !list.length) return;
+                    charGeneration++;
+                    for (var i = 0; i < list.length; i++) {
+                        var pair = list[i];
+                        var node = pair && pair[0];
+                        if (!node) continue;
+                        var edits = pendingCharData.get(node);
+                        if (!edits) { edits = []; pendingCharData.set(node, edits); }
+                        edits.push({ generation: charGeneration, oldValue: String(pair[1]) });
+                    }
+                }
+
+                // A registration only hears about edits made after it was put in place, and an
+                // entry no live registration can still reach is dropped rather than kept alive.
+                function pruneCharData() {
+                    var lowest = charGeneration + 1;
+                    for (var i = 0; i < observers.length; i++) {
+                        if (observers[i].generation < lowest) lowest = observers[i].generation;
+                    }
+                    var keys = [];
+                    pendingCharData.forEach(function (edits, node) { keys.push([node, edits]); });
+                    for (var k = 0; k < keys.length; k++) {
+                        var kept = [];
+                        for (var e = 0; e < keys[k][1].length; e++) {
+                            if (keys[k][1][e].generation >= lowest) kept.push(keys[k][1][e]);
+                        }
+                        if (kept.length) pendingCharData.set(keys[k][0], kept);
+                        else pendingCharData.delete(keys[k][0]);
+                    }
+                }
+
+                function syncCharDataTracking() {
+                    if (typeof __acrux === 'undefined'
+                        || typeof __acrux.setCharacterDataTracking !== 'function') return;
+                    var wanted = false;
+                    for (var i = 0; i < observers.length; i++) {
+                        if (observers[i].options.characterData) { wanted = true; break; }
+                    }
+                    __acrux.setCharacterDataTracking(wanted);
+                }
+
+                function charDataRecords(reg, node, oldValue) {
+                    var out = [];
+                    var edits = pendingCharData.get(node);
+                    if (edits) {
+                        for (var i = 0; i < edits.length; i++) {
+                            if (edits[i].generation < reg.generation) continue;
+                            out.push(makeCharDataRecord(reg, node,
+                                reg.options.characterDataOldValue ? edits[i].oldValue : null));
+                        }
+                    }
+                    if (out.length === 0 && oldValue !== null) {
+                        out.push(makeCharDataRecord(reg, node,
+                            reg.options.characterDataOldValue ? oldValue : null));
+                    }
+                    return out;
+                }
+
+                function makeCharDataRecord(reg, node, oldValue) {
+                    return {
+                        type: 'characterData',
+                        target: node,
+                        addedNodes: [],
+                        removedNodes: [],
+                        previousSibling: null,
+                        nextSibling: null,
+                        attributeName: null,
+                        namespaceURI: null,
+                        oldValue: oldValue
+                    };
+                }
+
+
+                function childNodesOf(node) {
+                    var out = [];
+                    if (!node || !node.childNodes) return out;
+                    var list = node.childNodes;
+                    for (var i = 0; i < list.length; i++) {
+                        var child = list[i];
+                        if (child) out.push(child);
+                    }
+                    return out;
+                }
+
+                function attributesOf(node) {
+                    var out = [];
+                    if (!node || typeof node.getAttributeNames !== 'function') return out;
+                    var names = node.getAttributeNames();
+                    for (var i = 0; i < names.length; i++) {
+                        out.push([names[i], node.getAttribute(names[i])]);
+                    }
+                    return out;
+                }
+
+                function dataOf(node) {
+                    if (!node) return null;
+                    return (node.nodeType === 3 || node.nodeType === 8) ? String(node.data) : null;
+                }
+
+                function buildSnapshot(node, parentEntry, depth) {
+                    var entry = {
+                        node: node,
+                        parent: parentEntry ? parentEntry.node : (node.parentNode || null),
+                        attrs: attributesOf(node),
+                        data: dataOf(node),
+                        kids: []
+                    };
+                    if (parentEntry) parentEntry.kids.push(entry);
+                    if (depth > 1) {
+                        var children = childNodesOf(node);
+                        for (var i = 0; i < children.length; i++) {
+                            buildSnapshot(children[i], entry, depth - 1);
+                        }
+                    }
+                    return entry;
+                }
+
+                function flatten(entry, into) {
+                    into.push(entry);
+                    for (var i = 0; i < entry.kids.length; i++) flatten(entry.kids[i], into);
+                    return into;
+                }
+
+                function snapshot(reg) {
+                    var depth = reg.options.subtree ? 1e6 : 1;
+                    return flatten(buildSnapshot(reg.target, null, depth), []);
+                }
+
+                function entriesByNode(list) {
+                    var map = new Map();
+                    for (var i = 0; i < list.length; i++) map.set(list[i].node, list[i]);
+                    return map;
+                }
+
+                function nodesOf(entries) {
+                    var out = [];
+                    for (var i = 0; i < entries.length; i++) out.push(entries[i].node);
+                    return out;
+                }
+
+                function without(list, other) {
+                    var out = [];
+                    for (var i = 0; i < list.length; i++) {
+                        if (other.indexOf(list[i]) < 0) out.push(list[i]);
+                    }
+                    return out;
+                }
+
+                function attrValue(pairs, name) {
+                    for (var i = 0; i < pairs.length; i++) {
+                        if (pairs[i][0] === name) return pairs[i][1];
+                    }
+                    return null;
+                }
+
+                function siblings(list, node) {
+                    var index = list.indexOf(node);
+                    return {
+                        previous: index > 0 ? list[index - 1] : null,
+                        next: index >= 0 && index < list.length - 1 ? list[index + 1] : null
+                    };
+                }
+
+                function diff(reg) {
+                    var fresh = snapshot(reg);
+                    var oldByNode = entriesByNode(reg.snapshot);
+                    var newByNode = entriesByNode(fresh);
+                    var records = [];
+
+                    var parents = [];
+                    for (var i = 0; i < fresh.length; i++) {
+                        if (parents.indexOf(fresh[i].node) < 0) parents.push(fresh[i].node);
+                    }
+                    for (var j = 0; j < reg.snapshot.length; j++) {
+                        if (parents.indexOf(reg.snapshot[j].node) < 0) parents.push(reg.snapshot[j].node);
+                    }
+
+                    for (var p = 0; p < parents.length; p++) {
+                        var node = parents[p];
+                        var oldEntry = oldByNode.get(node) || { kids: [], attrs: [], data: null };
+                        var newEntry = newByNode.get(node) || { kids: [], attrs: [], data: null };
+                        var oldKids = nodesOf(oldEntry.kids);
+                        var newKids = nodesOf(newEntry.kids);
+                        var added = without(newKids, oldKids);
+                        var removed = without(oldKids, newKids);
+
+                        if (reg.options.childList && (added.length || removed.length)) {
+                            var around = added.length ? siblings(newKids, added[0]) : siblings(oldKids, removed[0]);
+                            records.push({
+                                type: 'childList',
+                                target: node,
+                                addedNodes: added,
+                                removedNodes: removed,
+                                previousSibling: around.previous,
+                                nextSibling: around.next,
+                                attributeName: null,
+                                namespaceURI: null,
+                                oldValue: null
+                            });
+                        }
+
+                        // Only a node that was in the last snapshot has an old side to compare;
+                        // one that just appeared has no change of its own to report.
+                        var comparable = oldByNode.has(node) && newByNode.has(node);
+
+                        if (reg.options.attributes && node.nodeType === 1 && comparable) {
+                            var names = [];
+                            for (var a = 0; a < oldEntry.attrs.length; a++) {
+                                if (names.indexOf(oldEntry.attrs[a][0]) < 0) names.push(oldEntry.attrs[a][0]);
+                            }
+                            for (var b = 0; b < newEntry.attrs.length; b++) {
+                                if (names.indexOf(newEntry.attrs[b][0]) < 0) names.push(newEntry.attrs[b][0]);
+                            }
+                            for (var n = 0; n < names.length; n++) {
+                                var name = names[n];
+                                if (reg.options.attributeFilter && reg.options.attributeFilter.indexOf(name) < 0) continue;
+                                var before = attrValue(oldEntry.attrs, name);
+                                var after = attrValue(newEntry.attrs, name);
+                                if (before === after) continue;
+                                records.push({
+                                    type: 'attributes',
+                                    target: node,
+                                    addedNodes: [],
+                                    removedNodes: [],
+                                    previousSibling: null,
+                                    nextSibling: null,
+                                    attributeName: name,
+                                    namespaceURI: null,
+                                    oldValue: reg.options.attributeOldValue ? before : null
+                                });
+                            }
+                        }
+
+                        if (reg.options.characterData && (node.nodeType === 3 || node.nodeType === 8)) {
+                            var edits = charDataRecords(reg, node,
+                                comparable && oldEntry.data !== newEntry.data ? oldEntry.data : null);
+                            for (var c = 0; c < edits.length; c++) records.push(edits[c]);
+                        }
+                    }
+
+                    reg.snapshot = fresh;
+                    return records;
+                }
+
+                function deliver(registry) {
+                    collectCharData();
+                    var buckets = [];
+                    for (var i = 0; i < observers.length; i++) {
+                        var reg = observers[i];
+                        if (registry && reg.observer !== registry) continue;
+                        var made = diff(reg);
+                        if (!made.length) continue;
+                        var bucket = null;
+                        for (var j = 0; j < buckets.length; j++) {
+                            if (buckets[j].observer === reg.observer) bucket = buckets[j];
+                        }
+                        if (!bucket) {
+                            bucket = { observer: reg.observer, records: [] };
+                            buckets.push(bucket);
+                        }
+                        for (var k = 0; k < made.length; k++) bucket.records.push(made[k]);
+                    }
+                    for (var b = 0; b < buckets.length; b++) {
+                        try { buckets[b].observer._callback(buckets[b].records, buckets[b].observer); }
+                        catch (e) { }
+                    }
+                    return buckets.length > 0;
+                }
+
+                window.__mutationFlush = function () {
+                    if (flushing) return;
+                    flushing = true;
+                    try {
+                        // A callback that itself mutates the tree queues another round; the
+                        // checkpoint runs until the tree settles, the way the spec loop does.
+                        for (var pass = 0; pass < 8; pass++) {
+                            if (!deliver(null)) break;
+                        }
+                        pruneCharData();
+                    } finally {
+                        flushing = false;
+                    }
+                };
+
+                MutationObserver.prototype.observe = function (target, options) {
+                    if (!target || !target.nodeType) {
+                        throw new TypeError('parameter 1 is not of type Node');
+                    }
+                    options = options || {};
+                    var hasFilter = options.attributeFilter !== undefined && options.attributeFilter !== null;
+                    var childList = !!options.childList;
+                    var attributes = !!options.attributes || hasFilter;
+                    var characterData = !!options.characterData;
+                    if (!childList && !attributes && !characterData) {
+                        throw new TypeError('At least one of childList, attributes, characterData must be true');
+                    }
+                    var filter = hasFilter ? Array.prototype.slice.call(options.attributeFilter) : null;
+                    // Everything the host recorded up to now belongs to the registrations that were
+                    // already in place; this one starts from the tree as it stands.
+                    collectCharData();
+                    var reg = {
+                        observer: this,
+                        target: target,
+                        generation: charGeneration + 1,
+                        options: {
+                            childList: childList,
+                            attributes: attributes,
+                            characterData: characterData,
+                            subtree: !!options.subtree,
+                            attributeOldValue: !!options.attributeOldValue,
+                            characterDataOldValue: !!options.characterDataOldValue,
+                            attributeFilter: filter
+                        },
+                        snapshot: null
+                    };
+                    reg.snapshot = snapshot(reg);
+                    for (var i = 0; i < observers.length; i++) {
+                        if (observers[i].observer === this && observers[i].target === target) {
+                            observers.splice(i, 1);
+                            break;
+                        }
+                    }
+                    observers.push(reg);
+                    syncCharDataTracking();
+                };
+
+                MutationObserver.prototype.disconnect = function () {
+                    for (var i = observers.length - 1; i >= 0; i--) {
+                        if (observers[i].observer === this) observers.splice(i, 1);
+                    }
+                    syncCharDataTracking();
+                };
+
+                // takeRecords empties the queue without running the callback, so the records are
+                // collected and handed straight back.
+                MutationObserver.prototype.takeRecords = function () {
+                    collectCharData();
+                    var out = [];
+                    for (var i = 0; i < observers.length; i++) {
+                        if (observers[i].observer !== this) continue;
+                        var made = diff(observers[i]);
+                        for (var j = 0; j < made.length; j++) out.push(made[j]);
+                    }
+                    pruneCharData();
+                    return out;
+                };
+
+                window.MutationObserver = MutationObserver;
+                window.MutationRecord = function MutationRecord() {
+                    throw new TypeError('Illegal constructor');
+                };
+            })();
+
+            // The microtask checkpoint is where a queued observer callback runs (DOM §4.5.6.1), and
+            // the host calls this from it — after a script, after a timer, after an event.
+            window.__domCheckpoint = function () {
+                try { if (typeof window.__mutationFlush === 'function') window.__mutationFlush(); }
+                catch (e) { }
+            };
+
+            // ── NodeFilter (DOM §4.6.2) ─────────────────────────────────────────
+            // The whatToShow bitmask and the three answers a filter callback gives. SHOW_ALL is
+            // the unsigned 0xffffffff the reference reports (measured: 4294967295, not -1), and the
+            // entity bits run in the order the interfaces are named: a reference stands in for the
+            // entity it points at, so it takes the lower bit.
+            window.NodeFilter = {
+                SHOW_ALL: 0xffffffff,
+                SHOW_ELEMENT: 1,
+                SHOW_ATTRIBUTE: 2,
+                SHOW_TEXT: 4,
+                SHOW_CDATA_SECTION: 8,
+                SHOW_ENTITY_REFERENCE: 16,
+                SHOW_ENTITY: 32,
+                SHOW_PROCESSING_INSTRUCTION: 64,
+                SHOW_COMMENT: 128,
+                SHOW_DOCUMENT: 256,
+                SHOW_DOCUMENT_TYPE: 512,
+                SHOW_DOCUMENT_FRAGMENT: 1024,
+                SHOW_NOTATION: 2048,
+                FILTER_ACCEPT: 1,
+                FILTER_REJECT: 2,
+                FILTER_SKIP: 3
+            };
+
+            // ── Range and Selection (DOM §3.4–3.6, HTML §2.5.3.4) ─────────────────
+            // The document makes both of them, and 'Range' is constructible as well: 'new Range()'
+            // answers a range collapsed at the document, which is the range 'document.createRange()'
+            // gives (measured). AbstractRange sits above it and StaticRange beside it, and the four
+            // comparison modes the page passes to 'compareBoundaryPoints' are own properties of both the
+            // interface object and its prototype (measured: enumerable, not writable, not configurable).
+            // 'new.target' is what tells a constructor call from a plain one: the reference refuses the
+            // second with a sentence of its own (measured for Range and StaticRange).
+            (function () {
+                var known = window.__domProto || {};
+                // The two boundary points, for the objects the engine does not make: a StaticRange is a
+                // JavaScript object that carries its points under this symbol, and the accessors on
+                // AbstractRange.prototype read them back. A range the engine makes answers its own
+                // members before the prototype is looked at, so these getters never see it.
+                var points = Symbol('acruxRangePoints');
+                var pointNames = ['startContainer', 'startOffset', 'endContainer', 'endOffset'];
+                function buildInterface(name, base, construct) {
+                    var Ctor = construct || function () {
+                        throw new TypeError('Failed to construct \'' + name + '\': Illegal constructor');
+                    };
+                    Object.defineProperty(Ctor, 'name', { value: name, configurable: true });
+                    Ctor.prototype = base ? Object.create(base.prototype) : Object.create(Object.prototype);
+                    Object.defineProperty(Ctor.prototype, 'constructor', { value: Ctor, configurable: true, writable: true });
+                    // What 'Object.prototype.toString.call(range)' answers (measured: '[object Range]').
+                    Object.defineProperty(Ctor.prototype, Symbol.toStringTag,
+                        { value: name, writable: false, enumerable: false, configurable: true });
+                    window[name] = Ctor;
+                    known[name] = Ctor.prototype;
+                    return Ctor;
+                }
+                function defConstant(owner, key, value) {
+                    Object.defineProperty(owner, key,
+                        { value: value, writable: false, enumerable: true, configurable: false });
+                }
+                function abstractAccessors(proto) {
+                    var keys = pointNames.concat(['collapsed']);
+                    for (var k = 0; k < keys.length; k++) {
+                        (function (key) {
+                            Object.defineProperty(proto, key, {
+                                configurable: true, enumerable: true,
+                                get: function () {
+                                    var p = this[points];
+                                    if (!p) return undefined;
+                                    if (key === 'collapsed') return p[0] === p[2] && p[1] === p[3];
+                                    return p[pointNames.indexOf(key)];
+                                }
+                            });
+                        })(keys[k]);
+                    }
+                }
+
+                var AbstractRangeCtor = buildInterface('AbstractRange');
+                abstractAccessors(AbstractRangeCtor.prototype);
+                var RangeCtor = buildInterface('Range', AbstractRangeCtor, function () {
+                    if (!new.target)
+                        throw new TypeError('Failed to construct \'Range\': Please use the \'new\' operator,'
+                            + ' this DOM object constructor cannot be called as a function.');
+                    return document.createRange();
+                });
+                var modes = ['START_TO_START', 'START_TO_END', 'END_TO_END', 'END_TO_START'];
+                for (var m = 0; m < modes.length; m++) {
+                    defConstant(RangeCtor, modes[m], m);
+                    defConstant(RangeCtor.prototype, modes[m], m);
+                }
+                var StaticRangeCtor = buildInterface('StaticRange', AbstractRangeCtor, function (init) {
+                    var where = 'Failed to construct \'StaticRange\': ';
+                    if (!new.target)
+                        throw new TypeError(where + 'Please use the \'new\' operator, this DOM object'
+                            + ' constructor cannot be called as a function.');
+                    if (arguments.length < 1)
+                        throw new TypeError(where + '1 argument required, but only 0 present.');
+                    if (init === null || typeof init !== 'object')
+                        throw new TypeError(where + 'The provided value is not of type \'StaticRangeInit\'.');
+                    // A dictionary's members are read in the order the specification lists them, which is
+                    // alphabetical, so the range that gives no offsets is refused for 'endOffset' first
+                    // (measured), and an offset the page gave is coerced as an unsigned long after the
+                    // required-member check ('null' is a value, so it becomes 0 rather than refusing).
+                    var order = ['endContainer', 'endOffset', 'startContainer', 'startOffset'];
+                    var read = {};
+                    for (var i = 0; i < order.length; i++) {
+                        var key = order[i];
+                        var value = init[key];
+                        if (value === undefined)
+                            throw new TypeError(where + 'Failed to read the \'' + key + '\' property from'
+                                + ' \'StaticRangeInit\': Required member is undefined.');
+                        if (key === 'endContainer' || key === 'startContainer') {
+                            if (typeof value !== 'object' || typeof value.nodeType !== 'number')
+                                throw new TypeError(where + 'Failed to read the \'' + key + '\' property'
+                                    + ' from \'StaticRangeInit\': Failed to convert value to \'Node\'.');
+                        } else {
+                            value = value >>> 0;
+                        }
+                        read[key] = value;
+                    }
+                    this[points] = [read.startContainer, read.startOffset, read.endContainer, read.endOffset];
+                    return this;
+                });
+
+                var SelectionCtor = buildInterface('Selection');
+                var SP = SelectionCtor.prototype;
+                // What the host cannot see is settled here: the reference counts a method's arguments
+                // before it looks at their types, so 'collapse()' refuses with the argument-count
+                // sentence rather than with a type error about parameter 1 (measured for every one of
+                // these). Each wrapper hands the call to the host member below its own name, which does
+                // the type checks, the unsigned-long offsets and the range work — and quotes the name
+                // the page called, which is why 'setPosition' and 'collapse' have separate members
+                // although they do the same thing. The wrapper's 'length' is the number of required
+                // arguments, exactly as the reference reports it (measured: 'setPosition.length' is 1,
+                // 'setBaseAndExtent.length' is 4).
+                function selectionMethod(name, host, required) {
+                    function wrapped() {
+                        if (arguments.length < required)
+                            throw new TypeError('Failed to execute \'' + name + '\' on \'Selection\': '
+                                + required
+                                + (required === 1 ? ' argument required, but only ' : ' arguments required, but only ')
+                                + arguments.length + ' present.');
+                        return this[host].apply(this, arguments);
+                    }
+                    Object.defineProperty(wrapped, 'length', { value: required, configurable: true });
+                    return wrapped;
+                }
+                var counted = ['addRange', 'removeRange', 'getRangeAt', 'collapse', 'setPosition',
+                               'extend', 'selectAllChildren', 'containsNode'];
+                for (var c = 0; c < counted.length; c++) {
+                    Object.defineProperty(SP, counted[c], {
+                        value: selectionMethod(counted[c], '__' + counted[c], 1),
+                        writable: true, enumerable: true, configurable: true
+                    });
+                }
+                Object.defineProperty(SP, 'setBaseAndExtent', {
+                    value: selectionMethod('setBaseAndExtent', '__setBaseAndExtent', 4),
+                    writable: true, enumerable: true, configurable: true
+                });
+                // The sequence of ranges has to reach the page as an Array, and a CLR array arrives as an
+                // array-like, so the list is built here from the clones the selection answers with — fresh
+                // objects every time, which is what the reference gives (measured: 'getComposedRanges()[0]
+                // !== getRangeAt(0)'). 'empty' is the older name for 'removeAllRanges' (measured: it
+                // clears, and the selection reports 'None' after it).
+                Object.defineProperty(SP, 'getComposedRanges', {
+                    writable: true, enumerable: true, configurable: true,
+                    value: function () {
+                        var list = [];
+                        for (var i = 0; i < this.rangeCount; i++) list.push(this.__composedRange(i));
+                        return list;
+                    }
+                });
+                Object.defineProperty(SP, 'empty', {
+                    writable: true, enumerable: true, configurable: true,
+                    value: function () { return this.removeAllRanges(); }
+                });
+                window.getSelection = function () { return document.getSelection(); };
+            })();
+
+            // ── TreeWalker and NodeIterator (DOM 4 §4.7) ─────────────────────────
+            // Neither is constructible either — the document makes them — and both the factory and
+            // the 'filter' read live here rather than on the host because a JavaScript object handed
+            // to a host method is converted on the way in, so no host can give the very object back.
+            // The page's filter is therefore registered while it is still itself, the traverser is
+            // made from the id that registration answers, and 'walker.filter' reads the original out
+            // of that store — which is what makes 'walker.filter === f' hold (measured).
+            (function () {
+                var known = window.__domProto || {};
+                function iface(name) {
+                    var Ctor = function () {
+                        throw new TypeError('Failed to construct \'' + name + '\': Illegal constructor');
+                    };
+                    Object.defineProperty(Ctor, 'name', { value: name, configurable: true });
+                    Ctor.prototype = Object.create(Object.prototype);
+                    Object.defineProperty(Ctor.prototype, 'constructor', { value: Ctor, configurable: true, writable: true });
+                    Object.defineProperty(Ctor.prototype, Symbol.toStringTag,
+                        { value: name, writable: false, enumerable: false, configurable: true });
+                    window[name] = Ctor;
+                    known[name] = Ctor.prototype;
+                    return Ctor;
+                }
+                // The members of these interfaces are enumerable on the prototype, and 'filter' is a
+                // getter with no setter (measured: 'Object.keys(TreeWalker.prototype)' answers them,
+                // and a walker itself has no own property).
+                function defFilter(proto) {
+                    if (!proto) return;
+                    Object.defineProperty(proto, 'filter', {
+                        configurable: true, enumerable: true,
+                        get: function () {
+                            if (typeof __acruxFilterOf !== 'function') return null;
+                            return __acruxFilterOf(this.__filterId);
+                        }
+                    });
+                }
+                defFilter(iface('TreeWalker').prototype);
+                defFilter(iface('NodeIterator').prototype);
+
+                // What the host cannot see is settled here: the argument count, the unsigned-long
+                // coercion of whatToShow ('4' shows text, 'abc' and null show nothing, -1 shows
+                // everything, 4294967296 wraps to 0 — measured), and that the filter is an object, a
+                // function or nothing at all (a number is the TypeError the reference gives for
+                // parameter 3). The traverser itself is made by the host, from the id.
+                function traverserFactory(name, make) {
+                    return function (root, whatToShow, filter) {
+                        var where = 'Failed to execute \'' + name + '\' on \'Document\': ';
+                        if (arguments.length < 1)
+                            throw new TypeError(where + '1 argument required, but only 0 present.');
+                        var mask = whatToShow === undefined ? 4294967295 : (Number(whatToShow) >>> 0);
+                        if (filter !== undefined && filter !== null
+                            && typeof filter !== 'object' && typeof filter !== 'function')
+                            throw new TypeError(where + 'parameter 3 is not of type \'Object\'.');
+                        var id = (typeof __acruxStoreFilter === 'function') ? __acruxStoreFilter(filter) : 0;
+                        return this[make](root, mask, id);
+                    };
+                }
+                var DP = known['Document'] || (window.Document && window.Document.prototype);
+                if (DP) {
+                    Object.defineProperty(DP, 'createTreeWalker', {
+                        value: traverserFactory('createTreeWalker', '__makeTreeWalker'),
+                        writable: true, enumerable: true, configurable: true
+                    });
+                    Object.defineProperty(DP, 'createNodeIterator', {
+                        value: traverserFactory('createNodeIterator', '__makeNodeIterator'),
+                        writable: true, enumerable: true, configurable: true
+                    });
+                }
+            })();
+
+            // ── Cross-document messaging (HTML §8.6) ─────────────────────────────
+            // A posted message is a task, so it lands after the script that posted it — which is
+            // what a page relying on the ordering sees in a browser. The channel registry is the
+            // browsing context's: every channel with the same name in this document hears it.
+            (function () {
+                function fireEvent(target, listeners, onName, event) {
+                    event.target = target;
+                    var list = listeners || [];
+                    for (var i = 0; i < list.length; i++) {
+                        var listener = list[i];
+                        if (!listener) continue;
+                        try {
+                            if (typeof listener === 'function') listener.call(target, event);
+                            else if (typeof listener.handleEvent === 'function') listener.handleEvent(event);
+                        } catch (e) { }
+                    }
+                    if (typeof target[onName] === 'function') {
+                        try { target[onName](event); } catch (e) { }
+                    }
+                }
+
+                function makeTarget(proto) {
+                    proto.addEventListener = function (type, listener) {
+                        if (!listener) return;
+                        this._listeners = this._listeners || {};
+                        var list = this._listeners[type] = this._listeners[type] || [];
+                        if (list.indexOf(listener) < 0) list.push(listener);
+                    };
+                    proto.removeEventListener = function (type, listener) {
+                        var list = this._listeners && this._listeners[type];
+                        if (!list) return;
+                        var index = list.indexOf(listener);
+                        if (index >= 0) list.splice(index, 1);
+                    };
+                    proto.dispatchEvent = function (event) {
+                        if (event && event.type) fireEvent(this, this._listeners && this._listeners[event.type], 'on' + event.type, event);
+                        return true;
+                    };
+                    return proto;
+                }
+
+                // A message event carries data, which the engine's event host has no slot for, so
+                // the whole event is built in script: the flags, the propagation methods and the
+                // MessageEvent members all read the way the interface defines them.
+                function MessageEvent(type, init) {
+                    init = init || {};
+                    var evt = {
+                        type: String(type === undefined ? '' : type),
+                        bubbles: !!init.bubbles,
+                        cancelable: !!init.cancelable,
+                        composed: !!init.composed,
+                        isTrusted: false,
+                        defaultPrevented: false,
+                        data: init.data,
+                        origin: init.origin === undefined ? '' : String(init.origin),
+                        lastEventId: init.lastEventId === undefined ? '' : String(init.lastEventId),
+                        source: init.source === undefined ? null : init.source,
+                        ports: init.ports === undefined ? [] : init.ports,
+                        target: null,
+                        currentTarget: null,
+                        eventPhase: 0,
+                        preventDefault: function () { if (this.cancelable) this.defaultPrevented = true; },
+                        stopPropagation: function () { this._stopped = true; },
+                        stopImmediatePropagation: function () { this._stopped = true; this._immediateStopped = true; }
+                    };
+                    return evt;
+                }
+
+                // A port is one end of a channel: what goes in one end comes out of the other.
+                function MessagePort() {
+                    this._queue = [];
+                    this._listeners = {};
+                    this.onmessage = null;
+                    this._other = null;
+                    this._started = false;
+                    this._closed = false;
+                }
+                makeTarget(MessagePort.prototype);
+                MessagePort.prototype.postMessage = function (data) {
+                    if (this._closed) return;
+                    var other = this._other;
+                    if (!other) return;
+                    other._queue.push(data);
+                    var port = other;
+                    setTimeout(function () { port._drain(); }, 0);
+                };
+                MessagePort.prototype.start = function () {
+                    this._started = true;
+                    this._drain();
+                };
+                MessagePort.prototype.close = function () {
+                    this._closed = true;
+                    this._queue.length = 0;
+                };
+                // A port that has neither been started nor given an 'onmessage' handler keeps its
+                // queue, which is what lets a page install a listener before the first message
+                // arrives without losing what was already posted (§8.6.8.4).
+                MessagePort.prototype._drain = function () {
+                    if (this._closed) return;
+                    if (!this._started && typeof this.onmessage !== 'function') return;
+                    while (this._queue.length) {
+                        var data = this._queue.shift();
+                        fireEvent(this, this._listeners.message, 'onmessage', new MessageEvent('message', { data: data }));
+                    }
+                };
+
+                function MessageChannel() {
+                    var port1 = new MessagePort();
+                    var port2 = new MessagePort();
+                    port1._other = port2;
+                    port2._other = port1;
+                    this.port1 = port1;
+                    this.port2 = port2;
+                }
+
+                var channelsByName = {};
+
+                function BroadcastChannel(name) {
+                    var self = this;
+                    this.name = String(name);
+                    this.onmessage = null;
+                    this._listeners = {};
+                    this._closed = false;
+                    var list = channelsByName[this.name] = channelsByName[this.name] || [];
+                    list.push(self);
+                }
+                makeTarget(BroadcastChannel.prototype);
+                BroadcastChannel.prototype.postMessage = function (data) {
+                    if (this._closed) return;
+                    var list = channelsByName[this.name] || [];
+                    for (var i = 0; i < list.length; i++) {
+                        var channel = list[i];
+                        // The channel that posted does not hear its own message; the other ends of
+                        // the same name do (§8.6.10 step 5).
+                        if (channel === this || channel._closed) continue;
+                        (function (target) {
+                            setTimeout(function () {
+                                if (target._closed) return;
+                                fireEvent(target, target._listeners.message, 'onmessage',
+                                    new MessageEvent('message', { data: data, origin: location.origin }));
+                            }, 0);
+                        })(channel);
+                    }
+                };
+                BroadcastChannel.prototype.close = function () {
+                    this._closed = true;
+                    var list = channelsByName[this.name] || [];
+                    var index = list.indexOf(this);
+                    if (index >= 0) list.splice(index, 1);
+                };
+
+                window.MessageEvent = MessageEvent;
+                window.MessagePort = MessagePort;
+                window.MessageChannel = MessageChannel;
+                window.BroadcastChannel = BroadcastChannel;
+
+                // window.postMessage(message, targetOrigin) — the message comes back to this window
+                // as a message event, which is what a page that shells out to itself sees. The
+                // listeners live on the window (see window.addEventListener).
+                window.postMessage = function (message, targetOrigin, transfer) {
+                    setTimeout(function () {
+                        fireEvent(window, window.__winMessage || [], 'onmessage',
+                            new MessageEvent('message', { data: message, origin: location.origin, source: window }));
+                    }, 0);
+                };
+            })();
 
             // Array.groupBy (ES2024 §23.1.10): sort an iterable into a null-prototype object keyed
             // by the string form of the grouper's result. Object.groupBy is the engine's own; the
@@ -1717,9 +2631,44 @@ public class AcruxBuiltins
         return result ?? "[no handler]";
     }
 
+    private readonly Dictionary<int, CancellationTokenSource> _fetchTokens = new();
+    private readonly object _fetchTokenLock = new();
+
+    /// <summary>DOM §4.5.6: the JS MutationObserver turns text-change recording on while one of its
+    /// registrations asks for characterData and off when none does, so a page that never observes
+    /// pays nothing for every keystroke of a typewriter demo.</summary>
+    public void setCharacterDataTracking(bool on)
+        => Acrux.Core.Dom.DomMutationTracker.TrackCharacterData = on;
+
+    /// <summary>The text edits queued since the last call, as [wrapped node, old value] pairs —
+    /// the observer diff cannot reconstruct an old value a node has already lost.</summary>
+    public object[][] takeCharacterDataChanges()
+    {
+        var changes = Acrux.Core.Dom.DomMutationTracker.TakeCharacterDataChanges();
+        var outList = new List<object[]>(changes.Count);
+        foreach (var change in changes)
+        {
+            object?[] pair = [JsIntegrationService.WrapAny(change.Node), change.OldValue];
+            outList.Add(pair);
+        }
+        return outList.ToArray();
+    }
+
+    /// <summary>Fetch §5: the signal the page passed in aborts the request. The task is cancelled
+    /// at the socket, not just at the promise — an abandoned download still costs bandwidth.</summary>
+    public void abortFetch(int id)
+    {
+        CancellationTokenSource? source;
+        lock (_fetchTokenLock) _fetchTokens.TryGetValue(id, out source);
+        try { source?.Cancel(); }
+        catch { }
+    }
+
     public int _fetch(string url, string optionsJson, int resolveId, int rejectId)
     {
         var id = _engine.AddFetch(resolveId, rejectId);
+        var cancellation = new CancellationTokenSource();
+        lock (_fetchTokenLock) _fetchTokens[id] = cancellation;
 
         Task.Run(async () =>
         {
@@ -1752,8 +2701,8 @@ public class AcruxBuiltins
                         req.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
                 }
 
-                var response = await http.SendAsync(req);
-                var text = await response.Content.ReadAsStringAsync();
+                var response = await http.SendAsync(req, cancellation.Token);
+                var text = await response.Content.ReadAsStringAsync(cancellation.Token);
 
                 var headers = new Dictionary<string, string>();
                 foreach (var h in response.Headers)
@@ -1771,6 +2720,11 @@ public class AcruxBuiltins
             catch (Exception ex)
             {
                 _engine.CompleteFetch(id, new FetchResult { Success = false, Error = ex.Message });
+            }
+            finally
+            {
+                lock (_fetchTokenLock) _fetchTokens.Remove(id);
+                cancellation.Dispose();
             }
         });
 

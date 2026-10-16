@@ -9,7 +9,9 @@ public abstract class Element : Node
 
     protected Element(string tagName) : base()
     {
-        InternalState.LocalName = tagName;
+        // An HTML element carries the lowercase spelling of its name — that is the form the parser
+        // stores, the form 'createElement' folds to, and the form a page reads from 'localName'.
+        InternalState.LocalName = tagName.ToLowerInvariant();
         InternalState.NamespaceUri = "http://www.w3.org/1999/xhtml";
         TagName = tagName.ToUpperInvariant();
     }
@@ -28,6 +30,9 @@ public abstract class Element : Node
         clone.NamespaceUri = NamespaceUri;
         clone.Prefix = Prefix;
         foreach (var kv in Attributes) clone.Attributes[kv.Key] = kv.Value;
+        // The namespace an attribute was set under travels with it, or a clone loses the identity of
+        // its namespaced attributes.
+        foreach (var kv in AttributeNamespaces) clone.AttributeNamespaces[kv.Key] = kv.Value;
         foreach (var kv in Style) clone.Style[kv.Key] = kv.Value;
         clone.StyleMirrorText = StyleMirrorText;
         if (deep)
@@ -39,8 +44,20 @@ public abstract class Element : Node
     public string TagName { get; set; } = string.Empty;
     public string? NamespaceUri { get => InternalState.NamespaceUri; set => InternalState.NamespaceUri = value; }
     public string? Prefix { get => InternalState.Prefix; set => InternalState.Prefix = value; }
-    public string LocalName => InternalState.LocalName;
-    public override string NodeName => TagName;
+    public string LocalName { get => InternalState.LocalName; internal set => InternalState.LocalName = value; }
+
+    /// <summary>DOM 4 §4.1.3: an element's node name is its qualified name, and only an element in
+    /// the HTML namespace gets the uppercase spelling a page reads from 'tagName'. An element made
+    /// through createElementNS keeps the prefix and the case it was written in (measured: 'svg:circle'
+    /// answers 'svg:circle' from node name and 'SVG:CIRCLE' from tag name).</summary>
+    public override string NodeName => NamespaceUri == "http://www.w3.org/1999/xhtml"
+        ? TagName
+        : QualifiedName;
+
+    /// <summary>The name as it was written: the prefix and the local name joined with a colon, or the
+    /// local name alone (DOM §4.2.1) — the spelling a node name answers with outside the HTML
+    /// namespace, where no case folding happens.</summary>
+    public string QualifiedName => string.IsNullOrEmpty(Prefix) ? LocalName : Prefix + ":" + LocalName;
 
     // ===== Attributes =====
     public Dictionary<string, string> Attributes { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -75,6 +92,7 @@ public abstract class Element : Node
     {
         var oldValue = Attributes.GetValueOrDefault(name);
         Attributes.Remove(name);
+        AttributeNamespaces.Remove(name);
         _classListCache = null;
         if (name.Equals("media", StringComparison.OrdinalIgnoreCase))
         {
@@ -93,10 +111,55 @@ public abstract class Element : Node
 
     public bool HasAttribute(string name) => Attributes.ContainsKey(name);
 
-    public string? GetAttributeNS(string? ns, string name) => GetAttribute(name);
-    public void SetAttributeNS(string? ns, string name, string value) => SetAttribute(name, value);
-    public void RemoveAttributeNS(string? ns, string name) => RemoveAttribute(name);
-    public bool HasAttributeNS(string? ns, string name) => HasAttribute(name);
+    /// <summary>The namespace each attribute was set under, keyed by the name it is stored at. Only
+    /// the namespaced setters write here: an attribute the parser made has no entry and answers no
+    /// namespace, which is what the reference gives for those (§4.3.4).</summary>
+    public Dictionary<string, string?> AttributeNamespaces { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    internal static string LocalPartOf(string name)
+    {
+        var at = name.IndexOf(':');
+        return at < 0 ? name : name[(at + 1)..];
+    }
+
+    private bool NamespaceAgrees(string? ns, string storedName)
+    {
+        var stored = AttributeNamespaces.TryGetValue(storedName, out var found) ? found : null;
+        return string.Equals(stored ?? "", string.IsNullOrEmpty(ns) ? "" : ns, StringComparison.Ordinal);
+    }
+
+    /// <summary>DOM §4.3.4: an attribute set under a namespace is reached by its local name alone,
+    /// so the one stored as 'x:y' answers to 'y' while the namespace agrees.</summary>
+    public string? FindAttributeName(string? ns, string name)
+    {
+        if (Attributes.ContainsKey(name) && NamespaceAgrees(ns, name)) return name;
+        foreach (var key in Attributes.Keys)
+            if (LocalPartOf(key).Equals(name, StringComparison.OrdinalIgnoreCase) && NamespaceAgrees(ns, key))
+                return key;
+        return null;
+    }
+
+    public string? GetAttributeNS(string? ns, string name)
+    {
+        var stored = FindAttributeName(ns, name);
+        return stored == null ? null : GetAttribute(stored);
+    }
+
+    public void SetAttributeNS(string? ns, string name, string value)
+    {
+        SetAttribute(name, value);
+        if (string.IsNullOrEmpty(ns)) AttributeNamespaces.Remove(name);
+        else AttributeNamespaces[name] = ns;
+    }
+
+    public void RemoveAttributeNS(string? ns, string name)
+    {
+        var stored = FindAttributeName(ns, name) ?? name;
+        RemoveAttribute(stored);
+        if (!ReferenceEquals(stored, name)) AttributeNamespaces.Remove(name);
+    }
+
+    public bool HasAttributeNS(string? ns, string name) => FindAttributeName(ns, name) != null;
 
     // ===== ClassList =====
     public string[] ClassList

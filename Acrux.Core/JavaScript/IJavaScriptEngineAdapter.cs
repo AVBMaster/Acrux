@@ -8,6 +8,13 @@ public interface IJavaScriptEngineAdapter : IDisposable
     object? Evaluate(string expression);
     object? CallFunction(string functionName, params object?[] args);
 
+    /// <summary>Like CallFunction except that an error raised by the script itself is allowed to
+    /// escape, so a host method that was entered from script can hand the page back its own
+    /// exception — a NodeFilter that throws must take that Error out of nextNode() (DOM 4 §4.7.1,
+    /// measured). An adapter that cannot carry a script error across its boundary keeps the
+    /// swallowing behavior instead.</summary>
+    object? CallFunctionPropagating(string functionName, params object?[] args);
+
     void SetGlobal(string name, object? value);
     void EmbedHostObject(string name, object? value);
     T? GetGlobal<T>(string name) where T : class;

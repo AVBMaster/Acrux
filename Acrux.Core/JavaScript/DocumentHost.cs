@@ -1,4 +1,6 @@
+using System.Collections;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using Acrux.Core.Css;
 using Acrux.Core.Dom;
 using DomDocument = Acrux.Core.Dom.Document;
@@ -6,11 +8,12 @@ using DomElement = Acrux.Core.Dom.Element;
 
 namespace Acrux.Core.JavaScript;
 
-public class DocumentHost
+public class DocumentHost : IDomPrototypeHost
 {
     private readonly DomDocument _document;
     private ElementHost? _documentElementHost;
     private ElementHost? _bodyHost;
+    private SelectionHost? _selection;
     private readonly Dictionary<string, string> _cookies = new();
     internal JavaScriptEngine? Engine { get; set; }
 
@@ -97,13 +100,7 @@ public class DocumentHost
     public ElementHost? lastElementChild => firstElementChild;
     public int childElementCount => _document.Children.OfType<DomElement>().Count();
 
-    private object? WrapAnyDocumentNode(Node n) => n switch
-    {
-        DomElement el => WrapElement(el),
-        CommentNode c => new CommentHost(c),
-        TextNode t => new TextNodeWrapper(t),
-        _ => null,
-    };
+    private object? WrapAnyDocumentNode(Node n) => JsIntegrationService.WrapAny(n);
     public string? textContent
     {
         get => _document.TextContent;
@@ -231,42 +228,81 @@ public class DocumentHost
 
     public ElementHost createElement(string tagName)
     {
-        var el = new HtmlElement(tagName);
-        var engine = JavaScriptEngine.Current ?? Engine;
-        var integration = engine?.IntegrationService;
-        if (integration != null)
-            return (integration.WrapDomNode(el) as ElementHost)!;
-        var host = new ElementHost(el);
-        if (host.Engine == null && engine != null)
-            host.Engine = engine;
-        return host;
+        DomNames.RequireTagName(tagName, "createElement", "Document");
+        var el = _document.CreateElement(tagName);
+        return WrapElement(el) ?? new ElementHost(el);
     }
 
     public ElementHost createElementNS(string? ns, string tagName)
     {
-        var el = new HtmlElement(tagName) { NamespaceUri = ns };
+        DomNames.RequireQualifiedName(tagName, "createElementNS", "Document", element: true);
+        // The name is taken apart where the element is made: a qualified name carries a prefix and a
+        // local name, the case an element keeps is the document's business, and an element in the
+        // HTML namespace is the only one folded to the uppercase spelling (DOM §4.2.1, measured:
+        // 'svg:circle' reads 'svg:circle' from tag name, 'x:Y' in the HTML namespace reads 'X:Y').
+        var el = _document.CreateElementNS(ns, tagName);
         return WrapElement(el) ?? new ElementHost(el);
     }
 
+
+    /// <summary>Whether this is an HTML document — the difference that decides case-folded names and
+    /// which node kinds the document will make at all.</summary>
+    private bool IsHtmlDocument =>
+        _document.ContentType is null
+        || _document.ContentType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase);
+
+    // A node the page made belongs to the document that made it from the moment it is made, not
+    // only once it reaches the tree (DOM §4.1), so 'doc.createComment('x').ownerDocument === doc'
+    // holds for a document the page built with the implementation as much as for the page's own.
+    private T WithOwner<T>(T node) where T : Node
+    {
+        node.OwnerDocument = _document;
+        return node;
+    }
+
     public TextNodeWrapper createTextNode(string text)
+        => (TextNodeWrapper)JsIntegrationService.WrapAny(WithOwner(new TextNode(text)))!;
+
+    public object? createComment(string data) => JsIntegrationService.WrapAny(WithOwner(new CommentNode(data)));
+
+    public object? createDocumentFragment() => JsIntegrationService.WrapAny(WithOwner(new DocumentFragment()));
+
+    /// <summary>DOM §4.3.8: a CDATA section carries text the parser was meant to read as-is, so an
+    /// HTML document — where nothing is read that way — refuses to make one. An XML document gives a
+    /// node that is a Text with its own name and type.</summary>
+    public object? createCDATASection(string data)
     {
-        return new TextNodeWrapper(new TextNode(text));
+        // DOM §4.3.8: an HTML document has no CDATA content model, so it refuses to make one.
+        if (IsHtmlDocument)
+            throw new DOMException("Failed to execute 'createCDATASection' on 'Document': This "
+                                   + "operation is not supported for HTML documents.", "NotSupportedError");
+        // ']]>' is the delimiter the section ends at, so it cannot appear inside one (§4.3.8).
+        if (data.Contains("]]>", StringComparison.Ordinal))
+            throw new DOMException("Failed to execute 'createCDATASection' on 'Document': String "
+                                   + "cannot contain ']]>' since that is the end delimiter of a CData section.",
+                                   "InvalidCharacterError");
+        return JsIntegrationService.WrapAny(WithOwner(new CDataSection(data)));
     }
 
-    public object? createComment(string data) => new CommentHost(new CommentNode(data));
-
-    public object? createDocumentFragment()
+    /// <summary>DOM §4.3.5: only the target is held to the XML name rule — the data after it is
+    /// whatever the page wrote ('createProcessingInstruction('t','a<b')' is accepted, measured).</summary>
+    public object? createProcessingInstruction(string target, string data)
     {
-        return new DocumentFragmentHost(new DocumentFragment());
+        DomNames.RequireXmlName(target, "createProcessingInstruction", "Document");
+        return JsIntegrationService.WrapAny(WithOwner(new ProcessingInstruction(target, data)));
     }
 
-    public object? createCDATASection(string data) => null;
+    public object? createAttribute(string name)
+    {
+        DomNames.RequireLocalName(name, "createAttribute", "Document");
+        return new AttributeHost(name, document: _document);
+    }
 
-    public object? createProcessingInstruction(string target, string data) => null;
-
-    public object? createAttribute(string name) => new AttributeHost(name);
-
-    public object? createAttributeNS(string? ns, string name) => new AttributeHost(name, ns);
+    public object? createAttributeNS(string? ns, string name)
+    {
+        DomNames.RequireQualifiedName(name, "createAttributeNS", "Document", element: false);
+        return new AttributeHost(name, "", ns, _document);
+    }
 
     public ElementHost? getElementByClassName(string className)
     {
@@ -304,8 +340,6 @@ public class DocumentHost
     public ElementHost? elementFromPoint(double x, double y) => null;
 
     public object[] elementsFromPoint(double x, double y) => Array.Empty<object>();
-
-    public string? getSelection() => null;
 
     public ElementHost? activeElement
     {
@@ -377,41 +411,97 @@ public class DocumentHost
     {
         get
         {
+            // The doctype is a node, so it comes back as the one object the identity map keeps for
+            // it — 'document.doctype === document.doctype' holds the way it does for any other node.
             var docType = _document.Children.OfType<DocumentTypeNode>().FirstOrDefault();
-            return docType != null ? new DocumentTypeHost(docType) : null;
+            return docType != null ? JsIntegrationService.WrapAny(docType) : null;
         }
     }
 
-    public object implementation => new DOMImplementationHost(JavaScriptEngine.Current ?? Engine);
+    public object implementation
+        => _implementation ??= new DOMImplementationHost(JavaScriptEngine.Current ?? Engine);
 
-    /// <summary>DOM 4 §4.9: a TreeWalker / NodeIterator over the subtree. The engine materialises
-    /// the visited set at creation (document order), filtered by the whatToShow mask and the
-    /// optional acceptNode filter, and the walker steps forward/back through it — the reference is
-    /// not a live view, which matches the iterator model the node-set is taken from.</summary>
-    public object createTreeWalker(object? root, int whatToShow = -1, object? filter = null)
-        => new TreeWalkerHost(root, whatToShow, filter, walkable: true);
+    private object? _implementation;
 
-    public object createNodeIterator(object? root, int whatToShow = -1, object? filter = null)
-        => new TreeWalkerHost(root, whatToShow, filter, walkable: false);
-
-    public object? adoptNode(object node)
+    /// <summary>DOM 4 §4.7.7: a TreeWalker over the subtree, live — every step reads the tree as it
+    /// stands, so a node the page inserted between two steps is walked through. The mask and the
+    /// page's filter decide what a step answers; a rejected node prunes its subtree here.</summary>
+    /// <remarks>
+    /// The page reaches this through 'Document.prototype.createTreeWalker', which is script-side on
+    /// purpose: it is the last place the filter is still the page's own object (a value handed to a
+    /// host method arrives converted, and 'walker.filter' must answer the original), and what gets
+    /// through here is the id that registration answered.
+    /// </remarks>
+    public object __makeTreeWalker(object? root, double whatToShow = 4294967295d, int filterId = 0)
     {
-        if (node is ElementHost elHost)
+        var node = NodeTraverserHost.RequireRoot(root, "createTreeWalker");
+        return new TreeWalkerHost(node, NodeTraverserHost.ToMask(whatToShow), filterId,
+            JavaScriptEngine.Current ?? Engine);
+    }
+
+    /// <summary>DOM 4 §4.7.3: a NodeIterator over the subtree. It offers its root as the first
+    /// candidate, where a walker starts one step after it, and a rejected node only steps over
+    /// itself — an iterator does not prune.</summary>
+    public object __makeNodeIterator(object? root, double whatToShow = 4294967295d, int filterId = 0)
+    {
+        var node = NodeTraverserHost.RequireRoot(root, "createNodeIterator");
+        return new NodeIteratorHost(node, NodeTraverserHost.ToMask(whatToShow), filterId,
+            JavaScriptEngine.Current ?? Engine);
+    }
+
+    /// <summary>DOM §3.4: a range is a pair of boundary points the page can move, and a fresh one
+    /// starts collapsed at the document — before any node it could cover.</summary>
+    public RangeHost createRange() => RangeHost.Adopt(new RangeHost(_document, 0, _document, 0));
+
+    /// <summary>HTML §2.5.3.4: one selection per document, holding at most the range the page put
+    /// in it. It answered null, so a script that reached for the cursor had nothing to hold. The
+    /// document is given to it because a range whose content is not in this document is ignored.</summary>
+    public object? getSelection()
+    {
+        if (_selection == null)
         {
-            elHost.NativeElement.Remove();
-            return elHost;
+            _selection = new SelectionHost(_document);
+            JsIntegrationService.FixProto(_selection);
         }
+        return _selection;
+    }
+
+    /// <summary>DOM §4.5: adoption takes the node out of the tree it was in and gives it to this
+    /// document, and the object the page handed in is the object that comes back — now answering this
+    /// document as its owner. Any kind of node can be adopted; a document itself cannot (§4.5).</summary>
+    public object? adoptNode(object? node)
+    {
+        var native = ElementHost.UnwrapNode(node);
+        if (native is Document)
+            throw new DOMException("Failed to execute 'adoptNode' on 'Document': The node provided "
+                                   + "is of type '#document', which may not be adopted.", "NotSupportedError");
+        if (native == null) return node;
+        native.Remove();
+        native.OwnerDocument = _document;
         return node;
     }
 
-    public object? importNode(object node, bool deep = false)
+    /// <summary>DOM §4.5: an import is a clone that belongs to this document — the node the page
+    /// handed in keeps its own document, and the copy the call answers is a new object.</summary>
+    public object? importNode(object? node, bool deep = false)
     {
-        if (node is ElementHost elHost)
+        var native = ElementHost.UnwrapNode(node);
+        if (native == null)
         {
-            var cloned = elHost.NativeElement.CloneNode(deep);
-            return WrapElement((DomElement)cloned)!;
+            // An attribute is a node for every purpose but the tree, and it reaches the page as the
+            // Attr wrapper rather than a CLR node — its import is a copy of what it holds.
+            if (node is AttributeHost attr)
+            {
+                var copy = new AttributeHost(attr.name, attr.value, attr.namespaceURI, _document);
+                JsIntegrationService.FixProto(copy);
+                return copy;
+            }
+            throw new DOMException("Failed to execute 'importNode' on 'Document': parameter 1 is not "
+                                   + "of type 'Node'.", "TypeError");
         }
-        return node;
+        var imported = native.CloneNode(deep);
+        imported.OwnerDocument = _document;
+        return JsIntegrationService.WrapAny(imported);
     }
 
     public void normalizeDocument()
@@ -1369,7 +1459,7 @@ public class ComputedStyleHost
     public string? borderLeftWidth => getPropertyValue("border-left-width");
 }
 
-public class DocumentFragmentHost
+public class DocumentFragmentHost : IDomPrototypeHost
 {
     private readonly DocumentFragment _fragment;
 
@@ -1427,7 +1517,7 @@ public class DocumentFragmentHost
     {
         var node = ElementHost.UnwrapNode(child);
         if (node == null)
-            throw new DOMException("NotFoundError", "The node to be appended is not a node of this document.");
+            throw new DOMException("The node to be appended is not a node of this document.", "NotFoundError");
         if (node is Acrux.Core.Dom.DocumentFragment f)
             foreach (var moved in f.Children.ToList()) _fragment.AppendChild(moved);
         else _fragment.AppendChild(node);
@@ -1438,7 +1528,7 @@ public class DocumentFragmentHost
     {
         var node = ElementHost.UnwrapNode(newChild);
         if (node == null)
-            throw new DOMException("NotFoundError", "The node to be inserted is not a node of this document.");
+            throw new DOMException("The node to be inserted is not a node of this document.", "NotFoundError");
         Node? refNode = refChild == null ? null : ElementHost.UnwrapNode(refChild);
         if (node is Acrux.Core.Dom.DocumentFragment f)
             foreach (var moved in f.Children.ToList()) _fragment.InsertBefore(moved, refNode);
@@ -1450,7 +1540,7 @@ public class DocumentFragmentHost
     {
         var node = ElementHost.UnwrapNode(child);
         if (node == null)
-            throw new DOMException("NotFoundError", "The node to be removed is not a child of this node.");
+            throw new DOMException("The node to be removed is not a child of this node.", "NotFoundError");
         _fragment.RemoveChild(node);
         return child!;
     }
@@ -1460,7 +1550,7 @@ public class DocumentFragmentHost
         var newNode = ElementHost.UnwrapNode(newChild);
         var oldNode = ElementHost.UnwrapNode(oldChild);
         if (newNode == null || oldNode == null)
-            throw new DOMException("NotFoundError", "The node to be replaced is not a child of this node.");
+            throw new DOMException("The node to be replaced is not a child of this node.", "NotFoundError");
         _fragment.ReplaceChild(newNode, oldNode);
         return oldChild!;
     }
@@ -1486,6 +1576,22 @@ public class DocumentFragmentHost
     }
 
     public int childElementCount => EnumerateElements(_fragment).Count();
+
+    // A fragment is a Node, so the tree reads a page makes after 'extractContents' or while it
+    // builds a subtree up answer the same as an element's do (DOM §3.7).
+    public object? ownerDocument => WrapAnyNode(_fragment.OwnerDocument);
+    public object? parentElement => _fragment.ParentElement == null ? null : WrapAnyNode(_fragment.ParentElement);
+    public object? firstChild => WrapAnyNode(_fragment.FirstChild);
+    public object? lastChild => WrapAnyNode(_fragment.LastChild);
+    public object? parentNode => WrapAnyNode(_fragment.ParentNode);
+    public object? nextSibling => WrapAnyNode(_fragment.NextSibling);
+    public object? previousSibling => WrapAnyNode(_fragment.PreviousSibling);
+    public bool hasChildNodes() => _fragment.Children.Count > 0;
+    public string? nodeValue { get => null; set { } }
+    public void remove() => _fragment.Remove();
+
+    public object cloneNode(bool deep = true)
+        => JsIntegrationService.WrapAny(_fragment.CloneNode(deep)) ?? this;
 
     public string? textContent
     {
@@ -1530,17 +1636,13 @@ public class DocumentFragmentHost
         return new ElementHost(el);
     }
 
-    private object? WrapAnyNode(Acrux.Core.Dom.Node n) =>
-        n switch
-        {
-            DomElement el => Wrap(el),
-            Acrux.Core.Dom.CommentNode c => new CommentHost(c),
-            Acrux.Core.Dom.TextNode t => new TextNodeWrapper(t),
-            _ => null,
-        };
+    private object? WrapAnyNode(Acrux.Core.Dom.Node n) => JsIntegrationService.WrapAny(n);
 }
 
-public class DocumentTypeHost
+/// <summary>DOM §4.3.4: the doctype is a node of the document, not a bundle of strings — it reads
+/// its name, public and system identifiers, and it sits in the document's child list with the rest.
+/// Its 'nodeValue' and 'textContent' answer null and cannot be written: a doctype has no data.</summary>
+public class DocumentTypeHost : IDomPrototypeHost
 {
     private readonly DocumentTypeNode _docType;
 
@@ -1549,12 +1651,41 @@ public class DocumentTypeHost
         _docType = docType;
     }
 
-    public string name => _docType.Name ?? "html";
+    internal DocumentTypeNode NativeNode => _docType;
+
+    public string name => _docType.Name;
     public string publicId => _docType.PublicId ?? "";
     public string systemId => _docType.SystemId ?? "";
+
+    public string nodeName => _docType.Name;
+    public int nodeType => 10;
+    public string? nodeValue => null;
+    public string? textContent => null;
+    public string[] __domTypeChain => new[] { "EventTarget", "Node", "DocumentType" };
+    public object? ownerDocument
+        => JsIntegrationService.WrapAny(_docType.OwnerDocument) ?? JavaScriptEngine.Current?.IntegrationService?.Document;
+    public object? parentNode => JsIntegrationService.WrapAny(_docType.Parent);
+    public object? parentElement => null;
+    public object? previousSibling => JsIntegrationService.WrapAny(_docType.PreviousSibling);
+    public object? nextSibling => JsIntegrationService.WrapAny(_docType.NextSibling);
+    public object[] childNodes => Array.Empty<object>();
+    public int length => 0;
+    public object? firstChild => null;
+    public object? lastChild => null;
+    public bool hasChildNodes() => false;
+    // The two legacy collections a doctype used to hold its entities and notations in are gone from
+    // the interface; the reference still answers null for them, so a page that looks finds nothing
+    // rather than an undefined member.
+    public object? entities => null;
+    public object? notations => null;
+    public object? cloneNode(bool deep) => JsIntegrationService.WrapAny(_docType.CloneNode(deep));
+    public void remove() => _docType.Parent?.RemoveChild(_docType);
 }
 
-public class NamedNodeMapHost
+/// <summary>DOM §4.3.3: the attribute list of an element is live and array-like — 'el.attributes[0]'
+/// and 'el.attributes.length' read the current set, and every position answers the same Attr object
+/// 'getNamedItem' gives for that name.</summary>
+public class NamedNodeMapHost : IList
 {
     private readonly DomElement _element;
 
@@ -1563,13 +1694,19 @@ public class NamedNodeMapHost
         _element = element;
     }
 
-    public int length => _element.Attributes.Count;
+    public int length => Names().Count;
+    public int Length => Names().Count;
+
+    public object? this[int index]
+    {
+        get => item(index);
+        set => throw new NotSupportedException();
+    }
 
     public object? item(int index)
     {
-        if (index < 0 || index >= _element.Attributes.Count) return null;
-        var kv = _element.Attributes.ElementAt(index);
-        return new AttributeHost(kv.Key, kv.Value);
+        var names = Names();
+        return index >= 0 && index < names.Count ? AttributeHost.For(_element, names[index]) : null;
     }
 
     public object? getNamedItem(string name)
@@ -1577,39 +1714,195 @@ public class NamedNodeMapHost
         // NamedNodeMap answers Attr nodes, not the attribute's string value — a page that reads
         // getNamedItem('id').value would otherwise find 'value' on a plain string.
         if (!_element.HasAttribute(name)) return null;
-        return new AttributeHost(name, _element.GetAttribute(name));
+        return AttributeHost.For(_element, name);
     }
 
-    public object? setNamedItem(object attr)
+    /// <summary>DOM §4.2.1: the namespaced getter is looked up by the namespace and the local name,
+    /// not by the spelling the page wrote the attribute in — an attribute put on as 'x:y' under a
+    /// namespace is found as 'y' with that namespace, and the same Attr object comes back.</summary>
+    public object? getNamedItemNS(string? ns, string name)
     {
-        if (attr is AttributeHost host)
-            _element.SetAttribute(host.name, host.value ?? "");
-        return null;
+        var stored = _element.FindAttributeName(ns, name);
+        return stored == null ? null : AttributeHost.For(_element, stored);
     }
+
+    public object? setNamedItem(object attr) => ElementHost.SetAttributeOn(_element, attr);
+
+    /// <summary>DOM §4.2.1: the namespaced setter is the same operation — a name brought without a
+    /// prefix is put on under the namespace it carries, and the attribute it replaces is handed back.</summary>
+    public object? setNamedItemNS(object attr) => ElementHost.SetAttributeOn(_element, attr);
 
     public object? removeNamedItem(string name)
     {
         if (!_element.HasAttribute(name))
-            throw new DOMException("NotFoundError", "The named item does not exist.");
-        var val = _element.GetAttribute(name);
+            throw new DOMException("The named item does not exist.", "NotFoundError");
+        var removed = AttributeHost.For(_element, name);
+        AttributeHost.Release(removed);
         _element.RemoveAttribute(name);
-        return new AttributeHost(name, val);
+        return removed;
+    }
+
+    public object? removeNamedItemNS(string? ns, string name)
+    {
+        var stored = _element.FindAttributeName(ns, name);
+        if (stored == null)
+            throw new DOMException("The named item does not exist.", "NotFoundError");
+        var removed = AttributeHost.For(_element, stored);
+        AttributeHost.Release(removed);
+        _element.RemoveAttribute(stored);
+        return removed;
+    }
+
+    public IEnumerator GetEnumerator() => Names().Select(n => (object?)AttributeHost.For(_element, n)).ToList().GetEnumerator();
+
+    public int Count => Names().Count;
+    public bool IsReadOnly => true;
+    public bool IsFixedSize => true;
+    public bool IsSynchronized => false;
+    public object SyncRoot => this;
+
+    public int Add(object? value) => throw new NotSupportedException();
+    public void Clear() => throw new NotSupportedException();
+    public bool Contains(object? value) => Names().Any(n => ReferenceEquals(AttributeHost.For(_element, n), value));
+    public int IndexOf(object? value)
+    {
+        var names = Names();
+        for (var i = 0; i < names.Count; i++)
+            if (ReferenceEquals(AttributeHost.For(_element, names[i]), value)) return i;
+        return -1;
+    }
+    public void Insert(int index, object? value) => throw new NotSupportedException();
+    public void Remove(object? value) => throw new NotSupportedException();
+    public void RemoveAt(int index) => throw new NotSupportedException();
+    public void CopyTo(Array array, int index) => ToArray().CopyTo(array, index);
+
+    public object?[] ToArray() => Names().Select(n => (object?)AttributeHost.For(_element, n)).ToArray();
+
+    private List<string> Names()
+    {
+        // The element keeps its attributes in insertion order, which is the order the list reads.
+        return _element.Attributes.Keys.ToList();
     }
 }
 
-public class AttributeHost
+/// <summary>DOM §4.3: an attribute the page holds is one object per (element, name) for as long
+/// as it is attached, and reading or writing 'value' goes to the element's attribute — not to a
+/// copy taken when the page looked at it. A removal hands back the attribute it took off, with
+/// the value it held, and that one is detached: it answers its own value from then on.</summary>
+public class AttributeHost : IDomPrototypeHost
 {
+    private static readonly ConditionalWeakTable<DomElement, Dictionary<string, AttributeHost>> _views = new();
+
+    private DomElement? _owner;
+    private DomDocument? _document;
+    private string? _detached;
+    private bool _released;
+
     public string name { get; }
-    public string? value { get; set; }
-    public string? namespaceUri { get; }
     public bool specified => true;
     public bool isId => name.Equals("id", StringComparison.OrdinalIgnoreCase);
+    public string? namespaceURI { get; internal set; }
+    public string nodeName => name;
 
-    public AttributeHost(string name, string? value = null, string? ns = null)
+    // DOM §4.3.3: the two halves of an attribute's name. An attribute that carries a namespace is
+    // split at its first ':' — 'x:y' is prefix 'x', local name 'y'; one the parser made in an HTML
+    // document is not split at all, so 'xml:lang' keeps its whole local name and has no prefix
+    // (measured).
+    public string localName => namespaceURI == null ? name : LocalPart(name);
+    public string? prefix => namespaceURI == null ? null : PrefixPart(name);
+    public int nodeType => 2;
+    public string? textContent { get => value; set => this.value = value; }
+    public string[] __domTypeChain => new[] { "EventTarget", "Node", "Attr" };
+    public object? ownerElement => _owner != null && !_released ? JsIntegrationService.WrapAny(_owner) : null;
+
+    /// <summary>DOM §4.3.3: an attribute belongs to a document whether or not an element holds it,
+    /// and taking it off the element does not take it off the document — 'createAttribute' gives it
+    /// the document that made it. It is the page's own 'document', not a second wrapper of it.</summary>
+    public object? ownerDocument
+        => JsIntegrationService.WrapAny(_owner?.OwnerDocument ?? _document)
+           ?? JavaScriptEngine.Current?.IntegrationService?.Document;
+
+    public override string ToString() => value ?? "";
+
+    internal AttributeHost(DomElement? owner, string name, string? ns = null)
     {
+        _owner = owner;
         this.name = name;
-        this.value = value;
-        this.namespaceUri = ns;
+        namespaceURI = ns;
+    }
+
+    /// <summary>A detached attribute: 'document.createAttribute' makes one, and it answers its
+    /// own value until an element takes it.</summary>
+    public AttributeHost(string name, string? value = null, string? ns = null, DomDocument? document = null)
+        : this((DomElement?)null, name, ns)
+    {
+        _detached = value;
+        _document = document;
+    }
+
+    public string? value
+    {
+        get => _released ? _detached : (_owner != null ? _owner.GetAttribute(name) : _detached);
+        set
+        {
+            if (_released || _owner == null) _detached = value;
+            else _owner.SetAttribute(name, value ?? "");
+        }
+    }
+
+    internal DomElement? NativeOwner => _owner;
+    internal bool IsAttached => _owner != null && !_released && _owner.HasAttribute(name);
+
+    /// <summary>The attribute of an element, the same object every time while it is attached.</summary>
+    internal static AttributeHost For(DomElement element, string name)
+    {
+        var map = _views.GetValue(element, _ => new Dictionary<string, AttributeHost>(StringComparer.Ordinal));
+        if (!map.TryGetValue(name, out var view) || view._released)
+        {
+            // The element remembers which namespace each attribute was set under, and an attribute
+            // read back out of the element is the same object whether the page came at it by its
+            // qualified name or by its namespace and local name.
+            view = new AttributeHost(element, name,
+                element.AttributeNamespaces.TryGetValue(name, out var ns) ? ns : null);
+            map[name] = view;
+        }
+        return view;
+    }
+
+    private static string LocalPart(string name)
+    {
+        var at = name.IndexOf(':');
+        return at < 0 ? name : name[(at + 1)..];
+    }
+
+    private static string? PrefixPart(string name)
+    {
+        var at = name.IndexOf(':');
+        return at <= 0 ? null : name[..at];
+    }
+
+    /// <summary>Takes a detached attribute onto an element, so the element answers the very
+    /// object the page passed in.</summary>
+    internal static void Attach(DomElement element, AttributeHost attr)
+    {
+        var map = _views.GetValue(element, _ => new Dictionary<string, AttributeHost>(StringComparer.Ordinal));
+        attr._owner = element;
+        attr._document = element.OwnerDocument;
+        attr._detached = null;
+        attr._released = false;
+        map[attr.name] = attr;
+    }
+
+    /// <summary>Takes the attribute off the element that owned it: the page that held the object
+    /// keeps reading the value it had.</summary>
+    internal static void Release(object? attr)
+    {
+        if (attr is not AttributeHost host || host._owner == null) return;
+        host._detached = host._owner.GetAttribute(host.name);
+        host._released = true;
+        if (_views.TryGetValue(host._owner, out var map)
+            && map.TryGetValue(host.name, out var current) && ReferenceEquals(current, host))
+            map.Remove(host.name);
     }
 }
 
@@ -1623,23 +1916,49 @@ public class DOMImplementationHost
     public bool hasFeature(string? feature, object? version = null) => true;
 
     public DocumentTypeHost createDocumentType(string qualifiedName, string? publicId = null, string? systemId = null)
-        => new DocumentTypeHost(new DocumentTypeNode(publicId, systemId));
+    {
+        DomNames.RequireDocumentTypeName(qualifiedName, "createDocumentType", "DOMImplementation");
+        // Wrapped, not built here: the doctype a page hands to 'createDocument' has to be the same
+        // object it reads back from 'doc.doctype' and from the child list (DOM §2.8).
+        return (DocumentTypeHost)JsIntegrationService.WrapAny(
+            new DocumentTypeNode(publicId, systemId, qualifiedName))!;
+    }
 
     public object createDocument(string? ns, string? qualifiedName, object? doctype = null)
     {
+        if (!string.IsNullOrEmpty(qualifiedName))
+            DomNames.RequireQualifiedName(qualifiedName, "createDocument", "DOMImplementation", element: true);
         var doc = new Document();
+        // A document made through 'createDocument' is an XML one, and the interface the page reads
+        // back ('contentType', and what a CDATA section costs it) follows from that (§3.3).
+        doc.ContentType = ns == "http://www.w3.org/1999/xhtml"
+            ? "application/xhtml+xml" : "application/xml";
+        // The doctype the page hands over is put on before the root element (§3.3).
+        if (UnwrapDocumentType(doctype) is DocumentTypeNode dt) doc.AppendChild(dt);
         if (!string.IsNullOrEmpty(qualifiedName))
         {
             var root = doc.CreateElementNS(ns, qualifiedName);
             doc.AppendChild(root);
             doc.DocumentElement = root;
         }
-        return new DocumentHost(doc) { Engine = _engine };
+        // Wrapped, not built here, so the document the page holds is the one every node it contains
+        // names as its own (DOM §2.8).
+        return JsIntegrationService.WrapAny(doc) ?? new DocumentHost(doc) { Engine = _engine };
     }
+
+    private static DocumentTypeNode? UnwrapDocumentType(object? value) => value switch
+    {
+        DocumentTypeHost host => host.NativeNode,
+        DocumentTypeNode node => node,
+        _ => null
+    };
 
     public object createHTMLDocument(string? title = null)
     {
         var doc = new Document();
+        // An HTML document made by the implementation carries its doctype, the way the parser's
+        // does — a page that reads 'other.doctype.name' after creating one expects 'html'.
+        doc.AppendChild(new DocumentTypeNode(null, null, "html"));
         var html = doc.CreateElement("html");
         doc.AppendChild(html);
         doc.DocumentElement = html;
@@ -1654,65 +1973,10 @@ public class DOMImplementationHost
         }
         var body = doc.CreateElement("body");
         html.AppendChild(body);
-        return new DocumentHost(doc) { Engine = _engine };
-    }
-}
-
-/// <summary>A TreeWalker / NodeIterator (DOM 4 §4.9): the nodes of a subtree in document order,
-/// kept in the mask/filter order the caller asked for. 'nextNode'/'previousNode' step through the
-/// materialised set; a TreeWalker also tracks its current node, a NodeIterator does not rewind.</summary>
-public class TreeWalkerHost
-{
-    private readonly List<object> _nodes = new();
-    private int _index;
-    private readonly bool _walkable;
-
-    public TreeWalkerHost(object? root, int whatToShow, object? filter, bool walkable)
-    {
-        _walkable = walkable;
-        var underlying = ElementHost.UnwrapNode(root);
-        if (underlying == null) return;
-        var engine = JavaScriptEngine.Current ?? (root as DocumentHost)?.Engine;
-        foreach (var node in Enumerate(underlying))
-        {
-            if ((whatToShow & BitFor(node)) == 0) continue;
-            _nodes.Add(Wrap(node, engine));
-        }
-    }
-
-    public int length => _nodes.Count;
-    public object? currentNode => _index >= 0 && _index < _nodes.Count ? _nodes[_index] : null;
-    public object? nextNode() => _index < _nodes.Count ? _nodes[_index++] : null;
-    public object? previousNode() => _index > 0 ? _nodes[--_index] : null;
-
-    private static int BitFor(Node node) => node switch
-    {
-        Acrux.Core.Dom.Document => 1,        // SHOW_DOCUMENT — the root of a document order walk
-        DomElement => 1,                     // SHOW_ELEMENT
-        Acrux.Core.Dom.CDataSection => 16,   // SHOW_DOCUMENT_FRAGMENT (CDATA is a Text sub-kind)
-        Acrux.Core.Dom.TextNode => 4,        // SHOW_TEXT
-        Acrux.Core.Dom.DocumentTypeNode => 512, // SHOW_DOCTYPE
-        Acrux.Core.Dom.ProcessingInstruction => 64, // SHOW_PROCESSING_INSTRUCTION
-        CommentNode => 128,                  // SHOW_COMMENT
-        Acrux.Core.Dom.DocumentFragment => 16,    // SHOW_DOCUMENT_FRAGMENT
-        _ => 1
-    };
-
-    private static IEnumerable<Node> Enumerate(Node root)
-    {
-        yield return root;
-        foreach (var child in root.Children)
-            foreach (var d in Enumerate(child))
-                yield return d;
-    }
-
-    private static object Wrap(Node node, JavaScriptEngine? engine)
-    {
-        if (node is DomElement el)
-            return (object?)engine?.IntegrationService?.WrapDomNode(el) ?? new ElementHost(el);
-        if (node is Acrux.Core.Dom.Document doc)
-            return new DocumentHost(doc) { Engine = engine };
-        if (node is CommentNode c) return new CommentHost(c);
-        return new TextNodeWrapper((Acrux.Core.Dom.TextNode)node);
+        // The document's body is a property of the document, not something read back out of the tree,
+        // so a document built here had no body until it was written down: 'other.body' answered null
+        // and every range the page then tried to put in the new document was refused for it.
+        doc.Body = body;
+        return JsIntegrationService.WrapAny(doc) ?? new DocumentHost(doc) { Engine = _engine };
     }
 }

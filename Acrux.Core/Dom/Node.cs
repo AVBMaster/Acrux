@@ -83,6 +83,12 @@ public abstract class Node : EventTarget
             child.SetOwnerDocumentRecursive(document);
     }
 
+    /// <summary>The document a child gains by being inserted here. A Document is its own node
+    /// document, and a Document's OwnerDocument is null by spec, so copying the parent's link from
+    /// a document root left the whole tree below it — the doctype, the root element, a processing
+    /// instruction — without one, and 'doc.doctype.ownerDocument === doc' read false.</summary>
+    internal Document? InsertedChildOwner => this as Document ?? OwnerDocument;
+
     public virtual string? NodeValue
     {
         get => null;
@@ -154,6 +160,9 @@ public abstract class Node : EventTarget
     public Node CloneNode(bool deep = false)
     {
         var clone = CloneNodeInternal(deep);
+        // A clone belongs to the document the original was made in (§4.6) — the doctype and the root
+        // of a document clone rather than adopt, and both carry the link.
+        clone.OwnerDocument = InsertedChildOwner;
         return clone;
     }
 
@@ -237,7 +246,7 @@ public abstract class Node : EventTarget
         child.Remove();
         child._parent = this;
         _children.Add(child);
-        child.OwnerDocument = OwnerDocument;
+        child.OwnerDocument = InsertedChildOwner;
         OnChildInserted(child);
         DomMutationTracker.Notify();
         return child;
@@ -268,7 +277,7 @@ public abstract class Node : EventTarget
         newChild.Remove();
         newChild._parent = this;
         _children.Insert(index, newChild);
-        newChild.OwnerDocument = OwnerDocument;
+        newChild.OwnerDocument = InsertedChildOwner;
         OnChildInserted(newChild);
         DomMutationTracker.Notify();
         return newChild;
@@ -294,7 +303,7 @@ public abstract class Node : EventTarget
         newChild._parent = this;
         _children[index] = newChild;
         oldChild._parent = null;
-        newChild.OwnerDocument = OwnerDocument;
+        newChild.OwnerDocument = InsertedChildOwner;
         OnChildInserted(newChild);
         OnChildRemoved(oldChild);
         DomMutationTracker.Notify();

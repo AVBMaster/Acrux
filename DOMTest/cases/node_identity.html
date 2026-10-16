@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html>
+<head><title>Node identity, fragments and the tree surfaces (DOM §2.6–2.8, §4.7, §4.9)</title></head>
+<body>
+<div id="t">hello<b id="b">x</b>world<!-- tail --></div>
+<form id="f"><input id="i1" name="a" value="v"><textarea id="ta">tx</textarea></form>
+<div id="wroot"><section id="wa">ta<b id="wb">tb</b>ta2</section><p id="wc">tc</p></div>
+<script>
+// A probe that throws must not read as a pass: the old d(fn) helpers returned an 'ERR@…'
+// string, which is truthy, so a broken assertion hid inside its own failure message.
+function ck(name, fn, info) {
+    try {
+        var v = fn();
+        var extra = '';
+        if (info !== undefined) {
+            try { extra = String(typeof info === 'function' ? info() : info); }
+            catch (e2) { extra = 'info threw ' + (e2 && e2.message); }
+        }
+        __T(name, !!v, extra);
+    } catch (e) {
+        __T(name, false, 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e));
+    }
+}
+
+var el = document.getElementById('t');
+var b = document.getElementById('b');
+var i1 = document.getElementById('i1');
+
+// ── §2.8: one object per node, whatever path the page took to it ──────────────
+ck('A1 firstChild === childNodes[0]', function () { return el.firstChild === el.childNodes[0]; },
+    function () { return el.firstChild + '/' + el.childNodes[0]; });
+ck('A2 childNodes counts every node kind', function () { return el.childNodes.length === 4; },
+    function () { return el.childNodes.length; });
+ck('A3 childNodes[1] === getElementById', function () { return el.childNodes[1] === b; });
+ck('A4 lastChild is the comment', function () { return el.lastChild.nodeType === 8; },
+    function () { return el.lastChild.nodeType + '/' + el.lastChild.nodeName; });
+ck('A5 lastChild.nextSibling null', function () { return el.lastChild.nextSibling === null; });
+ck('A6 text node answers data', function () { return el.firstChild.data === 'hello'; },
+    function () { return typeof el.firstChild.data + '/' + el.firstChild.data; });
+ck('A7 created comment keeps identity', function () {
+    var c = document.createComment('hi');
+    el.appendChild(c);
+    return el.lastChild === c && c === el.childNodes[4];
+});
+ck('A8 querySelector meets childNodes', function () { return document.querySelector('#b') === b; });
+ck('A9 children[0] === childNodes[1]', function () { return el.children[0] === el.childNodes[1]; },
+    function () { return el.children.length + '/' + el.children[0].nodeName; });
+ck('A10 parentNode walks back', function () { return b.parentNode === el && b.parentElement === el; });
+ck('A11 firstElementChild', function () { return el.firstElementChild === b && el.lastElementChild === b; });
+ck('A12 body by two paths', function () {
+    return document.body === document.getElementsByTagName('body')[0]
+        && document.body === document.querySelector('body');
+});
+ck('A13 form controls by name and index', function () {
+    var f = document.getElementById('f');
+    return f.elements[0] === i1 && f.elements.namedItem('a') === i1;
+}, function () { var f = document.getElementById('f'); return f.elements.length + '/' + f.elements[0].id; });
+ck('A14 text node of an element', function () { return b.firstChild === b.childNodes[0] && b.firstChild.data === 'x'; });
+ck('A15 cloneNode is a different object', function () {
+    var c = b.cloneNode(true);
+    return c !== b && c.firstChild !== b.firstChild;
+});
+ck('A16 attribute identity across calls', function () {
+    return i1.attributes.getNamedItem('name') === i1.attributes.getNamedItem('name')
+        && i1.attributes.item(0) === i1.attributes.getNamedItem('id');
+}, function () { return i1.attributes.length; });
+ck('A17 childNodes is live', function () {
+    var k = el.childNodes;
+    var n = k.length;
+    var p = document.createElement('p');
+    el.appendChild(p);
+    return k.length === n + 1 && k[k.length - 1] === p;
+}, function () { return el.childNodes.length; });
+ck('A18 textContent read over every child', function () {
+    return el.textContent.indexOf('hello') === 0 && el.textContent.indexOf('x') > 0;
+}, function () { return JSON.stringify(el.textContent); });
+
+// ── DocumentFragment: a node, with the node surface ──────────────────────────
+ck('A19 fragment node surface', function () {
+    var frag = document.createDocumentFragment();
+    var a = document.createElement('i');
+    var t = document.createTextNode('hi');
+    frag.appendChild(a);
+    frag.appendChild(t);
+    return frag.nodeType === 11
+        && frag.firstChild === a
+        && frag.lastChild === t
+        && frag.childNodes.length === 2
+        && frag.hasChildNodes() === true
+        && frag.parentNode === null
+        && frag.textContent === 'hi';
+}, function () { var f = document.createDocumentFragment(); return f.nodeType + '/' + typeof f.firstChild; });
+ck('A20 fragment textContent setter', function () {
+    var frag = document.createDocumentFragment();
+    frag.textContent = 'set';
+    return frag.childNodes.length === 1 && frag.firstChild.data === 'set';
+});
+ck('A21 fragment insertBefore keeps identity', function () {
+    var frag = document.createDocumentFragment();
+    var one = document.createElement('b');
+    var two = document.createElement('em');
+    frag.appendChild(one);
+    frag.insertBefore(two, one);
+    return frag.firstChild === two && frag.childNodes[1] === one;
+});
+ck('A22 fragment cloneNode', function () {
+    var frag = document.createDocumentFragment();
+    frag.appendChild(document.createTextNode('deep'));
+    var c = frag.cloneNode(true);
+    return c !== frag && c.firstChild.data === 'deep' && c.firstChild !== frag.firstChild;
+}, function () { var f = document.createDocumentFragment(); f.appendChild(document.createTextNode('x')); return typeof f.cloneNode; });
+
+// ── TreeWalker / NodeIterator (DOM 4 §4.7) ───────────────────────────────────
+// A dedicated subtree (#wroot > wa['ta', wb['tb'], 'ta2'], wc['tc']) so the mutation cases above
+// cannot move what a walk answers. The expected sequences are the reference's own answers, taken
+// from the same tree shape.
+var wroot = document.getElementById('wroot');
+var wa = document.getElementById('wa');
+var wb = document.getElementById('wb');
+var wc = document.getElementById('wc');
+function nm(n) { return n === null ? 'null' : (n === wroot ? 'ROOT' : (n.id || n.nodeName + ':' + (n.data || ''))); }
+function forward(t, count) {
+    var out = [];
+    for (var i = 0; i < count; i++) out.push(nm(t.nextNode()));
+    return out.join(',');
+}
+function untilEnd(t) {
+    var out = []; var n = t.nextNode();
+    while (n) { out.push(nm(n)); n = t.nextNode(); }
+    return out.join(',');
+}
+function rejectWa(node) { return node === wa ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; }
+function skipWa(node) { return node === wa ? NodeFilter.FILTER_SKIP : NodeFilter.FILTER_ACCEPT; }
+
+ck('A23 treeWalker walks elements, never its root', function () {
+    return untilEnd(document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, null)) === 'wa,wb,wc';
+}, function () { return untilEnd(document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, null)); });
+ck('A24 treeWalker surface', function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, null);
+    return w.root === wroot && w.currentNode === wroot && w.whatToShow === NodeFilter.SHOW_ELEMENT
+        && w.filter === null;
+}, function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, null);
+    return 'root=' + (w.root === wroot) + ' cur=' + nm(w.currentNode) + ' mask=' + w.whatToShow + ' filter=' + String(w.filter);
+});
+ck('A25 nodeIterator offers its root first', function () {
+    return forward(document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, null), 9)
+        === 'ROOT,wa,#text:ta,wb,#text:tb,#text:ta2,wc,#text:tc,null';
+}, function () { return forward(document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, null), 9); });
+ck('A26 filter REJECT prunes a walker, only skips an iterator', function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, { acceptNode: rejectWa });
+    var i = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, { acceptNode: rejectWa });
+    return untilEnd(w) === 'wc,#text:tc'
+        && untilEnd(i) === 'ROOT,#text:ta,wb,#text:tb,#text:ta2,wc,#text:tc';
+}, function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, { acceptNode: rejectWa });
+    var i = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, { acceptNode: rejectWa });
+    return 'walker=' + untilEnd(w) + ' iterator=' + untilEnd(i);
+});
+ck('A27 filter SKIP leaves the children of a walker', function () {
+    return untilEnd(document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, { acceptNode: skipWa }))
+        === '#text:ta,wb,#text:tb,#text:ta2,wc,#text:tc';
+}, function () {
+    return untilEnd(document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, { acceptNode: skipWa }));
+});
+ck('A28 NodeFilter constants', function () {
+    return NodeFilter.FILTER_ACCEPT === 1 && NodeFilter.FILTER_REJECT === 2
+        && NodeFilter.FILTER_SKIP === 3 && NodeFilter.SHOW_ALL === 4294967295
+        && NodeFilter.SHOW_TEXT === 4 && NodeFilter.SHOW_ELEMENT === 1
+        && NodeFilter.SHOW_ENTITY_REFERENCE === 16 && NodeFilter.SHOW_ENTITY === 32
+        && NodeFilter.SHOW_COMMENT === 128 && NodeFilter.SHOW_DOCUMENT === 256
+        && NodeFilter.SHOW_DOCUMENT_FRAGMENT === 1024;
+}, function () { return NodeFilter.FILTER_ACCEPT + '/' + NodeFilter.SHOW_ALL + '/' + NodeFilter.SHOW_ENTITY; });
+ck('A29 SHOW_TEXT walks the text under masked elements', function () {
+    return untilEnd(document.createTreeWalker(wroot, NodeFilter.SHOW_TEXT, null))
+        === '#text:ta,#text:tb,#text:ta2,#text:tc';
+}, function () { return untilEnd(document.createTreeWalker(wroot, NodeFilter.SHOW_TEXT, null)); });
+ck('A30 iterator pointer sits beside its reference node', function () {
+    // measured on the reference: next, next, next, prev answers the node it had just handed back,
+    // and the next after that answers it once more before moving on.
+    var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, null);
+    var out = [];
+    out.push(nm(it.nextNode())); out.push(nm(it.nextNode())); out.push(nm(it.nextNode()));
+    out.push('p=' + nm(it.previousNode()));
+    out.push('n=' + nm(it.nextNode()));
+    out.push('p=' + nm(it.previousNode()));
+    out.push('p2=' + nm(it.previousNode()));
+    return out.join(',') === 'ROOT,wa,#text:ta,p=#text:ta,n=#text:ta,p=#text:ta,p2=wa';
+}, function () {
+    var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, null);
+    var o = [];
+    o.push(nm(it.nextNode())); o.push(nm(it.nextNode())); o.push(nm(it.nextNode()));
+    o.push('p=' + nm(it.previousNode())); o.push('n=' + nm(it.nextNode()));
+    o.push('p=' + nm(it.previousNode())); o.push('p2=' + nm(it.previousNode()));
+    return o.join(',');
+});
+ck('A31 iterator previousNode before its root is null', function () {
+    // measured: nothing is refused before the root — the step answers null and leaves the pointer
+    // where it was — and once nextNode() has handed the root back, the pointer sits after it.
+    var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, null);
+    var before = it.previousNode();
+    var atStart = before === null && it.referenceNode === wroot && it.pointerBeforeReferenceNode === true;
+    var next = it.nextNode();
+    return atStart && next === wroot && it.referenceNode === wroot
+        && it.pointerBeforeReferenceNode === false;
+}, function () {
+    var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, null);
+    var p = it.previousNode();
+    return 'prev=' + nm(p) + ' before=' + it.pointerBeforeReferenceNode
+        + ' next=' + nm(it.nextNode()) + ' after=' + it.pointerBeforeReferenceNode;
+});
+ck('A32 iterator detach is kept and does nothing', function () {
+    var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ELEMENT, null);
+    it.detach();
+    return nm(it.nextNode()) === 'ROOT';
+}, function () {
+    var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ELEMENT, null);
+    try { it.detach(); return 'ok'; } catch (e) { return 'threw ' + e.name; }
+});
+ck('A33 walker navigation moves the current node', function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, null);
+    var out = [];
+    out.push('fc=' + nm(w.firstChild()));
+    out.push('fc=' + nm(w.firstChild()));
+    out.push('ns=' + nm(w.nextSibling()));
+    out.push('ps=' + nm(w.previousSibling()));
+    out.push('cur=' + nm(w.currentNode));
+    return out.join(',') === 'fc=wa,fc=wb,ns=null,ps=null,cur=wb';
+}, function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, null);
+    var out = [];
+    out.push('fc=' + nm(w.firstChild()));
+    out.push('fc=' + nm(w.firstChild()));
+    out.push('ns=' + nm(w.nextSibling()));
+    out.push('ps=' + nm(w.previousSibling()));
+    out.push('cur=' + nm(w.currentNode));
+    return out.join(',');
+});
+ck('A34 walker sibling reads answer the subtree start', function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, null);
+    w.currentNode = wc;
+    var back = w.previousSibling();
+    w.currentNode = wa;
+    var on = w.nextSibling();
+    w.currentNode = wroot;
+    var last = w.lastChild();
+    var parent = (w.currentNode = wc, w.parentNode());
+    return back === wa && on === wc && last === wc && parent === wroot;
+}, function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, null);
+    w.currentNode = wc; var back = nm(w.previousSibling());
+    w.currentNode = wa; var on = nm(w.nextSibling());
+    w.currentNode = wroot; var last = nm(w.lastChild());
+    w.currentNode = wc; var parent = nm(w.parentNode());
+    return 'ps=' + back + ' ns=' + on + ' lc=' + last + ' parent=' + parent;
+});
+ck('A35 parentNode climbs to the nearest accepted ancestor', function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_TEXT, null);
+    var first = w.nextNode();
+    var up = w.parentNode();
+    var root = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, null);
+    return first && first.data === 'ta' && up === null && root.parentNode() === null;
+}, function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_TEXT, null);
+    var first = nm(w.nextNode());
+    return 'first=' + first + ' parent=' + nm(w.parentNode());
+});
+ck('A36 currentNode setter moves where a step starts', function () {
+    // measured: the step back from <b> answers the text node that precedes it, the step on from
+    // there answers the <b> again, and a node outside the walked tree is kept by identity.
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, null);
+    w.currentNode = wb;
+    var back = w.previousNode();
+    var on = w.nextNode();
+    var t = document.createTextNode('x');
+    w.currentNode = t;
+    return back === wa.firstChild && on === wb && w.currentNode === t && w.currentNode.nodeType === 3;
+}, function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, null);
+    w.currentNode = wb;
+    var back = w.previousNode();
+    return 'prev=' + nm(back) + ' isTextBeforeWb=' + (back === wa.firstChild) + ' next=' + nm(w.nextNode());
+});
+ck('A37 a bare function is a filter too', function () {
+    var w = document.createTreeWalker(wroot, 1, function (node) {
+        return node === wb ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    });
+    return untilEnd(w) === 'wa,wc';
+}, function () {
+    var w = document.createTreeWalker(wroot, 1, function (node) {
+        return node === wb ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    });
+    return untilEnd(w);
+});
+ck('A38 a filter that answers nonsense skips the node', function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, {
+        acceptNode: function (node) { return node === wb ? 99 : NodeFilter.FILTER_ACCEPT; }
+    });
+    return untilEnd(w) === 'wa,#text:ta,#text:ta2,wc,#text:tc';
+}, function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, {
+        acceptNode: function (node) { return node === wb ? 99 : NodeFilter.FILTER_ACCEPT; }
+    });
+    return untilEnd(w);
+});
+ck('A39 filter is answered back by identity', function () {
+    var f = { acceptNode: function () { return NodeFilter.FILTER_ACCEPT; } };
+    var w = document.createTreeWalker(wroot, 1, f);
+    var i = document.createNodeIterator(wroot, 1, f);
+    return w.filter === f && i.filter === f;
+}, function () {
+    var f = { acceptNode: function () { return 1; } };
+    return 'w=' + (document.createTreeWalker(wroot, 1, f).filter === f);
+});
+ck('A40 a walk sees a node the page inserted', function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, null);
+    var before = untilEnd(w);
+    var added = document.createElement('em');
+    added.id = 'wem';
+    wc.appendChild(added);
+    var after = untilEnd(document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, null));
+    wc.removeChild(added);
+    return before === 'wa,wb,wc' && after === 'wa,wb,wc,wem';
+}, function () {
+    var added = document.createElement('em');
+    added.id = 'wem';
+    wc.appendChild(added);
+    var s = untilEnd(document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, null));
+    wc.removeChild(added);
+    return s;
+});
+ck('A41 whatToShow is an unsigned mask', function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null);
+    return w.whatToShow === 5 && untilEnd(w) === 'wa,#text:ta,wb,#text:tb,#text:ta2,wc,#text:tc';
+}, function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null);
+    return w.whatToShow + '/' + untilEnd(w);
+});
+ck('A42 a walker over a text root has nothing to walk', function () {
+    var t = wa.firstChild;
+    var w = document.createTreeWalker(t, NodeFilter.SHOW_ALL, null);
+    return w.nextNode() === null && w.currentNode === t && w.root === t;
+}, function () {
+    var w = document.createTreeWalker(wa.firstChild, NodeFilter.SHOW_ALL, null);
+    return nm(w.nextNode()) + '/' + nm(w.currentNode);
+});
+ck('A43 a mask of zero shows nothing', function () {
+    return untilEnd(document.createTreeWalker(wroot, 0, null)) === ''
+        && document.createNodeIterator(wroot, 0, null).nextNode() === null;
+}, function () { return untilEnd(document.createTreeWalker(wroot, 0, null)) || 'empty'; });
+ck('A44 whatToShow is an unsigned long, however the page spells it', function () {
+    // measured on the reference: '4' shows text, 'abc' and null show nothing, 4.7 truncates to 4,
+    // -1 and an absent argument show everything, and 4294967296 wraps back to 0.
+    return document.createTreeWalker(wroot, '4').whatToShow === 4
+        && document.createTreeWalker(wroot, 'abc').whatToShow === 0
+        && document.createTreeWalker(wroot, null).whatToShow === 0
+        && document.createTreeWalker(wroot, 4.7).whatToShow === 4
+        && document.createTreeWalker(wroot, -1).whatToShow === 4294967295
+        && document.createTreeWalker(wroot, 4294967296).whatToShow === 0
+        && document.createTreeWalker(wroot).whatToShow === 4294967295
+        && document.createNodeIterator(wroot).whatToShow === 4294967295;
+}, function () {
+    return 'abc=' + document.createTreeWalker(wroot, 'abc').whatToShow
+        + ' float=' + document.createTreeWalker(wroot, 4.7).whatToShow
+        + ' wrap=' + document.createTreeWalker(wroot, 4294967296).whatToShow;
+});
+ck('A45 the factory refuses what it cannot take', function () {
+    var e1 = null, e2 = null, e3 = null;
+    try { document.createTreeWalker('x'); } catch (e) { e1 = e; }
+    try { document.createTreeWalker(); } catch (e) { e2 = e; }
+    try { document.createNodeIterator(wroot, 1, 5); } catch (e) { e3 = e; }
+    return e1 && e1.name === 'TypeError'
+        && e1.message === "Failed to execute 'createTreeWalker' on 'Document': parameter 1 is not of type 'Node'."
+        && e2 && e2.name === 'TypeError'
+        && e2.message === "Failed to execute 'createTreeWalker' on 'Document': 1 argument required, but only 0 present."
+        && e3 && e3.name === 'TypeError'
+        && e3.message === "Failed to execute 'createNodeIterator' on 'Document': parameter 3 is not of type 'Object'.";
+}, function () {
+    function msg(fn) { try { fn(); return 'no throw'; } catch (e) { return e.name + ': ' + e.message; } }
+    return msg(function () { document.createTreeWalker('x'); })
+        + ' | ' + msg(function () { document.createTreeWalker(); })
+        + ' | ' + msg(function () { document.createNodeIterator(wroot, 1, 5); });
+});
+ck('A46 a filter with no callable acceptNode is refused when a step asks it', function () {
+    // measured: the factory takes the object — and answers it back as 'filter' — but the first step
+    // that has to ask it refuses.
+    var f = { notAccept: 1 };
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, f);
+    var e = null;
+    try { w.nextNode(); } catch (er) { e = er; }
+    var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ELEMENT, f);
+    var e2 = null;
+    try { it.nextNode(); } catch (er) { e2 = er; }
+    return e && e.name === 'TypeError'
+        && e.message === "Failed to execute 'nextNode' on 'TreeWalker': Failed to execute 'acceptNode'"
+            + " on 'NodeFilter': The provided callback is not callable."
+        && e2 && e2.name === 'TypeError'
+        && w.filter === f && it.filter === f;
+}, function () {
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, { notAccept: 1 });
+    try { w.nextNode(); return 'no throw'; } catch (e) { return e.name + ': ' + e.message; }
+});
+ck('A47 the answer of a filter is a long before it is compared', function () {
+    // measured row by row on the reference: the answer is truncated, so 1.5 and '1' and true accept,
+    // '3' skips and leaves the children, and 0 / false / null / undefined / NaN / an object /
+    // anything out of range is the refusal that prunes.
+    function walk(answer) {
+        var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, {
+            acceptNode: function (node) { return node === wb ? answer : NodeFilter.FILTER_ACCEPT; }
+        });
+        return untilEnd(w);
+    }
+    var accepted = 'wa,#text:ta,wb,#text:tb,#text:ta2,wc,#text:tc';
+    var skipped = 'wa,#text:ta,#text:tb,#text:ta2,wc,#text:tc';
+    var pruned = 'wa,#text:ta,#text:ta2,wc,#text:tc';
+    return walk(1.5) === accepted && walk('1') === accepted && walk(true) === accepted
+        && walk('3') === skipped && walk(3) === skipped
+        && walk(0) === pruned && walk(false) === pruned && walk(null) === pruned
+        && walk(undefined) === pruned && walk('ACCEPT') === pruned && walk({}) === pruned;
+}, function () {
+    function walk(answer) {
+        var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, {
+            acceptNode: function (node) { return node === wb ? answer : NodeFilter.FILTER_ACCEPT; }
+        });
+        return String(answer) + '->' + untilEnd(w);
+    }
+    return walk(1.5) + ' | ' + walk('3') + ' | ' + walk(0);
+});
+ck('A48 the traverser answers its members from the interface prototype', function () {
+    var w = document.createTreeWalker(wroot, 1, null);
+    var it = document.createNodeIterator(wroot, 1, null);
+    var filterDesc = Object.getOwnPropertyDescriptor(TreeWalker.prototype, 'filter');
+    return Object.getPrototypeOf(w) === TreeWalker.prototype
+        && Object.getPrototypeOf(it) === NodeIterator.prototype
+        && Object.getPrototypeOf(TreeWalker.prototype) === Object.prototype
+        && Object.keys(w).length === 0
+        && filterDesc && typeof filterDesc.get === 'function' && filterDesc.set === undefined
+        && typeof w.nextNode === 'function' && typeof w.currentNode !== 'undefined'
+        && typeof it.referenceNode !== 'undefined' && typeof it.pointerBeforeReferenceNode === 'boolean'
+        && typeof it.detach === 'function';
+}, function () {
+    var w = document.createTreeWalker(wroot, 1, null);
+    return 'stamped=' + (Object.getPrototypeOf(w) === TreeWalker.prototype)
+        + ' own=' + JSON.stringify(Object.keys(w))
+        + ' filterOnProto=' + !!Object.getOwnPropertyDescriptor(TreeWalker.prototype, 'filter');
+});
+ck('A49 a traverser is not constructible, and is an instance of its interface', function () {
+    var e1 = null, e2 = null;
+    try { new TreeWalker(); } catch (e) { e1 = e; }
+    try { new NodeIterator(); } catch (e) { e2 = e; }
+    return e1 && e1.name === 'TypeError' && e2 && e2.name === 'TypeError'
+        && typeof TreeWalker === 'function' && typeof NodeIterator === 'function'
+        && document.createTreeWalker(wroot, 1, null) instanceof TreeWalker
+        && document.createNodeIterator(wroot, 1, null) instanceof NodeIterator;
+}, function () {
+    function msg(fn) { try { fn(); return 'no throw'; } catch (e) { return e.name; } }
+    return msg(function () { new TreeWalker(); }) + '/' + msg(function () { new NodeIterator(); });
+});
+ck('A50 a filter that throws takes its own error out of the step', function () {
+    // measured: the reference does not swallow it. The Error the page raised inside acceptNode is
+    // the one nextNode() throws, the very same object.
+    var boom = new TypeError('boom');
+    var made = function () { return { acceptNode: function () { throw boom; } }; };
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, made());
+    var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, made());
+    var e1 = null, e2 = null;
+    try { w.nextNode(); } catch (e) { e1 = e; }
+    try { it.nextNode(); } catch (e) { e2 = e; }
+    return e1 === boom && e2 === boom;
+}, function () {
+    var boom = new TypeError('boom');
+    var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, { acceptNode: function () { throw boom; } });
+    try { w.nextNode(); return 'no throw'; } catch (e) {
+        return 'same=' + (e === boom) + ' ' + (e && e.name) + ': ' + (e && e.message);
+    }
+});
+
+
+// ── surfaces the page probes for ─────────────────────────────────────────────
+ck('A51 collection constructors', function () {
+    return typeof NodeList === 'function' && typeof HTMLCollection === 'function';
+}, function () { return typeof NodeList + '/' + typeof HTMLCollection; });
+ck('A52 node class constructors', function () {
+    return typeof Node === 'function' && typeof Text === 'function' && typeof Comment === 'function'
+        && typeof DocumentFragment === 'function' && typeof Element === 'function';
+}, function () { return typeof Node + '/' + typeof Text + '/' + typeof Comment + '/' + typeof DocumentFragment; });
+ck('A53 node instanceof chain', function () {
+    return el instanceof Element && el instanceof Node && b.firstChild instanceof Text;
+}, function () { return (el instanceof Element) + '/' + (el instanceof Node) + '/' + (b.firstChild instanceof Text); });
+ck('A54 document instanceof chain', function () {
+    return document instanceof Node && document instanceof Document;
+}, function () { return (document instanceof Node) + '/' + (document instanceof Document); });
+ck('A55 document surface', function () {
+    return typeof document.characterSet === 'string' && document.characterSet.length > 0
+        && typeof document.compatMode === 'string' && document.compatMode === 'CSS1Compat'
+        && document.defaultView === window;
+}, function () { return document.characterSet + '/' + document.compatMode; });
+ck('A56 document.title read and write', function () {
+    var before = document.title;
+    document.title = 'identity';
+    var ok = document.title === 'identity' && document.querySelector('title').textContent === 'identity';
+    document.title = before;
+    return ok;
+}, function () { return JSON.stringify(document.title); });
+</script>
+</body>
+</html>

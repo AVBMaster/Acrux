@@ -45,41 +45,65 @@ public class JsMicrotaskQueue
 
         try
         {
-            int iterations = 0;
             const int maxIterations = 1000;
 
-            while (iterations < maxIterations)
+            // DOM §4.5.6.1 puts the queued mutation-observer callbacks at the same checkpoint the
+            // promise jobs run at, so the queue is drained, the observers are given their records,
+            // and a callback that queued more work is followed by another round of the same.
+            for (int round = 0; round < 4; round++)
             {
-                bool executed = false;
-
-                while (_syncMicrotasks.TryDequeue(out var task))
+                var iterations = DrainOnce(maxIterations);
+                if (iterations >= maxIterations)
                 {
-                    try { task(); }
-                    catch { }
-                    executed = true;
+                    Console.WriteLine("[Microtask] Warning: exceeded max microtask iterations");
+                    break;
                 }
-
-                while (_microtasks.TryDequeue(out var asyncTask))
-                {
-                    try
-                    {
-                        asyncTask().GetAwaiter().GetResult();
-                    }
-                    catch { }
-                    executed = true;
-                }
-
-                if (!executed) break;
-                iterations++;
+                RunDomCheckpoint();
+                if (PendingCount == 0) break;
             }
-
-            if (iterations >= maxIterations)
-                Console.WriteLine("[Microtask] Warning: exceeded max microtask iterations");
         }
         finally
         {
             _processing = false;
         }
+    }
+
+    private void RunDomCheckpoint()
+    {
+        try { _facade.CallFunction("__domCheckpoint"); }
+        catch { }
+    }
+
+    private int DrainOnce(int maxIterations)
+    {
+        int iterations = 0;
+
+        while (iterations < maxIterations)
+        {
+            bool executed = false;
+
+            while (_syncMicrotasks.TryDequeue(out var task))
+            {
+                try { task(); }
+                catch { }
+                executed = true;
+            }
+
+            while (_microtasks.TryDequeue(out var asyncTask))
+            {
+                try
+                {
+                    asyncTask().GetAwaiter().GetResult();
+                }
+                catch { }
+                executed = true;
+            }
+
+            if (!executed) break;
+            iterations++;
+        }
+
+        return iterations;
     }
 
     public void Clear()

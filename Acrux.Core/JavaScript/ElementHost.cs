@@ -6,10 +6,15 @@ using Acrux.Core.Dom.Html;
 
 namespace Acrux.Core.JavaScript;
 
-public class ElementHost
+public class ElementHost : IDomPrototypeHost
 {
     private readonly Element _element;
     private CssStyleDeclaration? _styleHost;
+    private JsNodeList? _children;
+    private JsNodeList? _childNodes;
+    private NamedNodeMapHost? _attributes;
+    private DomTokenListHost? _classList;
+    private RelTokenListHost? _relList;
     private readonly Dictionary<string, List<int>> _eventCallbackIds = new();
     private readonly HashSet<int> _onceCallbacks = new();
     internal JavaScriptEngine? Engine { get; set; }
@@ -252,17 +257,23 @@ public class ElementHost
         }
     }
 
-    public JsNodeList children => new JsNodeList(_element, Engine);
+    // A live collection is one object per element for as long as the element lives (DOM §2.8);
+    // the list re-reads the tree on every access, so caching the object costs no freshness.
+    public JsNodeList children => _children ??= new JsNodeList(_element, Engine);
 
     public int childElementCount => _element.Children.OfType<Element>().Count();
 
-    public JsNodeList childNodes => new JsNodeList(_element, Engine, childNodes: true);
+    public JsNodeList childNodes => _childNodes ??= new JsNodeList(_element, Engine, childNodes: true);
 
-    public NamedNodeMapHost attributes => new(_element);
+    public NamedNodeMapHost attributes => _attributes ??= new NamedNodeMapHost(_element);
 
     public string? getAttribute(string name) => _element.GetAttribute(name);
 
-    public void setAttribute(string name, string value) => _element.SetAttribute(name, value);
+    public void setAttribute(string name, string value)
+    {
+        DomNames.RequireSettableAttributeName(name, "setAttribute", "Element");
+        _element.SetAttribute(name, value);
+    }
 
     public void removeAttribute(string name) => _element.RemoveAttribute(name);
 
@@ -312,7 +323,17 @@ public class ElementHost
         ElementHost el => el.NativeElement,
         TextNodeWrapper t => t.NativeNode,
         CommentHost c => c.NativeNode,
+        // A processing instruction and a doctype are nodes the page can make and put in the tree,
+        // and a mutation method that met one had no case for it: the unwrap answered null and
+        // 'appendChild' refused its own argument as not a node of this document.
+        ProcessingInstructionHost pi => pi.NativeNode,
+        DocumentTypeHost dt => dt.NativeNode,
         DocumentFragmentHost f => f.NativeFragment,
+        // A document is a Node, and a page that hands one to a boundary or a traverser means the
+        // document itself: 'range.selectNodeContents(document)', 'walker.root = document',
+        // 'range.containsNode(document)' all answer it in the reference, and 'insertNode(document)'
+        // is refused by its type, not by an argument that never arrived.
+        DocumentHost d => d.NativeDocument,
         Node n => n,
         _ => null,
     };
@@ -325,7 +346,7 @@ public class ElementHost
     {
         var node = UnwrapNode(child);
         if (node == null)
-            throw new DOMException("NotFoundError", "The node to be appended is not a node of this document.");
+            throw new DOMException("The node to be appended is not a node of this document.", "NotFoundError");
         if (node is DocumentFragment frag)
         {
             foreach (var moved in frag.Children.ToList())
@@ -369,7 +390,7 @@ public class ElementHost
     {
         var node = UnwrapNode(newChild);
         if (node == null)
-            throw new DOMException("NotFoundError", "The node to be inserted is not a node of this document.");
+            throw new DOMException("The node to be inserted is not a node of this document.", "NotFoundError");
         Node? refNode = refChild == null ? null : UnwrapNode(refChild);
         if (node is DocumentFragment frag)
         {
@@ -385,7 +406,7 @@ public class ElementHost
     {
         var node = UnwrapNode(child);
         if (node == null)
-            throw new DOMException("NotFoundError", "The node to be removed is not a child of this node.");
+            throw new DOMException("The node to be removed is not a child of this node.", "NotFoundError");
         _element.RemoveChild(node);
         return child;
     }
@@ -395,7 +416,7 @@ public class ElementHost
         var newNode = UnwrapNode(newChild);
         var oldNode = UnwrapNode(oldChild);
         if (newNode == null || oldNode == null)
-            throw new DOMException("NotFoundError", "The node to be replaced is not a child of this node.");
+            throw new DOMException("The node to be replaced is not a child of this node.", "NotFoundError");
         if (newNode is DocumentFragment frag)
         {
             int idx = _element.Children.IndexOf(oldNode);
@@ -414,7 +435,10 @@ public class ElementHost
 
     public object cloneNode(bool deep)
     {
-        var cloned = CloneElement(_element, deep);
+        // The element clones itself: a second cloner here had its own list of what travels, and it
+        // left the namespace, the prefix, the namespace an attribute was set under and every comment
+        // or processing instruction behind (DOM §4.6).
+        var cloned = (Element)_element.CloneNode(deep);
         return WrapWithCache(cloned) ?? new ElementHost(cloned);
     }
 
@@ -829,7 +853,7 @@ public class ElementHost
 
     public object[] classListValues => _element.ClassList.Select(c => (object)c).ToArray();
 
-    public DomTokenListHost classList => new(this);
+    public DomTokenListHost classList => _classList ??= new(this);
 
     public bool classList_contains(string className) => _element.HasClass(className);
 
@@ -869,10 +893,15 @@ public class ElementHost
         return index >= 0 && index < classes.Count ? classes[index] : null;
     }
 
-    public string? getAttributeNS(string ns, string name) => _element.GetAttribute(name);
+    public string? getAttributeNS(string? ns, string name) => _element.GetAttributeNS(ns, name);
 
-    public void setAttributeNS(string ns, string name, string value) => _element.SetAttribute(name, value);
-    public void removeAttributeNS(string ns, string name) => _element.RemoveAttribute(name);
+    public void setAttributeNS(string? ns, string name, string value)
+    {
+        DomNames.RequireQualifiedName(name, "setAttributeNS", "Element", element: false);
+        _element.SetAttributeNS(ns, name, value);
+    }
+
+    public void removeAttributeNS(string? ns, string name) => _element.RemoveAttributeNS(ns, name);
 
     public object? dispatchEvent(object evt)
     {
@@ -1104,27 +1133,6 @@ public class ElementHost
         return result;
     }
 
-    private static Element CloneElement(Element source, bool deep)
-    {
-        var clone = new HtmlElement(source.TagName);
-        foreach (var attr in source.Attributes)
-            clone.Attributes[attr.Key] = attr.Value;
-        foreach (var kv in source.Style)
-            clone.Style[kv.Key] = kv.Value;
-        clone.StyleMirrorText = source.StyleMirrorText;
-        if (deep)
-        {
-            foreach (var child in source.Children)
-            {
-                if (child is Element childEl)
-                    clone.AppendChild(CloneElement(childEl, true));
-                else if (child is TextNode tn)
-                    clone.AppendChild(new TextNode(tn.TextContent ?? ""));
-            }
-        }
-        return clone;
-    }
-
     private static bool ContainsElement(Element parent, Element child)
     {
         if (parent == child) return true;
@@ -1136,12 +1144,7 @@ public class ElementHost
         return false;
     }
 
-    private object WrapNode(Node node)
-    {
-        if (node is Element e) return WrapWithCache(e) ?? new ElementHost(e);
-        if (node is CommentNode c) return new CommentHost(c);
-        return new TextNodeWrapper((TextNode)node);
-    }
+    private object WrapNode(Node node) => JsIntegrationService.WrapAny(node)!;
 
     // 'getClientRects()' is the real list above; the name is kept off the stub that used to
     // answer 1 for every element, which made '.length' look right and '[0]' undefined.
@@ -1182,17 +1185,30 @@ public class ElementHost
         }
     }
 
-    public string? namespaceURI => _element.NamespaceUri ?? "http://www.w3.org/1999/xhtml";
+    // An element made without a namespace has none to answer — only an element the parser or
+    // createElement gave the HTML namespace carries one (DOM §4.2.1, measured:
+    // 'createElementNS(null, "foo-bar").namespaceURI' is null, not the HTML one).
+    public string? namespaceURI => _element.NamespaceUri;
 
-    public string? prefix => null;
+    public string? prefix => _element.Prefix;
 
-    public string localName => _element.TagName.ToLowerInvariant();
+    // The two halves of the qualified name, as the element was made: 'svg:circle' is prefix 'svg' and
+    // local name 'circle', while a name written with a colon but no namespace — 'x:y' from
+    // 'setAttribute' — is one name, not two (§4.2.1).
+    public string localName => _element.LocalName;
 
     public string baseURI => "";
 
     public bool isConnected => _element.ParentElement != null || _element.TagName == "HTML";
 
-    public object? ownerDocument => null;
+    // Node.ownerDocument is the document the node lives in — the same object the page holds as
+    // 'document', not a second wrapper for it. A node the parser never stamped with an owner
+    // still belongs to the document the script is running in.
+    public object? ownerDocument
+    {
+        get => JsIntegrationService.WrapAny(_element.OwnerDocument)
+               ?? JavaScriptEngine.Current?.IntegrationService?.Document;
+    }
 
     public bool matches(string selector)
     {
@@ -1307,9 +1323,9 @@ public class ElementHost
         parent.InsertBefore(node, refNode);
     }
 
-    public bool hasAttributeNS(string ns, string name)
+    public bool hasAttributeNS(string? ns, string name)
     {
-        return _element.HasAttribute(name);
+        return _element.HasAttributeNS(ns, name);
     }
 
     // 'dataset' (DOMStringMap) is answered by a JS accessor installed on the element prototypes in
@@ -1416,35 +1432,59 @@ public class ElementHost
 
     public object? getAttributeNode(string name)
     {
-        var val = _element.GetAttribute(name);
-        return val != null ? new AttributeHost(name, val) : null;
+        // The Attr an element answers is live and one-per-name: reading it twice gives the same
+        // object, and writing through 'attr.value' writes the attribute.
+        return _element.HasAttribute(name) ? AttributeHost.For(_element, name) : null;
     }
 
-    public object? getAttributeNodeNS(string ns, string name)
+    public object? getAttributeNodeNS(string? ns, string name)
     {
-        return getAttributeNode(name);
+        // The attribute for a namespace and a local name is the very object the map answers for it,
+        // so 'getAttributeNodeNS(ns, "y") === attributes.getNamedItem("x:y")' holds (§4.3.6).
+        var stored = _element.FindAttributeName(ns, name);
+        return stored == null ? null : getAttributeNode(stored);
     }
 
     public object? setAttributeNode(object attr)
-    {
-        if (attr is AttributeHost host)
-        {
-            _element.SetAttribute(host.name, host.value ?? "");
-            return host;
-        }
-        return null;
-    }
+        => SetAttributeOn(_element, attr);
 
     public object? setAttributeNodeNS(object attr) => setAttributeNode(attr);
 
+    /// <summary>DOM §4.3.4: the attribute becomes the element's own and the one it replaces is
+    /// handed back. Both the element and its NamedNodeMap run through here, so the two ways of
+    /// putting an Attr on cannot drift apart.</summary>
+    internal static object? SetAttributeOn(Element element, object attr)
+    {
+        if (attr is not AttributeHost host)
+            throw new DOMException("parameter 1 is not of type 'Attr'.", "TypeError");
+        // An attribute that belongs to another element has to be taken off that element first;
+        // the spec refuses the call instead of moving it behind the page's back.
+        if (host.ownerElement != null && !ReferenceEquals(host.NativeOwner, element))
+            throw new DOMException("The attribute is in use on another element.", "InvalidModificationError");
+        var previous = element.HasAttribute(host.name) ? AttributeHost.For(element, host.name) : null;
+        if (ReferenceEquals(previous, host)) return host;
+        // The attribute that is taken off has to be detached before the new value goes on: its own
+        // 'value' is read off the element, so writing first would hand the page an old attribute
+        // holding the new value (§4.3.4).
+        if (previous != null) AttributeHost.Release(previous);
+        // The namespace the attribute carries goes on with it, so the element keeps answering
+        // 'getAttributeNS' by the local name (§4.3.6).
+        element.SetAttributeNS(host.namespaceURI, host.name, host.value ?? "");
+        AttributeHost.Attach(element, host);
+        return previous;
+    }
+
     public object? removeAttributeNode(object attr)
     {
-        if (attr is AttributeHost host)
-        {
-            _element.RemoveAttribute(host.name);
-            return host;
-        }
-        return null;
+        if (attr is not AttributeHost host)
+            throw new DOMException("parameter 1 is not of type 'Attr'.", "TypeError");
+        if (!ReferenceEquals(host.NativeOwner, _element) || !host.IsAttached)
+            throw new DOMException("The attribute is not an attribute of the element.", "NotFoundError");
+        // The value is read while the attribute is still on the element: the Attr the page gets
+        // back keeps the value it had, which is what the removal hands over (§4.3.6).
+        AttributeHost.Release(host);
+        _element.RemoveAttribute(host.name);
+        return host;
     }
 
     public void normalize() => NormalizeNode(_element);
@@ -1725,13 +1765,13 @@ public class ElementHost
 
     public int formLength => formElements.Length;
 
-    /// <summary>HTMLFormElement.elements — the live list of the form's controls. It is the same
-    /// collection the form owns, spelled with its standard name ('length' and indexed reads
-    /// follow). A non-form element answers an empty list.</summary>
-    public object[] elements
+    /// <summary>HTMLFormElement.elements — the live list of the form's controls, with the reads a
+    /// collection owns: 'length', the indexed read, 'item()' and 'namedItem()' (HTML §4.10.22).
+    /// A non-form element answers an empty list.</summary>
+    public object elements
     {
         get => string.Equals(_element.TagName, "FORM", StringComparison.OrdinalIgnoreCase)
-            ? formElements
+            ? new JsFormControlsCollection(_element, JavaScriptEngine.Current ?? Engine)
             : Array.Empty<object>();
     }
 
@@ -1918,7 +1958,7 @@ public class ElementHost
         set => _element.SetAttribute("rel", value);
     }
 
-    public RelTokenListHost relList => new(this);
+    public RelTokenListHost relList => _relList ??= new(this);
 
     // Reflected content attributes the standard names directly on the element interface.
     public string? download
@@ -2103,19 +2143,27 @@ public class RelTokenListHost
     public override string ToString() => value;
 }
 
-public class TextNodeWrapper
+public class TextNodeWrapper : IDomPrototypeHost
 {
     private readonly TextNode _node;
     public TextNodeWrapper(TextNode node) => _node = node;
     internal TextNode NativeNode => _node;
-    public string nodeName => "#text";
+
+    // A CDATA section is the same shape as a text node with its own name, type and interface: the
+    // reference gives '#cdata-section', 4 and a CDATASection at the end of the chain (DOM §4.3.8).
+    private bool IsCData => _node is CDataSection;
+    public string nodeName => IsCData ? "#cdata-section" : "#text";
     public string? textContent { get => _node.TextContent; set => _node.Data = value ?? ""; }
     public string? data { get => _node.TextContent; set => _node.Data = value ?? ""; }
     public string? nodeValue { get => _node.TextContent; set => _node.Data = value ?? ""; }
-    public int nodeType => 3;
+    public int nodeType => IsCData ? 4 : 3;
     public string? wholeText => _node.WholeText;
-    public string? __domType => "Text";
-    public string[] __domTypeChain => new[] { "EventTarget", "Node", "Text" };
+    public object? ownerDocument
+        => JsIntegrationService.WrapAny(_node.OwnerDocument) ?? JavaScriptEngine.Current?.IntegrationService?.Document;
+    public string? __domType => IsCData ? "CDATASection" : "Text";
+    public string[] __domTypeChain => IsCData
+        ? new[] { "EventTarget", "Node", "CharacterData", "Text", "CDATASection" }
+        : new[] { "EventTarget", "Node", "Text" };
     public ElementHost? parentElement
     {
         get
@@ -2128,23 +2176,15 @@ public class TextNodeWrapper
     }
     public object? parentNode
     {
-        get
-        {
-            var p = _node.Parent;
-            if (p == null) return null;
-            var engine = JavaScriptEngine.Current;
-            if (p is Element el)
-                return engine?.IntegrationService?.WrapDomNode(el) as ElementHost ?? new ElementHost(el);
-            return p;
-        }
+        get => JsIntegrationService.WrapAny(_node.Parent);
     }
     public object? nextSibling
     {
-        get { var n = _node.NextSibling; return n == null ? null : (object)(n is Element e ? new ElementHost(e) : new TextNodeWrapper((TextNode)n)); }
+        get => JsIntegrationService.WrapAny(_node.NextSibling);
     }
     public object? previousSibling
     {
-        get { var n = _node.PreviousSibling; return n == null ? null : (object)(n is Element e ? new ElementHost(e) : new TextNodeWrapper((TextNode)n)); }
+        get => JsIntegrationService.WrapAny(_node.PreviousSibling);
     }
     public object? cloneNode(bool deep)
     {
@@ -2177,7 +2217,7 @@ public class TextNodeWrapper
     }
 }
 
-public class CommentHost
+public class CommentHost : IDomPrototypeHost
 {
     private readonly CommentNode _node;
     public CommentHost(CommentNode node) => _node = node;
@@ -2188,22 +2228,31 @@ public class CommentHost
     public string? nodeValue { get => _node.Data; set => _node.Data = value ?? ""; }
     public string? textContent { get => _node.Data; set => _node.Data = value ?? ""; }
     public int length => _node.Data?.Length ?? 0;
+    public object? ownerDocument
+        => JsIntegrationService.WrapAny(_node.OwnerDocument) ?? JavaScriptEngine.Current?.IntegrationService?.Document;
     public string? __domType => "Comment";
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "CharacterData", "Comment" };
     public object? parentNode
     {
-        get
-        {
-            var p = _node.Parent;
-            if (p == null) return null;
-            if (p is Element el)
-            {
-                var engine = JavaScriptEngine.Current;
-                return engine?.IntegrationService?.WrapDomNode(el) as ElementHost ?? new ElementHost(el);
-            }
-            return p;
-        }
+        get => JsIntegrationService.WrapAny(_node.Parent);
     }
+    public object? nextSibling
+    {
+        get => JsIntegrationService.WrapAny(_node.NextSibling);
+    }
+    public object? previousSibling
+    {
+        get => JsIntegrationService.WrapAny(_node.PreviousSibling);
+    }
+    public object? cloneNode(bool deep) => JsIntegrationService.WrapAny(_node.CloneNode(deep));
+    public void remove() => _node.Parent?.RemoveChild(_node);
+
+    // CharacterData mixin (DOM 4 §4.5) — a comment answers the same methods a text node does.
+    public string substringData(int offset, int count) => _node.SubstringData(offset, count);
+    public void appendData(string data) => _node.AppendData(data);
+    public void insertData(int offset, string data) => _node.InsertData(offset, data);
+    public void deleteData(int offset, int count) => _node.DeleteData(offset, count);
+    public void replaceData(int offset, int count, string data) => _node.ReplaceData(offset, count, data);
     public ElementHost? parentElement
     {
         get
@@ -2373,6 +2422,56 @@ public class ScriptEvent
         this.metaKey = metaKey;
         this.button = button;
     }
+}
+
+/// <summary>DOM §4.3.5: a processing instruction is a node a page can make and read, with the
+/// target it was made from and the data after it. In an HTML document it is only ever something
+/// the script builds — the parser never gives one — but the object behaves the same either way.</summary>
+public class ProcessingInstructionHost : IDomPrototypeHost
+{
+    private readonly ProcessingInstruction _node;
+
+    public ProcessingInstructionHost(ProcessingInstruction node) => _node = node;
+
+    internal ProcessingInstruction NativeNode => _node;
+
+    public string target => _node.Target;
+    public string nodeName => _node.Target;
+    public int nodeType => 7;
+    public string? data { get => _node.Data; set => _node.Data = value ?? ""; }
+    public string? nodeValue { get => _node.Data; set => _node.Data = value ?? ""; }
+    public string? textContent { get => _node.Data; set => _node.Data = value ?? ""; }
+    public int length => _node.Data?.Length ?? 0;
+    public string[] __domTypeChain => new[] { "EventTarget", "Node", "CharacterData", "ProcessingInstruction" };
+    public object? ownerDocument
+        => JsIntegrationService.WrapAny(_node.OwnerDocument) ?? JavaScriptEngine.Current?.IntegrationService?.Document;
+    public object? parentNode => JsIntegrationService.WrapAny(_node.Parent);
+    public ElementHost? parentElement
+    {
+        get
+        {
+            var p = _node.ParentElement;
+            if (p == null) return null;
+            var engine = JavaScriptEngine.Current;
+            return engine?.IntegrationService?.WrapDomNode(p) as ElementHost ?? new ElementHost(p);
+        }
+    }
+    public object? previousSibling => JsIntegrationService.WrapAny(_node.PreviousSibling);
+    public object? nextSibling => JsIntegrationService.WrapAny(_node.NextSibling);
+    // A processing instruction is a leaf: it has a child list, and it is always empty (§4.3.5).
+    public object[] childNodes => Array.Empty<object>();
+    public object? firstChild => null;
+    public object? lastChild => null;
+    public bool hasChildNodes() => false;
+    public object? cloneNode(bool deep) => JsIntegrationService.WrapAny(_node.CloneNode(deep));
+    public void remove() => _node.Parent?.RemoveChild(_node);
+
+    // CharacterData mixin (DOM 4 §4.5) — the same methods a text and a comment node answer.
+    public string substringData(int offset, int count) => _node.SubstringData(offset, count);
+    public void appendData(string data) => _node.AppendData(data);
+    public void insertData(int offset, string data) => _node.InsertData(offset, data);
+    public void deleteData(int offset, int count) => _node.DeleteData(offset, count);
+    public void replaceData(int offset, int count, string data) => _node.ReplaceData(offset, count, data);
 }
 
 public class DatasetHost : System.Dynamic.DynamicObject

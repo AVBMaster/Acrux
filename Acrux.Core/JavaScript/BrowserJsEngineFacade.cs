@@ -134,6 +134,23 @@ public class BrowserJsEngineFacade : IDisposable
         }
     }
 
+    public object? CallFunctionPropagating(string functionName, params object?[] args)
+    {
+        if (_disposed) return null;
+        if (JsEngineBridge.IsRemoteNotReady(_adapter)) return null;
+        Current = _adapter;
+        try
+        {
+            var result = _adapter.CallFunctionPropagating(functionName, args);
+            FlushPostExecution();
+            return result;
+        }
+        finally
+        {
+            Current = null;
+        }
+    }
+
     public int StoreJsFunction(object callback)
     {
         return _adapter.StoreCallback(callback);

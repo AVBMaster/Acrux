@@ -49,15 +49,21 @@ public class JsDomPrototypeSystem
     }
 
     function defineConstructor(name, baseNames, factory) {
-        var chain = createPrototypeChain(baseNames);
+        // An interface owns its prototype object: 'Element.prototype' is the level that carries
+        // Element's accessors, not the 'Node' object it inherits from. Without its own level there
+        // is nowhere to put what the interface itself declares ('__domProto['HTMLDocument']' had no
+        // object at all, so document.defaultView landed on the Node level and every host below it),
+        // and 'Object.getPrototypeOf(el) === Element.prototype' answered false on an element.
+        var allNames = baseNames.concat([name]);
+        var chain = createPrototypeChain(allNames);
+        var own = chain[chain.length - 1];
         var ctor = function() {
             return factory ? factory.apply(this, arguments) : null;
         };
-        ctor.prototype = chain[chain.length - 1] || {};
+        ctor.prototype = own || {};
         ctor.prototype.constructor = ctor;
 
         // Store prototype chain for instanceof support
-        var allNames = baseNames.concat([name]);
         protoChains[name] = allNames;
 
         // Symbol.hasInstance: check if instance has __domTypeChain containing this name
@@ -94,20 +100,24 @@ public class JsDomPrototypeSystem
     window.__fixProto = function(obj) {
         if (!obj) return;
         try {
-            // Skip if already fixed
-            if (window.__fixedProtoSet && window.__fixedProtoSet.has(obj)) return;
-
             var rawChain = obj.__domTypeChain;
             if (!rawChain) return;
             var names = toJsArray(rawChain);
             if (names.length === 0) return;
             var typeName = names[names.length - 1];
             var ctor = window[typeName];
-            if (ctor && ctor.prototype) {
-                Object.setPrototypeOf(obj, ctor.prototype);
-                if (window.__fixedProtoSet) {
-                    window.__fixedProtoSet.add(obj);
-                }
+            if (!ctor || !ctor.prototype) return;
+            // The prototype objects are rebuilt when a page reloads, so the test is the object's
+            // own [[Prototype]] and not a set of names ever touched: a wrapper made against the
+            // previous page's prototypes has to be re-fixed, and re-fixing one that is already
+            // right costs nothing.
+            if (Object.getPrototypeOf(obj) === ctor.prototype) {
+                if (window.__fixedProtoSet) window.__fixedProtoSet.add(obj);
+                return;
+            }
+            Object.setPrototypeOf(obj, ctor.prototype);
+            if (window.__fixedProtoSet) {
+                window.__fixedProtoSet.add(obj);
             }
         } catch(e) {}
     };
@@ -176,27 +186,37 @@ public class JsDomPrototypeSystem
     {
         InitializePrototypes();
 
+        // The chain a host declares in its '__domTypeChain' and the base list registered here are
+        // the same line of descent — '__fixProto' picks the last name of the first and installs the
+        // prototype object of the second, so a level one of them does not know about silently
+        // removed every accessor the interfaces above it should have inherited.
         RegisterConstructor("EventTarget", new[] { "Object" }, _ => null);
         RegisterConstructor("Node", new[] { "Object", "EventTarget" }, _ => null);
+        RegisterConstructor("CharacterData", new[] { "Object", "EventTarget", "Node" }, _ => null);
         RegisterConstructor("Element", new[] { "Object", "EventTarget", "Node" }, _ => null);
         RegisterConstructor("HTMLElement", new[] { "Object", "EventTarget", "Node", "Element" }, _ => null);
-        RegisterConstructor("HTMLDocument", new[] { "Object", "EventTarget", "Node" }, _ => null);
+        RegisterConstructor("Document", new[] { "Object", "EventTarget", "Node" }, _ => null);
+        RegisterConstructor("HTMLDocument", new[] { "Object", "EventTarget", "Node", "Document" }, _ => null);
 
-        RegisterConstructor("Text", new[] { "Object", "EventTarget", "Node" }, _ => null);
-        RegisterConstructor("Comment", new[] { "Object", "EventTarget", "Node" }, _ => null);
+        RegisterConstructor("Text", new[] { "Object", "EventTarget", "Node", "CharacterData" }, _ => null);
+        RegisterConstructor("Comment", new[] { "Object", "EventTarget", "Node", "CharacterData" }, _ => null);
+        RegisterConstructor("ProcessingInstruction", new[] { "Object", "EventTarget", "Node", "CharacterData" }, _ => null);
+        RegisterConstructor("CDATASection", new[] { "Object", "EventTarget", "Node", "CharacterData", "Text" }, _ => null);
         RegisterConstructor("DocumentFragment", new[] { "Object", "EventTarget", "Node" }, _ => null);
+        RegisterConstructor("DocumentType", new[] { "Object", "EventTarget", "Node" }, _ => null);
 
-        RegisterConstructor("MouseEvent", new[] { "Object" }, _ => null);
-        RegisterConstructor("KeyboardEvent", new[] { "Object" }, _ => null);
-        RegisterConstructor("CustomEvent", new[] { "Object" }, _ => null);
         RegisterConstructor("Event", new[] { "Object" }, _ => null);
+        RegisterConstructor("UIEvent", new[] { "Object", "Event" }, _ => null);
+        RegisterConstructor("MouseEvent", new[] { "Object", "Event", "UIEvent" }, _ => null);
+        RegisterConstructor("KeyboardEvent", new[] { "Object", "Event", "UIEvent" }, _ => null);
+        RegisterConstructor("CustomEvent", new[] { "Object", "Event" }, _ => null);
 
         RegisterConstructor("NodeList", new[] { "Object" }, _ => null);
         RegisterConstructor("HTMLCollection", new[] { "Object" }, _ => null);
         RegisterConstructor("DOMTokenList", new[] { "Object" }, _ => null);
 
         RegisterConstructor("NamedNodeMap", new[] { "Object" }, _ => null);
-        RegisterConstructor("Attr", new[] { "Object" }, _ => null);
+        RegisterConstructor("Attr", new[] { "Object", "EventTarget", "Node" }, _ => null);
 
         RegisterConstructor("URL", new[] { "Object" }, _ => null);
         RegisterConstructor("URLSearchParams", new[] { "Object" }, _ => null);

@@ -36,6 +36,12 @@ public class NullJsEngineAdapter : IJavaScriptEngineAdapter, IDisposable
         return null;
     }
 
+    /// <summary>There is no script here to raise an error, so nothing can propagate.</summary>
+    public object? CallFunctionPropagating(string functionName, params object?[] args)
+    {
+        return null;
+    }
+
     public void SetGlobal(string name, object? value)
     {
     }

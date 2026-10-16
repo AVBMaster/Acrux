@@ -23,7 +23,73 @@ public class Document : Node
     }
     public Element? Body { get; set; }
     public Element? Head { get; set; }
-    public string Title { get; set; } = string.Empty;
+
+    private string? _title;
+
+    /// <summary>HTML §4.2.5: the title IDL attribute reflects the text content of the first 'title'
+    /// element in the document, stripped of leading and trailing ASCII whitespace. Reading it from
+    /// the tree is what makes an edit to that element — a textContent write, an innerHTML rewrite,
+    /// an appended node — the title the window and 'document.title' answer with; writing puts the
+    /// text there, or into a new element at the end of the head when the document has none. The
+    /// stored value is only what a document with no 'title' element falls back to.</summary>
+    public string Title
+    {
+        get
+        {
+            var element = FirstTitleElement();
+            if (element == null) return _title ?? string.Empty;
+            return StripAsciiWhitespace(element.TextContent ?? string.Empty);
+        }
+        set
+        {
+            var element = FirstTitleElement();
+            if (element != null)
+            {
+                element.TextContent = value;
+                _title = value;
+                return;
+            }
+            _title = value;
+            var head = Head ?? HeadElementOf();
+            if (head == null) return;
+            var created = CreateElement("title");
+            created.AppendChild(CreateTextNode(value));
+            head.AppendChild(created);
+        }
+    }
+
+    private Element? FirstTitleElement()
+    {
+        var titles = GetElementsByTagName("title");
+        return titles.Count > 0 ? titles[0] : null;
+    }
+
+    private Element? HeadElementOf()
+    {
+        var root = DocumentElement;
+        if (root == null) return null;
+        foreach (var child in root.Children.OfType<Element>())
+            if (child.TagName.Equals("HEAD", StringComparison.OrdinalIgnoreCase))
+                return child;
+        return null;
+    }
+
+    /// <summary>HTML's "strip leading and trailing whitespace" is the ASCII space, tab, line feed,
+    /// carriage return and form feed — not the Unicode set, which would eat a no-break space the
+    /// page put in the title on purpose.</summary>
+    private static string StripAsciiWhitespace(string value)
+    {
+        int start = 0;
+        while (start < value.Length && (value[start] == ' ' || value[start] == '\t' || value[start] == '\n'
+            || value[start] == '\r' || value[start] == '\f'))
+            start++;
+        int end = value.Length;
+        while (end > start && (value[end - 1] == ' ' || value[end - 1] == '\t' || value[end - 1] == '\n'
+            || value[end - 1] == '\r' || value[end - 1] == '\f'))
+            end--;
+        return value.Substring(start, end - start);
+    }
+
     public string Url { get; set; } = string.Empty;
     public string Charset { get; set; } = "UTF-8";
     public string ContentType { get; set; } = "text/html";
@@ -75,15 +141,42 @@ public class Document : Node
     // Spec methods
     public Element CreateElement(string tagName)
     {
-        return CreateHtmlElement(tagName);
+        var el = CreateHtmlElement(tagName);
+        el.OwnerDocument = this;
+        return el;
     }
 
+    /// <summary>DOM §4.2.1: 'createElementNS' is handed a <em>qualified</em> name, so its prefix and
+    /// its local name are taken apart here — an element made as 'svg:circle' answers 'svg' and
+    /// 'circle'. The case it keeps is the document's business: only an HTML element of an HTML
+    /// document is folded to the uppercase spelling tag name reads, and there the prefix is folded
+    /// while the local name keeps the case it was written in (all four measured).</summary>
     public Element CreateElementNS(string? ns, string tagName)
     {
         var el = CreateHtmlElement(tagName);
         el.NamespaceUri = ns;
+        el.OwnerDocument = this;
+        var at = tagName.IndexOf(':');
+        if (at > 0)
+        {
+            var html = ns == "http://www.w3.org/1999/xhtml" && IsHtmlDocument;
+            el.Prefix = html ? tagName[..at].ToLowerInvariant() : tagName[..at];
+            el.LocalName = tagName[(at + 1)..];
+            el.TagName = html ? tagName.ToUpperInvariant() : tagName;
+        }
+        else if (!IsHtmlDocument)
+        {
+            // An XML document has no case folding at all: the name a page wrote is the name it reads.
+            el.TagName = tagName;
+            el.LocalName = tagName;
+        }
         return el;
     }
+
+    /// <summary>Whether this is an HTML document — the difference that decides the case of a name and
+    /// which node kinds the document will make at all.</summary>
+    public bool IsHtmlDocument => ContentType is null
+        || ContentType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase);
 
     private static HtmlElement CreateHtmlElement(string tagName) =>
         HtmlElementFactory.Create(tagName);
@@ -95,32 +188,35 @@ public class Document : Node
 
     public CommentNode CreateComment(string data)
     {
-        return new CommentNode(data);
+        // A node made by a document belongs to that document from the moment it is made (§4.1), not
+        // only once it reaches the tree — 'doc.createComment('x').ownerDocument' is read before any
+        // insertion, and for a document the page built with the implementation it is not 'document'.
+        return new CommentNode(data) { OwnerDocument = this };
     }
 
     public DocumentFragment CreateDocumentFragment()
     {
-        return new DocumentFragment();
+        return new DocumentFragment() { OwnerDocument = this };
     }
 
     public CDataSection CreateCDataSection(string data)
     {
-        return new CDataSection(data);
+        return new CDataSection(data) { OwnerDocument = this };
     }
 
     public ProcessingInstruction CreateProcessingInstruction(string target, string data)
     {
-        return new ProcessingInstruction(target, data);
+        return new ProcessingInstruction(target, data) { OwnerDocument = this };
     }
 
     public Attr CreateAttribute(string name)
     {
-        return new Attr(name);
+        return new Attr(name) { OwnerDocument = this };
     }
 
     public Attr CreateAttributeNS(string? ns, string name)
     {
-        return new Attr(name, ns);
+        return new Attr(name, ns) { OwnerDocument = this };
     }
 
     public Element? GetElementById(string id)

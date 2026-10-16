@@ -43,7 +43,8 @@ internal class HtmlConstructionSite
         string systemId = new string(token.SystemIdentifier.ToArray());
         var doctype = new DocumentTypeNode(
             string.IsNullOrEmpty(publicId) ? null : publicId,
-            string.IsNullOrEmpty(systemId) ? null : systemId);
+            string.IsNullOrEmpty(systemId) ? null : systemId,
+            token.Name);
         _attachmentRoot.AppendChild(doctype);
         if (token.ForceQuirks)
             _inQuirksMode = true;

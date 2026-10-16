@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+<head><title>Node kinds the page makes: Attr, DocumentType, ProcessingInstruction, CDATA (DOM §4.2.1, §4.3.3–§4.3.8, §3.3)</title></head>
+<body>
+<input id="i1" name="a" value="v">
+<div id="d" class="one">text</div>
+<script>
+// Every sentence and every accepted spelling below was read off the reference browser in this
+// session (the probes are kept in out/), not written from the spec text: an attribute name is
+// refused for the characters that would end one in the markup (whitespace, '/', '=' and '>'), a
+// tag name swaps '=' for the rule that it may not start with a digit, and a processing
+// instruction's target is held to the XML name production.
+var NS = 'http://www.w3.org/1999/xhtml';
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+function ckErr(name, wantName, wantMsg, fn) {
+    var e = null;
+    try { fn(); } catch (x) { e = x; }
+    var got = e ? (e.name + ' | ' + e.message) : 'no throw';
+    __T(name, !!e && e.name === wantName && String(e.message) === wantMsg, got === wantName + ' | ' + wantMsg ? '' : 'got: ' + got);
+}
+function ckOk(name, fn, info) {
+    var v = null, threw = null;
+    try { v = fn(); } catch (e) { threw = e; }
+    __T(name, !threw, threw ? 'threw ' + threw.name + ': ' + threw.message : (info === undefined ? '' : String(info)));
+}
+function describe(n) { return n ? (n.nodeName + '/' + n.nodeType) : String(n); }
+
+var el = document.getElementById('i1');
+
+// ── A. every kind of node reaches the one document the page holds ────────────
+ck('A1 element ownerDocument is the page document', function () { return el.ownerDocument === document; });
+ck('A2 text node ownerDocument', function () {
+    var t = document.getElementById('d').firstChild;
+    return t && t.ownerDocument === document;
+}, function () { return describe(document.getElementById('d').firstChild); });
+ck('A3 comment ownerDocument', function () { return document.createComment('hi').ownerDocument === document; });
+ck('A4 attached attribute ownerDocument', function () { return el.attributes[0].ownerDocument === document; },
+    function () { return el.attributes[0].ownerDocument === document; });
+ck('A5 created attribute ownerDocument', function () { return document.createAttribute('x').ownerDocument === document; });
+ck('A6 fragment ownerDocument', function () { return document.createDocumentFragment().ownerDocument === document; });
+ck('A7 document has no ownerDocument', function () { return document.ownerDocument === null; });
+ck('A8 doctype ownerDocument', function () { return document.doctype.ownerDocument === document; });
+ck('A9 processing instruction ownerDocument', function () {
+    return document.createProcessingInstruction('t', 'd').ownerDocument === document;
+});
+ck('A10 adopting a node moves its document', function () {
+    var other = document.implementation.createHTMLDocument('o');
+    var made = other.createElement('p');
+    return made.ownerDocument === other && document.adoptNode(made).ownerDocument === document;
+});
+
+// ── B. the name productions, with the sentences that refuse them ─────────────
+ckErr('B1 createAttribute with a space', 'InvalidCharacterError',
+    "Failed to execute 'createAttribute' on 'Document': The localName provided ('a b') contains an invalid character.",
+    function () { document.createAttribute('a b'); });
+ckErr('B2 createAttribute empty', 'InvalidCharacterError',
+    "Failed to execute 'createAttribute' on 'Document': The localName provided ('') contains an invalid character.",
+    function () { document.createAttribute(''); });
+ckErr('B3 createAttribute with a slash', 'InvalidCharacterError',
+    "Failed to execute 'createAttribute' on 'Document': The localName provided ('a/b') contains an invalid character.",
+    function () { document.createAttribute('a/b'); });
+ckErr('B4 createAttribute with an equals', 'InvalidCharacterError',
+    "Failed to execute 'createAttribute' on 'Document': The localName provided ('a=b') contains an invalid character.",
+    function () { document.createAttribute('a=b'); });
+ckErr('B5 createAttribute with a close bracket', 'InvalidCharacterError',
+    "Failed to execute 'createAttribute' on 'Document': The localName provided ('a>b') contains an invalid character.",
+    function () { document.createAttribute('a>b'); });
+ckOk('B6 createAttribute may start with a digit', function () { return document.createAttribute('1a').name === '1a'; });
+ckOk('B7 createAttribute allows a less-than', function () { return document.createAttribute('a<b').name === 'a<b'; });
+ckOk('B8 createAttribute allows a colon', function () { return document.createAttribute('a:b').name === 'a:b'; });
+ckOk('B9 createAttribute allows non-ASCII', function () { return document.createAttribute('café').name === 'café'; });
+ckErr('B10 setAttribute with a space', 'InvalidCharacterError',
+    "Failed to execute 'setAttribute' on 'Element': 'a b' is not a valid attribute name.",
+    function () { el.setAttribute('a b', 'v'); });
+ckErr('B11 setAttribute empty', 'InvalidCharacterError',
+    "Failed to execute 'setAttribute' on 'Element': '' is not a valid attribute name.",
+    function () { el.setAttribute('', 'v'); });
+ckOk('B12 setAttribute allows what createAttribute refuses only in its own sentence', function () {
+    var p = document.createElement('p');
+    p.setAttribute('a<b', '1');
+    p.setAttribute('1a', '2');
+    return p.getAttribute('a<b') === '1' && p.getAttribute('1a') === '2';
+});
+ckErr('B13 createElement with a space', 'InvalidCharacterError',
+    "Failed to execute 'createElement' on 'Document': The tag name provided ('a b') is not a valid name.",
+    function () { document.createElement('a b'); });
+ckErr('B14 createElement starting with a digit', 'InvalidCharacterError',
+    "Failed to execute 'createElement' on 'Document': The tag name provided ('1a') is not a valid name.",
+    function () { document.createElement('1a'); });
+ckErr('B15 createElement empty', 'InvalidCharacterError',
+    "Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.",
+    function () { document.createElement(''); });
+ckOk('B16 createElement allows an equals and a less-than', function () {
+    return document.createElement('a=b').tagName === 'A=B' && document.createElement('a<b').tagName === 'A<B';
+});
+ckErr('B17 createElementNS with a space', 'InvalidCharacterError',
+    "Failed to execute 'createElementNS' on 'Document': The qualified name provided ('a b') contains the invalid character ' '.",
+    function () { document.createElementNS(NS, 'a b'); });
+ckErr('B18 createElementNS empty', 'InvalidCharacterError',
+    "Failed to execute 'createElementNS' on 'Document': The qualified name provided is empty.",
+    function () { document.createElementNS(NS, ''); });
+ckErr('B19 createElementNS starting with a digit', 'InvalidCharacterError',
+    "Failed to execute 'createElementNS' on 'Document': The qualified name provided ('1a') contains the invalid character '1'.",
+    function () { document.createElementNS(NS, '1a'); });
+ckErr('B20 createElementNS with a slash', 'InvalidCharacterError',
+    "Failed to execute 'createElementNS' on 'Document': The qualified name provided ('a/b') contains the invalid character '/'.",
+    function () { document.createElementNS(NS, 'a/b'); });
+ckOk('B21 createElementNS allows an equals', function () {
+    return document.createElementNS(NS, 'a=b').localName === 'a=b';
+});
+ckErr('B22 createAttributeNS with a slash', 'InvalidCharacterError',
+    "Failed to execute 'createAttributeNS' on 'Document': The qualified name provided ('a/b') contains the invalid character '/'.",
+    function () { document.createAttributeNS(NS, 'a/b'); });
+ckErr('B23 createAttributeNS empty', 'InvalidCharacterError',
+    "Failed to execute 'createAttributeNS' on 'Document': The qualified name provided is empty.",
+    function () { document.createAttributeNS(NS, ''); });
+ckErr('B24 setAttributeNS with an equals', 'InvalidCharacterError',
+    "Failed to execute 'setAttributeNS' on 'Element': The qualified name provided ('a=b') contains the invalid character '='.",
+    function () { el.setAttributeNS(NS, 'a=b', 'v'); });
+ckOk('B25 createAttributeNS allows a second colon', function () {
+    return document.createAttributeNS(NS, 'a:b:c').name === 'a:b:c';
+});
+ckOk('B26 the refused call changed nothing', function () {
+    return el.hasAttribute('a b') === false && el.hasAttribute('a=b') === false;
+});
+
+// ── C. the doctype is a node ─────────────────────────────────────────────────
+ck('C1 one doctype object per document', function () { return document.doctype === document.doctype; });
+ck('C2 doctype name and type', function () {
+    var dt = document.doctype;
+    return dt.nodeName === 'html' && dt.name === 'html' && dt.nodeType === 10;
+}, function () { return describe(document.doctype) + '/' + document.doctype.name; });
+ck('C3 doctype identifiers', function () {
+    var dt = document.doctype;
+    return dt.publicId === '' && dt.systemId === '';
+}, function () { return JSON.stringify([document.doctype.publicId, document.doctype.systemId]); });
+ck('C4 a doctype has no value and no text', function () {
+    var dt = document.doctype;
+    return dt.nodeValue === null && dt.textContent === null;
+}, function () { return JSON.stringify([document.doctype.nodeValue, document.doctype.textContent]); });
+ck('C5 a doctype has no children', function () {
+    var dt = document.doctype;
+    return dt.childNodes.length === 0 && dt.firstChild === null && dt.lastChild === null
+        && dt.hasChildNodes() === false && dt.parentElement === null;
+});
+ck('C6 doctype interfaces', function () {
+    var dt = document.doctype;
+    return dt instanceof DocumentType && dt instanceof Node && !(dt instanceof Element);
+}, function () {
+    return (document.doctype instanceof DocumentType) + '/' + (document.doctype instanceof Node);
+});
+ck('C7 the legacy collections answer null', function () {
+    var dt = document.doctype;
+    return dt.entities === null && dt.notations === null && !('data' in dt);
+});
+ck('C8 a created document type carries its own name', function () {
+    var dt = document.implementation.createDocumentType('svg:svg', '-//W3C//DTD SVG', 'http://x.dtd');
+    return dt.name === 'svg:svg' && dt.nodeName === 'svg:svg' && dt.publicId === '-//W3C//DTD SVG'
+        && dt.systemId === 'http://x.dtd' && dt.nodeType === 10;
+}, function () {
+    var dt = document.implementation.createDocumentType('svg:svg', '-//W3C//DTD SVG', 'http://x.dtd');
+    return JSON.stringify([dt.name, dt.publicId, dt.systemId]);
+});
+ckErr('C9 createDocumentType refuses a name with a space', 'InvalidCharacterError',
+    "Failed to execute 'createDocumentType' on 'DOMImplementation': The provided doctype name ('a b') contains an invalid character.",
+    function () { document.implementation.createDocumentType('a b', 'p', 's'); });
+ck('C10 createDocument puts the doctype before the root', function () {
+    var dt = document.implementation.createDocumentType('root', 'p', 's');
+    var doc = document.implementation.createDocument(NS, 'root', dt);
+    return doc.childNodes.length === 2 && doc.childNodes[0] === dt && doc.childNodes[0].nodeType === 10
+        && doc.childNodes[1].nodeType === 1 && doc.doctype === dt && doc.nodeType === 9;
+}, function () {
+    var dt = document.implementation.createDocumentType('root', 'p', 's');
+    var doc = document.implementation.createDocument(NS, 'root', dt);
+    return JSON.stringify([doc.childNodes.length, doc.doctype === dt, doc.doctype && doc.doctype.name]);
+});
+ckErr('C11 createDocument refuses a bad qualified name', 'InvalidCharacterError',
+    "Failed to execute 'createDocument' on 'DOMImplementation': The qualified name provided ('a b') contains the invalid character ' '.",
+    function () { document.implementation.createDocument(NS, 'a b', null); });
+ck('C12 an HTML document made by the implementation has its doctype', function () {
+    var h = document.implementation.createHTMLDocument('t');
+    return !!h.doctype && h.doctype.name === 'html' && h.childNodes.length === 2
+        && h.childNodes[0].nodeType === 10 && !!h.body && h.body.tagName === 'BODY'
+        && h.doctype.ownerDocument === h;
+}, function () {
+    var h = document.implementation.createHTMLDocument('t');
+    return JSON.stringify([h.doctype && h.doctype.name, h.childNodes.length, h.body && h.body.tagName]);
+});
+ck('C13 a doctype clone keeps its parts', function () {
+    var dt = document.implementation.createDocumentType('n', '-//P', '//S');
+    var c = dt.cloneNode(true);
+    return c !== dt && c.name === 'n' && c.publicId === '-//P' && c.systemId === '//S' && c.nodeType === 10;
+});
+ck('C14 the implementation is one object per document', function () {
+    return document.implementation === document.implementation;
+});
+
+// ── D. processing instructions (DOM §4.3.5) ─────────────────────────────────
+ck('D1 a created processing instruction is a node', function () {
+    var pi = document.createProcessingInstruction('xml-stylesheet', 'href="a.xsl"');
+    return !!pi && pi.nodeType === 7 && pi.nodeName === 'xml-stylesheet';
+}, function () { return describe(document.createProcessingInstruction('xml-stylesheet', 'x')); });
+ck('D2 processing instruction members', function () {
+    var pi = document.createProcessingInstruction('target', 'the data');
+    return pi.target === 'target' && pi.data === 'the data' && pi.nodeValue === 'the data'
+        && pi.textContent === 'the data' && pi.length === 8;
+}, function () { var p = document.createProcessingInstruction('target', 'the data'); return JSON.stringify([p.target, p.data, p.length]); });
+ck('D3 processing instruction interfaces', function () {
+    var pi = document.createProcessingInstruction('t', 'd');
+    return pi instanceof ProcessingInstruction && pi instanceof CharacterData && pi instanceof Node
+        && !(pi instanceof Text);
+}, function () {
+    var pi = document.createProcessingInstruction('t', 'd');
+    return (pi instanceof ProcessingInstruction) + '/' + (pi instanceof CharacterData);
+});
+ck('D4 the character data methods work on it', function () {
+    var pi = document.createProcessingInstruction('t', 'ab');
+    pi.appendData('cd');
+    pi.insertData(1, 'X');
+    var cut = pi.substringData(1, 2);
+    pi.deleteData(0, 1);
+    pi.replaceData(0, 1, 'Z');
+    return cut === 'Xb' && pi.data === 'Zbcd' && pi.length === 4;
+}, function () {
+    var pi = document.createProcessingInstruction('t', 'ab');
+    pi.appendData('cd');
+    pi.insertData(1, 'X');
+    return pi.data;
+});
+ck('D5 a processing instruction has no children', function () {
+    var pi = document.createProcessingInstruction('t', 'd');
+    return pi.childNodes.length === 0 && pi.firstChild === null && pi.parentElement === null
+        && pi.nextSibling === null;
+});
+ckErr('D6 a target with a space is refused', 'InvalidCharacterError',
+    "Failed to execute 'createProcessingInstruction' on 'Document': The target provided ('a b') is not a valid name.",
+    function () { document.createProcessingInstruction('a b', 'd'); });
+ckErr('D7 an empty target is refused', 'InvalidCharacterError',
+    "Failed to execute 'createProcessingInstruction' on 'Document': The target provided ('') is not a valid name.",
+    function () { document.createProcessingInstruction('', 'd'); });
+ckErr('D8 a target starting with a digit is refused', 'InvalidCharacterError',
+    "Failed to execute 'createProcessingInstruction' on 'Document': The target provided ('1a') is not a valid name.",
+    function () { document.createProcessingInstruction('1a', 'd'); });
+ckErr('D9 a target with an ampersand is refused', 'InvalidCharacterError',
+    "Failed to execute 'createProcessingInstruction' on 'Document': The target provided ('a&b') is not a valid name.",
+    function () { document.createProcessingInstruction('a&b', 'd'); });
+ckOk('D10 the name production a target is held to', function () {
+    var ok = ['_a', ':a', 'a.b', 'a-b', 'ABC', 'a1', 'café'].map(function (n) {
+        return document.createProcessingInstruction(n, 'd').target === n;
+    });
+    return ok.every(function (v) { return v; });
+});
+ckOk('D11 the data is taken as written', function () {
+    return document.createProcessingInstruction('t', 'a<b').data === 'a<b';
+});
+ck('D12 an appended processing instruction comes back as itself', function () {
+    var pi = document.createProcessingInstruction('t', 'd');
+    var d = document.getElementById('d');
+    d.appendChild(pi);
+    var read = d.lastChild;
+    var same = read === pi && read.nodeType === 7 && read.parentNode === d;
+    d.removeChild(pi);
+    return same && d.lastChild !== pi;
+});
+
+// ── E. CDATA sections (DOM §4.3.8) ──────────────────────────────────────────
+ckErr('E1 an HTML document refuses a CDATA section', 'NotSupportedError',
+    "Failed to execute 'createCDATASection' on 'Document': This operation is not supported for HTML documents.",
+    function () { document.createCDATASection('x'); });
+ckErr('E2 a document made as HTML refuses it too', 'NotSupportedError',
+    "Failed to execute 'createCDATASection' on 'Document': This operation is not supported for HTML documents.",
+    function () { document.implementation.createHTMLDocument('t').createCDATASection('x'); });
+ck('E3 an XML document makes one', function () {
+    var doc = document.implementation.createDocument(NS, 'r', null);
+    var c = doc.createCDATASection('a>b');
+    return c.nodeType === 4 && c.nodeName === '#cdata-section' && c.data === 'a>b'
+        && c.textContent === 'a>b' && c.ownerDocument === doc;
+}, function () {
+    var doc = document.implementation.createDocument(NS, 'r', null);
+    var c = doc.createCDATASection('a>b');
+    return describe(c) + '/' + c.data;
+});
+ck('E4 a CDATA section is a Text', function () {
+    var doc = document.implementation.createDocument(NS, 'r', null);
+    var c = doc.createCDATASection('x');
+    return c instanceof CDATASection && c instanceof Text && c instanceof CharacterData && c instanceof Node;
+}, function () {
+    var doc = document.implementation.createDocument(NS, 'r', null);
+    var c = doc.createCDATASection('x');
+    return (c instanceof CDATASection) + '/' + (c instanceof Text) + '/' + (c instanceof CharacterData);
+});
+ckErr('E5 the section cannot hold its own end delimiter', 'InvalidCharacterError',
+    "Failed to execute 'createCDATASection' on 'Document': String cannot contain ']]>' since that is the end delimiter of a CData section.",
+    function () { document.implementation.createDocument(NS, 'r', null).createCDATASection('a]]>b'); });
+ck('E6 an appended CDATA section comes back as itself', function () {
+    var doc = document.implementation.createDocument(NS, 'r', null);
+    var c = doc.createCDATASection('x');
+    doc.documentElement.appendChild(c);
+    return doc.documentElement.lastChild === c && c.parentNode === doc.documentElement;
+});
+
+// ── F. attributes that carry a namespace ────────────────────────────────────
+ck('F1 the namespaced setter is on the map', function () {
+    var p = document.createElement('p');
+    var a = document.createAttributeNS(NS, 'x');
+    a.value = '1';
+    return typeof p.attributes.setNamedItemNS === 'function'
+        && p.attributes.setNamedItemNS(a) === null && p.getAttributeNode('x') === a;
+});
+ck('F2 a namespaced attribute is found by its parts', function () {
+    var p = document.createElement('p');
+    var a = document.createAttributeNS(NS, 'x:y');
+    a.value = '1';
+    p.setAttributeNodeNS(a);
+    return p.getAttributeNS(NS, 'y') === '1' && p.getAttributeNodeNS(NS, 'y') === a
+        && p.attributes.getNamedItemNS(NS, 'y') === a && p.hasAttributeNS(NS, 'y') === true
+        && p.getAttributeNode('x:y') === a;
+}, function () {
+    var p = document.createElement('p');
+    var a = document.createAttributeNS(NS, 'x:y');
+    a.value = '1';
+    p.setAttributeNodeNS(a);
+    return JSON.stringify([p.getAttributeNS(NS, 'y'), p.getAttributeNodeNS(NS, 'y') === a]);
+});
+ck('F3 its name is split when it carries a namespace', function () {
+    var a = document.createAttributeNS(NS, 'x:y');
+    return a.name === 'x:y' && a.localName === 'y' && a.prefix === 'x' && a.namespaceURI === NS;
+}, function () {
+    var a = document.createAttributeNS(NS, 'x:y');
+    return JSON.stringify([a.name, a.localName, a.prefix, a.namespaceURI]);
+});
+ck('F4 a plain attribute is not split at its colon', function () {
+    var p = document.createElement('p');
+    p.setAttribute('x:y', '1');
+    var a = p.getAttributeNode('x:y');
+    return a.name === 'x:y' && a.localName === 'x:y' && a.prefix === null && a.namespaceURI === null;
+}, function () {
+    var p = document.createElement('p');
+    p.setAttribute('x:y', '1');
+    var a = p.getAttributeNode('x:y');
+    return JSON.stringify([a.name, a.localName, a.prefix, a.namespaceURI]);
+});
+ck('F5 setAttributeNS keeps the namespace on the element', function () {
+    var p = document.createElement('p');
+    p.setAttributeNS(NS, 'x:lang', 'en');
+    return p.getAttributeNS(NS, 'lang') === 'en' && p.getAttribute('x:lang') === 'en'
+        && p.getAttributeNodeNS(NS, 'lang').namespaceURI === NS;
+}, function () {
+    var p = document.createElement('p');
+    p.setAttributeNS(NS, 'x:lang', 'en');
+    return JSON.stringify([p.getAttributeNS(NS, 'lang'), p.getAttribute('x:lang')]);
+});
+ck('F6 removeAttributeNS takes the namespaced one off', function () {
+    var p = document.createElement('p');
+    p.setAttributeNS(NS, 'x:lang', 'en');
+    p.removeAttributeNS(NS, 'lang');
+    return p.hasAttributeNS(NS, 'lang') === false && p.hasAttribute('x:lang') === false;
+});
+ck('F7 the map removes a namespaced attribute by its parts', function () {
+    var p = document.createElement('p');
+    var a = document.createAttributeNS(NS, 'x:y');
+    a.value = '1';
+    p.setAttributeNodeNS(a);
+    var back = p.attributes.removeNamedItemNS(NS, 'y');
+    return back === a && a.value === '1' && !p.hasAttribute('x:y');
+});
+ck('F8 an element made in a namespace carries its parts', function () {
+    var e = document.createElementNS('http://www.w3.org/2000/svg', 'svg:circle');
+    return e.nodeName === 'svg:circle' && e.localName === 'circle' && e.prefix === 'svg'
+        && e.namespaceURI === 'http://www.w3.org/2000/svg';
+}, function () {
+    var e = document.createElementNS('http://www.w3.org/2000/svg', 'svg:circle');
+    return JSON.stringify([e.nodeName, e.localName, e.prefix, e.namespaceURI]);
+});
+ck('F9 a written attribute value survives a clone', function () {
+    var p = document.createElement('p');
+    p.setAttributeNS(NS, 'x:y', '1');
+    var c = p.cloneNode(false);
+    return c.getAttributeNS(NS, 'y') === '1';
+});
+ck('F10 the map is the same object the element holds', function () {
+    var p = document.createElement('p');
+    return p.attributes === p.attributes && el.attributes === el.attributes;
+});
+</script>
+</body>
+</html>

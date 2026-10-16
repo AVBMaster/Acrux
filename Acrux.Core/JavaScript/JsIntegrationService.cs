@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using DomDocument = Acrux.Core.Dom.Document;
@@ -20,6 +21,9 @@ namespace Acrux.Core.JavaScript;
     private DomDocument? _currentDocument;
 
     public BrowserJsEngineFacade Facade => _facade;
+    /// <summary>The page-side 'document' object — the one wrapper the global holds, so a node read
+    /// back through ownerDocument compares equal to it.</summary>
+    public DocumentHost? Document => _facade.GetGlobalObject<DocumentHost>("document");
     public ObjectIdentityMap IdentityMap => _identityMap;
     public JsEventListenerBridge EventBridge => _eventBridge;
     public JsTimerQueue TimerQueue => _timerQueue;
@@ -110,13 +114,25 @@ namespace Acrux.Core.JavaScript;
             SetupJsBridgeFunctions();
             _prototypeSystem.Reset();
             _prototypeSystem.RegisterBuiltinConstructors();
+            // The registration replaced the prototype objects every wrapper of the previous page
+            // points at, so nothing that was fixed before this line counts as fixed any more.
+            _protoGeneration++;
 
-            var docHost = new DocumentHost(document);
-            // 远程引擎已在 DomSetup.js 中定义 document，无需通过 SetGlobal 发送 .NET 对象
-            if (!JsEngineBridge.IsRemote(_facade.Adapter))
+            // The engine owns the document host: it makes one before calling in here and installs
+            // it as the global 'document' afterwards. Building a second one here gave the page a
+            // host whose prototype had been fixed against the previous page's prototype objects —
+            // 'document instanceof Node' was false and every accessor it cached disagreed with the
+            // window's own document.
+            var docHost = JsEngineBridge.IsRemote(_facade.Adapter)
+                ? null
+                : _facade.GetGlobalObject<DocumentHost>("document");
+            if (docHost == null || !ReferenceEquals(docHost.NativeDocument, document))
             {
-                _facade.SetGlobalObject("document", docHost);
+                docHost = new DocumentHost(document);
+                if (!JsEngineBridge.IsRemote(_facade.Adapter))
+                    _facade.SetGlobalObject("document", docHost);
             }
+            docHost.Engine = _jsEngine;
 
             // 远程引擎的 document 已在 JsEngineHost 的 DomSetup.js 中定义，
             // 无需执行 window.document = document 和原型修复
@@ -174,10 +190,21 @@ namespace Acrux.Core.JavaScript;
         try
         {
             if (JsEngineBridge.IsRemote(_facade.Adapter)) return;
+            // The prototype a wrapper gets is decided once per page, from its interface chain.
+            // Re-running the fixup on every access cost a JavaScript round-trip per node read — and
+            // a tree walk (a mutation snapshot, a node list) touches hundreds of nodes. The
+            // generation is bumped when a page reloads the prototype objects, so a wrapper made
+            // before the reload is fixed again against the new ones.
+            if (_protoFixed.TryGetValue(host, out var stamped)
+                && stamped is ProtoGeneration generation
+                && generation.Value == _protoGeneration) return;
             var id = Interlocked.Increment(ref _fixProtoCounter);
             var tmpName = $"__tmp_fp_{id}";
             _facade.SetGlobalObject(tmpName, host);
             _facade.Execute($"window.__fixProto({tmpName}); delete {tmpName};");
+            _protoFixed.TryGetValue(host, out var existing);
+            if (existing is ProtoGeneration known) known.Value = _protoGeneration;
+            else _protoFixed.TryAdd(host, new ProtoGeneration { Value = _protoGeneration });
         }
         catch { }
     }
@@ -188,12 +215,72 @@ namespace Acrux.Core.JavaScript;
         engine?.IntegrationService?.FixHostProto(host);
     }
 
-    public object? WrapDomNode(Dom.Node node)
+    public object? WrapDomNode(Dom.Node node) => WrapNode(node);
+
+    /// <summary>DOM §2.8: while a node lives it has exactly one JavaScript object. Elements were
+    /// already cached, but text, comment and fragment nodes were wrapped afresh on every access,
+    /// so 'el.firstChild === el.childNodes[0]' was false on a text node and an appended comment
+    /// was not the object the page still held. Everything reachable from the tree goes through
+    /// the same identity map.</summary>
+    public object? WrapNode(Dom.Node? node)
     {
-        if (node is DomElement el) return WrapDomNode(el);
-        if (node is Dom.TextNode tn) return new TextNodeWrapper(tn);
-        if (node is Dom.DocumentFragment df) return new DocumentFragmentHost(df);
-        return null;
+        if (node == null) return null;
+        if (node == _currentDocument) return _facade.GetGlobalObject<DocumentHost>("document");
+
+        var cached = _identityMap.GetWrapper(_identityMap.FindHandleForObject(node));
+        if (cached != null)
+        {
+            FixHostProto(cached);
+            return cached;
+        }
+
+        object? host = node switch
+        {
+            DomElement el => WrapDomNode(el),
+            Dom.TextNode tn => new TextNodeWrapper(tn),
+            Dom.CommentNode cn => new CommentHost(cn),
+            Dom.ProcessingInstruction pi => new ProcessingInstructionHost(pi),
+            Dom.DocumentFragment df => new DocumentFragmentHost(df),
+            Dom.Document doc => new DocumentHost(doc) { Engine = _jsEngine },
+            Dom.DocumentTypeNode dt => new DocumentTypeHost(dt),
+            _ => null,
+        };
+        if (host == null) return null;
+        if (node is not DomElement)
+        {
+            _identityMap.GetOrCreateHandle(node, () => host);
+            FixHostProto(host);
+        }
+        return host;
+    }
+
+    /// <summary>Wraps a node through whichever engine is current — the path every host binding
+    /// takes, so a node never arrives at the page as two objects.</summary>
+    public static object? WrapAny(Dom.Node? node)
+    {
+        var service = JavaScriptEngine.Current?.IntegrationService;
+        if (service != null) return service.WrapNode(node);
+        if (node == null) return null;
+        return node switch
+        {
+            DomElement el => new ElementHost(el),
+            Dom.TextNode tn => new TextNodeWrapper(tn),
+            Dom.CommentNode cn => new CommentHost(cn),
+            Dom.ProcessingInstruction pi => new ProcessingInstructionHost(pi),
+            Dom.DocumentFragment df => new DocumentFragmentHost(df),
+            Dom.Document doc => new DocumentHost(doc),
+            Dom.DocumentTypeNode dt => new DocumentTypeHost(dt),
+            _ => null,
+        };
+    }
+
+    /// <summary>Runs a global JavaScript function with host arguments — the way a binding hands
+    /// a node back to a page-side reaction (custom element callbacks, mutation delivery) without
+    /// building JavaScript values in C#.</summary>
+    public object? CallGlobal(string functionName, params object?[] args)
+    {
+        try { return _facade.CallFunction(functionName, args); }
+        catch { return null; }
     }
 
     public void ExecuteScript(string code, string? sourceUrl = null, ScriptType type = ScriptType.Inline, int lineOffset = 0)
@@ -308,6 +395,13 @@ namespace Acrux.Core.JavaScript;
 
     private BrowserJsException? _lastException;
     private int _fixProtoCounter;
+    private long _protoGeneration;
+    private readonly ConditionalWeakTable<object, object> _protoFixed = new();
+
+    private sealed class ProtoGeneration
+    {
+        public long Value;
+    }
 
     private static DomEvent MapDomEvent(DomEvent evt)
     {

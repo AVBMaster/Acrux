@@ -13,15 +13,18 @@ public abstract class CharacterData : Node
     public override string? NodeValue
     {
         get => _data;
-        set { _data = value ?? string.Empty; DomMutationTracker.Notify(); }
+        set => Data = value ?? string.Empty;
     }
 
     public override string? TextContent
     {
         get => _data;
-        set { _data = value ?? string.Empty; DomMutationTracker.Notify(); }
+        set => Data = value ?? string.Empty;
     }
 
+    /// <summary>The one place text data changes: every CharacterData operation (and the nodeValue
+    /// and textContent accessors) funnels through here, so a mutation observer sees the same
+    /// record whatever spelling the page used.</summary>
     public string Data
     {
         get => _data;
@@ -29,6 +32,7 @@ public abstract class CharacterData : Node
         {
             var old = _data;
             _data = value;
+            DomMutationTracker.NoteCharacterData(this, old, value);
             OnDataChanged(old, value);
             DomMutationTracker.Notify();
         }

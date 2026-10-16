@@ -43,18 +43,36 @@ public class JsHtmlCollection : IList
 
     public object? item(int index) => GetItem(index);
 
-    public object? NamedItem(string name)
+    /// <summary>HTMLCollection's named read: an id matches first, and only then a 'name' attribute
+    /// of the same spelling (DOM 4 §4.5.2.3).</summary>
+    public object? namedItem(string name)
     {
         var elements = GetFilteredElements();
-        return elements.FirstOrDefault(e =>
-        {
-            if (e is ElementHost el)
-            {
-                return el.id == name || el.getAttribute("name") == name;
-            }
-            return false;
-        });
+        foreach (var e in elements)
+            if (e is ElementHost el && el.id == name)
+                return el;
+        foreach (var e in elements)
+            if (e is ElementHost el && el.getAttribute("name") == name)
+                return el;
+        return null;
     }
+
+    public object?[] namedItems(string name)
+    {
+        var outList = new List<object>();
+        foreach (var e in GetFilteredElements())
+        {
+            if (e is ElementHost el && (el.id == name || el.getAttribute("name") == name))
+                outList.Add(el);
+        }
+        return outList.ToArray();
+    }
+
+    /// <summary>The named read spelled the way a live collection is indexed with a string —
+    /// 'document.images["logo"]' — which is the same lookup namedItem does.</summary>
+    public object? this[string name] => namedItem(name);
+
+    public object? NamedItem(string name) => namedItem(name);
 
     public IEnumerator<object> GetEnumerator() => GetFilteredElements().GetEnumerator();
 
@@ -91,8 +109,14 @@ public class JsHtmlCollection : IList
         return elements;
     }
 
+    /// <summary>An element reached through a collection is the same JavaScript object the rest of
+    /// the page holds for it (DOM §2.8), so the collection goes through the engine's identity map
+    /// rather than wrapping a fresh host of its own.</summary>
     private object WrapDom(DomElement el)
     {
+        var engine = JavaScriptEngine.Current ?? _engine;
+        if (engine?.IntegrationService != null)
+            return engine.IntegrationService.WrapDomNode(el)!;
         var host = new ElementHost(el);
         if (host.Engine == null && _engine != null)
             host.Engine = _engine;
@@ -224,18 +248,240 @@ public class JsNodeList : IList
 
     private object? WrapNode(Node node)
     {
-        if (node is DomElement el)
+        var engine = JavaScriptEngine.Current ?? _engine;
+        if (engine?.IntegrationService != null)
+            return engine.IntegrationService.WrapNode(node);
+        return node switch
         {
-            var engine = JavaScriptEngine.Current ?? _engine;
-            if (engine?.IntegrationService != null)
-                return engine.IntegrationService.WrapDomNode(el);
-            var host = new ElementHost(el);
-            if (host.Engine == null && engine != null)
-                host.Engine = engine;
-            return host;
-        }
-        if (node is Acrux.Core.Dom.CommentNode c)
-            return new CommentHost(c);
-        return new TextNodeWrapper((Acrux.Core.Dom.TextNode)node);
+            DomElement el => new ElementHost(el),
+            Acrux.Core.Dom.CommentNode c => new CommentHost(c),
+            Acrux.Core.Dom.TextNode t => new TextNodeWrapper(t),
+            _ => null,
+        };
     }
+}
+
+/// <summary>HTMLFormControlsCollection (HTML §4.10.22): the form's listed controls in tree order,
+/// read live — controls come and go between two reads of 'form.elements'. Its named read answers a
+/// RadioNodeList when several controls share the name, because a group of radio buttons is one
+/// control the form reads and writes as a value.</summary>
+public class JsFormControlsCollection : IList
+{
+    private static readonly HashSet<string> Listed = new(StringComparer.OrdinalIgnoreCase)
+    { "button", "input", "meter", "output", "progress", "select", "textarea" };
+
+    private readonly DomElement _form;
+    private readonly JavaScriptEngine? _engine;
+
+    public JsFormControlsCollection(DomElement form, JavaScriptEngine? engine = null)
+    {
+        _form = form;
+        _engine = engine ?? JavaScriptEngine.Current;
+    }
+
+    private List<DomElement> Controls()
+    {
+        var outList = new List<DomElement>();
+        Collect(_form, outList);
+        return outList;
+    }
+
+    private static void Collect(DomElement root, List<DomElement> into)
+    {
+        foreach (var child in root.Children.OfType<DomElement>())
+        {
+            if (Listed.Contains(child.TagName)) into.Add(child);
+            Collect(child, into);
+        }
+    }
+
+    private object Wrap(DomElement el)
+    {
+        var engine = JavaScriptEngine.Current ?? _engine;
+        if (engine?.IntegrationService != null)
+            return engine.IntegrationService.WrapDomNode(el)!;
+        var host = new ElementHost(el);
+        if (host.Engine == null && engine != null) host.Engine = engine;
+        return host;
+    }
+
+    public int length => Controls().Count;
+    public int Length => length;
+
+    public object? this[int index]
+    {
+        get
+        {
+            var controls = Controls();
+            return index >= 0 && index < controls.Count ? Wrap(controls[index]) : null;
+        }
+        set => throw new NotSupportedException();
+    }
+
+    public object? item(int index) => this[index];
+
+    /// <summary>'form.elements.namedItem(name)': the first control whose 'id' answers, then the
+    /// first whose 'name' does; a group that shares one name comes back as a RadioNodeList.</summary>
+    public object? namedItem(string name)
+    {
+        var matches = new List<DomElement>();
+        foreach (var el in Controls())
+            if (el.Id == name || el.GetAttribute("name") == name)
+                matches.Add(el);
+        if (matches.Count == 0) return null;
+        if (matches.Count == 1) return Wrap(matches[0]);
+        return new JsRadioNodeList(matches, _engine);
+    }
+
+    public object? NamedItem(string name) => namedItem(name);
+
+    public object? this[string name] => namedItem(name);
+
+    public IEnumerator<object> GetEnumerator()
+    {
+        foreach (var el in Controls())
+            yield return Wrap(el);
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    public int Count => length;
+    public bool IsReadOnly => true;
+    public bool IsFixedSize => true;
+    public bool IsSynchronized => false;
+    public object SyncRoot => this;
+
+    public bool Contains(object? value)
+    {
+        foreach (var el in Controls())
+            if (Equals(Wrap(el), value)) return true;
+        return false;
+    }
+
+    public int IndexOf(object? value)
+    {
+        var controls = Controls();
+        for (int i = 0; i < controls.Count; i++)
+            if (Equals(Wrap(controls[i]), value)) return i;
+        return -1;
+    }
+
+    public int Add(object? value) => throw new NotSupportedException();
+    public void Clear() => throw new NotSupportedException();
+    public void Insert(int index, object? value) => throw new NotSupportedException();
+    public void Remove(object? value) => throw new NotSupportedException();
+    public void RemoveAt(int index) => throw new NotSupportedException();
+    public void CopyTo(Array array, int index) => ToArray().CopyTo(array, index);
+
+    public object?[] ToArray() => Controls().Select(Wrap).ToArray();
+}
+
+/// <summary>RadioNodeList (HTML §4.10.22.4): the named group a form answers with when several
+/// controls share one name. Its 'value' reads the checked control of the group and writes the
+/// group, which is what makes 'form.color = "red"' reach the radio button the user picked.</summary>
+public class JsRadioNodeList : IList
+{
+    private readonly List<DomElement> _elements;
+    private readonly JavaScriptEngine? _engine;
+
+    public JsRadioNodeList(List<DomElement> elements, JavaScriptEngine? engine = null)
+    {
+        _elements = elements;
+        _engine = engine ?? JavaScriptEngine.Current;
+    }
+
+    private object Wrap(DomElement el)
+    {
+        var engine = JavaScriptEngine.Current ?? _engine;
+        if (engine?.IntegrationService != null)
+            return engine.IntegrationService.WrapDomNode(el)!;
+        var host = new ElementHost(el);
+        if (host.Engine == null && engine != null) host.Engine = engine;
+        return host;
+    }
+
+    public int length => _elements.Count;
+    public int Length => length;
+
+    public object? this[int index]
+    {
+        get => index >= 0 && index < _elements.Count ? Wrap(_elements[index]) : null;
+        set => throw new NotSupportedException();
+    }
+
+    public object? item(int index) => this[index];
+
+    /// <summary>The group's value: the checked control answers with its value ('on' for a checkbox
+    /// or radio that declares none) and nothing checked is the empty string — the form does not
+    /// guess from the first control. Writing puts the value on every control that owns a 'value'
+    /// attribute and moves the check to the control the value names.</summary>
+    public string? value
+    {
+        get
+        {
+            foreach (var el in _elements)
+            {
+                if (!el.HasAttribute("checked")) continue;
+                var v = el.GetAttribute("value");
+                return v ?? (IsToggle(el) ? "on" : "");
+            }
+            return "";
+        }
+        set
+        {
+            var write = value ?? "";
+            foreach (var el in _elements)
+            {
+                if (el.HasAttribute("value"))
+                {
+                    el.SetAttribute("value", write);
+                    if (IsToggle(el))
+                    {
+                        if ((el.GetAttribute("value") ?? "") == write) el.SetAttribute("checked", "");
+                        else el.RemoveAttribute("checked");
+                    }
+                }
+                else if (IsToggle(el))
+                {
+                    if (write == "on") el.SetAttribute("checked", "");
+                    else el.RemoveAttribute("checked");
+                }
+            }
+        }
+    }
+
+    private static bool IsToggle(DomElement el)
+        => el.TagName.Equals("INPUT", StringComparison.OrdinalIgnoreCase)
+            && (el.GetAttribute("type") is "radio" or "checkbox");
+
+    public IEnumerator<object> GetEnumerator()
+    {
+        foreach (var el in _elements)
+            yield return Wrap(el);
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    public int Count => length;
+    public bool IsReadOnly => true;
+    public bool IsFixedSize => true;
+    public bool IsSynchronized => false;
+    public object SyncRoot => this;
+
+    public bool Contains(object? value) => IndexOf(value) >= 0;
+    public int IndexOf(object? value)
+    {
+        for (int i = 0; i < _elements.Count; i++)
+            if (Equals(Wrap(_elements[i]), value)) return i;
+        return -1;
+    }
+
+    public int Add(object? value) => throw new NotSupportedException();
+    public void Clear() => throw new NotSupportedException();
+    public void Insert(int index, object? value) => throw new NotSupportedException();
+    public void Remove(object? value) => throw new NotSupportedException();
+    public void RemoveAt(int index) => throw new NotSupportedException();
+    public void CopyTo(Array array, int index) => ToArray().CopyTo(array, index);
+
+    public object?[] ToArray() => _elements.Select(Wrap).ToArray();
 }

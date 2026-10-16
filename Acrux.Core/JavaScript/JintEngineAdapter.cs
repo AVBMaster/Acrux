@@ -38,7 +38,34 @@ public class JintEngineAdapter : IJavaScriptEngineAdapter, IDisposable
             // reach the page as a JavaScript error it can catch, the way a DOMException does.
             // Jint's default bubbles the CLR exception to the host instead, which aborts the
             // whole script: one refused call silently took every later statement with it.
-            options.Interop.ExceptionHandler = _ => true;
+            // The one exception is Jint's own: a JavaScriptException only escapes a host method
+            // when that method re-entered script and the page threw, and that value is already
+            // the error the page raised. Turning it into a CLR exception's message would mint a
+            // second Error and lose the object identity the reference keeps (DOM 4 §4.7.1,
+            // measured: nextNode() re-raised the very TypeError the filter threw).
+            options.Interop.ExceptionHandler = e => e is not JavaScriptException;
+            // A DOM object has no own properties: every member the page reads is inherited from
+            // its interface prototype, which is what 'Object.keys(document.body)' and a 'for..in'
+            // over an element answer on the reference (measured: an empty list). The host members
+            // stay readable — they are the implementation of those members — they just are not
+            // reported as own, which is exactly how the interface objects look.
+            options.Interop.ObjectWrapperReportedPropertyKeys = (engine, target) =>
+                target is IDomPrototypeHost ? System.Array.Empty<JsValue>() : null;
+            // DOM §2.8 reaches the JavaScript side here: one CLR object has to be one JavaScript
+            // object for as long as it lives. Jint's default is a ring of the eight most recently
+            // wrapped targets, so a node the page still held could arrive a second time as a new
+            // object — '===' false, and the prototype and the JS properties the page put on the
+            // first one gone with it.
+            options.Interop.TrackObjectWrapperIdentity = true;
+            // A host object is stamped with the prototype of its DOM interface as it is wrapped, so
+            // 'el instanceof Element' and everything the prototypes carry answers on the first read.
+            options.Interop.WrapObjectHandler = (engine, target, type) =>
+            {
+                var wrapper = ObjectWrapper.Create(engine, target, type);
+                if (target is IDomPrototypeHost host && wrapper != null)
+                    DomPrototypeStamp.Apply(engine, wrapper, host);
+                return wrapper;
+            };
             // The host values whose platform interface is a sequence — 'object?[]', which is how
             // DocumentHost exposes document.adoptedStyleSheets — have to reach the page as an
             // Array: a plain CLR array arrives as an array-like, so 'Array.isArray' answers
@@ -155,6 +182,26 @@ public class JintEngineAdapter : IJavaScriptEngineAdapter, IDisposable
         try
         {
             return FromJsValue(_engine.Invoke(functionName, args));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Jint rethrows a JavaScriptException untouched when a host method it is waiting on
+    /// throws one (Jint's own interop guard is 'e is not JavaScriptException'), so the error the
+    /// page raised inside a callback can travel back out of the host method that asked for it.</summary>
+    public object? CallFunctionPropagating(string functionName, params object?[] args)
+    {
+        if (_disposed) return null;
+        try
+        {
+            return FromJsValue(_engine.Invoke(functionName, args));
+        }
+        catch (JavaScriptException)
+        {
+            throw;
         }
         catch
         {

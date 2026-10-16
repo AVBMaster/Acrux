@@ -8,15 +8,80 @@
   function exists(n){ try { return (0, eval)('typeof ' + n); } catch(e){ return 'err'; } }
 
   ['Headers','FormData','AbortController','AbortSignal','DOMImplementation','TreeWalker','NodeIterator',
-   'Image','Option'].forEach(function (g) {
+   'Image','Option','BroadcastChannel','MessageChannel','MessagePort','MessageEvent'].forEach(function (g) {
     __T('exists:'+g, exists(g) === 'function', 'typeof=' + exists(g));
   });
 
-  // Genuinely-absent subsystems (no transport / no XSLT engine / no canvas text metrics yet):
+  // Genuinely-absent subsystems (no XSLT engine / no canvas text metrics yet):
   // their names must NOT be defined, so a feature check on them answers false rather than lying.
-  ['BroadcastChannel','XSLTProcessor','TextMetrics'].forEach(function (g) {
+  ['XSLTProcessor','TextMetrics'].forEach(function (g) {
     __T('absent:'+g, exists(g) === 'undefined', 'typeof=' + exists(g));
   });
+
+  // --- the message interfaces (HTML §8.6) -----------------------------------
+  // A posted message is a task, so nothing has arrived while the script still runs; the harness
+  // drains the timers before it reads the results, which is what lets these assertions land.
+  try {
+    var a = new BroadcastChannel('acrux-test');
+    var b = new BroadcastChannel('acrux-test');
+    __T('BroadcastChannel.name', a.name === 'acrux-test', 'n=' + a.name);
+    __T('BroadcastChannel.onmessage init', a.onmessage === null);
+    var heard = [], selfHeard = false;
+    b.onmessage = function (ev) { heard.push(ev.data); };
+    a.addEventListener('message', function (ev) { heard.push('l:' + ev.data); });
+    a.onmessage = function () { selfHeard = true; };
+    a.postMessage('ping');
+    __T('postMessage is a task', heard.length === 0, 'sync=' + heard.length);
+    setTimeout(function () {
+      __T('BroadcastChannel delivers to the other channel',
+          heard.length === 1 && heard[0] === 'ping', 'heard=' + JSON.stringify(heard));
+      __T('the posting channel does not hear itself', selfHeard === false);
+      // The event a channel brings is a MessageEvent with the members the interface names, and a
+      // channel the page closed stops hearing — the close, not the post, is what ends it.
+      var ev = null;
+      var probe = new BroadcastChannel('acrux-shape');
+      var other = new BroadcastChannel('acrux-shape');
+      other.onmessage = function (e) { ev = e; };
+      probe.postMessage({ k: 1 });
+      var c2 = new BroadcastChannel('acrux-test');
+      var after = 0;
+      c2.onmessage = function () { after++; };
+      var stillLive = 0;
+      b.onmessage = function () { stillLive++; };
+      b.close();
+      c2.close();
+      a.postMessage('after-close');
+      setTimeout(function () {
+        __T('MessageEvent.type/data', !!ev && ev.type === 'message' && ev.data && ev.data.k === 1,
+            ev ? ev.type + '/' + JSON.stringify(ev.data) : 'no event');
+        __T('MessageEvent has the IDL members',
+            !!ev && 'origin' in ev && 'ports' in ev && 'lastEventId' in ev && ev.ports.length === 0,
+            ev ? ('origin=' + typeof ev.origin + ' ports=' + JSON.stringify(ev.ports)) : 'no event');
+        __T('a closed channel hears nothing', after === 0, 'after=' + after);
+        __T('a channel closed twice still hears nothing', stillLive === 0, 'stillLive=' + stillLive);
+      }, 0);
+    }, 0);
+  } catch (e) { __T('BroadcastChannel', false, e && e.message); }
+
+  try {
+    var mc = new MessageChannel();
+    __T('MessageChannel ports', !!mc.port1 && !!mc.port2 && mc.port1 !== mc.port2);
+    var got = null;
+    mc.port1.onmessage = function (ev) { got = ev.data; };
+    mc.port2.postMessage('through');
+    setTimeout(function () {
+      __T('MessagePort delivers to the other end', got === 'through', 'got=' + JSON.stringify(got));
+    }, 0);
+  } catch (e) { __T('MessageChannel', false, e && e.message); }
+
+  try {
+    var winGot = null;
+    window.addEventListener('message', function (ev) { if (ev && ev.data === 'to-window') winGot = ev.data; });
+    window.postMessage('to-window', '*');
+    setTimeout(function () {
+      __T('window.postMessage reaches the window listeners', winGot === 'to-window', 'got=' + JSON.stringify(winGot));
+    }, 0);
+  } catch (e) { __T('window.postMessage', false, e && e.message); }
 
   // --- Headers ---
   try {

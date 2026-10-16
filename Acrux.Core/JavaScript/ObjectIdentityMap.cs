@@ -34,7 +34,9 @@ public class ObjectIdentityMap : IDisposable
             _map[handle] = new WeakReference<object>(wrapper);
             _reverseMap[obj] = handle;
 
-            _objectKeepAlive.Add(obj, wrapper);
+            // A removed entry leaves its keep-alive pair behind, and Add throws on a key it
+            // already holds, so the wrapper for a node that came back to the tree is kept instead.
+            _objectKeepAlive.TryAdd(obj, wrapper);
 
             return handle;
         }
@@ -69,6 +71,14 @@ public class ObjectIdentityMap : IDisposable
                 return kvp.Key;
         }
         return IntPtr.Zero;
+    }
+
+    /// <summary>The handle already minted for a DOM node, so a wrapper can be reused instead of
+    /// a second object minted for the same node (DOM §2.8).</summary>
+    public IntPtr FindHandleForObject(object obj)
+    {
+        if (_disposed || obj == null) return IntPtr.Zero;
+        return _reverseMap.TryGetValue(obj, out var handle) ? handle : IntPtr.Zero;
     }
 
     public void Remove(IntPtr handle)

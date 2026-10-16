@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head><title>NamedNodeMap and Attr (DOM §4.2.1, §4.3.3–4.3.6)</title></head>
+<body>
+<input id="i1" name="a" value="v">
+<div id="d" class="one" title="two"></div>
+<script>
+function ck(name, fn, info) {
+    try {
+        var v = fn();
+        var extra = '';
+        if (info !== undefined) {
+            try { extra = String(typeof info === 'function' ? info() : info); }
+            catch (e2) { extra = 'info threw ' + (e2 && e2.message); }
+        }
+        __T(name, !!v, extra);
+    } catch (e) {
+        __T(name, false, 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e));
+    }
+}
+function throwsNamed(fn, name) {
+    try { fn(); return false; } catch (e) { return e.name === name; }
+}
+
+var el = document.getElementById('i1');
+var m = el.attributes;
+
+// ── the map is a list of Attr nodes, indexable and live ──────────────────────
+ck('N1 attributes length', function () { return m.length === 3; }, function () { return m.length; });
+ck('N2 index access answers an Attr', function () {
+    return typeof m[0] === 'object' && m[0] !== null && m[0].nodeType === 2;
+}, function () { return typeof m[0] + '/' + (m[0] && m[0].nodeName); });
+ck('N3 item(i) === [i]', function () { return m[0] === m.item(0) && m[2] === m.item(2); });
+ck('N4 getNamedItem finds by name', function () {
+    return m.getNamedItem('name') === m.item(1) && m.getNamedItem('name').value === 'a';
+}, function () { return m.getNamedItem('name') + '/' + m.item(1); });
+ck('N5 getNamedItem twice is one object', function () {
+    return m.getNamedItem('value') === m.getNamedItem('value');
+});
+ck('N6 item past the end is null', function () { return m.item(9) === null; });
+ck('N7 attr nodeName is its name', function () {
+    return m[1].nodeName === m[1].name && m[1].nodeName === 'name';
+}, function () { return m[1].nodeName + '/' + m[1].name; });
+ck('N8 attr ownerElement', function () { return m[0].ownerElement === el && m[0].ownerDocument === document; },
+    function () { return m[0].ownerElement === el; });
+ck('N9 attr namespace-less', function () { return m[0].namespaceURI === null || m[0].namespaceURI === ''; },
+    function () { return JSON.stringify(m[0].namespaceURI); });
+ck('N10 attr instanceof chain', function () {
+    return m[0] instanceof Attr && m[0] instanceof Node;
+}, function () { return (m[0] instanceof Attr) + '/' + (m[0] instanceof Node); });
+ck('N11 map is iterable', function () {
+    var n = 0;
+    for (var a of m) { if (!a || a.nodeType !== 2) return false; n++; }
+    return n === m.length;
+}, function () { var k = 0; for (var x of m) k++; return 'itered=' + k + ' len=' + m.length; });
+ck('N12 map length is live', function () {
+    var before = m.length;
+    el.setAttribute('extra', '1');
+    return m.length === before + 1;
+}, function () { return m.length; });
+
+// ── the two directions of a write ────────────────────────────────────────────
+ck('N13 attr value writes through to the element', function () {
+    var a = m.getNamedItem('name');
+    a.value = 'zz';
+    return el.getAttribute('name') === 'zz' && a.value === 'zz';
+}, function () { return el.getAttribute('name') + '/' + m.getNamedItem('name').value; });
+ck('N14 element write reaches the same attr object', function () {
+    var a = m.getNamedItem('name');
+    el.setAttribute('name', 'yy');
+    return m.getNamedItem('name') === a && a.value === 'yy';
+});
+ck('N15 getAttributeNames agrees with the map', function () {
+    var names = el.getAttributeNames();
+    if (names.length !== m.length) return false;
+    for (var i = 0; i < m.length; i++) if (names.indexOf(m[i].name) < 0) return false;
+    return true;
+}, function () { return JSON.stringify(el.getAttributeNames()); });
+ck('N16 removeAttribute drops it from the map', function () {
+    el.removeAttribute('extra');
+    return m.getNamedItem('extra') === null && el.hasAttribute('extra') === false;
+}, function () { return m.length; });
+
+// ── removeNamedItem / setNamedItem ───────────────────────────────────────────
+ck('N17 removeNamedItem hands back the attr with its value', function () {
+    var a = m.removeNamedItem('value');
+    return a && a.name === 'value' && a.value === 'v' && !el.hasAttribute('value') && a.ownerElement === null;
+}, function () { return 'left=' + m.length; });
+ck('N18 removeNamedItem of a missing name throws NotFoundError', function () {
+    return throwsNamed(function () { m.removeNamedItem('never-there'); }, 'NotFoundError');
+});
+ck('N19 setNamedItem puts a detached attr on', function () {
+    var a = document.createAttribute('q');
+    a.value = 'k';
+    var previous = m.setNamedItem(a);
+    return previous === null && el.getAttribute('q') === 'k' && m.getNamedItem('q') === a && a.ownerElement === el;
+});
+ck('N20 setNamedItem returns the attr it replaced', function () {
+    var a = document.createAttribute('q');
+    a.value = 'k2';
+    var previous = m.setNamedItem(a);
+    return previous && previous.name === 'q' && previous.value === 'k' && el.getAttribute('q') === 'k2';
+}, function () { return el.getAttribute('q'); });
+ck('N21 removeNamedItem detaches the owner', function () {
+    var a = m.getNamedItem('q');
+    m.removeNamedItem('q');
+    return a.ownerElement === null && a.value === 'k2' && el.hasAttribute('q') === false;
+});
+
+// ── the element-side methods, which must not drift from the map's ────────────
+ck('N22 setAttributeNode attaches and getNamedItem answers it', function () {
+    var a = document.createAttribute('z');
+    a.value = '1';
+    var previous = el.setAttributeNode(a);
+    return previous === null && el.attributes.getNamedItem('z') === a && a.ownerElement === el;
+});
+ck('N23 setAttributeNode replaces and hands the old one back', function () {
+    var b = document.createAttribute('z');
+    b.value = '2';
+    var previous = el.setAttributeNode(b);
+    return previous && previous.value === '1' && previous.ownerElement === null
+        && el.attributes.getNamedItem('z') === b;
+}, function () { return el.getAttribute('z'); });
+ck('N24 removeAttributeNode keeps the value it removed', function () {
+    var a = el.attributes.getNamedItem('z');
+    var back = el.removeAttributeNode(a);
+    return back === a && a.value === '2' && !el.hasAttribute('z') && a.ownerElement === null;
+});
+ck('N25 setAttributeNode refuses an attr owned elsewhere', function () {
+    var other = document.getElementById('d');
+    var owned = other.attributes.getNamedItem('class');
+    return throwsNamed(function () { el.setAttributeNode(owned); }, 'InvalidModificationError');
+});
+ck('N26 setAttributeNode wants an Attr', function () {
+    return throwsNamed(function () { el.setAttributeNode({ name: 'x', value: 'y' }); }, 'TypeError');
+});
+ck('N27 removeAttributeNode wants one of its own', function () {
+    var stranger = document.createAttribute('nope');
+    return throwsNamed(function () { el.removeAttributeNode(stranger); }, 'NotFoundError');
+});
+ck('N28 removeAttributeNode wants an Attr', function () {
+    return throwsNamed(function () { el.removeAttributeNode('class'); }, 'TypeError');
+});
+ck('N29 an attr read from the map is the owner\'s attr', function () {
+    var d = document.getElementById('d');
+    return d.getAttributeNode('title') === d.attributes.getNamedItem('title')
+        && d.getAttributeNode('title').value === 'two';
+}, function () { var d = document.getElementById('d'); return d.getAttributeNode('title') && d.getAttributeNode('title').value; });
+ck('N30 attribute node serialises as its value', function () {
+    var d = document.getElementById('d');
+    var a = d.getAttributeNode('class');
+    return String(a) === 'one' || a.nodeValue === 'one';
+}, function () { var d = document.getElementById('d'); var a = d.getAttributeNode('class'); return String(a) + '/' + a.nodeValue; });
+ck('N31 namedItem on the map by ns', function () {
+    return m.getNamedItemNS(null, 'name') === m.getNamedItem('name');
+}, function () { return m.getNamedItemNS && String(m.getNamedItemNS(null, 'name')); });
+</script>
+</body>
+</html>

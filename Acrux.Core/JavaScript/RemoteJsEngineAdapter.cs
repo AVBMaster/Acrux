@@ -2175,6 +2175,12 @@ public class RemoteJsEngineAdapter : IJavaScriptEngineAdapter, IDisposable
         }
     }
 
+    /// <summary>A script error only ever arrives here as a string, so the object the page threw
+    /// cannot be handed back to it across the pipe; this adapter keeps the swallowing behavior and
+    /// the in-process one carries the faithful propagation.</summary>
+    public object? CallFunctionPropagating(string functionName, params object?[] args)
+        => CallFunction(functionName, args);
+
     public void EmbedHostObject(string name, object? value) => SetGlobal(name, value);
 
     public void SetGlobal(string name, object? value)

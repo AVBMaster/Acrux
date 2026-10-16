@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html>
+<head><title>Range, StaticRange and Selection (DOM §3.4–3.6, HTML §2.5.3.4)</title></head>
+<body>
+<div id="d"><p id="p1">hello world</p><p id="p2">second</p></div>
+<script>
+// Every expectation in this file was read off the reference engine, and the sentences are quoted in
+// full: a refusal whose wording drifted is a refusal the page can no longer switch on. The harness
+// runs without layout, so nothing here asserts a rectangle — see DOMTest/out/range_selection.log for
+// the run record and the probes that measured these rules.
+function ck(name, fn, info) {
+    try {
+        var v = fn();
+        var extra = '';
+        if (info !== undefined) {
+            try { extra = String(typeof info === 'function' ? info() : info); }
+            catch (e2) { extra = 'info threw ' + (e2 && e2.message); }
+        }
+        __T(name, !!v, extra);
+    } catch (e) {
+        __T(name, false, 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e));
+    }
+}
+
+// The reference answers a refusal with both a name and a sentence; both are asserted, because the
+// engine reaches the page through a decorated CLR exception and either half can go quiet.
+function ckErr(name, wantName, wantMsg, fn) {
+    var e = null;
+    try { fn(); } catch (x) { e = x; }
+    var got = e ? (e.name + ' | ' + e.message) : 'no throw';
+    __T(name, !!e && e.name === wantName && String(e.message) === wantMsg,
+        got === wantName + ' | ' + wantMsg ? '' : 'got: ' + got);
+}
+
+var p1 = document.getElementById('p1');
+var p2 = document.getElementById('p2');
+var t1 = p1.firstChild;   // "hello world"
+var t2 = p2.firstChild;   // "second"
+var doc = document;
+var sel = doc.getSelection();
+
+function mkRange() { return doc.createRange(); }
+function contentsOf(node) { var r = mkRange(); r.selectNodeContents(node); return r; }
+
+// ── A: the interface surface ─────────────────────────────────────────────────
+ck('A1 new Range() is constructible', function () {
+    var r = new Range();
+    return r.startContainer === doc && r.startOffset === 0
+        && r.endContainer === doc && r.endOffset === 0;
+}, function () { var r = new Range(); return r.startContainer + '/' + r.startOffset; });
+ck('A2 a range is a Range and an AbstractRange', function () {
+    var r = mkRange();
+    return r instanceof Range && r instanceof AbstractRange && !(r instanceof StaticRange);
+});
+ck('A3 the four modes are on the interface object', function () {
+    return Range.START_TO_START === 0 && Range.START_TO_END === 1
+        && Range.END_TO_END === 2 && Range.END_TO_START === 3;
+});
+ck('A4 and on the prototype, enumerable, frozen, permanent', function () {
+    var d = Object.getOwnPropertyDescriptor(Range.prototype, 'START_TO_START');
+    return d && d.value === 0 && d.writable === false && d.enumerable === true
+        && d.configurable === false
+        && Range.prototype.START_TO_END === 1 && Range.prototype.END_TO_START === 3;
+});
+ck('A5 a range has no own property', function () {
+    return Object.keys(mkRange()).length === 0 && Object.getOwnPropertyNames(mkRange()).length === 0;
+}, function () { return Object.getOwnPropertyNames(mkRange()).join(','); });
+ck('A6 the toStringTag names the interface', function () {
+    return Object.prototype.toString.call(mkRange()) === '[object Range]'
+        && Object.prototype.toString.call(sel) === '[object Selection]'
+        && Object.prototype.toString.call(new StaticRange({
+            startContainer: p1, startOffset: 0, endContainer: p1, endOffset: 1
+        })) === '[object StaticRange]';
+});
+ckErr('A7 AbstractRange is not constructible', 'TypeError',
+    "Failed to construct 'AbstractRange': Illegal constructor", function () { return new AbstractRange(); });
+ckErr('A8 Selection is not constructible', 'TypeError',
+    "Failed to construct 'Selection': Illegal constructor", function () { return new Selection(); });
+ckErr('A9 Range called as a function refuses', 'TypeError',
+    "Failed to construct 'Range': Please use the 'new' operator, this DOM object constructor"
+    + " cannot be called as a function.",
+    function () { return Range(); });
+// Measured on the reference: a Range has neither of these. They are the two names a page that read
+// the older documentation reaches for, and the reference answers undefined.
+ck('A10 the members the reference does not have', function () {
+    var r = mkRange();
+    return r.containsNode === undefined && r.isCollapsed === undefined
+        && typeof r.collapsed === 'boolean';
+}, function () { var r = mkRange(); return typeof r.containsNode + '/' + typeof r.isCollapsed; });
+ck('A11 the methods the reference has', function () {
+    var r = mkRange();
+    var names = ['cloneContents', 'cloneRange', 'collapse', 'compareBoundaryPoints', 'comparePoint',
+        'createContextualFragment', 'deleteContents', 'detach', 'expand', 'extractContents',
+        'getBoundingClientRect', 'getClientRects', 'insertNode', 'intersectsNode', 'isPointInRange',
+        'selectNode', 'selectNodeContents', 'setEnd', 'setEndAfter', 'setEndBefore', 'setStart',
+        'setStartAfter', 'setStartBefore', 'surroundContents', 'toString'];
+    for (var i = 0; i < names.length; i++) {
+        if (typeof r[names[i]] !== 'function') return 'missing ' + names[i];
+    }
+    return true;
+});
+ck('A12 commonAncestorContainer', function () {
+    var r = mkRange(); r.setStart(t1, 1); r.setEnd(t2, 2);
+    return r.commonAncestorContainer === p1.parentNode;
+});
+
+// ── B: boundary points ───────────────────────────────────────────────────────
+ck('B1 setStart and setEnd hold the points', function () {
+    var r = mkRange(); r.setStart(t1, 2); r.setEnd(t1, 5);
+    return r.startContainer === t1 && r.startOffset === 2 && r.endOffset === 5 && r.toString() === 'llo';
+});
+ckErr('B2 an offset past a text node is refused by its length', 'IndexSizeError',
+    "Failed to execute 'setStart' on 'Range': The offset 99 is larger than the node's length (11).",
+    function () { mkRange().setStart(t1, 99); });
+ckErr('B3 an offset past an element is refused by its children', 'IndexSizeError',
+    "Failed to execute 'setStart' on 'Range': There is no child at offset 9.",
+    function () { mkRange().setStart(p1, 9); });
+ckErr('B4 a negative offset is refused as the wrapped number', 'IndexSizeError',
+    "Failed to execute 'setStart' on 'Range': The offset 4294967295 is larger than the node's length (11).",
+    function () { mkRange().setStart(t1, -1); });
+ckErr('B5 parameter 1 has to be a Node', 'TypeError',
+    "Failed to execute 'setStart' on 'Range': parameter 1 is not of type 'Node'.",
+    function () { mkRange().setStart('x', 0); });
+ck('B6 an offset the page spells as a string is coerced', function () {
+    var r = mkRange(); r.setStart(t1, '3'); r.setEnd(t1, '4');
+    return r.startOffset === 3 && r.endOffset === 4;
+}, function () { var r = mkRange(); r.setStart(t1, '3'); return r.startOffset; });
+ck('B7 NaN is the unsigned long 0', function () {
+    var r = contentsOf(t1); r.setStart(t1, NaN); r.setEnd(t1, 4);
+    return r.startOffset === 0;
+});
+ck('B8 setStart past the end takes the end with it', function () {
+    var r = mkRange(); r.setStart(t1, 1); r.setEnd(t1, 3); r.setStart(t1, 6);
+    return r.startOffset === 6 && r.endOffset === 6;
+}, function () { var r = mkRange(); r.setStart(t1, 1); r.setEnd(t1, 3); r.setStart(t1, 6); return r.startOffset + '/' + r.endOffset; });
+ckErr('B9 a boundary beside a parentless node is refused', 'InvalidNodeTypeError',
+    "Failed to execute 'setStartBefore' on 'Range': the given Node has no parent.",
+    function () { mkRange().setStartBefore(doc.createElement('div')); });
+ck('B10 selectNode surrounds the node, selectNodeContents fills it', function () {
+    var a = mkRange(); a.selectNode(p1);
+    var b = contentsOf(p1);
+    var c = contentsOf(t1);
+    return a.startContainer === p1.parentNode && a.startOffset === 0 && a.endOffset === 1
+        && a.commonAncestorContainer === p1.parentNode
+        && b.startContainer === p1 && b.startOffset === 0 && b.endOffset === 1
+        && c.startContainer === t1 && c.endOffset === 11;
+}, function () { var b = contentsOf(t1); return b.startContainer.nodeName + '/' + b.endOffset; });
+ck('B11 collapse() goes to the end; toStart is truthiness', function () {
+    var a = contentsOf(t1); a.collapse();
+    var b = contentsOf(t1); b.collapse(true);
+    var c = contentsOf(t1); c.collapse(0);
+    var d = contentsOf(t1); d.collapse('x');
+    var e = contentsOf(t1); e.collapse(false);
+    return a.startOffset === 11 && a.endOffset === 11
+        && b.startOffset === 0 && b.endOffset === 0
+        && c.startOffset === 11 && d.startOffset === 0 && e.startOffset === 11;
+}, function () { var a = contentsOf(t1); a.collapse(); return a.startOffset + '/' + a.endOffset; });
+ck('B12 a cloned range is a second object over the same points', function () {
+    var r = contentsOf(p1);
+    var q = r.cloneRange();
+    return q !== r && q.startContainer === r.startContainer && q.endContainer === r.endContainer
+        && q.toString() === r.toString();
+});
+ck('B13 comparePoint orders against the range', function () {
+    var r = mkRange(); r.setStart(t1, 2); r.setEnd(t1, 5);
+    return r.comparePoint(t1, 1) === -1 && r.comparePoint(t1, 2) === 0
+        && r.comparePoint(t1, 4) === 0 && r.comparePoint(t1, 5) === 0
+        && r.comparePoint(t1, 9) === 1 && r.isPointInRange(t1, 3) === true
+        && r.isPointInRange(t1, 9) === false;
+});
+ckErr('B14 comparePoint validates its offset', 'IndexSizeError',
+    "Failed to execute 'comparePoint' on 'Range': There is no child at offset 99.",
+    function () { mkRange().comparePoint(p1, 99); });
+ck('B15 intersectsNode', function () {
+    var r = mkRange(); r.setStart(t1, 2); r.setEnd(t1, 5);
+    return r.intersectsNode(t1) === true && r.intersectsNode(p2) === false
+        && r.intersectsNode(p1) === true;
+});
+ck('B16 compareBoundaryPoints with each mode', function () {
+    var a = mkRange(); a.setStart(t1, 2); a.setEnd(t1, 5);
+    var b = mkRange(); b.setStart(t1, 2); b.setEnd(t1, 5);
+    return a.compareBoundaryPoints(Range.START_TO_START, b) === 0
+        && a.compareBoundaryPoints(Range.START_TO_END, b) === -1
+        && a.compareBoundaryPoints(Range.END_TO_END, b) === 0
+        && a.compareBoundaryPoints(Range.END_TO_START, b) === 1;
+});
+ckErr('B17 a comparison mode the page invented is refused', 'NotSupportedError',
+    "Failed to execute 'compareBoundaryPoints' on 'Range': The comparison method provided must be"
+    + " one of 'START_TO_START', 'START_TO_END', 'END_TO_END', or 'END_TO_START'.",
+    function () { mkRange().compareBoundaryPoints(9, mkRange()); });
+ckErr('B18 parameter 2 has to be a Range', 'TypeError',
+    "Failed to execute 'compareBoundaryPoints' on 'Range': parameter 2 is not of type 'Range'.",
+    function () { mkRange().compareBoundaryPoints(Range.START_TO_START, p1); });
+ckErr('B19 a range from another document is refused by its document', 'WrongDocumentError',
+    "Failed to execute 'compareBoundaryPoints' on 'Range': The source range is in a different"
+    + " document than this range.",
+    function () {
+        var other = doc.implementation.createHTMLDocument();
+        mkRange().compareBoundaryPoints(Range.START_TO_START, other.createRange());
+    });
+
+// ── C: the content between the points ────────────────────────────────────────
+ck('C1 extractContents takes the covered nodes out', function () {
+    var host = doc.createElement('div');
+    host.appendChild(doc.createTextNode('abcdef'));
+    doc.getElementById('d').appendChild(host);
+    var text = host.firstChild;
+    var r = mkRange(); r.setStart(text, 2); r.setEnd(text, 4);
+    var f = r.extractContents();
+    var after = host.textContent;
+    var kept = f.childNodes.length === 1 && f.firstChild.nodeValue === 'cd';
+    host.parentNode.removeChild(host);
+    return kept && after === 'abef' && r.collapsed === true;
+}, function () { return 'see assertion'; });
+ck('C2 deleteContents leaves the range where its content was', function () {
+    var host = doc.createElement('div');
+    host.appendChild(doc.createTextNode('one two'));
+    doc.getElementById('d').appendChild(host);
+    var r = contentsOf(host);
+    r.deleteContents();
+    var empty = host.textContent === '';
+    var collapsed = r.collapsed === true && r.startContainer === host && r.startOffset === 0;
+    host.parentNode.removeChild(host);
+    return empty && collapsed;
+});
+ck('C3 cloneContents copies without touching the tree', function () {
+    var r = contentsOf(p1);
+    var f = r.cloneContents();
+    return f.childNodes.length === 1 && f.firstChild.nodeValue === 'hello world'
+        && p1.firstChild.nodeValue === 'hello world';
+});
+ck('C4 insertNode puts the node at the start and holds it', function () {
+    var host = doc.createElement('div');
+    host.appendChild(doc.createTextNode('ab'));
+    doc.getElementById('d').appendChild(host);
+    var r = mkRange(); r.setStart(host, 1); r.setEnd(host, 1);
+    var b = doc.createElement('b');
+    r.insertNode(b);
+    var placed = host.childNodes.length === 2 && host.childNodes[1] === b;
+    var bounds = r.startContainer === host && r.startOffset === 1
+        && r.endContainer === host && r.endOffset === 2;
+    b.parentNode.removeChild(b);
+    host.parentNode.removeChild(host);
+    return placed && bounds;
+});
+ck('C5 a fragment inserts its children, not itself', function () {
+    var host = doc.createElement('div');
+    host.appendChild(doc.createTextNode('ab'));
+    doc.getElementById('d').appendChild(host);
+    var r = mkRange(); r.selectNodeContents(host); r.collapse(true);
+    var f = doc.createDocumentFragment();
+    f.appendChild(doc.createElement('i'));
+    f.appendChild(doc.createElement('em'));
+    r.insertNode(f);
+    var bounds = r.startContainer === host && r.startOffset === 0
+        && r.endContainer === host && r.endOffset === 2;
+    var order = host.firstChild.tagName === 'I' && host.childNodes[1].tagName === 'EM';
+    while (host.firstChild) host.removeChild(host.firstChild);
+    host.appendChild(doc.createTextNode('ab'));
+    host.parentNode.removeChild(host);
+    return bounds && order;
+});
+ckErr('C6 a node cannot be inserted into its own ancestor', 'HierarchyRequestError',
+    "Failed to execute 'insertNode' on 'Range': The new child element contains the parent.",
+    function () {
+        var r = contentsOf(t1);
+        r.insertNode(p1.parentNode);
+    });
+ckErr('C7 a document cannot be inserted', 'HierarchyRequestError',
+    "Failed to execute 'insertNode' on 'Range': Unable to insert a node into a Range starting from"
+    + " the node itself.",
+    function () { contentsOf(t1).insertNode(doc); });
+ckErr('C8 a comment takes no children', 'HierarchyRequestError',
+    "Failed to execute 'insertNode' on 'Range': Nodes of type 'DIV' may not be inserted inside nodes"
+    + " of type '#comment'.",
+    function () {
+        var c = doc.createComment('x');
+        var r = mkRange(); r.selectNodeContents(c);
+        r.insertNode(doc.createElement('div'));
+    });
+ck('C9 surroundContents lifts the covered text into the element', function () {
+    var host = doc.createElement('div');
+    host.appendChild(doc.createTextNode('abcdef'));
+    doc.getElementById('d').appendChild(host);
+    var text = host.firstChild;
+    var r = mkRange(); r.setStart(text, 1); r.setEnd(text, 3);
+    var wrap = doc.createElement('strong');
+    r.surroundContents(wrap);
+    var shaped = host.childNodes.length === 3 && host.childNodes[1] === wrap
+        && wrap.firstChild.nodeValue === 'bc';
+    wrap.parentNode.replaceChild(wrap.firstChild, wrap);
+    while (host.firstChild) host.removeChild(host.firstChild);
+    host.parentNode.removeChild(host);
+    return shaped;
+});
+ckErr('C10 only an element can wrap a range', 'HierarchyRequestError',
+    "Failed to execute 'surroundContents' on 'Range': This node type does not support this method.",
+    function () { contentsOf(t1).surroundContents(doc.createComment('x')); });
+ckErr('C11 a range that cuts an element cannot be wrapped', 'InvalidStateError',
+    "Failed to execute 'surroundContents' on 'Range': The Range has partially selected a non-Text node.",
+    function () {
+        var r = mkRange(); r.setStart(t1, 2); r.setEnd(t2, 2);
+        r.surroundContents(doc.createElement('b'));
+    });
+ck('C12 createContextualFragment parses in the range context', function () {
+    var r = contentsOf(p1);
+    var f = r.createContextualFragment('<b>bold</b> and <i>slanted</i>');
+    return f.childNodes.length === 3 && f.firstChild.tagName === 'B'
+        && f.firstChild.firstChild.nodeValue === 'bold'
+        && f.childNodes[1].nodeType === 3 && f.childNodes[1].nodeValue === ' and '
+        && f.childNodes[2].tagName === 'I' && r.toString() === 'hello world';
+}, function () {
+    var f = contentsOf(p1).createContextualFragment('<b>x</b><i>y</i>');
+    return f.childNodes.length + '/' + (f.firstChild && f.firstChild.tagName);
+});
+ck('C13 expand grows a caret to the word around it', function () {
+    var r = mkRange(); r.setStart(t1, 2); r.setEnd(t1, 2);
+    r.expand('word');
+    return r.startOffset === 0 && r.endOffset === 5;
+}, function () { var r = mkRange(); r.setStart(t1, 2); r.setEnd(t1, 2); r.expand('word'); return r.startOffset + '/' + r.endOffset; });
+ck('C14 the units the reference leaves alone', function () {
+    var a = mkRange(); a.setStart(t1, 2); a.setEnd(t1, 2); a.expand('character');
+    var b = mkRange(); b.setStart(t1, 2); b.setEnd(t1, 2); b.expand('sentence');
+    return a.startOffset === 2 && a.endOffset === 2 && b.startOffset === 2;
+});
+ck('C15 detach leaves the range usable', function () {
+    var r = contentsOf(p1);
+    r.detach();
+    return r.toString() === 'hello world';
+});
+ckErr('C16 a boundary offset of a detached node still validates', 'IndexSizeError',
+    "Failed to execute 'setEnd' on 'Range': There is no child at offset 1.",
+    function () { var r = mkRange(); r.setEnd(doc.createElement('span'), 1); });
+
+// ── D: StaticRange ───────────────────────────────────────────────────────────
+ck('D1 a static range holds the points it was given', function () {
+    var sr = new StaticRange({ startContainer: t1, startOffset: 2, endContainer: t1, endOffset: 5 });
+    return sr.startContainer === t1 && sr.startOffset === 2 && sr.endContainer === t1
+        && sr.endOffset === 5 && sr.collapsed === false
+        && sr instanceof StaticRange && sr instanceof AbstractRange && !(sr instanceof Range)
+        && Object.getOwnPropertyNames(sr).length === 0;
+}, function () {
+    var sr = new StaticRange({ startContainer: t1, startOffset: 2, endContainer: t1, endOffset: 5 });
+    return Object.getOwnPropertyNames(sr).join(',');
+});
+ck('D2 a static range over one point is collapsed', function () {
+    var sr = new StaticRange({ startContainer: t1, startOffset: 3, endContainer: t1, endOffset: 3 });
+    return sr.collapsed === true;
+});
+ck('D3 its offsets are unsigned longs', function () {
+    var a = new StaticRange({ startContainer: t1, startOffset: -1, endContainer: t1, endOffset: 99 });
+    var b = new StaticRange({ startContainer: t1, startOffset: '2', endContainer: t1, endOffset: null });
+    return a.startOffset === 4294967295 && a.endOffset === 99 && b.startOffset === 2 && b.endOffset === 0;
+}, function () {
+    var a = new StaticRange({ startContainer: t1, startOffset: -1, endContainer: t1, endOffset: 99 });
+    return a.startOffset;
+});
+ck('D4 the points are read through AbstractRange.prototype', function () {
+    var d = Object.getOwnPropertyDescriptor(AbstractRange.prototype, 'startContainer');
+    return !!d && !!d.get && !d.set && d.enumerable === true && d.configurable === true
+        && Object.getOwnPropertyDescriptor(Range.prototype, 'startContainer') === undefined
+        && Object.getOwnPropertyNames(AbstractRange.prototype).sort().join(',')
+        === 'collapsed,constructor,endContainer,endOffset,startContainer,startOffset';
+}, function () { return Object.getOwnPropertyNames(AbstractRange.prototype).sort().join(','); });
+ckErr('D5 a missing dictionary member is named', 'TypeError',
+    "Failed to construct 'StaticRange': Failed to read the 'endContainer' property from"
+    + " 'StaticRangeInit': Required member is undefined.",
+    function () { return new StaticRange({ startContainer: t1, startOffset: 0, endOffset: 1 }); });
+ckErr('D6 the members are read in the order the specification lists them', 'TypeError',
+    "Failed to construct 'StaticRange': Failed to read the 'endOffset' property from"
+    + " 'StaticRangeInit': Required member is undefined.",
+    function () { return new StaticRange({ endContainer: t1, startContainer: t1 }); });
+ckErr('D7 a container that is not a Node is refused by its own name', 'TypeError',
+    "Failed to construct 'StaticRange': Failed to read the 'endContainer' property from"
+    + " 'StaticRangeInit': Failed to convert value to 'Node'.",
+    function () {
+        return new StaticRange({ startContainer: 'x', startOffset: 0, endContainer: 'x', endOffset: 1 });
+    });
+ckErr('D8 the dictionary itself has to be an object', 'TypeError',
+    "Failed to construct 'StaticRange': The provided value is not of type 'StaticRangeInit'.",
+    function () { return new StaticRange(5); });
+ckErr('D9 StaticRange needs one argument', 'TypeError',
+    "Failed to construct 'StaticRange': 1 argument required, but only 0 present.",
+    function () { return new StaticRange(); });
+ckErr('D10 StaticRange called as a function refuses', 'TypeError',
+    "Failed to construct 'StaticRange': Please use the 'new' operator, this DOM object constructor"
+    + " cannot be called as a function.",
+    function () { return StaticRange({}); });
+
+// ── E: the selection is one object per document ──────────────────────────────
+ck('E1 the document and the window answer the same selection', function () {
+    return doc.getSelection() === window.getSelection() && sel === doc.getSelection();
+});
+ck('E2 a selection has no own property', function () {
+    return Object.keys(sel).length === 0 && Object.getOwnPropertyNames(sel).length === 0;
+});
+ck('E3 an empty selection', function () {
+    sel.removeAllRanges();
+    return sel.rangeCount === 0 && sel.type === 'None' && sel.direction === 'none'
+        && sel.isCollapsed === true && sel.anchorNode === null && sel.focusNode === null
+        && sel.baseNode === null && sel.extentNode === null && sel.toString() === '';
+}, function () { return sel.rangeCount + '/' + sel.type + '/' + sel.anchorNode; });
+ckErr('E4 nothing is selected at that index', 'IndexSizeError',
+    "Failed to execute 'getRangeAt' on 'Selection': 0 is not a valid index.",
+    function () { sel.removeAllRanges(); sel.getRangeAt(0); });
+ckErr('E5 a negative index is refused as the wrapped number', 'IndexSizeError',
+    "Failed to execute 'getRangeAt' on 'Selection': 4294967295 is not a valid index.",
+    function () { sel.removeAllRanges(); sel.getRangeAt(-1); });
+ck('E6 a method list of its own', function () {
+    var names = ['addRange', 'removeRange', 'getRangeAt', 'collapse', 'setPosition', 'extend',
+        'setBaseAndExtent', 'selectAllChildren', 'containsNode', 'getComposedRanges', 'empty',
+        'removeAllRanges', 'collapseToStart', 'collapseToEnd', 'deleteFromDocument', 'modify',
+        'toString'];
+    for (var i = 0; i < names.length; i++) {
+        if (typeof Selection.prototype[names[i]] !== 'function') return 'missing ' + names[i];
+    }
+    var members = ['rangeCount', 'type', 'direction', 'isCollapsed', 'anchorNode', 'anchorOffset',
+        'focusNode', 'focusOffset', 'baseNode', 'baseOffset', 'extentNode', 'extentOffset'];
+    for (var m = 0; m < members.length; m++) {
+        if (!(members[m] in sel)) return 'missing ' + members[m];
+    }
+    return true;
+});
+ck('E7 the reference has no isAnchorFirst or isPending', function () {
+    return sel.isAnchorFirst === undefined && sel.isPending === undefined;
+});
+ck('E8 the prototype reports the number of arguments it needs', function () {
+    return Selection.prototype.addRange.length === 1
+        && Selection.prototype.getRangeAt.length === 1
+        && Selection.prototype.setPosition.length === 1
+        && Selection.prototype.setBaseAndExtent.length === 4
+        && Selection.prototype.empty.length === 0
+        && Selection.prototype.getComposedRanges.length === 0;
+}, function () {
+    return Selection.prototype.addRange.length + '/' + Selection.prototype.setPosition.length
+        + '/' + Selection.prototype.setBaseAndExtent.length;
+});
+ck('E9 a backward selection keeps the range ordered', function () {
+    var r = mkRange(); r.selectNodeContents(p1);
+    sel.removeAllRanges(); sel.addRange(r);
+    sel.setBaseAndExtent(t2, 3, t1, 2);
+    var q = sel.getRangeAt(0);
+    return q.startContainer === t1 && q.startOffset === 2
+        && q.endContainer === t2 && q.endOffset === 3;
+});
+
+// ── F: what the selection holds ──────────────────────────────────────────────
+ck('F1 addRange keeps the very object and getRangeAt answers it', function () {
+    var r = contentsOf(p1);
+    sel.removeAllRanges(); sel.addRange(r);
+    return sel.rangeCount === 1 && sel.getRangeAt(0) === r && sel.type === 'Range'
+        && sel.direction === 'forward';
+});
+ck('F2 a second range is ignored while the first is there', function () {
+    var a = contentsOf(p1), b = contentsOf(p2);
+    sel.removeAllRanges(); sel.addRange(a); sel.addRange(b);
+    return sel.rangeCount === 1 && sel.getRangeAt(0) === a;
+}, function () { return sel.rangeCount; });
+ck('F3 the selection is the range, live', function () {
+    var r = contentsOf(p1);
+    sel.removeAllRanges(); sel.addRange(r);
+    r.setStart(t1, 2);
+    return sel.anchorOffset === 2 && r.endOffset === 1 && sel.toString() === 'llo world';
+}, function () { return sel.anchorOffset + '/' + sel.focusOffset; });
+ck('F4 getComposedRanges answers fresh objects in an Array', function () {
+    var r = contentsOf(p1);
+    sel.removeAllRanges(); sel.addRange(r);
+    var list = sel.getComposedRanges();
+    return Array.isArray(list) && list.length === 1 && list[0] !== r
+        && list[0].startContainer === t1.parentNode && list[0].toString() === r.toString();
+}, function () { return sel.getComposedRanges().length; });
+ck('F5 getComposedRanges of an empty selection', function () {
+    sel.removeAllRanges();
+    var list = sel.getComposedRanges();
+    return Array.isArray(list) && list.length === 0;
+});
+ckErr('F6 a range that is not in the selection is refused',
+    "NotFoundError",
+    "Failed to execute 'removeRange' on 'Selection': Range not found.",
+    function () {
+        var a = contentsOf(p1), b = contentsOf(p2);
+        sel.removeAllRanges(); sel.addRange(a); sel.removeRange(b);
+    });
+ck('F7 removeRange takes the range out', function () {
+    var a = contentsOf(p1);
+    sel.removeAllRanges(); sel.addRange(a); sel.removeRange(a);
+    return sel.rangeCount === 0 && sel.type === 'None' && sel.direction === 'none';
+});
+ck('F8 a document built by the implementation has the parts a page expects', function () {
+    var other = doc.implementation.createHTMLDocument('A title');
+    return other.body !== null && other.body.tagName === 'BODY'
+        && other.documentElement.tagName === 'HTML'
+        && other.getElementsByTagName('head').length === 1
+        && other.title === 'A title';
+}, function () {
+    var other = doc.implementation.createHTMLDocument('A title');
+    return String(other.body) + '/' + String(other.documentElement);
+});
+ck('F9 a range over another document is ignored', function () {
+    var other = doc.implementation.createHTMLDocument();
+    var r = other.createRange(); r.selectNodeContents(other.body);
+    sel.removeAllRanges(); sel.addRange(r);
+    return sel.rangeCount === 0 && sel.type === 'None' && other.getSelection().rangeCount === 0;
+}, function () { return sel.rangeCount; });
+ck('F10 a range over a detached subtree is ignored', function () {
+    var div = doc.createElement('div');
+    div.appendChild(doc.createTextNode('x'));
+    var r = contentsOf(div);
+    sel.removeAllRanges(); sel.addRange(r);
+    return sel.rangeCount === 0 && sel.type === 'None';
+});
+ckErr('F11 an empty selection cannot be collapsed at either end', 'InvalidStateError',
+    "Failed to execute 'collapseToStart' on 'Selection': there is no selection.",
+    function () { sel.removeAllRanges(); sel.collapseToStart(); });
+ckErr('F12 the same at the end', 'InvalidStateError',
+    "Failed to execute 'collapseToEnd' on 'Selection': there is no selection.",
+    function () { sel.removeAllRanges(); sel.collapseToEnd(); });
+ck('F13 collapseToStart and collapseToEnd move the caret', function () {
+    var r = contentsOf(t1);
+    sel.removeAllRanges(); sel.addRange(r);
+    sel.collapseToStart();
+    var start = sel.anchorOffset === 0 && sel.isCollapsed === true && sel.type === 'Caret'
+        && sel.direction === 'none';
+    var r2 = contentsOf(t1);
+    sel.removeAllRanges(); sel.addRange(r2);
+    sel.collapseToEnd();
+    return start && sel.anchorOffset === 11 && sel.focusOffset === 11;
+}, function () { return sel.anchorOffset; });
+ck('F14 empty clears the selection', function () {
+    sel.removeAllRanges(); sel.addRange(contentsOf(p1)); sel.empty();
+    return sel.rangeCount === 0 && sel.type === 'None';
+});
+
+// ── G: the arguments the page forgot ─────────────────────────────────────────
+// The reference counts the arguments before it looks at their types, so these refusals name the
+// method and the number that is missing rather than parameter 1.
+ckErr('G1 addRange()', 'TypeError',
+    "Failed to execute 'addRange' on 'Selection': 1 argument required, but only 0 present.",
+    function () { sel.addRange(); });
+ckErr('G2 removeRange()', 'TypeError',
+    "Failed to execute 'removeRange' on 'Selection': 1 argument required, but only 0 present.",
+    function () { sel.removeRange(); });
+ckErr('G3 getRangeAt()', 'TypeError',
+    "Failed to execute 'getRangeAt' on 'Selection': 1 argument required, but only 0 present.",
+    function () { sel.getRangeAt(); });
+ckErr('G4 collapse()', 'TypeError',
+    "Failed to execute 'collapse' on 'Selection': 1 argument required, but only 0 present.",
+    function () { sel.collapse(); });
+ckErr('G5 setPosition()', 'TypeError',
+    "Failed to execute 'setPosition' on 'Selection': 1 argument required, but only 0 present.",
+    function () { sel.setPosition(); });
+ckErr('G6 extend()', 'TypeError',
+    "Failed to execute 'extend' on 'Selection': 1 argument required, but only 0 present.",
+    function () { sel.extend(); });
+ckErr('G7 selectAllChildren()', 'TypeError',
+    "Failed to execute 'selectAllChildren' on 'Selection': 1 argument required, but only 0 present.",
+    function () { sel.selectAllChildren(); });
+ckErr('G8 containsNode()', 'TypeError',
+    "Failed to execute 'containsNode' on 'Selection': 1 argument required, but only 0 present.",
+    function () { sel.containsNode(); });
+ckErr('G9 setBaseAndExtent()', 'TypeError',
+    "Failed to execute 'setBaseAndExtent' on 'Selection': 4 arguments required, but only 0 present.",
+    function () { sel.setBaseAndExtent(); });
+ckErr('G10 setBaseAndExtent with three', 'TypeError',
+    "Failed to execute 'setBaseAndExtent' on 'Selection': 4 arguments required, but only 3 present.",
+    function () { sel.setBaseAndExtent(p1, 0, p1, 1); sel.setBaseAndExtent(p1, 0, p1); });
+ckErr('G11 addRange with something that is not a Range', 'TypeError',
+    "Failed to execute 'addRange' on 'Selection': parameter 1 is not of type 'Range'.",
+    function () { sel.addRange('x'); });
+ckErr('G12 removeRange with something that is not a Range', 'TypeError',
+    "Failed to execute 'removeRange' on 'Selection': parameter 1 is not of type 'Range'.",
+    function () { sel.removeRange(p1); });
+ckErr('G13 collapse with something that is not a Node', 'TypeError',
+    "Failed to execute 'collapse' on 'Selection': parameter 1 is not of type 'Node'.",
+    function () { sel.collapse('x', 0); });
+ckErr('G14 setBaseAndExtent names the parameter it reached', 'TypeError',
+    "Failed to execute 'setBaseAndExtent' on 'Selection': parameter 1 is not of type 'Node'.",
+    function () { sel.setBaseAndExtent('x', 0, p1, 0); });
+ck('G15 and the third parameter has its own sentence', function () {
+    try { sel.setBaseAndExtent(p1, 0, 'x', 0); return false; }
+    catch (e) {
+        return e.name === 'TypeError'
+            && e.message === "Failed to execute 'setBaseAndExtent' on 'Selection': parameter 3 is"
+            + " not of type 'Node'.";
+    }
+});
+
+// ── H: anchor, focus, direction ──────────────────────────────────────────────
+ck('H1 collapse puts both points on one place', function () {
+    sel.collapse(t1, 4);
+    return sel.anchorNode === t1 && sel.anchorOffset === 4 && sel.focusNode === t1
+        && sel.focusOffset === 4 && sel.isCollapsed === true && sel.type === 'Caret'
+        && sel.direction === 'none' && sel.rangeCount === 1;
+});
+ck('H2 collapse(null) and collapse(undefined) clear it', function () {
+    sel.collapse(t1, 1); sel.collapse(null);
+    var cleared = sel.rangeCount === 0 && sel.type === 'None';
+    sel.collapse(t1, 1); sel.collapse(undefined);
+    return cleared && sel.rangeCount === 0;
+}, function () { return sel.rangeCount; });
+ck('H3 setPosition is collapse with its own name', function () {
+    sel.setPosition(t1, 6);
+    return sel.anchorOffset === 6 && sel.focusOffset === 6 && sel.type === 'Caret';
+});
+ckErr('H4 setPosition validates the offset it was given', 'IndexSizeError',
+    "Failed to execute 'setPosition' on 'Selection': The offset 99 is larger than the node's length (11).",
+    function () { sel.setPosition(t1, 99); });
+ckErr('H5 an element offset is refused by its children', 'IndexSizeError',
+    "Failed to execute 'setBaseAndExtent' on 'Selection': There is no child at offset 9.",
+    function () { sel.setBaseAndExtent(p1, 9, p1, 0); });
+ckErr('H6 extend validates too', 'IndexSizeError',
+    "Failed to execute 'extend' on 'Selection': There is no child at offset 5.",
+    function () { sel.setPosition(p1, 0); sel.extend(p1, 5); });
+ck('H7 a forward selection reads base as anchor', function () {
+    sel.setBaseAndExtent(t1, 1, t1, 5);
+    return sel.anchorNode === t1 && sel.anchorOffset === 1 && sel.focusOffset === 5
+        && sel.baseNode === sel.anchorNode && sel.baseOffset === sel.anchorOffset
+        && sel.extentNode === sel.focusNode && sel.extentOffset === sel.focusOffset
+        && sel.direction === 'forward' && sel.type === 'Range' && sel.toString() === 'ello';
+});
+ck('H8 a backward selection keeps the range ordered', function () {
+    sel.setBaseAndExtent(t1, 5, t1, 1);
+    return sel.anchorOffset === 5 && sel.focusOffset === 1 && sel.direction === 'backward'
+        && sel.isCollapsed === false && sel.getRangeAt(0).startOffset === 1
+        && sel.getRangeAt(0).endOffset === 5 && sel.toString() === 'ello';
+}, function () { return sel.anchorOffset + '/' + sel.focusOffset + '/' + sel.direction; });
+ck('H9 extend moves the focus and keeps the anchor', function () {
+    sel.setPosition(t1, 1); sel.extend(t1, 5);
+    return sel.anchorOffset === 1 && sel.focusOffset === 5 && sel.direction === 'forward'
+        && sel.toString() === 'ello';
+});
+ck('H10 extending back past the anchor turns the selection round', function () {
+    sel.setPosition(t1, 5); sel.extend(t1, 1);
+    return sel.anchorOffset === 5 && sel.focusOffset === 1 && sel.direction === 'backward'
+        && sel.toString() === 'ello';
+}, function () { return sel.anchorOffset + '/' + sel.focusOffset + '/' + sel.direction; });
+ck('H11 selectAllChildren takes the whole content', function () {
+    sel.selectAllChildren(p1);
+    return sel.anchorNode === p1 && sel.anchorOffset === 0 && sel.focusOffset === 1
+        && sel.type === 'Range' && sel.toString() === 'hello world';
+});
+ck('H12 selectAllChildren of a text node counts characters', function () {
+    sel.selectAllChildren(t1);
+    return sel.focusOffset === 11 && sel.toString() === 'hello world';
+}, function () { return sel.focusOffset; });
+ck('H13 a detached node still answers a caret', function () {
+    var div = doc.createElement('div');
+    sel.setBaseAndExtent(div, 0, div, 0);
+    return sel.rangeCount === 1 && sel.isCollapsed === true && sel.type === 'Caret'
+        && sel.anchorNode === div;
+});
+
+// ── I: the questions a selection answers about itself ────────────────────────
+ck('I1 an element is contained only inside both edges', function () {
+    sel.selectAllChildren(doc.getElementById('d'));
+    var d = doc.getElementById('d');
+    // #d holds p1 and p2: the selection starts before p1 and ends after p2, so neither of them is
+    // strictly inside it, while the text each one holds is (measured rule).
+    return sel.containsNode(p1) === false && sel.containsNode(p2) === false
+        && sel.containsNode(t1) === true && sel.containsNode(t1, false) === true
+        && sel.containsNode(p1, true) === true && sel.containsNode(d) === false;
+}, function () {
+    sel.selectAllChildren(doc.getElementById('d'));
+    return sel.containsNode(p1) + '/' + sel.containsNode(t1);
+});
+ck('I2 the element between two edges is contained', function () {
+    var host = doc.createElement('div');
+    var a = doc.createElement('p'), b = doc.createElement('p'), c = doc.createElement('p');
+    a.appendChild(doc.createTextNode('aa'));
+    b.appendChild(doc.createTextNode('bb'));
+    c.appendChild(doc.createTextNode('cc'));
+    host.appendChild(a); host.appendChild(b); host.appendChild(c);
+    doc.getElementById('d').appendChild(host);
+    sel.selectAllChildren(host);
+    var middle = sel.containsNode(b) === true && sel.containsNode(a) === false
+        && sel.containsNode(c) === false;
+    b.parentNode.removeChild(b);
+    host.parentNode.removeChild(host);
+    return middle;
+});
+ck('I3 a partially touched text node still counts, an element does not', function () {
+    sel.setBaseAndExtent(t1, 2, t2, 3);
+    return sel.containsNode(t1) === true && sel.containsNode(p1) === false
+        && sel.containsNode(t1, true) === true && sel.containsNode(p1, true) === true
+        && sel.containsNode(t2, true) === true;
+});
+ck('I4 an empty selection contains nothing', function () {
+    sel.removeAllRanges();
+    return sel.containsNode(p1) === false && sel.containsNode(p1, true) === false;
+});
+ck('I5 deleteFromDocument takes the selection out', function () {
+    var host = doc.createElement('div');
+    host.appendChild(doc.createTextNode('one two'));
+    doc.getElementById('d').appendChild(host);
+    sel.selectAllChildren(host);
+    sel.deleteFromDocument();
+    var emptied = host.textContent === '' && sel.isCollapsed === true;
+    host.parentNode.removeChild(host);
+    return emptied;
+});
+ck('I6 modify moves a caret a character at a time', function () {
+    sel.setPosition(t1, 0);
+    sel.modify('move', 'forward', 'character');
+    var forward = sel.anchorOffset === 1 && sel.focusOffset === 1 && sel.direction === 'none';
+    sel.modify('move', 'backward', 'character');
+    return forward && sel.anchorOffset === 0;
+}, function () { return sel.anchorOffset; });
+ck('I7 modify moves a caret a word at a time', function () {
+    sel.setPosition(t1, 6);
+    sel.modify('move', 'backward', 'word');
+    var back = sel.anchorOffset === 0;
+    sel.setPosition(t1, 6);
+    sel.modify('move', 'forward', 'word');
+    return back && sel.anchorOffset === 11;
+}, function () { return sel.anchorOffset; });
+ck('I8 modify can keep the anchor where it was', function () {
+    sel.setPosition(t1, 0);
+    sel.modify('extend', 'forward', 'word');
+    return sel.anchorOffset === 0 && sel.focusOffset === 5 && sel.toString() === 'hello'
+        && sel.direction === 'forward';
+}, function () { return sel.anchorOffset + '/' + sel.focusOffset; });
+ck('I9 modify validates nothing and changes nothing it does not know', function () {
+    sel.setPosition(t1, 3);
+    sel.modify();
+    var quiet = sel.anchorOffset === 3;
+    sel.modify(null, null, null);
+    quiet = quiet && sel.anchorOffset === 3;
+    sel.modify('x', 'forward', 'word');
+    quiet = quiet && sel.anchorOffset === 3;
+    sel.modify('move', 'forward', 'line');
+    return quiet && sel.anchorOffset === 3;
+}, function () { return sel.anchorOffset; });
+ck('I10 modify with no selection does nothing', function () {
+    sel.removeAllRanges();
+    sel.modify('move', 'forward', 'character');
+    return sel.rangeCount === 0;
+});
+
+// ── J: the selection reaches the tree it was made in ─────────────────────────
+ck('J1 the range the page added is the range the selection reports', function () {
+    var host = doc.createElement('div');
+    host.appendChild(doc.createTextNode('one two'));
+    doc.getElementById('d').appendChild(host);
+    var r = contentsOf(host);
+    sel.removeAllRanges(); sel.addRange(r);
+    r.deleteContents();
+    var took = sel.toString() === '' && sel.isCollapsed === true && sel.getRangeAt(0) === r
+        && host.textContent === '';
+    host.parentNode.removeChild(host);
+    return took;
+});
+ck('J2 a selection made by setBaseAndExtent survives the range being read', function () {
+    sel.setBaseAndExtent(t1, 0, t1, 5);
+    var r = sel.getRangeAt(0);
+    return r.toString() === 'hello' && r.startOffset === 0 && r.endOffset === 5
+        && sel.getRangeAt(0) === r;
+});
+ck('J3 the selection survives a document that was never selected in', function () {
+    var other = doc.implementation.createHTMLDocument();
+    sel.removeAllRanges(); sel.addRange(contentsOf(p1));
+    return other.getSelection() !== sel && other.getSelection().rangeCount === 0;
+});
+
+</script>
+</body>
+</html>
