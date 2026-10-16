@@ -1,3 +1,5 @@
+using Acrux.Core.JavaScript;
+
 namespace Acrux.Core.Dom;
 
 public static class NodeExtensions
@@ -163,6 +165,9 @@ public abstract class Node : EventTarget
         // A clone belongs to the document the original was made in (§4.6) — the doctype and the root
         // of a document clone rather than adopt, and both carry the link.
         clone.OwnerDocument = InsertedChildOwner;
+        // Cloning an element makes it the way making one does: a registered name is constructed as
+        // the copy comes into being, before anything is read off it (§4.6, custom-elements §1).
+        if (clone is Element cloneElement) CustomElements.Constructed(cloneElement);
         return clone;
     }
 
@@ -244,10 +249,12 @@ public abstract class Node : EventTarget
             throw new DOMException("Cannot append a Document node", "HierarchyRequestError");
 
         child.Remove();
+        var previousOwner = child.OwnerDocument;
         child._parent = this;
         _children.Add(child);
         child.OwnerDocument = InsertedChildOwner;
         OnChildInserted(child);
+        CustomElements.Inserted(child, previousOwner);
         DomMutationTracker.Notify();
         return child;
     }
@@ -275,10 +282,12 @@ public abstract class Node : EventTarget
             throw new DOMException("Reference node is not a child", "NotFoundError");
 
         newChild.Remove();
+        var previousOwner = newChild.OwnerDocument;
         newChild._parent = this;
         _children.Insert(index, newChild);
         newChild.OwnerDocument = InsertedChildOwner;
         OnChildInserted(newChild);
+        CustomElements.Inserted(newChild, previousOwner);
         DomMutationTracker.Notify();
         return newChild;
     }
@@ -289,6 +298,7 @@ public abstract class Node : EventTarget
             throw new DOMException("Node is not a child", "NotFoundError");
         child._parent = null;
         OnChildRemoved(child);
+        CustomElements.Removed(child);
         DomMutationTracker.Notify();
         return child;
     }
@@ -300,12 +310,18 @@ public abstract class Node : EventTarget
             throw new DOMException("Node is not a child", "NotFoundError");
 
         newChild.Remove();
+        var previousOwner = newChild.OwnerDocument;
         newChild._parent = this;
         _children[index] = newChild;
         oldChild._parent = null;
         newChild.OwnerDocument = InsertedChildOwner;
         OnChildInserted(newChild);
         OnChildRemoved(oldChild);
+        // The node that came away is the one that was taken out, and the replacement is put in:
+        // the disconnected callback of the first and the connected callback of the second are both
+        // owed, in that order (DOM §4.1 replace, HTML §1).
+        CustomElements.Removed(oldChild);
+        CustomElements.Inserted(newChild, previousOwner);
         DomMutationTracker.Notify();
         return oldChild;
     }
@@ -349,8 +365,11 @@ public abstract class Node : EventTarget
 
     private bool ComputeIsConnected()
     {
-        var root = GetRootNode();
-        return root.NodeType == NodeType.Document;
+        // Connected is not 'has a parent': the root of the chain has to be a document (DOM §2.6). A
+        // document the page built with 'document.implementation' counts — measured, an element moved
+        // into one still reads true here — so the registry, not the connection, is what keeps its
+        // reactions off those trees.
+        return GetRootNode().NodeType == NodeType.Document;
     }
 
     private void RebuildParentLinks()

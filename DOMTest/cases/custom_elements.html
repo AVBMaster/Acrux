@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+<head><title>Custom Elements section 1: the registry, its name rule, the reactions a definition owes</title></head>
+<body>
+<div id="holder"></div>
+<script>
+// Every sentence and every accepted spelling here was read off the reference engine in this session;
+// the probes are kept in out/. The name rule the reference applies: a name begins with a lowercase
+// ASCII letter, carries no uppercase letter, keeps to the characters of an XML name, has a hyphen in
+// the part after its first colon, and is none of the eight names the specification keeps back. The
+// reactions run in the order the specification puts them: the constructor, then the attributes the
+// element already carries, then the connected callback.
+var SVG = 'http://www.w3.org/2000/svg';
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+function ckErr(name, wantName, wantMsg, fn) {
+    var e = null;
+    try { fn(); } catch (x) { e = x; }
+    var got = e ? (e.name + ' | ' + e.message) : 'no throw';
+    __T(name, !!e && e.name === wantName && String(e.message) === wantMsg, got === wantName + ' | ' + wantMsg ? '' : 'got: ' + got);
+}
+function ckOk(name, fn, info) {
+    var threw = null, v = null;
+    try { v = fn(); } catch (e) { threw = e; }
+    __T(name, !threw, threw ? 'threw ' + (threw.name || '') + ': ' + threw.message
+        : (info === undefined ? '' : String(typeof info === 'function' ? info() : info)));
+}
+function describe(n) { return n ? (n.nodeName + '/' + n.nodeType) : String(n); }
+function refused(method, n) {
+    return 'Failed to execute \'' + method + '\' on \'CustomElementRegistry\': "' + n
+        + '" is not a valid custom element name';
+}
+function Bare() { return class extends HTMLElement { }; }
+
+// ── A. the registry object ─────────────────────────────────────────────────
+ck('A1 customElements is a CustomElementRegistry', function () {
+    return typeof customElements === 'object' && customElements instanceof CustomElementRegistry
+        && window.customElements === customElements
+        && Object.prototype.toString.call(customElements) === '[object CustomElementRegistry]';
+}, function () {
+    return typeof customElements + '/' + (customElements instanceof CustomElementRegistry)
+        + '/' + Object.prototype.toString.call(customElements);
+});
+ck('A2 the registry carries no own properties', function () { return Object.keys(customElements).length === 0; },
+    function () { return Object.keys(customElements).length; });
+ck('A3 the five methods live on the prototype', function () {
+    var want = ['define', 'get', 'getName', 'upgrade', 'whenDefined'];
+    for (var i = 0; i < want.length; i++) {
+        if (typeof customElements[want[i]] !== 'function') return false;
+        if (!Object.prototype.hasOwnProperty.call(CustomElementRegistry.prototype, want[i])) return false;
+    }
+    return true;
+}, function () { return Object.getOwnPropertyNames(CustomElementRegistry.prototype).join(','); });
+ck('A4 each method declares the arguments the interface gives it', function () {
+    return CustomElementRegistry.prototype.define.length === 2
+        && CustomElementRegistry.prototype.get.length === 1
+        && CustomElementRegistry.prototype.getName.length === 1
+        && CustomElementRegistry.prototype.whenDefined.length === 1
+        && CustomElementRegistry.prototype.upgrade.length === 1;
+}, function () {
+    return [CustomElementRegistry.prototype.define.length, CustomElementRegistry.prototype.get.length,
+        CustomElementRegistry.prototype.getName.length, CustomElementRegistry.prototype.whenDefined.length,
+        CustomElementRegistry.prototype.upgrade.length].join('/');
+});
+ck('A5 a name with no definition has no constructor', function () {
+    return customElements.get('no-such-element') === undefined;
+}, function () { return String(customElements.get('no-such-element')); });
+ck('A6 a constructor with no definition has no name', function () {
+    return customElements.getName(function () { }) === null;
+}, function () { return String(customElements.getName(function () { })); });
+
+// ── B. the name rule ───────────────────────────────────────────────────────
+ckErr('B1 an uppercase letter is refused', 'SyntaxError', refused('define', 'Foo-bar'),
+    function () { customElements.define('Foo-bar', Bare()); });
+ckErr('B2 a name without a hyphen is refused', 'SyntaxError', refused('define', 'foobar'),
+    function () { customElements.define('foobar', Bare()); });
+ckErr('B3 a name that begins with a hyphen is refused', 'SyntaxError', refused('define', '-x-y'),
+    function () { customElements.define('-x-y', Bare()); });
+ckErr('B4 a name that begins with a digit is refused', 'SyntaxError', refused('define', '1-x-y'),
+    function () { customElements.define('1-x-y', Bare()); });
+ckErr('B5 a space in the name is refused', 'SyntaxError', refused('define', 'x-y z'),
+    function () { customElements.define('x-y z', Bare()); });
+ckErr('B6 an equals sign is refused', 'SyntaxError', refused('define', 'x=y'),
+    function () { customElements.define('x=y', Bare()); });
+ckErr('B7 a slash is refused', 'SyntaxError', refused('define', 'x/y'),
+    function () { customElements.define('x/y', Bare()); });
+ckErr('B8 an empty name is refused', 'SyntaxError', refused('define', ''),
+    function () { customElements.define('', Bare()); });
+ckErr('B9 a name the specification keeps back is refused', 'SyntaxError', refused('define', 'font-face'),
+    function () { customElements.define('font-face', Bare()); });
+ckErr('B10 another kept-back name is refused', 'SyntaxError', refused('define', 'annotation-xml'),
+    function () { customElements.define('annotation-xml', Bare()); });
+ckErr('B11 no hyphen after the colon is refused', 'SyntaxError', refused('define', 'x:y'),
+    function () { customElements.define('x:y', Bare()); });
+ckErr('B12 a null character is refused', 'SyntaxError', refused('define', 'x' + String.fromCharCode(0) + 'y'),
+    function () { customElements.define('x' + String.fromCharCode(0) + 'y', Bare()); });
+ckOk('B13 a name that ends in a hyphen is a name', function () {
+    customElements.define('ok-trail-', Bare()); return customElements.get('ok-trail-') !== undefined;
+});
+ckOk('B14 a prefixed name with a hyphen after the colon is a name', function () {
+    customElements.define('svg:x-y', Bare()); return customElements.get('svg:x-y') !== undefined;
+});
+ckOk('B15 a hyphen before the colon still counts', function () {
+    customElements.define('a-b:c', Bare()); return customElements.get('a-b:c') !== undefined;
+});
+ckOk('B15b a hyphen right after the colon counts too', function () {
+    customElements.define('a:-', Bare()); return customElements.get('a:-') !== undefined;
+});
+ckOk('B16 a low code point beyond the ASCII range is a name character', function () {
+    customElements.define('x-\u00e9', Bare()); return customElements.get('x-\u00e9') !== undefined;
+});
+ckOk('B17 a dot and a digit are name characters', function () {
+    customElements.define('x-.y1', Bare()); return true;
+});
+
+// ── C. what a definition has to be ─────────────────────────────────────────
+ckErr('C1 define without a constructor is refused', 'TypeError',
+    'Failed to execute \'define\' on \'CustomElementRegistry\': 2 arguments required, but only 0 present.',
+    function () { customElements.define(); });
+ckErr('C2 one argument is not enough', 'TypeError',
+    'Failed to execute \'define\' on \'CustomElementRegistry\': 2 arguments required, but only 1 present.',
+    function () { customElements.define('c-two'); });
+ckErr('C3 an object is not a constructor', 'TypeError',
+    'Failed to execute \'define\' on \'CustomElementRegistry\': parameter 2 is not of type \'Function\'.',
+    function () { customElements.define('c-three', { }); });
+ckErr('C4 null is not a constructor', 'TypeError',
+    'Failed to execute \'define\' on \'CustomElementRegistry\': parameter 2 is not of type \'Function\'.',
+    function () { customElements.define('c-four', null); });
+ckOk('C5 a plain function is a constructor', function () {
+    customElements.define('c-five', function () { return document.createElement('div'); });
+    return typeof customElements.get('c-five') === 'function';
+});
+ckErr('C5b an arrow function cannot be a constructor', 'TypeError',
+    'Failed to execute \'define\' on \'CustomElementRegistry\': constructor argument is not a constructor',
+    function () { customElements.define('c-five-b', () => { }); });
+ckErr('C5c a constructor with no prototype object is refused', 'TypeError',
+    'Failed to execute \'define\' on \'CustomElementRegistry\': constructor prototype is not an object',
+    function () {
+        var f = function () { };
+        f.prototype = null;
+        customElements.define('c-five-c', f);
+    });
+ckErr('C6 a name already used is refused', 'NotSupportedError',
+    'Failed to execute \'define\' on \'CustomElementRegistry\': the name "c-six" has already been used'
+    + ' with this registry',
+    function () {
+        var C = class extends HTMLElement { };
+        customElements.define('c-six', C);
+        customElements.define('c-six', C);
+    });
+ckErr('C7 the same name with another constructor is refused too', 'NotSupportedError',
+    'Failed to execute \'define\' on \'CustomElementRegistry\': the name "c-seven" has already been used'
+    + ' with this registry',
+    function () {
+        customElements.define('c-seven', class extends HTMLElement { });
+        customElements.define('c-seven', class extends HTMLElement { });
+    });
+ckErr('C8 options that are not a dictionary are refused', 'TypeError',
+    'Failed to execute \'define\' on \'CustomElementRegistry\': The provided value is not of type'
+    + ' \'ElementDefinitionOptions\'.',
+    function () { customElements.define('c-eight', class extends HTMLElement { }, 'div'); });
+ckOk('C9 no options and an empty one both work', function () {
+    customElements.define('c-nine-a', class extends HTMLElement { }, undefined);
+    customElements.define('c-nine-b', class extends HTMLElement { }, { });
+    customElements.define('c-nine-c', class extends HTMLElement { }, { extends: undefined });
+    return true;
+});
+ck('C10 get finds the constructor and is case sensitive', function () {
+    var C = class extends HTMLElement { };
+    customElements.define('c-ten', C);
+    return customElements.get('c-ten') === C && customElements.get('C-TEN') === undefined
+        && customElements.getName(C) === 'c-ten';
+}, function () {
+    var C = class extends HTMLElement { };
+    return String(customElements.getName(C)) + '/' + String(customElements.get('c-ten'));
+});
+
+// ── D. whenDefined ─────────────────────────────────────────────────────────
+ck('D1 it answers a promise for any valid name', function () {
+    var p = customElements.whenDefined('d-one');
+    return !!p && typeof p.then === 'function';
+});
+ck('D2 a defined name resolves with its constructor', function () {
+    var C = class extends HTMLElement { };
+    customElements.define('d-two', C);
+    var done = null;
+    customElements.whenDefined('d-two').then(function (v) { done = v === C; }, function () { done = false; });
+    setTimeout(function () { __T('D2a the resolution arrived', done === true, 'done=' + done); }, 0);
+    return true;
+});
+ck('D3 an invalid name rejects with the name rule', function () {
+    var got = null;
+    customElements.whenDefined('D BAD').then(function () { got = 'resolved'; },
+        function (e) { got = e.name + ' | ' + e.message; });
+    setTimeout(function () {
+        __T('D3a the rejection arrived', got === 'SyntaxError | ' + refused('whenDefined', 'D BAD'), 'got=' + got);
+    }, 0);
+    return true;
+});
+ck('D4 a name defined later resolves then', function () {
+    var done = 'pending';
+    customElements.whenDefined('d-four').then(function (v) { done = v === Late; });
+    var Late = class extends HTMLElement { };
+    setTimeout(function () { customElements.define('d-four', Late); }, 0);
+    setTimeout(function () { __T('D4a it resolved once defined', done === true, 'done=' + done); }, 2);
+    return true;
+});
+ck('D5 each call is its own promise', function () {
+    return customElements.whenDefined('d-two') !== customElements.whenDefined('d-two');
+});
+
+// ── E. the reactions, in the order they are owed ───────────────────────────
+// A trace that makes the class but does not register it: the order of the reactions depends on
+// whether the name was already defined when the element was made, and several cases need both.
+function tracer(observed) {
+    var seen = [];
+    var C = class extends HTMLElement {
+        static get observedAttributes() { return observed.slice(); }
+        constructor() { super(); seen.push('ctor ' + (this.isConnected ? '1' : '0')); }
+        connectedCallback() { seen.push('connect'); }
+        disconnectedCallback() { seen.push('disconnect'); }
+        adoptedCallback() { seen.push('adopt'); }
+        attributeChangedCallback(n, o, v, ns) { seen.push('attr ' + n + ' ' + o + ' ' + v + ' ' + ns); }
+    };
+    return { seen: seen, ctor: C };
+}
+function holder() { var h = document.createElement('div'); document.body.appendChild(h); return h; }
+var e1 = tracer(['a', 'b']);
+customElements.define('e-one', e1.ctor);
+ck('E1 createElement constructs as it makes', function () {
+    e1.seen.length = 0;
+    var el = document.createElement('e-one');
+    return e1.seen.length === 1 && e1.seen[0] === 'ctor 0' && el.localName === 'e-one'
+        && el.tagName === 'E-ONE' && el.nodeType === 1 && el instanceof e1.ctor
+        && Object.getPrototypeOf(el) === e1.ctor.prototype;
+}, function () { var el = document.createElement('e-one'); return e1.seen.join(',') + '/' + el.localName; });
+ck('E2 an attribute is reported when it changes', function () {
+    var el = document.createElement('e-one');
+    e1.seen.length = 0;
+    el.setAttribute('a', '1');
+    el.setAttribute('a', '2');
+    el.setAttribute('zz', '3');
+    el.removeAttribute('a');
+    return e1.seen.join('|') === 'attr a null 1 null|attr a 1 2 null|attr a 2 null null';
+}, function () { return e1.seen.join('|'); });
+ck('E3 connected, disconnected, connected again', function () {
+    var h = holder();
+    var el = document.createElement('e-one');
+    e1.seen.length = 0;
+    h.appendChild(el);
+    var afterIn = e1.seen.join('|');
+    e1.seen.length = 0;
+    el.remove();
+    var afterOut = e1.seen.join('|');
+    e1.seen.length = 0;
+    h.appendChild(el);
+    return afterIn === 'connect' && afterOut === 'disconnect' && e1.seen.join('|') === 'connect';
+}, function () { return e1.seen.join('|'); });
+var e4 = tracer(['ns']);
+customElements.define('e-four', e4.ctor);
+ck('E4 a namespaced attribute reaches its observer', function () {
+    var h = holder();
+    var el = document.createElement('e-four');
+    h.appendChild(el);
+    e4.seen.length = 0;
+    el.setAttributeNS(SVG, 'ns', 'v');
+    return e4.seen.length === 1 && e4.seen[0] === 'attr ns null v ' + SVG;
+}, function () { return e4.seen.join('|'); });
+var e5 = tracer(['x:foo', 'q']);
+customElements.define('e-five', e5.ctor);
+ck('E5 an observer names the local half, the callback the whole name', function () {
+    var h = holder();
+    var el = document.createElement('e-five');
+    h.appendChild(el);
+    e5.seen.length = 0;
+    el.setAttributeNS(SVG, 'x:foo', '1');
+    var prefixed = e5.seen.join('|');
+    el.setAttributeNS(SVG, 'q', '2');
+    return prefixed === '' && e5.seen.join('|') === 'attr q null 2 ' + SVG;
+}, function () { return e5.seen.join('|'); });
+
+// ── F. the tree brings elements to the registry ────────────────────────────
+var f1 = tracer(['k']);
+customElements.define('f-one', f1.ctor);
+ck('F1 markup parsed for a defined name is constructed', function () {
+    f1.seen.length = 0;
+    var h = holder();
+    h.innerHTML = '<f-one k="9"></f-one>';
+    return f1.seen.join('|') === 'ctor 1|attr k null 9 null|connect';
+}, function () { return f1.seen.join('|'); });
+var f2 = tracer(['a']);
+ck('F2 defining a name upgrades the elements that carry it', function () {
+    var h = holder();
+    h.innerHTML = '<f-two a="1"></f-two>';
+    var made = h.firstElementChild;
+    var before = made instanceof HTMLElement;
+    customElements.define('f-two', f2.ctor);
+    return f2.seen.join('|') === 'ctor 1|attr a null 1 null|connect' && before === true
+        && made instanceof f2.ctor;
+}, function () { var w = document.querySelector('f-two'); return w ? String(w instanceof f2.ctor) : 'none'; });
+var f3 = tracer(['t']);
+ck('F3 an element made before its definition upgrades when it is put in', function () {
+    var h = holder();
+    var made = document.createElement('f-three');
+    var host = document.createElement('div');
+    host.appendChild(made);
+    var detachedTrace = f3.seen.join('|');
+    made.setAttribute('t', 'x');
+    customElements.define('f-three', f3.ctor);
+    var afterDefine = f3.seen.join('|');
+    h.appendChild(host);
+    return detachedTrace === '' && afterDefine === '' && f3.seen.join('|') === 'ctor 1|attr t null x null|connect';
+}, function () { return f3.seen.join('|'); });
+var f4 = tracer([]);
+ck('F4 a descendant is reached through its ancestor', function () {
+    var h = holder();
+    var outer = document.createElement('div');
+    var inner = document.createElement('f-four');
+    outer.appendChild(inner);
+    var detached = f4.seen.join('|');
+    customElements.define('f-four', f4.ctor);
+    var afterDefine = f4.seen.join('|');
+    h.appendChild(outer);
+    var afterIn = f4.seen.join('|');
+    f4.seen.length = 0;
+    outer.remove();
+    return detached === '' && afterDefine === '' && afterIn === 'ctor 1|connect'
+        && f4.seen.join('|') === 'disconnect';
+}, function () { return f4.seen.join('|'); });
+var f5 = tracer([]);
+customElements.define('f-five', f5.ctor);
+ck('F5 a text node and a comment owe nothing', function () {
+    var h = holder();
+    h.appendChild(document.createTextNode('t'));
+    h.appendChild(document.createComment('c'));
+    h.appendChild(document.createDocumentFragment());
+    return f5.seen.length === 0;
+}, function () { return f5.seen.join('|'); });
+var f6 = tracer([]);
+customElements.define('f-six', f6.ctor);
+ck('F6 a document made by the implementation has no registry', function () {
+    var d = document.implementation.createHTMLDocument('t');
+    var made = d.createElement('f-six');
+    var probe = made.isConnected;
+    f6.seen.length = 0;
+    d.body.appendChild(made);
+    var inOther = f6.seen.join('|');
+    // Attached in that document the node is connected — it is the missing registry that keeps its
+    // reactions off, not the tree it sits in (measured both halves).
+    var attached = made.isConnected === true;
+    document.body.appendChild(made);
+    return inOther === '' && attached && f6.seen.join('|') === 'ctor 1|connect';
+}, function () {
+    var d = document.implementation.createHTMLDocument('p');
+    var probe = d.createElement('f-six');
+    d.body.appendChild(probe);
+    return f6.seen.join('|') + '/' + probe.isConnected + '/' + (probe.ownerDocument === d);
+});
+var f7 = tracer(['u']);
+ck('F7 upgrade builds an element outside the tree', function () {
+    var made = document.createElement('f-seven');
+    made.setAttribute('u', '1');
+    customElements.define('f-seven', f7.ctor);
+    var afterDefine = f7.seen.join('|');
+    f7.seen.length = 0;
+    var answer = customElements.upgrade(made);
+    var afterUpgrade = f7.seen.join('|');
+    var twice = f7.seen.length;
+    customElements.upgrade(made);
+    var h = holder();
+    h.appendChild(made);
+    // A detached upgrade builds the element and reports the attributes it carries, but nothing is
+    // connected yet; the second upgrade finds it already built (§1).
+    return afterDefine === '' && afterUpgrade === 'ctor 0|attr u null 1 null' && answer === undefined
+        && twice === 2 && f7.seen.join('|') === 'ctor 0|attr u null 1 null|connect';
+}, function () { return f7.seen.join('|'); });
+ck('F8 upgrade of a node with no definition does nothing', function () {
+    var made = document.createElement('div');
+    var text = document.createTextNode('t');
+    made.appendChild(text);
+    var answer = customElements.upgrade(made);
+    return answer === undefined && customElements.upgrade(text) === undefined;
+});
+
+// ── G. a definition the page calls itself, and one that throws ─────────────
+var g1 = tracer(['p']);
+customElements.define('g-one', g1.ctor);
+ck('G1 the constructor of a definition is also an element constructor', function () {
+    g1.seen.length = 0;
+    var made = new g1.ctor();
+    var afterNew = g1.seen.join('|');
+    var proto = Object.getPrototypeOf(made) === g1.ctor.prototype;
+    made.setAttribute('p', '1');
+    var afterAttr = g1.seen.join('|');
+    var h = holder();
+    h.appendChild(made);
+    return afterNew === 'ctor 0' && proto && made.localName === 'g-one' && made.tagName === 'G-ONE'
+        && made instanceof g1.ctor && afterAttr === 'ctor 0|attr p null 1 null'
+        && g1.seen.join('|') === 'ctor 0|attr p null 1 null|connect'
+        && made.parentNode === h;
+}, function () { return g1.seen.join('|'); });
+ck('G2 a constructor that throws does not stop the element being made', function () {
+    class Boom extends HTMLElement { constructor() { super(); throw new Error('ctor-boom'); } }
+    customElements.define('g-two', Boom);
+    var made = document.createElement('g-two');
+    return !!made && made.localName === 'g-two' && made.nodeType === 1;
+}, function () { return describe(document.createElement('g-two')); });
+ck('G3 a connected callback that throws does not stop the insertion', function () {
+    class Boom2 extends HTMLElement {
+        connectedCallback() { throw new Error('connect-boom'); }
+    }
+    customElements.define('g-three', Boom2);
+    var made = document.createElement('g-three');
+    var h = holder();
+    h.appendChild(made);
+    return made.parentNode === h && h.contains(made);
+}, function () { var m = document.querySelector('g-three'); return m ? String(m.parentNode === null) : 'none'; });
+ck('G4 an attribute callback that throws still leaves the attribute written', function () {
+    class Boom3 extends HTMLElement {
+        static get observedAttributes() { return ['w']; }
+        attributeChangedCallback() { throw new Error('attr-boom'); }
+    }
+    customElements.define('g-four', Boom3);
+    var made = document.createElement('g-four');
+    made.setAttribute('w', '7');
+    return made.getAttribute('w') === '7';
+}, function () { var m = document.createElement('g-four'); m.setAttribute('w', '7'); return m.getAttribute('w'); });
+var reads5 = 0;
+function bump() { reads5++; }
+ck('G5 the observed list is read once, at the definition', function () {
+    var C = class extends HTMLElement {
+        static get observedAttributes() { bump(); return ['r']; }
+        attributeChangedCallback() { }
+    };
+    customElements.define('g-five', C);
+    var afterDefine = reads5;
+    var h = holder();
+    for (var i = 0; i < 3; i++) {
+        var made = document.createElement('g-five');
+        made.setAttribute('r', String(i));
+        h.appendChild(made);
+    }
+    return afterDefine === 1 && reads5 === 1;
+}, function () { return String(reads5); });
+var g6 = tracer([]);
+ck('G6 an element made twice is constructed once', function () {
+    var a = document.createElement('g-six');
+    var b = document.createElement('g-six');
+    customElements.define('g-six', g6.ctor);
+    var h = holder();
+    h.appendChild(a);
+    h.appendChild(b);
+    h.insertBefore(a, b);
+    // Two elements, one constructor call each; the move inside the same parent takes the connected
+    // state down and up again without building the element a second time.
+    return g6.seen.join('|') === 'ctor 1|connect|ctor 1|connect|disconnect|connect';
+}, function () { return g6.seen.join('|'); });
+var g7 = tracer(['c']);
+ck('G7 a clone of a custom element is constructed on its own', function () {
+    customElements.define('g-seven', g7.ctor);
+    var src = document.createElement('g-seven');
+    src.setAttribute('c', '1');
+    g7.seen.length = 0;
+    var copy = src.cloneNode(false);
+    var afterClone = g7.seen.join('|');
+    var h = holder();
+    h.appendChild(copy);
+    return afterClone === 'ctor 0|attr c null 1 null'
+        && g7.seen.join('|') === 'ctor 0|attr c null 1 null|connect';
+}, function () { return g7.seen.join('|'); });
+var g8 = tracer([]);
+ck('G8 moving an element out of the page takes its connected state with it', function () {
+    customElements.define('g-eight', g8.ctor);
+    var made = document.createElement('g-eight');
+    var h = holder();
+    h.appendChild(made);
+    g8.seen.length = 0;
+    var d = document.implementation.createHTMLDocument('t');
+    d.body.appendChild(made);
+    return g8.seen.join('|') === 'disconnect|adopt|connect';
+}, function () { return g8.seen.join('|'); });
+
+// ── H. what the registry keeps ─────────────────────────────────────────────
+ck('H1 the same constructor keeps one name', function () {
+    var C = class extends HTMLElement { };
+    customElements.define('h-one', C);
+    return customElements.getName(C) === 'h-one' && customElements.get('h-one') === C;
+});
+ckErr('H2 a second name for one constructor is refused', 'NotSupportedError',
+    'Failed to execute \'define\' on \'CustomElementRegistry\': this constructor has already been used'
+    + ' with this registry',
+    function () { customElements.define('h-two', customElements.get('h-one')); });
+ckErr('H2b a name that is not a string is still a name rule', 'SyntaxError', refused('define', 123),
+    function () { customElements.define(123, class extends HTMLElement { }); });
+ckOk('H2c an observed list that is not a list still defines', function () {
+    customElements.define('h-five', class extends HTMLElement {
+        static get observedAttributes() { return 'x'; }
+    });
+    return true;
+});
+ckOk('H2d an observed list that throws still defines', function () {
+    customElements.define('h-six', class extends HTMLElement {
+        static get observedAttributes() { throw new Error('obs-boom'); }
+        attributeChangedCallback() { }
+    });
+    var made = document.createElement('h-six');
+    made.setAttribute('q', '1');
+    return made.getAttribute('q') === '1';
+});
+ck('H3 a name is registered for the element the parser made too', function () {
+    var h = holder();
+    h.innerHTML = '<h-three></h-three>';
+    var C = class extends HTMLElement { };
+    customElements.define('h-three', C);
+    return h.firstElementChild instanceof C;
+}, function () {
+    var el = document.querySelector('h-three');
+    return el ? Object.getPrototypeOf(el).constructor.name : 'none';
+});
+</script>
+</body>
+</html>

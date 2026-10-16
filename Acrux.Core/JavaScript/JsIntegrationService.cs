@@ -104,6 +104,10 @@ namespace Acrux.Core.JavaScript;
         try
         {
             _currentDocument = document;
+            // A new page has a new registry: the names the previous one defined are not the names
+            // this document's script registered, and a hook left pointing at them would hand a node
+            // of this page to a constructor that no longer exists.
+            CustomElements.Reset();
             _identityMap.Clear();
             _scriptQueue.Clear();
             _timerQueue.ClearAll();

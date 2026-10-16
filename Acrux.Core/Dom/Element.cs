@@ -1,4 +1,5 @@
 using SkiaSharp;
+using Acrux.Core.JavaScript;
 using Acrux.Core.Performance;
 
 namespace Acrux.Core.Dom;
@@ -80,6 +81,10 @@ public abstract class Element : Node
         }
 
         OnAttributeChanged(name, oldValue, value);
+        // The attribute changed reaction the page's element class observes (§1). Whether this name is
+        // one of them is script data, so the whole change is handed over and the script decides.
+        CustomElements.AttributeChanged(this, name, oldValue, value,
+            AttributeNamespaces.TryGetValue(name, out var attributeNs) ? attributeNs : null);
 
         if (name.Equals("class", StringComparison.OrdinalIgnoreCase))
             _classListCache = null;
@@ -91,6 +96,9 @@ public abstract class Element : Node
     public void RemoveAttribute(string name)
     {
         var oldValue = Attributes.GetValueOrDefault(name);
+        // The namespace has to be read before the attribute is taken off — the callback is told
+        // which namespace the attribute it just lost was set under (§1).
+        AttributeNamespaces.TryGetValue(name, out var removedNamespace);
         Attributes.Remove(name);
         AttributeNamespaces.Remove(name);
         _classListCache = null;
@@ -101,6 +109,7 @@ public abstract class Element : Node
         }
 
         OnAttributeChanged(name, oldValue, null);
+        CustomElements.AttributeChanged(this, name, oldValue, null, removedNamespace);
 
         if (name.Equals("class", StringComparison.OrdinalIgnoreCase))
             _classListCache = null;
@@ -147,9 +156,11 @@ public abstract class Element : Node
 
     public void SetAttributeNS(string? ns, string name, string value)
     {
-        SetAttribute(name, value);
+        // The namespace is recorded first, so the attribute changed reaction the write triggers is
+        // told the namespace the attribute now has rather than the one it had before (§1).
         if (string.IsNullOrEmpty(ns)) AttributeNamespaces.Remove(name);
         else AttributeNamespaces[name] = ns;
+        SetAttribute(name, value);
     }
 
     public void RemoveAttributeNS(string? ns, string name)

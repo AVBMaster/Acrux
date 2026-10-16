@@ -1199,7 +1199,7 @@ public class ElementHost : IDomPrototypeHost
 
     public string baseURI => "";
 
-    public bool isConnected => _element.ParentElement != null || _element.TagName == "HTML";
+    public bool isConnected => _element.IsConnected;
 
     // Node.ownerDocument is the document the node lives in — the same object the page holds as
     // 'document', not a second wrapper for it. A node the parser never stamped with an owner

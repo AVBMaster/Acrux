@@ -1940,6 +1940,361 @@ public class JavaScriptEngine : IDisposable
                 catch (e) { }
             };
 
+            // ── Custom Elements (custom-elements §1) ───────────────────────────
+            // The registry lives here because a definition is a script function — the constructor,
+            // the attributes it observes and the callbacks are all script data. The engine keeps only
+            // the set of names that carry one, and it names the moments a reaction is owed: an
+            // element made for a registered name, a node put into the tree or taken out of it, an
+            // attribute written. Those are the entry points at the bottom of this block. Every
+            // reaction runs in the order the specification puts them — the constructor, then the
+            // attributes the element already carries, then the connected callback.
+            (function () {
+                var Q = String.fromCharCode(34);
+                var definitions = new Map();
+                var namesByCtor = new Map();
+                var constructedOf = new WeakMap();
+                var connectedSet = new WeakSet();
+                var waiters = new Map();
+                var pendingElement = null;
+                var makingOwnElement = false;
+                var RESERVED = ['annotation-xml', 'color-profile', 'font-face', 'font-face-src',
+                    'font-face-uri', 'font-face-format', 'font-face-name', 'missing-glyph'];
+
+                function isNameStartChar(code) {
+                    return (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+                        || code === 95 || code === 58 || code >= 183;
+                }
+                function isNameChar(code) {
+                    return isNameStartChar(code) || (code >= 48 && code <= 57)
+                        || code === 45 || code === 46;
+                }
+                // The rule a name is held to, measured name by name: it begins with a lowercase ASCII
+                // letter, no letter of it is uppercase, every character of it belongs to an XML name,
+                // the part after its first colon carries a hyphen, and it is none of the eight names
+                // the specification keeps back. 'x-' and 'svg:x-y' are names; '-x', 'xY-z', 'a:' and
+                // 'font-face' are not.
+                function validName(name) {
+                    if (typeof name !== 'string' || name.length === 0) return false;
+                    var first = name.charCodeAt(0);
+                    if (first < 97 || first > 122) return false;
+                    for (var i = 0; i < name.length; i++) {
+                        var code = name.charCodeAt(i);
+                        if (code >= 65 && code <= 90) return false;
+                        if (!isNameChar(code)) return false;
+                    }
+                    if (RESERVED.indexOf(name) >= 0) return false;
+                    // The hyphen may sit anywhere in the name — 'a-b:c' and 'a:-' are both names —
+                    // so there is no rule about the colon beyond it being a name character.
+                    return name.indexOf('-') >= 0;
+                }
+                function prefix(method) {
+                    return 'Failed to execute ' + chr(39) + method + chr(39)
+                        + ' on ' + chr(39) + 'CustomElementRegistry' + chr(39) + ': ';
+                }
+                function chr(code) { return String.fromCharCode(code); }
+                function nameRefused(method, name) {
+                    return new SyntaxError(prefix(method) + Q + String(name) + Q
+                        + ' is not a valid custom element name');
+                }
+                function reportError(e) {
+                    // A callback that throws is the page's error, not the engine's: the operation
+                    // that asked for it still finishes (HTML §1 invoking custom element reactions).
+                    try {
+                        if (typeof window.__domError === 'function') window.__domError(e);
+                    } catch (ignored) { }
+                }
+                function callReaction(fn, el, a, b, c, d) {
+                    if (typeof fn !== 'function') return;
+                    try { fn.call(el, a, b, c, d); } catch (e) { reportError(e); }
+                }
+                function localOf(node) {
+                    try { return node && node.nodeType === 1 ? String(node.localName) : ''; }
+                    catch (e) { return ''; }
+                }
+                function eachElementIn(node, out) {
+                    if (!node) return out;
+                    var isElement = false;
+                    try { isElement = node.nodeType === 1; } catch (e) { }
+                    if (isElement) out.push(node);
+                    var kids = null;
+                    try { kids = node.childNodes; } catch (e) { kids = null; }
+                    if (!kids) return out;
+                    for (var i = 0; i < kids.length; i++) eachElementIn(kids[i], out);
+                    return out;
+                }
+
+                // ── the reactions themselves ───────────────────────────────────
+                function attributeReaction(el, name, oldValue, newValue, ns) {
+                    var registered = constructedOf.get(el);
+                    if (registered === undefined) return;
+                    var def = definitions.get(registered);
+                    if (!def) return;
+                    // The list a class observes is matched against the attribute's local name: a
+                    // namespaced attribute written as 'x:foo' is observed as 'foo', and the callback
+                    // is told the name the attribute is stored under (measured both halves).
+                    var local = ns ? name.slice(name.indexOf(':') + 1) : name;
+                    if (def.observed.indexOf(local) < 0) return;
+                    var fn = null;
+                    try { fn = el.attributeChangedCallback; } catch (e) { fn = null; }
+                    callReaction(fn, el, name, oldValue === undefined ? null : oldValue,
+                        newValue === undefined ? null : newValue, ns === undefined ? null : ns);
+                }
+                function connectReaction(el) {
+                    if (connectedSet.has(el)) return;
+                    connectedSet.add(el);
+                    var fn = null;
+                    try { fn = el.connectedCallback; } catch (e) { fn = null; }
+                    callReaction(fn, el);
+                }
+                function disconnectReaction(el) {
+                    if (!connectedSet.has(el)) return;
+                    connectedSet.delete(el);
+                    var fn = null;
+                    try { fn = el.disconnectedCallback; } catch (e) { fn = null; }
+                    callReaction(fn, el);
+                }
+                function construct(el, name) {
+                    var def = definitions.get(name);
+                    if (!def) return;
+                    if (constructedOf.has(el)) return;
+                    constructedOf.set(el, name);
+                    pendingElement = el;
+                    try { new def.ctor(); } catch (e) { reportError(e); }
+                    pendingElement = null;
+                    // The attributes that were already on the element are reported as though they had
+                    // just arrived, in the order the element carries them (§1 upgrade).
+                    var names = [];
+                    try { names = el.getAttributeNames ? toJs(el.getAttributeNames()) : []; }
+                    catch (e) { names = []; }
+                    for (var i = 0; i < names.length; i++) {
+                        var attributeName = String(names[i]);
+                        var ns = null;
+                        try {
+                            var attrNode = el.getAttributeNode
+                                ? el.getAttributeNode(attributeName) : null;
+                            if (attrNode) ns = attrNode.namespaceURI;
+                        } catch (e) { ns = null; }
+                        var value = null;
+                        try { value = el.getAttribute(attributeName); } catch (e) { }
+                        attributeReaction(el, attributeName, null, value, ns);
+                    }
+                    if (isConnected(el)) connectReaction(el);
+                }
+                function isConnected(el) {
+                    try { return !!el.isConnected; } catch (e) { return false; }
+                }
+                // Only a document with a browsing context has a registry, so only the page's own
+                // document upgrades an element: a node the page made with 'document.implementation'
+                // is never constructed, and an element that came from the page keeps whatever it was
+                // built as when it travels out (measured both halves).
+                function isPageDocument(el) {
+                    try { return el.ownerDocument === document; } catch (e) { return false; }
+                }
+                function toJs(clrArray) {
+                    var out = [];
+                    if (!clrArray) return out;
+                    try {
+                        for (var i = 0; i < clrArray.length; i++) out.push(clrArray[i]);
+                    } catch (e) { }
+                    return out;
+                }
+                function insertionReaction(node) {
+                    var list = eachElementIn(node, []);
+                    for (var i = 0; i < list.length; i++) {
+                        var el = list[i];
+                        var name = localOf(el);
+                        if (!definitions.has(name)) continue;
+                        if (!constructedOf.has(el)) {
+                            if (isPageDocument(el)) construct(el, name);
+                            continue;
+                        }
+                        if (isConnected(el)) connectReaction(el);
+                    }
+                }
+                function removalReaction(node) {
+                    var list = eachElementIn(node, []);
+                    for (var i = 0; i < list.length; i++) disconnectReaction(list[i]);
+                }
+                function adoptionReaction(node) {
+                    var list = eachElementIn(node, []);
+                    for (var i = 0; i < list.length; i++) {
+                        var el = list[i];
+                        if (!constructedOf.has(el)) continue;
+                        var fn = null;
+                        try { fn = el.adoptedCallback; } catch (e) { fn = null; }
+                        callReaction(fn, el);
+                    }
+                }
+
+                // ── the interface object ───────────────────────────────────────
+                function CustomElementRegistry() { }
+                if (typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+                    try {
+                        Object.defineProperty(CustomElementRegistry.prototype, Symbol.toStringTag,
+                            { value: 'CustomElementRegistry', configurable: true });
+                    } catch (e) { }
+                }
+
+                // Two declared arguments, as the interface says; the options dictionary is read out of
+                // 'arguments' so that it stays the third thing the page wrote without changing the
+                // function's own length.
+                CustomElementRegistry.prototype.define = function (name, ctor) {
+                    var options = arguments.length > 2 ? arguments[2] : undefined;
+                    if (arguments.length < 2) {
+                        throw new TypeError(prefix('define') + '2 arguments required, but only '
+                            + arguments.length + ' present.');
+                    }
+                    var key = String(name);
+                    if (!validName(key)) throw nameRefused('define', key);
+                    if (typeof ctor !== 'function') {
+                        throw new TypeError(prefix('define')
+                            + 'parameter 2 is not of type ' + chr(39) + 'Function' + chr(39) + '.');
+                    }
+                    // Two different refusals, measured apart: a function that cannot be constructed
+                    // at all — the arrow a page writes — has no prototype property, while one that
+                    // can be constructed but carries no prototype object (a plain function with its
+                    // 'prototype' written away) is a constructor of the wrong shape.
+                    if (!Object.prototype.hasOwnProperty.call(ctor, 'prototype')) {
+                        throw new TypeError(prefix('define')
+                            + 'constructor argument is not a constructor');
+                    }
+                    if (ctor.prototype === null || typeof ctor.prototype !== 'object') {
+                        throw new TypeError(prefix('define')
+                            + 'constructor prototype is not an object');
+                    }
+                    if (definitions.has(key)) {
+                        throw new DOMException(prefix('define') + 'the name ' + Q + key + Q
+                            + ' has already been used with this registry', 'NotSupportedError');
+                    }
+                    if (namesByCtor.has(ctor)) {
+                        throw new DOMException(prefix('define')
+                            + 'this constructor has already been used with this registry',
+                            'NotSupportedError');
+                    }
+                    if (options !== undefined && options !== null) {
+                        if (typeof options !== 'object') {
+                            throw new TypeError(prefix('define') + 'The provided value is not of type '
+                                + chr(39) + 'ElementDefinitionOptions' + chr(39) + '.');
+                        }
+                    }
+                    var observed = [];
+                    try {
+                        // 'observedAttributes' is a static getter and the reference reads it once, at
+                        // the definition (measured: one read for the definition, none per element).
+                        var list = toJs(ctor.observedAttributes);
+                        for (var i = 0; i < list.length; i++) observed.push(String(list[i]));
+                    } catch (e) { observed = []; }
+                    definitions.set(key, { ctor: ctor, observed: observed, extendsName: extendsOf(options) });
+                    namesByCtor.set(ctor, key);
+                    try {
+                        if (typeof __acrux !== 'undefined' && typeof __acrux.ceDefine === 'function')
+                            __acrux.ceDefine(key);
+                    } catch (e) { }
+                    var waiting = waiters.get(key);
+                    if (waiting) {
+                        waiters.delete(key);
+                        for (var w = 0; w < waiting.length; w++) {
+                            try { waiting[w](ctor); } catch (e) { reportError(e); }
+                        }
+                    }
+                    // The elements of this document that already carry the name are upgraded (§1).
+                    var tree = [];
+                    try { tree = eachElementIn(document, []); } catch (e) { tree = []; }
+                    for (var t = 0; t < tree.length; t++) {
+                        if (localOf(tree[t]) === key && !constructedOf.has(tree[t]))
+                            construct(tree[t], key);
+                    }
+                };
+
+                function extendsOf(options) {
+                    if (!options || typeof options !== 'object') return null;
+                    var value = options.extends;
+                    if (value === undefined || value === null) return null;
+                    return String(value).toLowerCase();
+                }
+
+                CustomElementRegistry.prototype.get = function (name) {
+                    var def = definitions.get(String(name));
+                    return def ? def.ctor : undefined;
+                };
+
+                CustomElementRegistry.prototype.getName = function (ctor) {
+                    var found = namesByCtor.get(ctor);
+                    return found === undefined ? null : found;
+                };
+
+                CustomElementRegistry.prototype.whenDefined = function (name) {
+                    var key = String(name);
+                    if (!validName(key)) return Promise.reject(nameRefused('whenDefined', key));
+                    var def = definitions.get(key);
+                    if (def) return Promise.resolve(def.ctor);
+                    var waiting = waiters.get(key);
+                    if (!waiting) { waiting = []; waiters.set(key, waiting); }
+                    return new Promise(function (resolve) { waiting.push(resolve); });
+                };
+
+                CustomElementRegistry.prototype.upgrade = function (node) {
+                    var list = eachElementIn(node, []);
+                    for (var i = 0; i < list.length; i++) {
+                        var el = list[i];
+                        var name = localOf(el);
+                        if (!definitions.has(name) || constructedOf.has(el)) continue;
+                        if (!isPageDocument(el)) continue;
+                        construct(el, name);
+                    }
+                };
+
+                var registry = new CustomElementRegistry();
+                window.CustomElementRegistry = CustomElementRegistry;
+                Object.defineProperty(window, 'customElements', {
+                    configurable: true, enumerable: true,
+                    get: function () { return registry; }
+                });
+
+                // ── the moments the engine names ───────────────────────────────
+                // 'super()' inside a custom element constructor has to hand back the element: the one
+                // the engine is building while it constructs, or — for a page that called
+                // 'new MyEl()' itself — one made now for the name this constructor is registered
+                // under (§1: a custom element constructor is also an element constructor).
+                window.__ceTakeElement = function (ctor) {
+                    if (pendingElement) {
+                        var held = pendingElement;
+                        if (ctor) { try { Object.setPrototypeOf(held, ctor.prototype); } catch (e) { } }
+                        return held;
+                    }
+                    if (!ctor) return null;
+                    var name = namesByCtor.get(ctor);
+                    if (!name) return null;
+                    // The element is made without consulting the registry: this very constructor is
+                    // the one that is running, and a second construction of it would run the page's
+                    // constructor body twice.
+                    makingOwnElement = true;
+                    var made = null;
+                    try { made = document.createElement(name); } catch (e) { made = null; }
+                    makingOwnElement = false;
+                    if (!made) return null;
+                    try { Object.setPrototypeOf(made, ctor.prototype); } catch (e) { }
+                    constructedOf.set(made, name);
+                    return made;
+                };
+                // The prototype a custom element carries is the definition's, not the interface's, so
+                // the wrapper fix-up has to leave an element the registry owns alone.
+                window.__ceOwnsPrototype = function (obj) {
+                    try { return constructedOf.has(obj); } catch (e) { return false; }
+                };
+                window.__ceConstructed = function (el, name) {
+                    if (makingOwnElement) return;
+                    construct(el, String(name));
+                };
+                window.__ceInserted = function (node) { insertionReaction(node); };
+                window.__ceRemoved = function (node) { removalReaction(node); };
+                window.__ceAdopted = function (node) { adoptionReaction(node); };
+                window.__ceAttribute = function (el, name, oldValue, newValue, ns) {
+                    attributeReaction(el, String(name), oldValue, newValue,
+                        ns === undefined || ns === null ? null : String(ns));
+                };
+            })();
+
             // ── NodeFilter (DOM §4.6.2) ─────────────────────────────────────────
             // The whatToShow bitmask and the three answers a filter callback gives. SHOW_ALL is
             // the unsigned 0xffffffff the reference reports (measured: 4294967295, not -1), and the
@@ -2545,6 +2900,11 @@ public class AcruxBuiltins
     /// <summary>'crypto.randomUUID()' (Web Crypto §5.5): a version-4 identifier. The engine is
     /// the only place with a real random source, so the string is minted here.</summary>
     public string randomUUID() => Guid.NewGuid().ToString();
+
+    /// <summary>Custom Elements §1: the script-side registry tells the engine the name it put a
+    /// definition under, and the first call switches the reaction hooks on. Until a page defines its
+    /// first element the engine's tree operations never cross the boundary for a callback.</summary>
+    public void ceDefine(string name) => CustomElements.NoteDefinition(name ?? "");
 
     /// <summary>'new DOMParser().parseFromString(markup, "text/html")' (DOM Parsing §3): a brand
     /// new Document built from the markup, handed to the page as a document host so it is queried

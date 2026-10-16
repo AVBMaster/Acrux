@@ -58,6 +58,14 @@ public class JsDomPrototypeSystem
         var chain = createPrototypeChain(allNames);
         var own = chain[chain.length - 1];
         var ctor = function() {
+            // A class that derives from one of these interfaces is a custom element constructor, and
+            // 'super()' inside it has to hand back the element rather than a plain object: the one the
+            // registry is building, or one made now for the name this constructor is registered under
+            // (custom-elements §1). With nothing in flight this answers null and nothing changes.
+            if (window.__ceTakeElement) {
+                var taken = window.__ceTakeElement(typeof new.target === 'function' ? new.target : null);
+                if (taken) return taken;
+            }
             return factory ? factory.apply(this, arguments) : null;
         };
         ctor.prototype = own || {};
@@ -102,6 +110,10 @@ public class JsDomPrototypeSystem
         try {
             var rawChain = obj.__domTypeChain;
             if (!rawChain) return;
+            // A custom element carries the prototype of its definition rather than the interface's
+            // (custom-elements §1), so the fix-up that would put it back on HTMLElement.prototype has
+            // to pass an element the registry owns by.
+            if (window.__ceOwnsPrototype && window.__ceOwnsPrototype(obj)) return;
             var names = toJsArray(rawChain);
             if (names.length === 0) return;
             var typeName = names[names.length - 1];

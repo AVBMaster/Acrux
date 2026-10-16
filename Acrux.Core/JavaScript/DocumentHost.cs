@@ -230,7 +230,11 @@ public class DocumentHost : IDomPrototypeHost
     {
         DomNames.RequireTagName(tagName, "createElement", "Document");
         var el = _document.CreateElement(tagName);
-        return WrapElement(el) ?? new ElementHost(el);
+        var host = WrapElement(el) ?? new ElementHost(el);
+        // A name the page registered is constructed as it is made, while it is still outside the
+        // tree — the constructor sees the element before any attribute does (Custom Elements §1).
+        CustomElements.Constructed(el);
+        return host;
     }
 
     public ElementHost createElementNS(string? ns, string tagName)
@@ -241,7 +245,9 @@ public class DocumentHost : IDomPrototypeHost
         // HTML namespace is the only one folded to the uppercase spelling (DOM §4.2.1, measured:
         // 'svg:circle' reads 'svg:circle' from tag name, 'x:Y' in the HTML namespace reads 'X:Y').
         var el = _document.CreateElementNS(ns, tagName);
-        return WrapElement(el) ?? new ElementHost(el);
+        var host = WrapElement(el) ?? new ElementHost(el);
+        CustomElements.Constructed(el);
+        return host;
     }
 
 
