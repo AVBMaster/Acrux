@@ -514,6 +514,22 @@ internal class HtmlTreeBuilder
 
     private void ProcessEndOfFile(AtomicHtmlToken token)
     {
+        // HTML §13.2.6.4: in every mode before a body exists, an end-of-file token is handled by the
+        // same default any other token gets there — the html, head and body elements are created
+        // implicitly, so a markup run with nothing in it still ends up a document with them (measured:
+        // 'parseFromString('', 'text/html')' has a body in the reference).
+        for (var steps = 0; steps < 8; steps++)
+        {
+            switch (_insertionMode)
+            {
+                case InsertionMode.Initial: DefaultForInitial(); continue;
+                case InsertionMode.BeforeHtml: DefaultForBeforeHtml(); continue;
+                case InsertionMode.BeforeHead: DefaultForBeforeHead(); continue;
+                case InsertionMode.InHead: DefaultForInHead(); continue;
+                case InsertionMode.AfterHead: DefaultForAfterHead(); continue;
+            }
+            break;
+        }
         _tree.ProcessEndOfFile();
     }
 
@@ -1358,7 +1374,9 @@ internal class HtmlTreeBuilder
 
     private void DefaultForInitial()
     {
-        _tree.InsertDoctype(new AtomicHtmlToken(HtmlToken.TokenType.Doctype, "html"));
+        // HTML §13.2.6.4: the 'initial' mode hands the token to 'before html' and nothing else — a
+        // document that was not given a doctype does not get one written in for it (measured: the
+        // reference answers 'null' for 'document.doctype' of a markup run with no doctype).
         _insertionMode = InsertionMode.BeforeHtml;
     }
 

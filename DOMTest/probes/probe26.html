@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html><head><title>Probe 26</title></head><body>
+<div id="d"><span id="s">t</span></div>
+<script>
+var d = document.getElementById('d');
+var s = document.getElementById('s');
+function ident(tag) {
+  var p = null;
+  s.addEventListener('idcheck', function (e) { p = e.composedPath(); });
+  s.dispatchEvent(new Event('idcheck', { bubbles: true }));
+  __T(tag, p[0] === s && p[1] === d && document.getElementById('s') === s,
+    [String(p[0] === s), String(p[1] === d), String(document.getElementById('s') === s), String(p.length)].join('/'));
+}
+ident('identity with top-level vars, no churn');
+var junk = [];
+for (var i = 0; i < 3000; i++) junk.push({ a: i, b: 'x' + i });
+ident('identity after allocation churn');
+junk = null;
+ident('identity after releasing the churn');
+var made = [];
+for (var k = 0; k < 400; k++) made.push(document.createElement('p'));
+ident('identity after building 400 elements');
+made.length = 0;
+ident('identity after dropping the elements');
+</script></body></html>

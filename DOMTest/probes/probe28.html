@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html><head><title>Probe 28</title></head><body>
+<div id="d"><span id="s">t</span></div>
+<script>
+(function () {
+  function t(name, fn, info) {
+    var ok = false, got = '';
+    try { var v = fn(); ok = !!v; } catch (e) { got = 'threw ' + (e && e.name) + ': ' + (e && e.message); }
+    if (!ok && !got) { try { got = String(typeof info === 'function' ? info() : (info === undefined ? '' : info)); } catch (e) { got = 'info threw'; } }
+    __T(name, ok, got);
+  }
+  var d = document.getElementById('d');
+  t('toggleAttribute granular', function () {
+    var box = document.createElement('p');
+    var a = box.toggleAttribute('hidden');
+    var g = box.getAttribute('hidden');
+    var h = box.hasAttribute('hidden');
+    var o = box.outerHTML;
+    var b = box.toggleAttribute('hidden');
+    return a === true && g === '' && h === true && o === '<p hidden=""></p>' && b === false && box.getAttribute('hidden') === null;
+  }, function () {
+    var box = document.createElement('p');
+    var a = box.toggleAttribute('hidden');
+    return [a, JSON.stringify(box.getAttribute('hidden')), box.hasAttribute('hidden'), box.outerHTML].join(' | ');
+  });
+  t('document.compareDocumentPosition', function () {
+    return typeof document.compareDocumentPosition === 'function'
+      && document.compareDocumentPosition(d) === 20 && d.compareDocumentPosition(document) === 10;
+  }, typeof document.compareDocumentPosition);
+  t('Node constants', function () {
+    return Node.DOCUMENT_POSITION_DISCONNECTED === 1 && Node.DOCUMENT_POSITION_PRECEDING === 2
+      && Node.DOCUMENT_POSITION_FOLLOWING === 4 && Node.DOCUMENT_POSITION_CONTAINS === 8
+      && Node.DOCUMENT_POSITION_CONTAINED_BY === 16 && Node.DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC === 32
+      && d.DOCUMENT_POSITION_FOLLOWING === 4;
+  }, function () { return [Node.DOCUMENT_POSITION_DISCONNECTED, Node.DOCUMENT_POSITION_FOLLOWING, d.DOCUMENT_POSITION_FOLLOWING].join('/'); });
+  t('scroll clamps to what can be scrolled', function () {
+    var box = document.createElement('div');
+    document.body.appendChild(box);
+    box.scrollTo(4, 6);
+    var pair = box.scrollLeft === 0 && box.scrollTop === 0;
+    box.scrollTop = 500;
+    var clamped = box.scrollTop === 0;
+    box.scrollIntoView();
+    document.body.removeChild(box);
+    return pair && clamped;
+  }, function () { var box = document.createElement('div'); document.body.appendChild(box); box.scrollTop = 500; var v = box.scrollTop; document.body.removeChild(box); return String(v); });
+})();
+</script></body></html>

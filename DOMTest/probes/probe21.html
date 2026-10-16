@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html><head><title>Probe 21</title></head><body>
+<form id="f"><input id="i1" name="user" value="v"><input type="submit" id="sub"></form>
+<div id="d" class="a b" data-x="1"><span id="s">t</span></div>
+<script>
+(function () {
+  function t(name, fn, info) {
+    var ok = false, got = '';
+    try { var v = fn(); ok = !!v; } catch (e) { got = 'threw ' + (e && e.name) + ': ' + (e && e.message); }
+    if (!ok && !got) { try { got = String(typeof info === 'function' ? info() : (info === undefined ? '' : info)); } catch (e) { got = 'info threw'; } }
+    __T(name, ok, got);
+  }
+  var d = document.getElementById('d');
+  var s = document.getElementById('s');
+
+  // ── Node identity and tree reads ───────────────────────────────────────────
+  t('Node.isEqualNode', function () {
+    var a = document.createElement('p'); a.className = 'x';
+    var b = document.createElement('p'); b.className = 'x';
+    return a.isEqualNode(b) === true && a.isSameNode(a) === true && a.isSameNode(b) === false;
+  }, function () { var a = document.createElement('p'); var b = document.createElement('p'); return String(a.isEqualNode) + '/' + String(a.isSameNode); });
+  t('getRootNode with options', function () { return d.getRootNode({ composed: true }) === document; }, typeof d.getRootNode);
+  t('hasChildNodes takes no argument', function () { return d.hasChildNodes() === true && document.createElement('p').hasChildNodes() === false; }, d.hasChildNodes);
+  t('contains across kinds', function () { return d.contains(s) === true && s.contains(d) === false && d.contains(d) === true; },
+    function () { return String(d.contains(s)) + '/' + String(d.contains(d)); });
+  t('compareDocumentPosition', function () { return d.compareDocumentPosition(s) === 20 && s.compareDocumentPosition(d) === 10; },
+    function () { return d.compareDocumentPosition(s) + '/' + s.compareDocumentPosition(d); });
+
+  // ── Element surface ────────────────────────────────────────────────────────
+  t('getAttributeNames', function () { var n = d.getAttributeNames(); return Array.isArray(n) && n.indexOf('class') >= 0 && n.indexOf('data-x') >= 0; },
+    function () { return String(d.getAttributeNames && d.getAttributeNames()); });
+  t('insertAdjacentText', function () {
+    var box = document.createElement('p');
+    box.insertAdjacentText('afterbegin', 'a');
+    box.insertAdjacentText('beforeend', 'b');
+    box.insertAdjacentText('beforebegin', 'skip');
+    return box.textContent === 'ab' && box.parentNode === null;
+  }, function () { var b = document.createElement('p'); b.insertAdjacentText('afterbegin', 'a'); return b.textContent; });
+  t('toggleAttribute', function () {
+    var box = document.createElement('p');
+    return box.toggleAttribute('hidden') === true && box.hasAttribute('hidden')
+      && box.toggleAttribute('hidden') === false && !box.hasAttribute('hidden');
+  }, function () { return String(document.createElement('p').toggleAttribute); });
+  t('getAttributeNode', function () { var an = d.getAttributeNode('class'); return an && an.value === 'a b' && an.name === 'class'; },
+    function () { var an = d.getAttributeNode && d.getAttributeNode('class'); return an ? String(an.value) : 'none'; });
+  t('setAttribute with a number', function () { d.setAttribute('tabindex', 3); return d.getAttribute('tabindex') === '3'; },
+    function () { d.setAttribute('tabindex', 3); return String(d.getAttribute('tabindex')); });
+  t('matches with a comma list and :scope', function () {
+    return d.matches('p, div') === true && d.matches(':scope') === true && s.matches('#d :scope') === true;
+  }, function () { return String(d.matches('p, div')) + '/' + String(d.matches(':scope')) + '/' + String(s.matches('#d :scope')); });
+  t('closest with a comma list', function () { return s.closest('p, #d') === d && s.closest('nope') === null; },
+    function () { return String(s.closest('p, #d')); });
+  t('element dataset enumerable', function () {
+    d.dataset.king = '3';
+    var keys = Object.keys(d.dataset);
+    return d.getAttribute('data-king') === '3' && keys.indexOf('king') >= 0 && 'king' in d.dataset;
+  }, function () { d.dataset.king = '3'; return JSON.stringify(Object.keys(d.dataset)); });
+  t('slot/assignedSlot names', function () { return typeof d.assignedSlot === 'undefined' || d.assignedSlot === null; }, String(d.assignedSlot));
+
+  // ── Form and collection named access ───────────────────────────────────────
+  t('form.elements namedItem', function () {
+    var f = document.getElementById('f');
+    return f.elements.namedItem('user') === document.getElementById('i1')
+      && f.elements[0] === document.getElementById('i1');
+  }, function () { var f = document.getElementById('f'); return String(f.elements && f.elements.namedItem); });
+  t('form length and indexed', function () { var f = document.getElementById('f'); return f.length === 2 && f[0].id === 'i1'; },
+    function () { var f = document.getElementById('f'); return String(f.length) + '/' + String(f[0] && f[0].id); });
+  t('named access on the form', function () { var f = document.getElementById('f'); return f.user === document.getElementById('i1'); },
+    function () { var f = document.getElementById('f'); return String(f.user); });
+  t('document.getElementById vs name', function () {
+    return document.getElementsByName('user')[0] === document.getElementById('i1') && document.getElementsByName('user').length >= 1;
+  }, function () { var l = document.getElementsByName('user'); return String(l && l.length); });
+  t('collection named by id', function () {
+    var hc = document.getElementsByTagName('input');
+    return hc.length === 2 && hc[0].id === 'i1' && hc.namedItem('i1') !== null;
+  }, function () { var hc = document.getElementsByTagName('input'); return hc.length + '/' + String(hc.namedItem); });
+
+  // ── Window and BOM ─────────────────────────────────────────────────────────
+  t('window mirrors', function () {
+    return window.self === window && window.top === window && window.parent === window && window.window === window;
+  }, function () { return [String(window.self === window), String(window.top === window), String(window.parent === window), String(window.window === window)].join('/'); });
+  t('window.name and origin', function () { return typeof window.name === 'string' && typeof window.origin === 'string'; },
+    function () { return typeof window.name + '/' + String(window.origin); });
+  t('document.domain and referrer', function () { return typeof document.domain === 'string' && typeof document.referrer === 'string'; },
+    function () { return document.domain + '/' + document.referrer; });
+  t('location assign/replace are methods', function () {
+    return typeof location.assign === 'function' && typeof location.replace === 'function' && typeof location.reload === 'function';
+  }, function () { return typeof location.assign + '/' + typeof location.replace; });
+  t('location parts', function () {
+    return location.protocol === 'file:' && typeof location.hostname === 'string' && location.search === '' && location.hash === '';
+  }, function () { return [location.protocol, location.hostname, location.search, location.hash, location.pathname].join('|'); });
+  t('history.pushState keeps the state', function () {
+    history.pushState({ a: 1 }, '', '#one');
+    var st = history.state;
+    history.back();
+    return st && st.a === 1 && location.hash === '#one';
+  }, function () { history.pushState({ b: 2 }, '', '#two'); return JSON.stringify(history.state) + '/' + location.hash; });
+  t('scrollTo/scrollBy are methods', function () { return typeof window.scrollTo === 'function' && typeof window.scrollBy === 'function' && typeof d.scrollTo === 'function'; },
+    function () { return typeof window.scrollTo + '/' + typeof d.scrollTo; });
+
+  // ── Parsing and serialising ────────────────────────────────────────────────
+  t('DOMParser html', function () {
+    var doc = new DOMParser().parseFromString('<p class="q">hi</p>', 'text/html');
+    return doc.querySelector('p').className === 'q' && doc.body !== null && doc.defaultView === null;
+  }, function () { var p = new DOMParser().parseFromString('<p>hi</p>', 'text/html'); return String(p.querySelector('p')); });
+  t('DOMParser refuses a bad type', function () {
+    try { new DOMParser().parseFromString('x', 'not-a-type'); return 'no throw'; }
+    catch (e) { return e.name === 'TypeError' && /not a valid enum value of type SupportedType/.test(String(e.message)); }
+  }, function () { try { var doc = new DOMParser().parseFromString('x', 'not-a-type'); return 'no throw/' + String(doc.documentElement && doc.documentElement.localName); } catch (e) { return e.name; } });
+  t('XMLSerializer round trip', function () {
+    var out = new XMLSerializer().serializeToString(document.createElement('p'));
+    return typeof out === 'string' && out.indexOf('<p') === 0;
+  }, function () { return String(new XMLSerializer && new XMLSerializer().serializeToString(document.createElement('p'))); });
+  t('outerHTML and insertAdjacentHTML', function () {
+    var box = document.createElement('div'); box.innerHTML = '<b>x</b>';
+    return box.outerHTML === '<div><b>x</b></div>' && box.innerHTML === '<b>x</b>';
+  }, function () { var box = document.createElement('div'); box.innerHTML = '<b>x</b>'; return String(box.outerHTML); });
+
+  // ── Encoding helpers ───────────────────────────────────────────────────────
+  t('btoa/atob round trip', function () { return btoa('ab') === 'YWI=' && atob('YWI=') === 'ab'; },
+    function () { return btoa('ab') + '/' + atob('YWI='); });
+  t('btoa takes the latin1 range and refuses above it', function () {
+    var ok = atob(btoa('\u00FFx')) === '\u00FFx' && btoa('\u00FFx').length === 4;
+    try { btoa('\u0100'); return 'no throw'; } catch (e) { return ok && e.name === 'InvalidCharacterError'; }
+  }, function () { try { return btoa('\u00FFx') + '/' + btoa('\u0100'); } catch (e) { return e.name + '/' + String(btoa('\u00FFx')); } });
+  t('atob refuses bad length', function () {
+    try { atob('a'); return 'no throw'; } catch (e) { return e.name === 'InvalidCharacterError'; }
+  }, function () { try { atob('a'); return 'no throw'; } catch (e) { return e.name; } });
+  t('atob takes unpadded base64', function () { return atob('YWI') === 'ab'; }, atob('YWI'));
+
+  // ── Events through the tree ────────────────────────────────────────────────
+  t('event bubbles to the ancestor', function () {
+    var hits = [];
+    document.getElementById('d').addEventListener('myclick', function () { hits.push('d'); });
+    s.addEventListener('myclick', function () { hits.push('s'); });
+    s.dispatchEvent(new Event('myclick', { bubbles: true }));
+    return hits.join(',') === 's,d';
+  }, function () { var hits = []; document.getElementById('d').addEventListener('myclick', function () { hits.push('d'); }); s.addEventListener('myclick', function () { hits.push('s'); }); s.dispatchEvent(new Event('myclick2', { bubbles: true })); return hits.join(','); });
+  t('capture listener runs first', function () {
+    var hits = [];
+    document.getElementById('d').addEventListener('cap', function () { hits.push('d-cap'); }, true);
+    s.addEventListener('cap', function () { hits.push('s'); });
+    s.dispatchEvent(new Event('cap', { bubbles: true }));
+    return hits[0] === 'd-cap';
+  }, function () { var h = []; document.getElementById('d').addEventListener('cap2', function () { h.push('c'); }, true); s.dispatchEvent(new Event('cap2')); return h.join(','); });
+  t('stopPropagation halts the walk', function () {
+    var hits = [];
+    document.getElementById('d').addEventListener('halt', function () { hits.push('d'); });
+    s.addEventListener('halt', function (e) { e.stopPropagation(); hits.push('s'); });
+    s.dispatchEvent(new Event('halt', { bubbles: true }));
+    return hits.join(',') === 's';
+  }, function () { var h = []; document.getElementById('d').addEventListener('halt2', function () { h.push('d'); }); s.dispatchEvent(new Event('halt2')); return h.join(','); });
+  t('event target and currentTarget', function () {
+    var seen = null;
+    document.getElementById('d').addEventListener('phase', function (e) { seen = [e.target.id, e.currentTarget ? e.currentTarget.id : null]; });
+    s.dispatchEvent(new Event('phase', { bubbles: true }));
+    return seen !== null && seen[0] === 's';
+  }, function () { return 'n/a'; });
+  t('composedPath walks to the document', function () {
+    var path = null;
+    s.addEventListener('ppath', function (e) { path = e.composedPath(); });
+    s.dispatchEvent(new Event('ppath', { bubbles: true }));
+    return !!path && path.length >= 3 && path[0] === s;
+  }, function () { var p = null; s.addEventListener('ppath2', function (e) { p = e.composedPath(); }); s.dispatchEvent(new Event('ppath2')); return p ? String(p.length) : 'none'; });
+  t('once option on an element', function () {
+    var n = 0;
+    s.addEventListener('onc', function () { n++; }, { once: true });
+    s.dispatchEvent(new Event('onc')); s.dispatchEvent(new Event('onc'));
+    return n === 1;
+  }, function () { var n = 0; s.addEventListener('onc2', function () { n++; }, { once: true }); s.dispatchEvent(new Event('onc2')); s.dispatchEvent(new Event('onc2')); return n; });
+
+  // ── CSSOM reads ────────────────────────────────────────────────────────────
+  t('style setProperty and removeProperty', function () {
+    var box = document.createElement('p');
+    box.style.setProperty('color', 'rgb(1, 2, 3)');
+    var got = box.style.getPropertyValue('color');
+    box.style.removeProperty('color');
+    return got === 'rgb(1, 2, 3)' && box.style.getPropertyValue('color') === '';
+  }, function () { var box = document.createElement('p'); box.style.setProperty('color', 'red'); return String(box.style.getPropertyValue('color')); });
+  t('style.cssText round trip', function () {
+    var box = document.createElement('p');
+    box.style.cssText = 'color: red; margin: 0px';
+    return box.style.color === 'red' && /color/i.test(box.style.cssText);
+  }, function () { var box = document.createElement('p'); box.style.cssText = 'color: red'; return String(box.style.cssText); });
+  t('getComputedStyle is a declaration', function () {
+    var cs = getComputedStyle(d);
+    return typeof cs.getPropertyValue === 'function' && typeof cs.color === 'string' && cs.display !== '';
+  }, function () { var cs = getComputedStyle(d); return typeof cs.getPropertyValue + '/' + String(cs.color) + '/' + String(cs.display); });
+})();
+</script></body></html>

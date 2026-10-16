@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html><head><title>Probe 25</title></head><body>
+<div id="d"><span id="s">t</span></div>
+<div id="inline" onping="window.__inlineRan = 1;"></div>
+<script>
+(function () {
+  function t(name, fn, info) {
+    var ok = false, got = '';
+    try { var v = fn(); ok = !!v; } catch (e) { got = 'threw ' + (e && e.name) + ': ' + (e && e.message); }
+    if (!ok && !got) { try { got = String(typeof info === 'function' ? info() : (info === undefined ? '' : info)); } catch (e) { got = 'info threw'; } }
+    __T(name, ok, got);
+  }
+  var d = document.getElementById('d'), s = document.getElementById('s');
+  function ident(tag) {
+    var p = null;
+    s.addEventListener('idchk', function (e) { p = e.composedPath(); });
+    s.dispatchEvent(new Event('idchk', { bubbles: true }));
+    return document.getElementById('s') === s && document.getElementById('d') === d
+      && p[0] === s && p[1] === d;
+  }
+
+  t('identity at start', function () { return ident(); });
+  var onD = function () { window.__h1 = 1; };
+  d.addEventListener('halt', onD);
+  var stop = function (e) { e.stopPropagation(); };
+  s.addEventListener('halt', stop);
+  s.dispatchEvent(new Event('halt', { bubbles: true }));
+  d.removeEventListener('halt', onD);
+  s.removeEventListener('halt', stop);
+  t('identity after stopPropagation test', function () { return ident(); });
+
+  var cap = function (e) { e.stopPropagation(); };
+  d.addEventListener('capstop', cap, true);
+  var onTarget = function () { window.__h2 = 1; };
+  s.addEventListener('capstop', onTarget);
+  s.dispatchEvent(new Event('capstop', { bubbles: true }));
+  d.removeEventListener('capstop', cap, true);
+  s.removeEventListener('capstop', onTarget);
+  t('identity after capture stop test', function () { return ident(); });
+
+  var c1 = function () { window.__h3 = 1; };
+  d.addEventListener('quiet', c1, true);
+  var c2 = function () { window.__h4 = 1; };
+  s.addEventListener('quiet', c2);
+  var c3 = function () { window.__h5 = 1; };
+  d.addEventListener('quiet', c3);
+  s.dispatchEvent(new Event('quiet'));
+  d.removeEventListener('quiet', c1, true);
+  d.removeEventListener('quiet', c3);
+  s.removeEventListener('quiet', c2);
+  t('identity after non-bubbling test', function () { return ident(); });
+
+  var once = function () { window.__h6 = 1; };
+  s.addEventListener('onc', once, { once: true });
+  s.dispatchEvent(new Event('onc'));
+  s.dispatchEvent(new Event('onc'));
+  s.removeEventListener('onc', once);
+  t('identity after once test', function () { return ident(); });
+
+  document.getElementById('inline').dispatchEvent(new Event('ping', { bubbles: true }));
+  t('identity after inline attribute test', function () { return ident(); }, function () { return String(window.__inlineRan); });
+
+  var boom = function () { throw new Error('inside'); };
+  var fine = function () { window.__h7 = 1; };
+  s.addEventListener('boom', boom);
+  s.addEventListener('boom', fine);
+  s.dispatchEvent(new Event('boom'));
+  t('identity after throwing listener', function () { return ident(); });
+})();
+</script></body></html>

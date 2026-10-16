@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html><head><title>Probe 23</title></head><body>
+<div id="d"><span id="s">t</span></div>
+<script>
+(function () {
+  function t(name, fn, info) {
+    var ok = false, got = '';
+    try { var v = fn(); ok = !!v; } catch (e) { got = 'threw ' + (e && e.name) + ': ' + (e && e.message); }
+    if (!ok && !got) { try { got = String(typeof info === 'function' ? info() : (info === undefined ? '' : info)); } catch (e) { got = 'info threw'; } }
+    __T(name, ok, got);
+  }
+  var d = document.getElementById('d'), s = document.getElementById('s');
+  t('composedPath identity', function () {
+    var p = null;
+    s.addEventListener('cp', function (e) { p = e.composedPath(); });
+    s.dispatchEvent(new Event('cp', { bubbles: true }));
+    return p[0] === s && p[1] === d;
+  }, function () {
+    var p = null;
+    s.addEventListener('cp2', function (e) { p = e.composedPath(); });
+    s.dispatchEvent(new Event('cp2', { bubbles: true }));
+    if (!p) return 'no path';
+    var out = [];
+    for (var i = 0; i < p.length; i++) out.push(i + ':' + (p[i] === document ? 'document' : String(p[i] && p[i].id)) + '/' + String(p[i] && p[i].nodeType));
+    return out.join(' | ');
+  });
+  t('composedPath reaches the document', function () {
+    var p = null;
+    s.addEventListener('cp3', function (e) { p = e.composedPath(); });
+    s.dispatchEvent(new Event('cp3', { bubbles: true }));
+    return p[p.length - 1] === document;
+  }, function () {
+    var p = null;
+    s.addEventListener('cp4', function (e) { p = e.composedPath(); });
+    s.dispatchEvent(new Event('cp4', { bubbles: true }));
+    return p ? String(p[p.length - 1] === document) + '/' + String(p[p.length - 1]) : 'none';
+  });
+})();
+</script></body></html>

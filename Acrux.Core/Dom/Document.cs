@@ -91,6 +91,44 @@ public class Document : Node
     }
 
     public string Url { get; set; } = string.Empty;
+
+    /// <summary>HTML §2.7.3: the first 'base' element with an 'href' wins over the document URL, and
+    /// its value is resolved against that URL, so a page that names a relative base still hands its
+    /// nodes an absolute 'baseURI'. A document with no base falls back to its own URL.</summary>
+    public string? BaseUrl
+    {
+        get
+        {
+            foreach (var el in GetElementsByTagName("base"))
+            {
+                var href = el.GetAttribute("href");
+                if (string.IsNullOrEmpty(href)) continue;
+                return ResolveAgainstUrl(href);
+            }
+            return string.IsNullOrEmpty(Url) ? null : Url;
+        }
+    }
+
+    private string? ResolveAgainstUrl(string href)
+    {
+        if (string.IsNullOrEmpty(Url)) return href;
+        try
+        {
+            // 'System.Uri' understands 'file', 'http(s)' and the rest, and leaves an href that is
+            // already absolute alone.
+            return new Uri(new Uri(Url), href).ToString();
+        }
+        catch
+        {
+            return href;
+        }
+    }
+
+    /// <summary>HTML §2.6.2: which compatibility mode the parser decided the document is in — written
+    /// when the doctype is read, and forced on by the end of parsing when there was no doctype at all.
+    /// 'document.compatMode' reads it, and the legacy layout rules that keys off quirks will find it
+    /// here when they are wired up.</summary>
+    public bool QuirksMode { get; set; }
     public string Charset { get; set; } = "UTF-8";
     public string ContentType { get; set; } = "text/html";
     public string ReadyState { get; set; } = "loading";

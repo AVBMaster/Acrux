@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head><title>Parsing, the BOM surface and the node position helpers (DOM Parsing §3, HTML §2.7/§2.8.3/§4.12.5, DOM §4.2.4/§4.4.1, HTML §5.2.5, URL §3)</title></head>
+<body>
+<div id="d" class="a" data-x="1"><span id="s">t</span></div>
+<form id="f"><input id="i1" name="user" value="v"><input type="submit" id="sub"></form>
+<script>
+// The sentences, shapes and orders below were read off the reference browser in this session (the
+// measurement pages are kept in out/reference_probes): 'parseFromString' holds its type to a fixed list
+// and refuses anything else with a TypeError, an XML run keeps the prefix, the comment and the
+// processing instruction it was written with and asks for a 'parsererror' element inside the root when
+// it is not well formed, 'atob'/'btoa' live in the Latin-1 range with the sentences that say so, a node
+// with no doctype leaves the document in quirks mode, and 'toggleAttribute' answers whether the
+// attribute is there now.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+function ckErr(name, wantName, wantMsg, fn) {
+    var e = null;
+    try { fn(); } catch (x) { e = x; }
+    var got = e ? (e.name + ' | ' + e.message) : 'no throw';
+    __T(name, !!e && e.name === wantName && String(e.message) === wantMsg, got === wantName + ' | ' + wantMsg ? '' : 'got: ' + got);
+}
+var d = document.getElementById('d');
+var s = document.getElementById('s');
+
+// ── A. DOMParser over HTML ───────────────────────────────────────────────────
+ck('A1 the parsed HTML document is a document', function () {
+    var doc = new DOMParser().parseFromString('<p class=q>hi</p>', 'text/html');
+    var p = doc.querySelector('p');
+    return p.className === 'q' && p.localName === 'p' && p.tagName === 'P' && p.nodeType === 1
+        && doc.body.tagName === 'BODY' && doc.head !== null
+        && doc.documentElement.localName === 'html' && doc.readyState === 'complete'
+        && doc.contentType === 'text/html' && doc.defaultView === null && doc.title === ''
+        && doc.characterSet === 'UTF-8' && p.ownerDocument === doc;
+}, function () {
+    var doc = new DOMParser().parseFromString('<p class=q>hi</p>', 'text/html');
+    var p = doc.querySelector('p');
+    return [String(p), String(doc.body), String(doc.head), String(doc.readyState), String(doc.contentType),
+        String(doc.defaultView), String(doc.title)].join('/');
+});
+ck('A2 a document with no doctype of its own has none', function () {
+    var doc = new DOMParser().parseFromString('<p>hi</p>', 'text/html');
+    return doc.doctype === null && doc.compatMode === 'BackCompat';
+}, function () { var doc = new DOMParser().parseFromString('<p>hi</p>', 'text/html'); return String(doc.doctype) + '/' + doc.compatMode; });
+ck('A3 a doctype in the markup is kept and the mode is standards', function () {
+    var doc = new DOMParser().parseFromString('<!DOCTYPE html><html><head><title>T</title></head><body><p>hi</p></body></html>', 'text/html');
+    return doc.doctype !== null && doc.doctype.name === 'html' && doc.compatMode === 'CSS1Compat'
+        && doc.title === 'T' && doc.body.textContent === 'hi' && doc.childNodes.length === 2;
+}, function () {
+    var doc = new DOMParser().parseFromString('<!DOCTYPE html><html><body><p>hi</p></body></html>', 'text/html');
+    return String(doc.doctype) + '/' + doc.compatMode + '/' + doc.childNodes.length;
+});
+ck('A4 nothing in the run still builds html, head and body', function () {
+    var doc = new DOMParser().parseFromString('', 'text/html');
+    return doc.documentElement.localName === 'html' && doc.body !== null && doc.head !== null;
+}, function () { var doc = new DOMParser().parseFromString('', 'text/html'); return String(doc.documentElement) + '/' + String(doc.body); });
+ck('A5 the parsed document answers its own id', function () {
+    var doc = new DOMParser().parseFromString('<div id=zz>z</div>', 'text/html');
+    return doc.getElementById('zz').localName === 'div';
+}, function () { var doc = new DOMParser().parseFromString('<div id=zz>z</div>', 'text/html'); return String(doc.getElementById('zz')); });
+ck('A6 the live document is not disturbed by it', function () {
+    new DOMParser().parseFromString('<p>other</p>', 'text/html');
+    return document.body !== null && document.getElementById('d') === d && document.compatMode === 'CSS1Compat';
+}, function () { return String(document.getElementById('d') === d) + '/' + document.compatMode; });
+
+// ── B. the type list, and what a refusal costs ───────────────────────────────
+ckErr('B1 an unknown type is refused', 'TypeError',
+    "Failed to execute 'parseFromString' on 'DOMParser': The provided value 'not-a-type' is not a valid enum value of type SupportedType.",
+    function () { new DOMParser().parseFromString('x', 'not-a-type'); });
+ckErr('B2 so is the empty string', 'TypeError',
+    "Failed to execute 'parseFromString' on 'DOMParser': The provided value '' is not a valid enum value of type SupportedType.",
+    function () { new DOMParser().parseFromString('x', ''); });
+ck('B3 the XML types are all on the list', function () {
+    var kinds = ['text/xml', 'application/xml', 'application/xhtml+xml', 'image/svg+xml'];
+    for (var i = 0; i < kinds.length; i++) {
+        var doc = new DOMParser().parseFromString('<a><b/></a>', kinds[i]);
+        if (!doc.documentElement || doc.contentType !== kinds[i]) return 'failed at ' + kinds[i];
+    }
+    return true;
+}, function () {
+    var out = [];
+    var kinds = ['text/xml', 'application/xml', 'application/xhtml+xml', 'image/svg+xml'];
+    for (var i = 0; i < kinds.length; i++) {
+        var doc = new DOMParser().parseFromString('<a><b/></a>', kinds[i]);
+        out.push(kinds[i] + '=' + String(doc.documentElement && doc.documentElement.localName) + '/' + doc.contentType);
+    }
+    return out.join(' | ');
+});
+
+// ── C. the XML tree the run describes ────────────────────────────────────────
+ck('C1 element, attribute, text, comment and processing instruction', function () {
+    var doc = new DOMParser().parseFromString('<a t="1">x<!--c--><?pi d?></a>', 'text/xml');
+    var a = doc.documentElement;
+    return a.localName === 'a' && a.getAttribute('t') === '1' && a.childNodes.length === 3
+        && a.firstChild.nodeType === 3 && a.firstChild.data === 'x'
+        && a.childNodes[1].nodeType === 8 && a.childNodes[1].data === 'c'
+        && a.childNodes[2].nodeType === 7 && a.childNodes[2].target === 'pi'
+        && doc.body === null && doc.contentType === 'text/xml';
+}, function () {
+    var doc = new DOMParser().parseFromString('<a t="1">x<!--c--><?pi d?></a>', 'text/xml');
+    var a = doc.documentElement;
+    return String(a) + '/' + String(a && a.childNodes.length) + '/' + String(doc.body);
+});
+ck('C2 the prefix and the namespace both travel', function () {
+    var doc = new DOMParser().parseFromString('<r xmlns:p="urn:p"><p:c/></r>', 'text/xml');
+    var c = doc.documentElement.firstChild;
+    return c.localName === 'c' && c.prefix === 'p' && c.namespaceURI === 'urn:p' && c.nodeName === 'p:c';
+}, function () {
+    var doc = new DOMParser().parseFromString('<r xmlns:p="urn:p"><p:c/></r>', 'text/xml');
+    var c = doc.documentElement.firstChild;
+    return [String(c.localName), String(c.prefix), String(c.namespaceURI), String(c.nodeName)].join('/');
+});
+ck('C3 the default namespace is the one written', function () {
+    var doc = new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/2000/svg"><g/></svg>', 'image/svg+xml');
+    return doc.documentElement.localName === 'svg'
+        && doc.documentElement.namespaceURI === 'http://www.w3.org/2000/svg'
+        && doc.documentElement.firstChild.namespaceURI === 'http://www.w3.org/2000/svg';
+}, function () {
+    var doc = new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/2000/svg"><g/></svg>', 'image/svg+xml');
+    return String(doc.documentElement.namespaceURI) + '/' + String(doc.documentElement.firstChild.namespaceURI);
+});
+ck('C4 markup that is not well formed reports inside the tree it reached', function () {
+    var doc = new DOMParser().parseFromString('<r><c></r>', 'text/xml');
+    var pe = doc.querySelector('parsererror');
+    return doc.documentElement.localName === 'r' && pe !== null
+        && pe.namespaceURI === 'http://www.w3.org/1999/xhtml'
+        && /^This page contains the following errors:/.test(pe.textContent);
+}, function () {
+    var doc = new DOMParser().parseFromString('<r><c></r>', 'text/xml');
+    var pe = doc.querySelector('parsererror');
+    return String(doc.documentElement && doc.documentElement.localName) + '/' + String(pe)
+        + '/' + (pe ? String(pe.namespaceURI) : '-');
+});
+
+// ── D. toggleAttribute, and the name it refuses ──────────────────────────────
+ck('D1 toggle answers whether the attribute is there now', function () {
+    var box = document.createElement('p');
+    var a = box.toggleAttribute('hidden');
+    var put = box.getAttribute('hidden') === '' && box.hasAttribute('hidden') && box.outerHTML === '<p hidden=""></p>';
+    var b = box.toggleAttribute('hidden');
+    return a === true && put && b === false && box.getAttribute('hidden') === null && !box.hasAttribute('hidden');
+}, function () { var box = document.createElement('p'); var a = box.toggleAttribute('hidden'); return [a, JSON.stringify(box.getAttribute('hidden')), box.hasAttribute('hidden'), box.outerHTML].join(' | '); });
+ck('D2 the second argument decides instead of toggling', function () {
+    var box = document.createElement('p');
+    var put = box.toggleAttribute('other', true);
+    var kept = box.toggleAttribute('other', true);
+    var off = box.toggleAttribute('third', false);
+    return put === true && kept === true && box.getAttribute('other') === ''
+        && off === false && !box.hasAttribute('third');
+}, function () { var box = document.createElement('p'); return String(box.toggleAttribute('x', 0)) + '/' + String(box.toggleAttribute('y', 'no')); });
+ckErr('D3 a name that could not be an attribute is refused', 'InvalidCharacterError',
+    "Failed to execute 'toggleAttribute' on 'Element': 'a b' is not a valid attribute name.",
+    function () { d.toggleAttribute('a b'); });
+ckErr('D4 and so is the empty one', 'InvalidCharacterError',
+    "Failed to execute 'toggleAttribute' on 'Element': '' is not a valid attribute name.",
+    function () { d.toggleAttribute(''); });
+
+// ── E. base64 in the Latin-1 range ───────────────────────────────────────────
+ck('E1 the round trip holds', function () { return btoa('ab') === 'YWI=' && atob('YWI=') === 'ab'; },
+    function () { return btoa('ab') + '/' + atob('YWI='); });
+ck('E2 a byte the range still holds is a byte, not a code point', function () {
+    return atob(btoa('ÿx')) === 'ÿx' && btoa('ÿx').length === 4;
+}, function () { return btoa('ÿx') + '/' + atob(btoa('ÿx')).charCodeAt(0); });
+ck('E3 padding may be left off when reading', function () { return atob('YWI') === 'ab'; }, atob('YWI'));
+ckErr('E4 a string above the range is refused', 'InvalidCharacterError',
+    "Failed to execute 'btoa' on 'Window': The string to be encoded contains characters outside of the Latin1 range.",
+    function () { btoa('€'); });
+ckErr('E5 badly encoded base64 is refused', 'InvalidCharacterError',
+    "Failed to execute 'atob' on 'Window': The string to be decoded is not correctly encoded.",
+    function () { atob('a'); });
+ckErr('E6 and so is a character outside the alphabet', 'InvalidCharacterError',
+    "Failed to execute 'atob' on 'Window': The string to be decoded is not correctly encoded.",
+    function () { atob('a!'); });
+
+// ── F. the address the document was read at ──────────────────────────────────
+ck('F1 location reads the document URL', function () {
+    return location.href === document.URL && location.protocol === 'file:'
+        && location.hostname === '' && location.pathname.length > 0
+        && location.origin === 'file://' && location.search === '' && location.hash === '';
+}, function () { return [location.href, document.URL, location.protocol, location.hostname, location.pathname, location.origin].join('|'); });
+ck('F2 the parts follow the href it was given', function () {
+    location.hash = '#after';
+    var held = location.hash === '#after' && /#after$/.test(location.href);
+    location.hash = '';
+    return held && location.href.indexOf('#') < 0;
+}, function () { return location.href; });
+ck('F3 the history entry keeps the state and the resolved URL', function () {
+    var before = location.href;
+    history.pushState({ a: 1 }, '', '#one');
+    var hash = location.hash, state = history.state && history.state.a, grew = history.length;
+    history.pushState({ b: 2 }, 'ignored', 'sub/two.html');
+    var resolved = location.href === new URL('sub/two.html', before).href;
+    var after = location.pathname.slice(-13);
+    history.replaceState({ c: 3 }, '', '#three');
+    var replaced = JSON.stringify(history.state) === '{"c":3}' && location.hash === '#three';
+    return hash === '#one' && state === 1 && grew === 2 && resolved && replaced && history.length === 3;
+}, function () { var b = location.href; history.pushState({ a: 1 }, '', '#x'); return location.hash + '/' + JSON.stringify(history.state) + '/' + history.length; });
+ck('F4 the state travels, the page does not', function () {
+    var before = location.href;
+    history.pushState({ keep: true }, '', '#stay');
+    var held = location.href !== before && location.hash === '#stay';
+    history.pushState(null, '', '#next');
+    return held && history.state === null;
+}, function () { history.pushState({ q: 1 }, '', '#q'); return JSON.stringify(history.state) + '/' + location.hash; });
+
+// ── G. the dataset as a map ──────────────────────────────────────────────────
+ck('G1 the data attributes are the own properties', function () {
+    d.dataset.king = '3';
+    return Object.keys(d.dataset).join(',') === 'x,king' && JSON.stringify(d.dataset) === '{"x":"1","king":"3"}'
+        && 'king' in d.dataset && d.getAttribute('data-king') === '3';
+}, function () { d.dataset.king = '3'; return Object.keys(d.dataset).join(',') + '/' + JSON.stringify(d.dataset); });
+ck('G2 a property is enumerable, writable and configurable', function () {
+    var dd = Object.getOwnPropertyDescriptor(d.dataset, 'x');
+    return !!dd && dd.value === '1' && dd.enumerable === true && dd.writable === true && dd.configurable === true;
+}, function () { var dd = Object.getOwnPropertyDescriptor(d.dataset, 'x'); return dd ? JSON.stringify(dd.value) + '/' + dd.enumerable : 'none'; });
+ck('G3 the camelCase name stands for the hyphenated attribute', function () {
+    var box = document.createElement('p');
+    box.setAttribute('data-a-b', '1');
+    return box.dataset.aB === '1' && Object.keys(box.dataset).join(',') === 'aB';
+}, function () { var box = document.createElement('p'); box.setAttribute('data-a-b', '1'); return String(box.dataset.aB) + '/' + JSON.stringify(Object.keys(box.dataset)); });
+ck('G4 the hyphenated spelling is not a name of the map', function () {
+    var box = document.createElement('p');
+    box.setAttribute('data-a-b', '1');
+    return box.dataset['a-b'] === undefined && !('a-b' in box.dataset);
+}, function () { var box = document.createElement('p'); box.setAttribute('data-a-b', '1'); return String(box.dataset['a-b']) + '/' + String('a-b' in box.dataset); });
+ck('G5 delete takes the attribute off', function () {
+    var box = document.createElement('p');
+    box.dataset.bb = '2';
+    delete box.dataset.bb;
+    return box.getAttribute('data-bb') === null && Object.keys(box.dataset).length === 0;
+}, function () { var box = document.createElement('p'); box.dataset.bb = '2'; delete box.dataset.bb; return String(box.getAttribute('data-bb')); });
+ck('G6 the value is always the string the attribute holds', function () {
+    var box = document.createElement('p');
+    box.dataset.num = 7;
+    return box.getAttribute('data-num') === '7' && typeof box.dataset.num === 'string';
+}, function () { var box = document.createElement('p'); box.dataset.num = 7; return box.getAttribute('data-num') + '/' + typeof box.dataset.num; });
+ck('G7 the map is the same object while the element lives', function () {
+    return d.dataset === d.dataset && Object.prototype.toString.call(d.dataset) === '[object DOMStringMap]';
+}, function () { return String(d.dataset === d.dataset) + '/' + Object.prototype.toString.call(d.dataset); });
+ckErr('G8 a name with a hyphen in it is refused when written', 'SyntaxError',
+    "Failed to set a named property 'weird-key' on 'DOMStringMap': 'weird-key' is not a valid property name.",
+    function () { d.dataset['weird-key'] = '1'; });
+
+// ── H. where two nodes sit relative to one another ───────────────────────────
+ck('H1 containment carries the document order with it', function () {
+    return d.compareDocumentPosition(s) === 20 && s.compareDocumentPosition(d) === 10;
+}, function () { return d.compareDocumentPosition(s) + '/' + s.compareDocumentPosition(d); });
+ck('H2 the same node answers 0', function () { return d.compareDocumentPosition(d) === 0; }, d.compareDocumentPosition(d));
+ck('H3 the document holds an element', function () {
+    return document.compareDocumentPosition(d) === 20 && d.compareDocumentPosition(document) === 10;
+}, function () { return document.compareDocumentPosition(d) + '/' + d.compareDocumentPosition(document); });
+ck('H4 the constants are the bits the interface names', function () {
+    return Node.DOCUMENT_POSITION_DISCONNECTED === 1 && Node.DOCUMENT_POSITION_PRECEDING === 2
+        && Node.DOCUMENT_POSITION_FOLLOWING === 4 && Node.DOCUMENT_POSITION_CONTAINS === 8
+        && Node.DOCUMENT_POSITION_CONTAINED_BY === 16
+        && Node.DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC === 32;
+}, function () { return [Node.DOCUMENT_POSITION_DISCONNECTED, Node.DOCUMENT_POSITION_PRECEDING, Node.DOCUMENT_POSITION_FOLLOWING, Node.DOCUMENT_POSITION_CONTAINS, Node.DOCUMENT_POSITION_CONTAINED_BY, Node.DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC].join(','); });
+
+// ── I. slots, the form as a list, and the scroll members ─────────────────────
+ck('I1 nothing is assigned to a slot here', function () {
+    return d.assignedSlot === null && s.assignedSlot === null;
+}, function () { return String(d.assignedSlot) + '/' + typeof d.assignedSlot; });
+ck('I2 the slot attribute reflects as the empty string', function () {
+    return d.slot === '' && (function () { var box = document.createElement('p'); box.setAttribute('slot', 'a'); return box.slot === 'a'; })();
+}, function () { return String(d.slot) + '/' + String(document.createElement('p').slot); });
+ck('I3 a form is read as its control list', function () {
+    var f = document.getElementById('f');
+    return f.length === 2 && f[0] === document.getElementById('i1') && f[1].id === 'sub' && f[2] == null;
+}, function () { var f = document.getElementById('f'); return [f.length, String(f[0] && f[0].id), String(f[1] && f[1].id), String(f[2])].join('/'); });
+ck('I4 the collection answers the same list', function () {
+    var f = document.getElementById('f');
+    return f.elements.length === 2 && f.elements[0] === document.getElementById('i1')
+        && f.elements.namedItem('user') === document.getElementById('i1');
+}, function () { var e = document.getElementById('f').elements; return [e.length, String(e.namedItem('user') === document.getElementById('i1'))].join('/'); });
+ck('I5 a select is read the same way', function () {
+    var sel = document.createElement('select');
+    var one = document.createElement('option'); one.textContent = 'one';
+    var two = document.createElement('option'); two.textContent = 'two';
+    sel.appendChild(one); sel.appendChild(two);
+    return sel.length === 2 && sel[0] === one && sel.options.length === 2;
+}, function () {
+    var sel = document.createElement('select');
+    var o = document.createElement('option'); sel.appendChild(o);
+    return String(sel.length) + '/' + String(sel[0] === o);
+});
+ck('I6 the scroll members are there and the offsets clamp', function () {
+    var box = document.createElement('div');
+    document.body.appendChild(box);
+    // CSSOM View §6.3.1: a box with nothing to scroll cannot be scrolled, so every form of the call
+    // leaves the offsets where they were (measured: 0, 0 for the pair, the distance and the dictionary).
+    box.scrollTo(4, 6);
+    var pair = box.scrollLeft === 0 && box.scrollTop === 0;
+    box.scrollBy(2, 2);
+    var added = box.scrollLeft === 0 && box.scrollTop === 0;
+    box.scrollTo({ left: 10, top: 12 });
+    var dictionary = box.scrollLeft === 0 && box.scrollTop === 0;
+    box.scroll({ top: 1 });
+    box.scrollTop = 500;
+    var clamped = box.scrollTop === 0;
+    box.scrollIntoView();
+    document.body.removeChild(box);
+    return pair && added && dictionary && clamped
+        && typeof box.scrollTo === 'function' && typeof box.scrollBy === 'function'
+        && typeof box.scroll === 'function' && typeof box.scrollIntoView === 'function';
+}, function () { var box = document.createElement('div'); document.body.appendChild(box); box.scrollTo(1, 2); var v = box.scrollTop; document.body.removeChild(box); return String(box.scrollLeft) + '/' + v; });
+</script>
+</body>
+</html>

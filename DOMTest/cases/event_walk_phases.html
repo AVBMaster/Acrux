@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head><title>The dispatch walk: capture, target, bubble (DOM §2.5, §2.8, §2.9)</title></head>
+<body>
+<div id="d" class="a"><span id="s">t</span></div>
+<div id="inline" onping="window.__inlineRan = (window.__inlineRan || 0) + 1;"></div>
+<script>
+// The orders and the numbers below were read off the reference browser in this session (the
+// measurement pages live in out/reference_probes): a capture listener on an ancestor runs before the
+// one on the target and the target's own listener runs before the bubble back out
+// ('body-cap,d-cap,s-at-target,d-bubble,body-bubble'); 'eventPhase' is 1, 2 and 3 along that walk and
+// 0 once the dispatch has returned, when 'target' and 'currentTarget' are both null again; a listener
+// that stops propagation ends the walk at that node, including the target's own listeners when it was
+// an ancestor's capture listener that did it.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+
+var d = document.getElementById('d');
+var s = document.getElementById('s');
+
+// ── A. the three legs of the walk ────────────────────────────────────────────
+ck('A0 wrapper identity before any dispatch', function () {
+    var p = null;
+    s.addEventListener('identity0', function (e) { p = e.composedPath(); });
+    s.dispatchEvent(new Event('identity0', { bubbles: true }));
+    return p[0] === s && p[1] === d && document.getElementById('s') === s;
+}, function () { var p = null; s.addEventListener('identity0b', function (e) { p = e.composedPath(); }); s.dispatchEvent(new Event('identity0b', { bubbles: true })); return [String(p[0] === s), String(p[1] === d), String(document.getElementById('s') === s)].join('/'); });
+ck('A1 capture runs outermost first, then the target, then the bubble', function () {
+    var hits = [];
+    var body = document.body;
+    body.addEventListener('walk', function () { hits.push('body-cap'); }, true);
+    d.addEventListener('walk', function () { hits.push('d-cap'); }, true);
+    s.addEventListener('walk', function () { hits.push('s-at-target'); });
+    d.addEventListener('walk', function () { hits.push('d-bubble'); });
+    body.addEventListener('walk', function () { hits.push('body-bubble'); });
+    s.dispatchEvent(new Event('walk', { bubbles: true }));
+    return hits.join(',') === 'body-cap,d-cap,s-at-target,d-bubble,body-bubble';
+}, function () { var h = []; var b = document.body; b.addEventListener('w2', function () { h.push('bc'); }, true); s.dispatchEvent(new Event('w2', { bubbles: true })); return h.join(','); });
+ck('A2 eventPhase follows the leg the walk is on', function () {
+    var seen = [];
+    var cap = function (e) { seen.push('cap:' + e.eventPhase); };
+    var at = function (e) { seen.push('at:' + e.eventPhase); };
+    d.addEventListener('phase', cap, true);
+    s.addEventListener('phase', at);
+    s.dispatchEvent(new Event('phase', { bubbles: true }));
+    return seen.join(',') === 'cap:1,at:2';
+}, function () { var v = []; document.getElementById('d').addEventListener('p2', function (e) { v.push(e.eventPhase); }, true); s.dispatchEvent(new Event('p2', { bubbles: true })); return v.join(','); });
+ck('A3 the bubbling leg reports phase 3 on the ancestor', function () {
+    var phase = 0;
+    d.addEventListener('up', function (e) { phase = e.eventPhase; });
+    s.dispatchEvent(new Event('up', { bubbles: true }));
+    return phase === 3;
+}, function () { var p = 0; d.addEventListener('u2', function (e) { p = e.eventPhase; }); s.dispatchEvent(new Event('u2', { bubbles: true })); return p; });
+ck('A4 currentTarget is the node whose listener runs', function () {
+    var seen = [];
+    var fn = function (e) { seen.push(e.currentTarget.id + '<' + e.target.id); };
+    d.addEventListener('who', fn);
+    s.addEventListener('who', fn);
+    s.dispatchEvent(new Event('who', { bubbles: true }));
+    return seen.join('|') === 's<s|d<s';
+}, function () { var v = []; var f = function (e) { v.push(String(e.currentTarget && e.currentTarget.id)); }; s.addEventListener('w3', f); s.dispatchEvent(new Event('w3')); return v.join(','); });
+ck('A5 the event reports nothing once the dispatch is over', function () {
+    var ev = new Event('done');
+    s.dispatchEvent(ev);
+    return ev.eventPhase === 0 && ev.target === null && ev.currentTarget === null;
+}, function () { var e2 = new Event('d2'); s.dispatchEvent(e2); return e2.eventPhase + '/' + String(e2.target) + '/' + String(e2.currentTarget); });
+ck('A6 a listener on the document closes the bubble', function () {
+    var hits = [];
+    var onDoc = function () { hits.push('doc'); };
+    document.addEventListener('toup', onDoc);
+    s.dispatchEvent(new Event('toup', { bubbles: true }));
+    document.removeEventListener('toup', onDoc);
+    return hits.length === 1 && hits[0] === 'doc';
+}, function () { var h = []; document.addEventListener('t2', function () { h.push('d'); }); s.dispatchEvent(new Event('t2', { bubbles: true })); return h.join(','); });
+
+// ── B. stopping, once, and the handler in the markup ─────────────────────────
+ck('B0 identity after the A group', function () {
+    return document.getElementById('s') === s && document.getElementById('d') === d;
+}, function () { return String(document.getElementById('s') === s) + '/' + String(document.getElementById('d') === d); });
+ck('B1 stopPropagation on the target stops the ancestors', function () {
+    var hits = [];
+    var onD = function () { hits.push('d'); };
+    d.addEventListener('halt', onD);
+    var stop = function (e) { e.stopPropagation(); hits.push('s'); };
+    s.addEventListener('halt', stop);
+    s.dispatchEvent(new Event('halt', { bubbles: true }));
+    d.removeEventListener('halt', onD);
+    s.removeEventListener('halt', stop);
+    return hits.join(',') === 's';
+}, function () { var h = []; d.addEventListener('h2', function () { h.push('d'); }); s.dispatchEvent(new Event('h2', { bubbles: true })); return h.join(','); });
+ck('B2 stopPropagation in the capture leg stops the target too', function () {
+    var hits = [];
+    var stop = function (e) { e.stopPropagation(); hits.push('d-cap'); };
+    d.addEventListener('capstop', stop, true);
+    var onTarget = function () { hits.push('s'); };
+    s.addEventListener('capstop', onTarget);
+    s.dispatchEvent(new Event('capstop', { bubbles: true }));
+    d.removeEventListener('capstop', stop, true);
+    s.removeEventListener('capstop', onTarget);
+    return hits.join(',') === 'd-cap';
+}, function () { var h = []; h.push(String(d)); return h.join(','); });
+ck('B3 a non-bubbling event still walks the capture leg', function () {
+    var hits = [];
+    var cap = function () { hits.push('d-cap'); };
+    d.addEventListener('quiet', cap, true);
+    var onTarget = function () { hits.push('s'); };
+    s.addEventListener('quiet', onTarget);
+    var onD = function () { hits.push('d-bubble'); };
+    d.addEventListener('quiet', onD);
+    s.dispatchEvent(new Event('quiet'));
+    d.removeEventListener('quiet', cap, true);
+    d.removeEventListener('quiet', onD);
+    s.removeEventListener('quiet', onTarget);
+    return hits.join(',') === 'd-cap,s';
+}, function () { var h = []; s.dispatchEvent(new Event('q2')); return h.join(','); });
+ck('B4 once runs the listener a single time', function () {
+    var n = 0;
+    var fn = function () { n++; };
+    s.addEventListener('onc', fn, { once: true });
+    s.dispatchEvent(new Event('onc'));
+    s.dispatchEvent(new Event('onc'));
+    s.removeEventListener('onc', fn);
+    return n === 1;
+}, function () { var v = 0; var f = function () { v++; }; s.addEventListener('o2', f, { once: true }); s.dispatchEvent(new Event('o2')); s.dispatchEvent(new Event('o2')); return v; });
+ck('B5 the on-type attribute in the markup is a listener of that element', function () {
+    window.__inlineRan = 0;
+    document.getElementById('inline').dispatchEvent(new Event('ping', { bubbles: true }));
+    return window.__inlineRan === 1;
+}, function () { return String(window.__inlineRan); });
+ck('B6 a listener that throws does not stop the dispatch', function () {
+    var n = 0;
+    var boom = function () { throw new Error('inside'); };
+    var ok = function () { n++; };
+    s.addEventListener('boom', boom);
+    s.addEventListener('boom', ok);
+    s.dispatchEvent(new Event('boom'));
+    return n === 1;
+}, function () { var v = 0; s.addEventListener('b2', function () { v++; }); s.dispatchEvent(new Event('b2')); return v; });
+ck('B7 composedPath is the walk innermost first', function () {
+    var path = null;
+    var fn = function (e) { path = e.composedPath(); };
+    d.addEventListener('ppath', fn);
+    s.dispatchEvent(new Event('ppath', { bubbles: true }));
+    d.removeEventListener('ppath', fn);
+    return !!path && path.length >= 4 && path[0] === s && path[1] === d;
+}, function () { var p = null; s.addEventListener('ppath9', function (e) { p = e.composedPath(); }); s.dispatchEvent(new Event('ppath9', { bubbles: true })); return p ? [p.length, String(p[0] && p[0].id), String(p[1] && p[1].id), String(p[0] === s), String(p[1] === d)].join('/') : 'none'; });
+ck('B8 preventDefault is read back from the event', function () {
+    var fn = function (e) { e.preventDefault(); };
+    s.addEventListener('canc', fn);
+    var ev = new Event('canc', { cancelable: true });
+    var back = s.dispatchEvent(ev);
+    s.removeEventListener('canc', fn);
+    return ev.defaultPrevented === true && back === false;
+}, function () { var e2 = new Event('c2', { cancelable: true }); return String(e2.defaultPrevented); });
+ck('B9 an event that cannot be cancelled stays uncancelled', function () {
+    var fn = function (e) { e.preventDefault(); };
+    s.addEventListener('nocancel', fn);
+    var ev = new Event('nocancel', { cancelable: false });
+    var back = s.dispatchEvent(ev);
+    s.removeEventListener('nocancel', fn);
+    return ev.defaultPrevented === false && back === true;
+}, function () { var e2 = new Event('n2', { cancelable: false }); return String(e2.cancelable); });
+ck('B10 dispatch on an ancestor reaches the same walk', function () {
+    var hits = [];
+    var onS = function () { hits.push('s'); };
+    s.addEventListener('down', onS);
+    d.dispatchEvent(new Event('down'));
+    s.removeEventListener('down', onS);
+    // The event was dispatched at 'd', so a listener on its descendant is not on the path (§2.5).
+    return hits.length === 0;
+}, function () { var h = []; s.addEventListener('d3', function () { h.push('s'); }); d.dispatchEvent(new Event('d3')); return h.join(','); });
+ck('B11 the walk uses the live tree, not the one it started from', function () {
+    var hits = [];
+    var box = document.createElement('div');
+    var inner = document.createElement('span');
+    box.appendChild(inner);
+    document.body.appendChild(box);
+    box.addEventListener('live', function () { hits.push('box'); });
+    inner.addEventListener('live', function () { hits.push('inner'); });
+    inner.dispatchEvent(new Event('live', { bubbles: true }));
+    box.removeEventListener('live', function () { });
+    document.body.removeChild(box);
+    return hits.join(',') === 'inner,box';
+}, function () { return 'n/a'; });
+ck('B12 window listeners hear an event that reaches the document', function () {
+    var n = 0;
+    var fn = function () { n++; };
+    window.addEventListener('toowindow', fn);
+    s.dispatchEvent(new Event('toowindow', { bubbles: true }));
+    window.removeEventListener('toowindow', fn);
+    return n === 1;
+}, function () { var v = 0; window.addEventListener('w2b', function () { v++; }); return v; });
+ck('B13 path from a listener on the target', function () {
+    var p = null;
+    s.addEventListener('a1', function (e) { p = e.composedPath(); });
+    s.dispatchEvent(new Event('a1', { bubbles: true }));
+    return p[0] === s && p[1] === d;
+}, function () { var p = null; s.addEventListener('a1b', function (e) { p = e.composedPath(); }); s.dispatchEvent(new Event('a1b', { bubbles: true })); return [String(p[0] === s), String(p[1] === d), String(p[0] === document.getElementById('s'))].join('/'); });
+</script>
+</body>
+</html>

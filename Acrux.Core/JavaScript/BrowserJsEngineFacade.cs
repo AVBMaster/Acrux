@@ -74,6 +74,9 @@ public class BrowserJsEngineFacade : IDisposable
         // 远程引擎未就绪时跳过执行，避免阻塞 UI
         if (JsEngineBridge.IsRemoteNotReady(_adapter))
             return;
+        // The adapter that is 'current' is saved and put back rather than cleared: this can be called
+        // from inside a callback the same adapter is already running, and the outer run still needs it.
+        var previous = Current;
         Current = _adapter;
         try
         {
@@ -88,7 +91,7 @@ public class BrowserJsEngineFacade : IDisposable
         }
         finally
         {
-            Current = null;
+            Current = previous;
         }
     }
 
@@ -96,6 +99,7 @@ public class BrowserJsEngineFacade : IDisposable
     {
         if (_disposed || string.IsNullOrEmpty(expression)) return null;
         if (JsEngineBridge.IsRemoteNotReady(_adapter)) return null;
+        var previous = Current;
         Current = _adapter;
         try
         {
@@ -109,7 +113,7 @@ public class BrowserJsEngineFacade : IDisposable
         }
         finally
         {
-            Current = null;
+            Current = previous;
         }
     }
 
@@ -117,6 +121,7 @@ public class BrowserJsEngineFacade : IDisposable
     {
         if (_disposed) return null;
         if (JsEngineBridge.IsRemoteNotReady(_adapter)) return null;
+        var previous = Current;
         Current = _adapter;
         try
         {
@@ -130,7 +135,7 @@ public class BrowserJsEngineFacade : IDisposable
         }
         finally
         {
-            Current = null;
+            Current = previous;
         }
     }
 
@@ -138,6 +143,7 @@ public class BrowserJsEngineFacade : IDisposable
     {
         if (_disposed) return null;
         if (JsEngineBridge.IsRemoteNotReady(_adapter)) return null;
+        var previous = Current;
         Current = _adapter;
         try
         {
@@ -147,7 +153,7 @@ public class BrowserJsEngineFacade : IDisposable
         }
         finally
         {
-            Current = null;
+            Current = previous;
         }
     }
 
@@ -160,6 +166,7 @@ public class BrowserJsEngineFacade : IDisposable
     {
         if (_disposed) return;
         if (JsEngineBridge.IsRemoteNotReady(_adapter)) return;
+        var previous = Current;
         Current = _adapter;
         var mutationBefore = Acrux.Core.Dom.DomMutationTracker.Version;
         try
@@ -183,7 +190,7 @@ public class BrowserJsEngineFacade : IDisposable
         catch { }
         finally
         {
-            Current = null;
+            Current = previous;
         }
     }
 

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html><head><title>Probe 19</title></head><body>
+<div id="d" class="a b" style="color: rgb(1, 2, 3)">text<b>bold</b></div>
+<input id="i" type="text" value="hello">
+<canvas id="c" width="10" height="10"></canvas>
+<script>
+(function () {
+  function t(name, fn, info) {
+    var ok = false, got = '';
+    try { var v = fn(); ok = !!v; } catch (e) { got = 'threw ' + (e && e.name) + ': ' + (e && e.message); }
+    if (!ok && !got) { try { got = String(typeof info === 'function' ? info() : (info === undefined ? '' : info)); } catch (e) { got = 'info threw'; } }
+    __T(name, ok, got);
+  }
+  var d = document.getElementById('d');
+  t('FileReader exists', function () { return typeof FileReader === 'function'; }, typeof FileReader);
+  t('Blob.arrayBuffer', function () { return typeof new Blob(['x']).arrayBuffer === 'function'; });
+  t('Blob.stream', function () { return typeof new Blob(['x']).stream; });
+  t('URLSearchParams sort/append/size', function () {
+    var p = new URLSearchParams('b=2&a=1'); p.append('a', '3');
+    return p.size === 3 && p.get('a') === '1' && Array.from(p.keys()).join(',') === 'b,a,a';
+  }, function () { var p = new URLSearchParams('b=2&a=1'); p.sort && p.sort(); return p.toString(); });
+  t('URLSearchParams.sort', function () {
+    var p = new URLSearchParams('b=2&a=1'); p.sort(); return p.toString() === 'a=1&b=2';
+  }, function () { var p = new URLSearchParams('b=2&a=1'); return typeof p.sort + '/' + p.toString(); });
+  t('matchMedia addEventListener', function () {
+    var m = window.matchMedia('(min-width: 1px)'); return typeof m.addEventListener === 'function'
+      && typeof m.addListener === 'function' && m.matches === true && m.media === '(min-width: 1px)';
+  }, function () { var m = window.matchMedia('(min-width: 1px)'); return typeof m.addEventListener + '/' + m.matches; });
+  t('history state and length', function () { return typeof history.length === 'number' && history.state === null; },
+    function () { return typeof history.state + '/' + history.length; });
+  t('EventTarget constructible', function () { var et = new EventTarget(); return typeof et.addEventListener === 'function'; },
+    typeof EventTarget);
+  t('closest from a text node parent', function () { return d.querySelector('b').closest('#d') === d; },
+    function () { return String(d.querySelector('b').closest('#d')); });
+  t('matches with a list', function () { return d.matches('p, div') === true && d.matches(':scope') === true; },
+    function () { return String(d.matches('p, div')) + '/' + String(d.matches(':scope')); });
+  t('offsetTop/scrollHeight', function () { return typeof d.offsetTop === 'number' && typeof d.scrollHeight === 'number'
+      && typeof d.scrollWidth === 'number' && typeof d.clientHeight === 'number'; },
+    function () { return [d.offsetTop, d.scrollHeight, d.clientHeight].join('/'); });
+  t('DOMTokenList value/replace/forEach', function () {
+    var list = d.classList; return typeof list.value === 'string' && typeof list.replace === 'function'
+      && typeof list.forEach === 'function' && list.contains('a') && list.length === 2;
+  }, function () { return [d.classList.value, typeof d.classList.replace, d.classList.length].join('/'); });
+  t('dataset mutation', function () { d.dataset.fooBar = '1'; return d.getAttribute('data-foo-bar') === '1'
+      && d.dataset.fooBar === '1'; }, function () { return d.getAttribute('data-foo-bar'); });
+  t('normalize merges text', function () {
+    var box = document.createElement('p'); box.appendChild(document.createTextNode('a'));
+    box.appendChild(document.createTextNode('b')); box.normalize();
+    return box.childNodes.length === 1 && box.firstChild.data === 'ab';
+  }, function () { var b = document.createElement('p'); b.appendChild(document.createTextNode('a')); b.appendChild(document.createTextNode('b')); b.normalize(); return b.childNodes.length; });
+  t('Node.getRootNode', function () { return d.getRootNode() === document; }, typeof d.getRootNode);
+  t('insertAdjacentElement', function () {
+    var probe = document.createElement('i'); probe.id = 'adj1';
+    d.insertAdjacentElement('beforeend', probe);
+    return d.lastElementChild === probe;
+  }, function () { return typeof d.insertAdjacentElement; });
+  t('Range surroundContents', function () {
+    var r = document.createRange(); r.selectNodeContents(d.querySelector('b'));
+    var mark = document.createElement('mark'); r.surroundContents(mark);
+    return mark.firstChild && mark.firstChild.data === 'bold';
+  }, function () { var r = document.createRange(); return typeof r.surroundContents; });
+  t('Selection removeAllRanges', function () {
+    var sel = document.getSelection(); var r = document.createRange(); r.selectNodeContents(d);
+    sel.addRange(r); return sel.rangeCount === 1;
+  }, function () { return typeof document.getSelection().removeAllRanges; });
+  t('canvas getContext', function () { var c = document.getElementById('c'); return c.getContext ? typeof c.getContext('2d') : 'nomethod'; });
+  t('TextEncoder encode/decode', function () {
+    var e = new TextEncoder(); var bytes = e.encode('ab');
+    return bytes.length === 2 && bytes[0] === 97 && new TextDecoder().decode(bytes) === 'ab';
+  }, function () { return typeof TextEncoder; });
+  t('performance.now is relative', function () { var a = performance.now(); return a >= 0 && a < 1e7; }, String(performance.now()));
+  t('document.baseURI', function () { return typeof document.baseURI === 'string' && document.baseURI.length > 0; }, String(document.baseURI));
+  t('document.characterSet', function () { return /UTF-8/i.test(document.characterSet || document.characterEncoding); }, String(document.characterSet));
+  t('document.scripts', function () { return document.scripts && document.scripts.length >= 1; }, String(document.scripts && document.scripts.length));
+  t('img complete and naturalWidth', function () { var im = new Image(); return im.complete === true && im.naturalWidth === 0; }, function () { var im = new Image(); return [im.complete, im.naturalWidth].join('/'); });
+  t('storage quota', function () { return typeof navigator.storage === 'object' && navigator.storage !== null ? typeof navigator.storage.estimate === 'function' : true; }, typeof navigator.storage);
+  t('crypto.getRandomValues fills', function () {
+    var a = new Uint8Array(4); var back = crypto.getRandomValues(a);
+    return back === a && a.length === 4;
+  }, function () { var a = new Uint8Array(4); return String(crypto.getRandomValues(a) === a); });
+  t('structuredClone keeps arrays', function () { var src = { a: [1, 2, { b: 3 }] }; var copy = structuredClone(src); return copy.a[2].b === 3 && copy !== src && copy.a !== src.a; }, function () { var c = structuredClone({ a: 1 }); return JSON.stringify(c); });
+  t('AbortSignal reason default', function () { var c = new AbortController(); c.abort(); return c.signal.reason && c.signal.reason.name === 'AbortError'; }, function () { var c = new AbortController(); c.abort(); return String(c.signal.reason); });
+  t('queueMicrotask runs', function () { var done = false; queueMicrotask(function () { done = true; }); setTimeout(function () { __T('queueMicrotask ran', done === true, 'done=' + done); }, 0); return true; });
+  t('Element.prototype attributes live', function () { d.setAttribute('data-x', '1'); return d.attributes.length >= 3 && d.getAttributeNode('data-x').value === '1'; }, function () { return d.attributes.length; });
+  t('cloneNode keeps classes and id', function () { var c = d.cloneNode(true); return c.id === d.id && c.className === d.className && c.querySelector('b') !== null; }, function () { var c = d.cloneNode(true); return [c.id, c.className].join('/'); });
+  t('insertAdjacentHTML', function () { d.insertAdjacentHTML('beforeend', '<em>em</em>'); return d.lastElementChild.tagName === 'EM'; }, function () { return typeof d.insertAdjacentHTML; });
+  t('replaceChildren', function () { var box = document.createElement('p'); box.replaceChildren(document.createTextNode('z')); return box.childNodes.length === 1 && box.textContent === 'z'; }, function () { return typeof document.createElement('p').replaceChildren; });
+})();
+</script></body></html>

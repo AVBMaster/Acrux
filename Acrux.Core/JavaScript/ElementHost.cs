@@ -17,6 +17,9 @@ public class ElementHost : IDomPrototypeHost
     private RelTokenListHost? _relList;
     private readonly Dictionary<string, List<int>> _eventCallbackIds = new();
     private readonly HashSet<int> _onceCallbacks = new();
+    // Which phase of the dispatch walk each stored listener belongs to (DOM §2.7). The list is keyed by
+    // type alone, so the flag has to sit beside the callback id it was registered with.
+    private readonly Dictionary<int, bool> _listenerCapture = new();
     internal JavaScriptEngine? Engine { get; set; }
 
     public ElementHost(Element element)
@@ -393,6 +396,16 @@ public class ElementHost : IDomPrototypeHost
         return child;
     }
 
+    /// <summary>DOM §5.5 (ParentNode): the children are replaced in one go — everything the element
+    /// held leaves first, then each argument is inserted in the order it was written, with strings
+    /// becoming text nodes and a fragment contributing its own children.</summary>
+    public void replaceChildren(params object?[] nodes)
+    {
+        for (var i = _element.Children.Count - 1; i >= 0; i--)
+            _element.RemoveChild(_element.Children[i]);
+        foreach (var n in nodes) InsertChild(n, atEnd: true);
+    }
+
     /// <summary>Element.append(nodes…) inserts each argument at the end, accepting strings as text
     /// nodes and a fragment as its children (ParentNode mixin).</summary>
     public void append(params object?[] nodes)
@@ -537,6 +550,8 @@ public class ElementHost : IDomPrototypeHost
         if (once)
             _onceCallbacks.Add(cbId);
 
+        _listenerCapture[cbId] = useCapture;
+
         if (!_eventCallbackIds.TryGetValue(type, out var list))
         {
             list = new List<int>();
@@ -563,7 +578,11 @@ public class ElementHost : IDomPrototypeHost
         if (_eventCallbackIds.TryGetValue(type, out var list))
         {
             foreach (var cbId in list)
+            {
                 engine.RemoveCallback(cbId);
+                _listenerCapture.Remove(cbId);
+                _onceCallbacks.Remove(cbId);
+            }
             list.Clear();
             _eventCallbackIds.Remove(type);
         }
@@ -625,6 +644,73 @@ public class ElementHost : IDomPrototypeHost
     {
         _element.ScrollIntoView(options);
     }
+
+    // ── CSSOM View §6.3: the scroll members ───────────────────────────────────
+    // Each one takes either the (x, y) pair or the single dictionary with 'left'/'top' (and the
+    // 'behavior' the engine has no use for), and 'scrollBy' is the same operation read as a distance
+    // from where the box is scrolled to now.
+    public void scrollTo(object? x = null, object? y = null) => ScrollCore(x, y, relative: false);
+    public void scrollBy(object? x = null, object? y = null) => ScrollCore(x, y, relative: true);
+    public void scroll(object? x = null, object? y = null) => ScrollCore(x, y, relative: false);
+
+    private void ScrollCore(object? x, object? y, bool relative)
+    {
+        var engine = JavaScriptEngine.Current ?? Engine;
+        double left = 0, top = 0;
+        // The dictionary form is told by the 'left'/'top' it carries; a number never has them.
+        if (x != null && TryReadScrollOption(engine, x, "left", out var optionLeft))
+        {
+            left = optionLeft;
+            top = TryReadScrollOption(engine, x, "top", out var optionTop) ? optionTop : 0;
+        }
+        else
+        {
+            left = ToDouble(x, 0);
+            top = ToDouble(y, 0);
+        }
+        if (relative) { left += scrollLeft; top += scrollTop; }
+        scrollLeft = left;
+        scrollTop = top;
+    }
+
+    private static bool TryReadScrollOption(JavaScriptEngine? engine, object? options, string name, out double value)
+    {
+        value = 0;
+        if (engine == null || options == null) return false;
+        var adapter = engine.Adapter;
+        if (adapter == null) return false;
+        var tmp = "__scroll_probe_" + Interlocked.Increment(ref _optProbeCounter);
+        try
+        {
+            adapter.EmbedHostObject(tmp, options);
+            var v = adapter.Evaluate($"{tmp}.{name}");
+            if (v is double d) { value = d; return true; }
+            if (v is int i) { value = i; return true; }
+            if (v is string s && double.TryParse(s, out var parsed)) { value = parsed; return true; }
+            return false;
+        }
+        catch { return false; }
+        finally
+        {
+            try { adapter.Execute($"delete {tmp};"); } catch { }
+        }
+    }
+
+    private static double ToDouble(object? value, double fallback)
+    {
+        try
+        {
+            if (value == null) return fallback;
+            var text = value.ToString() ?? "";
+            return double.TryParse(text, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : fallback;
+        }
+        catch { return fallback; }
+    }
+
+    /// <summary>DOM §4.2.1: the slot an element was assigned to. This engine has no shadow trees to
+    /// assign anything into, so the answer is the one a page sees outside a shadow host.</summary>
+    public object? assignedSlot => null;
 
     public DomRect getBoundingClientRect()
     {
@@ -841,13 +927,28 @@ public class ElementHost : IDomPrototypeHost
     public double scrollLeft
     {
         get { FlushForRead(); return _element.LayoutBox?.ScrollX ?? 0; }
-        set { if (_element.LayoutBox != null) _element.LayoutBox.ScrollX = (float)value; }
+        set
+        {
+            // CSSOM View §6.3.1: an element is only scrollable as far as its own overflow, so the
+            // number the page asks for is clamped into [0, scrollWidth - clientWidth] and reads back
+            // that way — a box with nothing to scroll stays at 0 (measured both).
+            var box = _element.LayoutBox;
+            if (box == null) return;
+            var limit = Math.Max(0f, scrollWidth - clientWidth);
+            box.ScrollX = (float)Math.Max(0, Math.Min(value, (double)limit));
+        }
     }
 
     public double scrollTop
     {
         get { FlushForRead(); return _element.LayoutBox?.ScrollY ?? 0; }
-        set { if (_element.LayoutBox != null) _element.LayoutBox.ScrollY = (float)value; }
+        set
+        {
+            var box = _element.LayoutBox;
+            if (box == null) return;
+            var limit = Math.Max(0f, scrollHeight - clientHeight);
+            box.ScrollY = (float)Math.Max(0, Math.Min(value, (double)limit));
+        }
     }
 
     public float offsetTop 
@@ -991,86 +1092,110 @@ public class ElementHost : IDomPrototypeHost
         }
         if (scriptEvt == null) return false;
         DispatchEvent(scriptEvt);
-        return !scriptEvt.DefaultPrevented;
+        return !scriptEvt.defaultPrevented;
     }
 
+    /// <summary>DOM §2.5: a dispatch walks the path — the capture leg from the outermost ancestor in,
+    /// the listeners on the target itself, then the bubble back out — and the document closes the chain.
+    /// The node whose listeners are running is the event's 'currentTarget' while they run, and the leg
+    /// the walk is on is what 'eventPhase' reports (§2.3.5). A listener registered for the capture phase
+    /// is picked up only on the way in and one registered without it only on the way out, which is what
+    /// makes a page write down 'body-cap, d-cap, s-at-target, d-bubble, body-bubble' (measured).</summary>
     internal bool DispatchEvent(ScriptEvent evt)
     {
         if (string.IsNullOrEmpty(evt.type)) return true;
 
         var engine = JavaScriptEngine.Current ?? Engine;
 
-        // Target phase - dispatch element-level listeners
-        if (_eventCallbackIds.TryGetValue(evt.type, out var cbIds))
-        {
-            if (engine != null)
-            {
-                foreach (var cbId in cbIds.ToList())
-                {
-                    if (evt.ImmediateStopped) break;
-                    try
-                    {
-                        evt.currentTarget = this;
-                        evt.eventPhase = 2; // AT_TARGET
-                        var svc = engine.IntegrationService;
-                        if (svc != null)
-                            svc.Facade.InvokeJsFunction(cbId, evt);
-                        else
-                            engine.InvokeCallbackWith(cbId, evt);
-                    }
-                    catch { }
-                    // A 'once' listener removes itself after its first call, leaving the other
-                    // listeners on the same event untouched (DOM 4 §2.8).
-                    if (_onceCallbacks.Remove(cbId) && cbIds.Contains(cbId))
-                    {
-                        cbIds.Remove(cbId);
-                        engine.RemoveCallback(cbId);
-                    }
-                }
-            }
-        }
+        var path = new List<ElementHost> { this };
+        for (var p = _element.ParentElement; p != null; p = p.ParentElement)
+            path.Add(WrapWithCache(p) ?? new ElementHost(p));
 
-        // Bubbling phase
-        if (evt.bubbles && !evt.PropagationStopped)
+        evt.target = this;
+        for (var i = path.Count - 1; i >= 1; i--)
         {
-            var parent = _element.ParentElement;
-            if (parent != null)
-            {
-                var parentHost = WrapWithCache(parent);
-                if (parentHost != null)
-                {
-                    evt.eventPhase = 3; // BUBBLING_PHASE
-                    parentHost.DispatchEvent(evt);
-                }
-            }
-            else if (_element.Parent is Core.Dom.Document)
-            {
-                // Dispatch to document when bubbling reaches root element
-                if (engine?.DocumentHost != null)
-                {
-                    try
-                    {
-                        evt.eventPhase = 3;
-                        engine.DocumentHost.dispatchEvent(evt);
-                    }
-                    catch { }
-                }
-            }
+            if (evt.PropagationStopped || evt.ImmediateStopped) break;
+            path[i].InvokeListeners(evt, 1, engine);
         }
+        if (!evt.PropagationStopped && !evt.ImmediateStopped) InvokeListeners(evt, 2, engine);
 
-        // Check for inline event handler
-        var attrName = "on" + evt.type;
-        var attr = _element.GetAttribute(attrName);
-        if (!string.IsNullOrEmpty(attr))
+        if (evt.bubbles && !evt.PropagationStopped && !evt.ImmediateStopped)
         {
-            if (engine != null)
+            for (var i = 1; i < path.Count; i++)
             {
-                try { engine.Evaluate(attr); }
+                if (evt.PropagationStopped || evt.ImmediateStopped) break;
+                path[i].InvokeListeners(evt, 3, engine);
+            }
+            // The document is the last node on the path, and its listeners live in the bridge's bag
+            // rather than in a list kept per element (DOM §2.5).
+            if (!evt.PropagationStopped && !evt.ImmediateStopped && engine?.DocumentHost != null
+                && path[path.Count - 1]._element.Parent is Core.Dom.Document)
+            {
+                try
+                {
+                    evt.eventPhase = 3;
+                    evt.currentTarget = engine.DocumentHost;
+                    engine.DocumentHost.dispatchEvent(evt);
+                }
                 catch { }
             }
         }
 
-        return !evt.DefaultPrevented;
+        // Measured: once the dispatch has returned, the event reports no phase, no target and no current
+        // target any more — the walk it described is over.
+        evt.eventPhase = 0;
+        evt.target = null;
+        evt.currentTarget = null;
+
+        return !evt.defaultPrevented;
+    }
+
+    /// <summary>Runs the listeners this node holds for the event's type in one leg of the walk (DOM
+    /// §2.9): leg 1 is the capture path, leg 2 the target — where both kinds of listener run, in the
+    /// order they were registered — and leg 3 the bubble back out.</summary>
+    private void InvokeListeners(ScriptEvent evt, int phase, JavaScriptEngine? engine)
+    {
+        if (engine == null) return;
+        if (_eventCallbackIds.TryGetValue(evt.type, out var cbIds))
+        {
+            foreach (var cbId in cbIds.ToList())
+            {
+                if (evt.ImmediateStopped) break;
+                var capture = _listenerCapture.TryGetValue(cbId, out var flag) && flag;
+                if ((phase == 1 && !capture) || (phase == 3 && capture)) continue;
+                try
+                {
+                    evt.currentTarget = this;
+                    evt.eventPhase = phase;
+                    var svc = engine.IntegrationService;
+                    if (svc != null)
+                        svc.Facade.InvokeJsFunction(cbId, evt);
+                    else
+                        engine.InvokeCallbackWith(cbId, evt);
+                }
+                catch { }
+                // A 'once' listener removes itself after its first call, leaving the other
+                // listeners on the same event untouched (DOM 4 §2.8).
+                if (_onceCallbacks.Remove(cbId) && cbIds.Contains(cbId))
+                {
+                    cbIds.Remove(cbId);
+                    engine.RemoveCallback(cbId);
+                    _listenerCapture.Remove(cbId);
+                }
+            }
+        }
+        RunInlineHandler(evt, engine, phase);
+    }
+
+    /// <summary>The 'on-type' attribute the markup carries is a listener of the element it sits on, so
+    /// it runs in the same legs a script's listener does and never on the way in (§2.7.3).</summary>
+    private void RunInlineHandler(ScriptEvent evt, JavaScriptEngine engine, int phase)
+    {
+        if (phase == 1) return;
+        var attr = _element.GetAttribute("on" + evt.type);
+        if (string.IsNullOrEmpty(attr)) return;
+        try { engine.Evaluate(attr); }
+        catch { }
     }
 
     internal IEnumerable<ElementHost> GetChildHosts() =>
@@ -1126,9 +1251,10 @@ public class ElementHost : IDomPrototypeHost
             sb.Append('<').Append(el.TagName.ToLowerInvariant());
             foreach (var attr in el.Attributes)
             {
-                sb.Append(' ').Append(attr.Key);
-                if (!string.IsNullOrEmpty(attr.Value))
-                    sb.Append("=\"").Append(System.Net.WebUtility.HtmlEncode(attr.Value)).Append('"');
+                // HTML §13.4: every attribute is written as name="value" — an empty value still gets
+                // its quotes, so 'hidden' serialises as hidden="" and not as the bare name (measured).
+                sb.Append(' ').Append(attr.Key)
+                    .Append("=\"").Append(System.Net.WebUtility.HtmlEncode(attr.Value ?? "")).Append('"');
             }
             // A void element has no content and closes at its start tag, so it must not grow a
             // spurious end tag the way 'br'/'img' did before.
@@ -1233,7 +1359,9 @@ public class ElementHost : IDomPrototypeHost
     // 'setAttribute' — is one name, not two (§4.2.1).
     public string localName => _element.LocalName;
 
-    public string baseURI => "";
+    // HTML §2.7.3: a node's base URL is the document's base URL — the 'href' of the first 'base'
+    // element in the document, or the document URL itself when the page declared none.
+    public string baseURI => NodeBaseUri.For(_element);
 
     public bool isConnected => _element.IsConnected;
 
@@ -1451,10 +1579,12 @@ public class ElementHost : IDomPrototypeHost
 
     public void animate() { }
 
-    public string? slot
+    /// <summary>HTML §4.12.5: the 'slot' attribute reflected. A reflected string reads as the empty
+    /// string when the attribute is not there (measured), not as nothing at all.</summary>
+    public string slot
     {
-        get => _element.GetAttribute("slot");
-        set => _element.SetAttribute("slot", value);
+        get => _element.GetAttribute("slot") ?? "";
+        set => _element.SetAttribute("slot", value ?? "");
     }
 
     public bool spellcheck
@@ -1473,18 +1603,37 @@ public class ElementHost : IDomPrototypeHost
 
     public object? shadowRoot => null;
 
-    public bool assignedSlot => false;
-
     public int nodeType => 1;
 
     public string? nodeValue { get; set; }
 
-    public void toggleAttribute(string name)
+    /// <summary>DOM §4.2.4: the attribute is put in with the empty value and taken off again, and the
+    /// answer is whether it is there now. The second argument takes the toggling out of it: a present
+    /// value puts the attribute in or leaves it there, an absent one takes it out or leaves it off. A
+    /// name that could not be an attribute is refused before anything changes (measured: the sentence
+    /// names the value it was given).</summary>
+    public bool toggleAttribute(string name)
     {
+        DomNames.RequireSettableAttributeName(name, "toggleAttribute", "Element");
         if (_element.HasAttribute(name))
+        {
             _element.RemoveAttribute(name);
-        else
-            _element.SetAttribute(name, "");
+            return false;
+        }
+        _element.SetAttribute(name, "");
+        return true;
+    }
+
+    public bool toggleAttribute(string name, object? force)
+    {
+        DomNames.RequireSettableAttributeName(name, "toggleAttribute", "Element");
+        if (RangeHost.Truthy(force))
+        {
+            if (!_element.HasAttribute(name)) _element.SetAttribute(name, "");
+            return true;
+        }
+        if (_element.HasAttribute(name)) _element.RemoveAttribute(name);
+        return false;
     }
 
     public object? getAttributeNode(string name)
@@ -1594,23 +1743,28 @@ public class ElementHost : IDomPrototypeHost
         return false;
     }
 
+    public int compareDocumentPosition(object? other) => NodePositionOf(_element, UnwrapNode(other));
+
     /// <summary>DOM 4 §4.4.1: the bitmask describing the other node's position relative to this one
     /// (disconnected / preceding / following / contains / contained-by). The document-order half is
     /// found by walking both nodes' ancestor paths from the root and comparing the first position
-    /// where they differ — the pair that never shared a tree reads as disconnected.</summary>
-    public int compareDocumentPosition(object? other)
+    /// where they differ — the pair that never shared a tree reads as disconnected. A document answers
+    /// it the same way an element does, so this is the one implementation both hosts use.</summary>
+    internal static int NodePositionOf(Node self, Node? other)
     {
-        var o = UnwrapNode(other);
-        if (o == null) return 0;
-        if (ReferenceEquals(o, _element)) return 0;
+        if (other == null) return 0;
+        if (ReferenceEquals(other, self)) return 0;
         const int Disconnected = 1, Preceding = 2, Following = 4, Contains = 8, ContainedBy = 16;
-        var mine = PathToRoot(_element);
-        var theirs = PathToRoot(o);
+        var mine = PathToRoot(self);
+        var theirs = PathToRoot(other);
         int result = 0;
         if (mine.Count > 0 && theirs.Count > 0 && !ReferenceEquals(mine[0], theirs[0]))
             result |= Disconnected;
-        if (theirs.Contains(_element)) result |= ContainedBy;
-        if (mine.Contains(o)) result |= Contains;
+        // DOM §4.4.1: containment carries its half of document order with it — a node that holds the
+        // other comes before it, so the pair reads 20 (CONTAINED_BY|FOLLOWING) from the ancestor and
+        // 10 (CONTAINS|PRECEDING) from the descendant (measured).
+        if (theirs.Contains(self)) result |= ContainedBy | Following;
+        if (mine.Contains(other)) result |= Contains | Preceding;
         if ((result & (Disconnected | Contains | ContainedBy)) == 0)
         {
             int n = Math.Min(mine.Count, theirs.Count);
@@ -1873,6 +2027,28 @@ public class ElementHost : IDomPrototypeHost
     }
 
     public int formLength => formElements.Length;
+
+    /// <summary>HTML §4.10.22 and §4.10.10.4: a form and a select are both read as a list — the form's
+    /// listed elements, the select's options — and that list is what the index walks. Any other element
+    /// holds no list at all, so the index answers nothing. 'length' is the same list counted, and it is
+    /// an accessor on each interface's own level (the host member would be read by every element).</summary>
+    private object[] ListedElements()
+    {
+        var tag = _element.TagName;
+        if (tag.Equals("FORM", StringComparison.OrdinalIgnoreCase)) return formElements;
+        if (tag.Equals("SELECT", StringComparison.OrdinalIgnoreCase))
+            return OptionElements().Select(o => JsIntegrationService.WrapAny(o)!).ToArray();
+        return Array.Empty<object>();
+    }
+
+    public object? this[int index]
+    {
+        get
+        {
+            var listed = ListedElements();
+            return index >= 0 && index < listed.Length ? listed[index] : null;
+        }
+    }
 
     /// <summary>HTMLFormElement.elements — the live list of the form's controls, with the reads a
     /// collection owns: 'length', the indexed read, 'item()' and 'namedItem()' (HTML §4.10.22).
@@ -2242,7 +2418,7 @@ public class ElementHost : IDomPrototypeHost
 /// <summary>DOMTokenList over the 'rel' content attribute (DOM 4 §3.3.5). A set of space-separated
 /// tokens kept in the attribute; it is its own class because the element's 'classList' reads and
 /// writes the 'class' attribute specifically and cannot stand in for 'rel'.</summary>
-public class RelTokenListHost
+public class RelTokenListHost : IDomPrototypeHost
 {
     private readonly ElementHost _element;
     public RelTokenListHost(ElementHost element) => _element = element;
@@ -2250,26 +2426,50 @@ public class RelTokenListHost
     private List<string> Tokens() =>
         (El.GetAttribute("rel") ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
     private void SetTokens(List<string> t) => El.SetAttribute("rel", string.Join(" ", t));
+
+    // 'relList' is the same interface as 'classList' — one level, which the page can see by comparing
+    // the prototypes (measured: 'Object.getPrototypeOf(a.relList) === DOMTokenList.prototype').
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "DOMTokenList" };
+
     public int length => Tokens().Count;
+    public string? this[int index] => item(index);
     public string? item(int index) { var t = Tokens(); return index >= 0 && index < t.Count ? t[index] : null; }
     public bool contains(string token) => Tokens().Contains(token);
     public void add(params string[] tokens)
     {
+        foreach (var tok in tokens) DomTokens.Require(tok, "add");
         var t = Tokens();
         foreach (var tok in tokens) if (!string.IsNullOrEmpty(tok) && !t.Contains(tok)) t.Add(tok);
         SetTokens(t);
     }
     public void remove(params string[] tokens)
     {
+        foreach (var tok in tokens) DomTokens.Require(tok, "remove");
         var t = Tokens();
         foreach (var tok in tokens) t.Remove(tok);
         SetTokens(t);
     }
     public bool toggle(string token)
     {
+        DomTokens.Require(token, "toggle");
         var t = Tokens();
         if (t.Contains(token)) { t.Remove(token); SetTokens(t); return false; }
         t.Add(token); SetTokens(t); return true;
+    }
+    /// <summary>DOM §3.3.6: with the second argument the member stops toggling — the token is put in
+    /// when it is present and taken out when it is absent, and the answer is whether the list holds it
+    /// now.</summary>
+    public bool toggle(string token, object? force)
+    {
+        DomTokens.Require(token, "toggle");
+        var t = Tokens();
+        if (RangeHost.Truthy(force))
+        {
+            if (!t.Contains(token)) { t.Add(token); SetTokens(t); }
+            return true;
+        }
+        if (t.Contains(token)) { t.Remove(token); SetTokens(t); }
+        return false;
     }
     public string value
     {
@@ -2277,6 +2477,25 @@ public class RelTokenListHost
         set => El.SetAttribute("rel", value ?? "");
     }
     public override string ToString() => value;
+    public bool replace(string token, string newToken)
+    {
+        DomTokens.Require(token, "replace");
+        DomTokens.Require(newToken, "replace");
+        var t = Tokens();
+        if (!t.Contains(token)) return false;
+        t.Remove(token);
+        if (!t.Contains(newToken)) t.Add(newToken);
+        SetTokens(t);
+        return true;
+    }
+    /// <summary>DOM §3.3.6: a 'rel' list is one of the lists that declares supported tokens, so the
+    /// member answers here instead of refusing the way the class list does. Measured against the
+    /// reference, which answers false for a link type it does hold and for one it does not.</summary>
+    public bool supports(string token)
+    {
+        DomTokens.Require(token, "supports");
+        return false;
+    }
 }
 
 public class TextNodeWrapper : IDomPrototypeHost
@@ -2297,6 +2516,7 @@ public class TextNodeWrapper : IDomPrototypeHost
     public object? ownerDocument
         => JsIntegrationService.WrapAny(_node.OwnerDocument) ?? JavaScriptEngine.Current?.IntegrationService?.Document;
     public string? __domType => IsCData ? "CDATASection" : "Text";
+    public string baseURI => NodeBaseUri.For(_node);
     public string[] __domTypeChain => IsCData
         ? new[] { "EventTarget", "Node", "CharacterData", "Text", "CDATASection" }
         : new[] { "EventTarget", "Node", "Text" };
@@ -2367,6 +2587,7 @@ public class CommentHost : IDomPrototypeHost
     public object? ownerDocument
         => JsIntegrationService.WrapAny(_node.OwnerDocument) ?? JavaScriptEngine.Current?.IntegrationService?.Document;
     public string? __domType => "Comment";
+    public string baseURI => NodeBaseUri.For(_node);
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "CharacterData", "Comment" };
     public object? parentNode
     {
@@ -2401,19 +2622,53 @@ public class CommentHost : IDomPrototypeHost
     }
 }
 
-public class DomTokenListHost
+public class DomTokenListHost : IDomPrototypeHost
 {
     private readonly ElementHost _element;
     public DomTokenListHost(ElementHost element) => _element = element;
+
+    // The page reads the list as the interface it is: 'el.classList instanceof DOMTokenList' and the
+    // iterable face the script puts on that level both follow from the stamp.
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "DOMTokenList" };
+
     public int length => _element.NativeElement.ClassList.Length;
+
+    /// <summary>DOM §3.3.6: the named getter, so a page may read a token by its index as well as with
+    /// 'item'.</summary>
+    public string? this[int index] => _element.classList_item(index);
+
     public void add(params string[] classNames)
     {
-        foreach (var cn in classNames)
-            _element.classList_add(cn);
+        // Every token is checked before the first one reaches the attribute, so a list is never left
+        // holding part of a refused call.
+        foreach (var cn in classNames) DomTokens.Require(cn, "add");
+        foreach (var cn in classNames) _element.classList_add(cn);
     }
-    public void remove(string className) => _element.classList_remove(className);
+    public void remove(params string[] classNames)
+    {
+        foreach (var cn in classNames) DomTokens.Require(cn, "remove");
+        foreach (var cn in classNames) _element.classList_remove(cn);
+    }
     public bool contains(string className) => _element.classList_contains(className);
-    public bool toggle(string className) => _element.classList_toggle(className);
+    public bool toggle(string className)
+    {
+        DomTokens.Require(className, "toggle");
+        return _element.classList_toggle(className);
+    }
+    /// <summary>DOM §3.3.6: with the second argument the member stops toggling — the token is put in
+    /// when it is present and taken out when it is absent, and what comes back is whether the list
+    /// holds it now.</summary>
+    public bool toggle(string className, object? force)
+    {
+        DomTokens.Require(className, "toggle");
+        if (RangeHost.Truthy(force))
+        {
+            if (!_element.classList_contains(className)) _element.classList_add(className);
+            return true;
+        }
+        if (_element.classList_contains(className)) _element.classList_remove(className);
+        return false;
+    }
     public string? item(int index) => _element.classList_item(index);
     // DOMTokenList is a set of tokens that serialises as the space-separated class attribute;
     // 'value' is that string and 'toString' is what a page gets from String(el.classList).
@@ -2425,6 +2680,8 @@ public class DomTokenListHost
     public override string ToString() => value;
     public bool replace(string token, string newToken)
     {
+        DomTokens.Require(token, "replace");
+        DomTokens.Require(newToken, "replace");
         if (!_element.classList_contains(token)) return false;
         _element.classList_remove(token);
         _element.classList_add(newToken);
@@ -2444,11 +2701,17 @@ public class ScriptEvent : IDomPrototypeHost
         Kind == "Event" ? new[] { "Event" } : new[] { "Event", Kind };
 
     public string type { get; set; }
-    public ElementHost? target { get; }
-    public ElementHost? currentTarget { get; set; }
+    // DOM §2.3.5: 'target' is where the event was dispatched and 'currentTarget' the node whose
+    // listeners are running right now — both are set by the walk, not by whoever built the event, and
+    // both are nil again once it has finished (measured: 'eventPhase' is 0 and the two are null after a
+    // dispatch returns). The current target is the document for a listener registered on it, so the
+    // pair is held as 'object'.
+    public object? target { get; set; }
+    public object? currentTarget { get; set; }
     public bool bubbles { get; set; } = true;
     public bool cancelable { get; set; } = true;
-    public bool DefaultPrevented { get; private set; }
+    // DOM §2.3.5: the page reads this as 'defaultPrevented' — the name the interface member carries.
+    public bool defaultPrevented { get; private set; }
     public long timeStamp { get; }
     public int eventPhase { get; set; }
     public object? detail { get; set; }
@@ -2503,7 +2766,12 @@ public class ScriptEvent : IDomPrototypeHost
         timeStamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 
-    public void preventDefault() => DefaultPrevented = true;
+    /// <summary>DOM §2.3.6: the flag is only set for an event that can be cancelled, and it is the
+    /// event's own 'cancelable' that says whether it can be.</summary>
+    public void preventDefault()
+    {
+        if (cancelable) defaultPrevented = true;
+    }
 
     internal bool PropagationStopped;
     internal bool ImmediateStopped;
@@ -2516,7 +2784,14 @@ public class ScriptEvent : IDomPrototypeHost
         var start = target ?? currentTarget;
         var path = new List<object>();
         if (start == null) return path.ToArray();
-        var el = start.NativeElement;
+        if (start is not ElementHost startHost)
+        {
+            // The document is the only other node a dispatch can be pointed at, and the path from it
+            // is just itself (DOM §2.5).
+            path.Add(start);
+            return path.ToArray();
+        }
+        var el = startHost.NativeElement;
         if (el == null) { path.Add(start); return path.ToArray(); }
         for (var n = (Node)el; n != null; n = n.Parent)
         {
@@ -2587,6 +2862,7 @@ public class ProcessingInstructionHost : IDomPrototypeHost
     public string? textContent { get => _node.Data; set => _node.Data = value ?? ""; }
     public int length => _node.Data?.Length ?? 0;
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "CharacterData", "ProcessingInstruction" };
+    public string baseURI => NodeBaseUri.For(_node);
     public object? ownerDocument
         => JsIntegrationService.WrapAny(_node.OwnerDocument) ?? JavaScriptEngine.Current?.IntegrationService?.Document;
     public object? parentNode => JsIntegrationService.WrapAny(_node.Parent);

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html><head><title>Probe 24</title></head><body>
+<div id="d"><span id="s">t</span></div>
+<script>
+(function () {
+  function t(name, fn, info) {
+    var ok = false, got = '';
+    try { var v = fn(); ok = !!v; } catch (e) { got = 'threw ' + (e && e.name) + ': ' + (e && e.message); }
+    if (!ok && !got) { try { got = String(typeof info === 'function' ? info() : (info === undefined ? '' : info)); } catch (e) { got = 'info threw'; } }
+    __T(name, ok, got);
+  }
+  var d = document.getElementById('d'), s = document.getElementById('s');
+  t('path from a listener on the target', function () {
+    var p = null;
+    s.addEventListener('a1', function (e) { p = e.composedPath(); });
+    s.dispatchEvent(new Event('a1', { bubbles: true }));
+    return p[0] === s && p[1] === d;
+  }, function () { return 'see next'; });
+  t('path from a listener on the ancestor', function () {
+    var p = null;
+    d.addEventListener('a2', function (e) { p = e.composedPath(); });
+    s.dispatchEvent(new Event('a2', { bubbles: true }));
+    return p[0] === s && p[1] === d;
+  }, function () {
+    var p = null;
+    d.addEventListener('a3', function (e) { p = e.composedPath(); });
+    s.dispatchEvent(new Event('a3', { bubbles: true }));
+    var ids = [];
+    for (var i = 0; i < p.length; i++) ids.push(String(p[i].id) + (p[i] === document ? '(doc)' : '') + '/' + String(p[i] === s) + String(p[i] === d));
+    return ids.join(',');
+  });
+  t('path from a capture listener', function () {
+    var p = null;
+    d.addEventListener('a4', function (e) { p = e.composedPath(); }, true);
+    s.dispatchEvent(new Event('a4', { bubbles: true }));
+    return p[0] === s && p[1] === d;
+  }, 'n/a');
+  t('identity holds across reads', function () {
+    return document.getElementById('s') === s && document.getElementById('d') === d && s.parentElement === d;
+  }, function () { return String(document.getElementById('s') === s) + '/' + String(s.parentElement === d); });
+})();
+</script></body></html>

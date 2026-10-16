@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html><head><title>Probe 20</title></head><body>
+<div id="d" class="a b">x<b>bold</b></div>
+<a id="lnk" rel="nofollow me">l</a>
+<script>
+(function () {
+  function t(name, fn, info) {
+    var ok = false, got = '';
+    try { var v = fn(); ok = !!v; } catch (e) { got = 'threw ' + (e && e.name) + ': ' + (e && e.message); }
+    if (!ok && !got) { try { got = String(typeof info === 'function' ? info() : (info === undefined ? '' : info)); } catch (e) { got = 'info threw'; } }
+    __T(name, ok, got);
+  }
+  var d = document.getElementById('d');
+  var cl = d.classList;
+
+  t('DOMTokenList level exists', function () {
+    return typeof DOMTokenList === 'function' && Object.getPrototypeOf(cl) === DOMTokenList.prototype
+      && cl instanceof DOMTokenList;
+  }, function () { return typeof DOMTokenList + '/' + String(Object.getPrototypeOf(cl) === DOMTokenList.prototype); });
+  t('classList indexed access', function () { return cl[0] === 'a' && cl[1] === 'b' && cl[2] == null; },
+    function () { return [String(cl[0]), String(cl[1]), String(cl[2])].join('/'); });
+  t('classList.forEach shape', function () {
+    var seen = [];
+    cl.forEach(function (token, i, list) { seen.push(token + ':' + i + ':' + (list === cl)); });
+    return seen.join(',') === 'a:0:true,b:1:true';
+  }, function () { var s = []; cl.forEach(function (tk, i, l) { s.push(tk + ':' + i + ':' + (l === cl)); }); return s.join(','); });
+  t('classList iteration', function () {
+    return JSON.stringify(Array.from(cl.values())) === '["a","b"]'
+      && JSON.stringify(Array.from(cl.keys())) === '[0,1]'
+      && JSON.stringify(Array.from(cl.entries())) === '[[0,"a"],[1,"b"]]'
+      && JSON.stringify(Array.from(cl)) === '["a","b"]';
+  }, function () { return JSON.stringify([Array.from(cl.values()), Array.from(cl.keys()), Array.from(cl.entries()), Array.from(cl)]); });
+  t('classList.forEach thisArg', function () {
+    var box = { k: 1 };
+    var got = null;
+    cl.forEach(function () { got = this; }, box);
+    return got === box;
+  }, function () { var g = null; cl.forEach(function () { g = this; }, null); return String(g === null); });
+  t('classList.toggle force', function () {
+    var r = [cl.toggle('z', true), cl.contains('z'), cl.toggle('z', false), cl.contains('z'), cl.toggle('a', true)];
+    return r.join(',') === 'true,true,false,false,true';
+  }, function () { return [cl.toggle('q', true), cl.contains('q'), cl.toggle('q', false), cl.contains('q')].join(','); });
+  t('classList.remove varargs', function () {
+    cl.add('m', 'n'); cl.remove('m', 'n');
+    return !cl.contains('m') && !cl.contains('n');
+  }, function () { return cl.value; });
+  t('classList.add empty refused', function () {
+    try { cl.add(''); return 'no throw'; }
+    catch (e) { return e.name === 'SyntaxError' && /must not be empty/.test(String(e.message)); }
+  }, function () { try { cl.add(''); } catch (e) { return e.name + '/' + e.message; } });
+  t('classList.add space refused', function () {
+    try { cl.add('a b'); return 'no throw'; }
+    catch (e) { return e.name === 'InvalidCharacterError' && /HTML space characters/.test(String(e.message)); }
+  }, function () { try { cl.add('a b'); } catch (e) { return e.name + '/' + e.message; } });
+  t('classList.supports refuses', function () {
+    try { cl.supports('a'); return 'no throw'; }
+    catch (e) { return e.name === 'TypeError' && /no supported tokens/.test(String(e.message)); }
+  }, function () { try { return String(cl.supports('a')); } catch (e) { return e.name + '/' + e.message; } });
+  t('relList.supports answers', function () {
+    var l = document.getElementById('lnk').relList;
+    return typeof l.supports === 'function' && l.supports('nofollow') === false;
+  }, function () { var l = document.getElementById('lnk').relList; return typeof l.supports + '/' + String(l.supports('nofollow')); });
+  t('relList is a DOMTokenList', function () {
+    return Object.getPrototypeOf(document.getElementById('lnk').relList) === DOMTokenList.prototype
+      && document.getElementById('lnk').relList.length === 2;
+  }, function () { var l = document.getElementById('lnk').relList; return String(Object.getPrototypeOf(l) === DOMTokenList.prototype) + '/' + l.length; });
+  t('classList item out of range', function () { return cl.item(-1) === null && cl.item(999) === null; },
+    function () { return String(cl.item(-1)) + '/' + String(cl.item(999)); });
+  t('classList value set and toString', function () {
+    cl.value = 'k1 k2';
+    return cl.className === undefined && d.className === 'k1 k2' && String(cl) === 'k1 k2' && cl.value === 'k1 k2';
+  }, function () { return d.className + '/' + String(cl); });
+  t('classList toStringTag', function () {
+    return Object.prototype.toString.call(d.classList) === '[object DOMTokenList]';
+  }, function () { return Object.prototype.toString.call(d.classList); });
+  t('DOMTokenList own members', function () {
+    var names = Object.getOwnPropertyNames(DOMTokenList.prototype);
+    var want = ['add', 'remove', 'contains', 'toggle', 'item', 'replace', 'forEach', 'entries', 'values', 'keys', 'supports', 'length', 'value'];
+    for (var i = 0; i < want.length; i++) if (names.indexOf(want[i]) < 0) return 'missing ' + want[i];
+    return true;
+  }, function () { return Object.getOwnPropertyNames(DOMTokenList.prototype).sort().join(','); });
+
+  t('EventTarget constructible', function () {
+    var et = new EventTarget();
+    var hit = 0;
+    et.addEventListener('go', function () { hit++; });
+    var back = et.dispatchEvent(new Event('go'));
+    return hit === 1 && back === true && et instanceof EventTarget;
+  }, function () { var e = new EventTarget(); var h = 0; e.addEventListener('x', function () { h++; }); return [h, String(e.dispatchEvent(new Event('x')))].join('/'); });
+  t('EventTarget once option', function () {
+    var et = new EventTarget(); var hit = 0;
+    et.addEventListener('go', function () { hit++; }, { once: true });
+    et.dispatchEvent(new Event('go')); et.dispatchEvent(new Event('go'));
+    return hit === 1;
+  }, function () { var e = new EventTarget(); var h = 0; e.addEventListener('g', function () { h++; }, { once: true }); e.dispatchEvent(new Event('g')); e.dispatchEvent(new Event('g')); return h; });
+  t('EventTarget duplicate ignored, capture distinct', function () {
+    var et = new EventTarget(); var hit = 0;
+    var fn = function () { hit++; };
+    et.addEventListener('go', fn); et.addEventListener('go', fn);
+    et.dispatchEvent(new Event('go'));
+    var twice = hit === 1;
+    // The capture flag makes a second entry of the same function, and an object with no tree to walk
+    // runs both in registration order (DOM §2.3 step 5).
+    et.addEventListener('go', fn, true);
+    et.dispatchEvent(new Event('go'));
+    return twice && hit === 3;
+  }, function () { var e = new EventTarget(); var h = 0; var f = function () { h++; }; e.addEventListener('g', f); e.addEventListener('g', f); e.dispatchEvent(new Event('g')); return h; });
+  t('EventTarget removeEventListener and handleEvent', function () {
+    var et = new EventTarget(); var bag = { hits: 0, handleEvent: function () { this.hits++; } };
+    et.addEventListener('go', bag);
+    et.dispatchEvent(new Event('go'));
+    var one = bag.hits === 1;
+    et.removeEventListener('go', bag);
+    et.dispatchEvent(new Event('go'));
+    return one && bag.hits === 1;
+  }, function () { var b = { n: 0, handleEvent: function () { b.n++; } }; var e = new EventTarget(); e.addEventListener('g', b); e.dispatchEvent(new Event('g')); return b.n; });
+  t('EventTarget preventDefault makes dispatchEvent false', function () {
+    var et = new EventTarget();
+    et.addEventListener('go', function (ev) { ev.preventDefault(); });
+    var ev = new Event('go', { cancelable: true });
+    et.dispatchEvent(ev);
+    return ev.defaultPrevented === true && et.dispatchEvent(new Event('go')) === true;
+  }, function () { var e = new EventTarget(); var ev = new Event('go', { cancelable: true }); e.dispatchEvent(ev); return String(ev.defaultPrevented); });
+  t('EventTarget on-type member runs', function () {
+    var et = new EventTarget(); et.ongos = function () { et.ran = true; };
+    et.dispatchEvent(new Event('gos'));
+    return et.ran === true;
+  }, function () { var e = new EventTarget(); e.ongos = function () { e.r = 1; }; e.dispatchEvent(new Event('gos')); return String(e.r); });
+  t('EventTarget interface face', function () {
+    return typeof EventTarget === 'function' && EventTarget.length === 0
+      && Object.prototype.toString.call(new EventTarget()) === '[object EventTarget]';
+  }, function () { return typeof EventTarget + '/' + String(EventTarget.length) + '/' + Object.prototype.toString.call(new EventTarget()); });
+  t('document is an EventTarget', function () {
+    return document instanceof EventTarget && d instanceof EventTarget && typeof d.addEventListener === 'function';
+  }, function () { return String(document instanceof EventTarget) + '/' + String(d instanceof EventTarget); });
+
+  var originalBase = document.baseURI;
+  t('baseURI is the document URL', function () {
+    return typeof document.baseURI === 'string' && /^file:/.test(document.baseURI)
+      && document.URL === document.baseURI && d.baseURI === document.baseURI;
+  }, function () { return document.baseURI + '/' + d.baseURI; });
+  t('baseURI on every node kind', function () {
+    var text = d.firstChild;
+    var comment = document.createComment('c');
+    var frag = document.createDocumentFragment();
+    return text.baseURI === originalBase && frag.baseURI === originalBase
+      && document.createElement('p').baseURI === originalBase
+      && d.attributes[0].baseURI === originalBase && comment.baseURI === originalBase;
+  }, function () { return [d.firstChild.baseURI, document.createDocumentFragment().baseURI,
+      document.createElement('p').baseURI, String(d.attributes[0] && d.attributes[0].baseURI)].join('/'); });
+  t('base element wins and resolves', function () {
+    var b = document.createElement('base'); b.href = 'sub/x.html';
+    document.head.insertBefore(b, document.head.firstChild);
+    var want = new URL('sub/x.html', originalBase).href;
+    var got = document.baseURI;
+    var fromElement = d.baseURI;
+    b.remove();
+    return got === want && fromElement === want && document.baseURI === originalBase;
+  }, function () {
+    var b = document.createElement('base'); b.href = 'sub/x.html';
+    document.head.insertBefore(b, document.head.firstChild);
+    var out = document.baseURI + ' want ' + new URL('sub/x.html', originalBase).href;
+    b.remove(); return out;
+  });
+  t('about:blank document baseURI', function () {
+    var other = document.implementation.createHTMLDocument('t');
+    return other.baseURI === 'about:blank' && other.createElement('p').baseURI === 'about:blank'
+      && other.URL === 'about:blank';
+  }, function () { var o = document.implementation.createHTMLDocument('t'); return String(o.baseURI) + '/' + String(o.URL); });
+  t('window has no baseURI', function () { return window.baseURI === undefined; }, String(window.baseURI));
+
+  t('replaceChildren over each argument kind', function () {
+    var box = document.createElement('p');
+    box.appendChild(document.createTextNode('old'));
+    box.replaceChildren('s', document.createElement('i'), document.createDocumentFragment());
+    return box.childNodes.length === 2 && box.firstChild.nodeType === 3 && box.textContent === 's';
+  }, function () {
+    var box = document.createElement('p'); box.replaceChildren('s', document.createElement('i'));
+    return box.childNodes.length + '/' + box.firstChild.nodeType;
+  });
+  t('replaceChildren with no arguments empties', function () {
+    var box = document.createElement('p'); box.appendChild(document.createElement('b'));
+    box.replaceChildren(); return box.childNodes.length === 0;
+  }, function () { var b = document.createElement('p'); b.replaceChildren(); return b.childNodes.length; });
+  t('replaceChildren on document and fragment', function () {
+    var f = document.createDocumentFragment();
+    return typeof document.replaceChildren === 'function' && typeof f.replaceChildren === 'function'
+      && typeof f.append === 'function' && typeof f.prepend === 'function';
+  }, function () { return typeof document.replaceChildren + '/' + typeof document.createDocumentFragment().replaceChildren; });
+  t('cloneNode keeps id and classes', function () {
+    d.id = 'd'; var c = d.cloneNode(true);
+    return c.id === 'd' && c.className === d.className && c !== d && c.ownerDocument === document;
+  }, function () { d.id = 'd'; var c = d.cloneNode(true); return c.id + '/' + c.className; });
+
+  t('collection iteration face', function () {
+    var nl = document.querySelectorAll('div');
+    var nm = d.attributes;
+    var hc = document.children;
+    return typeof nl.forEach === 'function' && typeof nl[Symbol.iterator] === 'function'
+      && typeof nm[Symbol.iterator] === 'function' && typeof nm.forEach === 'function'
+      && typeof hc[Symbol.iterator] === 'function';
+  }, function () {
+    var nl = document.querySelectorAll('div'); var nm = d.attributes; var hc = document.children;
+    return ['nodeList.forEach', typeof nl.forEach, 'nodeList.iterator', typeof nl[Symbol.iterator],
+      'map.iterator', typeof nm[Symbol.iterator], 'map.forEach', typeof nm.forEach,
+      'collection.iterator', typeof hc[Symbol.iterator]].join('/');
+  });
+})();
+</script></body></html>

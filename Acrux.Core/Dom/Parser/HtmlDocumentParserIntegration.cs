@@ -5,16 +5,14 @@ public static class HtmlDocumentParserIntegration
     public static Document ParseHtml(string html)
     {
         var document = new Document();
-        if (string.IsNullOrEmpty(html))
-            return document;
 
         // Strip BOM (U+FEFF) which can appear at the start of UTF-8 encoded content.
         if (html.Length > 0 && html[0] == '\uFEFF')
             html = html.Substring(1);
 
-        if (string.IsNullOrEmpty(html))
-            return document;
-
+        // HTML \u00A713.2: even a run with nothing in it is parsed, because the tree construction creates
+        // the html, head and body elements as it reaches the end of the input \u2014 an early return here
+        // left 'parseFromString('', 'text/html')' with a document that had no document element.
         var parser = new HtmlDocumentParser(document);
         parser.Append(html);
         parser.Finish();

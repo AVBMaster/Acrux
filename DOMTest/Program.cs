@@ -66,6 +66,10 @@ foreach (var file in cases)
     js.ShowDialog = (msg, kind) => { Console.WriteLine($"    [{kind}] {msg}"); return "true"; };
 
     var doc = HtmlDocumentParserIntegration.ParseHtml(html);
+    // The page is read from a file, so it is given that file's URL — the same thing the shell does
+    // before it hands a document to the engine. Without it 'document.baseURI', 'location.href' and
+    // every relative resolution a case measures would answer the empty string.
+    doc.Url = new Uri(file).AbsoluteUri;
     js.LoadDocument(doc);
 
     // Give the page a laid-out canvas to measure against, the way the real shell does before it

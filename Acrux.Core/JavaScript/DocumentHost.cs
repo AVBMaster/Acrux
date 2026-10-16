@@ -81,9 +81,12 @@ public class DocumentHost : IDomPrototypeHost
 
     public string URL => _document.Url;
     public string documentURI => _document.Url;
-    public string? baseURI => _document.Url;
+    public string? baseURI => NodeBaseUri.For(_document);
 
-    public string? compatMode => "CSS1Compat";
+    // HTML §2.6.2: the mode the parser's doctype decision left the document in. A document with no
+    // doctype is in quirks mode and says 'BackCompat' (measured: the reference answers that for
+    // 'parseFromString('<p>', 'text/html')' and 'CSS1Compat' once the doctype is there).
+    public string? compatMode => _document.QuirksMode ? "BackCompat" : "CSS1Compat";
 
     // A Document is a Node (DOM 4 §4), so it reports nodeType 9 and '#document' like any other,
     // and its documentElement is the root element under it.
@@ -120,7 +123,10 @@ public class DocumentHost : IDomPrototypeHost
 
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "HTMLDocument" };
     public string? characterSet => "UTF-8";
-    public string? contentType => "text/html";
+    // DOM §3.2: the content type is the one the document was built with — 'text/html' for the page the
+    // shell navigated to, and what 'DOMParser.parseFromString' or 'createDocument' was given for the
+    // ones a script made.
+    public string? contentType => _document.ContentType;
 
     // ===== Document collections =====
     public object[] anchors
@@ -401,6 +407,12 @@ public class DocumentHost : IDomPrototypeHost
             if (ReferenceEquals(current, _document)) return true;
         return false;
     }
+
+    /// <summary>DOM §4.2.1: a document is a node, so it answers the position of another one the same
+    /// way an element does — 'document.compareDocumentPosition(el)' is CONTAINED_BY|FOLLOWING (20) and
+    /// the element reads it back as CONTAINS|PRECEDING (10) (measured).</summary>
+    public int compareDocumentPosition(object? other)
+        => ElementHost.NodePositionOf(_document, ElementHost.UnwrapNode(other));
 
     public ElementHost? activeElement
     {
@@ -1557,6 +1569,7 @@ public class DocumentFragmentHost : IDomPrototypeHost
     public string nodeName => "#document-fragment";
     public int nodeType => 11;
     public string? __domType => "DocumentFragment";
+    public string baseURI => NodeBaseUri.For(_fragment);
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "DocumentFragment" };
 
     public object? querySelector(string selector)
@@ -1577,25 +1590,43 @@ public class DocumentFragmentHost : IDomPrototypeHost
         return list.Select(e => (object)Wrap(e)!).ToArray();
     }
 
-    public object append(object? child)
+    /// <summary>DOM §5.5 (ParentNode): every argument is put in at the end — a string becomes a text
+    /// node and a fragment contributes the children it holds.</summary>
+    public object? append(params object?[] nodes)
     {
-        var node = ElementHost.UnwrapNode(child);
-        if (node == null) return child!;
-        if (node is Acrux.Core.Dom.DocumentFragment f)
-            foreach (var moved in f.Children.ToList()) _fragment.AppendChild(moved);
-        else _fragment.AppendChild(node);
-        return child!;
+        foreach (var n in nodes) InsertIntoFragment(n, atEnd: true);
+        return nodes.Length > 0 ? nodes[^1] : null;
     }
 
-    public object prepend(object? child)
+    public object? prepend(params object?[] nodes)
     {
-        var node = ElementHost.UnwrapNode(child);
-        if (node == null) return child!;
-        var first = _fragment.Children.FirstOrDefault();
-        if (node is Acrux.Core.Dom.DocumentFragment f)
-            foreach (var moved in f.Children.ToList()) _fragment.InsertBefore(moved, first);
-        else _fragment.InsertBefore(node, first);
-        return child!;
+        foreach (var n in nodes) InsertIntoFragment(n, atEnd: false);
+        return nodes.Length > 0 ? nodes[^1] : null;
+    }
+
+    /// <summary>DOM §5.5: the children the fragment held leave before the arguments are put in.</summary>
+    public void replaceChildren(params object?[] nodes)
+    {
+        for (var i = _fragment.Children.Count - 1; i >= 0; i--) _fragment.RemoveChild(_fragment.Children[i]);
+        foreach (var n in nodes) InsertIntoFragment(n, atEnd: true);
+    }
+
+    private void InsertIntoFragment(object? child, bool atEnd)
+    {
+        Node? node = child is string text ? new TextNode(text) : ElementHost.UnwrapNode(child);
+        if (node == null) return;
+        if (node is Acrux.Core.Dom.DocumentFragment contributed)
+        {
+            var first = atEnd ? null : _fragment.Children.FirstOrDefault();
+            foreach (var moved in contributed.Children.ToList())
+            {
+                if (atEnd) _fragment.AppendChild(moved);
+                else _fragment.InsertBefore(moved, first);
+            }
+            return;
+        }
+        if (atEnd) _fragment.AppendChild(node);
+        else _fragment.InsertBefore(node, _fragment.Children.FirstOrDefault());
     }
 
     // A document fragment is a Node, so the whole mutation surface it is used through —
@@ -1769,6 +1800,7 @@ public class DocumentTypeHost : IDomPrototypeHost
     public string? nodeValue => null;
     public string? textContent => null;
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "DocumentType" };
+    public string baseURI => NodeBaseUri.For(_docType);
     public object? ownerDocument
         => JsIntegrationService.WrapAny(_docType.OwnerDocument) ?? JavaScriptEngine.Current?.IntegrationService?.Document;
     public object? parentNode => JsIntegrationService.WrapAny(_docType.Parent);
@@ -1920,6 +1952,9 @@ public class AttributeHost : IDomPrototypeHost
     public int nodeType => 2;
     public string? textContent { get => value; set => this.value = value; }
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "Attr" };
+    // DOM §4.2.1: an attribute's node document is its element's, and the base URI is read from there
+    // — an attribute that belongs to no element yet still has the document that made it.
+    public string baseURI => NodeBaseUri.For((Acrux.Core.Dom.Node?)_owner ?? _document);
     public object? ownerElement => _owner != null && !_released ? JsIntegrationService.WrapAny(_owner) : null;
 
     /// <summary>DOM §4.3.3: an attribute belongs to a document whether or not an element holds it,
@@ -2036,6 +2071,9 @@ public class DOMImplementationHost
         if (!string.IsNullOrEmpty(qualifiedName))
             DomNames.RequireQualifiedName(qualifiedName, "createDocument", "DOMImplementation", element: true);
         var doc = new Document();
+        // A document the implementation makes is not navigated to, and the reference still gives it
+        // the URL an empty browsing context has — which is what 'baseURI' and 'URL' read back.
+        doc.Url = "about:blank";
         // A document made through 'createDocument' is an XML one, and the interface the page reads
         // back ('contentType', and what a CDATA section costs it) follows from that (§3.3).
         doc.ContentType = ns == "http://www.w3.org/1999/xhtml"
@@ -2063,6 +2101,7 @@ public class DOMImplementationHost
     public object createHTMLDocument(string? title = null)
     {
         var doc = new Document();
+        doc.Url = "about:blank";
         // An HTML document made by the implementation carries its doctype, the way the parser's
         // does — a page that reads 'other.doctype.name' after creating one expects 'html'.
         doc.AppendChild(new DocumentTypeNode(null, null, "html"));

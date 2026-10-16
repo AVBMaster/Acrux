@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head><title>Token lists, EventTarget, base URI and the ParentNode mixin (DOM §3.3.6, §2.3/§2.7, §4.2.1 with HTML §2.7.3, §5.5)</title></head>
+<body>
+<div id="d" class="a b">text<b>bold</b></div>
+<a id="lnk" rel="nofollow me">link</a>
+<script>
+// Every sentence and every accepted spelling below was read off the reference browser in this
+// session (the measurement pages are kept in out/reference_probes), not written from the spec text:
+// a token list is refused with a 'SyntaxError' for an empty token and an 'InvalidCharacterError'
+// that quotes the token for one holding a space, 'supports' refuses a list that declares no
+// supported tokens but answers for the 'rel' list, a node's base URI is the first 'base' element's
+// 'href' resolved against the document URL, and a document the implementation makes is at
+// 'about:blank'.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+function ckErr(name, wantName, wantMsg, fn) {
+    var e = null;
+    try { fn(); } catch (x) { e = x; }
+    var got = e ? (e.name + ' | ' + e.message) : 'no throw';
+    __T(name, !!e && e.name === wantName && String(e.message) === wantMsg, got === wantName + ' | ' + wantMsg ? '' : 'got: ' + got);
+}
+
+var d = document.getElementById('d');
+var cl = d.classList;
+
+// ── A. the list is the interface it is named as ──────────────────────────────
+ck('A1 DOMTokenList is an interface', function () {
+    return typeof DOMTokenList === 'function' && Object.getPrototypeOf(cl) === DOMTokenList.prototype;
+}, function () { return typeof DOMTokenList + '/' + String(Object.getPrototypeOf(cl) === DOMTokenList.prototype); });
+ck('A2 the list is an instance of it', function () { return cl instanceof DOMTokenList; });
+ck('A3 toStringTag names the interface', function () {
+    return Object.prototype.toString.call(cl) === '[object DOMTokenList]';
+}, function () { return Object.prototype.toString.call(cl); });
+ck('A4 the level declares the whole interface', function () {
+    var names = Object.getOwnPropertyNames(DOMTokenList.prototype);
+    var want = ['add', 'remove', 'contains', 'toggle', 'item', 'replace', 'forEach', 'entries',
+                'values', 'keys', 'supports', 'length', 'value', 'toString', 'constructor'];
+    for (var i = 0; i < want.length; i++) if (names.indexOf(want[i]) < 0) return 'missing ' + want[i];
+    return true;
+}, function () { return Object.getOwnPropertyNames(DOMTokenList.prototype).sort().join(','); });
+ck('A5 relList wears the same level', function () {
+    var l = document.getElementById('lnk').relList;
+    return Object.getPrototypeOf(l) === DOMTokenList.prototype && l.length === 2;
+}, function () { var l = document.getElementById('lnk').relList; return String(Object.getPrototypeOf(l) === DOMTokenList.prototype) + '/' + l.length; });
+
+// ── B. reading the tokens ────────────────────────────────────────────────────
+ck('B1 length counts the tokens', function () { return cl.length === 2; }, cl.length);
+ck('B2 item walks them', function () { return cl.item(0) === 'a' && cl.item(1) === 'b'; },
+    function () { return cl.item(0) + '/' + cl.item(1); });
+// Measured: the reference answers 'undefined' past the end of the list; the host's named getter gives
+// back the null its item member answers with. Both are absent, so the test takes either.
+ck('B3 the list is read by index too', function () {
+    return cl[0] === 'a' && cl[1] === 'b' && cl[2] == null && cl[-1] == null;
+}, function () { return [String(cl[0]), String(cl[1]), String(cl[2]), String(cl[-1])].join('/'); });
+ck('B4 item out of range answers null', function () {
+    return cl.item(-1) === null && cl.item(999) === null;
+}, function () { return String(cl.item(-1)) + '/' + String(cl.item(999)); });
+ck('B5 value is the serialised attribute', function () {
+    return cl.value === 'a b' && String(cl) === 'a b' && ('' + cl) === 'a b';
+}, function () { return cl.value + '/' + String(cl); });
+
+// ── C. the mutation members, in the sentences the reference writes ───────────
+ck('C1 add takes any number of tokens', function () {
+    cl.add('c1', 'c2');
+    return cl.length === 4 && cl.contains('c1') && cl.contains('c2') && d.getAttribute('class') === 'a b c1 c2';
+}, function () { return cl.length + '/' + d.getAttribute('class'); });
+ck('C2 remove takes any number of tokens', function () {
+    cl.remove('c1', 'c2');
+    return cl.length === 2 && !cl.contains('c1') && d.getAttribute('class') === 'a b';
+}, function () { return cl.length + '/' + d.getAttribute('class'); });
+ck('C3 add of a token already there keeps the list a set', function () {
+    cl.add('a'); return cl.length === 2;
+}, function () { return cl.length; });
+ck('C4 toggle without the second argument toggles', function () {
+    var first = cl.toggle('z');
+    var second = cl.toggle('z');
+    return first === true && second === false && !cl.contains('z');
+}, function () { return String(cl.toggle('q')) + '/' + String(cl.toggle('q')); });
+ck('C5 toggle with the second argument is definite', function () {
+    var r = [cl.toggle('z', true), cl.contains('z'), cl.toggle('z', false), cl.contains('z'),
+             cl.toggle('a', true), cl.contains('a')];
+    return r.join(',') === 'true,true,false,false,true,true';
+}, function () { return d.className + '/' + cl.length; });
+ck('C6 replace swaps a token the list holds', function () {
+    return cl.replace('b', 'bb') === true && cl.contains('bb') && !cl.contains('b');
+}, function () { return cl.value; });
+ck('C7 replace leaves the list alone for a token it does not hold', function () {
+    var before = d.className;
+    return cl.replace('zzz', 'y') === false && d.className === before;
+}, function () { return d.className; });
+ck('C8 the value setter writes the attribute', function () {
+    cl.value = 'k1 k2';
+    return d.className === 'k1 k2' && cl.length === 2 && cl.value === 'k1 k2';
+}, function () { return d.className + '/' + cl.length; });
+ckErr('C9 an empty token is refused as a SyntaxError', 'SyntaxError',
+    "Failed to execute 'add' on 'DOMTokenList': The token provided must not be empty.",
+    function () { cl.add(''); });
+ckErr('C10 a token with a space is refused as an InvalidCharacterError', 'InvalidCharacterError',
+    "Failed to execute 'remove' on 'DOMTokenList': The token provided ('a b') contains HTML space "
+    + 'characters, which are not valid in tokens.',
+    function () { cl.remove('a b'); });
+ckErr('C11 the refusal reaches toggle too', 'SyntaxError',
+    "Failed to execute 'toggle' on 'DOMTokenList': The token provided must not be empty.",
+    function () { cl.toggle(''); });
+ck('C12 a refused call leaves the list as it was', function () {
+    var before = d.className;
+    try { cl.add('ok', ' '); } catch (e) { }
+    return d.className === before;
+}, function () { return d.className; });
+
+// ── D. the list read as a collection ─────────────────────────────────────────
+ck('D1 forEach gives the token, its index and the list', function () {
+    var seen = [];
+    cl.forEach(function (token, i, list) { seen.push(token + ':' + i + ':' + (list === cl)); });
+    return seen.join(',') === 'k1:0:true,k2:1:true';
+}, function () { var s = []; cl.forEach(function (t, i, l) { s.push(t + ':' + i + ':' + (l === cl)); }); return s.join(','); });
+ck('D2 forEach hands the second argument as the receiver', function () {
+    var box = { k: 1 };
+    var got = null;
+    cl.forEach(function () { got = this; }, box);
+    return got === box;
+}, function () { var g = null; cl.forEach(function () { g = this; }, { k: 2 }); return String(g && g.k); });
+ck('D3 forEach ignores a callback that is not a function', function () {
+    cl.forEach(null); cl.forEach(undefined); cl.forEach(7);
+    return cl.length === 2;
+}, cl.length);
+ck('D4 the three walks cover the same tokens', function () {
+    return JSON.stringify(Array.from(cl.values())) === '["k1","k2"]'
+        && JSON.stringify(Array.from(cl.keys())) === '[0,1]'
+        && JSON.stringify(Array.from(cl.entries())) === '[[0,"k1"],[1,"k2"]]';
+}, function () { return JSON.stringify([Array.from(cl.values()), Array.from(cl.keys()), Array.from(cl.entries())]); });
+ck('D5 the list is iterable', function () {
+    var seen = [];
+    for (var token of cl) seen.push(token);
+    return seen.join(',') === 'k1,k2' && JSON.stringify(Array.from(cl)) === '["k1","k2"]';
+}, function () { var s = []; for (var tk of cl) s.push(tk); return s.join(','); });
+ck('D6 spread of the list', function () { return [...cl].join('|') === 'k1|k2'; },
+    function () { return [...cl].join('|'); });
+
+// ── E. supports: the lists that declare tokens, and the ones that do not ─────
+ckErr('E1 the class list has no supported tokens', 'TypeError',
+    "Failed to execute 'supports' on 'DOMTokenList': DOMTokenList has no supported tokens.",
+    function () { cl.supports('k1'); });
+ck('E2 the rel list answers the name', function () {
+    var l = document.getElementById('lnk').relList;
+    return typeof l.supports === 'function' && l.supports('nofollow') === false
+        && l.supports('nonsense') === false;
+}, function () { var l = document.getElementById('lnk').relList; return typeof l.supports + '/' + String(l.supports('nofollow')); });
+ck('E3 the rel list mutates the attribute', function () {
+    var l = document.getElementById('lnk').relList;
+    l.add('author'); l.remove('me');
+    var text = document.getElementById('lnk').getAttribute('rel');
+    return l.contains('author') && !l.contains('me') && text === 'nofollow author';
+}, function () { return document.getElementById('lnk').getAttribute('rel'); });
+ckErr('E4 the rel list refuses an empty token', 'SyntaxError',
+    "Failed to execute 'add' on 'DOMTokenList': The token provided must not be empty.",
+    function () { document.getElementById('lnk').relList.add(''); });
+
+// ── F. EventTarget as a page builds one ──────────────────────────────────────
+ck('F1 a page can build one', function () {
+    var et = new EventTarget();
+    return typeof et.addEventListener === 'function' && et instanceof EventTarget;
+}, function () { var e = new EventTarget(); return typeof e.addEventListener + '/' + String(e instanceof EventTarget); });
+ck('F2 the constructor takes no argument', function () { return EventTarget.length === 0; }, EventTarget.length);
+ck('F3 toStringTag names it', function () {
+    return Object.prototype.toString.call(new EventTarget()) === '[object EventTarget]';
+}, function () { return Object.prototype.toString.call(new EventTarget()); });
+ck('F4 a listener runs when its type is dispatched', function () {
+    var et = new EventTarget(); var hit = 0;
+    et.addEventListener('go', function () { hit++; });
+    var back = et.dispatchEvent(new Event('go'));
+    return hit === 1 && back === true;
+}, function () { var e = new EventTarget(); var h = 0; e.addEventListener('x', function () { h++; }); return h + '/' + String(e.dispatchEvent(new Event('x'))); });
+ck('F5 the same function twice is one listener', function () {
+    var et = new EventTarget(); var hit = 0;
+    var fn = function () { hit++; };
+    et.addEventListener('go', fn); et.addEventListener('go', fn);
+    et.dispatchEvent(new Event('go'));
+    return hit === 1;
+}, function () { var e = new EventTarget(); var h = 0; var f = function () { h++; }; e.addEventListener('g', f); e.addEventListener('g', f); e.dispatchEvent(new Event('g')); return h; });
+ck('F6 the capture flag makes a second entry of the same function', function () {
+    var et = new EventTarget(); var hit = 0;
+    var fn = function () { hit++; };
+    et.addEventListener('go', fn);
+    et.addEventListener('go', fn, true);
+    et.dispatchEvent(new Event('go'));
+    return hit === 2;
+}, function () { var e = new EventTarget(); var h = 0; var f = function () { h++; }; e.addEventListener('g', f); e.addEventListener('g', f, true); e.dispatchEvent(new Event('g')); return h; });
+ck('F7 once drops the listener after it has run', function () {
+    var et = new EventTarget(); var hit = 0;
+    et.addEventListener('go', function () { hit++; }, { once: true });
+    et.dispatchEvent(new Event('go')); et.dispatchEvent(new Event('go'));
+    return hit === 1;
+}, function () { var e = new EventTarget(); var h = 0; e.addEventListener('g', function () { h++; }, { once: true }); e.dispatchEvent(new Event('g')); e.dispatchEvent(new Event('g')); return h; });
+ck('F8 removeEventListener takes it back out', function () {
+    var et = new EventTarget(); var hit = 0;
+    var fn = function () { hit++; };
+    et.addEventListener('go', fn);
+    et.removeEventListener('go', fn);
+    et.dispatchEvent(new Event('go'));
+    return hit === 0;
+}, function () { var e = new EventTarget(); var h = 0; var f = function () { h++; }; e.addEventListener('g', f); e.removeEventListener('g', f); e.dispatchEvent(new Event('g')); return h; });
+ck('F9 an object with handleEvent is a listener', function () {
+    var et = new EventTarget(); var bag = { hits: 0, handleEvent: function () { this.hits++; } };
+    et.addEventListener('go', bag);
+    et.dispatchEvent(new Event('go'));
+    et.removeEventListener('go', bag);
+    et.dispatchEvent(new Event('go'));
+    return bag.hits === 1;
+}, function () { var b = { n: 0, handleEvent: function () { b.n++; } }; var e = new EventTarget(); e.addEventListener('g', b); e.dispatchEvent(new Event('g')); return b.n; });
+ck('F10 the on-type member runs too', function () {
+    var et = new EventTarget();
+    et.ongos = function () { et.ran = true; };
+    et.dispatchEvent(new Event('gos'));
+    return et.ran === true;
+}, function () { var e = new EventTarget(); e.ongos = function () { e.r = 1; }; e.dispatchEvent(new Event('gos')); return String(e.r); });
+ck('F11 preventDefault is read back and dispatch answers it', function () {
+    var et = new EventTarget();
+    et.addEventListener('go', function (ev) { ev.preventDefault(); });
+    var ev = new Event('go', { cancelable: true });
+    var first = et.dispatchEvent(ev);
+    var second = et.dispatchEvent(new Event('go'));
+    return ev.defaultPrevented === true && first === false && second === true;
+}, function () { var e = new EventTarget(); var ev2 = new Event('go', { cancelable: true }); return String(ev2.defaultPrevented); });
+ck('F12 an event that cannot be cancelled is not prevented', function () {
+    var et = new EventTarget();
+    et.addEventListener('go', function (ev) { ev.preventDefault(); });
+    var ev = new Event('go', { cancelable: false });
+    et.dispatchEvent(ev);
+    return ev.cancelable === false && ev.defaultPrevented === false;
+}, function () { var e = new EventTarget(); var ev2 = new Event('go', { cancelable: false }); e.dispatchEvent(ev2); return ev2.cancelable + '/' + ev2.defaultPrevented; });
+ck('F13 the event the listener is handed is the one dispatched', function () {
+    var et = new EventTarget();
+    var ev = new Event('go');
+    var seen = null;
+    et.addEventListener('go', function (x) { seen = x; });
+    et.dispatchEvent(ev);
+    return seen === ev && seen.type === 'go';
+}, function () { var e = new EventTarget(); var v = null; e.addEventListener('g', function (x) { v = x; }); e.dispatchEvent(new Event('g')); return v ? String(v.type) : 'none'; });
+ck('F14 a custom event carries its detail', function () {
+    var et = new EventTarget(); var got = null;
+    et.addEventListener('go', function (ev) { got = ev.detail; });
+    et.dispatchEvent(new CustomEvent('go', { detail: 7 }));
+    return got === 7;
+}, function () { var e = new EventTarget(); var g = null; e.addEventListener('g', function (x) { g = x.detail; }); e.dispatchEvent(new CustomEvent('g', { detail: 1 })); return String(g); });
+ck('F15 dispatch refuses an event with no type', function () {
+    var et = new EventTarget();
+    var threw = false;
+    try { et.dispatchEvent(null); } catch (e) { threw = e.name === 'TypeError'; }
+    return threw;
+}, function () { var e = new EventTarget(); try { e.dispatchEvent(null); return 'no throw'; } catch (x) { return x.name; } });
+ck('F16 the host objects are EventTargets too', function () {
+    return document instanceof EventTarget && d instanceof EventTarget;
+}, function () { return String(document instanceof EventTarget) + '/' + String(d instanceof EventTarget); });
+ck('F17 a listener that throws does not stop the others', function () {
+    var et = new EventTarget(); var hit = 0;
+    et.addEventListener('go', function () { throw new Error('inside'); });
+    et.addEventListener('go', function () { hit++; });
+    et.dispatchEvent(new Event('go'));
+    return hit === 1;
+}, function () { var e = new EventTarget(); var h = 0; e.addEventListener('g', function () { throw new Error('x'); }); e.addEventListener('g', function () { h++; }); e.dispatchEvent(new Event('g')); return h; });
+
+// ── G. base URI: the document URL, the base element, every node kind ─────────
+var HERE = document.baseURI;
+ck('G1 the page has a base URI', function () {
+    return typeof HERE === 'string' && HERE.length > 0;
+}, HERE);
+ck('G2 baseURI is the document URL when the page declares no base', function () {
+    return document.baseURI === document.URL && document.baseURI === document.documentURI;
+}, function () { return document.baseURI + '/' + document.URL + '/' + document.documentURI; });
+ck('G3 an element reads it from its document', function () { return d.baseURI === HERE; }, d.baseURI);
+ck('G4 a text node reads it too', function () { return d.firstChild.baseURI === HERE; }, d.firstChild.baseURI);
+ck('G5 a comment, a fragment and a detached element read it', function () {
+    return document.createComment('c').baseURI === HERE
+        && document.createDocumentFragment().baseURI === HERE
+        && document.createElement('p').baseURI === HERE;
+}, function () { return [document.createComment('c').baseURI,
+    document.createDocumentFragment().baseURI, document.createElement('p').baseURI].join('/'); });
+ck('G6 an attribute reads it from its element', function () {
+    return d.attributes[0].baseURI === HERE && document.createAttribute('x').baseURI === HERE;
+}, function () { return String(d.attributes[0] && d.attributes[0].baseURI) + '/' + document.createAttribute('x').baseURI; });
+ck('G7 the base element wins, resolved against the document URL', function () {
+    var b = document.createElement('base');
+    b.href = 'sub/x.html';
+    document.head.insertBefore(b, document.head.firstChild);
+    var want = new URL('sub/x.html', HERE).href;
+    var fromDocument = document.baseURI;
+    var fromElement = d.baseURI;
+    var stillTheUrl = document.URL;
+    b.remove();
+    return fromDocument === want && fromElement === want
+        && stillTheUrl === HERE && document.baseURI === HERE;
+}, function () {
+    var b = document.createElement('base'); b.href = 'sub/x.html';
+    document.head.insertBefore(b, document.head.firstChild);
+    var out = document.baseURI + ' want ' + new URL('sub/x.html', HERE).href;
+    b.remove(); return out;
+});
+ck('G8 the first base element is the one that counts', function () {
+    var first = document.createElement('base'); first.href = 'one/p.html';
+    var second = document.createElement('base'); second.href = 'two/p.html';
+    document.head.insertBefore(first, document.head.firstChild);
+    document.head.insertBefore(second, first.nextSibling);
+    var want = new URL('one/p.html', HERE).href;
+    var got = d.baseURI;
+    first.remove(); second.remove();
+    return got === want && document.baseURI === HERE;
+}, function () { return d.baseURI; });
+ck('G9 a document the implementation makes is at about:blank', function () {
+    var other = document.implementation.createHTMLDocument('t');
+    var xml = document.implementation.createDocument(null, 'r', null);
+    return other.baseURI === 'about:blank' && other.createElement('p').baseURI === 'about:blank'
+        && other.URL === 'about:blank' && xml.baseURI === 'about:blank';
+}, function () { var o = document.implementation.createHTMLDocument('t'); return String(o.baseURI) + '/' + String(o.URL); });
+ck('G10 the window is not a node and has no base URI', function () {
+    return window.baseURI === undefined;
+}, String(window.baseURI));
+
+// ── H. ParentNode: the children put in one go ────────────────────────────────
+ck('H1 replaceChildren over each argument kind', function () {
+    var box = document.createElement('p');
+    box.appendChild(document.createTextNode('old'));
+    box.replaceChildren('s', document.createElement('i'), document.createDocumentFragment());
+    return box.childNodes.length === 2 && box.firstChild.nodeType === 3 && box.textContent === 's'
+        && box.lastElementChild.tagName === 'I';
+}, function () {
+    var box = document.createElement('p'); box.replaceChildren('s', document.createElement('i'));
+    return box.childNodes.length + '/' + box.firstChild.nodeType;
+});
+ck('H2 replaceChildren with nothing leaves the element empty', function () {
+    var box = document.createElement('p');
+    box.appendChild(document.createElement('b'));
+    box.replaceChildren();
+    return box.childNodes.length === 0 && box.firstChild === null;
+}, function () { var b = document.createElement('p'); b.replaceChildren(); return b.childNodes.length; });
+ck('H3 append and prepend accept several arguments', function () {
+    var box = document.createElement('p');
+    box.append('a', document.createElement('b'), 'c');
+    box.prepend('z');
+    return box.childNodes.length === 4 && box.firstChild.data === 'z' && box.lastChild.data === 'c';
+}, function () { var b = document.createElement('p'); b.append('a', 'b'); return b.childNodes.length; });
+ck('H4 a document and a fragment answer the mixin too', function () {
+    var f = document.createDocumentFragment();
+    f.append('a', 'b');
+    var appended = f.childNodes.length === 2;
+    f.replaceChildren(document.createElement('i'));
+    return typeof document.replaceChildren === 'function' && appended
+        && f.childNodes.length === 1 && f.firstChild.nodeType === 1;
+}, function () { var f = document.createDocumentFragment(); f.append('a', 'b'); return f.childNodes.length; });
+ck('H5 the fragment puts its children in, not itself', function () {
+    var box = document.createElement('p');
+    var f = document.createDocumentFragment();
+    f.appendChild(document.createElement('b'));
+    f.appendChild(document.createTextNode('t'));
+    box.replaceChildren(f);
+    return box.childNodes.length === 2 && f.childNodes.length === 0;
+}, function () {
+    var b = document.createElement('p'); var fr = document.createDocumentFragment();
+    fr.appendChild(document.createElement('i')); b.replaceChildren(fr);
+    return b.childNodes.length + '/' + fr.childNodes.length;
+});
+
+// ── I. the clone the reference measures against these ────────────────────────
+ck('I1 cloneNode copies the id and the classes', function () {
+    var c = d.cloneNode(true);
+    return c.id === d.id && c.className === d.className && c !== d
+        && c.ownerDocument === document && c.parentNode === null;
+}, function () { var c = d.cloneNode(true); return c.id + '/' + c.className; });
+</script>
+</body>
+</html>

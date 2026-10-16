@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html><head><title>Probe 27</title></head><body>
+<div id="d"><span id="s">t</span></div>
+<script>
+var d = document.getElementById('d');
+var s = document.getElementById('s');
+function cpIdent(tag) {
+  var p = null;
+  s.addEventListener('idchk', function (e) { p = e.composedPath(); });
+  s.dispatchEvent(new Event('idchk', { bubbles: true }));
+  __T(tag, p[0] === s && p[1] === d, [String(p[0] === s), String(p[1] === d), String(p.length)].join('/'));
+}
+cpIdent('start');
+var body = document.body;
+var h1 = [];
+body.addEventListener('walk', function () { h1.push('body-cap'); }, true);
+d.addEventListener('walk', function () { h1.push('d-cap'); }, true);
+s.addEventListener('walk', function () { h1.push('s-at-target'); });
+d.addEventListener('walk', function () { h1.push('d-bubble'); });
+body.addEventListener('walk', function () { h1.push('body-bubble'); });
+s.dispatchEvent(new Event('walk', { bubbles: true }));
+cpIdent('after the five-listener walk');
+
+var seen = [];
+var cap = function (e) { seen.push('cap:' + e.eventPhase); };
+var at = function (e) { seen.push('at:' + e.eventPhase); };
+d.addEventListener('phase', cap, true);
+s.addEventListener('phase', at);
+s.dispatchEvent(new Event('phase', { bubbles: true }));
+cpIdent('after the phase test');
+
+var fn = function (e) { seen.push(e.currentTarget.id + '<' + e.target.id); };
+d.addEventListener('who', fn);
+s.addEventListener('who', fn);
+s.dispatchEvent(new Event('who', { bubbles: true }));
+cpIdent('after the currentTarget test');
+
+var ev = new Event('done');
+s.dispatchEvent(ev);
+cpIdent('after the finished-event test');
+
+var onDoc = function () { seen.push('doc'); };
+document.addEventListener('toup', onDoc);
+s.dispatchEvent(new Event('toup', { bubbles: true }));
+document.removeEventListener('toup', onDoc);
+cpIdent('after the document listener test');
+</script></body></html>

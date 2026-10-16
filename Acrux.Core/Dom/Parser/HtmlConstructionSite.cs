@@ -14,6 +14,7 @@ internal class HtmlConstructionSite
     private bool _isParsingFragment;
     private bool _redirectAttachToFosterParent;
     private bool _inQuirksMode;
+    private bool _doctypeInserted;
 
     public HtmlConstructionSite(Document document, bool isFragment = false)
     {
@@ -46,6 +47,7 @@ internal class HtmlConstructionSite
             string.IsNullOrEmpty(systemId) ? null : systemId,
             token.Name);
         _attachmentRoot.AppendChild(doctype);
+        _doctypeInserted = true;
         if (token.ForceQuirks)
             _inQuirksMode = true;
         else
@@ -254,6 +256,11 @@ internal class HtmlConstructionSite
     public void FinishedParsing()
     {
         Flush();
+        // HTML §13.2.6.4: a document the parser never saw a doctype for is in quirks mode. The flag is
+        // written down here, at the end of parsing, because the absence of the doctype is only known
+        // once the last token has been read — and it is what 'document.compatMode' answers from.
+        if (!_isParsingFragment && !_doctypeInserted) _inQuirksMode = true;
+        _document.QuirksMode = _inQuirksMode;
     }
 
     private static Element CreateElement(AtomicHtmlToken token, string namespaceUri)

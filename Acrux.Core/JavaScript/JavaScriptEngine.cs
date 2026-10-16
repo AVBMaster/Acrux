@@ -213,6 +213,10 @@ public class JavaScriptEngine : IDisposable
         _currentDocument = document;
         _documentHost = new DocumentHost(document);
         _documentHost.Engine = this;
+        // The address the page was navigated to is the document's own URL, and 'location' reads the
+        // same one — a page that asks 'location.href' after a navigation must not be told about the
+        // engine's default address instead.
+        _locationHost?.SetDocumentUrl(document.Url);
 
         if (_adapter != null)
         {
@@ -305,6 +309,11 @@ public class JavaScriptEngine : IDisposable
     public void Execute(string code, string? sourceUrl = null, ScriptType type = ScriptType.Inline, int lineOffset = 0)
     {
         if (_adapter == null || string.IsNullOrEmpty(code)) return;
+        // The ambient engine is put back, not cleared: a script run from inside a callback — a timer, a
+        // listener, the 'on...' attribute the markup carries — finishes while the script that raised it
+        // is still running, and leaving this null made every node read afterwards fall back to a fresh
+        // wrapper, so the page held two objects for one node.
+        var previous = Current;
         Current = this;
         try
         {
@@ -313,13 +322,14 @@ public class JavaScriptEngine : IDisposable
         }
         finally
         {
-            Current = null;
+            Current = previous;
         }
     }
 
     public object? Evaluate(string expression)
     {
         if (_adapter == null) return null;
+        var previous = Current;
         Current = this;
         try
         {
@@ -331,13 +341,14 @@ public class JavaScriptEngine : IDisposable
         }
         finally
         {
-            Current = null;
+            Current = previous;
         }
     }
 
     public object? CallJsFunction(string functionName, params object?[] args)
     {
         if (_adapter == null) return null;
+        var previous = Current;
         Current = this;
         try
         {
@@ -349,7 +360,7 @@ public class JavaScriptEngine : IDisposable
         }
         finally
         {
-            Current = null;
+            Current = previous;
         }
     }
 
@@ -461,9 +472,10 @@ public class JavaScriptEngine : IDisposable
             InvokeTimer(id);
         }
 
+        var timersPrevious = Current;
         Current = this;
         try { ProcessCompletedFetches(); }
-        finally { Current = null; }
+        finally { Current = timersPrevious; }
     }
 
     private void InvokeTimer(int timerId)
@@ -477,6 +489,7 @@ public class JavaScriptEngine : IDisposable
                 cbId = null;
         }
         if (cbId == null) return;
+        var previous = Current;
         Current = this;
         var v0 = DomMutationTracker.Version;
         try
@@ -490,7 +503,7 @@ public class JavaScriptEngine : IDisposable
         }
         finally
         {
-            Current = null;
+            Current = previous;
         }
     }
 
@@ -1073,10 +1086,28 @@ public class JavaScriptEngine : IDisposable
 
             // DOMParser builds a fresh Document out of markup (the host parses it through the same
             // HTML pipeline the live page went through), so the result answers getElementById and
-            // querySelector just like 'document'.
+            // querySelector just like 'document'. DOM Parsing §3 holds the type to a fixed list: the
+            // HTML type builds the html/head/body skeleton, the XML ones build the tree the markup
+            // says, and anything else is refused with the sentence the reference writes (measured).
             function DOMParser() {}
+            var SUPPORTED_TYPES = {
+                'text/html': 'html',
+                'text/xml': 'xml',
+                'application/xml': 'xml',
+                'application/xhtml+xml': 'xml',
+                'image/svg+xml': 'xml'
+            };
             DOMParser.prototype.parseFromString = function (source, contentType) {
-                return __acrux.parseHTML(String(source === undefined ? '' : source));
+                var type = String(contentType === undefined ? '' : contentType);
+                var kind = SUPPORTED_TYPES[type];
+                if (!kind) {
+                    var quote = String.fromCharCode(39);
+                    throw new TypeError('Failed to execute \'parseFromString\' on \'DOMParser\': The '
+                        + 'provided value ' + quote + type + quote
+                        + ' is not a valid enum value of type SupportedType.');
+                }
+                var text = String(source === undefined ? '' : source);
+                return kind === 'html' ? __acrux.parseHTML(text) : __acrux.parseXML(text, type);
             };
 
             // XMLSerializer re-serialises a node; the engine already owns the HTML serialisation that
@@ -1737,20 +1768,74 @@ public class JavaScriptEngine : IDisposable
                 if (typeof Proxy !== 'function' || typeof WeakMap !== 'function' || typeof Object.defineProperty !== 'function') return;
                 var store = new WeakMap();
                 function dash(k) { return String(k).replace(/[A-Z]/g, function (c) { return '-' + c.toLowerCase(); }); }
+                function camel(k) { return String(k).replace(/-([a-zA-Z])/g, function (m, c) { return c.toUpperCase(); }); }
+                function attrName(k) { return 'data-' + dash(k); }
+                // HTML §6.1.4.3: the map is only written through names that could be properties of
+                // it, and a name with a hyphen in it is not one — the reference refuses the write
+                // with a 'SyntaxError' that quotes the name (measured).
+                function isValidPropName(k) {
+                    return /^(?:[A-Za-z_$]|[^\x00-\x7F])(?:[A-Za-z0-9_$]|[^\x00-\x7F])*$/.test(String(k));
+                }
+                function refusedName(k) {
+                    return new SyntaxError('Failed to set a named property ' + chr39(String(k))
+                        + ' on ' + chr39('DOMStringMap') + ': ' + chr39(String(k))
+                        + ' is not a valid property name.');
+                }
+                function chr39(text) { return chr(39) + String(text) + chr(39); }
+                function chr(code) { return String.fromCharCode(code); }
+                function dataKeys(el) {
+                    // The attributes are the store, so the walk lists the ones that are data
+                    // attributes and gives each its camelCase spelling.
+                    var names = el.getAttributeNames ? el.getAttributeNames() : [];
+                    var out = [];
+                    for (var i = 0; i < names.length; i++) {
+                        var name = String(names[i]);
+                        if (name.length > 5 && name.slice(0, 5) === 'data-') out.push(camel(name.slice(5)));
+                    }
+                    return out;
+                }
                 function makeDataset(el) {
                     var existing = store.get(el);
                     if (existing) return existing;
-                    var proxy = new Proxy({}, {
+                    var target = (window.__domProto && window.__domProto['DOMStringMap'])
+                        ? Object.create(window.__domProto['DOMStringMap']) : {};
+                    var proxy = new Proxy(target, {
                         get: function (t, p) {
-                            if (typeof p !== 'string') return undefined;
-                            var v = el.getAttribute('data-' + dash(p));
+                            if (typeof p !== 'string') return t[p];
+                            if (p === 'toString') return function () { return ''; };
+                            // A name that could not have been written on the map was never read from it
+                            // either: the hyphenated spelling belongs to the attribute, not to the map
+                            // (measured: 'dataset['a-b']' is undefined while 'dataset.aB' is the value).
+                            if (!isValidPropName(p)) return undefined;
+                            var v = el.getAttribute(attrName(p));
                             return v === null ? undefined : v;
                         },
-                        set: function (t, p, v) { el.setAttribute('data-' + dash(p), (v === undefined || v === null) ? '' : String(v)); return true; },
-                        deleteProperty: function (t, p) { el.removeAttribute('data-' + dash(p)); return true; },
-                        has: function (t, p) { return el.getAttribute('data-' + dash(p)) !== null; },
-                        ownKeys: function () { return []; },
-                        getOwnPropertyDescriptor: function () { return { configurable: true, enumerable: true }; }
+                        set: function (t, p, v) {
+                            if (typeof p !== 'string') return false;
+                            if (!isValidPropName(p)) throw refusedName(p);
+                            el.setAttribute(attrName(p), (v === undefined || v === null) ? '' : String(v));
+                            return true;
+                        },
+                        deleteProperty: function (t, p) {
+                            if (typeof p !== 'string') return false;
+                            el.removeAttribute(attrName(p));
+                            return true;
+                        },
+                        has: function (t, p) {
+                            if (typeof p !== 'string') return p in t;
+                            if (!isValidPropName(p)) return false;
+                            return el.getAttribute(attrName(p)) !== null;
+                        },
+                        ownKeys: function () { return dataKeys(el); },
+                        getOwnPropertyDescriptor: function (t, p) {
+                            if (typeof p !== 'string') return Reflect.getOwnPropertyDescriptor(t, p);
+                            var v = el.getAttribute(attrName(p));
+                            if (v === null) return undefined;
+                            // Measured: a data attribute reads as an own, enumerable, writable and
+                            // configurable property of the map, which is what makes 'Object.keys',
+                            // JSON.stringify and the spread operator all see it.
+                            return { value: v, writable: true, enumerable: true, configurable: true };
+                        }
                     });
                     store.set(el, proxy);
                     return proxy;
@@ -1773,7 +1858,10 @@ public class JavaScriptEngine : IDisposable
 
             // HTML: document.defaultView is the Window that owns the document. An own-property write
             // onto the document host does not stick across the interop, so it is an accessor on the
-            // document prototype instead — which the host's [[Get]] resolves — returning the live global.
+            // document prototype instead — which the host's [[Get]] resolves — returning the live global
+            // for the document the window is showing and nothing at all for one a script built (DOM
+            // Parsing §3 and HTML §7.3.2: 'parseFromString' gives a document with no browsing context,
+            // and the reference answers 'null' for its defaultView — measured).
             (function () {
                 var proto = (window.__domProto && window.__domProto['HTMLDocument'])
                     || (window.HTMLDocument && window.HTMLDocument.prototype);
@@ -1782,7 +1870,7 @@ public class JavaScriptEngine : IDisposable
                 try {
                     Object.defineProperty(proto, 'defaultView', {
                         configurable: true, enumerable: false,
-                        get: function () { return window; }
+                        get: function () { return this === document ? window : null; }
                     });
                 } catch (e) { }
             })();
@@ -3031,6 +3119,170 @@ public class JavaScriptEngine : IDisposable
                 defineInterface('Screen');
                 defineInterface('Slot', 'Element');
                 defineInterface('EventListener');
+
+                // ── 'EventTarget' as a page builds one (DOM §2.3, §2.7) ──────────
+                // A page that wants its own dispatch point calls 'new EventTarget()' and the listeners
+                // live on the object the page made, so the walk is script's own: registration order,
+                // the 'once' option that drops the listener after it has run, the capture flag that
+                // makes a second listener of the same function, and the 'on' + type member that runs
+                // after the bag. The names stay on the interface level, so every object the host
+                // stamps with it — a document, an element, an event source — inherits the same face
+                // while answering its own host member first.
+                var eventTargetLevel = defineInterface('EventTarget', null, function () { });
+                function listenerFlags(record) {
+                    // The IDL takes either the capture boolean or the dictionary; both carry the same
+                    // two flags this far.
+                    if (record === true || record === false) return { capture: !!record, once: false };
+                    record = record || {};
+                    return { capture: !!record.capture, once: !!record.once };
+                }
+                function listenerBag(self) {
+                    // The bag is hidden and non-enumerable, so a page that walks the object it built
+                    // sees the interface, not the engine's bookkeeping.
+                    if (!Object.prototype.hasOwnProperty.call(self, '__domListeners')) {
+                        Object.defineProperty(self, '__domListeners', {
+                            value: {}, writable: true, enumerable: false, configurable: true
+                        });
+                    }
+                    return self.__domListeners;
+                }
+                function defineOnLevel(level, key, value) {
+                    if (Object.prototype.hasOwnProperty.call(level, key)) return;
+                    Object.defineProperty(level, key,
+                        { value: value, writable: true, enumerable: false, configurable: true });
+                }
+                defineOnLevel(eventTargetLevel, 'addEventListener', function (type, listener, options) {
+                    if (listener == null) return;
+                    var bag = listenerBag(this);
+                    var list = bag[String(type)] = bag[String(type)] || [];
+                    var flags = listenerFlags(options);
+                    for (var i = 0; i < list.length; i++) {
+                        if (list[i].fn === listener && list[i].capture === flags.capture) return;
+                    }
+                    list.push({ fn: listener, capture: flags.capture, once: flags.once });
+                });
+                defineOnLevel(eventTargetLevel, 'removeEventListener', function (type, listener, options) {
+                    if (listener == null) return;
+                    var bag = listenerBag(this);
+                    var list = bag[String(type)];
+                    if (!list) return;
+                    var flags = listenerFlags(options);
+                    for (var i = 0; i < list.length; i++) {
+                        if (list[i].fn === listener && list[i].capture === flags.capture) {
+                            list.splice(i, 1);
+                            return;
+                        }
+                    }
+                });
+                defineOnLevel(eventTargetLevel, 'dispatchEvent', function (event) {
+                    if (event == null) {
+                        throw new TypeError('Failed to execute \'dispatchEvent\' on \'EventTarget\': '
+                            + 'parameter 1 is not of type \'Event\'.');
+                    }
+                    var type = String(event.type === undefined ? '' : event.type);
+                    var list = (listenerBag(this)[type] || []).slice();
+                    try { event.target = this; } catch (e) { }
+                    try { event.currentTarget = this; } catch (e) { }
+                    for (var i = 0; i < list.length; i++) {
+                        var entry = list[i];
+                        // A listener registered with 'once' is taken out before it runs, so a dispatch
+                        // it raises from inside cannot hear it again.
+                        if (entry.once) {
+                            var live = listenerBag(this)[type] || [];
+                            var at = live.indexOf(entry);
+                            if (at >= 0) live.splice(at, 1);
+                        }
+                        try {
+                            if (typeof entry.fn === 'function') entry.fn.call(this, event);
+                            else if (entry.fn && typeof entry.fn.handleEvent === 'function') entry.fn.handleEvent(event);
+                        } catch (e) { }
+                    }
+                    var on = 'on' + type;
+                    if (typeof this[on] === 'function') { try { this[on](event); } catch (e) { } }
+                    return event.defaultPrevented !== true;
+                });
+
+                // ── 'DOMTokenList' read as a collection (DOM §3.3.6) ─────────────
+                // The tokens live in the host, so the walk reads them back through the two members that
+                // interface already answers there — 'length' and 'item' — and hands each token to the
+                // page with its index and the list itself, which is what a page treating the list as a
+                // collection expects. 'values', 'keys' and 'entries' are the value, index and pair
+                // walks of the same tokens, and the list is iterable, so 'Array.from(el.classList)' and
+                // 'for (var token of list)' answer from the one place. 'supports' belongs to a list that
+                // declares supported tokens; the class list has none, and the reference refuses the call
+                // rather than answering false for a token it cannot know (measured) — the 'rel' list,
+                // which does declare them, answers the name from its own host member.
+                var tokenListLevel = defineInterface('DOMTokenList', null);
+                function tokenCount(self) {
+                    var n = Number(self.length);
+                    return n > 0 ? Math.floor(n) : 0;
+                }
+                function tokenArray(self) {
+                    var out = [];
+                    for (var i = 0; i < tokenCount(self); i++) {
+                        var token = self.item(i);
+                        out.push(token === null || token === undefined ? '' : String(token));
+                    }
+                    return out;
+                }
+                function iterableOf(items) {
+                    return items && typeof items[Symbol.iterator] === 'function'
+                        ? items[Symbol.iterator]() : items;
+                }
+                defineOnLevel(tokenListLevel, 'forEach', function (callback, thisArg) {
+                    if (typeof callback !== 'function') return;
+                    var tokens = tokenArray(this);
+                    for (var i = 0; i < tokens.length; i++) {
+                        callback.call(thisArg, tokens[i], i, this);
+                    }
+                });
+                defineOnLevel(tokenListLevel, 'values', function () { return iterableOf(tokenArray(this)); });
+                defineOnLevel(tokenListLevel, 'keys', function () {
+                    var out = [];
+                    for (var i = 0; i < tokenCount(this); i++) out.push(i);
+                    return iterableOf(out);
+                });
+                defineOnLevel(tokenListLevel, 'entries', function () {
+                    var tokens = tokenArray(this);
+                    var out = [];
+                    for (var i = 0; i < tokens.length; i++) out.push([i, tokens[i]]);
+                    return iterableOf(out);
+                });
+                defineOnLevel(tokenListLevel, Symbol.iterator, function () { return this.values(); });
+                defineOnLevel(tokenListLevel, 'supports', function () {
+                    throw new TypeError('Failed to execute \'supports\' on \'DOMTokenList\': '
+                        + 'DOMTokenList has no supported tokens.');
+                });
+
+                // ── The constants the Node interface carries (DOM §4.2.1, §4.4.1) ──
+                // Every node type and every position bit is a property of the interface and of its
+                // prototype, which is how a page reads 'Node.TEXT_NODE' and 'el.ELEMENT_NODE' from the
+                // same place, and they are readonly: a script that writes one leaves the value it was
+                // given untouched (measured: the six position bits are 1, 2, 4, 8, 16 and 32 and answer
+                // on the constructor, the prototype and every node through the chain).
+                var nodeConstants = [
+                    ['ELEMENT_NODE', 1], ['ATTRIBUTE_NODE', 2], ['TEXT_NODE', 3],
+                    ['CDATA_SECTION_NODE', 4], ['ENTITY_REFERENCE_NODE', 5], ['ENTITY_NODE', 6],
+                    ['PROCESSING_INSTRUCTION_NODE', 7], ['COMMENT_NODE', 8], ['DOCUMENT_NODE', 9],
+                    ['DOCUMENT_TYPE_NODE', 10], ['DOCUMENT_FRAGMENT_NODE', 11], ['NOTATION_NODE', 12],
+                    ['DOCUMENT_POSITION_DISCONNECTED', 1], ['DOCUMENT_POSITION_PRECEDING', 2],
+                    ['DOCUMENT_POSITION_FOLLOWING', 4], ['DOCUMENT_POSITION_CONTAINS', 8],
+                    ['DOCUMENT_POSITION_CONTAINED_BY', 16], ['DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC', 32]];
+                var nodeLevel = protoMap['Node'] || (window.Node && window.Node.prototype);
+                var constantShape = { writable: false, enumerable: false, configurable: false };
+                for (var nc = 0; nc < nodeConstants.length; nc++) {
+                    var cname = nodeConstants[nc][0];
+                    var cvalue = nodeConstants[nc][1];
+                    if (nodeLevel && !Object.prototype.hasOwnProperty.call(nodeLevel, cname)) {
+                        constantShape.value = cvalue;
+                        try { Object.defineProperty(nodeLevel, cname, constantShape); } catch (e) { }
+                    }
+                    if (window.Node && !Object.prototype.hasOwnProperty.call(window.Node, cname)) {
+                        constantShape.value = cvalue;
+                        try { Object.defineProperty(window.Node, cname, constantShape); } catch (e) { }
+                    }
+                }
+
                 // The 'touchAction' style the interface reads, and the string list a name is a part of.
                 function DOMStringList(items) {
                     var list = items || [];
@@ -4405,8 +4657,44 @@ public class AcruxBuiltins
     public string encodeURIComponent(string str) => Uri.EscapeDataString(str ?? "null");
     public string escape(string str) => System.Net.WebUtility.UrlEncode(str ?? "null");
     public string unescape(string str) => System.Net.WebUtility.UrlDecode(str ?? "null");
-    public string atob(string str) => System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(str ?? "null"));
-    public string btoa(string str) => System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(str ?? "null"));
+    /// <summary>HTML §2.8.3: 'atob' reads base64 and answers a string whose code units are the bytes,
+    /// so the range it lives in is Latin-1 rather than UTF-8. Padding a page may leave off, and the
+    /// ASCII whitespace inside the run is dropped — anything else the base64 alphabet does not hold is
+    /// refused with the sentence the reference writes (measured).</summary>
+    public string atob(string str)
+    {
+        var raw = (str ?? "").Where(c => c is not (' ' or '\t' or '\n' or '\f' or '\r')).ToArray();
+        var text = new string(raw);
+        var pad = text.Length % 4 == 0 ? 0 : 4 - text.Length % 4;
+        string decoded;
+        try
+        {
+            decoded = System.Text.Encoding.Latin1.GetString(System.Convert.FromBase64String(text + new string('=', pad)));
+        }
+        catch
+        {
+            throw new Acrux.Core.Dom.DOMException("Failed to execute 'atob' on 'Window': The string to be "
+                + "decoded is not correctly encoded.", "InvalidCharacterError");
+        }
+        return decoded;
+    }
+
+    /// <summary>HTML §2.8.3: 'btoa' writes base64 out of a string whose code units are bytes. The
+    /// Latin-1 range is what the operation holds, and a code unit above it is refused — a code unit
+    /// that is still inside it is taken as the byte it names (measured: 'ÿx' encodes).</summary>
+    public string btoa(string str)
+    {
+        var text = str ?? "";
+        foreach (var c in text)
+        {
+            if (c > 0xFF)
+            {
+                throw new Acrux.Core.Dom.DOMException("Failed to execute 'btoa' on 'Window': The string to "
+                    + "be encoded contains characters outside of the Latin1 range.", "InvalidCharacterError");
+            }
+        }
+        return System.Convert.ToBase64String(System.Text.Encoding.Latin1.GetBytes(text));
+    }
     public Func<int>? GetInnerWidth { get; set; }
     public Func<int>? GetInnerHeight { get; set; }
     public Func<double>? GetDevicePixelRatio { get; set; }
@@ -4490,13 +4778,120 @@ public class AcruxBuiltins
     /// <summary>'new DOMParser().parseFromString(markup, "text/html")' (DOM Parsing §3): a brand
     /// new Document built from the markup, handed to the page as a document host so it is queried
     /// and mutated like the live one.</summary>
-    public DocumentHost parseHTML(string? markup)
+    public object parseHTML(string? markup)
     {
-        var html = markup ?? "";
-        var newDoc = string.IsNullOrEmpty(html.Trim())
-            ? new Acrux.Core.Dom.Document()
-            : Acrux.Core.Dom.Parser.HtmlDocumentParserIntegration.ParseHtml(html);
-        return new DocumentHost(newDoc);
+        // An empty run still becomes a document with its html, head and body, the way the HTML parser
+        // builds one from nothing (measured: 'parseFromString('', 'text/html')' has a body).
+        var newDoc = Acrux.Core.Dom.Parser.HtmlDocumentParserIntegration.ParseHtml(markup ?? "");
+        // Wrapped through the identity map rather than built here, so the document the page holds is the
+        // one every node inside it names as its 'ownerDocument' (DOM §2.8, §3.2).
+        return JsIntegrationService.WrapAny(newDoc) ?? new DocumentHost(newDoc);
+    }
+
+    /// <summary>DOM Parsing §3: the XML half of 'parseFromString'. The markup is read as an XML tree —
+    /// elements with the namespace and prefix each name carries, attributes, text, CDATA, comments and
+    /// the processing instructions between them — and the document is left with the content type the
+    /// page asked for, which is what makes 'contentType', a CDATA section and a prefixed attribute all
+    /// answer the way the interface says. Markup that is not well formed keeps the tree the reader
+    /// reached and gains the 'parsererror' element the reference puts inside it, holding the sentence
+    /// of the failure (measured).</summary>
+    public object parseXML(string? markup, string? contentType)
+    {
+        var doc = new Acrux.Core.Dom.Document
+        {
+            Url = "about:blank",
+            ContentType = string.IsNullOrEmpty(contentType) ? "text/xml" : contentType!,
+        };
+        var stack = new Stack<Acrux.Core.Dom.Element>();
+        string? failure = null;
+        int failureLine = 0, failureColumn = 0;
+        try
+        {
+            var settings = new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Ignore };
+            using var reader = System.Xml.XmlReader.Create(
+                new System.IO.StringReader(markup ?? ""), settings);
+            Acrux.Core.Dom.Element? root = null;
+            while (reader.Read())
+            {
+                switch (reader.NodeType)
+                {
+                    case System.Xml.XmlNodeType.Element:
+                    {
+                        var qualified = string.IsNullOrEmpty(reader.Prefix)
+                            ? reader.LocalName : reader.Prefix + ":" + reader.LocalName;
+                        var element = string.IsNullOrEmpty(reader.NamespaceURI)
+                            ? doc.CreateElement(qualified)
+                            : doc.CreateElementNS(reader.NamespaceURI, qualified);
+                        for (var i = 0; i < reader.AttributeCount; i++)
+                        {
+                            reader.MoveToAttribute(i);
+                            var name = string.IsNullOrEmpty(reader.Prefix)
+                                ? reader.LocalName : reader.Prefix + ":" + reader.LocalName;
+                            if (string.IsNullOrEmpty(reader.NamespaceURI))
+                                element.SetAttribute(name, reader.Value ?? "");
+                            else
+                                element.SetAttributeNS(reader.NamespaceURI, name, reader.Value ?? "");
+                        }
+                        reader.MoveToElement();
+                        if (root == null)
+                        {
+                            root = element;
+                            doc.DocumentElement = element;
+                            doc.AppendChild(element);
+                        }
+                        else stack.Peek().AppendChild(element);
+                        if (!reader.IsEmptyElement) stack.Push(element);
+                        break;
+                    }
+                    case System.Xml.XmlNodeType.EndElement:
+                        if (stack.Count > 0) stack.Pop();
+                        break;
+                    case System.Xml.XmlNodeType.Text:
+                    case System.Xml.XmlNodeType.CDATA:
+                    case System.Xml.XmlNodeType.Whitespace:
+                    case System.Xml.XmlNodeType.SignificantWhitespace:
+                    {
+                        if (stack.Count == 0) break;
+                        Acrux.Core.Dom.Node text = reader.NodeType == System.Xml.XmlNodeType.CDATA
+                            ? new Acrux.Core.Dom.CDataSection(reader.Value ?? "")
+                            : new Acrux.Core.Dom.TextNode(reader.Value ?? "");
+                        stack.Peek().AppendChild(text);
+                        break;
+                    }
+                    case System.Xml.XmlNodeType.Comment:
+                        if (stack.Count > 0) stack.Peek().AppendChild(new Acrux.Core.Dom.CommentNode(reader.Value ?? ""));
+                        else doc.AppendChild(new Acrux.Core.Dom.CommentNode(reader.Value ?? ""));
+                        break;
+                    case System.Xml.XmlNodeType.ProcessingInstruction:
+                    {
+                        var pi = new Acrux.Core.Dom.ProcessingInstruction(reader.LocalName ?? "", reader.Value ?? "");
+                        if (stack.Count > 0) stack.Peek().AppendChild(pi);
+                        else doc.AppendChild(pi);
+                        break;
+                    }
+                }
+            }
+        }
+        catch (System.Xml.XmlException ex)
+        {
+            failure = ex.Message;
+            failureLine = ex.LineNumber;
+            failureColumn = ex.LinePosition;
+        }
+
+        if (failure != null)
+        {
+            var error = doc.CreateElementNS("http://www.w3.org/1999/xhtml", "parsererror");
+            error.TextContent = "This page contains the following errors:"
+                + $"error on line {failureLine} at column {failureColumn}: {failure}";
+            if (doc.DocumentElement != null) doc.DocumentElement.AppendChild(error);
+            else
+            {
+                doc.AppendChild(error);
+                doc.DocumentElement = error;
+            }
+        }
+        return JsIntegrationService.WrapAny(doc) ?? new DocumentHost(doc);
     }
 
     // ── JS Engine Management ──────────────────────────────────
@@ -5019,6 +5414,26 @@ public class LocationHost : IDomPrototypeHost
     public string hash { get { var u = Parts(); return u?.hash ?? ""; } set { _href = RebuildTail(Pathname, Search, value); } }
     public string origin { get { var u = Parts(); return u?.origin ?? ""; } }
 
+    /// <summary>HTML §5.2.5: the document's own URL is the address the browsing context is at, so a
+    /// page reads the same URL through 'location' that the document carries. Setting it here does not
+    /// ask for a navigation — the shell navigated to get here.</summary>
+    internal void SetDocumentUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        _href = url!;
+    }
+
+    /// <summary>HTML §5.2.5: 'pushState' and 'replaceState' rewrite the address of the session history
+    /// entry the page is on, and the new address is read relative to the one already there. No
+    /// navigation happens (that is what separates the two from 'location.assign'), and the URL the
+    /// entry ends up with is the absolute one the page meant.</summary>
+    internal void SetStateUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        _href = new URLHost(url!, _href).href;
+    }
+
+
     private string Hash { get { var u = Parts(); return u?.hash ?? ""; } }
     private string Search { get { var u = Parts(); return u?.search ?? ""; } }
     private string Pathname { get { var u = Parts(); return u?.pathname ?? "/"; } }
@@ -5072,7 +5487,9 @@ public class HistoryHost : IDomPrototypeHost
 
     public HistoryHost(LocationHost location) => _location = location;
 
-    public int length => Math.Max(0, _stack.Count);
+    // HTML §5.2.5: the entry the page arrived on is the first one in the list, so the length counts
+    // it even before a 'pushState' has added anything.
+    public int length => _stack.Count + 1;
     public object? state => _currentIndex >= 0 && _currentIndex < _stack.Count ? _stack[_currentIndex] : null;
 
     public void back() { if (_currentIndex > 0) _currentIndex--; }
@@ -5083,19 +5500,18 @@ public class HistoryHost : IDomPrototypeHost
         while (_stack.Count > _currentIndex + 1) _stack.RemoveAt(_stack.Count - 1);
         _stack.Add(state);
         _currentIndex = _stack.Count - 1;
-        if (!string.IsNullOrEmpty(url))
-        {
-            _location.assign(url);
-        }
+        _location.SetStateUrl(url);
     }
     public void replaceState(object? state, string title, string? url)
     {
         if (_currentIndex >= 0 && _currentIndex < _stack.Count)
             _stack[_currentIndex] = state;
-        if (!string.IsNullOrEmpty(url))
+        else
         {
-            _location.replace(url);
+            _stack.Add(state);
+            _currentIndex = _stack.Count - 1;
         }
+        _location.SetStateUrl(url);
     }
 }
 

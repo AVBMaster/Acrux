@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html><head><title>Probe 22</title></head><body>
+<div id="d">x</div>
+<script>
+(function () {
+  function t(name, fn, info) {
+    var ok = false, got = '';
+    try { var v = fn(); ok = !!v; } catch (e) { got = 'threw ' + (e && e.name) + ': ' + (e && e.message); }
+    if (!ok && !got) { try { got = String(typeof info === 'function' ? info() : (info === undefined ? '' : info)); } catch (e) { got = 'info threw'; } }
+    __T(name, ok, got);
+  }
+
+  t('toggleAttribute answers and forces', function () {
+    var box = document.createElement('p');
+    var a = box.toggleAttribute('hidden');
+    var b = box.toggleAttribute('hidden');
+    var c = box.toggleAttribute('other', true);
+    var e = box.toggleAttribute('other', true);
+    var f = box.toggleAttribute('third', false);
+    return [a, box.getAttribute('hidden'), b, c, e, f, box.hasAttribute('third')].join('|')
+      === 'true||false|true|true|false|false';
+  }, function () {
+    var box = document.createElement('p');
+    return [box.toggleAttribute('hidden'), box.toggleAttribute('hidden'), box.getAttribute('hidden')].join('|');
+  });
+  t('toggleAttribute refuses a bad name', function () {
+    var box = document.createElement('p');
+    try { box.toggleAttribute('a b'); return 'no throw'; }
+    catch (e) { return e.name === 'InvalidCharacterError'
+      && e.message === "Failed to execute 'toggleAttribute' on 'Element': 'a b' is not a valid attribute name."; }
+  }, function () { var box = document.createElement('p'); try { box.toggleAttribute('a b'); } catch (e) { return e.name + '/' + e.message; } });
+
+  t('DOMParser html granular', function () {
+    var doc = new DOMParser().parseFromString('<p class=q>hi</p>', 'text/html');
+    var p = doc.querySelector('p');
+    return p.className === 'q' && p.localName === 'p' && p.tagName === 'P' && p.nodeType === 1
+      && doc.body && doc.body.tagName === 'BODY' && doc.head !== null
+      && doc.documentElement.localName === 'html' && doc.readyState === 'complete'
+      && doc.contentType === 'text/html' && doc.defaultView === null && doc.title === ''
+      && doc.doctype === null && doc.characterSet === 'UTF-8' && p.ownerDocument === doc;
+  }, function () {
+    var doc = new DOMParser().parseFromString('<p class=q>hi</p>', 'text/html');
+    var p = doc.querySelector('p');
+    return ['cls=' + (p ? p.className : 'no p'), 'tag=' + (p ? p.tagName : '-'),
+      'body=' + (doc.body ? doc.body.tagName : String(doc.body)),
+      'head=' + String(doc.head), 'root=' + (doc.documentElement ? doc.documentElement.localName : 'null'),
+      'ready=' + doc.readyState, 'type=' + doc.contentType, 'view=' + String(doc.defaultView),
+      'title=' + JSON.stringify(doc.title), 'dt=' + String(doc.doctype), 'chars=' + doc.characterSet].join(' / ');
+  });
+  t('DOMParser html finds by id', function () {
+    var doc = new DOMParser().parseFromString('<div id=zz>z</div>', 'text/html');
+    var got = doc.getElementById('zz');
+    return !!got && got.localName === 'div';
+  }, function () { var doc = new DOMParser().parseFromString('<div id=zz>z</div>', 'text/html'); return String(doc.getElementById('zz')); });
+  t('DOMParser of nothing still makes a document', function () {
+    var doc = new DOMParser().parseFromString('', 'text/html');
+    return doc.documentElement.localName === 'html' && doc.body !== null;
+  }, function () { var doc = new DOMParser().parseFromString('', 'text/html'); return (doc.documentElement ? doc.documentElement.localName : 'null') + '/' + String(doc.body); });
+  t('DOMParser refuses an unknown type', function () {
+    try { new DOMParser().parseFromString('x', 'not-a-type'); return 'no throw'; }
+    catch (e) { return e.name === 'TypeError' && e.message ===
+      "Failed to execute 'parseFromString' on 'DOMParser': The provided value 'not-a-type' is not a valid enum value of type SupportedType."; }
+  }, function () { try { new DOMParser().parseFromString('x', 'not-a-type'); return 'no throw'; } catch (e) { return e.name + '/' + e.message; } });
+  t('DOMParser xml keeps the tree', function () {
+    var doc = new DOMParser().parseFromString('<a t="1">x<!--c--><?pi d?></a>', 'text/xml');
+    var a = doc.documentElement;
+    return a.localName === 'a' && a.getAttribute('t') === '1' && a.childNodes.length === 3
+      && a.firstChild.nodeType === 3 && a.firstChild.data === 'x'
+      && a.childNodes[1].nodeType === 8 && a.childNodes[2].nodeType === 7
+      && doc.contentType === 'text/xml' && doc.body === null;
+  }, function () {
+    var doc = new DOMParser().parseFromString('<a t="1">x<!--c--><?pi d?></a>', 'text/xml');
+    var a = doc.documentElement;
+    return String(a) + '/' + (a ? a.localName : '-') + '/' + (a ? a.childNodes.length : '-') + '/' + doc.contentType;
+  });
+  t('DOMParser xml keeps the prefix', function () {
+    var doc = new DOMParser().parseFromString('<r xmlns:p="urn:p"><p:c/></r>', 'text/xml');
+    var c = doc.documentElement.firstChild;
+    return c.localName === 'c' && c.prefix === 'p' && c.namespaceURI === 'urn:p' && c.nodeName === 'p:c';
+  }, function () {
+    var doc = new DOMParser().parseFromString('<r xmlns:p="urn:p"><p:c/></r>', 'text/xml');
+    var c = doc.documentElement.firstChild;
+    return String(c) + '/' + (c ? c.localName : '-');
+  });
+  t('DOMParser xml reports a broken tree', function () {
+    var doc = new DOMParser().parseFromString('<r><c></r>', 'text/xml');
+    var pe = doc.querySelector('parsererror');
+    return doc.documentElement.localName === 'r' && pe !== null
+      && pe.namespaceURI === 'http://www.w3.org/1999/xhtml'
+      && /^This page contains the following errors:/.test(pe.textContent);
+  }, function () {
+    var doc = new DOMParser().parseFromString('<r><c></r>', 'text/xml');
+    var pe = doc.querySelector('parsererror');
+    return String(doc.documentElement && doc.documentElement.localName) + '/' + String(pe);
+  });
+  t('DOMParser svg keeps the namespace', function () {
+    var doc = new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/2000/svg"><g/></svg>', 'image/svg+xml');
+    return doc.documentElement.localName === 'svg'
+      && doc.documentElement.namespaceURI === 'http://www.w3.org/2000/svg'
+      && doc.contentType === 'image/svg+xml';
+  }, function () {
+    var doc = new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/2000/svg"><g/></svg>', 'image/svg+xml');
+    return String(doc.documentElement && doc.documentElement.localName) + '/' + doc.contentType;
+  });
+  t('location follows the document URL', function () {
+    return location.href === document.URL && location.protocol === 'file:'
+      && location.pathname.length > 0 && location.origin === 'file://'
+      && location.search === '' && location.hash === '';
+  }, function () { return location.href + '/' + document.URL + '/' + location.origin + '/' + location.pathname; });
+  t('history entries keep their url and state', function () {
+    var before = location.href;
+    history.pushState({ a: 1 }, '', '#one');
+    var hash = location.hash, state = history.state && history.state.a;
+    history.pushState({ b: 2 }, 'ignored', 'sub/two.html');
+    var resolved = location.href === new URL('sub/two.html', before).href;
+    var grew = history.length;
+    history.replaceState({ c: 3 }, '', '#three');
+    var after = JSON.stringify(history.state) === '{"c":3}' && location.hash === '#three';
+    return hash === '#one' && state === 1 && resolved && grew === 3 && after && history.length === 3;
+  }, function () { var b = location.href; history.pushState({ a: 1 }, '', '#x'); return location.hash + '/' + JSON.stringify(history.state) + '/' + history.length; });
+})();
+</script></body></html>
