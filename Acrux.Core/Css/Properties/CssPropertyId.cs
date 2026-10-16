@@ -601,6 +601,12 @@ public static class CssPropertyIdExtensions
         // The four legacy logical edges, measured to be stored under the logical property they
         // name rather than under either spelling of their own: 'setProperty('-webkit-margin-end',
         // …)' leaves cssText printing 'margin-inline-end: …' (snapshots/out/_b257_edge_names.txt).
+        // The one prefixed spelling that is NOT a property: the reference engine drops
+        // '-webkit-hyphens: auto' from the declaration block and answers the empty string for its
+        // computed value (measured), which is what an unknown name does — while '-webkit-line-break'
+        // and '-webkit-text-size-adjust' beside it are both real. The generic loop above cannot know
+        // that difference, so the exception is spelled out here.
+        NameToId.Remove("-webkit-hyphens");
         NameToId["-webkit-margin-start"] = CssPropertyId.MarginInlineStart;
         NameToId["-webkit-margin-end"] = CssPropertyId.MarginInlineEnd;
         NameToId["-webkit-padding-start"] = CssPropertyId.PaddingInlineStart;

@@ -1,0 +1,14 @@
+<!DOCTYPE html><html><head><style>body{margin:8px;font:14px/18px monospace}</style></head><body>
+<pre id="report"></pre>
+<script>
+var out=[];
+function t(prop,value){var d=document.createElement('div');document.body.appendChild(d);
+  d.style.setProperty(prop,value);void d.offsetHeight;
+  return value+'|n='+d.style.length+'|echo='+d.style.getPropertyValue(prop)
+    +'|comp='+getComputedStyle(d).getPropertyValue(prop)+'|sup='+(CSS.supports(prop,value)?'1':'0');}
+['linear(0, 1)','linear(0 0%, 1 100%)','linear(0, 0.5, 1)','ease','steps(2, start)','cubic-bezier(0, 0, 1, 1)','linear'].forEach(function(v){
+  out.push('atf|'+t('animation-timing-function',v));});
+out.push('ttf|'+t('transition-timing-function','linear(0, 1)'));
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

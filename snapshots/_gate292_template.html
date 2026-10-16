@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify292 &#8212; the property families with no grammar of their own, and what a legacy spelling answers</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: rgb(255,255,255); }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+/* Every probed element sits in a box that states its own size, so a value that resolves against its
+ * containing block prices the same in two engines with different viewport widths. */
+#box { width: 200px; }
+#box > div { height: 20px; }
+.sheet-tsa { text-size-adjust: 50%; }
+/* the geometry the swept properties have to reach */
+.row { position: relative; width: 300px; height: 30px; }
+.cell { position: absolute; width: 60px; height: 20px; background: rgb(240,240,240); }
+#g-1a { left: 8px; top: 8px; outline: 4px solid rgb(255,0,0); }
+#g-1b { left: 120px; top: 8px; outline: 4px solid rgb(255,0,0); outline-offset: 6px; }
+#g-2line { position: absolute; left: 8px; top: 60px; font-size: 0; line-height: 0; white-space: nowrap; }
+#g-2line span { display: inline-block; width: 20px; height: 10px; background: rgb(240,240,240); }
+#g-2b { vertical-align: 10px; }
+#g-2c { vertical-align: -10px; }
+#g-3a { box-sizing: border-box; width: 100px; height: 40px; padding: 10px; border: 5px solid rgb(0,0,255); }
+#g-3b { box-sizing: content-box; width: 100px; height: 40px; padding: 10px; border: 5px solid rgb(0,0,255); }
+table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 120px; }
+td { width: 20px; height: 10px; border: 2px solid rgb(255,128,128); }
+.hide td { empty-cells: hide; }
+/* the ink the swept properties have to paint: an outline ring beside its offset, and a cell whose
+ * border an 'empty-cells: hide' takes away */
+#i-host { position: relative; height: 120px; }
+/* The boxes carry no background of their own: what stands between the two red rings is the page, and
+ * the grey the box would have had would have hidden the offset's gap (measured with --pixels). */
+#i-1 { position: absolute; left: 8px; top: 8px; width: 60px; height: 20px;
+       outline: 4px solid rgb(255,0,0); }
+#i-2 { position: absolute; left: 120px; top: 8px; width: 60px; height: 20px;
+       outline: 4px solid rgb(255,0,0); outline-offset: 6px; }
+#i-3 { position: absolute; left: 8px; top: 60px; }
+#i-4 { position: absolute; left: 160px; top: 60px; }
+</style></head><body>
+<h2>the ink the swept properties have to paint (an outline ring, its offset, and an empty cell&#8217;s border)</h2>
+<div id="i-host">
+  <span id="i-1"></span><span id="i-2"></span>
+  <table id="i-3" class="hide"><tr><td id="i-3a"></td><td id="i-3b"></td></tr></table>
+  <table id="i-4"><tr><td id="i-4a"></td><td id="i-4b"></td></tr></table>
+</div>
+<h2>the geometry the swept properties have to reach</h2>
+<div class="row">
+  <span class="cell" id="g-1a"></span><span class="cell" id="g-1b"></span>
+  <span id="g-2line"><span id="g-2a"></span><span id="g-2b"></span><span id="g-2c"></span></span>
+</div>
+<div class="row"><span class="cell" id="g-3a" style="left:8px;top:100px"></span><span class="cell" id="g-3b" style="left:160px;top:100px"></span></div>
+<table id="g-4" class="hide"><tr><td id="g-4a"></td><td id="g-4b"></td></tr></table>
+<h2>the other doors a declaration comes in by</h2>
+<div id="host"></div>
+<h2>the families, measured value by value</h2>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* Every want in E, S and G is a transcription of what the reference engine printed for the same
+ * page (snapshots/out/_b292_ref_probeA.txt and _b292_ref_probeB.txt, and the guard lines as the
+ * reference answered them); nothing here is derived from a rule. E is one declaration written
+ * through the CSSOM on a fresh div inside a 200x20 box and read back through every surface at once
+ * &#8212; the block's length, its item(i) sequence, getPropertyValue, getComputedStyle, CSS.supports and
+ * cssText. S is the same kind of declaration reached through a style attribute, a stylesheet rule,
+ * removeProperty, the IDL setter and inheritance to a child that wrote nothing. G is the geometry:
+ * an outline that leaves the box alone, an offset that moves the ring further out, a vertical-align
+ * that lifts an inline box, a box-sizing that decides where the padding sits, and an empty-cells
+ * that takes a cell's border away.
+ *
+ * Two cells are marked '~' because the reference answers them with data this engine does not have,
+ * and both are filed: 'font-size-adjust: from-font' computes the font's own aspect ratio (#295) and
+ * 'animation-timing-function: linear(0, 1)' computes the interpolated stop list (#296). Everything
+ * else is pinned.
+ */
+var E = [
+@@E@@
+];
+var S = [
+@@S@@
+];
+var G = [
+@@G@@
+];
+
+var box = document.getElementById('box'), pass = 0, fail = 0, out = [];
+
+function names(d) { var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i)); return a.join(','); }
+
+for (var i = 0; i < E.length; i++) {
+  var prop = E[i][0], value = E[i][1];
+  var d = document.createElement('div');
+  box.appendChild(d);
+  d.style.setProperty(prop, value);
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) { sup = 'ERR'; }
+  var got = ['' + d.style.length, names(d), d.style.getPropertyValue(prop),
+             getComputedStyle(d).getPropertyValue(prop), sup, d.style.cssText];
+  var want = E[i].slice(2);
+  var bad = [];
+  for (var j = 0; j < want.length; j++) {
+    if (want[j] === '~') continue;
+    if (got[j] !== want[j]) bad.push('c' + j + ' got[' + got[j] + '] want[' + want[j] + ']');
+  }
+  if (bad.length) { fail++; out.push('FAIL E' + i + ' ' + prop + ': ' + value + ' | ' + bad.join(' | ')); }
+  else pass++;
+}
+
+/* S: the doors the CSSOM loop above does not use. Each row is the whole line the probe printed. */
+function door(d, prop) {
+  var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i));
+  return 'D|' + d.dataset.tag + '|names=' + a.join(',') + '|echo=' + d.style.getPropertyValue(prop)
+    + '|comp=' + getComputedStyle(d).getPropertyValue(prop) + '|text=' + d.style.cssText;
+}
+var host = document.getElementById('host'), sd = [];
+function mk(tag) { var e = document.createElement('div'); e.dataset.tag = tag; host.appendChild(e); return e; }
+var a = mk('attr'); a.setAttribute('style', 'outline-style: auto'); void a.offsetHeight;
+sd.push(door(a, 'outline-style'));
+var s = mk('sheet'); s.className = 'sheet-tsa'; void s.offsetHeight;
+sd.push(door(s, 'text-size-adjust'));
+var rr = mk('remove');
+rr.style.setProperty('-webkit-text-stroke', '1px red');
+rr.style.removeProperty('-webkit-text-stroke');
+void rr.offsetHeight;
+sd.push(door(rr, '-webkit-text-stroke'));
+var w = mk('idlset'); w.style.verticalAlign = 'text-bottom'; void w.offsetHeight;
+sd.push(door(w, 'vertical-align'));
+var p = mk('inherit');
+p.style.setProperty('text-size-adjust', '50%');
+p.style.setProperty('initial-letter', '2.5');
+p.style.setProperty('-webkit-line-break', 'after-white-space');
+var c = document.createElement('div'); p.appendChild(c); void c.offsetHeight;
+sd.push('D|inherit|parent=' + getComputedStyle(p).getPropertyValue('text-size-adjust') + '/'
+  + getComputedStyle(p).getPropertyValue('initial-letter') + '/'
+  + getComputedStyle(p).getPropertyValue('-webkit-line-break')
+  + '|child=' + getComputedStyle(c).getPropertyValue('text-size-adjust') + '/'
+  + getComputedStyle(c).getPropertyValue('initial-letter') + '/'
+  + getComputedStyle(c).getPropertyValue('-webkit-line-break'));
+for (var i = 0; i < S.length; i++) {
+  var tag = S[i].split('|')[1], gotLine = null;
+  for (var k = 0; k < sd.length; k++) if (sd[k].split('|')[1] === tag) gotLine = sd[k];
+  if (gotLine !== S[i]) { fail++; out.push('FAIL S' + i + ' got[' + gotLine + '] want[' + S[i] + ']'); }
+  else pass++;
+}
+
+/* G: the geometry. */
+function r(id) { var b = document.getElementById(id).getBoundingClientRect(); return { l: b.left, t: b.top, w: b.width, h: b.height, r: b.right, b: b.bottom }; }
+function n1(v) { return v.toFixed(1); }
+var gd = [];
+var a1 = r('g-1a'), b1 = r('g-1b');
+gd.push('g1|boxUnmoved=' + n1(a1.w) + ',' + n1(a1.h) + '|outlineSpans=' + n1((a1.r - a1.l) + 8)
+  + '|offsetBox=' + n1((b1.r - b1.l) + 20));
+var base = r('g-2a'), up = r('g-2b'), down = r('g-2c');
+gd.push('g2|lifted=' + n1(base.t - up.t) + '|dropped=' + n1(down.t - base.t) + '|width=' + n1(up.w)
+  + '|sideBySide=' + n1(up.l - base.r) + ',' + n1(down.l - up.r));
+var bb = r('g-3a'), cb = r('g-3b');
+gd.push('g3|borderBox=' + n1(bb.w) + ',' + n1(bb.h) + '|contentBox=' + n1(cb.w) + ',' + n1(cb.h));
+var c4 = r('g-4a'), d4 = r('g-4b');
+gd.push('g4|cellOuter=' + n1(c4.w) + ',' + n1(c4.h) + '|gap=' + n1(d4.l - c4.r));
+for (var i = 0; i < G.length; i++) {
+  var tag = G[i].split('|')[0], gotLine = null;
+  for (var k = 0; k < gd.length; k++) if (gd[k].split('|')[0] === tag) gotLine = gd[k];
+  if (gotLine !== G[i]) { fail++; out.push('FAIL G' + i + ' got[' + gotLine + '] want[' + G[i] + ']'); }
+  else pass++;
+}
+
+out.unshift((fail === 0 ? 'ALLPASS' : 'FAILURES') + ' b292: ' + pass + '/' + (pass + fail) + ' rows pass');
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

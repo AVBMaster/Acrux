@@ -352,7 +352,12 @@ public static class CssValueText
                 // The width is printed first whichever order the page wrote (measured: 'green 2px'
                 // reads back '2px green'), and a value that is not a two-word stroke never reaches
                 // here because the grammar has already refused it.
-                bool firstIsLength = char.IsDigit(words[0][0]) || words[0][0] is '+' or '-';
+                bool firstIsLength = char.IsDigit(words[0][0]) || words[0][0] is '+' or '-'
+                    // 'thin', 'medium' and 'thick' are widths here too, and the pair prints with
+                    // the width first whichever order the page wrote them in (measured:
+                    // '-webkit-text-stroke: thin red' reads back as it was written).
+                    || System.Array.BinarySearch(StrokeWidthOrder, words[0].ToLowerInvariant(),
+                        StringComparer.Ordinal) >= 0;
                 return firstIsLength ? words[0] + " " + words[1] : words[1] + " " + words[0];
             }
         }
@@ -366,6 +371,10 @@ public static class CssValueText
     }
 
     private static readonly string[] SideKeywords = { "above", "below", "left", "right" };
+
+    /// <summary>The three border-width keywords a text stroke takes in place of a length, sorted for
+    /// a binary search like <see cref="SideKeywords"/>.</summary>
+    private static readonly string[] StrokeWidthOrder = { "medium", "thick", "thin" };
 
     /// <summary>Whether a word of a legacy value is one of that property's own keywords, which is
     /// the only kind of word the engine may re-spell.</summary>
@@ -407,9 +416,12 @@ public static class CssValueText
         {
             // The reference engine prints an outline as colour, style, width — the style is a
             // keyword of its own set and the width is whatever is left (measured:
-            // 'outline: 2px dashed rgb(1, 2, 3)' reads back in that order).
+            // 'outline: 2px dashed rgb(1, 2, 3)' reads back in that order). 'auto' is one of the
+            // outline's style words and not a width, so it moves with them (measured:
+            // 'outline: 2px auto' reads 'auto 2px').
             var style = rest.FirstOrDefault(w =>
-                Acrux.Core.Css.ShorthandExpander.IsBorderStyle(w));
+                Acrux.Core.Css.ShorthandExpander.IsBorderStyle(w)
+                || w.Equals("auto", StringComparison.OrdinalIgnoreCase));
             if (style != null)
             {
                 rest.Remove(style);
@@ -1861,6 +1873,13 @@ public static class CssValueText
         { "xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "xxx-large",
           "larger", "smaller" };
     private static readonly string[] BorderWidthKeywords = { "thin", "medium", "thick" };
+    // CSS UI 4 §3.3: the outline's own style words — the border's without 'hidden' and with the
+    // 'auto' the ring brings (measured, and 'AUTO' folds to 'auto' like any other keyword).
+    private static readonly string[] OutlineStyleKeywords =
+        { "auto", "none", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset",
+          "outset" };
+    private static readonly string[] OutlineSideKeywords =
+        OutlineStyleKeywords.Concat(BorderWidthKeywords).ToArray();
     private static readonly string[] BorderSideKeywords =
         { "none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset",
           "outset", "thin", "medium", "thick" };
@@ -1892,12 +1911,14 @@ public static class CssValueText
     {
         var name = property.ToLowerInvariant();
         if (name.EndsWith("-style", StringComparison.Ordinal)
-            && (name.StartsWith("border", StringComparison.Ordinal) || name == "outline-style"))
+            && name.StartsWith("border", StringComparison.Ordinal))
             return BorderStyleKeywords;
+        if (name == "outline-style") return OutlineStyleKeywords;
         // A side shorthand carries the style and the width keywords beside its colour, and both
         // print in their one spelling (measured: 'border-top: 1PX SOLID RED' reads
         // '1px solid red').
-        if (name == "border" || name == "outline"
+        if (name == "outline") return OutlineSideKeywords;
+        if (name == "border"
             || (name.StartsWith("border-", StringComparison.Ordinal)
                 && !name.EndsWith("-color", StringComparison.Ordinal)
                 && !name.EndsWith("-width", StringComparison.Ordinal)

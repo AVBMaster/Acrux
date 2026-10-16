@@ -77,6 +77,12 @@ public static class CssInheritance
         // computed surface of the child too (measured: a child of 'letter-spacing: 50%' reads '50%').
         child.LetterSpacingPercent = parent.LetterSpacingPercent;
         child.WordSpacingPercent = parent.WordSpacingPercent;
+        // Both adjust the way text is laid out on the way down, and the reference engine carries them
+        // to a child that wrote nothing of its own (measured: a child of 'text-size-adjust: 50%'
+        // reads '50%' and one of '-webkit-line-break: after-white-space' reads the same word, while
+        // 'initial-letter' does not inherit at all).
+        child.TextSizeAdjust = parent.TextSizeAdjust;
+        child.LineBreakAuthored = parent.LineBreakAuthored;
         child.TextIndent = parent.TextIndent;
         child.TextIndentPercent = parent.TextIndentPercent;
         child.TextIndentHanging = parent.TextIndentHanging;

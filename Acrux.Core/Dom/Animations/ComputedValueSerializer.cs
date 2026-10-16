@@ -65,9 +65,15 @@ public static class ComputedValueSerializer
                 var initial = Acrux.Core.Css.Resolver.CssPropertyTraits.LegacyDeclaredOnlyInitial(property);
                 // 'currentcolor' in that table is a sentinel, not an answer: the property paints
                 // with the text colour, so the computed surface says the colour it means.
-                return initial != null && initial.Equals("currentcolor", StringComparison.OrdinalIgnoreCase)
-                    ? ColorText(style.Color)
-                    : initial;
+                if (initial is null) return null;
+                if (initial.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
+                    return ColorText(style.Color);
+                // The same sentinel inside a multi-part initial: '0px currentcolor' is the pair the
+                // text stroke answers, and only its colour half names the text (measured: an
+                // untouched box computes '0px rgb(9, 9, 9)').
+                return System.Text.RegularExpressions.Regex.Replace(initial, "currentcolor",
+                    _ => ColorText(style.Color),
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             }
             return Acrux.Core.Css.Resolver.CssPropertyTraits.LegacyComputedText(property, written);
         }
@@ -381,10 +387,10 @@ public static class ComputedValueSerializer
             case "scroll-margin-right": return ScrollInsetText(style, style.ScrollMarginRight);
             case "scroll-margin-bottom": return ScrollInsetText(style, style.ScrollMarginBottom);
             case "scroll-margin-left": return ScrollInsetText(style, style.ScrollMarginLeft);
-            case "scroll-padding-top": return ScrollInsetText(style, style.ScrollPaddingTop);
-            case "scroll-padding-right": return ScrollInsetText(style, style.ScrollPaddingRight);
-            case "scroll-padding-bottom": return ScrollInsetText(style, style.ScrollPaddingBottom);
-            case "scroll-padding-left": return ScrollInsetText(style, style.ScrollPaddingLeft);
+            case "scroll-padding-top": return ScrollPaddingText(style, style.ScrollPaddingTop);
+            case "scroll-padding-right": return ScrollPaddingText(style, style.ScrollPaddingRight);
+            case "scroll-padding-bottom": return ScrollPaddingText(style, style.ScrollPaddingBottom);
+            case "scroll-padding-left": return ScrollPaddingText(style, style.ScrollPaddingLeft);
             // The logical edges of the two insets answer with the physical side the writing
             // direction put them on (CSS Logical 1 §4) — the same side SetScrollInset wrote.
             case "scroll-margin-block-start": return ScrollInsetText(style, style.ScrollMarginTop);
@@ -395,13 +401,13 @@ public static class ComputedValueSerializer
             case "scroll-margin-inline-end":
                 return ScrollInsetText(style, style.Direction == "rtl"
                     ? style.ScrollMarginLeft : style.ScrollMarginRight);
-            case "scroll-padding-block-start": return ScrollInsetText(style, style.ScrollPaddingTop);
-            case "scroll-padding-block-end": return ScrollInsetText(style, style.ScrollPaddingBottom);
+            case "scroll-padding-block-start": return ScrollPaddingText(style, style.ScrollPaddingTop);
+            case "scroll-padding-block-end": return ScrollPaddingText(style, style.ScrollPaddingBottom);
             case "scroll-padding-inline-start":
-                return ScrollInsetText(style, style.Direction == "rtl"
+                return ScrollPaddingText(style, style.Direction == "rtl"
                     ? style.ScrollPaddingRight : style.ScrollPaddingLeft);
             case "scroll-padding-inline-end":
-                return ScrollInsetText(style, style.Direction == "rtl"
+                return ScrollPaddingText(style, style.Direction == "rtl"
                     ? style.ScrollPaddingLeft : style.ScrollPaddingRight);
             case "scroll-margin-block":
                 return Pair(Longhand(style, "scroll-margin-block-start"), Longhand(style, "scroll-margin-block-end"));
@@ -411,6 +417,13 @@ public static class ComputedValueSerializer
                 return Pair(Longhand(style, "scroll-padding-block-start"), Longhand(style, "scroll-padding-block-end"));
             case "scroll-padding-inline":
                 return Pair(Longhand(style, "scroll-padding-inline-start"), Longhand(style, "scroll-padding-inline-end"));
+            // The three that adjust nothing here but still answer a page: each prints what the
+            // cascade kept, with the one spelling the reference engine changes ('none' is the ratio
+            // it leaves the size at).
+            case "text-size-adjust": return style.TextSizeAdjust is "none" ? "100%" : style.TextSizeAdjust;
+            case "initial-letter": return string.IsNullOrWhiteSpace(style.InitialLetter)
+                ? "normal" : style.InitialLetter;
+            case "-webkit-line-break": return LegacyLineBreakText(style);
             case "caret-shape": return string.IsNullOrWhiteSpace(style.CaretShape)
                 ? "auto" : style.CaretShape;
             case "text-underline-position": return UnderlinePositionText(style.TextUnderlinePosition);
@@ -1228,8 +1241,24 @@ public static class ComputedValueSerializer
     /// <summary>One side of a scroll inset (CSS Scroll Snap 1 §6.1). The initial value is the
     /// length zero, so an untouched side reads back as '0px' — never as 'auto', which is only
     /// another spelling the page may use for that same zero (measured).</summary>
+    /// <summary>The legacy spelling of the line-break slot: the word the page wrote when that word
+    /// belongs to the legacy set, and otherwise the modern keyword the slot holds (measured:
+    /// 'after-white-space' reads back as itself while 'line-break' beside it answers 'auto').</summary>
+    private static string LineBreakText(LineBreakType value) => value.ToString().ToLowerInvariant();
+
+    private static string LegacyLineBreakText(ComputedStyle style) =>
+        style.LineBreakAuthored is { } authored
+            && authored is "auto" or "loose" or "normal" or "strict" or "after-white-space"
+            ? authored : LineBreakText(style.LineBreak);
+
     private static string ScrollInsetText(ComputedStyle style, Length? length) =>
         length == null ? "0px" : length is AutoLength ? "auto" : LengthText(style, length);
+
+    /// <summary>'scroll-padding' is the inset the other way and starts the other way too: a side
+    /// nobody mentioned is 'auto', where 'scroll-margin' answers the initial zero (measured: an
+    /// untouched box reads 'auto' from 'scroll-padding' and '0px' from 'scroll-margin').</summary>
+    private static string ScrollPaddingText(ComputedStyle style, Length? length) =>
+        length == null || length is AutoLength ? "auto" : LengthText(style, length);
 
     /// <summary>The computed text of <c>text-emphasis-position</c>: the vertical side always, the
     /// horizontal one only when the page put a <c>left</c> there. 'right' is the word the engine

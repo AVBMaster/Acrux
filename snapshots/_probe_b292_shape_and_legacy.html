@@ -1,0 +1,17 @@
+<!DOCTYPE html><html><head><style>body{margin:8px;font:14px/18px monospace}</style></head><body>
+<pre id="report"></pre>
+<script>
+var out=[];
+var d=document.createElement('div'); document.body.appendChild(d);
+d.style.setProperty('shape-margin','1');
+out.push('sm1|n='+d.style.length+'|echo='+d.style.getPropertyValue('shape-margin')+'|sup='+CSS.supports('shape-margin','1'));
+var d2=document.createElement('div'); document.body.appendChild(d2);
+d2.style.setProperty('shape-margin','1px');
+out.push('smpx|n='+d2.style.length+'|echo='+d2.style.getPropertyValue('shape-margin')+'|comp='+getComputedStyle(d2).getPropertyValue('shape-margin'));
+var d3=document.createElement('div'); document.body.appendChild(d3);
+d3.style.setProperty('-webkit-line-break','after-white-space');
+void d3.offsetHeight;
+out.push('wlb|n='+d3.style.length+'|echo='+d3.style.getPropertyValue('-webkit-line-break')+'|comp='+getComputedStyle(d3).getPropertyValue('-webkit-line-break')+'|lb='+getComputedStyle(d3).getPropertyValue('line-break'));
+document.getElementById('report').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

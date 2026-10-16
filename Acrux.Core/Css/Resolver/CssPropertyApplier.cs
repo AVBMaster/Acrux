@@ -1113,7 +1113,9 @@ public static class CssPropertyApplier
                         style.RubyPosition = rp;
                 }
                 break;
-            case "line-break": style.LineBreak = ParseLineBreak(value); break;
+            case "line-break":
+                style.LineBreak = ParseLineBreak(value);
+                style.LineBreakAuthored = value.Trim().ToLowerInvariant(); break;
             case "text-justify": style.TextJustify = ParseTextJustify(value); break;
             case "hanging-punctuation": style.HangingPunctuation = value.ToLowerInvariant(); break;
             // The keyword family the engine declares but does not act on. Each case canonicalises
@@ -1173,7 +1175,15 @@ public static class CssPropertyApplier
                 break;
             case "zoom": style.Zoom = ParseZoom(value); break;
             case "all": break; // all shorthand - handled via reset cascade
-            case "initial-letter": break; // recognized, minimal handling
+            // Read, validated, stored and echoed but not consumed: no layout drops a large initial
+            // and no platform inflates a font size, so the value is kept for the surfaces a page
+            // reads it back through (measured: both compute what was written).
+            case "initial-letter":
+                style.InitialLetter = CanonicalNumberPair(value, "normal"); break;
+            case "text-size-adjust":
+            case "-webkit-text-size-adjust":
+                style.TextSizeAdjust = value.Trim().ToLowerInvariant(); break;
+
             case "box-decoration-break":
                 style.BoxDecorationBreak = value.Trim().StartsWith("clone", StringComparison.OrdinalIgnoreCase)
                     ? BoxDecorationBreakType.Clone : BoxDecorationBreakType.Slice;
@@ -4782,16 +4792,15 @@ public static class CssPropertyApplier
             case "-webkit-tap-highlight-color":
                 return LegacyColorText(text, style);
             case "-webkit-text-stroke-width":
+                return string.Join(" ", SplitTopLevelWords(text).Select(word =>
+                    StrokeWidthKeyword(word, style)
+                    ?? LegacyLengthText(word, style, viewportWidth, viewportHeight)));
             case "-webkit-mask-box-image-outset":
             case "-webkit-mask-box-image-width":
                 return string.Join(" ", SplitTopLevelWords(text).Select(word =>
                     LegacyLengthText(word, style, viewportWidth, viewportHeight)));
             case "-webkit-text-stroke":
-                // The canonical spelling puts the width first, so each word is resolved as
-                // whichever kind it is.
-                return string.Join(" ", SplitTopLevelWords(text).Select(word =>
-                    IsColorWord(word) ? LegacyColorText(word, style)
-                        : LegacyLengthText(word, style, viewportWidth, viewportHeight)));
+                return StrokePairText(text, style, viewportWidth, viewportHeight);
             default:
                 return text;
         }
@@ -4825,6 +4834,66 @@ public static class CssPropertyApplier
             return CssColorText.FromColor(style.Color);
         if (!ColorParser.IsColorToken(word)) return word;
         return CssColorText.FromColor(ColorParser.Parse(word, style));
+    }
+
+    /// <summary>The three border-width keywords as the text stroke prices them: a fraction of the
+    /// font rather than a fixed pixel count, and the ladder is the border's own scaled to the font
+    /// (measured on a 14px box: 'thin' computes '0.291667px' = 14/48, 'medium' '0.875px' = 3·14/48
+    /// and 'thick' '1.45833px' = 5·14/48, where the same words on a border are 1, 3 and 5px).
+    /// Null for every other word, which is a length and priced as one.</summary>
+    private static string? StrokeWidthKeyword(string word, ComputedStyle style) =>
+        word.ToLowerInvariant() switch
+        {
+            "thin" => StrokeThicknessText(style, 1),
+            "medium" => StrokeThicknessText(style, 3),
+            "thick" => StrokeThicknessText(style, 5),
+            _ => null,
+        };
+
+    private static string StrokeThicknessText(ComputedStyle style, int steps) =>
+        Acrux.Core.Dom.Animations.CssValueTokenizer.Num(style.FontSize * steps / 48f) + "px";
+
+    /// <summary>The text stroke's computed value, which is always a pair: the width the page wrote
+    /// or the initial zero, and the colour it wrote or the colour it is drawn in, because the
+    /// reference engine answers both halves even when one was never mentioned (measured:
+    /// '-webkit-text-stroke: 1px' computes '1px rgb(9, 9, 9)', 'red' computes
+    /// '0px rgb(255, 0, 0)', and a box that wrote nothing computes '0px rgb(9, 9, 9)').</summary>
+    private static string StrokePairText(string text, ComputedStyle style,
+        float viewportWidth, float viewportHeight)
+    {
+        string? width = null, colour = null;
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            if (colour == null && (IsColorWord(word)
+                || word.Equals("currentcolor", StringComparison.OrdinalIgnoreCase)))
+            {
+                colour = LegacyColorText(word, style);
+                continue;
+            }
+            if (width == null)
+                width = StrokeWidthKeyword(word, style)
+                    ?? LegacyLengthText(word, style, viewportWidth, viewportHeight);
+        }
+        return (width ?? "0px") + " " + (colour ?? CssColorText.FromColor(style.Color));
+    }
+
+    /// <summary>One number, or a pair of them, kept in the spelling the reference engine prints:
+    /// the tokens lower-cased and joined with one space, and anything the grammar will not take left
+    /// at the property's initial.</summary>
+    private static string CanonicalNumberPair(string value, string initial)
+    {
+        var parts = ShorthandExpander.SplitShorthand(value);
+        if (parts.Count is < 1 or > 2) return initial;
+        if (parts.Count == 1 && parts[0].Equals(initial, StringComparison.OrdinalIgnoreCase))
+            return initial;
+        foreach (var part in parts)
+            if (!double.TryParse(part, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var number)
+                || number <= 0) return initial;
+        return string.Join(" ", parts.Select(part =>
+            Acrux.Core.Dom.Animations.CssValueTokenizer.Num(
+                double.Parse(part, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture))));
     }
 
     private static string LegacyLengthText(string word, ComputedStyle style,

@@ -76,6 +76,10 @@ public static class CssPropertyTraits
         "scroll-padding-inline", "scroll-padding-inline-start", "scroll-padding-inline-end",
         "scroll-padding-block", "scroll-padding-block-start", "scroll-padding-block-end",
         // Borders, outlines and corners.
+        // 'vertical-align' is a length beside its keywords, and the zero is printed as one
+        // (measured: 'vertical-align: 0' reads back '0px'). The text stroke likewise, in both of
+        // the names its shorthand enumerates as.
+        "vertical-align", "-webkit-text-stroke", "-webkit-text-stroke-width",
         "border", "border-top", "border-right", "border-bottom", "border-left",
         "border-width", "border-top-width", "border-right-width", "border-bottom-width",
         "border-left-width", "border-inline", "border-inline-width",
@@ -211,7 +215,10 @@ public static class CssPropertyTraits
         // initial is 'currentcolor' rather than a number (measured on a box whose colour is
         // rgb(9,9,9): both compute 'rgb(9, 9, 9)'; the ComputedValueSerializer reads the sentinel).
         ["-webkit-text-fill-color"] = ("currentcolor", true),
-        ["-webkit-text-stroke"] = ("0px rgb(0, 0, 0)", true),
+        // The stroke always answers both halves, so its initial says both of them and the colour
+        // half carries the same 'currentcolor' sentinel the serializer reads (measured: a box that
+        // wrote nothing computes '0px rgb(9, 9, 9)', its own text colour).
+        ["-webkit-text-stroke"] = ("0px currentcolor", true),
         ["-webkit-text-stroke-color"] = ("currentcolor", true),
         ["-webkit-text-stroke-width"] = ("0px", true),
         ["-webkit-user-drag"] = ("auto", false),

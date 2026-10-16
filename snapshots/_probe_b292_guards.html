@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b292 probe C &#8212; the families that also reach the drawn page</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: rgb(255,255,255); }
+.row { position: relative; width: 300px; height: 30px; }
+.cell { position: absolute; width: 60px; height: 20px; background: rgb(240,240,240); }
+#g-1a { left: 8px; top: 8px; outline: 4px solid rgb(255,0,0); }
+#g-1b { left: 120px; top: 8px; outline: 4px solid rgb(255,0,0); outline-offset: 6px; }
+#g-2line { position: absolute; left: 8px; top: 60px; font-size: 0; line-height: 0; white-space: nowrap; }
+#g-2line span { display: inline-block; width: 20px; height: 10px; background: rgb(240,240,240); }
+#g-2b { vertical-align: 10px; }
+#g-2c { vertical-align: -10px; }
+#g-3a { box-sizing: border-box; width: 100px; height: 40px; padding: 10px; border: 5px solid rgb(0,0,255); }
+#g-3b { box-sizing: content-box; width: 100px; height: 40px; padding: 10px; border: 5px solid rgb(0,0,255); }
+table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 120px; }
+td { width: 20px; height: 10px; border: 2px solid rgb(255,128,128); }
+.hide td { empty-cells: hide; }
+</style></head><body>
+<div class="row">
+  <span class="cell" id="g-1a"></span><span class="cell" id="g-1b"></span>
+  <span id="g-2line"><span id="g-2a"></span><span id="g-2b"></span><span id="g-2c"></span></span>
+</div>
+<div class="row"><span class="cell" id="g-3a" style="left:8px;top:100px"></span><span class="cell" id="g-3b" style="left:160px;top:100px"></span></div>
+<table class="hide" id="g-4"><tr><td id="g-4a"></td><td id="g-4b"></td></tr></table>
+<pre id="report"></pre>
+<script>
+/* Four declarations a page can also see: an outline drawn outside its box and the offset that moves
+ * it further, a vertical-align that lifts an inline box, a box-sizing that decides whether the
+ * padding is inside the stated width, and an empty-cells that takes a cell's border away. */
+function r(id) { var b = document.getElementById(id).getBoundingClientRect(); return { l: b.left, t: b.top, w: b.width, h: b.height, r: b.right, b: b.bottom }; }
+function n(v) { return v.toFixed(1); }
+var out = [];
+var a1 = r('g-1a'), b1 = r('g-1b');
+out.push('g1|boxUnmoved=' + n(a1.w) + ',' + n(a1.h) + '|outlineSpans=' + n((a1.r - a1.l) + 8)
+  + '|offsetBox=' + n((b1.r - b1.l) + 20));
+var base = r('g-2a'), up = r('g-2b'), down = r('g-2c');
+out.push('g2|lifted=' + n(base.t - up.t) + '|dropped=' + n(down.t - base.t) + '|width=' + n(up.w)
+  + '|sideBySide=' + n(up.l - base.r) + ',' + n(down.l - up.r));
+var bb = r('g-3a'), cb = r('g-3b');
+out.push('g3|borderBox=' + n(bb.w) + ',' + n(bb.h) + '|contentBox=' + n(cb.w) + ',' + n(cb.h));
+var c4 = r('g-4a'), d4 = r('g-4b');
+out.push('g4|cellOuter=' + n(c4.w) + ',' + n(c4.h) + '|gap=' + n(d4.l - c4.r));
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

@@ -1015,6 +1015,20 @@ public class ComputedStyle
     /// <summary>'caret-shape' (CSS UI 4 §4.3): 'auto' asks for the platform caret, 'bar' and
     /// 'block' ask for a specific shape. The engine draws one caret style, so the value is
     /// carried for the computed surface and for scripts, not for painting.</summary>
+    /// <summary>'text-size-adjust' (CSS Mobile Text Size Adjustment 1 §2) as the page wrote it:
+    /// 'auto', 'none' or a percentage. The property adjusts font sizes the platform would otherwise
+    /// inflate, which this engine does not do, so the text is kept for the surfaces that read it —
+    /// and the computed surface prints 'none' as the ratio it says (measured: 'none' computes
+    /// '100%').</summary>
+    public string TextSizeAdjust { get; set; } = "auto";
+    /// <summary>'initial-letter' (CSS Line Grid 1 §4.1): 'normal' or the ascent with its optional
+    /// descent, as written. No layout drops a large initial yet, so this is the read-back.</summary>
+    public string InitialLetter { get; set; } = "normal";
+    /// <summary>The word the page wrote for the line-break slot. The two names of it share one
+    /// property (measured: '-webkit-line-break: strict' answers 'strict' from 'line-break' as well),
+    /// but the legacy spelling has a word the modern set does not, and its computed value reads
+    /// back that word ('after-white-space'), while 'line-break' beside it answers 'auto'.</summary>
+    public string? LineBreakAuthored { get; set; }
     public string CaretShape { get; set; } = "auto";
     public VisibilityType Visibility { get; set; } = VisibilityType.Visible;
     public int? ZIndex { get; set; }
@@ -1792,7 +1806,8 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             ScrollMarginBottom = ScrollMarginBottom, ScrollMarginLeft = ScrollMarginLeft,
             ScrollPaddingTop = ScrollPaddingTop, ScrollPaddingRight = ScrollPaddingRight,
             ScrollPaddingBottom = ScrollPaddingBottom, ScrollPaddingLeft = ScrollPaddingLeft,
-            CaretShape = CaretShape,
+            CaretShape = CaretShape, TextSizeAdjust = TextSizeAdjust,
+            InitialLetter = InitialLetter, LineBreakAuthored = LineBreakAuthored,
             Visibility = Visibility, ZIndex = ZIndex, Cursor = Cursor, Opacity = Opacity,
             BoxShadow = BoxShadow, BackgroundSize = BackgroundSize,
             BackgroundSizeWidth = BackgroundSizeWidth, BackgroundSizeHeight = BackgroundSizeHeight,

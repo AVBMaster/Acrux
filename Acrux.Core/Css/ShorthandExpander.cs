@@ -1047,6 +1047,13 @@ public static class ShorthandExpander
         // '-webkit-border-vertical-spacing' reading '4px', while cssText prints 'border-spacing'.
         // The cascade's own table does not carry this pair: the two names reset nothing that
         // 'border-spacing' does not already write.
+        // CSS Text Decoration: the legacy stroke shorthand enumerates as its two parts, which is how
+        // a page walks it (measured: '-webkit-text-stroke: 1px red' has length 2, item(0)
+        // '-webkit-text-stroke-width' reading '1px' and item(1) '-webkit-text-stroke-color' reading
+        // 'red', while cssText prints the shorthand). The cascade's own table stays out of this:
+        // these two names have no id, and a shorthand that expands into names the parser does not
+        // know loses the declaration from a stylesheet (docs/CSS-HANDOFF.md §49.1).
+        "-webkit-text-stroke" => new[] { "-webkit-text-stroke-width", "-webkit-text-stroke-color" },
         "border-spacing" => new[] { "-webkit-border-horizontal-spacing",
                                     "-webkit-border-vertical-spacing" },
         // Three the engine expands but did not enumerate: each names the longhands it covers even

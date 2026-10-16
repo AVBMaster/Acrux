@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify292 &#8212; the property families with no grammar of their own, and what a legacy spelling answers</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: rgb(255,255,255); }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+/* Every probed element sits in a box that states its own size, so a value that resolves against its
+ * containing block prices the same in two engines with different viewport widths. */
+#box { width: 200px; }
+#box > div { height: 20px; }
+.sheet-tsa { text-size-adjust: 50%; }
+/* the geometry the swept properties have to reach */
+.row { position: relative; width: 300px; height: 30px; }
+.cell { position: absolute; width: 60px; height: 20px; background: rgb(240,240,240); }
+#g-1a { left: 8px; top: 8px; outline: 4px solid rgb(255,0,0); }
+#g-1b { left: 120px; top: 8px; outline: 4px solid rgb(255,0,0); outline-offset: 6px; }
+#g-2line { position: absolute; left: 8px; top: 60px; font-size: 0; line-height: 0; white-space: nowrap; }
+#g-2line span { display: inline-block; width: 20px; height: 10px; background: rgb(240,240,240); }
+#g-2b { vertical-align: 10px; }
+#g-2c { vertical-align: -10px; }
+#g-3a { box-sizing: border-box; width: 100px; height: 40px; padding: 10px; border: 5px solid rgb(0,0,255); }
+#g-3b { box-sizing: content-box; width: 100px; height: 40px; padding: 10px; border: 5px solid rgb(0,0,255); }
+table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 120px; }
+td { width: 20px; height: 10px; border: 2px solid rgb(255,128,128); }
+.hide td { empty-cells: hide; }
+/* the ink the swept properties have to paint: an outline ring beside its offset, and a cell whose
+ * border an 'empty-cells: hide' takes away */
+#i-host { position: relative; height: 120px; }
+/* The boxes carry no background of their own: what stands between the two red rings is the page, and
+ * the grey the box would have had would have hidden the offset's gap (measured with --pixels). */
+#i-1 { position: absolute; left: 8px; top: 8px; width: 60px; height: 20px;
+       outline: 4px solid rgb(255,0,0); }
+#i-2 { position: absolute; left: 120px; top: 8px; width: 60px; height: 20px;
+       outline: 4px solid rgb(255,0,0); outline-offset: 6px; }
+#i-3 { position: absolute; left: 8px; top: 60px; }
+#i-4 { position: absolute; left: 160px; top: 60px; }
+</style></head><body>
+<h2>the ink the swept properties have to paint (an outline ring, its offset, and an empty cell&#8217;s border)</h2>
+<div id="i-host">
+  <span id="i-1"></span><span id="i-2"></span>
+  <table id="i-3" class="hide"><tr><td id="i-3a"></td><td id="i-3b"></td></tr></table>
+  <table id="i-4"><tr><td id="i-4a"></td><td id="i-4b"></td></tr></table>
+</div>
+<h2>the geometry the swept properties have to reach</h2>
+<div class="row">
+  <span class="cell" id="g-1a"></span><span class="cell" id="g-1b"></span>
+  <span id="g-2line"><span id="g-2a"></span><span id="g-2b"></span><span id="g-2c"></span></span>
+</div>
+<div class="row"><span class="cell" id="g-3a" style="left:8px;top:100px"></span><span class="cell" id="g-3b" style="left:160px;top:100px"></span></div>
+<table id="g-4" class="hide"><tr><td id="g-4a"></td><td id="g-4b"></td></tr></table>
+<h2>the other doors a declaration comes in by</h2>
+<div id="host"></div>
+<h2>the families, measured value by value</h2>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* Every want in E, S and G is a transcription of what the reference engine printed for the same
+ * page (snapshots/out/_b292_ref_probeA.txt and _b292_ref_probeB.txt, and the guard lines as the
+ * reference answered them); nothing here is derived from a rule. E is one declaration written
+ * through the CSSOM on a fresh div inside a 200x20 box and read back through every surface at once
+ * &#8212; the block's length, its item(i) sequence, getPropertyValue, getComputedStyle, CSS.supports and
+ * cssText. S is the same kind of declaration reached through a style attribute, a stylesheet rule,
+ * removeProperty, the IDL setter and inheritance to a child that wrote nothing. G is the geometry:
+ * an outline that leaves the box alone, an offset that moves the ring further out, a vertical-align
+ * that lifts an inline box, a box-sizing that decides where the padding sits, and an empty-cells
+ * that takes a cell's border away.
+ *
+ * Two cells are marked '~' because the reference answers them with data this engine does not have,
+ * and both are filed: 'font-size-adjust: from-font' computes the font's own aspect ratio (#295) and
+ * 'animation-timing-function: linear(0, 1)' computes the interpolated stop list (#296). Everything
+ * else is pinned.
+ */
+var E = [
+  ["outline", "auto", "3", "outline-color,outline-style,outline-width", "auto", "rgb(9, 9, 9) auto 3px", "1", "outline: auto;"],
+  ["outline", "thin", "3", "outline-color,outline-style,outline-width", "thin", "rgb(9, 9, 9) none 1px", "1", "outline: thin;"],
+  ["outline", "3px", "3", "outline-color,outline-style,outline-width", "3px", "rgb(9, 9, 9) none 3px", "1", "outline: 3px;"],
+  ["outline", "3px solid", "3", "outline-color,outline-style,outline-width", "solid 3px", "rgb(9, 9, 9) solid 3px", "1", "outline: solid 3px;"],
+  ["outline", "3px solid red", "3", "outline-color,outline-style,outline-width", "red solid 3px", "rgb(255, 0, 0) solid 3px", "1", "outline: red solid 3px;"],
+  ["outline", "red", "3", "outline-color,outline-style,outline-width", "red", "rgb(255, 0, 0) none 3px", "1", "outline: red;"],
+  ["outline", "dashed", "3", "outline-color,outline-style,outline-width", "dashed", "rgb(9, 9, 9) dashed 3px", "1", "outline: dashed;"],
+  ["outline", "invert", "0", "", "", "rgb(9, 9, 9) none 3px", "0", ""],
+  ["outline", "auto 2px", "3", "outline-color,outline-style,outline-width", "auto 2px", "rgb(9, 9, 9) auto 2px", "1", "outline: auto 2px;"],
+  ["outline", "2px auto", "3", "outline-color,outline-style,outline-width", "auto 2px", "rgb(9, 9, 9) auto 2px", "1", "outline: auto 2px;"],
+  ["outline", "dotted thick", "3", "outline-color,outline-style,outline-width", "dotted thick", "rgb(9, 9, 9) dotted 5px", "1", "outline: dotted thick;"],
+  ["outline", "medium double rgb(1,2,3)", "3", "outline-color,outline-style,outline-width", "rgb(1, 2, 3) double medium", "rgb(1, 2, 3) double 3px", "1", "outline: rgb(1, 2, 3) double medium;"],
+  ["outline", "bogus", "0", "", "", "rgb(9, 9, 9) none 3px", "0", ""],
+  ["outline", "none", "3", "outline-color,outline-style,outline-width", "none", "rgb(9, 9, 9) none 3px", "1", "outline: none;"],
+  ["outline-style", "auto", "1", "outline-style", "auto", "auto", "1", "outline-style: auto;"],
+  ["outline-style", "none", "1", "outline-style", "none", "none", "1", "outline-style: none;"],
+  ["outline-style", "hidden", "0", "", "", "none", "0", ""],
+  ["outline-style", "dotted", "1", "outline-style", "dotted", "dotted", "1", "outline-style: dotted;"],
+  ["outline-style", "dashed", "1", "outline-style", "dashed", "dashed", "1", "outline-style: dashed;"],
+  ["outline-style", "solid", "1", "outline-style", "solid", "solid", "1", "outline-style: solid;"],
+  ["outline-style", "double", "1", "outline-style", "double", "double", "1", "outline-style: double;"],
+  ["outline-style", "groove", "1", "outline-style", "groove", "groove", "1", "outline-style: groove;"],
+  ["outline-style", "ridge", "1", "outline-style", "ridge", "ridge", "1", "outline-style: ridge;"],
+  ["outline-style", "inset", "1", "outline-style", "inset", "inset", "1", "outline-style: inset;"],
+  ["outline-style", "outset", "1", "outline-style", "outset", "outset", "1", "outline-style: outset;"],
+  ["outline-style", "currentcolor", "0", "", "", "none", "0", ""],
+  ["outline-style", "red", "0", "", "", "none", "0", ""],
+  ["outline-style", "bogus", "0", "", "", "none", "0", ""],
+  ["outline-style", "solid solid", "0", "", "", "none", "0", ""],
+  ["outline-width", "auto", "0", "", "", "3px", "0", ""],
+  ["outline-width", "thin", "1", "outline-width", "thin", "1px", "1", "outline-width: thin;"],
+  ["outline-width", "medium", "1", "outline-width", "medium", "3px", "1", "outline-width: medium;"],
+  ["outline-width", "thick", "1", "outline-width", "thick", "5px", "1", "outline-width: thick;"],
+  ["outline-width", "0", "1", "outline-width", "0px", "0px", "1", "outline-width: 0px;"],
+  ["outline-width", "3px", "1", "outline-width", "3px", "3px", "1", "outline-width: 3px;"],
+  ["outline-width", "1.5px", "1", "outline-width", "1.5px", "1px", "1", "outline-width: 1.5px;"],
+  ["outline-width", "-1px", "0", "", "", "3px", "0", ""],
+  ["outline-width", "1", "0", "", "", "3px", "0", ""],
+  ["outline-width", "50%", "0", "", "", "3px", "0", ""],
+  ["outline-width", "bogus", "0", "", "", "3px", "0", ""],
+  ["outline-color", "red", "1", "outline-color", "red", "rgb(255, 0, 0)", "1", "outline-color: red;"],
+  ["outline-color", "currentcolor", "1", "outline-color", "currentcolor", "rgb(9, 9, 9)", "1", "outline-color: currentcolor;"],
+  ["outline-color", "invert", "0", "", "", "rgb(9, 9, 9)", "0", ""],
+  ["outline-color", "#f00", "1", "outline-color", "rgb(255, 0, 0)", "rgb(255, 0, 0)", "1", "outline-color: rgb(255, 0, 0);"],
+  ["outline-color", "rgb(1, 2, 3)", "1", "outline-color", "rgb(1, 2, 3)", "rgb(1, 2, 3)", "1", "outline-color: rgb(1, 2, 3);"],
+  ["outline-color", "bogus", "0", "", "", "rgb(9, 9, 9)", "0", ""],
+  ["outline-color", "3px", "0", "", "", "rgb(9, 9, 9)", "0", ""],
+  ["outline-offset", "0", "1", "outline-offset", "0px", "0px", "1", "outline-offset: 0px;"],
+  ["outline-offset", "3px", "1", "outline-offset", "3px", "3px", "1", "outline-offset: 3px;"],
+  ["outline-offset", "-3px", "1", "outline-offset", "-3px", "-3px", "1", "outline-offset: -3px;"],
+  ["outline-offset", "10%", "0", "", "", "0px", "0", ""],
+  ["outline-offset", "1", "0", "", "", "0px", "0", ""],
+  ["outline-offset", "bogus", "0", "", "", "0px", "0", ""],
+  ["outline-offset", "calc(1px + 2px)", "1", "outline-offset", "calc(3px)", "3px", "1", "outline-offset: calc(3px);"],
+  ["outline-offset", "auto", "0", "", "", "0px", "0", ""],
+  ["vertical-align", "baseline", "1", "vertical-align", "baseline", "baseline", "1", "vertical-align: baseline;"],
+  ["vertical-align", "sub", "1", "vertical-align", "sub", "sub", "1", "vertical-align: sub;"],
+  ["vertical-align", "super", "1", "vertical-align", "super", "super", "1", "vertical-align: super;"],
+  ["vertical-align", "top", "1", "vertical-align", "top", "top", "1", "vertical-align: top;"],
+  ["vertical-align", "bottom", "1", "vertical-align", "bottom", "bottom", "1", "vertical-align: bottom;"],
+  ["vertical-align", "middle", "1", "vertical-align", "middle", "middle", "1", "vertical-align: middle;"],
+  ["vertical-align", "text-top", "1", "vertical-align", "text-top", "text-top", "1", "vertical-align: text-top;"],
+  ["vertical-align", "text-bottom", "1", "vertical-align", "text-bottom", "text-bottom", "1", "vertical-align: text-bottom;"],
+  ["vertical-align", "10px", "1", "vertical-align", "10px", "10px", "1", "vertical-align: 10px;"],
+  ["vertical-align", "-10px", "1", "vertical-align", "-10px", "-10px", "1", "vertical-align: -10px;"],
+  ["vertical-align", "50%", "1", "vertical-align", "50%", "50%", "1", "vertical-align: 50%;"],
+  ["vertical-align", "1", "0", "", "", "baseline", "0", ""],
+  ["vertical-align", "bogus", "0", "", "", "baseline", "0", ""],
+  ["vertical-align", "auto", "0", "", "", "baseline", "0", ""],
+  ["vertical-align", "center", "0", "", "", "baseline", "0", ""],
+  ["will-change", "auto", "1", "will-change", "auto", "auto", "1", "will-change: auto;"],
+  ["will-change", "scroll", "1", "will-change", "scroll", "scroll", "1", "will-change: scroll;"],
+  ["will-change", "transform", "1", "will-change", "transform", "transform", "1", "will-change: transform;"],
+  ["will-change", "opacity", "1", "will-change", "opacity", "opacity", "1", "will-change: opacity;"],
+  ["will-change", "contents", "1", "will-change", "contents", "contents", "1", "will-change: contents;"],
+  ["will-change", "left", "1", "will-change", "left", "left", "1", "will-change: left;"],
+  ["will-change", "margin-left", "1", "will-change", "margin-left", "margin-left", "1", "will-change: margin-left;"],
+  ["will-change", "width", "1", "will-change", "width", "width", "1", "will-change: width;"],
+  ["will-change", "transform, opacity", "1", "will-change", "transform, opacity", "transform, opacity", "1", "will-change: transform, opacity;"],
+  ["will-change", "transform opacity", "0", "", "", "auto", "0", ""],
+  ["will-change", "all", "0", "", "", "auto", "0", ""],
+  ["will-change", "bogus", "1", "will-change", "bogus", "bogus", "1", "will-change: bogus;"],
+  ["will-change", "--custom", "1", "will-change", "--custom", "--custom", "1", "will-change: --custom;"],
+  ["will-change", "translate", "1", "will-change", "translate", "translate", "1", "will-change: translate;"],
+  ["will-change", "color", "1", "will-change", "color", "color", "1", "will-change: color;"],
+  ["user-select", "auto", "1", "user-select", "auto", "auto", "1", "user-select: auto;"],
+  ["user-select", "none", "1", "user-select", "none", "none", "1", "user-select: none;"],
+  ["user-select", "text", "1", "user-select", "text", "text", "1", "user-select: text;"],
+  ["user-select", "all", "1", "user-select", "all", "all", "1", "user-select: all;"],
+  ["user-select", "element", "0", "", "", "auto", "0", ""],
+  ["user-select", "contain", "0", "", "", "auto", "0", ""],
+  ["user-select", "toggle", "0", "", "", "auto", "0", ""],
+  ["user-select", "bogus", "0", "", "", "auto", "0", ""],
+  ["user-select", "contain text", "0", "", "", "auto", "0", ""],
+  ["-webkit-user-select", "none", "1", "user-select", "none", "none", "1", "user-select: none;"],
+  ["-webkit-user-select", "element", "0", "", "", "auto", "0", ""],
+  ["-webkit-user-select", "toggle", "0", "", "", "auto", "0", ""],
+  ["tab-size", "0", "1", "tab-size", "0", "0", "1", "tab-size: 0;"],
+  ["tab-size", "2", "1", "tab-size", "2", "2", "1", "tab-size: 2;"],
+  ["tab-size", "4", "1", "tab-size", "4", "4", "1", "tab-size: 4;"],
+  ["tab-size", "-1", "0", "", "", "8", "0", ""],
+  ["tab-size", "1.5", "1", "tab-size", "1.5", "1.5", "1", "tab-size: 1.5;"],
+  ["tab-size", "2px", "1", "tab-size", "2px", "2px", "1", "tab-size: 2px;"],
+  ["tab-size", "50%", "0", "", "", "8", "0", ""],
+  ["tab-size", "bogus", "0", "", "", "8", "0", ""],
+  ["hyphens", "none", "1", "hyphens", "none", "none", "1", "hyphens: none;"],
+  ["hyphens", "manual", "1", "hyphens", "manual", "manual", "1", "hyphens: manual;"],
+  ["hyphens", "auto", "1", "hyphens", "auto", "auto", "1", "hyphens: auto;"],
+  ["hyphens", "inter-word", "0", "", "", "manual", "0", ""],
+  ["hyphens", "bogus", "0", "", "", "manual", "0", ""],
+  ["-webkit-hyphens", "auto", "0", "", "", "", "0", ""],
+  ["-webkit-hyphens", "bogus", "0", "", "", "", "0", ""],
+  ["line-break", "auto", "1", "line-break", "auto", "auto", "1", "line-break: auto;"],
+  ["line-break", "loose", "1", "line-break", "loose", "loose", "1", "line-break: loose;"],
+  ["line-break", "normal", "1", "line-break", "normal", "normal", "1", "line-break: normal;"],
+  ["line-break", "strict", "1", "line-break", "strict", "strict", "1", "line-break: strict;"],
+  ["line-break", "anywhere", "1", "line-break", "anywhere", "anywhere", "1", "line-break: anywhere;"],
+  ["line-break", "anywhere strict", "0", "", "", "auto", "0", ""],
+  ["line-break", "bogus", "0", "", "", "auto", "0", ""],
+  ["-webkit-line-break", "after-white-space", "1", "-webkit-line-break", "after-white-space", "after-white-space", "1", "-webkit-line-break: after-white-space;"],
+  ["-webkit-line-break", "strict", "1", "-webkit-line-break", "strict", "strict", "1", "-webkit-line-break: strict;"],
+  ["text-justify", "auto", "1", "text-justify", "auto", "auto", "1", "text-justify: auto;"],
+  ["text-justify", "inter-word", "1", "text-justify", "inter-word", "inter-word", "1", "text-justify: inter-word;"],
+  ["text-justify", "distribute", "1", "text-justify", "inter-character", "inter-character", "1", "text-justify: inter-character;"],
+  ["text-justify", "inter-character", "1", "text-justify", "inter-character", "inter-character", "1", "text-justify: inter-character;"],
+  ["text-justify", "kashida", "0", "", "", "auto", "0", ""],
+  ["text-justify", "bogus", "0", "", "", "auto", "0", ""],
+  ["text-orientation", "mixed", "1", "text-orientation", "mixed", "mixed", "1", "text-orientation: mixed;"],
+  ["text-orientation", "upright", "1", "text-orientation", "upright", "upright", "1", "text-orientation: upright;"],
+  ["text-orientation", "sideways", "1", "text-orientation", "sideways", "sideways", "1", "text-orientation: sideways;"],
+  ["text-orientation", "sideways-right", "1", "text-orientation", "sideways-right", "sideways", "1", "text-orientation: sideways-right;"],
+  ["text-orientation", "bogus", "0", "", "", "mixed", "0", ""],
+  ["text-orientation", "mixed upright", "0", "", "", "mixed", "0", ""],
+  ["text-combine-upright", "none", "1", "text-combine-upright", "none", "none", "1", "text-combine-upright: none;"],
+  ["text-combine-upright", "all", "1", "text-combine-upright", "all", "all", "1", "text-combine-upright: all;"],
+  ["text-combine-upright", "digits", "0", "", "", "none", "0", ""],
+  ["text-combine-upright", "digits 2", "0", "", "", "none", "0", ""],
+  ["text-combine-upright", "digits 4", "0", "", "", "none", "0", ""],
+  ["text-combine-upright", "bogus", "0", "", "", "none", "0", ""],
+  ["font-feature-settings", "normal", "1", "font-feature-settings", "normal", "normal", "1", "font-feature-settings: normal;"],
+  ["font-feature-settings", "\"liga\"", "1", "font-feature-settings", "\"liga\"", "\"liga\"", "1", "font-feature-settings: \"liga\";"],
+  ["font-feature-settings", "\"liga\" 1", "1", "font-feature-settings", "\"liga\"", "\"liga\"", "1", "font-feature-settings: \"liga\";"],
+  ["font-feature-settings", "\"liga\" 0", "1", "font-feature-settings", "\"liga\" 0", "\"liga\" 0", "1", "font-feature-settings: \"liga\" 0;"],
+  ["font-feature-settings", "\"smcp\" on", "1", "font-feature-settings", "\"smcp\"", "\"smcp\"", "1", "font-feature-settings: \"smcp\";"],
+  ["font-feature-settings", "\"liga\", \"smcp\"", "1", "font-feature-settings", "\"liga\", \"smcp\"", "\"liga\", \"smcp\"", "1", "font-feature-settings: \"liga\", \"smcp\";"],
+  ["font-feature-settings", "liga", "0", "", "", "normal", "0", ""],
+  ["font-feature-settings", "1", "0", "", "", "normal", "0", ""],
+  ["font-feature-settings", "\"liga\" bogus", "0", "", "", "normal", "0", ""],
+  ["font-feature-settings", "\"liga\" calc(1 + 1)", "1", "font-feature-settings", "\"liga\" calc(2)", "\"liga\" 2", "1", "font-feature-settings: \"liga\" calc(2);"],
+  ["font-variation-settings", "normal", "1", "font-variation-settings", "normal", "normal", "1", "font-variation-settings: normal;"],
+  ["font-variation-settings", "\"wght\" 400", "1", "font-variation-settings", "\"wght\" 400", "\"wght\" 400", "1", "font-variation-settings: \"wght\" 400;"],
+  ["font-variation-settings", "\"wght\" 700, \"wdth\" 100", "1", "font-variation-settings", "\"wght\" 700, \"wdth\" 100", "\"wdth\" 100, \"wght\" 700", "1", "font-variation-settings: \"wght\" 700, \"wdth\" 100;"],
+  ["font-variation-settings", "\"wght\" bogus", "0", "", "", "normal", "0", ""],
+  ["font-variation-settings", "wght 400", "0", "", "", "normal", "0", ""],
+  ["font-variation-settings", "\"wght\"", "0", "", "", "normal", "0", ""],
+  ["font-optical-sizing", "auto", "1", "font-optical-sizing", "auto", "auto", "1", "font-optical-sizing: auto;"],
+  ["font-optical-sizing", "none", "1", "font-optical-sizing", "none", "none", "1", "font-optical-sizing: none;"],
+  ["font-optical-sizing", "bogus", "0", "", "", "auto", "0", ""],
+  ["font-optical-sizing", "1", "0", "", "", "auto", "0", ""],
+  ["font-palette", "normal", "1", "font-palette", "normal", "normal", "1", "font-palette: normal;"],
+  ["font-palette", "light", "1", "font-palette", "light", "light", "1", "font-palette: light;"],
+  ["font-palette", "dark", "1", "font-palette", "dark", "dark", "1", "font-palette: dark;"],
+  ["font-palette", "0", "0", "", "", "normal", "0", ""],
+  ["font-palette", "2", "0", "", "", "normal", "0", ""],
+  ["font-palette", "-1", "0", "", "", "normal", "0", ""],
+  ["font-palette", "bogus", "0", "", "", "normal", "0", ""],
+  ["font-palette", "light dark", "0", "", "", "normal", "0", ""],
+  ["font-language-override", "normal", "1", "font-language-override", "normal", "normal", "1", "font-language-override: normal;"],
+  ["font-language-override", "NONE", "0", "", "", "normal", "0", ""],
+  ["font-language-override", "\"ENG\"", "1", "font-language-override", "\"ENG\"", "\"ENG\"", "1", "font-language-override: \"ENG\";"],
+  ["font-language-override", "\"dflt\"", "1", "font-language-override", "\"dflt\"", "\"dflt\"", "1", "font-language-override: \"dflt\";"],
+  ["font-language-override", "ENG", "0", "", "", "normal", "0", ""],
+  ["font-language-override", "\"en\"", "1", "font-language-override", "\"en\"", "\"en\"", "1", "font-language-override: \"en\";"],
+  ["font-kerning", "auto", "1", "font-kerning", "auto", "auto", "1", "font-kerning: auto;"],
+  ["font-kerning", "none", "1", "font-kerning", "none", "none", "1", "font-kerning: none;"],
+  ["font-kerning", "normal", "1", "font-kerning", "normal", "normal", "1", "font-kerning: normal;"],
+  ["font-kerning", "bogus", "0", "", "", "auto", "0", ""],
+  ["font-size-adjust", "none", "1", "font-size-adjust", "none", "none", "1", "font-size-adjust: none;"],
+  ["font-size-adjust", "0.5", "1", "font-size-adjust", "0.5", "0.5", "1", "font-size-adjust: 0.5;"],
+  ["font-size-adjust", "1", "1", "font-size-adjust", "1", "1", "1", "font-size-adjust: 1;"],
+  ["font-size-adjust", "from-font", "1", "font-size-adjust", "from-font", "~", "1", "font-size-adjust: from-font;"],
+  ["font-size-adjust", "50%", "0", "", "", "none", "0", ""],
+  ["font-size-adjust", "-1", "0", "", "", "none", "0", ""],
+  ["font-size-adjust", "0", "1", "font-size-adjust", "0", "0", "1", "font-size-adjust: 0;"],
+  ["font-size-adjust", "bogus", "0", "", "", "none", "0", ""],
+  ["font-size-adjust", "calc(0.5)", "1", "font-size-adjust", "calc(0.5)", "0.5", "1", "font-size-adjust: calc(0.5);"],
+  ["empty-cells", "show", "1", "empty-cells", "show", "show", "1", "empty-cells: show;"],
+  ["empty-cells", "hide", "1", "empty-cells", "hide", "hide", "1", "empty-cells: hide;"],
+  ["empty-cells", "bogus", "0", "", "", "show", "0", ""],
+  ["empty-cells", "show hide", "0", "", "", "show", "0", ""],
+  ["box-decoration-break", "slice", "1", "box-decoration-break", "slice", "slice", "1", "box-decoration-break: slice;"],
+  ["box-decoration-break", "clone", "1", "box-decoration-break", "clone", "clone", "1", "box-decoration-break: clone;"],
+  ["box-decoration-break", "slice clone", "0", "", "", "slice", "0", ""],
+  ["box-decoration-break", "bogus", "0", "", "", "slice", "0", ""],
+  ["-webkit-box-decoration-break", "clone", "1", "-webkit-box-decoration-break", "clone", "clone", "1", "-webkit-box-decoration-break: clone;"],
+  ["-webkit-box-decoration-break", "bogus", "0", "", "", "slice", "0", ""],
+  ["text-size-adjust", "none", "1", "text-size-adjust", "none", "100%", "1", "text-size-adjust: none;"],
+  ["text-size-adjust", "100%", "1", "text-size-adjust", "100%", "100%", "1", "text-size-adjust: 100%;"],
+  ["text-size-adjust", "50%", "1", "text-size-adjust", "50%", "50%", "1", "text-size-adjust: 50%;"],
+  ["text-size-adjust", "1", "0", "", "", "auto", "0", ""],
+  ["text-size-adjust", "fit-function", "0", "", "", "auto", "0", ""],
+  ["text-size-adjust", "bogus", "0", "", "", "auto", "0", ""],
+  ["-webkit-text-size-adjust", "none", "1", "text-size-adjust", "none", "100%", "1", "text-size-adjust: none;"],
+  ["-webkit-text-size-adjust", "100%", "1", "text-size-adjust", "100%", "100%", "1", "text-size-adjust: 100%;"],
+  ["-webkit-text-size-adjust", "bogus", "0", "", "", "auto", "0", ""],
+  ["initial-letter", "normal", "1", "initial-letter", "normal", "normal", "1", "initial-letter: normal;"],
+  ["initial-letter", "1", "1", "initial-letter", "1", "1", "1", "initial-letter: 1;"],
+  ["initial-letter", "2.5", "1", "initial-letter", "2.5", "2.5", "1", "initial-letter: 2.5;"],
+  ["initial-letter", "auto", "0", "", "", "normal", "0", ""],
+  ["initial-letter", "1 2", "1", "initial-letter", "1 2", "1 2", "1", "initial-letter: 1 2;"],
+  ["initial-letter", "2.5 1", "1", "initial-letter", "2.5 1", "2.5 1", "1", "initial-letter: 2.5 1;"],
+  ["initial-letter", "0", "0", "", "", "normal", "0", ""],
+  ["initial-letter", "-1", "0", "", "", "normal", "0", ""],
+  ["initial-letter", "bogus", "0", "", "", "normal", "0", ""],
+  ["initial-letter", "\"a\"", "0", "", "", "normal", "0", ""],
+  ["initial-letter-align", "auto", "0", "", "", "", "0", ""],
+  ["initial-letter-align", "alphabetic", "0", "", "", "", "0", ""],
+  ["initial-letter-align", "hanging", "0", "", "", "", "0", ""],
+  ["initial-letter-align", "text-top", "0", "", "", "", "0", ""],
+  ["initial-letter-align", "auto alphabetic", "0", "", "", "", "0", ""],
+  ["initial-letter-align", "bogus", "0", "", "", "", "0", ""],
+  ["ruby-merge", "separate", "0", "", "", "", "0", ""],
+  ["ruby-merge", "collapse", "0", "", "", "", "0", ""],
+  ["ruby-merge", "auto", "0", "", "", "", "0", ""],
+  ["ruby-merge", "sequence", "0", "", "", "", "0", ""],
+  ["ruby-merge", "bogus", "0", "", "", "", "0", ""],
+  ["ruby-merge", "auto collapse", "0", "", "", "", "0", ""],
+  ["ruby-position", "inter-character", "0", "", "", "over", "0", ""],
+  ["ruby-position", "under over", "0", "", "", "over", "0", ""],
+  ["scroll-margin", "0", "4", "scroll-margin-top,scroll-margin-right,scroll-margin-bottom,scroll-margin-left", "0px", "0px", "1", "scroll-margin: 0px;"],
+  ["scroll-margin", "10px", "4", "scroll-margin-top,scroll-margin-right,scroll-margin-bottom,scroll-margin-left", "10px", "10px", "1", "scroll-margin: 10px;"],
+  ["scroll-margin", "10px 20px", "4", "scroll-margin-top,scroll-margin-right,scroll-margin-bottom,scroll-margin-left", "10px 20px", "10px 20px", "1", "scroll-margin: 10px 20px;"],
+  ["scroll-margin", "auto", "0", "", "", "0px", "0", ""],
+  ["scroll-margin", "10px 20px 30px 40px", "4", "scroll-margin-top,scroll-margin-right,scroll-margin-bottom,scroll-margin-left", "10px 20px 30px 40px", "10px 20px 30px 40px", "1", "scroll-margin: 10px 20px 30px 40px;"],
+  ["scroll-margin", "bogus", "0", "", "", "0px", "0", ""],
+  ["scroll-margin-top", "10px", "1", "scroll-margin-top", "10px", "10px", "1", "scroll-margin-top: 10px;"],
+  ["scroll-margin-block", "10px", "2", "scroll-margin-block-start,scroll-margin-block-end", "10px", "10px", "1", "scroll-margin-block: 10px;"],
+  ["scroll-margin-inline-start", "5px", "1", "scroll-margin-inline-start", "5px", "5px", "1", "scroll-margin-inline-start: 5px;"],
+  ["scroll-margin", "10%", "0", "", "", "0px", "0", ""],
+  ["scroll-padding", "0", "4", "scroll-padding-top,scroll-padding-right,scroll-padding-bottom,scroll-padding-left", "0px", "0px", "1", "scroll-padding: 0px;"],
+  ["scroll-padding", "auto", "4", "scroll-padding-top,scroll-padding-right,scroll-padding-bottom,scroll-padding-left", "auto", "auto", "1", "scroll-padding: auto;"],
+  ["scroll-padding", "10px", "4", "scroll-padding-top,scroll-padding-right,scroll-padding-bottom,scroll-padding-left", "10px", "10px", "1", "scroll-padding: 10px;"],
+  ["scroll-padding", "10px auto", "4", "scroll-padding-top,scroll-padding-right,scroll-padding-bottom,scroll-padding-left", "10px auto", "10px auto", "1", "scroll-padding: 10px auto;"],
+  ["scroll-padding", "bogus", "0", "", "", "auto", "0", ""],
+  ["scroll-padding-top", "10px", "1", "scroll-padding-top", "10px", "10px", "1", "scroll-padding-top: 10px;"],
+  ["scroll-padding-inline-end", "auto", "1", "scroll-padding-inline-end", "auto", "auto", "1", "scroll-padding-inline-end: auto;"],
+  ["counter-set", "none", "1", "counter-set", "none", "none", "1", "counter-set: none;"],
+  ["counter-set", "foo", "1", "counter-set", "foo 0", "foo 0", "1", "counter-set: foo 0;"],
+  ["counter-set", "foo 1", "1", "counter-set", "foo 1", "foo 1", "1", "counter-set: foo 1;"],
+  ["counter-set", "foo bar", "1", "counter-set", "foo 0 bar 0", "foo 0 bar 0", "1", "counter-set: foo 0 bar 0;"],
+  ["counter-set", "\"a\"", "0", "", "", "none", "0", ""],
+  ["counter-set", "bogus", "1", "counter-set", "bogus 0", "bogus 0", "1", "counter-set: bogus 0;"],
+  ["counter-set", "foo -1", "1", "counter-set", "foo -1", "foo -1", "1", "counter-set: foo -1;"],
+  ["counter-increment", "none", "1", "counter-increment", "none", "none", "1", "counter-increment: none;"],
+  ["counter-increment", "foo", "1", "counter-increment", "foo 1", "foo 1", "1", "counter-increment: foo 1;"],
+  ["counter-increment", "foo 1", "1", "counter-increment", "foo 1", "foo 1", "1", "counter-increment: foo 1;"],
+  ["counter-increment", "foo calc(1)", "1", "counter-increment", "foo calc(1)", "foo 1", "1", "counter-increment: foo calc(1);"],
+  ["string-set", "none", "0", "", "", "", "0", ""],
+  ["string-set", "foo \"bar\"", "0", "", "", "", "0", ""],
+  ["string-set", "foo content()", "0", "", "", "", "0", ""],
+  ["string-set", "\"a\"", "0", "", "", "", "0", ""],
+  ["string-set", "bogus", "0", "", "", "", "0", ""],
+  ["bookmark-level", "none", "0", "", "", "", "0", ""],
+  ["bookmark-level", "1", "0", "", "", "", "0", ""],
+  ["bookmark-level", "2", "0", "", "", "", "0", ""],
+  ["bookmark-level", "0", "0", "", "", "", "0", ""],
+  ["bookmark-level", "bogus", "0", "", "", "", "0", ""],
+  ["bookmark-label", "content()", "0", "", "", "", "0", ""],
+  ["bookmark-label", "\"a\"", "0", "", "", "", "0", ""],
+  ["shape-margin", "0", "1", "shape-margin", "0px", "0px", "1", "shape-margin: 0px;"],
+  ["shape-margin", "10px", "1", "shape-margin", "10px", "10px", "1", "shape-margin: 10px;"],
+  ["shape-margin", "50%", "1", "shape-margin", "50%", "50%", "1", "shape-margin: 50%;"],
+  ["shape-margin", "1", "0", "", "", "0px", "0", ""],
+  ["shape-margin", "bogus", "0", "", "", "0px", "0", ""],
+  ["shape-image-threshold", "0", "1", "shape-image-threshold", "0", "0", "1", "shape-image-threshold: 0;"],
+  ["shape-image-threshold", "0.5", "1", "shape-image-threshold", "0.5", "0.5", "1", "shape-image-threshold: 0.5;"],
+  ["shape-image-threshold", "1", "1", "shape-image-threshold", "1", "1", "1", "shape-image-threshold: 1;"],
+  ["shape-image-threshold", "-1", "1", "shape-image-threshold", "-1", "0", "1", "shape-image-threshold: -1;"],
+  ["shape-image-threshold", "2", "1", "shape-image-threshold", "2", "1", "1", "shape-image-threshold: 2;"],
+  ["shape-image-threshold", "50%", "1", "shape-image-threshold", "0.5", "0.5", "1", "shape-image-threshold: 0.5;"],
+  ["shape-image-threshold", "bogus", "0", "", "", "0", "0", ""],
+  ["shape-outside", "none", "1", "shape-outside", "none", "none", "1", "shape-outside: none;"],
+  ["shape-outside", "margin-box", "1", "shape-outside", "margin-box", "margin-box", "1", "shape-outside: margin-box;"],
+  ["shape-outside", "border-box", "1", "shape-outside", "border-box", "border-box", "1", "shape-outside: border-box;"],
+  ["shape-outside", "content-box", "1", "shape-outside", "content-box", "content-box", "1", "shape-outside: content-box;"],
+  ["shape-outside", "padding-box", "1", "shape-outside", "padding-box", "padding-box", "1", "shape-outside: padding-box;"],
+  ["shape-outside", "circle(50%)", "1", "shape-outside", "circle(50%)", "circle(50%)", "1", "shape-outside: circle(50%);"],
+  ["shape-outside", "url(a.png)", "1", "shape-outside", "url(\"a.png\")", "url(\"file:///home/master/Acrux/snapshots/a.png\")", "1", "shape-outside: url(\"a.png\");"],
+  ["shape-outside", "bogus", "0", "", "", "none", "0", ""],
+  ["object-view-box", "none", "1", "object-view-box", "none", "none", "1", "object-view-box: none;"],
+  ["object-view-box", "inset(10px)", "1", "object-view-box", "inset(10px)", "inset(10px)", "1", "object-view-box: inset(10px);"],
+  ["object-view-box", "inset(10px 20px)", "1", "object-view-box", "inset(10px 20px)", "inset(10px 20px)", "1", "object-view-box: inset(10px 20px);"],
+  ["object-view-box", "circle(50%)", "0", "", "", "none", "0", ""],
+  ["object-view-box", "bogus", "0", "", "", "none", "0", ""],
+  ["object-view-box", "10px", "0", "", "", "none", "0", ""],
+  ["image-resolution", "from-image", "0", "", "", "", "0", ""],
+  ["image-resolution", "1dppx", "0", "", "", "", "0", ""],
+  ["image-resolution", "2", "0", "", "", "", "0", ""],
+  ["image-resolution", "10dpi", "0", "", "", "", "0", ""],
+  ["image-resolution", "from-image 1dppx", "0", "", "", "", "0", ""],
+  ["image-resolution", "bogus", "0", "", "", "", "0", ""],
+  ["image-resolution", "50%", "0", "", "", "", "0", ""],
+  ["image-orientation", "from-image", "1", "image-orientation", "from-image", "from-image", "1", "image-orientation: from-image;"],
+  ["image-orientation", "0deg", "0", "", "", "from-image", "0", ""],
+  ["image-orientation", "90deg", "0", "", "", "from-image", "0", ""],
+  ["image-orientation", "flip", "0", "", "", "from-image", "0", ""],
+  ["image-orientation", "90deg flip", "0", "", "", "from-image", "0", ""],
+  ["-webkit-text-stroke", "1px red", "2", "-webkit-text-stroke-width,-webkit-text-stroke-color", "1px red", "1px rgb(255, 0, 0)", "1", "-webkit-text-stroke: 1px red;"],
+  ["-webkit-text-stroke", "red 1px", "2", "-webkit-text-stroke-width,-webkit-text-stroke-color", "1px red", "1px rgb(255, 0, 0)", "1", "-webkit-text-stroke: 1px red;"],
+  ["-webkit-text-stroke", "thin", "2", "-webkit-text-stroke-width,-webkit-text-stroke-color", "thin", "0.291667px rgb(9, 9, 9)", "1", "-webkit-text-stroke: thin;"],
+  ["-webkit-text-stroke", "1px", "2", "-webkit-text-stroke-width,-webkit-text-stroke-color", "1px", "1px rgb(9, 9, 9)", "1", "-webkit-text-stroke: 1px;"],
+  ["-webkit-text-stroke", "bogus", "0", "", "", "0px rgb(9, 9, 9)", "0", ""],
+  ["-webkit-text-stroke-width", "2px", "1", "-webkit-text-stroke-width", "2px", "2px", "1", "-webkit-text-stroke-width: 2px;"],
+  ["-webkit-text-stroke-width", "bogus", "0", "", "", "0px", "0", ""],
+  ["-webkit-text-stroke-color", "red", "1", "-webkit-text-stroke-color", "red", "rgb(255, 0, 0)", "1", "-webkit-text-stroke-color: red;"],
+  ["-webkit-text-stroke-color", "bogus", "0", "", "", "rgb(9, 9, 9)", "0", ""],
+  ["-webkit-text-fill-color", "red", "1", "-webkit-text-fill-color", "red", "rgb(255, 0, 0)", "1", "-webkit-text-fill-color: red;"],
+  ["-webkit-text-fill-color", "currentcolor", "1", "-webkit-text-fill-color", "currentcolor", "rgb(9, 9, 9)", "1", "-webkit-text-fill-color: currentcolor;"],
+  ["-webkit-text-fill-color", "bogus", "0", "", "", "rgb(9, 9, 9)", "0", ""],
+  ["-webkit-text-fill-color", "3px", "0", "", "", "rgb(9, 9, 9)", "0", ""],
+  ["-webkit-font-smoothing", "auto", "1", "-webkit-font-smoothing", "auto", "auto", "1", "-webkit-font-smoothing: auto;"],
+  ["-webkit-font-smoothing", "antialiased", "1", "-webkit-font-smoothing", "antialiased", "antialiased", "1", "-webkit-font-smoothing: antialiased;"],
+  ["-webkit-font-smoothing", "subpixel-antialiased", "1", "-webkit-font-smoothing", "subpixel-antialiased", "subpixel-antialiased", "1", "-webkit-font-smoothing: subpixel-antialiased;"],
+  ["-webkit-font-smoothing", "none", "1", "-webkit-font-smoothing", "none", "none", "1", "-webkit-font-smoothing: none;"],
+  ["-webkit-font-smoothing", "bogus", "0", "", "", "auto", "0", ""],
+  ["caret-color", "auto", "1", "caret-color", "auto", "rgb(9, 9, 9)", "1", "caret-color: auto;"],
+  ["caret-color", "red", "1", "caret-color", "red", "rgb(255, 0, 0)", "1", "caret-color: red;"],
+  ["caret-color", "currentcolor", "1", "caret-color", "currentcolor", "rgb(9, 9, 9)", "1", "caret-color: currentcolor;"],
+  ["caret-color", "bogus", "0", "", "", "rgb(9, 9, 9)", "0", ""],
+  ["caret-color", "3px", "0", "", "", "rgb(9, 9, 9)", "0", ""],
+  ["accent-color", "auto", "1", "accent-color", "auto", "auto", "1", "accent-color: auto;"],
+  ["accent-color", "red", "1", "accent-color", "red", "rgb(255, 0, 0)", "1", "accent-color: red;"],
+  ["accent-color", "currentcolor", "1", "accent-color", "currentcolor", "rgb(9, 9, 9)", "1", "accent-color: currentcolor;"],
+  ["accent-color", "bogus", "0", "", "", "auto", "0", ""],
+  ["box-sizing", "content-box", "1", "box-sizing", "content-box", "content-box", "1", "box-sizing: content-box;"],
+  ["box-sizing", "border-box", "1", "box-sizing", "border-box", "border-box", "1", "box-sizing: border-box;"],
+  ["box-sizing", "padding-box", "0", "", "", "content-box", "0", ""],
+  ["box-sizing", "bogus", "0", "", "", "content-box", "0", ""],
+  ["animation-fill-mode", "none", "1", "animation-fill-mode", "none", "none", "1", "animation-fill-mode: none;"],
+  ["animation-fill-mode", "forwards", "1", "animation-fill-mode", "forwards", "forwards", "1", "animation-fill-mode: forwards;"],
+  ["animation-fill-mode", "backwards", "1", "animation-fill-mode", "backwards", "backwards", "1", "animation-fill-mode: backwards;"],
+  ["animation-fill-mode", "both", "1", "animation-fill-mode", "both", "both", "1", "animation-fill-mode: both;"],
+  ["animation-fill-mode", "forwards backwards", "0", "", "", "none", "0", ""],
+  ["animation-fill-mode", "bogus", "0", "", "", "none", "0", ""],
+  ["animation-direction", "normal", "1", "animation-direction", "normal", "normal", "1", "animation-direction: normal;"],
+  ["animation-direction", "reverse", "1", "animation-direction", "reverse", "reverse", "1", "animation-direction: reverse;"],
+  ["animation-direction", "alternate", "1", "animation-direction", "alternate", "alternate", "1", "animation-direction: alternate;"],
+  ["animation-direction", "alternate-reverse", "1", "animation-direction", "alternate-reverse", "alternate-reverse", "1", "animation-direction: alternate-reverse;"],
+  ["animation-direction", "bogus", "0", "", "", "normal", "0", ""],
+  ["animation-play-state", "running", "1", "animation-play-state", "running", "running", "1", "animation-play-state: running;"],
+  ["animation-play-state", "paused", "1", "animation-play-state", "paused", "paused", "1", "animation-play-state: paused;"],
+  ["animation-play-state", "bogus", "0", "", "", "running", "0", ""],
+  ["animation-timing-function", "ease", "1", "animation-timing-function", "ease", "ease", "1", "animation-timing-function: ease;"],
+  ["animation-timing-function", "linear", "1", "animation-timing-function", "linear", "linear", "1", "animation-timing-function: linear;"],
+  ["animation-timing-function", "steps(2)", "1", "animation-timing-function", "steps(2)", "steps(2)", "1", "animation-timing-function: steps(2);"],
+  ["animation-timing-function", "bogus", "0", "", "", "ease", "0", ""],
+  ["animation-composition", "add", "1", "animation-composition", "add", "add", "1", "animation-composition: add;"],
+  ["animation-composition", "accumulate", "1", "animation-composition", "accumulate", "accumulate", "1", "animation-composition: accumulate;"],
+  ["animation-composition", "replace", "1", "animation-composition", "replace", "replace", "1", "animation-composition: replace;"],
+  ["animation-composition", "bogus", "0", "", "", "replace", "0", ""],
+  ["animation-name", "none", "1", "animation-name", "none", "none", "1", "animation-name: none;"],
+  ["animation-name", "foo", "1", "animation-name", "foo", "foo", "1", "animation-name: foo;"],
+  ["animation-name", "bogus", "1", "animation-name", "bogus", "bogus", "1", "animation-name: bogus;"],
+  ["animation-name", "1", "0", "", "", "none", "0", ""],
+  ["transition-behavior", "normal", "1", "transition-behavior", "normal", "normal", "1", "transition-behavior: normal;"],
+  ["transition-behavior", "allow-discrete", "1", "transition-behavior", "allow-discrete", "allow-discrete", "1", "transition-behavior: allow-discrete;"],
+  ["transition-behavior", "bogus", "0", "", "", "normal", "0", ""],
+  ["transition-property", "none", "1", "transition-property", "none", "none", "1", "transition-property: none;"],
+  ["transition-property", "all", "1", "transition-property", "all", "all", "1", "transition-property: all;"],
+  ["transition-property", "opacity", "1", "transition-property", "opacity", "opacity", "1", "transition-property: opacity;"],
+  ["transition-property", "bogus", "1", "transition-property", "bogus", "bogus", "1", "transition-property: bogus;"],
+  ["contain-intrinsic-width", "none", "1", "contain-intrinsic-width", "none", "none", "1", "contain-intrinsic-width: none;"],
+  ["contain-intrinsic-width", "auto", "0", "", "", "none", "0", ""],
+  ["contain-intrinsic-width", "100px", "1", "contain-intrinsic-width", "100px", "100px", "1", "contain-intrinsic-width: 100px;"],
+  ["contain-intrinsic-width", "auto 100px", "1", "contain-intrinsic-width", "auto 100px", "auto 100px", "1", "contain-intrinsic-width: auto 100px;"],
+  ["contain-intrinsic-width", "auto auto", "0", "", "", "none", "0", ""],
+  ["contain-intrinsic-width", "bogus", "0", "", "", "none", "0", ""],
+  ["contain-intrinsic-inline-size", "100px", "1", "contain-intrinsic-inline-size", "100px", "100px", "1", "contain-intrinsic-inline-size: 100px;"],
+  ["contain-intrinsic-block-size", "auto 10px", "1", "contain-intrinsic-block-size", "auto 10px", "auto 10px", "1", "contain-intrinsic-block-size: auto 10px;"],
+  ["contain", "none", "1", "contain", "none", "none", "1", "contain: none;"],
+  ["contain", "strict", "1", "contain", "strict", "strict", "1", "contain: strict;"],
+  ["contain", "content", "1", "contain", "content", "content", "1", "contain: content;"],
+  ["contain", "size", "1", "contain", "size", "size", "1", "contain: size;"],
+  ["contain", "layout style paint", "1", "contain", "layout style paint", "content", "1", "contain: layout style paint;"],
+  ["contain", "bogus", "0", "", "", "none", "0", ""],
+  ["contain", "inline-size", "1", "contain", "inline-size", "inline-size", "1", "contain: inline-size;"],
+  ["-webkit-line-break", "auto", "1", "-webkit-line-break", "auto", "auto", "1", "-webkit-line-break: auto;"],
+  ["-webkit-line-break", "loose", "1", "-webkit-line-break", "loose", "loose", "1", "-webkit-line-break: loose;"],
+  ["-webkit-line-break", "normal", "1", "-webkit-line-break", "normal", "normal", "1", "-webkit-line-break: normal;"],
+  ["-webkit-line-break", "strict", "1", "-webkit-line-break", "strict", "strict", "1", "-webkit-line-break: strict;"],
+  ["-webkit-line-break", "anywhere", "0", "", "", "auto", "0", ""],
+  ["-webkit-line-break", "after-white-space", "1", "-webkit-line-break", "after-white-space", "after-white-space", "1", "-webkit-line-break: after-white-space;"],
+  ["-webkit-line-break", "loose-allows-after-ja", "0", "", "", "auto", "0", ""],
+  ["-webkit-line-break", "strict-allow-empty-line", "0", "", "", "auto", "0", ""],
+  ["-webkit-line-break", "bogus", "0", "", "", "auto", "0", ""],
+  ["-webkit-line-break", "after-white-space loose", "0", "", "", "auto", "0", ""],
+  ["line-break", "after-white-space", "0", "", "", "auto", "0", ""],
+  ["line-break", "loose-allows-after-ja", "0", "", "", "auto", "0", ""],
+  ["-webkit-text-stroke", "0", "2", "-webkit-text-stroke-width,-webkit-text-stroke-color", "0px", "0px rgb(9, 9, 9)", "1", "-webkit-text-stroke: 0px;"],
+  ["-webkit-text-stroke", "medium", "2", "-webkit-text-stroke-width,-webkit-text-stroke-color", "medium", "0.875px rgb(9, 9, 9)", "1", "-webkit-text-stroke: medium;"],
+  ["-webkit-text-stroke", "thick", "2", "-webkit-text-stroke-width,-webkit-text-stroke-color", "thick", "1.45833px rgb(9, 9, 9)", "1", "-webkit-text-stroke: thick;"],
+  ["-webkit-text-stroke", "red", "2", "-webkit-text-stroke-width,-webkit-text-stroke-color", "red", "0px rgb(255, 0, 0)", "1", "-webkit-text-stroke: red;"],
+  ["-webkit-text-stroke", "thin red", "2", "-webkit-text-stroke-width,-webkit-text-stroke-color", "thin red", "0.291667px rgb(255, 0, 0)", "1", "-webkit-text-stroke: thin red;"],
+  ["-webkit-text-stroke", "red thin", "2", "-webkit-text-stroke-width,-webkit-text-stroke-color", "thin red", "0.291667px rgb(255, 0, 0)", "1", "-webkit-text-stroke: thin red;"],
+  ["-webkit-text-stroke", "2 2px", "0", "", "", "0px rgb(9, 9, 9)", "0", ""],
+  ["-webkit-text-stroke", "1px rgb(1, 2, 3)", "2", "-webkit-text-stroke-width,-webkit-text-stroke-color", "1px rgb(1, 2, 3)", "1px rgb(1, 2, 3)", "1", "-webkit-text-stroke: 1px rgb(1, 2, 3);"],
+  ["-webkit-text-stroke", "currentcolor", "2", "-webkit-text-stroke-width,-webkit-text-stroke-color", "currentcolor", "0px rgb(9, 9, 9)", "1", "-webkit-text-stroke: currentcolor;"],
+  ["-webkit-text-stroke", "1px 2px", "0", "", "", "0px rgb(9, 9, 9)", "0", ""],
+  ["-webkit-text-stroke-width", "thin", "1", "-webkit-text-stroke-width", "thin", "0.291667px", "1", "-webkit-text-stroke-width: thin;"],
+  ["-webkit-text-stroke-width", "medium", "1", "-webkit-text-stroke-width", "medium", "0.875px", "1", "-webkit-text-stroke-width: medium;"],
+  ["-webkit-text-stroke-width", "thick", "1", "-webkit-text-stroke-width", "thick", "1.45833px", "1", "-webkit-text-stroke-width: thick;"],
+  ["-webkit-text-stroke-width", "1px", "1", "-webkit-text-stroke-width", "1px", "1px", "1", "-webkit-text-stroke-width: 1px;"],
+  ["-webkit-text-stroke-width", "0", "1", "-webkit-text-stroke-width", "0px", "0px", "1", "-webkit-text-stroke-width: 0px;"],
+  ["-webkit-text-stroke-width", "2", "0", "", "", "0px", "0", ""],
+  ["-webkit-text-stroke-color", "currentcolor", "1", "-webkit-text-stroke-color", "currentcolor", "rgb(9, 9, 9)", "1", "-webkit-text-stroke-color: currentcolor;"],
+  ["font-size-adjust", "calc(1)", "1", "font-size-adjust", "calc(1)", "1", "1", "font-size-adjust: calc(1);"],
+  ["font-size-adjust", "calc(0.5 + 0.5)", "1", "font-size-adjust", "calc(1)", "1", "1", "font-size-adjust: calc(1);"],
+  ["font-size-adjust", "2", "1", "font-size-adjust", "2", "2", "1", "font-size-adjust: 2;"],
+  ["shape-margin", "1px", "1", "shape-margin", "1px", "1px", "1", "shape-margin: 1px;"],
+  ["shape-margin", "-1px", "0", "", "", "0px", "0", ""],
+  ["shape-margin", "calc(1px)", "1", "shape-margin", "calc(1px)", "1px", "1", "shape-margin: calc(1px);"],
+  ["shape-margin", "2em", "1", "shape-margin", "2em", "28px", "1", "shape-margin: 2em;"],
+  ["outline", "medium solid currentcolor", "3", "outline-color,outline-style,outline-width", "currentcolor solid medium", "rgb(9, 9, 9) solid 3px", "1", "outline: currentcolor solid medium;"],
+  ["outline", "2px dashed rgb(1, 2, 3)", "3", "outline-color,outline-style,outline-width", "rgb(1, 2, 3) dashed 2px", "rgb(1, 2, 3) dashed 2px", "1", "outline: rgb(1, 2, 3) dashed 2px;"],
+  ["outline", "red auto", "3", "outline-color,outline-style,outline-width", "red auto", "rgb(255, 0, 0) auto 3px", "1", "outline: red auto;"],
+  ["outline", "auto auto", "0", "", "", "rgb(9, 9, 9) none 3px", "0", ""],
+  ["outline", "thin thin", "0", "", "", "rgb(9, 9, 9) none 3px", "0", ""],
+  ["outline", "1px 2px solid", "0", "", "", "rgb(9, 9, 9) none 3px", "0", ""],
+  ["outline-style", "AUTO", "1", "outline-style", "auto", "auto", "1", "outline-style: auto;"],
+  ["outline-width", "0", "1", "outline-width", "0px", "0px", "1", "outline-width: 0px;"],
+  ["outline-width", "1e2px", "1", "outline-width", "100px", "100px", "1", "outline-width: 100px;"],
+  ["outline-offset", "-0px", "1", "outline-offset", "0px", "0px", "1", "outline-offset: 0px;"],
+  ["will-change", "auto, transform", "0", "", "", "auto", "0", ""],
+  ["will-change", "transform, auto", "0", "", "", "auto", "0", ""],
+  ["will-change", "opacity, opacity", "1", "will-change", "opacity, opacity", "opacity, opacity", "1", "will-change: opacity, opacity;"],
+  ["will-change", "--custom", "1", "will-change", "--custom", "--custom", "1", "will-change: --custom;"],
+  ["will-change", "AUTO", "1", "will-change", "auto", "auto", "1", "will-change: auto;"],
+  ["will-change", "translate, scale", "1", "will-change", "translate, scale", "translate, scale", "1", "will-change: translate, scale;"],
+  ["initial-letter", "1.5 2.5", "0", "", "", "normal", "0", ""],
+  ["initial-letter", "3 0", "0", "", "", "normal", "0", ""],
+  ["initial-letter", "1 auto", "0", "", "", "normal", "0", ""],
+  ["initial-letter", "2 -1", "0", "", "", "normal", "0", ""],
+  ["initial-letter", "1 2 3", "0", "", "", "normal", "0", ""],
+  ["initial-letter", "NORMAL", "1", "initial-letter", "normal", "normal", "1", "initial-letter: normal;"],
+  ["text-size-adjust", "0%", "1", "text-size-adjust", "0%", "0%", "1", "text-size-adjust: 0%;"],
+  ["text-size-adjust", "200%", "1", "text-size-adjust", "200%", "200%", "1", "text-size-adjust: 200%;"],
+  ["text-size-adjust", "-10%", "0", "", "", "auto", "0", ""],
+  ["text-size-adjust", "auto", "1", "text-size-adjust", "auto", "auto", "1", "text-size-adjust: auto;"],
+  ["text-size-adjust", "12.5%", "1", "text-size-adjust", "12.5%", "12.5%", "1", "text-size-adjust: 12.5%;"],
+  ["text-size-adjust", "calc(50%)", "1", "text-size-adjust", "calc(50%)", "50%", "1", "text-size-adjust: calc(50%);"],
+  ["tab-size", "1e2", "1", "tab-size", "100", "100", "1", "tab-size: 100;"],
+  ["tab-size", "0", "1", "tab-size", "0", "0", "1", "tab-size: 0;"],
+  ["tab-size", "4em", "1", "tab-size", "4em", "56px", "1", "tab-size: 4em;"],
+  ["tab-size", "calc(2)", "1", "tab-size", "calc(2)", "2", "1", "tab-size: calc(2);"],
+  ["vertical-align", "0", "1", "vertical-align", "0px", "0px", "1", "vertical-align: 0px;"],
+  ["vertical-align", "calc(1px)", "1", "vertical-align", "calc(1px)", "1px", "1", "vertical-align: calc(1px);"],
+  ["vertical-align", "baseline baseline", "0", "", "", "baseline", "0", ""],
+  ["vertical-align", "middle top", "0", "", "", "baseline", "0", ""],
+  ["vertical-align", "-0px", "1", "vertical-align", "0px", "0px", "1", "vertical-align: 0px;"],
+  ["box-sizing", "CONTENT-BOX", "1", "box-sizing", "content-box", "content-box", "1", "box-sizing: content-box;"],
+  ["empty-cells", "SHOW", "1", "empty-cells", "show", "show", "1", "empty-cells: show;"],
+  ["ruby-merge", "SEPARATE", "0", "", "", "", "0", ""],
+  ["-webkit-hyphens", "manual", "0", "", "", "", "0", ""],
+  ["-webkit-hyphens", "none", "0", "", "", "", "0", ""],
+  ["animation-name", "foo, bar", "1", "animation-name", "foo, bar", "foo, bar", "1", "animation-name: foo, bar;"],
+  ["animation-name", "none, foo", "1", "animation-name", "none, foo", "none, foo", "1", "animation-name: none, foo;"],
+  ["animation-name", "1foo", "0", "", "", "none", "0", ""],
+  ["animation-name", "-foo", "1", "animation-name", "-foo", "-foo", "1", "animation-name: -foo;"],
+  ["animation-name", "_foo", "1", "animation-name", "_foo", "_foo", "1", "animation-name: _foo;"],
+  ["animation-name", "none, none", "1", "animation-name", "none, none", "none, none", "1", "animation-name: none, none;"],
+  ["animation-timing-function", "cubic-bezier(0, 0, 1, 1)", "1", "animation-timing-function", "cubic-bezier(0, 0, 1, 1)", "cubic-bezier(0, 0, 1, 1)", "1", "animation-timing-function: cubic-bezier(0, 0, 1, 1);"],
+  ["animation-timing-function", "steps(2, start)", "1", "animation-timing-function", "steps(2, start)", "steps(2, start)", "1", "animation-timing-function: steps(2, start);"],
+  ["animation-timing-function", "steps(0)", "0", "", "", "ease", "0", ""],
+  ["animation-timing-function", "linear(0, 1)", "1", "animation-timing-function", "linear(0 0%, 1 100%)", "linear(0 0%, 1 100%)", "1", "animation-timing-function: linear(0 0%, 1 100%);"],
+  ["animation-timing-function", "ease, linear", "1", "animation-timing-function", "ease, linear", "ease, linear", "1", "animation-timing-function: ease, linear;"],
+  ["animation-timing-function", "cubic-bezier(1)", "0", "", "", "ease", "0", ""],
+  ["transition-behavior", "allow-discrete, normal", "1", "transition-behavior", "allow-discrete, normal", "allow-discrete, normal", "1", "transition-behavior: allow-discrete, normal;"],
+  ["transition-behavior", "discrete", "0", "", "", "normal", "0", ""],
+  ["animation-fill-mode", "none, forwards", "1", "animation-fill-mode", "none, forwards", "none, forwards", "1", "animation-fill-mode: none, forwards;"],
+  ["animation-direction", "alternate, reverse", "1", "animation-direction", "alternate, reverse", "alternate, reverse", "1", "animation-direction: alternate, reverse;"],
+  ["animation-play-state", "running, paused", "1", "animation-play-state", "running, paused", "running, paused", "1", "animation-play-state: running, paused;"],
+  ["font-feature-settings", "\"liga\" 2, \"smcp\"", "1", "font-feature-settings", "\"liga\" 2, \"smcp\"", "\"liga\" 2, \"smcp\"", "1", "font-feature-settings: \"liga\" 2, \"smcp\";"],
+  ["font-feature-settings", "\"liga\" calc(1)", "1", "font-feature-settings", "\"liga\" calc(1)", "\"liga\"", "1", "font-feature-settings: \"liga\" calc(1);"],
+  ["font-feature-settings", "normal, \"liga\"", "0", "", "", "normal", "0", ""],
+  ["font-variation-settings", "\"wght\" calc(400)", "1", "font-variation-settings", "\"wght\" calc(400)", "\"wght\" 400", "1", "font-variation-settings: \"wght\" calc(400);"],
+  ["user-select", "AUTO", "1", "user-select", "auto", "auto", "1", "user-select: auto;"],
+  ["user-select", "text-select", "0", "", "", "auto", "0", ""],
+  ["caret-color", "currentcolor", "1", "caret-color", "currentcolor", "rgb(9, 9, 9)", "1", "caret-color: currentcolor;"],
+  ["accent-color", "auto", "1", "accent-color", "auto", "auto", "1", "accent-color: auto;"],
+  ["text-combine-upright", "digits 3", "0", "", "", "none", "0", ""],
+  ["text-orientation", "sideways-left", "0", "", "", "mixed", "0", ""]
+];
+var S = [
+  "D|attr|names=outline-style|echo=auto|comp=auto|text=outline-style: auto;",
+  "D|sheet|names=|echo=|comp=50%|text=",
+  "D|remove|names=|echo=|comp=0px rgb(9, 9, 9)|text=",
+  "D|idlset|names=vertical-align|echo=text-bottom|comp=text-bottom|text=vertical-align: text-bottom;",
+  "D|inherit|parent=50%/2.5/after-white-space|child=50%/normal/after-white-space"
+];
+var G = [
+  "g1|boxUnmoved=60.0,20.0|outlineSpans=68.0|offsetBox=80.0",
+  "g2|lifted=10.0|dropped=10.0|width=20.0|sideBySide=0.0,0.0",
+  "g3|borderBox=100.0,40.0|contentBox=130.0,70.0",
+  "g4|cellOuter=60.0,16.0|gap=0.0"
+];
+
+var box = document.getElementById('box'), pass = 0, fail = 0, out = [];
+
+function names(d) { var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i)); return a.join(','); }
+
+for (var i = 0; i < E.length; i++) {
+  var prop = E[i][0], value = E[i][1];
+  var d = document.createElement('div');
+  box.appendChild(d);
+  d.style.setProperty(prop, value);
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) { sup = 'ERR'; }
+  var got = ['' + d.style.length, names(d), d.style.getPropertyValue(prop),
+             getComputedStyle(d).getPropertyValue(prop), sup, d.style.cssText];
+  var want = E[i].slice(2);
+  var bad = [];
+  for (var j = 0; j < want.length; j++) {
+    if (want[j] === '~') continue;
+    if (got[j] !== want[j]) bad.push('c' + j + ' got[' + got[j] + '] want[' + want[j] + ']');
+  }
+  if (bad.length) { fail++; out.push('FAIL E' + i + ' ' + prop + ': ' + value + ' | ' + bad.join(' | ')); }
+  else pass++;
+}
+
+/* S: the doors the CSSOM loop above does not use. Each row is the whole line the probe printed. */
+function door(d, prop) {
+  var a = []; for (var i = 0; i < d.style.length; i++) a.push(d.style.item(i));
+  return 'D|' + d.dataset.tag + '|names=' + a.join(',') + '|echo=' + d.style.getPropertyValue(prop)
+    + '|comp=' + getComputedStyle(d).getPropertyValue(prop) + '|text=' + d.style.cssText;
+}
+var host = document.getElementById('host'), sd = [];
+function mk(tag) { var e = document.createElement('div'); e.dataset.tag = tag; host.appendChild(e); return e; }
+var a = mk('attr'); a.setAttribute('style', 'outline-style: auto'); void a.offsetHeight;
+sd.push(door(a, 'outline-style'));
+var s = mk('sheet'); s.className = 'sheet-tsa'; void s.offsetHeight;
+sd.push(door(s, 'text-size-adjust'));
+var rr = mk('remove');
+rr.style.setProperty('-webkit-text-stroke', '1px red');
+rr.style.removeProperty('-webkit-text-stroke');
+void rr.offsetHeight;
+sd.push(door(rr, '-webkit-text-stroke'));
+var w = mk('idlset'); w.style.verticalAlign = 'text-bottom'; void w.offsetHeight;
+sd.push(door(w, 'vertical-align'));
+var p = mk('inherit');
+p.style.setProperty('text-size-adjust', '50%');
+p.style.setProperty('initial-letter', '2.5');
+p.style.setProperty('-webkit-line-break', 'after-white-space');
+var c = document.createElement('div'); p.appendChild(c); void c.offsetHeight;
+sd.push('D|inherit|parent=' + getComputedStyle(p).getPropertyValue('text-size-adjust') + '/'
+  + getComputedStyle(p).getPropertyValue('initial-letter') + '/'
+  + getComputedStyle(p).getPropertyValue('-webkit-line-break')
+  + '|child=' + getComputedStyle(c).getPropertyValue('text-size-adjust') + '/'
+  + getComputedStyle(c).getPropertyValue('initial-letter') + '/'
+  + getComputedStyle(c).getPropertyValue('-webkit-line-break'));
+for (var i = 0; i < S.length; i++) {
+  var tag = S[i].split('|')[1], gotLine = null;
+  for (var k = 0; k < sd.length; k++) if (sd[k].split('|')[1] === tag) gotLine = sd[k];
+  if (gotLine !== S[i]) { fail++; out.push('FAIL S' + i + ' got[' + gotLine + '] want[' + S[i] + ']'); }
+  else pass++;
+}
+
+/* G: the geometry. */
+function r(id) { var b = document.getElementById(id).getBoundingClientRect(); return { l: b.left, t: b.top, w: b.width, h: b.height, r: b.right, b: b.bottom }; }
+function n1(v) { return v.toFixed(1); }
+var gd = [];
+var a1 = r('g-1a'), b1 = r('g-1b');
+gd.push('g1|boxUnmoved=' + n1(a1.w) + ',' + n1(a1.h) + '|outlineSpans=' + n1((a1.r - a1.l) + 8)
+  + '|offsetBox=' + n1((b1.r - b1.l) + 20));
+var base = r('g-2a'), up = r('g-2b'), down = r('g-2c');
+gd.push('g2|lifted=' + n1(base.t - up.t) + '|dropped=' + n1(down.t - base.t) + '|width=' + n1(up.w)
+  + '|sideBySide=' + n1(up.l - base.r) + ',' + n1(down.l - up.r));
+var bb = r('g-3a'), cb = r('g-3b');
+gd.push('g3|borderBox=' + n1(bb.w) + ',' + n1(bb.h) + '|contentBox=' + n1(cb.w) + ',' + n1(cb.h));
+var c4 = r('g-4a'), d4 = r('g-4b');
+gd.push('g4|cellOuter=' + n1(c4.w) + ',' + n1(c4.h) + '|gap=' + n1(d4.l - c4.r));
+for (var i = 0; i < G.length; i++) {
+  var tag = G[i].split('|')[0], gotLine = null;
+  for (var k = 0; k < gd.length; k++) if (gd[k].split('|')[0] === tag) gotLine = gd[k];
+  if (gotLine !== G[i]) { fail++; out.push('FAIL G' + i + ' got[' + gotLine + '] want[' + G[i] + ']'); }
+  else pass++;
+}
+
+out.unshift((fail === 0 ? 'ALLPASS' : 'FAILURES') + ' b292: ' + pass + '/' + (pass + fail) + ' rows pass');
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+window.ROWS = out;
+</script></body></html>

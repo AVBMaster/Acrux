@@ -660,7 +660,20 @@ public static class EchoedProperties
     private static string? NormalizeShapeMargin(string value)
     {
         var text = value.Trim();
-        return text.Length > 0 && CssValueGrammar.IsLengthOrPercentage(text) ? text : null;
+        if (text.Length == 0 || text.StartsWith("-", StringComparison.Ordinal)) return null;
+        // A math expression is a distance the engine has not finished adding (measured:
+        // 'shape-margin: calc(1px)' stands and computes '1px').
+        if (text.StartsWith("calc(", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("min(", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("max(", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("clamp(", StringComparison.OrdinalIgnoreCase)) return text;
+        if (!CssValueGrammar.IsLengthOrPercentage(text)) return null;
+        // A margin is a distance: the unit or the percentage has to be there, and the bare number
+        // is only the zero it may stand for (measured: 'shape-margin: 1' falls while '0', '1px' and
+        // '50%' each stand, and '-1px' falls with the number).
+        int i = 0;
+        while (i < text.Length && (char.IsAsciiDigit(text[i]) || text[i] == '.')) i++;
+        return i == text.Length && text != "0" ? null : text;
     }
 
     /// <summary>'shape-image-threshold' is a number, and a percentage is the fraction it stands for

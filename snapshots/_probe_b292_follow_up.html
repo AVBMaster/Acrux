@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b292 probe B &#8212; the follow-up words</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+#box { width: 200px; }
+#box > div { height: 20px; font-size-adjust: from-font; }
+.sheet-tsa { text-size-adjust: 50%; }</style></head><body>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* The second pass: the words the first batch of grammars left unanswered — the legacy line-break
+ * vocabulary of its own, the stroke's three width keywords, the list separators, the doors a
+ * declaration comes in by, and the inheritance of the three properties that only answer a read. */
+var CASES = [
+  "-webkit-line-break: auto",
+  "-webkit-line-break: loose",
+  "-webkit-line-break: normal",
+  "-webkit-line-break: strict",
+  "-webkit-line-break: anywhere",
+  "-webkit-line-break: after-white-space",
+  "-webkit-line-break: loose-allows-after-ja",
+  "-webkit-line-break: strict-allow-empty-line",
+  "-webkit-line-break: bogus",
+  "-webkit-line-break: after-white-space loose",
+  "line-break: after-white-space",
+  "line-break: loose-allows-after-ja",
+  "-webkit-text-stroke: 0",
+  "-webkit-text-stroke: medium",
+  "-webkit-text-stroke: thick",
+  "-webkit-text-stroke: red",
+  "-webkit-text-stroke: thin red",
+  "-webkit-text-stroke: red thin",
+  "-webkit-text-stroke: 2 2px",
+  "-webkit-text-stroke: 1px rgb(1, 2, 3)",
+  "-webkit-text-stroke: currentcolor",
+  "-webkit-text-stroke: 1px 2px",
+  "-webkit-text-stroke-width: thin",
+  "-webkit-text-stroke-width: medium",
+  "-webkit-text-stroke-width: thick",
+  "-webkit-text-stroke-width: 1px",
+  "-webkit-text-stroke-width: 0",
+  "-webkit-text-stroke-width: 2",
+  "-webkit-text-stroke-color: currentcolor",
+  "font-size-adjust: calc(1)",
+  "font-size-adjust: calc(0.5 + 0.5)",
+  "font-size-adjust: 2",
+  "shape-margin: 1px",
+  "shape-margin: -1px",
+  "shape-margin: calc(1px)",
+  "shape-margin: 2em",
+  "outline: medium solid currentcolor",
+  "outline: 2px dashed rgb(1, 2, 3)",
+  "outline: red auto",
+  "outline: auto auto",
+  "outline: thin thin",
+  "outline: 1px 2px solid",
+  "outline-style: AUTO",
+  "outline-width: 0",
+  "outline-width: 1e2px",
+  "outline-offset: -0px",
+  "will-change: auto, transform",
+  "will-change: transform, auto",
+  "will-change: opacity, opacity",
+  "will-change: --custom",
+  "will-change: AUTO",
+  "will-change: translate, scale",
+  "initial-letter: 1.5 2.5",
+  "initial-letter: 3 0",
+  "initial-letter: 1 auto",
+  "initial-letter: 2 -1",
+  "initial-letter: 1 2 3",
+  "initial-letter: NORMAL",
+  "text-size-adjust: 0%",
+  "text-size-adjust: 200%",
+  "text-size-adjust: -10%",
+  "text-size-adjust: auto",
+  "text-size-adjust: 12.5%",
+  "text-size-adjust: calc(50%)",
+  "tab-size: 1e2",
+  "tab-size: 0",
+  "tab-size: 4em",
+  "tab-size: calc(2)",
+  "vertical-align: 0",
+  "vertical-align: calc(1px)",
+  "vertical-align: baseline baseline",
+  "vertical-align: middle top",
+  "vertical-align: -0px",
+  "box-sizing: CONTENT-BOX",
+  "empty-cells: SHOW",
+  "ruby-merge: SEPARATE",
+  "-webkit-hyphens: manual",
+  "-webkit-hyphens: none",
+  "animation-name: foo, bar",
+  "animation-name: none, foo",
+  "animation-name: 1foo",
+  "animation-name: -foo",
+  "animation-name: _foo",
+  "animation-name: none, none",
+  "animation-timing-function: cubic-bezier(0, 0, 1, 1)",
+  "animation-timing-function: steps(2, start)",
+  "animation-timing-function: steps(0)",
+  "animation-timing-function: linear(0, 1)",
+  "animation-timing-function: ease, linear",
+  "animation-timing-function: cubic-bezier(1)",
+  "transition-behavior: allow-discrete, normal",
+  "transition-behavior: discrete",
+  "animation-fill-mode: none, forwards",
+  "animation-direction: alternate, reverse",
+  "animation-play-state: running, paused",
+  "font-feature-settings: \"liga\" 2, \"smcp\"",
+  "font-feature-settings: \"liga\" calc(1)",
+  "font-feature-settings: normal, \"liga\"",
+  "font-variation-settings: \"wght\" calc(400)",
+  "user-select: AUTO",
+  "user-select: text-select",
+  "caret-color: currentcolor",
+  "accent-color: auto",
+  "text-combine-upright: digits 3",
+  "text-orientation: sideways-left"
+];
+var out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var decl = CASES[i];
+  var prop = decl.slice(0, decl.indexOf(':')).trim();
+  var value = decl.slice(decl.indexOf(':') + 1).trim();
+  var d = document.createElement('div');
+  document.getElementById('box').appendChild(d);
+  d.style.setProperty(prop, value);
+  var names = [];
+  for (var j = 0; j < d.style.length; j++) names.push(d.style.item(j));
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) {}
+  out.push(i + '|' + prop + '|' + value + '|n=' + d.style.length + '|names=' + names.join(',')
+    + '|echo=' + d.style.getPropertyValue(prop) + '|comp=' + getComputedStyle(d).getPropertyValue(prop)
+    + '|sup=' + sup + '|text=' + d.style.cssText);
+}
+function door(d, prop) {
+  var names = []; for (var j = 0; j < d.style.length; j++) names.push(d.style.item(j));
+  return 'names=' + names.join(',') + '|echo=' + d.style.getPropertyValue(prop)
+    + '|comp=' + getComputedStyle(d).getPropertyValue(prop) + '|text=' + d.style.cssText;
+}
+var host = document.getElementById('box');
+var a = document.createElement('div'); a.setAttribute('style', 'outline-style: auto');
+host.appendChild(a); void a.offsetHeight; out.push('D|attr|' + door(a, 'outline-style'));
+var s = document.createElement('div'); s.className = 'sheet-tsa'; host.appendChild(s); void s.offsetHeight;
+out.push('D|sheet|' + door(s, 'text-size-adjust'));
+var r = document.createElement('div'); host.appendChild(r);
+r.style.setProperty('-webkit-text-stroke', '1px red'); r.style.removeProperty('-webkit-text-stroke');
+void r.offsetHeight; out.push('D|remove|' + door(r, '-webkit-text-stroke'));
+var w = document.createElement('div'); host.appendChild(w); w.style.verticalAlign = 'text-bottom';
+void w.offsetHeight; out.push('D|idlset|' + door(w, 'vertical-align'));
+var p = document.createElement('div'); host.appendChild(p);
+p.style.setProperty('text-size-adjust', '50%'); p.style.setProperty('initial-letter', '2.5');
+p.style.setProperty('-webkit-line-break', 'after-white-space');
+var c = document.createElement('div'); p.appendChild(c); void c.offsetHeight;
+out.push('D|inherit|parent=' + getComputedStyle(p).getPropertyValue('text-size-adjust') + '/'
+  + getComputedStyle(p).getPropertyValue('initial-letter') + '/'
+  + getComputedStyle(p).getPropertyValue('-webkit-line-break')
+  + '|child=' + getComputedStyle(c).getPropertyValue('text-size-adjust') + '/'
+  + getComputedStyle(c).getPropertyValue('initial-letter') + '/'
+  + getComputedStyle(c).getPropertyValue('-webkit-line-break'));
+var text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>
