@@ -4,7 +4,7 @@ using Node = Acrux.Core.Dom.Node;
 
 namespace Acrux.Core.JavaScript;
 
-public class JsHtmlCollection : IList
+public class JsHtmlCollection : IList, IDomPrototypeHost
 {
     private readonly DomElement _root;
     private readonly string? _tagName;
@@ -37,6 +37,9 @@ public class JsHtmlCollection : IList
     internal string InterfaceName = "HTMLCollection";
 
     public override string ToString() => DomHostString.Tagged(InterfaceName);
+
+    public string? __domType => InterfaceName;
+    public string[] __domTypeChain => new[] { InterfaceName };
 
     public int length => GetFilteredElements().Count;
     public int Length => GetFilteredElements().Count;
@@ -179,7 +182,7 @@ public class JsHtmlCollection : IList
     }
 }
 
-public class JsNodeList : IList
+public class JsNodeList : IList, IDomPrototypeHost
 {
     private readonly DomElement _root;
     private readonly Func<DomElement, List<DomElement>>? _filter;
@@ -207,6 +210,9 @@ public class JsNodeList : IList
     internal string InterfaceName = "NodeList";
 
     public override string ToString() => DomHostString.Tagged(InterfaceName);
+
+    public string? __domType => InterfaceName;
+    public string[] __domTypeChain => new[] { InterfaceName };
 
     /// <summary>A childNodes list carries every kind of node child (text and comment included),
     /// while the default and a selector query stay element-only — the two faces of the same
@@ -288,7 +294,7 @@ public class JsNodeList : IList
 /// read live — controls come and go between two reads of 'form.elements'. Its named read answers a
 /// RadioNodeList when several controls share the name, because a group of radio buttons is one
 /// control the form reads and writes as a value.</summary>
-public class JsFormControlsCollection : IList
+public class JsFormControlsCollection : IList, IDomPrototypeHost
 {
     private static readonly HashSet<string> Listed = new(StringComparer.OrdinalIgnoreCase)
     { "button", "input", "meter", "output", "progress", "select", "textarea" };
@@ -301,6 +307,13 @@ public class JsFormControlsCollection : IList
         _form = form;
         _engine = engine ?? JavaScriptEngine.Current;
     }
+
+    /// <summary>HTML §4.10.3: the form's controls answer an HTMLFormControlsCollection — the interface
+    /// that adds the named read on top of an HTMLCollection (measured: the tag, the constructor name and
+    /// 'instanceof HTMLCollection' all read that, while a page that builds one itself is refused).</summary>
+    public string? __domType => "HTMLFormControlsCollection";
+    public string[] __domTypeChain => new[] { "HTMLFormControlsCollection" };
+    public override string ToString() => DomHostString.Tagged(this);
 
     private List<DomElement> Controls()
     {

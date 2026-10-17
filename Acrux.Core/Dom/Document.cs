@@ -266,6 +266,13 @@ public class Document : Node
     {
         var result = new List<Element>();
         tagName = tagName.ToUpperInvariant();
+        // HTML §4.5.4: on a document the search covers every element, the root included — measured,
+        // 'document.getElementsByTagName("*")' counts the html element itself, while the same call on
+        // an element covers only its descendants.
+        // The wildcard reads every element, the root included (§4.5.4).
+        var wildcard = tagName == "*";
+        if (DocumentElement != null && (wildcard || DocumentElement.TagName == tagName))
+            result.Add(DocumentElement);
         CollectElementsByTagName(DocumentElement, tagName, result);
         return result;
     }
@@ -273,8 +280,30 @@ public class Document : Node
     public List<Element> GetElementsByClassName(string className)
     {
         var result = new List<Element>();
+        // The same reach as the tag search: a document collects its root element too (§4.5.4).
+        if (DocumentElement != null && ClassTokensMatch(DocumentElement, className))
+            result.Add(DocumentElement);
         CollectElementsByClassName(DocumentElement, className, result);
         return result;
+    }
+
+    /// <summary>HTML §4.5.4: the argument is a list of class names and an element answers only when it
+    /// carries every one of them; a list with nothing in it matches nothing.</summary>
+    private static bool ClassTokensMatch(Element element, string className)
+    {
+        var wanted = className.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (wanted.Length == 0) return false;
+        var written = (element.GetAttribute("class") ?? "")
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (written.Length == 0) return false;
+        foreach (var token in wanted)
+        {
+            var found = false;
+            foreach (var have in written)
+                if (have == token) { found = true; break; }
+            if (!found) return false;
+        }
+        return true;
     }
 
     public Element? QuerySelector(string selector)
@@ -350,7 +379,7 @@ public class Document : Node
         if (root == null) return;
         foreach (var child in root.Children.OfType<Element>())
         {
-            if (child.TagName == tagName)
+            if (child.TagName == tagName || tagName == "*")
                 result.Add(child);
             CollectElementsByTagName(child, tagName, result);
         }
@@ -361,7 +390,7 @@ public class Document : Node
         if (root == null) return;
         foreach (var child in root.Children.OfType<Element>())
         {
-            if (child.HasClass(className))
+            if (ClassTokensMatch(child, className))
                 result.Add(child);
             CollectElementsByClassName(child, className, result);
         }

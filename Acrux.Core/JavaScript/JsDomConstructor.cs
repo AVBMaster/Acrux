@@ -70,6 +70,9 @@ public class JsDomPrototypeSystem
         };
         ctor.prototype = own || {};
         ctor.prototype.constructor = ctor;
+        // The constructor carries the interface's own name: 'el.constructor.name' and
+        // 'Function.prototype.name' read the interface, not the local the bridge happens to use.
+        try { Object.defineProperty(ctor, 'name', { value: name, configurable: true }); } catch (e) { }
         // What 'Object.prototype.toString.call(el)' answers for an interface is the interface's own
         // name (DOM §6.1) — the level prototype carries it, so an element reads as the interface its
         // tag names rather than as a bare wrapper.

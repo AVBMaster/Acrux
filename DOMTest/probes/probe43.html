@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html><head><title>Probe 43</title></head><body>
+<img id="im" src="x.png" alt="a" name="n1">
+<a id="an" href="/x" name="n2">l</a>
+<iframe id="fr" name="n3"></iframe>
+<script>
+(function () {
+  var lines = [];
+  function step(l, fn) { try { lines.push(l + ' = ' + fn()); } catch (e) { lines.push(l + ' ERR ' + e.name + ': ' + e.message); } }
+  step('streams', function () { return JSON.stringify([typeof ReadableStream, typeof WritableStream, typeof TransformStream, typeof Blob.prototype.stream, typeof structuredClone, structuredClone.length]); });
+  step('clone kinds', function () { var c = structuredClone({ d: new Date(0), m: new Map([['k', 1]]), s: new Set([1]), a: [1, { b: 2 }] }); return JSON.stringify([Object.prototype.toString.call(c.d), typeof c.d, String(c.m), String(c.s), c.a.b]); });
+  step('clone fn', function () { try { structuredClone(function () {}); return 'ok'; } catch (e) { return e.name + ':' + e.message; } });
+  step('name reflection', function () { return JSON.stringify([document.getElementById('im').name, document.getElementById('an').name, document.getElementById('fr').name, document.body.name, String(document.getElementById('im').getAttribute('name'))]); });
+  step('no name', function () { var p = document.createElement('p'); return JSON.stringify([String(p.name), String(p.tagName)]); });
+  step('clipboard io', function () { return navigator.clipboard.writeText('abc').then(function () { return navigator.clipboard.readText(); }).then(function (v) { return 'read=' + v; })['catch'](function (e) { return 'ERR ' + e.name + ':' + e.message; }); });
+  step('clone fn length', function () { return JSON.stringify([typeof navigator.clipboard.constructor, String(navigator.clipboard.constructor.name)]); });
+  step('mql', function () { var m = matchMedia('(min-width: 1px)'); return JSON.stringify([Object.prototype.toString.call(m), String(m.constructor.name), typeof MediaQueryList, typeof MediaQueryListEvent, m.media, typeof m.addEventListener]); });
+  step('fr methods', function () { var fr = new FileReader(); return JSON.stringify([Object.prototype.toString.call(fr), String(fr.EMPTY), String(fr.LOADING), String(fr.DONE), String(fr.result), String(fr.error), typeof fr.readAsText, typeof fr.readAsArrayBuffer, typeof fr.readAsBinaryString]); });
+  step('filelist', function () { return JSON.stringify([typeof FileList, typeof document.createElement('input').files, Object.prototype.toString.call(document.createElement('input').files)]); });
+  __T('probe43', true, lines.join('\n'));
+})();
+</script></body></html>

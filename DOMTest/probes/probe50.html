@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html><head><title>Probe 50</title></head><body>
+<script>
+(function () {
+  var box = document.createElement('div');
+  box.className = 'g1 g2';
+  document.body.appendChild(box);
+  var list = document.getElementsByClassName('g1');
+  var checks = [
+    ['length', list.length === 1],
+    ['index', list[0] === box],
+    ['item', list.item(0) === box],
+    ['both', document.getElementsByClassName('g2 g1').length === 1],
+    ['one missing', document.getElementsByClassName('g1 nope').length === 0],
+    ['none', document.getElementsByClassName('zz').length === 0],
+    ['body scoped', document.body.getElementsByClassName('g1').length === 1],
+    ['self scoped', box.getElementsByClassName('g1').length === 0],
+    ['tag', Object.prototype.toString.call(list) === '[object HTMLCollection]'],
+    ['instanceof', list instanceof HTMLCollection]
+  ];
+  box.className = 'g3';
+  checks.push(['live', list.length === 0]);
+  document.body.removeChild(box);
+  var bad = checks.filter(function (c) { return !c[1]; }).map(function (c) { return c[0]; });
+  __T('class list', bad.length === 0, bad.join(',') + ' | typeof=' + typeof list.item(0) + ' same=' + (list[0] === box));
+})();
+</script></body></html>

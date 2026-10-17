@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html><head><title>Probe 39</title></head><body>
+<form id="f"><input name="a" value="1"><input type="checkbox" name="b" checked><select name="c"><option value="x">x</option></select></form>
+<input id="i" type="text" value="hello">
+<script>
+(function () {
+  var out = {};
+  function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + (e && e.name) + '::' + (e && e.message); } }
+
+  t('es.has', function () {
+    var names = ['structuredClone', 'Object.hasOwn', 'globalThis', 'BigInt', 'WeakRef', 'FinalizationRegistry',
+      'AggregateError', 'Promise.any', 'Promise.allSettled', 'Symbol.asyncIterator', 'String.prototype.replaceAll',
+      'String.prototype.matchAll', 'Array.prototype.flat', 'Array.prototype.flatMap', 'Array.prototype.at',
+      'Array.prototype.findLast', 'Array.prototype.toSorted', 'Object.groupBy', 'Proxy.revocable', 'Reflect',
+      'Intl.Collator', 'Intl.NumberFormat', 'TextDecoder', 'URL.canParse', 'URL.parse', 'URL.fromJSON',
+      'URLSearchParams.prototype.sort', 'Error'];
+    var missing = [];
+    for (var i = 0; i < names.length; i++) {
+      var parts = names[i].split('.'), v = window;
+      for (var j = 0; j < parts.length; j++) {
+        if (v == null || v[parts[j]] === undefined) { missing.push(names[i]); break; }
+        v = v[parts[j]];
+      }
+    }
+    return JSON.stringify(missing);
+  });
+  t('es.clone', function () {
+    var src = { a: 1, b: [1, 2, { c: 3 }], d: new Date(0), e: new Map([['k', 1]]), f: new Set([1]) };
+    var c = structuredClone(src);
+    return JSON.stringify([c.a, c.b[2].c, c.d.getTime(), c.e.get('k'), c.f.has(1), src.b !== c.b,
+      typeof structuredClone, structuredClone.length]);
+  });
+  t('es.err', function () {
+    var e = new Error('m', { cause: 'why' });
+    return JSON.stringify([String(e.cause), typeof AggregateError, (new AggregateError([1, 2], 'a')).errors.length,
+      typeof Promise.withResolvers, typeof Object.groupBy]);
+  });
+  t('clipboard', function () {
+    var c = navigator.clipboard;
+    return JSON.stringify([typeof c, c ? Object.prototype.toString.call(c) : 'none',
+      typeof (c && c.writeText), typeof (c && c.read), typeof (c && c.readText), typeof (c && c.write),
+      typeof Clipboard, typeof ClipboardEvent]);
+  });
+  t('storageevent', function () {
+    var e = new StorageEvent('storage', { key: 'k', oldValue: '1', newValue: '2', url: 'http://x/', storageArea: localStorage });
+    return JSON.stringify([typeof StorageEvent, Object.prototype.toString.call(e), e.key, e.oldValue, e.newValue,
+      e.url, e.storageArea === localStorage, e.bubbles, e.cancelable, String(window.onstorage)]);
+  });
+  t('filereader', function () {
+    var fr = new FileReader();
+    return JSON.stringify([typeof FileReader, Object.prototype.toString.call(fr), fr.EMPTY, fr.LOADING, fr.DONE,
+      fr.readyState, String(fr.result), typeof fr.readAsText, typeof fr.readAsDataURL, typeof fr.readAsArrayBuffer,
+      typeof fr.readAsBinaryString, typeof fr.abort, String(fr.onload)]);
+  });
+  t('file', function () {
+    var f = new File(['abc'], 'name.txt', { type: 'text/plain', lastModified: 123 });
+    return JSON.stringify([typeof File, Object.prototype.toString.call(f), f.name, f.size, f.type, f.lastModified,
+      f.slice(0, 1).constructor.name, typeof f.text, f instanceof Blob, typeof FileList, f.webkitRelativePath]);
+  });
+  t('formdata', function () {
+    var fd = new FormData(document.getElementById('f'));
+    fd.append('d', '4');
+    var pairs = []; fd.forEach(function (v, k) { pairs.push(k + '=' + v); });
+    return JSON.stringify([typeof FormData, Object.prototype.toString.call(fd), fd.get('a'), fd.getAll('b').length,
+      fd.has('c'), fd.delete('a'), String(fd.get('a')), pairs.join('&'), Array.from(fd.keys()).join('/'),
+      typeof fd.set, typeof fd.entries, typeof fd[Symbol.iterator], fd.constructor.name]);
+  });
+  t('blob', function () {
+    var b = new Blob(['ab', 'cd'], { type: 'text/x' });
+    return JSON.stringify([Object.prototype.toString.call(b), b.size, b.type, typeof b.text, typeof b.arrayBuffer,
+      typeof b.stream, b.constructor.name]);
+  });
+  t('window.surface', function () {
+    return JSON.stringify([typeof window.open, typeof window.close, typeof window.stop, typeof window.focus,
+      String(window.self === window), String(window.parent === window), String(window.top === window),
+      JSON.stringify(window.name), window.length, String(window.opener), window.closed, String(window.origin),
+      typeof window.postMessage, typeof window.matchMedia, typeof window.requestIdleCallback,
+      typeof window.queueMicrotask, String(window.crypto === crypto), String(window.screenLeft),
+      String(window.outerWidth), String(window.innerWidth > 0), String(window.localStorage === localStorage),
+      String(window.status), String(window.defaultStatus), String(window.devicePixelRatio)]);
+  });
+  t('doc.all', function () {
+    return JSON.stringify([typeof document.all, Object.prototype.toString.call(document.all),
+      document.all.length, document.all('i') ? document.all('i').id : 'none',
+      document.all[0] ? document.all[0].tagName : 'none', typeof document.all.item,
+      String(document.all.namedItem)]);
+  });
+  t('media', function () {
+    var m = window.matchMedia('(min-width: 1px)');
+    return JSON.stringify([Object.prototype.toString.call(m), typeof m.matches, m.media,
+      typeof m.addEventListener, typeof m.addListener, String(m.onchange), String(m.constructor.name),
+      typeof MediaQueryListEvent]);
+  });
+  t('custom', function () {
+    return JSON.stringify([typeof customElements.upgrade, typeof customElements.whenDefined,
+      typeof customElements.get, typeof customElements.getName,
+      typeof HTMLElement.prototype.attachInternals]);
+  });
+  t('formvalidity', function () {
+    var f = document.getElementById('f');
+    return JSON.stringify([typeof f.checkValidity, typeof f.reportValidity, String(f.checkValidity()),
+      f.elements.length, Object.prototype.toString.call(f.elements), String(f.elements.constructor.name),
+      String(f.elements.namedItem('a') === f.elements[0]), typeof f.requestSubmit, f.method,
+      String(f.name), typeof f.submit, f.length, String(f.elements.a ? f.elements.a.value : 'no named'),
+      typeof f.elements.item]);
+  });
+  t('observers', function () {
+    return JSON.stringify([typeof ResizeObserver, typeof IntersectionObserver, typeof MutationObserver,
+      typeof PerformanceObserver, typeof ReportingObserver, typeof IntersectionObserverEntry,
+      typeof ResizeObserverEntry, typeof navigator.sendBeacon]);
+  });
+  t('image', function () {
+    var img = new Image(10, 20);
+    return JSON.stringify([Object.prototype.toString.call(img), img.width, img.height, String(img.complete),
+      String(img.naturalWidth), typeof img.decode, img instanceof HTMLElement, String(img.loading),
+      String(img.decoding), typeof window.Image]);
+  });
+  t('urlmisc', function () {
+    var u = new URL('http://a/b?x=1'); u.hash = '#z'; u.search = '?y=2';
+    var p = new URLSearchParams([['a', '1'], ['a', '2']]);
+    return JSON.stringify([typeof URL.fromJSON, String(URL.canParse('http://a/')), u.href,
+      p.getAll('a').join(','), p.toString(), new URLSearchParams('a+b=c').get('a b'),
+      new URL('http://a/./b/../c').pathname, new URL('http://a:b@x/y?q#z').port,
+      new URL('http://x').origin, typeof p.sort]);
+  });
+  t('range.extras', function () {
+    var r = document.createRange(); var el = document.getElementById('i'); r.selectNode(el);
+    var clone = r.cloneRange();
+    return JSON.stringify([typeof r.compareBoundaryPoints, String(r.compareBoundaryPoints(Range.START_TO_START, clone)),
+      r.collapsed, typeof r.detach, String(r.commonAncestorContainer.id), typeof r.getBoundingClientRect,
+      typeof r.getClientRects, String(r.cloneContents().constructor.name),
+      String(document.createRange().intersectsNode(el)), String(Range.START_TO_START), String(Range.END_TO_END)]);
+  });
+  t('decoder', function () {
+    var e = new TextEncoder().encode('héllo');
+    return JSON.stringify([new TextDecoder().decode(e),
+      new TextDecoder('utf-8').decode(new Uint8Array([228, 189, 160])), e.length,
+      new TextDecoder({ fatal: true }).encoding]);
+  });
+  window.__DUMP__ = JSON.stringify(out, null, 1);
+  __T('probe39 dump', true, JSON.stringify(out));
+})();
+</script></body></html>

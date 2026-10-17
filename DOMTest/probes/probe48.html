@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html><head><title>Probe 48</title></head><body>
+<form id="f"><input name="a" value="1"><select name="c"><option value="x">x</option><option value="y" selected>y</option></select></form>
+<script>
+(function () {
+  var lines = [];
+  function step(l, f) { try { lines.push(l + ' = ' + f()); } catch (e) { lines.push(l + ' ERR ' + e.name + ': ' + e.message); } }
+  var form = document.getElementById('f');
+  step('selected', function () { var o = form.c.options; return [o[0].selected, o[1].selected, form.c.value, o.length, String(form.c.selectedIndex)].join('/'); });
+  step('all count', function () { return [document.all.length, document.getElementsByTagName('*').length, String(document.all.item(2) && document.all.item(2).tagName), String(document.all(0).tagName)].join('/'); });
+  step('mql', function () { var m = matchMedia('(min-width: 1px)'); var refusal = ''; try { matchMedia(); } catch (e) { refusal = e.name + '|' + e.message; }
+    var ev = new MediaQueryListEvent('change', { media: '(min-width: 2px)', matches: true });
+    return JSON.stringify([m instanceof EventTarget, String(m.media), refusal, ev.media, ev.matches, Object.prototype.toString.call(ev), String(m.onchange), typeof m.removeListener]); });
+  step('fd2', function () { var fd = new FormData(); fd.append('k', '1'); fd.append('k', '2');
+    var a = [fd.get('k'), fd.getAll('k').join('/'), fd.length];
+    fd.set('k', '3'); var b = [fd.get('k'), fd.getAll('k').length];
+    fd.append('a', new Blob(['xy'], { type: 'text/plain' })); var c = fd.get('a');
+    fd.delete('k'); var keys = Array.from(fd.keys()).join('/');
+    var pairs = []; for (var it = fd.entries(), st = it.next(); !st.done; st = it.next()) pairs.push(st.value.join(':'));
+    return JSON.stringify({ before: a.join(','), after: b.join(','), blob: [c && c.name, c && c.size, c instanceof File], keys: keys, pairs: pairs.join('|'), len: fd.length }); });
+  step('clipboard host', function () { return JSON.stringify([String(navigator.clipboard.constructor), String(navigator.clipboard instanceof Clipboard), String(Object.getPrototypeOf(navigator.clipboard) === (window.Clipboard && Clipboard.prototype)), typeof Clipboard]); });
+  step('reader', function () { var fr = new FileReader(); var seen = [];
+    fr.addEventListener('loadstart', function () { seen.push('start' + fr.readyState); });
+    fr.addEventListener('progress', function () { seen.push('prog' + fr.readyState); });
+    fr.onload = function (e) { seen.push('load:' + e.type + ':' + fr.readyState + ':' + (e.target === fr)); };
+    fr.onloadend = function () { seen.push("end"); };
+    return 'n/a'; });
+  __T('probe48', true, lines.join('\n'));
+})();
+</script></body></html>

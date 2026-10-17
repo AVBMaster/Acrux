@@ -13,7 +13,7 @@ namespace Acrux.Core.JavaScript;
 /// — and it answers the indexed read, 'item()' and the named read by id or 'name' the way an
 /// HTMLCollection does (DOM §4.5.2). An element reached this way is the same JavaScript object the rest
 /// of the page holds for it (DOM §2.8), so the collection wraps through the engine's identity map.</summary>
-public class JsLiveElementList
+public class JsLiveElementList : IDomPrototypeHost
 {
     private readonly Func<List<DomElement>> _provider;
 
@@ -39,6 +39,9 @@ public class JsLiveElementList
     internal string InterfaceName;
 
     public override string ToString() => DomHostString.Tagged(InterfaceName);
+
+    public string? __domType => InterfaceName;
+    public string[] __domTypeChain => new[] { InterfaceName };
 
     public object? this[int index]
     {

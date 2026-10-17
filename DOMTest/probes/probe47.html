@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html><head><title>Probe 47</title></head><body>
+<form id="f"><input name="a" value="1"></form>
+<script>
+(function () {
+  var lines = [];
+  function step(l, fn) { try { lines.push(l + ' = ' + fn()); } catch (e) { lines.push(l + ' ERR ' + e.name + ': ' + e.message); } }
+  var f = document.getElementById('d') || document.getElementById('f');
+  step('fctor', function () { var el = f.elements; return JSON.stringify([typeof HTMLFormControlsCollection,
+    String(Object.getPrototypeOf(el)), String(Object.getPrototypeOf(el) === HTMLFormControlsCollection.prototype),
+    String(el.constructor), String(el.__proto__ && el.__proto__.constructor),
+    String(Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'constructor'))]); });
+  step('children proto', function () { var l = document.body.children; return JSON.stringify([
+    String(Object.getPrototypeOf(l) === HTMLCollection.prototype), String(l.constructor)]); });
+  step('url relative', function () { var out = [];
+    try { out.push('URL(nope)=' + new URL('nope').href); } catch (e) { out.push('URL(nope) throws ' + e.name); }
+    try { out.push('URL(/x, base)=' + new URL('/x', 'http://a/b').href); } catch (e) { out.push('rel throws ' + e.name); }
+    try { out.push('URL(bad base)=' + new URL('/x', 'nope').href); } catch (e) { out.push('bad base throws ' + e.name); }
+    return out.join(' | '); });
+  step('filereader', function () { var fr = new FileReader(); var seen = [];
+    fr.addEventListener('loadstart', function () { seen.push('start' + fr.readyState); });
+    fr.onload = function (e) { seen.push('load:' + e.type + ':' + fr.readyState); };
+    fr.onloadend = function () { seen.push('end' + fr.readyState); };
+    fr.readAsText(new Blob(['hello']));
+    return new Promise(function (res) { setTimeout(function () {
+      res(JSON.stringify([fr.result, fr.readyState, seen.join(',')])); }, 0); }); });
+  setTimeout(function () { __T('probe47', true, lines.join('\n')); }, 6);
+})();
+</script></body></html>

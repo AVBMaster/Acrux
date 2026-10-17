@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html><head><title>Probe 41</title></head><body>
+<div id="a"><p id="b">x</p></div>
+<form id="f"><input id="g" name="a" value="1"></form>
+<table id="t"><tr id="r"><td id="cell">c</td></tr></table>
+<button id="btn">B</button>
+<script>
+(function () {
+  var ids = ['a', 'b', 'f', 'g', 't', 'r', 'cell', 'btn'];
+  var missing = ids.filter(function (x) { return document.getElementById(x) === null; });
+  var bySel = ids.filter(function (x) { return document.querySelector('#' + x) === null; });
+  __T('id lookup', missing.length === 0, 'missingById=' + missing.join(',') + ' missingBySel=' + bySel.join(',')
+    + ' f=' + String(document.getElementById('f')) + ' formList=' + document.forms.length + '/' + String(document.forms[0] && document.forms[0].id));
+})();
+</script></body></html>

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html><head><title>Probe 49</title></head><body>
+<form id="f"><select name="c"><option value="x">x</option><option value="y" selected>y</option></select></form>
+<script>
+(function () {
+  var lines = [];
+  function step(l, f) { try { lines.push(l + ' = ' + f()); } catch (e) { lines.push(l + ' ERR ' + e.name + ': ' + e.message); } }
+  var sel = document.getElementById('f').elements.namedItem('c');
+  step('select', function () { return JSON.stringify([sel.tagName, sel.options.length, sel.options[0].selected,
+    sel.options[1].selected, sel.value, sel.selectedIndex, String(sel.options[1].getAttribute('selected')),
+    Object.prototype.toString.call(sel.options)]); });
+  step('star', function () { return JSON.stringify([document.getElementsByTagName('*').length,
+    document.getElementsByTagName('*')[0].tagName, document.documentElement.getElementsByTagName('*').length,
+    document.all.length, document.all[0].tagName, String(document.all.item(2) && document.all.item(2).tagName)]); });
+  step('mql event', function () { var ev = new MediaQueryListEvent('change', { media: '(min-width: 2px)', matches: true });
+    return JSON.stringify([Object.prototype.toString.call(ev), ev.media, ev.matches, ev instanceof Event]); });
+  step('fd file', function () { var fd = new FormData(document.getElementById('f')); return 'n/a'; });
+  __T('probe49', true, lines.join('\n'));
+})();
+</script></body></html>

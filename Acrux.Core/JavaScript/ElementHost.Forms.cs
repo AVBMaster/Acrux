@@ -475,6 +475,46 @@ public partial class ElementHost
         }
     }
 
+    /// <summary>HTML §4.10.11: the option's selectedness is the select's answer rather than the flag on
+    /// the option — a single-choice list with nothing marked shows its first option, and a marked one in
+    /// a multi-select keeps its own choice (measured: for 'x' and a marked 'y' the two options answer
+    /// false and true). Writing it moves the choice, and in a single-choice list it takes the choice off
+    /// every sibling. An option outside a select is carried by its own attribute alone.</summary>
+    public bool selected
+    {
+        get => ChosenOwner() is { } host
+            ? host.SelectedOptionElements().Any(o => ReferenceEquals(o, _element))
+            : _element.HasAttribute("selected");
+        set
+        {
+            var host = ChosenOwner();
+            if (host == null)
+            {
+                if (value) _element.SetAttribute("selected", "");
+                else _element.RemoveAttribute("selected");
+                return;
+            }
+            if (value)
+            {
+                _element.SetAttribute("selected", "");
+                if (!host.multiple)
+                    foreach (var sibling in host.OptionElements())
+                        if (!ReferenceEquals(sibling, _element)) sibling.RemoveAttribute("selected");
+            }
+            else _element.RemoveAttribute("selected");
+        }
+    }
+
+    /// <summary>The host of the select an option sits in, through the option group it may be wrapped by
+    /// (HTML §4.10.11); null when the option belongs to no list.</summary>
+    private ElementHost? ChosenOwner()
+    {
+        if (!IsOption) return null;
+        for (var parent = _element.ParentElement; parent != null; parent = parent.ParentElement)
+            if (TagIs(parent, "SELECT")) return new ElementHost(parent);
+        return null;
+    }
+
     /// <summary>HTML §4.10.7: the bounds a meter answers. 'low' and 'high' fall back to the ends of the
     /// range the control declares (measured: a meter with max 8 and no bounds reads low 0 and high 8),
     /// and 'optimum' to the middle of them. A progress bar has none of the three to answer (§4.10.6).</summary>
@@ -682,8 +722,15 @@ public partial class ElementHost
 
 /// <summary>The empty file list a control that holds no files answers (HTML §4.10.5.1.6): the count, the
 /// indexed read and 'item()', which is all a page can ask of a list with nothing in it.</summary>
-public class JsFileList
+/// <summary>HTML §4.10.5.1: the files a file control holds. Nothing is loaded from disk here, so the
+/// list is the empty one the reference answers for a control the user has not filled in — but it is a
+/// FileList, which is what a page that reads 'length' and 'item' and prints the object expects.</summary>
+public class JsFileList : IDomPrototypeHost
 {
+    public string? __domType => "FileList";
+    public string[] __domTypeChain => new[] { "FileList" };
+    public override string ToString() => DomHostString.Tagged(this);
+
     public int length => 0;
     public object? this[int index] => null;
     public object? item(int index) => null;

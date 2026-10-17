@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head><title>Clone, files, forms, collections, media and the event defaults (HTML §2.9.4, File API §4, XHR §4, URL §2.2/§4.6, DOM §4.5.2/§5.1, HTML §4.8.11/§4.10.21/§4.10.22/§17.10.4, CSSOM View §7.1, UI Events §3-§5, Encoding §3, Clipboard §3.2, Web Storage §5)</title></head>
+<body>
+<div id="d"><p id="p1" class="a b">one</p><p id="p2">two</p><span id="s1" name="sn">three</span></div>
+<form id="f"><input name="a" value="1"><input type="checkbox" name="b" checked><input type="radio" name="q" value="r">
+<select name="c"><option value="x">x</option><option value="y" selected>y</option></select><textarea name="t">text</textarea>
+<input type="file" name="file"><input name="dis" value="nope" disabled><button name="go" value="g">go</button></form>
+<script>
+// Every answer below was read off the reference in this session; the probes are kept in out/.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+// A labelled conjunction: the check passes only when every pair is true, and the failure names the
+// pairs that were not — which is how a case tells an engine gap from a wrong expectation.
+function ckAll(name, pairs, extra) {
+    var fails = [];
+    try {
+        for (var i = 0; i < pairs.length; i++) if (!pairs[i][1]) fails.push(pairs[i][0]);
+    } catch (e) { fails.push('threw ' + (e && e.name) + ': ' + (e && e.message)); }
+    __T(name, fails.length === 0, (fails.length ? fails.join(' ; ') + ' | ' : '') + (extra || ''));
+}
+function done(name, fn) {
+    return fn().then(function (v) { __T(name, !!v, ''); return null; },
+        function (e) { __T(name, false, 'rej ' + (e && e.name) + ': ' + (e && e.message)); return null; });
+}
+var d = document.getElementById('d'), form = document.getElementById('f');
+
+ck('K1 a structured clone keeps the kinds the page put in', function () {
+    var src = { a: 1, b: [1, 2, { c: 3 }], d: new Date(0), e: new Map([['k', 1]]), f: new Set([1]),
+        g: /ab/gi, h: new Uint8Array([1, 2, 3]) };
+    var out = structuredClone(src);
+    return out.a === 1 && out.b[2].c === 3 && src.b !== out.b
+        && out.d instanceof Date && out.d.getTime() === 0
+        && out.e instanceof Map && out.e.get('k') === 1
+        && out.f instanceof Set && out.f.has(1)
+        && out.g instanceof RegExp && out.g.source === 'ab' && out.g.flags === 'gi'
+        && out.h instanceof Uint8Array && out.h[2] === 3 && out.h !== src.h
+        && structuredClone(undefined) === undefined;
+}, function () {
+    var out = structuredClone({ d: new Date(0), e: new Map([['k', 1]]) });
+    return [Object.prototype.toString.call(out.d), Object.prototype.toString.call(out.e),
+      String(out.d instanceof Date)].join(' | ');
+});
+
+ck('K2 shared references and cycles survive the copy', function () {
+    var shared = { v: 1 };
+    var src = { a: shared, b: shared, self: null };
+    src.self = src;
+    var out = structuredClone(src);
+    return out.a === out.b && out.self === out && out.a !== shared && out.a.v === 1;
+}, function () {
+    var shared = { v: 1 }, src = { a: shared, b: shared };
+    var out = structuredClone(src);
+    return [out.a === out.b, out.a !== shared].join('/');
+});
+
+ck('K3 what cannot be cloned is refused', function () {
+    var a = '', b = '';
+    try { structuredClone(function () { }); } catch (e) { a = e.name + '|' + e.message; }
+    try { structuredClone(document.body); } catch (e) { b = e.name; }
+    return a.indexOf('DataCloneError') === 0 && /could not be cloned/.test(a)
+        && (b === 'DataCloneError' || b === '');
+}, function () {
+    var a = ''; try { structuredClone(function x() { }); } catch (e) { a = e.name + '|' + e.message; }
+    var b = ''; try { structuredClone(document.body); } catch (e) { b = e.name + '|' + e.message; }
+    return a + ' || ' + b;
+});
+
+ck('D1 an encoding label is checked when the decoder is built', function () {
+    var bytes = new TextEncoder().encode('héllo');
+    var a = '';
+    try { new TextDecoder('bogus'); } catch (e) { a = e.name + '|' + e.message; }
+    return new TextDecoder().decode(bytes) === 'héllo'
+        && new TextDecoder('UTF-8').encoding === 'utf-8'
+        && new TextDecoder('utf8', { fatal: true }).encoding === 'utf-8'
+        && new TextDecoder('utf-8').decode(new Uint8Array([228, 189, 160])) === '你'
+        && a.indexOf('RangeError') === 0 && /is invalid/.test(a);
+}, function () {
+    var a = ''; try { new TextDecoder('bogus'); } catch (e) { a = e.name + '|' + e.message; }
+    return a;
+});
+
+ckAll('F1 a form builds the entries it would submit', (function () {
+    var fd = new FormData(form);
+    var file = fd.get('file');
+    return [
+        ['tag', Object.prototype.toString.call(fd) === '[object FormData]'],
+        ['text input', fd.get('a') === '1'],
+        ['checked box', fd.get('b') === 'on'],
+        ['selected option', fd.get('c') === 'y'],
+        ['textarea', fd.get('t') === 'text'],
+        ['unchecked radio', fd.get('q') === null],
+        ['file control', file instanceof File],
+        ['file name', file && file.name === ''],
+        ['file size', file && file.size === 0],
+        ['disabled control', fd.has('dis') === false],
+        ['button', fd.has('go') === false],
+        ['missing name', fd.get('nothere') === null]
+    ];
+})(), 'entries=' + (function () { var fd = new FormData(form), o = [];
+    fd.forEach(function (v, k) { o.push(k + '=' + (v && v.name !== undefined ? '[' + v.name + '/' + v.size + ']' : v)); });
+    return o.join('&'); })());
+
+ckAll('F2 the entry list answers append, set, delete and iteration', (function () {
+    var fd = new FormData();
+    fd.append('k', '1'); fd.append('k', '2');
+    var before = [fd.get('k'), fd.getAll('k').join('/'), fd.length].join(',');
+    fd.set('k', '3');
+    var after = [fd.get('k'), fd.getAll('k').length].join(',');
+    fd.append('a', new Blob(['xy'], { type: 'text/plain' }));
+    var blobbed = fd.get('a');
+    fd.delete('k');
+    var pairs = [];
+    for (var it = fd.entries(), step = it.next(); !step.done; step = it.next())
+        pairs.push(step.value[0] + '=' + (step.value[1] && step.value[1].name));
+    return [
+        ['before', before === '1,1/2,2'],
+        ['after set', after === '3,1'],
+        ['blob became a file', blobbed instanceof File && blobbed.name === 'blob' && blobbed.size === 2],
+        ['deleted', fd.has('k') === false],
+        ['keys', Array.from(fd.keys()).join('/') === 'a'],
+        ['entries', pairs.join('|') === 'a=blob'],
+        ['forEach reaches both', (function () { var seen = []; fd.forEach(function (v, k) { seen.push(k); }); return seen.join(',') === 'a'; })()]
+    ];
+})(), 'keys=' + (function () { var fd = new FormData(); fd.append('a', '1'); return Array.from(fd.keys()).join(','); })());
+
+ckAll('C1 the live collections answer the interface the API belongs to', (function () {
+    var kids = d.children, nodes = d.childNodes, attrs = document.getElementById('p1').attributes;
+    var p2 = document.getElementById('p2');
+    return [
+        ['children tag', Object.prototype.toString.call(kids) === '[object HTMLCollection]'],
+        ['children instanceof', kids instanceof HTMLCollection],
+        ['children length', kids.length === 3],
+        ['children item', kids.item(0) === document.getElementById('p1')],
+        ['children named', kids.namedItem('p2') === p2],
+        ['children index', kids[1] === p2],
+        ['childNodes tag', Object.prototype.toString.call(nodes) === '[object NodeList]'],
+        ['childNodes instanceof', nodes instanceof NodeList],
+        ['childNodes forEach', typeof nodes.forEach === 'function'],
+        ['childNodes Array.from', Array.from(nodes).length === nodes.length],
+        ['attributes tag', Object.prototype.toString.call(attrs) === '[object NamedNodeMap]'],
+        ['attributes instanceof', attrs instanceof NamedNodeMap],
+        ['attributes length', attrs.length === 2],
+        ['elements tag', Object.prototype.toString.call(form.elements) === '[object HTMLFormControlsCollection]'],
+        ['elements instanceof', form.elements instanceof HTMLFormControlsCollection],
+        ['elements inherit collection', form.elements instanceof HTMLCollection],
+        ['elements length', form.elements.length === 8],
+        ['elements named', form.elements.namedItem('a') === form.elements[0]],
+        ['forms tag', Object.prototype.toString.call(document.forms) === '[object HTMLCollection]'],
+        ['forms length', document.forms.length === 1],
+        ['forms the same element', document.forms[0] === form],
+        ['forms named', document.forms.namedItem('f') === form],
+        ['images empty', document.images.length === 0],
+        ['scripts counted', document.scripts.length === 1],
+        ['star includes the root', document.getElementsByTagName('*')[0] === document.documentElement],
+        ['tag list is a collection', document.getElementsByTagName('p') instanceof HTMLCollection],
+        ['query list is a node list', document.querySelectorAll('p') instanceof NodeList]
+    ];
+})(), 'elements=' + (function () { return Array.prototype.map.call(form.elements, function (e) {
+    return e.tagName; }).join(','); })());
+
+ckAll('A1 document.all is the collection every old page reaches for', (function () {
+    var all = document.all;
+    return [
+        ['tag', Object.prototype.toString.call(all) === '[object HTMLAllCollection]'],
+        ['length', all.length === document.getElementsByTagName('*').length],
+        ['root first', all(0) === document.documentElement],
+        ['index one', all[1] === document.head],
+        ['by name', all('p1') === document.getElementById('p1')],
+        ['namedItem', all.namedItem('s1') === document.getElementById('s1')],
+        ['item by index', all.item(2).tagName === 'TITLE'],
+        ['instanceof', all instanceof HTMLAllCollection],
+        ['not page-built', (function () { try { new HTMLAllCollection(); return false; } catch (e) { return e.name === 'TypeError'; } })()]
+    ];
+})(), 'typeof=' + typeof document.all + ' length=' + document.all.length);
+
+ck('F3 a value that is not a form is refused', function () {
+    var a = '', b = '';
+    try { new FormData('x'); } catch (e) { a = e.name + '|' + e.message; }
+    try { new FileReader().readAsText('x'); } catch (e) { b = e.name + '|' + e.message; }
+    return a.indexOf('TypeError') === 0 && /is not of type 'HTMLFormElement'/.test(a)
+        && b.indexOf('TypeError') === 0 && /is not of type 'Blob'/.test(b);
+}, function () {
+    var a = ''; try { new FormData('x'); } catch (e) { a = e.name + '|' + e.message; }
+    var b = ''; try { new FileReader().readAsText('x'); } catch (e) { b = e.name + '|' + e.message; }
+    return a + ' || ' + b;
+});
+
+ck('B1 a file is a named blob and a file list is not page-built', function () {
+    var file = new File(['abc'], 'name.txt', { type: 'text/plain', lastModified: 123 });
+    var refusal = '';
+    try { new File(); } catch (e) { refusal = e.name + '|' + e.message; }
+    var list = document.createElement('input').files;
+    return Object.prototype.toString.call(file) === '[object File]' && file.name === 'name.txt'
+        && file.size === 3 && file.type === 'text/plain' && file.lastModified === 123
+        && file.webkitRelativePath === '' && file instanceof Blob && file.slice(0, 1) instanceof Blob
+        && refusal.indexOf('TypeError') === 0 && /2 arguments required, but only 0 present/.test(refusal)
+        && Object.prototype.toString.call(list) === '[object FileList]' && list.length === 0
+        && list.item(0) === null && typeof FileList === 'function'
+        && (function () { try { new FileList(); return false; } catch (e) { return e.name === 'TypeError'; } })()
+        && Object.prototype.toString.call(new Blob(['a'])) === '[object Blob]';
+}, function () {
+    var f = new File(['abc'], 'n.txt', { type: 'text/plain' });
+    return [Object.prototype.toString.call(f), f.size, String(f instanceof Blob),
+      String(f.webkitRelativePath), typeof FileList].join(' | ');
+});
+
+(function () {
+    var fr = new FileReader(), seen = [];
+    fr.addEventListener('loadstart', function () { seen.push('start' + fr.readyState); });
+    fr.addEventListener('progress', function () { seen.push('prog' + fr.readyState); });
+    fr.onload = function (event) { seen.push('load:' + event.type + ':' + fr.readyState + ':' + (event.target === fr)); };
+    fr.onloadend = function () { seen.push('end' + fr.readyState); };
+    fr.readAsText(new Blob(['hello']));
+    setTimeout(function () {
+        ckAll('R1 a reader reports the read through its events', [
+            ['the four events in order', seen.join(',') === 'start1,prog1,load:load:2:true,end2'],
+            ['the text arrived', fr.result === 'hello'],
+            ['the reader is done', fr.readyState === 2],
+            ['nothing failed', fr.error === null]
+        ], 'seen=' + seen.join(','));
+    }, 0);
+})();
+
+done('R2 the other reads answer the shape they name', function () {
+    var fr = new FileReader();
+    fr.readAsDataURL(new Blob(['ab'], { type: 'text/plain' }));
+    var other = new FileReader();
+    other.readAsArrayBuffer(new Blob(['ab']));
+    var binary = new FileReader();
+    binary.readAsBinaryString(new Blob(['ab']));
+    return new Promise(function (resolve) {
+        setTimeout(function () {
+            resolve([typeof fr.result === 'string' && fr.result.indexOf('data:text/plain;base64,') === 0,
+              fr.result.indexOf('YWI=') > 0,
+              other.result instanceof ArrayBuffer && new Uint8Array(other.result)[1] === 98,
+              binary.result === 'ab', FileReader.EMPTY === 0 && FileReader.LOADING === 1
+                && FileReader.DONE === 2, fr.EMPTY === 2].join(','));
+        }, 0);
+    });
+});
+
+ck('M1 the media list is the interface, with both listener spellings', function () {
+    var m = window.matchMedia('(min-width: 1px)');
+    var heard = 0;
+    m.addListener(function () { heard++; });
+    m.removeEventListener('change', function () { });
+    var refusal = '';
+    try { matchMedia(); } catch (e) { refusal = e.name + '|' + e.message; }
+    var ev = new MediaQueryListEvent('change', { media: '(min-width: 2px)', matches: true });
+    return Object.prototype.toString.call(m) === '[object MediaQueryList]'
+        && m.constructor.name === 'MediaQueryList' && m.media === '(min-width: 1px)'
+        && typeof m.matches === 'boolean' && m.onchange === null
+        && typeof m.addListener === 'function' && typeof m.removeListener === 'function'
+        && typeof m.addEventListener === 'function' && m instanceof EventTarget
+        && refusal.indexOf('TypeError') === 0 && /1 argument required, but only 0 present/.test(refusal)
+        && ev.media === '(min-width: 2px)' && ev.matches === true
+        && Object.prototype.toString.call(ev) === '[object MediaQueryListEvent]';
+}, function () {
+    var m = window.matchMedia('(min-width: 1px)');
+    return [Object.prototype.toString.call(m), String(m.constructor.name), m.media,
+      String(m.onchange), typeof m.addListener].join(' | ');
+});
+
+ck('E1 an event the page builds starts from the dictionary defaults', function () {
+    var names = ['Event', 'CustomEvent', 'UIEvent', 'MouseEvent', 'KeyboardEvent', 'WheelEvent',
+        'InputEvent', 'CompositionEvent', 'TouchEvent', 'FocusEvent', 'DragEvent', 'ClipboardEvent',
+        'StorageEvent', 'HashChangeEvent', 'PopStateEvent', 'PageTransitionEvent', 'ProgressEvent',
+        'AnimationEvent', 'TransitionEvent', 'PointerEvent', 'SubmitEvent', 'ToggleEvent'];
+    for (var i = 0; i < names.length; i++) {
+        var made = new window[names[i]]('x');
+        if (made.bubbles !== false || made.cancelable !== false || made.composed !== false)
+            return 'default flags wrong on ' + names[i];
+    }
+    var init = new MouseEvent('click', { bubbles: true, cancelable: true, composed: true });
+    var storage = new StorageEvent('storage', { key: 'k' });
+    var illegal = '';
+    try { new BeforeUnloadEvent('beforeunload'); } catch (e) { illegal = e.name; }
+    return init.bubbles === true && init.cancelable === true && init.composed === true
+        && storage.key === 'k' && storage.bubbles === false
+        && illegal === 'TypeError'
+        && new SubmitEvent('submit').submitter === null
+        && new ToggleEvent('toggle', { oldState: 'closed', newState: 'open' }).newState === 'open';
+}, function () {
+    var bad = [];
+    var names = ['Event', 'MouseEvent', 'StorageEvent', 'ProgressEvent'];
+    for (var i = 0; i < names.length; i++) {
+        var e = new window[names[i]]('x');
+        bad.push(names[i] + '=' + e.bubbles + '/' + e.cancelable + '/' + e.composed);
+    }
+    return bad.join(' ');
+});
+
+ck('U1 a url that does not parse is refused, not replaced', function () {
+    var a = '', b = '', c = '';
+    try { new URL('nope'); } catch (e) { a = e.name + '|' + e.message; }
+    try { new URL('/x', 'nope'); } catch (e) { b = e.name + '|' + e.message; }
+    try { new URL(''); } catch (e) { c = e.name; }
+    var p = new URLSearchParams('b=2&a=1&b=3');
+    p.sort();
+    return a.indexOf('TypeError') === 0 && /Invalid URL/.test(a)
+        && b.indexOf('TypeError') === 0 && /Invalid base URL/.test(b)
+        && c === 'TypeError'
+        && new URL('/x', 'http://a/b').href === 'http://a/x'
+        && new URL('http://a/b/c').origin === 'http://a'
+        && p.toString() === 'a=1&b=2&b=3'
+        && String(URL.fromJSON({ href: 'http://a/x' })) === 'http://a/x'
+        && URL.fromJSON({ href: 'nope' }) === null && URL.fromJSON(null) === null;
+}, function () {
+    var a = ''; try { new URL('nope'); } catch (e) { a = e.name + '|' + e.message; }
+    var b = ''; try { new URL('/x', 'nope'); } catch (e) { b = e.name + '|' + e.message; }
+    return [a, b, typeof URL.fromJSON].join(' || ');
+});
+
+ck('I1 an image carries the loading surface', function () {
+    var img = new Image(10, 20);
+    return Object.prototype.toString.call(img) === '[object HTMLImageElement]'
+        && img.width === 10 && img.height === 20 && img.complete === true && img.naturalWidth === 0
+        && img.loading === 'auto' && img.decoding === 'auto' && img.referrerPolicy === ''
+        && img.srcset === '' && img.sizes === '' && img.currentSrc === ''
+        && img.decode() instanceof Promise && img instanceof HTMLElement;
+}, function () {
+    var im = new Image();
+    return [im.loading, im.decoding, String(im.decode() instanceof Promise), im.sizes].join(' | ');
+});
+
+ck('P1 the clipboard the navigator hands out is the interface', function () {
+    return typeof navigator.clipboard === 'object' && navigator.clipboard !== null
+        && Object.prototype.toString.call(navigator.clipboard) === '[object Clipboard]'
+        && navigator.clipboard instanceof Clipboard
+        && typeof Clipboard === 'function'
+        && typeof navigator.clipboard.writeText === 'function'
+        && typeof navigator.clipboard.readText === 'function'
+        && typeof navigator.clipboard.read === 'function'
+        && typeof navigator.clipboard.write === 'function';
+}, function () {
+    return [typeof navigator.clipboard, Object.prototype.toString.call(navigator.clipboard),
+      String(navigator.clipboard.constructor), String(navigator.clipboard instanceof Clipboard)].join(' | ');
+});
+</script>
+</body>
+</html>

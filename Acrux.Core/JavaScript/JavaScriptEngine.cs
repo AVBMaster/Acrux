@@ -934,30 +934,180 @@ public class JavaScriptEngine : IDisposable
                 };
             }
 
-            function FormData(init) {
-                var self = this;
-                var pairs = [];
-                if (init && typeof init.forEach === 'function' && typeof init.append !== 'function')
-                    init.forEach(function (v, k) { pairs.push([String(k), v]); });
-                else if (Array.isArray(init)) init.forEach(function (p) { pairs.push([String(p[0]), p[1]]); });
-                function find(k) { var o = []; for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === k) o.push(pairs[i][1]); return o; }
-                this.append = function (k, v) { pairs.push([String(k), v]); };
-                this.set = function (k, v) {
-                    k = String(k); var done = false;
-                    for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === k) { if (!done) { pairs[i][1] = v; done = true; } else { pairs.splice(i, 1); i--; } }
-                    if (!done) pairs.push([k, v]);
-                };
-                this.get = function (k) { var f = find(String(k)); return f.length ? f[0] : null; };
-                this.getAll = function (k) { return find(String(k)); };
-                this.has = function (k) { return find(String(k)).length > 0; };
-                this.delete = function (k) { k = String(k); for (var i = pairs.length - 1; i >= 0; i--) if (pairs[i][0] === k) pairs.splice(i, 1); };
-                this.forEach = function (cb, ts) { for (var i = 0; i < pairs.length; i++) cb.call(ts || null, pairs[i][1], pairs[i][0], self); };
-                this.keys = function () { return pairs.map(function (p) { return p[0]; }); };
-                this.values = function () { return pairs.map(function (p) { return p[1]; }); };
-                this.entries = function () { return pairs.map(function (p) { return [p[0], p[1]]; }); };
-                this[Symbol.iterator] = function () { return pairs.map(function (p) { return [p[0], p[1]]; })[Symbol.iterator](); };
-                Object.defineProperty(this, 'length', { get: function () { return pairs.length; } });
+            // ── FormData (XHR §4, HTML §17.10.4) ────────────────────────────────
+            // A list of entries. Built from a form it starts with the entries that form would submit:
+            // a control that is disabled or carries no name gives nothing, an unchecked checkbox or
+            // radio is left out, a checked checkbox with no value answers 'on', a select answers the
+            // option or options it shows as selected, a textarea its value, and a file control the file
+            // it holds — or the empty file named 'blob' when nothing was picked (measured: a form with
+            // 'a=1' and a checked box with no value gives 'a=1&b=on').
+            function formDataQuote(value) { return String.fromCharCode(39) + String(value) + String.fromCharCode(39); }
+            function formAttributeValue(el, name) {
+                var value = el.getAttribute ? el.getAttribute(name) : null;
+                return value === null || value === undefined ? null : String(value);
             }
+            function collectFormEntries(form, entries) {
+                var controls = form.elements;
+                if (!controls) return;
+                var count = typeof controls.length === 'number' ? controls.length : 0;
+                for (var i = 0; i < count; i++) {
+                    var el = controls.item ? controls.item(i) : controls[i];
+                    if (!el) continue;
+                    if (el.disabled === true) continue;
+                    var name = formAttributeValue(el, 'name');
+                    if (name === null || name === '') continue;
+                    var tag = String(el.tagName || '').toUpperCase();
+                    var type = (String(el.type || 'text') || 'text').toLowerCase();
+                    if (tag === 'INPUT') {
+                        if (type === 'submit' || type === 'reset' || type === 'button' || type === 'image')
+                            continue;
+                        if (type === 'checkbox' || type === 'radio') {
+                            if (el.checked !== true) continue;
+                            entries.push([name, formAttributeValue(el, 'value') || 'on']);
+                            continue;
+                        }
+                        if (type === 'file') {
+                            var held = el.files && el.files.length ? el.files.item(0) : null;
+                            // The file an empty control contributes has no name and no bytes; its type
+                            // is the default the platform gives a file rather than a named blob (§17.10.4).
+                            entries.push([name, held || new File([], '', { type: 'application/octet-stream' })]);
+                            continue;
+                        }
+                        entries.push([name, String(el.value === null || el.value === undefined ? '' : el.value)]);
+                        continue;
+                    }
+                    if (tag === 'TEXTAREA') {
+                        entries.push([name, String(el.value === null || el.value === undefined ? '' : el.value)]);
+                        continue;
+                    }
+                    if (tag === 'SELECT') {
+                        var options = el.options || [];
+                        var picked = [];
+                        for (var j = 0; j < options.length; j++) {
+                            if (options[j] && options[j].selected === true)
+                                picked.push(String(options[j].value));
+                        }
+                        if (!picked.length && el.multiple !== true && options.length)
+                            picked.push(String(options[0] && options[0].value || ''));
+                        for (var k = 0; k < picked.length; k++) entries.push([name, picked[k]]);
+                        continue;
+                    }
+                    // Output, progress and meter carry no entry of their own; a button never does.
+                }
+            }
+            function FormData(form) {
+                if (!(this instanceof FormData)) {
+                    throw new TypeError('Failed to construct ' + formDataQuote('FormData') + ': Please use '
+                        + 'the ' + formDataQuote('new') + ' operator, this object constructor cannot be '
+                        + 'called as a function.');
+                }
+                this.__entries = [];
+                if (form === undefined || form === null) return;
+                var isForm = !!form && String(form.tagName || '').toUpperCase() === 'FORM';
+                if (!isForm) {
+                    throw new TypeError('Failed to construct ' + formDataQuote('FormData') + ': parameter 1 '
+                        + 'is not of type ' + formDataQuote('HTMLFormElement') + '.');
+                }
+                collectFormEntries(form, this.__entries);
+            }
+            function formDataEntryValue(value) {
+                // A blob that is not a file is given a file name, which is what the entry the receiver
+                // reads back needs (X §4.2).
+                if (value && typeof Blob !== 'undefined' && value instanceof Blob
+                    && !(typeof File === 'function' && value instanceof File)) {
+                    return new File([value], 'blob');
+                }
+                return value;
+            }
+            FormData.prototype.append = function (name, value, filename) {
+                if (arguments.length < 2) {
+                    throw new TypeError('Failed to execute ' + formDataQuote('append') + ' on '
+                        + formDataQuote('FormData') + ': 2 arguments required, but only '
+                        + arguments.length + ' present.');
+                }
+                var entry = formDataEntryValue(value);
+                this.__entries.push([String(name), filename !== undefined
+                    ? new File([entry], String(filename)) : entry]);
+            };
+            FormData.prototype.set = function (name, value, filename) {
+                if (arguments.length < 2) {
+                    throw new TypeError('Failed to execute ' + formDataQuote('set') + ' on '
+                        + formDataQuote('FormData') + ': 2 arguments required, but only '
+                        + arguments.length + ' present.');
+                }
+                var key = String(name);
+                var entry = filename !== undefined ? new File([formDataEntryValue(value)], String(filename))
+                    : formDataEntryValue(value);
+                var found = -1;
+                for (var i = 0; i < this.__entries.length; i++) {
+                    if (this.__entries[i][0] !== key) continue;
+                    if (found < 0) { found = i; this.__entries[i][1] = entry; }
+                    else { this.__entries.splice(i, 1); i--; }
+                }
+                if (found < 0) this.__entries.push([key, entry]);
+            };
+            FormData.prototype.get = function (name) {
+                var key = String(name);
+                for (var i = 0; i < this.__entries.length; i++)
+                    if (this.__entries[i][0] === key) return this.__entries[i][1];
+                return null;
+            };
+            FormData.prototype.getAll = function (name) {
+                var key = String(name), out = [];
+                for (var i = 0; i < this.__entries.length; i++)
+                    if (this.__entries[i][0] === key) out.push(this.__entries[i][1]);
+                return out;
+            };
+            FormData.prototype.has = function (name) {
+                var key = String(name);
+                for (var i = 0; i < this.__entries.length; i++)
+                    if (this.__entries[i][0] === key) return true;
+                return false;
+            };
+            FormData.prototype.delete = function (name) {
+                var key = String(name);
+                for (var i = this.__entries.length - 1; i >= 0; i--)
+                    if (this.__entries[i][0] === key) this.__entries.splice(i, 1);
+            };
+            FormData.prototype.forEach = function (callback, thisArg) {
+                var copy = this.__entries.slice();
+                for (var i = 0; i < copy.length; i++) callback.call(thisArg, copy[i][1], copy[i][0], this);
+            };
+            function formDataPairs(self) {
+                var out = [];
+                for (var i = 0; i < self.__entries.length; i++)
+                    out.push([self.__entries[i][0], self.__entries[i][1]]);
+                return out;
+            }
+            FormData.prototype.entries = function () {
+                var made = formDataPairs(this), at = 0;
+                return { next: function () {
+                    return at < made.length
+                        ? { value: made[at++], done: false } : { value: undefined, done: true };
+                }, [Symbol.iterator]: function () { return this; } };
+            };
+            FormData.prototype.keys = function () {
+                var made = formDataPairs(this).map(function (p) { return p[0]; }), at = 0;
+                return { next: function () {
+                    return at < made.length
+                        ? { value: made[at++], done: false } : { value: undefined, done: true };
+                }, [Symbol.iterator]: function () { return this; } };
+            };
+            FormData.prototype.values = function () {
+                var made = formDataPairs(this).map(function (p) { return p[1]; }), at = 0;
+                return { next: function () {
+                    return at < made.length
+                        ? { value: made[at++], done: false } : { value: undefined, done: true };
+                }, [Symbol.iterator]: function () { return this; } };
+            };
+            FormData.prototype[Symbol.iterator] = FormData.prototype.entries;
+            // The historical read the engine already carried: the number of entries.
+            Object.defineProperty(FormData.prototype, 'length', {
+                get: function () { return this.__entries.length; },
+                enumerable: false, configurable: true
+            });
+            Object.defineProperty(FormData.prototype, Symbol.toStringTag,
+                { value: 'FormData', configurable: true });
 
             // ── AbortController / AbortSignal (DOM §4.6) ────────────────────────
             // The signal is an EventTarget once the controller aborts it — the engine's event bridge
@@ -1084,7 +1234,27 @@ public class JavaScriptEngine : IDisposable
                 return { read: b.length, written: Math.min(b.length, buf.length) };
             };
 
-            function TextDecoder(label, options) { this.encoding = String(label || 'utf-8').toLowerCase(); this.fatal = false; }
+            // Encoding Standard §3: the label is text, and a label the specification does not give a
+            // decoder for is refused when the decoder is built — not quietly treated as UTF-8
+            // (measured: 'new TextDecoder' of an object refuses with a RangeError quoting the label as
+            // the conversion left it, '[object Object]'). The second argument is the options
+            // dictionary, and the encoding it names is 'utf-8'.
+            function TextDecoder(label, options) {
+                var given = label === undefined || label === null ? '' : String(label);
+                var name = given.toLowerCase().replace(/[^0-9a-z]/g, '');
+                if (name === '' || name === 'utf8') name = 'utf-8';
+                if (name !== 'utf-8') {
+                    // Encoding Standard §3: an unsupported label is refused when the decoder is built,
+                    // with the text the conversion was given quoted back (measured).
+                    var Q = String.fromCharCode(39);
+                    throw new RangeError('Failed to construct ' + Q + 'TextDecoder' + Q
+                        + ': The encoding label provided (' + Q + given + Q + ') is invalid.');
+                }
+                var init = options && typeof options === 'object' ? options : {};
+                this.encoding = 'utf-8';
+                this.fatal = !!init.fatal;
+                this.ignoreBOM = !!init.ignoreBOM;
+            }
             TextDecoder.prototype.decode = function (input) {
                 if (input === undefined || input === null) return '';
                 var bytes = (input instanceof Uint8Array) ? input
@@ -1224,6 +1394,8 @@ public class JavaScriptEngine : IDisposable
 
             // Blob holds concatenated string parts; 'size' is the UTF-8 byte length and 'text'/'
             // arrayBuffer' are the async reads a page awaits on. File is a Blob with a name.
+            function blobBytes(blob) { return new TextEncoder().encode(blob.__text || ''); }
+            function blobToString(blob) { return blob.__text === undefined ? String(blob) : blob.__text; }
             function Blob(blobParts, options) {
                 var parts = blobParts || [];
                 var pieces = [];
@@ -1237,7 +1409,7 @@ public class JavaScriptEngine : IDisposable
                 this.size = new TextEncoder().encode(text).length;
             }
             Blob.prototype.text = function () { var t = this.__text; return Promise.resolve(t); };
-            Blob.prototype.arrayBuffer = function () { return Promise.resolve(new TextEncoder().encode(this.__text).buffer); };
+            Blob.prototype.arrayBuffer = function () { return Promise.resolve(blobBytes(this).buffer); };
             Blob.prototype.slice = function (start, end, contentType) {
                 var t = this.__text;
                 var s = start < 0 ? Math.max(t.length + start, 0) : (start || 0);
@@ -1245,44 +1417,169 @@ public class JavaScriptEngine : IDisposable
                 var sliceText = t.substring(Math.min(s, e), Math.max(s, e));
                 return new Blob([sliceText], { type: contentType || '' });
             };
+            Object.defineProperty(Blob.prototype, Symbol.toStringTag,
+                { value: 'Blob', configurable: true });
+
             function File(fileBits, fileName, options) {
+                if (arguments.length < 2) {
+                    throw new TypeError('Failed to construct ' + formDataQuote('File') + ': '
+                        + 2 + ' arguments required, but only ' + arguments.length + ' present.');
+                }
                 Blob.call(this, fileBits, options);
                 this.name = String(fileName === undefined ? '' : fileName);
-                this.lastModified = (options && options.lastModified) ? options.lastModified : Date.now();
+                var path = options && options.webkitPath ? String(options.webkitPath) : '';
+                var mark = path.lastIndexOf('/');
+                this.webkitPath = mark < 0 ? '' : path.slice(0, mark);
+                this.lastModified = (options && options.lastModified !== undefined)
+                    ? Number(options.lastModified) : Date.now();
             }
             File.prototype = Object.create(Blob.prototype);
             File.prototype.constructor = File;
+            Object.defineProperty(File.prototype, 'webkitRelativePath', {
+                get: function () {
+                    // A file the script built has no directory beside it; one the user picked through a
+                    // file input carries the path the picker knew.
+                    return this.__relative === undefined ? '' : this.__relative;
+                },
+                enumerable: true, configurable: true
+            });
+            Object.defineProperty(File.prototype, Symbol.toStringTag,
+                { value: 'File', configurable: true });
 
-            // FileReader runs its read as a task, then fires 'load' with the result on the reader —
-            // the shape every script expects from the callback API.
-            function FileReader() {
-                this.result = null; this.error = null; this.readyState = 0;
-                this.onload = null; this.onerror = null; this.onloadend = null; this.onprogress = null;
+            // FileList (§4.10.5.1): the files a control holds. The engine never reads a disk, so a page
+            // that builds one is refused, and the list a file control answers is the empty one.
+            function FileList() {
+                throw new TypeError('Failed to construct ' + formDataQuote('FileList')
+                    + ': Illegal constructor');
             }
-            FileReader.prototype.readAsText = function (blob) {
-                var self = this;
-                self.readyState = 1;
-                Promise.resolve().then(function () {
-                    self.result = blob.__text !== undefined ? blob.__text : String(blob);
-                    self.readyState = 2;
-                    if (typeof self.onload === 'function') self.onload({ target: self });
-                    if (typeof self.onloadend === 'function') self.onloadend({ target: self });
-                });
-            };
-            FileReader.prototype.readAsDataURL = function (blob) {
-                var self = this;
-                self.readyState = 1;
-                Promise.resolve().then(function () {
-                    var bytes = new TextEncoder().encode(blob.__text || '');
+            FileList.prototype.length = 0;
+            FileList.prototype.item = function () { return null; };
+            Object.defineProperty(FileList.prototype, Symbol.toStringTag,
+                { value: 'FileList', configurable: true });
+            window.FileList = FileList;
+
+            // ── FileReader (File API §4) ────────────────────────────────────────
+            // A read runs as a task, and the reader is an event target the whole way: 'loadstart',
+            // 'progress', then 'load' and 'loadend' around the result the page reads back. The three
+            // states are constants on the interface, on its prototype and on every reader (measured:
+            // EMPTY 0, LOADING 1, DONE 2), and a blob that is not a blob is refused for the parameter.
+            var FILE_READERS = {
+                readAsText: function (blob) { return blobToString(blob); },
+                readAsDataURL: function (blob) {
+                    var bytes = blobBytes(blob);
                     var bin = '';
                     for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-                    self.result = 'data:' + (blob.type || '') + ';base64,' + __acrux.btoa(bin);
-                    self.readyState = 2;
-                    if (typeof self.onload === 'function') self.onload({ target: self });
-                    if (typeof self.onloadend === 'function') self.onloadend({ target: self });
-                });
+                    return 'data:' + (blob.type || '') + ';base64,' + __acrux.btoa(bin);
+                },
+                readAsArrayBuffer: function (blob) { return blobBytes(blob).buffer; },
+                readAsBinaryString: function (blob) {
+                    var bytes = blobBytes(blob), out = '';
+                    for (var i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
+                    return out;
+                }
             };
-            FileReader.prototype.abort = function () { this.readyState = 2; };
+            function FileReader() { }
+            FileReader.prototype.result = null;
+            FileReader.prototype.error = null;
+            FileReader.prototype.readyState = 0;
+            FileReader.prototype.onloadstart = null;
+            FileReader.prototype.onprogress = null;
+            FileReader.prototype.onload = null;
+            FileReader.prototype.onerror = null;
+            FileReader.prototype.onloadend = null;
+            function readerRefused(method) {
+                return new TypeError('Failed to execute ' + formDataQuote(method) + ' on '
+                    + formDataQuote('FileReader') + ': parameter 1 is not of type '
+                    + formDataQuote('Blob') + '.');
+            }
+            function readerRun(self, method, blob) {
+                if (arguments.length < 3 || !(blob instanceof Blob)) throw readerRefused(method);
+                if (self.readyState === 1) {
+                    throw new DOMException('Failed to execute ' + formDataQuote(method) + ' on '
+                        + formDataQuote('FileReader') + ': The object is in state '
+                        + (self.readyState === 1 ? 'LOADING' : 'DONE') + ' not EMPTY.', 'InvalidStateError');
+                }
+                self.readyState = 1;
+                self.result = null;
+                self.error = null;
+                readerFire(self, 'loadstart');
+                Promise.resolve().then(function () {
+                    var value;
+                    try { value = FILE_READERS[method](blob); }
+                    catch (error) {
+                        self.readyState = 2;
+                        self.error = error;
+                        readerFire(self, 'error');
+                        readerFire(self, 'loadend');
+                        return;
+                    }
+                    readerFire(self, 'progress');
+                    self.result = value;
+                    self.readyState = 2;
+                    readerFire(self, 'load');
+                    readerFire(self, 'loadend');
+                });
+            }
+            // The event a reader raises is built here rather than by the engine: a JS object owns its
+            // members, so 'event.target' is the very reader the page holds — a host event object keeps
+            // the target through a CLR field and hands back a different wrapper for a script object.
+            function readerEvent(self, type, loaded) {
+                var proto = typeof ProgressEvent === 'function' ? ProgressEvent.prototype : null;
+                var event = proto ? Object.create(proto) : {};
+                Object.defineProperties(event, {
+                    type: { value: type, writable: true, enumerable: true, configurable: true },
+                    target: { value: self, writable: true, enumerable: true, configurable: true },
+                    currentTarget: { value: self, writable: true, enumerable: true, configurable: true },
+                    srcElement: { value: self, writable: true, enumerable: true, configurable: true },
+                    eventPhase: { value: 2, writable: true, enumerable: true, configurable: true },
+                    bubbles: { value: false, writable: true, enumerable: true, configurable: true },
+                    cancelable: { value: false, writable: true, enumerable: true, configurable: true },
+                    composed: { value: false, writable: true, enumerable: true, configurable: true },
+                    defaultPrevented: { value: false, writable: true, enumerable: true, configurable: true },
+                    isTrusted: { value: false, writable: true, enumerable: true, configurable: true },
+                    cancelBubble: { value: false, writable: true, enumerable: true, configurable: true },
+                    returnValue: { value: true, writable: true, enumerable: true, configurable: true },
+                    lengthComputable: { value: false, writable: true, enumerable: true, configurable: true },
+                    loaded: { value: loaded || 0, writable: true, enumerable: true, configurable: true },
+                    total: { value: 0, writable: true, enumerable: true, configurable: true },
+                    timeStamp: { value: Date.now(), writable: true, enumerable: true, configurable: true },
+                    preventDefault: { value: function () { }, writable: true, enumerable: true, configurable: true },
+                    stopPropagation: { value: function () { }, writable: true, enumerable: true, configurable: true },
+                    stopImmediatePropagation: { value: function () { }, writable: true, enumerable: true, configurable: true },
+                    initEvent: { value: function () { }, writable: true, enumerable: true, configurable: true },
+                    composedPath: { value: function () { return [self]; }, writable: true, enumerable: true, configurable: true }
+                });
+                return event;
+            }
+            function readerFire(self, type) {
+                try { self.dispatchEvent(readerEvent(self, type, self.result ? 1 : 0)); } catch (e) { }
+            }
+            function makeReaderMethod(name) {
+                return function (blob) { readerRun(this, name, blob); };
+            }
+            for (var readerName in FILE_READERS) {
+                if (Object.prototype.hasOwnProperty.call(FILE_READERS, readerName))
+                    FileReader.prototype[readerName] = makeReaderMethod(readerName);
+            }
+            FileReader.prototype.abort = function () {
+                if (this.readyState === 0 || this.readyState === 2) return;
+                this.readyState = 2;
+                this.result = null;
+                this.error = new DOMException('The user aborted a request.', 'AbortError');
+                readerFire(this, 'error');
+                readerFire(this, 'abort');
+                readerFire(this, 'loadend');
+            };
+            var readerStates = [['EMPTY', 0], ['LOADING', 1], ['DONE', 2]];
+            for (var rs = 0; rs < readerStates.length; rs++) {
+                (function (readerState, value) {
+                    var shape = { value: value, writable: false, enumerable: false, configurable: false };
+                    try { Object.defineProperty(FileReader.prototype, readerState, shape); } catch (e) { }
+                    try { Object.defineProperty(FileReader, readerState, shape); } catch (e) { }
+                })(readerStates[rs][0], readerStates[rs][1]);
+            }
+            Object.defineProperty(FileReader.prototype, Symbol.toStringTag,
+                { value: 'FileReader', configurable: true });
 
             // URL.createObjectURL hands out a blob: reference the host can later revoke; without a
             // backing store it is a stable label, which is all a page that only round-trips the URL needs.
@@ -1700,25 +1997,33 @@ public class JavaScriptEngine : IDisposable
             // '(min-width: calc(445px))'. The same function answers 'CSSRule.conditionText' and
             // 'CSSRule.media.mediaText', so the three spellings of one query cannot drift apart.
             function __serializeMediaQuery(q) { return q ? __acrux.mediaQuerySerialize(q) : ''; }
-            window.matchMedia = function(query) {
+            window.matchMedia = function (query) {
+                if (arguments.length < 1) {
+                    throw new TypeError('Failed to execute ' + formDataQuote('matchMedia') + ' on '
+                        + formDataQuote('Window') + ': 1 argument required, but only 0 present.');
+                }
                 var q = String(query === undefined ? '' : query).trim();
                 // The same evaluator an @media rule is filtered through, so a script and a
                 // stylesheet cannot disagree about the viewport (CSSOM View §7.1).
-                var matches = function() { return !!__acrux.mediaQueryMatches(q); };
-                var listeners = [];
-                var list = {};
-                // A MediaQueryList reads its own properties off the prototype and keeps them
-                // non-enumerable, so 'Object.keys(mql)' is empty and a spread of it is too.
+                var list = Object.create(window.MediaQueryList.prototype);
                 Object.defineProperties(list, {
-                    media: { get: function() { return __serializeMediaQuery(q); } },
-                    matches: { get: matches },   // live: the list follows the viewport
-                    onchange: { value: null, writable: true },
-                    addListener: { value: function(cb) { if (typeof cb === 'function') listeners.push(cb); } },
-                    removeListener: { value: function(cb) { var i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); } },
-                    addEventListener: { value: function(t, cb) { if (t === 'change' && typeof cb === 'function') listeners.push(cb); } },
-                    removeEventListener: { value: function(t, cb) { var i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); } },
-                    dispatchEvent: { value: function() { return true; } }
+                    __query: { value: q, enumerable: false, configurable: true },
+                    media: { get: function () { return __serializeMediaQuery(q); },
+                        enumerable: true, configurable: true },
+                    matches: {
+                        // Live: the list follows the viewport, and a listener registered against it is
+                        // told when the answer it carries changes (MQ §3.1).
+                        get: function () { return !!__acrux.mediaQueryMatches(q); },
+                        enumerable: true, configurable: true
+                    }
                 });
+                list.onchange = null;
+                // The list is registered against the checkpoint that tells it when the viewport moves;
+                // the checkpoint is built with the rest of the DOM surface below, so it is asked for on
+                // the way out rather than assumed.
+                if (typeof window.__mediaAdd === 'function') window.__mediaAdd(list);
+                // The first read fixes the answer the change is measured against.
+                list.__last = list.matches;
                 return list;
             };
             window.open = function(url, name, features) {
@@ -1746,13 +2051,115 @@ public class JavaScriptEngine : IDisposable
                 if (typeof fn !== 'function') throw new TypeError('queueMicrotask requires a function argument');
                 Promise.resolve().then(function() { fn(); });
             };
-            // A structural clone is a deep copy that keeps plain data (object/array graph) and
-            // drops what cannot cross — functions and non-serialisable values. The full set of
-            // types (Date, Map, Set, ArrayBuffer, transferables) is out of scope here, but the
-            // everyday JSON-safe graph clones the way the page expects.
-            window.structuredClone = function(value) {
+            // HTML §2.9.4: a structured clone is a deep copy of the value graph. A reference the page
+            // held twice stays one object in the copy, a cycle stays a cycle, and the kinds that carry
+            // meaning keep their kind — a Date clones as a Date, a Map and a Set as themselves, an
+            // ArrayBuffer and its views as the same bytes, a RegExp with its pattern and flags. What
+            // cannot cross is refused with DataCloneError naming the value (measured: a function
+            // answers 'function(){} could not be cloned.'), and undefined in, undefined out.
+            function cloneUncloneable(value) {
+                var label = typeof value === 'symbol' ? String(value) : String(value);
+                return new DOMException('Failed to execute ' + String.fromCharCode(39)
+                    + 'structuredClone' + String.fromCharCode(39) + ' on ' + String.fromCharCode(39)
+                    + 'Window' + String.fromCharCode(39) + ': ' + label + ' could not be cloned.',
+                    'DataCloneError');
+            }
+            function cloneInto(value, seen) {
+                if (value === null) return null;
+                var kind = typeof value;
+                if (kind === 'function' || kind === 'symbol') throw cloneUncloneable(value);
+                if (kind !== 'object') return value;
+                if (seen.has(value)) return seen.get(value);
+                var made;
+                if (value instanceof Date) return copyInto(value, seen, new Date(value.getTime()));
+                if (value instanceof RegExp) {
+                    var re = new RegExp(value.source, value.flags === undefined ? '' : value.flags);
+                    re.lastIndex = value.lastIndex || 0;
+                    return copyInto(value, seen, re);
+                }
+                if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(value)) {
+                    var bytes = new value.constructor(value.length);
+                    bytes.set(value);
+                    return copyInto(value, seen, bytes);
+                }
+                if (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer) {
+                    return copyInto(value, seen, value.slice(0));
+                }
+                if (Array.isArray(value)) {
+                    made = new Array(value.length);
+                    seen.set(value, made);
+                    for (var i = 0; i < value.length; i++) {
+                        if (i in value) made[i] = cloneInto(value[i], seen);
+                    }
+                    return copyKeys(value, made, seen);
+                }
+                if (typeof Map === 'function' && value instanceof Map) {
+                    made = new Map();
+                    seen.set(value, made);
+                    value.forEach(function (v, k) { made.set(cloneInto(k, seen), cloneInto(v, seen)); });
+                    return copyKeys(value, made, seen);
+                }
+                if (typeof Set === 'function' && value instanceof Set) {
+                    made = new Set();
+                    seen.set(value, made);
+                    value.forEach(function (v) { made.add(cloneInto(v, seen)); });
+                    return copyKeys(value, made, seen);
+                }
+                // A blob is a value the page already holds bytes for, so the copy is the same object
+                // the reference hands back for a kind its serializer knows (§2.9.4.16).
+                if (typeof Blob !== 'undefined' && value instanceof Blob) return copyInto(value, seen, value);
+                // The wrappers the engine hands out are not a plain graph the page built — the host
+                // owns their state, and copying that state is not what a clone means. The reference
+                // refuses them, and so does this (§2.9.4.18).
+                // An object the engine handed out — a node, a collection, any host wrapper — is not a
+                // graph the page owns, so it does not cross (measured: a function is refused with
+                // DataCloneError, and the serializer has no rule for a host object either).
+                var proto = Object.getPrototypeOf(value);
+                if (proto && typeof proto.__domType === 'string') throw cloneUncloneable(value);
+                made = proto === null ? Object.create(null) : {};
+                seen.set(value, made);
+                var keys = Object.keys(value);
+                for (var j = 0; j < keys.length; j++) made[keys[j]] = cloneInto(value[keys[j]], seen);
+                return copyKeys(value, made, seen);
+            }
+            function copyInto(original, seen, copy) { seen.set(original, copy); return copy; }
+            function copyKeys(original, copy, seen) {
+                // A clone carries the own properties the page wrote, keyed by string or by symbol — the
+                // iterator and the well-known symbols belong to the type, not to the data, so they are
+                // left where they are (§2.9.4.17).
+                var names = Object.getOwnPropertyNames(original);
+                for (var n = 0; n < names.length; n++) {
+                    if (names[n] === 'length' && typeof original.length === 'number' && copy.length === original.length)
+                        continue;
+                    if (Object.prototype.propertyIsEnumerable.call(original, names[n]))
+                        copy[names[n]] = cloneInto(original[names[n]], seen);
+                }
+                if (Object.getOwnPropertySymbols && Object.getOwnPropertySymbols(original).length) {
+                    var symbols = Object.getOwnPropertySymbols(original);
+                    for (var s = 0; s < symbols.length; s++) {
+                        if (symbols[s] === Symbol.iterator) continue;
+                        copy[symbols[s]] = cloneInto(original[symbols[s]], seen);
+                    }
+                }
+                return copy;
+            }
+            window.structuredClone = function (value) {
+                if (arguments.length < 1) {
+                    throw new TypeError('Failed to execute ' + String.fromCharCode(39) + 'structuredClone'
+                        + String.fromCharCode(39) + ' on ' + String.fromCharCode(39) + 'Window'
+                        + String.fromCharCode(39) + ': 1 argument required, but only 0 present.');
+                }
                 if (value === undefined) return undefined;
-                return JSON.parse(JSON.stringify(value));
+                var seen = new Map();
+                var options = arguments.length > 1 ? arguments[1] : null;
+                if (options && (options.transfer !== undefined && options.transfer !== null
+                    && options.transfer.length !== undefined && options.transfer.length > 0)) {
+                    throw new DOMException('Failed to execute ' + String.fromCharCode(39) + 'structuredClone'
+                        + String.fromCharCode(39) + ' on ' + String.fromCharCode(39) + 'Window'
+                        + String.fromCharCode(39) + ': transfer is not supported by this engine.',
+                        'NotSupportedError');
+                }
+                return cloneInto(value, seen);
             };
 
             // User Timing (Performance API §3): the clock the page measures against. 'now' is the
@@ -2515,6 +2922,11 @@ public class JavaScriptEngine : IDisposable
             window.__domCheckpoint = function () {
                 try { if (typeof window.__mutationFlush === 'function') window.__mutationFlush(); }
                 catch (e) { }
+                // The media lists are asked at the same checkpoint the mutation observers are, which
+                // is where a page that changed the viewport without leaving the script learns that a
+                // query it registered against flipped (MQ §3.1).
+                try { if (typeof window.__mediaCheckpoint === 'function') window.__mediaCheckpoint(); }
+                catch (e) { }
             };
 
             // ── Custom Elements (custom-elements §1) ───────────────────────────
@@ -3066,9 +3478,15 @@ public class JavaScriptEngine : IDisposable
                             if (initOnly) { init = type; }
                             else evt.type = String(type === undefined ? '' : type);
                             init = init || { };
-                            if (init.bubbles !== undefined) { try { evt.bubbles = !!init.bubbles; } catch (e) { } }
-                            if (init.cancelable !== undefined) { try { evt.cancelable = !!init.cancelable; } catch (e) { } }
-                            if (init.composed !== undefined) { try { evt.composed = !!init.composed; } catch (e) { } }
+                            // DOM §4.5.2: EventInit's three flags are all false, and every family built
+                            // on it starts from there. The engine's own event object is made for the
+                            // dispatch, where it does bubble and is often cancelable, so an event the
+                            // page builds itself has to be told the dictionary's answer rather than keep
+                            // the one the dispatcher would have worn (measured: 'new MouseEvent(...)'
+                            // reads bubbles false and cancelable false unless the init says otherwise).
+                            try { evt.bubbles = !!init.bubbles; } catch (e) { }
+                            try { evt.cancelable = !!init.cancelable; } catch (e) { }
+                            try { evt.composed = !!init.composed; } catch (e) { }
                             for (var k = 0; k < members.length; k++) {
                                 var key = members[k][0];
                                 var value;
@@ -3218,6 +3636,21 @@ public class JavaScriptEngine : IDisposable
                 eventCtor('BeforeUnloadEvent', [['returnValue', '']]);
                 eventCtor('PromiseRejectionEvent', [['reason', undefined], ['promise', undefined]]);
                 eventCtor('ProgressEvent', [['lengthComputable', false], ['loaded', 0], ['total', 0]]);
+                eventCtor('SubmitEvent', [['submitter', null]]);
+                eventCtor('ToggleEvent', [['oldState', ''], ['newState', '']]);
+                // A beforeunload event is the platform's to raise: a page that asks for one is refused,
+                // the same as the reference (UI Events §5.9, measured: 'Illegal constructor').
+                if (window.BeforeUnloadEvent) {
+                    var beforeUnloadLevel = protoMap['BeforeUnloadEvent'];
+                    var beforeUnloadRefused = function () {
+                        throw new TypeError('Failed to construct ' + String.fromCharCode(39)
+                            + 'BeforeUnloadEvent' + String.fromCharCode(39) + ': Illegal constructor');
+                    };
+                    if (beforeUnloadLevel) {
+                        beforeUnloadRefused.prototype = beforeUnloadLevel;
+                        window.BeforeUnloadEvent = beforeUnloadRefused;
+                    }
+                }
                 defineInterface('EventSource', 'EventTarget');
                 // The interface a canvas 2D context measures with. This engine has no 2D context to
                 // hand one out from, so the name exists and the constructor refuses, which is what a
@@ -4952,6 +5385,433 @@ public class JavaScriptEngine : IDisposable
                 if (window.sessionStorage) window.sessionStorage = storageNamed(window.sessionStorage);
             })();
 
+            // ── The collections, the media list and the legacy all-list (§2.8, MQ §3.1, HTML §4.10) ──
+            // The interfaces the engine hands out as CLR objects still answer as the interface they
+            // are: a level in the map the stamping reads gives a NodeList its 'instanceof', its
+            // 'constructor' and the tag the page prints. Nothing here is constructible — a page builds
+            // none of these itself (measured: 'new FileList()' and 'new HTMLCollection()' both refuse).
+            (function () {
+                var protoMap = window.__domProto || {};
+                var SQ = String.fromCharCode(39);
+                function quoted(value) { return SQ + String(value) + SQ; }
+                function refuse(name) {
+                    return function () {
+                        throw new TypeError('Failed to construct ' + quoted(name)
+                            + ': Illegal constructor');
+                    };
+                }
+                // The level the interface owns in the map the stamping reads. A name the page cannot
+                // build is registered with a constructor that refuses; a name the script builds itself
+                // keeps its own function and only joins the map.
+                function level(name, baseName, Ctor) {
+                    var base = baseName ? protoMap[baseName] : null;
+                    var proto = protoMap[name] || Object.create(base || Object.prototype);
+                    if (!protoMap[name]) protoMap[name] = proto;
+                    var Built = Ctor || refuse(name);
+                    try { Object.defineProperty(Built, 'name', { value: name, configurable: true }); }
+                    catch (e) { }
+                    Built.prototype = proto;
+                    try {
+                        Object.defineProperty(proto, 'constructor',
+                            { value: Built, writable: true, configurable: true });
+                        Object.defineProperty(proto, Symbol.toStringTag,
+                            { value: name, writable: false, enumerable: false, configurable: true });
+                    } catch (e) { }
+                    window[name] = Built;
+                    return proto;
+                }
+                function adopt(name, baseName, Ctor) {
+                    var base = baseName ? protoMap[baseName] : null;
+                    if (base) { try { Object.setPrototypeOf(Ctor.prototype, base); } catch (e) { } }
+                    try {
+                        Object.defineProperty(Ctor.prototype, Symbol.toStringTag,
+                            { value: name, writable: false, enumerable: false, configurable: true });
+                    } catch (e) { }
+                    protoMap[name] = Ctor.prototype;
+                    if (!window[name]) window[name] = Ctor;
+                    return Ctor.prototype;
+                }
+                function member(target, key, value) {
+                    if (!target) return;
+                    try {
+                        Object.defineProperty(target, key,
+                            { value: value, writable: true, enumerable: false, configurable: true });
+                    } catch (e) { target[key] = value; }
+                }
+
+                // The collection family (DOM §4.5.2, §5.1). A NodeList and an HTMLCollection share the
+                // reads a page uses — 'length', 'item', the index — and the HTMLCollection adds the
+                // named read; the form's controls add it again with the id-or-name rule the collection
+                // keeps, so it sits above the named item list rather than beside it.
+                var nodeList = level('NodeList', null, refuse('NodeList'));
+                member(nodeList, 'item', function (index) {
+                    var at = Number(index) | 0;
+                    return at >= 0 && at < this.length ? this[at] : null;
+                });
+                member(nodeList, 'forEach', function (callback, thisArg) {
+                    for (var i = 0; i < this.length; i++) callback.call(thisArg, this[i], i, this);
+                });
+                member(nodeList, 'keys', function () {
+                    var self = this, out = [], at = 0;
+                    for (var i = 0; i < self.length; i++) out.push(i);
+                    return { next: function () {
+                        return at < out.length
+                            ? { value: out[at++], done: false } : { value: undefined, done: true };
+                    }, [Symbol.iterator]: function () { return this; } };
+                });
+                member(nodeList, 'values', function () {
+                    var self = this, at = 0;
+                    return { next: function () {
+                        return at < self.length
+                            ? { value: self[at++], done: false } : { value: undefined, done: true };
+                    }, [Symbol.iterator]: function () { return this; } };
+                });
+                member(nodeList, 'entries', function () {
+                    var self = this, at = 0;
+                    return { next: function () {
+                        if (at >= self.length) return { value: undefined, done: true };
+                        var pair = [at, self[at]]; at++;
+                        return { value: pair, done: false };
+                    }, [Symbol.iterator]: function () { return this; } };
+                });
+                nodeList[Symbol.iterator] = nodeList.values;
+
+                var collection = level('HTMLCollection', null, refuse('HTMLCollection'));
+                Object.setPrototypeOf(collection, nodeList);
+                member(collection, 'namedItem', function (name) {
+                    var wanted = String(name === undefined ? '' : name);
+                    for (var i = 0; i < this.length; i++) {
+                        var el = this[i];
+                        if (el && String(el.id === undefined ? '' : el.id) === wanted) return el;
+                    }
+                    for (var j = 0; j < this.length; j++) {
+                        var item = this[j];
+                        if (item && item.getAttribute && String(item.getAttribute('name') || '') === wanted)
+                            return item;
+                    }
+                    return null;
+                });
+
+                var formControls = level('HTMLFormControlsCollection', 'HTMLCollection',
+                    refuse('HTMLFormControlsCollection'));
+                member(formControls, 'namedItem', function (name) {
+                    var wanted = String(name === undefined ? '' : name);
+                    var list = [];
+                    for (var i = 0; i < this.length; i++) {
+                        var el = this[i];
+                        if (!el) continue;
+                        if (String(el.id === undefined ? '' : el.id) === wanted) return el;
+                        if (el.getAttribute && String(el.getAttribute('name') || '') === wanted) list.push(el);
+                    }
+                    if (!list.length) return null;
+                    if (list.length === 1) return list[0];
+                    // More than one control carries the name: the answer is the radio group, which is
+                    // itself the list with a length (HTML §4.10.22).
+                    var group = list.slice();
+                    group.length = list.length;
+                    group.item = function (at) { return group[Number(at) | 0] || null; };
+                    group.value = list[0].value;
+                    return group;
+                });
+
+                level('RadioNodeList', 'NodeList', refuse('RadioNodeList'));
+                level('FileList', null);
+                level('NamedNodeMap', null, refuse('NamedNodeMap'));
+                level('HTMLAllCollection', null, refuse('HTMLAllCollection'));
+                // The four the script builds keep the constructors the page already calls — the level
+                // only joins the map so 'instanceof' and the tag read the interface.
+                adopt('FormData', null, window.FormData);
+                adopt('Blob', null, window.Blob);
+                adopt('File', 'Blob', window.File);
+                adopt('FileReader', 'EventTarget', window.FileReader);
+                level('MediaQueryList', 'EventTarget', refuse('MediaQueryList'));
+                level('MediaQueryListEvent', 'Event', function (type, init) {
+                    var event = new Event(type, init);
+                    init = init || { };
+                    // The event reads as the interface it was built for, the same way every other
+                    // family does, so the level is hung under it before the members are written.
+                    var ownLevel = protoMap['MediaQueryListEvent'];
+                    if (ownLevel) { try { Object.setPrototypeOf(event, ownLevel); } catch (e) { } }
+                    try {
+                        Object.defineProperty(event, 'media', {
+                            value: String(init.media === undefined ? '' : init.media),
+                            writable: true, enumerable: false, configurable: true
+                        });
+                        Object.defineProperty(event, 'matches', {
+                            value: !!init.matches, writable: true, enumerable: false, configurable: true
+                        });
+                    } catch (e) { }
+                    return event;
+                });
+                level('Clipboard', 'EventTarget', refuse('Clipboard'));
+
+                // A page cannot build a media list of its own either, but it can hold one from
+                // 'matchMedia', so the interface level carries the reads and the dispatch point.
+                var mediaLevel = protoMap['MediaQueryList'];
+                if (mediaLevel) {
+                    member(mediaLevel, 'dispatchEvent', function (event) {
+                        if (event == null) {
+                            throw new TypeError('Failed to execute ' + quoted('dispatchEvent') + ' on '
+                                + quoted('MediaQueryList') + ': parameter 1 is not of type '
+                                + quoted('Event') + '.');
+                        }
+                        if (typeof EventTarget === 'function' && this instanceof EventTarget)
+                            return EventTarget.prototype.dispatchEvent.call(this, event);
+                        return true;
+                    });
+                }
+
+                // ── The media checkpoint (CSSOM View §7.1, MQ §3.1) ────────────────
+                // A list keeps the answer it gave the last time it was asked; at the checkpoint the
+                // engine reads the viewport again and tells the lists whose answer moved. That is how
+                // a page that resized the window without leaving the script learns about it.
+                var mediaLists = [];
+                function fireMediaChange(list, matches) {
+                    var event;
+                    try {
+                        event = new MediaQueryListEvent('change', { media: list.media, matches: matches });
+                    } catch (e) { return; }
+                    try { event.target = list; } catch (e) { }
+                    try { list.dispatchEvent(event); } catch (e) { }
+                    if (typeof list.onchange === 'function') {
+                        try { list.onchange(event); } catch (e) { }
+                    }
+                }
+                window.__mediaLists = mediaLists;
+                window.__mediaCheckpoint = function () {
+                    for (var i = mediaLists.length - 1; i >= 0; i--) {
+                        var list = mediaLists[i];
+                        if (!list) { mediaLists.splice(i, 1); continue; }
+                        var matches = false;
+                        try { matches = !!list.matches; } catch (e) { continue; }
+                        if (list.__last === undefined) { list.__last = matches; continue; }
+                        if (list.__last === matches) continue;
+                        list.__last = matches;
+                        fireMediaChange(list, matches);
+                    }
+                };
+                // A list made before this block ran still needs registering; 'matchMedia' pushes on the
+                // way out, and the lists it made earlier are picked up here once.
+                window.__mediaAdd = function (list) { mediaLists.push(list); };
+
+                // ── 'document.all', the legacy collection every old page reads (HTML §4.10.21) ──
+                // It is the one object in the platform that is both a collection and callable: an
+                // argument is the name or the index and answers the element, a bare 'length' walks the
+                // tree. The reference also makes 'typeof' answer 'undefined' and a boolean test answer
+                // false, which is a rule the language carries inside the object and no script value can
+                // be built to repeat — so those two read as the ordinary answer here, and everything
+                // the page does with the collection works.
+                function allElements() {
+                    var out = [];
+                    function walk(node) {
+                        var kids = node.children;
+                        var count = kids && typeof kids.length === 'number' ? kids.length : 0;
+                        for (var i = 0; i < count; i++) {
+                            var kid = kids.item ? kids.item(i) : kids[i];
+                            if (!kid) continue;
+                            out.push(kid);
+                            walk(kid);
+                        }
+                    }
+                    // The collection covers the document, and the document element is part of it
+                    // (measured: 'document.all[0]' is the html element itself).
+                    if (document.documentElement) out.push(document.documentElement);
+                    walk(document.documentElement);
+                    return out;
+                }
+                function allNamed(list, name) {
+                    var wanted = String(name === undefined ? '' : name);
+                    var hits = [];
+                    for (var i = 0; i < list.length; i++) {
+                        var el = list[i];
+                        if (String(el.id === undefined ? '' : el.id) === wanted) hits.push(el);
+                        else if (el.getAttribute && String(el.getAttribute('name') || '') === wanted)
+                            hits.push(el);
+                    }
+                    if (!hits.length) return null;
+                    return hits.length === 1 ? hits[0] : hits;
+                }
+                var allCollection = new Proxy(function () { }, {
+                    apply: function (target, thisArg, args) {
+                        var list = allElements();
+                        if (!args.length) return list;
+                        var first = args[0];
+                        if (typeof first === 'number') return list[first] === undefined ? null : list[first];
+                        var text = String(first);
+                        if (/^[0-9]+$/.test(text)) return list[Number(text)] === undefined ? null : list[Number(text)];
+                        return allNamed(list, text);
+                    },
+                    get: function (target, key) {
+                        var list = allElements();
+                        if (key === Symbol.toStringTag) return 'HTMLAllCollection';
+                        if (key === 'length') return list.length;
+                        if (key === 'item') return function (index) {
+                            var at = Number(index) | 0;
+                            return list[at] === undefined ? null : list[at];
+                        };
+                        if (key === 'namedItem') return function (name) { return allNamed(allElements(), name); };
+                        if (key === 'call' || key === 'constructor' || key === 'apply')
+                            return target[key];
+                        if (typeof key === 'string' && /^[0-9]+$/.test(key))
+                            return list[Number(key)] === undefined ? undefined : list[Number(key)];
+                        return undefined;
+                    },
+                    has: function (target, key) {
+                        if (key === 'length' || key === 'item' || key === 'namedItem') return true;
+                        return typeof key === 'string' && /^[0-9]+$/.test(key)
+                            && Number(key) < allElements().length;
+                    },
+                    ownKeys: function () {
+                        var out = [];
+                        var list = allElements();
+                        for (var i = 0; i < list.length; i++) out.push(String(i));
+                        out.push('length');
+                        return out;
+                    },
+                    getOwnPropertyDescriptor: function (target, key) {
+                        var list = allElements();
+                        if (key === 'length')
+                            return { value: list.length, writable: false, enumerable: false, configurable: true };
+                        if (typeof key === 'string' && /^[0-9]+$/.test(key) && Number(key) < list.length)
+                            return { value: list[Number(key)], writable: false, enumerable: true, configurable: true };
+                        return Reflect.getOwnPropertyDescriptor(target, key);
+                    }
+                });
+                if (window.HTMLAllCollection) {
+                    try {
+                        Object.setPrototypeOf(allCollection, window.HTMLAllCollection.prototype);
+                    } catch (e) { }
+                }
+                // The media list keeps the two spellings it carried before the event-target pair
+                // arrived, so a page written against either registers the same callback.
+                var mediaListenerLevel = protoMap['MediaQueryList'];
+                if (mediaListenerLevel) {
+                    member(mediaListenerLevel, 'addListener', function (callback) {
+                        if (typeof callback === 'function') this.addEventListener('change', callback);
+                    });
+                    member(mediaListenerLevel, 'removeListener', function (callback) {
+                        this.removeEventListener('change', callback);
+                    });
+                }
+                var documentLevel = protoMap['HTMLDocument'] || protoMap['Document'];
+                if (documentLevel && !Object.prototype.hasOwnProperty.call(documentLevel, 'all')) {
+                    // The member belongs to the interface, so it is installed where the document's own
+                    // accessors live — 'document.defaultView' and 'document.fonts' are read the same way.
+                    try {
+                        Object.defineProperty(documentLevel, 'all', {
+                            get: function () { return allCollection; },
+                            enumerable: true, configurable: true
+                        });
+                    } catch (e) { }
+                }
+
+                // ── What the URL surface still owes (URL §2.5, §4.6) ──────────────
+                // 'URL.fromJSON' parses a record the page read from somewhere and answers a url or
+                // null — never a throw — and 'sort' puts a query's entries back in key order, keeping
+                // the order the pairs came in when the key is the same (WHATWG sorts by key only).
+                if (window.URL && !URL.fromJSON) {
+                    URL.fromJSON = function (json) {
+                        var record = json;
+                        if (typeof record === 'string') {
+                            try { record = JSON.parse(record); } catch (e) { return null; }
+                        }
+                        if (!record || typeof record !== 'object') return null;
+                        var href = record.href === undefined ? '' : String(record.href);
+                        var base = record.base === undefined ? undefined : String(record.base);
+                        try {
+                            return base ? new URL(href, base) : new URL(href);
+                        } catch (e) { return null; }
+                    };
+                }
+
+                // ── The image the page makes with 'new Image()' (HTML §4.8.11) ──────
+                // The rest of what the interface carries: the lazy-loading and decoding keywords, the
+                // source the loader settled on, and the promise that says the picture is ready. This
+                // engine has no decoder to wait on, so the read answers the default the attribute does
+                // not carry and 'decode' resolves at once (measured: a fresh image is already complete
+                // with no natural size, and 'loading' and 'decoding' read 'auto').
+                var imageLevel = protoMap['HTMLImageElement'];
+                function imageKeyword(key, allowed, fallback) {
+                    return {
+                        get: function () {
+                            var written = this.getAttribute(key);
+                            var text = String(written === null || written === undefined ? '' : written).toLowerCase();
+                            for (var i = 0; i < allowed.length; i++) if (allowed[i] === text) return text;
+                            return fallback;
+                        },
+                        set: function (value) {
+                            var text = String(value === undefined ? '' : value).toLowerCase();
+                            var hit = fallback;
+                            for (var i = 0; i < allowed.length; i++) if (allowed[i] === text) hit = text;
+                            this.setAttribute(key, hit);
+                        },
+                        enumerable: true, configurable: true
+                    };
+                }
+                function imageText(key) {
+                    return {
+                        get: function () {
+                            var written = this.getAttribute(key);
+                            return written === null || written === undefined ? '' : String(written);
+                        },
+                        set: function (value) { this.setAttribute(key, String(value === undefined ? '' : value)); },
+                        enumerable: true, configurable: true
+                    };
+                }
+                if (imageLevel) {
+                    try {
+                        Object.defineProperties(imageLevel, {
+                            loading: imageKeyword('loading', ['lazy', 'eager'], 'auto'),
+                            decoding: imageKeyword('decoding', ['sync', 'async', 'auto'], 'auto'),
+                            referrerPolicy: imageKeyword('referrerPolicy',
+                                ['', 'no-referrer', 'no-referrer-when-downgrade', 'origin',
+                                    'origin-when-cross-origin', 'same-origin', 'strict-origin',
+                                    'strict-origin-when-cross-origin', 'unsafe-url'], ''),
+                            srcset: imageText('srcset'),
+                            sizes: imageText('sizes'),
+                            currentSrc: { get: function () { return ''; }, enumerable: true, configurable: true },
+                            x: { get: function () { return 0; }, set: function () { },
+                                enumerable: true, configurable: true }
+                        });
+                    } catch (e) { }
+                    member(imageLevel, 'decode', function () { return Promise.resolve(undefined); });
+                }
+
+                // ── The window's own handler members (HTML §6.5, §8.4, §8.7) ──────
+                // An 'on' member the page has not written is null, not missing — a page that reads
+                // 'window.onstorage' before adding a listener has to see the handler that is not there
+                // yet (measured), and the storage area never fires one at the window that wrote it
+                // (Web Storage §5.2: the notification goes to the other documents).
+                var windowHandlers = ['onabort', 'onauxclick', 'onbeforeinput', 'onbeforematch',
+                    'onbeforetoggle', 'onblur', 'oncancel', 'oncanplay', 'oncanplaythrough', 'onchange',
+                    'onclick', 'onclose', 'oncommand', 'oncontextlost', 'oncontextmenu', 'oncontextrestored',
+                    'oncopy', 'oncuechange', 'oncut', 'ondblclick', 'ondrag', 'ondragend', 'ondragenter',
+                    'ondragleave', 'ondragover', 'ondragstart', 'ondrop', 'ondurationchange', 'onemptied',
+                    'onended', 'onerror', 'onfocus', 'onfocusin', 'onfocusout', 'onformdata', 'onhashchange',
+                    'oninput', 'oninvalid', 'onkeydown', 'onkeypress', 'onkeyup', 'onlanguagechange',
+                    'onload', 'onloadeddata', 'onloadedmetadata', 'onloadstart', 'onmessage',
+                    'onmessageerror', 'onmousedown', 'onmouseenter', 'onmouseleave', 'onmousemove',
+                    'onmouseout', 'onmouseover', 'onmouseup', 'onwheel', 'onoffline', 'ononline',
+                    'onpagehide', 'onpageshow', 'onpaste', 'onpause', 'onplay', 'onplaying',
+                    'onpopstate', 'onprogress', 'onratechange', 'onrejectionhandled', 'onreset',
+                    'onresize', 'onscroll', 'onscrollend', 'onsecuritypolicyviolation', 'onseeked',
+                    'onseeking', 'onselect', 'onslotchange', 'onstalled', 'onstorage', 'onsubmit',
+                    'onsuspend', 'ontimeupdate', 'ontoggle', 'onunhandledrejection', 'onunload',
+                    'onvolumechange', 'onwaiting'];
+                for (var wh = 0; wh < windowHandlers.length; wh++) {
+                    (function (handler) {
+                        if (Object.prototype.hasOwnProperty.call(window, handler)) return;
+                        try {
+                            Object.defineProperty(window, handler, {
+                                get: function () { return window['__' + handler] === undefined ? null : window['__' + handler]; },
+                                set: function (value) { window['__' + handler] = value === undefined ? null : value; },
+                                enumerable: true, configurable: true
+                            });
+                        } catch (e) { }
+                    })(windowHandlers[wh]);
+                }
+            })();
+
             // ── ES2024 Array.prototype.group (Array grouping §2.3) ──────────────
             // The grouping the page asked for, in the order the elements came, with the same property
             // names and the null-prototype object Object.groupBy answers.
@@ -5051,12 +5911,15 @@ public class JavaScriptEngine : IDisposable
                     readText: function () {
                         return Promise.reject(new DOMException('The Clipboard API is not available in '
                             + 'this context.', 'NotAllowedError'));
-                    },
-                    addEventListener: function () { },
-                    removeEventListener: function () { }
+                    }
                 };
+                // Clipboard is an event target (Clipboard §4.3), so the object hangs under the
+                // interface's level: the tag, the constructor and the listener bag all read from there
+                // rather than being faked one member at a time.
                 try {
-                    Object.defineProperty(clipboard, Symbol.toStringTag,
+                    var clipboardLevel = protoMap['Clipboard'];
+                    if (clipboardLevel) Object.setPrototypeOf(clipboard, clipboardLevel);
+                    else Object.defineProperty(clipboard, Symbol.toStringTag,
                         { value: 'Clipboard', configurable: true });
                 } catch (e) { }
                 var registrations = Promise.reject(new DOMException('Service workers are not '

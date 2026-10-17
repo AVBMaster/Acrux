@@ -1,3 +1,5 @@
+using Acrux.Core.Dom;
+
 namespace Acrux.Core.JavaScript;
 
 public class URLHost
@@ -5,19 +7,57 @@ public class URLHost
     private readonly Uri _uri;
     private URLSearchParamsHost? _searchParams;
 
+    /// <summary>URL §2.2, §4.1: the constructor IS the parser, and a parse that fails is a TypeError —
+    /// there is no blank url to fall back to. A relative input needs a base, and the two refusals name
+    /// the piece that failed (measured: 'Invalid URL' for a scheme-less input with no base, 'Invalid
+    /// base URL' for a base that is not itself absolute).</summary>
     public URLHost(string url, string? baseUrl = null)
     {
+        _uri = Parse(url ?? "", baseUrl);
+    }
+
+    private static Uri Parse(string text, string? baseUrl)
+    {
+        if (TryAbsolute(text, out var made)) return made!;
+        if (string.IsNullOrEmpty(baseUrl)) throw Invalid("Failed to construct 'URL': Invalid URL.");
+        if (!TryAbsolute(baseUrl, out var baseUri))
+            throw Invalid("Failed to construct 'URL': Invalid base URL.");
         try
         {
-            _uri = !string.IsNullOrEmpty(baseUrl)
-                ? new Uri(new Uri(baseUrl, UriKind.RelativeOrAbsolute), url)
-                : new Uri(url, UriKind.RelativeOrAbsolute);
+            return new Uri(baseUri, text);
         }
-        catch
+        catch (UriFormatException)
         {
-            _uri = new Uri("about:blank");
+            throw Invalid("Failed to construct 'URL': Invalid URL.");
         }
     }
+
+    private static DOMException Invalid(string message) => new(message, "TypeError");
+
+    private static bool TryAbsolute(string text, out Uri? uri)
+    {
+        uri = null;
+        if (text.Length == 0) return false;
+        // A url is absolute only when it opens with a scheme: a platform that reads 'nope' as a file
+        // path would otherwise accept what the URL parser calls a relative reference (§4.1).
+        if (!HasSchemePrefix(text)) return false;
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var made)) return false;
+        // A hierarchical scheme with nothing after the slashes ('http://') is a failure too.
+        if (string.IsNullOrEmpty(made!.Host) && !AllowsEmptyHost(made.Scheme)) return false;
+        uri = made;
+        return true;
+    }
+
+    private static bool HasSchemePrefix(string text)
+    {
+        var i = 0;
+        if (i < text.Length && !(char.IsAsciiLetter(text[i]))) return false;
+        while (i < text.Length && (char.IsAsciiLetterOrDigit(text[i]) || text[i] is '+' or '-' or '.')) i++;
+        return i < text.Length && text[i] == ':';
+    }
+
+    private static bool AllowsEmptyHost(string scheme) =>
+        scheme is "file" or "about" or "data" or "blob" or "javascript" or "mailto" or "urn" or "chrome";
 
     public string href => _uri.ToString();
 

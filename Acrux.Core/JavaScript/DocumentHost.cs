@@ -130,64 +130,25 @@ public class DocumentHost : IDomPrototypeHost
     public string? contentType => _document.ContentType;
 
     // ===== Document collections =====
-    public object[] anchors
-    {
-        get
-        {
-            var elements = _document.GetElementsByTagName("a")
-                .Where(e => e.HasAttribute("name") || e.HasAttribute("id"))
-                .Select(e => (object)WrapElement(e)!).ToArray();
-            return elements;
-        }
-    }
+    /// <summary>HTML §4.10.21: the document collections answer an HTMLCollection — live, itemised and
+    /// named — rather than the array a plain CLR array shows as (measured: 'String(document.forms)' is
+    /// '[object HTMLCollection]' and 'document.forms.item(0)' is the form).</summary>
+    public JsLiveElementList anchors => new(() => _document.GetElementsByTagName("a")
+        .Where(e => e.HasAttribute("name") || e.HasAttribute("id")).ToList());
 
-    public object[] forms
-    {
-        get
-        {
-            return _document.GetElementsByTagName("form")
-                .Select(e => (object)WrapElement(e)!).ToArray();
-        }
-    }
+    public JsLiveElementList forms => new(() => _document.GetElementsByTagName("form"));
 
-    public object[] images
-    {
-        get
-        {
-            return _document.GetElementsByTagName("img")
-                .Select(e => (object)WrapElement(e)!).ToArray();
-        }
-    }
+    public JsLiveElementList images => new(() => _document.GetElementsByTagName("img"));
 
-    public object[] links
-    {
-        get
-        {
-            return _document.GetElementsByTagName("a")
-                .Where(e => e.HasAttribute("href"))
-                .Select(e => (object)WrapElement(e)!).ToArray();
-        }
-    }
+    public JsLiveElementList links => new(() => _document.GetElementsByTagName("a")
+        .Where(e => e.HasAttribute("href")).ToList());
 
-    public object[] scripts
-    {
-        get
-        {
-            return _document.GetElementsByTagName("script")
-                .Select(e => (object)WrapElement(e)!).ToArray();
-        }
-    }
+    public JsLiveElementList scripts => new(() => _document.GetElementsByTagName("script"));
 
-    public object[] embeds
-    {
-        get
-        {
-            return _document.GetElementsByTagName("embed")
-                .Select(e => (object)WrapElement(e)!).ToArray();
-        }
-    }
+    public JsLiveElementList embeds => new(() => _document.GetElementsByTagName("embed"));
 
-    public object[] plugins => embeds;
+    /// <summary>HTML §4.10.21: 'plugins' is the same collection under its historical name.</summary>
+    public JsLiveElementList plugins => embeds;
 
     public ElementHost? getElementById(string id)
     {
@@ -225,13 +186,16 @@ public class DocumentHost : IDomPrototypeHost
     public object getElementsByTagName(string tagName)
     {
         if (_document.DocumentElement == null) return new object[0];
-        return new JsHtmlCollection(_document.DocumentElement, Engine, tagName);
+        // The document's search covers every element, the root included (HTML §4.5.4, measured:
+        // 'document.getElementsByTagName("*")[0]' is the html element), so the live list is built from
+        // the document's own walk rather than from a descendant scan.
+        return new JsLiveElementList(() => _document.GetElementsByTagName(tagName));
     }
 
     public object getElementsByClassName(string className)
     {
         if (_document.DocumentElement == null) return new object[0];
-        return new JsHtmlCollection(_document.DocumentElement, Engine, null, className);
+        return new JsLiveElementList(() => _document.GetElementsByClassName(className));
     }
 
     public object getElementsByName(string name)
@@ -1877,7 +1841,7 @@ public class DocumentTypeHost : IDomPrototypeHost
 /// <summary>DOM §4.3.3: the attribute list of an element is live and array-like — 'el.attributes[0]'
 /// and 'el.attributes.length' read the current set, and every position answers the same Attr object
 /// 'getNamedItem' gives for that name.</summary>
-public class NamedNodeMapHost : IList
+public class NamedNodeMapHost : IList, IDomPrototypeHost
 {
     private readonly DomElement _element;
 
@@ -1890,6 +1854,9 @@ public class NamedNodeMapHost : IList
     public int Length => Names().Count;
 
     public override string ToString() => DomHostString.Tagged("NamedNodeMap");
+
+    public string? __domType => "NamedNodeMap";
+    public string[] __domTypeChain => new[] { "NamedNodeMap" };
 
     public object? this[int index]
     {

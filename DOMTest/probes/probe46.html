@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html><head><title>Probe 46</title></head><body>
+<div id="d"><p id="p1" class="a">one</p><p id="p2">two</p><span id="s1" name="sn">three</span></div>
+<form id="f"><input name="a" value="1"><input type="checkbox" name="b" checked><select name="c"><option value="x">x</option></select></form>
+<script>
+(function () {
+  var lines = [];
+  function step(l, fn) { try { lines.push(l + ' = ' + fn()); } catch (e) { lines.push(l + ' ERR ' + e.name + ': ' + e.message); } }
+  var d = document.getElementById('d');
+  step('children', function () { return JSON.stringify([Object.prototype.toString.call(d.children), String(d.children),
+    String(d.children.constructor), d.children.length, d.children.item(0).id, String(d.children.namedItem('p2')),
+    d.children instanceof HTMLCollection, String(d.children[1].id)]); });
+  step('childNodes', function () { return JSON.stringify([Object.prototype.toString.call(d.childNodes), d.childNodes.length,
+    d.childNodes instanceof NodeList, String(d.childNodes.constructor), typeof d.childNodes.forEach,
+    Array.from(d.childNodes).length]); });
+  step('form.elements', function () { var f = document.getElementById('f'); return JSON.stringify([
+    Object.prototype.toString.call(f.elements), String(f.elements.constructor),
+    f.elements instanceof HTMLFormControlsCollection, f.elements instanceof HTMLCollection,
+    String(f.elements.namedItem('a')), String(f.elements.a.value), f.elements.length, typeof f.elements.item]); });
+  step('attributes', function () { return JSON.stringify([Object.prototype.toString.call(d.attributes),
+    d.attributes.length, String(d.attributes.getNamedItem('id').value), d.attributes instanceof NamedNodeMap,
+    String(d.attributes.constructor)]); });
+  step('doc.all', function () { return JSON.stringify([typeof document.all, Object.prototype.toString.call(document.all),
+    document.all.length, document.all('p1') ? document.all('p1').id : 'none', document.all[0].tagName,
+    String(document.all.item(1).id), String(document.all.namedItem('s1')),
+    document.all instanceof HTMLAllCollection]); });
+  step('query all', function () { var l = document.querySelectorAll('p'); return JSON.stringify([l.length,
+    l instanceof NodeList, Object.prototype.toString.call(l), Array.from(l).length, typeof l.forEach, l.item(0).id]); });
+  step('getElementsByTagName', function () { var l = document.getElementsByTagName('p'); return JSON.stringify([
+    l.length, l instanceof HTMLCollection, Object.prototype.toString.call(l), String(l.namedItem('p1')), l[1].id]); });
+  step('formdata read', function () { var fd = new FormData(document.getElementById('f'));
+    var out = [Object.prototype.toString.call(fd), fd.get('a'), fd.get('b'), fd.get('c'), fd.length];
+    fd.append('e', new Blob(['z'], { type: 'text/plain' }));
+    out.push(String(fd.get('e').name) + '/' + String(fd.get('e').size));
+    return JSON.stringify(out); });
+  step('file reader run', function () { var fr = new FileReader(); var seen = [];
+    fr.addEventListener('loadstart', function () { seen.push('start' + fr.readyState); });
+    fr.onload = function (e) { seen.push('load' + String(e && e.type)); };
+    fr.onloadend = function () { seen.push('end'); };
+    fr.readAsText(new Blob(['hello']));
+    return new Promise(function (res) { setTimeout(function () { res(JSON.stringify([fr.result, fr.readyState, seen.join(','), String(fr.error)])); }, 0); }); });
+  step('mql change', function () { var m = matchMedia('(min-width: 99999px)'); var hits = 0;
+    m.addListener(function (e) { hits++; });
+    return JSON.stringify([m.matches, typeof m.addListener, String(m.onchange), Object.prototype.toString.call(m)]); });
+  step('params', function () { var p = new URLSearchParams('b=2&a=1&b=3'); p.sort(); return p.toString(); });
+  step('url.fromJSON', function () { return JSON.stringify([String(new URL('http://a/b')), String(URL.fromJSON({ href: 'http://a/x' }).href), String(URL.fromJSON({ href: 'nope' })), String(URL.fromJSON(null))]); });
+  step('clone graph', function () { var shared = { v: 1 }; var src = { a: shared, b: shared, cyc: null }; src.cyc = src;
+    var c = structuredClone(src); return JSON.stringify([c.a === c.b, c.cyc === c, c.a.v]); });
+  step('decoder label', function () { return JSON.stringify([new TextDecoder().encoding, new TextDecoder('UTF-8').encoding,
+    (function () { try { new TextDecoder('bogus'); return 'no throw'; } catch (e) { return e.name + ':' + e.message; } })()]); });
+  window.__DUMP__ = '';
+  Promise.all(lines.map ? [] : []).then(function () { });
+  function finish() { __T('probe46', true, lines.join('\n')); }
+  setTimeout(finish, 5);
+})();
+</script></body></html>

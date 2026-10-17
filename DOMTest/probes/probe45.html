@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html><head><title>Probe 45</title></head><body>
+<script>
+(function () {
+  var names = ['Event', 'CustomEvent', 'UIEvent', 'MouseEvent', 'KeyboardEvent', 'WheelEvent', 'InputEvent',
+    'CompositionEvent', 'TouchEvent', 'FocusEvent', 'DragEvent', 'ClipboardEvent', 'StorageEvent',
+    'HashChangeEvent', 'PopStateEvent', 'PageTransitionEvent', 'ProgressEvent', 'MessageEvent',
+    'BeforeUnloadEvent', 'AnimationEvent', 'TransitionEvent', 'SubmitEvent', 'ToggleEvent',
+    'MediaQueryListEvent', 'PointerEvent'];
+  var out = {};
+  for (var i = 0; i < names.length; i++) {
+    var n = names[i];
+    try {
+      var C = window[n];
+      if (typeof C !== 'function') { out[n] = 'no ctor'; continue; }
+      var e = new C('x');
+      out[n] = [e.bubbles, e.cancelable, e.composed === undefined ? 'na' : e.composed];
+    } catch (err) { out[n] = 'ERR ' + err.name + ':' + String(err.message).slice(0, 50); }
+  }
+  __T('event defaults', true, JSON.stringify(out));
+})();
+</script></body></html>

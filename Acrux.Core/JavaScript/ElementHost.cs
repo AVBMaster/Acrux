@@ -2358,11 +2358,12 @@ public partial class ElementHost : IDomPrototypeHost
     }
 
     /// <summary>The 'name' content attribute, reflected on the elements that carry a name
-    /// (form controls, hyperlinks, frames). It is the same map the 'name' attribute uses.</summary>
-    public string? name
+    /// (form controls, hyperlinks, frames). A reflected DOMString is the empty string when the
+    /// attribute is not there — not null (measured: a form with no 'name' answers '').</summary>
+    public string name
     {
-        get => _element.GetAttribute("name");
-        set => _element.SetAttribute("name", value);
+        get => _element.GetAttribute("name") ?? "";
+        set => _element.SetAttribute("name", value ?? "");
     }
 
     public string rel

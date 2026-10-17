@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html><head><title>Probe 44</title></head><body><div id="d">ab</div>
+<script>
+(function () {
+  var r = document.createRange(); r.selectNodeContents(document.getElementById('d'));
+  var f = r.cloneContents();
+  var direct = document.createDocumentFragment();
+  __T('ctor names', true, [Object.prototype.toString.call(f), String(f.constructor), String(f.constructor && f.constructor.name),
+    String(direct.constructor && direct.constructor.name), String(window.DocumentFragment), String(f instanceof DocumentFragment),
+    String(Object.getPrototypeOf(f) === DocumentFragment.prototype)].join(' | '));
+})();
+</script></body></html>

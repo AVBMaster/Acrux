@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html><head><title>Probe 40</title></head><body>
+<form id="f"><input name="a" value="1"><input type="checkbox" name="b" checked><select name="c"><option value="x">x</option></select></form>
+<input id="i" type="text" value="hello">
+<script>
+(function () {
+  var lines = [];
+  lines.push('byId f = ' + String(document.getElementById('f')));
+  lines.push('byId i = ' + String(document.getElementById('i')));
+  lines.push('forms = ' + String(document.forms) + '/' + String(document.forms && document.forms.length));
+  lines.push('querySelector = ' + String(document.querySelector('form')));
+  lines.push('body children = ' + document.body.children.length + '/' + Array.prototype.map.call(document.body.children, function (c) { return c.tagName + '#' + c.id; }).join(','));
+  lines.push('doc children = ' + document.children.length + '/' + Array.prototype.map.call(document.children, function (c) { return c.tagName; }).join(','));
+  lines.push('all tags = ' + document.getElementsByTagName('form').length + '/' + document.getElementsByTagName('input').length);
+  lines.push('outer = ' + document.body.outerHTML.slice(0, 220));
+  __T('probe40', true, lines.join('\n'));
+})();
+</script></body></html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html><head><title>Probe 42</title></head><body>
+<form id="f"><input name="a" value="1"><input type="checkbox" name="b" checked><select name="c"><option value="x">x</option></select></form>
+<script>
+(function () {
+  var lines = [];
+  function step(label, fn) { try { lines.push(label + ' = ' + fn()); } catch (e) { lines.push(label + ' ERR ' + e.name + ': ' + e.message); } }
+  var f = document.getElementById('f');
+  step('f', function () { return String(f); });
+  step('typeof checkValidity', function () { return typeof f.checkValidity; });
+  step('typeof reportValidity', function () { return typeof f.reportValidity; });
+  step('checkValidity()', function () { return String(f.checkValidity()); });
+  step('elements', function () { return String(f.elements) + '/' + Object.prototype.toString.call(f.elements); });
+  step('elements.length', function () { return f.elements.length; });
+  step('elements ctor', function () { return String(f.elements.constructor); });
+  step('namedItem', function () { return String(f.elements.namedItem('a')); });
+  step('elements[0]', function () { return String(f.elements[0]); });
+  step('elements.a', function () { return String(f.elements.a); });
+  step('requestSubmit', function () { return typeof f.requestSubmit; });
+  step('method', function () { return String(f.method); });
+  step('name', function () { return String(f.name); });
+  step('submit', function () { return typeof f.submit; });
+  step('length', function () { return String(f.length); });
+  step('reset', function () { return typeof f.reset; });
+  __T('probe42', true, lines.join('\n'));
+})();
+</script></body></html>
