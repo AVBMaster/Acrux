@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html><head><title>Probe 35</title></head><body>
+<script>
+(function () {
+  function t(name, fn, info) {
+    var ok = false, got = '';
+    try { var v = fn(); ok = !!v; } catch (e) { got = 'threw ' + (e && e.name) + ': ' + (e && e.message); }
+    if (!ok && !got) { try { got = String(typeof info === 'function' ? info() : (info === undefined ? '' : info)); } catch (e) { got = 'info threw'; } }
+    __T(name, ok, got);
+  }
+  function done(name, fn) {
+    return fn().then(function (v) { __T(name, !!v, ''); },
+      function (e) { __T(name, false, 'rej ' + (e && e.name) + ': ' + (e && e.message)); });
+  }
+  function hex(buf) {
+    return Array.prototype.map.call(new Uint8Array(buf), function (b) {
+      return (b < 16 ? '0' : '') + b.toString(16);
+    }).join('');
+  }
+
+  t('xhr defaults', function () {
+    var x = new XMLHttpRequest();
+    return x.responseType === '' && x.response === '' && x.responseText === '' && x.readyState === 0
+      && x.status === 0 && x.statusText === '' && x.timeout === 0 && x.withCredentials === false
+      && x.upload !== null && typeof x.overrideMimeType === 'function' && x.responseXML === null
+      && Object.prototype.toString.call(x) === '[object XMLHttpRequest]'
+      && Object.prototype.toString.call(x.upload) === '[object XMLHttpRequestUpload]'
+      && typeof x.upload.addEventListener === 'function' && x.getAllResponseHeaders() === '';
+  }, function () {
+    var x = new XMLHttpRequest();
+    return [x.responseType, JSON.stringify(x.response), JSON.stringify(x.responseText), x.readyState,
+      x.status, JSON.stringify(x.statusText), x.timeout, x.withCredentials, String(x.upload),
+      Object.prototype.toString.call(x), Object.prototype.toString.call(x.upload)].join(' | ');
+  });
+  t('xhr constants', function () {
+    var x = new XMLHttpRequest();
+    return XMLHttpRequest.UNSENT === 0 && XMLHttpRequest.OPENED === 1 && XMLHttpRequest.HEADERS_RECEIVED === 2
+      && XMLHttpRequest.LOADING === 3 && XMLHttpRequest.DONE === 4
+      && x.UNSENT === 0 && x.DONE === 4 && x instanceof EventTarget;
+  }, function () { var x = new XMLHttpRequest(); return [XMLHttpRequest.UNSENT, XMLHttpRequest.OPENED,
+    XMLHttpRequest.HEADERS_RECEIVED, XMLHttpRequest.LOADING, XMLHttpRequest.DONE, x.UNSENT, x.DONE,
+    String(x instanceof EventTarget)].join('/'); });
+  t('xhr refusals', function () {
+    var x = new XMLHttpRequest();
+    var a = '', b = '', c = '';
+    try { x.send(); } catch (e) { a = e.name + '|' + e.message; }
+    try { x.setRequestHeader('x-a', 'y'); } catch (e) { b = e.name + '|' + e.message; }
+    try { x.open('GET'); } catch (e) { c = e.name + '|' + e.message; }
+    return a.indexOf('InvalidStateError') === 0 && /state must be OPENED/.test(a)
+      && b.indexOf('InvalidStateError') === 0 && /setRequestHeader/.test(b)
+      && c.indexOf('TypeError') === 0 && /2 arguments required, but only 1 present/.test(c);
+  }, function () {
+    var y = new XMLHttpRequest(); var out = [];
+    try { y.send(); } catch (e) { out.push(e.name + '|' + e.message); }
+    try { y.setRequestHeader('x-a', 'y'); } catch (e) { out.push(e.name + '|' + e.message); }
+    try { y.open('GET'); } catch (e) { out.push(e.name + '|' + e.message); }
+    return out.join(' || ');
+  });
+  t('xhr header name and type', function () {
+    var x = new XMLHttpRequest();
+    x.open('GET', '/nothing');
+    var a = '';
+    try { x.setRequestHeader('bad name', 'v'); } catch (e) { a = e.name + '|' + e.message; }
+    x.responseType = 'bogus';
+    var bogus = x.responseType;
+    var b = '', c = '';
+    try { b = x.responseText; } catch (e) { c = e.name + '|' + e.message; }
+    x.responseType = 'json';
+    var d = '';
+    try { d = x.responseText; } catch (e) { d = e.name + '|' + e.message; }
+    return a.indexOf('SyntaxError') === 0 && /is not a valid HTTP header field name/.test(a)
+      && bogus === '' && b === '' && c === ''
+      && d.indexOf('InvalidStateError') === 0 && /was .json./.test(d);
+  }, function () {
+    var x = new XMLHttpRequest(); x.open('GET', '/nothing'); var a = '';
+    try { x.setRequestHeader('bad name', 'v'); } catch (e) { a = e.name + '|' + e.message; }
+    x.responseType = 'bogus'; var after = x.responseType;
+    var b = '', c = '';
+    try { b = x.responseText; } catch (e) { c = e.name; }
+    x.responseType = 'json'; var d = '';
+    try { d = x.responseText; } catch (e) { d = e.name + '|' + e.message; }
+    return [after, JSON.stringify(b), c, d].join(' | ') + ' || ' + a;
+  });
+  t('xhr events', function () {
+    var seen = [];
+    var x = new XMLHttpRequest();
+    x.addEventListener('readystatechange', function () { seen.push('rs' + x.readyState); });
+    x.onloadstart = function () { seen.push('start'); };
+    x.onloadend = function () { seen.push('end'); };
+    x.open('GET', '/definitely-not-there');
+    x.send();
+    var states = [];
+    var y = new XMLHttpRequest();
+    y.onreadystatechange = function () { states.push(y.readyState); };
+    y.open('GET', '/also-not-there');
+    y.send();
+    return seen.indexOf('rs1') === 0 && seen.indexOf('start') >= 0 && states.length > 0;
+  }, function () {
+    var seen = [];
+    var x = new XMLHttpRequest();
+    x.addEventListener('readystatechange', function () { seen.push('rs' + x.readyState); });
+    x.onloadstart = function () { seen.push('start'); };
+    x.open('GET', '/nope'); x.send();
+    return seen.join(',');
+  });
+
+  t('storage named access', function () {
+    localStorage.clear();
+    localStorage.setItem('a', '1');
+    localStorage.b = '2';
+    var r = [localStorage.length === 2, localStorage.getItem('b') === '2', 'a' in localStorage,
+      localStorage.key(0) === 'a', localStorage.key(1) === 'b',
+      Object.keys(localStorage).join(',') === 'a,b', localStorage.a === '1'];
+    delete localStorage.a;
+    r.push(localStorage.length === 1, localStorage.a === undefined || localStorage.a === null);
+    r.push(localStorage.key(0) === 'b');
+    localStorage.clear();
+    return r.every(function (v) { return v === true; });
+  }, function () {
+    localStorage.clear(); localStorage.setItem('a', '1'); localStorage.b = '2';
+    var r = [localStorage.length, localStorage.getItem('b'), String('a' in localStorage),
+      String(localStorage.key(0)), String(localStorage.key(1)), JSON.stringify(Object.keys(localStorage)),
+      String(localStorage.a)];
+    localStorage.clear(); return r.join(' | ');
+  });
+  t('storage indexed and proto', function () {
+    localStorage.clear();
+    localStorage.setItem('0', 'zero');
+    var indexed = localStorage[0];
+    localStorage.clear();
+    return (indexed === 'zero' || indexed === undefined)
+      && Object.getPrototypeOf(localStorage) === Storage.prototype
+      && window.localStorage === localStorage && typeof Storage.prototype.setItem === 'function';
+  }, function () {
+    localStorage.clear(); localStorage.setItem('0', 'zero');
+    var v = localStorage[0]; localStorage.clear();
+    return [String(v), String(Object.getPrototypeOf(localStorage) === Storage.prototype),
+      String(window.localStorage === localStorage), typeof Storage.prototype.setItem].join(' | ');
+  });
+
+  t('crypto surface', function () {
+    return typeof crypto.subtle === 'object' && typeof crypto.subtle.digest === 'function'
+      && Object.prototype.toString.call(crypto.subtle) === '[object SubtleCrypto]'
+      && crypto.subtle.constructor.name === 'SubtleCrypto'
+      && typeof crypto.subtle.importKey === 'function' && typeof crypto.subtle.verify === 'function'
+      && typeof crypto.randomUUID === 'function' && typeof crypto.getRandomValues === 'function';
+  }, function () {
+    return [typeof crypto, typeof crypto.subtle, String(crypto.subtle && crypto.subtle.digest),
+      Object.prototype.toString.call(crypto.subtle), String(crypto.subtle.constructor.name)].join(' | ');
+  });
+  done('crypto digest', function () {
+    var abc = new TextEncoder().encode('abc');
+    return crypto.subtle.digest('SHA-256', abc).then(function (buf) {
+      var sha1 = crypto.subtle.digest('SHA-1', abc);
+      return Promise.all([buf, sha1]);
+    }).then(function (parts) {
+      return hex(parts[0]) === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+        && hex(parts[1]) === 'a9993e364706816aba3e25717850c26c9cd0d89d'
+        && parts[0] instanceof ArrayBuffer && parts[0].byteLength === 32 && parts[1].byteLength === 20;
+    });
+  });
+  done('crypto refusals', function () {
+    var abc = new TextEncoder().encode('abc');
+    var a, b;
+    return crypto.subtle.digest('BOGUS', abc).then(function () { a = 'resolved'; },
+      function (e) { a = e.name + '|' + e.message; return null; })
+      .then(function () {
+        return crypto.subtle.digest('SHA-256', 'not bytes');
+      }).then(function () { b = 'resolved'; }, function (e) { b = e.name + '|' + e.message; return null; })
+      .then(function () {
+        return a.indexOf('NotSupportedError') === 0 && /Algorithm: Unrecognized name/.test(a)
+          && b.indexOf('TypeError') === 0 && /is not of type/.test(b);
+      });
+  });
+
+  t('font face set', function () {
+    var set = document.fonts;
+    var face = new FontFace('N', 'url(a.woff2)', { style: 'italic', weight: '300', display: 'swap' });
+    var r = [Object.prototype.toString.call(set) === '[object FontFaceSet]', set.status === 'loaded',
+      set.size === 0, set.constructor.name === 'EventTarget', set instanceof EventTarget,
+      Object.getPrototypeOf(set) !== EventTarget.prototype,
+      Object.getPrototypeOf(Object.getPrototypeOf(set)) === EventTarget.prototype,
+      typeof window.FontFaceSet === 'undefined', typeof set.add === 'function',
+      typeof set.check === 'function', typeof set.load === 'function', typeof set.forEach === 'function',
+      typeof set[Symbol.iterator] === 'function', set.ready instanceof Promise,
+      face.family === 'N', face.style === 'italic', face.weight === '300', face.display === 'swap',
+      face.status === 'unloaded', face.unicodeRange === 'U+0-10FFFF', face.variant === 'normal',
+      Object.prototype.toString.call(face) === '[object FontFace]', face.loaded instanceof Promise];
+    set.add(face);
+    r.push(set.size === 1, set.has(face), Array.from(set).length === 1, set.check('12px N') === false);
+    set.delete(face);
+    r.push(set.size === 0, set.has(face) === false, set.check('12px N') === true);
+    return r.every(function (v) { return v === true; });
+  }, function () {
+    var set = document.fonts;
+    var face = new FontFace('N', 'url(a.woff2)', { style: 'italic' });
+    return [Object.prototype.toString.call(set), set.status, set.size, String(set.constructor.name),
+      String(set instanceof EventTarget), String(Object.getPrototypeOf(set) !== EventTarget.prototype),
+      String(typeof window.FontFaceSet), String(face.style), face.status, face.unicodeRange,
+      Object.prototype.toString.call(face), String(set.ready instanceof Promise)].join(' | ');
+  });
+  t('font face identity', function () {
+    var set = document.fonts;
+    if (set !== document.fonts) return false;
+    var face = new FontFace('Q', 'url(q.woff2)');
+    set.add(face);
+    var same = set.has(face) && Array.from(set)[0] === face;
+    set.clear();
+    return same && set.size === 0;
+  }, function () {
+    var set = document.fonts;
+    return [String(set === document.fonts), String(set.size)].join(' | ');
+  });
+  done('font load', function () {
+    var set = document.fonts;
+    var face = new FontFace('L', 'url(l.woff2)');
+    set.add(face);
+    var checkedBefore = set.check('12px L');
+    return set.load('12px L').then(function (faces) {
+      return [checkedBefore === false, Array.isArray(faces), face.status === 'loaded',
+        set.check('12px L') === true];
+    }).then(function (r) { set.clear(); return r.every(function (v) { return v === true; }); });
+  });
+
+  t('commands', function () {
+    var d = document;
+    var a = '', b = '', c = '';
+    try { d.execCommand(); } catch (e) { a = e.name + '|' + e.message; }
+    try { d.queryCommandState(); } catch (e) { b = e.name + '|' + e.message; }
+    try { d.queryCommandSupported(); } catch (e) { c = e.name + '|' + e.message; }
+    return typeof d.execCommand === 'function' && d.queryCommandSupported('bold') === true
+      && d.queryCommandSupported('bogus') === false && d.queryCommandSupported('') === false
+      && d.queryCommandState('bold') === false && d.queryCommandState('bogus') === false
+      && d.queryCommandEnabled('bold') === false && d.queryCommandValue('fontName') === ''
+      && d.execCommand('bold') === false && d.execCommand('bogus') === false
+      && a.indexOf('TypeError') === 0 && /1 argument required, but only 0 present/.test(a)
+      && b.indexOf('TypeError') === 0 && c.indexOf('TypeError') === 0;
+  }, function () {
+    var d = document; var a = '';
+    try { d.execCommand(); } catch (e) { a = e.name + '|' + e.message; }
+    return [String(d.queryCommandSupported), d.queryCommandSupported('bold'),
+      d.queryCommandSupported('bogus'), String(d.execCommand('bold')), a].join(' | ');
+  });
+
+  t('highlight registry', function () {
+    var h = new Highlight();
+    var r = document.createRange();
+    var r2 = document.createRange();
+    h.add(r); h.add(r2);
+    CSS.highlights.set('mark', h);
+    var out = [Object.prototype.toString.call(h) === '[object Highlight]', h.size === 1,
+      h.has(r) === true, h.type === 'highlight', h.priority === 0, Array.from(h).length === 1,
+      Object.prototype.toString.call(CSS.highlights) === '[object HighlightRegistry]',
+      CSS.highlights.size === 1, CSS.highlights.get('mark') === h, CSS.highlights.has('mark') === true,
+      CSS.highlights instanceof Map === false, Array.from(CSS.highlights.keys()).join(',') === 'mark',
+      typeof CSS.highlights.highlightsFromPoint === 'function',
+      typeof HighlightRegistry === 'function', CSS.highlights.delete('mark') === true,
+      CSS.highlights.size === 0];
+    var e = '';
+    try { CSS.highlights.set('bad', 'not a highlight'); } catch (err) { e = err.name + '|' + err.message; }
+    out.push(e.indexOf('TypeError') === 0 && /parameter 2 is not of type .Highlight./.test(e));
+    var illegal = '';
+    try { new HighlightRegistry(); } catch (err) { illegal = err.name; }
+    out.push(illegal === 'TypeError');
+    h.clear();
+    return out.every(function (v) { return v === true; });
+  }, function () {
+    var h = new Highlight(); var r = document.createRange(); var r2 = document.createRange();
+    h.add(r); h.add(r2);
+    var e = ''; try { CSS.highlights.set('bad', 'nope'); } catch (err) { e = err.name + '|' + err.message; }
+    return [h.size, h.type, h.priority, String(h.has(r)), e].join(' | ');
+  });
+
+  t('data transfer', function () {
+    var d = new DataTransfer();
+    var r = [Object.prototype.toString.call(d) === '[object DataTransfer]', d.dropEffect === 'none',
+      d.effectAllowed === 'none', d.types.length === 0, d.items.length === 0,
+      Object.prototype.toString.call(d.files) === '[object FileList]', d.files.length === 0,
+      typeof d.setDragImage === 'function', typeof d.getDragImage === 'undefined',
+      d.getData('text/plain') === ''];
+    d.setData('text/plain', 'x');
+    r.push(d.getData('text/plain') === 'x', d.types.length === 1, d.types[0] === 'text/plain',
+      d.items.length === 1, d.items[0].kind === 'string', d.items[0].type === 'text/plain',
+      Object.prototype.toString.call(d.items[0]) === '[object DataTransferItem]');
+    var frozen = '';
+    try { d.types.push('y'); } catch (e) { frozen = e.name; }
+    r.push(frozen === 'TypeError');
+    d.clearData();
+    r.push(d.types.length === 0, d.items.length === 0);
+    return r.every(function (v) { return v === true; });
+  }, function () {
+    var d = new DataTransfer();
+    d.setData('text/plain', 'x');
+    var frozen = ''; try { d.types.push('y'); frozen = 'no throw'; } catch (e) { frozen = e.name; }
+    return [Object.prototype.toString.call(d), d.dropEffect, d.types.length, d.items.length,
+      d.items[0].kind, d.items[0].type, frozen].join(' | ');
+  });
+  t('data transfer async', function () {
+    var d = new DataTransfer();
+    d.setData('text/plain', 'hello');
+    var answer = 'pending';
+    d.items[0].getAsString(function (text) { answer = text; });
+    return true;
+  }, function () { return 'deferred'; });
+
+  t('clipboard item', function () {
+    var blob = new Blob(['x'], { type: 'text/plain' });
+    var ci = new ClipboardItem({ 'text/plain': blob });
+    var r = [Object.prototype.toString.call(ci) === '[object ClipboardItem]', ci.types.length === 1,
+      ci.types[0] === 'text/plain', ci.presentationStyle === undefined,
+      typeof ci.getType === 'function', typeof ClipboardItem.supports === 'function',
+      ClipboardItem.supports('text/plain') === true, ClipboardItem.supports('text/html') === true,
+      ClipboardItem.supports('application/pdf') === false];
+    return r.every(function (v) { return v === true; });
+  }, function () {
+    var ci = new ClipboardItem({ 'text/plain': new Blob(['x']) });
+    return [Object.prototype.toString.call(ci), ci.types.length, String(ci.types[0]),
+      String(ci.presentationStyle), String(ClipboardItem.supports('text/plain')),
+      String(ClipboardItem.supports('application/pdf'))].join(' | ');
+  });
+})();
+</script></body></html>

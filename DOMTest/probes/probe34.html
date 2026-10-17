@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html><head><title>Probe 34</title></head><body>
+<div id="d"><span id="s">two<b>x</b></span></div>
+<script>
+(function () {
+  function t(name, fn, info) {
+    var ok = false, got = '';
+    try { var v = fn(); ok = !!v; } catch (e) { got = 'threw ' + (e && e.name) + ': ' + (e && e.message); }
+    if (!ok && !got) { try { got = String(typeof info === 'function' ? info() : (info === undefined ? '' : info)); } catch (e) { got = 'info threw'; } }
+    __T(name, ok, got);
+  }
+  var d = document.getElementById('d'), s = document.getElementById('s');
+  t('xpath smoke', function () {
+    function ev(expr, type, ctx) {
+      return document.evaluate(expr, ctx || document, null, type === undefined ? XPathResult.ANY_TYPE : type, null);
+    }
+    return ev('//span[@id="s"]', XPathResult.FIRST_ORDERED_NODE_TYPE).singleNodeValue === s
+      && ev('name(//span)', XPathResult.STRING_TYPE).stringValue === 'span'
+      && ev('string(//span)', XPathResult.STRING_TYPE).stringValue === 'twox'
+      && ev('count(//span)', XPathResult.NUMBER_TYPE).numberValue === 1
+      && ev('count(//span/@*)', XPathResult.NUMBER_TYPE).numberValue === 1
+      && ev('//span/text()', XPathResult.STRING_TYPE).stringValue === 'two'
+      && ev('count(//div/*[1])', XPathResult.NUMBER_TYPE).numberValue === 1
+      && ev('boolean(//span and //b)', XPathResult.BOOLEAN_TYPE).booleanValue === true
+      && ev('substring("hello", 2, 3)', XPathResult.STRING_TYPE).stringValue === 'ell'
+      && ev('//*[name()="b"]', XPathResult.FIRST_ORDERED_NODE_TYPE).singleNodeValue !== null;
+  }, function () {
+    function ev(expr, type, ctx) {
+      return document.evaluate(expr, ctx || document, null, type === undefined ? XPathResult.ANY_TYPE : type, null);
+    }
+    return [String(ev('count(//span)', XPathResult.NUMBER_TYPE).numberValue),
+      String(ev('name(//span)', XPathResult.STRING_TYPE).stringValue),
+      String(ev('count(//div/*[1])', XPathResult.NUMBER_TYPE).numberValue),
+      String(ev('substring("hello", 2, 3)', XPathResult.STRING_TYPE).stringValue)].join(' | ');
+  });
+
+  t('host string forms', function () {
+    return String(s) === '[object HTMLSpanElement]'
+      && String(document) === '[object HTMLDocument]'
+      && String(document.createTextNode('a')) === '[object Text]'
+      && String(document.createComment('a')) === '[object Comment]'
+      && String(document.createDocumentFragment()) === '[object DocumentFragment]'
+      && String(s.childNodes) === '[object NodeList]'
+      // A DOMTokenList is the one host here with a string of its own — the tokens it holds — and an
+      // element with no class answers the empty string (measured).
+      && String(s.classList) === ''
+      && String(s.attributes) === '[object NamedNodeMap]';
+  }, function () {
+    return [String(s), String(document), String(document.createTextNode('a')),
+      String(document.createComment('a')), String(document.createDocumentFragment()),
+      String(s.childNodes), String(s.classList), String(s.attributes)].join(' | ');
+  });
+  t('own js toString on a host', function () {
+    // Known divergence, recorded rather than chased: the reference lets a page replace a host object's
+    // 'toString' and then reads the replacement, but member access on a wrapped host resolves against
+    // the CLR object first, so the interface string is what the conversion answers. Fixing this means
+    // the interop layer, not the DOM.
+    var p = document.createElement('p');
+    Object.defineProperty(p, 'toString', { value: function () { return 'custom'; }, configurable: true });
+    return String(p) === '[object HTMLParagraphElement]' && typeof p.toString === 'function';
+  }, function () {
+    var p2 = document.createElement('p');
+    return [typeof p2.toString, typeof Object.defineProperty(p2, 'toString',
+      { value: function () { return 'custom'; }, configurable: true }), String(p2)].join(' | ');
+  });
+  t('shadow innerhtml', function () {
+    var host = document.createElement('div');
+    var root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<p class="q">a</p><span>b</span>';
+    return root.childElementCount === 2 && root.querySelector('.q') !== null
+      && root.innerHTML.indexOf('<p class="q">a</p>') >= 0;
+  }, function () {
+    var h = document.createElement('div'); var r = h.attachShadow({ mode: 'open' });
+    r.innerHTML = '<p class="q">a</p>';
+    return [r.childElementCount, String(r.querySelector('.q')), JSON.stringify(r.innerHTML),
+      String(r.childNodes.length)].join(' | ');
+  });
+})();
+</script></body></html>

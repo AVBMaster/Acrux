@@ -146,10 +146,13 @@ ck('N29 an attr read from the map is the owner\'s attr', function () {
     return d.getAttributeNode('title') === d.attributes.getNamedItem('title')
         && d.getAttributeNode('title').value === 'two';
 }, function () { var d = document.getElementById('d'); return d.getAttributeNode('title') && d.getAttributeNode('title').value; });
-ck('N30 attribute node serialises as its value', function () {
+ck('N30 attribute node answers its interface and its node value', function () {
+    // Measured: turning an attribute into a string gives the interface name — an attribute is a node
+    // like any other — while 'nodeValue' is the attribute's value, read and written (DOM §4.3.3).
     var d = document.getElementById('d');
     var a = d.getAttributeNode('class');
-    return String(a) === 'one' || a.nodeValue === 'one';
+    return String(a) === '[object Attr]' && a.nodeValue === 'one'
+        && Object.prototype.toString.call(a) === '[object Attr]';
 }, function () { var d = document.getElementById('d'); var a = d.getAttributeNode('class'); return String(a) + '/' + a.nodeValue; });
 ck('N31 namedItem on the map by ns', function () {
     return m.getNamedItemNS(null, 'name') === m.getNamedItem('name');

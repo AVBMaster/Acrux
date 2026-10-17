@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html><head><title>Probe 37 xpath dump</title></head><body>
+<div id="d">one<!--cmt--><span id="s" data-k="v">two<b>x</b></span>three</div>
+<script>
+(function () {
+  var lines = [];
+  function ev(expr, type, ctx, res) {
+    return document.evaluate(expr, ctx === undefined ? document : ctx, res || null, type, null);
+  }
+  function show(label, expr, kind, ctx, res) {
+    var value;
+    try {
+      if (kind === 'str') value = JSON.stringify(ev(expr, XPathResult.STRING_TYPE, ctx, res).stringValue);
+      else if (kind === 'num') value = String(ev(expr, XPathResult.NUMBER_TYPE, ctx, res).numberValue);
+      else if (kind === 'bool') value = String(ev(expr, XPathResult.BOOLEAN_TYPE, ctx, res).booleanValue);
+      else if (kind === 'one') {
+        var n = ev(expr, XPathResult.FIRST_ORDERED_NODE_TYPE, ctx, res).singleNodeValue;
+        value = n ? n.nodeName + '#' + n.nodeType : String(n);
+      } else if (kind === 'iter') {
+        var it = ev(expr, XPathResult.ORDERED_NODE_ITERATOR_TYPE, ctx, res);
+        var names = [], node;
+        while ((node = it.iterateNext())) names.push(node.nodeName);
+        value = names.join(',');
+      } else if (kind === 'snap') {
+        var sn = ev(expr, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, ctx, res);
+        value = [sn.snapshotLength, sn.snapshotItem(0) ? sn.snapshotItem(0).nodeName : 'null',
+          String(sn.snapshotItem(9)), String(sn.snapshotItem(-1))].join('/');
+      }
+    } catch (e) { value = 'ERR ' + e.name + ': ' + e.message; }
+    lines.push(label + ' = ' + String(value));
+  }
+
+  var d = document.getElementById('d'), s = document.getElementById('s');
+  show('qname_pos', '//span[@id="s"]', 'one');
+  show('name_fn', 'name(//span)', 'str');
+  show('localname_fn', 'local-name(//b)', 'str');
+  show('string_fn', 'string(//span)', 'str');
+  show('textstep', '//span/text()', 'str');
+  show('count_span', 'count(//span)', 'num');
+  show('count_attrs', 'count(//span/@*)', 'num');
+  show('first_child_pred', '//div/*[1]', 'one');
+  show('last_pred', '//div/*[last()]', 'one');
+  show('attr_pred', 'count(//*[@data-k])', 'num');
+  show('or_pred', 'count(//span[@nope or @data-k])', 'num');
+  show('comments', 'count(//comment())', 'num');
+  show('union_bool', 'boolean(//span and //b)', 'bool');
+  show('not_table', 'not(//table)', 'bool');
+  show('contains', 'contains(string(//span), "tw")', 'bool');
+  show('substring', 'substring("hello", 2, 3)', 'str');
+  show('substring_end', 'substring("hello", 2)', 'str');
+  show('substring_pad', 'substring("hello", 4, 5)', 'str');
+  show('sum', 'sum(//span/text())', 'num');
+  show('normalize', 'normalize-space("  a   b ")', 'str');
+  show('concat', 'concat("a", //span, "b")', 'str');
+  show('string_length', 'string-length(//span)', 'num');
+  show('number_fn', 'number("12abc")', 'num');
+  show('number_ok', 'number("12.5")', 'num');
+  show('position_fn', '//div/*[position()=1]', 'one');
+  show('descendant_it', '//*[name()="b" or name()="span"]', 'iter');
+  show('snapshot', '//descendant::span', 'snap');
+  show('parent_of_s', 'parent::div', 'one', s);
+  show('attr_id', 'attribute::id', 'str', s);
+  show('self_span', 'self::span', 'bool', s);
+  show('following_text', 'following-sibling::text()', 'str', s);
+  show('ancestor_div', 'ancestor::div', 'one', s);
+  show('text_of_d', 'string(./span)', 'str', d);
+  show('id_fn', 'id("s")', 'one');
+  show('floor', 'floor(3.7)', 'num');
+  show('ceiling', 'ceiling(3.2)', 'num');
+  show('round', 'round(2.5)', 'num');
+  show('string_result_identity', '//span[@id="s"]', 'one');
+  lines.push('identity = ' + (ev('//span[@id="s"]', XPathResult.FIRST_ORDERED_NODE_TYPE, document).singleNodeValue === s));
+  var r = ev('//span', XPathResult.ORDERED_NODE_ITERATOR_TYPE, document);
+  lines.push('result_shape = ' + [String(r instanceof XPathResult), Object.prototype.toString.call(r),
+    typeof r.invalidIteratorState, String(r.resultType)].join('/'));
+  lines.push('illegal_ctor = ' + (function () { try { new XPathResult(); return 'no throw'; } catch (e) { return e.name; } })());
+  __T('xpath dump', true, lines.join('\n'));
+  window.__DUMP__ = lines.join('\n');
+})();
+</script></body></html>

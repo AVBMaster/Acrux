@@ -200,8 +200,11 @@ public class JavaScriptEngine : IDisposable
         _adapter.SetGlobal("location", _locationHost);
         _adapter.SetGlobal("history", new HistoryHost(_locationHost));
         _adapter.SetGlobal("screen", new ScreenHost());
-        _adapter.SetGlobal("localStorage", new StorageHost("localStorage"));
-        _adapter.SetGlobal("sessionStorage", new StorageHost("sessionStorage"));
+        // Web Storage §5.1: the area belongs to the origin, not to the document, so the two hosts are
+        // built once and handed to every document the engine runs — a page that wrote an item and was
+        // navigated still reads it back.
+        _adapter.SetGlobal("localStorage", StorageArea("localStorage"));
+        _adapter.SetGlobal("sessionStorage", StorageArea("sessionStorage"));
 
         _adapter.SetGlobal("document", new DocumentHost(new Acrux.Core.Dom.Document()));
 
@@ -240,9 +243,22 @@ public class JavaScriptEngine : IDisposable
         MarkDirty();
     }
 
+    private StorageHost? _localStorageHost;
+    private StorageHost? _sessionStorageHost;
+
+    /// <summary>Web Storage §5.1: the storage area belongs to the origin and the document set, not to
+    /// one document, so the engine keeps the two areas and hands the same one to every page it runs.
+    /// A page that wrote an item before a navigation reads it back afterwards.</summary>
+    private StorageHost StorageArea(string name)
+    {
+        if (name == "sessionStorage") return _sessionStorageHost ??= new StorageHost(name);
+        return _localStorageHost ??= new StorageHost(name);
+    }
+
     private void ReapplyGlobals()
     {
         if (_adapter == null) return;
+
 
         // 清除 JS 端的元素缓存，避免旧页面的代理对象残留
         _adapter.Execute("if (typeof globalThis !== 'undefined') { globalThis.__elCache = {}; }");
@@ -264,8 +280,8 @@ public class JavaScriptEngine : IDisposable
             _adapter.SetGlobal("location", _locationHost);
         _adapter.SetGlobal("history", new HistoryHost(_locationHost ?? new LocationHost()));
         _adapter.SetGlobal("screen", new ScreenHost());
-        _adapter.SetGlobal("localStorage", new StorageHost("localStorage"));
-        _adapter.SetGlobal("sessionStorage", new StorageHost("sessionStorage"));
+        _adapter.SetGlobal("localStorage", StorageArea("localStorage"));
+        _adapter.SetGlobal("sessionStorage", StorageArea("sessionStorage"));
         _adapter.SetGlobal("console", new ConsoleHost { DevToolsConsole = new JsDevToolsConsole() });
 
         _adapter.Execute(GetSetupScript());
@@ -701,18 +717,34 @@ public class JavaScriptEngine : IDisposable
             function alert(msg) { __win.alert(msg); }
             function confirm(msg) { return __win.confirm(msg); }
             function prompt(msg, def) { return __win.prompt(msg, def); }
-            function decodeURI(str) { return __acrux.decodeURI(str); }
-            function decodeURIComponent(str) { return __acrux.decodeURIComponent(str); }
-            function encodeURI(str) { return __acrux.encodeURI(str); }
-            function encodeURIComponent(str) { return __acrux.encodeURIComponent(str); }
-            function parseInt(s, r) { return __acrux.parseInt(s, r); }
-            function parseFloat(s) { return __acrux.parseFloat(s); }
-            function isNaN(v) { return __acrux.isNaN(v); }
-            function isFinite(v) { return __acrux.isFinite(v); }
-            function escape(str) { return __acrux.escape(str); }
-            function unescape(str) { return __acrux.unescape(str); }
             function atob(str) { return __acrux.atob(str); }
             function btoa(str) { return __acrux.btoa(str); }
+
+            // The numeric and URI globals are ECMAScript's own, so the engine's version is the one a
+            // page gets: 'parseInt' with the radix it was handed, 'parseFloat' reading the number that
+            // is at the start of the text, and a value that is not a number answering NaN rather than
+            // zero or a throw. The host has its own reading of each for an engine that brings nothing
+            // with it — the out-of-process JavaScript host — so those are installed only where the name
+            // is missing.
+            (function () {
+                var scope = typeof globalThis !== 'undefined' ? globalThis : window;
+                var FALLBACKS = [
+                    ['decodeURI', function (s) { return __acrux.decodeURI(s); }],
+                    ['decodeURIComponent', function (s) { return __acrux.decodeURIComponent(s); }],
+                    ['encodeURI', function (s) { return __acrux.encodeURI(s); }],
+                    ['encodeURIComponent', function (s) { return __acrux.encodeURIComponent(s); }],
+                    ['parseInt', function (s, r) { return __acrux.parseInt(s, r); }],
+                    ['parseFloat', function (s) { return __acrux.parseFloat(s); }],
+                    ['isNaN', function (v) { return __acrux.isNaN(v); }],
+                    ['isFinite', function (v) { return __acrux.isFinite(v); }],
+                    ['escape', function (s) { return __acrux.escape(s); }],
+                    ['unescape', function (s) { return __acrux.unescape(s); }]
+                ];
+                for (var fi = 0; fi < FALLBACKS.length; fi++) {
+                    if (typeof scope[FALLBACKS[fi][0]] === 'function') continue;
+                    scope[FALLBACKS[fi][0]] = FALLBACKS[fi][1];
+                }
+            })();
 
             // Fetch §5.1: an aborted signal rejects with the reason it carries, and a reason the
             // page did not supply is the AbortError DOMException the spec names.
@@ -1073,7 +1105,73 @@ public class JavaScriptEngine : IDisposable
 
             // Web Crypto — the parts that need no secure transport surface. randomUUID is minted by
             // the host (the only real entropy), getRandomValues fills a typed array in place and
-            // returns the same array the page handed in.
+            // returns the same array the page handed in, and 'subtle' holds the four digests §15.14
+            // names. The bytes cross to the engine as hex and the digest comes back the same way, so
+            // the platform's own crypto does the work while the promise, the conversions and the
+            // refusals stay here — and both refusals are rejections rather than throws (measured: an
+            // unknown algorithm name rejects NotSupportedError saying 'Algorithm: Unrecognized name',
+            // a body that is not a buffer rejects TypeError naming '(ArrayBuffer or ArrayBufferView)').
+            function bufferBytes(value) {
+                if (value instanceof ArrayBuffer) return new Uint8Array(value);
+                if (value && typeof value.byteLength === 'number'
+                    && value.buffer instanceof ArrayBuffer)
+                    return new Uint8Array(value.buffer, value.byteOffset || 0, value.byteLength);
+                return null;
+            }
+            var HEX_DIGITS = '0123456789abcdef';
+            function toHex(bytes) {
+                var out = '';
+                for (var i = 0; i < bytes.length; i++)
+                    out += HEX_DIGITS.charAt((bytes[i] >> 4) & 15) + HEX_DIGITS.charAt(bytes[i] & 15);
+                return out;
+            }
+            function fromHex(hex) {
+                var made = new Uint8Array(hex.length >> 1);
+                for (var j = 0; j < made.length; j++) made[j] = parseInt(hex.substr(j * 2, 2), 16);
+                return made;
+            }
+            function SubtleCrypto() { }
+            var SUBTLE_DIGESTS = { 'SHA-1': true, 'SHA-256': true, 'SHA-384': true, 'SHA-512': true };
+            SubtleCrypto.prototype.digest = function (algorithm, data) {
+                var name = algorithm && algorithm.name !== undefined
+                    ? String(algorithm.name) : String(algorithm === undefined ? '' : algorithm);
+                var bytes = bufferBytes(data);
+                return new Promise(function (resolve, reject) {
+                    if (bytes === null) {
+                        reject(new TypeError('Failed to execute \'digest\' on \'SubtleCrypto\': The '
+                            + 'provided value is not of type \'(ArrayBuffer or ArrayBufferView)\'.'));
+                        return;
+                    }
+                    if (!SUBTLE_DIGESTS[name]) {
+                        reject(new DOMException('Failed to execute \'digest\' on \'SubtleCrypto\': '
+                            + 'Algorithm: Unrecognized name', 'NotSupportedError'));
+                        return;
+                    }
+                    var hex = __acrux.digest(name, toHex(bytes));
+                    if (typeof hex !== 'string') {
+                        reject(new DOMException('The operation failed for an operation-specific '
+                            + 'reason', 'OperationError'));
+                        return;
+                    }
+                    resolve(fromHex(hex).buffer);
+                });
+            };
+            // The other eleven members are the surface the page tests for with 'typeof'; this engine
+            // holds no key material and runs no cipher, so each one rejects the reason it cannot.
+            var SUBTLE_UNIMPLEMENTED = ['encrypt', 'decrypt', 'sign', 'verify', 'generateKey',
+                'deriveKey', 'deriveBits', 'importKey', 'exportKey', 'wrapKey', 'unwrapKey'];
+            for (var si = 0; si < SUBTLE_UNIMPLEMENTED.length; si++) {
+                (function (member) {
+                    SubtleCrypto.prototype[member] = function () {
+                        return Promise.reject(new DOMException('Failed to execute \'' + member
+                            + '\' on \'SubtleCrypto\': The operation is not supported.',
+                            'NotSupportedError'));
+                    };
+                })(SUBTLE_UNIMPLEMENTED[si]);
+            }
+            Object.defineProperty(SubtleCrypto.prototype, Symbol.toStringTag,
+                { value: 'SubtleCrypto', configurable: true });
+            window.SubtleCrypto = SubtleCrypto;
             var crypto = {
                 randomUUID: function () { return __acrux.randomUUID(); },
                 getRandomValues: function (array) {
@@ -1081,7 +1179,8 @@ public class JavaScriptEngine : IDisposable
                     for (var i = 0; i < array.length; i++)
                         array[i] = Math.floor(Math.random() * 256);
                     return array;
-                }
+                },
+                subtle: new SubtleCrypto()
             };
 
             // DOMParser builds a fresh Document out of markup (the host parses it through the same
@@ -3316,6 +3415,1541 @@ public class JavaScriptEngine : IDisposable
                     { value: 'DOMStringList', configurable: true });
                 window.DOMStringList = DOMStringList;
                 protoMap.DOMStringList = DOMStringList.prototype;
+
+                // ── The request a page opens (XMLHttpRequest §2) ───────────────────
+                // The host carries the state machine and the members the page reads; the level below it
+                // carries what a host member cannot. The five state constants answer on the interface,
+                // on its prototype and on every request through it (measured: 'XMLHttpRequest.DONE' and
+                // 'new XMLHttpRequest().UNSENT' are 4 and 0), and 'EventTarget' one level above gives
+                // the listener bag, so a request dispatched from the engine runs both the listeners and
+                // the 'on' plus type member the page wrote.
+                var xhrLevel = defineInterface('XMLHttpRequest', 'EventTarget', function () {
+                    return __acrux.createXMLHttpRequest();
+                });
+                defineInterface('XMLHttpRequestUpload', 'EventTarget');
+                var xhrStates = [['UNSENT', 0], ['OPENED', 1], ['HEADERS_RECEIVED', 2],
+                    ['LOADING', 3], ['DONE', 4]];
+                for (var xs = 0; xs < xhrStates.length; xs++) {
+                    var stateShape = { value: xhrStates[xs][1], writable: false,
+                        enumerable: false, configurable: false };
+                    try {
+                        Object.defineProperty(xhrLevel, xhrStates[xs][0], stateShape);
+                        Object.defineProperty(window.XMLHttpRequest, xhrStates[xs][0], stateShape);
+                    } catch (e) { }
+                }
+                // The engine's way of handing a request's event to the page: the same route a custom
+                // element reaction takes, with the host itself as the target, so nothing is built in C#.
+                window.__acruxXhrEvent = function (target, type) {
+                    try {
+                        if (!target || typeof target.dispatchEvent !== 'function') return;
+                        target.dispatchEvent(new Event(String(type)));
+                    } catch (e) { }
+                };
+            })();
+
+            // ── The XPath the page evaluates (DOM Parsing and the XPath 1.0 a browser exposes) ──
+            // 'document.evaluate' is a location-path expression read against a context node: the ten
+            // axes a step can name, the node tests ('name', '*', 'text()', 'comment()',
+            // 'processing-instruction()', 'node()', '@attr'), predicates by position, by attribute and by
+            // a comparison, and the functions a predicate is usually written with. The result answers the
+            // type the caller asked for, with the iterator and snapshot walks over the same node set in
+            // document order. What the subset leaves out — unions, filters on a step's own result,
+            // variables, the rest of the function library — is refused with the same sentence the
+            // reference writes for a string it cannot parse.
+            (function () {
+                var ANY_TYPE = 0, NUMBER_TYPE = 1, STRING_TYPE = 2, BOOLEAN_TYPE = 3,
+                    ORDERED_NODE_ITERATOR_TYPE = 4, UNORDERED_NODE_ITERATOR_TYPE = 5,
+                    ORDERED_NODE_SNAPSHOT_TYPE = 6, UNORDERED_NODE_SNAPSHOT_TYPE = 7,
+                    ANY_UNORDERED_NODE_TYPE = 8, FIRST_ORDERED_NODE_TYPE = 9;
+                var RESULT_NAMES = ['ANY_TYPE', 'NUMBER_TYPE', 'STRING_TYPE', 'BOOLEAN_TYPE',
+                    'ORDERED_NODE_ITERATOR_TYPE', 'UNORDERED_NODE_ITERATOR_TYPE',
+                    'ORDERED_NODE_SNAPSHOT_TYPE', 'UNORDERED_NODE_SNAPSHOT_TYPE',
+                    'ANY_UNORDERED_NODE_TYPE', 'FIRST_ORDERED_NODE_TYPE'];
+                var protoMap = window.__domProto || {};
+
+                function isNode(value) { return !!value && typeof value.nodeType === 'number'; }
+                function quote(text) { return String.fromCharCode(39) + String(text) + String.fromCharCode(39); }
+                function refused(expr) {
+                    return new SyntaxError('Failed to execute ' + quote('evaluate') + ' on '
+                        + quote('Document') + ': The string ' + quote(text_of(expr))
+                        + ' is not a valid XPath expression.');
+                }
+                function text_of(expr) { return String(expr === undefined ? '' : expr); }
+
+                function childNodes(node) {
+                    var out = [];
+                    if (!node) return out;
+                    var kids = node.childNodes;
+                    if (!kids) return out;
+                    for (var i = 0; i < kids.length; i++) {
+                        var kid = kids.item ? kids.item(i) : kids[i];
+                        if (kid) out.push(kid);
+                    }
+                    return out;
+                }
+                function elementChildren(node) {
+                    return childNodes(node).filter(function (n) { return n.nodeType === 1; });
+                }
+                function descendants(node, into) {
+                    var list = into || [];
+                    var kids = childNodes(node);
+                    for (var i = 0; i < kids.length; i++) {
+                        list.push(kids[i]);
+                        if (kids[i].nodeType === 1 || kids[i].nodeType === 9 || kids[i].nodeType === 11)
+                            descendants(kids[i], list);
+                    }
+                    return list;
+                }
+                function ancestors(node) {
+                    var list = [];
+                    for (var n = node.parentNode; n; n = n.parentNode) list.unshift(n);
+                    return list;
+                }
+                function rootOf(node) {
+                    var n = node;
+                    while (n.parentNode) n = n.parentNode;
+                    return n;
+                }
+                function inDocumentOrder(a, b) {
+                    if (a === b) return 0;
+                    var position = a.compareDocumentPosition ? a.compareDocumentPosition(b) : 0;
+                    if (position & 4) return -1;
+                    if (position & 2) return 1;
+                    return 0;
+                }
+                function sortedUnique(nodes) {
+                    var out = [];
+                    for (var i = 0; i < nodes.length; i++) {
+                        if (!nodes[i]) continue;
+                        var seen = false;
+                        for (var j = 0; j < out.length; j++) if (out[j] === nodes[i]) { seen = true; break; }
+                        if (!seen) out.push(nodes[i]);
+                    }
+                    out.sort(inDocumentOrder);
+                    return out;
+                }
+                function nameOf(node) {
+                    if (node.nodeType === 2 || node.nodeType === 1) {
+                        // An XPath name is the qualified name as the tree holds it — the local name of an
+                        // HTML element, which the DOM reports upper case in nodeName (measured).
+                        var prefix = node.prefix || '';
+                        var local = node.localName || '';
+                        return prefix ? prefix + ':' + local : local;
+                    }
+                    return node.nodeName || '';
+                }
+                function localNameOf(node) { return node.localName || String(node.nodeName || '').replace(/^[^:]*:/, ''); }
+                function textOf(node) {
+                    if (node.nodeType === 2) return node.value || '';
+                    if (node.nodeType === 3 || node.nodeType === 4) return node.data || '';
+                    if (node.nodeType === 7) return node.data || '';
+                    var pieces = '';
+                    var kids = childNodes(node);
+                    for (var i = 0; i < kids.length; i++) {
+                        if (kids[i].nodeType === 2 || kids[i].nodeType === 8) continue;
+                        pieces += textOf(kids[i]);
+                    }
+                    return pieces;
+                }
+                function normalize(text) { return String(text).replace(/[\t\n\r ]+/g, ' ').replace(/^ | $/g, ''); }
+
+                // ── the expression reader ────────────────────────────────────────────
+                function Reader(text) { this.text = String(text); this.at = 0; }
+                Reader.prototype.eof = function () { this.skip(); return this.at >= this.text.length; };
+                Reader.prototype.peek = function () { this.skip(); return this.text.charAt(this.at); };
+                Reader.prototype.skip = function () {
+                    while (this.at < this.text.length && /[\t\n\r ]/.test(this.text.charAt(this.at))) this.at++;
+                };
+                Reader.prototype.word = function () {
+                    this.skip();
+                    var start = this.at;
+                    while (this.at < this.text.length && /[A-Za-z0-9_.\-]/.test(this.text.charAt(this.at))) this.at++;
+                    return this.text.slice(start, this.at);
+                };
+                Reader.prototype.take = function (token) {
+                    this.skip();
+                    if (this.text.slice(this.at, this.at + token.length) !== token) return false;
+                    this.at += token.length;
+                    return true;
+                };
+                Reader.prototype.error = function () { throw new Error('bad xpath'); };
+
+                var AXES = ['ancestor', 'ancestor-or-self', 'attribute', 'child', 'descendant',
+                    'descendant-or-self', 'following', 'following-sibling', 'namespace', 'parent',
+                    'preceding', 'preceding-sibling', 'self'];
+
+                function readNodeTest(r) {
+                    // 'name()', 'text()', 'node()' and friends are a name followed immediately by the
+                    // parenthesis, which is also how an axis is introduced — the caller has already taken
+                    // the '::' or is reading a bare step, where the same word is a node test only when a
+                    // '(' follows it.
+                    var save = r.at;
+                    var name = r.word();
+                    if (name && r.text.charAt(r.at) === '(') {
+                        if (name === 'node' || name === 'text' || name === 'comment'
+                            || name === 'processing-instruction') {
+                            r.at++;
+                            if (name === 'processing-instruction' && r.peek() !== ')') r.word();
+                            if (!r.take(')')) r.error();
+                            return { kind: name };
+                        }
+                        r.at = save;
+                        name = '';
+                    }
+                    if (!name) {
+                        if (r.text.charAt(r.at) === '*') { r.at++; return { kind: 'any' }; }
+                        r.error();
+                    }
+                    // A qualified name is read whole — the prefix, the colon and either the local name
+                    // or the wildcard that matches every name in that namespace.
+                    if (r.text.charAt(r.at) === ':' && r.text.charAt(r.at + 1) !== ':') {
+                        r.at++;
+                        if (r.text.charAt(r.at) === '*') {
+                            r.at++;
+                            return { kind: 'qname', prefix: name, local: '*' };
+                        }
+                        var local = r.word();
+                        if (!local) r.error();
+                        return { kind: 'qname', prefix: name, local: local };
+                    }
+                    return { kind: 'name', value: name };
+                }
+
+                function readStep(r) {
+                    var save = r.at;
+                    // The two abbreviations a step can be written as: '..' is the parent of the node and
+                    // a lone '.' is the node itself, which is why 'string(./span)' reads the child of the
+                    // context node rather than nothing at all.
+                    if (r.text.charAt(r.at) === '.' && r.text.charAt(r.at + 1) === '.') {
+                        r.at += 2;
+                        return finishStep(r, 'parent', { kind: 'node' });
+                    }
+                    if (r.text.charAt(r.at) === '.' && !/[0-9]/.test(r.text.charAt(r.at + 1) || '')) {
+                        var after = r.text.charAt(r.at + 1) || '';
+                        if (after === '' || after === '/' || after === '[') {
+                            r.at++;
+                            return finishStep(r, 'self', { kind: 'node' });
+                        }
+                    }
+                    var head = r.word();
+                    if (r.text.charAt(r.at) === ':' && r.text.charAt(r.at + 1) === ':') {
+                        if (AXES.indexOf(head) < 0) r.error();
+                        r.at += 2;
+                        return finishStep(r, head, readNodeTest(r));
+                    }
+                    r.at = save;
+                    if (r.take('@')) return finishStep(r, 'attribute', readNodeTest(r));
+                    return finishStep(r, 'child', readNodeTest(r));
+                }
+                function finishStep(r, axis, nodeTest) {
+                    var predicates = [];
+                    while (r.peek() === '[') {
+                        r.at++;
+                        var predicate = readExpr(r);
+                        if (!r.take(']')) r.error();
+                        predicates.push(predicate);
+                    }
+                    return { axis: axis, test: nodeTest, predicates: predicates };
+                }
+
+                function readPath(r, inPredicate) {
+                    var path = { absolute: false, steps: [] };
+                    r.skip();
+                    if (r.take('//')) {
+                        path.absolute = true;
+                        path.steps.push({ axis: 'descendant-or-self', test: { kind: 'node' }, predicates: [] });
+                    } else if (r.take('/')) {
+                        path.absolute = true;
+                        if (r.peek() === '(' || (!/[A-Za-z@*.\-]/.test(r.peek()) && r.peek() !== '')) {
+                            return path;
+                        }
+                    }
+                    var guard = 0;
+                    for (;;) {
+                        if (++guard > 40) r.error();
+                        path.steps.push(readStep(r));
+                        r.skip();
+                        if (r.take('//')) { path.steps.push({ axis: 'descendant-or-self', test: { kind: 'node' }, predicates: [] }); continue; }
+                        if (r.take('/')) {
+                            if (r.eof() || r.peek() === ']' || r.peek() === ')') break;
+                            continue;
+                        }
+                        break;
+                    }
+                    return path;
+                }
+
+                function readExpr(r) { return readOr(r); }
+                function readOr(r) {
+                    var left = readAnd(r);
+                    for (;;) {
+                        if (r.peek() === '|') {
+                            r.skip(); r.at++;
+                            left = { op: 'union', left: left, right: readAnd(r) };
+                            continue;
+                        }
+                        // 'or' is a word, so it is eaten as a word — taking one character of it left the
+                        // rest of the expression to be read as a name.
+                        if (eatWord(r, 'or')) {
+                            left = { op: 'or', left: left, right: readAnd(r) };
+                            continue;
+                        }
+                        return left;
+                    }
+                }
+                function isWordAt(r, word) {
+                    r.skip();
+                    var rest = r.text.slice(r.at);
+                    return rest.length >= word.length && rest.slice(0, word.length) === word
+                        && !/[A-Za-z0-9_.\-]/.test(rest.charAt(word.length) || '');
+                }
+                function eatWord(r, word) {
+                    if (!isWordAt(r, word)) return false;
+                    r.skip(); r.at += word.length; return true;
+                }
+                function readAnd(r) {
+                    var left = readEquality(r);
+                    while (eatWord(r, 'and')) left = { op: 'and', left: left, right: readEquality(r) };
+                    return left;
+                }
+                function readEquality(r) {
+                    var left = readRelational(r);
+                    for (;;) {
+                        r.skip();
+                        if (r.take('=')) left = { op: 'eq', left: left, right: readRelational(r) };
+                        else if (r.take('!')) { if (!r.take('=')) r.error(); left = { op: 'ne', left: left, right: readRelational(r) }; }
+                        else return left;
+                    }
+                }
+                function readRelational(r) {
+                    var left = readAdditive(r);
+                    for (;;) {
+                        r.skip();
+                        if (r.take('<=')) left = { op: 'le', left: left, right: readAdditive(r) };
+                        else if (r.peek() === '<' && r.text.charAt(r.at + 1) !== '=') { r.at++; left = { op: 'lt', left: left, right: readAdditive(r) }; }
+                        else if (r.take('>=')) left = { op: 'ge', left: left, right: readAdditive(r) };
+                        else if (r.peek() === '>') { r.at++; left = { op: 'gt', left: left, right: readAdditive(r) }; }
+                        else return left;
+                    }
+                }
+                function readAdditive(r) {
+                    var left = readMultiplicative(r);
+                    for (;;) {
+                        r.skip();
+                        if (r.peek() === '+') { r.at++; left = { op: '+', left: left, right: readMultiplicative(r) }; }
+                        else if (r.peek() === '-') { r.at++; left = { op: '-', left: left, right: readMultiplicative(r) }; }
+                        else return left;
+                    }
+                }
+                function readMultiplicative(r) {
+                    var left = readUnary(r);
+                    for (;;) {
+                        r.skip();
+                        if (r.peek() === '*' && !/^[\s)*\]]/.test(r.text.slice(r.at + 1, r.at + 2) + 'x'.slice(0, 0) === '' ? '' : '')) {
+                            // 'a * b' is a multiplication; the parser only ever reaches this position
+                            // where a '*' cannot be the start of a node test.
+                            if (r.text.slice(r.at + 1, r.at + 2) === ':') return left;
+                            r.at++; left = { op: '*', left: left, right: readUnary(r) };
+                            continue;
+                        }
+                        if (eatWord(r, 'div')) { left = { op: 'div', left: left, right: readUnary(r) }; continue; }
+                        if (eatWord(r, 'mod')) { left = { op: 'mod', left: left, right: readUnary(r) }; continue; }
+                        return left;
+                    }
+                }
+                function readUnary(r) {
+                    r.skip();
+                    if (r.peek() === '-') { r.at++; return { op: 'negate', right: readUnary(r) }; }
+                    return readPrimary(r);
+                }
+                function readPrimary(r) {
+                    r.skip();
+                    if (r.take('(')) { var inner = readExpr(r); if (!r.take(')')) r.error(); return inner; }
+                    var c = r.peek();
+                    if (c === '$') r.error();
+                    if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(r.text.charAt(r.at + 1) || ''))) {
+                        var start = r.at;
+                        while (r.at < r.text.length && /[0-9.]/.test(r.text.charAt(r.at))) r.at++;
+                        return { kind: 'number', value: parseFloat(r.text.slice(start, r.at)) };
+                    }
+                    if (c === String.fromCharCode(39) || c === String.fromCharCode(34)) {
+                        var stop = c, from = r.at + 1;
+                        var end = r.text.indexOf(stop, from);
+                        if (end < 0) r.error();
+                        r.at = end + 1;
+                        return { kind: 'string', value: r.text.slice(from, end) };
+                    }
+                    if (c === '@' || c === '/'
+                        || (c === '.' && !/[0-9]/.test(r.text.charAt(r.at + 1) || ''))) {
+                        // A '.' or '..' is the start of a relative path, not a whole expression of its
+                        // own: 'count(../em)' reads the parent and then the child of it.
+                        return { kind: 'path', path: readPath(r, true) };
+                    }
+                    var save = r.at;
+                    var name = r.word();
+                    if (!name) r.error();
+                    if (r.peek() === '(') {
+                        // 'text()', 'comment()', 'processing-instruction()' and 'node()' are node tests
+                        // even when no axis is written in front of them, which is how a page writes the
+                        // predicate that keeps the element whose text is a given string (measured: it
+                        // counts the element).
+                        if (name === 'node' || name === 'text' || name === 'comment'
+                            || name === 'processing-instruction') {
+                            r.at++;
+                            if (name === 'processing-instruction' && r.peek() !== ')') r.word();
+                            if (!r.take(')')) r.error();
+                            return { kind: 'path', path: { absolute: false, steps: [
+                                { axis: 'child', test: { kind: name }, predicates: [] }] } };
+                        }
+                        r.at++;
+                        var args = [];
+                        if (!r.take(')')) {
+                            for (;;) { args.push(readExpr(r)); if (r.take(',')) continue; if (!r.take(')')) r.error(); break; }
+                        }
+                        return { kind: 'call', name: name, args: args };
+                    }
+                    if (name === 'and' || name === 'or' || name === 'mod' || name === 'div') r.error();
+                    r.at = save;
+                    return { kind: 'path', path: readPath(r, true) };
+                }
+
+                function parse(expr) {
+                    var r = new Reader(expr);
+                    var value = readExpr(r);
+                    r.skip();
+                    if (r.at < r.text.length) throw new Error('trailing text');
+                    return value;
+                }
+
+                function axisNodes(node, axis) {
+                    switch (axis) {
+                        case 'child': return childNodes(node);
+                        case 'descendant': return descendants(node).filter(function (n) { return n.parentNode !== null; });
+                        case 'descendant-or-self': return [node].concat(descendants(node));
+                        case 'parent': return node.parentNode ? [node.parentNode] : [];
+                        case 'ancestor': return ancestors(node);
+                        case 'ancestor-or-self': return ancestors(node).concat([node]);
+                        case 'self': return [node];
+                        case 'attribute': return attributesOf(node);
+                        case 'following-sibling': {
+                            var out = [], n = node.nextSibling;
+                            while (n) { out.push(n); n = n.nextSibling; }
+                            return out;
+                        }
+                        case 'preceding-sibling': {
+                            var back = [], p = node.previousSibling;
+                            while (p) { back.unshift(p); p = p.previousSibling; }
+                            return back;
+                        }
+                        case 'following': {
+                            var after = [], chain = [node];
+                            while (chain.length) {
+                                var start = chain.shift();
+                                for (var m = start.nextSibling; m; m = m.nextSibling) after.push(m);
+                            }
+                            var walk = node.parentNode;
+                            while (walk) {
+                                for (var q = walk.nextSibling; q; q = q.nextSibling) { after.push(q); }
+                                walk = walk.parentNode;
+                            }
+                            return after;
+                        }
+                        case 'preceding': {
+                            var before = [], walk2 = node.parentNode;
+                            while (walk2) {
+                                for (var k = walk2.previousSibling; k; k = k.previousSibling) before.push(k);
+                                walk2 = walk2.parentNode;
+                            }
+                            return before;
+                        }
+                        default: return [];
+                    }
+                }
+                function attributesOf(node) {
+                    if (!node.attributes || node.nodeType !== 1) return [];
+                    var out = [];
+                    for (var i = 0; i < node.attributes.length; i++) {
+                        var attr = node.attributes.item ? node.attributes.item(i) : node.attributes[i];
+                        if (attr) out.push(attr);
+                    }
+                    return out;
+                }
+                var RESOLVER = null;
+                function namespaceOf(node) { return node.namespaceURI || ''; }
+                function testMatches(node, test) {
+                    switch (test.kind) {
+                        // The wildcard matches any element or any attribute; which of the two a step can
+                        // reach is decided by its axis, so 'count(//span/@*)' counts the attributes and
+                        // '//*' counts the elements (XPath 1.0 §2.3).
+                        case 'any': return node.nodeType === 1 || node.nodeType === 2;
+                        case 'name': {
+                            if (node.nodeType === 1) return nameOf(node) === test.value;
+                            if (node.nodeType === 2) return localNameOf(node) === test.value;
+                            return false;
+                        }
+                        case 'qname': {
+                            if (node.nodeType !== 1 && node.nodeType !== 2) return false;
+                            var wanted = RESOLVER && typeof RESOLVER.lookupNamespaceURI === 'function'
+                                ? RESOLVER.lookupNamespaceURI(test.prefix) : null;
+                            // Without a resolver that names the prefix, the qualified name is matched the
+                            // way the tree spells it — the prefix the page wrote is the prefix the node
+                            // carries. With one, the namespace URI decides and the local name follows.
+                            if (wanted === null || wanted === undefined) {
+                                return nameOf(node) === test.prefix + ':' + test.local;
+                            }
+                            if (test.local === '*') return namespaceOf(node) === wanted;
+                            return namespaceOf(node) === wanted && localNameOf(node) === test.local;
+                        }
+                        case 'text': return node.nodeType === 3 || node.nodeType === 4;
+                        case 'comment': return node.nodeType === 8;
+                        case 'processing-instruction': return node.nodeType === 7;
+                        case 'node': return true;
+                        default: return false;
+                    }
+                }
+                function stepNodes(nodes, step) {
+                    var reached = [];
+                    for (var i = 0; i < nodes.length; i++) {
+                        var found = axisNodes(nodes[i], step.axis);
+                        for (var j = 0; j < found.length; j++)
+                            if (testMatches(found[j], step.test)) reached.push(found[j]);
+                    }
+                    if (!step.predicates.length) return reached;
+                    var kept = reached;
+                    for (var p = 0; p < step.predicates.length; p++) {
+                        var next = [];
+                        for (var k = 0; k < kept.length; k++) {
+                            var answer = evaluateValue(step.predicates[p], kept[k], k + 1, kept.length);
+                            // A predicate whose value is a number keeps the node at that position — the
+                            // index the page wrote, not whether the number is truthy (§2.3.5).
+                            if (typeof answer === 'number') {
+                                if (answer === k + 1) next.push(kept[k]);
+                                continue;
+                            }
+                            if (toBoolean(answer, kept[k])) next.push(kept[k]);
+                        }
+                        kept = next;
+                    }
+                    return kept;
+                }
+                function pathNodes(path, context) {
+                    var nodes = path.absolute ? [rootOf(context)] : [context];
+                    for (var i = 0; i < path.steps.length; i++) nodes = stepNodes(nodes, path.steps[i]);
+                    return nodes;
+                }
+                function firstOf(nodes) { return nodes.length ? nodes[0] : null; }
+                function asNumber(text) {
+                    // XPath 1.0 §4.1: a string converts to a number only when the whole of it is one, so
+                    // the leading digits of '12abc' do not carry it (measured: 'number' of it is NaN).
+                    var trimmed = String(text).replace(/^[\t\n\r ]+|[\t\n\r ]+$/g, '');
+                    return /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(trimmed)
+                        ? parseFloat(trimmed) : NaN;
+                }
+                function toNumber(value) {
+                    if (typeof value === 'number') return value;
+                    if (typeof value === 'boolean') return value ? 1 : 0;
+                    if (typeof value === 'string') return asNumber(value);
+                    if (Array.isArray(value)) return value.length ? asNumber(textOf(value[0])) : NaN;
+                    if (value && value.nodeType) return asNumber(textOf(value));
+                    return NaN;
+                }
+                function toStringValue(value) {
+                    if (typeof value === 'string') return value;
+                    if (typeof value === 'number') return isNaN(value) ? 'NaN' : (value === Infinity ? 'Infinity' : (value === -Infinity ? '-Infinity' : String(value)));
+                    if (typeof value === 'boolean') return value ? 'true' : 'false';
+                    if (Array.isArray(value)) return value.length ? textOf(value[0]) : '';
+                    if (value && value.nodeType) return textOf(value);
+                    return '';
+                }
+                function toBoolean(value, node, context) {
+                    if (typeof value === 'boolean') return value;
+                    if (typeof value === 'number') return !isNaN(value) && value !== 0;
+                    if (typeof value === 'string') return value.length > 0;
+                    if (Array.isArray(value)) return value.length > 0;
+                    if (value && value.nodeType) return true;
+                    return false;
+                }
+                function callFunction(name, args, ctx, position, size) {
+                    function arg(i) { return evaluateValue(args[i], ctx, position, size); }
+                    // The one-argument converters take the node-set the page wrote, so their answer comes
+                    // from its first node; with no argument at all the context node answers (§4.1).
+                    function text(i) { return i < args.length ? toStringValue(arg(i)) : textOf(ctx); }
+                    function nodeAt(i) {
+                        if (i >= args.length) return ctx;
+                        var value = arg(i);
+                        if (Array.isArray(value)) return value.length ? value[0] : null;
+                        return value && value.nodeType ? value : ctx;
+                    }
+                    switch (name) {
+                        case 'count': {
+                            var counted = args.length ? arg(0) : [];
+                            return Array.isArray(counted) ? counted.length : 0;
+                        }
+                        case 'position': return position || 1;
+                        case 'last': return size || 1;
+                        case 'name': {
+                            var named = nodeAt(0);
+                            return named ? nameOf(named) : '';
+                        }
+                        case 'local-name': {
+                            var local = nodeAt(0);
+                            return local ? localNameOf(local) : '';
+                        }
+                        case 'string': return text(0);
+                        case 'concat': {
+                            var joined = '';
+                            for (var i = 0; i < args.length; i++) joined += text(i);
+                            return joined;
+                        }
+                        case 'contains': return text(0).indexOf(text(1)) >= 0;
+                        case 'starts-with': return text(0).slice(0, text(1).length) === text(1);
+                        case 'ends-with': {
+                            var tail = text(1);
+                            return text(0).slice(-tail.length) === tail;
+                        }
+                        case 'substring-before': {
+                            var source = text(0);
+                            var pivot = text(1);
+                            var at = source.indexOf(pivot);
+                            return at < 0 ? '' : source.slice(0, at);
+                        }
+                        case 'substring-after': {
+                            var from = text(0);
+                            var mark = text(1);
+                            var found = from.indexOf(mark);
+                            return found < 0 ? '' : from.slice(found + mark.length);
+                        }
+                        case 'substring': {
+                            // Positions count from one, and the part asked for past the end of the
+                            // string is simply not there (measured: 'substring' of hello from 4 for 5 is
+                            // 'lo', not 'lo' padded with spaces).
+                            var whole = text(0);
+                            var first = Math.round(args.length > 1 ? toNumber(arg(1)) : NaN);
+                            var span = args.length > 2 ? Math.round(toNumber(arg(2)))
+                                : (isNaN(first) ? NaN : whole.length - first + 1);
+                            if (isNaN(first) || isNaN(span)) return '';
+                            var picked = '';
+                            for (var ci = first; ci < first + span; ci++) {
+                                if (ci >= 1 && ci <= whole.length) picked += whole.charAt(ci - 1);
+                            }
+                            return picked;
+                        }
+                        case 'string-length': return text(0).length;
+                        case 'normalize-space': return normalize(text(0).replace(/[\t\n\r]/g, ' '));
+                        case 'number': return 0 < args.length ? toNumber(arg(0)) : toNumber(textOf(ctx));
+                        case 'boolean': return toBoolean(arg(0), ctx);
+                        case 'not': return !toBoolean(arg(0), ctx);
+                        case 'true': return true;
+                        case 'false': return false;
+                        case 'sum': {
+                            var total = 0, list = args.length ? arg(0) : [];
+                            if (!Array.isArray(list)) return toNumber(list);
+                            for (var m = 0; m < list.length; m++) total += toNumber(textOf(list[m]));
+                            return total;
+                        }
+                        case 'floor': return Math.floor(toNumber(arg(0)));
+                        case 'ceiling': return Math.ceil(toNumber(arg(0)));
+                        case 'round': return Math.round(toNumber(arg(0)));
+                        case 'id': {
+                            var document = rootOf(ctx);
+                            var wanted = text(0).split(/\s+/);
+                            var hits = [];
+                            for (var w = 0; w < wanted.length; w++) {
+                                if (!wanted[w]) continue;
+                                var byId = (document.getElementById || function () { return null; }).call(document, wanted[w]);
+                                if (byId) hits.push(byId);
+                            }
+                            return hits;
+                        }
+                        default: throw new Error('unknown function ' + name);
+                    }
+                }
+                function evaluateValue(node, context, position, size) {
+                    if (!node) return '';
+                    switch (node.kind) {
+                        case 'number': return node.value;
+                        case 'string': return node.value;
+                        case 'path': return pathNodes(node.path, context);
+                        case 'call':
+                            return callFunction(node.name, node.args, context, position, size);
+                        default: break;
+                    }
+                    switch (node.op) {
+                        case 'and': return toBoolean(evaluateValue(node.left, context, position, size), context) && toBoolean(evaluateValue(node.right, context, position, size), context);
+                        case 'or': return toBoolean(evaluateValue(node.left, context, position, size), context) || toBoolean(evaluateValue(node.right, context, position, size), context);
+                        case 'union': {
+                            var left = evaluateValue(node.left, context, position, size);
+                            var right = evaluateValue(node.right, context, position, size);
+                            if (!Array.isArray(left) || !Array.isArray(right)) throw new Error('bad union');
+                            return sortedUnique(left.concat(right));
+                        }
+                        case 'negate': return -toNumber(evaluateValue(node.right, context, position, size));
+                        case '+': return toNumber(evaluateValue(node.left, context, position, size)) + toNumber(evaluateValue(node.right, context, position, size));
+                        case '-': return toNumber(evaluateValue(node.left, context, position, size)) - toNumber(evaluateValue(node.right, context, position, size));
+                        case '*': return toNumber(evaluateValue(node.left, context, position, size)) * toNumber(evaluateValue(node.right, context, position, size));
+                        case 'div': return toNumber(evaluateValue(node.left, context, position, size)) / toNumber(evaluateValue(node.right, context, position, size));
+                        case 'mod': return toNumber(evaluateValue(node.left, context, position, size)) % toNumber(evaluateValue(node.right, context, position, size));
+                        case 'eq': case 'ne': case 'lt': case 'le': case 'gt': case 'ge': {
+                            var a = evaluateValue(node.left, context, position, size);
+                            var b = evaluateValue(node.right, context, position, size);
+                            var bothNodes = Array.isArray(a) || Array.isArray(b);
+                            if (Array.isArray(a) && Array.isArray(b)) {
+                                // two node sets compare by string-value in XPath: any pair equal?
+                                var matched = false;
+                                for (var x = 0; x < a.length; x++) for (var y = 0; y < b.length; y++)
+                                    if (textOf(a[x]) === textOf(b[y])) matched = true;
+                                return node.op === 'eq' ? matched : node.op === 'ne' ? !matched : false;
+                            }
+                            if (node.op === 'eq' || node.op === 'ne') {
+                                var leftText = Array.isArray(a) ? (a.length ? textOf(a[0]) : '') : a;
+                                var rightText = Array.isArray(b) ? (b.length ? textOf(b[0]) : '') : b;
+                                var equal;
+                                if (typeof leftText === 'number' || typeof rightText === 'number')
+                                    equal = toNumber(leftText) === toNumber(rightText);
+                                else if (typeof leftText === 'boolean' || typeof rightText === 'boolean')
+                                    equal = toBoolean(leftText, context) === toBoolean(rightText, context);
+                                else equal = String(leftText) === String(rightText);
+                                return node.op === 'eq' ? equal : !equal;
+                            }
+                            return compareNumbers(node.op,
+                                Array.isArray(a) ? toNumber(a.length ? textOf(firstOf(a)) : NaN) : toNumber(a),
+                                Array.isArray(b) ? toNumber(b.length ? textOf(firstOf(b)) : NaN) : toNumber(b));
+                        }
+                        default: throw new Error('cannot evaluate');
+                    }
+                }
+                function compareNumbers(op, a, b) {
+                    if (op === 'lt') return a < b;
+                    if (op === 'le') return a <= b;
+                    if (op === 'gt') return a > b;
+                    return a >= b;
+                }
+                function evaluate(expr, node, position, size) {
+                    return evaluateValue(expr, node, position, size);
+                }
+
+                function XPathResultImpl(type, value, context) {
+                    var nodes = Array.isArray(value) ? sortedUnique(value) : null;
+                    var iterator = nodes ? nodes.slice() : null;
+                    var snapshot = nodes ? nodes.slice() : null;
+                    var firstNode = nodes ? (nodes[0] || null) : (isNode(value) ? value : null);
+                    this.resultType = type;
+                    this.invalidIteratorState = false;
+                    Object.defineProperties(this, {
+                        iterateNext: { value: function () {
+                            if (!iterator) return null;
+                            return iterator.length ? iterator.shift() : null;
+                        }, writable: true, enumerable: false, configurable: true },
+                        snapshotItem: { value: function (index) {
+                            if (!snapshot) return null;
+                            var at = Number(index);
+                            return at >= 0 && at < snapshot.length ? snapshot[at] : null;
+                        }, writable: true, enumerable: false, configurable: true }
+                    });
+                    this.snapshotLength = snapshot ? snapshot.length : 0;
+                    this.singleNodeValue = type === FIRST_ORDERED_NODE_TYPE || type === ANY_UNORDERED_NODE_TYPE
+                        ? firstNode : null;
+                    this.numberValue = type === NUMBER_TYPE
+                        ? (nodes ? toNumber(nodes.length ? textOf(nodes[0]) : 'NaN') : toNumber(value)) : NaN;
+                    this.stringValue = type === STRING_TYPE
+                        ? (nodes ? (nodes.length ? textOf(nodes[0]) : '') : toStringValue(value)) : '';
+                    this.booleanValue = type === BOOLEAN_TYPE ? toBoolean(nodes || value, context) : false;
+                }
+                // The page never builds a result of its own — 'document.evaluate' answers it (measured:
+                // 'new XPathResult()' refuses with an illegal-constructor TypeError). The object the walk
+                // returns is still an 'XPathResult', so it is made on this function's prototype.
+                function XPathResult() {
+                    throw new TypeError('Failed to construct ' + quote('XPathResult')
+                        + ': Illegal constructor');
+                }
+                XPathResultImpl.prototype = XPathResult.prototype;
+                for (var ri = 0; ri < RESULT_NAMES.length; ri++) {
+                    (function (name, value) {
+                        try {
+                            Object.defineProperty(XPathResult, name,
+                                { value: value, writable: false, enumerable: false, configurable: false });
+                            Object.defineProperty(XPathResult.prototype, name,
+                                { value: value, writable: false, enumerable: false, configurable: false });
+                        } catch (e) { }
+                    })(RESULT_NAMES[ri], ri);
+                }
+                // The result the page is handed reads as the interface it is (measured:
+                // 'Object.prototype.toString.call(result)' names 'XPathResult').
+                try {
+                    Object.defineProperty(XPathResult.prototype, Symbol.toStringTag,
+                        { value: 'XPathResult', configurable: true });
+                } catch (e) { }
+
+                function evaluateExpression(expr, contextNode, resolver, type) {
+                    var parsed;
+                    try { parsed = parse(expr); } catch (e) { throw refused(expr); }
+                    // A name test two steps down still needs the resolver the caller handed in, and the
+                    // walk is synchronous, so it is held for the duration of this one expression.
+                    var previous = RESOLVER;
+                    RESOLVER = resolver && typeof resolver.lookupNamespaceURI === 'function'
+                        ? resolver : null;
+                    var made;
+                    try { made = evaluate(parsed, contextNode, 1, 1); }
+                    finally { RESOLVER = previous; }
+                    return new XPathResultImpl(type, made, contextNode);
+                }
+                function NSResolverFor(node) {
+                    return {
+                        lookupNamespaceURI: function (prefix) {
+                            for (var n = node; n && n.nodeType === 1; n = n.parentNode) {
+                                var declared = n.getAttribute && n.getAttribute('xmlns:' + prefix);
+                                if (declared) return declared;
+                            }
+                            return null;
+                        }
+                    };
+                }
+                function XPathEvaluator() {
+                    if (!(this instanceof XPathEvaluator)) {
+                        throw new TypeError('Failed to construct ' + quote('XPathEvaluator')
+                            + ': Please use the ' + quote('new') + ' operator, please.');
+                    }
+                }
+                XPathEvaluator.prototype.createExpression = function (expr, resolver) {
+                    var parsed;
+                    try { parsed = parse(expr); } catch (e) {
+                        throw new SyntaxError('Failed to execute ' + quote('createExpression') + ' on '
+                            + quote('XPathEvaluator') + ': The string ' + quote(text_of(expr))
+                            + ' is not a valid XPath expression.');
+                    }
+                    var owner = this;
+                    return {
+                        expression: String(expr),
+                        resultType: 0,
+                        nsResolver: resolver || null,
+                        evaluate: function (context, type) {
+                            var chosen = type === undefined ? ANY_TYPE : Number(type);
+                            return evaluateFor(context, expr, resolver, chosen);
+                        }
+                    };
+                };
+                XPathEvaluator.prototype.createNSResolver = function (node) { return NSResolverFor(node); };
+                XPathEvaluator.prototype.evaluate = function (expr, context, resolver, type, result) {
+                    return evaluateFor(context, expr, resolver, type);
+                };
+                function evaluateFor(context, expr, resolver, type) {
+                    if (!isNode(context)) {
+                        throw new TypeError('Failed to execute ' + quote('evaluate') + ' on '
+                            + quote('Document') + ': parameter 2 is not of type ' + quote('Node') + '.');
+                    }
+                    var chosen = type === undefined || type === null ? ANY_TYPE : Number(type);
+                    return evaluateExpression(expr, context, resolver, chosen);
+                }
+
+                var documentLevel = protoMap['HTMLDocument'] || protoMap['Document'];
+                if (documentLevel && !Object.prototype.hasOwnProperty.call(documentLevel, 'evaluate')) {
+                    Object.defineProperty(documentLevel, 'evaluate', {
+                        value: function (expr, context, resolver, type, result) {
+                            return evaluateFor(context || this, expr, resolver, type);
+                        },
+                        writable: true, enumerable: false, configurable: true
+                    });
+                }
+                if (documentLevel && !Object.prototype.hasOwnProperty.call(documentLevel, 'createNSResolver')) {
+                    Object.defineProperty(documentLevel, 'createNSResolver', {
+                        value: function (node) { return NSResolverFor(node); },
+                        writable: true, enumerable: false, configurable: true
+                    });
+                }
+                if (documentLevel && !Object.prototype.hasOwnProperty.call(documentLevel, 'createExpression')) {
+                    Object.defineProperty(documentLevel, 'createExpression', {
+                        value: XPathEvaluator.prototype.createExpression,
+                        writable: true, enumerable: false, configurable: true
+                    });
+                }
+                window.XPathResult = XPathResult;
+                window.XPathEvaluator = XPathEvaluator;
+                protoMap.XPathResult = XPathResult.prototype;
+                protoMap.XPathEvaluator = XPathEvaluator.prototype;
+            })();
+
+            // ── The faces, commands, highlights and drag payload a page asks for ───
+            // Four families that need nothing from the engine to answer well: the faces a page declares
+            // with 'new FontFace' and the set the document keeps (CSS Font Loading §4.3, §4.4), the
+            // editing commands it queries (§5.7), the highlights it registers (CSS Highlight 1) and the
+            // payload a drag carries (HTML §5.3.4, Clipboard §3). Each answer here is what the reference
+            // was read answering: an empty set is 'loaded' with size 0, a command the interface does not
+            // know is false rather than a throw, and a registry member refuses a value that is not a
+            // highlight with the sentence that names the parameter.
+            (function () {
+                var protoMap = window.__domProto || {};
+                var eventTargetProto = protoMap['EventTarget']
+                    || (window.EventTarget && window.EventTarget.prototype) || Object.prototype;
+                var SQ = String.fromCharCode(39);
+                var DQ = String.fromCharCode(34);
+                function quoted(value) { return SQ + String(value) + SQ; }
+                function argumentRefused(api, iface, needed, present) {
+                    return new TypeError('Failed to execute ' + quoted(api) + ' on ' + quoted(iface)
+                        + ': ' + needed + ' argument' + (needed === 1 ? '' : 's')
+                        + ' required, but only ' + present + ' present.');
+                }
+                function wordOr(value, fallback) {
+                    return value === undefined || value === null ? fallback : String(value);
+                }
+                function unquoted(text) {
+                    var value = String(text).trim();
+                    if (value.length > 1 && (value.charAt(0) === SQ || value.charAt(0) === DQ))
+                        return value.slice(1, value.length - 1);
+                    return value;
+                }
+                function setLike(proto, list) {
+                    // The three spellings a Set-like interface answers with are the same function, and
+                    // the iteration symbol names the one the reference prints for all of them (measured:
+                    // 'fontSet[Symbol.iterator]' reads as the values member).
+                    proto.values = function () {
+                        var made = list(this);
+                        var at = 0;
+                        return {
+                            next: function () {
+                                return at < made.length
+                                    ? { value: made[at++], done: false } : { value: undefined, done: true };
+                            },
+                            [Symbol.iterator]: function () { return this; }
+                        };
+                    };
+                    proto.entries = function () {
+                        var made = list(this);
+                        var at = 0;
+                        return {
+                            next: function () {
+                                if (at >= made.length) return { value: undefined, done: true };
+                                var value = made[at];
+                                at++;
+                                return { value: [value, value], done: false };
+                            },
+                            [Symbol.iterator]: function () { return this; }
+                        };
+                    };
+                    proto.keys = proto.values;
+                    proto[Symbol.iterator] = proto.values;
+                    proto.forEach = function (callback, thisArg) {
+                        var made = list(this).slice();
+                        for (var i = 0; i < made.length; i++) callback.call(thisArg, made[i], made[i], this);
+                    };
+                }
+                function frozenCopy(items) {
+                    // A page that writes to the list it read is refused the way a frozen array refuses
+                    // it (measured: 'types.push' throws TypeError).
+                    return Object.freeze(items.slice());
+                }
+
+                // ── CSS Font Loading §4.4: the face the page declares ───────────────
+                function FontFace(family, source, descriptors) {
+                    if (!(this instanceof FontFace)) {
+                        throw new TypeError('Failed to construct ' + quoted('FontFace') + ': Please use '
+                            + 'the ' + quoted('new') + ' operator, this object constructor cannot be '
+                            + 'called as a function.');
+                    }
+                    var init = descriptors || {};
+                    this.family = String(family === undefined ? '' : family);
+                    this.style = wordOr(init.style, 'normal');
+                    this.weight = wordOr(init.weight, 'normal');
+                    this.stretch = wordOr(init.stretch, 'normal');
+                    this.unicodeRange = wordOr(init.unicodeRange, 'U+0-10FFFF');
+                    this.variant = wordOr(init.variant, 'normal');
+                    this.featureSettings = wordOr(init.featureSettings, 'normal');
+                    this.variationSettings = wordOr(init.variationSettings, 'normal');
+                    this.display = wordOr(init.display, 'auto');
+                    this.ascentOverride = wordOr(init.ascentOverride, 'normal');
+                    this.descentOverride = wordOr(init.descentOverride, 'normal');
+                    this.lineGapOverride = wordOr(init.lineGapOverride, 'normal');
+                    this.sizeAdjust = wordOr(init.sizeAdjust, 'normal');
+                    this.__source = String(source === undefined ? '' : source);
+                    this.status = 'unloaded';
+                    var settle;
+                    this.loaded = new Promise(function (resolve) { settle = resolve; });
+                    this.__settle = function (face) { settle(face); };
+                }
+                // §4.4.2: the face is not fetched — this engine matches a family against the faces the
+                // platform already has — so the request answers as loaded at once, which is what a page
+                // that waits on it and then reads 'check' needs to see.
+                FontFace.prototype.load = function () {
+                    var self = this;
+                    if (self.status !== 'error') {
+                        self.status = 'loaded';
+                        self.__settle(self);
+                    }
+                    return Promise.resolve(self);
+                };
+                Object.defineProperty(FontFace.prototype, Symbol.toStringTag,
+                    { value: 'FontFace', configurable: true });
+                window.FontFace = FontFace;
+
+                // ── CSS Font Loading §4.3: the set the document keeps ───────────────
+                function FontFaceSet() {
+                    this.__faces = [];
+                    this.onloading = null;
+                    this.onloadingdone = null;
+                    this.onloadingerror = null;
+                    this.__ready = Promise.resolve(this);
+                }
+                FontFaceSet.prototype = Object.create(eventTargetProto);
+                Object.defineProperty(FontFaceSet.prototype, Symbol.toStringTag,
+                    { value: 'FontFaceSet', configurable: true });
+                // No 'constructor' of its own: 'FontFaceSet' is not a name the page reaches, so the read
+                // walks on to the interface above it (measured: 'document.fonts.constructor.name' is
+                // 'EventTarget' while the tag the same object prints is 'FontFaceSet').
+                Object.defineProperty(FontFaceSet.prototype, 'status', {
+                    get: function () { return 'loaded'; }, enumerable: true, configurable: true
+                });
+                Object.defineProperty(FontFaceSet.prototype, 'size', {
+                    get: function () { return this.__faces.length; }, enumerable: true, configurable: true
+                });
+                Object.defineProperty(FontFaceSet.prototype, 'ready', {
+                    get: function () { return this.__ready; }, enumerable: true, configurable: true
+                });
+                FontFaceSet.prototype.add = function (face) {
+                    if (this.__faces.indexOf(face) < 0) this.__faces.push(face);
+                };
+                FontFaceSet.prototype.delete = function (face) {
+                    var at = this.__faces.indexOf(face);
+                    if (at < 0) return false;
+                    this.__faces.splice(at, 1);
+                    return true;
+                };
+                FontFaceSet.prototype.clear = function () { this.__faces.length = 0; };
+                FontFaceSet.prototype.has = function (face) { return this.__faces.indexOf(face) >= 0; };
+                function faceFamilies(text) {
+                    // The shorthand the page writes is 'style size/line-height family, family'; the list
+                    // is what comes after the last size word, so the names are read from the tail.
+                    var parts = String(text === undefined ? '' : text).split(',');
+                    var out = [];
+                    for (var i = 0; i < parts.length; i++) {
+                        var words = parts[i].trim().split(/\s+/);
+                        var family = unquoted(words.length ? words[words.length - 1] : '');
+                        if (family) out.push(family);
+                    }
+                    return out;
+                }
+                function matchingFaces(self, font) {
+                    var families = faceFamilies(font).map(function (n) { return n.toLowerCase(); });
+                    var found = [];
+                    for (var i = 0; i < self.__faces.length; i++) {
+                        var face = self.__faces[i];
+                        if (families.indexOf(String(face.family).toLowerCase()) >= 0) found.push(face);
+                    }
+                    return found;
+                }
+                // §4.3.6: the check answers false while a face the shorthand names still needs loading;
+                // a family the set does not hold is one the platform draws with, and that is true
+                // (measured: false right after 'add', true again once the face is gone from the set).
+                FontFaceSet.prototype.check = function (font, text) {
+                    var found = matchingFaces(this, font);
+                    for (var i = 0; i < found.length; i++) {
+                        if (found[i].status !== 'loaded') return false;
+                    }
+                    return true;
+                };
+                FontFaceSet.prototype.load = function (font, text) {
+                    if (arguments.length < 1) throw argumentRefused('load', 'FontFaceSet', 1, 0);
+                    var found = matchingFaces(this, font);
+                    var running = [];
+                    for (var i = 0; i < found.length; i++) {
+                        if (found[i].status === 'loaded') continue;
+                        running.push(found[i].load());
+                    }
+                    return running.length ? Promise.all(running) : Promise.resolve([]);
+                };
+                setLike(FontFaceSet.prototype, function (self) { return self.__faces.slice(); });
+                var documentLevel = protoMap['HTMLDocument'] || protoMap['Document'];
+                if (documentLevel && !Object.prototype.hasOwnProperty.call(documentLevel, 'fonts')) {
+                    Object.defineProperty(documentLevel, 'fonts', {
+                        get: function () {
+                            if (!this.__domFonts) this.__domFonts = new FontFaceSet();
+                            return this.__domFonts;
+                        },
+                        enumerable: true, configurable: true
+                    });
+                }
+
+                // ── The editing commands the page queries (HTML §5.7) ──────────────
+                // The engine has no editing host, so no command does anything: 'execCommand' answers
+                // false, the state is false and the value the empty string — which is exactly what the
+                // reference answers when there is nothing selected in nothing editable (measured). What
+                // the list carries is whether the name is one the interface knows: an unknown command is
+                // false rather than a throw, in every one of the four queries.
+                var COMMAND_NAMES = {};
+                var KNOWN_COMMANDS = ['abort', 'backcolor', 'bold', 'createlink', 'copy', 'cut',
+                    'defaultstyle', 'delete', 'deletetablecolumn', 'deletetablerow', 'execselect',
+                    'fontname', 'fontsize', 'forecolor', 'formatblock', 'heading', 'indent',
+                    'insertimage', 'insertlinebreak', 'insertorderedlist', 'insertparagraph',
+                    'inserthorizontalrule', 'insertunorderedlist', 'italic', 'justifycenter',
+                    'justifyfull', 'justifyleft', 'justifyright', 'nodeforecolor', 'outdent', 'paste',
+                    'redo', 'removeformat', 'selectall', 'strikethrough', 'stylewithcss', 'subscript',
+                    'superscript', 'underline', 'undo', 'unlink', 'usequestionnaireblock'];
+                for (var ci = 0; ci < KNOWN_COMMANDS.length; ci++) COMMAND_NAMES[KNOWN_COMMANDS[ci]] = true;
+                function commandKnown(name) {
+                    return Object.prototype.hasOwnProperty.call(COMMAND_NAMES,
+                        String(name === undefined ? '' : name).toLowerCase());
+                }
+                function defineDocumentMethod(level, name, body) {
+                    if (!level) return;
+                    // An operation on an interface is not enumerable, the same as the attributes beside it.
+                    try {
+                        Object.defineProperty(level, name, {
+                            value: body, writable: true, enumerable: false, configurable: true
+                        });
+                    } catch (e) { level[name] = body; }
+                }
+                defineDocumentMethod(documentLevel, 'execCommand', function (commandId, showUI, value) {
+                    if (arguments.length < 1) throw argumentRefused('execCommand', 'Document', 1, arguments.length);
+                    if (!commandKnown(commandId)) return false;
+                    return false;
+                });
+                defineDocumentMethod(documentLevel, 'queryCommandState', function (name) {
+                    if (arguments.length < 1) throw argumentRefused('queryCommandState', 'Document', 1, arguments.length);
+                    return false;
+                });
+                defineDocumentMethod(documentLevel, 'queryCommandSupported', function (name) {
+                    if (arguments.length < 1) throw argumentRefused('queryCommandSupported', 'Document', 1, arguments.length);
+                    return commandKnown(name);
+                });
+                defineDocumentMethod(documentLevel, 'queryCommandEnabled', function (name) {
+                    if (arguments.length < 1) throw argumentRefused('queryCommandEnabled', 'Document', 1, arguments.length);
+                    return commandKnown(name) && false;
+                });
+                defineDocumentMethod(documentLevel, 'queryCommandValue', function (name) {
+                    if (arguments.length < 1) throw argumentRefused('queryCommandValue', 'Document', 1, arguments.length);
+                    return '';
+                });
+
+                // ── The highlight a page registers (CSS Highlight API 1 §2, §3) ─────
+                function Highlight() {
+                    if (!(this instanceof Highlight)) {
+                        throw new TypeError('Failed to construct ' + quoted('Highlight') + ': Please use '
+                            + 'the ' + quoted('new') + ' operator, this object constructor cannot be '
+                            + 'called as a function.');
+                    }
+                    this.__items = [];
+                    this.priority = 0;
+                    for (var i = 0; i < arguments.length; i++) this.add(arguments[i]);
+                }
+                Object.defineProperty(Highlight.prototype, 'type', {
+                    get: function () { return 'highlight'; }, enumerable: true, configurable: true
+                });
+                Object.defineProperty(Highlight.prototype, 'size', {
+                    get: function () { return this.__items.length; }, enumerable: true, configurable: true
+                });
+                function sameRange(a, b) {
+                    // The set keeps a range once: two ranges drawn over the same span answer one item
+                    // for the page (measured: adding the same collapsed range twice leaves 'size' 1).
+                    return a === b || (a && b
+                        && a.startContainer === b.startContainer && a.startOffset === b.startOffset
+                        && a.endContainer === b.endContainer && a.endOffset === b.endOffset);
+                }
+                Highlight.prototype.add = function () {
+                    for (var i = 0; i < arguments.length; i++) {
+                        var range = arguments[i];
+                        if (range == null) continue;
+                        var found = false;
+                        for (var k = 0; k < this.__items.length; k++) {
+                            if (sameRange(this.__items[k], range)) { found = true; break; }
+                        }
+                        if (!found) this.__items.push(range);
+                    }
+                };
+                Highlight.prototype.delete = function (range) {
+                    for (var k = 0; k < this.__items.length; k++) {
+                        if (sameRange(this.__items[k], range)) { this.__items.splice(k, 1); return true; }
+                    }
+                    return false;
+                };
+                Highlight.prototype.has = function (range) {
+                    for (var k = 0; k < this.__items.length; k++) {
+                        if (sameRange(this.__items[k], range)) return true;
+                    }
+                    return false;
+                };
+                Highlight.prototype.clear = function () { this.__items.length = 0; };
+                setLike(Highlight.prototype, function (self) { return self.__items.slice(); });
+                Object.defineProperty(Highlight.prototype, Symbol.toStringTag,
+                    { value: 'Highlight', configurable: true });
+                window.Highlight = Highlight;
+
+                function HighlightRegistry() {
+                    throw new TypeError('Failed to construct ' + quoted('HighlightRegistry')
+                        + ': Illegal constructor');
+                }
+                function RegistryStore(registry) {
+                    if (!Object.prototype.hasOwnProperty.call(registry, '__entries')) {
+                        Object.defineProperty(registry, '__entries', {
+                            value: { names: [], values: {} }, writable: true,
+                            enumerable: false, configurable: true
+                        });
+                    }
+                    return registry.__entries;
+                }
+                Object.defineProperty(HighlightRegistry.prototype, 'size', {
+                    get: function () { return RegistryStore(this).names.length; },
+                    enumerable: true, configurable: true
+                });
+                HighlightRegistry.prototype.set = function (name, highlight) {
+                    if (arguments.length < 2) throw argumentRefused('set', 'HighlightRegistry', 2, arguments.length);
+                    if (!(highlight instanceof Highlight)) {
+                        throw new TypeError('Failed to execute ' + quoted('set') + ' on '
+                            + quoted('HighlightRegistry') + ': parameter 2 is not of type '
+                            + quoted('Highlight') + '.');
+                    }
+                    var store = RegistryStore(this);
+                    var key = String(name);
+                    if (store.values[key] === undefined) store.names.push(key);
+                    store.values[key] = highlight;
+                    return this;
+                };
+                HighlightRegistry.prototype.get = function (name) {
+                    var store = RegistryStore(this);
+                    var value = store.values[String(name)];
+                    return value === undefined ? undefined : value;
+                };
+                HighlightRegistry.prototype.has = function (name) {
+                    return RegistryStore(this).names.indexOf(String(name)) >= 0;
+                };
+                HighlightRegistry.prototype.delete = function (name) {
+                    var store = RegistryStore(this);
+                    var at = store.names.indexOf(String(name));
+                    if (at < 0) return false;
+                    store.names.splice(at, 1);
+                    delete store.values[String(name)];
+                    return true;
+                };
+                HighlightRegistry.prototype.clear = function () {
+                    var store = RegistryStore(this);
+                    store.names.length = 0;
+                    store.values = {};
+                };
+                // The names walk in the order they were registered, and the pairs answer
+                // [name, highlight] — the registry is a map, not the set the highlights themselves are.
+                HighlightRegistry.prototype.values = function () {
+                    var store = RegistryStore(this);
+                    var made = [];
+                    for (var i = 0; i < store.names.length; i++) made.push(store.values[store.names[i]]);
+                    var at = 0;
+                    return { next: function () {
+                        return at < made.length
+                            ? { value: made[at++], done: false } : { value: undefined, done: true };
+                    }, [Symbol.iterator]: function () { return this; } };
+                };
+                HighlightRegistry.prototype.keys = function () {
+                    var store = RegistryStore(this);
+                    var made = store.names.slice();
+                    var at = 0;
+                    return { next: function () {
+                        return at < made.length
+                            ? { value: made[at++], done: false } : { value: undefined, done: true };
+                    }, [Symbol.iterator]: function () { return this; } };
+                };
+                HighlightRegistry.prototype.entries = function () {
+                    var store = RegistryStore(this);
+                    var made = [];
+                    for (var i = 0; i < store.names.length; i++)
+                        made.push([store.names[i], store.values[store.names[i]]]);
+                    var at = 0;
+                    return { next: function () {
+                        return at < made.length
+                            ? { value: made[at++], done: false } : { value: undefined, done: true };
+                    }, [Symbol.iterator]: function () { return this; } };
+                };
+                HighlightRegistry.prototype.forEach = function (callback, thisArg) {
+                    var names = this.keys();
+                    for (var step = names.next(); !step.done; step = names.next()) {
+                        callback.call(thisArg, this.get(step.value), step.value, this);
+                    }
+                };
+                HighlightRegistry.prototype[Symbol.iterator] = HighlightRegistry.prototype.entries;
+                // §3.3: the highlights painted at a point are the ones whose ranges cover it. Nothing is
+                // painted by point here, so the walk answers the empty set the interface returns when no
+                // highlight covers the coordinate.
+                HighlightRegistry.prototype.highlightsFromPoint = function (x, y) {
+                    return new Highlight();
+                };
+                Object.defineProperty(HighlightRegistry.prototype, Symbol.toStringTag,
+                    { value: 'HighlightRegistry', configurable: true });
+                window.HighlightRegistry = HighlightRegistry;
+                var highlightRegistry = Object.create(HighlightRegistry.prototype);
+                if (window.CSS) {
+                    try {
+                        Object.defineProperty(window.CSS, 'highlights', {
+                            value: highlightRegistry, writable: false, enumerable: true, configurable: true
+                        });
+                    } catch (e) { window.CSS.highlights = highlightRegistry; }
+                }
+
+                // ── The payload a drag carries (HTML §5.3.4, Clipboard §3) ──────────
+                function DataTransferItem(type, read) {
+                    this.__type = String(type);
+                    this.__read = read;
+                }
+                Object.defineProperty(DataTransferItem.prototype, 'kind', {
+                    get: function () { return 'string'; }, enumerable: true, configurable: true
+                });
+                Object.defineProperty(DataTransferItem.prototype, 'type', {
+                    get: function () { return this.__type; }, enumerable: true, configurable: true
+                });
+                // §5.3.4.3: the string is handed to the callback on a task of its own, and a file — the
+                // other kind there is — is not what a script-built transfer holds.
+                DataTransferItem.prototype.getAsString = function (callback) {
+                    if (typeof callback !== 'function') return;
+                    var value = this.__read ? this.__read() : '';
+                    Promise.resolve().then(function () { callback(value); });
+                };
+                DataTransferItem.prototype.getAsFile = function () { return null; };
+                Object.defineProperty(DataTransferItem.prototype, Symbol.toStringTag,
+                    { value: 'DataTransferItem', configurable: true });
+                window.DataTransferItem = DataTransferItem;
+
+                function DataTransfer() {
+                    this.__order = [];
+                    this.__data = {};
+                    this.dropEffect = 'none';
+                    this.effectAllowed = 'none';
+                }
+                DataTransfer.prototype.setData = function (type, data) {
+                    if (arguments.length < 2) throw argumentRefused('setData', 'DataTransfer', 2, arguments.length);
+                    var key = String(type).toLowerCase();
+                    // A type that is not a MIME spelling is dropped without a word (§5.3.4.2).
+                    if (!/^[a-z0-9!#$%&'*+.^_`|~-]+\/[a-z0-9!#$%&'*+.^_`|~-]+$/.test(key)) return;
+                    if (this.__data[key] === undefined) this.__order.push(key);
+                    this.__data[key] = String(data);
+                };
+                DataTransfer.prototype.getData = function (type) {
+                    if (arguments.length < 1) throw argumentRefused('getData', 'DataTransfer', 1, arguments.length);
+                    var value = this.__data[String(type).toLowerCase()];
+                    return value === undefined ? '' : value;
+                };
+                DataTransfer.prototype.clearData = function (type) {
+                    if (arguments.length < 1) {
+                        this.__order.length = 0;
+                        this.__data = {};
+                        return;
+                    }
+                    var key = String(type).toLowerCase();
+                    if (this.__data[key] === undefined) return;
+                    delete this.__data[key];
+                    var at = this.__order.indexOf(key);
+                    if (at >= 0) this.__order.splice(at, 1);
+                };
+                // The image the drag shows beside the cursor is picked by the shell, not the script.
+                DataTransfer.prototype.setDragImage = function () { };
+                Object.defineProperty(DataTransfer.prototype, 'types', {
+                    get: function () { return frozenCopy(this.__order); },
+                    enumerable: true, configurable: true
+                });
+                Object.defineProperty(DataTransfer.prototype, 'items', {
+                    get: function () {
+                        var made = [];
+                        for (var i = 0; i < this.__order.length; i++) {
+                            (function (name, owner) {
+                                made.push(new DataTransferItem(name, function () {
+                                    var value = owner.__data[name];
+                                    return value === undefined ? '' : value;
+                                }));
+                            })(this.__order[i], this);
+                        }
+                        return frozenCopy(made);
+                    },
+                    enumerable: true, configurable: true
+                });
+                Object.defineProperty(DataTransfer.prototype, 'files', {
+                    // A script-built transfer holds no files; the list is the empty one the reference
+                    // answers, and it is a FileList the page can read 'length' and 'item' from.
+                    get: function () { return EmptyFileList(); },
+                    enumerable: true, configurable: true
+                });
+                Object.defineProperty(DataTransfer.prototype, Symbol.toStringTag,
+                    { value: 'DataTransfer', configurable: true });
+                window.DataTransfer = DataTransfer;
+
+                function EmptyFileList() {
+                    if (!window.__domEmptyFiles) {
+                        var list = [];
+                        list.item = function () { return null; };
+                        Object.defineProperty(list, Symbol.toStringTag,
+                            { value: 'FileList', configurable: true });
+                        window.__domEmptyFiles = Object.freeze(list);
+                    }
+                    return window.__domEmptyFiles;
+                }
+
+                // ── The clipboard item a page hands over (Clipboard §3.3) ───────────
+                var CLIPBOARD_TYPES = { 'text/plain': true, 'text/html': true };
+                function ClipboardItem(items) {
+                    if (!(this instanceof ClipboardItem)) {
+                        throw new TypeError('Failed to construct ' + quoted('ClipboardItem') + ': Please '
+                            + 'use the ' + quoted('new') + ' operator, this object constructor cannot be '
+                            + 'called as a function.');
+                    }
+                    if (items === undefined || items === null) {
+                        throw new TypeError('Failed to construct ' + quoted('ClipboardItem') + ': 1 '
+                            + 'argument required, but only 0 present.');
+                    }
+                    var dict = items;
+                    var names = Object.keys(dict);
+                    names.sort();
+                    this.__types = names;
+                    this.__data = dict;
+                }
+                Object.defineProperty(ClipboardItem.prototype, 'types', {
+                    get: function () { return frozenCopy(this.__types); },
+                    enumerable: true, configurable: true
+                });
+                ClipboardItem.prototype.getType = function (type) {
+                    if (arguments.length < 1) {
+                        throw argumentRefused('getType', 'ClipboardItem', 1, arguments.length);
+                    }
+                    var name = String(type);
+                    var value = this.__data[name];
+                    if (value === undefined) {
+                        return Promise.reject(new DOMException('The data of the specified type was not '
+                            + 'found.', 'NotFoundError'));
+                    }
+                    return Promise.resolve(typeof value.then === 'function' ? value : value);
+                };
+                // §3.3.1: the one spelling the engine can hand over is the one it can build a blob for.
+                ClipboardItem.supports = function (type) {
+                    if (arguments.length < 1) {
+                        throw argumentRefused('supports', 'ClipboardItem', 1, arguments.length);
+                    }
+                    return CLIPBOARD_TYPES[String(type).toLowerCase()] === true;
+                };
+                Object.defineProperty(ClipboardItem.prototype, Symbol.toStringTag,
+                    { value: 'ClipboardItem', configurable: true });
+                window.ClipboardItem = ClipboardItem;
+
+                // ── Web Storage §5: the named items the page writes ────────────────
+                // A storage area is an exotic object: every name the page gives it is an item, so
+                // 'localStorage.b = 2' writes one, 'Object.keys' lists the ones that are there in the
+                // order they went in, and a name the interface itself owns is the member, not an item.
+                // The host holds the items; this is the face the page reads them through.
+                var STORAGE_MEMBERS = { getItem: 1, setItem: 1, removeItem: 1, clear: 1, key: 1, length: 1 };
+                var storagePairs = [];
+                function storageHostOf(obj) {
+                    for (var p = 0; p < storagePairs.length; p++)
+                        if (storagePairs[p].object === obj) return storagePairs[p].host;
+                    return null;
+                }
+                function Storage() {
+                    throw new TypeError('Failed to construct ' + quoted('Storage')
+                        + ': Illegal constructor');
+                }
+                Storage.prototype.getItem = function (key) {
+                    var host = storageHostOf(this);
+                    return host === null ? null : host.getItem(String(key));
+                };
+                Storage.prototype.setItem = function (key, value) {
+                    var host = storageHostOf(this);
+                    if (host !== null) host.setItem(String(key), String(value));
+                };
+                Storage.prototype.removeItem = function (key) {
+                    var host = storageHostOf(this);
+                    if (host !== null) host.removeItem(String(key));
+                };
+                Storage.prototype.clear = function () {
+                    var host = storageHostOf(this);
+                    if (host !== null) host.clear();
+                };
+                Storage.prototype.key = function (index) {
+                    var host = storageHostOf(this);
+                    return host === null ? null : host.key(Number(index) | 0);
+                };
+                Object.defineProperty(Storage.prototype, 'length', {
+                    get: function () {
+                        var host = storageHostOf(this);
+                        return host === null ? 0 : host.length;
+                    },
+                    enumerable: true, configurable: true
+                });
+                Object.defineProperty(Storage.prototype, Symbol.toStringTag,
+                    { value: 'Storage', configurable: true });
+                window.Storage = Storage;
+
+                function storageNamed(host) {
+                    if (typeof Proxy !== 'function') return host;
+                    // An ordinary object stands in for the exotic one: the trap rules a proxy must keep
+                    // are about the target it wraps, and the items are the only properties that should
+                    // answer as its own. The host is held in the closure and read through the traps.
+                    var target = { };
+                    // The interface's methods are given as script functions over the host rather than the
+                    // host's own members: a host method asked for through a proxy gets a receiver that is
+                    // not the host, and the interop layer cannot make a CLR object out of that.
+                    var members = {
+                        getItem: function (key) {
+                            var value = host.getItem(String(key));
+                            return value === null || value === undefined ? null : value;
+                        },
+                        setItem: function (key, value) { host.setItem(String(key), String(value)); },
+                        removeItem: function (key) { host.removeItem(String(key)); },
+                        clear: function () { host.clear(); },
+                        key: function (index) {
+                            var value = host.key(Number(index) | 0);
+                            return value === null || value === undefined ? null : value;
+                        }
+                    };
+                    function readMember(key) {
+                        if (key === 'length') return typeof host.length === 'number' ? host.length : 0;
+                        return members[key];
+                    }
+                    var named = new Proxy(target, {
+                        get: function (unused, key) {
+                            if (key === Symbol.toStringTag) return 'Storage';
+                            if (typeof key !== 'string') return host[key];
+                            if (STORAGE_MEMBERS[key] === 1) return readMember(key);
+                            var value = host.getItem(key);
+                            // A name that is not an item reads as the missing property, not as the null
+                            // the host's 'getItem' answers (measured: 'localStorage.a' after a delete).
+                            return value === null || value === undefined ? undefined : value;
+                        },
+                        set: function (unused, key, value) {
+                            if (typeof key !== 'string') { target[key] = value; return true; }
+                            // A name the interface owns is not an item, so writing it stores nothing
+                            // (measured: 'localStorage.length = 5' leaves the count where it was).
+                            if (STORAGE_MEMBERS[key] === 1) return true;
+                            host.setItem(key, String(value));
+                            return true;
+                        },
+                        deleteProperty: function (unused, key) {
+                            if (typeof key === 'string' && STORAGE_MEMBERS[key] !== 1) host.removeItem(key);
+                            return true;
+                        },
+                        has: function (unused, key) {
+                            if (typeof key !== 'string') return key in target;
+                            if (STORAGE_MEMBERS[key] === 1) return true;
+                            var value = host.getItem(key);
+                            return value !== null && value !== undefined;
+                        },
+                        ownKeys: function () {
+                            var out = [];
+                            var count = typeof host.length === 'number' ? host.length : 0;
+                            if (typeof host.key !== 'function') return out;
+                            for (var i = 0; i < count; i++) {
+                                var name = host.key(i);
+                                if (name !== null && name !== undefined) out.push(String(name));
+                            }
+                            return out;
+                        },
+                        getOwnPropertyDescriptor: function (unused, key) {
+                            if (typeof key !== 'string' || STORAGE_MEMBERS[key] === 1) return undefined;
+                            var value = host.getItem(key);
+                            if (value === null || value === undefined) return undefined;
+                            return { value: value, writable: true, enumerable: true, configurable: true };
+                        },
+                        getPrototypeOf: function () { return Storage.prototype; }
+                    });
+                    storagePairs.push({ object: named, host: host });
+                    // The pairs only have to answer for the areas this document hands out; a page that
+                    // kept an object from a document it left behind has nowhere to read from anyway.
+                    while (storagePairs.length > 4) storagePairs.shift();
+                    return named;
+                }
+                // The areas were handed out as the host objects, so they are dressed here rather than
+                // where they were set; the setup script runs once per document, and each document gets
+                // one proxy per area that answers the same host every time it is read.
+                if (window.localStorage) window.localStorage = storageNamed(window.localStorage);
+                if (window.sessionStorage) window.sessionStorage = storageNamed(window.sessionStorage);
             })();
 
             // ── ES2024 Array.prototype.group (Array grouping §2.3) ──────────────
@@ -4783,6 +6417,34 @@ public class AcruxBuiltins
     /// the only place with a real random source, so the string is minted here.</summary>
     public string randomUUID() => Guid.NewGuid().ToString();
 
+    /// <summary>'crypto.subtle.digest' (Web Crypto §15.14): the hash of the bytes the page handed in.
+    /// The bytes arrive as hex and the digest leaves as hex, which keeps the boundary from having to
+    /// marshal an ArrayBuffer and lets the platform's own crypto implementation do the work — the
+    /// script side builds the promise and the refusals. A name the interface does not have answers
+    /// null, and the caller has already checked the four digests it exposes.</summary>
+    public string? digest(string algorithm, string hexData)
+    {
+        var name = (algorithm ?? "").Trim().ToUpperInvariant().Replace("-", "");
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromHexString(hexData ?? "");
+        }
+        catch
+        {
+            return null;
+        }
+        byte[] hash = name switch
+        {
+            "SHA1" => System.Security.Cryptography.SHA1.HashData(bytes),
+            "SHA256" => System.Security.Cryptography.SHA256.HashData(bytes),
+            "SHA384" => System.Security.Cryptography.SHA384.HashData(bytes),
+            "SHA512" => System.Security.Cryptography.SHA512.HashData(bytes),
+            _ => Array.Empty<byte>()
+        };
+        return hash.Length == 0 ? null : Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
     /// <summary>Custom Elements §1: the script-side registry tells the engine the name it put a
     /// definition under, and the first call switches the reaction hooks on. Until a page defines its
     /// first element the engine's tree operations never cross the boundary for a callback.</summary>
@@ -5086,13 +6748,67 @@ public class AcruxBuiltins
 
     public string decodeURI(string str) => Uri.UnescapeDataString(str);
     public string encodeURI(string str) => Uri.EscapeDataString(str);
-    public int parseInt(string s, object? radix = null)
+    /// <summary>'parseInt' for an engine that brings no built-ins of its own: the digits are read in the
+    /// radix the page gave — sixteen for an '0x' spelling and ten when no radix came — and the first
+    /// character that is not a digit in that radix ends the number rather than refusing the whole of it.
+    /// Text with no digits at all answers NaN, which is what the ECMAScript operation answers, not zero.</summary>
+    public double parseInt(string? s, object? radix = null)
     {
-        var r = radix is int ri ? ri : 10;
-        try { return Convert.ToInt32(s, r); }
-        catch { return int.TryParse(s, out var res) ? res : 0; }
+        var text = (s ?? "").TrimStart();
+        int sign = 1;
+        if (text.Length > 0 && (text[0] == '+' || text[0] == '-'))
+        {
+            sign = text[0] == '-' ? -1 : 1;
+            text = text.Substring(1);
+        }
+        var given = radix switch
+        {
+            int ri => ri,
+            long rl => (int)rl,
+            double rd => (int)rd,
+            string rs when double.TryParse(rs, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var rv) => (int)rv,
+            _ => 0
+        };
+        int numberBase = given == 0
+            ? (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? 16 : 10)
+            : given;
+        if (numberBase < 2 || numberBase > 36) return double.NaN;
+        if (numberBase == 16 && text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            text = text.Substring(2);
+        double value = 0;
+        int taken = 0;
+        foreach (var c in text)
+        {
+            int digit = c switch
+            {
+                >= '0' and <= '9' => c - '0',
+                >= 'a' and <= 'z' => c - 'a' + 10,
+                >= 'A' and <= 'Z' => c - 'A' + 10,
+                _ => -1
+            };
+            if (digit < 0 || digit >= numberBase) break;
+            value = value * numberBase + digit;
+            taken++;
+        }
+        return taken == 0 ? double.NaN : sign * value;
     }
-    public double parseFloat(string s) => double.TryParse(s, out var r) ? r : double.NaN;
+
+    /// <summary>'parseFloat' for the same engine: the number at the start of the text is read and the
+    /// rest of it is left alone, which is what '12px' answers twelve for rather than nothing.</summary>
+    public double parseFloat(string? s)
+    {
+        const System.Globalization.NumberStyles Style = System.Globalization.NumberStyles.Float;
+        var text = (s ?? "").TrimStart();
+        for (var end = text.Length; end > 0; end--)
+        {
+            if (double.TryParse(text[..end], Style,
+                    System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                return parsed;
+        }
+        return double.NaN;
+    }
+
     public bool isNaN(object? v)
     {
         if (v == null) return true;
@@ -5562,6 +7278,7 @@ public class ScreenOrientationHost
 public class StorageHost : System.Dynamic.DynamicObject
 {
     private readonly Dictionary<string, string> _data = new();
+    private readonly List<string> _order = new();
     private readonly string _name;
 
     public StorageHost(string name = "storage")
@@ -5570,10 +7287,27 @@ public class StorageHost : System.Dynamic.DynamicObject
     }
 
     public string? getItem(string key) => _data.GetValueOrDefault(key);
-    public void setItem(string key, string value) => _data[key] = value;
-    public void removeItem(string key) => _data.Remove(key);
-    public void clear() => _data.Clear();
-    public string? key(int index) => index >= 0 && index < _data.Count ? _data.ElementAt(index).Key : null;
+
+    /// <summary>Web Storage §5.2: an item that is already there keeps its place and a new one is added
+    /// at the end, which is the order 'key(index)' and a page that enumerates the object read.</summary>
+    public void setItem(string key, string value)
+    {
+        if (!_data.ContainsKey(key)) _order.Add(key);
+        _data[key] = value;
+    }
+
+    public void removeItem(string key)
+    {
+        if (_data.Remove(key)) _order.Remove(key);
+    }
+
+    public void clear()
+    {
+        _data.Clear();
+        _order.Clear();
+    }
+
+    public string? key(int index) => index >= 0 && index < _order.Count ? _order[index] : null;
     public int length => _data.Count;
 
     // Web Storage is defined with a named getter/setter, so 'localStorage.foo' reads and writes the
@@ -5588,13 +7322,14 @@ public class StorageHost : System.Dynamic.DynamicObject
     public override bool TrySetMember(System.Dynamic.SetMemberBinder binder, object? value)
     {
         if (IsMethodName(binder.Name)) return false;
+        if (!_data.ContainsKey(binder.Name)) _order.Add(binder.Name);
         _data[binder.Name] = value?.ToString() ?? "undefined";
         return true;
     }
 
     public override bool TryDeleteMember(System.Dynamic.DeleteMemberBinder binder)
     {
-        _data.Remove(binder.Name);
+        if (_data.Remove(binder.Name)) _order.Remove(binder.Name);
         return true;
     }
 

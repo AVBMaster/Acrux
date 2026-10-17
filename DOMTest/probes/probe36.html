@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html><head><title>Probe 36 dump</title></head><body>
+<script>
+(function () {
+  var lines = [];
+  function rec(name, fn) {
+    try { lines.push(name + ' = ' + fn()); } catch (e) { lines.push(name + ' THREW ' + (e && e.name) + ': ' + (e && e.message)); }
+  }
+  function hex(buf) {
+    var out = '';
+    var view = new Uint8Array(buf);
+    for (var i = 0; i < view.length; i++) out += (view[i] < 16 ? '0' : '') + view[i].toString(16);
+    return out;
+  }
+  window.__done = function () {
+    var enc = new TextEncoder().encode('abc');
+    lines.push('enc = ' + Object.prototype.toString.call(enc) + '/' + enc.length + '/' + enc[0] + '/'
+      + String(typeof enc.buffer) + '/' + (enc instanceof Uint8Array));
+    var hardHex = '';
+    var src = [97, 98, 99];
+    for (var hi = 0; hi < src.length; hi++) hardHex += (src[hi] < 16 ? '0' : '') + src[hi].toString(16);
+    lines.push('hardHex = ' + hardHex);
+    lines.push('digest abc = [' + __acrux.digest('SHA-256', hardHex) + ']');
+    lines.push('digest zero = [' + __acrux.digest('SHA-256', '000000') + ']');
+    var u = new Uint8Array(4);
+    u[0] = 65; u[1] = 66; u[2] = 67; u[3] = 250;
+    lines.push('written = ' + [String(u[0]), String(u[1]), String(u[2]), String(u[3]),
+      String(u.byteLength), String(u.buffer && u.buffer.byteLength),
+      Object.prototype.toString.call(u), Object.prototype.toString.call(u.buffer),
+      Array.prototype.join.call(u, ',')].join('/'));
+    var v = new Uint8Array([1, 2, 3]);
+    lines.push('from array = ' + Array.prototype.join.call(v, ',') + '/' + String(v.buffer.byteLength));
+    var ab = new ArrayBuffer(4);
+    var v1 = new Uint8Array(ab); v1[0] = 1; v1[1] = 2; v1[2] = 3; v1[3] = 4;
+    var v2 = new Uint8Array(ab);
+    lines.push('shared = ' + Array.prototype.join.call(v2, ',') + '/' + String(v1.buffer === ab));
+    var m = new Uint8Array(3); m[0] = 7; m[1] = 8; m[2] = 9;
+    var r = new Uint8Array(m.buffer);
+    lines.push('own buffer = ' + Array.prototype.join.call(r, ',') + '/' + Array.prototype.join.call(m, ','));
+    var f = (function (hex) {
+        var made = new Uint8Array(hex.length >> 1);
+        for (var j = 0; j < made.length; j++) made[j] = parseInt(hex.substr(j * 2, 2), 16);
+        return made;
+    })('41424344');
+    lines.push('fromHex = ' + Array.prototype.join.call(f, ',') + '/' + Array.prototype.join.call(new Uint8Array(f.buffer), ',')
+      + '/' + Object.prototype.toString.call(f) + '/' + Object.prototype.toString.call(f.buffer));
+    var orphan = (function () {
+        var t = new Uint8Array(4); t[0] = 65; t[1] = 66; t[2] = 67; t[3] = 68;
+        return t.buffer;
+    })();
+    lines.push('orphan = ' + Array.prototype.join.call(new Uint8Array(orphan), ',') + '/'
+      + String(orphan.byteLength));
+    var kept = new Uint8Array(4); kept[0] = 65; kept[1] = 66; kept[2] = 67; kept[3] = 68;
+    var sameBuffer = kept.buffer;
+    lines.push('kept = ' + Array.prototype.join.call(new Uint8Array(sameBuffer), ',') + '/'
+      + Array.prototype.join.call(kept, ','));
+    var big = new Uint8Array(32);
+    for (var bi = 0; bi < 32; bi++) big[bi] = bi + 1;
+    lines.push('big = ' + Array.prototype.join.call(new Uint8Array(big.buffer).subarray(0, 8), ',') + '/'
+      + String(big.buffer.byteLength));
+    var dbgBytes = new Uint8Array([97, 98, 99]);
+    var dbgHexIn = '';
+    var HX = '0123456789abcdef';
+    for (var di = 0; di < dbgBytes.length; di++)
+      dbgHexIn += HX.charAt((dbgBytes[di] >> 4) & 15) + HX.charAt(dbgBytes[di] & 15);
+    var dbgOut = __acrux.digest('SHA-256', dbgHexIn);
+    lines.push('dbg in=' + dbgHexIn + ' outType=' + typeof dbgOut + ' len=' + String(dbgOut.length)
+      + ' head=' + String(dbgOut).slice(0, 10));
+    var made2 = new Uint8Array(String(dbgOut).length >> 1);
+    for (var qi = 0; qi < made2.length; qi++) made2[qi] = parseInt(String(dbgOut).substr(qi * 2, 2), 16);
+    lines.push('dbg made = ' + Array.prototype.join.call(made2.subarray(0, 8), ',') + '/'
+      + Array.prototype.join.call(new Uint8Array(made2.buffer).subarray(0, 8), ',') + '/'
+      + String(made2.length));
+    var dbgPromise = null;
+    new Promise(function (res) { res(made2.buffer); }).then(function (b) {
+      lines.push('dbg promise = ' + Array.prototype.join.call(new Uint8Array(b).subarray(0, 8), ','));
+      return crypto.subtle.digest('SHA-256', dbgBytes);
+    }).then(function (real) {
+      lines.push('dbg real = ' + Array.prototype.join.call(new Uint8Array(real).subarray(0, 8), ',') + '/'
+        + String(real.byteLength));
+    });
+    new Promise(function (res) { res(f.buffer); }).then(function (bb) {
+      lines.push('promise buffer = ' + Object.prototype.toString.call(bb) + '/' + String(bb.byteLength)
+        + '/' + Array.prototype.join.call(new Uint8Array(bb), ',') + '/' + String(bb === f.buffer)
+        + '/src=' + Array.prototype.join.call(f, ','));
+      var held = new Uint8Array(3); held[0] = 11; held[1] = 12;
+      Promise.resolve(held.buffer).then(function (hb) {
+        lines.push('held promise = ' + Array.prototype.join.call(new Uint8Array(hb), ',')
+          + '/' + Array.prototype.join.call(held, ','));
+      });
+    });
+    crypto.subtle.digest('SHA-256', enc).then(function (buf) {
+      lines.push('sha256 type = ' + Object.prototype.toString.call(buf) + '/' + (buf instanceof ArrayBuffer)
+        + '/' + String(buf.byteLength));
+      lines.push('sha256 hex = ' + hex(buf));
+      return crypto.subtle.digest('SHA-1', enc);
+    }).then(function (b2) {
+      lines.push('sha1 hex = ' + hex(b2));
+      return crypto.subtle.digest('SHA-256', new Uint8Array([97, 98, 99]));
+    }).then(function (b3) {
+      lines.push('view hex = ' + hex(b3));
+      localStorage.clear();
+      localStorage.setItem('a', '1');
+      localStorage.b = '2';
+      lines.push('storage keys = ' + JSON.stringify(Object.keys(localStorage)));
+      lines.push('storage read = ' + [localStorage.length, localStorage.a, localStorage.b,
+        localStorage.getItem('a'), localStorage.key(0), String('a' in localStorage),
+        String(Object.getPrototypeOf(localStorage) === Storage.prototype),
+        String(window.localStorage === localStorage), String(localStorage[0])].join('/'));
+      delete localStorage.b;
+      lines.push('after delete = ' + JSON.stringify(Object.keys(localStorage)) + '/' + localStorage.length
+        + '/' + String(localStorage.b));
+      localStorage.clear();
+      var x = new XMLHttpRequest();
+      x.responseType = 'bogus';
+      lines.push('xhr bogus = [' + x.responseType + ']');
+      window.__DUMP__ = lines.join('\n');
+      __T('dump', true, lines.join('\n'));
+    }).catch(function (e) {
+      lines.push('chain rejected: ' + (e && e.name) + ': ' + (e && e.message));
+      __T('dump', false, lines.join('\n'));
+    });
+  };
+  rec('encoder', function () { return typeof TextEncoder; });
+  rec('promise', function () { return typeof Promise; });
+  window.__done();
+})();
+</script></body></html>

@@ -126,6 +126,20 @@ public abstract class Node : EventTarget
         return current;
     }
 
+    /// <summary>DOM §4.2.1: the root of the tree the node sits in once the shadow boundaries are crossed.
+    /// A shadow root is a root of its own, and the tree it belongs to continues at its host, so the walk
+    /// hops the fragment and carries on up. This is what 'connected' is read from (and what
+    /// 'getRootNode({ composed: true })' answers) — without the hop a node inside the shadow tree of a
+    /// connected element would read 'isConnected' false (measured true), and so would every custom
+    /// element reaction that waits for the tree to be in the document.</summary>
+    public Node ShadowIncludingRoot()
+    {
+        var current = GetRootNode();
+        while (current is ShadowRoot shadow && shadow.Host != null)
+            current = shadow.Host.GetRootNode();
+        return current;
+    }
+
     public bool HasChildNodes() => _children.Count > 0;
 
     public void Normalize()
@@ -365,11 +379,11 @@ public abstract class Node : EventTarget
 
     private bool ComputeIsConnected()
     {
-        // Connected is not 'has a parent': the root of the chain has to be a document (DOM §2.6). A
-        // document the page built with 'document.implementation' counts — measured, an element moved
-        // into one still reads true here — so the registry, not the connection, is what keeps its
-        // reactions off those trees.
-        return GetRootNode().NodeType == NodeType.Document;
+        // Connected is not 'has a parent': the root of the chain has to be a document (DOM §2.6), and
+        // the chain of a node inside a shadow tree continues at its host. A document the page built
+        // with 'document.implementation' counts too — measured, an element moved into one still reads
+        // true here — so the registry, not the connection, is what keeps its reactions off those trees.
+        return ShadowIncludingRoot().NodeType == NodeType.Document;
     }
 
     private void RebuildParentLinks()

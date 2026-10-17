@@ -14,6 +14,10 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         _element = element;
     }
 
+    /// <summary>A declaration block carries no string of its own, so the page that turns one into a
+    /// string reads the interface it is (measured: 'String(div.style)' answers the tag).</summary>
+    public override string ToString() => DomHostString.Tagged("CSSStyleDeclaration");
+
     public string cssText
     {
         get => SerializeForCssText(Declarations());

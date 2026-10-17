@@ -38,6 +38,8 @@ public abstract class NodeTraverserHost : IDomPrototypeHost
         ? new[] { "TreeWalker" }
         : new[] { "NodeIterator" };
 
+    public override string ToString() => DomHostString.Tagged(this);
+
     /// <summary>DOM 4 §4.7.2: the root is a node or the call is a TypeError, and that is checked
     /// before anything else — both factories start here. The message names the operation the page
     /// called, which is what the reference puts in front of it.</summary>

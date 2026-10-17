@@ -419,7 +419,7 @@ public partial class ElementHost
         for (var node = _element.ParentElement; node != null; node = node.ParentElement)
             if (TagIs(node, "LABEL")) { found.Insert(0, node); break; }
         return found;
-    });
+    }, "NodeList");
 
     /// <summary>HTML §4.10.5: the files a file control holds. Nothing is loaded from disk here, so the
     /// list is the empty one the reference answers for a control the user has not filled in.</summary>

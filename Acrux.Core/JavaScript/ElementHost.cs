@@ -76,6 +76,11 @@ public partial class ElementHost : IDomPrototypeHost
         }
     }
 
+    /// <summary>What the page reads when it turns the element into a string: the interface its tag
+    /// names, the same one the wrapper is stamped with (measured: 'String(span)' answers
+    /// '[object HTMLSpanElement]').</summary>
+    public override string ToString() => DomHostString.Tagged(this);
+
     private string InterfaceName
     {
         get
@@ -281,7 +286,7 @@ public partial class ElementHost : IDomPrototypeHost
 
     // A live collection is one object per element for as long as the element lives (DOM §2.8);
     // the list re-reads the tree on every access, so caching the object costs no freshness.
-    public JsNodeList children => _children ??= new JsNodeList(_element, Engine);
+    public JsNodeList children => _children ??= new JsNodeList(_element, Engine, null, "HTMLCollection");
 
     public int childElementCount => _element.Children.OfType<Element>().Count();
 
@@ -1219,7 +1224,7 @@ public partial class ElementHost : IDomPrototypeHost
         "area","base","br","col","embed","hr","img","input","link","meta","param","source","track","wbr"
     };
 
-    private static void SerializeNode(Node node, System.Text.StringBuilder sb)
+    internal static void SerializeNode(Node node, System.Text.StringBuilder sb)
     {
         if (node is TextNode tn)
         {
@@ -1582,9 +1587,7 @@ public partial class ElementHost : IDomPrototypeHost
         set => _element.SetAttribute("translate", value);
     }
 
-    public void attachShadow(object? mode) { }
-
-    public object? shadowRoot => null;
+    // 'attachShadow' and 'shadowRoot' live with the shadow tree in ElementHost.Tables.cs.
 
     public int nodeType => 1;
 
@@ -1777,14 +1780,21 @@ public partial class ElementHost : IDomPrototypeHost
 
     private object? GetRootNodeCore(object? options)
     {
-        // DOM 4 §4.3: the root of the tree the node lives in — the Document for a mounted node, the
-        // top-most ancestor for a detached one. A shadow root would stop here, but the engine has no
-        // attached shadow trees yet, so the document is the root.
+        // DOM §4.2.1: the root of the tree the node lives in — the Document for a mounted node, the
+        // shadow root for a node inside a shadow tree, the top-most ancestor for a detached one. With
+        // 'composed' the shadow boundaries are crossed, which is the other root the interface names.
         var engine = JavaScriptEngine.Current ?? Engine;
-        Node current = _element;
-        while (current.Parent != null) current = current.Parent;
+        var composed = false;
+        if (options != null)
+        {
+            var flag = ReadEngineOption(engine, options, "composed");
+            composed = flag;
+        }
+        Node current = composed ? _element.ShadowIncludingRoot() : _element.GetRootNode();
         if (current is Document doc)
             return engine?.DocumentHost ?? (object)new DocumentHost(doc);
+        if (current is ShadowRoot shadow)
+            return JsIntegrationService.WrapAny(shadow);
         if (current is Element el)
             return engine?.IntegrationService?.WrapDomNode(el) as ElementHost ?? new ElementHost(el);
         return current;
@@ -2682,6 +2692,7 @@ public class TextNodeWrapper : IDomPrototypeHost
     public string[] __domTypeChain => IsCData
         ? new[] { "EventTarget", "Node", "CharacterData", "Text", "CDATASection" }
         : new[] { "EventTarget", "Node", "Text" };
+    public override string ToString() => DomHostString.Tagged(this);
     public ElementHost? parentElement
     {
         get
@@ -2751,6 +2762,7 @@ public class CommentHost : IDomPrototypeHost
     public string? __domType => "Comment";
     public string baseURI => NodeBaseUri.For(_node);
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "CharacterData", "Comment" };
+    public override string ToString() => DomHostString.Tagged(this);
     public object? parentNode
     {
         get => JsIntegrationService.WrapAny(_node.Parent);
@@ -2861,6 +2873,10 @@ public class ScriptEvent : IDomPrototypeHost
 
     string[] IDomPrototypeHost.__domTypeChain =>
         Kind == "Event" ? new[] { "Event" } : new[] { "Event", Kind };
+
+    /// <summary>The event reads as the interface its kind names (measured: 'String(new WheelEvent())'
+    /// is '[object WheelEvent]'), which is the last level of the chain it is stamped with.</summary>
+    public override string ToString() => DomHostString.Tagged(this);
 
     public string type { get; set; }
     // DOM §2.3.5: 'target' is where the event was dispatched and 'currentTarget' the node whose
@@ -3024,6 +3040,7 @@ public class ProcessingInstructionHost : IDomPrototypeHost
     public string? textContent { get => _node.Data; set => _node.Data = value ?? ""; }
     public int length => _node.Data?.Length ?? 0;
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "CharacterData", "ProcessingInstruction" };
+    public override string ToString() => DomHostString.Tagged(this);
     public string baseURI => NodeBaseUri.For(_node);
     public object? ownerDocument
         => JsIntegrationService.WrapAny(_node.OwnerDocument) ?? JavaScriptEngine.Current?.IntegrationService?.Document;

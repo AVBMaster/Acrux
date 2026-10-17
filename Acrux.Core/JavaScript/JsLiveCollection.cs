@@ -21,14 +21,22 @@ public class JsHtmlCollection : IList
         _engine = JavaScriptEngine.Current;
     }
 
-    internal JsHtmlCollection(DomElement root, JavaScriptEngine? engine, string? tagName = null, string? className = null, string? name = null)
+    internal JsHtmlCollection(DomElement root, JavaScriptEngine? engine, string? tagName = null, string? className = null, string? name = null,
+        string interfaceName = "HTMLCollection")
     {
         _root = root;
         _engine = engine;
         _tagName = tagName;
         _className = className;
         _name = name;
+        InterfaceName = interfaceName;
     }
+
+    /// <summary>The interface the collection reads as: the families that answer an HTMLCollection name
+    /// themselves, while 'getElementsByName' answers a NodeList (measured).</summary>
+    internal string InterfaceName = "HTMLCollection";
+
+    public override string ToString() => DomHostString.Tagged(InterfaceName);
 
     public int length => GetFilteredElements().Count;
     public int Length => GetFilteredElements().Count;
@@ -185,12 +193,20 @@ public class JsNodeList : IList
         _engine = JavaScriptEngine.Current;
     }
 
-    internal JsNodeList(DomElement root, JavaScriptEngine? engine, Func<DomElement, List<DomElement>>? filter = null)
+    internal JsNodeList(DomElement root, JavaScriptEngine? engine, Func<DomElement, List<DomElement>>? filter = null,
+        string interfaceName = "NodeList")
     {
         _root = root;
         _engine = engine;
         _filter = filter;
+        InterfaceName = interfaceName;
     }
+
+    /// <summary>'children' answers an HTMLCollection and the rest of the family — 'childNodes',
+    /// 'querySelectorAll' — answers a NodeList (measured).</summary>
+    internal string InterfaceName = "NodeList";
+
+    public override string ToString() => DomHostString.Tagged(InterfaceName);
 
     /// <summary>A childNodes list carries every kind of node child (text and comment included),
     /// while the default and a selector query stay element-only — the two faces of the same

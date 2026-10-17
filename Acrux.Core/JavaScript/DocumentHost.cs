@@ -122,6 +122,7 @@ public class DocumentHost : IDomPrototypeHost
     public string __domType => "HTMLDocument";
 
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "HTMLDocument" };
+    public override string ToString() => DomHostString.Tagged(this);
     public string? characterSet => "UTF-8";
     // DOM §3.2: the content type is the one the document was built with — 'text/html' for the page the
     // shell navigated to, and what 'DOMParser.parseFromString' or 'createDocument' was given for the
@@ -236,7 +237,7 @@ public class DocumentHost : IDomPrototypeHost
     public object getElementsByName(string name)
     {
         if (_document.DocumentElement == null) return new object[0];
-        return new JsHtmlCollection(_document.DocumentElement, Engine, null, null, name);
+        return new JsHtmlCollection(_document.DocumentElement, Engine, null, null, name, "NodeList");
     }
 
     public ElementHost createElement(string tagName)
@@ -718,8 +719,6 @@ public class DocumentHost : IDomPrototypeHost
             return sheets.ToArray();
         }
     }
-
-    public string? fonts => null;
 
     /// <summary>The document's adopted style sheets (CSSOM §5.2.2). A page installs the
     /// constructed sheets it made with <c>document.adoptedStyleSheets = [sheet]</c>, and they
@@ -1595,7 +1594,35 @@ public class DocumentFragmentHost : IDomPrototypeHost
     public int nodeType => 11;
     public string? __domType => "DocumentFragment";
     public string baseURI => NodeBaseUri.For(_fragment);
-    public string[] __domTypeChain => new[] { "EventTarget", "Node", "DocumentFragment" };
+    // Virtual because the shadow root is the same shape with one more interface on the end of its
+    // chain, and it is the chain that decides the prototype the page sees.
+    public virtual string[] __domTypeChain => new[] { "EventTarget", "Node", "DocumentFragment" };
+
+    public override string ToString() => DomHostString.Tagged(this);
+
+    /// <summary>HTML §13.2.5.114: the markup is parsed in the context of a nominal parent — a fragment
+    /// parses as though it were in the body, a shadow root as though it were in its host's tag, so the
+    /// elements the host would not allow are dropped the same way the parser drops them for a host of
+    /// that tag. Reading writes back the children the node holds (ParentNode's own rule, §5.5).</summary>
+    public string? innerHTML
+    {
+        get
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var child in _fragment.Children)
+                ElementHost.SerializeNode(child, sb);
+            return sb.ToString();
+        }
+        set
+        {
+            _fragment.Children.Clear();
+            if (string.IsNullOrEmpty(value)) return;
+            foreach (var child in HtmlParser.ParseFragment(value, InnerHtmlContextTag))
+                _fragment.AppendChild(child);
+        }
+    }
+
+    internal virtual string InnerHtmlContextTag => "body";
 
     public object? querySelector(string selector)
     {
@@ -1825,6 +1852,7 @@ public class DocumentTypeHost : IDomPrototypeHost
     public string? nodeValue => null;
     public string? textContent => null;
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "DocumentType" };
+    public override string ToString() => DomHostString.Tagged(this);
     public string baseURI => NodeBaseUri.For(_docType);
     public object? ownerDocument
         => JsIntegrationService.WrapAny(_docType.OwnerDocument) ?? JavaScriptEngine.Current?.IntegrationService?.Document;
@@ -1860,6 +1888,8 @@ public class NamedNodeMapHost : IList
 
     public int length => Names().Count;
     public int Length => Names().Count;
+
+    public override string ToString() => DomHostString.Tagged("NamedNodeMap");
 
     public object? this[int index]
     {
@@ -1976,6 +2006,9 @@ public class AttributeHost : IDomPrototypeHost
     public string? prefix => namespaceURI == null ? null : PrefixPart(name);
     public int nodeType => 2;
     public string? textContent { get => value; set => this.value = value; }
+    /// <summary>DOM §4.3.3: an attribute's node value is the attribute's value — reading it answers the
+    /// same string 'value' does, and writing it writes the attribute through the element that holds it.</summary>
+    public string? nodeValue { get => value; set => this.value = value; }
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "Attr" };
     // DOM §4.2.1: an attribute's node document is its element's, and the base URI is read from there
     // — an attribute that belongs to no element yet still has the document that made it.
@@ -1989,7 +2022,7 @@ public class AttributeHost : IDomPrototypeHost
         => JsIntegrationService.WrapAny(_owner?.OwnerDocument ?? _document)
            ?? JavaScriptEngine.Current?.IntegrationService?.Document;
 
-    public override string ToString() => value ?? "";
+    public override string ToString() => DomHostString.Tagged("Attr");
 
     internal AttributeHost(DomElement? owner, string name, string? ns = null)
     {

@@ -244,6 +244,9 @@ namespace Acrux.Core.JavaScript;
             Dom.TextNode tn => new TextNodeWrapper(tn),
             Dom.CommentNode cn => new CommentHost(cn),
             Dom.ProcessingInstruction pi => new ProcessingInstructionHost(pi),
+            // A shadow root is a fragment with a host of its own, and it answers a longer chain — so it
+            // has to be recognised before the fragment it derives from (DOM §4.3.7).
+            Dom.ShadowRoot sr => new ShadowRootHost(sr),
             Dom.DocumentFragment df => new DocumentFragmentHost(df),
             Dom.Document doc => new DocumentHost(doc) { Engine = _jsEngine },
             Dom.DocumentTypeNode dt => new DocumentTypeHost(dt),
@@ -271,6 +274,7 @@ namespace Acrux.Core.JavaScript;
             Dom.TextNode tn => new TextNodeWrapper(tn),
             Dom.CommentNode cn => new CommentHost(cn),
             Dom.ProcessingInstruction pi => new ProcessingInstructionHost(pi),
+            Dom.ShadowRoot sr => new ShadowRootHost(sr),
             Dom.DocumentFragment df => new DocumentFragmentHost(df),
             Dom.Document doc => new DocumentHost(doc),
             Dom.DocumentTypeNode dt => new DocumentTypeHost(dt),
@@ -368,7 +372,25 @@ namespace Acrux.Core.JavaScript;
         _microtaskQueue.DrainMicrotasks();
     }
 
-    /// <summary>Ms until the next JS timer fires (int.MaxValue = none).</summary>
+    /// <summary>Queue a unit of work at the microtask checkpoint from outside the JavaScript thread.
+    /// The queue itself is safe to write from a task, and everything it holds runs when the engine next
+    /// drains it — which is on the thread the engine executes on, so an answer that arrived on a worker
+    /// is handed to the page the same way a promise job is.</summary>
+    public void EnqueueMicrotask(Action task) => _microtaskQueue.EnqueueMicrotask(task);
+
+    /// <summary>Engine-side work the page is waiting on: an XMLHttpRequest whose answer has not come
+    /// back yet. A pump that only watches timers would stop while one is in flight and never run the
+    /// job it queues, so a pump asks this and keeps going.</summary>
+    private int _backgroundJobs;
+    public void NoteBackgroundJob(bool started)
+        => System.Threading.Interlocked.Add(ref _backgroundJobs, started ? 1 : -1);
+
+    /// <summary>Whether the engine is holding work a page is waiting an answer on.</summary>
+    public bool HasBackgroundJobs => Volatile.Read(ref _backgroundJobs) > 0;
+
+    /// <summary>Ms until the next JS timer fires (int.MaxValue = none). Work an XMLHttpRequest is
+    /// waiting on is not a timer — a pump asks 'HasBackgroundJobs' for that, because turning it into a
+    /// delay of zero would have the shell spin while a request is in flight.</summary>
     public int NextTimerDelayMs() => _timerQueue.NextTimerDelayMs();
 
     public void CollectGarbage()

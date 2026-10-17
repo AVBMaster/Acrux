@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Globalization;
+using System.Threading;
 using Acrux.Core.Dom;
 using DOMException = Acrux.Core.Dom.DOMException;
 using DomElement = Acrux.Core.Dom.Element;
@@ -16,7 +17,11 @@ public class JsLiveElementList
 {
     private readonly Func<List<DomElement>> _provider;
 
-    public JsLiveElementList(Func<List<DomElement>> provider) => _provider = provider;
+    public JsLiveElementList(Func<List<DomElement>> provider, string interfaceName = "HTMLCollection")
+    {
+        _provider = provider;
+        InterfaceName = interfaceName;
+    }
 
     private List<object> Items()
     {
@@ -27,6 +32,13 @@ public class JsLiveElementList
     }
 
     public int length => _provider().Count;
+
+    /// <summary>The table collections — rows, cells, tbodies — answer an HTMLCollection (HTML
+    /// §4.9.1.2), while a control's labels answer a NodeList (§4.10.3), which is why the API that made
+    /// the list names the interface it belongs to.</summary>
+    internal string InterfaceName;
+
+    public override string ToString() => DomHostString.Tagged(InterfaceName);
 
     public object? this[int index]
     {
@@ -398,6 +410,69 @@ public partial class ElementHost
         if (string.IsNullOrEmpty(text)) return fallback;
         return int.TryParse(text, System.Globalization.NumberStyles.Any,
             System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : fallback;
+    }
+
+    /// <summary>Reads one string off a JS dictionary handed to a host method. The object carries no CLR
+    /// members, so the value is read back through the engine rather than reflected (HTML §4.3.7.2).</summary>
+    private static string? ReadEngineString(JavaScriptEngine? engine, object? options, string name)
+    {
+        if (engine == null || options == null) return null;
+        var adapter = engine.Adapter;
+        if (adapter == null) return null;
+        var tmp = "__str_probe_" + Interlocked.Increment(ref _optProbeCounter);
+        try
+        {
+            adapter.EmbedHostObject(tmp, options);
+            var v = adapter.Evaluate($"{tmp}.{name}");
+            return v as string;
+        }
+        catch { return null; }
+        finally
+        {
+            try { adapter.Execute($"delete {tmp};"); } catch { }
+        }
+    }
+
+    // ── the shadow tree a page opens (DOM §4.3.7, HTML §4.3.7.2) ──────────────
+    /// <summary>The shadow root the page gave this element, and nothing at all while its mode is closed
+    /// or no root was ever attached.</summary>
+    public object? shadowRoot
+    {
+        get
+        {
+            var root = _element.ShadowRoot;
+            if (root == null || root.Mode != Acrux.Core.Dom.ShadowMode.Open) return null;
+            return JsIntegrationService.WrapAny(root);
+        }
+    }
+
+    /// <summary>HTML §4.3.7.2: the init dictionary has to name a mode, an element that already hosts a
+    /// shadow tree refuses a second one, and what comes back is the root — a fragment of its own, held
+    /// apart from the host's children, which is why 'host.querySelector' finds nothing the root
+    /// contains (measured) while 'root.querySelector' finds it.</summary>
+    public object attachShadow(object? options)
+    {
+        var mode = ReadEngineString(JavaScriptEngine.Current ?? Engine, options, "mode");
+        if (mode != "open" && mode != "closed")
+        {
+            var quote = (char)39;
+            throw new DOMException("Failed to execute 'attachShadow' on 'Element': Failed to read the "
+                + quote + "mode" + quote + " property from " + quote + "ShadowRootInit" + quote
+                + ": The provided value " + quote + (mode ?? "") + quote
+                + " is not a valid enum value of type ShadowRootMode.", "TypeError");
+        }
+        if (_element.ShadowRoot != null)
+        {
+            throw new DOMException("Failed to execute 'attachShadow' on 'Element': Shadow root cannot "
+                + "be created on a host which already hosts a shadow tree.", "NotSupportedError");
+        }
+        var delegatesFocus = ReadEngineOption(JavaScriptEngine.Current ?? Engine, options, "delegatesFocus");
+        var root = _element.AttachShadow(new Acrux.Core.Dom.ShadowRootInit
+        {
+            Mode = mode == "closed" ? Acrux.Core.Dom.ShadowMode.Closed : Acrux.Core.Dom.ShadowMode.Open,
+            DelegatesFocus = delegatesFocus,
+        });
+        return JsIntegrationService.WrapAny(root) ?? new ShadowRootHost(root);
     }
 
     // ── the namespace axis (DOM §5.4) ────────────────────────────────────────

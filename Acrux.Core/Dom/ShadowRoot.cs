@@ -10,8 +10,6 @@ public class ShadowRoot : DocumentFragment
     public bool Serializable { get; set; }
     public string? ReferenceTarget { get; set; }
 
-    private string? _innerHtml;
-
     internal ShadowRoot(Element host, ShadowMode mode, bool delegatesFocus = false,
         SlotAssignmentMode slotAssignment = SlotAssignmentMode.Named)
     {
@@ -19,15 +17,26 @@ public class ShadowRoot : DocumentFragment
         Mode = mode;
         DelegatesFocus = delegatesFocus;
         SlotAssignment = slotAssignment;
-        NodeName = "#shadow-root";
+        // DOM §4.2: a shadow root is a document fragment, and that is the name it answers — the tree
+        // under the host is a fragment of its own, not a node of a kind the interface names otherwise.
+        NodeName = "#document-fragment";
     }
 
     public override NodeType NodeType => NodeType.DocumentFragment;
 
+    /// <summary>HTML §13.2.5.145: writing the root's markup parses it in the context of the host and
+    /// puts the result into the shadow tree, so the elements the page wrote are queryable afterwards;
+    /// reading it serialises the tree it holds.</summary>
     public string InnerHTML
     {
-        get => _innerHtml ?? BuildInnerHtml();
-        set => _innerHtml = value;
+        get => BuildInnerHtml();
+        set
+        {
+            Children.Clear();
+            if (string.IsNullOrEmpty(value)) return;
+            foreach (var child in Acrux.Core.JavaScript.HtmlParser.ParseFragment(value, Host.TagName))
+                AppendChild(child);
+        }
     }
 
     private string BuildInnerHtml()
@@ -47,9 +56,9 @@ public class ShadowRoot : DocumentFragment
             sb.Append('<').Append(el.TagName.ToLowerInvariant());
             foreach (var attr in el.Attributes)
             {
-                sb.Append(' ').Append(attr.Key);
-                if (!string.IsNullOrEmpty(attr.Value))
-                    sb.Append("=\"").Append(System.Net.WebUtility.HtmlEncode(attr.Value)).Append('"');
+                // HTML §13.4: every attribute is written with its value in quotes, an empty one included.
+                sb.Append(' ').Append(attr.Key)
+                    .Append("=\"").Append(System.Net.WebUtility.HtmlEncode(attr.Value ?? "")).Append('"');
             }
             sb.Append('>');
             foreach (var child in el.Children)

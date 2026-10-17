@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head><title>XPath, shadow roots and the selection (DOM Parsing §3, XPath 1.0, DOM §4.3.7, HTML §13.2.5, Selection §2.5.3.4)</title></head>
+<body>
+<div id="d">one<!--cmt--><span id="s" data-k="v">two<b>x</b></span>three</div>
+<script>
+// Every value here was read off the reference in this session; the probes it came from are kept in
+// out/reference_probes/. The XPath engine is the subset a page actually writes: the thirteen axes,
+// the node tests, predicates by position, attribute or comparison, and the core function library.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+
+var d = document.getElementById('d'), s = document.getElementById('s');
+function ev(expr, type, ctx, resolver) {
+    return document.evaluate(expr, ctx === undefined ? document : ctx, resolver || null, type, null);
+}
+function text(expr, ctx, resolver) { return ev(expr, XPathResult.STRING_TYPE, ctx, resolver).stringValue; }
+function num(expr, ctx, resolver) { return ev(expr, XPathResult.NUMBER_TYPE, ctx, resolver).numberValue; }
+function flag(expr, ctx, resolver) { return ev(expr, XPathResult.BOOLEAN_TYPE, ctx, resolver).booleanValue; }
+function one(expr, ctx, resolver) { return ev(expr, XPathResult.FIRST_ORDERED_NODE_TYPE, ctx, resolver).singleNodeValue; }
+
+ck('X1 a step names the node the tree holds', function () {
+    return one('//span[@id="s"]') === s && one('//span') === s
+        && text('name(//span)') === 'span' && text('local-name(//b)') === 'b'
+        && text('string(//span)') === 'twox' && text('//span/text()') === 'two'
+        && num('count(//span)') === 1 && num('count(//span/@*)') === 2;
+}, function () { return [String(one('//span[@id="s"]')), text('name(//span)'), num('count(//span/@*)')].join(' | '); });
+
+ck('X2 the axes walk the tree', function () {
+    return one('child::span', d) === s && one('parent::div', s) === d
+        && text('attribute::id', s) === 's' && flag('self::span', s) === true
+        && text('following-sibling::text()', s) === 'three'
+        && one('descendant-or-self::span', d) === s && one('ancestor::div', s) === d
+        && text('string(./span)', d) === 'twox' && one('../span', s) === s
+        && num('count(../span)', s) === 1
+        && text('descendant::b', d) === 'x';
+}, function () { return [String(one('child::span', d)), text('following-sibling::text()', s),
+  text('string(./span)', d), num('count(../span)', s), text('descendant::b', d)].join(' | '); });
+
+ck('X3 a predicate keeps by position, attribute or comparison', function () {
+    return num('count(//div/*[1])') === 1 && one('//div/*[last()]').nodeName === 'SPAN'
+        && one('//div/*[position()=1]') === s && num('count(//*[@data-k])') === 1
+        && num('count(//span[@nope or @data-k])') === 1 && num('count(//comment())') === 1
+        && flag('boolean(//span and //b)') === true && flag('not(//table)') === true
+        && flag('contains(string(//span), "tw")') === true
+        && num('count(//span[text()="two"])') === 1;
+}, function () { return [num('count(//div/*[1])'), one('//div/*[last()]').nodeName, num('count(//comment())')].join(' | '); });
+
+ck('X4 the functions answer the value the spec gives', function () {
+    return text('substring("hello", 2, 3)') === 'ell' && text('substring("hello", 2)') === 'ello'
+        && text('substring("hello", 4, 5)') === 'lo' && text('normalize-space("  a   b ")') === 'a b'
+        && text('concat("a", //span, "b")') === 'atwoxb' && num('string-length(//span)') === 4
+        && isNaN(num('number("12abc")')) && num('number("12.5")') === 12.5
+        && num('floor(3.7)') === 3 && num('ceiling(3.2)') === 4 && num('round(2.5)') === 3
+        && text('substring-before("a-b", "-")') === 'a' && text('substring-after("a-b", "-")') === 'b'
+        && flag('starts-with("abc", "ab")') === flag('ends-with("abc", "bc")')
+        && one('id("s")') === s;
+}, function () { return [text('substring("hello", 4, 5)'), num('number("12.5")'), text('normalize-space("  a   b ")')].join(' | '); });
+
+ck('X5 the iterator and the snapshot walk the same node set', function () {
+    var it = ev('//*[name()="b" or name()="span"]', XPathResult.ORDERED_NODE_ITERATOR_TYPE);
+    var names = [], node;
+    while ((node = it.iterateNext())) names.push(node.nodeName);
+    var snap = ev('//descendant::span', XPathResult.ORDERED_NODE_SNAPSHOT_TYPE);
+    return names.join(',') === 'SPAN,B' && snap.snapshotLength === 1 && snap.snapshotItem(0) === s
+        && snap.snapshotItem(9) === null && snap.snapshotItem(-1) === null
+        && typeof it.invalidIteratorState === 'boolean' && it.resultType === 4;
+}, function () {
+    var it2 = ev('//*[name()="b"]', XPathResult.ORDERED_NODE_ITERATOR_TYPE);
+    return String(it2.iterateNext()) + '/' + String(it2.iterateNext()) + '/' + String(it2.iterateNext());
+});
+
+ck('X6 the result is the interface it reads as', function () {
+    var r = ev('//span', XPathResult.ORDERED_NODE_ITERATOR_TYPE);
+    return r instanceof XPathResult && Object.prototype.toString.call(r) === '[object XPathResult]'
+        && XPathResult.FIRST_ORDERED_NODE_TYPE === 9
+        && XPathResult.ANY_TYPE === 0 && XPathResult.NUMBER_TYPE === 1
+        && XPathResult.ORDERED_NODE_SNAPSHOT_TYPE === 6 && r.resultType === 4;
+}, function () {
+    var r = ev('//span', XPathResult.ORDERED_NODE_ITERATOR_TYPE);
+    return [String(r instanceof XPathResult), Object.prototype.toString.call(r), r.resultType].join(' | ');
+});
+
+ck('X7 a name the resolver gives is read by its namespace', function () {
+    // The engine resolves a prefixed name through the resolver the caller handed in and, without one,
+    // compares the qualified name as the tree spells it. The reference instead refuses a name whose
+    // prefix the tree cannot resolve — the one place this XPath subset does not follow it.
+    var made = document.createElementNS('urn:x', 'x:c');
+    made.setAttribute('xmlns:x', 'urn:x');
+    d.appendChild(made);
+    var resolver = { lookupNamespaceURI: function (p) { return p === 'x' ? 'urn:x' : null; } };
+    var found = one('//x:c', document, resolver);
+    var wildcard = ev('//x:*', XPathResult.ORDERED_NODE_ITERATOR_TYPE, document, resolver);
+    var count = 0; while (wildcard.iterateNext()) count++;
+    var counted = num('count(//x:c)', document, resolver);
+    var local = text('local-name(//x:c)', document, resolver);
+    d.removeChild(made);
+    return found === made && counted === 1 && count === 1 && local === 'c';
+}, function () {
+    var made = document.createElementNS('urn:x', 'x:c');
+    return [String(made.nodeName), String(made.namespaceURI), String(made.localName)].join(' | ');
+});
+
+ck('X8 an expression the reader refuses says so', function () {
+    var a = '', b = '', c = '';
+    try { document.evaluate('///', document, null, XPathResult.ANY_TYPE, null); } catch (e) { a = e.name + '|' + e.message; }
+    try { document.evaluate('//span', 'nope', null, XPathResult.ANY_TYPE, null); } catch (e) { b = e.name + '|' + e.message; }
+    try { new XPathResult(); } catch (e) { c = e.name + '|' + e.message; }
+    return a.indexOf('SyntaxError') === 0 && /is not a valid XPath expression/.test(a)
+        && b.indexOf('TypeError') === 0 && /parameter 2 is not of type 'Node'/.test(b)
+        && c.indexOf('TypeError') === 0 && /Illegal constructor/.test(c);
+}, function () {
+    var a = ''; try { document.evaluate('///', document, null, XPathResult.ANY_TYPE, null); } catch (e) { a = e.name + '|' + e.message; }
+    var b = ''; try { document.evaluate('//span', 'nope', null, XPathResult.ANY_TYPE, null); } catch (e) { b = e.name + '|' + e.message; }
+    return a + ' || ' + b;
+});
+
+ck('X9 the evaluator builds an expression of its own', function () {
+    var e = new XPathEvaluator();
+    var made = e.createExpression('count(//span)');
+    return typeof e.createExpression === 'function' && typeof e.createNSResolver === 'function'
+        && made.evaluate(document, XPathResult.NUMBER_TYPE).numberValue === 1
+        && made.resultType === 0 && typeof made.evaluate === 'function'
+        && e.evaluate('name(//span)', document, null, XPathResult.STRING_TYPE, null).stringValue === 'span';
+}, function () {
+    var e = new XPathEvaluator();
+    return [typeof e.createExpression, e.createExpression('count(//span)').resultType].join(' | ');
+});
+
+ck('S1 a shadow root is the fragment under its host', function () {
+    var host = document.createElement('div');
+    var root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<p class="q">a</p><span>b</span>';
+    var inner = document.createElement('b');
+    root.appendChild(inner);
+    return root.host === host && root.mode === 'open' && root.nodeType === 11
+        && root.nodeName === '#document-fragment' && host.shadowRoot === root
+        && root.querySelector('.q') !== null && root.querySelectorAll('p').length === 1
+        && host.querySelector('.q') === null && host.childNodes.length === 0
+        && root.childElementCount === 3 && root instanceof ShadowRoot && root instanceof DocumentFragment
+        && Object.getPrototypeOf(root) === ShadowRoot.prototype
+        && Object.prototype.toString.call(root) === '[object ShadowRoot]'
+        && String(root) === '[object ShadowRoot]'
+        && root.innerHTML.indexOf('<p class="q">a</p>') >= 0
+        && inner.parentNode === root && root.contains(inner) === true
+        && inner.isConnected === false && inner.getRootNode() === root
+        && inner.ownerDocument === document && root.activeElement === null
+        && Array.isArray(root.adoptedStyleSheets) && root.adoptedStyleSheets.length === 0
+        && typeof root.addEventListener === 'function' && root.delegatesFocus === false
+        && root.slotAssignment === 'named';
+}, function () {
+    var h = document.createElement('div'); var r = h.attachShadow({ mode: 'open' });
+    r.innerHTML = '<p class="q">a</p>';
+    return [String(r), r.nodeType, r.childElementCount, String(r.querySelector('.q')),
+      JSON.stringify(r.innerHTML), String(r.adoptedStyleSheets)].join(' | ');
+});
+
+ck('S2 a second root and an unknown mode are refused', function () {
+    var host = document.createElement('div');
+    host.attachShadow({ mode: 'open' });
+    var a = '', b = '', bName = '';
+    try { host.attachShadow({ mode: 'open' }); } catch (e) { a = e.name + '|' + e.message; }
+    try { document.createElement('p').attachShadow({ mode: 'weird' }); }
+    catch (e) { b = e.message; bName = e.name; }
+    var closed = document.createElement('div');
+    closed.attachShadow({ mode: 'closed' });
+    return a.indexOf('NotSupportedError') === 0 && /already hosts a shadow tree/.test(a)
+        && bName === 'TypeError' && /is not a valid enum value of type ShadowRootMode/.test(b)
+        && closed.shadowRoot === null;
+}, function () {
+    var host = document.createElement('div'); host.attachShadow({ mode: 'open' });
+    var a = ''; try { host.attachShadow({ mode: 'open' }); } catch (e) { a = e.name + '|' + e.message; }
+    var b = ''; try { document.createElement('p').attachShadow({ mode: 'weird' }); } catch (e) { b = e.name + '|' + e.message; }
+    return a + ' || ' + b;
+});
+
+ck('S3 a node in a shadow tree is connected when its host is', function () {
+    var host = document.createElement('div');
+    document.body.appendChild(host);
+    var root = host.attachShadow({ mode: 'open' });
+    var inner = document.createElement('b');
+    root.appendChild(inner);
+    var got = inner.isConnected === true && host.isConnected === true
+        && inner.getRootNode() === root && host.getRootNode() === document;
+    document.body.removeChild(host);
+    return got && inner.isConnected === false && inner.getRootNode() === root;
+}, function () {
+    var h2 = document.createElement('div'); document.body.appendChild(h2);
+    var r2 = h2.attachShadow({ mode: 'open' }); var b2 = document.createElement('b');
+    r2.appendChild(b2);
+    return [b2.isConnected, h2.getRootNode() === document, b2.getRootNode() === r2].join('/');
+});
+
+ck('T1 a range added to the selection is read back', function () {
+    var sel = document.getSelection();
+    var r = document.createRange();
+    r.selectNodeContents(s);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    return sel.rangeCount === 1 && sel.containsNode(s, true) === true
+        && sel.isCollapsed === false && sel.anchorNode === s && sel.toString() === 'twox'
+        && sel.getRangeAt(0) === r && sel.type === 'Range' && sel.direction === 'forward';
+}, function () {
+    var sel = document.getSelection();
+    return [sel.rangeCount, String(sel.anchorNode), sel.toString(), sel.type, sel.direction].join(' | ');
+});
+
+ck('T2 the caret answers the end it was put at', function () {
+    var sel = document.getSelection();
+    var r = document.createRange();
+    r.selectNodeContents(s);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    sel.collapseToEnd();
+    var atEnd = sel.isCollapsed === true && sel.anchorNode === s;
+    sel.removeAllRanges();
+    var r2 = document.createRange();
+    r2.selectNodeContents(s);
+    sel.addRange(r2);
+    sel.collapseToStart();
+    var atStart = sel.isCollapsed === true && sel.anchorOffset === 0 && sel.anchorNode === s;
+    sel.removeAllRanges();
+    return atEnd && atStart && sel.rangeCount === 0 && sel.anchorNode === null
+        && sel.toString() === '' && sel.type === 'None';
+}, function () {
+    var sel = document.getSelection();
+    return [sel.rangeCount, String(sel.anchorNode), sel.type].join(' | ');
+});
+</script>
+</body>
+</html>

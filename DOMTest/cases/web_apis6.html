@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head><title>XHR, Web Storage, Web Crypto, fonts, commands, highlights, drag payload (XHR §2, Web Storage §5, Web Crypto §15.14, Font Loading §4.3/§4.4, HTML §5.7, CSS Highlight §2/§3, HTML §5.3.4, Clipboard §3)</title></head>
+<body>
+<script>
+// Measured against the reference in this session; the probes the numbers came from are kept under
+// out/reference_probes/. The sentences a refusal writes are quoted as the reference writes them.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+function done(name, fn) {
+    return fn().then(function (v) { __T(name, !!v, ''); },
+        function (e) { __T(name, false, 'rej ' + (e && e.name) + ': ' + (e && e.message)); });
+}
+function hexOf(buf) {
+    var out = '', view = new Uint8Array(buf);
+    for (var i = 0; i < view.length; i++) out += (view[i] < 16 ? '0' : '') + view[i].toString(16);
+    return out;
+}
+
+ck('H1 a request that has not gone out reads the defaults', function () {
+    var x = new XMLHttpRequest();
+    return x.responseType === '' && x.response === '' && x.responseText === '' && x.readyState === 0
+        && x.status === 0 && x.statusText === '' && x.timeout === 0 && x.withCredentials === false
+        && x.upload !== null && typeof x.overrideMimeType === 'function' && x.responseXML === null
+        && Object.prototype.toString.call(x) === '[object XMLHttpRequest]'
+        && Object.prototype.toString.call(x.upload) === '[object XMLHttpRequestUpload]'
+        && typeof x.upload.addEventListener === 'function' && x.getAllResponseHeaders() === ''
+        && x.getResponseHeader('anything') === null;
+}, function () {
+    var x = new XMLHttpRequest();
+    return [x.responseType, JSON.stringify(x.response), x.readyState, x.status,
+      JSON.stringify(x.statusText), String(x.upload), Object.prototype.toString.call(x)].join(' | ');
+});
+
+ck('H2 the five states answer on the interface and on the request', function () {
+    var x = new XMLHttpRequest();
+    return XMLHttpRequest.UNSENT === 0 && XMLHttpRequest.OPENED === 1
+        && XMLHttpRequest.HEADERS_RECEIVED === 2 && XMLHttpRequest.LOADING === 3
+        && XMLHttpRequest.DONE === 4 && x.UNSENT === 0 && x.DONE === 4
+        && x instanceof EventTarget;
+}, function () {
+    var x = new XMLHttpRequest();
+    return [XMLHttpRequest.UNSENT, XMLHttpRequest.OPENED, XMLHttpRequest.HEADERS_RECEIVED,
+      XMLHttpRequest.LOADING, XMLHttpRequest.DONE, x.UNSENT, x.DONE].join('/');
+});
+
+ck('H3 the members that need a request in flight refuse for the state', function () {
+    var x = new XMLHttpRequest();
+    var a = '', b = '', c = '';
+    try { x.send(); } catch (e) { a = e.name + '|' + e.message; }
+    try { x.setRequestHeader('x-a', 'y'); } catch (e) { b = e.name + '|' + e.message; }
+    try { x.open('GET'); } catch (e) { c = e.name + '|' + e.message; }
+    return a.indexOf('InvalidStateError') === 0 && /state must be OPENED/.test(a)
+        && b.indexOf('InvalidStateError') === 0 && /'setRequestHeader'/.test(b)
+        && c.indexOf('TypeError') === 0 && /2 arguments required, but only 1 present/.test(c);
+}, function () {
+    var y = new XMLHttpRequest(), out = [];
+    try { y.send(); } catch (e) { out.push(e.name + '|' + e.message); }
+    try { y.setRequestHeader('x-a', 'y'); } catch (e) { out.push(e.name + '|' + e.message); }
+    try { y.open('GET'); } catch (e) { out.push(e.name + '|' + e.message); }
+    return out.join(' || ');
+});
+
+ck('H4 a header name is checked and an unknown type is dropped', function () {
+    var x = new XMLHttpRequest();
+    x.open('GET', '/nothing');
+    var a = '';
+    try { x.setRequestHeader('bad name', 'v'); } catch (e) { a = e.name + '|' + e.message; }
+    x.responseType = 'bogus';
+    var bogus = x.responseType;
+    var asText = x.responseText;
+    x.responseType = 'json';
+    var d = '';
+    try { d = x.responseText; } catch (e) { d = e.name + '|' + e.message; }
+    return a.indexOf('SyntaxError') === 0 && /is not a valid HTTP header field name/.test(a)
+        && bogus === '' && asText === ''
+        && d.indexOf('InvalidStateError') === 0 && /was .json./.test(d);
+}, function () {
+    var x = new XMLHttpRequest(); x.open('GET', '/nothing'); var a = '';
+    try { x.setRequestHeader('bad name', 'v'); } catch (e) { a = e.name + '|' + e.message; }
+    x.responseType = 'json'; var d = '';
+    try { d = x.responseText; } catch (e) { d = e.name + '|' + e.message; }
+    return a + ' || ' + d;
+});
+
+ck('H5 the state machine raises its events on the request', function () {
+    var seen = [];
+    var x = new XMLHttpRequest();
+    x.addEventListener('readystatechange', function () { seen.push('rs' + x.readyState); });
+    x.addEventListener('loadstart', function () { seen.push('start'); });
+    x.onerror = function (e) { seen.push('error' + (e && e.type)); };
+    x.onloadend = function () { seen.push('end'); };
+    x.open('GET', '/definitely-not-there');
+    x.send();
+    return seen.join(',') === 'rs1,rs2,start';
+}, function () {
+    var seen = [];
+    var x = new XMLHttpRequest();
+    x.addEventListener('readystatechange', function () { seen.push('rs' + x.readyState); });
+    x.onloadstart = function () { seen.push('start'); };
+    x.open('GET', '/nope'); x.send();
+    return seen.join(',');
+});
+
+ck('H6 a request dropped on purpose says abort once', function () {
+    var seen = [];
+    var x = new XMLHttpRequest();
+    x.addEventListener('readystatechange', function () { seen.push('rs' + x.readyState); });
+    x.addEventListener('abort', function () { seen.push('abort'); });
+    x.addEventListener('loadend', function () { seen.push('loadend'); });
+    x.open('GET', '/slow-but-not-there');
+    x.send();
+    x.abort();
+    var after = seen.join(',');
+    return after === 'rs1,rs2,rs0,abort,loadend' && x.readyState === 0;
+}, function () {
+    var seen = [];
+    var x = new XMLHttpRequest();
+    x.addEventListener('readystatechange', function () { seen.push('rs' + x.readyState); });
+    x.addEventListener('abort', function () { seen.push('abort'); });
+    x.open('GET', '/slow'); x.send(); x.abort();
+    return seen.join(',');
+});
+
+ck('S1 an item written by name is stored in the order it came', function () {
+    localStorage.clear();
+    localStorage.setItem('a', '1');
+    localStorage.b = '2';
+    var read = [localStorage.length === 2, localStorage.getItem('b') === '2', 'a' in localStorage,
+        localStorage.key(0) === 'a', localStorage.key(1) === 'b',
+        Object.keys(localStorage).join(',') === 'a,b', localStorage.a === '1',
+        localStorage[0] === undefined, Object.prototype.toString.call(localStorage) === '[object Storage]'];
+    delete localStorage.a;
+    read.push(localStorage.length === 1, localStorage.a === undefined, localStorage.key(0) === 'b');
+    localStorage.clear();
+    return read.every(function (v) { return v === true; });
+}, function () {
+    localStorage.clear(); localStorage.setItem('a', '1'); localStorage.b = '2';
+    var r = [localStorage.length, localStorage.getItem('b'), String('a' in localStorage),
+      String(localStorage.key(0)), String(localStorage.key(1)), JSON.stringify(Object.keys(localStorage)),
+      Object.prototype.toString.call(localStorage)];
+    localStorage.clear(); return r.join(' | ');
+});
+
+ck('S2 the area is the interface and the same object every read', function () {
+    return Object.getPrototypeOf(localStorage) === Storage.prototype
+        && window.localStorage === localStorage && typeof Storage.prototype.setItem === 'function'
+        && typeof Storage === 'function'
+        && (function () { try { new Storage(); return false; } catch (e) { return e.name === 'TypeError'; } })();
+}, function () {
+    return [String(Object.getPrototypeOf(localStorage) === Storage.prototype),
+      String(window.localStorage === localStorage), typeof Storage.prototype.setItem,
+      typeof Storage].join(' | ');
+});
+
+ck('C1 the crypto surface the page tests for', function () {
+    return typeof crypto.subtle === 'object' && typeof crypto.subtle.digest === 'function'
+        && Object.prototype.toString.call(crypto.subtle) === '[object SubtleCrypto]'
+        && crypto.subtle.constructor.name === 'SubtleCrypto'
+        && typeof crypto.subtle.importKey === 'function' && typeof crypto.subtle.verify === 'function'
+        && typeof crypto.randomUUID === 'function' && typeof crypto.getRandomValues === 'function'
+        && typeof crypto.subtle.digest('SHA-256', new Uint8Array([1])).then === 'function';
+}, function () {
+    return [typeof crypto.subtle, Object.prototype.toString.call(crypto.subtle),
+      String(crypto.subtle.constructor.name), typeof crypto.subtle.importKey].join(' | ');
+});
+
+done('C2 the digests are the ones the platform computes', function () {
+    var abc = new TextEncoder().encode('abc');
+    return Promise.all([crypto.subtle.digest('SHA-256', abc), crypto.subtle.digest('SHA-1', abc),
+        crypto.subtle.digest('SHA-256', new Uint8Array([97, 98, 99]))]).then(function (parts) {
+        return hexOf(parts[0]) === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+            && hexOf(parts[1]) === 'a9993e364706816aba3e25717850c26c9cd0d89d'
+            && hexOf(parts[2]) === hexOf(parts[0])
+            && parts[0] instanceof ArrayBuffer && parts[0].byteLength === 32
+            && parts[1].byteLength === 20;
+    });
+});
+
+done('C3 an unknown algorithm and a body that is not a buffer reject', function () {
+    var abc = new TextEncoder().encode('abc');
+    var a = '', b = '';
+    return crypto.subtle.digest('BOGUS', abc).then(function () { a = 'resolved'; },
+        function (e) { a = e.name + '|' + e.message; }).then(function () {
+        return crypto.subtle.digest('SHA-256', 'not bytes');
+    }).then(function () { b = 'resolved'; }, function (e) { b = e.name + '|' + e.message; })
+        .then(function () {
+            return a.indexOf('NotSupportedError') === 0 && /Algorithm: Unrecognized name/.test(a)
+                && b.indexOf('TypeError') === 0 && /is not of type/.test(b);
+        });
+});
+
+ck('F1 the face set answers the empty set and the face keeps its descriptors', function () {
+    var set = document.fonts;
+    var face = new FontFace('N', 'url(a.woff2)', { style: 'italic', weight: '300', display: 'swap' });
+    var r = [Object.prototype.toString.call(set) === '[object FontFaceSet]', set.status === 'loaded',
+        set.size === 0, set.constructor.name === 'EventTarget', set instanceof EventTarget,
+        Object.getPrototypeOf(set) !== EventTarget.prototype,
+        Object.getPrototypeOf(Object.getPrototypeOf(set)) === EventTarget.prototype,
+        typeof window.FontFaceSet === 'undefined', typeof set.add === 'function',
+        typeof set.check === 'function', typeof set.load === 'function', typeof set.forEach === 'function',
+        typeof set[Symbol.iterator] === 'function', set.ready instanceof Promise,
+        face.family === 'N', face.style === 'italic', face.weight === '300', face.display === 'swap',
+        face.status === 'unloaded', face.unicodeRange === 'U+0-10FFFF', face.variant === 'normal',
+        face.stretch === 'normal', Object.prototype.toString.call(face) === '[object FontFace]',
+        face.loaded instanceof Promise];
+    set.add(face);
+    r.push(set.size === 1, set.has(face), Array.from(set).length === 1, set.check('12px N') === false,
+        set === document.fonts);
+    set.delete(face);
+    r.push(set.size === 0, set.has(face) === false, set.check('12px N') === true);
+    return r.every(function (v) { return v === true; });
+}, function () {
+    var set = document.fonts;
+    var face = new FontFace('N', 'url(a.woff2)', { style: 'italic' });
+    return [Object.prototype.toString.call(set), set.status, set.size, String(set.constructor.name),
+      String(set instanceof EventTarget), String(face.style), face.status, face.unicodeRange].join(' | ');
+});
+
+done('F2 loading a face makes the check answer true', function () {
+    var set = document.fonts;
+    var face = new FontFace('L', 'url(l.woff2)');
+    set.add(face);
+    var before = set.check('12px L');
+    return set.load('12px L').then(function (faces) {
+        return before === false && Array.isArray(faces) && face.status === 'loaded'
+            && set.check('12px L') === true;
+    }).then(function (v) { set.clear(); return v; });
+});
+
+ck('D1 the editing commands answer without an editing host', function () {
+    var a = '', b = '', c = '';
+    try { document.execCommand(); } catch (e) { a = e.name + '|' + e.message; }
+    try { document.queryCommandState(); } catch (e) { b = e.name + '|' + e.message; }
+    try { document.queryCommandSupported(); } catch (e) { c = e.name + '|' + e.message; }
+    return typeof document.execCommand === 'function'
+        && document.queryCommandSupported('bold') === true
+        && document.queryCommandSupported('bogus') === false
+        && document.queryCommandSupported('') === false
+        && document.queryCommandState('bold') === false
+        && document.queryCommandState('bogus') === false
+        && document.queryCommandEnabled('bold') === false
+        && document.queryCommandValue('fontName') === ''
+        && document.execCommand('bold') === false && document.execCommand('bogus') === false
+        && a.indexOf('TypeError') === 0 && /1 argument required, but only 0 present/.test(a)
+        && b.indexOf('TypeError') === 0 && c.indexOf('TypeError') === 0;
+}, function () {
+    var a = ''; try { document.execCommand(); } catch (e) { a = e.name + '|' + e.message; }
+    return [document.queryCommandSupported('bold'), document.queryCommandSupported('bogus'),
+      document.execCommand('bold'), a].join(' | ');
+});
+
+ck('L1 a highlight is a set of ranges and the registry holds it by name', function () {
+    var h = new Highlight();
+    var r = document.createRange();
+    var r2 = document.createRange();
+    h.add(r); h.add(r2);
+    CSS.highlights.set('mark', h);
+    var out = [Object.prototype.toString.call(h) === '[object Highlight]', h.size === 1,
+        h.has(r) === true, h.type === 'highlight', h.priority === 0, Array.from(h).length === 1,
+        Object.prototype.toString.call(CSS.highlights) === '[object HighlightRegistry]',
+        CSS.highlights.size === 1, CSS.highlights.get('mark') === h, CSS.highlights.has('mark') === true,
+        CSS.highlights instanceof Map === false, Array.from(CSS.highlights.keys()).join(',') === 'mark',
+        typeof CSS.highlights.highlightsFromPoint === 'function', typeof HighlightRegistry === 'function',
+        CSS.highlights.delete('mark') === true, CSS.highlights.size === 0];
+    var e = '';
+    try { CSS.highlights.set('bad', 'not a highlight'); } catch (err) { e = err.name + '|' + err.message; }
+    out.push(e.indexOf('TypeError') === 0 && /parameter 2 is not of type .Highlight./.test(e));
+    var illegal = '';
+    try { new HighlightRegistry(); } catch (err) { illegal = err.name; }
+    out.push(illegal === 'TypeError');
+    h.clear();
+    return out.every(function (v) { return v === true; });
+}, function () {
+    var h = new Highlight(); var r = document.createRange(); var r2 = document.createRange();
+    h.add(r); h.add(r2);
+    var e = ''; try { CSS.highlights.set('bad', 'nope'); } catch (err) { e = err.name + '|' + err.message; }
+    return [h.size, h.type, h.priority, String(h.has(r)), e].join(' | ');
+});
+
+ck('P1 a drag payload holds what the script put in it', function () {
+    var d = new DataTransfer();
+    var r = [Object.prototype.toString.call(d) === '[object DataTransfer]', d.dropEffect === 'none',
+        d.effectAllowed === 'none', d.types.length === 0, d.items.length === 0,
+        Object.prototype.toString.call(d.files) === '[object FileList]', d.files.length === 0,
+        typeof d.setDragImage === 'function', typeof d.getDragImage === 'undefined',
+        d.getData('text/plain') === ''];
+    d.setData('text/plain', 'x');
+    r.push(d.getData('text/plain') === 'x', d.types.length === 1, d.types[0] === 'text/plain',
+        d.items.length === 1, d.items[0].kind === 'string', d.items[0].type === 'text/plain',
+        Object.prototype.toString.call(d.items[0]) === '[object DataTransferItem]');
+    var frozen = '';
+    try { d.types.push('y'); } catch (e) { frozen = e.name; }
+    r.push(frozen === 'TypeError');
+    d.clearData();
+    r.push(d.types.length === 0, d.items.length === 0);
+    return r.every(function (v) { return v === true; });
+}, function () {
+    var d = new DataTransfer(); d.setData('text/plain', 'x'); var frozen = 'no throw';
+    try { d.types.push('y'); } catch (e) { frozen = e.name; }
+    return [Object.prototype.toString.call(d), d.dropEffect, d.types.length, d.items.length,
+      d.items[0].kind, frozen].join(' | ');
+});
+
+done('P2 an item hands its string to the callback the page gave', function () {
+    var d = new DataTransfer();
+    d.setData('text/plain', 'hello');
+    return new Promise(function (resolve) { d.items[0].getAsString(resolve); }).then(function (text) {
+        return text === 'hello' && d.items[0].getAsFile() === null;
+    });
+});
+
+ck('C4 a clipboard item carries the types it was built from', function () {
+    var blob = new Blob(['x'], { type: 'text/plain' });
+    var ci = new ClipboardItem({ 'text/plain': blob });
+    return Object.prototype.toString.call(ci) === '[object ClipboardItem]'
+        && ci.types.length === 1 && ci.types[0] === 'text/plain'
+        && ci.presentationStyle === undefined && typeof ci.getType === 'function'
+        && typeof ClipboardItem.supports === 'function'
+        && ClipboardItem.supports('text/plain') === true
+        && ClipboardItem.supports('text/html') === true
+        && ClipboardItem.supports('application/pdf') === false;
+}, function () {
+    var ci = new ClipboardItem({ 'text/plain': new Blob(['x']) });
+    return [Object.prototype.toString.call(ci), ci.types.length, String(ci.types[0]),
+      String(ci.presentationStyle), String(ClipboardItem.supports('text/plain'))].join(' | ');
+});
+
+done('C5 the item gives back the blob under the type', function () {
+    var ci = new ClipboardItem({ 'text/plain': new Blob(['x'], { type: 'text/plain' }) });
+    return ci.getType('text/plain').then(function (blob) { return blob.text(); })
+        .then(function (text) { return text === 'x'; });
+});
+
+ck('N1 a host object reads as the interface its tag names', function () {
+    var span = document.createElement('span');
+    return String(span) === '[object HTMLSpanElement]'
+        && String(document) === '[object HTMLDocument]'
+        && String(document.createTextNode('a')) === '[object Text]'
+        && String(document.createComment('a')) === '[object Comment]'
+        && String(document.createDocumentFragment()) === '[object DocumentFragment]'
+        && String(document.body.childNodes) === '[object NodeList]'
+        && String(document.body.children) === '[object HTMLCollection]'
+        && String(document.body.attributes) === '[object NamedNodeMap]'
+        && String(document.body.classList) === ''
+        && String(document.body.style) === '[object CSSStyleDeclaration]'
+        && String(document.getSelection()) === ''
+        && String(document.createRange()) === '';
+}, function () {
+    var span = document.createElement('span');
+    return [String(span), String(document), String(document.body.children),
+      String(document.body.attributes), String(document.body.classList),
+      String(document.body.style), String(document.getSelection())].join(' | ');
+});
+</script>
+</body>
+</html>

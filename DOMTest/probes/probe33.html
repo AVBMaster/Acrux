@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html><head><title>Probe 33</title></head><body>
+<div id="d">one<!--cmt--><span id="s" data-k="v">two<b>x</b></span>three</div>
+<script>
+(function () {
+  function t(name, fn, info) {
+    var ok = false, got = '';
+    try { var v = fn(); ok = !!v; } catch (e) { got = 'threw ' + (e && e.name) + ': ' + (e && e.message); }
+    if (!ok && !got) { try { got = String(typeof info === 'function' ? info() : (info === undefined ? '' : info)); } catch (e) { got = 'info threw'; } }
+    __T(name, ok, got);
+  }
+  var d = document.getElementById('d'), s = document.getElementById('s');
+  function ev(expr, type, ctx) {
+    return document.evaluate(expr, ctx || document, null, type === undefined ? XPathResult.ANY_TYPE : type, null);
+  }
+  t('xpath basics', function () {
+    return ev('//span[@id="s"]', XPathResult.FIRST_ORDERED_NODE_TYPE).singleNodeValue === s
+      && ev('name(//span)', XPathResult.STRING_TYPE).stringValue === 'span'
+      && ev('string(//span)', XPathResult.STRING_TYPE).stringValue === 'twox'
+      && ev('//span/text()', XPathResult.STRING_TYPE).stringValue === 'two'
+      && ev('count(//span)', XPathResult.NUMBER_TYPE).numberValue === 1
+      && ev('count(//span/@*)', XPathResult.NUMBER_TYPE).numberValue === 2;
+  }, function () { return typeof document.evaluate; });
+  t('xpath axes and predicates', function () {
+    return ev('child::span', XPathResult.FIRST_ORDERED_NODE_TYPE, d).singleNodeValue === s
+      && ev('parent::div', XPathResult.FIRST_ORDERED_NODE_TYPE, s).singleNodeValue === d
+      && ev('attribute::id', XPathResult.STRING_TYPE, s).stringValue === 's'
+      && ev('self::span', XPathResult.BOOLEAN_TYPE, s).booleanValue === true
+      && ev('following-sibling::text()', XPathResult.STRING_TYPE, s).stringValue === 'three'
+      && ev('descendant-or-self::span', XPathResult.FIRST_ORDERED_NODE_TYPE, d).singleNodeValue === s
+      && ev('ancestor::div', XPathResult.FIRST_ORDERED_NODE_TYPE, s).singleNodeValue === d;
+  }, function () { return [String(ev('child::span', XPathResult.FIRST_ORDERED_NODE_TYPE, d).singleNodeValue), String(ev('attribute::id', XPathResult.STRING_TYPE, s).stringValue)].join('/'); });
+  t('xpath predicates', function () {
+    return ev('count(//div/*[1])', XPathResult.NUMBER_TYPE).numberValue === 1
+      && ev('//div/*[last()]', XPathResult.FIRST_ORDERED_NODE_TYPE).singleNodeValue.nodeName === 'SPAN'
+      && ev('count(//*[@data-k])', XPathResult.NUMBER_TYPE).numberValue === 1
+      && ev('count(//span[@nope or @data-k])', XPathResult.NUMBER_TYPE).numberValue === 1
+      && ev('count(//comment())', XPathResult.NUMBER_TYPE).numberValue === 1
+      && ev('boolean(//span and //b)', XPathResult.BOOLEAN_TYPE).booleanValue === true
+      && ev('not(//table)', XPathResult.BOOLEAN_TYPE).booleanValue === true
+      && ev('contains(string(//span), "tw")', XPathResult.BOOLEAN_TYPE).booleanValue === true;
+  }, function () { return [ev('count(//div/*[1])', XPathResult.NUMBER_TYPE).numberValue, ev('count(//comment())', XPathResult.NUMBER_TYPE).numberValue].join('/'); });
+  t('xpath iterator and snapshot', function () {
+    var it = ev('//*[name()="b" or name()="span"]', XPathResult.ORDERED_NODE_ITERATOR_TYPE);
+    var names = []; var n;
+    while ((n = it.iterateNext())) names.push(n.nodeName);
+    var snap = ev('//descendant::span', XPathResult.ORDERED_NODE_SNAPSHOT_TYPE);
+    return names.join(',') === 'SPAN,B' && snap.snapshotLength === 1 && snap.snapshotItem(0) === s
+      && snap.snapshotItem(9) === null && typeof it.invalidIteratorState === 'boolean';
+  }, function () {
+    var it2 = ev('//*[name()="b"]', XPathResult.ORDERED_NODE_ITERATOR_TYPE);
+    return String(it2.iterateNext()) + '/' + String(it2.iterateNext());
+  });
+  t('xpath refusals', function () {
+    var a = '', b = '', c = '';
+    try { document.evaluate('///', document, null, XPathResult.ANY_TYPE, null); } catch (e) { a = e.name + '|' + e.message; }
+    try { document.evaluate('//span', 'nope', null, XPathResult.ANY_TYPE, null); } catch (e) { b = e.name + '|' + e.message; }
+    try { new XPathResult(); } catch (e) { c = e.name; }
+    return a.indexOf('SyntaxError') === 0 && /is not a valid XPath expression/.test(a)
+      && b.indexOf('TypeError') === 0 && /parameter 2 is not of type/.test(b) && c === 'TypeError';
+  }, function () { try { document.evaluate('///', document, null, XPathResult.ANY_TYPE, null); return 'no throw'; } catch (e) { return e.name + '|' + e.message; } });
+  t('xpath evaluator', function () {
+    var e = new XPathEvaluator();
+    var made = document.createElementNS('urn:x', 'x:c');
+    d.appendChild(made);
+    var resolver = { lookupNamespaceURI: function (p) { return p === 'x' ? 'urn:x' : null; } };
+    return typeof e.createExpression === 'function'
+      && e.createExpression('count(//span)').evaluate(document, XPathResult.NUMBER_TYPE).numberValue === 1
+      && document.evaluate('//x:c', document, resolver, XPathResult.FIRST_ORDERED_NODE_TYPE).singleNodeValue === made
+      && typeof e.createNSResolver === 'function';
+  }, function () { return typeof XPathEvaluator + '/' + typeof XPathResult; });
+
+  t('shadow root', function () {
+    var host = document.createElement('div');
+    var root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<p class="q">a</p><span>b</span>';
+    var inner = document.createElement('b');
+    root.appendChild(inner);
+    return root.host === host && root.mode === 'open' && root.nodeType === 11
+      && root.nodeName === '#document-fragment' && host.shadowRoot === root
+      && root.querySelector('.q') !== null && root.querySelectorAll('p').length === 1
+      && host.querySelector('.q') === null && host.childNodes.length === 0
+      && root.childElementCount === 3 && root instanceof ShadowRoot && root instanceof DocumentFragment
+      && Object.getPrototypeOf(root) === ShadowRoot.prototype
+      && Object.prototype.toString.call(root) === '[object ShadowRoot]'
+      && inner.parentNode === root && root.contains(inner) === true
+      && inner.isConnected === false && inner.getRootNode() === root
+      && inner.ownerDocument === document && root.activeElement === null
+      && typeof root.adoptedStyleSheets === 'object' && root.adoptedStyleSheets.length === 0
+      && typeof root.addEventListener === 'function';
+  }, function () {
+    var h2 = document.createElement('div');
+    var r2 = h2.attachShadow({ mode: 'open' });
+    r2.innerHTML = '<p class="q">a</p>';
+    return [String(r2), r2.nodeType, r2.nodeName, String(h2.shadowRoot === r2),
+      String(r2.querySelector('.q')), String(Object.getPrototypeOf(r2) === ShadowRoot.prototype),
+      Object.prototype.toString.call(r2), r2.childElementCount].join(' | ');
+  });
+  t('shadow refusals', function () {
+    var host = document.createElement('div');
+    host.attachShadow({ mode: 'open' });
+    var a = '', b = '';
+    try { host.attachShadow({ mode: 'open' }); } catch (e) { a = e.name + '|' + e.message; }
+    try { document.createElement('p').attachShadow({ mode: 'weird' }); } catch (e) { b = e.name; }
+    var closed = document.createElement('div');
+    closed.attachShadow({ mode: 'closed' });
+    return a.indexOf('NotSupportedError') === 0 && /already hosts a shadow tree/.test(a)
+      && b === 'TypeError' && closed.shadowRoot === null;
+  }, function () { return 'n/a'; });
+  t('shadow in a connected host', function () {
+    var host = document.createElement('div');
+    document.body.appendChild(host);
+    var root = host.attachShadow({ mode: 'open' });
+    var inner = document.createElement('b');
+    root.appendChild(inner);
+    var got = inner.isConnected === true && host.isConnected === true;
+    document.body.removeChild(host);
+    return got && inner.isConnected === false;
+  }, function () {
+    var host2 = document.createElement('div'); document.body.appendChild(host2);
+    var r2 = host2.attachShadow({ mode: 'open' }); var b2 = document.createElement('b');
+    r2.appendChild(b2); var v = b2.isConnected; document.body.removeChild(host2); return String(v) + '/' + String(b2.isConnected);
+  });
+
+  t('selection addRange then read', function () {
+    var sel = document.getSelection();
+    var r = document.createRange();
+    r.selectNodeContents(s);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    var count = sel.rangeCount;
+    return count === 1 && sel.containsNode(s, true) === true && sel.isCollapsed === false
+      && sel.anchorNode === s && sel.toString() === 'twox';
+  }, function () {
+    var sel2 = document.getSelection();
+    var r2 = document.createRange(); r2.selectNodeContents(s);
+    sel2.removeAllRanges(); sel2.addRange(r2);
+    return [sel2.rangeCount, String(sel2.anchorNode), sel2.containsNode(s, true), sel2.toString()].join(' | ');
+  });
+  t('selection collapseToEnd', function () {
+    var sel = document.getSelection();
+    var r = document.createRange(); r.selectNodeContents(s);
+    sel.removeAllRanges(); sel.addRange(r);
+    sel.collapseToEnd();
+    var end = sel.isCollapsed === true && sel.anchorOffset === 2;
+    sel.removeAllRanges();
+    return end && sel.rangeCount === 0 && sel.anchorNode === null && sel.toString() === '';
+  }, function () { var sel = document.getSelection(); return [sel.rangeCount, String(sel.anchorNode)].join('/'); });
+})();
+</script></body></html>

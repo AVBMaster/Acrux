@@ -151,12 +151,16 @@ static void DrainTimers(JavaScriptEngine js)
     // Run every timer that is due, then wait out the one that is next, the way the shell's pump
     // does — a case that checks something a setTimeout answers has to let that timer actually
     // arrive. Bounded so a mistaken setInterval cannot hold the harness.
-    for (int round = 0; round < 120; round++)
+    for (int round = 0; round < 400; round++)
     {
         try { js.IntegrationService?.ProcessTimers(); } catch { }
+        // A request the page sent answers on a task of its own; the pump keeps running while the
+        // engine is holding one, or the job it queues would never be reached.
+        bool waiting = false;
+        try { waiting = js.IntegrationService?.HasBackgroundJobs ?? false; } catch { }
         int delay = int.MaxValue;
         try { delay = js.IntegrationService?.NextTimerDelayMs() ?? int.MaxValue; } catch { }
-        if (delay == int.MaxValue) break;
+        if (delay == int.MaxValue && !waiting) break;
         Thread.Sleep(Math.Min(Math.Max(delay, 1), 20));
     }
 }
