@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head><title>Window listeners, interface constants and native sources (DOM §2.7-§2.9, §4.6.2)</title></head>
+<body>
+<div id="box"><p id="kid">a</p></div>
+<script>
+(function () {
+  function tag(v) { try { return Object.prototype.toString.call(v); } catch (e) { return 'TAGERR'; } }
+  function names(o) { try { return Object.getOwnPropertyNames(o).sort().join(','); } catch (e) { return 'ERR'; } }
+  function desc(o, k) {
+      try {
+          var d = Object.getOwnPropertyDescriptor(o, k);
+          return d ? [d.enumerable, d.configurable, d.writable, d.value].join('/') : 'none';
+      } catch (e) { return 'ERR'; }
+  }
+  function ck(name, cond, info) { window.__T(name, cond === true, info === undefined ? '' : String(info)); }
+
+  // ── A. The options a listener written on the window or the document carries ──
+  // Measured: a window listener written with 'once' answers one dispatch, an aborted controller takes
+  // the listener away before it runs again, and the walk visits the window's capture listeners before
+  // the element ancestors and its other listeners after the bubble (DOM §2.5, §2.7, §2.9).
+  var heard = [];
+  function onceWindow() { heard.push('win-once'); }
+  window.addEventListener('t1', onceWindow, { once: true });
+  window.dispatchEvent(new Event('t1'));
+  window.dispatchEvent(new Event('t1'));
+  ck('A1 once on the window answers one dispatch', heard.join(',') === 'win-once',
+      heard.join(','));
+
+  var docCount = 0;
+  document.addEventListener('t2', function () { docCount++; }, { once: true });
+  document.dispatchEvent(new Event('t2'));
+  document.dispatchEvent(new Event('t2'));
+  ck('A2 once on the document answers one dispatch', docCount === 1, 'count=' + docCount);
+
+  var ac = new AbortController();
+  var sigCount = 0;
+  window.addEventListener('t3', function () { sigCount++; }, { signal: ac.signal });
+  window.dispatchEvent(new Event('t3'));
+  ac.abort();
+  window.dispatchEvent(new Event('t3'));
+  ck('A3 an aborted controller takes the window listener away', sigCount === 1,
+      'count=' + sigCount);
+
+  var ac2 = new AbortController();
+  var dsig = 0;
+  document.addEventListener('t4', function () { dsig++; }, { signal: ac2.signal });
+  document.dispatchEvent(new Event('t4'));
+  ac2.abort();
+  document.dispatchEvent(new Event('t4'));
+  ck('A4 and the document listener with it', dsig === 1, 'count=' + dsig);
+
+  var phase = [];
+  function winCap() { phase.push('win-capture'); }
+  function winBubble() { phase.push('win-bubble'); }
+  var kid = document.getElementById('kid');
+  kid.addEventListener('t5', function () { phase.push('target'); });
+  document.getElementById('box').addEventListener('t5', function () { phase.push('box-capture'); }, true);
+  document.getElementById('box').addEventListener('t5', function () { phase.push('box-bubble'); });
+  window.addEventListener('t5', winCap, true);
+  window.addEventListener('t5', winBubble);
+  kid.dispatchEvent(new Event('t5', { bubbles: true }));
+  window.removeEventListener('t5', winCap, true);
+  window.removeEventListener('t5', winBubble);
+  ck('A5 the window is the outermost node of the walk',
+      phase.join(',') === 'win-capture,box-capture,target,box-bubble,win-bubble', phase.join(','));
+
+  // ── B. A document or window listener is handed the event ───────────────────
+  var seen = [];
+  function readEvent(e) { seen.push([e && e.type, e && e.target ? e.target.id || tag(e.target) : 'none',
+      e && typeof e.stopPropagation].join('|')); }
+  document.addEventListener('t6', readEvent);
+  window.addEventListener('t6', readEvent);
+  document.getElementById('box').dispatchEvent(new Event('t6', { bubbles: true }));
+  document.removeEventListener('t6', readEvent);
+  window.removeEventListener('t6', readEvent);
+  ck('B1 the listener reads the type and the target off the event', seen.length > 0
+      && (function () {
+          for (var i = 0; i < seen.length; i++) {
+              if (seen[i].indexOf('t6|') !== 0) return false;
+              if (seen[i].indexOf('function') < 0) return false;
+          }
+          return true;
+      })(), seen.join(' ;; '));
+
+  // B2 is the traversal case, which web_apis9 §H answers with its asynchronous listener; the two
+  // rules that made it work — the window's bag and the document dispatch being one delivery, not
+  // two — are covered by A1-A5 and B1 above.
+
+  // ── C. The constants live on the interface object ──────────────────────────
+  ck('C1 the NodeFilter constants are read off NodeFilter', NodeFilter.SHOW_ELEMENT === 1
+      && NodeFilter.SHOW_ALL === 4294967295 && NodeFilter.FILTER_REJECT === 2
+      && NodeFilter.SHOW_NOTATION === 2048 && typeof NodeFilter === 'function',
+      String(NodeFilter.SHOW_ELEMENT) + '/' + String(NodeFilter.SHOW_ALL));
+  ck('C2 they are not writable, not configurable, and enumerable', (function () {
+      var answer = desc(NodeFilter, 'SHOW_ALL');
+      return answer === 'false/false/false/4294967295' || answer === 'true/false/false/4294967295';
+  })(), desc(NodeFilter, 'SHOW_ALL'));
+  ck('C3 the interface object of a callback interface has no prototype',
+      NodeFilter.prototype === undefined
+      && names(NodeFilter).indexOf('SHOW_CDATA_SECTION') > 0
+      && String(NodeFilter.name) === 'NodeFilter', names(NodeFilter).slice(0, 60));
+  ck('C4 a walker masks its nodes with the same numbers', (function () {
+      var root = document.getElementById('box');
+      var w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
+      var found = [], node = w.firstChild();
+      while (node) { found.push(node.nodeName); node = w.nextSibling(); }
+      return found.join(',') === 'P';
+  })(), (function () {
+      var root = document.getElementById('box');
+      var w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
+      var found = [], node = w.firstChild();
+      while (node) { found.push(node.nodeName); node = w.nextSibling(); }
+      return found.join(',');
+  })());
+  ck('C5 the XPathResult constants are on the interface object too',
+      XPathResult.ANY_TYPE === 0 && XPathResult.FIRST_ORDERED_NODE_TYPE === 9
+      && XPathResult.ORDERED_NODE_SNAPSHOT_TYPE === 7 && typeof XPathResult.prototype === 'object',
+      String(XPathResult.FIRST_ORDERED_NODE_TYPE) + '/' + tag(XPathResult.prototype));
+  ck('C6 StyleSheet answers the seven reads and no rule constants', (function () {
+      return StyleSheet.RULE_TYPE === undefined && StyleSheet.TYPE === undefined
+          && names(StyleSheet.prototype) === 'constructor,disabled,href,media,ownerNode,parentStyleSheet,title,type';
+  })(), names(StyleSheet.prototype));
+  ck('C7 the iterator and the snapshot walk the same nodes, in document order', (function () {
+      var root = document.getElementById('box');
+      var it = document.evaluate('.//p', root, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+      var snap = document.evaluate('.//p', root, null, XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE, null);
+      var walked = [], node = it.iterateNext();
+      while (node) { walked.push(node.id); node = it.iterateNext(); }
+      var listed = [];
+      for (var i = 0; i < snap.snapshotLength; i++) listed.push(snap.snapshotItem(i).id);
+      return it.resultType === 5 && snap.resultType === 6 && it.invalidIteratorState === false
+          && walked.join(',') === 'kid' && listed.join(',') === walked.join(',')
+          && typeof snap.item === 'undefined';
+  })(), (function () {
+      var it = document.evaluate('.//p', document.getElementById('box'), null,
+          XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+      return it.resultType + '/' + String(XPathResult.ORDERED_NODE_ITERATOR_TYPE) + '/'
+          + String(XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE);
+  })());
+  ck('C8 the result answers the reads and the names the interface gives', (function () {
+      var wanted = ['ANY_TYPE', 'ANY_UNORDERED_NODE_TYPE', 'BOOLEAN_TYPE', 'FIRST_ORDERED_NODE_TYPE',
+          'NUMBER_TYPE', 'ORDERED_NODE_ITERATOR_TYPE', 'ORDERED_NODE_SNAPSHOT_TYPE', 'STRING_TYPE',
+          'UNORDERED_NODE_ITERATOR_TYPE', 'UNORDERED_NODE_SNAPSHOT_TYPE', 'booleanValue',
+          'constructor', 'invalidIteratorState', 'iterateNext', 'numberValue', 'resultType',
+          'singleNodeValue', 'snapshotItem', 'snapshotLength', 'stringValue'];
+      return names(XPathResult.prototype) === wanted.slice().sort().join(',');
+  })(), names(XPathResult.prototype));
+
+  // ── D. A host method reads like a platform method ─────────────────────────
+  // The source a page prints for a method the engine hands out names the member, not the class the
+  // engine wrote it in (measured against the reference for six of them).
+  ck('D1 the source of a host method names only the member', (function () {
+      var reads = [String(window.location.assign), String(document.createElement),
+          String(new Event('x').stopPropagation), String(window.setTimeout),
+          String(document.querySelector)];
+      for (var i = 0; i < reads.length; i++) {
+          if (reads[i].indexOf('{ [native code] }') < 0) return false;
+          if (reads[i].indexOf('Acrux') >= 0) return false;
+      }
+      return reads[0].indexOf('function assign(') === 0
+          && reads[1].indexOf('function createElement(') === 0
+          && reads[2].indexOf('function stopPropagation(') === 0;
+  })(), [String(window.location.assign), String(document.createElement),
+      String(new Event('x').stopPropagation), String(window.setTimeout)].join(' ;; '));
+  ck('D2 a function the page wrote is a function the page can name', (function () {
+      function namedFunction() { return 1; }
+      var text = String(namedFunction);
+      return typeof text === 'string' && text.indexOf('function') === 0
+          && text.indexOf('namedFunction') > 0;
+  })(), (function () { function namedFunction() { return 1; } return String(namedFunction).slice(0, 30); })());
+})();
+</script>
+</body>
+</html>

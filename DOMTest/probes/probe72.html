@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html><head><title>Probe 72</title></head><body>
+<div id="d"><p id="p1">one</p></div>
+<form id="f"><input id="i1" type="text" value="abc"><textarea id="ta">line1
+line2</textarea><select id="se"><option value="a">A</option></select></form>
+<script>
+(function () {
+  var out = {};
+  function names(n) {
+    try {
+      var ctor = window[n];
+      if (typeof ctor !== 'function' || !ctor.prototype) return 'no-ctor';
+      return Object.getOwnPropertyNames(ctor.prototype).slice().sort().join(',');
+    } catch (e) { return 'ERR ' + e.name; }
+  }
+  var IFACES = ['Node', 'Element', 'HTMLElement', 'CharacterData', 'Text', 'Comment', 'Document',
+    'DocumentFragment', 'ShadowRoot', 'Attr', 'NamedNodeMap', 'NodeList', 'HTMLCollection',
+    'DOMTokenList', 'DOMStringMap', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent',
+    'InputEvent', 'FocusEvent', 'WheelEvent', 'ClipboardEvent', 'CompositionEvent', 'TouchEvent',
+    'UIEvent', 'EventTarget', 'AbortSignal', 'AbortController', 'Range', 'StaticRange',
+    'AbstractRange', 'Selection', 'NodeIterator', 'TreeWalker', 'NodeFilter', 'DocumentType',
+    'ProcessingInstruction', 'CDATASection', 'HTMLInputElement', 'HTMLTextAreaElement',
+    'HTMLSelectElement', 'HTMLOptionElement', 'HTMLFormElement', 'HTMLButtonElement',
+    'HTMLAnchorElement', 'HTMLImageElement', 'HTMLIFrameElement', 'HTMLScriptElement',
+    'HTMLStyleElement', 'HTMLTemplateElement', 'HTMLVideoElement', 'HTMLAudioElement',
+    'HTMLMediaElement', 'HTMLDialogElement', 'HTMLSlotElement', 'HTMLTableCellElement',
+    'HTMLTableElement', 'HTMLLIElement', 'HTMLLabelElement', 'HTMLProgressElement',
+    'HTMLMeterElement', 'HTMLDataListElement', 'HTMLFieldSetElement', 'HTMLLegendElement',
+    'HTMLDetailsElement', 'HTMLAreaElement', 'HTMLBaseElement', 'HTMLLinkElement',
+    'HTMLMetaElement', 'HTMLObjectElement', 'HTMLEmbedElement', 'HTMLTrackElement',
+    'HTMLParamElement', 'HTMLSourceElement', 'HTMLPictureElement', 'HTMLQuoteElement',
+    'HTMLModElement', 'HTMLHeadingElement', 'HTMLParagraphElement', 'HTMLHRElement',
+    'HTMLPreElement', 'HTMLBRElement', 'HTMLDivElement', 'HTMLSpanElement', 'HTMLUListElement',
+    'HTMLOListElement', 'HTMLMenuElement', 'HTMLDListElement', 'HTMLOptGroupElement',
+    'HTMLOutputElement', 'HTMLTimeElement', 'HTMLAudioElement', 'ValidityState',
+    'CustomElementRegistry', 'ElementInternals', 'DOMParser', 'XMLSerializer', 'XPathResult',
+    'XPathExpression', 'XPathEvaluator', 'XPathNSResolver', 'Storage', 'MessageEvent',
+    'MessageChannel', 'MessagePort', 'BroadcastChannel', 'StorageEvent', 'ErrorEvent',
+    'PageTransitionEvent', 'HashChangeEvent', 'PopStateEvent', 'SubmitEvent', 'FormDataEvent',
+    'ToggleEvent', 'AnimationEvent', 'TransitionEvent', 'Animation', 'AnimationEffect',
+    'KeyframeEffect', 'DocumentTimeline', 'DOMRect', 'DOMRectReadOnly', 'DOMPoint',
+    'DOMPointReadOnly', 'DOMMatrix', 'DOMMatrixReadOnly', 'TextMetrics', 'CanvasRenderingContext2D',
+    'HTMLCanvasElement', 'URL', 'URLSearchParams', 'Headers', 'Request', 'Response', 'Blob',
+    'File', 'FileList', 'FileReader', 'FormData', 'Performance', 'PerformanceEntry',
+    'PerformanceMark', 'PerformanceMeasure', 'PerformanceObserver', 'PerformanceObserverEntryList',
+    'IntersectionObserver', 'IntersectionObserverEntry', 'ResizeObserver', 'ResizeObserverEntry',
+    'MutationObserver', 'MutationRecord', 'StyleSheet', 'CSSStyleSheet', 'CSSRule', 'CSSStyleRule',
+    'CSSMediaRule', 'CSSSupportsRule', 'CSSKeyframesRule', 'CSSKeyframeRule', 'CSSFontFaceRule',
+    'CSSImportRule', 'CSSNamespaceRule', 'MediaList', 'CSSStyleDeclaration', 'CSSKeywordValue',
+    'CSSNumericValue', 'CSSUnitValue', 'CSSVariableReferenceValue', 'CSSPositionTryRule',
+    'CSSPropertyRule', 'CSSNestedDeclarations', 'CSSContainerRule', 'CSSScopeRule',
+    'CSSStartingStyleRule', 'CSSLayerBlockRule', 'CSSLayerStatementRule', 'CSSPropertyRule',
+    'TrustedHTML', 'TrustedScript', 'TrustedScriptURL', 'TrustedTypePolicy',
+    'TrustedTypePolicyFactory', 'SpeechSynthesisUtterance', 'SpeechSynthesis',
+    'WakeLockSentinel', 'MediaCapabilities', 'LockManager', 'Presentation', 'Screen', 'History',
+    'Location', 'Navigator', 'Window', 'VisualViewport', 'UserActivation', 'SharedStorage'];
+  var seen = { };
+  var report = { };
+  for (var i = 0; i < IFACES.length; i++) {
+    var n = IFACES[i];
+    if (seen[n]) continue;
+    seen[n] = 1;
+    report[n] = names(n);
+  }
+  out.prototypes = report;
+
+  function h(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  var J = JSON.stringify;
+  var d = document.getElementById('d'), p1 = document.getElementById('p1'), i1 = document.getElementById('i1'),
+      ta = document.getElementById('ta'), se = document.getElementById('se'), f = document.getElementById('f');
+  out['input members'] = h(function () { return J([i1.selectionStart, i1.selectionEnd,
+    i1.selectionDirection, typeof i1.setRangeText, typeof i1.setSelectionRange, typeof i1.select,
+    typeof i1.stepUp, i1.valueAsNumber, i1.valueAsDate, J(i1.files), i1.files.length,
+    typeof i1.showPicker, i1.checkValidity(), i1.willValidate, i1.type, i1.defaultValue,
+    h(function () { i1.setRangeText('X', 1, 2, 'end'); return i1.value + '/' + i1.selectionStart; })]); });
+  out['textarea members'] = h(function () { return J([ta.rows, ta.cols, ta.selectionStart,
+    typeof ta.setRangeText, ta.textLength, ta.maxLength, typeof ta.maxLength, ta.minLength,
+    ta.form === f, typeof ta.showPicker, ta.checkValidity()]); });
+  out['select members'] = h(function () { return J([se.options.length, se.selectedIndex, se.type,
+    se.multiple, se.value, typeof se.add, typeof se.remove, typeof se.item, typeof se.namedItem,
+    se.name, se.length, se.selectedOptions.length, h(function () { se.selectedIndex = 0; return se.value; })]); });
+  out['form members'] = h(function () { return J([f.elements.length, f.length, f.method, f.encodingType,
+    f.autocomplete, f.noValidate, f.acceptCharset, typeof f.requestSubmit, typeof f.reset, f.name,
+    f.action, typeof f.reportValidity, h(function () { return f.requestSubmit() === undefined; })]); });
+  out['element extras'] = h(function () { return J([typeof d.inert, d.inert, typeof d.enterKeyHint,
+    typeof d.inputMode, typeof d.autocapitalize, d.autocapitalize, typeof d.spellcheck, d.spellcheck,
+    typeof d.isContentEditable, d.isContentEditable, typeof d.candidate, typeof d.customElementRegistry,
+    typeof d.attachInternals, d.dataset instanceof Object, typeof d.itemProp, typeof d.globalScopes,
+    h(function () { d.spellcheck = false; return String(d.getAttribute('spellcheck')); }),
+    h(function () { d.inert = true; return String(d.hasAttribute('inert')); })]); });
+  out['selection members'] = h(function () { var s = window.getSelection();
+    return J([tag(s), s.rangeCount, s.isCollapsed, s.type, s.direction, typeof s.getRangeAt,
+      typeof s.addRange, typeof s.removeRange, typeof s.removeAllRanges, typeof s.setBaseAndExtent,
+      typeof s.selectNodeContents, typeof s.selectAllChildren, typeof s.collapse, typeof s.extend,
+      typeof s.position, typeof s.containsNode, typeof s.deleteFromDocument, typeof s.modify,
+      typeof s.caretPositionFromPoint, typeof s.getComposedRanges]); });
+  out['range members'] = h(function () { var r = document.createRange();
+    return J([Object.getOwnPropertyNames(r).length, typeof r.createContextualFragment,
+      typeof r.selectNode, typeof r.surroundContents, typeof r.comparePoint, typeof r.intersectsNode,
+      typeof r.getClientRects, typeof r.getBoundingClientRect, typeof r.cloneContents,
+      typeof r.extractContents, typeof r.deleteContents, typeof r.insertNode, typeof r.setStart,
+      typeof r.collapse, typeof r.detach, r.commonAncestorContainer === d, r.toString(),
+      h(function () { r.selectNodeContents(p1); return r.startContainer === p1 + '/' + r.toString(); }),
+      h(function () { var frag = r.cloneContents(); return frag.childNodes.length + '/' + frag.nodeType; }),
+      h(function () { return J(r.comparePoint(p1, 0)); })]); });
+  out['node extras'] = h(function () { return J([typeof p1.isSameNode, p1.isSameNode(p1),
+    p1.isEqualNode(d), typeof p1.getRootNode, p1.getRootNode() === d, p1.hasChildNodes(),
+    typeof p1.hasAttributes, p1.hasAttributes(), J(p1.compareDocumentPosition(d)),
+    typeof p1.lookupPrefix, typeof p1.lookupNamespaceURI, typeof p1.isDefaultNamespace,
+    p1.isDefaultNamespace(null), typeof p1.getFeature, typeof p1.setTextContent,
+    p1.contains(d), d.contains(p1), typeof p1.cloneNode, typeof p1.normalize,
+    p1.textContent, typeof p1.append, typeof p1.prepend, typeof p1.replaceChildren]); });
+  out['document extras'] = h(function () { return J([typeof document.adoptNode, typeof document.importNode,
+    h(function () { var other = new DOMParser().parseFromString('<a><b/></a>', 'text/html');
+      var moved = document.importNode(other.documentElement, true);
+      return moved.nodeName + '/' + moved.ownerDocument === document; }),
+    h(function () { var n = document.createElement('i'); document.adoptNode(n); return n.ownerDocument === document; }),
+    typeof document.createEvent, typeof document.createRange, typeof document.getSelection,
+    typeof document.write, typeof document.writeln, typeof document.open, typeof document.close,
+    typeof document.execCommand, typeof document.queryCommandSupported, typeof document.exitFullscreen,
+    typeof document.hasFocus, document.hasFocus(), typeof document.elementFromPoint,
+    document.elementFromPoint(1, 1) === null || typeof document.elementFromPoint(1, 1),
+    typeof document.createNodeIterator, typeof document.createTreeWalker, typeof document.evaluate,
+    typeof document.createExpression, typeof document.createNSResolver, typeof document.namespaces,
+    document.dir, typeof document.securityPolicyViolationReportBody, typeof document.exitPointerLock,
+    document.pictureInPictureEnabled, document.fullscreenElement, typeof document.getAnimations,
+    document.getAnimations().length, typeof document.fonts, document.wasDiscarded,
+    document.revision, typeof document.startViewTransition, typeof document.fragmentDirective,
+    h(function () { return J([document.characterSet, document.inputEncoding, document.contentType]); })]); });
+  out['event extras'] = h(function () { var e = new Event('x', { bubbles: true, composed: true });
+    return J([e.bubbles, e.composed, e.eventPhase, e.cancelBubble, e.returnValue, typeof e.composedPath,
+      J(e.composedPath()), e.isTrusted, typeof e.initEvent, typeof e.stopImmediatePropagation,
+      new MouseEvent('m', { clientX: 3 }).clientX, new KeyboardEvent('k', { key: 'a' }).key,
+      h(function () { return new Event('x', { bubbles: true, composed: true, cancelable: true }).type; }),
+      h(function () { var a = []; var t = new EventTarget(); t.addEventListener('e', function () { a.push(1); });
+        t.dispatchEvent(new Event('e')); return a.join(','); })]); });
+  out['observer extras'] = h(function () { return J([typeof IntersectionObserver,
+    typeof window.ResizeObserver, typeof PerformanceObserver,
+    h(function () { var seen = []; var io = new IntersectionObserver(function (l) { seen = l; });
+      io.observe(d); io.unobserve(d); io.disconnect();
+      return typeof io.takeRecords + '/' + typeof io.root + '/' + io.root; }),
+    h(function () { var ro = new ResizeObserver(function () { }); ro.observe(d); ro.unobserve(d);
+      ro.disconnect(); return typeof ro.observe; }),
+    h(function () { var po = new PerformanceObserver(function () { });
+      return typeof po.takeRecords + '/' + J(PerformanceObserver.supportedEntryTypes === undefined); })]); });
+  out['canvas and text metrics'] = h(function () { var c = document.createElement('canvas');
+    return J([tag(c), c.width, c.height, typeof c.getContext, tag(c.getContext('2d')),
+      typeof TextMetrics, typeof c.toDataURL, h(function () { return c.toDataURL().slice(0, 22); }),
+      c.toBlob === undefined ? 'no-toBlob' : typeof c.toBlob, typeof c.transferToImageBitmap]); });
+  out['animation extras'] = h(function () { var a = d.animate([{ opacity: 0 }, { opacity: 1 }], 10);
+    return J([tag(a), typeof a.play, typeof a.pause, typeof a.cancel, typeof a.finish, typeof a.reverse,
+      typeof a.updatePlaybackRate, typeof a.commitStyles, typeof a.persist, typeof a.replaceState,
+      a.playState, a.playbackRate, typeof a.effect, tag(a.effect), a.timeline === document.timeline,
+      typeof a.onfinish, typeof a.finished, h(function () { a.cancel(); return a.playState; })]); });
+  out['tokenlist extras'] = h(function () { var cl = d.classList; cl.add('a', 'b');
+    return J([cl.length, cl.value, typeof cl.replace, cl.replace('a', 'c'), cl.contains('c'),
+      typeof cl.toggle, cl.toggle('x', true), cl.toggle('x', true), typeof cl.entries,
+      J(Array.from(cl)), typeof cl.item, cl.item(0), typeof cl.supports, h(function () { return cl.supports('a'); }),
+      h(function () { cl.add(''); return 'no-throw'; })]); });
+  out['dataset extras'] = h(function () { var ds = d.dataset;
+    return J([typeof ds.setItem, typeof ds.getItem, typeof ds.hasAttribute, typeof ds.removeAttribute,
+      J(Object.keys(ds).sort())]); });
+  __T('probe72', true, J(out, null, 1));
+  function tag(v) { try { return Object.prototype.toString.call(v); } catch (e) { return 'ERR'; } }
+})();
+</script></body></html>

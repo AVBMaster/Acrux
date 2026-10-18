@@ -22,4 +22,73 @@ internal static class WebIdL
     /// a fraction point, however the page spelled it.</summary>
     internal static string Format(double value)
         => value.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>ToNumber over what the engine hands a host: the interop layer keeps a number as a
+    /// double and a string as a string, so a value that is neither is coerced the way JavaScript
+    /// coerces it and a value it cannot read is NaN — the number every rule below refuses.</summary>
+    internal static double ToNumber(object? value)
+    {
+        switch (value)
+        {
+            case null: return double.NaN;
+            case double d: return d;
+            case float f: return f;
+            case bool b: return b ? 1 : 0;
+            case string s: return Parse(s);
+            case IConvertible c:
+                try { return c.ToDouble(System.Globalization.CultureInfo.InvariantCulture); }
+                catch (Exception) { return double.NaN; }
+            default: return double.NaN;
+        }
+    }
+
+    private static double Parse(string text)
+    {
+        var trimmed = text.Trim(White);
+        if (trimmed.Length == 0) return 0;
+        if (double.TryParse(trimmed, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var number)) return number;
+        if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+            && long.TryParse(trimmed.AsSpan(2), System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var hex)) return hex;
+        if (trimmed.Equals("Infinity", StringComparison.Ordinal)
+            || trimmed.Equals("+Infinity", StringComparison.Ordinal)) return double.PositiveInfinity;
+        if (trimmed.Equals("-Infinity", StringComparison.Ordinal)) return double.NegativeInfinity;
+        return double.NaN;
+    }
+
+    private static readonly char[] White = { '\t', '\n', '\v', '\f', '\r', ' ', '\u00a0', '\ufeff' };
+
+    /// <summary>Web IDL 'double' — the finite numbers, and the sentence the platform writes for one
+    /// that is not. An absent argument is not refused here; that is the arity check, and it runs
+    /// first.</summary>
+    internal static double RequiredDouble(object? value, string method, string owner)
+    {
+        var number = ToNumber(value);
+        if (double.IsFinite(number)) return number;
+        throw NotAFloat(number, method, owner);
+    }
+
+    /// <summary>The same, limited to a range — the quality of an image encoder is a number between
+    /// 0 and 1 and nothing else.</summary>
+    internal static double RequiredDouble(object? value, double min, double max,
+        string method, string owner)
+    {
+        var number = ToNumber(value);
+        if (double.IsFinite(number) && number >= min && number <= max) return number;
+        throw NotAFloat(number, method, owner);
+    }
+
+    private static Acrux.Core.Dom.DOMException NotAFloat(double number, string method, string owner)
+        => new($"Failed to execute '{method}' on '{owner}': The value provided "
+               + $"({Spell(number)}) is not a valid float.", "TypeError");
+
+    /// <summary>How the reference writes the refused number back: the shortest digits that read again
+    /// as the same value, and JavaScript's own spelling for the values no other number has.</summary>
+    private static string Spell(double number) => number switch
+    {
+        double.PositiveInfinity => "Infinity",
+        double.NegativeInfinity => "-Infinity",
+        _ => number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+    };
 }

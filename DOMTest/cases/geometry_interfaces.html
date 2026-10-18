@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html>
+<head><title>Geometry Interfaces parity (Geometry §2-§6, CSSOM View §5.1)</title></head>
+<body>
+<div id="root">
+  <p id="p1">text <b id="b1">bold</b> tail</p>
+  <canvas id="cv1"></canvas>
+</div>
+<script>
+(function () {
+  function tag(v) { try { return Object.prototype.toString.call(v); } catch (e) { return 'TAGERR'; } }
+  function own(o) { try { return Object.getOwnPropertyNames(o).sort().join(','); } catch (e) { return 'ERR'; } }
+  function refused(fn) {
+    try { fn(); return 'no-throw'; }
+    catch (e) { return String(e && e.name) + ':' + String(e && e.message); }
+  }
+  var quote = String.fromCharCode(39);
+  function startsWith(text, head) { return String(text).indexOf(head) === 0; }
+  function ck(name, cond, info) { window.__T(name, !!cond, info === undefined ? '' : String(info)); }
+
+  var M = window.DOMMatrix, R = window.DOMMatrixReadOnly;
+
+  // ── A. An instance owns nothing; the names are all on the two prototypes ────
+  ck('A1 a matrix owns no key', own(new M()) === '' && own(new R()) === ''
+      && JSON.stringify(Object.keys(new M())) === '[]', 'own=' + own(new M()));
+  ck('A2 the readonly face has the whole name set', (function () {
+      return own(R.prototype) === ['a', 'b', 'c', 'constructor', 'd', 'e', 'f', 'flipX',
+          'flipY', 'inverse', 'is2D', 'isIdentity', 'm11', 'm12', 'm13', 'm14', 'm21', 'm22',
+          'm23', 'm24', 'm31', 'm32', 'm33', 'm34', 'm41', 'm42', 'm43', 'm44', 'multiply',
+          'rotate', 'rotateAxisAngle', 'rotateFromVector', 'scale', 'scale3d', 'scaleNonUniform',
+          'skewX', 'skewY', 'toFloat32Array', 'toFloat64Array', 'toJSON', 'toString',
+          'transformPoint', 'translate'].sort().join(',');
+  })(), own(R.prototype));
+  ck('A3 the writable face adds the in-place twins and nothing else', (function () {
+      return own(M.prototype) === ['a', 'b', 'c', 'constructor', 'd', 'e', 'f', 'invertSelf',
+          'm11', 'm12', 'm13', 'm14', 'm21', 'm22', 'm23', 'm24', 'm31', 'm32', 'm33', 'm34',
+          'm41', 'm42', 'm43', 'm44', 'multiplySelf', 'preMultiplySelf', 'rotateAxisAngleSelf',
+          'rotateFromVectorSelf', 'rotateSelf', 'scale3dSelf', 'scaleSelf', 'setMatrixValue',
+          'skewXSelf', 'skewYSelf', 'translateSelf'].sort().join(',');
+  })(), own(M.prototype));
+  ck('A4 the non-standard names are not there', typeof M.prototype.multiplyRight === 'undefined'
+      && typeof M.prototype.rotateX === 'undefined'
+      && typeof M.prototype.rotateXSelf === 'undefined'
+      && typeof M.prototype.scaleNonUniformSelf === 'undefined'
+      && typeof M.prototype.translate3d === 'undefined');
+  ck('A5 the two levels are in order', Object.getPrototypeOf(M.prototype) === R.prototype
+      && Object.getPrototypeOf(R.prototype) === Object.prototype
+      && Object.getPrototypeOf(M) === R && Object.getPrototypeOf(R) === Function.prototype);
+  ck('A6 the tag the page prints', tag(new M()) === '[object DOMMatrix]'
+      && tag(new R()) === '[object DOMMatrixReadOnly]'
+      && String(new M().a) === '1');
+
+  // ── B. Nothing here is built without 'new' ─────────────────────────────────
+  ck('B1 the constructors refuse a call', (function () {
+      var names = ['DOMMatrix', 'DOMMatrixReadOnly', 'DOMPoint', 'DOMPointReadOnly', 'DOMRect',
+          'DOMRectReadOnly', 'DOMQuad'];
+      for (var i = 0; i < names.length; i++) {
+        var answer = refused((function (one) {
+            return function () { return window[one](); };
+        })(names[i]));
+        if (!startsWith(answer, 'TypeError:Failed to construct ' + quote + names[i]
+            + quote + ': Please use the ')) return false;
+      }
+      return true;
+  })(), (function () {
+      var answers = [];
+      ['DOMMatrix', 'DOMMatrixReadOnly', 'DOMPoint', 'DOMPointReadOnly', 'DOMRect',
+          'DOMRectReadOnly', 'DOMQuad'].forEach(function (one) {
+          answers.push(one + ' -> ' + refused(function () { return window[one](); }));
+      });
+      return answers.join(' ;; ');
+  })());
+  ck('B2 a member away from its object is an illegal invocation', (function () {
+      var answers = [refused(function () { return M.prototype.a; }),
+          refused(function () { return R.prototype.is2D; }),
+          refused(function () { return M.prototype.multiply.call({}, new M()); }),
+          refused(function () { return M.prototype.toFloat64Array.call({}); }),
+          refused(function () { return M.prototype.toString.call({}); }),
+          refused(function () { return R.prototype.toJSON.call({}); }),
+          refused(function () { return window.DOMPointReadOnly.prototype.matrixTransform.call({}); })];
+      for (var i = 0; i < answers.length; i++) {
+          if (answers[i] !== 'TypeError:Illegal invocation') return false;
+      }
+      return true;
+  })(), (function () {
+      var answers = [refused(function () { return M.prototype.a; }),
+          refused(function () { return R.prototype.is2D; }),
+          refused(function () { return M.prototype.multiply.call({}, new M()); }),
+          refused(function () { return M.prototype.toFloat64Array.call({}); }),
+          refused(function () { return M.prototype.toString.call({}); }),
+          refused(function () { return R.prototype.toJSON.call({}); }),
+          refused(function () { return window.DOMPointReadOnly.prototype.matrixTransform.call({}); })];
+      return answers.join(' ;; ');
+  })());
+  ck('B3 the arity every operation reads', (function () {
+      var read = [M.length, R.length, M.prototype.multiply.length, M.prototype.translate.length,
+          M.prototype.rotate.length, M.prototype.transformPoint.length,
+          M.prototype.toFloat64Array.length, M.fromMatrix.length, M.prototype.setMatrixValue.length,
+          window.DOMPoint.length, window.DOMRect.length, window.DOMQuad.length,
+          window.DOMPointReadOnly.prototype.matrixTransform.length,
+          window.DOMRectReadOnly.fromRect.length];
+      var want = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0];
+      for (var i = 0; i < want.length; i++) if (read[i] !== want[i]) return false;
+      return true;
+  })(), (function () {
+      return [M.length, R.length, M.prototype.multiply.length, M.prototype.translate.length,
+          M.prototype.rotate.length, M.prototype.transformPoint.length,
+          M.prototype.toFloat64Array.length, M.fromMatrix.length, M.prototype.setMatrixValue.length,
+          window.DOMPoint.length, window.DOMRect.length, window.DOMQuad.length,
+          window.DOMPointReadOnly.prototype.matrixTransform.length,
+          window.DOMRectReadOnly.fromRect.length].join('/');
+  })());
+
+  // ── C. The transform list the constructor reads ────────────────────────────
+  ck('C1 a list of two-dimensional functions', (function () {
+      var m = new M('translate(1px, 2px) rotate(45deg)');
+      return Math.round(m.a * 1e6) === 707107 && Math.round(m.b * 1e6) === 707107
+          && Math.round(m.c * 1e6) === -707107 && m.e === 1 && m.f === 2 && m.is2D === true;
+  })(), String(new M('translate(1px, 2px) rotate(45deg)')));
+  ck('C2 an angle keeps the unit it was written with', (function () {
+      return String(new M('rotate(0.5turn)')) === 'matrix(-1, 0, 0, -1, 0, 0)'
+          && String(new M('rotate(100grad)')) === 'matrix(0, 1, -1, 0, 0, 0)'
+          && String(new M('rotate(90deg)')) === 'matrix(0, 1, -1, 0, 0, 0)';
+  })(), String(new M('rotate(90deg)')) + ' | ' + String(new M('rotate(1rad)')));
+  ck('C3 a unitless length or angle is refused', (function () {
+      return refused(function () { return new M('translate(1)'); })
+          === "SyntaxError:Failed to construct 'DOMMatrix': Failed to parse 'translate(1)'."
+          && refused(function () { return new M('rotate(45)'); })
+          === "SyntaxError:Failed to construct 'DOMMatrix': Failed to parse 'rotate(45)'."
+          && refused(function () { return new M('scale(2px)'); })
+          === "SyntaxError:Failed to construct 'DOMMatrix': Failed to parse 'scale(2px)'.";
+  })(), refused(function () { return new M('translate(1)'); }));
+  ck('C4 a relative length names its own sentence', (function () {
+      return startsWith(refused(function () { return new M('translate(1em)'); }),
+          "SyntaxError:Failed to construct 'DOMMatrix': Values must be resolvable at parse time")
+          && refused(function () { return new M('translate(1vh)'); }).indexOf('resolvable') > 0
+          && refused(function () { return new M('translate(1%)'); }).indexOf('resolvable') > 0;
+  })(), refused(function () { return new M('translate(1em)'); }));
+  ck('C5 the absolute units are resolved to pixels', (function () {
+      var m = new M('translate(1in, 1pc)');
+      return m.e === 96 && m.f === 16
+          && Math.abs(new M('translate(1cm)').e - 96 / 2.54) < 1e-5
+          && Math.abs(new M('translateY(1pt)').f - 96 / 72) < 1e-5
+          && new M('translate(0)').e === 0;
+  })(), new M('translate(1in)').e + '/' + new M('translate(1cm)').e);
+  ck('C6 a sequence of six or sixteen, and nothing between', (function () {
+      var six = new M([1, 2, 3, 4, 5, 6]);
+      var sixteen = new M([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+      return six.m12 === 2 && six.is2D === true && sixteen.m44 === 16
+          && sixteen.is2D === false && String(sixteen).indexOf('matrix3d(1, 2, 3, 4') === 0
+          && startsWith(refused(function () { return new M([1, 2, 3]); }),
+              "TypeError:Failed to construct 'DOMMatrix': The sequence must contain 6 elements "
+              + 'for a 2D matrix or 16 elements for a 3D matrix.');
+  })(), refused(function () { return new M([1, 2, 3]); }));
+  ck('C7 the dictionary form is not the constructor form', (function () {
+      return refused(function () { return new M({ a: 1 }); }) ===
+          "SyntaxError:Failed to construct 'DOMMatrix': Failed to parse '[object Object]'."
+          && refused(function () { return new M(5); }) ===
+          "SyntaxError:Failed to construct 'DOMMatrix': Failed to parse '5'."
+          && R.fromMatrix({ m11: 2, m44: 3 }).is2D === false
+          && R.fromMatrix({ m11: 2 }).is2D === true;
+  })(), refused(function () { return new M({ a: 1 }); }));
+  ck('C8 a matrix given to the constructor reads back as itself', (function () {
+      var turned = new M('rotate3d(1, 1, 1, 45deg)');
+      var made = new M(turned);
+      return made.is2D === false && tag(made) === '[object DOMMatrix]'
+          && Math.abs(made.m11 - turned.m11) < 1e-6 && Math.abs(made.m44 - 1) < 1e-6;
+  })(), (function () {
+      var turned = new M('rotate3d(1, 1, 1, 45deg)');
+      return String(new M(turned)) + ' vs ' + String(turned);
+  })());
+  ck('C9 an empty list is the identity and a blank one is not a list', (function () {
+      return String(new M('')) === 'matrix(1, 0, 0, 1, 0, 0)'
+          && refused(function () { return new M(' '); }).indexOf('Failed to parse') > 0;
+  })());
+
+  // ── D. is2D and isIdentity ─────────────────────────────────────────────────
+  ck('D1 the three-dimensional functions set the flag', (function () {
+      return new M('rotateZ(45deg)').is2D === true
+          && new M('rotate3d(0, 0, 1, 45deg)').is2D === false
+          && new M('matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)').is2D === false
+          && new M('perspective(2px)').is2D === false
+          && new M('perspective(2px)').m34 === -0.5
+          && new M('scale3d(1, 1, 1)').is2D === false
+          && new M('translateZ(3px)').m43 === 3;
+  })(), new M('rotate3d(0, 0, 1, 45deg)').is2D + '/' + new M('perspective(2px)').m34);
+  ck('D2 the flag is computed for an operation and never comes back', (function () {
+      return new M().scale3d(1, 1, 1).is2D === true
+          && new M().scale3d(2, 3, 4).is2D === false
+          && new M('scale3d(1, 1, 1)').scale(2).is2D === false
+          && new M().rotateAxisAngle(1, 0, 0, 0).is2D === false
+          && new M().rotateFromVector(1, 0).is2D === true
+          && new M().rotate(30, 60).is2D === false
+          && new M().scale(2, 3).is2D === true
+          && new M().translate(1, 2, 3).is2D === false;
+  })(), new M().scale3d(1, 1, 1).is2D + '/' + new M().rotateAxisAngle(1, 0, 0, 0).is2D);
+  ck('D3 isIdentity answers the numbers as they are', (function () {
+      var m = new M();
+      var answer = m.isIdentity === true;
+      m.m41 = 1;
+      answer = answer && m.isIdentity === false && new M('rotate(360deg)').isIdentity === true;
+      return answer;
+  })(), new M('rotate(360deg)').isIdentity + '/' + new M('rotate(45deg)').isIdentity);
+  ck('D4 a write moves the same number under either name', (function () {
+      var m = new M();
+      m.m11 = 7;
+      var reads = m.a === 7 && m.m11 === 7;
+      m.e = '9';
+      m.m13 = 2;
+      return reads && m.e === 9 && m.m41 === 9 && m.is2D === false;
+  })(), (function () { var m = new M(); m.m13 = 2; return m.is2D + '/' + String(m).slice(0, 18); })());
+  ck('D5 a readonly matrix ignores a write', (function () {
+      var m = new R();
+      m.a = 5;
+      var r = new window.DOMRectReadOnly(1, 2, 3, 4);
+      r.x = 9;
+      var strict = refused(function () { 'use strict'; var q = new R(); q.a = 9; });
+      return m.a === 1 && r.x === 1 && strict.indexOf('TypeError') === 0;
+  })(), (function () { var m = new R(); m.a = 5; return m.a; })());
+
+  // ── E. The copies, the in-place twins and their numbers ────────────────────
+  ck('E1 a copy leaves the matrix alone and answers the same kind', (function () {
+      var k = new M();
+      var moved = k.translate(5, 6);
+      return k.e === 0 && moved.e === 5 && tag(moved) === '[object DOMMatrix]'
+          && new R().translate(1, 2) instanceof R;
+  })());
+  ck('E2 an in-place twin answers the very object it was called on', (function () {
+      var k = new M();
+      var answers = [k.translateSelf(3, 4) === k, k.e === 3, k.f === 4,
+          k.scaleSelf(2) === k, k.a === 2, k.d === 2,
+          k.rotateSelf(90) === k, k.a === 0, k.b === 2,
+          k.multiplySelf(new M().scale(2)) === k, k.a === 0,
+          k.invertSelf() === k, k.e === -1, Math.abs(k.f - 0.75) < 1e-12,
+          k.skewXSelf(45) === k, Math.abs(k.c - 0.25) < 1e-12,
+          k.scale3dSelf(2, 3, 4) === k, k.is2D === false];
+      for (var i = 0; i < answers.length; i++) if (!answers[i]) return false;
+      return true;
+  })(), (function () {
+      var k = new M();
+      var read = [k.translateSelf(3, 4) === k, k.e, k.f,
+          k.scaleSelf(2) === k, k.a, k.d,
+          k.rotateSelf(90) === k, k.a, k.b,
+          k.multiplySelf(new M().scale(2)) === k, k.a,
+          k.invertSelf() === k, k.e, k.f,
+          k.skewXSelf(45) === k, k.c,
+          k.scale3dSelf(2, 3, 4) === k, k.is2D];
+      return read.join(',');
+  })());
+  ck('E3 multiply reads the list left to right', (function () {
+      var m = new M('matrix(1, 2, 3, 4, 5, 6)').multiply(new M('matrix(2, 0, 0, 2, 10, 20)'));
+      return [m.a, m.b, m.c, m.d, m.e, m.f].join('/') === '2/4/6/8/75/106';
+  })(), String(new M('matrix(1, 2, 3, 4, 5, 6)').multiply(new M('matrix(2, 0, 0, 2, 10, 20)'))));
+  ck('E4 a dictionary is a matrix for an operation but not for the constructor', (function () {
+      return String(new M('matrix(1, 2, 3, 4, 5, 6)').multiply({ a: 2, b: 0 }))
+          === 'matrix(2, 4, 3, 4, 5, 6)'
+          && startsWith(refused(function () {
+              return new M('matrix(1, 2, 3, 4, 5, 6)').multiply('scale(2)'); }),
+              "TypeError:Failed to execute 'multiply' on 'DOMMatrixReadOnly': The provided value "
+              + "is not of type 'DOMMatrixInit'.");
+  })(), refused(function () { return new M().multiply('scale(2)'); }));
+  ck('E5 the inverse of a matrix that cannot be inverted is not a number', (function () {
+      var m = new M('matrix(1, 2, 3, 4, 5, 6)').inverse();
+      return [m.a, m.b, m.c, m.d, m.e, m.f].join('/') === '-2/1/1.5/-0.5/1/-2'
+          && tag(m) === '[object DOMMatrix]'
+          && String(new M('matrix(0, 0, 0, 0, 0, 0)').inverse().a) === 'NaN';
+  })(), String(new M('matrix(1, 2, 3, 4, 5, 6)').inverse()));
+  ck('E6 preMultiply turns the other way round', (function () {
+      var k = new M('matrix(1, 2, 3, 4, 5, 6)');
+      k.preMultiplySelf(new M('matrix(2, 0, 0, 2, 10, 20)'));
+      return [k.a, k.b, k.c, k.d, k.e, k.f].join('/') === '2/4/6/8/20/32';
+  })());
+  ck('E7 the flips and the skews are the numbers the reference gives', (function () {
+      var m = new M('matrix(1, 2, 3, 4, 5, 6)');
+      var fx = m.flipX(), fy = m.flipY();
+      return [fx.a, fx.b, fx.c, fx.d].join('/') === '-1/-2/3/4'
+          && [fy.a, fy.b, fy.c, fy.d].join('/') === '1/2/-3/-4'
+          && new M().skewX(45).is2D === true
+          && Math.abs(new M().skewX(45).c - 1) < 1e-9 && new M().skewX(45).b === 0
+          && Math.abs(new M().skewY(45).b - 1) < 1e-9
+          && Math.abs(new M().rotateFromVector(1, 1).b - Math.SQRT1_2) < 1e-9
+          && String(new M().rotateFromVector(0)) === 'matrix(1, 0, 0, 1, 0, 0)';
+  })(), String(new M().skewX(45)) + ' | ' + String(new M('matrix(1,2,3,4,5,6)').flipX()));
+  ck('E8 rotate with two or three arguments is the three turns', (function () {
+      var m = new M().rotate(30, 60);
+      return Math.abs(m.a - 0.5) < 1e-9 && m.b === 0
+          && Math.abs(m.m13 + 0.8660254037844387) < 1e-9
+          && Math.abs(m.e) < 1e-12 && m.is2D === false
+          && Math.abs(new M().rotate(0, 60, 30).a - 0.4330127018922193) < 1e-9;
+  })(), (function () {
+      var m = new M().rotate(30, 60);
+      return [Math.abs(m.a - 0.5) < 1e-9, m.b, Math.abs(m.m13 + 0.8660254037844387) < 1e-9,
+          Math.abs(m.e) < 1e-12, m.is2D, new M().rotate(0, 60, 30).a].join(',');
+  })());
+  ck('E9 setMatrixValue replaces the numbers and refuses a bad list', (function () {
+      var k = new M('matrix(1, 2, 3, 4, 5, 6)');
+      var answer = k.setMatrixValue('translate(1px, 1px)');
+      return k.a === 1 && k.e === 1 && k.f === 1 && answer === k
+          && startsWith(refused(function () { k.setMatrixValue('nonsense'); }),
+              "SyntaxError:Failed to execute 'setMatrixValue' on 'DOMMatrix': Failed to parse ");
+  })(), refused(function () { new M().setMatrixValue('nonsense'); }));
+
+  // ── F. The reads that hand the numbers out ─────────────────────────────────
+  ck('F1 toJSON answers the twenty-four names in order', (function () {
+      return own(new M('matrix(1, 2, 3, 4, 5, 6)').toJSON()) ===
+          ['a', 'b', 'c', 'd', 'e', 'f', 'm11', 'm12', 'm13', 'm14', 'm21', 'm22', 'm23', 'm24',
+              'm31', 'm32', 'm33', 'm34', 'm41', 'm42', 'm43', 'm44', 'is2D', 'isIdentity']
+              .sort().join(',');
+  })(), own(new M().toJSON()).slice(0, 40));
+  ck('F2 the JSON of a matrix is the twenty-four numbers', (function () {
+      return JSON.stringify(new M('matrix(1, 2, 3, 4, 5, 6)')) ===
+          '{"a":1,"b":2,"c":3,"d":4,"e":5,"f":6,"m11":1,"m12":2,"m13":0,"m14":0,"m21":3,"m22":4,'
+          + '"m23":0,"m24":0,"m31":0,"m32":0,"m33":1,"m34":0,"m41":5,"m42":6,"m43":0,"m44":1,'
+          + '"is2D":true,"isIdentity":false}';
+  })(), JSON.stringify(new M('matrix(1, 2, 3, 4, 5, 6)')).slice(0, 60));
+  ck('F3 toString writes the CSS function', (function () {
+      return String(new M()) === 'matrix(1, 0, 0, 1, 0, 0)'
+          && String(new M('rotate3d(1, 1, 1, 45deg)')).indexOf('matrix3d(0.804737854124365') === 0
+          && String(new M('matrix(1,2,3,4,5,6)')) === 'matrix(1, 2, 3, 4, 5, 6)';
+  })(), String(new M('rotate3d(1, 1, 1, 45deg)')));
+  ck('F4 the float arrays are the real thing and a copy of the numbers', (function () {
+      var m = new M('translate(2px)');
+      var six = m.toFloat64Array(), three = m.toFloat32Array();
+      var touched = six[0];
+      six[0] = 9;
+      return tag(six) === '[object Float64Array]' && tag(three) === '[object Float32Array]'
+          && six.length === 16 && three.length === 16 && six[12] === 2 && m.m11 === 1
+          && touched === 1 && String(m) === 'matrix(1, 0, 0, 1, 2, 0)';
+  })(), tag(new M().toFloat64Array()) + '/' + new M().toFloat64Array().length);
+  ck('F5 the factories of the interface are three', (function () {
+      return own(M) === 'fromFloat32Array,fromFloat64Array,fromMatrix,length,name,prototype'
+          && own(R) === 'fromFloat32Array,fromFloat64Array,fromMatrix,length,name,prototype'
+          && typeof M.identity === 'undefined' && typeof M.fromSVGMatrix === 'undefined'
+          && typeof M.fromTransform === 'undefined' && typeof M.multiply === 'undefined'
+          && tag(M.fromMatrix(new M())) === '[object DOMMatrix]'
+          && tag(R.fromMatrix(new M())) === '[object DOMMatrixReadOnly]'
+          && tag(M.fromFloat64Array(new Float64Array([1, 2, 3, 4, 5, 6]))) === '[object DOMMatrix]'
+          && M.fromFloat64Array(new Float64Array([1, 2, 3, 4, 5, 6])).b === 2;
+  })(), own(M));
+
+  // ── G. Points, rectangles and quads ────────────────────────────────────────
+  ck('G1 a point owns nothing and reads through the prototype', (function () {
+      var p = new window.DOMPoint(1, 2, 3, 4);
+      return own(p) === '' && p.x === 1 && p.w === 4 && tag(p) === '[object DOMPoint]'
+          && JSON.stringify(p) === '{"x":1,"y":2,"z":3,"w":4}'
+          && JSON.stringify(new window.DOMPointReadOnly(1, 2, 3, 4)) === '{"x":1,"y":2,"z":3,"w":4}';
+  })(), own(new window.DOMPoint(1, 2)));
+  ck('G2 a point writes and a readonly point does not', (function () {
+      var p = new window.DOMPoint(1, 2); p.x = 9;
+      var q = new window.DOMPointReadOnly(1, 2); q.x = 9;
+      var strict = refused(function () {
+          'use strict';
+          var r = new window.DOMPointReadOnly(1, 2);
+          r.x = 9;
+      });
+      return p.x === 9 && q.x === 1 && strict.indexOf('TypeError') === 0;
+  })(), strictRead());
+  function strictRead() {
+      var q = new window.DOMPointReadOnly(1, 2);
+      try { q.x = 9; } catch (e) { }
+      return q.x;
+  }
+  ck('G3 matrixTransform accepts a matrix, a dictionary or nothing', (function () {
+      var p = new window.DOMPoint(1, 2);
+      return p.matrixTransform(new M().scale(2)).x === 2
+          && p.matrixTransform({ a: 2 }).x === 2
+          && p.matrixTransform().x === 1
+          && tag(p.matrixTransform(new M().scale(2))) === '[object DOMPoint]'
+          && new window.DOMPointReadOnly(1, 2).matrixTransform()
+              instanceof window.DOMPointReadOnly;
+  })(), tag(new window.DOMPoint(1, 2).matrixTransform()));
+  ck('G4 a rectangle answers the eight reads and the JSON order', (function () {
+      var r = new window.DOMRect(1, 2, 3, 4);
+      return own(r) === '' && r.x === 1 && r.top === 2 && r.right === 4 && r.bottom === 6
+          && r.left === 1 && JSON.stringify(r) ===
+              '{"x":1,"y":2,"width":3,"height":4,"top":2,"right":4,"bottom":6,"left":1}'
+          && tag(r) === '[object DOMRect]' && tag(new window.DOMRectReadOnly(1, 2, 3, 4))
+              === '[object DOMRectReadOnly]';
+  })(), JSON.stringify(new window.DOMRect(1, 2, 3, 4)));
+  ck('G5 the writable face re-declares four names only', (function () {
+      return own(window.DOMRect.prototype) === 'constructor,height,width,x,y'
+          && own(window.DOMRectReadOnly.prototype) ===
+              'bottom,constructor,height,left,right,toJSON,top,width,x,y'
+          && own(window.DOMPoint.prototype) === 'constructor,w,x,y,z'
+          && own(window.DOMPointReadOnly.prototype) ===
+              'constructor,matrixTransform,toJSON,w,x,y,z'
+          && Object.getPrototypeOf(window.DOMRect) === window.DOMRectReadOnly
+          && Object.getPrototypeOf(window.DOMPoint) === window.DOMPointReadOnly;
+  })(), own(window.DOMRect.prototype) + ' / ' + own(window.DOMRectReadOnly.prototype));
+  // The four numbers are kept as written and the four edges read across a negative size, on the
+  // writable face and on the readonly one alike (Geometry Interfaces §5.1; measured).
+  ck('G6 a negative size is kept and the edges span it', (function () {
+      var made = [10, 10, -4, -6, 6, 10, 4, 10];
+      var faces = [new window.DOMRect(10, 10, -4, -6), new window.DOMRectReadOnly(10, 10, -4, -6)];
+      for (var f = 0; f < faces.length; f++) {
+          var r = faces[f];
+          var read = [r.x, r.y, r.width, r.height, r.left, r.right, r.top, r.bottom];
+          for (var i = 0; i < made.length; i++) if (read[i] !== made[i]) return false;
+      }
+      return true;
+  })(), (function () { var r = new window.DOMRect(10, 10, -4, -6);
+      return [r.x, r.y, r.width, r.height, r.left, r.right, r.top, r.bottom].join('/'); })());
+  ck('G7 a rectangle writes its four numbers and not its edges', (function () {
+      var r = new window.DOMRect(1, 2, 3, 4);
+      r.width = 10; r.bottom = 99;
+      return r.width === 10 && r.bottom === 6 && r.right === 11;
+  })(), (function () { var r = new window.DOMRect(1, 2, 3, 4); r.width = 10; r.bottom = 99;
+      return r.width + '/' + r.bottom; })());
+  ck('G8 a quad owns nothing and bounds its corners', (function () {
+      var q = new window.DOMQuad({ x: 1, y: 2 }, { x: 3, y: 4 }, { x: 5, y: 6 }, { x: 7, y: 8 });
+      return own(q) === '' && q.p1.x === 1 && tag(q) === '[object DOMQuad]'
+          && q.getBounds() instanceof window.DOMRectReadOnly && q.getBounds().x === 1
+          && q.getBounds().width === 6 && typeof q.getBoundingRect === 'undefined'
+          && JSON.stringify(new window.DOMQuad()).indexOf('"p1":{"x":0,"y":0,"z":0,"w":1}') === 1
+          && own(window.DOMQuad.prototype) === 'constructor,getBounds,p1,p2,p3,p4,toJSON'
+          && own(window.DOMQuad) === 'fromQuad,fromRect,length,name,prototype'
+          && typeof window.DOMQuad.fromPoint === 'undefined';
+  })(), own(window.DOMQuad.prototype) + ' / ' + own(window.DOMQuad));
+  ck('G9 a quad from a rectangle holds its corners', (function () {
+      var q = window.DOMQuad.fromRect({ x: 1, y: 2, width: 3, height: 4 });
+      return q.p1.x === 1 && q.p2.x === 4 && q.p3.y === 6 && q.p4.x === 1
+          && q.p1.w === 1 && tag(q.p1) === '[object DOMPoint]';
+  })());
+
+  // ── H. The numbers a page reads from the host, unchanged by the reshaping ──
+  ck('H1 a box reads its rectangle through the same interface', (function () {
+      var r = document.getElementById('p1').getBoundingClientRect();
+      return tag(r) === '[object DOMRect]' && typeof r.toJSON === 'function'
+          && r instanceof window.DOMRect && r instanceof window.DOMRectReadOnly;
+  })(), (function () {
+      var r = document.getElementById('p1').getBoundingClientRect();
+      return tag(r) + '/' + typeof r.x;
+  })());
+  ck('H2 a matrix transforms a point the way CSS does', (function () {
+      var p = new M('rotate3d(0, 0, 1, 90deg)').transformPoint({ x: 1, y: 0 });
+      return p.x === 0 && p.y === 1 && p.z === 0 && p.w === 1;
+  })(), (function () {
+      var p = new M('rotate3d(0, 0, 1, 90deg)').transformPoint({ x: 1, y: 0 });
+      return p.x + '/' + p.y;
+  })());
+  ck('H3 transformPoint answers a point of the writable family', (function () {
+      var p = new M().scale(2).transformPoint({ x: 3, y: 4, z: 0, w: 1 });
+      return p.x === 6 && p.y === 8 && tag(p) === '[object DOMPoint]';
+  })());
+  ck('H4 the canvas interface still answers its bitmap size', (function () {
+      var c = document.getElementById('cv1');
+      return c.width === 300 && c.height === 150 && typeof c.toDataURL === 'function'
+          && typeof c.getContext === 'function';
+  })(), document.getElementById('cv1').width + '/' + document.getElementById('cv1').height);
+})();
+</script>
+</body>
+</html>

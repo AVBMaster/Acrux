@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Threading;
 using Acrux.Core.Css;
 using Acrux.Core.Dom;
@@ -1122,6 +1123,21 @@ public partial class ElementHost : IDomPrototypeHost
             path.Add(WrapWithCache(p) ?? new ElementHost(p));
 
         evt.target = this;
+        // The document — and the window, which shares its bag — comes first on the capture leg and
+        // last on the way back out, before and after the element ancestors it holds (DOM §2.5).
+        var reachesDocument = path.Count > 0
+            && path[path.Count - 1]._element.Parent is Core.Dom.Document;
+        var documentHost = engine?.DocumentHost;
+        if (reachesDocument && documentHost != null)
+        {
+            try
+            {
+                evt.eventPhase = 1;
+                evt.currentTarget = documentHost;
+                documentHost.DispatchCapturePhase(evt);
+            }
+            catch { }
+        }
         for (var i = path.Count - 1; i >= 1; i--)
         {
             if (evt.PropagationStopped || evt.ImmediateStopped) break;
@@ -1138,14 +1154,14 @@ public partial class ElementHost : IDomPrototypeHost
             }
             // The document is the last node on the path, and its listeners live in the bridge's bag
             // rather than in a list kept per element (DOM §2.5).
-            if (!evt.PropagationStopped && !evt.ImmediateStopped && engine?.DocumentHost != null
-                && path[path.Count - 1]._element.Parent is Core.Dom.Document)
+            if (!evt.PropagationStopped && !evt.ImmediateStopped && reachesDocument
+                && documentHost != null)
             {
                 try
                 {
                     evt.eventPhase = 3;
-                    evt.currentTarget = engine.DocumentHost;
-                    engine.DocumentHost.dispatchEvent(evt);
+                    evt.currentTarget = documentHost;
+                    documentHost.DispatchDocumentTail(evt);
                 }
                 catch { }
             }
@@ -1225,7 +1241,7 @@ public partial class ElementHost : IDomPrototypeHost
     /// <summary>Asks the script side, by the token it handed back at registration, whether the signal a
     /// listener was registered against has aborted since (DOM §2.7.7).</summary>
 
-    private static bool SignalAborted(JavaScriptEngine engine, int token)
+    internal static bool SignalAborted(JavaScriptEngine engine, int token)
     {
         var bridge = engine.Adapter;
         if (bridge == null) return false;
@@ -1630,17 +1646,26 @@ public partial class ElementHost : IDomPrototypeHost
         set => _element.SetAttribute("draggable", value ? "true" : "false");
     }
 
-    public string? accessKey
+    /// <summary>HTML §7.4: the access key the markup carried. A reflected DOMString answers the empty
+    /// string when the attribute is not there (measured), and the label the platform would show for it
+    /// is the interface's own read, which this engine has no key to name.</summary>
+    public string accessKey
     {
-        get => _element.GetAttribute("accesskey");
-        set => _element.SetAttribute("accesskey", value);
+        get => _element.GetAttribute("accesskey") ?? "";
+        set => _element.SetAttribute("accesskey", value ?? "");
     }
+
+    public string accessKeyLabel => "";
 
     public int tabIndex
     {
         get => int.TryParse(_element.GetAttribute("tabindex"), out var i) ? i : 0;
         set => _element.SetAttribute("tabindex", value.ToString());
     }
+
+    /// <summary>HTML §4.4.5: the shadow-part list is the token list of the 'part' attribute, and like
+    /// 'sandbox' it declares no supported tokens of its own.</summary>
+    public RelTokenListHost part => new(this, "part");
 
     /// <summary>HTML §4.12.5: the 'slot' attribute reflected. A reflected string reads as the empty
     /// string when the attribute is not there (measured), not as nothing at all.</summary>
@@ -1650,9 +1675,21 @@ public partial class ElementHost : IDomPrototypeHost
         set => _element.SetAttribute("slot", value ?? "");
     }
 
+    /// <summary>HTML §6.2.4: the spellcheck state is inherited, and the default with nothing written
+    /// anywhere above the element is true (measured: a plain div answers 'spellcheck' true). Writing it
+    /// puts the attribute on the element itself, which is what the read then answers.</summary>
     public bool spellcheck
     {
-        get => _element.GetAttribute("spellcheck") == "true";
+        get
+        {
+            for (Acrux.Core.Dom.Node? node = _element; node != null; node = node.ParentElement)
+            {
+                var written = (node as Element)?.GetAttribute("spellcheck");
+                if (written == null) continue;
+                return !written.Equals("false", StringComparison.OrdinalIgnoreCase);
+            }
+            return true;
+        }
         set => _element.SetAttribute("spellcheck", value ? "true" : "false");
     }
 
@@ -1935,10 +1972,12 @@ public partial class ElementHost : IDomPrototypeHost
         set => inputChecked = value;
     }
 
-    public string? placeholder
+    /// <summary>HTML §4.10.5.1: a reflected DOMString, so the control with no placeholder written on it
+    /// answers the empty string rather than nothing (measured).</summary>
+    public string placeholder
     {
-        get => _element.GetAttribute("placeholder");
-        set => _element.SetAttribute("placeholder", value);
+        get => _element.GetAttribute("placeholder") ?? "";
+        set => _element.SetAttribute("placeholder", value ?? "");
     }
 
     public string? inputName
@@ -2055,6 +2094,30 @@ public partial class ElementHost : IDomPrototypeHost
     public object[] options => OptionElements()
         .Select(e => (object)(WrapWithCache(e) ?? new ElementHost(e))).ToArray();
 
+    /// <summary>HTML §4.10.9: the select answers its option list through the two reads a named
+    /// collection has — the option at an index, and the option whose name (or id) is the one asked
+    /// for. Both read the live list, so an option the page adds afterwards is in them.</summary>
+    public object? item(object? index)
+    {
+        var list = OptionElements();
+        var number = ToInt(index, -1);
+        if (number < 0 || number >= list.Count) return null;
+        return WrapWithCache(list[number]) ?? new ElementHost(list[number]);
+    }
+
+    public object? namedItem(object? name)
+    {
+        var wanted = Convert.ToString(name) ?? "";
+        if (wanted.Length == 0) return null;
+        foreach (var option in OptionElements())
+        {
+            if (string.Equals(option.GetAttribute("id"), wanted, StringComparison.Ordinal)
+                || string.Equals(option.GetAttribute("name"), wanted, StringComparison.OrdinalIgnoreCase))
+                return WrapWithCache(option) ?? new ElementHost(option);
+        }
+        return null;
+    }
+
     public int selectLength => OptionElements().Count;
 
     /// <summary>HTML §4.10.9: the select's list of options is every option it contains, the ones
@@ -2143,10 +2206,13 @@ public partial class ElementHost : IDomPrototypeHost
         set => _element.SetAttribute("name", value);
     }
 
-    public string? action
+    /// <summary>HTML §4.10.22: the address a submission goes to — the attribute resolved against the
+    /// document's base, or the document's own address when the markup named none (measured: a form with
+    /// no action answers its page URL, never nothing).</summary>
+    public string action
     {
-        get => _element.GetAttribute("action");
-        set => _element.SetAttribute("action", value);
+        get => ResolveAgainstBase(_element.GetAttribute("action"));
+        set => _element.SetAttribute("action", value ?? "");
     }
 
     public string? method
@@ -2159,6 +2225,82 @@ public partial class ElementHost : IDomPrototypeHost
     {
         get => _element.GetAttribute("enctype") ?? "application/x-www-form-urlencoded";
         set => _element.SetAttribute("enctype", value);
+    }
+
+    // HTML §4.10.22: the form's three remaining reads. 'encodingType' is the other name the interface
+    // gives the enctype, 'acceptCharset' and 'autocomplete' are reflected strings that answer the
+    // empty value when the markup wrote none, and 'noValidate' is the boolean of the attribute of the
+    // same name (measured: a plain form answers 'application/x-www-form-urlencoded', '', '' and false).
+    public string encodingType
+    {
+        get => _element.GetAttribute("enctype") ?? "application/x-www-form-urlencoded";
+        set => _element.SetAttribute("enctype", value ?? "");
+    }
+
+    public string acceptCharset
+    {
+        get => _element.GetAttribute("accept-charset") ?? "";
+        set => _element.SetAttribute("accept-charset", value ?? "");
+    }
+
+    /// <summary>HTML §4.10.5: the input's autofill hint is the enumerated 'autocomplete' attribute,
+    /// whose spelling on the interface carries the capital C — and the unset control answers the empty
+    /// value, not nothing (measured). The form's own read is the lowercase one in the forms part.</summary>
+    public string autoComplete
+    {
+        get
+        {
+            var written = (_element.GetAttribute("autocomplete") ?? "").ToLowerInvariant();
+            return written is "on" or "off" ? written : "";
+        }
+        set
+        {
+            var written = (value ?? "").ToLowerInvariant();
+            _element.SetAttribute("autocomplete", written is "on" or "off" ? written : "");
+        }
+    }
+
+    public bool noValidate
+    {
+        get => _element.HasAttribute("novalidate");
+        set
+        {
+            if (value) _element.SetAttribute("novalidate", "");
+            else _element.RemoveAttribute("novalidate");
+        }
+    }
+
+    /// <summary>HTML §4.10.22: the action a submission goes to is the attribute resolved against the
+    /// document's base — an absolute address, or the document's own address when the markup (or the
+    /// empty action) gives no other target (measured: a form with no action answers its page URL).</summary>
+    public string formAction
+    {
+        get => ResolveAgainstBase(_element.GetAttribute("action"));
+        set => _element.SetAttribute("action", value ?? "");
+    }
+
+    private string ResolveAgainstBase(string? raw)
+    {
+        var baseUrl = _element.OwnerDocument?.BaseUrl
+            ?? Engine?.LocationHost?.href
+            ?? JavaScriptEngine.Current?.LocationHost?.href;
+        if (string.IsNullOrEmpty(raw)) return string.IsNullOrEmpty(baseUrl) ? "" : baseUrl;
+        if (string.IsNullOrEmpty(baseUrl)) return raw;
+        try { return new URLHost(raw, baseUrl).href; } catch { return raw; }
+    }
+
+    /// <summary>HTML §4.10.5.1: 'showPicker' opens the picker the control owns. Only the controls with a
+    /// picker — the date and time kinds, colour, a list-backed field and a file or select — have one, and
+    /// this engine draws no such panel, so a control that has none is refused the way a closed shadow
+    /// tree or a disabled control is (HTML §4.10.5.1 'the element has no picker').</summary>
+    public void showPicker()
+    {
+        var type = (_element.GetAttribute("type") ?? "text").ToLowerInvariant();
+        var has = TagIs("SELECT", "INPUT") && type is "date" or "time" or "datetime-local" or "month"
+            or "week" or "color" or "file";
+        if (!has)
+            throw new DOMException("Failed to execute 'showPicker' on 'HTMLInputElement': "
+                + "the element has no picker to show.", "InvalidStateError");
     }
 
     public void submit()
@@ -2267,9 +2409,45 @@ public partial class ElementHost : IDomPrototypeHost
         return null;
     }
 
-    public string? toDataURL(string? type = "image/png")
+    /// <summary>HTML §4.8.3: the canvas's own pixels, encoded. A type the engine cannot write falls
+    /// back to PNG and the data url says so; the quality is a number between 0 and 1 and is only
+    /// read by the lossy formats. With no bitmap backend at all there are no pixels to encode, and
+    /// the answer is the empty string rather than a data url that is not one.</summary>
+    public string toDataURL(string? type = "image/png", object? quality = null)
     {
-        return "";
+        var mime = EncodedType(type, out var format);
+        double level = mime.Equals("image/png", StringComparison.OrdinalIgnoreCase)
+            ? 100
+            : quality is null ? 92
+                : WebIdL.RequiredDouble(quality, 0, 1, "toDataURL", "HTMLCanvasElement") * 100;
+        var image = (_element as HTMLCanvasElement)?.SnapshotForExport();
+        if (image == null) return "";
+        try
+        {
+            using var picked = image;
+            using var data = picked.Encode(format, (int)Math.Clamp(level, 0, 100));
+            return "data:" + mime + ";base64," + Convert.ToBase64String(data.ToArray());
+        }
+        catch (Exception) { return ""; }
+    }
+
+    /// <summary>HTML §4.8.3: the two words the encoder knows, and anything else is PNG.</summary>
+    internal static string EncodedType(string? type, out SkiaSharp.SKEncodedImageFormat format)
+    {
+        if (!string.IsNullOrEmpty(type)
+            && type.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase))
+        {
+            format = SkiaSharp.SKEncodedImageFormat.Jpeg;
+            return "image/jpeg";
+        }
+        if (!string.IsNullOrEmpty(type)
+            && type.Equals("image/webp", StringComparison.OrdinalIgnoreCase))
+        {
+            format = SkiaSharp.SKEncodedImageFormat.Webp;
+            return "image/webp";
+        }
+        format = SkiaSharp.SKEncodedImageFormat.Png;
+        return "image/png";
     }
 
     // ===== HTMLMediaElement specific =====
@@ -2629,23 +2807,30 @@ public partial class ElementHost : IDomPrototypeHost
         set => _element.SetAttribute("alt", value);
     }
 
-    // HTML width/height content attributes. On the elements the spec gives a *number* (img, iframe,
-    // embed, object) it answers the parsed integer — and the same element's offsetWidth reads back
-    // the very number the attribute carried, the way the layout treats it. On every other element
-    // 'width'/'height' carry no meaning, so the attribute text is returned.
+    // HTML width/height content attributes. On the elements the spec gives a *number* (an image's
+    // display size and a canvas's bitmap) it answers the parsed integer — and the same element's
+    // offsetWidth reads back the very number the attribute carried, the way the layout treats it. A
+    // canvas's bitmap size carries the interface's own defaults (HTML §4.8.3: 300 by 150). On the
+    // legacy elements — a frame, an object, an embed — and on every element where the attribute
+    // carries no meaning at all, it is the attribute text (measured: an iframe answers '10' and an
+    // image answers 20).
     public object width
     {
-        get => NumericSizeElement ? (object)ParseIntAttr("width") : (_element.GetAttribute("width") ?? "");
+        get => NumericSizeElement ? (object)ParseIntAttr("width", CanvasDefaultWidth)
+            : (_element.GetAttribute("width") ?? "");
         set => _element.SetAttribute("width", Convert.ToString(value) ?? "");
     }
 
     public object height
     {
-        get => NumericSizeElement ? (object)ParseIntAttr("height") : (_element.GetAttribute("height") ?? "");
+        get => NumericSizeElement ? (object)ParseIntAttr("height", CanvasDefaultHeight)
+            : (_element.GetAttribute("height") ?? "");
         set => _element.SetAttribute("height", Convert.ToString(value) ?? "");
     }
 
-    private bool NumericSizeElement => TagIs("IMG", "IFRAME", "EMBED", "OBJECT");
+    private bool NumericSizeElement => TagIs("IMG", "CANVAS");
+    private ulong CanvasDefaultWidth => TagIs("CANVAS") ? 300u : 0u;
+    private ulong CanvasDefaultHeight => TagIs("CANVAS") ? 150u : 0u;
 
     private bool TagIs(params string[] names)
     {
@@ -2653,11 +2838,11 @@ public partial class ElementHost : IDomPrototypeHost
         return false;
     }
 
-    private ulong ParseIntAttr(string name)
+    private ulong ParseIntAttr(string name, ulong fallback = 0)
     {
         var raw = _element.GetAttribute(name) ?? "";
         var digits = new string(raw.TakeWhile(char.IsDigit).ToArray());
-        return ulong.TryParse(digits, out var v) ? v : 0;
+        return ulong.TryParse(digits, out var v) ? v : fallback;
     }
 
     public ulong imgWidth

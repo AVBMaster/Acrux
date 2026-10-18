@@ -602,9 +602,11 @@ public class DocumentHost : IDomPrototypeHost
 
     /// <summary>DOM §2.7: the flags arrive as values, the same way they do for an element — the page's
     /// options dictionary is read on the script side, which keeps the object it may hold (a signal)
-    /// alive. A document listener is booked with the bridge that walks the tree, so what it carries is
-    /// the capture flag; 'once' and a signal are answered for elements, where the walk is the host's
-    /// own.</summary>
+    /// alive and hands over the token its own probe answers. A document listener is booked with the
+    /// bridge that walks the tree, and the bridge keeps the same three rules for it that the element
+    /// does: the leg it belongs to, 'once' taking it out after it has run, and an aborted controller
+    /// taking it out before it runs (measured: a window listener written with 'once' answers one
+    /// dispatch, not two).</summary>
     public void addEventListenerFlags(string type, object callback, bool useCapture, bool once, int signalToken)
     {
         var engine = JavaScriptEngine.Current ?? Engine;
@@ -613,12 +615,40 @@ public class DocumentHost : IDomPrototypeHost
         var integration = engine.IntegrationService;
         if (integration != null)
         {
-            integration.EventBridge.AddListener(type, callback, useCapture);
+            integration.EventBridge.AddListener(type, callback, useCapture, once,
+                passive: false, signal: null, signalToken: signalToken);
         }
         else
         {
             var cbId = engine.StoreCallbackRef(callback);
         }
+    }
+
+    /// <summary>The capture leg of a walk that started below the document (DOM §2.5) — the document
+    /// comes first, before the element ancestors, and the window shares its bag.</summary>
+    internal void DispatchCapturePhase(ScriptEvent evt)
+    {
+        var engine = JavaScriptEngine.Current ?? Engine;
+        engine?.IntegrationService?.EventBridge.InvokeCapturePhase(evt.type, evt);
+    }
+
+    /// <summary>The leg that closes the walk: the document is the last node on the path, so the
+    /// listeners that were not written for the capture run here, and the inline handler the document
+    /// element carries with them (DOM §2.9, §2.8).</summary>
+    internal void DispatchDocumentTail(ScriptEvent evt)
+    {
+        var engine = JavaScriptEngine.Current ?? Engine;
+        engine?.IntegrationService?.EventBridge.InvokeBubblePhase(evt.type, evt);
+        RunInlineHandler(engine, evt);
+    }
+
+    private void RunInlineHandler(JavaScriptEngine? engine, ScriptEvent evt)
+    {
+        if (engine == null || _document.DocumentElement == null) return;
+        var attr = _document.DocumentElement.GetAttribute("on" + evt.type);
+        if (string.IsNullOrEmpty(attr)) return;
+        try { engine.Evaluate(attr); }
+        catch { }
     }
 
     public void removeEventListener(string type, object callback)
@@ -643,20 +673,11 @@ public class DocumentHost : IDomPrototypeHost
         var integration = engine.IntegrationService;
         if (integration != null)
         {
-            integration.EventBridge.DispatchEvent(evt.type, null);
+            integration.EventBridge.DispatchEvent(evt.type, evt);
         }
 
-        // Check for inline event handler on document
-        if (_document.DocumentElement != null)
-        {
-            var attrName = "on" + evt.type;
-            var attr = _document.DocumentElement.GetAttribute(attrName);
-            if (!string.IsNullOrEmpty(attr))
-            {
-                try { engine.Evaluate(attr); }
-                catch { }
-            }
-        }
+        // The inline handler the document element carries is part of the document's own answer.
+        RunInlineHandler(engine, evt);
     }
 
     // Fullscreen §5: 'fullscreenEnabled' is an attribute of the document, not a method a page calls

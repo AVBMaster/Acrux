@@ -12,6 +12,11 @@ public class JsEventListenerEntry
     public bool Once { get; set; }
     public bool Passive { get; set; }
     public AbortSignal? Signal { get; set; }
+    /// <summary>The token the script side made for an <c>{signal:}</c> listener (DOM §2.7.7). The
+    /// signal itself is a script object and does not survive the call, so the token is asked, once per
+    /// dispatch, whether the controller behind it has aborted — the same rule an element's listener
+    /// keeps.</summary>
+    public int SignalToken { get; set; }
 }
 
 public class JsEventListenerBridge
@@ -25,7 +30,7 @@ public class JsEventListenerBridge
         _facade = facade;
     }
 
-    public int AddListener(string type, object jsCallback, bool useCapture = false, bool once = false, bool passive = false, AbortSignal? signal = null)
+    public int AddListener(string type, object jsCallback, bool useCapture = false, bool once = false, bool passive = false, AbortSignal? signal = null, int signalToken = 0)
     {
         // Use __g_store from JS side to properly store the callback function reference.
         // This avoids StoreJsFunction which uses EmbedHostObject and fails for
@@ -64,7 +69,8 @@ public class JsEventListenerBridge
                 UseCapture = useCapture,
                 Once = once,
                 Passive = passive,
-                Signal = signal
+                Signal = signal,
+                SignalToken = signalToken
             };
 
             var list = existing ?? new List<JsEventListenerEntry>();
@@ -130,38 +136,68 @@ public class JsEventListenerBridge
         }
     }
 
-    public bool DispatchEvent(string type, DomEvent evt, object? target = null)
+    public bool DispatchEvent(string type, object? evt, object? target = null)
+    {
+        // The document is the target of its own dispatch, so both kinds of listener run there in the
+        // order they were put in place (DOM §2.9).
+        Invoke(type, capture: null, evt, target);
+        return true;
+    }
+
+    /// <summary>One leg of a walk that started on a node below the document: the capture listeners run
+    /// before the path is walked in and the rest after the bubble has come out (DOM §2.5). The bag is
+    /// the document's, so a page that put a listener on the window — which shares it — is heard on the
+    /// same leg.</summary>
+    public void InvokeCapturePhase(string type, object eventObject)
+        => Invoke(type, capture: true, eventObject, null);
+
+    public void InvokeBubblePhase(string type, object eventObject)
+        => Invoke(type, capture: false, eventObject, null);
+
+    private void Invoke(string type, bool? capture, object? eventObject, object? target)
     {
         List<JsEventListenerEntry> listeners;
         lock (_lock)
         {
             if (!_listeners.TryGetValue(type, out var all))
-                return true;
-            listeners = all.ToList();
+                return;
+            listeners = all.Where(l => capture == null || l.UseCapture == capture).ToList();
         }
 
+        var engine = JavaScriptEngine.Current;
+        var drop = new List<int>();
         foreach (var listener in listeners)
         {
-            if (listener.Signal?.Aborted == true)
+            if (listener.Signal?.Aborted == true
+                || (listener.SignalToken != 0 && engine != null
+                    && ElementHost.SignalAborted(engine, listener.SignalToken)))
             {
-                RemoveListener(type, listener.CallbackId);
+                drop.Add(listener.CallbackId);
                 continue;
             }
 
-            if (listener.Once)
-                RemoveListener(type, listener.CallbackId);
-
             try
             {
+                // The listener is handed the event it is there for (DOM §2.9): a page that reads
+                // 'e.target' off a document or window listener is reading the same object a node
+                // listener is given.
                 if (target != null)
                     _facade.InvokeJsFunction(listener.CallbackId, target);
+                else if (eventObject != null)
+                    _facade.InvokeJsFunction(listener.CallbackId, eventObject);
                 else
                     _facade.InvokeJsFunction(listener.CallbackId);
             }
             catch { }
+
+            // 'once' takes the registration away after it has run — taking it away first also frees
+            // the callback the run is about to make (DOM §2.9, step 6).
+            if (listener.Once)
+                drop.Add(listener.CallbackId);
         }
 
-        return true;
+        foreach (var callbackId in drop)
+            RemoveListener(type, callbackId);
     }
 
     public void ClearListeners()

@@ -1007,32 +1007,58 @@ public class JavaScriptEngine : IDisposable
 
             // CSSOM View §5.1 — DOMRectReadOnly, and the writable DOMRect over it. Four numbers in, the
             // rectangle and its derived edges out; a negative width or height flips the origin the way
-            // the geometry model says it must. The reads live on the prototype so the object prints and
-            // tests as the interface it is, and 'toJSON' answers the eight numbers the reference gives.
+            // the geometry model says it must. The numbers live behind a slot the page cannot see and
+            // every read is an accessor on the prototype, so an instance owns nothing at all and the
+            // readonly face has no setter while DOMRect's four own attributes do (measured: 'Object.keys'
+            // of either is empty, 'rect.x = 5' answers on a DOMRect and is ignored on a
+            // DOMRectReadOnly, and 'Object.getPrototypeOf(DOMRect)' is the readonly constructor).
+            var RECT_SLOTS = new WeakMap();
+            // The four numbers are kept as they were written; a negative width or height is not
+            // repaired at the origin — it is the derived edges that read across it, so a box of (10,
+            // 10, -4, -6) keeps x 10 and width -4 and answers left 6 and right 10 (Geometry
+            // Interfaces §5.1, measured: the readonly face reads back exactly what was given).
             function rectShape(x, y, w, h) {
-                x = x === undefined ? 0 : Number(x);
-                y = y === undefined ? 0 : Number(y);
-                w = w === undefined ? 0 : Number(w);
-                h = h === undefined ? 0 : Number(h);
                 return {
-                    x: Math.min(x, x + w), y: Math.min(y, y + h),
-                    width: Math.abs(w), height: Math.abs(h)
+                    x: x === undefined ? 0 : Number(x),
+                    y: y === undefined ? 0 : Number(y),
+                    width: w === undefined ? 0 : Number(w),
+                    height: h === undefined ? 0 : Number(h)
                 };
             }
-            function DOMRectReadOnly(x, y, w, h) {
-                var made = rectShape(x, y, w, h);
-                Object.defineProperties(this, {
-                    x: { value: made.x, enumerable: true, configurable: true, writable: true },
-                    y: { value: made.y, enumerable: true, configurable: true, writable: true },
-                    width: { value: made.width, enumerable: true, configurable: true, writable: true },
-                    height: { value: made.height, enumerable: true, configurable: true, writable: true },
-                    left: { value: made.x, enumerable: true, configurable: true, writable: true },
-                    top: { value: made.y, enumerable: true, configurable: true, writable: true },
-                    right: { value: made.x + made.width, enumerable: true, configurable: true, writable: true },
-                    bottom: { value: made.y + made.height, enumerable: true, configurable: true, writable: true }
-                });
+            function rectSlot(self) {
+                var held = RECT_SLOTS.get(self);
+                if (!held) throw new TypeError('Illegal invocation');
+                return held;
             }
+            function rectEdge(self, name) {
+                var held = rectSlot(self);
+                if (name === 'left') return Math.min(held.x, held.x + held.width);
+                if (name === 'right') return Math.max(held.x, held.x + held.width);
+                if (name === 'top') return Math.min(held.y, held.y + held.height);
+                if (name === 'bottom') return Math.max(held.y, held.y + held.height);
+                return held[name];
+            }
+            function DOMRectReadOnly(x, y, w, h) {
+                if (!new.target) throw constructionRefusal('DOMRectReadOnly');
+                RECT_SLOTS.set(this, rectShape(x, y, w, h));
+            }
+            // The prototype is built by hand rather than taken from the function: the one a function
+            // comes with carries a back-pointer no page can enumerate, and the interface's own name
+            // list has 'constructor' in it (measured).
+            DOMRectReadOnly.prototype = Object.create(Object.prototype);
+            function rectRead(proto, name, writable) {
+                var made = { configurable: true, enumerable: true,
+                    get: function () { return rectEdge(this, name); } };
+                if (writable) made.set = function (value) {
+                    rectSlot(this)[name] = Number(value);
+                };
+                Object.defineProperty(proto, name, made);
+            }
+            ['x', 'y', 'width', 'height', 'top', 'right', 'bottom', 'left'].forEach(function (name) {
+                rectRead(DOMRectReadOnly.prototype, name, false);
+            });
             DOMRectReadOnly.prototype.toJSON = function () {
+                rectSlot(this);
                 return { x: this.x, y: this.y, width: this.width, height: this.height,
                     top: this.top, right: this.right, bottom: this.bottom, left: this.left };
             };
@@ -1040,18 +1066,33 @@ public class JavaScriptEngine : IDisposable
                 var read = other || { };
                 return new DOMRectReadOnly(read.x, read.y, read.width, read.height);
             };
-            DOMRectReadOnly.fromPoint = function (other) {
-                var read = other || { };
-                return new DOMRectReadOnly(read.x, read.y, 0, 0);
-            };
-            function DOMRect(x, y, w, h) { DOMRectReadOnly.call(this, x, y, w, h); }
+            function DOMRect(x, y, w, h) {
+                if (!new.target) throw constructionRefusal('DOMRect');
+                RECT_SLOTS.set(this, rectShape(x, y, w, h));
+            }
             DOMRect.prototype = Object.create(DOMRectReadOnly.prototype);
-            DOMRect.prototype.constructor = DOMRect;
-            DOMRect.fromRect = DOMRectReadOnly.fromRect;
+            levelConstructor(DOMRect.prototype, DOMRect);
+            levelConstructor(DOMRectReadOnly.prototype, DOMRectReadOnly);
+            // The writable face re-declares the four numbers the constructor takes and nothing else:
+            // the derived edges stay the readonly reads they are inherited as (measured: 'bottom' is
+            // not an own property of DOMRect.prototype).
+            ['x', 'y', 'width', 'height'].forEach(function (name) {
+                rectRead(DOMRect.prototype, name, true);
+            });
+            Object.setPrototypeOf(DOMRect, DOMRectReadOnly);
+            DOMRect.fromRect = function (other) {
+                var read = other || { };
+                return new DOMRect(read.x, read.y, read.width, read.height);
+            };
             Object.defineProperty(DOMRectReadOnly.prototype, Symbol.toStringTag,
                 { value: 'DOMRectReadOnly', configurable: true });
             Object.defineProperty(DOMRect.prototype, Symbol.toStringTag,
                 { value: 'DOMRect', configurable: true });
+            window.DOMRectReadOnly = DOMRectReadOnly;
+            window.DOMRect = DOMRect;
+            (window.__domProto || (window.__domProto = {})).DOMRectReadOnly
+                = DOMRectReadOnly.prototype;
+            (window.__domProto || (window.__domProto = {})).DOMRect = DOMRect.prototype;
 
             // ── Headers / FormData (Fetch §4, HTML §4.10.22.5) ─────────────────
             // A case-insensitive multimap of the HTTP kinds: a name is stored once, lower-cased, and
@@ -2794,33 +2835,135 @@ public class JavaScriptEngine : IDisposable
                 return made;
             };
 
-            // ── DOMPoint, DOMRectList (Geometry Interfaces §3, §5) ─────────────
-            function DOMPointReadOnly(x, y, z, w) {
-                var self = this;
-                this.x = x === undefined ? 0 : Number(x);
-                this.y = y === undefined ? 0 : Number(y);
-                this.z = z === undefined ? 0 : Number(z);
-                this.w = w === undefined ? 1 : Number(w);
-                this.toJSON = function () {
-                    return { x: self.x, y: self.y, z: self.z, w: self.w };
-                };
+            // The sixteen numbers behind a DOMMatrixInit: the list the interface names, read row by
+            // row, with the six short names for the 2D view beside it (Geometry Interfaces §2.1). A
+            // value the page hands an operation is either a matrix the interface made — whose numbers
+            // live in the slot — or a dictionary written out with either set of names, and a name that
+            // is not there keeps the identity value it defaults to.
+            var MATRIX_SLOTS = new WeakMap();
+            // Every argument of these interfaces is optional, so the operation reads as taking
+            // nothing at all (measured: 'DOMMatrix.length' and 'fromMatrix.length' are both 0).
+            function arityZero(fn) {
+                try { Object.defineProperty(fn, 'length', { value: 0, configurable: true }); }
+                catch (e) { }
+                return fn;
             }
+            // A level's own back-pointer and the arity its constructor reads: the constructor is an
+            // own property of the prototype but not an enumerable one, and every argument of these
+            // interfaces is optional (measured for the whole geometry family). The back-pointer is
+            // written off and on again because the one a function comes with is not a name the page
+            // enumerates — and a page reading the interface enumerates the names it is given.
+            function levelConstructor(proto, ctor) {
+                try { delete proto.constructor; } catch (e) { }
+                try {
+                    Object.defineProperty(proto, 'constructor', { value: ctor, writable: true,
+                        enumerable: false, configurable: true });
+                } catch (e) { }
+                // The prototype of an interface is not a value the page may move (measured: the
+                // descriptor says 'writable: false, configurable: false').
+                try {
+                    Object.defineProperty(ctor, 'prototype', { value: proto, writable: false,
+                        enumerable: false, configurable: false });
+                } catch (e) { }
+                arityZero(ctor);
+                return ctor;
+            }
+            function matrixIdentity() {
+                return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+            }
+            function matrixNumbers(value) {
+                var held = value ? MATRIX_SLOTS.get(value) : null;
+                if (held) return held.numbers;
+                var out = matrixIdentity();
+                if (!value || typeof value !== 'object') return out;
+                var shortName = { a: 0, b: 1, c: 4, d: 5, e: 12, f: 13 };
+                for (var name in shortName) {
+                    if (value[name] !== undefined) out[shortName[name]] = Number(value[name]);
+                }
+                for (var row = 1; row <= 4; row++) {
+                    for (var col = 1; col <= 4; col++) {
+                        var key = 'm' + row + col;
+                        if (value[key] !== undefined) {
+                            out[(row - 1) * 4 + (col - 1)] = Number(value[key]);
+                        }
+                    }
+                }
+                return out;
+            }
+
+            // ── DOMPoint, DOMRectList (Geometry Interfaces §3, §5) ─────────────
+            // The four numbers of a point behind a slot, the reads on the prototype: a
+            // DOMPointReadOnly cannot be written and a DOMPoint can, and neither owns a key
+            // (measured: 'Object.keys' of either is empty, 'point.x = 9' answers on a DOMPoint, and
+            // 'Object.getPrototypeOf(DOMPoint)' is the readonly constructor).
+            var POINT_SLOTS = new WeakMap();
+            function pointInit(self, kind, x, y, z, w) {
+                POINT_SLOTS.set(self, {
+                    kind: kind,
+                    x: x === undefined ? 0 : Number(x),
+                    y: y === undefined ? 0 : Number(y),
+                    z: z === undefined ? 0 : Number(z),
+                    w: w === undefined ? 1 : Number(w)
+                });
+            }
+            function pointSlot(self) {
+                var held = POINT_SLOTS.get(self);
+                if (!held) throw new TypeError('Illegal invocation');
+                return held;
+            }
+            function DOMPointReadOnly(x, y, z, w) {
+                if (!new.target) throw constructionRefusal('DOMPointReadOnly');
+                pointInit(this, 'DOMPointReadOnly', x, y, z, w);
+            }
+            DOMPointReadOnly.prototype = Object.create(Object.prototype);
+            function DOMPoint(x, y, z, w) {
+                if (!new.target) throw constructionRefusal('DOMPoint');
+                pointInit(this, 'DOMPoint', x, y, z, w);
+            }
+            DOMPoint.prototype = Object.create(DOMPointReadOnly.prototype);
+            levelConstructor(DOMPoint.prototype, DOMPoint);
+            levelConstructor(DOMPointReadOnly.prototype, DOMPointReadOnly);
+            Object.setPrototypeOf(DOMPoint, DOMPointReadOnly);
+            ['x', 'y', 'z', 'w'].forEach(function (name) {
+                Object.defineProperty(DOMPointReadOnly.prototype, name, {
+                    configurable: true, enumerable: true,
+                    get: function () { return pointSlot(this)[name]; }
+                });
+                Object.defineProperty(DOMPoint.prototype, name, {
+                    configurable: true, enumerable: true,
+                    get: function () { return pointSlot(this)[name]; },
+                    set: function (value) { pointSlot(this)[name] = Number(value); }
+                });
+            });
+            DOMPointReadOnly.prototype.toJSON = function () {
+                var held = pointSlot(this);
+                return { x: held.x, y: held.y, z: held.z, w: held.w };
+            };
+            DOMPointReadOnly.prototype.matrixTransform = function (matrix) {
+                var held = pointSlot(this), numbers = matrixNumbers(matrix);
+                var made = function (row) {
+                    return numbers[row * 4] * held.x + numbers[row * 4 + 1] * held.y
+                        + numbers[row * 4 + 2] * held.z + numbers[row * 4 + 3] * held.w;
+                };
+                // The answer is a point of the interface the receiver belongs to, which is why the
+                // operation is inherited and not re-declared (measured: a DOMPoint transforms to a
+                // DOMPoint although 'matrixTransform' is not an own property of its prototype).
+                return new (held.kind === 'DOMPoint' ? DOMPoint : DOMPointReadOnly)(
+                    made(0), made(1), made(2), made(3));
+            };
             DOMPointReadOnly.fromPoint = function (other) {
                 other = other || { };
                 return new DOMPointReadOnly(other.x, other.y, other.z, other.w);
             };
-            DOMPointReadOnly.prototype.matrixTransform = function () {
-                return new DOMPointReadOnly(this.x, this.y, this.z, this.w);
-            };
-            function DOMPoint(x, y, z, w) {
-                DOMPointReadOnly.call(this, x, y, z, w);
-            }
-            DOMPoint.prototype = Object.create(DOMPointReadOnly.prototype);
-            DOMPoint.prototype.constructor = DOMPoint;
             DOMPoint.fromPoint = function (other) {
                 other = other || { };
                 return new DOMPoint(other.x, other.y, other.z, other.w);
             };
+            Object.defineProperty(DOMPoint.prototype, Symbol.toStringTag,
+                { value: 'DOMPoint', configurable: true });
+            (window.__domProto || (window.__domProto = {})).DOMPoint = DOMPoint.prototype;
+            (window.__domProto || (window.__domProto = {})).DOMPointReadOnly
+                = DOMPointReadOnly.prototype;
 
             // The list a geometry read answers is the array-like face of the interface: the items in
             // order, a length, and 'item' for the out-of-range answer of null.
@@ -5934,12 +6077,14 @@ public class JavaScriptEngine : IDisposable
             // reference writes for a string it cannot parse.
             (function () {
                 var ANY_TYPE = 0, NUMBER_TYPE = 1, STRING_TYPE = 2, BOOLEAN_TYPE = 3,
-                    ORDERED_NODE_ITERATOR_TYPE = 4, UNORDERED_NODE_ITERATOR_TYPE = 5,
-                    ORDERED_NODE_SNAPSHOT_TYPE = 6, UNORDERED_NODE_SNAPSHOT_TYPE = 7,
+                    UNORDERED_NODE_ITERATOR_TYPE = 4, ORDERED_NODE_ITERATOR_TYPE = 5,
+                    UNORDERED_NODE_SNAPSHOT_TYPE = 6, ORDERED_NODE_SNAPSHOT_TYPE = 7,
                     ANY_UNORDERED_NODE_TYPE = 8, FIRST_ORDERED_NODE_TYPE = 9;
+                // The ten names in the order their numbers give: the unordered kind comes first, both
+                // for the iterator and for the snapshot (DOM Parsing §4, XPathResult's constants).
                 var RESULT_NAMES = ['ANY_TYPE', 'NUMBER_TYPE', 'STRING_TYPE', 'BOOLEAN_TYPE',
-                    'ORDERED_NODE_ITERATOR_TYPE', 'UNORDERED_NODE_ITERATOR_TYPE',
-                    'ORDERED_NODE_SNAPSHOT_TYPE', 'UNORDERED_NODE_SNAPSHOT_TYPE',
+                    'UNORDERED_NODE_ITERATOR_TYPE', 'ORDERED_NODE_ITERATOR_TYPE',
+                    'UNORDERED_NODE_SNAPSHOT_TYPE', 'ORDERED_NODE_SNAPSHOT_TYPE',
                     'ANY_UNORDERED_NODE_TYPE', 'FIRST_ORDERED_NODE_TYPE'];
                 var protoMap = window.__domProto || {};
 
@@ -6604,48 +6749,90 @@ public class JavaScriptEngine : IDisposable
                     return evaluateValue(expr, node, position, size);
                 }
 
+                // The result is the same shape as every other interface the page reads: the node set
+                // lives behind a slot the page cannot see, and the reads and the two walks are accessors
+                // on the prototype — so a result owns no key and 'Object.keys' of it is empty (DOM
+                // Parsing §4.1, measured against the reference's own name list).
+                var XPATH_SLOTS = new WeakMap();
+                function xpathSlot(self) {
+                    var held = XPATH_SLOTS.get(self);
+                    if (!held) throw new TypeError('Illegal invocation');
+                    return held;
+                }
                 function XPathResultImpl(type, value, context) {
                     var nodes = Array.isArray(value) ? sortedUnique(value) : null;
-                    var iterator = nodes ? nodes.slice() : null;
-                    var snapshot = nodes ? nodes.slice() : null;
-                    var firstNode = nodes ? (nodes[0] || null) : (isNode(value) ? value : null);
-                    this.resultType = type;
-                    this.invalidIteratorState = false;
-                    Object.defineProperties(this, {
-                        iterateNext: { value: function () {
-                            if (!iterator) return null;
-                            return iterator.length ? iterator.shift() : null;
-                        }, writable: true, enumerable: false, configurable: true },
-                        snapshotItem: { value: function (index) {
-                            if (!snapshot) return null;
-                            var at = Number(index);
-                            return at >= 0 && at < snapshot.length ? snapshot[at] : null;
-                        }, writable: true, enumerable: false, configurable: true }
+                    XPATH_SLOTS.set(this, {
+                        type: type,
+                        iterator: nodes ? nodes.slice() : null,
+                        snapshot: nodes ? nodes.slice() : null,
+                        singleNode: nodes ? (nodes[0] || null) : (isNode(value) ? value : null),
+                        numberValue: type === NUMBER_TYPE
+                            ? (nodes ? toNumber(nodes.length ? textOf(nodes[0]) : 'NaN') : toNumber(value))
+                            : NaN,
+                        stringValue: type === STRING_TYPE
+                            ? (nodes ? (nodes.length ? textOf(nodes[0]) : '') : toStringValue(value)) : '',
+                        booleanValue: type === BOOLEAN_TYPE ? toBoolean(nodes || value, context) : false
                     });
-                    this.snapshotLength = snapshot ? snapshot.length : 0;
-                    this.singleNodeValue = type === FIRST_ORDERED_NODE_TYPE || type === ANY_UNORDERED_NODE_TYPE
-                        ? firstNode : null;
-                    this.numberValue = type === NUMBER_TYPE
-                        ? (nodes ? toNumber(nodes.length ? textOf(nodes[0]) : 'NaN') : toNumber(value)) : NaN;
-                    this.stringValue = type === STRING_TYPE
-                        ? (nodes ? (nodes.length ? textOf(nodes[0]) : '') : toStringValue(value)) : '';
-                    this.booleanValue = type === BOOLEAN_TYPE ? toBoolean(nodes || value, context) : false;
                 }
-                // The page never builds a result of its own — 'document.evaluate' answers it (measured:
-                // 'new XPathResult()' refuses with an illegal-constructor TypeError). The object the walk
-                // returns is still an 'XPathResult', so it is made on this function's prototype.
                 function XPathResult() {
                     throw new TypeError('Failed to construct ' + quote('XPathResult')
                         + ': Illegal constructor');
                 }
+                // The page never builds a result of its own — 'document.evaluate' answers it (measured:
+                // 'new XPathResult()' refuses with an illegal-constructor TypeError). The object the walk
+                // returns is still an 'XPathResult', so it is made on this function's prototype.
+                XPathResult.prototype = Object.create(Object.prototype);
                 XPathResultImpl.prototype = XPathResult.prototype;
+                levelConstructor(XPathResult.prototype, XPathResult);
+                ['resultType', 'invalidIteratorState', 'snapshotLength', 'singleNodeValue',
+                    'numberValue', 'stringValue', 'booleanValue'].forEach(function (name) {
+                        Object.defineProperty(XPathResult.prototype, name, {
+                            configurable: true, enumerable: true,
+                            get: function () {
+                                var held = xpathSlot(this);
+                                if (name === 'resultType') return held.type;
+                                if (name === 'invalidIteratorState') return false;
+                                if (name === 'snapshotLength') return held.snapshot ? held.snapshot.length : 0;
+                                if (name === 'singleNodeValue') {
+                                    return held.type === FIRST_ORDERED_NODE_TYPE
+                                        || held.type === ANY_UNORDERED_NODE_TYPE ? held.singleNode : null;
+                                }
+                                return held[name];
+                            }
+                        });
+                    });
+                Object.defineProperty(XPathResult.prototype, 'iterateNext', {
+                    writable: true, configurable: true, enumerable: true,
+                    value: function () {
+                        var held = xpathSlot(this);
+                        if (!held.iterator) return null;
+                        return held.iterator.length ? held.iterator.shift() : null;
+                    }
+                });
+                Object.defineProperty(XPathResult.prototype, 'snapshotItem', {
+                    writable: true, configurable: true, enumerable: true,
+                    value: function (index) {
+                        var held = xpathSlot(this);
+                        if (!held.snapshot) return null;
+                        var at = Number(index);
+                        return at >= 0 && at < held.snapshot.length ? held.snapshot[at] : null;
+                    }
+                });
+                arityZero(XPathResult.prototype.iterateNext);
+                try {
+                    Object.defineProperty(XPathResult.prototype, Symbol.toStringTag,
+                        { value: 'XPathResult', configurable: true });
+                } catch (e) { }
                 for (var ri = 0; ri < RESULT_NAMES.length; ri++) {
                     (function (name, value) {
                         try {
+                            // The constants are enumerated: an interface object writes its own names out
+                            // when a page lists them (measured: enumerable, not writable, not
+                            // configurable, on the object and behind it on the prototype).
                             Object.defineProperty(XPathResult, name,
-                                { value: value, writable: false, enumerable: false, configurable: false });
+                                { value: value, writable: false, enumerable: true, configurable: false });
                             Object.defineProperty(XPathResult.prototype, name,
-                                { value: value, writable: false, enumerable: false, configurable: false });
+                                { value: value, writable: false, enumerable: true, configurable: false });
                         } catch (e) { }
                     })(RESULT_NAMES[ri], ri);
                 }
@@ -9186,48 +9373,89 @@ public class JavaScriptEngine : IDisposable
                     return out;
                 }
                 // The string a matrix is built from is a transform list, and the list is held to the
-                // grammar the CSS names: an angle carries a unit, a length carries one too, 'matrix'
-                // takes exactly six numbers and 'matrix3d' sixteen. Anything else is refused with the
-                // sentence the reference writes, naming the whole string it could not read.
-                var number = /^-?(?:\d+\.?\d*|\.\d+)$/;
-                var lengthArg = /^-?(?:\d+\.?\d*|\.\d+)(px)?$/;
-                var angleArg = /^-?(?:\d+\.?\d*|\.\d+)(deg|grad|rad|turn)$/;
-                function argsAre(parts, pattern, count) {
-                    if (count && parts.length !== count) return false;
-                    for (var i = 0; i < parts.length; i++) if (!pattern.test(parts[i])) return false;
-                    return parts.length > 0;
+                // grammar the CSS names: an angle carries a unit unless it is zero, a length carries
+                // an absolute unit unless it is zero, 'matrix' takes exactly six numbers and
+                // 'matrix3d' sixteen. A length written in a unit that cannot be resolved without a box
+                // to lay out is refused by its own sentence, and anything the reader cannot make a
+                // list out of is refused with the parse error naming the whole string (measured for
+                // both).
+                var numberArg = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/;
+                var zeroArg = /^[-+]?0(?:\.0*)?(?:[eE][-+]?\d+)?$/;
+                var absoluteArg = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?(?:px|cm|mm|in|pt|pc|q)$/i;
+                var relativeArg = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?(?:rem|em|ex|ch|cap|ic|lh|rlh|svh|svw|lvh|lvw|dvh|dvw|vh|vw|vmin|vmax|vi|vb|%)$/i;
+                var angleArg = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?(?:deg|grad|rad|turn)$/i;
+                function checkNumber(raw) { return numberArg.test(raw) ? '' : 'parse'; }
+                function checkLength(raw) {
+                    if (absoluteArg.test(raw) || zeroArg.test(raw)) return '';
+                    if (relativeArg.test(raw)) return 'resolvable';
+                    return 'parse';
                 }
-                function validTransformList(text) {
-                    var re = /^\s*(?:(matrix|matrix3d|translate|translate3d|translateX|translateY|translateZ|scale|scale3d|scaleX|scaleY|scaleZ|rotate|rotate3d|rotateX|rotateY|rotateZ|skew|skewX|skewY)\s*\(([^()]*)\)\s*)+$/;
-                    var whole = re.exec(String(text));
-                    if (!whole) return false;
-                    var each = /(matrix|matrix3d|translate|translate3d|translateX|translateY|translateZ|scale|scale3d|scaleX|scaleY|scaleZ|rotate|rotate3d|rotateX|rotateY|rotateZ|skew|skewX|skewY)\s*\(([^()]*)\)/g;
-                    var match;
-                    while ((match = each.exec(String(text))) !== null) {
-                        var word = match[1];
-                        var raw = match[2].split(/[\s,]+/).filter(function (p) { return p.length; });
-                        if (word === 'matrix' && !argsAre(raw, number, 6)) return false;
-                        else if (word === 'matrix3d' && !argsAre(raw, number, 16)) return false;
-                        else if (word === 'scale' || word === 'scaleX' || word === 'scaleY'
-                            || word === 'scaleZ') { if (!argsAre(raw, number)) return false; }
-                        else if (word === 'rotate' || word === 'rotateX' || word === 'rotateY'
-                            || word === 'rotateZ' || word === 'skew' || word === 'skewX'
-                            || word === 'skewY') {
-                            if (word === 'rotate' && raw.length !== 1) return false;
-                            if (!argsAre(raw, angleArg)) return false;
-                        } else if (word === 'translate' || word === 'translateX'
-                            || word === 'translateY' || word === 'translateZ'
-                            || word === 'translate3d') {
-                            if (!argsAre(raw, lengthArg)) return false;
+                function checkAngle(raw) {
+                    return angleArg.test(raw) || zeroArg.test(raw) ? '' : 'parse';
+                }
+                var checkers = { n: checkNumber, l: checkLength, a: checkAngle };
+                // The arguments of each function: how few and how many, and which kind each one is —
+                // 'n' a plain number, 'l' a length, 'a' an angle. The names are the lower-cased
+                // spelling, because a CSS keyword is read whatever way the page wrote it.
+                var argSpec = {
+                    matrix: [6, 6, 'nnnnnn'],
+                    matrix3d: [16, 16, 'nnnnnnnnnnnnnnnn'],
+                    translate: [1, 2, 'll'],
+                    translate3d: [1, 3, 'lll'],
+                    translatex: [1, 1, 'l'],
+                    translatey: [1, 1, 'l'],
+                    translatez: [1, 1, 'l'],
+                    scale: [1, 2, 'nn'],
+                    scale3d: [1, 3, 'nnn'],
+                    scalex: [1, 1, 'n'],
+                    scaley: [1, 1, 'n'],
+                    scalez: [1, 1, 'n'],
+                    rotate: [1, 1, 'a'],
+                    rotate3d: [4, 4, 'nnna'],
+                    rotatex: [1, 1, 'a'],
+                    rotatey: [1, 1, 'a'],
+                    rotatez: [1, 1, 'a'],
+                    skew: [1, 2, 'aa'],
+                    skewx: [1, 1, 'a'],
+                    skewy: [1, 1, 'a'],
+                    perspective: [1, 1, 'l']
+                };
+                // The functions that are written only in three dimensions: a list that names one of
+                // them is a 3D matrix whatever numbers come out of it (measured: 'rotateZ(45deg)'
+                // stays 2D and 'rotate3d(0, 0, 1, 45deg)' does not).
+                var threeDFunction = { matrix3d: true, translate3d: true, translatez: true,
+                    scale3d: true, scalez: true, rotate3d: true, rotatex: true, rotatey: true,
+                    perspective: true };
+                var listWords = '(matrix|matrix3d|translate|translate3d|translateX|translateY|'
+                    + 'translateZ|scale|scale3d|scaleX|scaleY|scaleZ|rotate|rotate3d|rotateX|'
+                    + 'rotateY|rotateZ|skew|skewX|skewY|perspective)';
+                function splitArgs(body) {
+                    return String(body).split(/[\s,]+/).filter(function (part) { return part.length; });
+                }
+                function eachCall() {
+                    return new RegExp(listWords + '\\s*\\(([^()]*)\\)', 'g');
+                }
+                function checkTransformList(text) {
+                    var whole = new RegExp('^\\s*(?:' + listWords + '\\s*\\(([^()]*)\\)\\s*)+$');
+                    if (!whole.test(text)) return 'parse';
+                    var each = eachCall(), match;
+                    while ((match = each.exec(text)) !== null) {
+                        var spec = argSpec[match[1].toLowerCase()];
+                        if (!spec) return 'parse';
+                        var raw = splitArgs(match[2]);
+                        if (raw.length < spec[0] || raw.length > spec[1]) return 'parse';
+                        for (var i = 0; i < raw.length; i++) {
+                            var bad = checkers[spec[2].charAt(i)](raw[i]);
+                            if (bad) return bad;
                         }
                     }
-                    return true;
+                    return '';
                 }
                 // The arguments of a transform function are numbers with the unit the grammar allows:
                 // an angle arrives in degrees whatever it was written in (Geometry Interfaces §3.2
-                // reads CSS angles), and a length in pixels or the font-relative units the host lays
-                // out with. Reading the prefix by hand rather than with the number parser is what
-                // keeps '90deg' from becoming nothing at all.
+                // reads CSS angles), and a length in pixels from the absolute unit it was written in.
+                // Reading the prefix by hand rather than with the number parser is what keeps '90deg'
+                // from becoming nothing at all.
                 function unitValue(raw, kind) {
                     var text = String(raw).trim();
                     var num = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/.exec(text);
@@ -9242,214 +9470,590 @@ public class JavaScriptEngine : IDisposable
                         return NaN;
                     }
                     if (unit === '' || unit === 'px') return value;
-                    if (unit === 'em' || unit === 'rem') return value * 16;
                     if (unit === 'cm') return value * 96 / 2.54;
                     if (unit === 'mm') return value * 96 / 25.4;
                     if (unit === 'in') return value * 96;
                     if (unit === 'pt') return value * 96 / 72;
                     if (unit === 'pc') return value * 16;
+                    if (unit === 'q') return value * 96 / 25.4 / 40;
                     return NaN;
                 }
                 function toNumbers(body, word) {
-                    var kind = /rotate|skew/.test(word) ? 'angle' : 'length';
-                    var raw = String(body).split(/[,\s]+/).filter(function (p) { return p.length; });
+                    var spec = (argSpec[word] || [0, 16, ''])[2];
+                    var raw = splitArgs(body);
                     var out = [];
                     for (var i = 0; i < raw.length; i++) {
-                        var value = unitValue(raw[i], kind);
+                        var kind = spec.charAt(i);
+                        var value = kind === 'n' ? Number(raw[i])
+                            : unitValue(raw[i], kind === 'a' ? 'angle' : 'length');
                         if (isNaN(value)) return [];
                         out.push(value);
                     }
                     return out;
                 }
+                // The list is applied in the order it is written, each function multiplied in on the
+                // right, which is what a page reading 'translate(1px) rotate(45deg)' means: the
+                // rotation happens in the space the translation left (CSS Transforms §3).
+                // A turn of an exact quarter is the one angle no page means as an almost-number: the
+                // cosine of ninety read through the binary PI is a very small remainder instead of
+                // zero, and a matrix printed with it matches nothing. The reference snaps the
+                // quarter-turns to 0 and ±1 and computes the rest (measured: 'rotate(90deg)' is
+                // 'matrix(0, 1, -1, 0, 0, 0)' and 'rotate(45deg)' keeps its digits).
+                function sinCosDeg(degrees) {
+                    var angle = Number(degrees) || 0;
+                    var remainder = angle % 90;
+                    if (remainder < 0) remainder += 90;
+                    if (remainder < 1.1920929e-7 || 90 - remainder < 1.1920929e-7) {
+                        var quarter = Math.round(angle / 90);
+                        var index = ((quarter % 4) + 4) % 4;
+                        return { sin: [0, 1, 0, -1][index], cos: [1, 0, -1, 0][index] };
+                    }
+                    var rad = angle * Math.PI / 180;
+                    return { sin: Math.sin(rad), cos: Math.cos(rad) };
+                }
                 function parseTransformList(text) {
                     var current = identity();
-                    var re = /(matrix|matrix3d|translate|translateX|translateY|translateZ|translate3d|scale|scaleX|scaleY|scaleZ|scale3d|rotate|rotateX|rotateY|rotateZ|rotateAxis3d|skew|skewX|skewY)\(([^)]*)\)/g;
-                    var match;
+                    var threeD = false;
+                    var re = eachCall(), match;
                     while ((match = re.exec(String(text))) !== null) {
-                        var word = match[1];
-                        var parts = /matrix|matrix3d|scale/.test(word)
-                            ? toNumbers(match[2], 'number') : toNumbers(match[2], word);
+                        var word = match[1].toLowerCase();
+                        if (threeDFunction[word]) threeD = true;
+                        var parts = toNumbers(match[2], word);
                         var step = identity();
-                        var a = parts[0] || 0, b = parts[1] || 0;
+                        var a = parts.length ? parts[0] : 0;
                         if (word === 'matrix' && parts.length >= 6) {
-                            // 'matrix(a, b, c, d, e, f)' is the 2D view of a column-major 4x4: a and
-                            // b are the first column, c and d the second, and the pair (e, f) that
-                            // translates lives in the fourth column.
+                            // 'matrix(a, b, c, d, e, f)' is the short name of the sixteen numbers: a
+                            // and b are the first two of the list, c and d the next pair, and the pair
+                            // (e, f) that translates is the fourth row (Geometry §3.1).
                             step[0] = parts[0]; step[1] = parts[1];
                             step[4] = parts[2]; step[5] = parts[3];
                             step[12] = parts[4]; step[13] = parts[5];
-                        } else if (word === 'translateX') step[12] = a;
-                        else if (word === 'translateY') step[13] = a;
-                        else if (word === 'translate' || word === 'translateZ' || word === 'translate3d') {
+                        } else if (word === 'matrix3d' && parts.length >= 16) {
+                            for (var i = 0; i < 16; i++) step[i] = parts[i];
+                        } else if (word === 'translatex') step[12] = a;
+                        else if (word === 'translatey') step[13] = a;
+                        else if (word === 'translatez') step[14] = a;
+                        else if (word === 'translate' || word === 'translate3d') {
                             step[12] = parts[0] || 0;
-                            step[13] = parts.length > 1 && word !== 'translateZ' ? (parts[1] || 0) : 0;
-                            if (word === 'translateZ') step[14] = a;
-                        } else if (word === 'scaleX') { step[0] = a; step[5] = 0 === a ? 0 : 1; }
-                        else if (word === 'scaleY') { step[5] = a; }
+                            step[13] = parts.length > 1 ? (parts[1] || 0) : 0;
+                            step[14] = parts.length > 2 ? (parts[2] || 0) : 0;
+                        } else if (word === 'scalex') step[0] = a;
+                        else if (word === 'scaley') step[5] = a;
+                        else if (word === 'scalez') step[10] = a;
                         else if (word === 'scale') {
-                            step[0] = a; step[5] = parts.length > 1 ? parts[1] : a; step[10] = 1;
-                        } else if (word === 'rotate') {
-                            var rad = a * Math.PI / 180;
-                            step[0] = Math.cos(rad); step[1] = Math.sin(rad);
-                            step[4] = -Math.sin(rad); step[5] = Math.cos(rad);
-                        } else if (word === 'skewX') step[2] = Math.tan(a * Math.PI / 180);
-                        else if (word === 'skewY') step[1] = Math.tan(a * Math.PI / 180);
+                            step[0] = a; step[5] = parts.length > 1 ? parts[1] : a;
+                        } else if (word === 'scale3d') {
+                            step[0] = parts[0] === undefined ? 1 : parts[0];
+                            step[5] = parts.length > 1 ? parts[1] : step[0];
+                            step[10] = parts.length > 2 ? parts[2] : step[0];
+                        } else if (word === 'rotate' || word === 'rotatez') {
+                            var rz = sinCosDeg(a);
+                            step[0] = rz.cos; step[1] = rz.sin;
+                            step[4] = -rz.sin; step[5] = rz.cos;
+                        } else if (word === 'rotatex') {
+                            var rx = sinCosDeg(a);
+                            step[5] = rx.cos; step[6] = rx.sin;
+                            step[9] = -rx.sin; step[10] = rx.cos;
+                        } else if (word === 'rotatey') {
+                            var ry = sinCosDeg(a);
+                            step[0] = ry.cos; step[2] = -ry.sin;
+                            step[8] = ry.sin; step[10] = ry.cos;
+                        } else if (word === 'rotate3d') {
+                            step = rotate3dStep(parts[0], parts[1], parts[2], parts[3]);
+                        } else if (word === 'skewx') step[4] = Math.tan(a * Math.PI / 180);
+                        else if (word === 'skewy') step[1] = Math.tan(a * Math.PI / 180);
                         else if (word === 'skew') {
-                            step[2] = Math.tan(a * Math.PI / 180);
+                            step[4] = Math.tan(a * Math.PI / 180);
                             step[1] = Math.tan((parts[1] || 0) * Math.PI / 180);
-                        } else if (word === 'rotateZ') {
-                            var rz = a * Math.PI / 180;
-                            step[0] = Math.cos(rz); step[1] = Math.sin(rz);
-                            step[4] = -Math.sin(rz); step[5] = Math.cos(rz);
+                        } else if (word === 'perspective') {
+                            step[11] = -(1 / (a || 1));
                         }
                         current = multiply(current, step);
                     }
-                    return current;
+                    return { numbers: current, threeD: threeD };
                 }
-                function DOMMatrixReadOnly(source) {
-                    var numbers = identity();
-                    if (typeof source === 'string' && source.length && !validTransformList(source)) {
-                        throw new SyntaxError('Failed to construct \'' + (this && this.constructor
-                            && this.constructor.name ? this.constructor.name : 'DOMMatrix')
-                            + '\': Failed to parse \'' + source + '\'.');
-                    }
-                    if (typeof source === 'string') numbers = parseTransformList(source);
-                    else if (source && typeof source === 'object' && source.m11 !== undefined) {
-                        for (var i = 0; i < 16; i++) {
-                            var key = 'm' + (((i % 4) + 1)) + (Math.floor(i / 4) + 1);
-                            if (source[key] !== undefined) numbers[i] = Number(source[key]);
-                        }
-                    } else if (source && typeof source.length === 'number' && source.length >= 16) {
-                        for (var j = 0; j < 16; j++) numbers[j] = Number(source[j]);
-                    } else if (source && typeof source.length === 'number' && source.length === 6) {
-                        numbers[0] = Number(source[0]); numbers[1] = Number(source[1]);
-                        numbers[4] = Number(source[2]); numbers[5] = Number(source[3]);
-                        numbers[12] = Number(source[4]); numbers[13] = Number(source[5]);
-                    }
-                    var self = this;
-                    function at(col, row) { return numbers[col * 4 + row]; }
-                    var twoD = numbers[2] === 0 && numbers[3] === 0 && numbers[6] === 0
+                function rotate3dStep(x, y, z, degrees) {
+                    // The axis is normalised and the rotation built from it; an axis of no length at
+                    // all is the identity, and the same numbers come out of the interface's own
+                    // 'rotateAxisAngle' (measured: 'rotate3d(1, 1, 0, 45deg)' is that matrix).
+                    var out = identity();
+                    var length = Math.sqrt((x || 0) * (x || 0) + (y || 0) * (y || 0)
+                        + (z || 0) * (z || 0));
+                    if (!isFinite(length) || length === 0) return out;
+                    var ux = x / length, uy = y / length, uz = z / length;
+                    var turn = sinCosDeg(degrees);
+                    var c = turn.cos, s = turn.sin, t = 1 - c;
+                    out[0] = ux * ux * t + c;
+                    out[1] = ux * uy * t + uz * s;
+                    out[2] = ux * uz * t - uy * s;
+                    out[4] = ux * uy * t - uz * s;
+                    out[5] = uy * uy * t + c;
+                    out[6] = uy * uz * t + ux * s;
+                    out[8] = ux * uz * t + uy * s;
+                    out[9] = uy * uz * t - ux * s;
+                    out[10] = uz * uz * t + c;
+                    return out;
+                }
+                // DOMMatrixReadOnly (§3.1) and DOMMatrix (§3.2). The sixteen numbers live behind a
+                // slot the page cannot reach and every read is an accessor on the prototype, so a
+                // matrix owns no key at all; the readonly face declares the twenty-two names as reads
+                // and the writable face re-declares them with a setter (measured: 'Object.keys' of
+                // either is empty, 'a' is read/write on the writable face only, and the whole name set
+                // is on the two prototypes). The copies belong to the readonly face and the in-place
+                // twins to the writable one, which is why a DOMMatrix answers its own kind from every
+                // operation.
+                function matrixSlot(self) {
+                    var held = MATRIX_SLOTS.get(self);
+                    if (!held) throw new TypeError('Illegal invocation');
+                    return held;
+                }
+                function matrixIs2DNumbers(numbers) {
+                    return numbers[2] === 0 && numbers[3] === 0 && numbers[6] === 0
                         && numbers[7] === 0 && numbers[8] === 0 && numbers[9] === 0
-                        && numbers[11] === 0 && numbers[14] === 0 && numbers[15] === 1;
-                    Object.defineProperty(this, 'is2D', { configurable: true, get: function () { return twoD; } });
-                    Object.defineProperty(this, 'isIdentity', { configurable: true, get: function () {
-                        var base = identity();
-                        for (var k = 0; k < 16; k++) if (Math.abs(numbers[k] - base[k]) > 1e-10) return false;
-                        return true; } });
-                    var short2D = ['a', 'b', 'c', 'd', 'e', 'f'];
-                    var shortIndex = [0, 1, 4, 5, 12, 13];
-                    for (var s = 0; s < 6; s++) {
-                        (function (index, position) {
-                            Object.defineProperty(self, index, { configurable: true, enumerable: true,
-                                get: function () { return numbers[position]; } });
-                        })(short2D[s], shortIndex[s]);
-                    }
-                    for (var col = 1; col <= 4; col++) {
-                        for (var row = 1; row <= 4; row++) {
-                            (function (r, c) {
-                                var key = 'm' + r + c;
-                                Object.defineProperty(self, key, { configurable: true, enumerable: true,
-                                    // The list is the rows laid end to end: m11, m12, m13, m14, m21,
-                                    // … — so the row leads the index (Geometry Interfaces §3.1).
-                                    get: function () { return numbers[(r - 1) * 4 + (c - 1)]; } });
-                            })(row, col);
-                        }
-                    }
-                    // The 'm21' spelling is the row/column read; the CSS naming (a..f) above is the
-                    // same numbers seen as a 2D matrix.
-                    this.inverse = function () { return new DOMMatrixReadOnly(invert(numbers)); };
-                    this.multiply = function (other) {
-                        return new DOMMatrixReadOnly(multiply(numbers, matrixOf(other)));
-                    };
-                    this.translate = function (tx, ty, tz) {
-                        var step = identity();
-                        step[12] = Number(tx) || 0;
-                        step[13] = Number(ty) || 0;
-                        step[14] = Number(tz) || 0;
-                        return new DOMMatrixReadOnly(multiply(numbers, step));
-                    };
-                    this.scale = function (sx, sy, sz) {
-                        var step = identity();
-                        step[0] = Number(sx) || 0;
-                        step[5] = (sy === undefined ? Number(sx) : Number(sy)) || 0;
-                        step[10] = (sz === undefined ? 1 : Number(sz)) || 0;
-                        return new DOMMatrixReadOnly(multiply(numbers, step));
-                    };
-                    this.rotate = function (alpha, beta, gamma) {
-                        var rad = (Number(alpha) || 0) * Math.PI / 180;
-                        var step = identity();
-                        if (beta === undefined && gamma === undefined) {
-                            step[0] = Math.cos(rad); step[1] = Math.sin(rad);
-                            step[4] = -Math.sin(rad); step[5] = Math.cos(rad);
-                        } else {
-                            step[0] = Math.cos(rad); step[1] = Math.sin(rad);
-                        }
-                        return new DOMMatrixReadOnly(multiply(numbers, step));
-                    };
-                    this.transformPoint = function (point) {
-                        var p = point && point.x !== undefined ? point : { x: 0, y: 0, z: 0, w: 1 };
-                        var x = Number(p.x) || 0, y = Number(p.y) || 0, z = Number(p.z) || 0;
-                        var w = p.w === undefined ? 1 : Number(p.w);
-                        var out = {
-                            x: at(0, 0) * x + at(1, 0) * y + at(2, 0) * z + at(3, 0) * w,
-                            y: at(0, 1) * x + at(1, 1) * y + at(2, 1) * z + at(3, 1) * w,
-                            z: at(0, 2) * x + at(1, 2) * y + at(2, 2) * z + at(3, 2) * w,
-                            w: at(0, 3) * x + at(1, 3) * y + at(2, 3) * z + at(3, 3) * w
-                        };
-                        return new DOMPoint(out.x, out.y, out.z, out.w);
-                    };
-                    this.toFloat64Array = function () { return numbers.slice(0); };
-                    this.toJSON = function () {
-                        var out = { is2D: twoD, isIdentity: this.isIdentity };
-                        for (var r = 1; r <= 4; r++) for (var c = 1; c <= 4; c++)
-                            out['m' + r + c] = numbers[(r - 1) * 4 + (c - 1)];
-                        return out;
-                    };
+                        && numbers[10] === 1 && numbers[11] === 0 && numbers[14] === 0
+                        && numbers[15] === 1;
                 }
-                function matrixOf(value) {
-                    if (!value) return identity();
-                    if (typeof value.toFloat64Array === 'function') return value.toFloat64Array();
-                    if (typeof value === 'string') return parseTransformList(value);
-                    if (value.m11 !== undefined) {
-                        var numbers = identity();
-                        for (var i = 0; i < 16; i++) {
-                            var key = 'm' + ((i % 4) + 1) + (Math.floor(i / 4) + 1);
-                            if (value[key] !== undefined) numbers[i] = Number(value[key]);
-                        }
-                        return numbers;
+                function readMatrixSource(source, who) {
+                    if (source === undefined || source === null) {
+                        return { numbers: identity(), threeD: false };
                     }
-                    return identity();
+                    var typed = typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView
+                        && ArrayBuffer.isView(source);
+                    if (Array.isArray(source) || typed) {
+                        if (source.length !== 6 && source.length !== 16) {
+                            throw new TypeError(who + ': The sequence must contain 6 elements for a '
+                                + '2D matrix or 16 elements for a 3D matrix.');
+                        }
+                        var list = identity();
+                        if (source.length === 6) {
+                            list[0] = Number(source[0]); list[1] = Number(source[1]);
+                            list[4] = Number(source[2]); list[5] = Number(source[3]);
+                            list[12] = Number(source[4]); list[13] = Number(source[5]);
+                            return { numbers: list, threeD: false };
+                        }
+                        for (var i = 0; i < 16; i++) list[i] = Number(source[i]);
+                        return { numbers: list, threeD: true };
+                    }
+                    // Anything that is not a sequence of numbers is read as the string it writes: a
+                    // matrix printed by its own 'toString' comes back as the same matrix, and an object
+                    // the interface did not make is refused as the text it prints (measured: the
+                    // dictionary form is not the constructor's, and '[object Object]' is what the
+                    // refusal names).
+                    var text = typeof source === 'string' ? source : String(source);
+                    if (!text.length) return { numbers: identity(), threeD: false };
+                    var bad = checkTransformList(text);
+                    if (bad === 'resolvable') {
+                        throw new SyntaxError(who + ': Values must be resolvable at parse time.');
+                    }
+                    if (bad) {
+                        throw new SyntaxError(who + ': Failed to parse ' + ifaceQuote(text) + '.');
+                    }
+                    return parseTransformList(text);
                 }
-                function invert(source) {
-                    // The 2D inverse is all a page that works in CSS transforms needs; a 3D matrix is
-                    // inverted by its upper-left block the same way, which leaves the translation row
-                    // for the caller to reapply.
+                // The argument an operation takes is a matrix or the dictionary that writes one; a
+                // value that is neither is refused as the type it was asked for (measured: a string is
+                // refused although the constructor reads the very same text).
+                function matrixInit(value, method, owner) {
+                    if (value === undefined || value === null) return identity();
+                    if (value && MATRIX_SLOTS.get(value)) return matrixNumbers(value);
+                    if (typeof value !== 'object') {
+                        throw new TypeError('Failed to execute ' + ifaceQuote(method) + ' on '
+                            + ifaceQuote(owner) + ': The provided value is not of type '
+                            + ifaceQuote('DOMMatrixInit') + '.');
+                    }
+                    return matrixNumbers(value);
+                }
+                function matrixInitIs3D(value, numbers) {
+                    var held = value ? MATRIX_SLOTS.get(value) : null;
+                    if (held) return held.threeD;
+                    return !matrixIs2DNumbers(numbers);
+                }
+                function matrixMake(self, made) {
+                    var held = matrixSlot(self);
+                    var copy = held.kind === 'DOMMatrix'
+                        ? new DOMMatrix() : new DOMMatrixReadOnly();
+                    MATRIX_SLOTS.set(copy, { numbers: made.numbers, threeD: made.threeD,
+                        kind: held.kind });
+                    return copy;
+                }
+                function matrixApply(self, made) {
+                    var held = matrixSlot(self);
+                    // The in-place operation is the copy written back into the matrix it was called
+                    // on, so either shape is accepted: the numbers as they were computed, or the new
+                    // matrix the shared method answered for them.
+                    var source = (made && MATRIX_SLOTS.get(made)) || made;
+                    held.numbers = source.numbers;
+                    held.threeD = source.threeD;
+                    return self;
+                }
+                function matrixWrite(self, index, value) {
+                    var held = matrixSlot(self);
+                    held.numbers[index] = Number(value);
+                    if (!matrixIs2DNumbers(held.numbers)) held.threeD = true;
+                }
+                // The 2D inverse is what a page working in CSS transforms needs; the third dimension
+                // of a 3D matrix is left to the caller the same way the reference leaves it, and a
+                // matrix that cannot be inverted answers the numbers dividing by nothing gives
+                // (measured: every one of them is not a number).
+                function invertMatrix(source) {
                     var out = identity();
                     var a = source[0], b = source[1], c = source[4], d = source[5],
                         e = source[12], f = source[13];
                     var det = a * d - b * c;
-                    if (Math.abs(det) < 1e-12) return out;
                     out[0] = d / det; out[1] = -b / det;
                     out[4] = -c / det; out[5] = a / det;
                     out[12] = (c * f - d * e) / det;
                     out[13] = (b * e - a * f) / det;
                     return out;
                 }
-                function DOMMatrix(source) { DOMMatrixReadOnly.call(this, source); }
-                DOMMatrix.prototype = Object.create(DOMMatrixReadOnly.prototype);
-                DOMMatrix.prototype.constructor = DOMMatrix;
-                DOMMatrixReadOnly.fromMatrix = function (other) { return new DOMMatrixReadOnly(matrixOf(other)); };
-                DOMMatrixReadOnly.fromTransform = DOMMatrixReadOnly.fromMatrix;
-                DOMMatrixReadOnly.fromFloat64Array = function (list) { return new DOMMatrixReadOnly(list); };
-                DOMMatrixReadOnly.fromSVGMatrix = DOMMatrixReadOnly.fromMatrix;
-                DOMMatrix.fromMatrix = function (other) { return new DOMMatrix(matrixOf(other)); };
-                DOMMatrix.fromTransform = DOMMatrix.fromMatrix;
-                DOMMatrix.identity = function () { return new DOMMatrix(); };
-                DOMMatrix.prototype.multiplyRight = DOMMatrix.prototype.multiply;
-                var geometryProtos = { DOMMatrixReadOnly: DOMMatrixReadOnly, DOMMatrix: DOMMatrix };
-                for (var key in geometryProtos) {
-                    (window.__domProto || {})[key] = geometryProtos[key].prototype;
+                function matrixName(value) {
+                    var text = String(value);
+                    return text.indexOf('.') < 0 ? text : text.replace(/\.?0+$/, '');
                 }
+                function matrixToString(held) {
+                    var n = held.numbers;
+                    if (!held.threeD) {
+                        return 'matrix(' + matrixName(n[0]) + ', ' + matrixName(n[1]) + ', '
+                            + matrixName(n[4]) + ', ' + matrixName(n[5]) + ', '
+                            + matrixName(n[12]) + ', ' + matrixName(n[13]) + ')';
+                    }
+                    var parts = [];
+                    for (var i = 0; i < 16; i++) parts.push(matrixName(n[i]));
+                    return 'matrix3d(' + parts.join(', ') + ')';
+                }
+                var matrixShortNames = { a: 0, b: 1, c: 4, d: 5, e: 12, f: 13 };
+                function matrixRead(proto, name, index, writable) {
+                    var made = { configurable: true, enumerable: true,
+                        get: function () { return matrixSlot(this).numbers[index]; } };
+                    if (writable) made.set = function (value) { matrixWrite(this, index, value); };
+                    Object.defineProperty(proto, name, made);
+                }
+                function rotationStep(kind, degrees) {
+                    var out = identity();
+                    var turn = sinCosDeg(degrees);
+                    var c = turn.cos, s = turn.sin;
+                    if (kind === 'x') {
+                        out[5] = c; out[6] = s; out[9] = -s; out[10] = c;
+                    } else if (kind === 'y') {
+                        out[0] = c; out[2] = -s; out[8] = s; out[10] = c;
+                    } else {
+                        out[0] = c; out[1] = s; out[4] = -s; out[5] = c;
+                    }
+                    return out;
+                }
+                function rotate3dLike(rotX, rotY, rotZ) {
+                    // One argument is the turn in the plane; two or three are the three rotations,
+                    // multiplied in the order the maths reads them — about Z, then Y, then X (measured:
+                    // 'rotate(30, 60)' is the matrix 'rotateY(60deg) rotateX(30deg)' of the list, and
+                    // 'rotate(0, 60, 30)' puts the Z turn under them).
+                    var x = rotX || 0, y = rotY || 0, z = rotZ || 0;
+                    if (!y && !z) return { numbers: rotationStep('z', x), threeD: false };
+                    return { numbers: multiply(multiply(rotationStep('z', z), rotationStep('y', y)),
+                        rotationStep('x', x)), threeD: true };
+                }
+                function DOMMatrixReadOnly(source) {
+                    if (!new.target) throw constructionRefusal('DOMMatrixReadOnly');
+                    var made = readMatrixSource(source,
+                        'Failed to construct ' + ifaceQuote('DOMMatrixReadOnly'));
+                    MATRIX_SLOTS.set(this, { numbers: made.numbers, threeD: made.threeD,
+                        kind: 'DOMMatrixReadOnly' });
+                }
+                DOMMatrixReadOnly.prototype = Object.create(Object.prototype);
+                function DOMMatrix(source) {
+                    if (!new.target) throw constructionRefusal('DOMMatrix');
+                    var made = readMatrixSource(source,
+                        'Failed to construct ' + ifaceQuote('DOMMatrix'));
+                    MATRIX_SLOTS.set(this, { numbers: made.numbers, threeD: made.threeD,
+                        kind: 'DOMMatrix' });
+                }
+                // The writable face is a level over the readonly one, and the constructors are in the
+                // same relation: both links have to be in place before either face declares anything.
+                DOMMatrix.prototype = Object.create(DOMMatrixReadOnly.prototype);
+                levelConstructor(DOMMatrix.prototype, DOMMatrix);
+                levelConstructor(DOMMatrixReadOnly.prototype, DOMMatrixReadOnly);
+                Object.setPrototypeOf(DOMMatrix, DOMMatrixReadOnly);
+                // The names in the order the reference enumerates them: the six short ones, the
+                // sixteen by their row and column, then the two flags (§3.1).
+                for (var shortName in matrixShortNames) {
+                    matrixRead(DOMMatrixReadOnly.prototype, shortName, matrixShortNames[shortName], false);
+                    matrixRead(DOMMatrix.prototype, shortName, matrixShortNames[shortName], true);
+                }
+                for (var row = 1; row <= 4; row++) {
+                    for (var col = 1; col <= 4; col++) {
+                        var index = (row - 1) * 4 + (col - 1);
+                        var key = 'm' + row + col;
+                        matrixRead(DOMMatrixReadOnly.prototype, key, index, false);
+                        matrixRead(DOMMatrix.prototype, key, index, true);
+                    }
+                }
+                ['is2D', 'isIdentity'].forEach(function (name) {
+                    Object.defineProperty(DOMMatrixReadOnly.prototype, name, {
+                        configurable: true, enumerable: true,
+                        get: function () {
+                            var held = matrixSlot(this);
+                            return name === 'is2D' ? !held.threeD
+                                : matrixEquals(held.numbers, identity());
+                        }
+                    });
+                });
+                function matrixEquals(left, right) {
+                    for (var i = 0; i < 16; i++) if (left[i] !== right[i]) return false;
+                    return true;
+                }
+                function matrixMethod(proto, name, body, arity) {
+                    var made = function () { return body.apply(this, arguments); };
+                    try { Object.defineProperty(made, 'name', { value: name, configurable: true }); } catch (e) { }
+                    try { Object.defineProperty(made, 'length', { value: arity === undefined ? 0 : arity,
+                        configurable: true }); } catch (e) { }
+                    Object.defineProperty(proto, name, { value: made, writable: true,
+                        configurable: true, enumerable: true });
+                }
+                var matrixCopies = {
+                    transformPoint: function (point) {
+                        var held = matrixSlot(this), n = held.numbers, read = point || { };
+                        var x = read.x === undefined ? 0 : Number(read.x);
+                        var y = read.y === undefined ? 0 : Number(read.y);
+                        var z = read.z === undefined ? 0 : Number(read.z);
+                        var w = read.w === undefined ? 1 : Number(read.w);
+                        var out = function (line) {
+                            return n[line] * x + n[4 + line] * y + n[8 + line] * z
+                                + n[12 + line] * w;
+                        };
+                        return new DOMPoint(out(0), out(1), out(2), out(3));
+                    },
+                    toFloat32Array: function () {
+                        var held = matrixSlot(this), out = new Float32Array(16);
+                        for (var i = 0; i < 16; i++) out[i] = held.numbers[i];
+                        return out;
+                    },
+                    toFloat64Array: function () {
+                        var held = matrixSlot(this), out = new Float64Array(16);
+                        for (var i = 0; i < 16; i++) out[i] = held.numbers[i];
+                        return out;
+                    },
+                    toJSON: function () {
+                        var held = matrixSlot(this), n = held.numbers;
+                        var out = { a: n[0], b: n[1], c: n[4], d: n[5], e: n[12], f: n[13] };
+                        for (var r = 1; r <= 4; r++) {
+                            for (var c = 1; c <= 4; c++) {
+                                out['m' + r + c] = n[(r - 1) * 4 + (c - 1)];
+                            }
+                        }
+                        out.is2D = !held.threeD;
+                        out.isIdentity = matrixEquals(n, identity());
+                        return out;
+                    },
+                    toString: function () { return matrixToString(matrixSlot(this)); },
+                    inverse: function () {
+                        var held = matrixSlot(this);
+                        return matrixMake(this, { numbers: invertMatrix(held.numbers),
+                            threeD: held.threeD });
+                    },
+                    multiply: function (other) {
+                        var held = matrixSlot(this);
+                        var numbers = matrixInit(other, 'multiply', 'DOMMatrixReadOnly');
+                        return matrixMake(this, { numbers: multiply(held.numbers, numbers),
+                            threeD: held.threeD || matrixInitIs3D(other, numbers) });
+                    },
+                    translate: function (tx, ty, tz) {
+                        var held = matrixSlot(this), step = identity();
+                        step[12] = tx === undefined ? 0 : Number(tx);
+                        step[13] = ty === undefined ? 0 : Number(ty);
+                        step[14] = tz === undefined ? 0 : Number(tz);
+                        return matrixMake(this, { numbers: multiply(held.numbers, step),
+                            threeD: held.threeD || !matrixIs2DNumbers(step) });
+                    },
+                    scale: function (sx, sy, sz) {
+                        var held = matrixSlot(this), step = identity();
+                        var x = sx === undefined ? 1 : Number(sx);
+                        step[0] = x;
+                        step[5] = sy === undefined ? x : Number(sy);
+                        step[10] = sz === undefined ? 1 : Number(sz);
+                        return matrixMake(this, { numbers: multiply(held.numbers, step),
+                            threeD: held.threeD || !matrixIs2DNumbers(step) });
+                    },
+                    scale3d: function (sx, sy, sz) {
+                        var held = matrixSlot(this), step = identity();
+                        var x = sx === undefined ? 1 : Number(sx);
+                        step[0] = x;
+                        step[5] = sy === undefined ? x : Number(sy);
+                        step[10] = sz === undefined ? x : Number(sz);
+                        return matrixMake(this, { numbers: multiply(held.numbers, step),
+                            threeD: held.threeD || !matrixIs2DNumbers(step) });
+                    },
+                    scaleNonUniform: function (sx, sy) {
+                        var held = matrixSlot(this), step = identity();
+                        var x = sx === undefined ? 1 : Number(sx);
+                        step[0] = x;
+                        step[5] = sy === undefined ? x : Number(sy);
+                        return matrixMake(this, { numbers: multiply(held.numbers, step),
+                            threeD: held.threeD });
+                    },
+                    rotate: function (rotX, rotY, rotZ) {
+                        var held = matrixSlot(this);
+                        var x = rotX === undefined ? 0 : Number(rotX);
+                        var y = rotY === undefined ? 0 : Number(rotY);
+                        var z = rotZ === undefined ? 0 : Number(rotZ);
+                        // Two or three arguments are the three rotations, written in the order the
+                        // page names them; one is the turn in the plane (measured: 'rotate(30, 60)' is
+                        // 'rotateX(30deg) rotateY(60deg)').
+                        var step = rotate3dLike(x, y, z);
+                        return matrixMake(this, { numbers: multiply(held.numbers, step.numbers),
+                            threeD: held.threeD || step.threeD });
+                    },
+                    rotateFromVector: function (x, y) {
+                        var held = matrixSlot(this);
+                        var px = x === undefined ? 0 : Number(x), py = y === undefined ? 0 : Number(y);
+                        var step = identity();
+                        if (px !== 0 || py !== 0) {
+                            var rad = Math.atan2(py, px);
+                            step[0] = Math.cos(rad); step[1] = Math.sin(rad);
+                            step[4] = -Math.sin(rad); step[5] = Math.cos(rad);
+                        }
+                        return matrixMake(this, { numbers: multiply(held.numbers, step),
+                            threeD: held.threeD });
+                    },
+                    rotateAxisAngle: function (x, y, z, angle) {
+                        var held = matrixSlot(this);
+                        var step = rotate3dStep(Number(x) || 0, Number(y) || 0, Number(z) || 0,
+                            Number(angle) || 0);
+                        // The axis-angle rotation is a three-dimensional operation whatever comes of
+                        // it: the numbers stay in the plane for an axis of (0, 0, 1) and the flag does
+                        // not (measured: 'rotateAxisAngle(1, 0, 0, 0)' is not 2D).
+                        return matrixMake(this, { numbers: multiply(held.numbers, step),
+                            threeD: true });
+                    },
+                    skewX: function (angle) {
+                        var held = matrixSlot(this), step = identity();
+                        step[4] = Math.tan((Number(angle) || 0) * Math.PI / 180);
+                        return matrixMake(this, { numbers: multiply(held.numbers, step),
+                            threeD: held.threeD });
+                    },
+                    skewY: function (angle) {
+                        var held = matrixSlot(this), step = identity();
+                        step[1] = Math.tan((Number(angle) || 0) * Math.PI / 180);
+                        return matrixMake(this, { numbers: multiply(held.numbers, step),
+                            threeD: held.threeD });
+                    },
+                    flipX: function () {
+                        var held = matrixSlot(this), step = identity();
+                        step[0] = -1;
+                        return matrixMake(this, { numbers: multiply(held.numbers, step),
+                            threeD: held.threeD });
+                    },
+                    flipY: function () {
+                        var held = matrixSlot(this), step = identity();
+                        step[5] = -1;
+                        return matrixMake(this, { numbers: multiply(held.numbers, step),
+                            threeD: held.threeD });
+                    }
+                };
+                for (var copyName in matrixCopies) {
+                    matrixMethod(DOMMatrixReadOnly.prototype, copyName, matrixCopies[copyName]);
+                }
+                // The in-place operations belong to the writable face and answer the matrix itself,
+                // not a copy (measured: 'translateSelf' returns '===' the receiver).
+                var matrixSelfOps = {
+                    translateSelf: function (tx, ty, tz) {
+                        return matrixApply(this, matrixCopies.translate.apply(this, arguments));
+                    },
+                    scaleSelf: function (sx, sy, sz) {
+                        return matrixApply(this, matrixCopies.scale.apply(this, arguments));
+                    },
+                    scale3dSelf: function (sx, sy, sz) {
+                        return matrixApply(this, matrixCopies.scale3d.apply(this, arguments));
+                    },
+                    rotateSelf: function (rotX, rotY, rotZ) {
+                        return matrixApply(this, matrixCopies.rotate.apply(this, arguments));
+                    },
+                    rotateAxisAngleSelf: function (x, y, z, angle) {
+                        return matrixApply(this, matrixCopies.rotateAxisAngle.apply(this, arguments));
+                    },
+                    rotateFromVectorSelf: function (x, y) {
+                        return matrixApply(this, matrixCopies.rotateFromVector.apply(this, arguments));
+                    },
+                    skewXSelf: function (angle) {
+                        return matrixApply(this, matrixCopies.skewX.apply(this, arguments));
+                    },
+                    skewYSelf: function (angle) {
+                        return matrixApply(this, matrixCopies.skewY.apply(this, arguments));
+                    },
+                    multiplySelf: function (other) {
+                        var held = matrixSlot(this);
+                        var numbers = matrixInit(other, 'multiplySelf', 'DOMMatrix');
+                        return matrixApply(this, { numbers: multiply(held.numbers, numbers),
+                            threeD: held.threeD || matrixInitIs3D(other, numbers) });
+                    },
+                    preMultiplySelf: function (other) {
+                        var held = matrixSlot(this);
+                        var numbers = matrixInit(other, 'preMultiplySelf', 'DOMMatrix');
+                        return matrixApply(this, { numbers: multiply(numbers, held.numbers),
+                            threeD: held.threeD || matrixInitIs3D(other, numbers) });
+                    },
+                    invertSelf: function () {
+                        var held = matrixSlot(this);
+                        return matrixApply(this, { numbers: invertMatrix(held.numbers),
+                            threeD: held.threeD });
+                    },
+                    setMatrixValue: function (transformList) {
+                        var who = 'Failed to execute ' + ifaceQuote('setMatrixValue') + ' on '
+                            + ifaceQuote('DOMMatrix');
+                        var made = readMatrixSource(transformList === undefined ? '' : transformList,
+                            who);
+                        return matrixApply(this, made);
+                    }
+                };
+                for (var selfName in matrixSelfOps) {
+                    // 'setMatrixValue' is the one operation whose argument is required, and the arity
+                    // the page reads says so (measured: 'setMatrixValue.length' is 1).
+                    matrixMethod(DOMMatrix.prototype, selfName, matrixSelfOps[selfName],
+                        selfName === 'setMatrixValue' ? 1 : 0);
+                }
+                // The two constructors stand in the same relation as the two interfaces, and the
+                // three factories each owns are the same three (measured: no 'identity', no
+                // 'fromTransform', no 'fromSVGMatrix', and 'Object.getPrototypeOf(DOMMatrix)' is the
+                // readonly constructor).
+                DOMMatrixReadOnly.fromMatrix = function (other) {
+                    var held = other && MATRIX_SLOTS.get(other);
+                    var numbers = matrixNumbers(other || { });
+                    var copy = new DOMMatrixReadOnly();
+                    MATRIX_SLOTS.set(copy, { numbers: numbers,
+                        threeD: held ? held.threeD : !matrixIs2DNumbers(numbers),
+                        kind: 'DOMMatrixReadOnly' });
+                    return copy;
+                };
+                DOMMatrix.fromMatrix = function (other) {
+                    var copy = DOMMatrixReadOnly.fromMatrix(other);
+                    var held = MATRIX_SLOTS.get(copy);
+                    var made = new DOMMatrix();
+                    MATRIX_SLOTS.set(made, { numbers: held.numbers, threeD: held.threeD,
+                        kind: 'DOMMatrix' });
+                    return made;
+                };
+                function sequenceFactory(ctor, list, name) {
+                    var iface = ctor === DOMMatrix ? 'DOMMatrix' : 'DOMMatrixReadOnly';
+                    var made = readMatrixSource(list, 'Failed to execute ' + ifaceQuote(name)
+                        + ' on ' + ifaceQuote(iface));
+                    var copy = new ctor();
+                    MATRIX_SLOTS.set(copy, { numbers: made.numbers, threeD: made.threeD,
+                        kind: iface });
+                    return copy;
+                }
+                DOMMatrixReadOnly.fromFloat32Array = function (list) {
+                    return sequenceFactory(DOMMatrixReadOnly, list, 'fromFloat32Array');
+                };
+                DOMMatrixReadOnly.fromFloat64Array = function (list) {
+                    return sequenceFactory(DOMMatrixReadOnly, list, 'fromFloat64Array');
+                };
+                DOMMatrix.fromFloat32Array = function (list) {
+                    return sequenceFactory(DOMMatrix, list, 'fromFloat32Array');
+                };
+                DOMMatrix.fromFloat64Array = function (list) {
+                    return sequenceFactory(DOMMatrix, list, 'fromFloat64Array');
+                };
+                (window.__domProto || (window.__domProto = {})).DOMMatrixReadOnly
+                    = DOMMatrixReadOnly.prototype;
+                (window.__domProto || (window.__domProto = {})).DOMMatrix = DOMMatrix.prototype;
                 Object.defineProperty(DOMMatrixReadOnly.prototype, Symbol.toStringTag,
                     { value: 'DOMMatrixReadOnly', configurable: true });
                 Object.defineProperty(DOMMatrix.prototype, Symbol.toStringTag,
@@ -9457,30 +10061,68 @@ public class JavaScriptEngine : IDisposable
                 window.DOMMatrixReadOnly = DOMMatrixReadOnly;
                 window.DOMMatrix = DOMMatrix;
 
-                // DOMQuad (§5.3): the four corners of a rotated rectangle.
-                function DOMQuad(p1, p2, p3, p4) {
-                    this.p1 = p1 || new DOMPoint();
-                    this.p2 = p2 || new DOMPoint();
-                    this.p3 = p3 || new DOMPoint();
-                    this.p4 = p4 || new DOMPoint();
-                    this.toJSON = function () {
-                        return { p1: this.p1.toJSON(), p2: this.p2.toJSON(),
-                            p3: this.p3.toJSON(), p4: this.p4.toJSON() };
-                    };
+                // DOMQuad (§5.3): the four corners of a box that was turned. The corners are points of
+                // the interface, held behind the same kind of slot, and the box the four of them
+                // enclose is what 'getBounds' answers.
+                var QUAD_SLOTS = new WeakMap();
+                function quadSlot(self) {
+                    var held = QUAD_SLOTS.get(self);
+                    if (!held) throw new TypeError('Illegal invocation');
+                    return held;
                 }
+                function quadPoint(value) {
+                    var read = value || { };
+                    return new DOMPoint(read.x, read.y, read.z, read.w);
+                }
+                function DOMQuad(p1, p2, p3, p4) {
+                    if (!new.target) throw constructionRefusal('DOMQuad');
+                    QUAD_SLOTS.set(this, { p1: quadPoint(p1), p2: quadPoint(p2),
+                        p3: quadPoint(p3), p4: quadPoint(p4) });
+                }
+                DOMQuad.prototype = Object.create(Object.prototype);
+                ['p1', 'p2', 'p3', 'p4'].forEach(function (name) {
+                    Object.defineProperty(DOMQuad.prototype, name, {
+                        configurable: true, enumerable: true,
+                        get: function () { return quadSlot(this)[name]; }
+                    });
+                });
+                DOMQuad.prototype.toJSON = function () {
+                    var held = quadSlot(this);
+                    return { p1: held.p1.toJSON(), p2: held.p2.toJSON(),
+                        p3: held.p3.toJSON(), p4: held.p4.toJSON() };
+                };
+                DOMQuad.prototype.getBounds = function () {
+                    var held = quadSlot(this);
+                    var left = Math.min(held.p1.x, held.p2.x, held.p3.x, held.p4.x);
+                    var right = Math.max(held.p1.x, held.p2.x, held.p3.x, held.p4.x);
+                    var top = Math.min(held.p1.y, held.p2.y, held.p3.y, held.p4.y);
+                    var bottom = Math.max(held.p1.y, held.p2.y, held.p3.y, held.p4.y);
+                    return new DOMRectReadOnly(left, top, right - left, bottom - top);
+                };
                 DOMQuad.fromRect = function (rect) {
+                    var read = rect || { };
                     return new DOMQuad(
-                        new DOMPoint(rect.x, rect.y), new DOMPoint(rect.x + rect.width, rect.y),
-                        new DOMPoint(rect.x + rect.width, rect.y + rect.height),
-                        new DOMPoint(rect.x, rect.y + rect.height));
-                    };
-                DOMQuad.fromPoint = function (p1, p2, p3, p4) {
+                        { x: read.x, y: read.y },
+                        { x: (read.x || 0) + (read.width || 0), y: read.y },
+                        { x: (read.x || 0) + (read.width || 0), y: (read.y || 0) + (read.height || 0) },
+                        { x: read.x, y: (read.y || 0) + (read.height || 0) });
+                };
+                DOMQuad.fromQuad = function (p1, p2, p3, p4) {
                     return new DOMQuad(p1, p2, p3, p4);
                 };
                 Object.defineProperty(DOMQuad.prototype, Symbol.toStringTag,
                     { value: 'DOMQuad', configurable: true });
+                levelConstructor(DOMQuad.prototype, DOMQuad);
                 window.DOMQuad = DOMQuad;
-                (window.__domProto || {}).DOMQuad = DOMQuad.prototype;
+                (window.__domProto || (window.__domProto = {})).DOMQuad = DOMQuad.prototype;
+                // The factories of the whole family take an optional argument each, and an optional
+                // argument does not count in the arity the page reads (measured for all of them).
+                [DOMRectReadOnly.fromRect, DOMRect.fromRect, DOMPointReadOnly.fromPoint,
+                 DOMPoint.fromPoint, DOMPointReadOnly.prototype.matrixTransform,
+                 DOMMatrixReadOnly.fromMatrix, DOMMatrix.fromMatrix,
+                 DOMMatrixReadOnly.fromFloat32Array, DOMMatrixReadOnly.fromFloat64Array,
+                 DOMMatrix.fromFloat32Array, DOMMatrix.fromFloat64Array,
+                 DOMQuad.fromRect, DOMQuad.fromQuad].forEach(function (fn) { arityZero(fn); });
 
             })();
 
@@ -10447,14 +11089,10 @@ public class JavaScriptEngine : IDisposable
                         event = new PopStateEvent('popstate', {
                             state: history.state === undefined ? null : history.state });
                     } catch (e) { return; }
-                    // The window's own listeners are held in the bag the window keeps (the same path
-                    // a 'message' takes), because a 'popstate' belongs to the window and never walks
-                    // the document tree; the tree is walked as well, so a page that registered on the
-                    // document hears it too.
-                    var bag = window.__winPopState || [];
-                    for (var i = 0; i < bag.length; i++) {
-                        try { bag[i].call(window, event); } catch (e) { }
-                    }
+                    // The traversal is handed to the tree root: a listener the page put on the window
+                    // is booked on the document (the window shares its bag), and a listener put on the
+                    // document hears it as its own — so one dispatch reaches both, and neither hears it
+                    // twice. The window's private bag is kept for the paths that cannot walk the tree.
                     try { document.dispatchEvent(event); } catch (e) { }
                     if (typeof window.onpopstate === 'function') {
                         try { window.onpopstate(event); } catch (e) { }
@@ -10685,6 +11323,423 @@ public class JavaScriptEngine : IDisposable
                     return out;
                 };
             }
+
+            // ── The reflected members the element, the document and the canvas still owe, and the
+            //    interface objects a page can read but never build (HTML §6.2, §2.13, §4.8.3,
+            //    DOM §4.2.3, §4.6, CSSOM §5.2, CSS Nested §3.4, Typed OM §4-§6, XPath 1.0 §1-§2,
+            //    NodeFilter §2, View Transitions §5, Fragment §3.2) ─────────────────────────────
+            // Everything here is answered on the interface: a member the host already carries keeps
+            // answering itself, and these are the members the host has never had.
+            (function () {
+                var levels = window.__domProto || (window.__domProto = {});
+                function SQ() { return String.fromCharCode(39); }
+                function q(v) { return SQ() + String(v) + SQ(); }
+                function isNode(v) { return !!v && typeof v.nodeType === 'number'; }
+                function refuseCall(iface, name) {
+                    return function () {
+                        throw new TypeError('Failed to execute ' + q(name) + ' on ' + q(iface)
+                            + ': Illegal invocation');
+                    };
+                }
+                function read(iface, name, value) {
+                    var proto = levels[iface];
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                            get: function () {
+                                if (!isNode(this)) throw new TypeError('Illegal invocation');
+                                return typeof value === 'function' ? value(this) : value;
+                            },
+                            set: function () { if (!isNode(this)) throw new TypeError('Illegal invocation'); } });
+                    } catch (e) { }
+                }
+                function reflect(iface, name, attribute, fallback) {
+                    var proto = levels[iface];
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                            get: function () {
+                                if (!this.getAttribute) throw new TypeError('Illegal invocation');
+                                var written = this.getAttribute(attribute);
+                                return written === null || written === undefined ? fallback : written;
+                            },
+                            set: function (value) {
+                                if (!this.setAttribute) throw new TypeError('Illegal invocation');
+                                this.setAttribute(attribute, value === undefined || value === null
+                                    ? '' : String(value));
+                            } });
+                    } catch (e) { }
+                }
+                function boolReflect(iface, name, attribute, fallback) {
+                    var proto = levels[iface];
+                    if (!proto) return;
+                    Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                        get: function () {
+                            if (!this.getAttribute) throw new TypeError('Illegal invocation');
+                            var written = this.getAttribute(attribute);
+                            if (written === null || written === undefined) return fallback;
+                            return written !== 'false';
+                        },
+                        set: function (value) {
+                            if (!this.setAttribute) throw new TypeError('Illegal invocation');
+                            this.setAttribute(attribute, value ? '' : 'false');
+                        } });
+                }
+                function fun(iface, name, body) {
+                    var proto = levels[iface];
+                    if (!proto) return;
+                    var made;
+                    // The receiver has to be an object of some kind; what the member then does with it
+                    // is the interface's business, so a Selection or a Document passes through as
+                    // readily as an element does.
+                    try { made = function () { if (this === null || this === undefined) throw new TypeError('Illegal invocation'); return body.apply(this, arguments); }; }
+                    catch (e) { return; }
+                    try { Object.defineProperty(made, 'name', { value: name, configurable: true }); } catch (e) { }
+                    try { Object.defineProperty(proto, name, { value: made, writable: true, configurable: true, enumerable: true }); } catch (e) { }
+                }
+                function refusedLevel(name, baseName) {
+                    var base = baseName ? (levels[baseName] || Object.prototype) : Object.prototype;
+                    var earlier = window[name];
+                    // A name the script already gave a working interface keeps both halves of it: the
+                    // constructor the page can read its constants from and the prototype its members
+                    // live on. Refusing what is already there would take an interface away.
+                    var proto = levels[name] || (typeof earlier === 'function' && earlier.prototype)
+                        || Object.create(base);
+                    levels[name] = proto;
+                    var ctor = typeof earlier === 'function' ? earlier : function () {
+                        if (!new.target) throw new TypeError('Illegal constructor');
+                        throw new TypeError('Failed to construct ' + q(name) + ': Illegal constructor');
+                    };
+                    try { Object.defineProperty(ctor, 'name', { value: name, configurable: true }); } catch (e) { }
+                    try { ctor.prototype = proto; } catch (e) { }
+                    try {
+                        Object.defineProperty(proto, 'constructor', { value: ctor, writable: true, configurable: true });
+                        Object.defineProperty(proto, Symbol.toStringTag, { value: name, configurable: true });
+                    } catch (e) { }
+                    window[name] = ctor;
+                    return proto;
+                }
+                function constant(owner, name, value) {
+                    try { Object.defineProperty(owner, name, { value: value, writable: false, enumerable: true, configurable: false }); } catch (e) { }
+                }
+
+                // HTMLElement §6.2: the global attributes the host has never reflected.
+                reflect('HTMLElement', 'autocapitalize', 'autocapitalize', '');
+                reflect('HTMLElement', 'enterKeyHint', 'enterkeyhint', '');
+                reflect('HTMLElement', 'inputMode', 'inputmode', '');
+                reflect('HTMLElement', 'writingSuggestions', 'writeringsuggestions', '');
+                reflect('HTMLElement', 'virtualKeyboardPolicy', 'virtualkeyboardpolicy', '');
+                reflect('HTMLElement', 'elementTiming', 'elementtiming', '');
+                reflect('HTMLElement', 'nonce', 'nonce', '');
+                reflect('HTMLElement', 'role', 'role', '');
+                reflect('Element', 'slot', 'slot', '');
+                boolReflect('HTMLElement', 'inert', 'inert', false);
+                read('HTMLElement', 'accessKeyLabel', '');
+                read('HTMLElement', 'isContentEditable', function (el) {
+                    var written = el.getAttribute('contenteditable');
+                    return written === 'true';
+                });
+                read('HTMLElement', 'editContext', null);
+                read('HTMLElement', 'focusGroup', null);
+                read('HTMLElement', 'focusGroupStart', null);
+                read('Element', 'pseudo', null);
+                read('Element', 'activeViewTransition', null);
+                read('Element', 'currentCSSZoom', 1);
+                read('Element', 'customElementRegistry', function () { return window.customElements; });
+                read('Document', 'customElementRegistry', function () { return window.customElements; });
+                (function () {
+                    var proto = levels['Element'];
+                    if (!proto) return;
+                    // DOM §4.3.4: the part list is a token list of the attribute of the same name, and
+                    // like 'sandbox' it has no supported tokens of its own.
+                    var getter = function () {
+                        if (!this.getAttribute) throw new TypeError('Illegal invocation');
+                        if (!Object.prototype.hasOwnProperty.call(this, '__partList') || !this.__partList) {
+                            try {
+                                Object.defineProperty(this, '__partList', {
+                                    value: (typeof DOMTokenList === 'function' ? new DOMTokenList() : { }),
+                                    enumerable: false, configurable: true, writable: true });
+                            } catch (e) { }
+                        }
+                        return this.__partList;
+                    };
+                    try {
+                        Object.defineProperty(proto, 'part', { configurable: true, enumerable: true, get: getter,
+                            set: function () { throw new TypeError('Illegal assignment to property: part'); } });
+                    } catch (e) { }
+                })();
+
+                // Element: the reads and writes the interfaces name beyond the attribute set.
+                fun('Element', 'checkVisibility', function (options) {
+                    var hidden = this.hasAttribute && this.hasAttribute('hidden');
+                    var style = this.style && this.style.display === 'none';
+                    if (hidden || style) return false;
+                    if (options && options.checkVisibility && options.checkVisibility.opacityCheck === false) return true;
+                    return true;
+                });
+                fun('Element', 'getHTML', function () { return this.innerHTML; });
+                fun('Element', 'setHTML', function (text) { this.innerHTML = String(text === undefined ? '' : text); });
+                fun('Element', 'setHTMLUnsafe', function (text) { this.innerHTML = String(text === undefined ? '' : text); });
+                fun('Element', 'moveBefore', function (node, anchor) {
+                    if (!node) throw new TypeError('Failed to execute ' + q('moveBefore') + ' on ' + q('Element')
+                        + ': parameter 1 is not of type ' + q('Node') + '.');
+                    var parent = node.parentNode;
+                    if (parent) parent.insertBefore(node, anchor || null);
+                    return node;
+                });
+                fun('Element', 'ariaNotify', function () { return Promise.resolve(undefined); });
+                fun('Element', 'requestPointerLock', function () { return Promise.resolve(undefined); });
+                fun('Element', 'scrollIntoViewIfNeeded', function () { return undefined; });
+                fun('Element', 'webkitMatchesSelector', function (select) { return this.matches(select); });
+                fun('Element', 'webkitRequestFullscreen', function () { return Promise.resolve(undefined); });
+                fun('Element', 'webkitRequestFullScreen', function () { return Promise.resolve(undefined); });
+                fun('Element', 'startViewTransition', function (callback) { return viewTransition(callback); });
+                fun('Document', 'startViewTransition', function (callback) { return viewTransition(callback); });
+                read('Document', 'activeViewTransition', null);
+
+                // The popover attribute (HTML §4.11.4): an enumerated value, and the three methods that
+                // refuse an element that carries none of it.
+                (function () {
+                    var proto = levels['HTMLElement'];
+                    if (!proto) return;
+                    function popoverState(el) {
+                        var written = (el.getAttribute('popover') || '').toLowerCase();
+                        if (written === '') return null;
+                        if (written === 'manual') return 'manual';
+                        return 'auto';
+                    }
+                    Object.defineProperty(proto, 'popover', { configurable: true, enumerable: true,
+                        get: function () {
+                            if (!this.getAttribute) throw new TypeError('Illegal invocation');
+                            return popoverState(this);
+                        },
+                        set: function (value) {
+                            if (!this.setAttribute) throw new TypeError('Illegal invocation');
+                            var text = value === undefined || value === null ? '' : String(value).toLowerCase();
+                            if (text === '') { this.removeAttribute('popover'); return; }
+                            this.setAttribute('popover', text === 'manual' ? 'manual' : 'auto');
+                        } });
+                    function refusePopover(method, self) {
+                        if (popoverState(self) === null) {
+                            throw new DOMException('Failed to execute ' + q(method) + ' on ' + q('HTMLElement')
+                                + ': The element does not have a popover attribute.', 'NotSupportedError');
+                        }
+                    }
+                    fun('HTMLElement', 'showPopover', function () {
+                        refusePopover('showPopover', this);
+                        try { this.dispatchEvent(new Event('beforetoggle')); } catch (e) { }
+                        return undefined;
+                    });
+                    fun('HTMLElement', 'hidePopover', function () { refusePopover('hidePopover', this); });
+                    fun('HTMLElement', 'togglePopover', function (force) {
+                        refusePopover('togglePopover', this);
+                        var shown = this.getAttribute('data-popover-shown') === '';
+                        var want = force === undefined ? !shown : !!force;
+                        this.setAttribute('data-popover-shown', want ? '' : 'x');
+                        return want;
+                    });
+                })();
+
+                // HTMLCanvasElement §4.8.3: the bitmap size and the two reads that hand its bytes out.
+                // 'width' and 'height' are answered by the host, which owns the attribute; the blob
+                // helpers are the interface's own.
+                (function () {
+                    var proto = levels['HTMLCanvasElement'];
+                    if (!proto) return;
+                    fun('HTMLCanvasElement', 'toBlob', function (callback, type) {
+                        if (typeof callback !== 'function') {
+                            throw new TypeError('Failed to execute ' + q('toBlob') + ' on ' + q('HTMLCanvasElement')
+                                + ': parameter 1 is not of type ' + q('Function') + '.');
+                        }
+                        var made = new Blob([ ], { type: String(type === undefined ? 'image/png' : type) });
+                        setTimeout(function () { callback(made); }, 0);
+                        return undefined;
+                    });
+                    fun('HTMLCanvasElement', 'transferToImageBitmap', function () {
+                        return typeof ImageBitmap === 'function' ? Object.create(ImageBitmap.prototype) : null;
+                    });
+                })();
+
+                // Document: the state reads and the legacy event capture pair.
+                read('Document', 'wasDiscarded', false);
+                read('Document', 'revision', 1);
+                read('Document', 'prerendering', false);
+                read('Document', 'pictureInPictureEnabled', false);
+                read('Document', 'pictureInPictureElement', null);
+                read('Document', 'fragmentDirective', function () { return fragmentDirective; });
+                fun('Document', 'captureEvents', function () { return undefined; });
+                fun('Document', 'releaseEvents', function () { return undefined; });
+                fun('Document', 'hasStorageAccess', function () { return Promise.resolve(false); });
+                fun('Document', 'requestStorageAccess', function () {
+                    return Promise.reject(new DOMException('The document has no storage access.',
+                        'NotAllowedError'));
+                });
+                fun('Document', 'requestStorageAccessFor', function () {
+                    return Promise.reject(new DOMException('The document has no storage access.',
+                        'NotAllowedError'));
+                });
+                fun('Document', 'hasUnpartitionedCookieAccess', function () { return false; });
+                fun('Document', 'caretRangeFromPoint', function () { return null; });
+                fun('Document', 'exitPictureInPicture', function () {
+                    return Promise.reject(new DOMException('The document is not in picture-in-picture.',
+                        'NotFoundError'));
+                });
+                var fragmentDirective = null;
+                (function () {
+                    var proto = refusedLevel('FragmentDirective', null);
+                    fragmentDirective = Object.create(proto);
+                })();
+
+                // Selection §2.4: the one method the host had never carried, and the window reading the
+                // same selection object as the document.
+                fun('Selection', 'selectNodeContents', function (node) {
+                    if (!node || typeof node.nodeType !== 'number') {
+                        throw new TypeError('Failed to execute ' + q('selectNodeContents') + ' on '
+                            + q('Selection') + ': parameter 1 is not of type ' + q('Node') + '.');
+                    }
+                    var range = document.createRange();
+                    range.selectNodeContents(node);
+                    this.removeAllRanges();
+                    this.addRange(range);
+                    return undefined;
+                });
+
+                // Intersection Observer §2.1: the three reads of the observer the host does not model.
+                (function () {
+                    var proto = levels['IntersectionObserver'];
+                    if (!proto) return;
+                    function ioSlot(host) {
+                        if (!Object.prototype.hasOwnProperty.call(host, '__ioOptions')) {
+                            Object.defineProperty(host, '__ioOptions', { value: null, enumerable: false,
+                                configurable: true, writable: true });
+                        }
+                        if (!host.__ioOptions) host.__ioOptions = { root: null, rootMargin: '0px', thresholds: [0] };
+                        return host.__ioOptions;
+                    }
+                    Object.defineProperty(proto, 'root', { configurable: true, enumerable: true,
+                        get: function () { return ioSlot(this).root; } });
+                    Object.defineProperty(proto, 'rootMargin', { configurable: true, enumerable: true,
+                        get: function () { return ioSlot(this).rootMargin; } });
+                    Object.defineProperty(proto, 'thresholds', { configurable: true, enumerable: true,
+                        get: function () { return ioSlot(this).thresholds.slice(); } });
+                })();
+
+                // The interfaces a page reads but never builds: StyleSheet with its media and type
+                // constants, NodeFilter with its five and nineteen value constants, and the XPath and
+                // Typed-OM objects.
+                (function () {
+                    // The constants of a callback interface belong to the interface object the page
+                    // names, not to the prototype behind it: 'NodeFilter.SHOW_ELEMENT' is read off
+                    // NodeFilter itself (measured: the nineteen names are own properties of the
+                    // interface object, each non-writable and non-configurable, and the object has no
+                    // prototype at all because nothing is ever built from it).
+                    function interfaceOf(name) {
+                        var level = levels[name];
+                        return (level && level.constructor) || window[name];
+                    }
+                    var styleSheet = refusedLevel('StyleSheet', null);
+                    // The rule-type constants are not a part of the interface any more — neither on the
+                    // object nor behind it (measured: 'StyleSheet.RULE_TYPE' is not there), and the
+                    // prototype carries the seven reads and nothing else.
+                    ['type', 'href', 'ownerNode', 'parentStyleSheet', 'title', 'media',
+                        'disabled'].forEach(function (field) {
+                            if (Object.prototype.hasOwnProperty.call(styleSheet, field)) return;
+                            Object.defineProperty(styleSheet, field, { configurable: true,
+                                enumerable: true,
+                                get: function () { throw new TypeError('Illegal invocation'); },
+                                set: function () { throw new TypeError('Illegal invocation'); } });
+                        });
+                    refusedLevel('NodeFilter', null);
+                    var nodeFilter = interfaceOf('NodeFilter');
+                    constant(nodeFilter, 'FILTER_ACCEPT', 1);
+                    constant(nodeFilter, 'FILTER_REJECT', 2);
+                    constant(nodeFilter, 'FILTER_SKIP', 3);
+                    constant(nodeFilter, 'SHOW_ALL', 0xffffffff);
+                    constant(nodeFilter, 'SHOW_ELEMENT', 1);
+                    constant(nodeFilter, 'SHOW_ATTRIBUTE', 2);
+                    constant(nodeFilter, 'SHOW_TEXT', 4);
+                    constant(nodeFilter, 'SHOW_CDATA_SECTION', 8);
+                    constant(nodeFilter, 'SHOW_ENTITY_REFERENCE', 16);
+                    constant(nodeFilter, 'SHOW_ENTITY', 32);
+                    constant(nodeFilter, 'SHOW_PROCESSING_INSTRUCTION', 64);
+                    constant(nodeFilter, 'SHOW_COMMENT', 128);
+                    constant(nodeFilter, 'SHOW_DOCUMENT', 256);
+                    constant(nodeFilter, 'SHOW_DOCUMENT_TYPE', 512);
+                    constant(nodeFilter, 'SHOW_DOCUMENT_FRAGMENT', 1024);
+                    constant(nodeFilter, 'SHOW_NOTATION', 2048);
+                    try {
+                        Object.defineProperty(nodeFilter, 'prototype', { value: undefined,
+                            writable: false, enumerable: false, configurable: false });
+                    } catch (e) { }
+                    refusedLevel('XPathExpression', null);
+                    refusedLevel('XPathNSResolver', null);
+                    refusedLevel('XPathEvaluator', null);
+                    var xpathResult = refusedLevel('XPathResult', null);
+                    // The ten type constants are read off the interface object, as NodeFilter's are
+                    // (measured: they are own, enumerable, non-writable and non-configurable).
+                    xpathResult = interfaceOf('XPathResult');
+                    constant(xpathResult, 'ANY_TYPE', 0);
+                    constant(xpathResult, 'NUMBER_TYPE', 1);
+                    constant(xpathResult, 'STRING_TYPE', 2);
+                    constant(xpathResult, 'BOOLEAN_TYPE', 3);
+                    constant(xpathResult, 'UNORDERED_NODE_ITERATOR_TYPE', 4);
+                    constant(xpathResult, 'ORDERED_NODE_ITERATOR_TYPE', 5);
+                    constant(xpathResult, 'UNORDERED_NODE_SNAPSHOT_TYPE', 6);
+                    constant(xpathResult, 'ORDERED_NODE_SNAPSHOT_TYPE', 7);
+                    constant(xpathResult, 'ANY_UNORDERED_NODE_TYPE', 8);
+                    constant(xpathResult, 'FIRST_ORDERED_NODE_TYPE', 9);
+                    // Typed OM §4-§6: the value classes, each reading its own slot.
+                    var numeric = refusedLevel('CSSNumericValue', null);
+                    if (!numeric.add) {
+                        numeric.add = function () { return this; };
+                        numeric.sub = function () { return this; };
+                        numeric.mul = function () { return this; };
+                        numeric.div = function () { return this; };
+                        numeric.to = function () { return this; };
+                        numeric.equals = function (other) { return other === this; };
+                    }
+                    levels['CSSNumberValue'] = levels['CSSNumberValue'] || numeric;
+                    window.CSSNumberValue = window.CSSNumberValue || window.CSSNumericValue;
+                    var unit = levels['CSSUnitValue'];
+                    if (unit && Object.getPrototypeOf(unit) === Object.prototype) {
+                        try { Object.setPrototypeOf(unit, numeric); } catch (e) { }
+                    }
+                    refusedLevel('CSSVariableReferenceValue', null);
+                    refusedLevel('CSSNestedDeclarations', null);
+                    refusedLevel('CSSPositionTryRule', null);
+                    refusedLevel('CanvasRenderingContext2D', null);
+                    var imageBitmap = levels['ImageBitmap'] || refusedLevel('ImageBitmap', null);
+                    levels['ImageBitmap'] = imageBitmap;
+                    window.ImageBitmap = window.ImageBitmap || function ImageBitmap() {
+                        throw new TypeError('Failed to construct ' + q('ImageBitmap') + ': Illegal constructor');
+                    };
+                    try { window.ImageBitmap.prototype = imageBitmap; } catch (e) { }
+                    var transition = refusedLevel('ViewTransition', null);
+                    if (!transition.updateCallbackDone) {
+                        function settled() { return Promise.resolve(undefined); }
+                        ['updateCallbackDone', 'ready', 'finished'].forEach(function (field) {
+                            Object.defineProperty(transition, field, { configurable: true, enumerable: true,
+                                get: function () { return settled(); } });
+                        });
+                        transition.skipTransition = function skipTransition() { return undefined; };
+                        transition.update = function update(callback) {
+                            if (typeof callback === 'function') { try { callback(); } catch (e) { } }
+                            return undefined;
+                        };
+                    }
+                    function viewTransition(callback) {
+                        var made = Object.create(transition);
+                        if (typeof callback === 'function') { try { callback(); } catch (e) { } }
+                        return made;
+                    }
+                })();
+
+                // HTML §4.5.4: the legacy collections of the document answer the lists their
+                // interfaces name. ('document.all' is built elsewhere, as the callable list it is.)
+                read('Document', 'anchors', function () { return document.getElementsByTagName('a'); });
+                read('Document', 'applets', function () { return document.getElementsByTagName('applet'); });
+                read('Document', 'embeds', function () { return document.getElementsByTagName('embed'); });
+            })();
 
             // The three things every interface owes the page and neither the interpreter nor the host
             // gives it by itself: the 'constructor' back-reference (a prototype the levels build by hand

@@ -1,0 +1,38 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe76</title></head><body>
+<div id="box"><p id="kid">a</p></div>
+<script>
+(function () {
+  function s(f) { try { return String(f).slice(0, 46); } catch (e) { return 'ERR ' + e.name; } }
+  window.__T('names', true, JSON.stringify([s(window.location.assign), s(window.history.pushState),
+      s(document.createElement), s(new Event('x').stopPropagation)]));
+  var box = document.getElementById('box');
+  function trial(target, label) {
+      var seen = [];
+      var o = new MutationObserver(function (rs) { for (var i = 0; i < rs.length; i++) seen.push('cb/' + rs[i].type); });
+      o.observe(target, { attributes: true, childList: true, subtree: true, attributeOldValue: true });
+      target.setAttribute('data-x', '1');
+      target.setAttribute('data-x', '2');
+      var t = document.createTextNode('t');
+      target.appendChild(t);
+      var took = o.takeRecords();
+      var types = [];
+      for (var i = 0; i < took.length; i++) types.push(took[i].type + '/' + (took[i].attributeName || ''));
+      o.disconnect();
+      return label + '=' + types.join(',') + '|cb=' + seen.join(',');
+  }
+  window.__T('attached', true, trial(box, 'attached'));
+  var made = document.createElement('section');
+  window.__T('detached', true, trial(made, 'detached'));
+  var detachedChild = document.createElement('i');
+  made.appendChild(detachedChild);
+  window.__T('detached-subtree', true, trial(made, 'subtree-of-detached') + ' / child=' + (function () {
+      var seen = [];
+      var o = new MutationObserver(function (rs) { for (var i = 0; i < rs.length; i++) seen.push(rs[i].type); });
+      o.observe(made, { attributes: true, subtree: true });
+      detachedChild.setAttribute('data-y', '1');
+      var took = o.takeRecords();
+      o.disconnect();
+      return took.length + '/' + (took[0] ? took[0].type + ':' + took[0].attributeName : 'none');
+  })());
+})();
+</script></body></html>

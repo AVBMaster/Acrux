@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>ref probe75 — geometry interfaces</title></head>
+<body>
+<div id="x">measure</div>
+<script>
+window.__ERR75 = 'none';
+window.onerror = function (m, s, l, c) { window.__ERR75 = String(m) + '@' + l + ':' + c; return false; };
+try {
+(function () {
+    function J(v) { try { return JSON.stringify(v); } catch (e) { return 'JERR ' + String(e).slice(0, 60); } }
+    function tag(v) { try { return Object.prototype.toString.call(v); } catch (e) { return 'TAGERR'; } }
+    function names(o) { try { return Object.getOwnPropertyNames(o).sort(); } catch (e) { return ['ERR']; } }
+    function g(fn) { try { return String(fn()); } catch (e) { return 'ERR ' + e.name + ' ' + String(e.message).slice(0, 90); } }
+    function own(o) { try { return Object.getOwnPropertyNames(o).sort().join(','); } catch (e) { return 'ERR'; } }
+    function get(o, k) { try { var v = o[k]; return typeof v === 'function' ? 'fn/' + v.length : String(v); } catch (e) { return 'ERR ' + e.name; } }
+    function desc(o, name) {
+        var level = 0;
+        while (o && level < 5) {
+            var d = Object.getOwnPropertyDescriptor(o, name);
+            if (d) return [d.get ? 'get' : (d.value ? 'value' : '?'), d.set ? 'set' : '-',
+                d.enumerable === true, d.configurable === true, d.writable === true, name, level];
+            o = Object.getPrototypeOf(o); level++;
+        }
+        return ['absent', '-', '-', '-', '-', name, level];
+    }
+    var out = {};
+    var M = window.DOMMatrix, R = window.DOMMatrixReadOnly;
+    out.ctorReadOnly = names(R);
+    out.ctorMatrix = names(M);
+    out.protoReadOnly = names(R.prototype);
+    out.protoMatrix = names(M.prototype);
+    out.ctorChain = [Object.getPrototypeOf(M) === R, Object.getPrototypeOf(R) === Function.prototype,
+        Object.getPrototypeOf(R.prototype) === Object.prototype,
+        Object.getPrototypeOf(M.prototype) === R.prototype];
+    var m = new M();
+    out.instanceOwn = own(m);
+    out.instanceKeys = J(Object.keys(m));
+    out.readOnlyOwn = own(new R());
+    out.matrixArity = [get(M, 'length'), get(R, 'length'), get(M.prototype, 'multiply'),
+        get(M.prototype, 'translate'), get(M.prototype, 'scale'), get(M.prototype, 'rotate'),
+        get(M.prototype, 'rotateAxisAngle'), get(M.prototype, 'transformPoint'),
+        get(M.prototype, 'toFloat64Array'), get(M, 'fromMatrix'), get(M, 'identity'),
+        get(M.prototype, 'setMatrixValue'), get(M.prototype, 'scaleNonUniform'),
+        get(M.prototype, 'scaleNonUniformSelf'), get(R, 'fromSVGMatrix'), get(R, 'fromTransform'),
+        get(M.prototype, 'multiplyRight'), get(M.prototype, 'flipX')];
+    out.descs = [desc(M.prototype, 'a'), desc(M.prototype, 'm11'), desc(R.prototype, 'a'),
+        desc(M.prototype, 'is2D'), desc(M.prototype, 'isIdentity'), desc(R.prototype, 'is2D'),
+        desc(R.prototype, 'toJSON'), desc(M.prototype, 'toString'), desc(R.prototype, 'toString'),
+        desc(M, 'prototype'), desc(M, 'fromMatrix'), desc(R.prototype, 'constructor'),
+        desc(M.prototype, 'constructor'), desc(M.prototype, 'transformPoint')];
+    out.callNoNew = [g(function () { return tag(M()); }), g(function () { return tag(R()); }),
+        g(function () { return tag(window.DOMPoint()); }), g(function () { return tag(window.DOMRect()); }),
+        g(function () { return tag(window.DOMRectReadOnly()); }),
+        g(function () { return tag(window.DOMPointReadOnly()); }),
+        g(function () { return tag(window.DOMQuad()); }),
+        g(function () { return M(); })];
+    out.brandless = [g(function () { return M.prototype.a; }),
+        g(function () { return M.prototype.multiply.call({}, m); }),
+        g(function () { return M.prototype.toFloat64Array.call({}); }),
+        g(function () { return M.prototype.toString.call({}); }),
+        g(function () { return M.prototype.isIdentity.valueOf; }),
+        g(function () { return R.prototype.toJSON.call({}); }),
+        g(function () { return M.prototype.setMatrixValue.call({}, 'translate(1px)'); })];
+    var moved = new M();
+    out.selfOps = [g(function () { return tag(moved.translateSelf(3, 4)) + '/' + moved.e + '/' + moved.f; }),
+        g(function () { return tag(moved.scaleSelf(2)) + '/' + moved.a + '/' + moved.d; }),
+        g(function () { return tag(moved.rotateSelf(90)) + '/' + Math.round(moved.a * 1e6) / 1e6 + '/' + Math.round(moved.b * 1e6) / 1e6; }),
+        g(function () { return tag(moved.multiplySelf(new M().scale(2))) + '/' + moved.a; }),
+        g(function () { return tag(moved.invertSelf()) + '/' + Math.round(moved.e * 100) / 100 + '/' + Math.round(moved.f * 100) / 100; }),
+        g(function () { return tag(moved.skewXSelf(45)) + '/' + moved.c; }),
+        g(function () { return tag(moved.scale3dSelf(2, 3, 4)) + '/' + moved.a + '/' + moved.is2D; }),
+        g(function () { return tag(moved.rotateAxisAngleSelf(0, 1, 0, 90)) + '/' + moved.m11; }),
+        g(function () { return tag(moved.rotateFromVectorSelf(1, 1)) + '/' + moved.is2D; }),
+        g(function () { return tag(moved.preMultiplySelf(new M().scale(3))) + '/' + moved.a; }),
+        g(function () { return tag(moved.rotateXSelf(45)) + '/' + moved.m22; }),
+        g(function () { return tag(moved.scaleNonUniformSelf(2, 3)) + '/' + moved.a + '/' + moved.d; }),
+        g(function () { return tag(moved.setMatrixValue('translate(1px, 1px)')) + '/' + moved.e + '/' + moved.f; })];
+    out.selfReturnsSelf = g(function () { var k = new M(); return k.translateSelf(1, 2) === k; });
+    out.readOnlyCopyReturnsNew = g(function () { var k = new M(); var t = k.translate(1, 2); return (t !== k) + '/' + tag(t) + '/' + k.e; });
+    out.writable = [g(function () { var k = new M(); k.a = 5; return k.a; }),
+        g(function () { var k = new M(); k.m11 = 7; return k.m11 + '/' + k.a; }),
+        g(function () { var k = new M(); k.e = '9'; return k.e + '/' + k.m41; }),
+        g(function () { var k = new M(); k.is2D = false; return k.is2D; }),
+        g(function () { var k = new R(); k.a = 5; return k.a; }),
+        g(function () { var k = new R(); k.m41 = 3; return k.m41 + '/' + k.f; }),
+        g(function () { 'use strict'; var k = new R(); try { k.a = 9; return 'set ok'; } catch (e) { return 'ERR ' + e.name; } })];
+    out.copies = [g(function () { return new M().scale(2).a + '/' + new M().scale(2).d + '/' + new M().scale(2, 3).d; }),
+        g(function () { return tag(new M().rotate(90)) + '/' + new M().rotate(90).b; }),
+        g(function () { return tag(new M().rotate()) + '/' + new M().rotate(0, 90).m11; }),
+        g(function () { return tag(new M().rotateX(90)) + '/' + new M().rotateX(90).m22; }),
+        g(function () { return new M().rotateFromVector(1, 1).b; }),
+        g(function () { return new M().scaleNonUniform(2, 3).a + '/' + new M().scaleNonUniform(2, 3).d; }),
+        g(function () { return tag(new M().skewX(45)) + '/' + new M().skewX(45).c; }),
+        g(function () { return new M().flipX().a + '/' + new M().flipY().d; }),
+        g(function () { return tag(new M().inverse()) + '/' + tag(new M('translate(1px)').inverse()); }),
+        g(function () { return new M().translate().e + '/' + new M().scale().a; }),
+        g(function () { return new M().skewX(45).is2D + '/' + new M().skewX(45).b; })];
+    out.multiply = g(function () { var t = new M('matrix(1, 2, 3, 4, 5, 6)').multiply(new M().scale(2, 2));
+        return tag(t) + '/' + [t.a, t.b, t.c, t.d, t.e, t.f].join('/'); });
+    out.multiplyString = g(function () { return new M('matrix(1, 2, 3, 4, 5, 6)').multiply('scale(2)') + ''; });
+    out.staticCopies = [g(function () { return tag(M.multiply(new M('matrix(1, 2, 3, 4, 5, 6)'), new M().scale(2, 2))); }),
+        g(function () { return tag(M.translate(new M(), 1, 2)); }),
+        g(function () { return tag(M.fromMatrix(new M())); }),
+        g(function () { return tag(R.fromMatrix(new M())); }),
+        g(function () { return tag(M.identity()); }),
+        g(function () { return tag(R.fromMatrix({ m11: 2 })); })];
+    out.floatArrays = [g(function () { var v = new M().toFloat64Array(); return tag(v) + '/' + v.length + '/' + (v instanceof Float64Array); }),
+        g(function () { var v = new M().toFloat32Array(); return tag(v) + '/' + v.length; }),
+        g(function () { var v = new M('translate(2px)').toFloat64Array(); return v[12] + '/' + v[0]; }),
+        g(function () { return tag(M.fromFloat64Array(new Float64Array([1, 2, 3, 4, 5, 6]))) + '/' + M.fromFloat64Array(new Float64Array([1, 2, 3, 4, 5, 6])).b; }),
+        g(function () { return tag(M.fromFloat32Array(new Float32Array([1, 2, 3, 4, 5, 6]))); }),
+        g(function () { return tag(new M().toFloat64Array()) + '/' + J(Array.prototype.slice.call(new M().toFloat64Array(), 0, 5)); })];
+    out.point = g(function () { var p = new M().scale(2).transformPoint({ x: 3, y: 4, z: 0, w: 1 });
+        return tag(p) + '/' + p.x + '/' + p.y + '/' + p.z + '/' + p.w; });
+    out.pointOwn = g(function () { var p = new M().transformPoint({ x: 1, y: 2 }); return own(p); });
+    out.json = g(function () { return JSON.stringify(new M('matrix(1, 2, 3, 4, 5, 6)')); });
+    out.toStringValue = g(function () { return new M().toString() + '|' + String(new M()) + '|' + new R().toString(); });
+    out.isFlags = [g(function () { return new M().isIdentity; }), g(function () { return new M().is2D; }),
+        g(function () { return new M('matrix(1, 2, 3, 4, 5, 6)').is2D; }),
+        g(function () { return new M('matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)').is2D; }),
+        g(function () { return new M('rotate3d(1, 1, 1, 45deg)').is2D; }),
+        g(function () { return new M('matrix(1, 2, 3, 4, 5, 6)').isIdentity; })];
+    out.parseRefusals = [g(function () { return new M('rotate(45)'); }),
+        g(function () { return new M('nonsense'); }),
+        g(function () { return new M([1, 2, 3]); }),
+        g(function () { return new M({ a: 1 }); }),
+        g(function () { return new M(5); }),
+        g(function () { return new M('translate(1px, 2px) rotate(45deg)'); }),
+        g(function () { return new M('rotate(45)') + ''; })];
+    out.matrixString = g(function () { return new M('matrix(1, 2, 3, 4, 5, 6)').m12 + '/' + new M().m11 + '/' + new M().m41; });
+    out.initDict = g(function () { var t = new M({ a: 2, b: 3, c: 4, d: 5, e: 6, f: 7 });
+        return [t.a, t.b, t.c, t.d, t.e, t.f].join('/'); });
+    out.dictFull = g(function () { var t = new M({ m11: 1, m12: 2, m13: 3, m14: 4, m21: 5, m22: 6, m23: 7, m24: 8,
+        m31: 9, m32: 10, m33: 11, m34: 12, m41: 13, m42: 14, m43: 15, m44: 16 });
+        return [t.a, t.b, t.c, t.d, t.e, t.f, t.is2D].join('/'); });
+    out.dictMixed = g(function () { var t = new M({ a: 2, m11: 9 }); return t.a + '/' + t.m11 + '/' + t.b; });
+    out.readOnlyBrand = g(function () { return new M() instanceof R; });
+    out.instanceOfMatrix = g(function () { return new R() instanceof M; });
+    out.protoToStringTag = [g(function () { return String(M.prototype[Symbol.toStringTag]); }),
+        g(function () { return String(R.prototype[Symbol.toStringTag]); }),
+        M.prototype[Symbol.toStringTag] === undefined];
+    out.protoProtoOwn = names(window.DOMPointReadOnly.prototype);
+    out.pointOwn2 = names(window.DOMPoint.prototype);
+    out.rectOwn = names(window.DOMRect.prototype);
+    out.rectROOwn = names(window.DOMRectReadOnly.prototype);
+    out.pointInstance = g(function () { return own(new window.DOMPoint(1, 2)) + '|' + tag(new window.DOMPoint(1, 2)); });
+    out.rectInstance = g(function () { return own(new window.DOMRect(1, 2, 3, 4)) + '|' + tag(new window.DOMRect(1, 2, 3, 4)); });
+    window.__T('probe75 ours', true, J(out));
+    document.title = 'done ' + String(Object.keys(out).length);
+})();
+} catch (e) { window.__T('probe75 threw', false, String(e && e.name) + ' | ' + String(e && e.message) + ' | ' + String(e && e.stack).slice(0, 300)); }
+</script>
+</body></html>

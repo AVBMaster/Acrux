@@ -67,7 +67,8 @@ ck('X5 the iterator and the snapshot walk the same node set', function () {
     var snap = ev('//descendant::span', XPathResult.ORDERED_NODE_SNAPSHOT_TYPE);
     return names.join(',') === 'SPAN,B' && snap.snapshotLength === 1 && snap.snapshotItem(0) === s
         && snap.snapshotItem(9) === null && snap.snapshotItem(-1) === null
-        && typeof it.invalidIteratorState === 'boolean' && it.resultType === 4;
+        && typeof it.invalidIteratorState === 'boolean'
+        && it.resultType === XPathResult.ORDERED_NODE_ITERATOR_TYPE;
 }, function () {
     var it2 = ev('//*[name()="b"]', XPathResult.ORDERED_NODE_ITERATOR_TYPE);
     return String(it2.iterateNext()) + '/' + String(it2.iterateNext()) + '/' + String(it2.iterateNext());
@@ -78,7 +79,11 @@ ck('X6 the result is the interface it reads as', function () {
     return r instanceof XPathResult && Object.prototype.toString.call(r) === '[object XPathResult]'
         && XPathResult.FIRST_ORDERED_NODE_TYPE === 9
         && XPathResult.ANY_TYPE === 0 && XPathResult.NUMBER_TYPE === 1
-        && XPathResult.ORDERED_NODE_SNAPSHOT_TYPE === 6 && r.resultType === 4;
+        && XPathResult.ORDERED_NODE_SNAPSHOT_TYPE === 7 && r.resultType === 5
+        && XPathResult.UNORDERED_NODE_ITERATOR_TYPE === 4
+        && XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE === 6
+        && XPathResult.BOOLEAN_TYPE === 3 && XPathResult.STRING_TYPE === 2
+        && XPathResult.ANY_UNORDERED_NODE_TYPE === 8 && XPathResult.FIRST_ORDERED_NODE_TYPE === 9;
 }, function () {
     var r = ev('//span', XPathResult.ORDERED_NODE_ITERATOR_TYPE);
     return [String(r instanceof XPathResult), Object.prototype.toString.call(r), r.resultType].join(' | ');

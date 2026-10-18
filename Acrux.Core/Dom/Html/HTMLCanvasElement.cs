@@ -15,12 +15,36 @@ public class HTMLCanvasElement : HtmlElement
     /// </summary>
     public SKImage? SnapshotSurface() => _context2d?.SnapshotImage();
 
+    /// <summary>HTML §4.8.3: the pixels an export is made from. A canvas nobody drew on is not
+    /// empty — it is transparent black at its own size — so an export always has an image, and
+    /// only a platform with no bitmap backend at all is left without one.</summary>
+    public SKImage? SnapshotForExport()
+    {
+        var drawn = _context2d?.SnapshotImage();
+        if (drawn != null) return drawn;
+        try
+        {
+            int w = (int)Math.Clamp(Width, 1u, 32_768u);
+            int h = (int)Math.Clamp(Height, 1u, 32_768u);
+            var info = new SKImageInfo(w, h, SKColorType.Rgba8888, SKAlphaType.Premul);
+            using var surface = SKSurface.Create(info);
+            if (surface == null) return null;
+            surface.Canvas.Clear(SKColors.Transparent);
+            return surface.Snapshot();
+        }
+        catch
+        {
+            // Skia's native library is not part of the headless harness; no pixels, no export.
+            return null;
+        }
+    }
+
     public HTMLCanvasElement(Document document, string? name = null, string? namespaceUri = null)
         : base(name ?? "canvas") { }
 
     public ulong Width
     {
-        get => ulong.TryParse(GetAttribute("width"), out var v) ? v : 150;
+        get => ulong.TryParse(GetAttribute("width"), out var v) ? v : 300;
         set => SetAttribute("width", value.ToString());
     }
     public ulong Height

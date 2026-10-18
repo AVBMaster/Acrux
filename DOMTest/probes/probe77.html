@@ -1,0 +1,35 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe77 — window and document listener options</title></head><body>
+<script>
+(function () {
+  var log = [];
+  window.addEventListener('zz', function () { log.push('win'); }, { once: true });
+  window.dispatchEvent(new Event('zz'));
+  window.dispatchEvent(new Event('zz'));
+  var dcount = 0;
+  document.addEventListener('yy', function () { dcount++; }, { once: true });
+  document.dispatchEvent(new Event('yy'));
+  document.dispatchEvent(new Event('yy'));
+  var ac = new AbortController();
+  var scount = 0;
+  window.addEventListener('ww', function () { scount++; }, { signal: ac.signal });
+  window.dispatchEvent(new Event('ww'));
+  ac.abort();
+  window.dispatchEvent(new Event('ww'));
+  var ds = 0;
+  var ac2 = new AbortController();
+  document.addEventListener('vv', function () { ds++; }, { signal: ac2.signal });
+  document.dispatchEvent(new Event('vv'));
+  ac2.abort();
+  document.dispatchEvent(new Event('vv'));
+  // capture on window for a bubbling event from a node
+  var phase = [];
+  window.addEventListener('pp', function () { phase.push('win-capture'); }, true);
+  window.addEventListener('pp', function () { phase.push('win-bubble'); }, false);
+  var kid = document.createElement('p');
+  document.body.appendChild(kid);
+  kid.addEventListener('pp', function () { phase.push('target'); });
+  kid.dispatchEvent(new Event('pp', { bubbles: true }));
+  window.__T('probe77', true, JSON.stringify({ winOnce: log.join(','), docOnce: dcount,
+      winSignal: scount, docSignal: ds, phases: phase.join(',') }));
+})();
+</script></body></html>

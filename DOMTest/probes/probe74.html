@@ -1,0 +1,20 @@
+<!DOCTYPE html><html><head><title>P74</title></head><body><div id="d">x</div><script>
+(function () {
+  function h(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  var d = document.getElementById('d');
+  var out = {};
+  out.raw = h(function () { return JSON.stringify([typeof d.checkVisibility, d.hasAttribute('hidden'),
+    String(d.style.display), String(d.style && d.style.cssText), d.isConnected, d.nodeType,
+    Object.prototype.hasOwnProperty.call(Object.getPrototypeOf(d), 'checkVisibility')]); });
+  out.levelOwner = h(function () {
+    var p = Object.getPrototypeOf(d);
+    var found = 'none';
+    while (p) { if (Object.prototype.hasOwnProperty.call(p, 'checkVisibility')) { found = String(p) + '/' + (p.constructor && p.constructor.name); break; } p = Object.getPrototypeOf(p); }
+    return found; });
+  out.call = h(function () { return String(d.checkVisibility()); });
+  out.apply = h(function () { var f = null; var p = Object.getPrototypeOf(d);
+    while (p) { if (Object.prototype.hasOwnProperty.call(p, 'checkVisibility')) { f = p.checkVisibility; break; } p = Object.getPrototypeOf(p); }
+    return f ? String(f.call(d)) : 'not-found'; });
+  __T('p74', true, JSON.stringify(out));
+})();
+</script></body></html>

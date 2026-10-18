@@ -68,8 +68,30 @@
 
   // iframe
   var ifr = id('if1');
-  __T('iframe.width', ifr.width === 10, 'iw=' + ifr.width);
+  // The legacy size attributes of an iframe, an object and an embed are the text of the attribute;
+  // only an image and a canvas answer a number, and a canvas answers the bitmap size with the
+  // interface's own 300 by 150 (HTML §4.8.14, §4.8.3; measured).
+  __T('iframe.width is the attribute text', ifr.width === '10', 'iw=' + ifr.width);
+  __T('iframe.height is the attribute text', ifr.height === '20', 'ih=' + ifr.height);
   __T('iframe.name', ifr.name === 'fr', 'in=' + ifr.name);
+  __T('object.width is the attribute text', (function () {
+      var o = d.createElement('object'); o.setAttribute('width', '30');
+      return o.width === '30' && o.height === ''; })(),
+    'ow=' + (function () { var o = d.createElement('object'); o.setAttribute('width', '30');
+      return typeof o.width + '/' + o.height; })());
+  __T('embed.width is the attribute text', (function () {
+      var e = d.createElement('embed'); e.setAttribute('width', '7');
+      return e.width === '7'; })());
+  __T('canvas size is a number with the interface defaults', (function () {
+      var c = d.createElement('canvas');
+      return c.width === 300 && c.height === 150; })(),
+    'c=' + (function () { var c = d.createElement('canvas'); return c.width + '/' + c.height; })());
+  __T('canvas size writes the attribute', (function () {
+      var c = d.createElement('canvas'); c.width = 12; c.height = 8;
+      return c.getAttribute('width') === '12' && c.height === 8; })());
+  __T('img size is a number', (function () {
+      var im = d.createElement('img'); im.setAttribute('width', '20');
+      return im.width === 20 && typeof im.height === 'number'; })());
 })();
 </script>
 </body>
