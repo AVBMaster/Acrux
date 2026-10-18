@@ -1,0 +1,25 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>ref probe82 — event defaults and navigator</title></head><body><div id="d">x</div>
+<script>
+(function () {
+    function J(v){try{return JSON.stringify(v);}catch(e){return 'JERR';}}
+    function g(f){try{return String(f());}catch(e){return 'ERR '+e.name+':'+String(e.message).slice(0,60);}}
+    var out={};
+    out.caches=g(function(){return typeof window.caches+'/'+Object.prototype.toString.call(window.caches);});
+    out.navigatorProto=g(function(){return Object.getOwnPropertyNames(Navigator.prototype).sort().join(',');});
+    out.vibrate=g(function(){return navigator.vibrate+'/'+navigator.vibrate(10)+'/'+navigator.vibrate([1,2]);});
+    out.gamepads=g(function(){return J(navigator.getGamepads());});
+    out.mle=g(function(){var e=new MediaQueryListEvent('change',{media:'(min-width: 1px)',matches:true});
+        return [Object.prototype.toString.call(e),e.media,e.matches,e.type,Object.getOwnPropertyNames(e).join(',')].join('/');});
+    out.mleProto=g(function(){return Object.getOwnPropertyNames(MediaQueryListEvent.prototype).sort().join(',');});
+    out.mleBrand=g(function(){return MediaQueryListEvent.prototype.media;});
+    out.mqlInstance=g(function(){var m=matchMedia('(min-width: 1px)');return [Object.getOwnPropertyNames(m).join(','),Object.keys(m).join(','),''+m.media,m.matches,String(m.onchange)].join('|');});
+    out.mqlBrand=g(function(){return window.MediaQueryList.prototype.matches;});
+    out.eventOwn=g(function(){return Object.getOwnPropertyNames(new Event('x')).join(',')+'|'+Object.getOwnPropertyNames(new MouseEvent('x')).join(',');});
+    out.eventBrand=g(function(){return [Object.getOwnPropertyDescriptor(Event.prototype,'type').get.call({})+'',''];});
+    out.eventKeys=g(function(){var e=new Event('x');var k=[];for(var p=e;p;p=Object.getPrototypeOf(p)){}return Object.keys(e).join(',');});
+    out.mqDesc=g(function(){var d=Object.getOwnPropertyDescriptor(MediaQueryList.prototype,'matches');return [!!d.get,!!d.set,d.enumerable,d.configurable].join('/');});
+    out.createEvent=g(function(){var e=document.createEvent('HTMLEvents');return Object.prototype.toString.call(e)+'/'+Object.getOwnPropertyNames(e).join(',');});
+    out.mleCtor=g(function(){return [MediaQueryListEvent.length, new MediaQueryListEvent('x').media, new MediaQueryListEvent('x').matches].join('/');});
+    window.__T('probe82 ours', true, J(out));
+})();
+</script></body></html>

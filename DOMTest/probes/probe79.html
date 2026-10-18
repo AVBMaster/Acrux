@@ -1,0 +1,63 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>ref probe79 — ECMAScript surface</title></head><body><div>x</div>
+<script>
+window.__ERR='none';
+window.onerror=function(m,s,l,c){window.__ERR=String(m)+'@'+l+':'+c;return false;};
+(function () {
+    function J(v){try{return JSON.stringify(v);}catch(e){return 'JERR '+String(e).slice(0,40);}}
+    function g(f){try{return String(f());}catch(e){return 'ERR '+e.name+':'+String(e.message).slice(0,70);}}
+    function own(o){try{return Object.getOwnPropertyNames(o).sort().join(',');}catch(e){return 'ERR';}}
+    function d(o,k){try{var x=Object.getOwnPropertyDescriptor(o,k);return x?J([typeof x.value!=='undefined'?'value':'acc',x.writable,x.enumerable,x.configurable]):'none';}catch(e){return 'ERR';}}
+    var out={};
+    out.iteratorProtoExists = g(function(){return typeof Iterator;});
+    out.iteratorProtoOwn = g(function(){return own(Iterator.prototype);});
+    out.iteratorCtorOwn = g(function(){return own(Iterator);});
+    out.iteratorDesc = g(function(){return d(Object.getPrototypeOf([].values()), 'map');});
+    out.iteratorChain = g(function(){ return Object.getPrototypeOf(Array.prototype[Symbol.iterator].call([1]).__proto__||{}) && String(Array.prototype[Symbol.iterator].call([1]) instanceof Iterator); });
+    out.iteratorMap = g(function(){ return J([].values().map(function(x){return x*2;}).toArray()); });
+    out.iteratorFilter = g(function(){ return J([1,2,3,4].values().filter(function(x){return x%2===0;}).toArray()); });
+    out.iteratorFlatMap = g(function(){ return J([1,2].values().flatMap(function(x){return [x,x];}).toArray()); });
+    out.iteratorTakeDrop = g(function(){ return J([1,2,3,4,5].values().take(2).drop(1).toArray()); });
+    out.iteratorTwWhile = g(function(){ return J([1,2,9,3].values().takeWhile(function(x){return x<3;}).toArray())+'|'+J([1,2,9,3].values().dropWhile(function(x){return x<3;}).toArray()); });
+    out.iteratorReduce = g(function(){ return [1,2,3].values().reduce(function(a,b){return a+b;})+'/'+[1,2,3].values().reduce(function(a,b){return a+b;},10); });
+    out.iteratorMisc = g(function(){ return [1,2].values().forEach(function(){})+'/'+[1,2,3].values().some(function(x){return x>2;})+'/'+[1,2,3].values().every(function(x){return x>0;})+'/'+[1,2,3].values().find(function(x){return x>1;}); });
+    out.iteratorToArrayArg = g(function(){ return J(new Int32Array([1,2,3,4].values().toArray({type:'i32'}))); });
+    out.iteratorConstructor = g(function(){ return new Iterator(); });
+    out.iteratorLength = g(function(){ return Iterator.prototype.length+'/'+Iterator.prototype.map.length+'/'+Iterator.prototype.reduce.length; });
+    out.iteratorNames = g(function(){ return Iterator.prototype.map.name+'/'+String(typeof Iterator.prototype.map)+'/'+String(typeof Iterator.prototype.constructor); });
+    out.iteratorGenProto = g(function(){ var it = (function*(){ yield 1; })(); return String(it instanceof Iterator)+'/'+String(Object.getPrototypeOf(Object.getPrototypeOf(it))===Iterator.prototype); });
+    out.iteratorString = g(function(){ var it='abc'[Symbol.iterator](); return String(it instanceof Iterator)+'/'+J(it.toArray()); });
+    out.promiseWithResolvers = g(function(){ var p = Promise.withResolvers(); return typeof p.promise+'/'+typeof p.resolve+'/'+typeof p.reject; });
+    out.promiseTry = g(function(){ return typeof Promise.try; });
+    out.arrayFromAsync = g(function(){ return typeof Array.fromAsync; });
+    out.arrayCopy = g(function(){ var a=[3,1,2]; return a.toReversed().join(',')+'/'+a.toSorted().join(',')+'/'+a.toSpliced(0,1).join(',')+'/'+a.with(0,9).join(',')+'/'+a.length; });
+    out.groupBy = g(function(){ return J(Object.groupBy([1,2,3], function(x){return x%2;})); });
+    out.arrayGroup = g(function(){ return typeof Array.prototype.group; });
+    out.setMethods = g(function(){ var a=new Set([1,2]), b=new Set([2,3]);
+        return J(Array.from(a.union(b)))+'/'+J(Array.from(a.intersection(b)))+'/'+J(Array.from(a.difference(b)))
+            +'/'+J(Array.from(a.symmetricDifference(b)))+'/'+a.isSubsetOf(b)+'/'+String(a.isDisjointFrom(b))+'/'+g(function(){return a.isDisjointWith(b);})+'/'+new Set([1]).isSupersetOf([1]); });
+    out.setPrototypeOwn = g(function(){ return own(Set.prototype); });
+    out.mapPrototypeOwn = g(function(){ return own(Map.prototype); });
+    out.mapGetOrInsert = g(function(){ return typeof Map.prototype.getOrInsert; });
+    out.stringWellFormed = g(function(){ return '\uD800'.isWellFormed()+'/'+('\uD800'.toWellFormed().length); });
+    out.arrayBufferTransfer = g(function(){ var b=new ArrayBuffer(8); return typeof b.transfer+'/'+typeof b.transferToFixedLength; });
+    out.regexpV = g(function(){ try { return 'v:'+new RegExp('a', 'v').flags; } catch (e) { return 'ERR v flag'; } });
+    out.regexpDupNames = g(function(){ return g(function(){return new RegExp('(?<a>x)(?<a>y)');}); });
+    out.errorCause = g(function(){ var e = new Error('x', { cause: 7 }); return String(e.cause); });
+    out.aggregateError = g(function(){ return typeof AggregateError + '/' + (new AggregateError([1],'m').errors.join(',')); });
+    out.atomicsWaitAsync = g(function(){ return typeof Atomics.waitAsync; });
+    out.symbolMetadata = g(function(){ return typeof Symbol.metadata + '/' + String(Symbol.metadata); });
+    out.mathSummation = g(function(){ return typeof Math.Summation; });
+    out.dateGetYear = g(function(){ return typeof Date.prototype.getYear; });
+    out.objectProtoProto = g(function(){ return typeof Object.prototype.__proto__ + '/' + d(Object.prototype,'__proto__'); });
+    out.arrayAt = g(function(){ return [1,2,3].at(-1); });
+    out.findLast = g(function(){ return [1,2,3].findLast(function(x){return x<3;})+'/'+[1,2,3].findLastIndex(function(x){return x<3;}); });
+    out.hasOwn = g(function(){ return Object.hasOwn({a:1},'a'); });
+    out.replaceInsert = g(function(){ return 'a'.replaceAll('a','bb')+'|'+String(typeof String.prototype.insert); });
+    out.wireStructurs = g(function(){ return typeof WeakRef+'/'+typeof FinalizationRegistry+'/'+typeof SharedArrayBuffer; });
+    out.iteratorSymbolPrototypeTag = g(function(){ return String(Iterator.prototype[Symbol.toStringTag]); });
+    out.arrayIteratorTag = g(function(){ return Object.prototype.toString.call([].values()); });
+    out.generatorTag = g(function(){ return Object.prototype.toString.call((function*(){ yield 1; })()); });
+    window.__T('probe79 ours', true, J(out));
+    
+})();
+</script></body></html>

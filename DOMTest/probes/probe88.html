@@ -1,0 +1,83 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe88 — navigator members, method brands</title></head><body><div id="d">x</div>
+<script>
+(function () {
+    function J(v){try{return JSON.stringify(v);}catch(e){return 'JERR';}}
+    function g(f){try{return String(f());}catch(e){return 'ERR '+e.name+':'+String(e.message).slice(0,80);}}
+    function tag(v){try{return Object.prototype.toString.call(v);}catch(e){return 'TAGERR';}}
+    function dsc(o,n){try{var d=Object.getOwnPropertyDescriptor(o,n);if(!d)return 'ABSENT';
+        return [typeof d.get,typeof d.set,d.enumerable,d.configurable,typeof d.value,d.writable].join('/');}
+        catch(e){return 'ERR '+e.name;}}
+    var out={};
+    var NAMES=['mediaSession','gpu','hid','ink','serial','usb','xr','virtualKeyboard',
+        'storageBuckets','getInstalledRelatedApps','requestMediaKeySystemAccess','getBattery',
+        'webkitPersistentStorage','webkitTemporaryStorage','login','userActivation','webdriver',
+        'hardwareConcurrency','maxTouchPoints','deviceMemory','doNotTrack','languages','vibrate',
+        'getGamepads','sendBeacon','javaEnabled','pdfViewerEnabled','cookieEnabled','onLine',
+        'product','productSub','vendor','vendorSub','appCodeName','appName','appVersion','platform','language'];
+    out.navigator={};
+    NAMES.forEach(function(n){ out.navigator[n]=g(function(){
+        var v=window.navigator[n];
+        return tag(v)+'|'+(typeof v)+'|'+(typeof v==='function'?'len '+v.length:'');});});
+    out.navBrand={
+        ua:g(function(){return g(function(){return Navigator.prototype.userAgent;});}),
+        hc:g(function(){return g(function(){return Navigator.prototype.hardwareConcurrency;});}),
+        sb:g(function(){return g(function(){return Navigator.prototype.sendBeacon;});}),
+        je:g(function(){return g(function(){return Navigator.prototype.javaEnabled;});}),
+        vib:g(function(){return g(function(){return Navigator.prototype.vibrate;});}),
+        vd:g(function(){return dsc(Navigator.prototype,'userAgent');}),
+        vh:g(function(){return dsc(Navigator.prototype,'hardwareConcurrency');}),
+        vsb:g(function(){return dsc(Navigator.prototype,'sendBeacon');}),
+        vm:g(function(){return dsc(Navigator.prototype,'mediaSession');})
+    };
+    out.navOps=g(function(){var n=window.navigator;
+        return [g(function(){return n.getBattery().then?'promise':'other';}),
+            g(function(){return n.getInstalledRelatedApps().then?'promise':'other';})].join('|');});
+    out.batteryReject=g(function(){return navigator.getBattery().then(function(r){return 'resolved';},
+        function(e){return 'rejected '+e.name;});});
+    // Method brand checks and arities on the BOM interfaces.
+    out.brands={
+        histPush:g(function(){return g(function(){return History.prototype.pushState('s','t');});}),
+        histGo:g(function(){return g(function(){return History.prototype.go;});}),
+        implCreate:g(function(){return g(function(){return DOMImplementation.prototype.createHTMLDocument;});}),
+        implCall:g(function(){return g(function(){return DOMImplementation.prototype.createHTMLDocument.call({});});}),
+        storageGet:g(function(){return g(function(){return Storage.prototype.getItem;});}),
+        storageCall:g(function(){return g(function(){return Storage.prototype.getItem.call({}, 'a');});}),
+        etWhen:g(function(){return g(function(){return typeof EventTarget.prototype.when;});}),
+        etWhenLen:g(function(){return g(function(){return EventTarget.prototype.when.length;});}),
+        etWhenBrand:g(function(){return g(function(){return EventTarget.prototype.when.call({},'x');});}),
+        soLock:g(function(){return g(function(){return ScreenOrientation.prototype.lock;});}),
+        soUnlock:g(function(){return g(function(){return ScreenOrientation.prototype.unlock;});}),
+        perfNow:g(function(){return g(function(){return Performance.prototype.now;});}),
+        perfCtor:g(function(){return g(function(){return typeof Performance.prototype.constructor;})+'|'
+            +g(function(){return Performance.prototype.constructor.name;});}),
+        storageCtor:g(function(){return g(function(){return Storage.prototype.constructor;});}),
+        storageCtorName:g(function(){return g(function(){return Storage.prototype.constructor.name;});})
+    };
+    out.whenTest=g(function(){var d=document.createElement('div');
+        var p=d.when('ping'); var fired=false;
+        p.then(function(e){fired=true;});
+        d.addEventListener('ping',function(){});
+        return [tag(p), typeof p.then].join('/');});
+    out.whenArg=g(function(){return g(function(){return window.when;});});
+    // VisualViewport and Screen instance shapes.
+    out.vvShape=g(function(){var v=window.visualViewport;
+        return [tag(v),Object.getOwnPropertyNames(v).join(','),Object.keys(v).join(','),
+            v.width+'/'+v.height+'/'+v.scale, typeof v.addEventListener].join('|');});
+    out.vvProto=g(function(){return dsc(VisualViewport.prototype,'width')+'|'
+        +g(function(){return VisualViewport.prototype.width;});});
+    out.screenShape=g(function(){return [tag(window.screen),
+        Object.getOwnPropertyNames(window.screen).join(','),
+        Object.keys(window.screen).join(','), g(function(){return window.screen.addEventListener?'has':'none';}),
+        g(function(){return typeof Screen.prototype.addEventListener;})].join('|');});
+    out.screenAddEventListener=g(function(){return g(function(){return window.screen.addEventListener('x',function(){});});});
+    out.histShape=g(function(){return [tag(window.history),Object.getOwnPropertyNames(window.history).join(','),
+        Object.keys(window.history).join(','), dsc(History.prototype,'state'),
+        dsc(History.prototype,'scrollRestoration')].join('|');});
+    out.implShape=g(function(){return [tag(document.implementation),
+        Object.getOwnPropertyNames(document.implementation).join(',')].join('|');});
+    document.title='P88 '+JSON.stringify(out);
+    window.__REPORT=JSON.stringify(out);
+    window.__T && window.__T('probe88', true, JSON.stringify(out));
+})();
+</script>
+<div>probe88</div></body></html>

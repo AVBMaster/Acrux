@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+<head><title>BOM interface surfaces (Web IDL §4.4, HTML §7.3, DOM §3.3, Screen Orientation §3, Web Storage §5, Performance §5, CSSOM View §9)</title></head>
+<body>
+<div id="box"><p id="kid">a</p></div>
+<script>
+(function () {
+    function own(o) { try { return Object.getOwnPropertyNames(o).sort().join(','); } catch (e) { return 'ERR'; } }
+    function tag(v) { try { return Object.prototype.toString.call(v); } catch (e) { return 'TAGERR'; } }
+    function refused(fn) {
+        try { var v = fn(); return 'no-throw:' + (v === undefined ? 'undefined' : String(v)); }
+        catch (e) { return String(e && e.name) + ':' + String(e && e.message).slice(0, 90); }
+    }
+    function dsc(o, n) {
+        var d = Object.getOwnPropertyDescriptor(o, n);
+        if (!d) return 'ABSENT';
+        return [typeof d.get, typeof d.set, d.enumerable, d.configurable, typeof d.value, d.writable,
+            d.get ? String(d.get.name) : '', d.set ? String(d.set.name) : ''].join('/');
+    }
+    function ck(name, cond, info) { window.__T(name, cond === true, info === undefined ? '' : String(info)); }
+    // The asynchronous checks report from the promise a case settles on; the runner drains the timers
+    // after the script, so a check that lands later is still read.
+    function done(name, fn) {
+        var promise;
+        try { promise = fn(); } catch (e) {
+            window.__T(name, false, 'threw ' + (e && e.name) + ': ' + (e && e.message));
+            return;
+        }
+        promise.then(function (v) { window.__T(name, v === true, ''); },
+            function (e) { window.__T(name, false, 'rej ' + (e && e.name) + ': ' + (e && e.message)); });
+    }
+
+    var SCREEN_NAMES = 'availHeight,availLeft,availTop,availWidth,colorDepth,constructor,height,'
+        + 'isExtended,onchange,orientation,pixelDepth,width';
+    var HISTORY_NAMES = 'back,constructor,forward,go,length,pushState,replaceState,scrollRestoration,state';
+    var IMPL_NAMES = 'constructor,createDocument,createDocumentType,createHTMLDocument,hasFeature';
+    var STORAGE_NAMES = 'clear,constructor,getItem,key,length,removeItem,setItem';
+    var ORIENTATION_NAMES = 'angle,constructor,lock,onchange,type,unlock';
+    var VV_NAMES = 'constructor,height,offsetLeft,offsetTop,onresize,onscroll,onscrollend,pageLeft,'
+        + 'pageTop,scale,width';
+    var PERFORMANCE_NAMES = 'clearMarks,clearMeasures,clearResourceTimings,constructor,eventCounts,'
+        + 'getEntries,getEntriesByName,getEntriesByType,interactionCount,mark,measure,memory,navigation,'
+        + 'now,onresourcetimingbufferfull,setResourceTimingBufferSize,timeOrigin,timing,toJSON';
+
+    // ── A. The level names the members, the object keeps nothing ───────────────
+    ck('A1 the screen names its ten reads and its constructor', own(Screen.prototype) === SCREEN_NAMES,
+        own(Screen.prototype));
+    ck('A2 the screen object the window hands out owns nothing',
+        own(window.screen) === '' && Object.keys(window.screen).join(',') === '',
+        own(window.screen) + '|' + Object.keys(window.screen).join(','));
+    ck('A3 the history names its eight members', own(History.prototype) === HISTORY_NAMES,
+        own(History.prototype));
+    ck('A4 the implementation names its four methods',
+        own(DOMImplementation.prototype) === IMPL_NAMES, own(DOMImplementation.prototype));
+    ck('A5 the storage names its five methods, its length and its constructor',
+        own(Storage.prototype) === STORAGE_NAMES, own(Storage.prototype));
+    ck('A6 the orientation names the two reads, the two methods and the handler',
+        own(ScreenOrientation.prototype) === ORIENTATION_NAMES, own(ScreenOrientation.prototype));
+    ck('A7 the viewport names its reads without owning any of them',
+        own(VisualViewport.prototype) === VV_NAMES
+        && own(window.visualViewport) === ''
+        && Object.keys(window.visualViewport).join(',') === '',
+        own(VisualViewport.prototype) + '|' + own(window.visualViewport));
+    ck('A8 the clock names its members and its constructor',
+        own(Performance.prototype) === PERFORMANCE_NAMES, own(Performance.prototype));
+
+    // ── B. A read away from the object the engine made is refused ──────────────
+    ck('B1 the screen reads and the handler are refused on the level',
+        refused(function () { return Screen.prototype.width; }) === 'TypeError:Illegal invocation'
+        && refused(function () { return Screen.prototype.onchange; }) === 'TypeError:Illegal invocation'
+        && refused(function () { return Screen.prototype.orientation; }) === 'TypeError:Illegal invocation',
+        refused(function () { return Screen.prototype.width; }) + ' | '
+        + refused(function () { return Screen.prototype.onchange; }));
+    ck('B2 the history reads and a call through the level are refused',
+        refused(function () { return History.prototype.length; }) === 'TypeError:Illegal invocation'
+        && refused(function () { return History.prototype.state; }) === 'TypeError:Illegal invocation'
+        && refused(function () { return History.prototype.pushState('s', 't'); })
+            === 'TypeError:Illegal invocation'
+        && refused(function () { return History.prototype.go(); }) === 'TypeError:Illegal invocation',
+        refused(function () { return History.prototype.pushState('s', 't'); }));
+    ck('B3 a storage method called on anything else is refused',
+        refused(function () { return Storage.prototype.length; }) === 'TypeError:Illegal invocation'
+        && refused(function () { return Storage.prototype.getItem.call({ }, 'a'); })
+            === 'TypeError:Illegal invocation'
+        && refused(function () { return Storage.prototype.setItem.call({ }, 'a', 'b'); })
+            === 'TypeError:Illegal invocation',
+        refused(function () { return Storage.prototype.getItem.call({ }, 'a'); }));
+    ck('B4 the implementation method called off its object is refused',
+        refused(function () { return DOMImplementation.prototype.createHTMLDocument.call({ }, 'T'); })
+            === 'TypeError:Illegal invocation',
+        refused(function () { return DOMImplementation.prototype.createHTMLDocument.call({ }, 'T'); }));
+    ck('B5 the navigator reads are refused on the level',
+        refused(function () { return Navigator.prototype.userAgent; }) === 'TypeError:Illegal invocation'
+        && refused(function () { return Navigator.prototype.hardwareConcurrency; })
+            === 'TypeError:Illegal invocation'
+        && refused(function () { return Navigator.prototype.mediaSession; })
+            === 'TypeError:Illegal invocation',
+        refused(function () { return Navigator.prototype.userAgent; }));
+    ck('B6 the viewport reads are refused on the level',
+        refused(function () { return VisualViewport.prototype.width; }) === 'TypeError:Illegal invocation'
+        && refused(function () { return VisualViewport.prototype.scale; }) === 'TypeError:Illegal invocation',
+        refused(function () { return VisualViewport.prototype.width; }));
+    ck('B7 the orientation reads are refused on the level',
+        refused(function () { return ScreenOrientation.prototype.type; }) === 'TypeError:Illegal invocation'
+        && refused(function () { return ScreenOrientation.prototype.angle; })
+            === 'TypeError:Illegal invocation',
+        refused(function () { return ScreenOrientation.prototype.type; }));
+
+    // ── C. The descriptors, and the name each accessor carries ────────────────
+    ck('C1 a read of the interface is a getter named for the member',
+        dsc(Screen.prototype, 'width') === 'function/undefined/true/true/undefined//get width/'
+        && dsc(History.prototype, 'length') === 'function/undefined/true/true/undefined//get length/'
+        && dsc(Storage.prototype, 'length') === 'function/undefined/true/true/undefined//get length/'
+        && dsc(Navigator.prototype, 'userAgent') === 'function/undefined/true/true/undefined//get userAgent/',
+        dsc(Screen.prototype, 'width') + ' | ' + dsc(Navigator.prototype, 'userAgent'));
+    ck('C2 a write of the interface is the getter and the setter of the member',
+        dsc(History.prototype, 'scrollRestoration')
+            === 'function/function/true/true/undefined//get scrollRestoration/set scrollRestoration'
+        && dsc(Screen.prototype, 'onchange') === 'function/function/true/true/undefined//get onchange/set onchange',
+        dsc(History.prototype, 'scrollRestoration') + ' | ' + dsc(Screen.prototype, 'onchange'));
+    ck('C3 a method of the interface is a writable value named for itself',
+        dsc(DOMImplementation.prototype, 'createHTMLDocument')
+            === 'undefined/undefined/true/true/function/true//'
+        && History.prototype.pushState.name === 'pushState'
+        && Storage.prototype.getItem.name === 'getItem'
+        && Performance.prototype.now.name === 'now',
+        dsc(DOMImplementation.prototype, 'createHTMLDocument') + ' | '
+        + String(History.prototype.pushState.name) + '/' + String(Storage.prototype.getItem.name)
+        + '/' + String(Performance.prototype.now.name));
+    ck('C4 the arity a page reads is the number of required arguments',
+        History.prototype.pushState.length === 2 && History.prototype.replaceState.length === 2
+        && History.prototype.go.length === 0 && History.prototype.back.length === 0
+        && History.prototype.forward.length === 0
+        && DOMImplementation.prototype.createHTMLDocument.length === 0
+        && DOMImplementation.prototype.hasFeature.length === 0
+        && Navigator.prototype.sendBeacon.length === 1 && Navigator.prototype.vibrate.length === 1
+        && Navigator.prototype.getGamepads.length === 0 && Navigator.prototype.javaEnabled.length === 0
+        && EventTarget.prototype.when.length === 1,
+        [History.prototype.pushState.length, History.prototype.replaceState.length,
+            History.prototype.go.length, DOMImplementation.prototype.createHTMLDocument.length,
+            Navigator.prototype.sendBeacon.length, Navigator.prototype.vibrate.length,
+            Navigator.prototype.getGamepads.length, EventTarget.prototype.when.length].join('/'));
+    ck('C5 the constructor is the level back-pointer and names the interface',
+        History.prototype.constructor === History && Screen.prototype.constructor === Screen
+        && Storage.prototype.constructor === Storage && Storage.name === 'Storage'
+        && Performance.prototype.constructor === Performance && Performance.name === 'Performance'
+        && refused(function () { return new Storage(); })
+            === "TypeError:Failed to construct 'Storage': Illegal constructor",
+        String(Storage.prototype.constructor === Storage) + '/' + String(Storage.name) + '/'
+        + refused(function () { return new Storage(); }).slice(0, 60));
+
+    // ── D. The object still answers what the engine knows ─────────────────────
+    ck('D1 the screen answers its own numbers behind the interface',
+        typeof window.screen.width === 'number' && typeof window.screen.colorDepth === 'number'
+        && typeof window.screen.orientation.angle === 'number'
+        && typeof window.screen.orientation.type === 'string'
+        && window.screen.isExtended === false
+        && tag(window.screen.orientation) === '[object ScreenOrientation]',
+        [window.screen.width, window.screen.colorDepth, window.screen.orientation.type,
+            window.screen.isExtended].join('/'));
+    ck('D2 a handler written on the screen or the viewport reads back',
+        window.screen.onchange === null
+        && function () {
+            var handler = function () { };
+            window.screen.onchange = handler;
+            var stored = window.screen.onchange === handler;
+            window.screen.onchange = 7;
+            var dropped = window.screen.onchange === null;
+            window.screen.onchange = null;
+            return stored && dropped;
+        }()
+        && window.visualViewport.onresize === null,
+        [String(window.screen.onchange), String(window.visualViewport.onresize)].join('/'));
+    ck('D3 the screen is an event target the way the reference carries it',
+        typeof window.screen.addEventListener === 'function'
+        && Object.getPrototypeOf(Screen.prototype) === EventTarget.prototype,
+        [typeof window.screen.addEventListener,
+            Object.getPrototypeOf(Screen.prototype) === EventTarget.prototype].join('/'));
+    ck('D4 the viewport answers the reads the interface declares',
+        typeof window.visualViewport.width === 'number' && window.visualViewport.scale === 1
+        && typeof window.visualViewport.addEventListener === 'function',
+        [window.visualViewport.width, window.visualViewport.scale,
+            window.visualViewport.height].join('/'));
+    ck('D5 the storage named access and the two storages still work',
+        (function () {
+            var s = window.localStorage;
+            s.setItem('r16', 'value');
+            var read = s.getItem('r16') === 'value' && s.r16 === 'value' && s.length >= 1
+                && s.key(s.length - 1) === 'r16';
+            s.removeItem('r16');
+            return read && s.getItem('r16') === null;
+        })(),
+        [window.localStorage.length, String(window.localStorage.getItem('r16'))].join('/'));
+    ck('D6 the implementation builds the documents it names',
+        (function () {
+            var made = document.implementation.createHTMLDocument('Title');
+            return tag(made) === '[object HTMLDocument]' && made.title === 'Title'
+                && tag(document.implementation.createDocument(null, 'root', null)) === '[object XMLDocument]'
+                && document.implementation.hasFeature('', '') === true;
+        })(),
+        refused(function () { return document.implementation.createHTMLDocument('Title').title; }));
+    ck('D7 the clock answers through its interface',
+        typeof window.performance.now() === 'number'
+        && tag(window.performance) === '[object Performance]'
+        && typeof window.performance.getEntries === 'function',
+        String(typeof window.performance.now()));
+
+    // ── E. The history keeps doing its work behind the interface ──────────────
+    var beforeLength = window.history.length;
+    var pushedObject = { step: 1 };
+    ck('E1 pushState and replaceState still move the state the page reads back',
+        (function () {
+            window.history.pushState(pushedObject, 'one', '#r16one');
+            // The entry the push adds is there unless the platform limits the list it keeps; what the
+            // history holds is the clone, so the object the page handed in is not what reads back.
+            var pushed = JSON.stringify(window.history.state) === '{"step":1}'
+                && location.hash === '#r16one' && window.history.state !== pushedObject
+                && window.history.length >= beforeLength && window.history.length <= beforeLength + 1;
+            var afterPush = window.history.length;
+            window.history.replaceState({ step: 2 }, 'two', '#r16two');
+            return pushed && JSON.stringify(window.history.state) === '{"step":2}'
+                && location.hash === '#r16two' && window.history.length === afterPush;
+        })(),
+        JSON.stringify(window.history.state) + '/' + location.hash + '/' + window.history.length
+        + '/' + (window.history.state !== pushedObject));
+    ck('E2 the two required arguments are the sentence the reference writes',
+        refused(function () { return window.history.pushState(); })
+            === "TypeError:Failed to execute 'pushState' on 'History': 2 arguments required, but only 0 present."
+        && refused(function () { return window.history.replaceState({}); })
+            === "TypeError:Failed to execute 'replaceState' on 'History': 2 arguments required, but only 1 present.",
+        refused(function () { return window.history.pushState(); }));
+    ck('E3 the scroll restoration reads the value the interface declares',
+        window.history.scrollRestoration === 'auto'
+        && (function () { window.history.scrollRestoration = 'nonsense';
+            var kept = window.history.scrollRestoration === 'auto';
+            window.history.scrollRestoration = 'manual';
+            var moved = window.history.scrollRestoration === 'manual';
+            window.history.scrollRestoration = 'auto';
+            return kept && moved; })(),
+        String(window.history.scrollRestoration));
+
+    // ── F. The navigator reads the devices the engine cannot reach ────────────
+    var NAV_WANTED = ['appCodeName', 'appName', 'appVersion', 'clipboard', 'connection',
+        'cookieEnabled', 'credentials', 'deviceMemory', 'doNotTrack', 'geolocation', 'getGamepads',
+        'gpu', 'hid', 'ink', 'javaEnabled', 'keyboard', 'language', 'languages', 'locks', 'managed',
+        'maxTouchPoints', 'mediaCapabilities', 'mediaDevices', 'mediaSession', 'mimeTypes', 'onLine',
+        'permissions', 'platform', 'plugins', 'presentation', 'product', 'productSub',
+        'requestMediaKeySystemAccess', 'scheduling', 'sendBeacon', 'serial', 'serviceWorker',
+        'storage', 'storageBuckets', 'usb', 'userActivation', 'userAgent', 'userAgentData', 'vendor',
+        'vendorSub', 'vibrate', 'virtualKeyboard', 'wakeLock', 'webdriver', 'webkitPersistentStorage',
+        'webkitTemporaryStorage', 'windowControlsOverlay', 'xr'];
+    var navListed = ',' + own(Navigator.prototype) + ',';
+    var navMissing = NAV_WANTED.filter(function (name) {
+        return navListed.indexOf(',' + name + ',') < 0;
+    });
+    ck('F1 the navigator names the reads the interface declares',
+        navMissing.length === 0, navMissing.join(','));
+    ck('F2 a device the engine cannot reach reads as the interface names it',
+        tag(window.navigator.gpu) === '[object GPU]'
+        && tag(window.navigator.hid) === '[object HID]'
+        && tag(window.navigator.serial) === '[object Serial]'
+        && tag(window.navigator.usb) === '[object USB]'
+        && tag(window.navigator.xr) === '[object XRSystem]'
+        && tag(window.navigator.mediaSession) === '[object MediaSession]'
+        && tag(window.navigator.virtualKeyboard) === '[object VirtualKeyboard]'
+        && tag(window.navigator.storageBuckets) === '[object StorageBucketManager]',
+        [tag(window.navigator.gpu), tag(window.navigator.hid), tag(window.navigator.usb),
+            tag(window.navigator.mediaSession)].join('/'));
+    ck('F3 the strings and the numbers still answer through the interface',
+        typeof window.navigator.userAgent === 'string' && window.navigator.userAgent.length > 0
+        && window.navigator.appName === 'Netscape' && window.navigator.product === 'Gecko'
+        && window.navigator.cookieEnabled === true && window.navigator.onLine === true
+        && window.navigator.javaEnabled() === false && window.navigator.vibrate(10) === false
+        && window.navigator.getGamepads().length === 4 && typeof window.navigator.language === 'string'
+        && window.navigator.languages.length >= 1,
+        [window.navigator.appName, window.navigator.product, window.navigator.javaEnabled(),
+            window.navigator.vibrate(10), window.navigator.getGamepads().length].join('/'));
+
+    // ── G. 'when' — the listener a page awaits (DOM §2.7.8) ───────────────────
+    ck('G1 the method is the interface\'s and one argument names it',
+        typeof EventTarget.prototype.when === 'function' && EventTarget.prototype.when.name === 'when'
+        && EventTarget.prototype.when.length === 1
+        && refused(function () { return EventTarget.prototype.when.call({ }, 'x'); })
+            === 'TypeError:Illegal invocation',
+        refused(function () { return EventTarget.prototype.when.call({ }, 'x'); }) + ' | '
+        + String(EventTarget.prototype.when.name));
+    // The value 'when' hands back is the one the engine settles on: the reference answers the
+    // observable it subscribes to, this engine answers the promise the older text of the same
+    // interface described. The check takes either and asks the same question of it.
+    function awaitWhen(awaited) {
+        return new Promise(function (resolve) {
+            var settled = false;
+            function finish(value) { if (!settled) { settled = true; resolve(value); } }
+            if (awaited && typeof awaited.then === 'function') {
+                awaited.then(function (event) { finish(event); },
+                    function (reason) { finish({ rejected: reason }); });
+            } else if (awaited && typeof awaited.subscribe === 'function') {
+                awaited.subscribe({ next: function (event) { finish(event); },
+                    error: function (reason) { finish({ rejected: reason }); },
+                    complete: function () { finish({ completed: true }); } });
+            } else finish({ shape: typeof awaited });
+        });
+    }
+    done('G2 the awaited event settles it', function () {
+        var target = document.createElement('div');
+        document.body.appendChild(target);
+        var awaited = awaitWhen(target.when('r16ping'));
+        setTimeout(function () {
+            target.dispatchEvent(new Event('r16ping', { bubbles: false }));
+        }, 5);
+        return awaited.then(function (event) {
+            return !!event && event.type === 'r16ping' && event.target === target;
+        });
+    });
+    done('G3 a request whose signal is already aborted never hears the event', function () {
+        var target = document.createElement('div');
+        var controller = new AbortController();
+        controller.abort('gone');
+        return awaitWhen(target.when('r16ping2', { signal: controller.signal }))
+            .then(function (answer) {
+                return !!(answer && (answer.rejected !== undefined || answer.completed));
+            });
+    });
+
+    // ── H. The rest of the engine did not move ────────────────────────────────
+    ck('H1 the window still answers the reads the page uses',
+        typeof window.matchMedia === 'function' && typeof window.addEventListener === 'function'
+        && typeof window.requestAnimationFrame === 'function'
+        && tag(window.navigator) === '[object Navigator]' && tag(window.history) === '[object History]'
+        && tag(window.screen) === '[object Screen]',
+        [tag(window.navigator), tag(window.history), tag(window.screen), tag(window.performance)].join('/'));
+    ck('H2 the event families keep the members the level declares',
+        own(Event.prototype).indexOf('returnValue') >= 0
+        && own(Event.prototype).indexOf('cancelBubble') >= 0
+        && typeof new MouseEvent('x').getModifierState === 'function',
+        own(Event.prototype));
+    ck('H3 a media list keeps its own reads',
+        own(MediaQueryList.prototype) === 'addListener,constructor,matches,media,onchange,removeListener',
+        own(MediaQueryList.prototype));
+})();
+</script>
+</body>
+</html>

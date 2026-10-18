@@ -1,0 +1,78 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe93 — the Observable interface</title></head><body><div id="d">x</div>
+<script>
+(function () {
+    function J(v){try{return JSON.stringify(v);}catch(e){return 'JERR';}}
+    function g(f){try{return String(f());}catch(e){return 'ERR '+e.name+':'+String(e.message).slice(0,60);}}
+    function own(o){try{return Object.getOwnPropertyNames(o).sort().join(',');}catch(e){return 'ERR';}}
+    function dsc(o,n){try{var d=Object.getOwnPropertyDescriptor(o,n);if(!d)return 'ABSENT';
+        return [typeof d.get,typeof d.set,d.enumerable,d.configurable,typeof d.value,d.writable,
+            d.value&&d.value.name!==undefined?String(d.value.name):'',
+            d.value&&d.value.length!==undefined?String(d.value.length):''].join('/');}
+        catch(e){return 'ERR '+e.name;}}
+    var out={};
+    out.global=[typeof window.Observable, window.Observable&&window.Observable.name,
+        window.Observable&&window.Observable.length, own(window.Observable),
+        own(window.Observable.prototype)].join('|');
+    out.tag=g(function(){return Object.prototype.toString.call(Observable);});
+    out.symbolObservable=g(function(){return typeof Symbol.observable+'|'+String(Symbol.observable);});
+    out.ctorRefuses=g(function(){return g(function(){return new Observable(function(){return 1;});});});
+    out.subscriberArg=g(function(){var seen=null;
+        try { new Observable(function (s) { seen = Object.prototype.toString.call(s)+'|'+own(Object(s))
+            +'|'+typeof s.next+'|'+typeof s.error+'|'+typeof s.complete+'|'+typeof s.cleanup
+            +'|'+typeof s.unsubscribe; }); } catch (e) { seen='ERR '+e.message; }
+        return seen;});
+    out.subscribe=g(function(){var o=new Observable(function (s) { s.next(1); s.next(2); s.complete(); });
+        var heard=[]; var sub=o.subscribe({next:function(v){heard.push(v);},
+            error:function(e){heard.push('E');}, complete:function(){heard.push('C');}});
+        return [heard.join(','), Object.prototype.toString.call(sub), own(Object(sub)),
+            typeof sub.unsubscribe].join('|');});
+    out.subscribeFns=g(function(){var heard=[];
+        new Observable(function (s) { s.next('a'); }).subscribe(function (v) { heard.push(v); });
+        return heard.join(',');});
+    out.unsubscribe=g(function(){var still=[]; var sRef=null;
+        var o=new Observable(function (s) { sRef=s; s.next(1); });
+        o.subscribe(function (v) { still.push(v); }).unsubscribe();
+        try { sRef.next(2); } catch (e) { still.push('threw'); }
+        return still.join(',');});
+    out.cleanup=g(function(){var order=[];
+        var o=new Observable(function (s) { s.cleanup(function(){order.push('cleanup');});
+            s.next(1); s.complete(); });
+        o.subscribe({next:function(v){order.push('n'+v);},complete:function(){order.push('C');}});
+        return order.join(',');});
+    out.operators=g(function(){var o=new Observable(function (s) { s.next(1); s.next(2); s.complete(); });
+        var r={};
+        ['map','filter','take','drop','forEach','toArray','reduce','first','last','find','some','every',
+            'flatMap','switchMap','inspect','catch','finally','takeUntil'].forEach(function (n) {
+            r[n]=g(function(){var v;
+                if (n==='forEach'||n==='toArray'||n==='reduce'||n==='first'||n==='last'||n==='find'
+                    ||n==='some'||n==='every') { return typeof o[n](function(){return true;},0); }
+                v=o[n](function (x) { return x; });
+                return Object.prototype.toString.call(v);});
+        });
+        return J(r);});
+    out.mapWorks=g(function(){var heard=[];
+        new Observable(function (s) { s.next(1); s.next(2); s.complete(); })
+            .map(function (x) { return x * 10; }).subscribe(function (v) { heard.push(v); });
+        return heard.join(',');});
+    out.toArray=g(function(){return g(function(){
+        return new Observable(function (s) { s.next(1); s.next(2); s.complete(); })
+            .toArray().then ? 'promise' : 'other';});});
+    out.fromAndOf=g(function(){return [typeof Observable.from, typeof Observable.of,
+        typeof Observable.from&&Observable.from.length, typeof Observable.of&&Observable.of.length].join('/');});
+    out.protoDescs=dsc(Observable.prototype,'subscribe')+'|'+dsc(Observable.prototype,'map')+'|'
+        +dsc(Observable,'from')+'|'+dsc(Observable.prototype,'constructor');
+    out.eventWhen=g(function(){var el=document.createElement('div');document.body.appendChild(el);
+        var obs=el.when('p93'); var heard=[];
+        obs.subscribe({next:function(e){heard.push(e.type);},complete:function(){heard.push('C');}});
+        el.dispatchEvent(new Event('p93'));
+        el.dispatchEvent(new Event('p93'));
+        return [heard.join(','), Object.prototype.toString.call(obs)].join('|');});
+    out.whenOptions=g(function(){var el=document.createElement('div');
+        return [dsc(el.when('x'),'subscribe').slice(0,40), typeof el.when('x',{once:true}).subscribe,
+            g(function(){return el.when();})].join('|');});
+    document.title='P93 '+J(out);
+    window.__REPORT=J(out);
+    window.__T && window.__T('probe93', true, J(out));
+})();
+</script>
+<div>probe93</div></body></html>

@@ -3197,7 +3197,7 @@ public class DomTokenListHost : IDomPrototypeHost
     }
 }
 
-public class ScriptEvent : IDomPrototypeHost
+public class ScriptEvent : IDomPrototypeHost, IDomEnumerableHost
 {
     /// <summary>The interface this event reads as (DOM §4.5.2, UI Events §2 and the families built on
     /// top of them). A page that calls 'new WheelEvent(...)' asks the document for an event of that
@@ -3205,8 +3205,19 @@ public class ScriptEvent : IDomPrototypeHost
     /// 'wheel instanceof WheelEvent' and '[object WheelEvent]' both follow from it.</summary>
     internal string Kind = "Event";
 
+    /// <summary>The name the interface reads as, carried on the object itself so a page that reaches
+    /// through the interface — 'Event.prototype.type' read off the level, or a getter called with the
+    /// level as its receiver — can tell an event from anything else standing on the same prototype
+    /// (DOM §2.9, measured: such a read is 'TypeError: Illegal invocation').</summary>
+    public string __domType => Kind;
+
     string[] IDomPrototypeHost.__domTypeChain =>
         Kind == "Event" ? new[] { "Event" } : new[] { "Event", Kind };
+
+    /// <summary>DOM §2.9: the trusted flag is the one member an event carries on itself rather than
+    /// behind its interface — the reference enumerates exactly this one name off any event, constructed
+    /// or dispatched (measured: 'Object.keys(new Event("x"))' is ['isTrusted']).</summary>
+    string[] IDomEnumerableHost.__domOwnKeys => new[] { "isTrusted" };
 
     /// <summary>The event reads as the interface its kind names (measured: 'String(new WheelEvent())'
     /// is '[object WheelEvent]'), which is the last level of the chain it is stamped with.</summary>
@@ -3228,10 +3239,20 @@ public class ScriptEvent : IDomPrototypeHost
     public int eventPhase { get; set; }
     public object? detail { get; set; }
     public bool composed { get; set; } = false;
-    public bool isTrusted { get; } = true;
-    public string? returnValue { get; set; }
-    public string? srcElement => target?.ToString();
-    public bool cancelBubble { get => !bubbles; set => bubbles = !value; }
+    // DOM §2.9: an event the engine raised is trusted; the constructor the page calls turns that
+    // over, so an event built in script answers false.
+    public bool isTrusted { get; set; } = true;
+    // DOM §2.9.4: the legacy cancellation flag and the oldest name of the target are both answered
+    // from the state the event already keeps, so neither is a member of the event itself — they read
+    // through accessors on the interface ('!defaultPrevented' and 'target').
+    // DOM §2.9: the legacy flag is the other face of 'stopPropagation', not the negation of
+    // 'bubbles' — an event built with no flags answers false (measured), and writing true stops the
+    // walk the way the method does.
+    public bool cancelBubble
+    {
+        get => PropagationStopped;
+        set { if (value) stopPropagation(); }
+    }
 
     // Keyboard event properties
     public string? key { get; set; }
@@ -3243,7 +3264,9 @@ public class ScriptEvent : IDomPrototypeHost
     public bool isComposing { get; set; }
     public int keyCode { get; set; }
     public int which { get; set; }
-    public bool charCode { get; set; }
+    // UI Events §4.1: the character code is a number, and a keyboard event built by the page carries
+    // no character at all — the zero the reference answers.
+    public int charCode { get; set; }
 
     // Mouse event properties
     public double clientX { get; set; }

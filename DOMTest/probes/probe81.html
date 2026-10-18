@@ -1,0 +1,195 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe81 — Web API surface sweep</title></head><body><div id="d">x</div>
+<script>
+window.__ERR = 'none';
+window.onerror = function (m, s, l, c) { window.__ERR = String(m) + '@' + l + ':' + c; return false; };
+(function () {
+    function J(v) { try { return JSON.stringify(v); } catch (e) { return 'JERR'; } }
+    function g(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + String(e.message).slice(0, 60); } }
+    function own(o) { try { return Object.getOwnPropertyNames(o).sort().join(','); } catch (e) { return 'ERR'; } }
+    function tag(v) { try { return Object.prototype.toString.call(v); } catch (e) { return 'TAGERR'; } }
+    var out = {};
+
+    // A. The event families: what each prototype carries and what a bare constructor defaults to.
+    var EVENTS = ['Event', 'CustomEvent', 'UIEvent', 'MouseEvent', 'KeyboardEvent', 'InputEvent',
+        'FocusEvent', 'WheelEvent', 'DragEvent', 'PointerEvent', 'TouchEvents', 'TouchEvent',
+        'CompositionEvent', 'ProgressEvent', 'MessageEvent', 'StorageEvent', 'CloneEvent',
+        'HashChangeEvent', 'PopStateEvent', 'PageTransitionEvent', 'TransitionEvent',
+        'AnimationEvent', 'PromiseRejectionEvent', 'SubmitEvent', 'ToggleEvent',
+        'BeforeUnloadEvent', 'SecurityPolicyViolationEvent', 'TrustedTypePolicyFactory'];
+    out.eventProtos = {};
+    EVENTS.forEach(function (name) {
+        var C = window[name];
+        if (typeof C !== 'function') { out.eventProtos[name] = 'ABSENT'; return; }
+        out.eventProtos[name] = g(function () { return own(C.prototype); });
+    });
+    out.eventDefaults = {
+        event: g(function () { var e = new Event('x'); return [e.bubbles, e.cancelable, e.composed,
+            e.target, e.currentTarget, e.eventPhase, e.isTrusted, e.defaultPrevented].join('/'); }),
+        custom: g(function () { var e = new CustomEvent('x'); return [e.detail].join('/'); }),
+        ui: g(function () { var e = new UIEvent('x'); return [e.detail, e.view, e.which].join('/'); }),
+        mouse: g(function () { var e = new MouseEvent('x'); return [e.button, e.buttons, e.client.x,
+            e.clientX, e.clientY, e.movementX, e.layerX, e.pageX, e.screenX, e.altKey, e.ctrlKey,
+            e.metaKey, e.shiftKey, e.relatedTarget, e.region, e.getModifierState('Shift')].join('/'); }),
+        keyboard: g(function () { var e = new KeyboardEvent('x'); return [e.key, e.code, e.location,
+            e.repeat, e.isComposing, e.altKey, e.charCode, e.keyCode, e.which].join('/'); }),
+        input: g(function () { var e = new InputEvent('x'); return [e.data, e.inputType,
+            e.isComposing, e.dataTransfer, J(e.getTargetRanges())].join('/'); }),
+        focus: g(function () { var e = new FocusEvent('x'); return [e.relatedTarget].join('/'); }),
+        wheel: g(function () { var e = new WheelEvent('x'); return [e.deltaX, e.deltaY, e.deltaZ,
+            e.deltaMode].join('/'); }),
+        message: g(function () { var e = new MessageEvent('x'); return [e.data, e.origin, e.lastEventId,
+            e.source, J(e.ports), e.returnValue].join('/'); }),
+        storage: g(function () { var e = new StorageEvent('x'); return [e.key, e.oldValue, e.newValue,
+            e.url, e.storageArea].join('/'); }),
+        popstate: g(function () { var e = new PopStateEvent('x'); return J(e.state); }),
+        hash: g(function () { var e = new HashChangeEvent('x'); return [e.oldURL, e.newURL].join('/'); }),
+        transition: g(function () { var e = new TransitionEvent('x'); return [e.propertyName,
+            e.elapsedTime, e.pseudoElement].join('/'); }),
+        animation: g(function () { var e = new AnimationEvent('x'); return [e.animationName,
+            e.elapsedTime, e.pseudoElement].join('/'); }),
+        submit: g(function () { var e = new SubmitEvent('x'); return tag(e.submitter); }),
+        toggle: g(function () { var e = new ToggleEvent('x'); return [e.newState, e.oldState].join('/'); }),
+        promiseRejection: g(function () { var e = new PromiseRejectionEvent('x'); return [e.reason,
+            e.promise].join('/'); }),
+        progress: g(function () { var e = new ProgressEvent('x'); return [e.lengthComputable,
+            e.loaded, e.total].join('/'); }),
+        composition: g(function () { var e = new CompositionEvent('x'); return J(e.data); }),
+        touch: g(function () { var e = new TouchEvent('x'); return [e.touches && e.touches.length,
+            e.changedTouches && e.changedTouches.length, e.altKey].join('/'); }),
+        pageTransition: g(function () { var e = new PageTransitionEvent('x'); return J(e.persisted); })
+    };
+
+    // B. Legacy event factory and the DOM implementation.
+    out.createEvent = {
+        htmlevents: g(function () { var e = document.createEvent('HTMLEvents'); e.initEvent('x', true, false);
+            return tag(e) + '/' + e.type + '/' + e.bubbles + '/' + e.cancelable; }),
+        uievents: g(function () { return tag(document.createEvent('UIEvents')); }),
+        msevents: g(function () { return tag(document.createEvent('MouseEvents')); }),
+        customevents: g(function () { var e = document.createEvent('CustomEvent');
+            e.initCustomEvent('x', true, true, 7); return tag(e) + '/' + e.detail; }),
+        events: g(function () { return tag(document.createEvent('Events')); }),
+        keyboardevents: g(function () { return tag(document.createEvent('KeyboardEvents')); }),
+        mutationname: g(function () { return tag(document.createEvent('MutationEvents')); }),
+        bad: g(function () { return document.createEvent('Nonsense'); })
+    };
+    out.domImplementation = {
+        proto: g(function () { return own(window.DOMImplementation.prototype); }),
+        createHTMLDocument: g(function () { var d = document.implementation.createHTMLDocument('T');
+            return tag(d) + '/' + d.title + '/' + d.documentElement.nodeName + '/' + d.childNodes.length; }),
+        createDocument: g(function () { return tag(document.implementation.createDocument(null, 'r', null)); }),
+        hasFeature: g(function () { return document.implementation.hasFeature('', '') + '/legacy'; })
+    };
+
+    // C. The window's own frame.
+    out.window = {
+        proto: g(function () { return own(window).length; }),
+        self: g(function () { return [window.self === window, window.top === window,
+            window.parent === window, window.window === window, window.frames === window].join('/'); }),
+        length: g(function () { return window.frames.length + '/' + window.length; }),
+        name: g(function () { return J(window.name) + '/' + typeof window.name; }),
+        closed: g(function () { return J(window.closed); }),
+        opener: g(function () { return J(window.opener); }),
+        origin: g(function () { return String(window.origin).slice(0, 30); }),
+        dialogs: g(function () { return [typeof window.alert, typeof window.confirm,
+            typeof window.prompt, typeof window.print, typeof window.stop, typeof window.close,
+            typeof window.open, typeof window.blur, typeof window.focus, typeof window.caches].join('/'); }),
+        scrolling: g(function () { return [typeof window.scrollTo, typeof window.scrollBy,
+            window.scrollX + '/' + window.scrollY, window.pageXOffset + '/' + window.pageYOffset].join('|'); }),
+        raf: g(function () { return [typeof window.requestAnimationFrame,
+            typeof window.cancelAnimationFrame, typeof window.requestIdleCallback,
+            typeof window.queueMicrotask, window.requestAnimationFrame(function () {}) > 0].join('/'); }),
+        media: g(function () { return [typeof window.matchMedia].join('/'); }),
+        dpr: g(function () { return window.devicePixelRatio + '/' + window.isSecureContext + '/'
+            + window.crossOriginIsolated; }),
+        sab: g(function () { return typeof SharedArrayBuffer + '/' + typeof Atomics.waitAsync; }),
+        scheduler: g(function () { return tag(window.scheduler) + '/' + typeof window.postMessage; })
+    };
+
+    // D. matchMedia and the media query list.
+    out.media = {
+        mql: g(function () { var m = window.matchMedia('(min-width: 1px)');
+            return [tag(m), m.matches, m.media, m.onChange, typeof m.addEventListener,
+                typeof m.addListener, typeof m.dispatchEvent].join('/'); }),
+        mqlProto: g(function () { return own(window.MediaQueryList.prototype); }),
+        mqlCtor: g(function () { return typeof window.MediaQueryList; }),
+        mqlEventProto: g(function () { return own(window.MediaQueryListEvent.prototype); }),
+        mqlFalse: g(function () { return window.matchMedia('(min-width: 99999px)').matches; }),
+        mqlBad: g(function () { return window.matchMedia('nonsense').media; }),
+        mqlAddRemove: g(function () { var m = window.matchMedia('(min-width: 1px)'); var n = 0;
+            function h() { n++; } m.addEventListener('change', h); m.removeEventListener('change', h);
+            return n; })
+    };
+
+    // E. Screen, visual viewport, history, storage.
+    out.screen = g(function () { return [tag(window.screen), own(Object.getPrototypeOf(window.screen)),
+        window.screen.width, window.screen.height, window.screen.availWidth,
+        window.screen.colorDepth, window.screen.orientation && window.screen.orientation.type,
+        window.screen.isExtended].join('/'); });
+    out.visualViewport = g(function () { var v = window.visualViewport;
+        return v ? [tag(v), own(Object.getPrototypeOf(v)), v.width, v.height, v.scale,
+            v.offsetLeft, v.offsetTop].join('/') : 'null'; });
+    out.history = g(function () { return [tag(window.history), own(window.History.prototype),
+        window.history.length, J(window.history.state), window.history.scrollRestoration].join('/'); });
+    out.historyArity = g(function () { return [window.History.prototype.pushState.length,
+        window.History.prototype.replaceState.length, window.History.prototype.go.length,
+        window.History.prototype.scrollBy.length].join('/'); });
+    out.storage = g(function () { return [tag(window.localStorage),
+        own(window.Storage.prototype), window.localStorage.length].join('/'); });
+    out.storageOps = g(function () { var s = window.localStorage; s.setItem('k', 'v');
+        var a = [s.getItem('k'), s.key(0), 'k' in s, Object.keys(s).join(','), s.k];
+        s.removeItem('k'); s.clear(); return a.join('/'); });
+
+    // F. Navigator, crypto, performance, permissions and the big namespaces.
+    out.navigator = g(function () { return [window.navigator.hardwareConcurrency,
+        window.navigator.deviceMemory, window.navigator.maxTouchPoints, window.navigator.webdriver,
+        J(window.navigator.doNotTrack), window.navigator.languages.length,
+        typeof window.navigator.vibrate, typeof window.navigator.sendBeacon,
+        typeof window.navigator.mediaDevices, typeof window.navigator.permissions,
+        typeof window.navigator.storage, typeof window.navigator.serviceWorker,
+        typeof window.navigator.userAgentData, typeof window.navigator.getGamepads,
+        typeof window.navigator.scheduling, typeof window.navigator.wakeLock].join('/'); });
+    out.crypto = g(function () { return [tag(window.crypto), own(window.Crypto.prototype),
+        typeof window.crypto.getRandomValues, typeof window.crypto.subtle,
+        g(function () { return window.crypto.randomUUID().length; }),
+        typeof window.crypto.randomUUID, typeof SubtleCrypto].join('/'); });
+    out.performance = g(function () { return [tag(window.performance),
+        own(Object.getPrototypeOf(window.performance)), typeof window.performance.mark,
+        typeof window.performance.measure, typeof window.performance.clearMarks,
+        typeof window.performance.timeOrigin, typeof window.PerformanceObserver].join('/'); });
+    out.namespaces = g(function () { return ['indexedDB', 'IDBKeyRange', 'caches', 'Cache',
+        'serviceWorker', 'Notification', 'Geolocation', 'MediaQueryList', 'VisualViewport',
+        'Storage', 'Permissions', 'PermissionStatus', 'Crypto', 'SubtleCrypto', 'TextEncoder',
+        'Blob', 'FileReader', 'WebSocket', 'EventSource', 'BroadcastChannel', 'MessageChannel',
+        'Worker', 'SharedWorker', 'CustomElementRegistry', 'HTMLSlotElement', 'ShadowRoot',
+        'ResizeObserver', 'IntersectionObserver', 'MutationObserver', 'NodeIterator', 'TreeWalker',
+        'StaticRange', 'XPathEvaluator', 'DOMParser', 'XMLSerializer', 'XSLTProcessor',
+        'Selection', 'Range', 'CSSRuleList', 'FontFace', 'localStorage'].map(function (n) {
+            return n + '=' + typeof window[n]; }).join(','); });
+    out.idb = g(function () { return [typeof window.indexedDB, typeof window.IDBKeyRange,
+        own(window.IDBKeyRange), typeof window.IDBKeyRange.only].join('/'); });
+    out.permissions = g(function () { return [typeof window.navigator.permissions,
+        window.Permissions ? own(window.Permissions.prototype) : 'none',
+        g(function () { return window.navigator.permissions.query({ name: 'geolocation' })
+            .then ? 'promise' : 'notpromise'; })].join('/'); });
+    out.geolocation = g(function () { return [tag(window.navigator.geolocation),
+        own(window.Geolocation.prototype)].join('/'); });
+
+    // G. Encoding, streams, observers, and a few constructors' arity.
+    out.encoding = g(function () { var e = new TextEncoder(); var t = new TextDecoder();
+        return [tag(e), e.encode('ab').length, t.decode(e.encode('ab')),
+            t.encoding, e.encoding, typeof TextDecoderStream, typeof TextEncoderStream].join('/'); });
+    out.constructors = g(function () { return [window.Range.length, window.MutationObserver.length,
+        window.ResizeObserver.length, window.IntersectionObserver.length, window.Event.length,
+        window.CustomEvent.length, window.XMLHttpRequest.length, window.FormData.length,
+        window.Headers.length, window.Request.length, window.Response.length, window.Blob.length,
+        window.File.length, window.FileReader.length, window.URL.length,
+        window.URLSearchParams.length, window.Image.length, window.Notification.length].join('/'); });
+    out.staticRanges = g(function () { return [typeof window.StaticRange,
+        window.StaticRange ? own(window.StaticRange.prototype) : 'none'].join('/'); });
+    out.customElements = g(function () { return [tag(window.customElements),
+        own(window.CustomElementRegistry.prototype), typeof window.customElements.define].join('/'); });
+
+    window.__T('probe81 ours', true, J(out));
+    document.title = 'P81 ' + Object.keys(out).length;
+})();
+</script></body></html>

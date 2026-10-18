@@ -1,0 +1,94 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe86 — returnValue and BOM prototypes</title></head><body><div id="d">x</div>
+<script>
+(function () {
+    function J(v){try{return JSON.stringify(v);}catch(e){return 'JERR';}}
+    function g(f){try{return String(f());}catch(e){return 'ERR '+e.name+':'+String(e.message).slice(0,70);}}
+    function own(o){try{return Object.getOwnPropertyNames(o).sort().join(',');}catch(e){return 'ERR';}}
+    function dsc(o,n){try{var d=Object.getOwnPropertyDescriptor(o,n);if(!d)return 'ABSENT';
+        return [typeof d.get,typeof d.set,d.enumerable,d.configurable,typeof d.value,
+            d.writable,d.get?String(d.get.name):'',d.set?String(d.set.name):''].join('/');}
+        catch(e){return 'ERR '+e.name;}}
+    var out={};
+
+    // A. The legacy cancellation flag (DOM §2.9.4).
+    out.evReturnValue=g(function(){var e=new Event('x');
+        return [e.returnValue, typeof e.returnValue, e.defaultPrevented].join('/');});
+    out.evPrevent=g(function(){var e=new Event('x',{cancelable:true}); e.preventDefault();
+        return [e.returnValue, e.defaultPrevented].join('/');});
+    out.evSetFalse=g(function(){var e=new Event('x',{cancelable:true}); e.returnValue=false;
+        return [e.returnValue, e.defaultPrevented].join('/');});
+    out.evSetFalseNot=g(function(){var e=new Event('x'); e.returnValue=false;
+        return [e.returnValue, e.defaultPrevented].join('/');});
+    out.evSetTrue=g(function(){var e=new Event('x',{cancelable:true}); e.preventDefault();
+        e.returnValue=true; return [e.returnValue, e.defaultPrevented].join('/');});
+    out.evSetString=g(function(){var e=new Event('x',{cancelable:true}); e.returnValue='no';
+        return [e.returnValue, typeof e.returnValue, e.defaultPrevented].join('/');});
+    out.evRVDesc=g(function(){return dsc(Event.prototype,'returnValue');});
+    out.evRVCopy=g(function(){var e=new Event('x');
+        return [own(e), J(e.returnValue), Object.keys(e).join(',')].join('|');});
+    out.bueDefaults=g(function(){var e=new BeforeUnloadEvent('x');
+        return [e.returnValue, typeof e.returnValue, J(e.type)].join('/');});
+    out.bueDesc=g(function(){return dsc(BeforeUnloadEvent.prototype,'returnValue');});
+    out.bueAny=g(function(){var e=new BeforeUnloadEvent('x'); e.returnValue='hello';
+        return [e.returnValue, typeof e.returnValue, e.defaultPrevented].join('/');});
+    out.bueBrand=g(function(){return g(function(){return BeforeUnloadEvent.prototype.returnValue;});});
+    out.msgReturnValue=g(function(){var e=new MessageEvent('x');
+        return [e.returnValue, typeof e.returnValue].join('/');});
+    out.cbDesc=g(function(){return dsc(Event.prototype,'cancelBubble')+'|'
+        +dsc(Event.prototype,'srcElement')+'|'+dsc(Event.prototype,'type');});
+    out.srcElement=g(function(){var e=new Event('x'); return J(e.srcElement)+'|'+J(e.target);});
+
+    // B. The BOM interfaces: what each prototype carries and what the instance owns.
+    var IFACES=['Screen','History','DOMImplementation','Storage','Navigator','MediaQueryList',
+        'VisualViewport','Performance','EventTarget','Window','WorkerNavigator','Permissions'];
+    out.protos={};
+    IFACES.forEach(function(n){var C=window[n];
+        out.protos[n]= typeof C==='function' ? own(C.prototype) : 'ABSENT';});
+    out.instances={
+        screen:g(function(){return own(window.screen)+'|'+Object.keys(window.screen).join(',');}),
+        history:g(function(){return own(window.history)+'|'+Object.keys(window.history).join(',');}),
+        impl:g(function(){return own(document.implementation);}),
+        storage:g(function(){var s=window.localStorage; s.setItem('a','1');
+            var r=own(s)+'|'+Object.keys(s).join(','); s.removeItem('a'); return r;}),
+        nav:g(function(){return own(window.navigator)+'|'+Object.keys(window.navigator).join(',');}),
+        mql:g(function(){var m=window.matchMedia('(min-width: 1px)');return own(m)+'|'+Object.keys(m).join(',');}),
+        vv:g(function(){return own(window.visualViewport);}),
+        perf:g(function(){return own(window.performance)+'|'+Object.keys(window.performance).join(',');})
+    };
+    out.descs={
+        screenW:g(function(){return dsc(Screen.prototype,'width');}),
+        histLen:g(function(){return dsc(History.prototype,'length');}),
+        histState:g(function(){return dsc(History.prototype,'state');}),
+        implCreate:g(function(){return dsc(DOMImplementation.prototype,'createHTMLDocument');}),
+        storageLen:g(function(){return dsc(Storage.prototype,'length');}),
+        navHc:g(function(){return dsc(Navigator.prototype,'hardwareConcurrency');}),
+        mqlMatches:g(function(){return dsc(MediaQueryList.prototype,'matches');})
+    };
+    out.brandChecks={
+        screenW:g(function(){return g(function(){return Screen.prototype.width;});}),
+        histLen:g(function(){return g(function(){return History.prototype.length;});}),
+        storageLen:g(function(){return g(function(){return Storage.prototype.length;});}),
+        navHc:g(function(){return g(function(){return Navigator.prototype.hardwareConcurrency;});}),
+        mqlMatches:g(function(){return g(function(){return MediaQueryList.prototype.matches;});}),
+        perfNow:g(function(){return g(function(){return Performance.prototype.now;});})
+    };
+    out.histOps=g(function(){var h=window.history;
+        return [typeof h.pushState, h.pushState.length, typeof h.replaceState, h.replaceState.length,
+            typeof h.go, h.go.length, typeof h.back, h.back.length, typeof h.forward,
+            h.scrollRestoration, typeof h.state].join('/');});
+    out.implOps=g(function(){var i=document.implementation;
+        return [typeof i.createHTMLDocument, i.createHTMLDocument.length, typeof i.createDocument,
+            typeof i.createDocumentType, typeof i.hasFeature, i.hasFeature.length].join('/');});
+    out.screenOps=g(function(){var s=window.screen;
+        return [s.width,s.height,s.availWidth,s.availHeight,s.availLeft,s.availTop,s.colorDepth,
+            s.pixelDepth,s.orientation&&s.orientation.type,s.isExtended].join('/');});
+    out.orientationProto=g(function(){return own(window.ScreenOrientation?
+        window.ScreenOrientation.prototype:'none');});
+    out.storageCtor=g(function(){return [g(function(){return new Storage();}),
+        g(function(){var s=window.localStorage; return s.a+'/'+s.length+'/'+J(s.key(0));})].join('|');});
+    document.title = 'P86 ' + J(out);
+    window.__REPORT = J(out);
+    window.__T && window.__T('probe86 ours', true, J(out));
+})();
+</script>
+<div>probe86</div></body></html>

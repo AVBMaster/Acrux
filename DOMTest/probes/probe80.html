@@ -1,0 +1,24 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe80 — Set methods</title></head><body><script>
+(function () {
+  function g(f){try{return String(f());}catch(e){return 'ERR '+e.name+':'+String(e.message).slice(0,60);}}
+  var a = new Set([1,2]), b = new Set([2,3]);
+  var out = [];
+  out.push('union=' + g(function(){ return J2(a.union(b)); }));
+  out.push('intersection=' + g(function(){ return J2(a.intersection(b)); }));
+  out.push('difference=' + g(function(){ return J2(a.difference(b)); }));
+  out.push('symmetricDifference=' + g(function(){ return J2(a.symmetricDifference(b)); }));
+  out.push('isSubsetOf=' + g(function(){ return a.isSubsetOf([1,2,3]); }));
+  out.push('isSupersetOf=' + g(function(){ return a.isSupersetOf([1]); }));
+  out.push('isDisjointFrom=' + g(function(){ return a.isDisjointFrom([7]); }));
+  out.push('isDisjointWith=' + g(function(){ return a.isDisjointWith(b); }));
+  out.push('argSet=' + g(function(){ return J2(a.union(new Set([9]))); }));
+  out.push('argBad=' + g(function(){ return a.union(5); }));
+  out.push('size=' + g(function(){ return a.size + '/' + new Set([1,2,3]).size; }));
+  out.push('sab=' + g(function(){ return typeof SharedArrayBuffer + '/' + String(window.SharedArrayBuffer === undefined); }));
+  out.push('coa=' + g(function(){ return typeof (new Uint8Array(4)).constructor.name; }));
+  out.push('int32=' + g(function(){ var x = new Int32Array(3); x[0]=7; return J2(x); }));
+  out.push('arrayFromIter=' + g(function(){ return J2(Array.from(a)); }));
+  window.__T('probe80', true, out.join(' | '));
+  function J2(v){ var o=[]; if (v && typeof v.forEach==='function') v.forEach(function(x){o.push(x);}); else o=[String(v)]; return JSON.stringify(o.length?o:[String(v)]); }
+})();
+</script></body></html>

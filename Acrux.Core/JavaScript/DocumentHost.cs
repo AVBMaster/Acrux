@@ -912,16 +912,25 @@ public class DocumentHost : IDomPrototypeHost
     /// <summary>HTML §2.8.2: the legacy 'createEvent' answers by event family, and the same door is
     /// what a page-built event comes through — the family is recorded on the event so its wrapper can
     /// be stamped with the interface it names (DOM §4.5.2, UI Events §2).</summary>
+    /// <summary>DOM §2.12.7: the legacy spellings are read as the interface they name, and a string
+    /// that names no event at all is refused with the sentence the reference writes — the removed
+    /// families ('MutationEvents', 'TextEvents') are gone from the list, so they are refused like any
+    /// nonsense rather than answered with a generic event (measured).</summary>
+    public object? createEvent()
+        => throw new Acrux.Core.Dom.DOMException(
+            "Failed to execute 'createEvent' on 'Document': 1 argument required, but only 0 present.",
+            "TypeError");
+
     public object? createEvent(string type)
     {
-        var given = type ?? "Event";
+        var given = type ?? "";
         var name = given.ToLowerInvariant() switch
         {
-            "event" => "Event",
+            "event" or "events" or "htmlevent" or "htmlevents" => "Event",
             "customevent" => "CustomEvent",
             "uievent" or "uievents" => "UIEvent",
             "mouseevent" or "mouseevents" => "MouseEvent",
-            "keyevent" or "keyevents" or "keyboardevent" => "KeyboardEvent",
+            "keyevent" or "keyevents" or "keyboardevent" or "keyboardevents" => "KeyboardEvent",
             "focusevent" => "FocusEvent",
             "pointerevent" or "pointerevents" => "PointerEvent",
             "wheelevent" => "WheelEvent",
@@ -941,7 +950,11 @@ public class DocumentHost : IDomPrototypeHost
             "beforeunloadevent" => "BeforeUnloadEvent",
             "promiserejectionevent" => "PromiseRejectionEvent",
             "progressevent" => "ProgressEvent",
-            _ => given
+            _ => given.EndsWith("Event", System.StringComparison.Ordinal) && given.Length > 5
+                ? given
+                : throw new Acrux.Core.Dom.DOMException(
+                    "Failed to execute 'createEvent' on 'Document': The provided event type ("
+                    + "'" + given + "') is invalid.", "NotSupportedError")
         };
         return new ScriptEvent(name, null) { Kind = name };
     }

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head><title>Event interfaces and the legacy factory (DOM §2.9, §2.12.7, UI Events §3-§7, MQ §5.2)</title></head>
+<body>
+<div id="box"><p id="kid">a</p></div>
+<script>
+(function () {
+    function own(o) { try { return Object.getOwnPropertyNames(o).sort().join(','); } catch (e) { return 'ERR'; } }
+    function tag(v) { try { return Object.prototype.toString.call(v); } catch (e) { return 'TAGERR'; } }
+    function refused(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name) + ':' + String(e && e.message); }
+    }
+    function ck(name, cond, info) { window.__T(name, cond === true, info === undefined ? '' : String(info)); }
+    function sorted(list) { return list.slice().sort().join(','); }
+
+    // ── A. The member set each interface declares sits on its prototype ───────
+    var LEVELS = {
+        Event: ['AT_TARGET', 'BUBBLING_PHASE', 'CAPTURING_PHASE', 'NONE', 'bubbles',
+            'cancelBubble', 'cancelable', 'composed', 'composedPath', 'constructor',
+            'currentTarget', 'defaultPrevented', 'eventPhase', 'initEvent', 'preventDefault',
+            'returnValue', 'srcElement', 'stopImmediatePropagation', 'stopPropagation', 'target',
+            'timeStamp', 'type'],
+        CustomEvent: ['constructor', 'detail', 'initCustomEvent'],
+        UIEvent: ['constructor', 'detail', 'initUIEvent', 'pseudoTarget', 'sourceCapabilities',
+            'view', 'which'],
+        MouseEvent: ['altKey', 'button', 'buttons', 'clientX', 'clientY', 'constructor', 'ctrlKey',
+            'fromElement', 'getModifierState', 'initMouseEvent', 'layerX', 'layerY', 'metaKey',
+            'movementX', 'movementY', 'offsetX', 'offsetY', 'pageX', 'pageY', 'relatedTarget',
+            'screenX', 'screenY', 'shiftKey', 'toElement', 'x', 'y'],
+        KeyboardEvent: ['DOM_KEY_LOCATION_LEFT', 'DOM_KEY_LOCATION_NUMPAD', 'DOM_KEY_LOCATION_RIGHT',
+            'DOM_KEY_LOCATION_STANDARD', 'altKey', 'charCode', 'code', 'constructor', 'ctrlKey',
+            'getModifierState', 'initKeyboardEvent', 'isComposing', 'key', 'keyCode', 'location',
+            'metaKey', 'repeat', 'shiftKey'],
+        InputEvent: ['constructor', 'data', 'dataTransfer', 'getTargetRanges', 'inputType',
+            'isComposing'],
+        FocusEvent: ['constructor', 'relatedTarget'],
+        WheelEvent: ['DOM_DELTA_LINE', 'DOM_DELTA_PAGE', 'DOM_DELTA_PIXEL', 'constructor',
+            'deltaMode', 'deltaX', 'deltaY', 'deltaZ', 'wheelDelta', 'wheelDeltaX', 'wheelDeltaY'],
+        DragEvent: ['constructor', 'dataTransfer'],
+        PointerEvent: ['altitudeAngle', 'azimuthAngle', 'constructor', 'getCoalescedEvents',
+            'getPredictedEvents', 'height', 'isPrimary', 'persistentDeviceId', 'pointerId',
+            'pointerType', 'pressure', 'tangentialPressure', 'tiltX', 'tiltY', 'twist', 'width'],
+        TouchEvent: ['altKey', 'changedTouches', 'constructor', 'ctrlKey', 'metaKey', 'shiftKey',
+            'targetTouches', 'touches'],
+        CompositionEvent: ['constructor', 'data', 'initCompositionEvent'],
+        ProgressEvent: ['constructor', 'lengthComputable', 'loaded', 'total'],
+        MessageEvent: ['constructor', 'data', 'initMessageEvent', 'lastEventId', 'origin', 'ports',
+            'source', 'userActivation'],
+        StorageEvent: ['constructor', 'initStorageEvent', 'key', 'newValue', 'oldValue',
+            'storageArea', 'url'],
+        HashChangeEvent: ['constructor', 'newURL', 'oldURL'],
+        PopStateEvent: ['constructor', 'hasUAVisualTransition', 'state'],
+        PageTransitionEvent: ['constructor', 'persisted'],
+        TransitionEvent: ['constructor', 'elapsedTime', 'propertyName', 'pseudoElement',
+            'pseudoTarget'],
+        AnimationEvent: ['animationName', 'constructor', 'elapsedTime', 'pseudoElement',
+            'pseudoTarget'],
+        PromiseRejectionEvent: ['constructor', 'promise', 'reason'],
+        SubmitEvent: ['constructor', 'submitter'],
+        ToggleEvent: ['constructor', 'newState', 'oldState', 'source'],
+        BeforeUnloadEvent: ['constructor', 'returnValue'],
+        SecurityPolicyViolationEvent: ['blockedURI', 'columnNumber', 'constructor', 'disposition',
+            'documentURI', 'effectiveDirective', 'lineNumber', 'originalPolicy', 'referrer',
+            'sample', 'sourceFile', 'statusCode', 'violatedDirective']
+    };
+    Object.keys(LEVELS).forEach(function (name) {
+        ck('A ' + name + ' declares its members on the prototype', (function () {
+            var Ctor = window[name];
+            return typeof Ctor === 'function' && own(Ctor.prototype) === sorted(LEVELS[name]);
+        })(), (function () {
+            var Ctor = window[name];
+            return typeof Ctor === 'function' ? own(Ctor.prototype) : 'ABSENT';
+        })());
+    });
+
+    // ── B. The instance carries the trusted flag and nothing else ────────────
+    // DOM §2.9: 'isTrusted' is the one member an event owns; a page that builds an event is not the
+    // engine, so the flag answers false (measured for the constructor and the legacy factory alike).
+    ck('B1 an event owns only isTrusted', (function () {
+        return own(new Event('x')) === 'isTrusted' && own(new MouseEvent('x')) === 'isTrusted'
+            && Object.keys(new Event('x')).join(',') === 'isTrusted'
+            && new Event('x').isTrusted === false
+            && document.createEvent('HTMLEvents').isTrusted === true;
+    })(), (function () {
+        return [own(new Event('x')), Object.keys(new Event('x')), String(new Event('x').isTrusted),
+            String(document.createEvent('HTMLEvents').isTrusted),
+            own(new MouseEvent('x'))].join(' ; ');
+    })());
+    ck('B2 the EventInit flags all default to false', (function () {
+        var e = new Event('x');
+        return e.bubbles === false && e.cancelable === false && e.composed === false
+            && e.defaultPrevented === false && e.cancelBubble === false && e.eventPhase === 0
+            && e.target === null && e.currentTarget === null && e.type === 'x';
+    })(), (function () { var e = new Event('x'); return e.eventPhase + '/' + String(e.target); })());
+    ck('B3 a flag the dictionary sets is read back', (function () {
+        var e = new Event('x', { bubbles: true, cancelable: true, composed: true });
+        return e.bubbles === true && e.cancelable === true && e.composed === true;
+    })());
+    ck('B4 the phase constants are the numbers the walk uses', (function () {
+        return Event.NONE === 0 && Event.CAPTURING_PHASE === 1 && Event.AT_TARGET === 2
+            && Event.BUBBLING_PHASE === 3 && WheelEvent.DOM_DELTA_PIXEL === 0
+            && WheelEvent.DOM_DELTA_LINE === 1 && WheelEvent.DOM_DELTA_PAGE === 2
+            && KeyboardEvent.DOM_KEY_LOCATION_STANDARD === 0
+            && KeyboardEvent.DOM_KEY_LOCATION_LEFT === 1 && KeyboardEvent.DOM_KEY_LOCATION_RIGHT === 2
+            && KeyboardEvent.DOM_KEY_LOCATION_NUMPAD === 3;
+    })());
+
+    // ── C. Each family leaves the members the dictionary did not name ─────────
+    ck('C1 the bare constructors answer the defaults', (function () {
+        var m = new MouseEvent('x'), k = new KeyboardEvent('x'), i = new InputEvent('x'),
+            w = new WheelEvent('x'), ms = new MessageEvent('x'), st = new StorageEvent('x'),
+            p = new PopStateEvent('x'), h = new HashChangeEvent('x'), t = new TransitionEvent('x'),
+            a = new AnimationEvent('x'), pr = new ProgressEvent('x'), sb = new SubmitEvent('x'),
+            tg = new ToggleEvent('x'), pg = new PageTransitionEvent('x'), f = new FocusEvent('x'),
+            u = new UIEvent('x'), c = new CustomEvent('x'), pt = new PointerEvent('x');
+        return [m.button === 0 && m.buttons === 0 && m.clientX === 0 && m.x === 0 && m.y === 0
+                && m.layerX === 0 && m.offsetX === 0 && m.ctrlKey === false && m.relatedTarget === null
+                && m.getModifierState('Shift') === false,
+            k.key === '' && k.code === '' && k.location === 0 && k.repeat === false
+                && k.isComposing === false && k.charCode === 0 && k.keyCode === 0,
+            i.data === null && i.inputType === '' && i.isComposing === false && i.dataTransfer === null
+                && String(i.getTargetRanges()) === '',
+            w.deltaX === 0 && w.deltaY === 0 && w.deltaZ === 0 && w.deltaMode === 0,
+            ms.data === null && ms.origin === '' && ms.lastEventId === '' && ms.source === null
+                && String(ms.ports) === '' && ms.returnValue === true,
+            st.key === null && st.oldValue === null && st.newValue === null && st.url === ''
+                && st.storageArea === null,
+            p.state === null && String(p.hasUAVisualTransition) === 'false',
+            h.oldURL === '' && h.newURL === '',
+            t.propertyName === '' && t.elapsedTime === 0 && t.pseudoElement === '',
+            a.animationName === '' && a.elapsedTime === 0,
+            pr.lengthComputable === false && pr.loaded === 0 && pr.total === 0,
+            sb.submitter === null, tg.newState === '' && tg.oldState === '',
+            pg.persisted === false, f.relatedTarget === null,
+            u.detail === 0 && u.view === null && u.which === 0, c.detail === null,
+            pt.pointerId === 0 && pt.width === 1 && pt.height === 1 && pt.pressure === 0
+                && pt.pointerType === '' && pt.isPrimary === false].every(function (answer) {
+                    return answer === true;
+                });
+    })(), (function () {
+        var m = new MouseEvent('x'), ms = new MessageEvent('x'), k = new KeyboardEvent('x'),
+            i = new InputEvent('x'), w = new WheelEvent('x'), st = new StorageEvent('x'),
+            p = new PopStateEvent('x'), t = new TransitionEvent('x'), sb = new SubmitEvent('x'),
+            tg = new ToggleEvent('x'), pt = new PointerEvent('x');
+        return [m.button, m.x, m.layerX, m.relatedTarget, ms.data, ms.origin, String(ms.ports),
+            ms.source, k.key, k.charCode, i.data, i.inputType, String(i.getTargetRanges()),
+            w.deltaMode, st.key, String(p.hasUAVisualTransition), t.elapsedTime, sb.submitter,
+            tg.newState, pt.pointerType, pt.width].join('/');
+    })());
+    ck('C2 the media-list event answers its two reads', (function () {
+        var e = new MediaQueryListEvent('change', { media: '(min-width: 1px)', matches: true });
+        return tag(e) === '[object MediaQueryListEvent]' && e.media === '(min-width: 1px)'
+            && e.matches === true && e.type === 'change'
+            && own(MediaQueryListEvent.prototype) === sorted(['constructor', 'matches', 'media'])
+            && MediaQueryListEvent.length === 1;
+    })(), (function () {
+        var e = new MediaQueryListEvent('x', { media: 'm', matches: true });
+        return own(e) + '|' + e.media + '/' + e.matches;
+    })());
+    ck('C3 the security report event keeps its own defaults', (function () {
+        var e = new SecurityPolicyViolationEvent('x');
+        return e.blockedURI === '' && e.columnNumber === 0 && e.disposition === 'enforce'
+            && e.lineNumber === 0 && e.statusCode === 0 && e.violatedDirective === ''
+            && tag(e) === '[object SecurityPolicyViolationEvent]';
+    })(), String(new SecurityPolicyViolationEvent('x').disposition));
+
+    // ── D. A member away from its event, and the legacy initialisers ──────────
+    ck('D1 a read taken away from the event is refused', (function () {
+        var reads = [refused(function () { return Event.prototype.type; }),
+            refused(function () { return Event.prototype.target; }),
+            refused(function () { return MouseEvent.prototype.button; }),
+            refused(function () { return MediaQueryListEvent.prototype.media; }),
+            refused(function () { return Event.prototype.preventDefault.call({}); }),
+            refused(function () { return Event.prototype.initEvent.call({}, 'x'); })];
+        for (var i = 0; i < reads.length; i++) if (reads[i] !== 'TypeError:Illegal invocation') return false;
+        return true;
+    })(), (function () { return refused(function () { return Event.prototype.type; }); })());
+    ck('D2 the legacy initialisers write the event they are called on', (function () {
+        var e = new Event('x'); e.initEvent('y', true, false);
+        var c = new CustomEvent('x'); c.initCustomEvent('y', true, true, 9);
+        var u = new UIEvent('x'); u.initUIEvent('y', true, true, null, 4);
+        var m = new MouseEvent('x');
+        m.initMouseEvent('y', true, true, null, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, null);
+        var s = new StorageEvent('x');
+        s.initStorageEvent('y', false, false, 'k', 'o', 'n', 'http://a', null);
+        var msg = new MessageEvent('x');
+        msg.initMessageEvent('y', true, true, 'd', 'http://b', 'e', null, []);
+        return e.type === 'y' && e.bubbles === true && e.cancelable === false
+            && c.type === 'y' && c.detail === 9 && u.detail === 4
+            && m.button === 12 && m.clientX === 6 && m.screenX === 4
+            && s.key === 'k' && s.newValue === 'n'
+            && msg.data === 'd' && msg.origin === 'http://b' && msg.lastEventId === 'e';
+    })(), (function () {
+        var m = new MouseEvent('x');
+        m.initMouseEvent('y', true, true, null, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, null);
+        return m.type + '/' + m.button + '/' + m.clientX;
+    })());
+    ck('D3 initKeyboardEvent leaves the key and the code alone', (function () {
+        var k = new KeyboardEvent('x', { key: 'a', code: 'KeyA' });
+        k.initKeyboardEvent('y', true, true, null, 'b', '2', '', false, '');
+        return k.type === 'y' && k.key === 'a' && k.code === 'KeyA';
+    })(), (function () {
+        var k = new KeyboardEvent('x', { key: 'a' });
+        k.initKeyboardEvent('y', true, true, null, 'b');
+        return k.type + '/' + k.key;
+    })());
+    ck('D4 the composition initialiser is taken away', (function () {
+        return refused(function () {
+            new CompositionEvent('x').initCompositionEvent('y', true, true, 'd');
+        }) === "TypeError:Failed to execute 'initCompositionEvent' on 'CompositionEvent': "
+            + "parameter 4 is not of type 'Window'.";
+    })(), refused(function () {
+        new CompositionEvent('x').initCompositionEvent('y', true, true, 'd');
+    }));
+
+    // ── E. document.createEvent reads the legacy names and refuses the rest ──
+    ck('E1 the legacy spellings name an interface', (function () {
+        var made = [tag(document.createEvent('Events')),
+            tag(document.createEvent('HTMLEvents')),
+            tag(document.createEvent('UIEvents')),
+            tag(document.createEvent('MouseEvents')),
+            tag(document.createEvent('CustomEvent')),
+            tag(document.createEvent('KeyboardEvents'))];
+        return made.join(',') === '[object Event],[object Event],[object UIEvent],'
+            + '[object MouseEvent],[object CustomEvent],[object KeyboardEvent]';
+    })(), (function () {
+        return tag(document.createEvent('Events')) + ',' + tag(document.createEvent('HTMLEvents'));
+    })());
+    ck('E2 an unknown or removed kind is refused', (function () {
+        var want = "NotSupportedError:Failed to execute 'createEvent' on 'Document': The provided "
+            + "event type ('Nonsense') is invalid.";
+        return refused(function () { return document.createEvent('Nonsense'); }) === want
+            && refused(function () { return document.createEvent('MutationEvents'); })
+                .indexOf("'MutationEvents') is invalid.") > 0
+            && refused(function () { return document.createEvent(''); })
+                .indexOf("'') is invalid.") > 0;
+    })(), refused(function () { return document.createEvent('Nonsense'); }));
+    ck('E3 the factory asks for its one argument', (function () {
+        return refused(function () { return document.createEvent(); }) ===
+            "TypeError:Failed to execute 'createEvent' on 'Document': 1 argument required, "
+            + 'but only 0 present.';
+    })(), refused(function () { return document.createEvent(); }));
+    ck('E4 an event from the factory is initialisable and dispatchable', (function () {
+        var heard = [];
+        var node = document.getElementById('kid');
+        node.addEventListener('legacy', function (e) { heard.push(e.type + '/' + e.bubbles); });
+        var e = document.createEvent('HTMLEvents');
+        e.initEvent('legacy', true, false);
+        node.dispatchEvent(e);
+        return heard.join(',') === 'legacy/true';
+    })());
+
+    // ── F. The media list keeps no own property ─────────────────────────────
+    ck('F1 the list owns nothing and answers its three reads', (function () {
+        var m = window.matchMedia('(min-width: 1px)');
+        return own(m) === '' && Object.keys(m).length === 0 && typeof m.media === 'string'
+            && typeof m.matches === 'boolean' && m.onchange === null
+            && m.media === '(min-width: 1px)'
+            && own(window.MediaQueryList.prototype) ===
+                sorted(['addListener', 'constructor', 'matches', 'media', 'onchange', 'removeListener']);
+    })(), (function () {
+        var m = window.matchMedia('(min-width: 1px)');
+        return own(m) + '|' + own(window.MediaQueryList.prototype);
+    })());
+    ck('F2 a read away from a list is refused, and the setter is the handler', (function () {
+        var m = window.matchMedia('(min-width: 1px)');
+        m.onchange = function () { };
+        var held = typeof m.onchange === 'function';
+        m.onchange = null;
+        return held && m.onchange === null
+            && refused(function () { return window.MediaQueryList.prototype.matches; })
+            === 'TypeError:Illegal invocation';
+    })());
+
+    // ── G. The window's own answers ────────────────────────────────────────
+    ck('G1 the navigator answers the two reads this engine has no device for', (function () {
+        return typeof navigator.vibrate === 'function' && navigator.vibrate(10) === false
+            && String(navigator.getGamepads()) === String([null, null, null, null])
+            && navigator.getGamepads().length === 4;
+    })(), typeof navigator.vibrate + '/' + String(navigator.vibrate(1)));
+    ck('G2 no shared memory without the isolation that would make it sound', (function () {
+        return typeof SharedArrayBuffer === 'undefined';
+    })(), typeof SharedArrayBuffer + '/' + typeof Atomics.waitAsync);
+    ck('G3 a listener written on the window or document keeps its options', (function () {
+        var once = 0, signal = 0;
+        var ac = new AbortController();
+        window.addEventListener('evtOnce', function () { once++; }, { once: true });
+        document.addEventListener('evtSignal', function () { signal++; }, { signal: ac.signal });
+        window.dispatchEvent(new Event('evtOnce'));
+        window.dispatchEvent(new Event('evtOnce'));
+        document.dispatchEvent(new Event('evtSignal'));
+        ac.abort();
+        document.dispatchEvent(new Event('evtSignal'));
+        var heard = [];
+        function onEvent(e) { heard.push(e.type + '/' + (e.target && e.target.id || '?')); }
+        document.addEventListener('evtObject', onEvent);
+        document.getElementById('box').dispatchEvent(new Event('evtObject', { bubbles: true }));
+        document.removeEventListener('evtObject', onEvent);
+        return once === 1 && signal === 1 && heard.join(',') === 'evtObject/box';
+    })());
+})();
+</script>
+</body>
+</html>

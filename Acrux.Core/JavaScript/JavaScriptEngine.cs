@@ -3652,6 +3652,20 @@ public class JavaScriptEngine : IDisposable
             // '(min-width: calc(445px))'. The same function answers 'CSSRule.conditionText' and
             // 'CSSRule.media.mediaText', so the three spellings of one query cannot drift apart.
             function __serializeMediaQuery(q) { return q ? __acrux.mediaQuerySerialize(q) : ''; }
+            var MQL_SLOTS = new WeakMap();
+            // The checkpoint and the constructor live in different blocks of the script, so the one
+            // answer the list keeps — the match it gave the last time it was asked — is reached
+            // through these two rather than by a property on the list: the instance owns nothing
+            // (CSSOM View §7.1, measured: 'Object.getOwnPropertyNames(matchMedia(q))' is empty).
+            window.__mediaSeed = function (list, query, last) {
+                MQL_SLOTS.set(list, { query: query, last: last, onchange: null });
+            };
+            window.__mediaLast = function (list, value) {
+                var held = MQL_SLOTS.get(list);
+                if (!held) return undefined;
+                if (value !== undefined) held.last = value;
+                return held.last;
+            };
             window.matchMedia = function (query) {
                 if (arguments.length < 1) {
                     throw new TypeError('Failed to execute ' + formDataQuote('matchMedia') + ' on '
@@ -3661,24 +3675,13 @@ public class JavaScriptEngine : IDisposable
                 // The same evaluator an @media rule is filtered through, so a script and a
                 // stylesheet cannot disagree about the viewport (CSSOM View §7.1).
                 var list = Object.create(window.MediaQueryList.prototype);
-                Object.defineProperties(list, {
-                    __query: { value: q, enumerable: false, configurable: true },
-                    media: { get: function () { return __serializeMediaQuery(q); },
-                        enumerable: true, configurable: true },
-                    matches: {
-                        // Live: the list follows the viewport, and a listener registered against it is
-                        // told when the answer it carries changes (MQ §3.1).
-                        get: function () { return !!__acrux.mediaQueryMatches(q); },
-                        enumerable: true, configurable: true
-                    }
-                });
-                list.onchange = null;
+                window.__mediaSeed(list, q, undefined);
                 // The list is registered against the checkpoint that tells it when the viewport moves;
                 // the checkpoint is built with the rest of the DOM surface below, so it is asked for on
                 // the way out rather than assumed.
                 if (typeof window.__mediaAdd === 'function') window.__mediaAdd(list);
                 // The first read fixes the answer the change is measured against.
-                list.__last = list.matches;
+                window.__mediaLast(list, list.matches);
                 return list;
             };
             window.open = function(url, name, features) {
@@ -4029,11 +4032,15 @@ public class JavaScriptEngine : IDisposable
                 throw new TypeError('Failed to construct ' + formDataQuote('Performance')
                     + ': Illegal constructor');
             }
+            // The level is built rather than the one the declaration comes with: the back-pointer a
+            // function carries by itself is not a name the engine enumerates off it, and the reference
+            // lists 'constructor' with the rest (Web IDL §4.4.3, measured).
+            Performance.prototype = Object.create(Object.prototype);
             Object.defineProperties(Performance.prototype, {
                 timeOrigin: { configurable: true, enumerable: false,
                     get: function () { performanceBrand(this, 'timeOrigin'); return perfWallOrigin; } },
                 now: { configurable: true, writable: true, enumerable: false,
-                    value: function () { performanceBrand(this, 'now'); return perfNow(); } },
+                    value: function now() { performanceBrand(this, 'now'); return perfNow(); } },
                 timing: { configurable: true, enumerable: false,
                     get: function () { performanceBrand(this, 'timing'); return performanceTiming; } },
                 navigation: { configurable: true, enumerable: false,
@@ -4052,7 +4059,7 @@ public class JavaScriptEngine : IDisposable
                         performanceResourceBuffer.full = typeof handler === 'function' ? handler : null;
                     } },
                 mark: { configurable: true, writable: true, enumerable: false,
-                    value: function (name) {
+                    value: function mark(name) {
                         performanceBrand(this, 'mark');
                         if (arguments.length < 1) {
                             throw new TypeError('Failed to execute ' + formDataQuote('mark') + ' on '
@@ -4066,7 +4073,7 @@ public class JavaScriptEngine : IDisposable
                         return made;
                     } },
                 measure: { configurable: true, writable: true, enumerable: false,
-                    value: function (name, startOrOptions, end) {
+                    value: function measure(name, startOrOptions, end) {
                         performanceBrand(this, 'measure');
                         var start = 0, duration = 0, detail = null;
                         if (startOrOptions && typeof startOrOptions === 'object') {
@@ -4092,39 +4099,39 @@ public class JavaScriptEngine : IDisposable
                         return made;
                     } },
                 clearMarks: { configurable: true, writable: true, enumerable: false,
-                    value: function (name) {
+                    value: function clearMarks(name) {
                         performanceBrand(this, 'clearMarks');
                         if (name === undefined) { perfBuffer.mark = []; return; }
                         perfBuffer.mark = perfBuffer.mark.filter(function (e) {
                             return e.name !== String(name); });
                     } },
                 clearMeasures: { configurable: true, writable: true, enumerable: false,
-                    value: function (name) {
+                    value: function clearMeasures(name) {
                         performanceBrand(this, 'clearMeasures');
                         if (name === undefined) { perfBuffer.measure = []; return; }
                         perfBuffer.measure = perfBuffer.measure.filter(function (e) {
                             return e.name !== String(name); });
                     } },
                 getEntries: { configurable: true, writable: true, enumerable: false,
-                    value: function () { performanceBrand(this, 'getEntries'); return perfSorted(); } },
+                    value: function getEntries() { performanceBrand(this, 'getEntries'); return perfSorted(); } },
                 getEntriesByType: { configurable: true, writable: true, enumerable: false,
-                    value: function (type) {
+                    value: function getEntriesByType(type) {
                         performanceBrand(this, 'getEntriesByType'); return perfSorted(String(type));
                     } },
                 getEntriesByName: { configurable: true, writable: true, enumerable: false,
-                    value: function (name) {
+                    value: function getEntriesByName(name) {
                         performanceBrand(this, 'getEntriesByName');
                         return perfSorted().filter(function (e) { return e.name === String(name); });
                     } },
                 clearResourceTimings: { configurable: true, writable: true, enumerable: false,
-                    value: function () { performanceBrand(this, 'clearResourceTimings'); } },
+                    value: function clearResourceTimings() { performanceBrand(this, 'clearResourceTimings'); } },
                 setResourceTimingBufferSize: { configurable: true, writable: true, enumerable: false,
-                    value: function (size) {
+                    value: function setResourceTimingBufferSize(size) {
                         performanceBrand(this, 'setResourceTimingBufferSize');
                         performanceResourceBuffer.size = Number(size) || 0;
                     } },
                 toJSON: { configurable: true, writable: true, enumerable: false,
-                    value: function () {
+                    value: function toJSON() {
                         performanceBrand(this, 'toJSON');
                         // The three the reference names, in its own order: the entries are not part of
                         // this serialisation even though the buffer is read through other members.
@@ -4394,13 +4401,23 @@ public class JavaScriptEngine : IDisposable
             // writes the init dictionary over the defaults. A dispatched event reports the same
             // fields a page switched on, and the flags default to false exactly as the interface
             // defines them (the older createEvent path left 'bubbles'/'cancelable' true).
+            // DOM §2.9: only the engine raises a trusted event. An event the page constructs answers
+            // 'isTrusted' false, and that one flag — not the rest of the reads — is what the instance
+            // itself carries (measured: 'Object.getOwnPropertyNames(new Event('x'))' is exactly
+            // ['isTrusted']).
+            function untrustedEvent(evt) {
+                // The flag is the host's own property and the only name the event enumerates, so
+                // writing it is the whole of the job.
+                try { evt.isTrusted = false; } catch (e) { }
+                return evt;
+            }
             function Event(type, init) {
                 var evt = document.createEvent('Event');
                 evt.type = String(type === undefined ? '' : type);
                 evt.bubbles = !!(init && init.bubbles);
                 evt.cancelable = !!(init && init.cancelable);
                 evt.composed = !!(init && init.composed);
-                return evt;
+                return untrustedEvent(evt);
             }
 
             function CustomEvent(type, init) {
@@ -4410,12 +4427,13 @@ public class JavaScriptEngine : IDisposable
                 evt.cancelable = !!(init && init.cancelable);
                 evt.composed = !!(init && init.composed);
                 evt.detail = (init && init.detail !== undefined) ? init.detail : null;
-                return evt;
+                return untrustedEvent(evt);
             }
 
             function MouseEvent(type, init) {
                 var evt = document.createEvent('mouseevent');
                 evt.type = type;
+                untrustedEvent(evt);
                 if (init) {
                     if (init.bubbles !== undefined) evt.bubbles = init.bubbles;
                     if (init.cancelable !== undefined) evt.cancelable = init.cancelable;
@@ -5478,14 +5496,9 @@ public class JavaScriptEngine : IDisposable
                 viewport.addEventListener = function () { };
                 viewport.removeEventListener = function () { };
                 viewport.dispatchEventListener = undefined;
-                Object.defineProperty(viewport, 'width', { configurable: true, enumerable: true,
-                    get: function () { try { return window.innerWidth; } catch (e) { return 0; } } });
-                Object.defineProperty(viewport, 'height', { configurable: true, enumerable: true,
-                    get: function () { try { return window.innerHeight; } catch (e) { return 0; } } });
-                Object.defineProperty(viewport, 'pageLeft', { configurable: true, enumerable: true,
-                    get: function () { try { return window.scrollX; } catch (e) { return 0; } } });
-                Object.defineProperty(viewport, 'pageTop', { configurable: true, enumerable: true,
-                    get: function () { try { return window.scrollY; } catch (e) { return 0; } } });
+                // The reads are the interface's own — the level is made with the rest of the
+                // interfaces below and the object the window hands out is moved onto it there. The
+                // instance keeps nothing of its own (CSSOM View §9, measured name list).
                 try {
                     Object.defineProperty(viewport, Symbol.toStringTag,
                         { value: 'VisualViewport', configurable: true });
@@ -5587,6 +5600,18 @@ public class JavaScriptEngine : IDisposable
                     window[name] = Ctor;
                     return proto;
                 }
+                // What the page's dictionary held for an event, kept behind a slot: an event the engine
+                // made answers its own state, and an event the page built answers what the dictionary
+                // said — but in neither case does the instance own a property. The reads live on the
+                // interface prototype, where a page enumerates them (UI Events §3-§7, measured:
+                // 'Object.getOwnPropertyNames(new Event('x'))' is empty and the whole name set is on
+                // 'Event.prototype').
+                var EVENT_HOLDINGS = new WeakMap();
+                function eventHold(evt, key, value) {
+                    var held = EVENT_HOLDINGS.get(evt);
+                    if (!held) { held = {}; EVENT_HOLDINGS.set(evt, held); }
+                    held[key] = value;
+                }
                 function eventCtor(name, members, initOnly) {
                     // A Touch is the one event the interfaces build from a dictionary alone: there
                     // is no type to name it, the identifier and the coordinates are the whole thing.
@@ -5614,6 +5639,11 @@ public class JavaScriptEngine : IDisposable
                             try { evt.bubbles = !!init.bubbles; } catch (e) { }
                             try { evt.cancelable = !!init.cancelable; } catch (e) { }
                             try { evt.composed = !!init.composed; } catch (e) { }
+                            // An event the page builds is not trusted: only the engine can raise a
+                            // trusted one (DOM §2.9, measured: 'new Event('x').isTrusted' is false, and
+                            // 'isTrusted' is the one property the event itself owns).
+                            try { evt.isTrusted = false; } catch (e) { }
+                            eventHold(evt, 'isTrusted', false);
                             for (var k = 0; k < members.length; k++) {
                                 var key = members[k][0];
                                 var value;
@@ -5626,10 +5656,7 @@ public class JavaScriptEngine : IDisposable
                                 // on the event itself, non-enumerably, so the read answers exactly the
                                 // value the dictionary held even where the host stores another shape.
                                 try { evt[key] = value; } catch (e) { }
-                                try {
-                                    Object.defineProperty(evt, key, { value: value, writable: true,
-                                        enumerable: false, configurable: true });
-                                } catch (e) { }
+                                eventHold(evt, key, value);
                             }
                             try { Object.setPrototypeOf(evt, proto); } catch (e) { }
                             return evt;
@@ -5682,8 +5709,11 @@ public class JavaScriptEngine : IDisposable
                     } catch (e) { }
                 }
 
-                eventCtor('UIEvent', [['detail', 0], ['view', null], ['which', 0]]);
+                eventCtor('UIEvent', [['detail', 0], ['view', null], ['which', 0],
+                    ['pseudoTarget', null], ['sourceCapabilities', null]]);
                 eventCtor('MouseEvent', [['screenX', 0], ['screenY', 0], ['clientX', 0], ['clientY', 0],
+                    ['layerX', 0], ['layerY', 0], ['offsetX', 0], ['offsetY', 0],
+                    ['toElement', null], ['fromElement', null],
                     ['pageX', function () { return this.clientX; }],
                     ['pageY', function () { return this.clientY; }],
                     ['movementX', 0], ['movementY', 0], ['button', 0], ['buttons', 0],
@@ -5758,11 +5788,40 @@ public class JavaScriptEngine : IDisposable
                 eventCtor('StorageEvent', [['key', null], ['oldValue', null], ['newValue', null],
                     ['url', ''], ['storageArea', null]]);
                 eventCtor('HashChangeEvent', [['oldURL', ''], ['newURL', '']]);
-                eventCtor('PopStateEvent', [['state', null]]);
+                eventCtor('PopStateEvent', [['state', null], ['hasUAVisualTransition', false]]);
                 eventCtor('PageTransitionEvent', [['persisted', false]]);
                 eventCtor('BeforeUnloadEvent', [['returnValue', '']]);
                 eventCtor('PromiseRejectionEvent', [['reason', undefined], ['promise', undefined]]);
                 eventCtor('ProgressEvent', [['lengthComputable', false], ['loaded', 0], ['total', 0]]);
+                // The message a port, a worker or 'postMessage' hands over (Web Messaging §4): the
+                // seven members of the event, with no source, no ports and no origin until the
+                // dispatcher fills them in.
+                eventCtor('MessageEvent', [['data', null], ['origin', ''], ['lastEventId', ''],
+                    ['source', null], ['ports', []],
+                    ['userActivation', null], ['returnValue', true]]);
+                // 'new PromiseRejectionEvent' is the one constructor whose two arguments are both
+                // required (HTML §8.7), and a page that leaves one out is refused before the event is
+                // built (measured: '2 arguments required, but only 1 present').
+                var rejectionCtor = window.PromiseRejectionEvent;
+                if (typeof rejectionCtor === 'function') {
+                    var rejectionLevel = protoMap['PromiseRejectionEvent'];
+                    var rejectionBase = rejectionCtor;
+                    var rejectionWrapped = function PromiseRejectionEvent(type, init) {
+                        if (arguments.length < 2) {
+                            throw new TypeError('Failed to construct ' + String.fromCharCode(39)
+                                + 'PromiseRejectionEvent' + String.fromCharCode(39)
+                                + ': 2 arguments required, but only '
+                                + arguments.length + ' present.');
+                        }
+                        return new rejectionBase(type, init);
+                    };
+                    try {
+                        rejectionWrapped.prototype = rejectionLevel || rejectionBase.prototype;
+                        Object.defineProperty(rejectionWrapped, 'length', { value: 2,
+                            configurable: true });
+                        window.PromiseRejectionEvent = rejectionWrapped;
+                    } catch (e) { }
+                }
                 eventCtor('SubmitEvent', [['submitter', null]]);
                 eventCtor('ToggleEvent', [['oldState', ''], ['newState', '']]);
                 // The form-data event the submit button carries (HTML §4.10.22.3) and the update event a
@@ -5787,6 +5846,275 @@ public class JavaScriptEngine : IDisposable
                         window.BeforeUnloadEvent = beforeUnloadRefused;
                     }
                 }
+                // The reporting interface a content-security-policy violation is delivered on
+                // (Content Security Policy §8): an event with twelve members of its own, all of them
+                // left at the dictionary's defaults by a bare constructor (measured).
+                eventCtor('SecurityPolicyViolationEvent', [['blockedURI', ''], ['columnNumber', 0],
+                    ['disposition', 'enforce'], ['documentURI', ''], ['effectiveDirective', ''],
+                    ['lineNumber', 0], ['originalPolicy', ''], ['referrer', ''], ['sample', ''],
+                    ['sourceFile', ''], ['statusCode', 0], ['violatedDirective', '']]);
+                // An event the legacy factory makes is the engine's own, so it carries the trusted
+                // flag a page cannot set — written as the one property the event itself owns (DOM
+                // §2.9, measured: 'Object.getOwnPropertyNames(document.createEvent('HTMLEvents'))' is
+                // exactly the one name).
+                (function () {
+                    var made = document.createEvent;
+                    if (typeof made !== 'function') return;
+                    Object.defineProperty(document, 'createEvent', {
+                        writable: true, enumerable: true, configurable: true,
+                        // The factory's event is the engine's own, so it keeps the trusted flag the
+                        // host gave it; the wrapper is here to answer the name the same way for every
+                        // kind, and to keep the legacy spellings behind one door.
+                        value: function createEvent(type) {
+                            return made.call(document, type);
+                        }
+                    });
+                })();
+                // The members each event interface declares, in the order the reference enumerates them
+                // (UI Events §3-§7, Mouse Events, Touch Events, Progress Events, File API, HTML §9-§10):
+                // a page that lists the interface's names has to read them off the prototype, where a
+                // host event answers its own value first and a read taken away from an event is refused.
+                var EVENT_MEMBERS = {
+                    Event: {
+                        // DOM §2.9.4: the two legacy reads are not stored values but the other faces of
+                        // the members they name — 'returnValue' is the cancellation flag read backwards
+                        // and 'srcElement' is the target under its oldest name — so they are answered
+                        // from the state the event already keeps (measured: a page-built event answers
+                        // 'returnValue' true and writing false to a cancelable one prevents it, while
+                        // the same write to a non-cancelable one leaves the read true).
+                        computed: { returnValue: function () { return !this.defaultPrevented; },
+                            srcElement: function () { return this.target === undefined ? null : this.target; } },
+                        writes: { returnValue: function (value) {
+                            if (!value) this.preventDefault(); } },
+                        read: ['bubbles', 'cancelable', 'composed', 'currentTarget', 'defaultPrevented',
+                            'eventPhase', 'target', 'timeStamp', 'type'],
+                        write: ['cancelBubble'],
+                        method: ['composedPath', 'preventDefault', 'stopImmediatePropagation',
+                            'stopPropagation'],
+                        init: ['initEvent'],
+                        constants: { NONE: 0, CAPTURING_PHASE: 1, AT_TARGET: 2, BUBBLING_PHASE: 3 }
+                    },
+                    CustomEvent: { read: ['detail'], init: ['initCustomEvent'] },
+                    UIEvent: { read: ['detail', 'pseudoTarget', 'sourceCapabilities', 'view', 'which'],
+                        init: ['initUIEvent'] },
+                    MouseEvent: {
+                        computed: { x: function () { return this.clientX; },
+                            y: function () { return this.clientY; } },
+                        read: ['altKey', 'button', 'buttons', 'clientX', 'clientY', 'ctrlKey',
+                            'fromElement', 'layerX', 'layerY', 'metaKey', 'movementX', 'movementY',
+                            'offsetX', 'offsetY', 'pageX', 'pageY', 'relatedTarget', 'screenX',
+                            'screenY', 'shiftKey', 'toElement', 'x', 'y'],
+                        method: ['getModifierState'], init: ['initMouseEvent']
+                    },
+                    KeyboardEvent: {
+                        read: ['altKey', 'charCode', 'code', 'ctrlKey', 'isComposing', 'key',
+                            'keyCode', 'location', 'metaKey', 'repeat', 'shiftKey'],
+                        method: ['getModifierState'], init: ['initKeyboardEvent'],
+                        constants: { DOM_KEY_LOCATION_STANDARD: 0, DOM_KEY_LOCATION_LEFT: 1,
+                            DOM_KEY_LOCATION_RIGHT: 2, DOM_KEY_LOCATION_NUMPAD: 3 }
+                    },
+                    InputEvent: { read: ['data', 'dataTransfer', 'inputType', 'isComposing'],
+                        method: ['getTargetRanges'] },
+                    FocusEvent: { read: ['relatedTarget'] },
+                    WheelEvent: { read: ['deltaMode', 'deltaX', 'deltaY', 'deltaZ', 'wheelDelta',
+                            'wheelDeltaX', 'wheelDeltaY'],
+                        constants: { DOM_DELTA_PIXEL: 0, DOM_DELTA_LINE: 1, DOM_DELTA_PAGE: 2 } },
+                    DragEvent: { read: ['dataTransfer'] },
+                    PointerEvent: { read: ['altitudeAngle', 'azimuthAngle', 'height', 'isPrimary',
+                            'persistentDeviceId', 'pointerId', 'pointerType', 'pressure',
+                            'tangentialPressure', 'tiltX', 'tiltY', 'twist', 'width'],
+                        method: ['getCoalescedEvents', 'getPredictedEvents'] },
+                    TouchEvent: { read: ['altKey', 'changedTouches', 'ctrlKey', 'metaKey',
+                        'shiftKey', 'targetTouches', 'touches'] },
+                    CompositionEvent: { read: ['data'], init: ['initCompositionEvent'] },
+                    ProgressEvent: { read: ['lengthComputable', 'loaded', 'total'] },
+                    MessageEvent: { read: ['data', 'lastEventId', 'origin', 'ports', 'source',
+                        'userActivation'], init: ['initMessageEvent'] },
+                    StorageEvent: { read: ['key', 'newValue', 'oldValue', 'storageArea', 'url'],
+                        init: ['initStorageEvent'] },
+                    HashChangeEvent: { read: ['newURL', 'oldURL'] },
+                    PopStateEvent: { read: ['hasUAVisualTransition', 'state'] },
+                    PageTransitionEvent: { read: ['persisted'] },
+                    TransitionEvent: { read: ['elapsedTime', 'propertyName', 'pseudoElement',
+                        'pseudoTarget'] },
+                    AnimationEvent: { read: ['animationName', 'elapsedTime', 'pseudoElement',
+                        'pseudoTarget'] },
+                    PromiseRejectionEvent: { read: ['promise', 'reason'] },
+                    SubmitEvent: { read: ['submitter'] },
+                    ToggleEvent: { read: ['newState', 'oldState', 'source'] },
+                    BeforeUnloadEvent: { write: ['returnValue'] },
+                    SecurityPolicyViolationEvent: { read: ['blockedURI', 'columnNumber',
+                        'disposition', 'documentURI', 'effectiveDirective', 'lineNumber',
+                        'originalPolicy', 'referrer', 'sample', 'sourceFile', 'statusCode',
+                        'violatedDirective'] }
+                };
+                function isEventish(receiver) {
+                    return !!receiver && (typeof receiver.__domType === 'string'
+                        || EVENT_HOLDINGS.has(receiver));
+                }
+                // The legacy initialisers (UI Events §3.1, §5.2, §5.4, Mouse Events §3.3): each one is
+                // the dictionary form of the constructor's, written out as a list of positions. Where
+                // the specification says an argument is ignored — the key and the locale of
+                // 'initKeyboardEvent', for instance, which the reference leaves the event's own — the
+                // position simply is not in the list.
+                var EVENT_INIT_ARGS = {
+                    initEvent: [['type', 0, 's'], ['bubbles', 1, 'b'], ['cancelable', 2, 'b']],
+                    initCustomEvent: [['type', 0, 's'], ['bubbles', 1, 'b'], ['cancelable', 2, 'b'],
+                        ['detail', 3, 'k']],
+                    initUIEvent: [['type', 0, 's'], ['bubbles', 1, 'b'], ['cancelable', 2, 'b'],
+                        ['view', 3, 'k'], ['detail', 4, 'n']],
+                    initMouseEvent: [['type', 0, 's'], ['bubbles', 1, 'b'], ['cancelable', 2, 'b'],
+                        ['view', 3, 'k'], ['detail', 4, 'n'], ['screenX', 5, 'n'], ['screenY', 6, 'n'],
+                        ['clientX', 7, 'n'], ['clientY', 8, 'n'], ['ctrlKey', 9, 'b'],
+                        ['altKey', 10, 'b'], ['shiftKey', 11, 'b'], ['metaKey', 12, 'b'],
+                        ['button', 13, 'n'], ['relatedTarget', 14, 'k']],
+                    initKeyboardEvent: [['type', 0, 's'], ['bubbles', 1, 'b'], ['cancelable', 2, 'b'],
+                        ['view', 3, 'k']],
+                    initStorageEvent: [['type', 0, 's'], ['bubbles', 1, 'b'], ['cancelable', 2, 'b'],
+                        ['key', 3, 'k'], ['oldValue', 4, 'k'], ['newValue', 5, 'k'],
+                        ['url', 6, 's'], ['storageArea', 7, 'k']],
+                    initMessageEvent: [['type', 0, 's'], ['bubbles', 1, 'b'], ['cancelable', 2, 'b'],
+                        ['data', 3, 'k'], ['origin', 4, 's'], ['lastEventId', 5, 's'],
+                        ['source', 6, 'k'], ['ports', 7, 'k']]
+                };
+                function eventInitApply(self, args, spec) {
+                    for (var i = 0; i < spec.length; i++) {
+                        var key = spec[i][0], at = spec[i][1], kind = spec[i][2];
+                        if (args.length <= at) continue;
+                        var value = args[at];
+                        if (kind === 's') value = String(value === undefined ? '' : value);
+                        else if (kind === 'b') value = !!value;
+                        else if (kind === 'n') value = Number(value) || 0;
+                        eventHold(self, key, value);
+                        try { self[key] = value; } catch (e) { }
+                    }
+                }
+                function eventDeclare(iface, name, kind) {
+                    var proto = protoMap[iface];
+                    if (!proto) return;
+                    var held = Object.getOwnPropertyDescriptor(proto, name);
+                    try {
+                        if (kind === 'method' || kind === 'init') {
+                            if (held && typeof held.value === 'function') {
+                                // The declaration is only complete when the read is refused away from
+                                // its event, so an older placeholder is wrapped rather than replaced
+                                // (DOM §2.9, measured: 'Illegal invocation' for every one of them).
+                                var earlier = held.value;
+                                var wrapped = function () {
+                                    if (!isEventish(this)) throw new TypeError('Illegal invocation');
+                                    var spec = EVENT_INIT_ARGS[name];
+                                    if (spec) { eventInitApply(this, arguments, spec); return undefined; }
+                                    return earlier.apply(this, arguments);
+                                };
+                                try {
+                                    Object.defineProperty(wrapped, 'name', { value: name,
+                                        configurable: true });
+                                } catch (e) { }
+                                Object.defineProperty(proto, name, { value: wrapped, writable: true,
+                                    configurable: true, enumerable: true });
+                                return;
+                            }
+                            Object.defineProperty(proto, name, {
+                                writable: true, configurable: true, enumerable: true,
+                                value: function () {
+                                    if (!isEventish(this)) throw new TypeError('Illegal invocation');
+                                    var spec = EVENT_INIT_ARGS[name];
+                                    if (spec) { eventInitApply(this, arguments, spec); return undefined; }
+                                    if (name === 'initCompositionEvent') {
+                                        // The one legacy initialiser the reference took away: its fourth
+                                        // argument is still read as the window it names.
+                                        if (arguments.length < 4 || arguments[3] !== window) {
+                                            throw new TypeError('Failed to execute '
+                                                + String.fromCharCode(39) + 'initCompositionEvent'
+                                                + String.fromCharCode(39) + ' on '
+                                                + String.fromCharCode(39) + 'CompositionEvent'
+                                                + String.fromCharCode(39) + ': parameter 4 is not of '
+                                                + 'type ' + String.fromCharCode(39) + 'Window'
+                                                + String.fromCharCode(39) + '.');
+                                        }
+                                        return undefined;
+                                    }
+                                    if (name === 'composedPath') return [];
+                                    if (name === 'getModifierState') return false;
+                                    if (name === 'getTargetRanges' || name === 'getCoalescedEvents'
+                                        || name === 'getPredictedEvents') return [];
+                                    return undefined;
+                                }
+                            });
+                            return;
+                        }
+                        var readBody = function () {
+                            if (!isEventish(this)) throw new TypeError('Illegal invocation');
+                            var own = EVENT_HOLDINGS.get(this);
+                            return own && Object.prototype.hasOwnProperty.call(own, name)
+                                ? own[name] : undefined;
+                        };
+                        var writeBody = kind === 'write' ? function (value) {
+                            if (!isEventish(this)) throw new TypeError('Illegal invocation');
+                            eventHold(this, name, value);
+                        } : undefined;
+                        // The two functions a page reads off the descriptor are named for the member
+                        // they answer, the way an interface's accessors are (measured).
+                        try { Object.defineProperty(readBody, 'name',
+                            { value: 'get ' + name, configurable: true }); } catch (e) { }
+                        if (writeBody) {
+                            try { Object.defineProperty(writeBody, 'name',
+                                { value: 'set ' + name, configurable: true }); } catch (e) { }
+                        }
+                        Object.defineProperty(proto, name, {
+                            configurable: true, enumerable: true,
+                            get: readBody, set: writeBody
+                        });
+                    } catch (e) { }
+                }
+                Object.keys(EVENT_MEMBERS).forEach(function (iface) {
+                    var spec = EVENT_MEMBERS[iface];
+                    ['read', 'write', 'method', 'init'].forEach(function (kind) {
+                        var list = spec[kind] || [];
+                        for (var i = 0; i < list.length; i++) eventDeclare(iface, list[i], kind);
+                    });
+                    var computed = spec.computed || { };
+                    var writes = spec.writes || { };
+                    Object.keys(computed).forEach(function (name) {
+                        var proto = protoMap[iface];
+                        if (!proto) return;
+                        var readBody = function () {
+                            if (!isEventish(this)) throw new TypeError('Illegal invocation');
+                            return computed[name].call(this);
+                        };
+                        var writeBody = writes[name] ? function (value) {
+                            if (!isEventish(this)) throw new TypeError('Illegal invocation');
+                            writes[name].call(this, value);
+                        } : undefined;
+                        try { Object.defineProperty(readBody, 'name',
+                            { value: 'get ' + name, configurable: true }); } catch (e) { }
+                        if (writeBody) {
+                            try { Object.defineProperty(writeBody, 'name',
+                                { value: 'set ' + name, configurable: true }); } catch (e) { }
+                        }
+                        try {
+                            Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                                get: readBody, set: writeBody });
+                        } catch (e) { }
+                    });
+                    var constants = spec.constants || { };
+                    Object.keys(constants).forEach(function (name) {
+                        var proto = protoMap[iface];
+                        if (!proto) return;
+                        try {
+                            Object.defineProperty(proto, name, { value: constants[name],
+                                writable: false, enumerable: true, configurable: false });
+                        } catch (e) { }
+                        var ctor = window[iface];
+                        if (typeof ctor === 'function') {
+                            try {
+                                Object.defineProperty(ctor, name, { value: constants[name],
+                                    writable: false, enumerable: false, configurable: false });
+                            } catch (e) { }
+                        }
+                    });
+                });
+
                 defineInterface('EventSource', 'EventTarget');
                 // The object 'document.implementation' answers (DOM §3.3): the level gives the host
                 // wrapper its tag, its constructor name and the sentence the reference writes for a
@@ -7499,30 +7827,41 @@ public class JavaScriptEngine : IDisposable
                     throw new TypeError('Failed to construct ' + quoted('Storage')
                         + ': Illegal constructor');
                 }
+                // The level a page reads is built rather than the one the function declaration comes
+                // with: the back-pointer a function carries by itself is not a name the engine
+                // enumerates off it, and the reference lists 'constructor' among the members (Web IDL
+                // §4.4.3, measured).
+                Storage.prototype = Object.create(Object.prototype);
                 Storage.prototype.getItem = function (key) {
                     var host = storageHostOf(this);
-                    return host === null ? null : host.getItem(String(key));
+                    if (host === null) throw new TypeError('Illegal invocation');
+                    return host.getItem(String(key));
                 };
                 Storage.prototype.setItem = function (key, value) {
                     var host = storageHostOf(this);
-                    if (host !== null) host.setItem(String(key), String(value));
+                    if (host === null) throw new TypeError('Illegal invocation');
+                    host.setItem(String(key), String(value));
                 };
                 Storage.prototype.removeItem = function (key) {
                     var host = storageHostOf(this);
-                    if (host !== null) host.removeItem(String(key));
+                    if (host === null) throw new TypeError('Illegal invocation');
+                    host.removeItem(String(key));
                 };
                 Storage.prototype.clear = function () {
                     var host = storageHostOf(this);
-                    if (host !== null) host.clear();
+                    if (host === null) throw new TypeError('Illegal invocation');
+                    host.clear();
                 };
                 Storage.prototype.key = function (index) {
                     var host = storageHostOf(this);
-                    return host === null ? null : host.key(Number(index) | 0);
+                    if (host === null) throw new TypeError('Illegal invocation');
+                    return host.key(Number(index) | 0);
                 };
                 Object.defineProperty(Storage.prototype, 'length', {
                     get: function () {
                         var host = storageHostOf(this);
-                        return host === null ? 0 : host.length;
+                        if (host === null) throw new TypeError('Illegal invocation');
+                        return host.length;
                     },
                     enumerable: true, configurable: true
                 });
@@ -7771,40 +8110,89 @@ public class JavaScriptEngine : IDisposable
                     return document.createDocumentFragment();
                 });
                 level('MediaQueryList', 'EventTarget', refuse('MediaQueryList'));
+                var MQLEVENT_SLOTS = new WeakMap();
                 level('MediaQueryListEvent', 'Event', function (type, init) {
                     var event = new Event(type, init);
                     init = init || { };
+                    // The two values of the event are kept behind a slot rather than on the object:
+                    // the reads are the interface's own, and an event answers them from the slot
+                    // (Media Queries §5.2, measured: the instance owns only 'isTrusted').
+                    MQLEVENT_SLOTS.set(event, {
+                        media: String(init.media === undefined ? '' : init.media),
+                        matches: !!init.matches
+                    });
                     // The event reads as the interface it was built for, the same way every other
                     // family does, so the level is hung under it before the members are written.
                     var ownLevel = protoMap['MediaQueryListEvent'];
                     if (ownLevel) { try { Object.setPrototypeOf(event, ownLevel); } catch (e) { } }
-                    try {
-                        Object.defineProperty(event, 'media', {
-                            value: String(init.media === undefined ? '' : init.media),
-                            writable: true, enumerable: false, configurable: true
-                        });
-                        Object.defineProperty(event, 'matches', {
-                            value: !!init.matches, writable: true, enumerable: false, configurable: true
-                        });
-                    } catch (e) { }
                     return event;
                 });
+                // The two reads the event carries are named by its interface (Media Queries §5.2): a
+                // page that lists 'MediaQueryListEvent.prototype' reads them there, and a read taken
+                // away from the event is refused.
+                var mediaEventLevel = protoMap['MediaQueryListEvent'];
+                if (mediaEventLevel) {
+                    // Only the type is required; the dictionary is optional (Media Queries §5.2,
+                    // measured: 'MediaQueryListEvent.length' is 1).
+                    try {
+                        Object.defineProperty(window.MediaQueryListEvent, 'length', { value: 1,
+                            configurable: true });
+                    } catch (e) { }
+                    ['matches', 'media'].forEach(function (name) {
+                        try {
+                            Object.defineProperty(mediaEventLevel, name, { configurable: true,
+                                enumerable: true, get: function () {
+                                    var held = MQLEVENT_SLOTS.get(this);
+                                    if (!held) throw new TypeError('Illegal invocation');
+                                    return held[name];
+                                } });
+                        } catch (e) { }
+                    });
+                }
                 level('Clipboard', 'EventTarget', refuse('Clipboard'));
 
                 // A page cannot build a media list of its own either, but it can hold one from
-                // 'matchMedia', so the interface level carries the reads and the dispatch point.
+                // 'matchMedia'. The three reads belong to the interface, not to the list: the query the
+                // list was made with is the only thing the instance holds, and the answer is computed
+                // from it on every read (CSSOM View §7.1, MQ §3.1). 'dispatchEvent' is not declared
+                // here — it comes down from the EventTarget the list inherits (measured own name list).
                 var mediaLevel = protoMap['MediaQueryList'];
                 if (mediaLevel) {
-                    member(mediaLevel, 'dispatchEvent', function (event) {
-                        if (event == null) {
-                            throw new TypeError('Failed to execute ' + quoted('dispatchEvent') + ' on '
+                    var mediaMethod = function (name, body) {
+                        Object.defineProperty(mediaLevel, name, { value: body, writable: true,
+                            configurable: true, enumerable: true });
+                    };
+                    mediaMethod('addListener', function (callback) {
+                        if (typeof callback !== 'function' && callback !== null) {
+                            throw new TypeError('Failed to execute ' + quoted('addListener') + ' on '
                                 + quoted('MediaQueryList') + ': parameter 1 is not of type '
-                                + quoted('Event') + '.');
+                                + quoted('EventListener') + '.');
                         }
-                        if (typeof EventTarget === 'function' && this instanceof EventTarget)
-                            return EventTarget.prototype.dispatchEvent.call(this, event);
-                        return true;
+                        this.addEventListener('change', callback);
                     });
+                    mediaMethod('removeListener', function (callback) {
+                        this.removeEventListener('change', callback);
+                    });
+                    ['matches', 'media'].forEach(function (name) {
+                        Object.defineProperty(mediaLevel, name, { configurable: true, enumerable: true,
+                            get: function () {
+                                var held = MQL_SLOTS.get(this);
+                                if (!held) throw new TypeError('Illegal invocation');
+                                return name === 'media' ? __serializeMediaQuery(held.query)
+                                    : !!__acrux.mediaQueryMatches(held.query);
+                            } });
+                    });
+                    Object.defineProperty(mediaLevel, 'onchange', { configurable: true, enumerable: true,
+                        get: function () {
+                            var held = MQL_SLOTS.get(this);
+                            if (!held) throw new TypeError('Illegal invocation');
+                            return held.onchange === undefined ? null : held.onchange;
+                        },
+                        set: function (value) {
+                            var held = MQL_SLOTS.get(this);
+                            if (!held) throw new TypeError('Illegal invocation');
+                            held.onchange = typeof value === 'function' ? value : null;
+                        } });
                 }
 
                 // ── The media checkpoint (CSSOM View §7.1, MQ §3.1) ────────────────
@@ -7830,9 +8218,10 @@ public class JavaScriptEngine : IDisposable
                         if (!list) { mediaLists.splice(i, 1); continue; }
                         var matches = false;
                         try { matches = !!list.matches; } catch (e) { continue; }
-                        if (list.__last === undefined) { list.__last = matches; continue; }
-                        if (list.__last === matches) continue;
-                        list.__last = matches;
+                        var last = window.__mediaLast(list);
+                        if (last === undefined) { window.__mediaLast(list, matches); continue; }
+                        if (last === matches) continue;
+                        window.__mediaLast(list, matches);
                         fireMediaChange(list, matches);
                     }
                 };
@@ -8058,9 +8447,22 @@ public class JavaScriptEngine : IDisposable
             // (HTML §7.3, Fullscreen §5, CSSOM View §9, URL §2.5).
             (function () {
                 var protoMap = window.__domProto || {};
+                // A method of an interface sits on the prototype and is enumerable there, the way the
+                // reads are (Web IDL §4.4.3): a page that lists the interface reads its methods too.
+                function interfaceMethod(proto, name, body) {
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, { value: body, writable: true,
+                            configurable: true, enumerable: true });
+                    } catch (e) { }
+                }
                 function accessor(iface, name, get, isAsync) {
                     var proto = protoMap[iface];
                     if (!proto) return;
+                    // The read a page finds on the descriptor is named for the member it answers
+                    // (measured: 'get width', not the anonymous name a function expression leaves).
+                    try { Object.defineProperty(get, 'name', { value: 'get ' + name,
+                        configurable: true }); } catch (e) { }
                     try {
                         Object.defineProperty(proto, name, {
                             configurable: true, enumerable: true,
@@ -8161,6 +8563,23 @@ public class JavaScriptEngine : IDisposable
                     accessor('Navigator', 'hardwareConcurrency',
                         function () { return __acrux.hardwareConcurrency(); });
                 }
+                // The two reads the reference answers for every page — the gamepads none of this
+                // engine can sample, and a vibration the page cannot ask for (Gamepad §5, Vibration
+                // §1): both are the empty answer, not a missing member.
+                var navigatorLevel = protoMap['Navigator'];
+                if (navigatorLevel) {
+                    interfaceMethod(navigatorLevel, 'vibrate', function () { return false; });
+                    interfaceMethod(navigatorLevel, 'getGamepads', function () {
+                        return [null, null, null, null];
+                    });
+                }
+                // SharedArrayBuffer is exposed only to a context that is cross-origin isolated, and
+                // this engine never claims that isolation (HTML §8.1, SAB §3.1). A page reading the
+                // name should not find a constructor behind it.
+                try {
+                    Object.defineProperty(window, 'SharedArrayBuffer', { value: undefined,
+                        writable: false, enumerable: false, configurable: true });
+                } catch (e) { }
                 // URL §2.5: the ancestors of a window this engine never nests are an empty list.
                 accessor('Location', 'ancestorOrigins', function () {
                     return typeof DOMStringList === 'function' ? new DOMStringList([]) : [];
@@ -8855,6 +9274,14 @@ public class JavaScriptEngine : IDisposable
                 var TRUSTED_TYPES = { TrustedHTML: trustedHTMLProto, TrustedScript: trustedScriptProto,
                     TrustedScriptURL: trustedScriptURLProto };
                 var POLICY_SLOTS = new WeakMap();
+                // The object the window hands out is moved onto its interface, where the reads live;
+                // the instance keeps nothing of its own (CSSOM View §9, measured: the viewport answers
+                // 'width', 'height', 'offsetLeft', 'offsetTop', 'pageLeft', 'pageTop', 'scale' behind
+                // 'VisualViewport.prototype' and owns no key).
+                var viewportLevel = (window.__domProto || {}).VisualViewport;
+                if (viewportLevel) {
+                    try { Object.setPrototypeOf(window.visualViewport, viewportLevel); } catch (e) { }
+                }
                 var policyProto = refusedInterface('TrustedTypePolicy', null);
                 slotAccess(policyProto, POLICY_SLOTS, ['name']);
                 function policyMethod(kind) {
@@ -8964,6 +9391,317 @@ public class JavaScriptEngine : IDisposable
                 accessor('Navigator', 'windowControlsOverlay', function () { return overlay; });
                 accessor('Document', 'featurePolicy', function () { return featurePolicy; });
                 accessor('Document', 'prerendering', function () { return false; });
+
+                // ── The interfaces whose object the engine makes ─────────────────
+                // A page holds one Screen, one History, one DOMImplementation, one Storage: each of
+                // those objects carries its own members, and the interface is where those members are
+                // named. Both halves are measured (Web IDL §4.4.2, §4.8, Screen Orientation §3,
+                // HTML §7.3):
+                // 'Object.getOwnPropertyNames(window.screen)' is empty while 'Screen.prototype' lists
+                // the ten reads, and 'Screen.prototype.width' — or 'Storage.prototype.getItem' called
+                // on anything that is not one of the two storages — is 'TypeError: Illegal invocation'.
+                // The host's own member answers first on a real object, so the delegating read below is
+                // reached by a page that calls through the prototype; a name the host does not carry
+                // gets its own body, because delegating there would ask the accessor again.
+                var BOM_HOSTS = new WeakMap();
+                var BOM_HANDLERS = new WeakMap();
+                function bomRegister(object, iface) {
+                    if (object) { try { BOM_HOSTS.set(object, iface); } catch (e) { } }
+                    return object;
+                }
+                function bomSelf(receiver, iface) {
+                    if (!receiver || BOM_HOSTS.get(receiver) !== iface) {
+                        throw new TypeError('Illegal invocation');
+                    }
+                    return receiver;
+                }
+                function bomRead(iface, name) {
+                    return function () { return bomSelf(this, iface)[name]; };
+                }
+                function bomWrite(iface, name) {
+                    return function (value) { bomSelf(this, iface)[name] = value; };
+                }
+                function bomAttribute(iface, name, read, write) {
+                    var proto = protoMap[iface];
+                    if (!proto) return;
+                    var getter = read || bomRead(iface, name);
+                    var setter = write ? (typeof write === 'function' ? write
+                        : bomWrite(iface, name)) : undefined;
+                    // The two functions a page reads off the descriptor are named for the member they
+                    // answer (measured: 'get width', 'set width' — the plain name is what the accessor
+                    // of an interface does not use).
+                    try { Object.defineProperty(getter, 'name', { value: 'get ' + name,
+                        configurable: true }); } catch (e) { }
+                    if (setter) {
+                        try { Object.defineProperty(setter, 'name', { value: 'set ' + name,
+                            configurable: true }); } catch (e) { }
+                    }
+                    try {
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                            get: getter, set: setter });
+                    } catch (e) { }
+                }
+                // An event handler attribute is the interface's own member but not the host's: the
+                // handler a page writes is kept beside the object, and a page that never wrote one
+                // reads null (HTML §7.4.4).
+                function bomHandler(iface, name) {
+                    bomAttribute(iface, name, function () {
+                        var bag = BOM_HANDLERS.get(bomSelf(this, iface));
+                        return bag && bag[name] !== undefined ? bag[name] : null;
+                    }, function (value) {
+                        var self = bomSelf(this, iface);
+                        var bag = BOM_HANDLERS.get(self);
+                        if (!bag) { bag = {}; BOM_HANDLERS.set(self, bag); }
+                        bag[name] = typeof value === 'function' ? value : null;
+                    });
+                }
+                // The length a page reads off a method is the number of arguments the IDL declares as
+                // required, and a method declared that way has to be written that way (Web IDL §4.4.4)
+                // — the arguments object carries whatever else the call handed over.
+                function bomMethod(iface, name, count, apply) {
+                    var proto = protoMap[iface];
+                    if (!proto) return;
+                    var body = count === 0
+                        ? function () { return apply(bomSelf(this, iface), arguments); }
+                        : count === 1
+                            ? function (first) { return apply(bomSelf(this, iface), arguments); }
+                            : count === 2
+                                ? function (first, second) { return apply(bomSelf(this, iface), arguments); }
+                                : count === 3
+                                    ? function (first, second, third) {
+                                        return apply(bomSelf(this, iface), arguments);
+                                    }
+                                    : function () { return apply(bomSelf(this, iface), arguments); };
+                    try {
+                        Object.defineProperty(body, 'name', { value: name, configurable: true });
+                    } catch (e) { }
+                    interfaceMethod(proto, name, body);
+                }
+                bomRegister(window.screen, 'Screen');
+                bomRegister(window.screen && window.screen.orientation, 'ScreenOrientation');
+                bomRegister(window.history, 'History');
+                bomRegister(document.implementation, 'DOMImplementation');
+                bomRegister(window.navigator, 'Navigator');
+                bomRegister(window.performance, 'Performance');
+                bomRegister(window.visualViewport, 'VisualViewport');
+                bomRegister(window.localStorage, 'Storage');
+                bomRegister(window.sessionStorage, 'Storage');
+
+                // HTML §7.3: the rest of the navigator. The strings, the booleans and the numbers are
+                // the host's own answer, so the interface only names them and refuses the read taken
+                // away from the navigator; the requests that would need a device this engine cannot
+                // reach answer a promise (measured: 'Navigator.prototype.userAgent' is a getter with no
+                // setter and reading it off the level is 'TypeError: Illegal invocation', while
+                // 'navigator.getBattery()' hands back a promise).
+                ['appCodeName', 'appName', 'appVersion', 'cookieEnabled', 'deviceMemory',
+                    'doNotTrack', 'language', 'languages', 'maxTouchPoints', 'onLine',
+                    'pdfViewerEnabled', 'platform', 'product', 'productSub', 'userAgent', 'vendor',
+                    'vendorSub'].forEach(function (name) { bomAttribute('Navigator', name); });
+                bomMethod('Navigator', 'javaEnabled', 0, function (self) { return self.javaEnabled(); });
+                bomMethod('Navigator', 'sendBeacon', 1, function (self, args) {
+                    return self.sendBeacon(String(args[0] === undefined ? '' : args[0]),
+                        args.length > 1 ? args[1] : null);
+                });
+                bomMethod('Navigator', 'vibrate', 1, function () { return false; });
+                bomMethod('Navigator', 'getGamepads', 0, function () {
+                    return [null, null, null, null];
+                });
+                if (typeof __acrux !== 'undefined' && typeof __acrux.hardwareConcurrency === 'function') {
+                    bomAttribute('Navigator', 'hardwareConcurrency', function () {
+                        bomSelf(this, 'Navigator');
+                        return __acrux.hardwareConcurrency();
+                    });
+                }
+                bomAttribute('Navigator', 'webdriver', function () {
+                    bomSelf(this, 'Navigator');
+                    return false;
+                });
+                // The interfaces that stand for a device the engine has no way to reach: the name, the
+                // tag and a constructor a page cannot call (measured: 'Object.prototype.toString.call
+                // (navigator.gpu)' is '[object GPU]'). The reads the interfaces above already answer
+                // keep the object they were given.
+                var DEVICE_READS = [['gpu', 'GPU', false], ['hid', 'HID', true], ['ink', 'Ink', true],
+                    ['mediaSession', 'MediaSession', false], ['serial', 'Serial', true],
+                    ['usb', 'USB', true], ['virtualKeyboard', 'VirtualKeyboard', true],
+                    ['xr', 'XRSystem', true], ['storageBuckets', 'StorageBucketManager', false],
+                    ['login', 'NavigatorLogin', false], ['managed', 'NavigatorManagedData', false],
+                    ['webkitPersistentStorage', 'DeprecatedStorageQuota', false],
+                    ['webkitTemporaryStorage', 'DeprecatedStorageQuota', false]];
+                DEVICE_READS.forEach(function (pair) {
+                    var field = pair[0], iface = pair[1];
+                    // The level may already exist under a constructor the script made for itself; the
+                    // object has to stand on the one the page reaches through the interface.
+                    var level = protoMap[iface] || (typeof window[iface] === 'function'
+                        && window[iface].prototype) || null;
+                    if (!level) level = refusedInterface(iface, pair[2] ? eventTargetLevel : null);
+                    var made = Object.create(level);
+                    bomRegister(made, iface);
+                    bomAttribute('Navigator', field, function () {
+                        bomSelf(this, 'Navigator');
+                        return made;
+                    });
+                });
+                ['getBattery', 'getInstalledRelatedApps', 'joinAdInterestGroup',
+                    'leaveAdInterestGroup', 'updateAdInterestGroups'].forEach(function (name) {
+                        bomMethod('Navigator', name, 0, function () {
+                            return Promise.reject(new DOMException('The ' + name
+                                + ' method is not supported by this engine.', 'NotSupportedError'));
+                        });
+                    });
+                bomMethod('Navigator', 'requestMediaKeySystemAccess', 2, function () {
+                    return Promise.reject(new DOMException('Encrypted media is not supported by this '
+                        + 'engine.', 'NotSupportedError'));
+                });
+
+                // CSSOM View §8 and Screen Orientation §3: the screen is an event target in the
+                // reference (a page reads 'screen.addEventListener') and its ten reads are the
+                // interface's, not the object's own.
+                var screenLevel = protoMap['Screen'];
+                if (screenLevel && eventTargetLevel && !window.screen.addEventListener) {
+                    try { Object.setPrototypeOf(screenLevel, eventTargetLevel); } catch (e) { }
+                }
+                ['availHeight', 'availLeft', 'availTop', 'availWidth', 'colorDepth', 'height',
+                    'isExtended', 'orientation', 'pixelDepth', 'width'].forEach(function (name) {
+                        bomAttribute('Screen', name);
+                    });
+                bomHandler('Screen', 'onchange');
+                ['angle', 'type'].forEach(function (name) { bomAttribute('ScreenOrientation', name); });
+                bomHandler('ScreenOrientation', 'onchange');
+                bomMethod('ScreenOrientation', 'unlock', 0, function (self) { self.unlock(); });
+
+                // HTML §7.3: the session history. 'pushState' and 'replaceState' take the state and the
+                // title, and the address is the optional third of them (HTML §8.4), which is why the
+                // host keeps the work under a name of its own and the interface names the two required
+                // arguments (measured: 'history.pushState.length' is 2 and 'history.go.length' is 0).
+                ['length', 'state'].forEach(function (name) { bomAttribute('History', name); });
+                bomAttribute('History', 'scrollRestoration', null, true);
+                ['back', 'forward'].forEach(function (name) {
+                    bomMethod('History', name, 0, function (self) { self[name](); });
+                });
+                bomMethod('History', 'go', 0, function (self, args) {
+                    self.go(args.length ? Number(args[0]) || 0 : 0);
+                });
+                bomMethod('History', 'pushState', 2, function (self, args) {
+                    if (args.length < 2) { throw historyArity('pushState', args.length); }
+                    self.__pushState(historyClone(args[0]), args[1] === undefined ? '' : String(args[1]),
+                        args.length > 2 ? args[2] : null);
+                });
+                bomMethod('History', 'replaceState', 2, function (self, args) {
+                    if (args.length < 2) { throw historyArity('replaceState', args.length); }
+                    self.__replaceState(historyClone(args[0]), args[1] === undefined ? '' : String(args[1]),
+                        args.length > 2 ? args[2] : null);
+                });
+                // HTML §8.4.2: what the history keeps is the structured clone of the value, not the
+                // value — so the object a page handed in is not the object it reads back (measured:
+                // 'history.state' is not the object 'pushState' was given, though it prints the same).
+                function historyClone(value) {
+                    if (value === null || value === undefined) return value === undefined ? null : value;
+                    if (typeof value !== 'object') return value;
+                    if (typeof structuredClone !== 'function') return value;
+                    try { return structuredClone(value); } catch (e) { return value; }
+                }
+                function historyArity(name, given) {
+                    return new TypeError('Failed to execute ' + formDataQuote(name) + ' on '
+                        + formDataQuote('History') + ': 2 arguments required, but only ' + given
+                        + ' present.');
+                }
+
+                // DOM §3.3: the four methods of the implementation object. Every argument the IDL
+                // declares is optional, so each one reads zero (measured).
+                ['hasFeature', 'createDocumentType', 'createDocument', 'createHTMLDocument']
+                    .forEach(function (name) {
+                        bomMethod('DOMImplementation', name, 0, function (self, args) {
+                            return self[name].apply(self, args);
+                        });
+                    });
+
+                // Web Storage §5 and Performance §5: the two storages and the clock each stand on a
+                // level that names its own constructor. The back-pointer is written off and on again
+                // because the one a function comes with is not a name the page enumerates (measured:
+                // 'Object.getOwnPropertyNames(Storage.prototype)' lists 'constructor').
+                function nameConstructor(ctor) {
+                    var proto = ctor && ctor.prototype;
+                    if (!proto) return;
+                    try { delete proto.constructor; } catch (e) { }
+                    try {
+                        Object.defineProperty(proto, 'constructor', { value: ctor, writable: true,
+                            enumerable: false, configurable: true });
+                    } catch (e) { }
+                }
+                if (typeof Storage === 'function') nameConstructor(Storage);
+                if (typeof Performance === 'function') nameConstructor(Performance);
+
+                // CSSOM View §9: the viewport object the window hands out keeps no members of its own.
+                // It was made before the interface existed, so the values it was built with are taken
+                // back out here and the reads come from the level — where a page that asks away from the
+                // viewport is refused.
+                var viewportObject = window.visualViewport;
+                if (viewportObject) {
+                    ['offsetLeft', 'offsetTop', 'scale', 'onresize', 'onscroll', 'addEventListener',
+                        'removeEventListener', 'dispatchEventListener'].forEach(function (name) {
+                            try { delete viewportObject[name]; } catch (e) { }
+                        });
+                }
+                if (visualViewportProto) {
+                    ['width', 'height', 'pageLeft', 'pageTop', 'offsetLeft', 'offsetTop'].forEach(
+                        function (name) {
+                            Object.defineProperty(visualViewportProto, name, { configurable: true,
+                                enumerable: true, get: function () {
+                                    bomSelf(this, 'VisualViewport'); return 0;
+                                } });
+                        });
+                    Object.defineProperty(visualViewportProto, 'scale', { configurable: true,
+                        enumerable: true, get: function () {
+                            bomSelf(this, 'VisualViewport'); return 1;
+                        } });
+                    ['onresize', 'onscroll', 'onscrollend'].forEach(function (name) {
+                        bomHandler('VisualViewport', name);
+                    });
+                }
+
+                // DOM §2.7.8: 'when' is the listener a page awaits instead of writing. It registers the
+                // one listener and hands back the promise it settles, so the interface still refuses a
+                // receiver with no listener bag to put it in (measured: the method is there and reads
+                // one required argument).
+                if (eventTargetLevel && !eventTargetLevel.when) {
+                    interfaceMethod(eventTargetLevel, 'when', function when(type) {
+                        var target = this;
+                        var options = arguments.length > 1 ? arguments[1] : undefined;
+                        if (!target || typeof target.addEventListener !== 'function') {
+                            throw new TypeError('Illegal invocation');
+                        }
+                        if (arguments.length < 1) {
+                            throw new TypeError('Failed to execute ' + formDataQuote('when') + ' on '
+                                + formDataQuote('EventTarget') + ': 1 argument required, but only 0 present.');
+                        }
+                        var name = String(type === undefined ? '' : type);
+                        var capture = options === true || options === false
+                            ? !!options : !!(options && options.capture);
+                        var flags = { capture: capture };
+                        if (options && typeof options === 'object') {
+                            if (options.once) flags.once = true;
+                            if (options.passive) flags.passive = true;
+                            if (options.signal) flags.signal = options.signal;
+                        }
+                        return new Promise(function (resolve, reject) {
+                            function hear(event) {
+                                target.removeEventListener(name, hear, flags);
+                                resolve(event);
+                            }
+                            var signal = flags.signal;
+                            if (signal) {
+                                if (signal.aborted) { reject(signal.reason); return; }
+                                signal.addEventListener('abort', function () {
+                                    target.removeEventListener(name, hear, flags);
+                                    reject(signal.reason);
+                                }, { once: true });
+                            }
+                            target.addEventListener(name, hear, flags);
+                        });
+                    });
+                }
+
+
 
                 // HTML §8.4: a document the engine cannot scroll to a caret in answers nothing, and the
                 // interface still names the type a page reads.
@@ -10440,10 +11178,12 @@ public class JavaScriptEngine : IDisposable
                     return bag;
                 }
 
-                // A message event carries data, which the engine's event host has no slot for, so
-                // the whole event is built in script: the flags, the propagation methods and the
-                // MessageEvent members all read the way the interface defines them.
-                function MessageEvent(type, init) {
+                // The message the engine delivers into a listener is still built in script: the
+                // worker, channel and 'postMessage' paths hand this object straight to a callback,
+                // and it carries the flags, the propagation methods and the members of the interface.
+                // It is not what the page's 'new MessageEvent(...)' answers — that one is the host
+                // event the interface is built on, and it owns nothing (Web Messaging §4).
+                function scriptMessageEvent(type, init) {
                     init = init || {};
                     var evt = {
                         type: String(type === undefined ? '' : type),
@@ -10506,7 +11246,7 @@ public class JavaScriptEngine : IDisposable
                     if (!this._started && typeof this.onmessage !== 'function') return;
                     while (this._queue.length) {
                         var data = this._queue.shift();
-                        fireEvent(this, this._listeners.message, 'onmessage', new MessageEvent('message', { data: data }));
+                        fireEvent(this, this._listeners.message, 'onmessage', scriptMessageEvent('message', { data: data }));
                     }
                 };
 
@@ -10556,7 +11296,7 @@ public class JavaScriptEngine : IDisposable
                             setTimeout(function () {
                                 if (target._closed) return;
                                 fireEvent(target, target._listeners.message, 'onmessage',
-                                    new MessageEvent('message', { data: data, origin: location.origin }));
+                                    scriptMessageEvent('message', { data: data, origin: location.origin }));
                             }, 0);
                         })(channel);
                     }
@@ -10568,7 +11308,6 @@ public class JavaScriptEngine : IDisposable
                     if (index >= 0) list.splice(index, 1);
                 };
 
-                window.MessageEvent = MessageEvent;
                 window.MessagePort = MessagePort;
                 window.MessageChannel = MessageChannel;
                 window.BroadcastChannel = BroadcastChannel;
@@ -10590,7 +11329,7 @@ public class JavaScriptEngine : IDisposable
                 window.postMessage = function (message) {
                     setTimeout(function () {
                         fireEvent(window, window.__winMessage || [], 'onmessage',
-                            new MessageEvent('message', { data: message, origin: location.origin, source: window }));
+                            scriptMessageEvent('message', { data: message, origin: location.origin, source: window }));
                     }, 0);
                 };
             })();
@@ -11825,6 +12564,36 @@ public class JavaScriptEngine : IDisposable
                 nodeCtor('Text', function (text) { return document.createTextNode(text); });
                 nodeCtor('Comment', function (text) { return document.createComment(text); });
             })();
+
+            // Every accessor an interface declares is named for the member it answers, the way the
+            // reference writes them (measured: 'get width', 'set scrollRestoration'). A getter written
+            // without a name reads back as the bare 'get', which is a difference a page sees in the
+            // descriptor of any member it looks at, so the names are put on at the end — once every
+            // interface has been declared and none is left to be added under a different one.
+            (function () {
+                var levels = window.__domProto || { };
+                // The two interfaces the script builds for itself are not levels the host stamps, so
+                // their constructors are walked by name.
+                var built = { Storage: true, Performance: true };
+                Object.keys(levels).concat(Object.keys(built)).forEach(function (name) {
+                    var proto = levels[name] || (typeof window[name] === 'function'
+                        && window[name].prototype);
+                    if (!proto || (typeof proto !== 'object' && typeof proto !== 'function')) return;
+                    var own = Object.getOwnPropertyNames(proto);
+                    for (var i = 0; i < own.length; i++) {
+                        var made = Object.getOwnPropertyDescriptor(proto, own[i]);
+                        if (!made) continue;
+                        if (made.get) {
+                            try { Object.defineProperty(made.get, 'name',
+                                { value: 'get ' + own[i], configurable: true }); } catch (e) { }
+                        }
+                        if (made.set) {
+                            try { Object.defineProperty(made.set, 'name',
+                                { value: 'set ' + own[i], configurable: true }); } catch (e) { }
+                        }
+                    }
+                });
+            })();
         ";
     }
 
@@ -13012,7 +13781,11 @@ public class HistoryHost : IDomPrototypeHost
         JavaScriptEngine.Current?.FirePopState();
     }
 
-    public void pushState(object? state, string title, string? url)
+    /// <summary>HTML §5.6: the work behind the interface's 'pushState'. The name carries the two
+    /// underscores because the interface, not the object, is what a page calls: the method the page
+    /// reaches is the one the level declares, where the two required arguments and the sentence for a
+    /// call that left one out are written (measured: 'history.pushState.length' is 2).</summary>
+    public void __pushState(object? state, string title, string? url)
     {
         while (_stack.Count > _currentIndex + 1) _stack.RemoveAt(_stack.Count - 1);
         _stack.Add(new Entry(state, url));
@@ -13020,7 +13793,7 @@ public class HistoryHost : IDomPrototypeHost
         _location.SetStateUrl(url);
     }
 
-    public void replaceState(object? state, string title, string? url)
+    public void __replaceState(object? state, string title, string? url)
     {
         if (_currentIndex >= 0 && _currentIndex < _stack.Count)
             _stack[_currentIndex] = new Entry(state, url ?? _stack[_currentIndex].Url);
