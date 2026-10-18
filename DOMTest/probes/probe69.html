@@ -1,0 +1,50 @@
+<!DOCTYPE html><html><head><title>P69</title></head><body><script>
+(function () {
+  function h(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  var J = JSON.stringify;
+  var out = {};
+  out.plugins = (function () { var l = []; for (var i = 0; i < navigator.plugins.length; i++) { var p = navigator.plugins[i];
+    l.push([p.name, p.filename, p.description, p.length, (p[0] && p[0].type) + '/' + (p[1] && p[1].type)].join('|')); } return l; })();
+  out.pluginsNamed = [typeof navigator.plugins.namedItem, navigator.plugins.namedItem('PDF Viewer') ? navigator.plugins.namedItem('PDF Viewer').name : null,
+    navigator.plugins['PDF Viewer'] ? navigator.plugins['PDF Viewer'].filename : null];
+  out.mime = (function () { var l = []; for (var i = 0; i < navigator.mimeTypes.length; i++) { var m = navigator.mimeTypes[i];
+    l.push([m.type, m.suffixes, m.description, m.enabledPlugin && m.enabledPlugin.name].join('|')); } return l; })();
+  out.pluginProto = Object.getOwnPropertyNames(Plugin.prototype).sort();
+  out.pluginArrayProto = Object.getOwnPropertyNames(PluginArray.prototype).sort();
+  out.mimeProto = Object.getOwnPropertyNames(MimeType.prototype).sort();
+  out.ttOwn = Object.getOwnPropertyNames(Object.getPrototypeOf(navigator.trustedTypes ? window.trustedTypes : window.trustedTypes)).sort();
+  out.ttStatic = Object.getOwnPropertyNames(TrustedTypePolicyFactory).sort();
+  out.ttFactory = [window.trustedTypes.name, typeof window.trustedTypes.emptyPolicy, window.trustedTypes.isConfigured,
+    h(function () { return Object.getOwnPropertyNames(Object.getPrototypeOf(window.trustedTypes)).sort().join(','); }),
+    h(function () { return Object.getOwnPropertyNames(Object.getPrototypeOf(window.trustedTypes.emptyPolicy)).sort().join(','); }),
+    h(function () { return Object.prototype.toString.call(window.trustedTypes.emptyPolicy.createHTML('x')); }),
+    h(function () { return String(window.trustedTypes.emptyPolicy.createHTML('x')); }),
+    h(function () { return window.trustedTypes.createPolicy('q', {}); }),
+    h(function () { return window.trustedTypes.createPolicy('q', { createHTML: function (s) { return s; } }).createHTML('<i>'); }),
+    h(function () { return Object.prototype.toString.call(new TrustedHTML()); })];
+  out.speechProto = h(function () { return Object.getOwnPropertyNames(SpeechSynthesis.prototype).sort().join(','); });
+  out.utterProto = h(function () { return Object.getOwnPropertyNames(SpeechSynthesisUtterance.prototype).sort().join(','); });
+  out.utterLen = h(function () { return SpeechSynthesisUtterance.length + '/' + SpeechSynthesis.length; });
+  out.kb = [h(function () { return navigator.keyboard.lock(['Digit1']); }), h(function () { return navigator.keyboard.unlock(); }),
+    Object.getOwnPropertyNames(Keyboard.prototype).sort().join(',')];
+  out.wake = h(function () { return navigator.wakeLock.request('screen').then(function (s) { return 'resolved'; },
+    function (e) { return 'rejected ' + e.name + ':' + e.message; }); });
+  out.md = [Object.getOwnPropertyNames(MediaDevices.prototype).sort().join(','), h(function () { return navigator.mediaDevices.getDisplayMedia(); })];
+  out.locks = Object.getOwnPropertyNames(LockManager.prototype).sort().join(',');
+  out.cred = Object.getOwnPropertyNames(CredentialsContainer.prototype).sort().join(',');
+  out.mc = [Object.getOwnPropertyNames(MediaCapabilities.prototype).sort().join(','),
+    h(function () { return navigator.mediaCapabilities.decodingInfo({ video: { contentType: 'video/mp4',
+      size: { width: 1, height: 1 }, bitrate: 1 } }).then ? 'promise' : typeof null; })];
+  out.sched = Object.getOwnPropertyNames(Scheduling.prototype).sort().join(',');
+  out.uad = Object.getOwnPropertyNames(NavigatorUAData.prototype).sort().join(',');
+  out.wco = Object.getOwnPropertyNames(WindowControlsOverlay.prototype).sort().join(',');
+  out.ss = Object.getOwnPropertyNames(SharedStorage.prototype).sort().join(',');
+  out.fp = Object.getOwnPropertyNames(FeaturePolicy.prototype).sort().join(',');
+  out.pres = Object.getOwnPropertyNames(Presentation.prototype).sort().join(',');
+  out.sc = Object.getOwnPropertyNames(ScreenOrientation.prototype).sort().join(',');
+  out.win = h(function () { return Object.getOwnPropertyNames(Window.prototype).length; });
+  out.vv = Object.getOwnPropertyNames(VisualViewport.prototype).sort().join(',');
+  out.ua = Object.getOwnPropertyNames(UserActivation.prototype).sort().join(',');
+  __T('p69', true, J(out, null, 1));
+})();
+</script></body></html>

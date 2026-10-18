@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html><head><title>Probe 68</title></head><body>
+<div id="d">t</div>
+<script>
+(function () {
+  var out = {}; function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + e.name + '::' + e.message; } }
+  function h(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  var J = JSON.stringify;
+  function tag(v) { try { return Object.prototype.toString.call(v); } catch (e) { return 'ERR'; } }
+
+  t('plugins mime', function () {
+    return J([tag(navigator.plugins), navigator.plugins.length, tag(navigator.mimeTypes),
+      navigator.mimeTypes.length, typeof navigator.plugins.item, typeof navigator.plugins.refresh,
+      navigator.plugins[0] && tag(navigator.plugins[0]), navigator.plugins[0] &&
+      [navigator.plugins[0].name, navigator.plugins[0].filename, navigator.plugins[0].description,
+        navigator.plugins[0].length].join('/'),
+      navigator.mimeTypes[0] && tag(navigator.mimeTypes[0]), navigator.mimeTypes[0] &&
+      [navigator.mimeTypes[0].type, navigator.mimeTypes[0].suffixes, navigator.mimeTypes[0].description].join('/'),
+      h(function () { return new Plugin(); }), h(function () { return new MimeType(); })]); });
+  t('window ctor', function () {
+    return J([h(function () { return new Window(); }), h(function () { return Window(); }),
+      tag(window.frames), typeof window.Window, typeof VisualViewport,
+      h(function () { return new VisualViewport(); }), typeof TrustedTypePolicyFactory,
+      typeof TrustedHTML, typeof TrustedScript, typeof TrustedScriptURL, typeof SpeechSynthesis,
+      typeof SpeechSynthesisUtterance, typeof SpeechValidationResult]); });
+  t('trusted types', function () {
+    var tt = window.trustedTypes;
+    return J([tag(tt), tt && [typeof tt.createPolicy, typeof tt.emptyPolicy, typeof tt.getTypeNames,
+      tt.isConfigured].join(','), tt && tt.name, tt && J(tt.getTypeNames()),
+      h(function () { var p = tt.createPolicy('p', { createHTML: function (s) { return s; } });
+        return tag(p.createHTML('<b>')) + '/' + String(p.createHTML('<b>')); }),
+      h(function () { return String(tt.createPolicy('bad')); }),
+      h(function () { return tt.emptyPolicy.createHTML('x'); })]); });
+  t('speech', function () {
+    var ss = window.speechSynthesis;
+    return J([tag(ss), ss && [typeof ss.speak, typeof ss.cancel, typeof ss.pause, typeof ss.resume,
+      typeof ss.getVoices, ss.speaking, ss.pending, ss.paused].join(','),
+      typeof SpeechSynthesisUtterance, h(function () { var u = new SpeechSynthesisUtterance('hi');
+        return [u.text, u.lang, u.volume, u.rate, u.pitch, typeof u.voice, u.voiceURI,
+          typeof u.onstart, typeof u.onend].join('|'); }),
+      h(function () { return SpeechSynthesisUtterance(); }),
+      h(function () { return ss.getVoices().length; }), ss instanceof EventTarget]); });
+  t('clone details', function () {
+    return J([h(function () { return typeof ArrayBuffer.prototype.transfer; }),
+      h(function () { var b = new ArrayBuffer(4); var c = structuredClone(b, { transfer: [b] });
+        return b.byteLength + '/' + c.byteLength; }),
+      h(function () { structuredClone(document.getElementById('d')); return 'no-throw'; }),
+      h(function () { structuredClone(window); return 'no-throw'; }),
+      h(function () { structuredClone(new Map()); return 'map-ok'; }),
+      h(function () { structuredClone(Symbol('s')); return 'no-throw'; }),
+      h(function () { return structuredClone({ a: 1 }, { transfer: [] }).a; }),
+      h(function () { var u = new Uint8Array([1, 2]); var c = structuredClone({ x: u.buffer }, { transfer: [u.buffer] });
+        return u.byteLength + '/' + c.x.byteLength; })]); });
+  t('ua data and overlays', function () {
+    var uad = navigator.userAgentData;
+    return J([tag(uad), uad && [J(uad.brands), uad.mobile, uad.platform, typeof uad.getHighEntropyValues].join('|'),
+      tag(navigator.windowControlsOverlay), navigator.windowControlsOverlay &&
+      [navigator.windowControlsOverlay.visible, typeof navigator.windowControlsOverlay.getTitlebarAreaRect,
+        typeof navigator.windowControlsOverlay.onscrollchange].join(','),
+      tag(window.sharedStorage), window.sharedStorage && typeof window.sharedStorage.worklet,
+      tag(document.featurePolicy), document.featurePolicy && typeof document.featurePolicy.allowsFeature,
+      tag(navigator.credentials), tag(navigator.locks), navigator.locks && typeof navigator.locks.request,
+      tag(navigator.presentation), typeof Presentation, typeof PresentationRequest]); });
+  t('keyboard and wake', function () {
+    return J([tag(navigator.keyboard), h(function () { return navigator.keyboard.lock(); }),
+      h(function () { return navigator.keyboard.unlock(); }),
+      tag(navigator.wakeLock), h(function () { return typeof navigator.wakeLock.request('screen').then; }),
+      h(function () { return new WakeLock(); }), h(function () { return typeof WakeLockSentinel; }),
+      h(function () { return navigator.mediaDevices && navigator.mediaDevices.getUserMedia({ audio: true }).toString; })]); });
+  t('caret and more', function () {
+    var p = document.caretPositionFromPoint ? document.caretPositionFromPoint(5, 5) : 'missing';
+    return J([tag(p), p && p.offset, p && tag(p.offsetNode), typeof CaretPosition,
+      typeof LockManager, typeof Lock, typeof UserActivation, typeof NavigatorUAData,
+      typeof WindowControlsOverlay, typeof SharedStorage, typeof FeaturePolicy, typeof Presentation,
+      typeof StorageManager, typeof Scheduling, typeof WakeLock, typeof Keyboard,
+      typeof MediaDevices, typeof MediaKeySystemAccess, typeof HTMLEmbedElement]); });
+  __T('probe68', true, J(out, null, 1));
+})();
+</script></body></html>

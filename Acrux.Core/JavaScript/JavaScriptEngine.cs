@@ -3582,7 +3582,7 @@ public class JavaScriptEngine : IDisposable
                     + 'Window' + String.fromCharCode(39) + ': ' + label + ' could not be cloned.',
                     'DataCloneError');
             }
-            function cloneInto(value, seen) {
+            function cloneInto(value, seen, transfer) {
                 if (value === null) return null;
                 var kind = typeof value;
                 if (kind === 'function' || kind === 'symbol') throw cloneUncloneable(value);
@@ -3601,27 +3601,33 @@ public class JavaScriptEngine : IDisposable
                     return copyInto(value, seen, bytes);
                 }
                 if (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer) {
+                    // HTML §2.9.4.13: a buffer the page put in the transfer list crosses as its own
+                    // bytes and the original is left detached (measured: the source answers
+                    // 'byteLength' 0 and the copy keeps the length).
+                    if (transfer && transfer.has(value)) {
+                        return copyInto(value, seen, value.transfer());
+                    }
                     return copyInto(value, seen, value.slice(0));
                 }
                 if (Array.isArray(value)) {
                     made = new Array(value.length);
                     seen.set(value, made);
                     for (var i = 0; i < value.length; i++) {
-                        if (i in value) made[i] = cloneInto(value[i], seen);
+                        if (i in value) made[i] = cloneInto(value[i], seen, transfer);
                     }
-                    return copyKeys(value, made, seen);
+                    return copyKeys(value, made, seen, transfer);
                 }
                 if (typeof Map === 'function' && value instanceof Map) {
                     made = new Map();
                     seen.set(value, made);
-                    value.forEach(function (v, k) { made.set(cloneInto(k, seen), cloneInto(v, seen)); });
-                    return copyKeys(value, made, seen);
+                    value.forEach(function (v, k) { made.set(cloneInto(k, seen, transfer), cloneInto(v, seen, transfer)); });
+                    return copyKeys(value, made, seen, transfer);
                 }
                 if (typeof Set === 'function' && value instanceof Set) {
                     made = new Set();
                     seen.set(value, made);
-                    value.forEach(function (v) { made.add(cloneInto(v, seen)); });
-                    return copyKeys(value, made, seen);
+                    value.forEach(function (v) { made.add(cloneInto(v, seen, transfer)); });
+                    return copyKeys(value, made, seen, transfer);
                 }
                 // A blob is a value the page already holds bytes for, so the copy is the same object
                 // the reference hands back for a kind its serializer knows (§2.9.4.16).
@@ -3632,16 +3638,28 @@ public class JavaScriptEngine : IDisposable
                 // An object the engine handed out — a node, a collection, any host wrapper — is not a
                 // graph the page owns, so it does not cross (measured: a function is refused with
                 // DataCloneError, and the serializer has no rule for a host object either).
-                var proto = Object.getPrototypeOf(value);
-                if (proto && typeof proto.__domType === 'string') throw cloneUncloneable(value);
-                made = proto === null ? Object.create(null) : {};
+                // An object the engine handed out is not a graph the page owns. The reference names the
+                // interface it was made as ('HTMLDivElement object could not be cloned.'), and the
+                // global object answers with its class marker (measured: '#<Window>').
+                var proto2 = Object.getPrototypeOf(value);
+                if (value === window) {
+                    throw cloneUncloneable('#<Window>');
+                }
+                var hostType = value.__domType;
+                if (typeof hostType === 'string' && hostType.length) {
+                    throw cloneUncloneable(hostType + ' object');
+                }
+                if (proto2 && typeof proto2.__domType === 'string') {
+                    throw cloneUncloneable(proto2.__domType + ' object');
+                }
+                made = proto2 === null ? Object.create(null) : {};
                 seen.set(value, made);
                 var keys = Object.keys(value);
-                for (var j = 0; j < keys.length; j++) made[keys[j]] = cloneInto(value[keys[j]], seen);
-                return copyKeys(value, made, seen);
+                for (var j = 0; j < keys.length; j++) made[keys[j]] = cloneInto(value[keys[j]], seen, transfer);
+                return copyKeys(value, made, seen, transfer);
             }
             function copyInto(original, seen, copy) { seen.set(original, copy); return copy; }
-            function copyKeys(original, copy, seen) {
+            function copyKeys(original, copy, seen, transfer) {
                 // A clone carries the own properties the page wrote, keyed by string or by symbol — the
                 // iterator and the well-known symbols belong to the type, not to the data, so they are
                 // left where they are (§2.9.4.17).
@@ -3650,13 +3668,13 @@ public class JavaScriptEngine : IDisposable
                     if (names[n] === 'length' && typeof original.length === 'number' && copy.length === original.length)
                         continue;
                     if (Object.prototype.propertyIsEnumerable.call(original, names[n]))
-                        copy[names[n]] = cloneInto(original[names[n]], seen);
+                        copy[names[n]] = cloneInto(original[names[n]], seen, transfer);
                 }
                 if (Object.getOwnPropertySymbols && Object.getOwnPropertySymbols(original).length) {
                     var symbols = Object.getOwnPropertySymbols(original);
                     for (var s = 0; s < symbols.length; s++) {
                         if (symbols[s] === Symbol.iterator) continue;
-                        copy[symbols[s]] = cloneInto(original[symbols[s]], seen);
+                        copy[symbols[s]] = cloneInto(original[symbols[s]], seen, transfer);
                     }
                 }
                 return copy;
@@ -3670,14 +3688,31 @@ public class JavaScriptEngine : IDisposable
                 if (value === undefined) return undefined;
                 var seen = new Map();
                 var options = arguments.length > 1 ? arguments[1] : null;
-                if (options && (options.transfer !== undefined && options.transfer !== null
-                    && options.transfer.length !== undefined && options.transfer.length > 0)) {
-                    throw new DOMException('Failed to execute ' + String.fromCharCode(39) + 'structuredClone'
-                        + String.fromCharCode(39) + ' on ' + String.fromCharCode(39) + 'Window'
-                        + String.fromCharCode(39) + ': transfer is not supported by this engine.',
-                        'NotSupportedError');
+                var transfer = new Set();
+                var list = options && options.transfer;
+                if (list !== undefined && list !== null) {
+                    if (typeof list.length !== 'number') {
+                        throw new TypeError('Failed to execute ' + String.fromCharCode(39) + 'structuredClone'
+                            + String.fromCharCode(39) + ' on ' + String.fromCharCode(39) + 'Window'
+                            + String.fromCharCode(39) + ': parameter 2 has member '
+                            + String.fromCharCode(39) + 'transfer' + String.fromCharCode(39)
+                            + ' which is not iterable.');
+                    }
+                    for (var q = 0; q < list.length; q++) {
+                        var item = list[q];
+                        if (typeof ArrayBuffer === 'undefined' || !(item instanceof ArrayBuffer)) {
+                            throw cloneUncloneable(item);
+                        }
+                        if (item.detached === true) {
+                            throw new DOMException('Failed to execute ' + String.fromCharCode(39)
+                                + 'structuredClone' + String.fromCharCode(39) + ' on '
+                                + String.fromCharCode(39) + 'Window' + String.fromCharCode(39)
+                                + ': transfer item is already detached.', 'DataCloneError');
+                        }
+                        transfer.add(item);
+                    }
                 }
-                return cloneInto(value, seen);
+                return cloneInto(value, seen, transfer);
             };
 
             // ── Performance (Performance API §3, High Resolution Time §4-§5,
@@ -5336,8 +5371,8 @@ public class JavaScriptEngine : IDisposable
                 // fullscreen is.
                 Object.defineProperty(document, 'fullscreenElement', { configurable: true,
                     enumerable: true, get: function () { return null; } });
-                Object.defineProperty(document, 'fullscreenEnabled', { configurable: true,
-                    enumerable: true, get: function () { return false; } });
+                // 'fullscreenEnabled' is answered by the document host itself now, as the attribute the
+                // interface names; an own override would only collide with the host's member.
                 Object.defineProperty(document, 'pictureInPictureEnabled', { configurable: true,
                     enumerable: true, get: function () { return false; } });
                 document.exitFullscreen = function () {
@@ -7826,28 +7861,9 @@ public class JavaScriptEngine : IDisposable
                 }
             })();
 
-            // ── ES2024 Array.prototype.group (Array grouping §2.3) ──────────────
-            // The grouping the page asked for, in the order the elements came, with the same property
-            // names and the null-prototype object Object.groupBy answers.
-            if (!Array.prototype.group) {
-                Object.defineProperty(Array.prototype, 'group', {
-                    value: function (callbackfn, thisArg) {
-                        if (typeof callbackfn !== 'function') {
-                            throw new TypeError('callbackfn is not a function');
-                        }
-                        var out = Object.create(null);
-                        var len = this.length >>> 0;
-                        for (var i = 0; i < len; i++) {
-                            if (!(i in this)) continue;
-                            var key = String(callbackfn.call(thisArg, this[i], i, this));
-                            if (!Object.prototype.hasOwnProperty.call(out, key)) out[key] = [];
-                            out[key].push(this[i]);
-                        }
-                        return out;
-                    },
-                    writable: true, configurable: true
-                });
-            }
+            // The grouping the page asks for is Object.groupBy's, not a method on the array: the
+            // 'Array.prototype.group' spelling was withdrawn from the specification and the reference
+            // does not carry it (measured: 'typeof Array.prototype.group' is undefined).
 
             // ── The accessors an interface declares that the host does not model ─
             // A host object answers its own members first, so a getter installed on the interface's
@@ -7975,12 +7991,20 @@ public class JavaScriptEngine : IDisposable
                             + ': Illegal constructor');
                     };
                     Object.defineProperty(ctor, 'name', { value: name, configurable: true });
-                    var proto = Object.create(baseProto || Object.prototype);
-                    Object.defineProperty(proto, 'constructor',
-                        { value: ctor, writable: true, configurable: true });
-                    Object.defineProperty(proto, Symbol.toStringTag, { value: name, configurable: true });
+                    // A level the script already built is kept: the host objects stamped against it
+                    // would otherwise walk a prototype the page cannot reach through the interface.
+                    var proto = protoMap[name] || Object.create(baseProto || Object.prototype);
+                    protoMap[name] = proto;
+                    // The level and the constructor have to be one object: a page reads
+                    // 'MediaDeviceInfo.prototype.getCapabilities', the stamping hangs the host on the
+                    // level, and a second prototype under the constructor would answer nothing there.
+                    try { ctor.prototype = proto; } catch (e) { }
+                    try {
+                        Object.defineProperty(proto, 'constructor',
+                            { value: ctor, writable: true, configurable: true });
+                        Object.defineProperty(proto, Symbol.toStringTag, { value: name, configurable: true });
+                    } catch (e) { }
                     window[name] = ctor;
-                    if (protoMap[name] === undefined) protoMap[name] = proto;
                     return proto;
                 }
                 function member(proto, name, value) {
@@ -8085,6 +8109,729 @@ public class JavaScriptEngine : IDisposable
                 accessor('Navigator', 'storage', function () { return storageManager; });
                 accessor('Navigator', 'connection', function () { return networkInformation; });
                 accessor('Navigator', 'webdriver', function () { return false; });
+                // ── The rest of the navigator, the legacy plug-in list and the window-level
+                //    interfaces (HTML §2.7.4, §7.3.4, Wake Lock §3, Keyboard Map §2,
+                //    MediaDevices §4, User Activation §2, Scheduling §2, Media Capabilities §3,
+                //    Credentials §4, Web Locks §3, Presentation §5, UA-CH §4,
+                //    Window Controls Overlay §3, Shared Storage §3, Feature Policy §3,
+                //    Visual Viewport §3, Speech Synthesis §6, Trusted Types §3) ──────────────
+                // A member an interface declares is enumerable on its prototype (measured: the
+                // descriptor of 'Keyboard.prototype.lock' answers enumerable true), so this family is
+                // written by plain assignment, with the state behind a slot only its own accessors read.
+                var HANDLER_BAGS = new WeakMap();
+                function slotAccess(proto, slots, fields) {
+                    for (var i = 0; i < fields.length; i++) {
+                        (function (field) {
+                            Object.defineProperty(proto, field, {
+                                configurable: true, enumerable: true,
+                                get: function () {
+                                    var held = slots.get(this);
+                                    if (!held) throw new TypeError('Illegal invocation');
+                                    return held[field];
+                                } });
+                        })(fields[i]);
+                    }
+                }
+                function eventHandler(proto, field) {
+                    Object.defineProperty(proto, field, {
+                        configurable: true, enumerable: true,
+                        get: function () {
+                            var bag = HANDLER_BAGS.get(this);
+                            return bag && bag[field] !== undefined ? bag[field] : null;
+                        },
+                        set: function (value) {
+                            var bag = HANDLER_BAGS.get(this);
+                            if (!bag) { bag = {}; HANDLER_BAGS.set(this, bag); }
+                            bag[field] = value === undefined ? null : value;
+                        } });
+                }
+                function fireHandler(target, type, event) {
+                    // The dispatch is what runs an 'on-type' handler as well as the registered
+                    // listeners, so calling the handler here too would tell the page twice (measured:
+                    // a start answers once).
+                    try { target.dispatchEvent(event); } catch (e) { }
+                }
+
+                // HTML §2.7.4: the legacy plug-in list is the one the platform ships — five names for
+                // the same built-in viewer, each holding the two PDF types (measured, down to the
+                // filename the reference gives). Neither class is constructible.
+                var PLUGIN_SLOTS = new WeakMap(), MIME_SLOTS = new WeakMap();
+                var pluginProto = refusedInterface('Plugin', null);
+                slotAccess(pluginProto, PLUGIN_SLOTS, ['name', 'filename', 'description', 'length']);
+                pluginProto.item = function item(index) {
+                    var held = PLUGIN_SLOTS.get(this);
+                    if (!held) throw new TypeError('Illegal invocation');
+                    index = Number(index) | 0;
+                    return index >= 0 && index < held.types.length ? held.types[index] : null;
+                };
+                pluginProto.namedItem = function namedItem(name) {
+                    var held = PLUGIN_SLOTS.get(this);
+                    if (!held) throw new TypeError('Illegal invocation');
+                    name = String(name);
+                    for (var p = 0; p < held.types.length; p++) {
+                        if (held.types[p].type === name) return held.types[p];
+                    }
+                    return null;
+                };
+                var mimeProto = refusedInterface('MimeType', null);
+                slotAccess(mimeProto, MIME_SLOTS, ['type', 'suffixes', 'description', 'enabledPlugin']);
+                var LIST_SLOTS = new WeakMap();
+                function listProto(name) {
+                    var proto = refusedInterface(name, null);
+                    slotAccess(proto, LIST_SLOTS, ['length']);
+                    proto.item = function item(index) {
+                        var held = LIST_SLOTS.get(this);
+                        if (!held) throw new TypeError('Illegal invocation');
+                        index = Number(index) | 0;
+                        return index >= 0 && index < held.items.length ? held.items[index] : null;
+                    };
+                    proto.namedItem = function namedItem(name2) {
+                        var held = LIST_SLOTS.get(this);
+                        if (!held) throw new TypeError('Illegal invocation');
+                        name2 = String(name2);
+                        for (var n = 0; n < held.items.length; n++) {
+                            var one = held.items[n];
+                            var key = one.name === undefined ? one.type : one.name;
+                            if (String(key) === name2) return one;
+                        }
+                        return null;
+                    };
+                    proto.refresh = function refresh() { };
+                    return proto;
+                }
+                var PDF_TYPES = [['application/pdf', 'pdf', 'Portable Document Format'],
+                                 ['text/pdf', 'pdf', 'Portable Document Format']];
+                var PDF_PLUGINS = ['PDF Viewer', 'Chrome PDF Viewer', 'Chromium PDF Viewer',
+                    'Microsoft Edge PDF Viewer', 'WebKit built-in PDF'];
+                var pluginItems = [], mimeItems = [];
+                for (var pi2 = 0; pi2 < PDF_PLUGINS.length; pi2++) {
+                    var plugin = Object.create(pluginProto);
+                    var types = [];
+                    for (var mi2 = 0; mi2 < PDF_TYPES.length; mi2++) {
+                        var mime = Object.create(mimeProto);
+                        MIME_SLOTS.set(mime, { type: PDF_TYPES[mi2][0], suffixes: PDF_TYPES[mi2][1],
+                            description: PDF_TYPES[mi2][2], enabledPlugin: plugin });
+                        types.push(mime);
+                        if (pi2 === 0) mimeItems.push(mime);
+                    }
+                    PLUGIN_SLOTS.set(plugin, { name: PDF_PLUGINS[pi2], filename: 'internal-pdf-viewer',
+                        description: 'Portable Document Format', length: types.length, types: types });
+                    for (var ti2 = 0; ti2 < types.length; ti2++) {
+                        Object.defineProperty(plugin, ti2, { value: types[ti2], enumerable: true,
+                            writable: false, configurable: true });
+                    }
+                    pluginItems.push(plugin);
+                }
+                function buildList(proto, items) {
+                    var made = Object.create(proto);
+                    LIST_SLOTS.set(made, { items: items, length: items.length });
+                    for (var bi = 0; bi < items.length; bi++) {
+                        Object.defineProperty(made, bi, { value: items[bi], enumerable: true,
+                            writable: false, configurable: true });
+                        // A legacy platform object is also read by name (HTML §2.6.2), and the first
+                        // holder of a name keeps it.
+                        var keyed = items[bi].name === undefined ? items[bi].type : items[bi].name;
+                        if (keyed !== undefined && !(keyed in made)) {
+                            Object.defineProperty(made, String(keyed), { value: items[bi],
+                                enumerable: true, writable: false, configurable: true });
+                        }
+                    }
+                    return made;
+                }
+                var pluginArray = buildList(listProto('PluginArray'), pluginItems);
+                var mimeTypeArray = buildList(listProto('MimeTypeArray'), mimeItems);
+
+                // MediaDevices §4: the device list this engine can see is empty and no capture is
+                // allowed, but the interface and the constraint set it names are the reference's own.
+                var DEVICE_SLOTS = new WeakMap();
+                var mediaDeviceInfoProto = refusedInterface('MediaDeviceInfo', null);
+                slotAccess(mediaDeviceInfoProto, DEVICE_SLOTS, ['deviceId', 'kind', 'label', 'groupId']);
+                mediaDeviceInfoProto.toJSON = function toJSON() {
+                    var held = DEVICE_SLOTS.get(this);
+                    if (!held) throw new TypeError('Illegal invocation');
+                    return { deviceId: held.deviceId, groupId: held.groupId, kind: held.kind,
+                        label: held.label };
+                };
+                var inputDeviceInfoProto = refusedInterface('InputDeviceInfo', mediaDeviceInfoProto);
+                inputDeviceInfoProto.getCapabilities = function getCapabilities() { return { }; };
+                var SUPPORTED_CONSTRAINTS = ['aspectRatio', 'autoGainControl', 'brightness',
+                    'channelCount', 'colorTemperature', 'contrast', 'deviceId', 'displaySurface',
+                    'echoCancellation', 'exposureCompensation', 'exposureMode', 'exposureTime',
+                    'facingMode', 'focusDistance', 'focusMode', 'frameRate', 'groupId', 'height',
+                    'iso', 'latency', 'noiseSuppression', 'pan', 'pointsOfInterest', 'resizeMode',
+                    'sampleRate', 'sampleSize', 'saturation', 'sharpness', 'suppressLocalAudioPlayback',
+                    'tilt', 'torch', 'voiceIsolation', 'whiteBalanceMode', 'width', 'zoom'];
+                var mediaDevicesProto = refusedInterface('MediaDevices', eventTargetLevel);
+                mediaDevicesProto.getSupportedConstraints = function getSupportedConstraints() {
+                    var made = { };
+                    for (var c = 0; c < SUPPORTED_CONSTRAINTS.length; c++) {
+                        made[SUPPORTED_CONSTRAINTS[c]] = true;
+                    }
+                    return made;
+                };
+                mediaDevicesProto.enumerateDevices = function enumerateDevices() {
+                    return Promise.resolve([]);
+                };
+                // MediaDevices §4.4.1, §4.4.2: no capture device is wired to this engine, so the request
+                // fails the way one does when the user turns it down.
+                mediaDevicesProto.getUserMedia = function getUserMedia() {
+                    return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+                };
+                mediaDevicesProto.getDisplayMedia = function getDisplayMedia() {
+                    return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+                };
+                mediaDevicesProto.setCaptureHandleConfig = function setCaptureHandleConfig() { };
+                eventHandler(mediaDevicesProto, 'ondevicechange');
+                var mediaDevices = Object.create(mediaDevicesProto);
+
+                // Wake Lock §3: a sentinel is handed out and released on request; the engine has no
+                // display to keep awake, but the object graph the page awaits is the interface's.
+                var WAKE_SLOTS = new WeakMap();
+                var wakeSentinelProto = refusedInterface('WakeLockSentinel', eventTargetLevel);
+                slotAccess(wakeSentinelProto, WAKE_SLOTS, ['type', 'unavailableReason']);
+                eventHandler(wakeSentinelProto, 'onrelease');
+                wakeSentinelProto.release = function release() {
+                    var held = WAKE_SLOTS.get(this);
+                    if (!held) throw new TypeError('Illegal invocation');
+                    if (held.type === null) return Promise.resolve(undefined);
+                    held.type = null;
+                    held.unavailableReason = null;
+                    var bag = HANDLER_BAGS.get(this);
+                    if (bag) bag.released = true;
+                    return Promise.resolve(undefined);
+                };
+                var wakeLockProto = refusedInterface('WakeLock', null);
+                wakeLockProto.request = function request(type) {
+                    var wanted = String(type === undefined ? '' : type);
+                    if (wanted !== 'screen') {
+                        return Promise.reject(new DOMException('The requested type is not supported.',
+                            'NotSupportedError'));
+                    }
+                    var sentinel = Object.create(wakeSentinelProto);
+                    WAKE_SLOTS.set(sentinel, { type: 'screen', unavailableReason: null });
+                    return Promise.resolve(sentinel);
+                };
+                var wakeLock = Object.create(wakeLockProto);
+
+                // Keyboard Map §2: the layout the engine can read is the empty map, and a request to
+                // take the hardware keys succeeds without holding anything.
+                function KeyboardLayoutMap() {
+                    throw new TypeError('Failed to construct ' + formDataQuote('KeyboardLayoutMap')
+                        + ': Illegal constructor');
+                }
+                KeyboardLayoutMap.prototype = Object.create(Map.prototype);
+                Object.defineProperty(KeyboardLayoutMap.prototype, 'constructor',
+                    { value: KeyboardLayoutMap, writable: true, configurable: true });
+                Object.defineProperty(KeyboardLayoutMap.prototype, Symbol.toStringTag,
+                    { value: 'KeyboardLayoutMap', configurable: true });
+                window.KeyboardLayoutMap = KeyboardLayoutMap;
+                function layoutMap() {
+                    var made = new Map();
+                    try { Object.setPrototypeOf(made, KeyboardLayoutMap.prototype); } catch (e) { }
+                    return made;
+                }
+                var keyboardProto = refusedInterface('Keyboard', eventTargetLevel);
+                keyboardProto.getLayoutMap = function getLayoutMap() {
+                    return Promise.resolve(layoutMap());
+                };
+                keyboardProto.lock = function lock(keyTypes) {
+                    return Promise.resolve(undefined);
+                };
+                keyboardProto.unlock = function unlock() { };
+                var keyboard = Object.create(keyboardProto);
+
+                // User Activation §2: the state a click leaves behind. This engine drives its events
+                // from the shell, so the two reads follow the flag the dispatch sets.
+                var USER_ACTIVATION_SLOTS = new WeakMap();
+                var userActivationProto = refusedInterface('UserActivation', null);
+                slotAccess(userActivationProto, USER_ACTIVATION_SLOTS, ['hasBeenActive', 'isActive']);
+                var userActivationState = { hasBeenActive: false, isActive: false };
+                var userActivation = Object.create(userActivationProto);
+                USER_ACTIVATION_SLOTS.set(userActivation, userActivationState);
+
+                // Scheduling §2: there is no input queue to ask, so nothing is pending.
+                var schedulingProto = refusedInterface('Scheduling', null);
+                schedulingProto.isInputPending = function isInputPending() { return false; };
+                var scheduling = Object.create(schedulingProto);
+
+                // Media Capabilities §3: the engine plays nothing, so every container it is asked about
+                // is answered as unsupported rather than as a guess.
+                var CAPABILITY_SLOTS = new WeakMap();
+                var capabilityInfoProto = refusedInterface('MediaCapabilitiesInfo', null);
+                slotAccess(capabilityInfoProto, CAPABILITY_SLOTS, ['supported', 'powerEfficient', 'smooth']);
+                function capabilityInfo(supported) {
+                    var made = Object.create(capabilityInfoProto);
+                    CAPABILITY_SLOTS.set(made, { supported: supported, powerEfficient: false,
+                        smooth: false });
+                    return made;
+                }
+                var mediaCapabilitiesProto = refusedInterface('MediaCapabilities', null);
+                function decodeAsk(config, method) {
+                    if (config === null || typeof config !== 'object'
+                        || (config.audio === undefined && config.video === undefined)) {
+                        return Promise.reject(new TypeError('Failed to execute '
+                            + formDataQuote(method) + ' on ' + formDataQuote('MediaCapabilities')
+                            + ': parameter 1 is not of type ' + formDataQuote('MediaConfiguration')
+                            + '.'));
+                    }
+                    return Promise.resolve(capabilityInfo(false));
+                }
+                mediaCapabilitiesProto.decodingInfo = function decodingInfo(config) {
+                    return decodeAsk(config, 'decodingInfo');
+                };
+                mediaCapabilitiesProto.encodingInfo = function encodingInfo(config) {
+                    return decodeAsk(config, 'encodingInfo');
+                };
+                var mediaCapabilities = Object.create(mediaCapabilitiesProto);
+
+                // Credential Management §4: the engine holds no credentials, so a get answers nothing
+                // and a request that names no credential type is refused as the reference refuses it.
+                var credentialsProto = refusedInterface('CredentialsContainer', null);
+                credentialsProto.get = function get(options) {
+                    if (options === null || options === undefined
+                        || (options.password === undefined && options.identity === undefined
+                            && options.token === undefined && options.federation === undefined)) {
+                        return Promise.reject(new DOMException('No credential type was specified in '
+                            + 'the request.', 'NotSupportedError'));
+                    }
+                    return Promise.resolve(null);
+                };
+                credentialsProto.create = function create(options) {
+                    if (options === null || options === undefined
+                        || (options.password === undefined && options.identity === undefined
+                            && options.token === undefined)) {
+                        return Promise.reject(new DOMException('No credential type was specified in '
+                            + 'the request.', 'NotSupportedError'));
+                    }
+                    return Promise.resolve(null);
+                };
+                credentialsProto.store = function store() { return Promise.resolve(undefined); };
+                credentialsProto.preventSilentAccess = function preventSilentAccess() {
+                    return Promise.resolve(undefined);
+                };
+                var credentials = Object.create(credentialsProto);
+
+                // Web Locks §3: the lock is granted on the spot and the callback's own result is what
+                // the promise answers — the interface a page uses to serialise its own work.
+                var LOCK_SLOTS = new WeakMap();
+                var lockProto = refusedInterface('Lock', null);
+                slotAccess(lockProto, LOCK_SLOTS, ['name', 'mode']);
+                var lockManagerProto = refusedInterface('LockManager', eventTargetLevel);
+                lockManagerProto.request = function request(name, options, callback) {
+                    var task = typeof options === 'function' ? options : callback;
+                    if (typeof task !== 'function') {
+                        return Promise.reject(new TypeError('Failed to execute '
+                            + formDataQuote('request') + ' on ' + formDataQuote('LockManager')
+                            + ': parameter 2 is not of type ' + formDataQuote('Function') + '.'));
+                    }
+                    var held = Object.create(lockProto);
+                    LOCK_SLOTS.set(held, { name: String(name), mode: 'exclusive' });
+                    try {
+                        var answer = task(held);
+                        if (answer && typeof answer.then === 'function') return answer;
+                        return Promise.resolve(answer);
+                    } catch (error) {
+                        return Promise.reject(error);
+                    }
+                };
+                lockManagerProto.query = function query() {
+                    return Promise.resolve({ held: [], pending: [] });
+                };
+                var lockManager = Object.create(lockManagerProto);
+
+                // Presentation API §5: no second screen is wired, so there is nothing to ask for.
+                var PRESENTATION_SLOTS = new WeakMap();
+                var presentationProto = refusedInterface('Presentation', null);
+                slotAccess(presentationProto, PRESENTATION_SLOTS, ['defaultRequest', 'receiver']);
+                var presentation = Object.create(presentationProto);
+                PRESENTATION_SLOTS.set(presentation, { defaultRequest: null, receiver: null });
+                function PresentationRequest() {
+                    throw new TypeError('Failed to construct ' + formDataQuote('PresentationRequest')
+                        + ': Illegal constructor');
+                }
+                window.PresentationRequest = PresentationRequest;
+
+                // UA-CH §4: the client hints the engine can answer, and nothing else.
+                var uaDataProto = refusedInterface('NavigatorUAData', null);
+                uaDataProto.toJSON = function toJSON() {
+                    return { brands: UA_BRANDS, mobile: false, platform: UA_PLATFORM };
+                };
+                var UA_SLOTS = new WeakMap();
+                slotAccess(uaDataProto, UA_SLOTS, ['brands', 'mobile', 'platform']);
+                var UA_BRANDS = [{ brand: 'Acrux', version: '1' }];
+                var UA_PLATFORM = navigator.platform === undefined ? '' : String(navigator.platform);
+                var uaData = Object.create(uaDataProto);
+                UA_SLOTS.set(uaData, { brands: UA_BRANDS, mobile: false, platform: UA_PLATFORM });
+                uaDataProto.getHighEntropyValues = function getHighEntropyValues(hints) {
+                    var full = { architecture: '', bitness: '', model: '',
+                        platformVersion: '', uaFullVersion: '1.0', fullVersionList: UA_BRANDS };
+                    var asked = hints === undefined ? [] : hints;
+                    var made = { brands: UA_BRANDS, mobile: false, platform: UA_PLATFORM };
+                    for (var hi = 0; hi < asked.length; hi++) {
+                        var key = String(asked[hi]);
+                        if (full[key] !== undefined) made[key] = full[key];
+                    }
+                    return Promise.resolve(made);
+                };
+
+                // Window Controls Overlay §3: the window is drawn by the shell, so the overlay is not
+                // visible and its titlebar rectangle is the empty one.
+                var overlayProto = refusedInterface('WindowControlsOverlay', eventTargetLevel);
+                overlayProto.getTitlebarAreaRect = function getTitlebarAreaRect() {
+                    return typeof DOMRectReadOnly === 'function'
+                        ? DOMRectReadOnly.fromRect({ x: 0, y: 0, width: 0, height: 0 }) : null;
+                };
+                var OVERLAY_SLOTS = new WeakMap();
+                slotAccess(overlayProto, OVERLAY_SLOTS, ['visible']);
+                eventHandler(overlayProto, 'ongeometrychange');
+                var overlay = Object.create(overlayProto);
+                OVERLAY_SLOTS.set(overlay, { visible: false });
+
+                // Shared Storage §3: the worklet this engine has nowhere to run, so the writes a page
+                // asks for fail rather than quietly pretending to have stored something.
+                var sharedStorageProto = refusedInterface('SharedStorage', null);
+                function sharedStorageRefused(method) {
+                    return Promise.reject(new TypeError('Failed to execute ' + formDataQuote(method)
+                        + ' on ' + formDataQuote('SharedStorage') + ': Shared Storage operations are '
+                        + 'only allowed in worklets.'));
+                }
+                // §3: the operations are the worklet's, so a page that asks from the window is refused —
+                // the reference answers the same refusal, and the members exist either way (measured).
+                ['append', 'clear', 'delete', 'set', 'batchUpdate', 'run', 'selectURL'].forEach(function (method) {
+                    sharedStorageProto[method] = function () { return sharedStorageRefused(method); };
+                });
+                var sharedStorageWorkletProto = refusedInterface('SharedStorageWorklet', eventTargetLevel);
+                sharedStorageWorkletProto.addModule = function addModule() {
+                    return Promise.reject(new TypeError('SharedStorageWorklet is not supported.'));
+                };
+
+                var workletObject = Object.create(sharedStorageWorkletProto);
+                Object.defineProperty(sharedStorageProto, 'worklet', {
+                    configurable: true, enumerable: true,
+                    get: function () { return workletObject; } });
+                sharedStorageProto.createWorklet = function createWorklet() {
+                    return Promise.resolve(workletObject);
+                };
+                var sharedStorage = Object.create(sharedStorageProto);
+
+                // Feature Policy §3: the engine grants no delegated features, so the allowlists are
+                // empty and the question the page asks answers the same way for every feature.
+                var featurePolicyProto = refusedInterface('FeaturePolicy', null);
+                featurePolicyProto.allowsFeature = function allowsFeature(name) { return false; };
+                featurePolicyProto.getAllowlistForFeature = function getAllowlistForFeature() { return []; };
+                var FEATURE_POLICY_SLOTS = new WeakMap();
+                slotAccess(featurePolicyProto, FEATURE_POLICY_SLOTS, ['allowedFeatures']);
+                var featurePolicy = Object.create(featurePolicyProto);
+                FEATURE_POLICY_SLOTS.set(featurePolicy, { allowedFeatures: [] });
+                Object.defineProperty(featurePolicyProto, 'features', {
+                    configurable: true, enumerable: true,
+                    get: function () {
+                        if (!FEATURE_POLICY_SLOTS.get(this)) throw new TypeError('Illegal invocation');
+                        return [];
+                    } });
+
+                // Visual Viewport §3: the interface the pinch-zoom of a real device would report; this
+                // engine has one viewport at scale one.
+                var visualViewportProto = refusedInterface('VisualViewport', eventTargetLevel);
+                ['width', 'height', 'pageLeft', 'pageTop', 'offsetLeft', 'offsetTop'].forEach(function (f) {
+                    Object.defineProperty(visualViewportProto, f, { configurable: true, enumerable: true,
+                        get: function () { return 0; } });
+                });
+                Object.defineProperty(visualViewportProto, 'scale', { configurable: true,
+                    enumerable: true, get: function () { return 1; } });
+                ['onresize', 'onscroll', 'onscrollend'].forEach(function (f) {
+                    eventHandler(visualViewportProto, f);
+                });
+
+                // The orientation object the screen answers is stamped from this level, which is what
+                // makes 'Object.prototype.toString.call(screen.orientation)' name the interface (Screen
+                // Orientation §3, measured).
+                var screenOrientationProto = refusedInterface('ScreenOrientation', null);
+                // Screen Orientation §5: the display cannot be turned by this engine, so the request
+                // fails the way a desktop build that cannot rotate answers it.
+                screenOrientationProto.lock = function lock(orientation) {
+                    return Promise.reject(new DOMException(
+                        'lock() is not supported on this device.', 'NotSupportedError'));
+                };
+
+                // Speech Synthesis §6: nothing is spoken, so an utterance the page hands over completes
+                // on the next task — start, then end — which is what a page that chains on the events
+                // expects rather than a call that never answers.
+                var speechProto = refusedInterface('SpeechSynthesis', eventTargetLevel);
+                var SPEAKING = { queue: [], current: null };
+                speechProto.speak = function speak(utterance) {
+                    if (!utterance || typeof utterance.text !== 'string') {
+                        throw new TypeError('Failed to execute ' + formDataQuote('speak') + ' on '
+                            + formDataQuote('SpeechSynthesis') + ': parameter 1 is not of type '
+                            + formDataQuote('SpeechSynthesisUtterance') + '.');
+                    }
+                    SPEAKING.queue.push(utterance);
+                    if (SPEAKING.current === null) runNextUtterance();
+                    return undefined;
+                };
+                function speechEvent(utterance, type) {
+                    var made = null;
+                    try { made = new Event(type); } catch (e) { made = { type: type }; }
+                    try { made.utterance = utterance; } catch (e) { }
+                    return made;
+                }
+                function runNextUtterance() {
+                    var next = SPEAKING.queue.shift();
+                    SPEAKING.current = next || null;
+                    if (!next) return;
+                    setTimeout(function () {
+                        fireHandler(next, 'start', speechEvent(next, 'start'));
+                        setTimeout(function () {
+                            fireHandler(next, 'end', speechEvent(next, 'end'));
+                            runNextUtterance();
+                        }, 0);
+                    }, 0);
+                }
+                speechProto.cancel = function cancel() { SPEAKING.queue = []; SPEAKING.current = null; };
+                speechProto.pause = function pause() { SPEAKING.paused = true; };
+                speechProto.resume = function resume() { SPEAKING.paused = false; };
+                speechProto.getVoices = function getVoices() { return []; };
+                Object.defineProperty(speechProto, 'speaking', { configurable: true, enumerable: true,
+                    get: function () { return SPEAKING.current !== null; } });
+                Object.defineProperty(speechProto, 'pending', { configurable: true, enumerable: true,
+                    get: function () { return SPEAKING.queue.length > 0; } });
+                Object.defineProperty(speechProto, 'paused', { configurable: true, enumerable: true,
+                    get: function () { return SPEAKING.paused === true; } });
+                eventHandler(speechProto, 'onvoiceschanged');
+                var speechSynthesis = Object.create(speechProto);
+
+                var utteranceProto = refusedInterface('SpeechSynthesisUtterance', eventTargetLevel);
+                var UTTER_SLOTS = new WeakMap();
+                function utterField(field, fallback) {
+                    Object.defineProperty(utteranceProto, field, { configurable: true, enumerable: true,
+                        get: function () {
+                            var held = UTTER_SLOTS.get(this);
+                            if (!held) throw new TypeError('Illegal invocation');
+                            return held[field] === undefined ? fallback : held[field];
+                        },
+                        set: function (value) {
+                            var held = UTTER_SLOTS.get(this);
+                            if (!held) throw new TypeError('Illegal invocation');
+                            held[field] = typeof value === 'number' ? value : String(value === undefined
+                                ? '' : value);
+                        } });
+                }
+                utterField('text', ''); utterField('lang', ''); utterField('voiceURI', '');
+                utterField('volume', 1); utterField('rate', 1); utterField('pitch', 1);
+                Object.defineProperty(utteranceProto, 'voice', { configurable: true, enumerable: true,
+                    get: function () {
+                        var held = UTTER_SLOTS.get(this);
+                        if (!held) throw new TypeError('Illegal invocation');
+                        return held.voice === undefined ? null : held.voice;
+                    },
+                    set: function (value) {
+                        var held = UTTER_SLOTS.get(this);
+                        if (!held) throw new TypeError('Illegal invocation');
+                        held.voice = value === undefined ? null : value;
+                    } });
+                ['onstart', 'onend', 'onpause', 'onresume', 'onmark', 'onboundary', 'onerror']
+                    .forEach(function (f) { eventHandler(utteranceProto, f); });
+                window.SpeechSynthesisUtterance = function SpeechSynthesisUtterance(utteranceText) {
+                    if (!(this instanceof window.SpeechSynthesisUtterance)) {
+                        throw constructionRefusal('SpeechSynthesisUtterance');
+                    }
+                    UTTER_SLOTS.set(this, { text: String(utteranceText === undefined ? '' : utteranceText) });
+                    return this;
+                };
+                window.SpeechSynthesisUtterance.prototype = utteranceProto;
+                Object.defineProperty(window.SpeechSynthesisUtterance, 'length',
+                    { value: 0, configurable: true });
+
+                // Trusted Types §3: the policy the page creates turns a string into a typed value, and a
+                // rule the policy did not declare is the identity function the specification defaults to.
+                var TT_SLOTS = new WeakMap();
+                function trustedWrapper(levelName, rulesName) {
+                    var proto = refusedInterface(levelName, null);
+                    Object.defineProperty(proto, 'toString', { value: function toString() {
+                        var held = TT_SLOTS.get(this);
+                        return held === undefined ? '' : String(held.value);
+                    }, writable: true, configurable: true });
+                    Object.defineProperty(proto, Symbol.toPrimitive, { value: function toPrimitive() {
+                        var held = TT_SLOTS.get(this);
+                        return held === undefined ? '' : String(held.value);
+                    }, writable: true, configurable: true });
+                    return proto;
+                }
+                var trustedHTMLProto = trustedWrapper('TrustedHTML');
+                var trustedScriptProto = trustedWrapper('TrustedScript');
+                var trustedScriptURLProto = trustedWrapper('TrustedScriptURL');
+                function trusted(typeProto, value) {
+                    var made = Object.create(typeProto);
+                    TT_SLOTS.set(made, { value: value });
+                    return made;
+                }
+                var TRUSTED_TYPES = { TrustedHTML: trustedHTMLProto, TrustedScript: trustedScriptProto,
+                    TrustedScriptURL: trustedScriptURLProto };
+                var POLICY_SLOTS = new WeakMap();
+                var policyProto = refusedInterface('TrustedTypePolicy', null);
+                slotAccess(policyProto, POLICY_SLOTS, ['name']);
+                function policyMethod(kind) {
+                    return function (input) {
+                        var held = POLICY_SLOTS.get(this);
+                        if (!held) throw new TypeError('Illegal invocation');
+                        var text = String(input === undefined ? '' : input);
+                        var rule = held.rules[kind];
+                        var rest = Array.prototype.slice.call(arguments, 1);
+                        var made = typeof rule === 'function' ? rule.apply(null, [text].concat(rest)) : text;
+                        return trusted(TRUSTED_TYPES[kind === 'createHTML' ? 'TrustedHTML'
+                            : kind === 'createScript' ? 'TrustedScript' : 'TrustedScriptURL'],
+                            made === undefined || made === null ? '' : String(made));
+                    };
+                }
+                policyProto.createHTML = policyMethod('createHTML');
+                policyProto.createScript = policyMethod('createScript');
+                policyProto.createScriptURL = policyMethod('createScriptURL');
+                var factoryProto = refusedInterface('TrustedTypePolicyFactory', null);
+                factoryProto.createPolicy = function createPolicy(name, rules) {
+                    var policyName = String(name === undefined ? '' : name);
+                    if (rules !== undefined && rules !== null && typeof rules !== 'object') {
+                        throw new TypeError('Failed to execute ' + formDataQuote('createPolicy') + ' on '
+                            + formDataQuote('TrustedTypePolicyFactory') + ': parameter 2 is not of type '
+                            + formDataQuote('TrustedTypePolicyOptions') + '.');
+                    }
+                    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(policyName)) {
+                        throw new TypeError('Failed to construct ' + formDataQuote('TrustedTypePolicy')
+                            + ': The name provided is not a valid policy name.');
+                    }
+                    var made = Object.create(policyProto);
+                    POLICY_SLOTS.set(made, { name: policyName, rules: rules || { } });
+                    return made;
+                };
+                factoryProto.isHTML = function isHTML(value) {
+                    return !!(value && Object.getPrototypeOf(value) === trustedHTMLProto);
+                };
+                factoryProto.isScript = function isScript(value) {
+                    return !!(value && Object.getPrototypeOf(value) === trustedScriptProto);
+                };
+                factoryProto.isScriptURL = function isScriptURL(value) {
+                    return !!(value && Object.getPrototypeOf(value) === trustedScriptURLProto);
+                };
+                factoryProto.getAttributeType = function getAttributeType(attributeName) {
+                    var name = String(attributeName === undefined ? '' : attributeName);
+                    if (/^on[a-z]/i.test(name)) return 'TrustedScript';
+                    if (name === 'src' || name === 'href' || name === 'codebase' || name === 'data') {
+                        return 'TrustedScriptURL';
+                    }
+                    if (name === 'srcdoc') return 'TrustedHTML';
+                    return null;
+                };
+                factoryProto.getPropertyType = function getPropertyType(base, property) {
+                    var name = String(property === undefined ? '' : property);
+                    if (name === 'innerHTML' || name === 'outerHTML') return 'TrustedHTML';
+                    if (name === 'src' || name === 'codeBase') return 'TrustedScriptURL';
+                    if (name === 'innerText' || name === 'text' || name === 'textContent') {
+                        return 'TrustedScript';
+                    }
+                    return null;
+                };
+                factoryProto.getTypeMapping = function getTypeMapping() {
+                    var mapping = { };
+                    var rules = {
+                        iframe: { attributes: { srcdoc: 'TrustedHTML' },
+                            properties: { srcdoc: 'TrustedHTML' } },
+                        script: { attributes: { src: 'TrustedScriptURL', href: 'TrustedScriptURL' },
+                            properties: { src: 'TrustedScriptURL', text: 'TrustedScript',
+                                innerText: 'TrustedScript', textContent: 'TrustedScript',
+                                href: 'TrustedScriptURL' } },
+                        embed: { attributes: { src: 'TrustedScriptURL' },
+                            properties: { src: 'TrustedScriptURL' } },
+                        object: { attributes: { codebase: 'TrustedScriptURL', data: 'TrustedScriptURL' },
+                            properties: { codeBase: 'TrustedScriptURL', data: 'TrustedScriptURL' } }
+                    };
+                    for (var key in rules) {
+                        if (!Object.prototype.hasOwnProperty.call(rules, key)) continue;
+                        mapping[key] = rules[key];
+                    }
+                    mapping['*'] = { attributes: { },
+                        properties: { innerHTML: 'TrustedHTML', outerHTML: 'TrustedHTML' } };
+                    return mapping;
+                };
+                Object.defineProperty(factoryProto, 'defaultPolicy', { configurable: true,
+                    enumerable: true, get: function () { return null; } });
+                var emptyPolicy = Object.create(policyProto);
+                POLICY_SLOTS.set(emptyPolicy, { name: 'default', rules: { } });
+                Object.defineProperty(factoryProto, 'emptyHTML', { configurable: true, enumerable: true,
+                    get: function () { return trusted(trustedHTMLProto, ''); } });
+                Object.defineProperty(factoryProto, 'emptyScript', { configurable: true, enumerable: true,
+                    get: function () { return trusted(trustedScriptProto, ''); } });
+                var trustedTypes = Object.create(factoryProto);
+
+                // The navigator reads the objects the interfaces above built.
+                accessor('Navigator', 'plugins', function () { return pluginArray; });
+                accessor('Navigator', 'mimeTypes', function () { return mimeTypeArray; });
+                accessor('Navigator', 'mediaDevices', function () { return mediaDevices; });
+                accessor('Navigator', 'wakeLock', function () { return wakeLock; });
+                accessor('Navigator', 'keyboard', function () { return keyboard; });
+                accessor('Navigator', 'userActivation', function () { return userActivation; });
+                accessor('Navigator', 'scheduling', function () { return scheduling; });
+                accessor('Navigator', 'mediaCapabilities', function () { return mediaCapabilities; });
+                accessor('Navigator', 'credentials', function () { return credentials; });
+                accessor('Navigator', 'locks', function () { return lockManager; });
+                accessor('Navigator', 'presentation', function () { return presentation; });
+                accessor('Navigator', 'userAgentData', function () { return uaData; });
+                accessor('Navigator', 'windowControlsOverlay', function () { return overlay; });
+                accessor('Document', 'featurePolicy', function () { return featurePolicy; });
+                accessor('Document', 'prerendering', function () { return false; });
+
+                // HTML §8.4: a document the engine cannot scroll to a caret in answers nothing, and the
+                // interface still names the type a page reads.
+                var caretProto = refusedInterface('CaretPosition', null);
+                var CARET_SLOTS = new WeakMap();
+                slotAccess(caretProto, CARET_SLOTS, ['offsetNode', 'offset']);
+                accessor('Document', 'caretPositionFromPoint', function () {
+                    return function caretPositionFromPoint() { return null; };
+                });
+
+                // The window is the object the interface names, and its legacy storage quota constants
+                // are its prototype's own (measured: Window.prototype lists TEMPORARY, PERSISTENT and
+                // the constructor).
+                if (typeof window.Window !== 'function') {
+                    function Window() {
+                        if (!new.target) throw new TypeError('Illegal constructor');
+                        throw new TypeError('Failed to construct ' + formDataQuote('Window')
+                            + ': Illegal constructor');
+                    }
+                    Window.prototype = Object.create(Object.prototype);
+                    try {
+                        Object.defineProperty(Window.prototype, 'TEMPORARY',
+                            { value: 0, writable: false, enumerable: true, configurable: false });
+                        Object.defineProperty(Window.prototype, 'PERSISTENT',
+                            { value: 1, writable: false, enumerable: true, configurable: false });
+                    } catch (e) { }
+                    Object.defineProperty(Window.prototype, 'constructor',
+                        { value: Window, writable: true, configurable: true });
+                    Object.defineProperty(Window.prototype, Symbol.toStringTag,
+                        { value: 'Window', configurable: true });
+                    // The global object keeps the prototype the realm gave it, so the test the
+                    // interface answers is carried here instead (HTML §7.3: 'window instanceof Window'
+                    // is true).
+                    if (Symbol.hasInstance) {
+                        try {
+                            Object.defineProperty(Window, Symbol.hasInstance, { value: function (value) {
+                                return value === window;
+                            }, configurable: true });
+                        } catch (e) { }
+                    }
+                    window.Window = Window;
+                }
+                try {
+                    Object.defineProperty(window, Symbol.toStringTag,
+                        { value: 'Window', configurable: true });
+                } catch (e) { }
+                window.sharedStorage = sharedStorage;
+                window.trustedTypes = trustedTypes;
+                window.speechSynthesis = speechSynthesis;
+                // A rejected promise a page can await, handed to the host for the operations the engine
+                // cannot carry out (Screen Orientation §5).
+                window.__acruxUnsupportedPromise = function (message) {
+                    return Promise.reject(new DOMException(String(message === undefined ? '' : message),
+                        'NotSupportedError'));
+                };
             })();
 
             // ── The observers (Intersection Observer §2, Resize Observer §2,
@@ -10948,8 +11695,33 @@ public class NavigatorHost : IDomPrototypeHost
 
     public string userAgent => "Acrux/1.0 (" + OperatingSystemComment() + ") AppleWebKit/537.36";
     public string appCodeName => "Mozilla";
-    public string appName => "Acrux";
+
+    /// <summary>HTML §7.3.4: the four legacy slots are fixed strings the specification names, not
+    /// descriptions of this engine — 'appName' is "Netscape" and 'vendorSub' the empty value, whatever
+    /// the build is (measured against the reference, which answers exactly those).</summary>
+    public string appName => "Netscape";
+    public string vendorSub => "";
     public string appVersion => "1.0";
+
+    /// <summary>Device Memory §3: the amount of RAM the device has, rounded down into the fixed list
+    /// the specification allows so the number cannot be used to pick the machine out of a crowd.</summary>
+    public double deviceMemory
+    {
+        get
+        {
+            var bytes = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+            double gib = bytes <= 0 ? 4 : bytes / 1073741824d;
+            // §3: the value is the largest allowed one that does not exceed the real size.
+            double[] steps = [0.25, 0.5, 1, 2, 4, 8];
+            var answer = 0.25;
+            for (var s = 0; s < steps.Length; s++) if (steps[s] <= gib) answer = steps[s];
+            return answer;
+        }
+    }
+
+    /// <summary>PDF §2: the engine carries no document viewer, so the flag the interface reads for one
+    /// is false (the reference answers true because its build ships a PDF viewer).</summary>
+    public bool pdfViewerEnabled => false;
 
     /// <summary>HTML §7.3.4: 'platform' names the operating system the engine is running on, so one
     /// build answers 'Linux x86_64', 'Win32' or 'MacIntel' according to the host it is on rather than a
@@ -11222,14 +11994,31 @@ public class ScreenHost : IDomPrototypeHost
     public int pixelDepth => Acrux.Core.Display.ScreenMetrics.ColorDepth;
     public int top => Acrux.Core.Display.ScreenMetrics.Top;
     public int left => Acrux.Core.Display.ScreenMetrics.Left;
-    public object? orientation => new ScreenOrientationHost();
+
+    /// <summary>Screen Orientation §3: the orientation object is the same one every read answers, and
+    /// a screen that cannot be extended says so (measured: 'screen.isExtended' is false and the two
+    /// reads of 'orientation' are one object).</summary>
+    public bool isExtended => false;
+    private ScreenOrientationHost? _orientation;
+    public object orientation => _orientation ??= new ScreenOrientationHost();
 }
 
-public class ScreenOrientationHost
+/// <summary>The one orientation a display the engine cannot rotate answers (Screen Orientation §4, §5):
+/// the type and the angle are the interface's own, and a request to turn the display fails the way the
+/// reference's desktop build answers it.</summary>
+public class ScreenOrientationHost : IDomPrototypeHost
 {
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "ScreenOrientation" };
+
     public string type => "landscape-primary";
-    public string angle => "0";
-    public void lock_(string orientation) { }
+
+    // 'angle' is a number, not its spelling (measured: 'typeof screen.orientation.angle' is 'number').
+    public int angle => 0;
+    public object? onchange => null;
+    public override string ToString() => DomHostString.Tagged(this);
+
+    // 'lock' is answered by the interface level rather than here: a page that awaits the request has
+    // to get a promise, and the rejected one the engine cannot grant is built where Promise lives.
     public void unlock() { }
 }
 

@@ -1,0 +1,19 @@
+<!DOCTYPE html><html><head><title>P70</title></head><body><script>
+(function () {
+  function h(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  var out = {};
+  out.policy = h(function () { var p = window.trustedTypes.createPolicy('p1', { createHTML: function (s) { return s.toUpperCase(); } });
+    return 'name=' + p.name + ' str=' + String(p.createHTML('<b>')) + ' tag=' + Object.prototype.toString.call(p.createHTML('<b>')); });
+  out.identity = h(function () { var p2 = window.trustedTypes.createPolicy('p2', { }); return String(p2.createScript('x')) + '/' + p2.createScript('x'); });
+  out.policyProto = h(function () { return Object.getOwnPropertyNames(TrustedTypePolicy.prototype).sort().join(','); });
+  out.factoryProto = h(function () { return Object.getOwnPropertyNames(TrustedTypePolicyFactory.prototype).sort().join(','); });
+  out.ssTag = h(function () { return Object.prototype.toString.call(window.sharedStorage); });
+  out.ssWorklet = h(function () { return Object.prototype.toString.call(window.sharedStorage.worklet); });
+  out.ssMembers = h(function () { return Object.getOwnPropertyNames(Object.getPrototypeOf(window.sharedStorage)).sort().join(','); });
+  out.ssWorkletMembers = h(function () { return Object.getOwnPropertyNames(Object.getPrototypeOf(window.sharedStorage.worklet)).sort().join(','); });
+  out.ssSet = h(function () { var r = window.sharedStorage.set('a', 'b'); return typeof r.then; });
+  out.protoOfProto = h(function () { return Object.prototype.toString.call(window.SharedStorage.prototype) + ' ' + Object.getOwnPropertyNames(window.SharedStorage.prototype).sort().join(','); });
+  out.workletLevel = h(function () { return typeof SharedStorageWorklet + ' ' + Object.getOwnPropertyNames(SharedStorageWorklet.prototype).sort().join(','); });
+  __T('p70', true, JSON.stringify(out, null, 1));
+})();
+</script></body></html>

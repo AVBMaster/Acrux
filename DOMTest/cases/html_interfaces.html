@@ -458,11 +458,12 @@ ck('G8 performance still answers the legacy timing object', function () {
 }, function () { return Object.prototype.toString.call(performance.timing); });
 
 // ── H. the ES additions the platform carries ───────────────────────────────
-ck('H1 Array.prototype.group groups as Object.groupBy does', function () {
-    var out = [1, 2, 3, 4].group(function (n) { return n % 2 ? 'odd' : 'even'; });
+ck('H1 the grouping is Object.groupBy, not a method on the array', function () {
+    var out = Object.groupBy([1, 2, 3, 4], function (n) { return n % 2 ? 'odd' : 'even'; });
     return out.odd.length === 2 && out.even.length === 2 && out.odd[0] === 1
-        && Object.getPrototypeOf(out) === null;
-}, function () { return JSON.stringify([1, 2].group(function (n) { return 'k'; })); });
+        && Object.getPrototypeOf(out) === null
+        && typeof Array.prototype.group === 'undefined';
+}, function () { return [typeof Object.groupBy, typeof Array.prototype.group].join('/'); });
 ck('H2 an iterator helper still walks the same sequence', function () {
     var seen = 0;
     new Set([1, 2, 3]).values().filter(function (n) { return n > 1; }).forEach(function () { seen++; });

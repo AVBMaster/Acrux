@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html><head><title>Probe 67</title></head><body>
+<div id="d">t</div>
+<script>
+(function () {
+  var out = {}; function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + e.name + '::' + e.message; } }
+  var J = JSON.stringify;
+  function tag(v) { try { return Object.prototype.toString.call(v); } catch (e) { return 'ERR ' + e.name; } }
+  function shape(obj, names) {
+    var proto = obj && Object.getPrototypeOf(obj);
+    if (!proto) return 'no-proto';
+    return names.map(function (k) { return k + ':' + typeof obj[k]; }).join(',');
+  }
+
+  t('window members', function () {
+    return J(['frameElement', 'frames', 'length', 'top', 'parent', 'self', 'closed', 'opener', 'name',
+      'status', 'origin', 'print', 'stop', 'focus', 'blur', 'getSelection', 'scroll', 'scrollTo',
+      'scrollBy', 'matchMedia', 'requestIdleCallback', 'getComputedStyle', 'structuredClone',
+      'reportError', 'queueMicrotask', 'postMessage', 'atob', 'btoa', 'fetch', 'crypto', 'speechSynthesis',
+      'trustedTypes', 'showInteractiveDialog', 'sharedStorage', 'window'.length].map(function (k) {
+        return k + ':' + typeof window[k]; })); });
+  t('window shape', function () {
+    return J([tag(window), window.length, window.top === window, window.parent === window,
+      window.self === window, tag(window.frames), window.frames === window, window.frameElement,
+      window.closed, window.origin, typeof window.print, window.onerror,
+      Object.prototype.toString.call(window.constructor), typeof Window]); });
+  t('document members', function () {
+    return J(['hasFocus', 'activeElement', 'visibilityState', 'hidden', 'fonts', 'timeline', 'wakeLock',
+      'prerendering', 'exitFullscreen', 'fullscreenEnabled', 'fullscreenElement', 'pointerLockElement',
+      'exitPointerLock', 'getAnimations', 'elementFromPoint', 'caretPositionFromPoint', 'adoptScripts',
+      'adoptStyles', 'currentCSSAnchor', 'documentElement', 'defaultView', 'characterSet', 'contentType',
+      'xmlStandalone', 'xmlVersion', 'inputEncoding', 'fragments', 'featurePolicy', 'scrollingElement',
+      'forms', 'scripts'].map(function (k) { return k + ':' + typeof document[k]; })); });
+  t('document shape', function () {
+    return J([tag(document.fonts), document.fonts && shape(document.fonts, ['add', 'check', 'load', 'ready',
+      'status', 'size', 'clear', 'forEach', 'entries']), document.visibilityState, document.hidden,
+      document.hasFocus(), tag(document.timeline), document.timeline && document.timeline.currentTime,
+      tag(document.wakeLock), document.prerendering, document.fullscreenEnabled, document.contentType,
+      document.characterSet, document.inputEncoding, tag(document.defaultView), document.title.length >= 0]); });
+  t('navigator members', function () {
+    return J(['mediaDevices', 'wakeLock', 'keyboard', 'storage', 'userActivation', 'hardwareConcurrency',
+      'deviceMemory', 'doNotTrack', 'maxTouchPoints', 'webdriver', 'pdfViewerEnabled', 'scheduling',
+      'mediaCapabilities', 'connection', 'presentation', 'serviceWorker', 'clipboard', 'clipboard'
+      , 'permissions', 'geolocation', 'credentials', 'locks', 'login', 'mediaCapabilities', 'mimeTypes',
+      'plugins', 'product', 'productSub', 'vendor', 'vendorSub', 'platform', 'appVersion', 'appName',
+      'appCodeName', 'userAgentData', 'globalPrivacyControl', 'windowControlsOverlay'].map(function (k) {
+        return k + ':' + typeof navigator[k]; })); });
+  t('navigator subobjects', function () {
+    var n = navigator;
+    return J([tag(n), tag(n.mediaDevices), n.mediaDevices && shape(n.mediaDevices, ['enumerateDevices',
+      'getUserMedia', 'getDisplayMedia', 'ondevicechange', 'mediaKeysSystem']),
+      tag(n.wakeLock), n.wakeLock && shape(n.wakeLock, ['request', 'send']),
+      tag(n.keyboard), n.keyboard && shape(n.keyboard, ['lock', 'unlock', 'layoutMap', 'supportedLayoutOptions']),
+      tag(n.userActivation), n.userActivation && [n.userActivation.hasBeenActive, n.userActivation.isActive].join(','),
+      tag(n.storage), n.storage && shape(n.storage, ['estimate', 'persist', 'persisted']),
+      tag(n.scheduling), n.scheduling && shape(n.scheduling, ['isInputPending', 'postTask']),
+      tag(n.connection), n.connection && shape(n.connection, ['effectiveType', 'downlink', 'rtt', 'saveData']),
+      tag(n.credentials), n.mediaCapabilities && shape(n.mediaCapabilities, ['decodingInfo', 'encodingInfo'])]); });
+  t('navigator values', function () {
+    return J([navigator.hardwareConcurrency, navigator.deviceMemory, navigator.doNotTrack,
+      navigator.maxTouchPoints, navigator.webdriver, navigator.pdfViewerEnabled, navigator.product,
+      navigator.productSub, navigator.vendor, navigator.vendorSub, navigator.platform,
+      navigator.appName, navigator.appCodeName, navigator.language, navigator.languages.length,
+      navigator.onLine, navigator.cookieEnabled, tag(navigator.userAgentData),
+      navigator.globalPrivacyControl, tag(navigator.windowControlsOverlay)]); });
+  t('screen and history', function () {
+    return J([tag(window.screen), shape(window.screen, ['width', 'height', 'availWidth', 'availHeight',
+      'colorDepth', 'pixelDepth', 'availLeft', 'availTop', 'orientation', 'isExtended']),
+      tag(window.screen.orientation), window.screen.orientation && shape(window.screen.orientation,
+        ['type', 'angle', 'lock', 'unlock', 'onchange']),
+      tag(window.history), shape(window.history, ['length', 'scrollRestoration', 'state', 'back',
+        'forward', 'go', 'pushState', 'replaceState']), window.history.length, window.history.scrollRestoration]); });
+  t('events and misc', function () {
+    return J([typeof FontFace, typeof DOMMatrix, typeof DOMMatrixReadOnly, typeof StaticRange,
+      typeof VisualViewport, window.visualViewport && tag(window.visualViewport),
+      typeof CookieStore, typeof TrackingEvent, typeof Navigator, typeof Screen, typeof History,
+      typeof Location, typeof DocumentTimeline, typeof FontFaceSet, typeof WakeLock,
+      typeof WakeLockSentinel, typeof Keyboard, typeof InputDeviceCapabilities,
+      typeof InputDeviceInfo, typeof MediaDeviceInfo, typeof StorageManager, typeof Scheduling,
+      typeof NetworkInformation, typeof CredentialsContainer, typeof MediaCapabilities]); });
+  t('async lists', function () {
+    var done = {};
+    setTimeout(function () {
+      __T('probe67 async', true, J(done));
+    }, 60);
+    navigator.mediaDevices && navigator.mediaDevices.enumerateDevices().then(function (list) {
+      done.devices = list.length + '/' + (list[0] ? tag(list[0]) + shape(list[0], ['deviceId', 'kind', 'label', 'groupId', 'toJSON']) : 'empty');
+    }, function (e) { done.devices = 'ERR ' + e.name; });
+    navigator.storage && navigator.storage.estimate().then(function (q) {
+      done.estimate = tag(q) + '/' + (q.quota !== undefined) + '/' + (q.usage !== undefined);
+    }, function (e) { done.estimate = 'ERR ' + e.name; });
+    navigator.wakeLock && navigator.wakeLock.request('screen').then(function (s) {
+      done.wake = tag(s) + shape(s, ['type', 'unavailableReason', 'onrelease', 'release']) + '/' + s.type;
+      return s.release();
+    }, function (e) { done.wake = 'ERR ' + e.name + ':' + e.message; });
+    done.pending = 'yes';
+    return 'async'; });
+  __T('probe67', true, J(out, null, 1));
+})();
+</script></body></html>

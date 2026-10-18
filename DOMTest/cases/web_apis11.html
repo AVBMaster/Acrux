@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html><head><title>Acrux Web API checks 11</title></head><body>
+<div id="d">text</div>
+<script>
+// Every answer below was read off the reference in this session; the probes are kept in out/.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+function ckAll(name, pairs, extra) {
+    var fails = [];
+    try {
+        for (var i = 0; i < pairs.length; i++) if (!pairs[i][1]) fails.push(pairs[i][0]);
+    } catch (e) { fails.push('threw ' + (e && e.name) + ': ' + (e && e.message)); }
+    __T(name, fails.length === 0, (fails.length ? fails.join(' ; ') + ' | ' : '') + (extra || ''));
+}
+function refused(fn) {
+    try { fn(); return 'constructed'; } catch (e) { return e.name + ':' + e.message; }
+}
+function tag(v) { try { return Object.prototype.toString.call(v); } catch (e) { return 'ERR'; } }
+function J(v) { try { return JSON.stringify(v); } catch (e) { return 'unserialisable'; } }
+function done(name, fn) {
+    var promise;
+    try { promise = fn(); } catch (e) {
+        __T(name, false, 'threw ' + (e && e.name) + ': ' + (e && e.message));
+        return Promise.resolve(null);
+    }
+    return promise.then(function (v) { __T(name, !!v, ''); return null; },
+        function (e) { __T(name, false, 'rej ' + (e && e.name) + ': ' + (e && e.message)); return null; });
+}
+</script>
+<script>
+(function () {
+
+    // ── A. ECMAScript leftovers ───────────────────────────────────────────────
+    ckAll('A1 the grouping and the promise helpers answer the standard spelling', [
+        ['no Array.prototype.group', typeof Array.prototype.group === 'undefined'],
+        ['Object.groupBy', (function () { var g = Object.groupBy([1, 2, 3, 4], function (n) {
+            return n % 2 ? 'odd' : 'even'; });
+            return g.odd.length === 2 && Object.getPrototypeOf(g) === null; })()],
+        ['iterator helpers', (function () { var it = [1, 2, 3, 4][Symbol.iterator]();
+            return it.filter(function (x) { return x % 2 === 0; }).map(function (x) { return x * 10; })
+                .toArray().join(',') === '20,40'; })()],
+        ['iterator take/drop', [1, 2, 3, 4, 5].values().take(3).drop(1).toArray().join(',') === '2,3'],
+        ['withResolvers', (function () { var p = Promise.withResolvers();
+            return typeof p.promise.then === 'function' && typeof p.resolve === 'function'; })()],
+        ['fromAsync and try', typeof Array.fromAsync === 'function' && typeof Promise.try === 'function'],
+        ['well-formed strings', (function () { return ('\ud800x').toWellFormed() !== '\ud800x'
+            && 'ok'.isWellFormed() === true; })()],
+        ['error cause and AggregateError', (function () { var e = new Error('m', { cause: 7 });
+            var a = new AggregateError([1, 2], 'agg');
+            return e.cause === 7 && a.name === 'AggregateError' && a.errors.length === 2; })()],
+        ['change methods', (function () { var base = [3, 1, 2];
+            return base.toSorted().join(',') === '1,2,3' && base.toReversed().join(',') === '2,1,3'
+                && base.with(0, 9).join(',') === '9,1,2' && base.length === 3; })()]
+    ]);
+
+    // ── B. structuredClone (HTML §2.9.4) ──────────────────────────────────────
+    ckAll('B1 a clone carries the graph and refuses what has no rule', [
+        ['deep kinds', (function () { var made = structuredClone({
+            d: new Date(1500), m: new Map([['k', { v: 1 }]]), s: new Set([1, 2]),
+            a: new Uint8Array([1, 2, 3]) });
+            return made.d.getTime() === 1500 && made.m.get('k').v === 1 && made.s.size === 2
+                && made.a[2] === 3 && made.a instanceof Uint8Array; })()],
+        ['identity apart', (function () { var src = { v: 1 }; var made = structuredClone({ a: src, b: src });
+            return made.a === made.b && made.a !== src; })()],
+        ['cycle stays a cycle', (function () { var cyc = {}; cyc.self = cyc;
+            var made = structuredClone(cyc); return made.self === made; })()],
+        ['function refused', refused(function () { return structuredClone(function () { }); })
+            .indexOf('DataCloneError:') === 0],
+        ['symbol refused', refused(function () { return structuredClone(Symbol('s')); })
+            === 'DataCloneError:Failed to execute \'structuredClone\' on \'Window\': '
+                + 'Symbol(s) could not be cloned.'],
+        ['element refused', refused(function () { return structuredClone(document.getElementById('d')); })
+            === 'DataCloneError:Failed to execute \'structuredClone\' on \'Window\': '
+                + 'HTMLDivElement object could not be cloned.']
+    ]);
+    ck('B2 a transferred buffer leaves its owner detached', function () {
+        var buf = new Uint8Array([1, 2, 3, 4]).buffer;
+        var made = structuredClone({ x: buf }, { transfer: [buf] });
+        return buf.byteLength === 0 && made.x.byteLength === 4 && made.x instanceof ArrayBuffer;
+    }, function () { var b2 = new Uint8Array([1, 2]).buffer; var m2 = structuredClone({ y: b2 }, { transfer: [b2] });
+        return [b2.byteLength, m2.y.byteLength].join('/'); });
+    ck('B3 an empty transfer list changes nothing', function () {
+        return structuredClone({ a: 1 }, { transfer: [] }).a === 1; });
+
+    // ── C. the sub-interfaces the navigator hands out ────────────────────────────────────
+    ckAll('C1 the legacy strings and the small state objects', [
+        ['appName', navigator.appName === 'Netscape'],
+        ['vendorSub', navigator.vendorSub === ''],
+        ['deviceMemory', typeof navigator.deviceMemory === 'number'],
+        ['pdfViewerEnabled', typeof navigator.pdfViewerEnabled === 'boolean'],
+        ['userActivation', tag(navigator.userActivation) === '[object UserActivation]'
+            && navigator.userActivation.hasBeenActive === false
+            && navigator.userActivation.isActive === false],
+        ['scheduling', tag(navigator.scheduling) === '[object Scheduling]'
+            && navigator.scheduling.isInputPending() === false],
+        ['presentation', tag(navigator.presentation) === '[object Presentation]'
+            && navigator.presentation.defaultRequest === null
+            && navigator.presentation.receiver === null],
+        ['illegal ctors', refused(function () { return new UserActivation(); })
+            === 'TypeError:Failed to construct \'UserActivation\': Illegal constructor'
+            && typeof Scheduling === 'function' && typeof Presentation === 'function']
+    ]);
+    ckAll('C2 the media capabilities and the credential store answer honestly', [
+        ['decodingInfo', tag(navigator.mediaCapabilities.decodingInfo({ audio: {
+            contentType: 'audio/mp4', channels: '1', bitrate: 1000, samplerate: '44100' } }))
+            === '[object Promise]'],
+        ['bad config answers a promise', (function () { var asked = navigator.mediaCapabilities.decodingInfo(5);
+            return asked && typeof asked.then === 'function'; })()],
+        ['credentials tag', tag(navigator.credentials) === '[object CredentialsContainer]'],
+        ['credentials refused', (function () { var seen = '';
+            navigator.credentials.get({}).then(function () { }, function (e) { seen = e.name + ':' + e.message; });
+            return typeof navigator.credentials.get({}).then === 'function'; })()],
+        ['store resolves', typeof navigator.credentials.store().then === 'function']
+    ]);
+
+    // ── D. the media devices list ─────────────────────────────────────────────
+    ckAll('D1 mediaDevices carries the interface and its constraint set', [
+        ['tag', tag(navigator.mediaDevices) === '[object MediaDevices]'
+            && navigator.mediaDevices instanceof EventTarget],
+        ['members', ['enumerateDevices', 'getUserMedia', 'getDisplayMedia', 'getSupportedConstraints',
+            'setCaptureHandleConfig'].every(function (k) {
+                return typeof navigator.mediaDevices[k] === 'function'; })],
+        ['ondevicechange', navigator.mediaDevices.ondevicechange === null],
+        ['constraints', (function () { var c = navigator.mediaDevices.getSupportedConstraints();
+            return c.deviceId === true && c.width === true && c.echoCancellation === true
+                && Object.keys(c).length > 20; })()],
+        ['device info ctors', refused(function () { return new MediaDeviceInfo(); })
+            === 'TypeError:Failed to construct \'MediaDeviceInfo\': Illegal constructor'
+            && refused(function () { return new InputDeviceInfo(); })
+                === 'TypeError:Failed to construct \'InputDeviceInfo\': Illegal constructor'
+            && typeof InputDeviceInfo === 'function'],
+        ['getCapabilities is a member', typeof InputDeviceInfo.prototype.getCapabilities === 'function']
+    ]);
+
+    // ── E. wake lock and keyboard ────────────────────────────────────────────
+    ckAll('E1 the sentinel and the layout map are the objects the page awaits', [
+        ['wakeLock tag', tag(navigator.wakeLock) === '[object WakeLock]'
+            && typeof navigator.wakeLock.send === 'undefined'],
+        ['illegal', refused(function () { return new WakeLock(); })
+            === 'TypeError:Failed to construct \'WakeLock\': Illegal constructor'
+            && typeof WakeLockSentinel === 'function'],
+        ['keyboard', tag(navigator.keyboard) === '[object Keyboard]'
+            && typeof navigator.keyboard.lock === 'function'
+            && navigator.keyboard.unlock() === undefined],
+        ['layout map type', typeof KeyboardLayoutMap === 'function']
+    ]);
+
+    // ── F. the legacy plug-in list (HTML §2.7.4) ──────────────────────────────
+    ckAll('F1 the plug-in and mime lists answer as the interface names them', [
+        ['lists', tag(navigator.plugins) === '[object PluginArray]'
+            && navigator.plugins.length === 5
+            && tag(navigator.mimeTypes) === '[object MimeTypeArray]'
+            && navigator.mimeTypes.length === 2],
+        ['first names', ['PDF Viewer', 'Chrome PDF Viewer', 'Chromium PDF Viewer',
+            'Microsoft Edge PDF Viewer', 'WebKit built-in PDF'].every(function (name, i) {
+                return navigator.plugins[i].name === name; })],
+        ['plugin fields', (function () { var p = navigator.plugins[0];
+            return p.filename === 'internal-pdf-viewer' && p.description === 'Portable Document Format'
+                && p.length === 2 && p.item(0).type === 'application/pdf'
+                && p.namedItem('text/pdf').suffixes === 'pdf' && p.item(9) === null; })()],
+        ['indexed', navigator.plugins[3] === navigator.plugins.item(3)
+            && navigator.plugins['PDF Viewer'] === navigator.plugins[0]],
+        ['mime fields', (function () { var m = navigator.mimeTypes[0];
+            return m.type === 'application/pdf' && m.suffixes === 'pdf'
+                && m.description === 'Portable Document Format'
+                && m.enabledPlugin === navigator.plugins[0]; })()],
+        ['illegal ctors', refused(function () { return new Plugin(); })
+            === 'TypeError:Failed to construct \'Plugin\': Illegal constructor'
+            && refused(function () { return new MimeType(); })
+                === 'TypeError:Failed to construct \'MimeType\': Illegal constructor'],
+        ['refresh', typeof navigator.plugins.refresh === 'function'
+            && navigator.plugins.refresh() === undefined]
+    ]);
+
+    // ── G. Trusted Types (Trusted Types §3) ───────────────────────────────────
+    ckAll('G1 a policy types the strings it is given', [
+        ['factory', tag(window.trustedTypes) === '[object TrustedTypePolicyFactory]'
+            && typeof window.trustedTypes.createPolicy === 'function'
+            && window.trustedTypes.defaultPolicy === null],
+        ['typed values', (function () { var html = window.trustedTypes.emptyHTML;
+            return tag(html) === '[object TrustedHTML]' && String(html) === ''
+                && window.trustedTypes.isHTML(html) === true
+                && window.trustedTypes.isScript(html) === false; })()],
+        ['rule used', (function () { var p = window.trustedTypes.createPolicy('p1', {
+            createHTML: function (s) { return s.toUpperCase(); } });
+            var typed = p.createHTML('<b>');
+            return p.name === 'p1' && tag(typed) === '[object TrustedHTML]'
+                && String(typed) === '<B>'; })()],
+        ['identity default', (function () { var p = window.trustedTypes.createPolicy('p2', { });
+            return String(p.createHTML('<i>')) === '<i>' && String(p.createScript('x')) === 'x'
+                && String(p.createScriptURL('u')) === 'u'; })()],
+        ['bad name refused', refused(function () { return window.trustedTypes.createPolicy('has space'); })
+            .indexOf('TypeError:') === 0],
+        ['type lookups', window.trustedTypes.getAttributeType('onclick') === 'TrustedScript'
+            && window.trustedTypes.getPropertyType('HTMLElement', 'innerHTML') === 'TrustedHTML'
+            && window.trustedTypes.getAttributeType('title') === null],
+        ['mapping', (function () { var m = window.trustedTypes.getTypeMapping();
+            return m.script.properties.src === 'TrustedScriptURL'
+                && m['iframe'].attributes.srcdoc === 'TrustedHTML'
+                && m['*'].properties.outerHTML === 'TrustedHTML'; })()],
+        ['illegal ctors', refused(function () { return new TrustedHTML(); })
+            === 'TypeError:Failed to construct \'TrustedHTML\': Illegal constructor'
+            && typeof TrustedScriptURL === 'function' && typeof TrustedTypePolicy === 'function']
+    ]);
+
+    // ── H. Speech Synthesis (Speech Synthesis §6) ─────────────────────────────
+    ckAll('H1 the utterance carries its parameters and the engine answers the queue', [
+        ['synthesis', tag(window.speechSynthesis) === '[object SpeechSynthesis]'
+            && window.speechSynthesis instanceof EventTarget
+            && window.speechSynthesis.speaking === false
+            && window.speechSynthesis.pending === false
+            && window.speechSynthesis.paused === false
+            && window.speechSynthesis.getVoices().length === 0],
+        ['utterance defaults', (function () { var u = new SpeechSynthesisUtterance('hi');
+            return u.text === 'hi' && u.lang === '' && u.volume === 1 && u.rate === 1
+                && u.pitch === 1 && u.voice === null && u.voiceURI === ''
+                && u.onstart === null && u.onend === null; })()],
+        ['utterance events', (function () { var u = new SpeechSynthesisUtterance('hi');
+            return u instanceof EventTarget && typeof u.addEventListener === 'function'; })()],
+        ['no call without new', refused(function () { return SpeechSynthesisUtterance('x'); })
+            === 'TypeError:Failed to construct \'SpeechSynthesisUtterance\': Please use the '
+                + '\'new\' operator, this DOM object constructor cannot be called as a function.'],
+        ['writing a parameter', (function () { var u = new SpeechSynthesisUtterance();
+            u.rate = 2; u.text = 'x'; return u.rate === 2 && u.text === 'x'
+                && Object.keys(u).length === 0; })()],
+        ['speak needs an utterance', refused(function () { return window.speechSynthesis.speak({ }); })
+            .indexOf('TypeError:') === 0]
+    ]);
+
+    // ── I. the window and the screen ─────────────────────────────────────────
+    ckAll('I1 the window answers as Window and the screen as Screen', [
+        ['tag', tag(window) === '[object Window]' && tag(window.frames) === '[object Window]'
+            && window instanceof Window],
+        ['proto constants', Window.prototype.TEMPORARY === 0 && Window.prototype.PERSISTENT === 1
+            && Window.prototype.constructor === Window],
+        ['illegal', refused(function () { return new Window(); })
+            === 'TypeError:Failed to construct \'Window\': Illegal constructor'
+            && refused(function () { return Window(); }) === 'TypeError:Illegal constructor'],
+        ['visual viewport', tag(window.visualViewport) === '[object VisualViewport]'
+            && window.visualViewport.scale === 1
+            && typeof window.visualViewport.addEventListener === 'function'
+            && refused(function () { return new VisualViewport(); })
+                === 'TypeError:Failed to construct \'VisualViewport\': Illegal constructor'],
+        ['screen', tag(window.screen) === '[object Screen]'
+            && window.screen.isExtended === false
+            && typeof window.screen.width === 'number'],
+        ['orientation', (function () { var o = window.screen.orientation;
+            return tag(o) === '[object ScreenOrientation]' && typeof o.angle === 'number'
+                && o.angle === 0 && o.type === 'landscape-primary' && o.onchange === null
+                && typeof o.unlock === 'function' && typeof o.lock === 'function'; })()],
+        ['orientation types', typeof ScreenOrientation === 'function']
+    ]);
+
+    // ── J. the remaining reads of the document and the window ────────────────────────────────────
+    ckAll('J1 the document answers the flags and the point reads', [
+        ['prerendering', document.prerendering === false],
+        ['fullscreen flags', document.fullscreenEnabled === false && document.fullscreenElement === null],
+        ['xml reads', document.xmlStandalone === false && document.xmlVersion === null],
+        ['caret', document.caretPositionFromPoint(4, 4) === null && typeof CaretPosition === 'function'],
+        ['feature policy', tag(document.featurePolicy) === '[object FeaturePolicy]'
+            && document.featurePolicy.allowsFeature('fullscreen') === false
+            && J(document.featurePolicy.features) === '[]'
+            && J(document.featurePolicy.getAllowlistForFeature('fullscreen')) === '[]'],
+        ['window controls overlay', tag(navigator.windowControlsOverlay) === '[object WindowControlsOverlay]'
+            && navigator.windowControlsOverlay.visible === false
+            && tag(navigator.windowControlsOverlay.getTitlebarAreaRect()) === '[object DOMRectReadOnly]'
+            && navigator.windowControlsOverlay.ongeometrychange === null],
+        ['shared storage', tag(window.sharedStorage) === '[object SharedStorage]'
+            && tag(window.sharedStorage.worklet) === '[object SharedStorageWorklet]'
+            && typeof window.sharedStorage.set === 'function'
+            && typeof window.sharedStorage.run === 'function'],
+        ['ua data', tag(navigator.userAgentData) === '[object NavigatorUAData]'
+            && navigator.userAgentData.mobile === false
+            && navigator.userAgentData.brands.length >= 1
+            && typeof navigator.userAgentData.getHighEntropyValues === 'function'
+            && J(navigator.userAgentData.toJSON().brands) === J(navigator.userAgentData.brands)]
+    ]);
+
+    // ── K. the asynchronous answers (a page chains on these) ──────────────────
+    var heard = {};
+    navigator.mediaDevices.enumerateDevices().then(function (list) {
+        heard.devices = Array.isArray(list) && list.length === 0;
+        finishK();
+    }, function (e) { heard.devices = 'ERR ' + e.name; finishK(); });
+    navigator.wakeLock.request('screen').then(function (s) {
+        heard.wake = tag(s) === '[object WakeLockSentinel]' && s.type === 'screen'
+            && s.unavailableReason === null && typeof s.release === 'function';
+        s.release().then(function () { heard.released = true; finishK(); });
+    }, function (e) { heard.wake = 'ERR ' + e.name + ':' + e.message; finishK(); });
+    navigator.keyboard.getLayoutMap().then(function (m) {
+        heard.layout = tag(m) === '[object KeyboardLayoutMap]' && m.size === 0
+            && typeof m.get === 'function' && m instanceof Map;
+        finishK();
+    }, function (e) { heard.layout = 'ERR ' + e.name; finishK(); });
+    navigator.locks.request('acrux-lock', function (lock) {
+        heard.lock = tag(lock) === '[object Lock]' && lock.name === 'acrux-lock'
+            && lock.mode === 'exclusive';
+        return 'done';
+    }).then(function (value) {
+        heard.lockResult = value === 'done';
+        return navigator.locks.query();
+    }).then(function (q) {
+        heard.query = q.held.length === 0 && q.pending.length === 0;
+        finishK();
+    });
+    navigator.credentials.get({}).then(function () { heard.cred = 'resolved'; finishK(); },
+        function (e) {
+            heard.cred = e.name === 'NotSupportedError'
+                && e.message === 'No credential type was specified in the request.';
+            finishK();
+        });
+    navigator.mediaCapabilities.decodingInfo({ audio: { contentType: 'audio/mp4', channels: '1',
+        bitrate: 1000, samplerate: '44100' } }).then(function (info) {
+        heard.decoding = tag(info) === '[object MediaCapabilitiesInfo]'
+            && info.supported === false && info.powerEfficient === false && info.smooth === false;
+        finishK();
+    }, function (e) { heard.decoding = 'ERR ' + e.name; finishK(); });
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function () { heard.gum = 'resolved'; finishK(); },
+        function (e) { heard.gum = e.name === 'NotAllowedError' && e.message === 'Permission denied'; finishK(); });
+    window.screen.orientation.lock('landscape-primary').then(function () { heard.lock2 = 'resolved'; finishK(); },
+        function (e) { heard.lock2 = e.name === 'NotSupportedError'; finishK(); });
+    window.sharedStorage.set('a', 'b').then(function () { heard.ss = 'resolved'; finishK(); },
+        function (e) { heard.ss = e.name === 'TypeError'; finishK(); });
+    navigator.keyboard.lock(['Digit1']).then(function (v) { heard.kblock = v === undefined; finishK(); },
+        function (e) { heard.kblock = 'ERR ' + e.name; finishK(); });
+    navigator.mediaCapabilities.decodingInfo(5).then(function () { heard.bad = 'resolved'; finishK(); },
+        function (e) { heard.bad = e.name === 'TypeError'; finishK(); });
+    var utter = new SpeechSynthesisUtterance('second');
+    var order = [];
+    utter.onstart = function () { order.push('start'); };
+    utter.onend = function () { order.push('end'); };
+    window.speechSynthesis.speak(utter);
+    setTimeout(function () {
+        heard.spoke = order.join(',') === 'start,end';
+        heard.spokeOrder = order.join(',');
+        finishK();
+    }, 400);
+
+    var K_KEYS = ['devices', 'wake', 'released', 'layout', 'lock', 'lockResult', 'query', 'cred',
+        'decoding', 'bad', 'gum', 'lock2', 'ss', 'kblock', 'spoke'];
+    var kDone = false;
+    function finishK() {
+        if (kDone) return;
+        // A settled answer the engine never gives is a failure, not a silence: the group is reported
+        // as soon as every key the interfaces owe has an answer in it.
+        for (var ki = 0; ki < K_KEYS.length; ki++) if (heard[K_KEYS[ki]] === undefined) return;
+        kDone = true;
+        ckAll('K1 the promises the interfaces hand back settle as the reference settles them', [
+            ['enumerateDevices', heard.devices === true],
+            ['wake sentinel', heard.wake === true],
+            ['release', heard.released === true],
+            ['layout map', heard.layout === true],
+            ['lock granted', heard.lock === true],
+            ['callback result', heard.lockResult === true],
+            ['query', heard.query === true],
+            ['credentials refused', heard.cred === true],
+            ['decoding info', heard.decoding === true],
+            ['getUserMedia refused', heard.gum === true],
+            ['orientation lock refused', heard.lock2 === true],
+            ['shared storage refused', heard.ss === true],
+            ['keyboard lock', heard.kblock === true],
+            ['bad config refused', heard.bad === true],
+            ['speech events', heard.spoke === true]
+        ]);
+    }
+    setTimeout(function () {
+        if (kDone) return;
+        var waiting = [];
+        for (var wi = 0; wi < K_KEYS.length; wi++) if (heard[K_KEYS[wi]] === undefined) waiting.push(K_KEYS[wi]);
+        __T('K1 the promises the interfaces hand back settle as the reference settles them', false,
+            'never settled: ' + waiting.join(', ') + ' | got ' + J(heard));
+    }, 600);
+})();
+</script>
+</body></html>

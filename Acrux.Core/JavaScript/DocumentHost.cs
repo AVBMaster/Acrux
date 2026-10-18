@@ -144,6 +144,9 @@ public class DocumentHost : IDomPrototypeHost
     /// answers on the reference too (measured).</summary>
     public string? xmlVersion => _document.IsHtmlDocument ? null : "1.0";
     public string? xmlEncoding => null;
+    // DOM §4.3.3: a document the HTML parser built carries no standalone declaration, and the read is a
+    // boolean rather than an absence (measured: 'typeof document.xmlStandalone' is 'boolean').
+    public bool xmlStandalone => false;
     public bool strictErrorChecking => false;
 
     // ===== Document collections =====
@@ -656,7 +659,9 @@ public class DocumentHost : IDomPrototypeHost
         }
     }
 
-    public bool fullscreenEnabled() => false;
+    // Fullscreen §5: 'fullscreenEnabled' is an attribute of the document, not a method a page calls
+    // (measured: 'typeof document.fullscreenEnabled' is 'boolean').
+    public bool fullscreenEnabled => false;
 
 
 

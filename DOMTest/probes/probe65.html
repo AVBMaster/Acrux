@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html><head><title>Probe 65</title></head><body>
+<div id="d">t</div>
+<script>
+(function () {
+  var out = {}; function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + e.name + '::' + e.message; } }
+  var J = JSON.stringify;
+  function h(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  var it = [1, 2, 3][Symbol.iterator]();
+  var iterProto = Object.getPrototypeOf(it);
+
+  t('iterator helpers', function () {
+    return J(['map', 'filter', 'take', 'drop', 'flatMap', 'reduce', 'forEach', 'some', 'every',
+      'find', 'toArray', 'constructor'].map(function (k) { return k + ':' + typeof iterProto[k]; })); });
+  t('iterator statics', function () {
+    return J(['range', 'concat', 'from', 'disjoint'].map(function (k) {
+      return k + ':' + typeof (Iterator ? Iterator[k] : 'no-Iterator'); })
+      + '/' + h(function () { return Iterator.range(1, 4).toArray().join(','); })
+      + '/' + h(function () { return Iterator.concat([1, 2].values(), [3].values()).toArray().join(','); })); });
+  t('iterator behavior', function () {
+    return J([h(function () { return [1, 2, 3, 4].values().filter(function (x) { return x % 2 === 0; }).toArray().join(','); }),
+      h(function () { return [1, 2, 3].values().map(function (x) { return x * 2; }).reduce(function (a, b) { return a + b; }, 0); }),
+      h(function () { return [1, 2, 3, 4, 5].values().take(2).drop(1).toArray().join(','); }),
+      h(function () { return [[1], [2]].values().flatMap(function (x) { return x; }).toArray().join(','); }),
+      h(function () { return [5, 1].values().some(function (x) { return x > 4; }) + '/' + [1].values().every(function (x) { return x === 1; }); }),
+      h(function () { return [1, 2].values().find(function (x) { return x === 2; }); }),
+      h(function () { return [1, 2].values().forEach(function () { }).constructor === undefined; }),
+      h(function () { return Array.from([1, 2].values().map(function (x) { return x + 1; })); })]); });
+  t('array change methods', function () {
+    var base = [3, 1, 2];
+    return J([h(function () { return base.toSorted().join(','); }),
+      h(function () { return base.toReversed().join(','); }),
+      h(function () { return base.toSpliced(1, 1, 9).join(','); }),
+      h(function () { return base.with(0, 7).join(','); }),
+      base.length + '/' + base[0],
+      h(function () { return new Uint8Array([3, 1]).toSorted().join(','); }),
+      h(function () { return [1, 2].findLast(function (x) { return x < 2; }); }),
+      h(function () { return [1, 2].findLastIndex(function (x) { return x < 2; }); })]); });
+  t('fromAsync and promises', function () {
+    return J([typeof Array.fromAsync, typeof Promise.withResolvers, typeof Promise.try,
+      typeof Promise.any, typeof Promise.allSettled, typeof AggregateError,
+      h(function () { var p = Promise.withResolvers(); return typeof p.resolve + '/' + typeof p.reject + '/' + (p.promise instanceof Promise); }),
+      h(function () { var e = new Error('x', { cause: 42 }); return String(e.cause); }),
+      h(function () { var a = new AggregateError([1, 2], 'm'); return a.errors.join(',') + '/' + a.message + '/' + a.name; })]); });
+  t('string and object extras', function () {
+    return J([typeof String.prototype.isWellFormed,
+      h(function () { return ('\ud800a').toWellFormed(); }),
+      h(function () { return '\ud83d\ude00'.isWellFormed(); }),
+      typeof Object.hasOwn, h(function () { return Object.hasOwn({ a: 1 }, 'a'); }),
+      typeof Object.groupBy, typeof Array.prototype.group, typeof Map.groupBy,
+      typeof structuredClone, typeof globalThis, typeof WeakRef, typeof FinalizationRegistry]); });
+  t('structuredClone basics', function () {
+    var made = structuredClone({ a: 1, b: { c: [1, 2] } });
+    return J([made.a, made.b.c.join(','), typeof made.b, (function () { var o = { x: 1 };
+      var c = structuredClone(o); c.x = 2; return o.x + '/' + c.x; })()]); });
+  t('structuredClone shapes', function () {
+    var date = new Date(1234);
+    var map = new Map([['k', { v: 1 }]]);
+    var set = new Set([1, 2]);
+    var ta = new Uint8Array([1, 2, 3]);
+    var cyc = {}; cyc.self = cyc;
+    var clone = structuredClone({ date: date, map: map, set: set, ta: ta, cyc: cyc, s: 'x' });
+    return J([clone.date instanceof Date && clone.date.getTime() === 1234,
+      clone.map instanceof Map && clone.map.get('k').v === 1,
+      clone.set instanceof Set && clone.set.size === 2,
+      clone.ta instanceof Uint8Array && clone.ta[2] === 3,
+      clone.cyc.self === clone,
+      clone.map.get('k') !== map.get('k'),
+      h(function () { structuredClone(function () { }); return 'no-throw'; }),
+      h(function () { try { structuredClone(document.getElementById('d')); return 'no-throw'; } catch (e) { return e.name; } }),
+      h(function () { var t = new Uint8Array(2); var c = structuredClone(t, { transfer: [t.buffer] }); return t.byteLength + '/' + c.byteLength; })]); });
+  t('set and map methods', function () {
+    var s = new Set([1, 2, 3]), s2 = new Set([3, 4]);
+    return J([typeof s.union, typeof s.intersection, typeof s.difference, typeof s.isSubsetOf,
+      typeof s.isSupersetOf, typeof s.isDisjointFrom, typeof s.join, typeof s.difference,
+      h(function () { return s.union(s2).size; }), h(function () { return s.symmetricDifference ? s.symmetricDifference(s2).size : 'none'; }),
+      typeof Map.prototype.getOrInsert, typeof Map.prototype.compute, typeof Map.prototype.upsert,
+      typeof Map.prototype.entries, h(function () { return Array.from(new Map([[1, 2]]).entries())[0].join('-'); }),
+      typeof Array.prototype.iterator, typeof Array.prototype.union]); });
+  t('regexp and misc', function () {
+    var m = /(?<y>x)/.exec('x');
+    var d = new RegExp('a', 'd').exec('ba');
+    return J([h(function () { return m.groups.y; }),
+      typeof d.indices + '/' + m.groups.y,
+      h(function () { try { return new RegExp('[\\\\p{L}\\\\u{62}]', 'v').source.length > 0; } catch (e) { return 'ERR ' + e.name; } }),
+      h(function () { try { return /(?<=a)b/.test('ab'); } catch (e) { return 'ERR'; } }),
+      typeof Intl.Segmenter, typeof Intl.getCanonicalLocales, typeof Array.prototype.at,
+      typeof String.prototype.replaceAll, typeof Array.prototype.flat, typeof ''.isWellFormed]); });
+  t('class features', function () {
+    return J([h(function () { eval('class A { static { this.x = 1; } }'); return eval('A.x'); }),
+      h(function () { var src = 'class B { #p = 1; get v() { return this.#p; } static is(o) { return #p in o; } } globalThis.__B = B;';
+        eval(src); return globalThis.__B ? 'defined' : 'none'; }),
+      h(function () { var o = {}; var x = 0; o.a ??= 1; x ||= 2; x &&= 3; return o.a + '/' + x; }),
+      h(function () { try { return (null?.a?.b) + ''; } catch (e) { return 'ERR'; } })]); });
+  t('json and iterables', function () {
+    return J([typeof JSON.rawJSON, typeof JSON.parse === 'function',
+      h(function () { return JSON.stringify({ a: [1, undefined, 'x'] }); }),
+      h(function () { var seen = []; JSON.parse('{"a":1}', function (k, v) { seen.push(k); return v; }); return seen.join(','); }),
+      h(function () { var out = []; for (var x of new Set([1, 2])) out.push(x); return out.join(','); }),
+      h(function () { return Array.from('ab').join('-') + '/' + Array.from(new Map([[1, 2]])).length; })]); });
+  __T('probe65', true, J(out, null, 1));
+})();
+</script></body></html>

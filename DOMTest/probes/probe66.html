@@ -1,0 +1,18 @@
+<!DOCTYPE html><html><head><title>P66</title></head><body><script>
+(function () {
+  function h(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  var out = {};
+  out.namedLiteral = h(function () { var m = /(?<y>x)/.exec('x'); return m.groups ? m.groups.y : 'no-groups'; });
+  out.namedCtor = h(function () { var m = new RegExp('(?<y>x)').exec('x'); return m.groups ? m.groups.y : 'no-groups'; });
+  out.lookbehind = h(function () { return new RegExp('(?<=a)b').test('ab'); });
+  out.dFlag = h(function () { var r = new RegExp('a', 'd'); return typeof r.hasIndices + '/' + /a/d.exec('ba'); });
+  out.vFlag = h(function () { return new RegExp('\\p{L}', 'v').test('a'); });
+  out.uFlag = h(function () { return new RegExp('\\p{L}', 'u').test('a'); });
+  out.dotAll = h(function () { return /s/.test('a'); });
+  out.sticky = h(function () { var r = /a/y; r.lastIndex = 1; return r.test('ba'); });
+  out.copyWithin = h(function () { return [1,2,3,4].copyWithin(0,2).join(','); });
+  out.at = h(function () { return [1,2,3].at(-1) + '/' + 'abc'.at(0) + '/' + new Int8Array([5,6]).at(-1); });
+  out.hasIndicesProp = typeof RegExp.prototype.hasIndices;
+  __T('p66', true, JSON.stringify(out));
+})();
+</script></body></html>

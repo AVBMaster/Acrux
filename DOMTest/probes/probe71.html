@@ -1,0 +1,19 @@
+<!DOCTYPE html><html><head><title>P71</title></head><body><script>
+(function () {
+  var log = [];
+  var u = new SpeechSynthesisUtterance('one');
+  u.onstart = function (e) { log.push('start:' + (e && e.type)); };
+  u.onend = function (e) { log.push('end:' + (e && e.type)); };
+  u.addEventListener('start', function () { log.push('listener-start'); });
+  var s = window.speechSynthesis;
+  s.speak(u);
+  log.push('after-speak speaking=' + s.speaking + ' pending=' + s.pending);
+  setTimeout(function () {
+    log.push('t50 speaking=' + s.speaking);
+    __T('probe71', true, JSON.stringify(log));
+  }, 50);
+  setTimeout(function () {
+    __T('probe71 late', true, JSON.stringify(log));
+  }, 300);
+})();
+</script></body></html>
