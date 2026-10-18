@@ -890,7 +890,7 @@ public static class EchoedProperties
     /// <summary>The number as the page wrote it, clamped into 0..1 for the computed surface.</summary>
     private static string ClampToUnitInterval(string text)
         => double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-            ? Math.Clamp(value, 0d, 1d).ToString("R", CultureInfo.InvariantCulture) : text;
+            ? Acrux.Core.Dom.Animations.CssValueTokenizer.Num(Math.Clamp(value, 0d, 1d)) : text;
 
     private static string? NormalizeShapeImageThreshold(string value)
     {
@@ -906,7 +906,7 @@ public static class EchoedProperties
         else if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number))
             return null;
         if (double.IsNaN(number)) return null;
-        return number.ToString("R", CultureInfo.InvariantCulture);
+        return Acrux.Core.Dom.Animations.CssValueTokenizer.Num(number);
     }
 
     private static string? NormalizeScrollSnapType(string text)
@@ -1376,8 +1376,7 @@ public static class EchoedProperties
         if (IsCalc(trimmed)) return trimmed;
         if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(trimmed, out var number,
                 out var unit)) return null;
-        var canonical = number.ToString("0.################", CultureInfo.InvariantCulture)
-                        + (unit.Length == 0 ? "px" : unit.ToLowerInvariant());
+        var canonical = Number(number) + (unit.Length == 0 ? "px" : unit.ToLowerInvariant());
         return CssPropertyApplier.IsLengthOrPercentageToken(canonical) ? canonical : null;
     }
 
@@ -1520,8 +1519,11 @@ public static class EchoedProperties
              + "px)";
     }
 
+    /// <summary>The one number printer, shared with every other surface: six significant digits,
+    /// the exponent form outside 1e-4 to 1e6 (measured: 'stroke-dashoffset: 0.0000123456789px'
+    /// reads '1.23457e-05px', where a plain decimal format kept all the digits and no exponent).</summary>
     private static string Number(double value) =>
-        value.ToString("0.################", CultureInfo.InvariantCulture);
+        Acrux.Core.Dom.Animations.CssValueTokenizer.Num(value);
 
 
     /// <summary>Motion Path 1 §3.3: one <c>&lt;length-percentage&gt;</c>. A bare number is no
@@ -1713,7 +1715,7 @@ public static class EchoedProperties
                         i++;
                     if (!double.TryParse(data[start..i], NumberStyles.Float, CultureInfo.InvariantCulture,
                             out var value)) return null;
-                    parts.Add(value.ToString("0.################", CultureInfo.InvariantCulture));
+                    parts.Add(Number(value));
                 }
                 else if (char.IsWhiteSpace(data[i])) { i++; }
                 else break;

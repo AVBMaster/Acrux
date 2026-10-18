@@ -1302,7 +1302,7 @@ public static class CssValueText
                 out var share)) return word;
         // '50%' is the factor '0.5' and '10%' is '0.1'; the trim is the same one every number in a
         // value text gets, so '2 50% 2' does not come out as '2 0.50 2'.
-        return (share / 100.0).ToString("0.#############################", CultureInfo.InvariantCulture);
+        return Acrux.Core.Dom.Animations.CssValueTokenizer.Num(share / 100.0);
     }
 
     /// <summary>'rotate' with its axis written the way the engine writes it: the unit vector that
