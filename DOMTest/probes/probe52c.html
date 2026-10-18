@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html><head><title>Probe 52c</title></head><body>
+<div id="d"><p id="p1">one</p></div>
+<script>
+(function () {
+  var out = {}; function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + e.name + '::' + e.message; } } var J = JSON.stringify;
+  t('define', function () { var messages = [];
+    function tryDefine(label, body) { try { body(); messages.push(label + '=ok'); } catch (e) { messages.push(label + '=' + e.name + ':' + e.message); } }
+    tryDefine('anon', function () { customElements.define('a-b1', class extends HTMLElement { }); });
+    tryDefine('fn', function () { customElements.define('a-b2', function () { }); });
+    tryDefine('badcase', function () { customElements.define('Invalid-Name', class extends HTMLElement { }); });
+    tryDefine('redefine', function () { customElements.define('a-b1', class extends HTMLElement { }); });
+    var made = document.createElement('a-b1');
+    return J([messages.join(' | '), customElements.getName('a-b1'), String(customElements.getName('no-such')),
+      made.constructor.name, Object.prototype.toString.call(made), typeof customElements.upgrade,
+      typeof WeakRef, typeof window.scheduler, typeof Scheduler, typeof FinalizationRegistry, typeof window.WeakMap]); });
+  t('css rule iface', function () { var names = [];
+    try { names = Object.getOwnPropertyNames(CSSRule.prototype); } catch (e) { names = ['ERR ' + e.name]; }
+    return J([names.join(','), CSSRule.UNKNOWN_RULE, CSSRule.STYLE_RULE, CSSRule.CHARSET_RULE, CSSRule.MEDIA_RULE,
+      CSSRule.IMPORT_RULE, CSSRule.FONT_FACE_RULE, CSSRule.PAGE_RULE, CSSRule.KEYFRAMES_RULE,
+      CSSRule.KEYFRAME_RULE, CSSRule.NAMESPACE_RULE, CSSRule.SUPPORTS_RULE, CSSRule.VIEWPORT_RULE, CSSRule.FONT_FEATURE_VALUES_RULE,
+      typeof CSSStyleSheet.prototype.insertRule,
+      Object.prototype.toString.call(document.styleSheets)]); });
+  t('media rule', function () { var st = document.createElement('style');
+    st.textContent = '@media screen and (min-width: 10px) { #zz { color: red } } @keyframes spin { from { opacity: 0 } } @import url("x.css"); @supports (display: grid) { #zz { color: blue } }';
+    document.head.appendChild(st); var sheet = st.sheet, rules = sheet.cssRules, list = [];
+    for (var i = 0; i < rules.length; i++) list.push(rules[i].type + ':' + Object.prototype.toString.call(rules[i])
+      + ':' + String(rules[i].constructorName || '') + ':' + typeof rules[i].media);
+    return J([rules.length, list.join(' | '), typeof CSSMediaRule, typeof CSSKeyframesRule, typeof CSSImportRule,
+      typeof CSSSupportsRule, typeof CSSFontFaceRule, typeof CSSNamespaceRule, typeof CSSPageRule, typeof CSSKeywordRule,
+      typeof CSSContainerRule, Object.prototype.toString.call(rules[1].cssRules[0])]); });
+  t('element iface members', function () { return J([typeof HTMLElement.prototype.attachInternals,
+    typeof HTMLElement.prototype.innerText, typeof Element.prototype.requestFullscreen,
+    typeof document.exitFullscreen, typeof Element.prototype.scrollIntoView, typeof Element.prototype.animate,
+    typeof Element.prototype.getAnimations, typeof Element.prototype.closest, typeof Element.prototype.matches,
+    typeof Element.prototype.setPointerCapture, typeof Object.getPrototypeOf(document.getElementById('p1')).assignedSlot, typeof Element.prototype.computedStyleMap,
+    typeof HTMLElement.prototype.click, typeof HTMLDialogElement]); });
+  t('internals', function () { var reg = customElements.get('probe-el');
+    if (!reg) { customElements.define('probe-el', class extends HTMLElement { constructor() { super(); } }); reg = customElements.get('probe-el'); }
+    var el = document.createElement('probe-el'); var it = el.attachInternals();
+    var fields = ['setValidity','labels','shadowRoot','form','style'];
+    var reads = fields.map(function (k) { try { return k + '=' + typeof it[k]; } catch (e) { return k + '=ERR ' + e.name; } });
+    return J([Object.prototype.toString.call(it), reads.join(','), typeof ElementInternals, el instanceof HTMLElement]); });
+  t('animate', function () { var p = document.getElementById('p1'); var a = p.animate([{ opacity: 0 }, { opacity: 1 }], 100);
+    return J([Object.prototype.toString.call(a), typeof a.play, typeof a.cancel, typeof a.finish, typeof a.pause,
+      typeof a.playEffects, typeof a.commitStyles, typeof a.cancel, a.playState, typeof a.effect, typeof a.timeline,
+      typeof Animation, typeof KeyframeEffect, typeof document.getAnimations, p.getAnimations().length]); });
+  t('computed style map', function () { var p = document.getElementById('p1');
+    return J([typeof p.computedStyleMap, Object.prototype.toString.call(p.computedStyleMap ? p.computedStyleMap() : null),
+      typeof StyleValue, typeof CSSKeywordValue, typeof CSSUnitValue, typeof CSSMathValue, typeof CSS.registerProperty]); });
+  t('scroll geometry', function () { var d = document.getElementById('d');
+    return J([d.scrollHeight > 0, d.scrollTop, typeof d.scrollTo, typeof d.scroll, typeof d.scrollBy,
+      Object.prototype.toString.call(d.getBoundingClientRect()), d.getBoundingClientRect().height > 0,
+      typeof document.scrollingElement, document.scrollingElement === document.documentElement]); });
+  __T('probe52c', true, J(out, null, 1));
+})();
+</script></body></html>

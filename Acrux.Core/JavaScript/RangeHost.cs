@@ -462,7 +462,7 @@ public class RangeHost : IDomPrototypeHost
                 ? element
                 : node is CharacterData ? node.ParentNode as DomElement : null;
             if (owner == null || !seen.Add(owner)) continue;
-            rects.AddRange(new ElementHost(owner).getClientRects());
+            rects.AddRange(new ElementHost(owner).ClientRects());
         }
         return rects.ToArray();
     }

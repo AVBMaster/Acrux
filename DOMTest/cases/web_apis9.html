@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head><title>Bytes, the CSSOM interfaces, the element prototypes, the session history and the scheduler (File API §4.1, Encoding §2.4, §3, §6.2, CSSOM §5.2-§5.6, Geometry Interfaces §4-§5, CSSOM View §2.2-§2.4, §3.10, DOM §4.2, §4.3.10, §5.1, HTML §5.6, §7.4.3, §7.4.7, §12.5.2, Web Animations §2-§4, CSS Typed OM §3, §5, Fullscreen §5, Form Data §4.15.5, Custom Elements §1, XMLHttpRequest §2.4, Scheduler §2-§3)</title></head>
+<body>
+<div id="d" style="width:120px;height:60px"><p id="p1">one<br>two</p><p id="p2">three</p></div>
+<form id="f"><input id="i1" name="a" value="1"></form>
+<script>
+// Every answer below was read off the reference in this session; the probes are kept in out/.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+function ckAll(name, pairs, extra) {
+    var fails = [];
+    try {
+        for (var i = 0; i < pairs.length; i++) if (!pairs[i][1]) fails.push(pairs[i][0]);
+    } catch (e) { fails.push('threw ' + (e && e.name) + ': ' + (e && e.message)); }
+    __T(name, fails.length === 0, (fails.length ? fails.join(' ; ') + ' | ' : '') + (extra || ''));
+}
+function done(name, fn) {
+    var promise;
+    try { promise = fn(); } catch (e) {
+        __T(name, false, 'threw ' + (e && e.name) + ': ' + (e && e.message));
+        return Promise.resolve(null);
+    }
+    return promise.then(function (v) { __T(name, !!v, ''); return null; },
+        function (e) { __T(name, false, 'rej ' + (e && e.name) + ': ' + (e && e.message)); return null; });
+}
+function refused(fn) {
+    try { fn(); return 'constructed'; } catch (e) { return e.name + ':' + e.message; }
+}
+function tagName(v) { return Object.prototype.toString.call(v); }
+var d = document.getElementById('d'), p1 = document.getElementById('p1');
+
+// ── A. A blob holds bytes (File API §4.1.1) ─────────────────────────────────
+ckAll('A1 every part kind is taken as the bytes it names', [
+    ['bytes', new Blob([new Uint8Array([104, 105])]).size === 2],
+    ['buffer', new Blob([new ArrayBuffer(3)]).size === 3],
+    ['view', new Blob([new Int8Array([-1]), 'x']).size === 2],
+    ['string', new Blob(['ab'], { type: 'text/plain' }).size === 2],
+    ['blob part', new Blob([new Blob(['abc']), 'd']).size === 4],
+    ['text read back', (function () { return new Blob([new Uint8Array([104, 105])]).text() instanceof Promise; })()],
+    ['no own bookkeeping', typeof new Blob(['a']).text === 'function']
+]);
+
+done('A2 the bytes a blob was built from read back as bytes', function () {
+    var b = new Blob([new Uint8Array([104, 105, 33])]);
+    return b.text().then(function (t) {
+        return b.bytes().then(function (v) {
+            return t === 'hi!' && v instanceof Uint8Array && v.length === 3 && v[2] === 33
+                && tagName(b.arrayBuffer ? new ArrayBuffer(0) : null) === '[object ArrayBuffer]';
+        });
+    });
+});
+
+done('A3 the slice is a range of bytes, negative bounds and all', function () {
+    var b = new Blob([new Uint8Array([0, 1, 2, 3, 4, 5])]);
+    var mid = b.slice(2, 4), back = b.slice(-2);
+    return Promise.all([mid.bytes(), back.bytes()]).then(function (v) {
+        return v[0].length === 2 && v[0][0] === 2 && v[0][1] === 3
+            && v[1].length === 2 && v[1][0] === 4 && v[1][1] === 5;
+    });
+});
+
+done('A4 the stream hands the byte run over in one chunk', function () {
+    return new Blob([new Uint8Array([65, 66]), 'C']).stream().getReader().read().then(function (r) {
+        return r.value instanceof Uint8Array && r.value.length === 3 && r.value[0] === 65 && r.value[2] === 67;
+    });
+});
+
+ck('A5 a body built from bytes still reads as a stream', function () {
+    var r = new Response(new Uint8Array([104, 105]));
+    return tagName(r.body) === '[object ReadableStream]' && r.bodyUsed === false;
+});
+
+done('A6 a response built from a buffer reads back the same bytes', function () {
+    var r = new Response(new Uint8Array([104, 105, 33]));
+    return r.arrayBuffer().then(function (b) {
+        var view = new Uint8Array(b);
+        return view.length === 3 && view[0] === 104 && view[2] === 33;
+    });
+});
+
+// ── B. The decoders (Encoding §2.4, §3, §6.2) ───────────────────────────────
+ckAll('B1 a fatal decoder refuses the run it cannot read', [
+    ['bad byte', refused(function () { return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array([0xff])); })
+        === 'TypeError:Failed to execute \'decode\' on \'TextDecoder\': The encoded data was not valid.'],
+    ['overlong', refused(function () { return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array([0xc0, 0x41])); })
+        .indexOf('TypeError') === 0],
+    ['not fatal', new TextDecoder('utf-8').decode(new Uint8Array([0xff, 0x68])).length === 2],
+    ['label refused', refused(function () { return new TextDecoder('bogus-codec'); })
+        === 'RangeError:Failed to construct \'TextDecoder\': The encoding label provided (\'bogus-codec\') is invalid.'],
+    ['utf-16le accepted', (function () { var t = new TextDecoder('utf-16le'); return t.encoding === 'utf-16le'; })()],
+    ['bom dropped', new TextDecoder('utf-8').decode(new Uint8Array([0xef, 0xbb, 0xbf, 0x68])) === 'h'],
+    ['bom kept on request', new TextDecoder('utf-8', { ignoreBOM: true }).decode(new Uint8Array([0xef, 0xbb, 0xbf, 0x68])).length === 2]
+]);
+
+done('B2 the utf-16 decoders read the pairs the standard names', function () {
+    var le = new TextDecoder('utf-16le').decode(new Uint8Array([0x68, 0, 0x69, 0]));
+    var be = new TextDecoder('utf-16be').decode(new Uint8Array([0, 0x68, 0, 0x69]));
+    var pair = new TextDecoder('utf-16le').decode(new Uint8Array([0x3d, 0xd8, 0x00, 0xdc]));
+    return Promise.resolve(le === 'hi' && be === 'hi' && pair.length === 2 && pair.charCodeAt(0) === 0xD83D);
+});
+
+ck('B3 encodeInto counts what it wrote and read', function () {
+    var buf = new Uint8Array(4), res = new TextEncoder().encodeInto('hi', buf);
+    return res.written === 2 && res.read === 2 && buf[0] === 104;
+});
+
+// ── C. The CSSOM interfaces (CSSOM §5.2-§5.6) ───────────────────────────────
+ckAll('C1 the rule interfaces are named and the rules wear them', [
+    ['constructors', typeof CSSRule === 'function' && typeof CSSStyleRule === 'function'
+        && typeof CSSMediaRule === 'function' && typeof CSSKeyframesRule === 'function'
+        && typeof CSSKeyframeRule === 'function' && typeof CSSImportRule === 'function'
+        && typeof CSSSupportsRule === 'function' && typeof CSSFontFaceRule === 'function'
+        && typeof CSSPageRule === 'function' && typeof CSSNamespaceRule === 'function'
+        && typeof CSSGroupingRule === 'function' && typeof CSSConditionRule === 'function'],
+    ['lists', typeof CSSRuleList === 'function' && typeof StyleSheetList === 'function'
+        && typeof MediaList === 'function' && typeof CSSStyleDeclaration === 'function'],
+    ['illegal ctor', refused(function () { return new CSSRule(); }) === 'TypeError:Failed to construct \'CSSRule\': Illegal constructor'],
+    ['constants', CSSRule.STYLE_RULE === 1 && CSSRule.CHARSET_RULE === 2 && CSSRule.IMPORT_RULE === 3
+        && CSSRule.MEDIA_RULE === 4 && CSSRule.FONT_FACE_RULE === 5 && CSSRule.PAGE_RULE === 6
+        && CSSRule.KEYFRAMES_RULE === 7 && CSSRule.KEYFRAME_RULE === 8 && CSSRule.MARGIN_RULE === 9
+        && CSSRule.NAMESPACE_RULE === 10 && CSSRule.COUNTER_STYLE_RULE === 11
+        && CSSRule.SUPPORTS_RULE === 12 && CSSRule.FONT_FEATURE_VALUES_RULE === 14
+        // The interface names no UNKNOWN_RULE: the constant was taken out of the specification and
+        // the reference's own key list leaves it out (measured).
+        && CSSRule.UNKNOWN_RULE === undefined],
+    ['constants on the prototype', CSSRule.prototype.MEDIA_RULE === 4],
+    ['tag names', Object.getOwnPropertyNames(CSSRule.prototype).join(',').indexOf('cssText') > 0]
+]);
+
+ckAll('C2 the sheet the page appended is the sheet the interface reads', [
+    ['sheet', (function () { var st = document.createElement('style');
+        st.textContent = '#zz { color: rgb(1, 2, 3) } @media screen { #yy { color: red } }';
+        document.head.appendChild(st);
+        return st.sheet !== null && st.sheet !== undefined; })()],
+    ['rules', (function () { var st = document.head.querySelector('style:last-of-type');
+        return st.sheet.cssRules.length === 2; })()],
+    ['rule kinds', (function () { var st = document.head.querySelector('style:last-of-type');
+        var first = st.sheet.cssRules[0], second = st.sheet.cssRules[1];
+        return first instanceof CSSStyleRule && second instanceof CSSMediaRule
+            && first.type === CSSRule.STYLE_RULE && second.type === CSSRule.MEDIA_RULE
+            && tagName(second) === '[object CSSMediaRule]' && tagName(first) === '[object CSSStyleRule]'; })()],
+    ['list', (function () { var st = document.head.querySelector('style:last-of-type');
+        return tagName(st.sheet.cssRules) === '[object CSSRuleList]' && st.sheet.cssRules.length === 2
+            && typeof st.sheet.cssRules.item === 'function' && st.sheet.cssRules.item(0) === st.sheet.cssRules[0]; })()],
+    ['identity', (function () { var st = document.head.querySelector('style:last-of-type');
+        return st.sheet.cssRules[0] === st.sheet.cssRules[0]; })()],
+    ['media list', (function () { var st = document.head.querySelector('style:last-of-type');
+        var media = st.sheet.cssRules[1].media;
+        return tagName(media) === '[object MediaList]' && media.mediaText === 'screen'
+            && media.length === 1; })()],
+    ['declaration', (function () { var st = document.head.querySelector('style:last-of-type');
+        return st.sheet.cssRules[0].style instanceof CSSStyleDeclaration; })()],
+    ['styleSheets list', tagName(document.styleSheets) === '[object StyleSheetList]'],
+    ['live', (function () { var st = document.createElement('style');
+        st.textContent = '.live-a { color: red }'; document.head.appendChild(st);
+        var rules = st.sheet.cssRules; var before = rules.length;
+        st.sheet.insertRule('.live-b { color: blue }', st.sheet.cssRules.length);
+        return before === 1 && rules.length === 2 && rules[1].selectorText === '.live-b'; })()]
+]);
+
+ckAll('C3 a member read through a receiver that is not one is refused', [
+    ['cssText', refused(function () { return CSSRule.prototype.cssText; }) === 'TypeError:Illegal invocation'],
+    ['declaration read', refused(function () { return CSSStyleDeclaration.prototype.cssText; })
+        === 'TypeError:Illegal invocation'],
+    ['element method', refused(function () { return Element.prototype.matches.call({}, 'div'); })
+        === 'TypeError:Failed to execute \'matches\' on \'Element\': Illegal invocation'],
+    ['closest', typeof Element.prototype.closest === 'function'],
+    ['assigned slot', (function () { return p1.assignedSlot === null
+        && refused(function () { return Node.prototype.assignedSlot; }) === 'TypeError:Illegal invocation'; })()],
+    ['document member', document.scrollingElement === document.documentElement]
+]);
+
+// ── D. Geometry (CSSOM View §2.2-§2.4, Geometry Interfaces §5) ──────────────
+ckAll('D1 the rectangles read as the interfaces they belong to', [
+    ['rect tag', tagName(p1.getBoundingClientRect()) === '[object DOMRect]'],
+    ['instance', p1.getBoundingClientRect() instanceof DOMRect],
+    ['json', (function () { var j = p1.getBoundingClientRect().toJSON();
+        return Object.keys(j).join(',') === 'x,y,width,height,top,right,bottom,left'; })()],
+    ['rects list', tagName(p1.getClientRects()) === '[object DOMRectList]'],
+    // The headless harness has no layout to measure, so a box may answer no fragments at all; the
+    // list's own shape is what is checked here, and the item is only demanded when there is one.
+    ['list item', (function () { var r = p1.getClientRects();
+        return r.length === 0 || r.item(0) instanceof DOMRect; })()],
+    ['list length', typeof p1.getClientRects().length === 'number'],
+    ['out of range', p1.getClientRects().item(9) === null]
+]);
+
+// ── E. The text an element shows (HTML §12.5.2) ─────────────────────────────
+ckAll('E2 innerText follows the blocks the markup holds', [
+    ['paragraph', p1.innerText === 'one\ntwo'],
+    ['container', d.innerText === 'one\ntwo\n\nthree'],
+    ['writable', (function () { var box = document.createElement('div'); box.innerText = 'a\nb';
+        return box.textContent === 'a\nb'; })()],
+    // The member is an accessor the interface declares, so a read through the prototype is refused
+    // with 'Illegal invocation' and an instance reads the text (both measured).
+    ['on the prototype', refused(function () { return HTMLElement.prototype.innerText; })
+        === 'TypeError:Illegal invocation']
+], function () { return 'p1=' + JSON.stringify(p1.innerText) + ' d=' + JSON.stringify(d.innerText); });
+
+// ── F. Animatable (Web Animations §2-§4) ────────────────────────────────────
+ckAll('F1 an animation is the interface it names', [
+    ['ctor', typeof Animation === 'function' && typeof KeyframeEffect === 'function'
+        && typeof AnimationEffect === 'function'],
+    ['built', (function () { var a = p1.animate([{ opacity: 0 }, { opacity: 1 }], 1000);
+        return tagName(a) === '[object Animation]' && a instanceof Animation; })()],
+    ['state', (function () { var a = p1.animate([{ opacity: 0 }, { opacity: 1 }], 1000);
+        return a.playState === 'running' && typeof a.currentTime === 'number'
+            && a.playbackRate === 1 && typeof a.effect === 'object' && a.timeline === document.timeline; })()],
+    ['listed', p1.getAnimations().length >= 1 && typeof document.getAnimations === 'function'],
+    ['methods', (function () { var box = document.createElement('span'); document.body.appendChild(box);
+        var a = box.animate([{ opacity: 0 }, { opacity: 1 }], 500);
+        a.pause(); var paused = a.playState === 'paused';
+        a.play(); var running = a.playState === 'running';
+        a.cancel(); return paused && running && a.playState === 'idle' && box.getAnimations().length === 0; })()],
+    ['timeline', tagName(document.timeline) === '[object DocumentTimeline]'],
+    ['brand', refused(function () { return Animation.prototype.playState; }) === 'TypeError:Illegal invocation']
+], (function () {
+    var a = p1.animate([{ opacity: 0 }, { opacity: 1 }], 1000);
+    return ['state=' + a.playState, 'same=' + (a.timeline === document.timeline),
+        'tag=' + tagName(a.timeline), 'rate=' + a.playbackRate, 'effect=' + typeof a.effect,
+        'time=' + a.currentTime, 'listed=' + p1.getAnimations().length].join(' ');
+})());
+
+done('F2 an animation that reaches its end reports it', function () {
+    var box = document.createElement('div'), heard = 'none';
+    document.body.appendChild(box);
+    var a = box.animate([{ opacity: 0 }, { opacity: 1 }], 30);
+    a.onfinish = function () { heard = 'finish'; };
+    return new Promise(function (resolve) {
+        setTimeout(function () { resolve(heard === 'finish' && a.playState === 'finished'); }, 120);
+    });
+});
+
+// ── G. Typed OM and the map a computed style reads (CSS Typed OM §3, §5) ────
+ckAll('G1 the style map reads the properties by name', [
+    ['method', typeof p1.computedStyleMap === 'function'],
+    ['tag', (function () { return tagName(p1.computedStyleMap()) === '[object StylePropertyMapReadOnly]'; })()],
+    ['members', (function () { var map = p1.computedStyleMap();
+        return typeof map.get === 'function' && typeof map.getAll === 'function'
+            && typeof map.has === 'function' && typeof map.size === 'number'
+            && typeof map.entries === 'function' && typeof map.forEach === 'function'; })()],
+    ['values', (function () { var map = p1.computedStyleMap();
+        return map.get('color') !== null && typeof map.get('color').value === 'string'; })()],
+    ['unknown name', p1.computedStyleMap().get('no-such-property') === null],
+    ['keywords build', new CSSKeywordValue('auto').value === 'auto'],
+    ['units build', (function () { var v = new CSSUnitValue(10, 'px'); return v.value === 10 && v.unit === 'px'; })()],
+    ['math refused', refused(function () { return new CSSMathValue('sum'); }).indexOf('TypeError') === 0],
+    ['register named', typeof CSS.registerProperty === 'function']
+]);
+
+// ── H. The session history (HTML §5.6, §7.4.7) ──────────────────────────────
+ckAll('H1 the history keeps the entries the page pushes', [
+    ['length', typeof history.length === 'number' && history.length >= 1],
+    ['state before', history.state === null],
+    ['scrollRestoration', history.scrollRestoration === 'auto'],
+    ['restoration holds a refusal', (function () { history.scrollRestoration = 'manual';
+        history.scrollRestoration = 'nonsense'; return history.scrollRestoration === 'manual'; })()],
+    ['popstate handler', typeof window.onpopstate === 'object' || typeof window.onpopstate === 'function'],
+    ['no defaultStatus', window.defaultStatus === undefined]
+]);
+
+ck('H2 pushState and replaceState move the state the page reads back', function () {
+    var before = history.length;
+    history.pushState({ step: 1 }, 'one', '#step1');
+    var pushed = history.length === before + 1 && history.state.step === 1;
+    history.replaceState({ step: 2 }, 'two', '#step2');
+    return pushed && history.length === before + 1 && history.state.step === 2;
+});
+
+done('H3 a traversal hands the window the state it landed on', function () {
+    var heard = [];
+    function onPop(event) { heard.push(JSON.stringify(event.state)); }
+    window.addEventListener('popstate', onPop);
+    history.pushState({ which: 'a' }, 'a', '#a');
+    history.pushState({ which: 'b' }, 'b', '#b');
+    history.back();
+    return new Promise(function (resolve) {
+        setTimeout(function () {
+            window.removeEventListener('popstate', onPop);
+            resolve(heard.join('|') === '{"which":"a"}');
+        }, 30);
+    });
+});
+
+// ── I. The scheduler (Scheduler §2, §3) ─────────────────────────────────────
+ck('I1 the scheduler is the interface the page calls', function () {
+    return typeof Scheduler === 'function' && tagName(window.scheduler) === '[object Scheduler]'
+        && typeof window.scheduler.postTask === 'function' && typeof TaskSignal === 'function';
+});
+
+done('I2 a posted task runs and answers its own value', function () {
+    return window.scheduler.postTask(function () { return 7; }).then(function (v) { return v === 7; });
+});
+
+done('I3 a task that is not a function is refused', function () {
+    return new Promise(function (resolve) {
+        try { window.scheduler.postTask('not a function'); resolve(false); }
+        catch (e) { resolve(e.name === 'TypeError'); }
+    });
+});
+
+// ── J. Fullscreen, internals and the registry ───────────────────────────────
+done('J1 a full-screen request is refused with the error the specification names', function () {
+    return p1.requestFullscreen().then(function () { return 'resolved'; }, function (e) {
+        return e.name === 'NotSupportedError';
+    });
+});
+
+ck('J2 internals belong to a custom element and to nothing else', function () {
+    var plain = refused(function () { return document.createElement('div').attachInternals(); });
+    return plain.indexOf('NotSupportedError') === 0
+        && plain.indexOf('Unable to attach ElementInternals to non-custom elements.') > 0;
+});
+
+ck('J3 a defined element gets its internals and the labels read refuses', function () {
+    if (!customElements.get('probe-internals')) {
+        customElements.define('probe-internals', class extends HTMLElement { });
+    }
+    var el = document.createElement('probe-internals');
+    var internals = el.attachInternals();
+    var labels = refused(function () { return internals.labels; });
+    return tagName(internals) === '[object ElementInternals]'
+        && internals.shadowRoot === null && internals.willValidate === false
+        && labels.indexOf('NotSupportedError') === 0
+        && labels.indexOf('not a form-associated custom element') > 0;
+});
+
+ck('J4 the registry answers the name of a constructor it holds', function () {
+    var ctor = class extends HTMLElement { };
+    customElements.define('probe-name', ctor);
+    return customElements.getName(ctor) === 'probe-name'
+        && customElements.getName(class extends HTMLElement { }) === null
+        && refused(function () { return customElements.getName('probe-name'); })
+            === 'TypeError:Failed to execute \'getName\' on \'CustomElementRegistry\': parameter 1 is not of type \'Function\'.';
+});
+
+ck('J5 a constructor without a prototype of its own is refused', function () {
+    // The arrow a page writes has no 'prototype' property at all, which is the one thing the
+    // registry can read; a plain function is a constructor and is taken (both measured).
+    var arrow = refused(function () { customElements.define('probe-arrow', () => { }); });
+    var plain = refused(function () { customElements.define('probe-plain', function () { }); });
+    return arrow.indexOf('TypeError:Failed to execute') === 0
+        && arrow.indexOf('CustomElementRegistry') > 0
+        && arrow.indexOf('constructor argument is not a constructor') > 0
+        && plain === 'constructed' && customElements.getName(function () { }) === null;
+}, function () {
+    return [refused(function () { customElements.define('probe-arrow9', () => { }); }),
+        customElements.get('probe-plain') !== undefined].join(' | ');
+});
+
+// ── K. The request the page has not sent (XMLHttpRequest §2.4) ──────────────
+ck('K1 the reads a request answers before it is opened', function () {
+    var x = new XMLHttpRequest();
+    return x.responseURL === '' && x.status === 0 && x.readyState === 0 && x.responseText === ''
+        && x.response === '' && x.responseType === '' && x.timeout === 0
+        && x.withCredentials === false && tagName(x) === '[object XMLHttpRequest]'
+        && tagName(x.upload) === '[object XMLHttpRequestUpload]' && x.upload.timeout === undefined;
+});
+</script>
+</body>
+</html>

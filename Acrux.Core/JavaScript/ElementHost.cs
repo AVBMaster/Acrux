@@ -91,7 +91,10 @@ public partial class ElementHost : IDomPrototypeHost
                     ? "SVGSVGElement" : "SVGElement";
             if (ns == "http://www.w3.org/1998/Math/MathML") return "MathMLElement";
             if (ns != null && ns != "http://www.w3.org/1999/xhtml") return "Element";
-            return Acrux.Core.Dom.Html.HtmlElementFactory.InterfaceNameFor(_element.LocalName);
+            // The name is folded: a tree that came from an XML parse carries the case it was written
+            // with, and the interface is named in lowercase (HTML §4.1 — 'Child' is read as 'child',
+            // which is no known tag, so the element is an HTMLUnknownElement either way).
+            return Acrux.Core.Dom.Html.HtmlElementFactory.InterfaceNameFor(_element.LocalName.ToLowerInvariant());
         }
     }
 
@@ -745,14 +748,16 @@ public partial class ElementHost : IDomPrototypeHost
     /// <summary>One rectangle per fragment: a box of its own answers one, an inline box answers
     /// one per line it is broken across (plus one for each atomic inline it contains), and a box
     /// that is not rendered answers none (CSSOM View 4).</summary>
-    public DomRect[] getClientRects()
+    public object getClientRects() => new LiveListHost("DOMRectList", () => ClientRects().Cast<object>().ToArray());
+
+    internal DomRect[] ClientRects()
     {
         FlushForRead();
         var box = _element.LayoutBox;
         var (scrollX, scrollY) = AncestorScrollOf(ScrollBasisOf(_element));
         if (box != null)
-            return new[] { new DomRect(box.BorderBox.Left - scrollX, box.BorderBox.Top - scrollY,
-                box.BorderBox.Width, box.BorderBox.Height) };
+            return new[] { new DomRect(box.BorderBox.Left - scrollX,
+                box.BorderBox.Top - scrollY, box.BorderBox.Width, box.BorderBox.Height) };
         var fragments = Acrux.Core.Layout.InlineGeometry.GetFragments(_element);
         var rects = new DomRect[fragments.Count];
         for (int i = 0; i < fragments.Count; i++)
@@ -1569,8 +1574,6 @@ public partial class ElementHost : IDomPrototypeHost
         get => int.TryParse(_element.GetAttribute("tabindex"), out var i) ? i : 0;
         set => _element.SetAttribute("tabindex", value.ToString());
     }
-
-    public void animate() { }
 
     /// <summary>HTML §4.12.5: the 'slot' attribute reflected. A reflected string reads as the empty
     /// string when the attribute is not there (measured), not as nothing at all.</summary>
@@ -3141,7 +3144,11 @@ public class DatasetHost : System.Dynamic.DynamicObject
     }
 }
 
-public class DomRect
+/// <summary>The rectangle a geometry read answers (CSSOM View §2.3, Geometry Interfaces §5). It is
+/// stamped with the DOMRect level the script declares, so the tag, 'rect instanceof DOMRect' and
+/// 'toJSON' all read from the interface (measured: a box's rectangle prints [object DOMRect] and its
+/// JSON is the eight numbers in the order x, y, width, height, top, right, bottom, left).</summary>
+public class DomRect : IDomPrototypeHost
 {
     public float x { get; }
     public float y { get; }
@@ -3152,6 +3159,19 @@ public class DomRect
     public float bottom => y + height;
     public float left => x;
 
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "DOMRectReadOnly", "DOMRect" };
+
+    public string? __domType => "DOMRect";
+
+    public override string ToString() => DomHostString.Tagged(this);
+
+    /// <summary>The eight numbers the interface serialises, in the order its own JSON answers.</summary>
+    public object toJSON() => new Dictionary<string, object>
+    {
+        ["x"] = x, ["y"] = y, ["width"] = width, ["height"] = height,
+        ["top"] = top, ["right"] = right, ["bottom"] = bottom, ["left"] = left
+    };
+
     public DomRect(float x, float y, float width, float height)
     {
         this.x = x;
@@ -3160,3 +3180,4 @@ public class DomRect
         this.height = height;
     }
 }
+

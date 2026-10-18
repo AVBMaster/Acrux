@@ -3,8 +3,13 @@ using Acrux.Core.Dom;
 
 namespace Acrux.Core.JavaScript;
 
-public class StyleHost : DynamicObject
+public class StyleHost : DynamicObject, IDomPrototypeHost
 {
+    // The computed style is a declaration block of the same interface (CSSOM §5.3.2).
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "CSSStyleDeclaration" };
+
+    public override string ToString() => DomHostString.Tagged(this);
+
     private readonly Element _element;
 
     public StyleHost(Element element)

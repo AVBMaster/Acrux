@@ -205,6 +205,9 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         // so in both cases nothing changes and nothing is invalidated.
         name = CssPropertyIdExtensions.CanonicalName(name);
         var remove = string.IsNullOrEmpty(value);
+        // The author's text is read the way a stylesheet's is: a comment is the space it stands
+        // for, and neither the grammar nor the block ever sees the comment itself.
+        value = CssValueGrammar.WithCommentsAsWhitespace(value);
         if (!remove && !CssValueGrammar.TextIsValidFor(name, value)) return;
         SyncWithAttribute();
         if (remove)
@@ -219,6 +222,7 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
 
     private void WriteIfValid(string name, string value)
     {
+        value = CssValueGrammar.WithCommentsAsWhitespace(value);
         if (CssValueGrammar.TextIsValidFor(name, value))
             StoreDeclaration(name, value);
     }
@@ -318,8 +322,15 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
 /// model (CSSOM 5.3.1), so the property list lives here and each subclass supplies the
 /// storage. The list is the set pages actually reach for; anything else is read through
 /// getPropertyValue.</summary>
-public abstract class CssStyleDeclarationBase : System.Dynamic.DynamicObject
+public abstract class CssStyleDeclarationBase : System.Dynamic.DynamicObject, IDomPrototypeHost
 {
+    // The two declaration blocks the CSSOM hands out — an element's inline style and a rule's
+    // declarations — are the same interface, so both are stamped with this level and a page that
+    // asks 'el.style instanceof CSSStyleDeclaration' hears the answer the interface gives.
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "CSSStyleDeclaration" };
+
+    public override string ToString() => DomHostString.Tagged(this);
+
     protected abstract string? GetStyle(string name);
 
     protected abstract void SetStyle(string name, string? value);

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html><head><title>Probe 52</title></head><body>
+<div id="d" style="width:120px;height:40px"><p id="p1">one</p><p id="p2">two</p></div>
+<form id="f"><input id="i1" name="a" value="1"></form>
+<script>
+(function () {
+  var out = {}; function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + e.name + '::' + e.message; } } var J = JSON.stringify;
+  var d = document.getElementById('d'), p1 = document.getElementById('p1'), form = document.getElementById('f'), input = document.getElementById('i1');
+  t('location methods', function () { var l = location;
+    return J([typeof l.assign, typeof l.replace, typeof l.reload, String(l.ancestorOrigins),
+      typeof history.length, history.length, typeof history.state, String(history.scrollRestoration),
+      typeof history.pushState, typeof history.replaceState, typeof history.back, typeof history.forward,
+      typeof history.go]); });
+  t('window bom', function () { return J([typeof window.open, typeof window.close, typeof window.stop, typeof window.name, String(window.name),
+    String(window.status), String(window.defaultStatus), window.closed, window.length, String(window.parent === window),
+    String(window.self === window), typeof window.origin, window.origin, typeof screen.availWidth, screen.availWidth,
+    typeof screen.orientation, typeof screen.colorDepth, typeof window.screenX, typeof window.screenLeft]); });
+  t('blob bytes', function () { var b1 = new Blob([new Uint8Array([104, 105])]); var b2 = new Blob([new ArrayBuffer(3)]);
+    var b3 = new Blob(['ab'], { type: 'text/plain' });
+    return J([b1.size, b3.size, typeof b1.text, b2.size, J(new Blob([new Int8Array([-1]), 'x']).size)]); });
+  t('encode into', function () { var enc = new TextEncoder(); var buf = new Uint8Array(4); var res = enc.encodeInto('hi', buf);
+    return J([typeof enc.encodeInto, res.written, res.read, buf[0], typeof TextDecoder.prototype.decode,
+      new TextDecoder().decode(new Uint8Array([104, 105])), (function () {
+        try { return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array([255])); } catch (e) { return e.name; } })()]); });
+  t('offsets', function () { return J([typeof input.offsetWidth, input.offsetWidth, typeof input.offsetHeight, typeof input.offsetParent,
+    typeof input.offsetTop, typeof input.offsetLeft, typeof input.innerText, typeof input.attachInternals,
+    typeof d.getBoundingClientRect, J(d.getBoundingClientRect().width), typeof d.getClientRects, d.getClientRects().length]); });
+  t('element extra', function () { var box = document.createElement('div'); box.innerHTML = '<span id="s">x</span>';
+    var s = box.firstChild;
+    return J([typeof s.insertAdjacentElement, typeof s.insertAdjacentHTML, typeof s.closest, s.closest('div') === box,
+      typeof s.matches, typeof s.msMatchesSelector, typeof s.scrollIntoView, typeof s.animate, typeof s.requestFullscreen,
+      typeof s.setPointerCapture, typeof s.getAttributeNames, s.getAttributeNames().length, typeof s.hasAttributes,
+      typeof s.isSameNode, typeof s.replaceChildren, typeof s.attachShadow]); });
+  t('xhr surface', function () { var x = new XMLHttpRequest();
+    return J([typeof x.responseType, x.responseType, typeof x.response, typeof x.statusText, x.statusText,
+      typeof x.timeout, x.timeout, typeof x.withCredentials, typeof x.upload, typeof x.overrideMimeType,
+      typeof x.readyState, x.readyState, typeof x.responseURL, typeof x.responseXml, typeof x.open, x.open.length, typeof x.send]); });
+  t('mutation record', function () { var seen = null; var mo = new MutationObserver(function (list) { seen = list[0]; });
+    mo.observe(d, { childList: true, attributes: true, attributeOldValue: true, characterData: true, subtree: true });
+    d.setAttribute('data-x', '1'); d.removeAttribute('data-x'); mo.takeRecords(); mo.disconnect();
+    var r = seen;
+    return J([r && r.type, r && (r.target === d), r && r.attributeName, r && r.oldValue, typeof r.addedNodes,
+      typeof r.removedNodes, r && r.previousSibling, typeof r.nextSibling, typeof mo.takeRecords, typeof mo.disconnect]); });
+  t('node surface', function () { return J([typeof p1.compareDocumentPosition, p1.compareDocumentPosition(d) === Node.DOCUMENT_POSITION_CONTAINED_BY,
+    typeof p1.normalize, typeof p1.isEqualNode, typeof p1.isSameNode, typeof p1.lookupPrefix, typeof p1.lookupNamespaceURI,
+    typeof p1.getRootNode, p1.getRootNode() === document, typeof p1.hasChildNodes, p1.contains(input),
+    typeof p1.cloneNode, typeof p1.appendChild, typeof p1.insertBefore, typeof p1.replaceChild, typeof p1.removeChild,
+    p1.parentNode === d, p1.parentElement === d, typeof p1.parentNode]); });
+  t('sibling and child', function () { return J([p1.firstElementChild, p1.lastElementChild, p1.previousElementSibling,
+    p1.nextElementSibling === d.lastElementChild, d.childElementCount, d.firstElementChild === p1, d.lastElementChild === d.children[1],
+    typeof p1.before, typeof p1.after, typeof p1.replaceWith, typeof p1.remove, typeof p1.append, typeof p1.prepend]); });
+  t('text node', function () { var tn = p1.firstChild;
+    return J([typeof tn.splitText, tn.textContent, typeof tn.wholeText, typeof tn.textLength, tn.textLength,
+      typeof tn.assignedSlot, typeof tn.data, tn.data.length, typeof tn.appendData, typeof tn.insertData,
+      typeof tn.deleteData, typeof tn.replaceData, typeof tn.substringData, tn.nodeType, tn.nodeName]); });
+  t('document surface', function () { return J([typeof document.cookie, String(document.cookie), typeof document.referrer,
+    document.referrer, document.title, typeof document.dir, typeof document.lang, typeof document.hidden,
+    typeof document.visibilityState, typeof document.hasFocus, document.hasFocus(), typeof document.activeElement,
+    typeof document.defaultView, document.defaultView === window, typeof document.documentElement,
+    typeof document.scrollingElement, typeof document.documentMode, typeof document.write, typeof document.writeln,
+    typeof document.close, typeof document.open]); });
+  t('cssom', function () { var st = document.createElement('style'); st.textContent = '@media screen { #zz { color: red } }';
+    document.head.appendChild(st); var sheet = st.sheet;
+    return J([sheet && typeof sheet.ownerNode, sheet && sheet.ownerNode === st, sheet && typeof sheet.parentStyleSheet,
+      sheet && sheet.cssRules.length, sheet && sheet.cssRules[0].type, sheet && Object.prototype.toString.call(sheet.cssRules[0]),
+      sheet && typeof sheet.cssRules[0].media, sheet && sheet.cssRules[0].cssRules[0].style.getPropertyValue('color'),
+      typeof sheet.insertRule, typeof sheet.deleteRule, typeof CSSRule, sheet.cssRules[0].media.mediaText]); });
+  t('style decl', function () { var el = document.createElement('div'); el.style.setProperty('color', 'red', 'important');
+    return J([el.style.getPropertyValue('color'), el.style.getPropertyPriority('color'), el.style.length,
+      el.style.item(0), typeof el.style.removeProperty, typeof CSSStyleDeclaration.prototype.cssText,
+      typeof el.style.setProperty, el.style.cssText.replace(/\s/g, '')]); });
+  t('formdata', function () { var fd = new FormData(); fd.append('a', '1'); fd.append('a', '2'); fd.set('b', '3');
+    return J([typeof fd.entries, typeof fd.keys, typeof fd.values, typeof fd[Symbol.iterator], typeof fd.getAll,
+      fd.getAll('a').length, typeof fd.delete, typeof fd.has, fd.has('b'), typeof fd.append, fd.toString().slice(0, 20)]); });
+  t('url params', function () { var p = new URLSearchParams('a=1&a=2&b=3'); p.set('c', 'x');
+    var u = new URL('http://example.com/p?one=1'); u.searchParams.set('two', '2');
+    return J([typeof p.sort, p.sort === undefined, typeof p.size, p.size, p.toString(), u.href,
+      typeof u.searchParams.append, typeof p.getAll, p.getAll('a').length, typeof p[Symbol.iterator]]); });
+  t('console', function () { var c = window.console; return J([typeof c.log, typeof c.info, typeof c.warn, typeof c.error,
+    typeof c.debug, typeof c.trace, typeof c.assert, typeof c.count, typeof c.countReset, typeof c.time,
+    typeof c.timeLog, typeof c.timeEnd, typeof c.group, typeof c.groupEnd, typeof c.table, typeof c.dir, typeof c.clear]); });
+  t('es surface', function () { return J([typeof Object.hasOwn, typeof Array.prototype.at, typeof Array.prototype.flat,
+    typeof Array.prototype.toSorted, typeof Array.prototype.findLast, typeof String.prototype.replaceAll,
+    typeof Map.groupBy, typeof Promise.any, typeof Promise.allSettled, typeof Intl.DateTimeFormat,
+    (function () { var re = /(?<=a)b/; return re.test('ab'); })(), (function () { var re2 = /(?<x>a)/; return re2.exec('a').groups.x; })(),
+    typeof BigInt, typeof window.WeakRef, typeof window.Scheduler, typeof window.Atomic]); });
+  t('registry', function () { var ce = customElements; return J([typeof ce.getName, typeof ce.upgrade, typeof ce.whenDefined,
+    typeof ce.define, (function () { try { ce.define('probe-52', class extends HTMLElement { }); return ce.getName('probe-52'); }
+      catch (e) { return 'ERR ' + e.name; } })(), typeof ce.get]); });
+  __T('probe52', true, J(out, null, 1));
+})();
+</script></body></html>

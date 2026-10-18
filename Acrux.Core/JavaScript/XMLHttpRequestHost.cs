@@ -54,6 +54,12 @@ public class XMLHttpRequestHost : IDomPrototypeHost
     public int readyState => _readyState;
     public int status => _status;
     public string statusText => _statusText;
+
+    /// <summary>XMLHttpRequest §2.4: the address the response finally came from, once redirects have
+    /// been followed — the address the request was opened with while it runs, and the empty string
+    /// before a request has been opened at all (measured). Nothing is read back from the redirect
+    /// chain here, so the answer is the address the page asked for.</summary>
+    public string responseURL => _readyState == 0 ? "" : _url ?? "";
     public double timeout { get; set; }
     public bool withCredentials { get; set; }
 

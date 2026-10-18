@@ -521,3 +521,64 @@ public class JsRadioNodeList : IList
 
     public object?[] ToArray() => _elements.Select(Wrap).ToArray();
 }
+
+/// <summary>A live list (CSSOM §5.2.7, §6.1, Geometry Interfaces §5.2, DOM §5.1): the rules of a sheet,
+/// the sheets of a document, the rectangles of a range or the nodes of a collection, read by
+/// <c>length</c>, by <c>item</c> and by the index a page writes. The array behind
+/// it is asked for on every read, which is what makes the list live — a rule the page inserts through
+/// the sheet shows up in the list it already holds, and the wrappers inside it are the same objects
+/// every other path hands out.</summary>
+public class LiveListHost : IList, IDomPrototypeHost
+{
+    private readonly string _interfaceName;
+    private readonly Func<object[]> _provider;
+
+    public LiveListHost(string interfaceName, Func<object[]> provider)
+    {
+        _interfaceName = interfaceName;
+        _provider = provider;
+    }
+
+    string[] IDomPrototypeHost.__domTypeChain => new[] { _interfaceName };
+
+    public string? __domType => _interfaceName;
+
+    public override string ToString() => DomHostString.Tagged(_interfaceName);
+
+    public int length => Count;
+
+    public object? item(int index) => index >= 0 && index < Count ? _provider()[index] : null;
+
+    public object? this[int index]
+    {
+        get => item(index);
+        set => throw new NotSupportedException();
+    }
+
+    public int Count => _provider().Length;
+    public bool IsReadOnly => true;
+    public bool IsFixedSize => true;
+    public bool IsSynchronized => false;
+    public object SyncRoot => this;
+    public IEnumerator GetEnumerator() => _provider().GetEnumerator();
+    public void CopyTo(Array array, int index)
+    {
+        var items = _provider();
+        for (int i = 0; i < items.Length; i++) array.SetValue(items[i], index + i);
+    }
+    public int Add(object? value) => throw new NotSupportedException();
+    public void Clear() => throw new NotSupportedException();
+    public bool Contains(object? value) => IndexOf(value) >= 0;
+
+    public int IndexOf(object? value)
+    {
+        var items = _provider();
+        for (int i = 0; i < items.Length; i++)
+            if (ReferenceEquals(items[i], value)) return i;
+        return -1;
+    }
+
+    public void Insert(int index, object? value) => throw new NotSupportedException();
+    public void Remove(object? value) => throw new NotSupportedException();
+    public void RemoveAt(int index) => throw new NotSupportedException();
+}

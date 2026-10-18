@@ -575,6 +575,19 @@ public class JavaScriptEngine : IDisposable
         finally { _inForcedUpdate = false; }
     }
 
+    /// <summary>HTML §5.6: the traversal to an entry the page pushed is answered with a 'popstate' on
+    /// the window, carrying the state that entry holds. The event is built in script — the window's
+    /// listeners live there, the interface's own constructor knows the shape, and the state is read
+    /// from the history the page already holds — so the bridge carries nothing across.</summary>
+    public void FirePopState()
+    {
+        // The state the event carries is the entry the history is standing on, and the script reads
+        // it from there — a value that came out of the engine once and is handed back again is not
+        // something the bridge should be moving across.
+        try { IntegrationService?.CallGlobal("__acruxPopState"); }
+        catch { /* a page that replaced the bridge keeps its own hearing */ }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -1274,7 +1287,13 @@ public class JavaScriptEngine : IDisposable
                 var given = label === undefined || label === null ? '' : String(label);
                 var name = given.toLowerCase().replace(/[^0-9a-z]/g, '');
                 if (name === '' || name === 'utf8') name = 'utf-8';
-                if (name !== 'utf-8') {
+                // Encoding Standard §2.4: the two endian forms are their own decoders, and 'utf-16'
+                // takes the little-endian name of them. They are not refused, so a page that builds
+                // one reads the bytes back in the order the standard says (measured: a decoder of
+                // 'utf-16le' hands over the text without a refusal).
+                if (name === 'utf16' || name === 'utf16le') name = 'utf-16le';
+                else if (name === 'utf16be') name = 'utf-16be';
+                if (name !== 'utf-8' && name !== 'utf-16le' && name !== 'utf-16be') {
                     // Encoding Standard §3: an unsupported label is refused when the decoder is built,
                     // with the text the conversion was given quoted back (measured).
                     var Q = String.fromCharCode(39);
@@ -1282,22 +1301,100 @@ public class JavaScriptEngine : IDisposable
                         + ': The encoding label provided (' + Q + given + Q + ') is invalid.');
                 }
                 var init = options && typeof options === 'object' ? options : {};
-                this.encoding = 'utf-8';
+                this.encoding = name;
                 this.fatal = !!init.fatal;
                 this.ignoreBOM = !!init.ignoreBOM;
+            }
+            function utf16Run(bytes, bigEndian, fatal, skipBom) {
+                // Encoding Standard §2.4 UTF-16 decoder: two bytes at a time, a surrogate pair joined,
+                // an unpaired surrogate or a leftover byte an error.
+                var out = '', i = bigEndian ? 2 : 0, at = 0;
+                if (bytes.length >= 2 && ((bigEndian && bytes[0] === 0xFE && bytes[1] === 0xFF)
+                    || (!bigEndian && bytes[0] === 0xFF && bytes[1] === 0xFE)) && !skipBom) at = 2;
+                for (; at + 1 < bytes.length; at += 2) {
+                    var code = bigEndian ? (bytes[at] << 8) | bytes[at + 1] : (bytes[at + 1] << 8) | bytes[at];
+                    if (code >= 0xD800 && code <= 0xDBFF && at + 3 < bytes.length) {
+                        var next = bigEndian
+                            ? (bytes[at + 2] << 8) | bytes[at + 3] : (bytes[at + 3] << 8) | bytes[at + 2];
+                        if (next >= 0xDC00 && next <= 0xDFFF) {
+                            out += String.fromCharCode(code, next);
+                            at += 2;
+                            continue;
+                        }
+                        if (fatal) {
+                            throw new TypeError('Failed to execute ' + String.fromCharCode(39) + 'decode'
+                                + String.fromCharCode(39) + ' on ' + String.fromCharCode(39) + 'TextDecoder'
+                                + String.fromCharCode(39) + ': The encoded data was not valid.');
+                        }
+                        out += String.fromCharCode(0xFFFD);
+                        continue;
+                    }
+                    if (code >= 0xD800 && code <= 0xDFFF) {
+                        if (fatal) {
+                            throw new TypeError('Failed to execute ' + String.fromCharCode(39) + 'decode'
+                                + String.fromCharCode(39) + ' on ' + String.fromCharCode(39) + 'TextDecoder'
+                                + String.fromCharCode(39) + ': The encoded data was not valid.');
+                        }
+                        out += String.fromCharCode(0xFFFD);
+                        continue;
+                    }
+                    out += String.fromCharCode(code);
+                }
+                if (at < bytes.length) {
+                    if (fatal) {
+                        throw new TypeError('Failed to execute ' + String.fromCharCode(39) + 'decode'
+                            + String.fromCharCode(39) + ' on ' + String.fromCharCode(39) + 'TextDecoder'
+                            + String.fromCharCode(39) + ': The encoded data was not valid.');
+                    }
+                    out += String.fromCharCode(0xFFFD);
+                }
+                return out;
             }
             TextDecoder.prototype.decode = function (input) {
                 if (input === undefined || input === null) return '';
                 var bytes = (input instanceof Uint8Array) ? input
                     : (input.buffer ? new Uint8Array(input.buffer, input.byteOffset || 0, input.byteLength) : input);
-                var res = '', i = 0, len = bytes.length;
+                if (this.encoding === 'utf-16le' || this.encoding === 'utf-16be') {
+                    return utf16Run(bytes, this.encoding === 'utf-16be', !!this.fatal, !!this.ignoreBOM);
+                }
+                // Encoding Standard §6.2 UTF-8 decoder: a byte sequence that is overlong, that runs
+                // past its own length, that carries a continuation byte where none belongs, that
+                // names a surrogate or a code point beyond U+10FFFF is an error — the fatal decoder
+                // refuses the whole run (measured: a TypeError whose message is the whole sentence),
+                // the non-fatal one answers one replacement character for each error run.
+                var len = bytes.length, i = 0, res = '', seen = 0;
+                if (len >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF
+                    && !this.ignoreBOM) { i = 3; }
+                function bad() {
+                    if (this.fatal) {
+                        throw new TypeError('Failed to execute ' + String.fromCharCode(39) + 'decode'
+                            + String.fromCharCode(39) + ' on ' + String.fromCharCode(39) + 'TextDecoder'
+                            + String.fromCharCode(39) + ': The encoded data was not valid.');
+                    }
+                    if (!seen) res += String.fromCharCode(0xFFFD);
+                    seen++;
+                }
                 while (i < len) {
-                    var b0 = bytes[i], cp;
-                    if (b0 < 0x80) { cp = b0; i += 1; }
-                    else if ((b0 & 0xE0) === 0xC0) { cp = ((b0 & 0x1F) << 6) | (bytes[i + 1] & 0x3F); i += 2; }
-                    else if ((b0 & 0xF0) === 0xE0) { cp = ((b0 & 0x0F) << 12) | ((bytes[i + 1] & 0x3F) << 6) | (bytes[i + 2] & 0x3F); i += 3; }
-                    else if ((b0 & 0xF8) === 0xF0) { cp = ((b0 & 0x07) << 18) | ((bytes[i + 1] & 0x3F) << 12) | ((bytes[i + 2] & 0x3F) << 6) | (bytes[i + 3] & 0x3F); i += 4; }
-                    else { cp = b0; i += 1; }
+                    var b0 = bytes[i], need = 0, cp = 0, low = 0;
+                    if (b0 < 0x80) { cp = b0; need = 0; low = 0x00; }
+                    else if ((b0 & 0xE0) === 0xC0) { cp = b0 & 0x1F; need = 1; low = 0x80; }
+                    else if ((b0 & 0xF0) === 0xE0) { cp = b0 & 0x0F; need = 2; low = 0x800; }
+                    else if ((b0 & 0xF8) === 0xF0) { cp = b0 & 0x07; need = 3; low = 0x10000; }
+                    else { bad.call(this); i += 1; seen = 0; continue; }
+                    var at = 0, ok = true;
+                    for (at = 1; at <= need; at++) {
+                        var next = i + at;
+                        if (next >= len || (bytes[next] & 0xC0) !== 0x80) { ok = false; break; }
+                        cp = (cp << 6) | (bytes[next] & 0x3F);
+                    }
+                    if (!ok) { i += 1; while (i < len && (bytes[i] & 0xC0) === 0x80) i++; bad.call(this); seen = 0; continue; }
+                    // The value has to be worth the bytes it was written with, and it has to name a
+                    // character at all: an overlong form, a surrogate and anything past the last
+                    // code point are all errors the same way.
+                    if (cp < low || (cp >= 0xD800 && cp <= 0xDFFF) || cp > 0x10FFFF) {
+                        i += need + 1; bad.call(this); seen = 0; continue;
+                    }
+                    i += need + 1; seen = 0;
                     if (cp <= 0xFFFF) res += String.fromCharCode(cp);
                     else { cp -= 0x10000; res += String.fromCharCode(0xD800 + (cp >> 10), 0xDC00 + (cp & 0x3FF)); }
                 }
@@ -2084,35 +2181,64 @@ public class JavaScriptEngine : IDisposable
             window.WritableStreamDefaultController = WritableStreamDefaultController;
             window.TransformStream = TransformStream;
 
-            // Blob holds concatenated string parts; 'size' is the UTF-8 byte length and 'text'/'
-            // arrayBuffer' are the async reads a page awaits on. File is a Blob with a name.
-            function blobBytes(blob) { return new TextEncoder().encode(blob.__text || ''); }
+            // ── Blob and File (File API §4.1) ──────────────────────────────────
+            // A blob holds bytes, not a string it happens to print: each part is normalised to a byte
+            // run — a string through UTF-8, an ArrayBuffer or a view of one as it lies, another blob's
+            // own bytes copied — and 'size' is the length of the joined run (measured: a blob built
+            // from the two bytes 104,105 sizes 2, and one built from a three-byte buffer sizes 3).
+            // 'text' is those bytes decoded, so a blob made from bytes reads back the text they mean.
+            function partBytes(part) {
+                if (part === null || part === undefined) return new Uint8Array(0);
+                if (part instanceof Blob) return blobBytes(part);
+                if (typeof part === 'string') return new TextEncoder().encode(part);
+                if (typeof ArrayBuffer === 'function' && part instanceof ArrayBuffer) return new Uint8Array(part);
+                if (part.buffer instanceof ArrayBuffer) {
+                    var at = part.byteOffset || 0;
+                    return new Uint8Array(part.buffer.slice(at, at + part.byteLength));
+                }
+                return new TextEncoder().encode(String(part));
+            }
+            function blobBytes(blob) {
+                if (blob && blob.__bytes !== undefined) return blob.__bytes;
+                return new TextEncoder().encode(blob && blob.__text !== undefined ? blob.__text : String(blob));
+            }
             function blobToString(blob) { return blob.__text === undefined ? String(blob) : blob.__text; }
             function Blob(blobParts, options) {
                 var parts = blobParts || [];
-                var pieces = [];
-                for (var i = 0; i < parts.length; i++) {
-                    var p = parts[i];
-                    pieces.push(p === null || p === undefined ? '' : (p instanceof Blob ? p.__text : String(p)));
+                var joined = [], total = 0, i, p;
+                for (i = 0; i < parts.length; i++) {
+                    p = partBytes(parts[i]);
+                    joined.push(p);
+                    total += p.length;
                 }
-                var text = pieces.join('');
-                Object.defineProperty(this, '__text', { value: text, configurable: true });
+                var bytes = new Uint8Array(total);
+                var at = 0;
+                for (i = 0; i < joined.length; i++) { bytes.set(joined[i], at); at += joined[i].length; }
+                Object.defineProperty(this, '__bytes', { value: bytes, configurable: true });
+                Object.defineProperty(this, '__text', { value: new TextDecoder().decode(bytes), configurable: true });
                 this.type = (options && options.type) ? String(options.type) : '';
-                this.size = new TextEncoder().encode(text).length;
+                this.size = bytes.length;
             }
-            Blob.prototype.text = function () { var t = this.__text; return Promise.resolve(t); };
-            Blob.prototype.arrayBuffer = function () { return Promise.resolve(blobBytes(this).buffer); };
+            Blob.prototype.text = function () { return Promise.resolve(blobToString(this)); };
+            Blob.prototype.arrayBuffer = function () {
+                var copy = blobBytes(this).slice();
+                return Promise.resolve(copy.buffer);
+            };
             // A blob reads as one chunk: the whole byte range arrives in the first pull, which is what
             // the reference gives for a blob this small (measured: the first chunk of a four-byte blob
             // is a Uint8Array of byteLength 4).
-            Blob.prototype.stream = function () { return singleChunkStream(blobBytes(this)); };
-            Blob.prototype.bytes = function () { return Promise.resolve(blobBytes(this)); };
+            Blob.prototype.stream = function () { return singleChunkStream(blobBytes(this).slice()); };
+            Blob.prototype.bytes = function () { return Promise.resolve(blobBytes(this).slice()); };
             Blob.prototype.slice = function (start, end, contentType) {
-                var t = this.__text;
-                var s = start < 0 ? Math.max(t.length + start, 0) : (start || 0);
-                var e = end === undefined ? t.length : (end < 0 ? t.length + end : end);
-                var sliceText = t.substring(Math.min(s, e), Math.max(s, e));
-                return new Blob([sliceText], { type: contentType || '' });
+                // §4.1.1.8: the range is in bytes, a negative bound counts back from the end, and the
+                // two bounds are clamped and swapped before the run is taken.
+                var total = this.size;
+                var s = start === undefined ? 0 : Number(start) || 0;
+                var e = end === undefined ? total : Number(end) || 0;
+                if (s < 0) s = Math.max(total + s, 0); else s = Math.min(s, total);
+                if (e < 0) e = Math.max(total + e, 0); else e = Math.min(e, total);
+                if (e < s) e = s;
+                return new Blob([blobBytes(this).slice(s, e)], { type: contentType || '' });
             };
             Object.defineProperty(Blob.prototype, Symbol.toStringTag,
                 { value: 'Blob', configurable: true });
@@ -2451,6 +2577,9 @@ public class JavaScriptEngine : IDisposable
 
             // The list a geometry read answers is the array-like face of the interface: the items in
             // order, a length, and 'item' for the out-of-range answer of null.
+            // The list a range or a box answers (CSSOM View §2.4.1): 'length', 'item' and the index,
+            // with the tag the interface gives — the level is registered for the wrappers the engine
+            // hands out, and those read their tag from here.
             function DOMRectList(items) {
                 var list = items || [];
                 var self = this;
@@ -2511,24 +2640,25 @@ public class JavaScriptEngine : IDisposable
                 return out;
             }
             function bodyParts(body) {
-                if (body === undefined || body === null) return { text: '', stream: null };
-                if (typeof body === 'string') return { text: body, stream: null };
-                if (streamQueueOf(body)) return { text: '', stream: body };
+                if (body === undefined || body === null) return { text: '', stream: null, bytes: null };
+                if (typeof body === 'string') return { text: body, stream: null, bytes: null };
+                if (streamQueueOf(body)) return { text: '', stream: body, bytes: null };
                 if (typeof body === 'object') {
-                    if (typeof body.__text === 'string') return { text: body.__text, stream: null };
-                    if (typeof ArrayBuffer === 'function' && body instanceof ArrayBuffer) {
-                        return { text: bytesText(new Uint8Array(body)), stream: null };
+                    // A blob, a buffer or a view of one is taken as the bytes they are: the text is
+                    // what those bytes decode to, and the reads that answer bytes hand the run back
+                    // rather than a re-encoding of the text (§6.1).
+                    if (body instanceof Blob || (typeof ArrayBuffer === 'function' && body instanceof ArrayBuffer)
+                        || body.buffer instanceof ArrayBuffer) {
+                        var run = partBytes(body);
+                        return { text: bytesText(run), stream: null, bytes: run };
                     }
-                    if (body.buffer instanceof ArrayBuffer) {
-                        return { text: bytesText(new Uint8Array(body.buffer,
-                            body.byteOffset || 0, body.byteLength)), stream: null };
-                    }
+                    if (typeof body.__text === 'string') return { text: body.__text, stream: null, bytes: null };
                     if (typeof body.toString === 'function') {
                         var made = body.toString();
-                        if (made !== '[object Object]') return { text: String(made), stream: null };
+                        if (made !== '[object Object]') return { text: String(made), stream: null, bytes: null };
                     }
                 }
-                return { text: String(body), stream: null };
+                return { text: String(body), stream: null, bytes: null };
             }
             function drainBodyStream(state) {
                 var iterator = streamAsyncIterator(state.stream);
@@ -2583,6 +2713,7 @@ public class JavaScriptEngine : IDisposable
                         return drainBodyStream(state).then(function (bytes) {
                             return bytes.buffer ? bytes.buffer : bytes; });
                     }
+                    if (state.bytes) return Promise.resolve(state.bytes.slice().buffer);
                     var made = textBytes(state.text);
                     return Promise.resolve(made.buffer === undefined ? made : made.buffer);
                 },
@@ -2594,12 +2725,13 @@ public class JavaScriptEngine : IDisposable
                         return drainBodyStream(state).then(function (bytes) {
                             return new Blob([bytesText(bytes)], { type: type }); });
                     }
-                    return Promise.resolve(new Blob([state.text], { type: type }));
+                    return Promise.resolve(new Blob([state.bytes || state.text], { type: type }));
                 },
                 bytes: function () {
                     var state = bodyOf(this, 'bytes');
                     readBody(state);
                     if (state.stream) return drainBodyStream(state);
+                    if (state.bytes) return Promise.resolve(state.bytes.slice());
                     return Promise.resolve(textBytes(state.text));
                 },
                 formData: function () {
@@ -2635,7 +2767,8 @@ public class JavaScriptEngine : IDisposable
                         if (state.stream) return state.stream;
                         if (!state.text.length) return null;
                         if (state.bodyStream === undefined) {
-                            state.bodyStream = singleChunkStream(textBytes(state.text));
+                            state.bodyStream = singleChunkStream(
+                                state.bytes ? state.bytes.slice() : textBytes(state.text));
                         }
                         return state.bodyStream;
                     }
@@ -2798,6 +2931,10 @@ public class JavaScriptEngine : IDisposable
                 { value: 'Response', configurable: true });
             Object.defineProperty(Request.prototype, Symbol.toStringTag,
                 { value: 'Request', configurable: true });
+            [DOMPointReadOnly, DOMPoint, DOMRectList].forEach(function (ctor) {
+                Object.defineProperty(ctor.prototype, Symbol.toStringTag,
+                    { value: ctor.name, configurable: true });
+            });
             window.DOMPoint = DOMPoint;
             window.DOMPointReadOnly = DOMPointReadOnly;
             window.DOMRectList = DOMRectList;
@@ -2821,6 +2958,185 @@ public class JavaScriptEngine : IDisposable
                 } catch (e) { }
                 return sheet;
             }
+            // The constructor the page calls is this one — a sheet the script builds itself, empty
+            // until 'replaceSync' or 'insertRule' fills it (CSSOM §5.2.2). It was written in the
+            // script's own scope and never reached the window, so 'typeof CSSStyleSheet' answered
+            // nothing at all.
+            window.CSSStyleSheet = CSSStyleSheet;
+
+            // ── The CSSOM interfaces (CSSOM §5.2-§5.6) ──────────────────────────
+            // The rules a sheet hands out, the declarations they carry and the lists that hold them
+            // are host objects, and the stamping that gives a wrapper its interface reads these
+            // levels: the tag, 'rule instanceof CSSMediaRule' and the members the interface declares
+            // all come from the level. A member read through a receiver the engine did not make is
+            // refused the way the reference refuses it (measured: 'CSSRule.prototype.cssText' raises a
+            // TypeError whose message is 'Illegal invocation', while a rule taken out of the sheet
+            // answers its own text) — an instance never reaches these functions, because its own
+            // member of the same name is read first.
+            (function () {
+                var levels = window.__domProto || (window.__domProto = {});
+                function quoted(value) { return String.fromCharCode(39) + value + String.fromCharCode(39); }
+                function level(name, baseName) {
+                    var proto = levels[name] || Object.create(levels[baseName] || Object.prototype);
+                    levels[name] = proto;
+                    var earlier = window[name];
+                    // A name the script already gave a working constructor keeps it: 'new
+                    // CSSStyleSheet()' builds a sheet the page owns, so refusing it would take an
+                    // interface away rather than describe one.
+                    var Ctor = typeof earlier === 'function' ? earlier : function () {
+                        throw new TypeError('Failed to construct ' + quoted(name)
+                            + ': Illegal constructor');
+                    };
+                    Object.defineProperty(Ctor, 'name', { value: name, configurable: true });
+                    Ctor.prototype = proto;
+                    Object.defineProperty(proto, 'constructor',
+                        { value: Ctor, writable: true, configurable: true });
+                    Object.defineProperty(proto, Symbol.toStringTag,
+                        { value: name, configurable: true, enumerable: false });
+                    window[name] = Ctor;
+                    return proto;
+                }
+                function refusal() { throw new TypeError('Illegal invocation'); }
+                function readMember(iface, member) {
+                    var proto = levels[iface];
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, member,
+                            { configurable: true, enumerable: false, get: refusal, set: refusal });
+                    } catch (e) { }
+                }
+                function callMember(iface, member) {
+                    var proto = levels[iface];
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, member, { configurable: true, writable: true,
+                            enumerable: false, value: function () { refusal(); } });
+                    } catch (e) { }
+                }
+                var ruleLevel = level('CSSRule', null);
+                // The rule-type constants the interface still names, with the values at-rules were
+                // introduced in — not the order their own objects are read in (measured against the
+                // host's own 'type': '@keyframes' 7, '@keyframe' 8, '@counter-style' 11, '@supports'
+                // 12, '@namespace' 10, '@font-feature-values' 14).
+                [['STYLE_RULE', 1], ['CHARSET_RULE', 2], ['IMPORT_RULE', 3],
+                 ['MEDIA_RULE', 4], ['FONT_FACE_RULE', 5], ['PAGE_RULE', 6], ['KEYFRAMES_RULE', 7],
+                 ['KEYFRAME_RULE', 8], ['MARGIN_RULE', 9], ['NAMESPACE_RULE', 10],
+                 ['COUNTER_STYLE_RULE', 11], ['SUPPORTS_RULE', 12],
+                 ['FONT_FEATURE_VALUES_RULE', 14]].forEach(function (pair) {
+                    Object.defineProperty(ruleLevel, pair[0], { value: pair[1], writable: false,
+                        enumerable: false, configurable: true });
+                    Object.defineProperty(window.CSSRule, pair[0], { value: pair[1], writable: false,
+                        enumerable: false, configurable: true });
+                });
+                ['type', 'cssText', 'parentRule', 'parentStyleSheet'].forEach(function (member) {
+                    readMember('CSSRule', member);
+                });
+                level('CSSGroupingRule', 'CSSRule');
+                readMember('CSSGroupingRule', 'cssRules');
+                callMember('CSSGroupingRule', 'insertRule');
+                callMember('CSSGroupingRule', 'deleteRule');
+                level('CSSConditionRule', 'CSSGroupingRule');
+                readMember('CSSConditionRule', 'conditionText');
+                readMember('CSSConditionRule', 'name');
+                level('CSSMediaRule', 'CSSConditionRule');
+                readMember('CSSMediaRule', 'media');
+                level('CSSSupportsRule', 'CSSConditionRule');
+                readMember('CSSSupportsRule', 'supportsText');
+                level('CSSContainerRule', 'CSSConditionRule');
+                level('CSSStyleRule', 'CSSRule');
+                readMember('CSSStyleRule', 'selectorText');
+                readMember('CSSStyleRule', 'style');
+                callMember('CSSStyleRule', 'insertRule');
+                callMember('CSSStyleRule', 'deleteRule');
+                level('CSSImportRule', 'CSSRule');
+                readMember('CSSImportRule', 'href');
+                readMember('CSSImportRule', 'media');
+                readMember('CSSImportRule', 'supportsText');
+                readMember('CSSImportRule', 'layerName');
+                level('CSSKeyframesRule', 'CSSRule');
+                readMember('CSSKeyframesRule', 'name');
+                readMember('CSSKeyframesRule', 'cssRules');
+                readMember('CSSKeyframesRule', 'length');
+                callMember('CSSKeyframesRule', 'appendRule');
+                callMember('CSSKeyframesRule', 'deleteRule');
+                callMember('CSSKeyframesRule', 'getRuleByName');
+                level('CSSKeyframeRule', 'CSSRule');
+                readMember('CSSKeyframeRule', 'keyText');
+                readMember('CSSKeyframeRule', 'style');
+                level('CSSFontFaceRule', 'CSSRule');
+                readMember('CSSFontFaceRule', 'style');
+                level('CSSPageRule', 'CSSRule');
+                readMember('CSSPageRule', 'selectorText');
+                readMember('CSSPageRule', 'style');
+                level('CSSNamespaceRule', 'CSSRule');
+                readMember('CSSNamespaceRule', 'namespaceURI');
+                readMember('CSSNamespaceRule', 'prefix');
+                level('CSSMarginRule', 'CSSRule');
+                readMember('CSSMarginRule', 'name');
+                readMember('CSSMarginRule', 'style');
+                level('CSSPropertyRule', 'CSSRule');
+                readMember('CSSPropertyRule', 'name');
+                readMember('CSSPropertyRule', 'syntax');
+                readMember('CSSPropertyRule', 'inherits');
+                readMember('CSSPropertyRule', 'initialValue');
+                level('CSSCounterStyleRule', 'CSSRule');
+                ['name', 'system', 'symbols', 'additiveSymbols', 'range', 'pad', 'suffix',
+                 'negative', 'fallback', 'speakAs'].forEach(function (member) {
+                    readMember('CSSCounterStyleRule', member);
+                });
+                level('CSSLayerBlockRule', 'CSSGroupingRule');
+                readMember('CSSLayerBlockRule', 'name');
+                level('CSSLayerStatementRule', 'CSSRule');
+                readMember('CSSLayerStatementRule', 'nameList');
+                level('CSSScopeRule', 'CSSGroupingRule');
+                level('CSSStartingStyleRule', 'CSSRule');
+                level('CSSFontFeatureValuesRule', 'CSSRule');
+                level('CSSPositionTryRule', 'CSSRule');
+                level('CSSViewTransitionRule', 'CSSRule');
+                // The two lists (CSSOM §5.2.8, §6.1): 'length' with an 'item' read, and the index the
+                // host answers for each position.
+                level('CSSRuleList', null);
+                readMember('CSSRuleList', 'length');
+                callMember('CSSRuleList', 'item');
+                level('StyleSheetList', null);
+                readMember('StyleSheetList', 'length');
+                callMember('StyleSheetList', 'item');
+                level('MediaList', null);
+                readMember('MediaList', 'mediaText');
+                readMember('MediaList', 'length');
+                callMember('MediaList', 'item');
+                callMember('MediaList', 'appendMedium');
+                callMember('MediaList', 'deleteMedium');
+                // The declaration block (CSSOM §5.3.1): the seven members the interface names on its
+                // own prototype, measured, with 'cssFloat' beside 'float' as the IDL has to.
+                level('CSSStyleDeclaration', null);
+                ['cssText', 'length', 'parentRule', 'cssFloat'].forEach(function (member) {
+                    readMember('CSSStyleDeclaration', member);
+                });
+                ['getPropertyValue', 'getPropertyPriority', 'setProperty', 'removeProperty',
+                 'item'].forEach(function (member) { callMember('CSSStyleDeclaration', member); });
+                level('CSSStyleSheet', null);
+                readMember('CSSStyleSheet', 'ownerRule');
+                readMember('CSSStyleSheet', 'ownerNode');
+                readMember('CSSStyleSheet', 'parentStyleSheet');
+                readMember('CSSStyleSheet', 'cssRules');
+                readMember('CSSStyleSheet', 'href');
+                readMember('CSSStyleSheet', 'title');
+                readMember('CSSStyleSheet', 'type');
+                readMember('CSSStyleSheet', 'disabled');
+                readMember('CSSStyleSheet', 'media');
+                callMember('CSSStyleSheet', 'insertRule');
+                callMember('CSSStyleSheet', 'deleteRule');
+                callMember('CSSStyleSheet', 'replaceSync');
+                // The geometry the CSSOM and the range reads through: a box's rectangle and a list of
+                // them are stamped with these levels (Geometry Interfaces §4, §5, CSSOM View §2.4;
+                // measured: [object DOMRect] for the box and [object DOMRectList] for the list).
+                ['DOMPointReadOnly', 'DOMPoint', 'DOMRectReadOnly', 'DOMRect', 'DOMRectList']
+                    .forEach(function (name) {
+                        if (typeof window[name] !== 'function') return;
+                        if (!levels[name]) levels[name] = window[name].prototype;
+                    });
+            })();
 
             function Image(width, height) {
                 var img = document.createElement('img');
@@ -2836,10 +3152,12 @@ public class JavaScriptEngine : IDisposable
                 // A 'message' event is fired on the Window rather than on the tree, so the window
                 // keeps its own copy of these listeners for window.postMessage to reach (HTML §8.6).
                 // The same holds for the error an 'reportError' raises: it belongs to the window,
-                // and the tree root never sees it (HTML §8.8).
-                if ((type === 'message' || type === 'error') && listener) {
-                    var ml = window[type === 'message' ? '__winMessage' : '__winError']
-                        = window[type === 'message' ? '__winMessage' : '__winError'] || [];
+                // and the tree root never sees it (HTML §8.8). The history's 'popstate' is a third —
+                // the traversal is answered on the window, not on a node in the tree (HTML §5.6).
+                var winBag = type === 'message' ? '__winMessage'
+                    : (type === 'error' ? '__winError' : (type === 'popstate' ? '__winPopState' : null));
+                if (winBag && listener) {
+                    var ml = window[winBag] = window[winBag] || [];
                     if (ml.indexOf(listener) < 0) ml.push(listener);
                 }
             };
@@ -2847,7 +3165,9 @@ public class JavaScriptEngine : IDisposable
                 if (document && document.removeEventListener) {
                     document.removeEventListener(type, listener, options);
                 }
-                var bag = type === 'message' ? window.__winMessage : (type === 'error' ? window.__winError : null);
+                var bag = type === 'message' ? window.__winMessage
+                    : (type === 'error' ? window.__winError
+                        : (type === 'popstate' ? window.__winPopState : null));
                 if (bag) {
                     var i = bag.indexOf(listener);
                     if (i >= 0) bag.splice(i, 1);
@@ -3480,7 +3800,17 @@ public class JavaScriptEngine : IDisposable
                     });
                 }
                 var P = window.__domProto;
-                if (P) { for (var k in P) defOn(P[k]); }
+                // Only the interfaces that can carry a handler: an element, a document, a fragment or
+                // the window. The loop used to walk every level there is, which wrote 'onclick' onto a
+                // '@media' rule as readily as onto a button — and the interface's own key list the
+                // reference prints has no handler on it at all (measured).
+                function handlerLevel(name) {
+                    return /^(HTML|SVG|MathML)[A-Za-z]*Element$/.test(name) || name === 'Element'
+                        || name === 'HTMLElement' || name === 'Document' || name === 'HTMLDocument'
+                        || name === 'XMLDocument' || name === 'DocumentFragment'
+                        || name === 'ShadowRoot' || name === 'Node' || name === 'Window';
+                }
+                if (P) { for (var k in P) if (handlerLevel(k)) defOn(P[k]); }
                 defOn(window.HTMLElement && window.HTMLElement.prototype);
                 defOn(window.Element && window.Element.prototype);
                 // WindowEventHandlers (HTML §6.7.1): window.onload / onerror / onscroll and friends
@@ -3627,7 +3957,7 @@ public class JavaScriptEngine : IDisposable
             Object.defineProperty(window, 'frames', { configurable: true, get: function() { return window; } });
             Object.defineProperty(window, 'length', { configurable: true, get: function() { return 0; } });
             Object.defineProperty(window, 'status', __domStringAttr(''));
-            Object.defineProperty(window, 'defaultStatus', __domStringAttr(''));
+
             Object.defineProperty(window, 'screenLeft', { configurable: true, get: function() { return 0; } });
             Object.defineProperty(window, 'screenTop', { configurable: true, get: function() { return 0; } });
             Object.defineProperty(window, 'screenX', { configurable: true, get: function() { return 0; } });
@@ -4414,6 +4744,12 @@ public class JavaScriptEngine : IDisposable
                 };
 
                 CustomElementRegistry.prototype.getName = function (ctor) {
+                    // §1: the read is asked of the constructor, not of the name — a page that hands
+                    // over the name is refused in the interface's own sentence (measured).
+                    if (typeof ctor !== 'function') {
+                        throw new TypeError(prefix('getName') + 'parameter 1 is not of type '
+                            + chr(39) + 'Function' + chr(39) + '.');
+                    }
                     var found = namesByCtor.get(ctor);
                     return found === undefined ? null : found;
                 };
@@ -8409,6 +8745,638 @@ public class JavaScriptEngine : IDisposable
                 };
             })();
 
+            // ── The members the element and document interfaces declare ────────
+            // (DOM §4.2, CSSOM View §2.4, §3.10, HTML §7.3.4, §12.5.2, Web Animations §2-§4,
+            //  Houdini CSS Typed OM §3-§6, Fullscreen §5, Form Data §4.15.5)
+            // An element wrapper answers its own members first, so a member the host already
+            // implements needs only its place on the interface: a page that reads
+            // 'Element.prototype.matches' gets a function, and a call through a receiver that is
+            // not an element is refused the way the reference refuses it. What the host does not
+            // carry — the animation a page starts, the map a computed style reads through, the
+            // internals of a custom element, the text an element shows — is built here for real.
+            (function () {
+                var levels = window.__domProto || (window.__domProto = {});
+                function quoted(value) { return String.fromCharCode(39) + value + String.fromCharCode(39); }
+                function refusal() { throw new TypeError('Illegal invocation'); }
+                function isNode(value) { return !!value && typeof value.nodeType === 'number'; }
+                function method(iface, name, body) {
+                    var proto = levels[iface];
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, {
+                            configurable: true, writable: true, enumerable: false, value: body
+                        });
+                    } catch (e) { }
+                }
+                // A member the host implements: the function is the interface's own, and only ever
+                // runs for a receiver the engine did not make. The reference says the interface and
+                // the operation, not just the invocation, and a page that reads 'err.message' out of
+                // a log expects that wording (CSSOM View §2.2, DOM §4.2.13; both measured).
+                function brandMethod(iface, name) {
+                    method(iface, name, function () {
+                        throw new TypeError('Failed to execute ' + quoted(name) + ' on ' + quoted(iface)
+                            + ': Illegal invocation');
+                    });
+                }
+                function brandRead(iface, name, value) {
+                    var proto = levels[iface];
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, {
+                            configurable: true, enumerable: false,
+                            get: function () { if (!isNode(this)) refusal(); return typeof value === 'function' ? value(this) : value; },
+                            set: refusal
+                        });
+                    } catch (e) { }
+                }
+                ['matches', 'closest', 'getClientRects', 'getBoundingClientRect', 'scrollBy',
+                 'getAttributeNames', 'hasAttributes', 'isSameNode', 'insertAdjacentElement',
+                 'insertAdjacentHTML', 'insertAdjacentText', 'remove', 'replaceChildren',
+                 'attachShadow', 'setPointerCapture', 'releasePointerCapture', 'hasPointerCapture',
+                 'scrollIntoView', 'matchesSelector'].forEach(function (name) {
+                    brandMethod('Element', name);
+                });
+                ['append', 'prepend', 'before', 'after', 'replaceWith'].forEach(function (name) {
+                    brandMethod('ChildNode' in levels ? 'ChildNode' : 'Element', name);
+                    brandMethod('Element', name);
+                });
+                ['contains', 'normalize', 'cloneNode', 'insertBefore', 'appendChild',
+                 'replaceChild', 'removeChild', 'isEqualNode', 'compareDocumentPosition',
+                 'lookupPrefix', 'lookupNamespaceURI', 'getRootNode'].forEach(function (name) {
+                    brandMethod('Node', name);
+                });
+                brandRead('Node', 'assignedSlot', null);
+                brandRead('Node', 'baseURI', function (node) { return node.baseURI; });
+                method('HTMLElement', 'click', function () {
+                    if (!isNode(this)) refusal();
+                    this.click();
+                });
+                brandMethod('HTMLElement', 'attachInternals');
+                brandMethod('Document', 'querySelector');
+                brandMethod('Document', 'querySelectorAll');
+
+                // ── The animation a page starts (Web Animations §2, §4, §5) ──────
+                // The engine has no compositor to drive, so an animation runs on the timer queue and
+                // the page reads the state the interface names: it is playing until its own end,
+                // 'finish' and 'cancel' move it, and the callbacks fire on the task the reference
+                // would have run them on. Nothing is painted from it — that part stays a gap.
+                var ANIMATIONS = new WeakMap();
+                var animationSeq = 0;
+                // The animation interfaces (Web Animations §2, §3, §4): the levels are registered
+                // before the first animation is built, because an animation's own prototype is the
+                // level — the tag, 'anim instanceof Animation' and the members the interface declares
+                // all read from there (measured: [object Animation] with playState 'running').
+                function namedLevel(name, baseName) {
+                    var proto = levels[name] || Object.create(levels[baseName] || Object.prototype);
+                    levels[name] = proto;
+                    var earlier = window[name];
+                    var Ctor = typeof earlier === 'function' ? earlier : function () {
+                        throw new TypeError('Failed to construct ' + quoted(name)
+                            + ': Illegal constructor');
+                    };
+                    Object.defineProperty(Ctor, 'name', { value: name, configurable: true });
+                    Ctor.prototype = proto;
+                    Object.defineProperty(proto, 'constructor',
+                        { value: Ctor, writable: true, configurable: true });
+                    Object.defineProperty(proto, Symbol.toStringTag, { value: name, configurable: true });
+                    window[name] = Ctor;
+                    return proto;
+                }
+                namedLevel('AnimationEffect', null);
+                namedLevel('KeyframeEffect', 'AnimationEffect');
+                namedLevel('Animation', null);
+                function animProto() { return levels.Animation || Object.prototype; }
+                function animSlots(anim) {
+                    var slots = ANIMATIONS.get(anim);
+                    if (!slots) refusal();
+                    return slots;
+                }
+                function timingOf(options) {
+                    var read = options;
+                    if (read === undefined || read === null) return { duration: 0, delay: 0, endDelay: 0, iterations: 1, iterationStart: 0 };
+                    if (typeof read !== 'object') read = { duration: read };
+                    var duration = read.duration === undefined || read.duration === 'auto'
+                        ? 0 : Number(read.duration) || 0;
+                    return { duration: duration, delay: Number(read.delay) || 0,
+                        endDelay: Number(read.endDelay) || 0,
+                        iterations: read.iterations === undefined ? 1 : Number(read.iterations),
+                        iterationStart: Number(read.iterationStart) || 0,
+                        direction: read.direction === undefined ? 'normal' : String(read.direction),
+                        fill: read.fill === undefined ? 'none' : String(read.fill),
+                        easing: read.easing === undefined ? 'linear' : String(read.easing) };
+                }
+                function fireAnimation(anim, type) {
+                    var slots = ANIMATIONS.get(anim);
+                    if (!slots) return;
+                    var event = null;
+                    try {
+                        event = new Event(type);
+                        event.animation = anim;
+                        event.timelineTime = slots.currentTime || 0;
+                    } catch (e) { }
+                    var handler = slots['on' + type];
+                    if (typeof handler === 'function') { try { handler.call(anim, event); } catch (e) { } }
+                    if (event) { try { anim.dispatchEvent(event); } catch (e) { } }
+                }
+                function Animation(target, keyframes, options) {
+                    var self = this;
+                    var timing = timingOf(options);
+                    var shared = ANIMATIONS.get(self);
+                    var slots = shared || {
+                        playState: 'idle', currentTime: 0, startTime: null, playbackRate: 1,
+                        pending: false, replaceState: 'active', id: '', timing: timing,
+                        target: target || null, keyframes: keyframes, onfinish: null,
+                        oncancel: null, onremove: null, timer: 0, holdTime: 0
+                    };
+                    if (!shared) ANIMATIONS.set(self, slots);
+                    var made = Object.create(animProto());
+                    ANIMATIONS.set(made, slots);
+                    slots.animation = made;
+                    made.play = function () {
+                        var at = performance.now();
+                        if (slots.playState === 'running') return;
+                        slots.playState = 'running';
+                        slots.startTime = at - slots.currentTime;
+                        schedule();
+                    };
+                    made.pause = function () {
+                        if (slots.timer) { clearTimeout(slots.timer); slots.timer = 0; }
+                        slots.playState = 'paused';
+                    };
+                    made.finish = function () {
+                        if (slots.timer) { clearTimeout(slots.timer); slots.timer = 0; }
+                        slots.currentTime = total();
+                        slots.playState = 'finished';
+                    };
+                    made.cancel = function () {
+                        if (slots.timer) { clearTimeout(slots.timer); slots.timer = 0; }
+                        slots.currentTime = 0;
+                        slots.playState = 'idle';
+                        fireAnimation(made, 'cancel');
+                    };
+                    made.reverse = function () {
+                        slots.playbackRate = -slots.playbackRate;
+                        made.play();
+                    };
+                    made.updatePlaybackRate = function (rate) {
+                        slots.playbackRate = Number(rate) || 0;
+                        return Promise.resolve(undefined);
+                    };
+                    made.commitStyles = function () { return undefined; };
+                    made.persist = function () { };
+                    made.addEventListener = function () { };
+                    made.removeEventListener = function () { };
+                    made.dispatchEvent = function () { return true; };
+                    return made;
+                }
+                // The lists every animated object keeps, so 'getAnimations' answers what was started
+                // and never finished or cancelled.
+                function animationsOf(node) {
+                    if (!isNode(node)) refusal();
+                    var list = ANIMATIONS.get(node);
+                    if (!list) { list = []; ANIMATIONS.set(node, list); }
+                    var live = [];
+                    for (var i = list.length - 1; i >= 0; i--) {
+                        var slots = ANIMATIONS.get(list[i]);
+                        if (!slots || slots.playState === 'idle') { list.splice(i, 1); continue; }
+                        live.push(list[i]);
+                    }
+                    return live;
+                }
+                method('Element', 'getAnimations', function () { return animationsOf(this); });
+                method('Document', 'getAnimations', function () { return animationsOf(this); });
+                method('Element', 'animate', function (keyframes, options) {
+                    if (!isNode(this)) refusal();
+                    var made = new Animation(null, null, null);
+                    var slots = ANIMATIONS.get(made);
+                    if (!ANIMATIONS.get(this)) ANIMATIONS.set(this, []);
+                    slots.target = this;
+                    slots.keyframes = keyframes;
+                    // The timing the page asked for belongs to this animation, not to the empty one
+                    // built above: the constructor was handed nothing, so the dictionary is read here.
+                    slots.timing = timingOf(options);
+                    var span = slots.timing.duration * (slots.timing.iterations === Infinity ? 1
+                        : Math.max(0, Number(slots.timing.iterations) || 0));
+                    slots.span = span;
+                    ANIMATIONS.get(this).push(made);
+                    made.play = function () {
+                        slots.playState = 'running';
+                        slots.startTime = performance.now() - slots.currentTime;
+                        if (!slots.span) { slots.playState = 'finished'; return; }
+                        if (slots.timer) clearTimeout(slots.timer);
+                        if (span > 0) {
+                            slots.timer = setTimeout(function () {
+                                slots.timer = 0;
+                                if (slots.playState !== 'running') return;
+                                slots.currentTime = span;
+                                slots.playState = 'finished';
+                                fireAnimation(made, 'finish');
+                            }, span);
+                        }
+                    };
+                    made.play();
+                    return made;
+                });
+                // The clock an animation runs on is the engine's own: the state is recomputed when the
+                // page reads it rather than only when a timer happens to come round (Web Animations
+                // §3), and the finish callback is heard exactly once — the first read past the end,
+                // or the timer that gets there first.
+                function advance(slots) {
+                    if (slots.playState !== 'running' || !slots.timer) return;
+                    var elapsed = performance.now() - slots.startTime;
+                    if (elapsed < slots.span) { slots.currentTime = elapsed > 0 ? elapsed : 0; return; }
+                    slots.currentTime = slots.span;
+                    slots.playState = 'finished';
+                    if (slots.timer) { clearTimeout(slots.timer); slots.timer = 0; }
+                    fireAnimation(slots.animation, 'finish');
+                }
+                ['effect', 'timeline', 'startTime', 'currentTime', 'playbackRate', 'contextTime',
+                 'rangeStart', 'rangeEnd', 'playState', 'replaceState', 'pending', 'id', 'onfinish',
+                 'oncancel', 'onremove', 'finished', 'ready'].forEach(function (field) {
+                    Object.defineProperty(animProto(), field, {
+                        configurable: true, enumerable: false,
+                        get: function () {
+                            var slots = ANIMATIONS.get(this);
+                            if (!slots) refusal();
+                            advance(slots);
+                            if (field === 'finished' || field === 'ready') return Promise.resolve(this);
+                            if (field === 'timeline') return document.timeline;
+                            if (field === 'effect') return slots.keyframes === undefined ? null
+                                : Object.create(levels.KeyframeEffect || Object.prototype);
+                            if (field === 'currentTime') return slots.currentTime;
+                            if (field === 'startTime') return slots.startTime;
+                            return slots[field];
+                        },
+                        set: function (value) {
+                            var slots = ANIMATIONS.get(this);
+                            if (!slots) refusal();
+                            if (field === 'currentTime') {
+                                slots.currentTime = Number(value) || 0;
+                                return;
+                            }
+                            if (field === 'playbackRate') { slots.playbackRate = Number(value) || 0; return; }
+                            slots[field] = value === undefined ? null : value;
+                        }
+                    });
+                });
+                method('Animation', 'play', function () { refusal(); });
+                method('Animation', 'pause', function () { refusal(); });
+                method('Animation', 'finish', function () { refusal(); });
+                method('Animation', 'cancel', function () { refusal(); });
+                method('Animation', 'reverse', function () { refusal(); });
+                method('Animation', 'commitStyles', function () { refusal(); });
+
+                // Houdini CSS Typed OM §3, §5: the map a computed style is read through, and the
+                // values it hands out. The engine has no parsed value objects to give yet, so every
+                // property reads as the keyword the CSS text holds — the name, the read and the size
+                // of the map are the interface's own.
+                function StyleValue() { refusal(); }
+                function CSSUnitValue(value, unit) {
+                    if (!(this instanceof CSSUnitValue)) {
+                        throw new TypeError('Failed to construct ' + quoted('CSSUnitValue')
+                            + ': Please use the ' + quoted('new') + ' operator');
+                    }
+                    this.value = Number(value) || 0;
+                    this.unit = String(unit === undefined ? '' : unit);
+                }
+                function CSSKeywordValue(value) {
+                    if (!(this instanceof CSSKeywordValue)) {
+                        throw new TypeError('Failed to construct ' + quoted('CSSKeywordValue')
+                            + ': Please use the ' + quoted('new') + ' operator');
+                    }
+                    this.value = String(value === undefined ? '' : value);
+                }
+                function CSSMathValue(operator) {
+                    throw new TypeError('Failed to construct ' + quoted('CSSMathValue')
+                        + ': Illegal constructor');
+                }
+                function mapProto(name, baseName) {
+                    // A map the page can build is hung below the read-only view it shares, so the
+                    // name of the level above is looked up rather than used as the prototype itself.
+                    var proto = Object.create(levels[baseName] || Object.prototype);
+                    var Ctor = function () {
+                        throw new TypeError('Failed to construct ' + quoted(name)
+                            + ': Illegal constructor');
+                    };
+                    Object.defineProperty(Ctor, 'name', { value: name, configurable: true });
+                    Ctor.prototype = proto;
+                    Object.defineProperty(proto, 'constructor',
+                        { value: Ctor, writable: true, configurable: true });
+                    Object.defineProperty(proto, Symbol.toStringTag, { value: name, configurable: true });
+                    window[name] = Ctor;
+                    levels[name] = proto;
+                    return proto;
+                }
+                var STYLE_MAP_SLOTS = new WeakMap();
+                function mapEntries(receiver) {
+                    var entries = STYLE_MAP_SLOTS.get(receiver);
+                    if (!entries) refusal();
+                    return entries;
+                }
+                var readOnlyProto = mapProto('StylePropertyMapReadOnly', null);
+                var liveProto = mapProto('StylePropertyMap', 'StylePropertyMapReadOnly');
+                // The value classes are the page's to build (CSS Typed OM §3): the keyword and the
+                // unit are constructors, the mathematical value is not, and each name has to reach
+                // the window — they were written in this block's own scope, so a page that asked for
+                // 'CSSKeywordValue' heard nothing at all.
+                // CSS Properties and Values API §4: a custom property the page registers is held by
+                // name; the three fields the dictionary carries are kept beside it.
+                var REGISTERED = { };
+                if (!window.CSS) window.CSS = { };
+                try {
+                    Object.defineProperty(window.CSS, 'registerProperty', {
+                        configurable: true, writable: true, enumerable: false,
+                        value: function (definition) {
+                            var read = definition || { };
+                            var key = read.name === undefined ? '' : String(read.name);
+                            if (key.length < 3 || key.substring(0, 2) !== '--') {
+                                throw new DOMException('Failed to execute ' + quoted('registerProperty')
+                                    + ' on ' + quoted('CSS') + ': The name provided must start with '
+                                    + quoted('--') + '.', 'SyntaxError');
+                            }
+                            REGISTERED[key] = {
+                                syntax: read.syntax === undefined ? '*' : String(read.syntax),
+                                inherits: !!read.inherits,
+                                initialValue: read.initialValue === undefined ? null : String(read.initialValue)
+                            };
+                        }
+                    });
+                } catch (e) { }
+                window.CSSKeywordValue = CSSKeywordValue;
+                window.CSSUnitValue = CSSUnitValue;
+                window.CSSMathValue = CSSMathValue;
+                Object.defineProperty(CSSKeywordValue.prototype, Symbol.toStringTag,
+                    { value: 'CSSKeywordValue', configurable: true });
+                Object.defineProperty(CSSUnitValue.prototype, Symbol.toStringTag,
+                    { value: 'CSSUnitValue', configurable: true });
+                Object.defineProperty(CSSMathValue.prototype, Symbol.toStringTag,
+                    { value: 'CSSMathValue', configurable: true });
+                levels.CSSKeywordValue = CSSKeywordValue.prototype;
+                levels.CSSUnitValue = CSSUnitValue.prototype;
+                levels.CSSMathValue = CSSMathValue.prototype;
+                function asKeyword(text) {
+                    return new CSSKeywordValue(text);
+                }
+                ['size', 'get', 'getAll', 'has', 'entries', 'forEach', 'keys', 'values', 'append',
+                 'delete', 'set', 'clear'].forEach(function (name) {
+                    if (name === 'size') {
+                        Object.defineProperty(readOnlyProto, 'size', { configurable: true, enumerable: false,
+                            get: function () { return Object.keys(mapEntries(this)).length; } });
+                        return;
+                    }
+                    Object.defineProperty(readOnlyProto, name, {
+                        configurable: true, writable: true, enumerable: false,
+                        value: function (a, b) {
+                            var entries = mapEntries(this);
+                            if (name === 'get') return entries[a] === undefined ? null : asKeyword(entries[a]);
+                            if (name === 'getAll') return entries[a] === undefined ? [] : [asKeyword(entries[a])];
+                            if (name === 'has') return entries[a] !== undefined;
+                            if (name === 'keys') return Object.keys(entries);
+                            if (name === 'values') return Object.keys(entries).map(function (k) { return entries[k]; });
+                            if (name === 'entries') return Object.keys(entries).map(function (k) { return [k, entries[k]]; });
+                            if (name === 'forEach') {
+                                Object.keys(entries).forEach(function (k) { a.call(b, entries[k], k); });
+                                return undefined;
+                            }
+                            refusal();
+                        }
+                    });
+                });
+                method('Element', 'computedStyleMap', function () {
+                    if (!isNode(this)) refusal();
+                    var read = null;
+                    try { read = window.getComputedStyle(this); } catch (e) { read = null; }
+                    var entries = { };
+                    // The declaration list names its own properties by index (CSSOM §5.3.2), which is
+                    // the only list a computed style keeps — the camelCase members are a different set.
+                    var count = read && read.length ? Number(read.length) : 0;
+                    for (var i = 0; i < count; i++) {
+                        var key = typeof read.item === 'function' ? read.item(i) : null;
+                        if (key === null || key === undefined) continue;
+                        entries[String(key)] = String(read.getPropertyValue(String(key)));
+                    }
+                    var made = Object.create(readOnlyProto);
+                    STYLE_MAP_SLOTS.set(made, entries);
+                    return made;
+                });
+
+                // Fullscreen §5: this engine draws its own window and has no full-screen surface to
+                // ask for, so the request is refused with the error the specification names for an
+                // element that cannot be made full screen.
+                ['requestFullscreen', 'webkitRequestFullscreen'].forEach(function (name) {
+                    method('Element', name, function () {
+                        if (!isNode(this)) refusal();
+                        return Promise.reject(new DOMException(
+                            'Fullscreen is not available in this engine.', 'NotSupportedError'));
+                    });
+                });
+                // Form Data §4.15.5: the internals a custom element holds. An element the page has
+                // not defined is refused the way the reference refuses it (measured).
+                var INTERNALS_SLOTS = new WeakMap();
+                var internalsProto = levels.ElementInternals || (levels.ElementInternals =
+                    Object.create(Object.prototype));
+                if (!window.ElementInternals) {
+                    var InternalsCtor = function () {
+                        throw new TypeError('Failed to construct ' + quoted('ElementInternals')
+                            + ': Illegal constructor');
+                    };
+                    Object.defineProperty(InternalsCtor, 'name',
+                        { value: 'ElementInternals', configurable: true });
+                    InternalsCtor.prototype = internalsProto;
+                    Object.defineProperty(internalsProto, 'constructor',
+                        { value: InternalsCtor, writable: true, configurable: true });
+                    Object.defineProperty(internalsProto, Symbol.toStringTag,
+                        { value: 'ElementInternals', configurable: true });
+                    window.ElementInternals = InternalsCtor;
+                }
+                function internalsSlots(internals) {
+                    var slots = INTERNALS_SLOTS.get(internals);
+                    if (!slots) refusal();
+                    return slots;
+                }
+                ['form', 'willValidate', 'validity', 'validationMessage', 'shadowRoot', 'states',
+                 'role'].forEach(function (field) {
+                    Object.defineProperty(internalsProto, field, { configurable: true, enumerable: false,
+                        get: function () { return internalsSlots(this)[field]; } });
+                });
+                Object.defineProperty(internalsProto, 'labels', { configurable: true, enumerable: false,
+                    get: function () {
+                        var slots = internalsSlots(this);
+                        if (!slots.formAssociated) {
+                            // Form Data §4.15.5.11: the labels a form-associated custom element owns.
+                            // An internals whose element never asked to be associated has none, and the
+                            // reference reads that as a refusal naming the property (measured).
+                            throw new DOMException('Failed to read the ' + quoted('labels') + ' property '
+                                + 'from ' + quoted('ElementInternals') + ': The target element is not a '
+                                + 'form-associated custom element.', 'NotSupportedError');
+                        }
+                        return slots.labels;
+                    } });
+                ['checkValidity', 'reportValidity', 'setFormValue', 'setValidity'].forEach(function (name) {
+                    Object.defineProperty(internalsProto, name, {
+                        configurable: true, writable: true, enumerable: false,
+                        value: function () {
+                            internalsSlots(this);
+                            if (name === 'checkValidity' || name === 'reportValidity') return true;
+                            return undefined;
+                        }
+                    });
+                });
+                // HTML §5.6: the bridge the history's own traversal calls. The event is built here,
+                // through the interface's constructor, and sent down the tree the window's listeners
+                // live on — the same path a dispatched event takes.
+                window.__acruxPopState = function () {
+                    var event = null;
+                    try {
+                        event = new PopStateEvent('popstate', {
+                            state: history.state === undefined ? null : history.state });
+                    } catch (e) { return; }
+                    // The window's own listeners are held in the bag the window keeps (the same path
+                    // a 'message' takes), because a 'popstate' belongs to the window and never walks
+                    // the document tree; the tree is walked as well, so a page that registered on the
+                    // document hears it too.
+                    var bag = window.__winPopState || [];
+                    for (var i = 0; i < bag.length; i++) {
+                        try { bag[i].call(window, event); } catch (e) { }
+                    }
+                    try { document.dispatchEvent(event); } catch (e) { }
+                    if (typeof window.onpopstate === 'function') {
+                        try { window.onpopstate(event); } catch (e) { }
+                    }
+                };
+
+                // Scheduler §2, §3: the task a page posts is queued on the timer queue the engine
+                // already pumps, with the priority it asked for choosing how soon that pump reaches
+                // it. The signal is the abort handle the task can be given; aborting it rejects the
+                // promise with the reason the signal carries.
+                function namedInterface(name, baseProto, constructible) {
+                    var proto = levels[name] || Object.create(baseProto || Object.prototype);
+                    levels[name] = proto;
+                    var Ctor = constructible || function () {
+                        throw new TypeError('Failed to construct ' + quoted(name)
+                            + ': Illegal constructor');
+                    };
+                    Object.defineProperty(Ctor, 'name', { value: name, configurable: true });
+                    Ctor.prototype = proto;
+                    Object.defineProperty(proto, 'constructor',
+                        { value: Ctor, writable: true, configurable: true });
+                    Object.defineProperty(proto, Symbol.toStringTag, { value: name, configurable: true });
+                    window[name] = Ctor;
+                    return proto;
+                }
+                var TASK_SLOTS = new WeakMap();
+                var taskSignalProto = namedInterface('TaskSignal', (levels.EventTarget || Object.prototype));
+                ['priority', 'abortReason'].forEach(function (field) {
+                    Object.defineProperty(taskSignalProto, field, { configurable: true, enumerable: false,
+                        get: function () { var slots = TASK_SLOTS.get(this); if (!slots) refusal(); return slots[field]; } });
+                });
+                var schedulerProto = namedInterface('Scheduler', null);
+                Object.defineProperty(schedulerProto, 'currentTask', { configurable: true, enumerable: false,
+                    get: function () { return null; } });
+                Object.defineProperty(schedulerProto, 'postTask', {
+                    configurable: true, writable: true, enumerable: false,
+                    value: function (callback, options) {
+                        var self = this;
+                        if (typeof callback !== 'function') {
+                            throw new TypeError('Failed to execute ' + quoted('postTask') + ' on '
+                                + quoted('Scheduler') + ': parameter 1 is not of type '
+                                + quoted('Function') + '.');
+                        }
+                        var read = options || { };
+                        var signal = read.signal === undefined ? null : read.signal;
+                        var priority = read.priority === undefined ? 'user-visible' : String(read.priority);
+                        if (signal && TASK_SLOTS.get(signal)) signal.__lastPriority = priority;
+                        var delay = priority === 'background' ? 8 : (priority === 'user-blocking' ? 0 : 4);
+                        return new Promise(function (resolve, reject) {
+                            setTimeout(function () {
+                                if (signal && signal.aborted) {
+                                    reject(signal.reason === undefined
+                                        ? new DOMException('The operation was aborted.', 'AbortError')
+                                        : signal.reason);
+                                    return;
+                                }
+                                try { resolve(callback()); } catch (e) { reject(e); }
+                            }, delay);
+                        });
+                    }
+                });
+                Object.defineProperty(window, 'scheduler', { configurable: true, enumerable: true,
+                    get: function () {
+                        if (!window.__acruxScheduler) window.__acruxScheduler = Object.create(schedulerProto);
+                        return window.__acruxScheduler;
+                    } });
+
+                method('HTMLElement', 'attachInternals', function () {
+                    if (!isNode(this) || typeof this.tagName !== 'string') refusal();
+                    if (this.tagName.indexOf('-') < 0) {
+                        throw new DOMException('Failed to execute ' + quoted('attachInternals') + ' on '
+                            + quoted('HTMLElement') + ': Unable to attach ElementInternals to '
+                            + 'non-custom elements.', 'NotSupportedError');
+                    }
+                    var made = Object.create(internalsProto);
+                    INTERNALS_SLOTS.set(made, { form: null, willValidate: false, validity: null,
+                        validationMessage: '', shadowRoot: this.shadowRoot === undefined ? null
+                            : this.shadowRoot, states: { }, role: null, labels: [],
+                        formAssociated: false });
+                    return made;
+                });
+
+                // HTML §12.5.2: the text an element shows. The engine has no rendered line boxes to
+                // walk here, so the block runs of the markup stand in for them — each block child
+                // contributes its own text and two breaks are joined into one — which gives the
+                // reference's answers for the shapes pages actually read (measured: 'one\ntwo' for a
+                // paragraph with a break, 'one\ntwo\n\nthree' for two paragraphs).
+                var BLOCK_TEXT = {
+                    ADDRESS: 1, ARTICLE: 1, ASIDE: 1, BLOCKQUOTE: 1, DD: 1, DETAILS: 1, DIV: 1,
+                    DL: 1, DT: 1, FIELDSET: 1, FIGCAPTION: 1, FIGURE: 1, FOOTER: 1, FORM: 1, H1: 1,
+                    H2: 1, H3: 1, H4: 1, H5: 1, H6: 1, HEADER: 1, HR: 1, LI: 1, MAIN: 1, NAV: 1,
+                    OL: 1, P: 1, PRE: 1, SECTION: 1, TABLE: 1, TBODY: 1, TD: 1, TFOOT: 1, TH: 1,
+                    THEAD: 1, TR: 1, UL: 1
+                };
+                function innerTextOf(node) {
+                    if (node.nodeType === 3 || node.nodeType === 4) return node.data || '';
+                    var out = '';
+                    var children = node.childNodes || [];
+                    for (var i = 0; i < children.length; i++) {
+                        var child = children[i];
+                        if (child.nodeType === 1) {
+                            var tag = String(child.tagName || '').toUpperCase();
+                            if (tag === 'BR') { out += '\n'; continue; }
+                            if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') continue;
+                            var made = innerTextOf(child);
+                            if (made === '') continue;
+                            if (BLOCK_TEXT[tag]) {
+                                // Each block is set off by a break of its own on either side, so two
+                                // neighbouring blocks meet as two breaks — the reference's paragraph
+                                // separator (measured: 'one\ntwo\n\nthree' for two paragraphs) — and
+                                // three or more in a row fold back to two.
+                                out += '\n' + made + '\n';
+                            } else out += made;
+                        } else if (child.nodeType === 3 || child.nodeType === 4) out += child.data || '';
+                    }
+                    return out;
+                }
+                var htmlProto = levels.HTMLElement || Object.prototype;
+                if (!Object.prototype.hasOwnProperty.call(htmlProto, 'innerText')) {
+                    try {
+                        Object.defineProperty(htmlProto, 'innerText', {
+                            configurable: true, enumerable: false,
+                            get: function () {
+                                if (!isNode(this)) refusal();
+                                return innerTextOf(this).replace(/\n{3,}/g, '\n\n')
+                                    .replace(/^\n+/, '').replace(/\s+$/, '');
+                            },
+                            set: function (text) {
+                                if (!isNode(this)) refusal();
+                                this.textContent = String(text === undefined ? '' : text);
+                            }
+                        });
+                    } catch (e) { }
+                }
+                // HTML §7.3.4, DOM §3.2: the two reads the document and the history still leave out.
+                brandRead('Document', 'scrollingElement', function (doc) { return doc.documentElement; });
+            })();
+
             // Array.groupBy (ES2024 §23.1.10): sort an iterable into a null-prototype object keyed
             // by the string form of the grouper's result. Object.groupBy is the engine's own; the
             // static on Array is the same operation reached from the iterable side, and the
@@ -9497,34 +10465,69 @@ public class HistoryHost : IDomPrototypeHost
 {
     string[] IDomPrototypeHost.__domTypeChain => new[] { "History" };
 
-    private readonly List<object?> _stack = new();
+    private readonly List<Entry> _stack = new();
     private int _currentIndex = -1;
     private readonly LocationHost _location;
+    private string _scrollRestoration = "auto";
+
+    /// <summary>One entry of the session history: the state the page handed to 'pushState' and the
+    /// address it was written with, which a traversal has to put back (HTML §5.6).</summary>
+    private sealed record Entry(object? State, string? Url);
 
     public HistoryHost(LocationHost location) => _location = location;
 
     // HTML §5.2.5: the entry the page arrived on is the first one in the list, so the length counts
     // it even before a 'pushState' has added anything.
     public int length => _stack.Count + 1;
-    public object? state => _currentIndex >= 0 && _currentIndex < _stack.Count ? _stack[_currentIndex] : null;
+    public object? state => _currentIndex >= 0 && _currentIndex < _stack.Count
+        ? _stack[_currentIndex].State : null;
 
-    public void back() { if (_currentIndex > 0) _currentIndex--; }
-    public void forward() { if (_currentIndex < _stack.Count - 1) _currentIndex++; }
-    public void go(int delta) { _currentIndex = Math.Max(0, Math.Min(_stack.Count - 1, _currentIndex + delta)); }
+    /// <summary>HTML §7.4.7: the two spellings the interface accepts. A value the enumeration does not
+    /// name is dropped, which is what the reference does when a page writes anything else (measured:
+    /// writing 'nonsense' leaves the value it already held).</summary>
+    public string scrollRestoration
+    {
+        get => _scrollRestoration;
+        set { if (value is "auto" or "manual") _scrollRestoration = value; }
+    }
+
+    public void back() => Traverse(-1);
+    public void forward() => Traverse(1);
+
+    /// <summary>HTML §5.6: the entry the history moves to, and the 'popstate' event the window hears
+    /// when it is a different one. The address moves with it, because the entry remembers the one that
+    /// was written when it was pushed.</summary>
+    public void go(int delta)
+    {
+        if (delta == 0) { _location.OnReload?.Invoke(); return; }
+        Traverse(delta);
+    }
+
+    private void Traverse(int delta)
+    {
+        var next = _currentIndex + delta;
+        if (next < 0 || next >= _stack.Count) return;
+        _currentIndex = next;
+        var entry = _stack[next];
+        if (entry.Url != null) _location.SetStateUrl(entry.Url);
+        JavaScriptEngine.Current?.FirePopState();
+    }
+
     public void pushState(object? state, string title, string? url)
     {
         while (_stack.Count > _currentIndex + 1) _stack.RemoveAt(_stack.Count - 1);
-        _stack.Add(state);
+        _stack.Add(new Entry(state, url));
         _currentIndex = _stack.Count - 1;
         _location.SetStateUrl(url);
     }
+
     public void replaceState(object? state, string title, string? url)
     {
         if (_currentIndex >= 0 && _currentIndex < _stack.Count)
-            _stack[_currentIndex] = state;
+            _stack[_currentIndex] = new Entry(state, url ?? _stack[_currentIndex].Url);
         else
         {
-            _stack.Add(state);
+            _stack.Add(new Entry(state, url));
             _currentIndex = _stack.Count - 1;
         }
         _location.SetStateUrl(url);

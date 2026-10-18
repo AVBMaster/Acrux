@@ -75,15 +75,27 @@ foreach (var file in cases)
     // Give the page a laid-out canvas to measure against, the way the real shell does before it
     // runs script: style associations (a <style> element becomes a stylesheet), geometry reads
     // (getBoundingClientRect, offsetWidth) and the cascade all depend on this pass having run.
-    try
+    // The shell keeps ONE style computer per document, seeded with the UA sheet, and calls it again
+    // whenever a script reads a sheet or a box (Acrux.PageHost wires 'ForceUpdateStyleAndLayout');
+    // the same hook is wired here, so a style the page appends mid-script gets the sheet the
+    // reference would already have given it. The layout pass is guarded on its own: this machine
+    // has no Skia native library, and a failed layout must not hide the style pass behind it.
+    var styleComputer = new Acrux.Core.Css.StyleComputer();
+    styleComputer.AddStylesheet(new Acrux.Core.Dom.DocumentManager().GetUaStylesheet(),
+        Acrux.Core.Css.Resolver.CascadeOrigin.UserAgent);
+    void UpdateStyle()
     {
-        new Acrux.Core.Css.StyleComputer().ComputeStyles(doc, 1024, 768);
-        new Acrux.Core.Layout.LayoutEngine().LayoutAurora(doc, 1024, 768);
+        try { styleComputer.ComputeStyles(doc, 1024, 768); }
+        catch (Exception sex) { Console.WriteLine($"    [style pass] {sex.Message}"); }
     }
-    catch (Exception lex)
+    void UpdateLayout()
     {
-        Console.WriteLine($"    [style/layout pass] {lex.Message}");
+        try { new Acrux.Core.Layout.LayoutEngine().LayoutAurora(doc, 1024, 768); }
+        catch (Exception lex) { Console.WriteLine($"    [layout pass] {lex.Message}"); }
     }
+    js.ForceUpdateStyleAndLayout = () => { UpdateStyle(); UpdateLayout(); };
+    UpdateStyle();
+    UpdateLayout();
 
     // Test-support bootstrap the cases rely on.
     js.Execute("""

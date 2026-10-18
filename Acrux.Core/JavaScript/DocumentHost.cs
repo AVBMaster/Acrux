@@ -671,7 +671,9 @@ public class DocumentHost : IDomPrototypeHost
     /// Only the elements whose sheet the style engine actually loaded own one, so a
     /// <c>style</c> a script appended appears here once the next recompute has collected
     /// it, and a disabled or removed one disappears with it.</summary>
-    public object[] styleSheets
+    public object styleSheets => new LiveListHost("StyleSheetList", () => SheetArray);
+
+    internal object[] SheetArray
     {
         get
         {

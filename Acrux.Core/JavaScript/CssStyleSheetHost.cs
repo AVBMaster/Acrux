@@ -13,7 +13,7 @@ namespace Acrux.Core.JavaScript;
 /// list the cascade reads, so an <c>insertRule</c> changes the next recompute rather than
 /// just the object a script is holding.
 /// </summary>
-public class CssStyleSheetHost
+public class CssStyleSheetHost : IDomPrototypeHost
 {
     private readonly Element? _owner;
     private readonly Func<Element, ElementHost?>? _wrap;
@@ -59,6 +59,12 @@ public class CssStyleSheetHost
     /// replaced wholesale (measured: putting an element's sheet in adoptedStyleSheets throws
     /// NotAllowedError, because the element already owns it).</summary>
     internal bool IsConstructed => _constructed != null;
+
+    // The interface the sheet is read as (CSSOM §5.2): the wrapper is stamped with the level, so the
+    // tag, 'instanceof' and the members the interface declares all come from there.
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "CSSStyleSheet" };
+
+    public override string ToString() => DomHostString.Tagged(this);
 
     public object? ownerNode => _owner != null && _wrap != null ? _wrap(_owner) : null;
 
@@ -118,7 +124,12 @@ public class CssStyleSheetHost
 
     private object[]? _ruleHosts;
 
-    public object[] cssRules
+    /// <summary>The rule list the page reads (CSSOM §5.2.7): a live list of the rules, not the plain
+    /// array the engine keeps, so 'length', 'item' and the index all answer through the interface —
+    /// and the wrappers inside it are the ones the sheet already handed out.</summary>
+    public object cssRules => new LiveListHost("CSSRuleList", () => RuleArray);
+
+    internal object[] RuleArray
     {
         get
         {
@@ -360,7 +371,7 @@ public class CssStyleSheetHost
 /// rebuilt from the parsed rule, so a serialisation the engine normalised (a colour, a
 /// shorthand expanded into longhands) reads back normalised, and a group rule carries its
 /// children both as nested cssRules and inside its own text.</summary>
-public class CssRuleHost
+public class CssRuleHost : IDomPrototypeHost
 {
     private readonly StyleRuleBase _rule;
     private readonly Action _changed;
@@ -595,9 +606,58 @@ public class CssRuleHost
 
     public object? parentRule => _parent;
 
-    /// <summary>The rules nested in a group rule, or the keyframes of an animation; empty for
-    /// anything that is not one of those (CSSOM §5.3.8, CSS Animations 1 §7.2).</summary>
-    public object[] cssRules
+    /// <summary>The interface the rule is read as (CSSOM §5.3, §5.4, §5.6): the kind of at-rule names
+    /// it, and the wrapper is stamped with that level so a '@media' rule prints
+    /// [object CSSMediaRule] and a page that asks 'rule instanceof CSSMediaRule' hears yes
+    /// (measured).</summary>
+    public string interfaceName => _rule switch
+    {
+        StyleRule => "CSSStyleRule",
+        StyleRuleMedia => "CSSMediaRule",
+        StyleRuleSupports => "CSSSupportsRule",
+        StyleRuleContainer => "CSSContainerRule",
+        StyleRuleImport => "CSSImportRule",
+        StyleRuleFontFace => "CSSFontFaceRule",
+        StyleRuleKeyframes => "CSSKeyframesRule",
+        StyleRuleKeyframe => "CSSKeyframeRule",
+        StyleRulePage => "CSSPageRule",
+        StyleRulePageMargin => "CSSMarginRule",
+        StyleRuleProperty => "CSSPropertyRule",
+        StyleRuleCounterStyle => "CSSCounterStyleRule",
+        StyleRuleNamespace => "CSSNamespaceRule",
+        StyleRuleScope => "CSSScopeRule",
+        StyleRuleLayerBlock => "CSSLayerBlockRule",
+        StyleRuleLayerStatement => "CSSLayerStatementRule",
+        StyleRuleStartingStyle => "CSSStartingStyleRule",
+        StyleRuleViewTransition => "CSSViewTransitionRule",
+        StyleRulePositionTry => "CSSPositionTryRule",
+        StyleRuleFontFeatureValues => "CSSFontFeatureValuesRule",
+        _ => "CSSRule",
+    };
+
+    /// <summary>The line of descent: every rule is a CSSRule, a group rule stands on CSSGroupingRule,
+    /// and a condition rule on CSSConditionRule above that — the order the interfaces are drawn in.</summary>
+    string[] IDomPrototypeHost.__domTypeChain
+    {
+        get
+        {
+            var names = new List<string> { "CSSRule" };
+            if (_rule is StyleRuleGroup) names.Add("CSSGroupingRule");
+            if (_rule is StyleRuleCondition) names.Add("CSSConditionRule");
+            if (interfaceName != "CSSRule") names.Add(interfaceName);
+            return names.ToArray();
+        }
+    }
+
+    public override string ToString() => DomHostString.Tagged(this);
+
+
+    /// <summary>The rules nested in a group rule, or the keyframes of an animation, as the list the
+    /// interface names (CSSOM §5.2.7, §5.3.8, CSS Animations 1 §7.2); empty for anything that is not
+    /// one of those.</summary>
+    public object cssRules => new LiveListHost("CSSRuleList", () => ChildRuleArray);
+
+    internal object[] ChildRuleArray
     {
         get
         {
@@ -927,8 +987,14 @@ public class CssRuleStyleDeclaration : CssStyleDeclarationBase
 /// 'deleteMedium' — puts the new text back on the object the cascade walks, so the change is
 /// applied on the next recompute instead of living only in the object the script holds. An empty
 /// list is not a syntax error but a rule that applies to everything.</summary>
-public class CssMediaListHost : IList
+public class CssMediaListHost : IList, IDomPrototypeHost
 {
+    // The media list a '@media' rule and a sheet answer (CSSOM §5.3.4, Media Queries §3.4):
+    // stamped with the MediaList level so the tag and 'instanceof' read from the interface.
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "MediaList" };
+
+    public string? __domType => "MediaList";
+
     private readonly Func<string> _read;
     private readonly Action<string> _write;
 
