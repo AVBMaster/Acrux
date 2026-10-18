@@ -60,6 +60,20 @@ public static class ComputedValueSerializer
         if (Acrux.Core.Css.Resolver.CssPropertyTraits.IsLegacyDeclaredOnly(property))
         {
             var written = style.GetDeclaredOnlyValue(property);
+            if (written == null)
+            {
+                // A prefixed spelling whose name the cascade folds onto a property of its own is
+                // stored in the twin's slot, not in this bag — so the twin's written value is the
+                // answer here, while nothing written still gives this property its own initial
+                // (measured: '-webkit-text-orientation: upright' computes 'upright' on the element
+                // and on its child, and an untouched box computes 'vertical-right').
+                var twin = Acrux.Core.Css.Properties.CssPropertyIdExtensions
+                    .BehaviourName(property);
+                if (!twin.Equals(property, StringComparison.OrdinalIgnoreCase)
+                    && style.GetEchoed(twin) is { } fromTwin)
+                    return Acrux.Core.Css.Resolver.CssPropertyTraits
+                        .LegacyComputedText(property, fromTwin);
+            }
             if (written == null || Acrux.Core.Css.Resolver.CssPropertyTraits.IsLegacyComputedInitial(property))
             {
                 var initial = Acrux.Core.Css.Resolver.CssPropertyTraits.LegacyDeclaredOnlyInitial(property);
@@ -130,27 +144,27 @@ public static class ComputedValueSerializer
             // -------------------------------------------------------- sizes
             // A box size is clamped at computed-value time: nothing narrower than nothing is
             // still zero wide, and a negative used value prints as one (CSS 2.1 §10.4).
-            case "width": return style.ComputedSizeCss(style.Width);
-            case "height": return style.ComputedSizeCss(style.Height);
+            case "width": return style.ComputedSizeCss(style.Width, cut: true);
+            case "height": return style.ComputedSizeCss(style.Height, cut: true);
             // The logical sizing pair answers with the physical side the writing mode selects
             // (CSS Logical 1 §4.2) — which for the horizontal modes this engine lays out in is the
             // inline axis = width and the block axis = height. Measured: 'block-size: 100px'
             // computes '100px', where this engine had no case at all and answered the empty string.
-            case "inline-size": return style.ComputedSizeCss(style.Width);
-            case "block-size": return style.ComputedSizeCss(style.Height);
-            case "min-inline-size": return MinLengthText(style, style.MinWidth);
-            case "min-block-size": return MinLengthText(style, style.MinHeight);
+            case "inline-size": return style.ComputedSizeCss(style.Width, cut: true);
+            case "block-size": return style.ComputedSizeCss(style.Height, cut: true);
+            case "min-inline-size": return MinLengthText(style, style.MinWidth, cut: true);
+            case "min-block-size": return MinLengthText(style, style.MinHeight, cut: true);
             case "max-inline-size": return style.MaxWidth != null ? LengthText(style, style.MaxWidth) : "none";
             case "max-block-size": return style.MaxHeight != null ? LengthText(style, style.MaxHeight) : "none";
-            case "min-width": return MinLengthText(style, style.MinWidth);
+            case "min-width": return MinLengthText(style, style.MinWidth, cut: true);
             case "max-width": return style.MaxWidth != null ? LengthText(style, style.MaxWidth) : "none";
-            case "min-height": return MinLengthText(style, style.MinHeight);
+            case "min-height": return MinLengthText(style, style.MinHeight, cut: true);
             case "max-height": return style.MaxHeight != null ? LengthText(style, style.MaxHeight) : "none";
 
-            case "top": return LengthText(style, style.Top);
-            case "right": return LengthText(style, style.Right);
-            case "bottom": return LengthText(style, style.Bottom);
-            case "left": return LengthText(style, style.Left);
+            case "top": return LengthText(style, style.Top, cut: true);
+            case "right": return LengthText(style, style.Right, cut: true);
+            case "bottom": return LengthText(style, style.Bottom, cut: true);
+            case "left": return LengthText(style, style.Left, cut: true);
 
             // The logical inset longhands read back the physical side the cascade put them on
             // (CSS Logical Properties 1 §4): 'inset-block-start' is the top edge, and
@@ -167,14 +181,14 @@ public static class ComputedValueSerializer
             case "inset-inline":
                 return Pair(Longhand(style, "inset-inline-start"), Longhand(style, "inset-inline-end"));
 
-            case "margin-top": return MarginText(style, style.MarginTop);
-            case "margin-right": return MarginText(style, style.MarginRight);
-            case "margin-bottom": return MarginText(style, style.MarginBottom);
-            case "margin-left": return MarginText(style, style.MarginLeft);
-            case "padding-top": return LengthText(style, style.PaddingTop);
-            case "padding-right": return LengthText(style, style.PaddingRight);
-            case "padding-bottom": return LengthText(style, style.PaddingBottom);
-            case "padding-left": return LengthText(style, style.PaddingLeft);
+            case "margin-top": return MarginText(style, style.MarginTop, cut: true);
+            case "margin-right": return MarginText(style, style.MarginRight, cut: true);
+            case "margin-bottom": return MarginText(style, style.MarginBottom, cut: true);
+            case "margin-left": return MarginText(style, style.MarginLeft, cut: true);
+            case "padding-top": return LengthText(style, style.PaddingTop, cut: true);
+            case "padding-right": return LengthText(style, style.PaddingRight, cut: true);
+            case "padding-bottom": return LengthText(style, style.PaddingBottom, cut: true);
+            case "padding-left": return LengthText(style, style.PaddingLeft, cut: true);
 
             // A border whose style is 'none' or 'hidden' has no width, whatever the page asked
             // for (CSS 2.1 §10.3.2 — the width is zeroed at computed-value time, which is why
@@ -190,14 +204,14 @@ public static class ComputedValueSerializer
             // them onto the sides during the cascade (CSS Logical Properties 1 §2), so a
             // 'margin-block-start' read answers with the top margin it became, and an
             // 'margin-inline-start' with the side 'direction' put it on.
-            case "margin-block-start": return MarginText(style, style.MarginTop);
-            case "margin-block-end": return MarginText(style, style.MarginBottom);
-            case "margin-inline-start": return InlineSideMargin(style, start: true);
-            case "margin-inline-end": return InlineSideMargin(style, start: false);
-            case "padding-block-start": return LengthText(style, style.PaddingTop);
-            case "padding-block-end": return LengthText(style, style.PaddingBottom);
-            case "padding-inline-start": return InlineSidePadding(style, start: true);
-            case "padding-inline-end": return InlineSidePadding(style, start: false);
+            case "margin-block-start": return MarginText(style, style.MarginTop, cut: true);
+            case "margin-block-end": return MarginText(style, style.MarginBottom, cut: true);
+            case "margin-inline-start": return InlineSideMargin(style, start: true, cut: true);
+            case "margin-inline-end": return InlineSideMargin(style, start: false, cut: true);
+            case "padding-block-start": return LengthText(style, style.PaddingTop, cut: true);
+            case "padding-block-end": return LengthText(style, style.PaddingBottom, cut: true);
+            case "padding-inline-start": return InlineSidePadding(style, start: true, cut: true);
+            case "padding-inline-end": return InlineSidePadding(style, start: false, cut: true);
             case "border-block-start-width": return BorderWidthText(style.BorderTopWidth, style.BorderTopStyle);
             case "border-block-end-width": return BorderWidthText(style.BorderBottomWidth, style.BorderBottomStyle);
             case "border-block-start-style": return style.BorderTopStyle.ToCssString();
@@ -219,6 +233,13 @@ public static class ComputedValueSerializer
             case "border-inline-end-color":
                 return ColorText(IsRtl(style) ? style.BorderLeftColor : style.BorderRightColor);
 
+            // The four logical corners are the physical corner the box's direction put them on, the
+            // same mapping the cascade wrote them with (CSS Backgrounds 3 §5.3, measured:
+            // 'border-end-end-radius: 1px 2px' reads back '1px 2px').
+            case "border-start-start-radius": return RadiusCorner(style, 0);
+            case "border-start-end-radius": return RadiusCorner(style, 1);
+            case "border-end-start-radius": return RadiusCorner(style, 2);
+            case "border-end-end-radius": return RadiusCorner(style, 3);
             case "border-top-left-radius": return RadiusText(style.BorderTopLeftRadius, style.BorderTopLeftRadiusY);
             case "border-top-right-radius": return RadiusText(style.BorderTopRightRadius, style.BorderTopRightRadiusY);
             case "border-bottom-right-radius": return RadiusText(style.BorderBottomRightRadius, style.BorderBottomRightRadiusY);
@@ -247,7 +268,7 @@ public static class ComputedValueSerializer
             // here rather than only in the hand-built map because a generated box reads through
             // this serializer for everything the map does not carry.
             case "font-family": return style.FontFamily ?? "";
-            case "font-size": return Px(style.FontSize);
+            case "font-size": return Px(style.FontSize, cut: true);
             case "font": return FontShorthandText(style);
             case "line-height":
                 // 'normal' is the only keyword the computed value keeps. A multiplier is not:
@@ -283,7 +304,10 @@ public static class ComputedValueSerializer
                     + (style.TextIndentHanging ? " hanging" : "")
                     + (style.TextIndentEachLine ? " each-line" : ""), "text-indent") ?? indent;
             }
-            case "font-weight": return ((int)style.FontWeight).ToString(CultureInfo.InvariantCulture);
+            // The weight the page measured, not the enum step rounded to the nearest hundred:
+            // '550' computes '550' and '1.5' computes '1.5' (measured), and the number is printed
+            // the way a reference engine prints one — '400', not '400.0'.
+            case "font-weight": return TrimmedNumber(style.FontWeightNumber);
             case "visibility": return style.Visibility switch
             {
                 VisibilityType.Hidden => "hidden",
@@ -302,22 +326,17 @@ public static class ComputedValueSerializer
             case "order": return style.Order.ToString(CultureInfo.InvariantCulture);
             // CSS Overflow 3 §3.3: 'clip' is a value of its own on each axis, and the printer had
             // no arm for it, so a box that did clip reported that it did not.
-            case "overflow-x": return style.OverflowX switch
-            {
-                OverflowType.Hidden => "hidden",
-                OverflowType.Scroll => "scroll",
-                OverflowType.Auto => "auto",
-                OverflowType.Clip => "clip",
-                _ => "visible",
-            };
-            case "overflow-y": return style.OverflowY switch
-            {
-                OverflowType.Hidden => "hidden",
-                OverflowType.Scroll => "scroll",
-                OverflowType.Auto => "auto",
-                OverflowType.Clip => "clip",
-                _ => "visible",
-            };
+            // CSS Overflow 3 §3.2: the axis a page can scroll is the axis the other one forces.
+            // 'overlay' is the spelling of 'auto' the engine still accepts and no longer reports,
+            // and a 'visible' beside a scrolling axis computes as 'auto' — which is why
+            // 'overflow: visible auto' reads back one word (all measured).
+            case "overflow-x": return OverflowAxisText(style, x: true);
+            case "overflow-y": return OverflowAxisText(style, x: false);
+            // CSS 2.1 §11.1.2: the computed rect prices every side the way the rest of the
+            // computed surface does — '1em' is the font of the element that wrote it (measured:
+            // 'rect(1em 2em 3em 4em)' reads 'rect(16px, 32px, 48px, 64px)') — while 'auto' stays
+            // the word it is, because a side on the box's own edge has no number to give.
+            case "clip": return LegacyClipComputedText(style);
             // -------------------------------------------------- box alignment
             // CSS Box Alignment 3 §3: the initial value of the distribution properties is the
             // keyword 'normal', and a keyword the page wrote is what reads back — 'end' is not
@@ -494,7 +513,11 @@ public static class ComputedValueSerializer
             case "font-size-adjust": return style.FontSizeAdjust is float ratio
                 ? CssValueTokenizer.Num(ratio) : "none";
             // 'normal' is reported as the percentage it means.
-            case "font-stretch": return style.FontStretch is "" or "normal" ? "100%" : style.FontStretch;
+            // CSS Fonts 4 §6.3: the computed value of a stretch is the percentage the word names,
+            // and a property with nothing written on it says '100%' — the initial the engine
+            // measures (measured: 'ultra-condensed' computes '50%', 'semi-expanded' computes
+            // '112.5%', 'normal' computes '100%' and a refused word computes '100%' too).
+            case "font-stretch": return FontStretchComputed(style.FontStretch);
             case "text-rendering": return style.TextRendering;
             case "contain": return Css.Resolver.CssPropertyApplier.FormatContain(style.Contain);
             case "contain-intrinsic-size": return ContainIntrinsicSizeText(style);
@@ -507,7 +530,15 @@ public static class ComputedValueSerializer
             case "contain-intrinsic-height": return ContainIntrinsicPhysicalText(style, width: false);
             case "contain-intrinsic-inline-size": return ContainIntrinsicAxisText(style, inline: true);
             case "contain-intrinsic-block-size": return ContainIntrinsicAxisText(style, inline: false);
-            case "field-sizing": return style.FieldSizing == FieldSizingType.Content ? "content" : "normal";
+            case "math-style": return style.MathStyle;
+            case "math-shift": return style.MathShift;
+            case "field-sizing": return style.FieldSizing switch
+            {
+                FieldSizingType.Content => "content",
+                // 'fixed' is what the reference engine says for a control with nothing written on
+                // it, and the draft's 'normal' means the same box (measured, both).
+                _ => "fixed",
+            };
             case "text-overflow": return style.TextOverflowString is { Length: > 0 } tos ? tos
                 : style.TextOverflow == TextOverflowType.Ellipsis ? "ellipsis" : "clip";
             case "line-break": return style.LineBreak.ToString().ToLowerInvariant();
@@ -565,8 +596,23 @@ public static class ComputedValueSerializer
             {
                 WritingModeType.VerticalRl => "vertical-rl",
                 WritingModeType.VerticalLr => "vertical-lr",
+                WritingModeType.SidewaysLr => "sideways-lr",
+                WritingModeType.SidewaysRl => "sideways-rl",
                 _ => "horizontal-tb",
             };
+            // CSS Text 3 §11.1: the legacy alias of 'overflow-wrap', and the same computed value
+            // (measured: 'word-wrap: break-word' computes 'break-word' and nothing written computes
+            // 'normal').
+            case "word-wrap": return OverflowWrapText(style.OverflowWrap);
+            // The pair spellings of the logical borders answer with the two longhands they say,
+            // folded to one word when both halves agree (measured: 'border-inline-color: red blue'
+            // reads 'rgb(255, 0, 0) rgb(0, 0, 255)').
+            case "border-block-color":
+                return Pair(Longhand(style, "border-block-start-color"),
+                            Longhand(style, "border-block-end-color"));
+            case "border-inline-color":
+                return Pair(Longhand(style, "border-inline-start-color"),
+                            Longhand(style, "border-inline-end-color"));
             case "direction": return style.Direction;
             case "unicode-bidi": return style.UnicodeBidi;
             case "user-select": return style.UserSelect ?? "auto";
@@ -632,10 +678,10 @@ public static class ComputedValueSerializer
             // matrix3d() on the platform, which this engine has no text form for, so those
             // values stay as authored rather than printing a wrong 2D projection.
             case "transform": return TransformText(style.Transform);
-            case "translate": return string.IsNullOrWhiteSpace(style.Translate) ? "none" : style.Translate!.Trim();
+            case "translate": return string.IsNullOrWhiteSpace(style.Translate) ? "none" : ClampLengthTerms(style.Translate!.Trim());
             case "rotate": return string.IsNullOrWhiteSpace(style.Rotate) ? "none" : style.Rotate!.Trim();
             case "scale": return string.IsNullOrWhiteSpace(style.Scale) ? "none" : style.Scale!.Trim();
-            case "perspective": return string.IsNullOrWhiteSpace(style.Perspective) ? "none" : style.Perspective!.Trim();
+            case "perspective": return string.IsNullOrWhiteSpace(style.Perspective) ? "none" : ClampLengthTerms(style.Perspective!.Trim());
             case "transform-origin": return TransformOriginText(style.TransformOrigin);
             case "perspective-origin": return TransformOriginText(style.PerspectiveOrigin);
             case "backface-visibility": return style.BackfaceVisibility ?? "visible";
@@ -762,7 +808,15 @@ public static class ComputedValueSerializer
             case "transition-delay": return TimeListOr(style.TransitionDelay, "0s");
             case "transition-timing-function": return ListOr(style.TransitionTimingFunction, "ease");
             case "animation-name": return ListOr(style.AnimationName, "none");
-            case "animation-duration": return TimeListOr(style.AnimationDuration, "0s", nonNegative: true);
+            // CSS Animations 1 §3 with Scroll-driven Animations 1: an 'auto' duration is the length
+            // the timeline would run for, and with no timeline that is nothing — the longhand says
+            // the seconds, the shorthand below still knows the page said 'auto' (measured:
+            // 'animation-duration: auto' computes '0s').
+            case "animation-duration": return TimeListOr(style.AnimationDuration, "0s",
+                nonNegative: true).Equals("auto", StringComparison.OrdinalIgnoreCase)
+                ? string.Join(", ", List(style.AnimationDuration).Select(t =>
+                    t.Equals("auto", StringComparison.OrdinalIgnoreCase) ? "0s" : t))
+                : TimeListOr(style.AnimationDuration, "0s", nonNegative: true);
             case "animation-timing-function": return ListOr(style.AnimationTimingFunction, "ease");
             case "animation-delay": return TimeListOr(style.AnimationDelay, "0s");
             case "animation-iteration-count": return ListOr(style.AnimationIterationCount, "1");
@@ -989,7 +1043,7 @@ public static class ComputedValueSerializer
     /// says width 'none' and height '55px').</summary>
     private static string ContainIntrinsicAxisText(ComputedStyle style, bool inline)
     {
-        bool vertical = style.WritingMode is WritingModeType.VerticalRl or WritingModeType.VerticalLr;
+        bool vertical = style.WritingMode.IsVertical();
         return ContainIntrinsicPhysicalText(style, width: inline != vertical);
     }
 
@@ -1090,7 +1144,9 @@ public static class ComputedValueSerializer
 
     private static string ClearTypeText(ClearType value) => CssFloatKeywords.ToCssString(value);
 
-    private static string Px(float value) => CssValueTokenizer.Num(value) + "px";
+    private static string Px(float value, bool cut = false) =>
+        (cut ? CssValueTokenizer.NumCut(CssValueTokenizer.ClampComputedPixels(value))
+             : CssValueTokenizer.Num(CssValueTokenizer.ClampComputedPixels(value))) + "px";
 
     /// <summary>The computed text of 'content'. Adjacent quoted strings are a single string by the
     /// time the value is computed (measured: 'content: "a" "b"' reads '"ab"', and the empty string
@@ -1136,16 +1192,16 @@ public static class ComputedValueSerializer
     /// (CSS 2.1 §10.3.2 — the width is suppressed at computed-value time, so an authored
     /// 'border-width: 1px' on a styleless box reads back as '0px').</summary>
     private static string BorderWidthText(float width, BorderStyle style) =>
-        style == BorderStyle.None ? Px(0) : Px(width);
+        style.IsDrawn() ? Px(width) : Px(0);
 
     /// <summary>The margin of the inline side 'direction' put a logical longhand on.</summary>
-    private static string InlineSideMargin(ComputedStyle style, bool start) =>
+    private static string InlineSideMargin(ComputedStyle style, bool start, bool cut = false) =>
         MarginText(style, IsRtl(style) ? (start ? style.MarginRight : style.MarginLeft)
-                                       : (start ? style.MarginLeft : style.MarginRight));
+                                       : (start ? style.MarginLeft : style.MarginRight), cut);
 
-    private static string InlineSidePadding(ComputedStyle style, bool start) =>
+    private static string InlineSidePadding(ComputedStyle style, bool start, bool cut = false) =>
         LengthText(style, IsRtl(style) ? (start ? style.PaddingRight : style.PaddingLeft)
-                                       : (start ? style.PaddingLeft : style.PaddingRight));
+                                       : (start ? style.PaddingLeft : style.PaddingRight), cut);
 
     /// <summary>The inset of the inline side 'direction' put a logical longhand on — the same
     /// side ApplyInlineInset wrote, so a read of 'inset-inline-start' answers the left edge it
@@ -1171,9 +1227,33 @@ public static class ComputedValueSerializer
         // matrix(), while 'scaleZ(2)' is not (all measured).
         var m = Acrux.Core.Css.TransformParser.ToMatrix4(operations);
         string N(float value) => CssValueTokenizer.Num(value);
+        // The two entries that carry a pixel distance answer with the largest pixel distance a
+        // computed length can be (measured: 'translateX(2147483647px)' is
+        // 'matrix(1, 0, 0, 1, 3.35544e+07, 0)'); the ratios have no such ceiling.
+        string PxEntry(float value) =>
+            CssValueTokenizer.Num(CssValueTokenizer.ClampComputedPixels(value));
         if (Acrux.Core.Css.TransformParser.IsFlat4(m))
-            return $"matrix({N(m[0])}, {N(m[1])}, {N(m[4])}, {N(m[5])}, {N(m[12])}, {N(m[13])})";
+            return $"matrix({N(m[0])}, {N(m[1])}, {N(m[4])}, {N(m[5])}, "
+                 + $"{PxEntry(m[12])}, {PxEntry(m[13])})";
         return "matrix3d(" + string.Join(", ", m.Select(N)) + ")";
+    }
+
+    /// <summary>A transform-family value with every term already spoken in pixels folded into the
+    /// range a computed length can be (measured: 'translate: 2147483647px' computes
+    /// '3.35544e+07px'). A term in another unit is left as the page wrote it — pricing it here would
+    /// answer a number the property's own computed surface has never said.</summary>
+    private static string ClampLengthTerms(string text)
+    {
+        var words = text.Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < words.Length; i++)
+        {
+            var word = words[i];
+            if (!word.EndsWith("px", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!CssValueTokenizer.TrySplitUnit(word, out var number, out _)) continue;
+            if (System.Math.Abs(number) <= CssValueTokenizer.MaxComputedPixels) continue;
+            words[i] = CssValueTokenizer.Num(CssValueTokenizer.ClampComputedPixels(number)) + "px";
+        }
+        return string.Join(" ", words);
     }
 
     /// <summary>The 'font' shorthand's computed value: its longhands in the shorthand's own
@@ -1238,21 +1318,34 @@ public static class ComputedValueSerializer
         return ColorText(ColorParser.Parse(value));
     }
 
-    private static string LengthText(ComputedStyle owner, Length? length)
+    private static string LengthText(ComputedStyle owner, Length? length, bool cut = false)
     {
         if (length == null) return "auto";
         // A length resolves against the element's own font at computed-value time (CSS Values
         // 3 §7), so 'width: 10em' on a box whose font is 12px reads back as '120px'; a
         // percentage stays a percentage and 'auto' stays a keyword.
-        return owner.ComputedLengthCss(length);
+        return owner.ComputedLengthCss(length, cut: cut);
     }
 
     /// <summary>One side of a margin. 'auto' is the keyword CSS 2.1 §10.3.3 lets a page write, but it
     /// is not what the computed surface answers: the free space the side was left to take is nothing
     /// at computed-value time, so the reference engine prints '0px' for it (measured:
     /// 'margin: calc(10px + 2px) auto' computes '12px 0px').</summary>
-    private static string MarginText(ComputedStyle owner, Length? length) =>
-        length is AutoLength ? "0px" : LengthText(owner, length);
+    private static string MarginText(ComputedStyle owner, Length? length, bool cut = false) =>
+        length is AutoLength ? "0px" : LengthText(owner, length, cut);
+
+    /// <summary>The legacy 'clip' rect with every side priced and none of its words invented: the
+    /// four sides come from the same split the grammar answered with, so the value that reaches a
+    /// script is the rect the page wrote, in the unit the layout reads.</summary>
+    private static string LegacyClipComputedText(ComputedStyle style)
+    {
+        var sides = CssValueGrammar.LegacyClipSides(style.Clip);
+        if (sides == null) return "auto";
+        var printed = new List<string>(4);
+        foreach (var side in sides)
+            printed.Add(side == "auto" ? "auto" : LengthText(style, Length.Parse(side)));
+        return "rect(" + string.Join(", ", printed) + ")";
+    }
 
     /// <summary>One side of a scroll inset (CSS Scroll Snap 1 §6.1). The initial value is the
     /// length zero, so an untouched side reads back as '0px' — never as 'auto', which is only
@@ -1293,6 +1386,36 @@ public static class ComputedValueSerializer
         return kept.Count == 0 ? "over" : string.Join(" ", kept);
     }
 
+    /// <summary>One logical corner's radius, read off the physical corner the box's direction places
+    /// it on: 'start-start' is the top-left of a left-to-right box and its top-right in a
+    /// right-to-left one (CSS Logical Properties 1 §2). The four cases are the logical corners in
+    /// the order start-start, start-end, end-start, end-end.</summary>
+    private static string RadiusCorner(ComputedStyle style, int corner)
+    {
+        bool rtl = IsRtl(style);
+        return corner switch
+        {
+            0 => RadiusText(rtl ? style.BorderTopRightRadius : style.BorderTopLeftRadius,
+                             rtl ? style.BorderTopRightRadiusY : style.BorderTopLeftRadiusY),
+            1 => RadiusText(rtl ? style.BorderTopLeftRadius : style.BorderTopRightRadius,
+                             rtl ? style.BorderTopLeftRadiusY : style.BorderTopRightRadiusY),
+            2 => RadiusText(rtl ? style.BorderBottomRightRadius : style.BorderBottomLeftRadius,
+                             rtl ? style.BorderBottomRightRadiusY : style.BorderBottomLeftRadiusY),
+            _ => RadiusText(rtl ? style.BorderBottomLeftRadius : style.BorderBottomRightRadius,
+                             rtl ? style.BorderBottomLeftRadiusY : style.BorderBottomRightRadiusY),
+        };
+    }
+
+    /// <summary>CSS Overflow 3 §3.3's spelling of the legacy alias keeps its hyphen (measured:
+    /// 'word-wrap: break-word' computes 'break-word', where the enum name alone would say
+    /// 'breakword').</summary>
+    private static string OverflowWrapText(Acrux.Core.Dom.OverflowWrapMode mode) => mode switch
+    {
+        Acrux.Core.Dom.OverflowWrapMode.BreakWord => "break-word",
+        Acrux.Core.Dom.OverflowWrapMode.Anywhere => "anywhere",
+        _ => "normal",
+    };
+
     private static string RadiusText(float x, float y)
     {
         var horizontal = RadiusEndpoint(x);
@@ -1309,7 +1432,8 @@ public static class ComputedValueSerializer
     private static string RadiusEndpoint(float radius) =>
         radius < 0 ? $"{CssValueTokenizer.Num(-radius)}%" : Px(radius);
 
-    private static string BackgroundPosText(Length? length, bool cycled = false)
+    private static string BackgroundPosText(Length? length, bool cycled = false,
+        ComputedStyle? style = null)
     {
         if (length == null) return "0%";
         // PercentLength carries the fraction, so 0.5 is the 50% the platform prints.
@@ -1325,9 +1449,12 @@ public static class ComputedValueSerializer
         // 10px)'). A quirk of how the reference engine stores the two, not of the grammar.
         if (length is FarEdgeLength far)
             return cycled
-                ? BackgroundPosText(far.Offset)
-                : $"calc(100% - {BackgroundPosText(far.Offset)})";
-        return length.ToString();
+                ? BackgroundPosText(far.Offset, style: style)
+                : $"calc(100% - {BackgroundPosText(far.Offset, style: style)})";
+        // A font-relative or viewport unit has no place left to be relative to once it is computed
+        // (CSS Values 3 §7), so it is priced like any other length the computed surface reports
+        // (measured: 'background-position-x: 1rem' on a 16px root reads '16px').
+        return style != null ? style.ComputedLengthCss(length) : length.ToString();
     }
 
     /// <summary>The origin as the reference engine prints it: two positional values plus, when it
@@ -1422,9 +1549,9 @@ public static class ComputedValueSerializer
         for (int i = 0; i < count; i++)
         {
             if (i > 0) parts.Append(", ");
-            parts.Append(BackgroundPosText(PickAxis(xLayers, style.BackgroundPositionX, i), IsCycledLayer(xLayers, i)))
+            parts.Append(BackgroundPosText(PickAxis(xLayers, style.BackgroundPositionX, i), IsCycledLayer(xLayers, i), style))
                  .Append(' ')
-                 .Append(BackgroundPosText(PickAxis(yLayers, style.BackgroundPositionY, i), IsCycledLayer(yLayers, i)));
+                 .Append(BackgroundPosText(PickAxis(yLayers, style.BackgroundPositionY, i), IsCycledLayer(yLayers, i), style));
         }
         return parts.ToString();
     }
@@ -1443,7 +1570,7 @@ public static class ComputedValueSerializer
         for (int i = 0; i < count; i++)
         {
             if (i > 0) parts.Append(", ");
-            parts.Append(BackgroundPosText(PickAxis(layers, scalar, i)));
+            parts.Append(BackgroundPosText(PickAxis(layers, scalar, i), style: style));
         }
         return parts.ToString();
     }
@@ -1583,6 +1710,27 @@ public static class ComputedValueSerializer
             case "border-right": return BorderSideText(style, "border-right");
             case "border-bottom": return BorderSideText(style, "border-bottom");
             case "border-left": return BorderSideText(style, "border-left");
+            // The three pair longhands of each logical axis: the two edges' values, printed as the
+            // pair the page wrote (measured: 'border-block-color: red blue' computes
+            // 'rgb(255, 0, 0) rgb(0, 0, 255)' and 'border-block-style: solid' computes 'solid').
+            case "border-block-width":
+                return Pair(Longhand(style, "border-block-start-width"),
+                            Longhand(style, "border-block-end-width"));
+            case "border-block-style":
+                return Pair(Longhand(style, "border-block-start-style"),
+                            Longhand(style, "border-block-end-style"));
+            case "border-block-color":
+                return Pair(Longhand(style, "border-block-start-color"),
+                            Longhand(style, "border-block-end-color"));
+            case "border-inline-width":
+                return Pair(Longhand(style, "border-inline-start-width"),
+                            Longhand(style, "border-inline-end-width"));
+            case "border-inline-style":
+                return Pair(Longhand(style, "border-inline-start-style"),
+                            Longhand(style, "border-inline-end-style"));
+            case "border-inline-color":
+                return Pair(Longhand(style, "border-inline-start-color"),
+                            Longhand(style, "border-inline-end-color"));
             case "border-block-start": return BorderSideText(style, "border-block-start");
             case "border-block-end": return BorderSideText(style, "border-block-end");
             case "border-inline-start": return BorderSideText(style, "border-inline-start");
@@ -1616,7 +1764,8 @@ public static class ComputedValueSerializer
                       + $"{Longhand(style, "column-rule-color")}";
             }
             case "overflow": return Pair(Longhand(style, "overflow-x"), Longhand(style, "overflow-y"));
-            case "gap": return Pair(Longhand(style, "row-gap"), Longhand(style, "column-gap"));
+            case "gap":
+            case "grid-gap": return Pair(Longhand(style, "row-gap"), Longhand(style, "column-gap"));
             case "place-content":
                 return Pair(Longhand(style, "align-content"), Longhand(style, "justify-content"));
             case "place-items":
@@ -1639,6 +1788,7 @@ public static class ComputedValueSerializer
                 return GridLine(Longhand(style, "grid-column-start"), Longhand(style, "grid-column-end"));
             case "grid-area": return GridAreaText(style);
             case "grid-template": return GridTemplateText(style);
+            case "grid": return GridShorthandText(style);
 
             // -------------------------------------------------------- time lists
             case "animation": return AnimationText(style);
@@ -1695,6 +1845,54 @@ public static class ComputedValueSerializer
 
     /// <summary>One longhand's computed text. An empty fallback rather than null: a shorthand
     /// that is missing a part still has to say something about the parts it has.</summary>
+    /// <summary>One axis of 'overflow' as the engine computes it. 'overlay' is accepted and
+    /// reported as 'auto', and 'visible' beside an axis that scrolls computes as 'auto' too,
+    /// because a box cannot be seen to overflow one edge and clip the other
+    /// (CSS Overflow 3 §3.2; measured: 'overflow: visible auto' computes 'auto',
+    /// 'overflow: scroll auto' computes 'scroll auto' and 'overflow: overlay' computes 'auto').</summary>
+    private static string OverflowAxisText(ComputedStyle style, bool x)
+    {
+        var mine = x ? style.OverflowX : style.OverflowY;
+        var other = x ? style.OverflowY : style.OverflowX;
+        string Word(OverflowType value) => value switch
+        {
+            OverflowType.Hidden => "hidden",
+            OverflowType.Scroll => "scroll",
+            OverflowType.Auto => "auto",
+            OverflowType.Clip => "clip",
+            _ => "visible",
+        };
+        var text = Word(mine);
+        if (text != "visible") return text;
+        return other is OverflowType.Auto or OverflowType.Scroll ? "auto" : text;
+    }
+
+    /// <summary>The eight absolute stretch keywords and the percentage each of them is
+    /// (CSS Fonts 4 §6.3, measured at all eight); anything the property already spells as a
+    /// percentage says itself, and 'normal' or nothing at all is the 100% the font is drawn at.</summary>
+    private static string FontStretchComputed(string? stretch)
+    {
+        var word = (stretch ?? "").Trim().ToLowerInvariant();
+        return word switch
+        {
+            "" or "normal" => "100%",
+            "ultra-condensed" => "50%",
+            "extra-condensed" => "62.5%",
+            "condensed" => "75%",
+            "semi-condensed" => "87.5%",
+            "semi-expanded" => "112.5%",
+            "expanded" => "125%",
+            "extra-expanded" => "150%",
+            "ultra-expanded" => "200%",
+            _ => word,
+        };
+    }
+
+    /// <summary>A number the engine prints the way a reference engine does: no trailing zeros, and
+    /// a whole weight says itself as an integer ('400', '550', '1.5').</summary>
+    private static string TrimmedNumber(double number)
+        => number.ToString("0.#################", CultureInfo.InvariantCulture);
+
     private static string Longhand(ComputedStyle style, string name) => ValueOf(style, name) ?? "";
 
     /// <summary>The four-value collapse of a box shorthand (CSS 2.1 §5.10.1, measured): a list
@@ -1812,13 +2010,13 @@ public static class ComputedValueSerializer
     /// <summary>A minimum size: the initial is the 'auto' the page may write, and the reference
     /// engine computes that spelling to the zero it stands for (measured: 'min-width: auto' reads
     /// 'auto' in the specified value and '0px' in the computed one).</summary>
-    private static string MinLengthText(ComputedStyle style, Length? length)
+    private static string MinLengthText(ComputedStyle style, Length? length, bool cut = false)
     {
         // A minimum with nothing written at it is the number zero, not the keyword 'auto': the
         // reference engine answers '0px' (measured, and the same answer a dropped
         // 'min-width: none' falls back to). 'auto' written on purpose means the same zero.
         if (length == null) return "0px";
-        var text = LengthText(style, length);
+        var text = LengthText(style, length, cut);
         return text.Equals("auto", StringComparison.OrdinalIgnoreCase) ? "0px" : text;
     }
 
@@ -1849,8 +2047,35 @@ public static class ComputedValueSerializer
         var rows = GridTemplateRowsText(style);
         var columns = GridTemplateColumnsText(style);
         if (rows == "none" && columns == "none") return "none";
-        // The template is the row list, then the column list on the other side of a slash.
+        // The column list is said only when there is one: a template that names its rows and stays
+        // silent about the columns says just the rows (measured: 'grid-template: "a" 1px' computes
+        // '"a" 1px' and 'grid-template: 1px / 2px' computes both sides of the slash).
+        if (columns == "none") return rows;
         return $"{rows} / {columns}";
+    }
+
+    /// <summary>CSS Grid 1 §7.2.1: the <c>grid</c> shorthand's computed value is the six parts the
+    /// shorthand owns, said in its own order and separated by slashes — the two axes, the areas,
+    /// the flow, and the two implicit lists. Every one of them is said even when it is the initial,
+    /// because the line has to read back as a template (measured: an untouched box computes
+    /// 'none / none / none / row / auto / auto' and 'grid: 1px / 2px' computes
+    /// '1px / 2px / none / row / auto / auto'). A row list the areas alone define is said as one
+    /// 'auto' per row, which is the track each of those rows takes.</summary>
+    private static string GridShorthandText(ComputedStyle style)
+    {
+        var areas = AreaRowStrings(style.GridTemplateAreas);
+        // The axes are read through their own longhands, and an axis the named areas alone define is
+        // said as one 'auto' per row (measured: 'grid: "a" / 1px' computes 'auto / 1px / "a" / row
+        // / auto / auto' — the areas in their own slot, the tracks they stand for in the axis).
+        var rows = Longhand(style, "grid-template-rows");
+        if (rows == "none" && areas.Count > 0)
+            rows = string.Join(" ", areas.Select(_ => "auto"));
+        var columns = Longhand(style, "grid-template-columns");
+        return string.Join(" / ", rows, columns,
+            areas.Count > 0 ? string.Join(" ", areas) : "none",
+            Longhand(style, "grid-auto-flow"),
+            Longhand(style, "grid-auto-rows"),
+            Longhand(style, "grid-auto-columns"));
     }
 
     /// <summary>The column side of 'grid-template': the list as authored (measured keeps the
@@ -1907,7 +2132,12 @@ public static class ComputedValueSerializer
     private static string InterleaveAreas(List<string> areas, string list)
     {
         var tracks = SplitTrackTokens(list);
-        if (tracks.Count == 0) return list;
+        if (tracks.Count == 0) return string.Join(" ", areas);
+        // A row the areas alone define has an 'auto' track nobody wrote, and the template says the
+        // area and not the track it stands for (measured: 'grid-template: "a"' computes '"a"',
+        // while '"a" 1px' keeps the track beside its name).
+        tracks = tracks.Where(t => !t.Equals("auto", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (tracks.Count == 0) return string.Join(" ", areas);
         var parts = new List<string>(tracks.Count);
         for (int i = 0; i < tracks.Count; i++)
             parts.Add(i < areas.Count ? $"{areas[i]} {tracks[i]}" : tracks[i]);
@@ -1987,7 +2217,12 @@ public static class ComputedValueSerializer
         // One item per layer, in the grammar's order, and a part still at its initial is left
         // out (measured: '1s a, 2s linear b' for two animations whose other parts are default).
         var names = List(Longhand(style, "animation-name"));
-        var durations = List(Longhand(style, "animation-duration"));
+        // The duration is read from the field and not from the longhand's computed text, because
+        // the two say different things: 'animation-duration' resolves its 'auto' to the '0s' a box
+        // without a timeline runs for (measured), while the shorthand has to know that the page
+        // never said a duration at all in order to leave it out.
+        var durations = List(string.IsNullOrWhiteSpace(style.AnimationDuration)
+            ? "auto" : style.AnimationDuration!.Trim());
         var timings = List(Longhand(style, "animation-timing-function"));
         var delays = List(Longhand(style, "animation-delay"));
         var counts = List(Longhand(style, "animation-iteration-count"));
@@ -1999,9 +2234,19 @@ public static class ComputedValueSerializer
         for (int i = 0; i < System.Math.Max(1, layers); i++)
         {
             var parts = new List<string>(8);
-            AddUnlessAt(parts, At(durations, i), "0s");
+            var duration = At(durations, i);
+            var delay = At(delays, i);
+            // 'auto' is the duration a layer has when nothing said how long it runs, and it is the
+            // value the computed shorthand leaves out — while a '0s' the page wrote is a duration the
+            // engine was told to use and says itself (measured: 'animation: auto' computes 'none'
+            // and 'animation: 0s' computes '0s'). The two times are one pair besides: a delay only
+            // reads as a delay with the duration in front of it, so an unsaid duration is written
+            // out as the '0s' it resolves to ('animation: -1s' computes '0s -1s', both measured).
+            var unsaid = duration.Equals("auto", StringComparison.OrdinalIgnoreCase);
+            var saysDuration = !unsaid || (delay != "0s" && delay.Length > 0);
+            if (saysDuration && duration.Length > 0) parts.Add(unsaid ? "0s" : duration);
             AddUnlessAt(parts, At(timings, i), "ease");
-            AddUnlessAt(parts, At(delays, i), "0s");
+            if (delay != "0s" && delay.Length > 0) parts.Add(delay);
             AddUnlessAt(parts, At(counts, i), "1");
             AddUnlessAt(parts, At(directions, i), "normal");
             AddUnlessAt(parts, At(fills, i), "none");
@@ -2105,7 +2350,15 @@ public static class ComputedValueSerializer
         var items = new List<string>(images.Count);
         for (int i = 0; i < images.Count; i++)
         {
-            var parts = new List<string>(7) { At(images, i) };
+            // The image is said only when there is an image: 'none' is what a mask layer means with
+            // nothing written on it, so 'mask: 1px' computes the position alone
+            // (measured), and a layer whose every part is initial computes 'none'.
+            var image = At(images, i);
+            var parts = new List<string>(7);
+            // The image prints the way the 'mask-image' longhand prints one, colours and all
+            // (measured: 'mask: linear-gradient(red, blue)' computes the gradient with rgb()s).
+            if (image.Length > 0 && image != "none")
+                parts.Add(Css.ImageValueCanonicalizer.Canonicalize(image));
             var p = At(List(position), i);
             var s = At(List(size), i);
             if (p.Length > 0 && p != "0% 0%") parts.Add(p);
@@ -2142,7 +2395,7 @@ public static class ComputedValueSerializer
             if (k.Length > 0 && k != "add") parts.Add(k);
             var m = At(List(mode), i);
             if (m.Length > 0 && m != "match-source") parts.Add(m);
-            items.Add(string.Join(" ", parts));
+            items.Add(parts.Count > 0 ? string.Join(" ", parts) : "none");
         }
         return string.Join(", ", items);
     }

@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b295 digit probe</title></head>
+<body>
+<div id="host"></div>
+<script>
+// The number printer, isolated. Each row is written so that a rounding rule, a truncating rule and
+// a 'count the decimals' rule answer DIFFERENT strings, and the set walks the two places where the
+// printing changes its mind: below one ten-thousandth and above ten to the sixth.
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+let index = 0;
+
+function one(value) {
+  const el = document.createElement('div');
+  host.appendChild(el);
+  el.style.setProperty('margin-left', value);
+  rows.push(index + '|margin-left|' + value
+      + '|echo=' + el.style.getPropertyValue('margin-left')
+      + '|comp=' + getComputedStyle(el).getPropertyValue('margin-left'));
+  index++;
+}
+
+const numbers = [
+  '1.0000001px', '1.0000004px', '1.0000005px', '1.0000014px', '1.9999994px', '1.9999995px',
+  '0.19999994px', '0.19999995px', '0.1234564999px', '0.1234565px',
+  '0.0199999999px', '0.01234565px', '0.01234564999px', '0.01234565001px',
+  '0.001999999px', '0.001234565px', '0.001234555px',
+  '0.000199999px', '0.0001234567px', '0.00012345px',
+  '0.0000999999px', '0.0001000001px', '0.000019999px', '0.0000123456px',
+  '0.0000012345px', '0.0000001234px', '0.00000001234px',
+  '9999999px', '10000000px', '12345678px', '99999949px', '99999951px',
+  '100000000px', '1234567890px', '123456789012345px',
+  '0.5px', '0.25px', '0.0625px', '0.03125px', '16.666666px',
+  '2px', '2.0px', '2.00px', '-0.000123456789px', '-1.23456789px'
+];
+for (const n of numbers) one(n);
+
+window.__probe = rows.join('\n');
+console.log(window.__probe);
+}
+build();
+</script>
+</body></html>

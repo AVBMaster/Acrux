@@ -1699,8 +1699,8 @@ public class GridLayoutAlgorithm
     // that spelling and the logical keywords.
     private static JustifyItemsType ParseJustifyItems(string value) => value.ToLowerInvariant() switch
     {
-        "start" or "flexstart" or "flex-start" or "left" => JustifyItemsType.Start,
-        "end" or "flexend" or "flex-end" or "right" => JustifyItemsType.End,
+        "start" or "flexstart" or "flex-start" or "left" or "self-start" => JustifyItemsType.Start,
+        "end" or "flexend" or "flex-end" or "right" or "self-end" => JustifyItemsType.End,
         "center" => JustifyItemsType.Center,
         "stretch" => JustifyItemsType.Stretch,
         _ => JustifyItemsType.Stretch
@@ -1708,8 +1708,8 @@ public class GridLayoutAlgorithm
 
     private static AlignItemsType ParseAlignItems(string value) => value.ToLowerInvariant() switch
     {
-        "start" or "flexstart" or "flex-start" => AlignItemsType.Start,
-        "end" or "flexend" or "flex-end" => AlignItemsType.End,
+        "start" or "flexstart" or "flex-start" or "self-start" => AlignItemsType.Start,
+        "end" or "flexend" or "flex-end" or "self-end" => AlignItemsType.End,
         "center" => AlignItemsType.Center,
         "stretch" => AlignItemsType.Stretch,
         "baseline" => AlignItemsType.Baseline,

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b294 probe G &#8212; the longhands a shorthand counts as, and the values that split two grammars</title>
+<style>body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: #fff; }
+#box { width: 200px; } #box > div { height: 20px; }</style></head><body>
+<div id="box"></div><pre id="report"></pre>
+<script>
+/* Two questions, one page.
+ *
+ * 'SHORTHANDS' asks a shorthand for the longhand names it counts as: the row prints the count and
+ * every name in the order the CSSOM lists them, which is what a longhand count has to agree with.
+ *
+ * 'CASES' asks the values that two candidate grammars both accept, or both refuse — the pair a
+ * position writes, the list a comma separates, the legacy spelling an alias keeps. */
+var SHORTHANDS = ["animation", "-webkit-animation", "mask", "offset", "border-block",
+  "border-block-start", "border-block-end", "border-inline", "border-inline-start",
+  "border-inline-end", "column-rule", "font-variant", "font", "place-content", "place-items",
+  "place-self", "transition", "-webkit-transition", "grid", "grid-area", "grid-column",
+  "grid-row", "text-emphasis", "list-style", "background", "flex", "flex-flow", "border",
+  "border-top", "border-radius", "inset", "inset-block", "margin", "padding", "gap", "grid-gap",
+  "grid-template", "contain", "contain-intrinsic-size", "columns", "outline", "overflow",
+  "scroll-margin", "scroll-padding", "text-decoration", "view-transition-group", "caret",
+  "box-shadow", "all", "transition-property", "mask-position", "anchor", "position-try",
+  "font-synthesis", "font-variant-numeric", "scroll-snap-type", "will-change", "align-self"];
+
+/* One valid value per shorthand, so the CSSOM has something to list. */
+var SHORTHAND_VALUES = {
+  "animation": "1s slide", "-webkit-animation": "1s slide", "mask": "url(a.png)",
+  "offset": "path('M0 0')", "border-block": "1px solid red",
+  "border-block-start": "1px solid red", "border-block-end": "1px", "border-inline": "1px",
+  "border-inline-start": "1px", "border-inline-end": "1px", "column-rule": "1px solid red",
+  "font-variant": "small-caps", "font": "12px serif", "place-content": "center",
+  "place-items": "center", "place-self": "center", "transition": "opacity 1s",
+  "-webkit-transition": "opacity 1s", "grid": "1px / 2px", "grid-area": "1 / 2",
+  "grid-column": "1 / 2", "grid-row": "1", "text-emphasis": "dot", "list-style": "disc",
+  "background": "red", "flex": "1", "flex-flow": "row", "border": "1px solid red",
+  "border-top": "1px solid red", "border-radius": "1px", "inset": "1px",
+  "inset-block": "1px", "margin": "1px", "padding": "1px", "gap": "1px", "grid-gap": "1px",
+  "grid-template": "1px / 2px", "contain": "size", "contain-intrinsic-size": "auto 1px",
+  "columns": "2", "outline": "1px solid red", "overflow": "auto",
+  "scroll-margin": "1px", "scroll-padding": "1px", "text-decoration": "underline",
+  "view-transition-group": "contain", "caret": "auto", "box-shadow": "0 0 0 1px",
+  "all": "inherit", "transition-property": "all", "mask-position": "1px", "anchor": "default",
+  "position-try": "bottom-left", "font-synthesis": "weight",
+  "font-variant-numeric": "tabular-nums", "scroll-snap-type": "both", "will-change": "auto",
+  "align-self": "center"
+};
+
+var CASES = [
+  ["writing-mode", "tb"], ["writing-mode", "lr"], ["writing-mode", "rl"],
+  ["writing-mode", "vertical"], ["writing-mode", "sideways"],
+  ["direction", "auto"], ["direction", "bogus"], ["direction", "ltr rtl"],
+  ["will-change", "auto, opacity"], ["will-change", "none, opacity"], ["will-change", "1"],
+  ["will-change", "\"x\""], ["will-change", "auto auto"],
+  ["text-orientation", "mixed upright"], ["text-orientation", "sideways-right"],
+  ["text-orientation", "vertical-right"],
+  ["font-weight", "normal bold"], ["font-weight", "100 200"], ["font-weight", "bolder lighter"],
+  ["font-weight", "+500"], ["font-weight", "calc(400 + 100)"], ["font-weight", "4.5"],
+  ["font-weight", "0.5"],
+  ["field-sizing", "fixed fixed"], ["field-sizing", "content, fixed"],
+  ["position", "static static"], ["position", "STICKY"],
+  ["animation-name", "none, none"], ["animation-name", "a, a"], ["animation-name", "none a"],
+  ["animation-name", "\"quoted\""], ["animation-name", "1"],
+  ["animation-range", "entry 0%"], ["animation-range", "exit 100%"],
+  ["animation-range", "normal cover"], ["animation-range", "1px 1px"],
+  ["animation-range", "entry, exit"], ["animation-range", "0% 100%"],
+  ["clip", "rect(1px 1px 1px)"], ["clip", "auto, auto"], ["clip", "rect(0%, 0%, 0%, 0%)"],
+  ["clip", "rect(1px, 1px)"], ["clip", "rect(1px 1px 1px 1px 1px)"],
+  ["clip", "rect(auto auto auto auto)"],
+  ["mask", "url(a.png) 1px / auto"], ["mask", "url(a.png) / contain"],
+  ["mask", "url(a.png) repeat no-clip content-box intersect luminance 1px"],
+  ["mask", "url(a.png) 1px 2px repeat-x padding-box exclude alpha"],
+  ["mask", "none 1px"], ["mask", "url(a.png) center"],
+  ["mask-size", "auto contain"], ["mask-size", "1px, 2px"],
+  ["mask-repeat", "repeat-x repeat-y"], ["mask-repeat", "no-repeat no-repeat no-repeat"],
+  ["mask-mode", "match-source alpha"],
+  ["offset", "url(#a) 1px 2px"], ["offset", "normal 1px 2px"], ["offset", "auto"],
+  ["offset", "path('M0 0') 1px 2px"], ["offset", "border-box"], ["offset", "fill-box"],
+  ["place-content", "stretch start"], ["place-content", "center center"],
+  ["place-content", "normal normal"], ["place-content", "start end"],
+  ["place-items", "center center"], ["place-items", "normal normal"],
+  ["place-items", "baseline center"], ["place-self", "auto auto"], ["place-self", "start end"],
+  ["scale", "1 1"], ["scale", "50% 1"], ["scale", "0 0 0"], ["scale", "-1"],
+  ["scale", "1 auto"], ["translate", "1px 1px"], ["translate", "auto auto"],
+  ["rotate", "y 45deg"], ["rotate", "1 1 0 45deg"], ["rotate", "none 45deg"],
+  ["grid", "1px / 2px / \"a\""], ["grid", "none / none"],
+  ["grid", "[a] 1px [b] / [c] 2px [d]"], ["grid", "\"a\" \"b\" / 1px"],
+  ["grid", "1px / 2px row"], ["grid", "\"a\" 1px / 2px"],
+  ["grid-template", "\"a\""], ["grid-template", "1px"], ["grid-template", "none / none"],
+  ["grid-template-areas", "\"\""], ["grid-template-areas", "\"a a\" \"a a\""],
+  ["grid-auto-flow", "column dense row"],
+  ["grid-area", "auto auto auto auto"], ["grid-area", "1 / 1 / 1 / 1"],
+  ["list-style", "auto disc"], ["list-style", "disc auto"], ["list-style", "none none"],
+  ["list-style", "inside outside"], ["list-style", "url(a.png) url(b.png)"],
+  ["color-scheme", "only light dark"], ["color-scheme", "light only dark"],
+  ["color-scheme", "light dark only"], ["color-scheme", "normal light"],
+  ["text-emphasis", "filled circle"], ["text-emphasis", "dot sesame"],
+  ["text-emphasis", "red blue"], ["text-emphasis", "none dot"],
+  ["border-block", "currentColor"], ["border-block", "thin"],
+  ["border-block", "none none"], ["border-block", "1px 2px 3px"],
+  ["border-inline-style", "solid solid solid"],
+  ["font-stretch", "112.5%"], ["font-stretch", "ultra-condensed 112.5%"],
+  ["font-stretch", "condensed condensed"],
+  ["transition", "all 1s ease-out 0s discrete"], ["transition", "opacity"],
+  ["transition", "1s 2s"], ["transition", "ease-out"],
+  ["counter-reset", "x 2147483648"], ["counter-reset", "none none"], ["counter-reset", "x, y"],
+  ["counter-reset", "\"x\" 1"], ["counter-reset", "span 1"],
+  ["math-shift", "superscript"], ["math-shift", "normal normal"],
+  ["transform-box", "border-box fill-box"], ["transform-box", "padding-box"],
+  ["pointer-events", "visible painted"], ["pointer-events", "visiblePainted painted"],
+  ["text-wrap-mode", "wrap wrap"], ["text-wrap-style", "balance stable"],
+  ["white-space-collapse", "collapse collapse"],
+  ["background-image", "none, none"], ["background-image", "url(a.png) url(b.png)"],
+  ["mask-image", "cross-fade(url(a.png), url(b.png))"],
+  ["mask-image", "-webkit-image-set(url(a.png) 1x)"],
+  ["view-transition-group", "normal normal"], ["view-transition-group", "1px"],
+  ["-webkit-text-orientation", "horizontal-top-to-bottom"],
+  ["-webkit-text-orientation", "mixed"], ["-webkit-text-orientation", "sideways-right"],
+  ["column-span", "span"], ["column-span", "all all"],
+  ["word-wrap", "normal break-word"], ["overflow-wrap", "normal break-word"],
+  ["flex-direction", "row row"], ["flex-wrap", "wrap wrap"],
+  ["font-synthesis", "weight style small-caps"], ["font-synthesis", "style weight"],
+  ["font-synthesis", "auto none"], ["font-variant", "petit-caps"],
+  ["font-variant", "scientific-infractions"], ["font-variant", "fraction"],
+  ["font-variant", "normal small-caps"], ["font-variant", "none small-caps"],
+  ["font-style", "italic italic"], ["font-style", "oblique 20deg oblique"],
+  ["font-style", "oblique -20deg"], ["font-style", "oblique 400deg"],
+  ["text-decoration-style", "solid dotted"], ["text-decoration-line", "none underline"],
+  ["animation-iteration-count", "1, 2, 3"], ["animation-duration", "1s, 2s, 3s"],
+  ["animation-timing-function", "linear, steps(2), cubic-bezier(0, 0, 1, 1)"],
+  ["animation-timing-function", "cubic-bezier(2, 0, 1, 1)"],
+  ["animation-play-state", "running, running"],
+  ["animation-composition", "replace"]
+];
+
+var out = [];
+for (var s = 0; s < SHORTHANDS.length; s++) {
+  var name = SHORTHANDS[s];
+  var el = document.createElement('div');
+  document.getElementById('box').appendChild(el);
+  el.style.setProperty(name, SHORTHAND_VALUES[name] || 'inherit');
+  void el.offsetHeight;
+  var names = [];
+  for (var i = 0; i < el.style.length; i++) names.push(el.style.item(i));
+  out.push('S' + s + '|' + name + '|' + (SHORTHAND_VALUES[name] || 'inherit')
+    + '|n=' + el.style.length + '|names=' + names.join(','));
+}
+for (var i = 0; i < CASES.length; i++) {
+  var prop = CASES[i][0], value = CASES[i][1];
+  var d = document.createElement('div');
+  document.getElementById('box').appendChild(d);
+  d.style.setProperty(prop, value);
+  void d.offsetHeight;
+  var sup = 'ERR';
+  try { sup = CSS.supports(prop, value) ? '1' : '0'; } catch (e) {}
+  out.push('C' + i + '|' + prop + '|' + value + '|sup=' + sup + '|n=' + d.style.length
+    + '|echo=' + d.style.getPropertyValue(prop)
+    + '|comp=' + getComputedStyle(d).getPropertyValue(prop));
+}
+text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

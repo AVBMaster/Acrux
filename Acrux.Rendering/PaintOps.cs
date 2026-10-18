@@ -211,6 +211,11 @@ public class DrawRectOp : PaintOp
 
     private static void DrawBorderSide(SKCanvas canvas, float x1, float y1, float x2, float y2, float width, SKColor color, BorderStyle style)
     {
+        // This op draws a line wherever one is asked for with a width and a colour, and it carries
+        // no computed style: the callers are the theme painters, the broken-image frame and an
+        // element's outline ring, all of which say the width and the colour and nothing else.
+        // Whether a CSS border's style draws any ink — 'none' and 'hidden' (CSS 2.1 §8.5.1) — is
+        // decided where the style is known: BoxBorderPainter.BorderEdge.ShouldRender.
         if (style == BorderStyle.Groove || style == BorderStyle.Ridge ||
             style == BorderStyle.Inset || style == BorderStyle.Outset)
         {

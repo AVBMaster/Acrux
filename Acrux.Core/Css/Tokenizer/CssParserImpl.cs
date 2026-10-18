@@ -1431,6 +1431,12 @@ public class CssParserImpl
             valueText = valueText[..^"!important".Length].Trim();
         }
 
+        // A comment inside the value is the token boundary CSS Syntax 3 §4 makes it, and the text
+        // this engine keeps for the declaration has to say the same thing a tokenized stylesheet
+        // does: 'margin: 1px/*c*/2px' is two lengths, and the rect a script reads back from
+        // 'rect(0px 0px 0px 0px) /* x */' carries no comment at all (measured, both).
+        valueText = Acrux.Core.Css.CssValueGrammar.WithCommentsAsWhitespace(valueText);
+
         // Convert to CssValue and add to parsed properties
         if (!string.IsNullOrEmpty(propertyName) && !string.IsNullOrEmpty(valueText))
         {
@@ -2431,7 +2437,11 @@ public class CssParserImpl
         if (!custom && !Acrux.Core.Css.Resolver.CssPropertyTraits.IsDeclaredProperty(name))
             return false;
 
-        var value = Acrux.Core.Css.MediaFeatureValue.StripComments(
+        // The comment inside a declaration value is the boundary CSS Syntax 3 §4 makes it, so it
+        // leaves a space behind here — '1px/*c*/2px' is two lengths, while the same cut that a
+        // media list asks for (MediaFeatureValue.StripComments, where the measured reading is that
+        // the space goes with the comment) would fuse them into one token that is no value.
+        var value = Acrux.Core.Css.CssValueGrammar.WithCommentsAsWhitespace(
             text[ends[colon]..ends[to - 1]]).Trim();
         // A ';' in the value is a second declaration, and a group holds one declaration
         // (measured: '(color: red; color: blue)' and '(background:red; color:blue)' are no

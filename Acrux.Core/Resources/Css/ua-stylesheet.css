@@ -839,9 +839,10 @@ search {
 }
 
 /* Colors */
-:root {
-  color-scheme: light;
-}
+/* The reference engine's light scheme on the root is a used value, not a declaration: with no
+   'color-scheme' written anywhere, getComputedStyle says 'normal' on ':root' and on every
+   descendant (measured), and the engine paints light because 'normal' means light here. The dark
+   rule below is the one the reference engine does express as a declaration. */
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;

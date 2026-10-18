@@ -26,13 +26,19 @@ public static class InlineStyleBlock
         element.Style.Clear();
         foreach (var kv in Parse(text))
         {
+            // A comment in the attribute is the space CSS Syntax 3 §4 says it is, before the
+            // grammar is asked and before the value is stored — the same reading the CSSOM's
+            // setter gives the same text (measured: 'style="margin: 1px/*c*/2px"' makes four
+            // longhands and echoes '1px 2px').
+            var name = kv.Key;
+            var authored = CssValueGrammar.WithCommentsAsWhitespace(kv.Value);
             // The same question the CSSOM's setter asks, because the attribute and setProperty are
             // two roads to one block: a declaration the property's grammar refuses is never in the
             // map at all, and so never reads back as if it were (measured: an authored
             // 'style="text-decoration: underline red overline"' answers getPropertyValue with the
             // empty string and paints no line).
-            if (!CssValueGrammar.TextIsValidFor(kv.Key, kv.Value)) continue;
-            Store(element, kv.Key, kv.Value);
+            if (!CssValueGrammar.TextIsValidFor(name, authored)) continue;
+            Store(element, name, authored);
         }
         element.StyleMirrorText = text;
     }

@@ -39,10 +39,10 @@ public sealed class InlineBoxFragmentPainter
 
     /// <summary>Mirror of HasBorderDecoration: any border edge has a visible style.</summary>
     public static bool HasBorderDecoration(ComputedStyle style) =>
-        (style.BorderTopWidth > 0 && style.BorderTopStyle != BorderStyle.None) ||
-        (style.BorderRightWidth > 0 && style.BorderRightStyle != BorderStyle.None) ||
-        (style.BorderBottomWidth > 0 && style.BorderBottomStyle != BorderStyle.None) ||
-        (style.BorderLeftWidth > 0 && style.BorderLeftStyle != BorderStyle.None);
+        (style.BorderTopWidth > 0 && style.BorderTopStyle.IsDrawn()) ||
+        (style.BorderRightWidth > 0 && style.BorderRightStyle.IsDrawn()) ||
+        (style.BorderBottomWidth > 0 && style.BorderBottomStyle.IsDrawn()) ||
+        (style.BorderLeftWidth > 0 && style.BorderLeftStyle.IsDrawn());
 
     /// <summary>
     /// Mirror of HasEffectiveAppearance. This engine has no native appearance

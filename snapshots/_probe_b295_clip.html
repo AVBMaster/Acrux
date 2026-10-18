@@ -1,0 +1,111 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b295 clip probe</title></head>
+<body>
+<div id="host"></div>
+<script>
+// The legacy 'clip' rectangle, asked on all four surfaces at once: what the grammar says (sup),
+// how many declarations the CSSOM counts (n), how the style attribute echoes (echo) and what the
+// computed value prints (comp). The spelling questions matter here because the rect takes its four
+// sides with a space in the legacy grammar and prints them with a comma, and because a side can be
+// the word 'auto' instead of a number.
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+let index = 0;
+
+function one(value) {
+  const el = document.createElement('div');
+  host.appendChild(el);
+  const sup = CSS.supports('clip', value) ? 1 : 0;
+  el.style.setProperty('clip', value);
+  const n = sup ? el.style.length : 0;
+  const echo = el.style.getPropertyValue('clip');
+  const comp = getComputedStyle(el).getPropertyValue('clip');
+  rows.push(index + '|clip|clip|' + value +
+      '|sup=' + sup + '|n=' + n + '|echo=' + echo + '|comp=' + comp);
+  index++;
+}
+
+const values = [
+  'auto',
+  'rect(0px 20px 40px 0px)',
+  'rect(0, 20px, 40px, 0px)',
+  'rect(0 0 0 0)',
+  'rect(0px 0px 0px 0px)',
+  'rect(1px 2px 3px 4px)',
+  'rect(1 2 3 4)',
+  'rect(10px 20px)',
+  'rect(10px 20px 30px)',
+  'rect(1px 2px 3px 4px 5px)',
+  'rect(auto)',
+  'rect(auto auto auto auto)',
+  'rect(auto 20px auto auto)',
+  'rect(0px, auto, auto, 5px)',
+  'rect(10px, 10px, 10px, 10px, auto)',
+  'rect(-10px 100px 100px -10px)',
+  'rect(-1px -1px -1px -1px)',
+  'rect(50% 50% 50% 50%)',
+  'rect(1em 2em 3em 4em)',
+  'rect(1rem 2rem 1rem 1rem)',
+  'rect(10pt 10pt 10pt 10pt)',
+  'rect(2cm 1cm 2cm 1cm)',
+  'rect(calc(1px + 2px) 0px 0px 0px)',
+  'rect(  0px   20px  40px  0px  )',
+  'rect(0px, 20px, 40px, 0px,)',
+  'rect(0px  20px,40px  0px)',
+  'RECT(0px 20px 40px 0px)',
+  'Rect(0px 20px 40px 0px)',
+  'rect(0px 20px 40px 0px',
+  'rect(0px 20px 40px 0px))',
+  'inset(0px)',
+  'inset(0px round 2px)',
+  'circle(10px)',
+  'rect(0px 20px 40px 0px) border-box',
+  'rect(0px 20px 40px 0px), rect(1px 2px 3px 4px)',
+  'auto auto',
+  'none',
+  'inherit',
+  'initial',
+  'revert',
+  'unset',
+  '',
+  'rect()',
+  'rect(0px 20px 40px 0px) ',
+  ' rect(0px 20px 40px 0px)',
+  'rect(auto 0px auto 0px)',
+  'rect(0px auto 0px auto)',
+  'rect(2147483647px 1px 1px 1px)',
+  'rect(1e3px 1px 1px 1px)',
+  'rect(0px 20px 40px 0x)',
+  'rect(0px 20px 40px 0px auto)',
+  'rect(1.5px 2.5px 3.5px 4.5px)',
+  'rect(0px 0px 0px 0px) /* x */',
+  'rect(1Q 1Q 1Q 1Q)',
+];
+
+// A clipped box is a box whose painting has been cut, not one whose layout has: a child of a
+// clipped element keeps its own 'auto', because the property is not inherited.
+function pair() {
+  const par = document.createElement('div');
+  const kid = document.createElement('div');
+  par.appendChild(kid);
+  host.appendChild(par);
+  par.style.setProperty('clip', 'rect(0px 20px 40px 0px)');
+  rows.push(index + '|clip-inherited|clip|rect(0px 20px 40px 0px)' +
+      '|comp=' + getComputedStyle(kid).getPropertyValue('clip') +
+      '|par=' + getComputedStyle(par).getPropertyValue('clip'));
+  index++;
+}
+
+function main() {
+  for (const v of values) one(v);
+  pair();
+  window.__probe = rows.join('\n');
+  console.log(window.__probe);
+}
+main();
+}
+build();
+</script>
+</body></html>

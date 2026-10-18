@@ -214,9 +214,11 @@ public static class LineBoxMetrics
             float reference = style.FontSize > 0 ? style.FontSize : DefaultFontSize;
             using var _fontContext = FontUnitContext.Use(style);
             bool fromMath = length is MathLength;
+            // 'em' takes the element's font and 'rem' the root's; the percentage of a
+            // 'line-height' takes the element's font, which is why the first argument stays.
             float px = length is MathLength math && math.Expression.Contains('%')
-                ? math.ToPixelsAgainstPercentageBase(reference, reference, 0, 0)
-                : length.ToPixels(reference, reference, 0, 0);
+                ? math.ToPixelsAgainstPercentageBase(reference, style.RootFontSizeOrInitial, 0, 0)
+                : length.ToPixels(reference, style.RootFontSizeOrInitial, 0, 0);
             if (!float.IsNaN(px) && px >= 0)
             {
                 SetPixels(style, px, fromMath);

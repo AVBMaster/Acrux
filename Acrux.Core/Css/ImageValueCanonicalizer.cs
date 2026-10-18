@@ -24,9 +24,41 @@ public static class ImageValueCanonicalizer
         var layers = MaskLayerParser.SplitTopLevel(imageList, ',');
         if (layers.Count == 0) return imageList;
         for (int i = 0; i < layers.Count; i++)
+        {
             if (layers[i].Contains("gradient", StringComparison.OrdinalIgnoreCase))
                 layers[i] = CanonicalizeGradient(layers[i]);
+            // CSS Images 4 §4.2: the resolution a 'image-set()' candidate carries is printed as the
+            // unit the engine's own vocabulary uses — 'x' is 'dppx' there
+            // (measured: 'image-set(url(a.png) 1x)' computes 'image-set(url("a.png") 1dppx)').
+            layers[i] = CanonicalizeImageSet(layers[i]);
+        }
         return string.Join(", ", layers);
+    }
+
+    private static string CanonicalizeImageSet(string layer)
+    {
+        const string head = "image-set(";
+        int open = layer.IndexOf(head, StringComparison.OrdinalIgnoreCase);
+        if (open < 0) return layer;
+        int close = MatchingParen(layer, open + head.Length - 1);
+        if (close <= open) return layer;
+        var candidates = MaskLayerParser.SplitTopLevel(
+            layer.Substring(open + head.Length, close - open - head.Length), ',');
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            var words = MaskLayerParser.SplitTopLevel(candidates[i], ' ');
+            for (int w = 0; w < words.Count; w++)
+            {
+                var word = words[w].Trim();
+                if (word.Length > 1 && word.EndsWith("x", StringComparison.OrdinalIgnoreCase)
+                    && double.TryParse(word[..^1], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var rate))
+                    words[w] = Dom.Animations.CssValueTokenizer.Num((float)rate) + "dppx";
+            }
+            candidates[i] = string.Join(" ", words);
+        }
+        return layer.Substring(0, open + head.Length) + string.Join(", ", candidates)
+            + layer[close..];
     }
 
     private static string CanonicalizeGradient(string layer)

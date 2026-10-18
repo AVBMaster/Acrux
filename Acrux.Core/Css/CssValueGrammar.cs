@@ -71,6 +71,48 @@ public static class CssValueGrammar
         return false;
     }
 
+    /// <summary>A declaration value with every CSS comment replaced by the one space it stands for.
+    /// A stylesheet never shows this text — its tokenizer takes comments out while it splits the
+    /// stream into tokens — but a value handed to <c>setProperty</c> or written into a 'style'
+    /// attribute arrives as the author typed it, and CSS Syntax 3 §4 says a comment is a token
+    /// boundary, not nothing: '1px/*c*/2px' is two lengths, and the same text with the comment cut
+    /// out entirely would be one impossible one (measured: the reference engine makes four longhands
+    /// out of <c>margin: 1px/*c*/2px</c> and echoes '1px 2px', stores 'rect(0px, 0px, 0px, 0px)' for
+    /// a rect with a comment on either side of it, and says '12px serif' for
+    /// <c>font: 12px/*x*/ serif</c>). A comment that never closes runs to the end of the value, and a
+    /// '/*' inside a quoted string is a string, not a comment.</summary>
+    public static string WithCommentsAsWhitespace(string? value)
+    {
+        if (string.IsNullOrEmpty(value) || value!.IndexOf("/*", StringComparison.Ordinal) < 0)
+            return value ?? string.Empty;
+        var sb = new System.Text.StringBuilder(value.Length);
+        for (int i = 0; i < value.Length; i++)
+        {
+            char c = value[i];
+            if (c is '"' or '\'')
+            {
+                char quote = c;
+                sb.Append(c);
+                int j = i + 1;
+                while (j < value.Length && value[j] != quote)
+                    j += value[j] == '\\' ? 2 : 1;
+                int length = Math.Min(j - i + 1, value.Length - i);
+                sb.Append(value, i + 1, length - 1);
+                i += length;
+                continue;
+            }
+            if (c == '/' && i + 1 < value.Length && value[i + 1] == '*')
+            {
+                int close = value.IndexOf("*/", i + 2, StringComparison.Ordinal);
+                i = close < 0 ? value.Length : close + 1;
+                sb.Append(' ');
+                continue;
+            }
+            sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
     /// <summary>The same grammar for a declaration the CSSOM is about to store, where only
     /// the property name and the value text are at hand.</summary>
     public static bool TextIsValidFor(string propertyName, string value)
@@ -82,7 +124,11 @@ public static class CssValueGrammar
         // of them reads back a property the page could never have set (measured:
         // 'setProperty("initial-letter-align","superscript")' then answers the empty string).
         if (!Resolver.CssPropertyTraits.IsDeclaredProperty(propertyName)) return false;
-        return ValueTextIsValid(propertyName, value);
+        // A comment is the token boundary it stands for, here as much as in a stylesheet, so the
+        // grammar, <c>CSS.supports</c> and the block the CSSOM stores all read one sequence
+        // (measured: 'margin: 1px/*c*/2px' is four longhands and 'rect(0px/*x*/0px 0px 0px)' is a
+        // rect; 'width: /*x*/' is no value at all).
+        return ValueTextIsValid(propertyName, WithCommentsAsWhitespace(value));
     }
 
     /// <summary>Whether a value text is a value of the named property, once the name itself has been
@@ -375,6 +421,13 @@ public static class CssValueGrammar
         // 'loose-allows-after-ja' and 'strict-allow-empty-line' each fall).
         "-webkit-line-break" => static t => IsOneWordOnly(t, "auto", "loose", "normal", "strict",
             "after-white-space"),
+        // CSS Writing Modes 3 §5.4 as the prefixed spelling reads it in this engine: the four
+        // orientations below are the whole set. 'mixed' — the initial of the modern property — is
+        // nobody's value here, and neither are 'vertical', 'auto', 'sideways-left', 'vertical-left'
+        // or the two horizontal spellings the first draft carried
+        // (all measured, in snapshots/out/_b294_ref_probeF.txt and _b294_ref_probeG.txt).
+        "-webkit-text-orientation" => static t => IsOneWordOnly(t, "vertical-right",
+            "sideways-right", "upright", "sideways"),
         "-webkit-text-stroke-width" => static t => IsTextStrokeWidth(t.Trim()),
         // Width first, colour second, either one optional and never two of a kind (measured:
         // 'green 2px' is stored reordered as '2px green', '2px 2px' and 'red green' are dropped).
@@ -759,7 +812,13 @@ public static class CssValueGrammar
         "-webkit-radial-gradient", "-webkit-repeating-radial-gradient",
         "linear-gradient", "repeating-linear-gradient", "radial-gradient",
         "repeating-radial-gradient", "conic-gradient", "repeating-conic-gradient",
-        "cross-fade", "image-set", "element", "paint",
+        // 'image-set()' with its legacy twin, and the paint-worklet function of the Houdini draft.
+        "image-set", "-webkit-image-set", "paint",
+        // 'cross-fade()' and 'element()' are in the spec's <image> and in no engine this round
+        // measured: each of the four image properties refuses them, in the longhand and in the
+        // shorthand alike (snapshots/out/_b294_ref_probeE.txt rows 39 and 40, and
+        // _b294_ref_probeF.txt's 'background-image', 'mask-image', 'list-style-image' and
+        // 'border-image-source' blocks).
     };
 
     /// <summary>The grammar to gate a declaration by, or null when this engine cannot decide
@@ -853,7 +912,8 @@ public static class CssValueGrammar
         // CSS Lists 3 §4.3/§4.4: a counter is a name plus an integer, and the integer is written
         // even when the page left it out. 'none' is a value of the whole property, never of one
         // counter, and 'reverse' is simply a name (both measured).
-        CssPropertyId.CounterReset or CssPropertyId.CounterSet => IsCounterList,
+        CssPropertyId.CounterReset or CssPropertyId.CounterSet
+            or CssPropertyId.CounterIncrement => IsCounterList,
         // CSS Transitions 1 §4.1 / CSS Animations 1 §3: a '<time>' is a number carrying the unit 's'
         // or 'ms', and the list is one time per item. No other unit spells a time — 'min' is a length
         // unit and the word round() takes, but it is never a duration, so the reference engine drops
@@ -917,7 +977,10 @@ public static class CssValueGrammar
         // dark' and 'only' alone fall, 'light light' stands (a duplicate is not a second grammar
         // slot), and the three words are not equally fussy about their case — 'Light' and 'DARK' are
         // the keywords, while 'ONLY' is neither the keyword nor a name.
-        CssPropertyId.ColorScheme => static text => CanonicalColorScheme(text) != null,
+        CssPropertyId.ColorScheme => static text =>
+            // A comma would be a list of values, and this property's list is space-separated
+            // (measured: 'color-scheme: light, dark' is dropped).
+            !text.Contains(',', StringComparison.Ordinal) && CanonicalColorScheme(text) != null,
         // CSS Scrollbars 1 §3.1: 'scrollbar-color' is 'auto' or exactly TWO colours — the thumb and
         // the track. One colour alone is no value (measured: 'scrollbar-color: red' is dropped
         // while 'red blue' and 'currentcolor blue' both stand).
@@ -997,9 +1060,15 @@ public static class CssValueGrammar
         CssPropertyId.FontKerning => static text => IsOneWordOnly(text, "auto", "normal", "none"),
         // CSS Writing Modes 3 §3.2/§4.1: the axis keywords, and nothing else. 'vertical' and
         // 'sideways' are not values of 'writing-mode', and 'sideways-lr vertical-rl' is two of them
-        // (each measured: dropped, with the property left at its initial).
+        // CSS Writing Modes 4 §5.2: the six modes with the one-word legacy spellings the reference
+        // engine still reads and re-prices — 'tb' is a vertical mode and 'lr', 'rl' are horizontal
+        // ones (measured, each: the echo keeps the word the page wrote and the computed value is
+        // the mode that word says). 'vertical' and 'sideways' are not values of 'writing-mode', and
+        // 'sideways-lr vertical-rl' is two of them (each measured: dropped, with the property left
+        // at its initial).
         CssPropertyId.WritingMode => static text => IsOneWordOnly(text,
-            "horizontal-tb", "vertical-rl", "vertical-lr", "sideways-rl", "sideways-lr"),
+            "horizontal-tb", "vertical-rl", "vertical-lr", "sideways-rl", "sideways-lr",
+            "lr-tb", "tb-rl", "tb-lr", "rl-tb", "lr", "rl", "tb"),
         // CSS Text 4 §2.1: the five keywords. The legacy '-isolate' and '-plaintext' spellings are
         // not values the reference engine takes any more (measured: both read back empty).
         CssPropertyId.Isolation => static text => IsOneWordOnly(text, "auto", "isolate"),
@@ -1008,7 +1077,7 @@ public static class CssValueGrammar
         CssPropertyId.Clear => static text => CssFloatKeywords.TryParseClear(text, out _),
         // CSS Fonts 4 §1.2: an absolute or relative size keyword, a system font keyword, or a
         // length/percentage. 'math' and 'auto' are the keywords text-size-adjust added.
-        CssPropertyId.FontSize => static text => IsLengthList(text,
+        CssPropertyId.FontSize => static text => IsNonNegativeLengthList(text,
             "xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "xxx-large",
             "larger", "smaller", "caption", "icon", "menu", "message-box", "small-caption",
             "status-bar", "math", "auto"),
@@ -1031,14 +1100,14 @@ public static class CssValueGrammar
             or CssPropertyId.InlineSize or CssPropertyId.BlockSize
             or CssPropertyId.MinWidth or CssPropertyId.MinHeight
             or CssPropertyId.MinInlineSize or CssPropertyId.MinBlockSize
-            => static text => IsSingleLength(text,
+            => static text => IsNonNegativeSingleLength(text,
                 "auto", "min-content", "max-content", "fit-content", "stretch",
                 // The legacy spelling of 'stretch' the engine still answers, and the prefixed
                 // form pages use today.
                 "-webkit-fill-available", "-webkit-fit-content"),
         CssPropertyId.MaxWidth or CssPropertyId.MaxHeight
             or CssPropertyId.MaxInlineSize or CssPropertyId.MaxBlockSize
-            => static text => IsSingleLength(text,
+            => static text => IsNonNegativeSingleLength(text,
                 "none", "min-content", "max-content", "fit-content", "stretch",
                 "-webkit-fill-available", "-webkit-fit-content"),
         // CSS Scroll Snap 1 §6.1, measured side by side: a margin side is a length and nothing
@@ -1079,15 +1148,26 @@ public static class CssValueGrammar
             or CssPropertyId.PaddingBottom or CssPropertyId.PaddingLeft
             or CssPropertyId.PaddingBlock or CssPropertyId.PaddingBlockStart or CssPropertyId.PaddingBlockEnd
             or CssPropertyId.PaddingInline or CssPropertyId.PaddingInlineStart or CssPropertyId.PaddingInlineEnd
-            => static text => IsLengthListUpTo(text, 4),
+            => static text => SplitComponents(text).Count <= 4 && IsNonNegativeLengthList(text),
         CssPropertyId.Inset or CssPropertyId.Top or CssPropertyId.Right
             or CssPropertyId.Bottom or CssPropertyId.Left
             or CssPropertyId.InsetBlock or CssPropertyId.InsetBlockStart or CssPropertyId.InsetBlockEnd
             or CssPropertyId.InsetInline or CssPropertyId.InsetInlineStart or CssPropertyId.InsetInlineEnd
             => static text => IsLengthListUpTo(text, 4, "auto"),
+        // CSS 2.1 §17.3: a border side's width is <line-width> — a non-negative length or one of
+        // the three words — and ONE of them per side. 'auto' is the word of 'border-image-width'
+        // and of no border side (measured: 'border-top-width: auto' is dropped), a percentage is
+        // not a width either, and neither is a negative length or a second value.
         CssPropertyId.BorderTopWidth or CssPropertyId.BorderRightWidth
             or CssPropertyId.BorderBottomWidth or CssPropertyId.BorderLeftWidth
-            => static text => IsLengthList(text, "thin", "medium", "thick", "auto"),
+            => static text => IsLineWidthList(text, 1),
+        // The logical border widths measure the pair of edges, so one value for both or two for
+        // each edge, and nothing else (measured: 'border-block-width: 1px 2px' stands).
+        CssPropertyId.BorderBlockWidth or CssPropertyId.BorderInlineWidth
+            => static text => IsLineWidthList(text, 2),
+        CssPropertyId.BorderBlockStartWidth or CssPropertyId.BorderBlockEndWidth
+            or CssPropertyId.BorderInlineStartWidth or CssPropertyId.BorderInlineEndWidth
+            => static text => IsLineWidthList(text, 1),
         // 'outline-width' is the same family with a narrower set: no 'auto' (that word belongs to
         // the style here), no bare number and no percentage, and nothing negative (all measured) —
         // which is why it stands apart from the four border widths above.
@@ -1096,31 +1176,74 @@ public static class CssValueGrammar
         // CSS Box Alignment 3 §3.7 and CSS Gap 1 §3: 'normal' or a length, one for each axis. The
         // shorthand takes at most two, so a third is no value (measured: 'gap: 10px 20px 30px' is
         // dropped while 'gap: 10px 20px' and 'gap: normal' stand), and a longhand takes exactly one.
-        CssPropertyId.Gap => static text => IsLengthListUpTo(text, 2, "normal"),
+        CssPropertyId.Gap => static text => IsGapValue(text, 2),
         CssPropertyId.RowGap or CssPropertyId.ColumnGap
-            => static text => IsLengthList(text, "normal"),
+            => static text => IsGapValue(text, 1),
         CssPropertyId.Color or CssPropertyId.BackgroundColor or CssPropertyId.OutlineColor
             or CssPropertyId.BorderTopColor or CssPropertyId.BorderRightColor
             or CssPropertyId.BorderBottomColor or CssPropertyId.BorderLeftColor
-            or CssPropertyId.ColumnRuleColor
             => static text => IsColorList(text),
+        // CSS Multi-column 1 §5.2: one colour for the rule — the two-colour shape a physical side
+        // takes is not in this property's grammar (measured: 'column-rule-color: red blue' falls).
+        // CSS Multi-Column 1 §3.5: the rule is a width, a line style and a colour — in any order,
+        // each of them at most once. An <image> is not one of the three, which is what separates
+        // this shorthand from the border shorthands that share its shape
+        // (measured: 'column-rule: 1px solid red' stands while 'column-rule: url(a.png)' and
+        // 'column-rule: linear-gradient(red, blue)' are each dropped).
+        CssPropertyId.ColumnRule => IsColumnRuleShorthandValue,
+        CssPropertyId.ColumnRuleColor => IsOneColor,
+        // CSS Logical 1 §4: the logical border colour pair is the two edges' colours, and the
+        // shorthand of the whole axis takes one colour for both (measured:
+        // 'border-block-color: red blue' stands while 'border-block: red blue' falls).
+        CssPropertyId.BorderBlockColor or CssPropertyId.BorderInlineColor
+            => static text => IsTwoColors(text),
         // The background geometry longhands (CSS Backgrounds 3 §4.1, CSS Position 3 §5.2), gated
         // by the same matchers the 'background' shorthand expands through so that the two cannot
         // disagree. Gating here rather than only at application time is what keeps the rule below
         // alive: a declaration the grammar rejects is dropped from the cascade, so
         // 'background-position: top 10px' on a box the stylesheet had put at '7px 9px' reads back
         // as '7px 9px' and not as the initial '0% 0%' (measured).
-        // CSS Box Alignment 3 §6/§8: the six alignment properties share one keyword table, and the
-        // legacy family belongs to 'justify-items' alone (measured: 'justify-content: legacy left'
-        // and 'align-content: legacy center' are both dropped, while 'justify-items: legacy right'
-        // stands). The gate is the same function the cascade uses, so the echo, supports() and the
+        // CSS Box Alignment 3 §6/§8: the six alignment properties share the keyword family of
+        // §4 and divide five of its words between them. Measured value by value
+        // (snapshots/out/_b294_ref_probeF.txt), 'auto' is a word of self alignment alone
+        // ('align-items: auto' and 'justify-items: auto' both fall), 'left' and 'right' belong to
+        // the content distribution and to 'justify-items' ('align-content: left' and
+        // 'align-items: left' fall), 'baseline' is nobody's 'justify-content' while 'last
+        // baseline' is nobody's 'align-content', and the legacy family is 'justify-items'' own
+        // tail. The gate is the same function the cascade uses, so the echo, supports() and the
         // stored value cannot disagree about which words are values.
-        CssPropertyId.AlignItems or CssPropertyId.AlignSelf or CssPropertyId.AlignContent
-            or CssPropertyId.JustifyContent or CssPropertyId.JustifySelf
-            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsAlignmentValue(text),
-        CssPropertyId.JustifyItems
-            => static text => Acrux.Core.Css.Resolver.CssPropertyApplier.IsAlignmentValue(
-                text, legacyAllowed: true),
+        CssPropertyId.AlignContent => static text =>
+            Acrux.Core.Css.Resolver.CssPropertyApplier.IsAlignmentValue(text,
+                Acrux.Core.Css.Resolver.CssPropertyApplier.AlignContentWords),
+        CssPropertyId.JustifyContent => static text =>
+            Acrux.Core.Css.Resolver.CssPropertyApplier.IsAlignmentValue(text,
+                Acrux.Core.Css.Resolver.CssPropertyApplier.JustifyContentWords),
+        CssPropertyId.AlignItems => static text =>
+            Acrux.Core.Css.Resolver.CssPropertyApplier.IsAlignmentValue(text,
+                Acrux.Core.Css.Resolver.CssPropertyApplier.AlignItemsWords),
+        CssPropertyId.JustifyItems => static text =>
+            Acrux.Core.Css.Resolver.CssPropertyApplier.IsAlignmentValue(text,
+                Acrux.Core.Css.Resolver.CssPropertyApplier.JustifyItemsWords),
+        CssPropertyId.AlignSelf => static text =>
+            Acrux.Core.Css.Resolver.CssPropertyApplier.IsAlignmentValue(text,
+                Acrux.Core.Css.Resolver.CssPropertyApplier.AlignSelfWords),
+        CssPropertyId.JustifySelf => static text =>
+            Acrux.Core.Css.Resolver.CssPropertyApplier.IsAlignmentValue(text,
+                Acrux.Core.Css.Resolver.CssPropertyApplier.JustifySelfWords),
+        // CSS Box Alignment 3 §6: the 'place-*' shorthands are the pair of two of the properties
+        // above, so each half is judged by the words the longhand it writes answers for — which is
+        // why 'place-content: left' falls (align-content has no 'left' to take the first half)
+        // while 'place-self: left' falls for the block half and 'justify-self: left' stands
+        // (all measured).
+        CssPropertyId.PlaceContent => static text => IsPlacePairValue(text,
+            Acrux.Core.Css.Resolver.CssPropertyApplier.AlignContentWords,
+            Acrux.Core.Css.Resolver.CssPropertyApplier.JustifyContentWords),
+        CssPropertyId.PlaceItems => static text => IsPlacePairValue(text,
+            Acrux.Core.Css.Resolver.CssPropertyApplier.AlignItemsWords,
+            Acrux.Core.Css.Resolver.CssPropertyApplier.JustifyItemsWords),
+        CssPropertyId.PlaceSelf => static text => IsPlacePairValue(text,
+            Acrux.Core.Css.Resolver.CssPropertyApplier.AlignSelfWords,
+            Acrux.Core.Css.Resolver.CssPropertyApplier.JustifySelfWords),
         CssPropertyId.BackgroundPosition => ShorthandExpander.IsBackgroundPositionValue,
         // CSS Images 3 §5.2 and CSS Position 3 §5.2: 'object-position' takes the same grammar as a
         // background position except for one case — when two side keywords are written, each of
@@ -1162,9 +1285,22 @@ public static class CssValueGrammar
         // list and the whole declaration goes with it, in the longhand and in the shorthand alike
         // (measured: 'background-image: url(a.png), local(x)', 'mask-image: local(x)' and
         // 'background: local(x)' all read back an empty rule).
+        // CSS Backgrounds 3 §4.4 and CSS Masking 1 §6.1: each layer of the image list is an image
+        // and nothing else — a colour, a keyword or two words in one layer are no image, and
+        // 'cross-fade()'/'element()' are in the spec's <image> but in no engine's table (measured).
+        // 'background' keeps its own gate: there a colour IS one of the parts.
         CssPropertyId.BackgroundImage or CssPropertyId.MaskImage
-            or CssPropertyId.Background
-            => static text => !NamesAFontLocal(text),
+            => static text => !NamesAFontLocal(text) && SaysImages(text),
+        CssPropertyId.Background => static text => !NamesAFontLocal(text),
+        // CSS Masking 1 §9.2: the mask's repeat is the background's repeat, one pair per layer —
+        // 'repeat-x repeat-y' is two single-axis words side by side and no layer has that shape
+        // (measured, and the same for the three-term spelling).
+        CssPropertyId.MaskRepeat => ShorthandExpander.IsBackgroundRepeatValue,
+        // CSS Lists 3 §3.3: the shorthand's three parts, at most one of each. 'auto' is a marker
+        // type of its own and 'disc' is another, so the pair 'auto disc' says two types and is no
+        // value; two images do the same (measured, both, and 'none none' — the image and the type —
+        // is the one two-word shape that stands).
+        CssPropertyId.ListStyle => IsListStyleShorthand,
         // CSS Masking 1 §5.1: a mask layer takes no <color> at all — the shorthand of the same
         // shape that the background is keeps one, and this one does not — and no word outside its
         // own list. Measured: 'mask: red' and 'mask: url(a.png) red' both read back empty.
@@ -1234,10 +1370,16 @@ public static class CssValueGrammar
         // 'border: 1px solid red' and 'border: solid' both are.
         CssPropertyId.Border or CssPropertyId.BorderTop or CssPropertyId.BorderRight
             or CssPropertyId.BorderBottom or CssPropertyId.BorderLeft
-            or CssPropertyId.BorderBlockStart or CssPropertyId.BorderBlockEnd
+            => static text => IsBorderSideValue(text, maxWidth: 4),
+        // CSS Logical 1 §4: the logical border shorthands measure two edges, and the shorthand of
+        // the axis says ONE width, ONE style and ONE colour for both of them — a second value of
+        // any one part is the longhand's own shape, not the shorthand's
+        // (measured: 'border-block: 1px 2px', '… : solid solid' and '… : red blue' each fall while
+        // 'border-block-width: 1px 2px' stands as the pair it names).
+        CssPropertyId.BorderBlockStart or CssPropertyId.BorderBlockEnd
             or CssPropertyId.BorderInlineStart or CssPropertyId.BorderInlineEnd
             or CssPropertyId.BorderBlock or CssPropertyId.BorderInline
-            => IsBorderSideValue,
+            => static text => IsBorderSideValue(text, maxWidth: 1),
         // 'outline' is <'outline-color'> || <'outline-style'> || <'outline-width'> (CSS UI 4 §5.1)
         // — one of each, and the width is a single value rather than the four-side list a border
         // side shorthand takes. Measured: 'outline: 2px dashed rgb(1, 2, 3)' and 'outline: red'
@@ -1258,10 +1400,12 @@ public static class CssValueGrammar
         // 'span' with its number. A bare 'span' is no line — the reference engine drops it (measured:
         // 'grid-area: span' reads back empty and computes 'auto'), and two words with no slash
         // between them are no line either ('grid-area: main head' is dropped the same way).
-        CssPropertyId.GridArea or CssPropertyId.GridRow or CssPropertyId.GridColumn
-            or CssPropertyId.GridRowStart or CssPropertyId.GridRowEnd
+        CssPropertyId.GridArea => static text => IsGridLineValue(text, 4),
+        CssPropertyId.GridRow or CssPropertyId.GridColumn
+            => static text => IsGridLineValue(text, 2),
+        CssPropertyId.GridRowStart or CssPropertyId.GridRowEnd
             or CssPropertyId.GridColumnStart or CssPropertyId.GridColumnEnd
-            => IsGridLineValue,
+            => static text => IsGridLineValue(text, 1),
         // CSS Grid 1 §7.4: at most one axis and at most one 'dense'. Two axes ('row column') or a
         // repeated word are no value at all (measured: 'row row' reads back empty).
         CssPropertyId.GridAutoFlow => static text =>
@@ -1485,7 +1629,8 @@ public static class CssValueGrammar
         // CSS Grid 1 §7.2/§7.3: a track list of breadths, and none of the 'repeat()' notation the
         // explicit templates take (measured: 'grid-auto-rows: repeat(2, 10px)' falls while
         // 'minmax(auto, 1fr)', 'fit-content(10px)' and '1fr 2fr' stand).
-        CssPropertyId.GridAutoRows or CssPropertyId.GridAutoColumns => IsTrackList,
+        CssPropertyId.GridAutoRows or CssPropertyId.GridAutoColumns => static text =>
+            !SaysSubgridOrRepeat(text) && IsTrackList(text),
         // CSS Text Decoration 4 §4.2: a length-percentage or one of the two keywords. A bare number
         // is no thickness (measured: 'text-decoration-thickness: 1' falls, '0' and '10%' stand).
         CssPropertyId.TextDecorationThickness => static text =>
@@ -1533,8 +1678,10 @@ public static class CssValueGrammar
                 "text-top", "text-bottom")
             || (SplitComponents(text).Count == 1
                 && IsDimensionedLengthPercentageOrZero(text.Trim())),
-        // CSS Will Change 1 §2: 'auto' alone, or a comma-separated list of feature idents. A space is
-        // no separator and 'all' is not one of the words (both measured); any other ident — 'bogus'
+        // CSS Will Change 1 §2: 'auto' alone, or a comma-separated list of feature names. 'none'
+        // says nothing will change and 'all' says everything, and neither is in the grammar —
+        // CSS Will Change gives no keyword for the absence or the totality of a list of names
+        // (both measured, and 'auto' with company falls with them); any other ident — 'bogus'
         // included — stands, because the property names a feature this engine may not know.
         CssPropertyId.WillChange => static text =>
         {
@@ -1549,8 +1696,9 @@ public static class CssValueGrammar
                     if (items.Count != 1) return false;
                     continue;
                 }
-                if (word.Equals("all", StringComparison.OrdinalIgnoreCase)) return false;
-                if (!IsIdentifierLike(word)) return false;
+                if (word.Equals("all", StringComparison.OrdinalIgnoreCase)
+                    || word.Equals("none", StringComparison.OrdinalIgnoreCase)) return false;
+                if (!IsIdentifierLike(word) || char.IsAsciiDigit(word[0])) return false;
             }
             return true;
         },
@@ -1626,10 +1774,20 @@ public static class CssValueGrammar
             {
                 var word = item.Trim();
                 if (word.Equals("none", StringComparison.OrdinalIgnoreCase)) continue;
+                // A quoted string is the other way to say an animation's name, and the engine
+                // prints it without its quotes (measured: 'animation-name: "quoted"' reads back
+                // 'quoted').
+                if (word.Length >= 2 && (word[0] == '"' || word[0] == '\'') && word[^1] == word[0])
+                    continue;
                 if (!IsIdentifierLike(word) || char.IsAsciiDigit(word[0])) return false;
             }
             return true;
         },
+        // CSS Animations 1 §3: the shorthand's parts are the longhands' own values, so a word that
+        // reads as a timing function has to be one — and a 'cubic-bezier()' whose x leaves [0,1] is
+        // no easing at all, which takes the whole declaration with it
+        // (measured: 'animation: cubic-bezier(0.1, 2, 3, 4)' leaves the property at its initial).
+        CssPropertyId.Animation => IsAnimationShorthandValue,
         CssPropertyId.AnimationTimingFunction => static text => IsTimingFunctionList(text),
         CssPropertyId.TransitionTimingFunction => static text => IsTimingFunctionList(text),
         // CSS Transitions 1 §4: one of the two behaviour words per item.
@@ -1670,8 +1828,862 @@ public static class CssValueGrammar
             if (parts.Count != 1) return false;
             return Resolver.EchoedProperties.NormalizeMarker(parts[0]) != null;
         },
+        // ============================================================ b294: the word sets, pair
+        // shapes and list separators no earlier round priced. Every accept and every refusal in
+        // the block below is the reference engine's own answer, read value by value from
+        // snapshots/out/_b294_ref_probeE.txt, _b294_ref_probeF.txt and _b294_ref_probeG.txt.
+
+        // CSS Position 3 §4.2 with CSS 2.1 §9.3: the five positions, and no legacy spelling of one
+        // of them — '-webkit-sticky' is a name the prefixed era gave the keyword and the reference
+        // engine reads no value at all from it (measured; 'STICKY' still reads back 'sticky').
+        CssPropertyId.Position => static text =>
+            IsOneWordOnly(text, "static", "relative", "absolute", "fixed", "sticky"),
+        // CSS Writing Modes 3 §4.1: two words. 'auto' is the value an older draft gave the
+        // property and a second direction beside the first is no value (both measured).
+        CssPropertyId.Direction => static text => IsOneWordOnly(text, "ltr", "rtl"),
+        // CSS Overflow 3 §3.3: one behaviour per axis, two for the shorthand, and 'sticky' — the
+        // word a draft added to the set — is in no engine's table (measured: 'sticky' and
+        // 'sticky auto' each fall while 'overlay' stands and computes 'auto').
+        CssPropertyId.OverflowX or CssPropertyId.OverflowY => static text =>
+            IsOneWordOnly(text, "visible", "hidden", "clip", "scroll", "auto", "overlay"),
+        CssPropertyId.Overflow => static text =>
+            IsOneOrTwoKeywords(text, "visible", "hidden", "clip", "scroll", "auto", "overlay"),
+        // CSS Flexbox 1 §4.1/§4.3: each longhand is one word of its own set, and the names from
+        // the first edition of the chapter ('flex-row', 'reverse') are not values (measured).
+        CssPropertyId.FlexDirection => static text =>
+            IsOneWordOnly(text, "row", "row-reverse", "column", "column-reverse"),
+        CssPropertyId.FlexWrap => static text =>
+            IsOneWordOnly(text, "nowrap", "wrap", "wrap-reverse"),
+        // CSS Transforms 1 §3 and Transforms 2 §6: the five reference boxes. 'auto' is the value
+        // the second draft added and no engine measured here takes it, and the two box words the
+        // padding and margin edges own are not among the five (all measured).
+        CssPropertyId.TransformBox => static text =>
+            IsOneWordOnly(text, "content-box", "border-box", "fill-box", "stroke-box", "view-box"),
+        // SVG 2 §12.6: the painted-region set, one word, in its camel-case spelling lower-cased on
+        // the way in. The two '-box' spellings belong to other properties and the two-word SVG
+        // form is not read (all measured: 'fill-box', 'stroke-box' and 'visible painted' fall).
+        CssPropertyId.PointerEvents => static text =>
+            IsOneWordOnly(text, "auto", "none", "visiblePainted", "visibleFill", "visibleStroke",
+                "visible", "painted", "fill", "stroke", "all", "bounding-box"),
+        // CSS MathML Core §5.3: 'math-style' takes its two words; 'math-shift' is the property an
+        // engine answers only 'normal' for — 'superscript' and 'subscript' are its spec words and
+        // are refused here exactly as they are there (measured, every one).
+        CssPropertyId.MathStyle => static text => IsOneWordOnly(text, "normal", "compact"),
+        CssPropertyId.MathShift => static text => IsOneWordOnly(text, "normal"),
+        // CSS Multi-column 1 §7.2: 'none' or 'all'. 'auto' is the word the first edition carried
+        // and a number is not a span (both measured).
+        CssPropertyId.ColumnSpan => static text => IsOneWordOnly(text, "none", "all"),
+        // CSS Form Control 1 §4.1: the two boxes a control's inline size may follow, one at a
+        // time. 'normal' and 'auto' are the older draft's words and a pair is no value (measured;
+        // the property computes 'fixed', which is what 'fixed' — not 'normal' — is its initial).
+        CssPropertyId.FieldSizing => static text => IsOneWordOnly(text, "fixed", "content"),
+        // CSS Text 4 §3.4.1, §4.6: the word sets the engines measured here answer. 'discard' and
+        // 'preserve-spaces' are in the current draft of the collapsing grammar and in no engine's
+        // table, 'normal' and 'auto' belong to the 'white-space' shorthand, and a second word is
+        // never a value (all measured: each dropped, with the property left where it was).
+        CssPropertyId.WhiteSpaceCollapse => static text =>
+            IsOneWordOnly(text, "collapse", "preserve", "preserve-breaks", "break-spaces"),
+        CssPropertyId.TextWrapMode => static text => IsOneWordOnly(text, "wrap", "nowrap"),
+        CssPropertyId.TextWrapStyle => static text =>
+            IsOneWordOnly(text, "auto", "balance", "stable", "pretty"),
+        // CSS Text Decoration 4 §3.2: one line style, never two — the pair belongs to the
+        // shorthand's decoration list, not to this property (measured: 'dotted wavy' and
+        // 'solid solid' are each dropped, and 'hidden' is a border word).
+        CssPropertyId.TextDecorationStyle => static text =>
+            IsOneWordOnly(text, "solid", "double", "dotted", "dashed", "wavy"),
+        // CSS Text Decoration 4 §3.1: the line list, where 'none' says the whole list on its own,
+        // a word appears at most once, and the two error words and 'blink' — each of which already
+        // says a whole decoration — appear alone (measured: 'none underline' and
+        // 'underline underline' fall, 'underline overline' stands).
+        CssPropertyId.TextDecorationLine => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count == 0) return false;
+            if (words.All(word => IsOneOf(word, "none", "blink", "spelling-error", "grammar-error")))
+                return words.Count == 1;
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var word in words)
+            {
+                if (!IsOneOf(word, "underline", "overline", "line-through")) return false;
+                if (!seen.Add(word.ToLowerInvariant())) return false;
+            }
+            return true;
+        },
+        // CSS Fonts 4 §4.2: 'normal', 'bold' and the two relative words, or a weight — a number
+        // from 1 to 1000, and a fraction of a weight is still a weight. A zero, a negative and a
+        // number past 1000 are each refused rather than clamped (measured: '0', '0.5', '-1' and
+        // '1001' all leave the property at 400, while '1.5', '250' and '999' are weights the
+        // computed value keeps exactly as written), and '+500' is the same weight spelled longer.
+        CssPropertyId.FontWeight => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count != 1) return false;
+            var word = words[0];
+            if (IsOneOf(word, "normal", "bold", "bolder", "lighter")) return true;
+            if (IsMathFunctionCall(word, IsNumber)) return true;
+            if (!TryPlainNumber(word, out var weight)) return false;
+            return weight >= 1 && weight <= 1000;
+        },
+        // CSS Fonts 4 §6.3: the eight absolute widths and a percentage. The two relative keywords
+        // share the section and are in no engine's table (measured: 'wider' and 'narrower' fall),
+        // a math function is refused because a stretch is not added to, and 'bold' is nobody's
+        // width.
+        CssPropertyId.FontStretch => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count != 1) return false;
+            if (IsOneOf(words[0], "normal", "ultra-condensed", "extra-condensed", "condensed",
+                    "semi-condensed", "semi-expanded", "expanded", "extra-expanded",
+                    "ultra-expanded")) return true;
+            // 'calc(100% + 1px)' is a well-formed percentage sum and still no stretch: the property
+            // is a width, and a width is not computed from a length (measured).
+            return IsPercentage(words[0]);
+        },
+        // CSS Fonts 4 §5.3: normal | italic | oblique, optionally with the angle of the slant.
+        // The angle is at most a right one, whichever way it leans (measured: 'oblique 90deg' and
+        // 'oblique -20deg' stand, 'oblique 91deg' and 'oblique 100deg' fall), 'left' and 'right'
+        // are the vertical-text words of the current draft and are not read, and the italic that
+        // follows an angle is a second style word.
+        CssPropertyId.FontStyle => IsFontStyleValue,
+        // CSS Fonts 4 §8.7: the variant words of the shorthand, at most one from each of its
+        // families. The list this engine reads is the one the reference engine answers for, word
+        // by word; 'normal' and 'none' say the whole list, and a word says a family it belongs to
+        // exactly once.
+        CssPropertyId.FontVariant => IsFontVariantValue,
+        // CSS Fonts 4 §8.12: the synthesis longhands are two words each.
+        CssPropertyId.FontSynthesisSmallCaps or CssPropertyId.FontSynthesisStyle
+            or CssPropertyId.FontSynthesisWeight
+            => static text => IsOneWordOnly(text, "auto", "none"),
+        // CSS Text 3 §5.5: the legacy spelling of 'overflow-wrap', with the same set and the same
+        // refusal of 'break-all' (measured: 'break-all' and 'auto' each fall).
+        CssPropertyId.WordWrap or CssPropertyId.OverflowWrap => static text =>
+            IsOneWordOnly(text, "normal", "break-word", "anywhere"),
+        // CSS Animations 1 §3: each longhand is a comma-separated list — one item per animation —
+        // and a space inside one item is no separator at all (measured: 'animation-duration: 1s 2s'
+        // and 'animation-iteration-count: 1 2' are each dropped while '1s, 2s' and '1, 2' stand).
+        CssPropertyId.AnimationIterationCount => static text =>
+        {
+            var items = SplitTopLevel(text);
+            if (items.Count == 0) return false;
+            foreach (var item in items)
+            {
+                var word = item.Trim();
+                if (word.Equals("infinite", StringComparison.OrdinalIgnoreCase)) continue;
+                if (IsMathFunctionCall(word, IsNumber)) continue;
+                // A count of nothing, and a count of less than nothing, are each refused: the
+                // reference engine drops '-1' and keeps '0' (measured).
+                if (!TryPlainNumber(word, out var count) || count < 0) return false;
+            }
+            return true;
+        },
+        // CSS 2.1 §11.1.2: the legacy 'clip' is 'auto' or <rect()> with exactly four lengths —
+        // each one 'auto' or a unit-bearing length, never a percentage and never a bare zero —
+        // and the shape functions belong to 'clip-path' (all measured).
+        CssPropertyId.Clip => IsLegacyClipValue,
+        // CSS Masking 1 §7.1/§8: one box per layer for each of the two properties. 'margin-box'
+        // is not one of the six geometry boxes, and two boxes in one layer are the shorthand's
+        // shape, not the longhand's (all measured).
+        CssPropertyId.MaskClip => static text => IsMaskBoxList(text, allowNoClip: true),
+        CssPropertyId.MaskOrigin => static text => IsMaskBoxList(text, allowNoClip: false),
+        // CSS Masking 1 §9/§10: the same <bg-size> the background geometry takes, and the same
+        // <position> the background takes — which is why 'top 1px' is no mask position either.
+        CssPropertyId.MaskSize => ShorthandExpander.IsBackgroundSizeValue,
+        CssPropertyId.MaskPosition => IsMaskPositionValue,
+        // CSS Motion Path 1 §2/§3: the offset family's position, anchor and distance longhands are
+        // echoed from their own table, which is where their value sets are written
+        // (Resolver.EchoedProperties) — measured: 'offset-anchor: auto 1px' is no anchor, while
+        // 'offset-position: 1px 2px' and 'offset-position: auto' both are.
+
+        // CSS Transitions 1 §2: the property list is a comma list of names, and the two words that
+        // say the whole list say it alone (measured: 'all, none' and 'all none' both fall, a quoted
+        // name falls, and an unknown name stands because the property may learn it later).
+        CssPropertyId.TransitionProperty => static text =>
+        {
+            var items = SplitTopLevel(text);
+            if (items.Count == 0) return false;
+            for (int i = 0; i < items.Count; i++)
+            {
+                var word = items[i].Trim();
+                if (IsOneOf(word, "all", "none")) return items.Count == 1;
+                // A feature is named, and a digit names nothing however identifier-shaped its
+                // characters are (measured: 'transition-property: 1' and 'will-change: 1' fall).
+                if (!IsIdentifierLike(word) || char.IsAsciiDigit(word[0])) return false;
+            }
+            return true;
+        },
+        // CSS Lists 3 §4.5 and CSS Backgrounds 3 §4.6: the marker and the border's source are one
+        // image — not the list of them a layer property takes — from the same set an image is
+        // drawn from, and 'cross-fade()' and 'element()' are in no engine's set (measured).
+        CssPropertyId.ListStyleImage => static text =>
+            !NamesAFontLocal(text) && IsOneImageReference(text),
+        CssPropertyId.BorderImageSource => static text =>
+            !NamesAFontLocal(text) && IsOneImageReference(text),
+        // CSS 2.1 §17.3 and CSS Multi-column 1 §5.2: the style words of a side, one per side, and
+        // 'wavy' — which belongs to text decoration — is not one of them.
+        // CSS Multi-column 1 §5.1: one <line-width>, and 'auto' is the word of a border's image
+        // and of no column rule (measured: 'column-rule-width: auto' and '… : 1px 2px' fall).
+        // CSS 2.1 §8.5: four widths, each one a <line-width> — 'auto' is a style word and the
+        // reference engine has no width by that name (measured: 'border-width: auto' is dropped).
+        CssPropertyId.BorderWidth => static text => IsLineWidthList(text, 4),
+        CssPropertyId.ColumnRuleWidth => static text => IsLineWidthList(text, 1),
+        // CSS Lists 3 §3.2: two words and no more. 'auto' is the value the marker type takes, not
+        // the position's, and a pair is no position (both measured).
+        CssPropertyId.ListStylePosition => static text => IsOneWordOnly(text, "inside", "outside"),
+        CssPropertyId.ColumnRuleStyle or CssPropertyId.BorderTopStyle
+            or CssPropertyId.BorderRightStyle or CssPropertyId.BorderBottomStyle
+            or CssPropertyId.BorderLeftStyle or CssPropertyId.BorderInlineStartStyle
+            or CssPropertyId.BorderInlineEndStyle or CssPropertyId.BorderBlockStartStyle
+            or CssPropertyId.BorderBlockEndStyle
+            => static text => IsOneWordOnly(text, "none", "hidden", "dotted", "dashed", "solid",
+                "double", "groove", "ridge", "inset", "outset"),
+        CssPropertyId.BorderStyle => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count is < 1 or > 4) return false;
+            return words.All(word => IsOneOf(word, "none", "hidden", "dotted", "dashed", "solid",
+                "double", "groove", "ridge", "inset", "outset"));
+        },
+        // The two logical border-style pairs take one or two of the same words (measured:
+        // 'border-block-style: solid solid' stands and reads back 'solid', while 'solid, solid' —
+        // a comma — is no pair and three words are not a pair either).
+        CssPropertyId.BorderBlockStyle or CssPropertyId.BorderInlineStyle
+            => static text => !text.Contains(',', StringComparison.Ordinal)
+                && IsOneOrTwoKeywords(text, "none", "hidden", "dotted", "dashed",
+                    "solid", "double", "groove", "ridge", "inset", "outset"),
+        // CSS Sizing 4 §5.2 and CSS Grid 1 §7.2/§7.3: the track-list family, split by how many
+        // lists the property holds. A single axis takes one track list; 'grid-template' is the two
+        // axes with the slash between them, and a bare track list without the slash is no template
+        // (measured: 'grid-template: 1px 2px' and 'grid-template: subgrid' fall while
+        // 'auto auto / auto auto' and '"a" 1px' stand); 'grid' is the template with the flow and
+        // the implicit tracks beside it, and it needs the slash too (measured: 'grid: 1px' and
+        // 'grid: row' fall).
+        CssPropertyId.GridTemplateRows or CssPropertyId.GridTemplateColumns
+            => static text => IsRowOrColumnTrackList(text),
+        CssPropertyId.GridTemplateAreas => IsGridTemplateAreas,
+        CssPropertyId.GridTemplate => IsGridTemplateValue,
+        CssPropertyId.Grid => IsGridShorthandValue,
+        // CSS Grid 1 §7.2: an implicit track list is a track list that never says 'subgrid' and
+        // never repeats (measured: 'grid-auto-rows: subgrid' and '… repeat(2, 1px)' both fall while
+        // '1px 2px' and 'min-content' stand).
+        // CSS Gap 1 §3: a gap is 'normal' or one non-negative <length-percentage>, one per axis.
+        // 'auto' is the value the flexbox draft gave it and no engine measured here reads it
+        // (measured: 'row-gap: auto' and 'column-gap: 1px 2px' fall, 'gap: 1px 2px' stands). The
+        // two axes and the pair are gated where the family is already gated, above; the legacy
+        // names take the same shape.
+        CssPropertyId.GridGap => static text => IsGapValue(text, 2),
+        CssPropertyId.GridColumnGap or CssPropertyId.GridRowGap
+            => static text => IsGapValue(text, 1),
+        // CSS Transforms 2 §3: the individual transform properties. A scale is one, two or three
+        // numbers or percentages — never a length, never 'auto', never a comma list — and the
+        // percentage is the number it multiplies (measured: 'scale: 50%' reads back '0.5'). A
+        // translate is one, two or three lengths, and the percentage is the axis it moves along.
+        CssPropertyId.Scale => IsScaleValue,
+        CssPropertyId.Translate => IsTranslateValue,
+        // CSS View Transitions 1 §6: the grouping is 'normal', 'contain', 'allow-discrete' or a
+        // name the page invented — any single ident is an answer, and two of them are not
+        // (measured: 'unknown-ident' and '--a' stand, 'normal contain' and '1px' fall). The
+        // property is echoed from its own table, which is where that answer is written.
+        // Scroll-driven animations 1 §3: the range pair and its two longhands are 'normal' or a
+        // timeline-range name with an optional offset; two offsets in one range is no range, 'auto'
+        // is not a range, and an area name the timeline does not have is no value (all measured).
+        // They are echoed from their own table too, so their grammar lives there.
+        // CSS 2.1 §8.5 with CSS Sizing 4: a corner radius is one or two <length-percentage>s, and
+        // the physical shorthand's four-and-four form is the one place a slash divides the two
+        // axes. 'top left 1px' is the corner name from a draft that never shipped (measured).
+        CssPropertyId.BorderTopLeftRadius or CssPropertyId.BorderTopRightRadius
+            or CssPropertyId.BorderBottomLeftRadius or CssPropertyId.BorderBottomRightRadius
+            or CssPropertyId.BorderStartStartRadius or CssPropertyId.BorderStartEndRadius
+            or CssPropertyId.BorderEndStartRadius or CssPropertyId.BorderEndEndRadius
+            => static text => IsPairOf(text, IsRadiusCornerValue),
+        // The physical shorthand is the same two lists, only up to four corners per list.
+        CssPropertyId.BorderRadius => IsBorderRadiusValue,
         _ => null,
     };
+
+    /// <summary>CSS Fonts 4 §5.3's <c>font-style</c>: one of the three words, or 'oblique' with the
+    /// angle it leans by. The angle is at most a right one whichever way it leans (measured:
+    /// 'oblique 90deg' and 'oblique -20deg' stand, 'oblique 91deg' and 'oblique 100deg' fall) and
+    /// every unit the tokenizer prices is priced in degrees here, because
+    /// <c>oblique 0.25turn</c> is the same slant written longer (measured, both).</summary>
+    private static bool IsFontStyleValue(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count is < 1 or > 2) return false;
+        if (words.Count == 1) return IsOneOf(words[0], "normal", "italic", "oblique");
+        if (!words[0].Equals("oblique", StringComparison.OrdinalIgnoreCase)) return false;
+        return IsObliqueAngle(words[1]);
+    }
+
+    /// <summary>The angle 'oblique' takes: a plain angle whose size is at most 90 degrees. A math
+    /// function is left to the type check that runs after this one, which already prices
+    /// <c>calc(45deg * 2)</c> as an angle.</summary>
+    private static bool IsObliqueAngle(string token)
+    {
+        if (IsMathFunctionCall(token, _ => true)) return true;
+        if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(
+                token, out var number, out var unit)) return false;
+        double degrees = unit.ToLowerInvariant() switch
+        {
+            "deg" => number,
+            "grad" => number * 360.0 / 400.0,
+            "rad" => number * 180.0 / System.Math.PI,
+            "turn" => number * 360.0,
+            _ => double.NaN,
+        };
+        return !double.IsNaN(degrees) && degrees >= -90.0 && degrees <= 90.0;
+    }
+
+    /// <summary>CSS Fonts 4 §8.7's <c>font-variant</c> shorthand: 'normal' or 'none' saying the
+    /// whole list, or the variant words with none repeated. Which words the shorthand opens is the
+    /// reference engine's answer, word by word (measured): the ligature, caps, numeric,
+    /// east-asian and position families among them — while 'scientific-infractions', 'fraction'
+    /// and 'capital-width', which no longhand of this family spells, each fall.</summary>
+    private static bool IsFontVariantValue(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count == 0) return false;
+        if (words.Count == 1 && IsOneOf(words[0], "normal", "none")) return true;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var word in words)
+        {
+            var lower = word.ToLowerInvariant();
+            if (!FontVariantWords.Contains(lower)) return false;
+            if (!seen.Add(lower)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>The words of the five families the <c>font-variant</c> shorthand reads.</summary>
+    private static readonly HashSet<string> FontVariantWords = new(StringComparer.Ordinal)
+    {
+        "common-ligatures", "no-common-ligatures", "discretionary-ligatures",
+        "no-discretionary-ligatures", "historical-ligatures", "no-historical-ligatures",
+        "contextual", "no-contextual",
+        "small-caps", "all-small-caps", "petite-caps", "all-petite-caps", "unicase",
+        "titling-caps", "historical-forms",
+        "lining-nums", "oldstyle-nums", "proportional-nums", "tabular-nums",
+        "diagonal-fractions", "stacked-fractions", "ordinal", "slashed-zero",
+        "jis78", "jis04", "simplified", "traditional", "proportional-width", "full-width",
+        "half-width", "third-width", "quarter-width",
+        "ruby", "isolated-ligatures", "no-isolated-ligatures",
+        "sub", "super",
+    };
+
+    /// <summary>CSS 2.1 §11.1.2's legacy <c>clip</c>: 'auto', or <c>rect()</c> carrying exactly
+    /// four sides — each one a length or the word 'auto'. One, two or three sides are no rect, a
+    /// percentage is no length here, and the shape functions of the modern property do not belong to
+    /// this one. A zero may be written without its unit, which the engine prints as '0px'
+    /// (measured: 'rect(0)', 'rect(0 0)', 'rect(1px auto)', 'rect(0%, 0%, 0%, 0%)' and 'inset(0)'
+    /// each fall while 'rect(0 0 0 0)', 'rect(10px 5px 20px 5px)' and
+    /// 'rect(auto auto auto auto)' stand). The sides come from <see cref="LegacyClipSides"/>, which
+    /// is the one place the rect is cut.</summary>
+    private static bool IsLegacyClipValue(string text)
+    {
+        if (text.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase)) return true;
+        var sides = LegacyClipSides(text);
+        if (sides == null) return false;
+        foreach (var side in sides)
+        {
+            if (side == "auto") continue;
+            if (IsLegacyClipLength(side)) continue;
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>The four sides of the legacy 'clip' rect, trimmed and lowercased, in the order the
+    /// property names them — top, right, bottom, left — or null when the text says no rect the
+    /// property reads. One function cuts the rect for the grammar, the value text, the computed
+    /// surface and the paint, because a side that lands in a different place in two of them is a
+    /// bug no probe would localise. A rect is refused when its sides are not four, when a comma and
+    /// a space separate them in the same rect, when a comma list ends in a comma, when one side is
+    /// two tokens, or when something follows the parenthesis that closes it.</summary>
+    public static List<string>? LegacyClipSides(string? text)
+    {
+        var trimmed = (text ?? string.Empty).Trim();
+        const string rect = "rect(";
+        if (!trimmed.StartsWith(rect, StringComparison.OrdinalIgnoreCase)) return null;
+        var body = trimmed[rect.Length..];
+
+        // CSS Syntax 3 §4.3.2: a function that runs to the end of the input is still that
+        // function, so the closing parenthesis here is optional (measured: 'rect(0px 20px 40px 0px'
+        // stands and reads back as a whole rect). Whatever follows the parenthesis that does close
+        // it is outside the value (measured: 'rect(0px 20px 40px 0px))' falls).
+        int depth = 1, close = -1;
+        for (int i = 0; i < body.Length; i++)
+        {
+            if (body[i] == '(') depth++;
+            else if (body[i] == ')' && --depth == 0) { close = i; break; }
+        }
+        var inner = close < 0 ? body : body[..close];
+        if (close >= 0 && body[(close + 1)..].Trim().Length > 0) return null;
+
+        List<string> sides;
+        if (inner.Contains(','))
+        {
+            sides = SplitTopLevel(inner, ',');
+            if (sides.Any(side => side.Trim().Length == 0
+                                  || SplitOutsideParentheses(side.Trim()).Count != 1)) return null;
+        }
+        else
+            sides = SplitOutsideParentheses(inner);
+        if (sides.Count != 4) return null;
+        return sides.Select(side => side.Trim().ToLowerInvariant()).ToList();
+    }
+
+    /// <summary>One side of a legacy rect as a length. Three shapes the general &lt;length&gt;
+    /// check waves through are refused here, because the reference engine reads none of them: a
+    /// unit it has never heard of ('rect(0px 20px 40px 0x)' falls), a percentage
+    /// ('rect(50% 50% 50% 50%)' falls), and a number whose decimal point has no digit after it
+    /// ('rect(123456789.px 1px 1px 1px)' falls — the same shape the sizing properties refuse too,
+    /// measured on 'margin-left: 123456789.px').</summary>
+    private static bool IsLegacyClipLength(string token)
+    {
+        if (IsMathFunctionCall(token, static word =>
+                IsLengthOrPercentage(word) && !word.EndsWith("%", StringComparison.Ordinal)))
+            return true;
+
+        int i = 0;
+        if (i < token.Length && (token[i] == '+' || token[i] == '-')) i++;
+        int before = i;
+        while (i < token.Length && char.IsAsciiDigit(token[i])) i++;
+        bool digitsBeforePoint = i > before;
+        if (i < token.Length && token[i] == '.')
+        {
+            i++;
+            int after = i;
+            while (i < token.Length && char.IsAsciiDigit(token[i])) i++;
+            if (i == after) return false;                 // '1.px' — a point with nothing after it
+        }
+        else if (!digitsBeforePoint) return false;        // no number at all
+        if (i < token.Length && (token[i] == 'e' || token[i] == 'E'))
+        {
+            // 'e' opens an exponent only when digits follow it: the 'e' of '1em' is the first
+            // letter of a unit, and reading it as a power would refuse the length.
+            int probe = i + 1;
+            if (probe < token.Length && (token[probe] == '+' || token[probe] == '-')) probe++;
+            int exponent = probe;
+            while (probe < token.Length && char.IsAsciiDigit(token[probe])) probe++;
+            // Only digits after the 'e' make it a power; '1e' by itself is no unit the engine
+            // prices either, and the unit check below answers it.
+            if (probe > exponent) i = probe;
+        }
+
+        var unit = token[i..];
+        // A zero is the one number this property lets drop its unit (CSS Values 3 §8.6).
+        if (unit.Length == 0) return IsBareZero(token);
+        return unit != "%" && PricesALength(unit);
+    }
+
+    /// <summary>Whether the engine knows what a dimension wearing this unit is worth — the same
+    /// set <see cref="Acrux.Core.Dom.Length.Parse"/> prices, asked of it rather than copied here so
+    /// the two can never disagree about a unit.</summary>
+    private static bool PricesALength(string unit) =>
+        unit.Length > 0
+        && Acrux.Core.Dom.Length.Parse("1" + unit) is not Acrux.Core.Dom.AutoLength
+                                                    and not Acrux.Core.Dom.IntrinsicLength
+                                                    and not Acrux.Core.Dom.PercentLength;
+
+    /// <summary>CSS Masking 1 §7.1/§8: the geometry boxes of one mask layer. The longhand takes
+    /// one, the shorthand's <c>origin / clip</c> pair takes two; 'margin-box' is not one of the
+    /// six boxes and 'no-clip' belongs to the clip axis alone
+    /// (all measured: 'mask-clip: margin-box' and 'mask-origin: border-box padding-box' fall).</summary>
+    /// <summary>CSS Masking 1 §5.3's position: the shapes the background's position takes, less
+    /// the three-token form this engine's reference reads only for the background (measured:
+    /// 'mask-position: right 1px bottom' is dropped where 'background-position' takes it, and
+    /// 'right 1px' and the four-token 'left 10px top 20px' both stand).</summary>
+    private static bool IsMaskPositionValue(string text)
+    {
+        foreach (var layer in SplitTopLevel(text))
+            if (SplitComponents(layer).Count == 3) return false;
+        return ShorthandExpander.IsBackgroundPositionValue(text);
+    }
+
+    /// <summary>Whether 'only' was written at one end of the colour-scheme list rather than in its
+    /// middle — the position the reference engine reads it from.</summary>
+    private static bool SaysTheFlagAtAnEnd(System.Collections.Generic.List<string> words)
+    {
+        int at = words.FindIndex(w => w.Equals("only", StringComparison.OrdinalIgnoreCase));
+        return at == 0 || at == words.Count - 1;
+    }
+
+    private static bool IsMaskBoxList(string text, bool allowNoClip)
+    {
+        var items = SplitTopLevel(text);
+        if (items.Count == 0) return false;
+        foreach (var item in items)
+        {
+            var words = SplitComponents(item);
+            // One box per layer: the comma is what separates the layers, so a second box written
+            // inside one layer is no geometry (measured: 'mask-clip: border-box padding-box' and
+            // 'mask-origin: content-box border-box' are dropped while
+            // 'content-box, border-box' stands).
+            if (words.Count != 1) return false;
+            foreach (var word in words)
+            {
+                var lower = word.ToLowerInvariant();
+                if (lower == "no-clip")
+                {
+                    // 'no-clip' extends the clip axis only, and never twice in one layer.
+                    if (!allowNoClip || words.Count != 1) return false;
+                    continue;
+                }
+                if (lower is not ("border-box" or "padding-box" or "content-box" or "fill-box"
+                    or "stroke-box" or "view-box")) return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>CSS Grid 1 §7.2 for one explicit axis: 'none', 'subgrid' on its own, or a track
+    /// list. Line names in brackets belong to the list they frame, so '[a] 1px [b]' is one track
+    /// written with its two names; 'span 2' and 'auto-flow' are the spellings of other properties
+    /// and are no track here (both measured).</summary>
+    private static bool IsRowOrColumnTrackList(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0) return false;
+        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("subgrid", StringComparison.OrdinalIgnoreCase)) return true;
+        if (trimmed.StartsWith("subgrid", StringComparison.OrdinalIgnoreCase)) return false;
+        return HasATrackAndOnlyTracks(trimmed);
+    }
+
+    /// <summary>The track list every grid axis shares: bracketed line names, at least one track,
+    /// and nothing between them that is not one or the other.</summary>
+    private static bool HasATrackAndOnlyTracks(string text)
+    {
+        var items = SplitGridItems(text);
+        if (items.Count == 0) return false;
+        bool anyTrack = false;
+        foreach (var item in items)
+        {
+            if (item.StartsWith("[", StringComparison.Ordinal)) continue;
+            if (IsTrackBreadth(item) || item.Equals("repeat", StringComparison.OrdinalIgnoreCase)
+                || item.StartsWith("repeat(", StringComparison.OrdinalIgnoreCase))
+            {
+                anyTrack = true;
+                continue;
+            }
+            return false;
+        }
+        return anyTrack;
+    }
+
+    /// <summary>The items of a track list: bracketed line-name groups are one item each, and the
+    /// rest splits at the spaces that are outside every parenthesis and quotation.</summary>
+    private static List<string> SplitGridItems(string text)
+    {
+        var items = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(' || c == '[') depth++;
+            else if ((c == ')' || c == ']') && depth > 0) depth--;
+            else if (c == '"' || c == '\'')
+            {
+                i = SkipString(text, i);
+                continue;
+            }
+            else if (depth == 0 && char.IsWhiteSpace(c))
+            {
+                if (i > start) items.Add(text[start..i]);
+                start = i + 1;
+            }
+        }
+        if (text.Length > start) items.Add(text[start..]);
+        return items;
+    }
+
+    /// <summary>CSS Grid 1 §7.3: the named areas are one string per row, and a row is a list of
+    /// the names in it. A name is an identifier or the '.' that means no name; 'span' is the word
+    /// of the placement properties, a bare identifier is not a row, and an empty row is no row
+    /// (all measured).</summary>
+    private static bool IsGridTemplateAreas(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
+        var rows = SplitComponents(trimmed);
+        if (rows.Count == 0) return false;
+        foreach (var row in rows)
+        {
+            if (row.Length < 2 || (row[0] != '"' && row[0] != '\'') || row[^1] != row[0])
+                return false;
+            var cells = row[1..^1];
+            if (cells.Trim().Length == 0) return false;
+            foreach (var cell in SplitWords(cells))
+            {
+                if (cell == ".") continue;
+                if (char.IsAsciiDigit(cell[0])) return false;
+                if (cell.Equals("span", StringComparison.OrdinalIgnoreCase)) return false;
+                foreach (var c in cell)
+                    if (!char.IsLetter(c) && c != '_' && c != '-' && c <= '\u007F') return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>CSS Grid 1 §7.2/§7.3's <c>grid-template</c>: 'none', or the two axes with the
+    /// slash between them, or a list of area strings that stand for the rows. A single track list
+    /// is no template — it is the axis longhand's own shape — and 'subgrid' needs the second axis
+    /// beside it (all measured: 'grid-template: 1px 2px' and 'grid-template: subgrid' fall while
+    /// '"a" 1px', 'none / 1px' and 'subgrid / subgrid' stand).</summary>
+    private static bool IsGridTemplateValue(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0) return false;
+        var parts = SplitTopLevel(trimmed, '/');
+        if (parts.Count == 1)
+        {
+            var one = parts[0].Trim();
+            if (one.Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
+            return SaysNothingButAreasAndTracks(one);
+        }
+        if (parts.Count != 2) return false;
+        foreach (var part in parts)
+        {
+            var axis = part.Trim();
+            if (axis.Length == 0) return false;
+            if (!IsRowOrColumnTrackList(axis) && !SaysNothingButAreasAndTracks(axis)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>Whether the components of a grid axis are area strings and, at most, one track
+    /// list — the spelling that gives the rows their names.</summary>
+    private static bool SaysNothingButAreasAndTracks(string text)
+    {
+        var items = SplitGridItems(text);
+        if (items.Count == 0) return false;
+        bool anyString = false;
+        foreach (var item in items)
+        {
+            if (item[0] is '"' or '\'')
+            {
+                if (!IsGridTemplateAreas(item)) return false;
+                anyString = true;
+                continue;
+            }
+            if (IsTrackBreadth(item) || item.StartsWith("repeat(", StringComparison.Ordinal)
+                || item.StartsWith("minmax(", StringComparison.Ordinal)
+                || item.StartsWith("fit-content(", StringComparison.Ordinal)
+                || item.StartsWith("calc(", StringComparison.Ordinal)
+                || item.StartsWith("[", StringComparison.Ordinal)) continue;
+            return false;
+        }
+        return anyString;
+    }
+
+    /// <summary>CSS Grid 1 §7.2.1's <c>grid</c> shorthand: a template — and the template this
+    /// property takes is the one with the slash in it, or 'none', or a list of area strings — with
+    /// the flow and the implicit tracks beside it. A single track list is no value here, 'subgrid'
+    /// is not one either, and the flow word never stands on its own
+    /// (all measured: 'grid: 1px', 'grid: row', 'grid: subgrid' and 'grid: 1px / 2px / 3px' each
+    /// fall while '1px / 2px', '"a" / 1px' and 'none / auto' stand).</summary>
+    private static bool IsGridShorthandValue(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0) return false;
+        var parts = SplitTopLevel(trimmed, '/');
+        if (parts.Count >= 3) return false;
+        var head = parts[0].Trim();
+        if (parts.Count == 1)
+        {
+            if (head.Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
+            return SaysNothingButAreasAndTracks(head);
+        }
+        if (!IsRowOrColumnTrackList(head) && !SaysNothingButAreasAndTracks(head)) return false;
+        var second = parts[1].Trim();
+        return IsRowOrColumnTrackList(second)
+            || SaysNothingButAreasAndTracks(second)
+            || second.Equals("none", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>CSS Grid 1 §7.2: whether a track list says 'subgrid' or repeats. An implicit track
+    /// list does neither, which is the only difference between it and an explicit one.</summary>
+    private static bool SaysSubgridOrRepeat(string text)
+    {
+        var lower = text.ToLowerInvariant();
+        return lower.Contains("subgrid", StringComparison.Ordinal)
+            || lower.Contains("repeat(", StringComparison.Ordinal);
+    }
+
+    /// <summary>CSS Gap 1 §3: 'normal' or a non-negative <length-percentage>, at most
+    /// <paramref name="max"/> of them. 'auto' is the value the flexbox draft gave the property and
+    /// no engine measured here reads it, a comma is no separator and a negative gap is no gap at
+    /// all (measured: 'row-gap: auto', 'gap: 1px, 2px' and 'column-gap: -1px' each fall).</summary>
+    private static bool IsGapValue(string text, int max)
+    {
+        if (text.IndexOf(',') >= 0) return false;
+        var words = SplitComponents(text);
+        if (words.Count == 0 || words.Count > max) return false;
+        if (words.Count > 1 && words.Any(word => word.Equals("normal",
+                StringComparison.OrdinalIgnoreCase))) return false;
+        foreach (var word in words)
+        {
+            if (word.Equals("normal", StringComparison.OrdinalIgnoreCase)) continue;
+            if (IsMathFunctionCall(word, IsLengthOrPercentage)) continue;
+            if (!IsNonNegativeLengthOrPercentage(word)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>CSS Transforms 2 §3: 'none', or one to three numbers or percentages. A length is
+    /// no scale factor, 'auto' is not in the grammar and a comma would be a list of layers the
+    /// property does not have (all measured: 'scale: 1px', 'scale: auto' and 'scale: 1, 2' each
+    /// fall while 'scale: 50% 50%' stands).</summary>
+    private static bool IsScaleValue(string text)
+    {
+        // A comma would be a list of layers, and this property has one element to scale
+        // (measured: 'scale: 1, 2' is dropped where 'scale: 1 2' stands).
+        if (text.Contains(',')) return false;
+        var words = SplitComponents(text);
+        if (words.Count is < 1 or > 3) return false;
+        if (words.Count == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+            return true;
+        foreach (var word in words)
+        {
+            if (IsMathFunctionCall(word, IsNumberOrPercentage)) continue;
+            if (IsNumber(word) || IsPercentage(word)) continue;
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>CSS Transforms 2 §3: 'none', or one to three lengths, percentages or <c>calc()</c>s
+    /// — and a fourth is a length the property has no axis for
+    /// (measured: 'translate: 1px 2px 3px 4px' and 'translate: auto' fall).</summary>
+    private static bool IsTranslateValue(string text)
+    {
+        if (text.Contains(',')) return false;
+        var words = SplitComponents(text);
+        if (words.Count is < 1 or > 3) return false;
+        if (words.Count == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+            return true;
+        foreach (var word in words)
+        {
+            if (IsMathFunctionCall(word, IsLengthOrPercentage)) continue;
+            if (IsLengthOrPercentage(word) && !SaysAKeywordNotALength(word)) continue;
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>Whether a token is one of the words a length property spells and never measures —
+    /// 'auto', 'none' and the intrinsic keywords. <c>IsLengthOrPercentage</c> reads a bare word as
+    /// a number with no unit, which is why the shape has to be asked here.</summary>
+    private static bool SaysAKeywordNotALength(string token)
+    {
+        if (token.Length == 0 || char.IsAsciiDigit(token[0])
+            || token[0] is '+' or '-' or '.') return false;
+        return true;
+    }
+
+    /// <summary>CSS Backgrounds 3 §5.3's shorthand: one or two lists of one to four corner radii,
+    /// divided by the slash. A comma divides nothing in this property, a corner named in the list
+    /// belongs to a draft that never shipped (measured: 'top left 1px' falls) and 'auto' is a radius
+    /// in no spelling of it either.</summary>
+    private static bool IsBorderRadiusValue(string text)
+    {
+        if (text.Contains(',')) return false;
+        var halves = SplitTopLevel(text, '/');
+        foreach (var half in halves)
+        {
+            var words = SplitComponents(half);
+            if (words.Count is < 1 or > 4) return false;
+            foreach (var word in words)
+                if (!IsRadiusCornerValue(word)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>CSS Backgrounds 3 §5.3 for a corner: one or two <length-percentage>s, the second
+    /// the radius of the other axis. A negative radius is no radius
+    /// (measured: 'border-top-left-radius: 1px 2px' and '10% 20%' both stand).</summary>
+    private static bool IsRadiusCornerValue(string token)
+    {
+        if (IsMathFunctionCall(token, IsLengthOrPercentage)) return true;
+        if (!IsLengthOrPercentage(token)) return false;
+        return !Acrux.Core.Dom.Animations.CssValueTokenizer
+            .TrySplitUnit(token, out var number, out _) || number >= 0;
+    }
+
+    /// <summary>One <image> — the set every image property draws from, and the list of them is the
+    /// layer properties' own shape. 'cross-fade()' and 'element()' are in the spec's <image> and in
+    /// no engine measured here (both refused, through 'background-image', 'mask-image',
+    /// 'list-style-image' and 'border-image-source' alike).</summary>
+    private static bool IsOneImageReference(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count != 1) return false;
+        var word = words[0];
+        if (word.Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
+        if (SaysAnImageNoEngineReads(word)) return false;
+        return IsImageFunction(word);
+    }
+
+    /// <summary>The three slots of a rule line, each of them filled at most once.</summary>
+    private static bool IsColumnRuleShorthandValue(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count is < 1 or > 3) return false;
+        bool width = false, style = false, colour = false;
+        foreach (var word in words)
+        {
+            var lower = word.ToLowerInvariant();
+            if (!style && IsOneOf(lower, "none", "hidden", "dotted", "dashed", "solid", "double",
+                "groove", "ridge", "inset", "outset")) { style = true; continue; }
+            if (!width && Acrux.Core.Css.Resolver.CssPropertyApplier.IsBorderWidthToken(word))
+            { width = true; continue; }
+            if (!colour && IsOneColor(word)) { colour = true; continue; }
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>The two image functions the reference engine will not read for any property.</summary>
+    private static bool SaysAnImageNoEngineReads(string token)
+    {
+        var lower = token.ToLowerInvariant();
+        return lower.StartsWith("cross-fade(", StringComparison.Ordinal)
+            || lower.StartsWith("element(", StringComparison.Ordinal);
+    }
+
+    /// <summary>A number or a percentage, which is the operand type the individual transform
+    /// properties price their <c>calc()</c>s against.</summary>
+    private static bool IsNumberOrPercentage(string token)
+        => IsNumber(token) || IsPercentage(token) || IsLengthOrPercentage(token);
+
+    /// <summary>CSS Box Alignment 3 §6: the two halves of a 'place-*' value, each judged by the
+    /// word set of the longhand it writes. A half can be two words of its own ('first baseline'),
+    /// which is why the split is decided by what reads rather than by a count of spaces — the same
+    /// reading the cascade gives the pair, so the shorthand is never accepted on one surface and
+    /// dropped on another (measured: 'place-content: left' falls, 'place-content: baseline center'
+    /// stands, 'place-self: auto' stands and 'place-items: auto' falls).</summary>
+    private static bool IsPlacePairValue(string text,
+        Acrux.Core.Css.Resolver.CssPropertyApplier.AlignmentWords blockWords,
+        Acrux.Core.Css.Resolver.CssPropertyApplier.AlignmentWords inlineWords)
+    {
+        var parts = SplitComponents(text);
+        if (parts.Count == 0) return false;
+        string? block = Acrux.Core.Css.Resolver.CssPropertyApplier
+            .CanonicalAlignmentOf(parts[0], blockWords);
+        int taken = 1;
+        // The first half of the pair is two words of its own ('first baseline') just as often as it
+        // is one half of a two-value pair ('center start'), and the reading that comes first is the
+        // one that decides: one word for the block axis, and only when that is no value, two.
+        if (block == null && parts.Count >= 2)
+        {
+            block = Acrux.Core.Css.Resolver.CssPropertyApplier
+                .CanonicalAlignmentOf(parts[0] + " " + parts[1], blockWords);
+            taken = 2;
+        }
+        if (block == null) return false;
+        if (parts.Count == taken) return true;
+        return Acrux.Core.Css.Resolver.CssPropertyApplier.CanonicalAlignmentOf(
+            string.Join(" ", parts.Skip(taken)), inlineWords) != null;
+    }
 
     /// <summary>A comma-separated list of one keyword set — the animation and transition longhands
     /// each take their own list, and the separator is the comma and only the comma (measured).</summary>
@@ -1687,6 +2699,28 @@ public static class CssValueGrammar
     /// <summary>A &lt;easing-function&gt;# (CSS Easing 1 §2): one of the seven keywords, or
     /// <c>cubic-bezier()</c> with four numbers, or <c>steps()</c> with a positive integer and an
     /// optional position. 'bogus' is neither (measured: 'animation-timing-function: bogus' falls).</summary>
+    /// <summary>Each part of every animation layer, judged by the longhand that owns it: an easing
+    /// that is no easing, an iteration count that is not a number or 'infinite', and a name that is
+    /// neither an ident nor a string each leave the layer — and so the declaration — out.</summary>
+    private static bool IsAnimationShorthandValue(string text)
+    {
+        foreach (var entry in Acrux.Core.Css.ShorthandExpander.ClassifyAnimationEntries(text))
+        {
+            if (entry[1].Length > 0 && !IsTimingFunction(entry[1])) return false;
+            if (entry[3].Length > 0 && !entry[3].Equals("infinite", StringComparison.OrdinalIgnoreCase)
+                && !Acrux.Core.Css.ShorthandExpander.IsNumberToken(entry[3])) return false;
+            if (entry[7].Length > 0 && !IsAnimationNameItem(entry[7])) return false;
+        }
+        return true;
+    }
+
+    private static bool IsAnimationNameItem(string token)
+    {
+        if (token.Length >= 2 && (token[0] == '"' || token[0] == '\'')
+            && token[^1] == token[0]) return true;
+        return IsIdentifierLike(token);
+    }
+
     private static bool IsTimingFunctionList(string text)
     {
         var items = SplitTopLevel(text);
@@ -1705,7 +2739,18 @@ public static class CssValueGrammar
         var name = word[..open].Trim().ToLowerInvariant();
         var args = SplitTopLevel(word[(open + 1)..^1]);
         if (name == "cubic-bezier")
-            return args.Count == 4 && args.All(arg => IsNumber(arg.Trim()));
+        {
+            // Four numbers, and the two that place the control points along the progress axis are
+            // inside the unit interval (CSS Easing 1 §2, measured: 'cubic-bezier(0.1, 2, 3, 4)' and
+            // 'cubic-bezier(2, 0, 1, 1)' are each dropped while 'cubic-bezier(0, 0, 1, 1)' stands;
+            // the two that measure the value itself may be anywhere).
+            if (args.Count != 4) return false;
+            var numbers = new double[4];
+            for (int i = 0; i < 4; i++)
+                if (!TryPlainNumber(args[i].Trim(), out numbers[i])) return false;
+            return numbers[0] >= 0.0 && numbers[0] <= 1.0
+                && numbers[2] >= 0.0 && numbers[2] <= 1.0;
+        }
         if (name == "steps")
         {
             if (args.Count is < 1 or > 2) return false;
@@ -2158,7 +3203,7 @@ public static class CssValueGrammar
         return parts;
     }
 
-    private static bool IsBorderSideValue(string text)
+    private static bool IsBorderSideValue(string text, int maxWidth = 4)
     {
         var parts = SplitComponents(text);
         if (parts.Count == 0 || parts.Count > 6) return false;
@@ -2172,7 +3217,7 @@ public static class CssValueGrammar
             if (ColorParser.IsColorToken(part) || IsOtherFunctionCall(part)) { colour++; continue; }
             return false;
         }
-        return width <= 4 && style <= 1 && colour <= 1;
+        return width <= maxWidth && style <= 1 && colour <= 1;
     }
 
     /// <summary>A family list: one name per comma, each name a quoted string or the identifiers
@@ -2682,9 +3727,19 @@ public static class CssValueGrammar
     {
         var lower = token.ToLowerInvariant();
         if (lower is "auto" or "min-content" or "max-content") return true;
+        // <line-size> is a <length-percentage>, so a track may be written as a share of the grid
+        // (measured: 'grid-template-columns: 50%' and '100px 50%' both stand).
+        if (lower.EndsWith("%", StringComparison.Ordinal))
+            return IsLengthOrPercentage(lower)
+                && (!Acrux.Core.Dom.Animations.CssValueTokenizer
+                    .TrySplitUnit(lower, out var percent, out _) || percent >= 0);
         if (lower.StartsWith("minmax(", StringComparison.Ordinal)
             || lower.StartsWith("fit-content(", StringComparison.Ordinal)
             || lower.StartsWith("calc(", StringComparison.Ordinal)) return true;
+        // A math function is a breadth of its own, not only 'calc()': the reference engine reads
+        // 'clamp(30px, 40%, 80px)' and 'min(60px, 50%)' as the <line-size> they work out to
+        // (measured, both, as a bare track and beside '1fr').
+        if (IsMathFunctionCall(lower, IsLengthOrPercentage)) return true;
         if (Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out _, out var unit))
             return unit.Equals("fr", StringComparison.OrdinalIgnoreCase)
                 || IsDimensionedLengthOrZero(token);
@@ -2773,10 +3828,17 @@ public static class CssValueGrammar
 
     /// <summary>One &lt;grid-line&gt;, or a slash-separated list of them (the shorthands take the same
     /// words in the same order). See the arm that calls this for what the reference engine takes.</summary>
-    private static bool IsGridLineValue(string text)
+    /// <summary>A &lt;grid-line&gt; list: 'auto', 'none', a line name, a line number, or 'span' with
+    /// the name or the number it spans. A bare 'span' is no line — the reference engine drops it
+    /// (measured: 'grid-area: span' reads back empty and computes 'auto'), and two words with no
+    /// slash between them are no line either ('grid-area: main head' is dropped the same way).
+    /// <paramref name="maxParts"/> is the number of lines the property has: two for a grid axis,
+    /// four for an area, one for a single edge — and a third line on an axis is no value at all
+    /// (measured: 'grid-column: a / b / c' falls).</summary>
+    private static bool IsGridLineValue(string text, int maxParts = 4)
     {
         var parts = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(text, '/');
-        if (parts.Count == 0) return false;
+        if (parts.Count == 0 || parts.Count > maxParts) return false;
         foreach (var part in parts)
         {
             var words = SplitComponents(part);
@@ -2787,7 +3849,11 @@ public static class CssValueGrammar
                 return false;
             }
             if (words.Count == 2 && words[0].Equals("span", StringComparison.OrdinalIgnoreCase)
-                && IsIntegerWord(words[1])) continue;
+                && (IsIntegerWord(words[1])
+                    // 'span a' spans the line named 'a' (measured: it stands where '1 span a' —
+                    // a line number in front of the keyword — falls).
+                    || (IsIdentifierLike(words[1])
+                        && !words[1].Equals("span", StringComparison.OrdinalIgnoreCase)))) continue;
             return false;
         }
         return true;
@@ -2864,6 +3930,10 @@ public static class CssValueGrammar
             else kept.Add(word);
         }
         if (kept.Count == 0) return null;
+        // The flag reads either in front of the whole list or behind it, and the engine prints it
+        // last whichever way it was written (measured: 'only light' and 'light dark only' both say
+        // '… only', while 'light only dark' — a flag dropped between two members — is refused).
+        if (saysOnly && !SaysTheFlagAtAnEnd(words)) return null;
         if (saysOnly) kept.Add("only");
         return string.Join(" ", kept);
     }
@@ -3295,10 +4365,49 @@ public static class CssValueGrammar
         double.TryParse(token, System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var value) && value != 0;
 
-    /// <summary><c>list-style-type</c> is the keyword family of <c>@counter-style</c> plus a quoted
-    /// string used as the marker; an unknown name is a custom counter style the sheet may declare,
-    /// which the engine still echoes, while a function is not a type at all (measured:
-    /// <c>'symbols("*")'</c> is dropped and <c>'"–"'</c> is kept).</summary>
+    /// <summary>Every comma-separated layer of the value is an image: an address, a gradient, one
+    /// of the image functions, or the word 'none'. A colour is not an image, two words in one layer
+    /// are not one image either, and 'local()' was refused by the arm above (measured:
+    /// 'background-image: red', '… : auto' and '… : none none' are each dropped).</summary>
+    private static bool SaysImages(string text)
+    {
+        var layers = SplitTopLevel(text);
+        if (layers.Count == 0) return false;
+        foreach (var layer in layers)
+        {
+            var words = SplitComponents(layer);
+            if (words.Count != 1) return false;
+            var word = words[0];
+            if (word.Equals("none", StringComparison.OrdinalIgnoreCase)) continue;
+            if (SaysAnImageNoEngineReads(word)) return false;
+            if (!IsImageFunction(word)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>CSS Lists 3 §3.3 read as one position, one image and one marker type at most.</summary>
+    private static bool IsListStyleShorthand(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count == 0) return false;
+        // The three slots are filled in the order the words arrive, and a word goes to the first
+        // slot still open that can read it. That is how the reference engine reads the two shapes a
+        // strict per-slot count refuses (measured: 'list-style: none none' is the image and the type
+        // and reads 'outside none none', and 'list-style: inside outside' is the position and a type
+        // named 'outside' that reads back 'inside none outside').
+        bool position = false, image = false, type = false;
+        foreach (var word in words)
+        {
+            var lower = word.ToLowerInvariant();
+            if (!position && lower is "inside" or "outside") { position = true; continue; }
+            if (!image && IsImageFunction(word)) { image = true; continue; }
+            if (!image && lower == "none") { image = true; continue; }
+            if (!type && (lower == "none" || IsListStyleTypeValue(word))) { type = true; continue; }
+            return false;
+        }
+        return true;
+    }
+
     private static bool IsListStyleTypeValue(string text)
     {
         var words = SplitComponents(text);
@@ -3315,8 +4424,16 @@ public static class CssValueGrammar
     /// <c>normal</c> counter — and an integer that does not fit is no declaration either (all
     /// measured; <c>'c reverse'</c> on the other hand is two counters, because 'reverse' is a name
     /// like any other).</summary>
+    /// <summary>Whether a token begins with the characters of a number — the only way a length
+    /// token can start, and the test that keeps a keyword out of a numeric slot.</summary>
+    private static bool IsAsciiNumericStart(string word) =>
+        char.IsAsciiDigit(word[0]) || word[0] is '.' or '+' or '-';
+
     private static bool IsCounterList(string text)
     {
+        // Space separates counters; the comma separates the lists of other properties and is no
+        // separator here (measured: 'counter-reset: x, y' is dropped).
+        if (text.Contains(',')) return false;
         var words = SplitComponents(text);
         if (words.Count == 0) return false;
         if (words.Count == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
@@ -3326,16 +4443,28 @@ public static class CssValueGrammar
         while (i < words.Count)
         {
             var name = words[i];
+            // A counter is named by an identifier, and a number names nothing
+            // (measured: 'counter-reset: 1' is dropped).
             if (name.Equals("none", StringComparison.OrdinalIgnoreCase)
                 || name.Equals("normal", StringComparison.OrdinalIgnoreCase)
+                || char.IsAsciiDigit(name[0])
                 || !IsIdentifierLike(name)) return false;
             i++;
             if (i < words.Count)
             {
-                // Only a number continues this counter; the next word starts a new one.
-                if (Acrux.Core.Css.ShorthandExpander.IsNumberToken(words[i])
-                    && int.TryParse(words[i], System.Globalization.NumberStyles.Integer,
-                        System.Globalization.CultureInfo.InvariantCulture, out _)) i++;
+                // Only a number continues this counter; the next word starts a new one. The
+                // integer is read as a whole number, and one too large for the property is clamped
+                // rather than refused (measured: 'counter-reset: x 2147483648' is accepted and
+                // reads back 'x 2147483647', while 'x 1.5' is no counter list at all).
+                var next = words[i];
+                bool saysCount = Acrux.Core.Css.ShorthandExpander.IsNumberToken(next)
+                    && double.TryParse(next, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var count)
+                    && count == Math.Floor(count);
+                // An expression that works out to a whole number is the counter's integer too, and
+                // the echo keeps the expression the page wrote (measured: 'counter-increment: foo
+                // calc(1)' stands and computes 'foo 1').
+                if (saysCount || IsMathFunctionCall(next, IsNumberOrPercentage)) i++;
             }
             any = true;
         }
@@ -3403,6 +4532,22 @@ public static class CssValueGrammar
         var parts = SplitComponents(text);
         return parts.Count == 1 && !IsFitContentFunction(parts[0]) && IsLengthList(parts[0], keywords);
     }
+
+    /// <summary>A length list whose terms are never negative. A size, a padding and a font size are
+    /// the three properties the reference engine refuses a negative literal on — it drops the
+    /// declaration instead of clamping it (measured: 'width: -10px', 'padding-left: -10px' and
+    /// 'font-size: -10px' each fall while 'margin-left: -10px' and 'top: -10px' stand). A negative
+    /// written inside a math function is not one of them: 'width: calc(-10px)' is a size the engine
+    /// keeps and lays out as nothing wide (measured), because the sign is only known once the
+    /// function is worked out.</summary>
+    private static bool IsNonNegativeLengthList(string text, params string[] keywords) =>
+        IsLengthList(text, keywords) && !AnyNegativeTerm(text);
+
+    private static bool IsNonNegativeSingleLength(string text, params string[] keywords) =>
+        IsSingleLength(text, keywords) && !AnyNegativeTerm(text);
+
+    private static bool AnyNegativeTerm(string text) =>
+        SplitComponents(text).Any(IsNegativeValue);
 
     /// <summary>CSS Sizing 4 §4: the bare <c>fit-content</c> keyword is a size, the functional
     /// <c>fit-content()</c> is not one — 'width: fit-content(200px)', 'min-height: fit-content(10px)'
@@ -3481,6 +4626,42 @@ public static class CssValueGrammar
     /// work out for itself. 'invert' is deliberately absent: Color 4 §14.1 defines it only for
     /// forced-colours mode, and a reference engine rejects the whole declaration outside it
     /// (measured: 'outline: 3px solid invert' leaves outline-style at its initial 'none').</summary>
+    /// <summary>One colour, or the two that address the pair of edges a logical property
+    /// measures (CSS Logical 1 §4, measured on 'border-block-color').</summary>
+    private static bool IsTwoColors(string text)
+    {
+        // The pair is two colours divided by a space; a comma at the top of the value divides
+        // layers, and these properties have one pair between their two edges and no list at all —
+        // while the comma inside 'rgb(255, 255, 255)' is the colour's own and stays (measured:
+        // 'border-block-color: red, blue' is dropped, 'border-block-color: #fff' is not).
+        if (SplitTopLevel(text, ',').Count > 1) return false;
+        // Split at the spaces outside every parenthesis: a component colour may be an 'rgb()' with
+        // its own commas inside, and a splitter that read those would break the colour in two
+        // (measured: 'border-block-color: #fff' echoes as 'rgb(255, 255, 255)' and stands).
+        var words = SplitOutsideParentheses(text);
+        return words.Count is 1 or 2 && words.All(word => ColorParser.IsColorToken(word));
+    }
+
+    /// <summary>One &lt;line-width&gt; — a non-negative length or the word 'thin', 'medium',
+    /// 'thick' — up to <paramref name="max"/> of them. A percentage is not a width and a negative
+    /// length is not one either (measured: 'border-top-width: 50%' and '… : -1px' both fall).</summary>
+    private static bool IsLineWidthList(string text, int max)
+    {
+        if (text.IndexOf(',') >= 0) return false;
+        var words = SplitComponents(text);
+        if (words.Count == 0 || words.Count > max) return false;
+        foreach (var word in words)
+        {
+            if (IsOneOf(word, "thin", "medium", "thick")) continue;
+            if (IsMathFunctionCall(word, IsLengthOrPercentage)) continue;
+            // A width is a length: 'auto' is a style word and no width, and a bare ident is not a
+            // length either (measured: 'border-width: auto' is dropped).
+            if (word.Length == 0 || !IsAsciiNumericStart(word)) return false;
+            if (!IsNonNegativeLengthOrPercentage(word) || IsPercentage(word)) return false;
+        }
+        return true;
+    }
+
     private static bool IsColorList(string text)
     {
         foreach (var token in SplitComponents(text))
@@ -3514,13 +4695,25 @@ public static class CssValueGrammar
     /// <summary>A &lt;length&gt; or &lt;percentage&gt; in the sign/number/unit shape CSS Syntax
     /// gives them. The unit is not looked up in a table: a unit name this engine has not heard
     /// of yet is still a unit, and refusing it would lose a working declaration.</summary>
+    /// <summary>Whether a token is a length, a percentage or the math expression that stands for
+    /// one — the operand type every offset property takes (measured: 'animation-range-start' and
+    /// 'offset-position: calc(1px)' both keep a calc the plain length reader would refuse).</summary>
+    public static bool IsLengthPercentageOrMath(string token) =>
+        IsMathFunctionCall(token, IsLengthOrPercentage) || IsLengthOrPercentage(token);
+
     internal static bool IsLengthOrPercentage(string token)
     {
         int i = 0;
         if (i < token.Length && (token[i] == '+' || token[i] == '-')) i++;
         int digits = i;
-        while (i < token.Length && (char.IsAsciiDigit(token[i]) || token[i] == '.')) i++;
+        // A point belongs to the number only when a digit follows it (or when the number simply
+        // ends there): '1.5px' is a length and '1.' is a number, but '1.px' is a number with a
+        // point left hanging off it, and the reference engine's fast path reads no such thing
+        // (measured: 'margin-left: 123456789.px' is dropped while '123456789px' stands).
+        while (i < token.Length && (char.IsAsciiDigit(token[i])
+                || (token[i] == '.' && i + 1 < token.Length && char.IsAsciiDigit(token[i + 1])))) i++;
         if (i == digits) return false;
+        if (i < token.Length && token[i] == '.' && i + 1 == token.Length) i++;
         if (i < token.Length && (token[i] == 'e' || token[i] == 'E'))
         {
             int probe = i + 1;

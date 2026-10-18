@@ -27,6 +27,11 @@ public static class CssInheritance
         // generic's default (see ComputedStyle.FontSizeIsDefault).
         child.FontSizeIsDefault = parent.FontSizeIsDefault;
         child.FontWeight = parent.FontWeight;
+        // The number is what 'bolder'/'lighter' are read against (CSS Fonts 4 §4.2), so it has to
+        // travel with the enum the face selection uses — a child of 'font-weight: 300' is bolder
+        // *than 300*, and the reference engine answers 400 for it (measured at parents 100 to 900).
+        child.FontWeightNumber = parent.FontWeightNumber;
+        child.InheritedFontWeightNumber = parent.FontWeightNumber;
         child.FontStyle = parent.FontStyle;
         // The authored angle is part of the inherited 'font-style' value: an element that
         // inherits 'oblique 20deg' must keep the 20deg, or it degrades into a request for the
@@ -150,6 +155,12 @@ public static class CssInheritance
         child.Orphans = parent.Orphans;
         child.Widows = parent.Widows;
         child.ImageRendering = parent.ImageRendering;
+        // 'math-style' is a property of the formula's text, so it runs down the tree with the rest
+        // of the font chain (measured: a child of 'math-style: compact' reads 'compact').
+        child.MathStyle = parent.MathStyle;
+        // CSS Color Adjust 1 §9: the scheme an element asks for is inherited, and a descendant that
+        // writes nothing keeps its parent's (measured: a child of 'color-scheme: dark' reads 'dark').
+        child.ColorScheme = parent.ColorScheme;
         child.AccentColor = parent.AccentColor;
         child.CaretColor = parent.CaretColor;
         child.EffectiveColorScheme = parent.EffectiveColorScheme;

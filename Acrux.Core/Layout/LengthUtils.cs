@@ -284,9 +284,9 @@ public static class LengthUtils
     }
 
     /// <summary>The border box strut used for layout. CSS 2.1 §8.5.1: a side whose
-    /// 'border-style' is none (or hidden, which the parser folds into none) has a
-    /// USED width of zero whatever 'border-width' says, so the stored width alone
-    /// must not size the box.</summary>
+    /// 'border-style' is none or hidden has a USED width of zero whatever 'border-width'
+    /// says, so the stored width alone must not size the box (measured: a 100px box with
+    /// 'border: 10px hidden' is still 100px wide, and its border-width computes to 0px).</summary>
     public static BoxStrut ComputeBorders(ComputedStyle style) =>
         new(UsedBorderWidth(style.BorderTopWidth, style.BorderTopStyle),
             UsedBorderWidth(style.BorderRightWidth, style.BorderRightStyle),
@@ -294,7 +294,7 @@ public static class LengthUtils
             UsedBorderWidth(style.BorderLeftWidth, style.BorderLeftStyle));
 
     private static float UsedBorderWidth(float width, BorderStyle borderStyle) =>
-        borderStyle == BorderStyle.None ? 0 : width;
+        borderStyle.IsDrawn() ? width : 0;
 
     public static BoxStrut ComputePadding(ConstraintSpace space, ComputedStyle style) =>
         new(ResolveInsetSide(style.PaddingTop, space.PercentageResolutionInlineSize, style, space),

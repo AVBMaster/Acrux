@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify295 &#8212; the rect a box is cut to, the comment a value carries and the number a length stops at</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: rgb(255,255,255); }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+/* Every paint box says its own size, so the region a clip leaves is the same number in two
+ * engines that have different viewports, and the root font is named because an 'em' side of a
+ * clip has one answer only when both engines know the number it is a share of. */
+html { font-size: 16px; }
+#stage { position: relative; width: 420px; height: 330px; }
+#stage > div { position: absolute; }
+/* The legacy rect takes its four sides from the top-left corner of the border box: 'right' is a
+ * distance from the LEFT edge, not an inset from the right (CSS 2.1 §11.1.2). */
+#g-1 { left: 0; top: 70px; width: 80px; height: 40px; background: rgb(0,0,255);
+       clip: rect(0px 20px 40px 0px); }
+/* A border is inside the rect, so a rect narrower than the box cuts the border ring as well. */
+#g-2 { left: 90px; top: 70px; width: 60px; height: 60px; background: rgb(255,128,128);
+       border: 10px solid rgb(0,0,128); clip: rect(10px 50px 50px 10px); }
+/* 'auto' is the edge the side names, and nothing else moves. */
+#g-3 { left: 160px; top: 70px; width: 60px; height: 40px; background: rgb(0,128,0);
+       clip: rect(auto 20px auto auto); }
+/* A rectangle turned inside out paints nothing at all. */
+#g-4 { left: 230px; top: 70px; width: 40px; height: 40px; background: rgb(255,0,255);
+       clip: rect(30px 10px 10px 30px); }
+/* A box that stays in the flow carries the value and paints as though it did not. The rule has to
+ * out-specify '#stage > div' above, or the box is taken out of the flow by that one and the guard
+ * measures the wrong thing. */
+#stage > div#g-5 { position: relative; left: 0; top: 120px; width: 80px; height: 40px;
+       background: rgb(0,0,255); clip: rect(0px 20px 40px 0px); }
+/* The rect and a clip-path on one box clip the same region twice: what is left is their share. */
+#g-6 { left: 90px; top: 120px; width: 60px; height: 60px; background: rgb(255,128,0);
+       clip: rect(0px 60px 30px 0px); clip-path: inset(0 30px 0 0); }
+/* The clip covers the subtree, not only the box's own paint. */
+#g-7 { left: 160px; top: 120px; width: 60px; height: 60px; background: rgb(128,128,128);
+       clip: rect(0px 30px 60px 0px); }
+#g-7 > div { position: static; margin: 0; width: 60px; height: 20px; background: rgb(0,0,0); }
+/* A side written in 'em' is priced in the element's own font, and the text inside the box is
+ * clipped by the rect like any other paint. */
+#g-8 { left: 230px; top: 120px; width: 90px; height: 40px; font: 14px monospace;
+       color: rgb(9,9,9); background: rgb(230,230,230); clip: rect(0.5em 3.5em 40px 0px); }
+#report { font: 14px/18px monospace; white-space: pre; }
+</style></head><body>
+<h2>the region a clip leaves, the text a comment leaves and the number a length leaves</h2>
+<div id="stage">
+  <div id="g-1"></div>
+  <div id="g-2"></div>
+  <div id="g-3"></div>
+  <div id="g-4"></div>
+  <div id="g-5"></div>
+  <div id="g-6"></div>
+  <div id="g-7"><div></div></div>
+  <div id="g-8">clip clip clip</div>
+</div>
+<div id="report"></div>
+<script>
+// Every want cell below is a transcription of what the reference engine printed for the same row
+// (snapshots/out/_b295_ref_probeClip.txt, _b295_ref_comment.txt, _b295_ref_number.txt,
+// _b295_ref_biglength.txt and _b295_ref_digits.txt); nothing here is derived from a rule. A cell
+// the reference answers with data this engine does not have is marked '~' and filed as a gap.
+var ROWS = [
+  ["clip", "auto", "1", "1", "auto", "auto"],
+  ["clip", "rect(0px 20px 40px 0px)", "1", "1", "rect(0px, 20px, 40px, 0px)", "rect(0px, 20px, 40px, 0px)"],
+  ["clip", "rect(0, 20px, 40px, 0px)", "1", "1", "rect(0px, 20px, 40px, 0px)", "rect(0px, 20px, 40px, 0px)"],
+  ["clip", "rect(0 0 0 0)", "1", "1", "rect(0px, 0px, 0px, 0px)", "rect(0px, 0px, 0px, 0px)"],
+  ["clip", "rect(0px 0px 0px 0px)", "1", "1", "rect(0px, 0px, 0px, 0px)", "rect(0px, 0px, 0px, 0px)"],
+  ["clip", "rect(1px 2px 3px 4px)", "1", "1", "rect(1px, 2px, 3px, 4px)", "rect(1px, 2px, 3px, 4px)"],
+  ["clip", "rect(1 2 3 4)", "0", "0", "", "auto"],
+  ["clip", "rect(10px 20px)", "0", "0", "", "auto"],
+  ["clip", "rect(10px 20px 30px)", "0", "0", "", "auto"],
+  ["clip", "rect(1px 2px 3px 4px 5px)", "0", "0", "", "auto"],
+  ["clip", "rect(auto)", "0", "0", "", "auto"],
+  ["clip", "rect(auto auto auto auto)", "1", "1", "rect(auto, auto, auto, auto)", "rect(auto, auto, auto, auto)"],
+  ["clip", "rect(auto 20px auto auto)", "1", "1", "rect(auto, 20px, auto, auto)", "rect(auto, 20px, auto, auto)"],
+  ["clip", "rect(0px, auto, auto, 5px)", "1", "1", "rect(0px, auto, auto, 5px)", "rect(0px, auto, auto, 5px)"],
+  ["clip", "rect(10px, 10px, 10px, 10px, auto)", "0", "0", "", "auto"],
+  ["clip", "rect(-10px 100px 100px -10px)", "1", "1", "rect(-10px, 100px, 100px, -10px)", "rect(-10px, 100px, 100px, -10px)"],
+  ["clip", "rect(-1px -1px -1px -1px)", "1", "1", "rect(-1px, -1px, -1px, -1px)", "rect(-1px, -1px, -1px, -1px)"],
+  ["clip", "rect(50% 50% 50% 50%)", "0", "0", "", "auto"],
+  ["clip", "rect(1em 2em 3em 4em)", "1", "1", "rect(1em, 2em, 3em, 4em)", "rect(16px, 32px, 48px, 64px)"],
+  ["clip", "rect(1rem 2rem 1rem 1rem)", "1", "1", "rect(1rem, 2rem, 1rem, 1rem)", "rect(16px, 32px, 16px, 16px)"],
+  ["clip", "rect(10pt 10pt 10pt 10pt)", "1", "1", "rect(10pt, 10pt, 10pt, 10pt)", "rect(13.3333px, 13.3333px, 13.3333px, 13.3333px)"],
+  ["clip", "rect(2cm 1cm 2cm 1cm)", "1", "1", "rect(2cm, 1cm, 2cm, 1cm)", "rect(75.5906px, 37.7953px, 75.5906px, 37.7953px)"],
+  ["clip", "rect(calc(1px + 2px) 0px 0px 0px)", "1", "1", "rect(calc(3px), 0px, 0px, 0px)", "rect(3px, 0px, 0px, 0px)"],
+  ["clip", "rect(  0px   20px  40px  0px  )", "1", "1", "rect(0px, 20px, 40px, 0px)", "rect(0px, 20px, 40px, 0px)"],
+  ["clip", "rect(0px, 20px, 40px, 0px,)", "0", "0", "", "auto"],
+  ["clip", "rect(0px  20px,40px  0px)", "0", "0", "", "auto"],
+  ["clip", "RECT(0px 20px 40px 0px)", "1", "1", "rect(0px, 20px, 40px, 0px)", "rect(0px, 20px, 40px, 0px)"],
+  ["clip", "Rect(0px 20px 40px 0px)", "1", "1", "rect(0px, 20px, 40px, 0px)", "rect(0px, 20px, 40px, 0px)"],
+  ["clip", "rect(0px 20px 40px 0px", "1", "1", "rect(0px, 20px, 40px, 0px)", "rect(0px, 20px, 40px, 0px)"],
+  ["clip", "rect(0px 20px 40px 0px))", "0", "0", "", "auto"],
+  ["clip", "inset(0px)", "0", "0", "", "auto"],
+  ["clip", "inset(0px round 2px)", "0", "0", "", "auto"],
+  ["clip", "circle(10px)", "0", "0", "", "auto"],
+  ["clip", "rect(0px 20px 40px 0px) border-box", "0", "0", "", "auto"],
+  ["clip", "rect(0px 20px 40px 0px), rect(1px 2px 3px 4px)", "0", "0", "", "auto"],
+  ["clip", "auto auto", "0", "0", "", "auto"],
+  ["clip", "none", "0", "0", "", "auto"],
+  ["clip", "inherit", "1", "1", "inherit", "auto"],
+  ["clip", "initial", "1", "1", "initial", "auto"],
+  ["clip", "revert", "1", "1", "revert", "auto"],
+  ["clip", "unset", "1", "1", "unset", "auto"],
+  ["clip", "", "0", "0", "", "auto"],
+  ["clip", "rect()", "0", "0", "", "auto"],
+  ["clip", "rect(0px 20px 40px 0px) ", "1", "1", "rect(0px, 20px, 40px, 0px)", "rect(0px, 20px, 40px, 0px)"],
+  ["clip", " rect(0px 20px 40px 0px)", "1", "1", "rect(0px, 20px, 40px, 0px)", "rect(0px, 20px, 40px, 0px)"],
+  ["clip", "rect(auto 0px auto 0px)", "1", "1", "rect(auto, 0px, auto, 0px)", "rect(auto, 0px, auto, 0px)"],
+  ["clip", "rect(0px auto 0px auto)", "1", "1", "rect(0px, auto, 0px, auto)", "rect(0px, auto, 0px, auto)"],
+  ["clip", "rect(2147483647px 1px 1px 1px)", "1", "1", "rect(2.14748e+09px, 1px, 1px, 1px)", "rect(3.35544e+07px, 1px, 1px, 1px)"],
+  ["clip", "rect(1e3px 1px 1px 1px)", "1", "1", "rect(1000px, 1px, 1px, 1px)", "rect(1000px, 1px, 1px, 1px)"],
+  ["clip", "rect(0px 20px 40px 0x)", "0", "0", "", "auto"],
+  ["clip", "rect(0px 20px 40px 0px auto)", "0", "0", "", "auto"],
+  ["clip", "rect(1.5px 2.5px 3.5px 4.5px)", "1", "1", "rect(1.5px, 2.5px, 3.5px, 4.5px)", "rect(1.5px, 2.5px, 3.5px, 4.5px)"],
+  ["clip", "rect(0px 0px 0px 0px) /* x */", "1", "1", "rect(0px, 0px, 0px, 0px)", "rect(0px, 0px, 0px, 0px)"],
+  ["clip", "rect(1Q 1Q 1Q 1Q)", "1", "1", "rect(1q, 1q, 1q, 1q)", "rect(0.944882px, 0.944882px, 0.944882px, 0.944882px)"],
+  ["clip-inherited", "rect(0px 20px 40px 0px)", "~", "~", "~", "auto", "rect(0px, 20px, 40px, 0px)"],
+  ["clip", "rect(0px 0px 0px 0px) /* x */", "1", "1", "rect(0px, 0px, 0px, 0px)", "rect(0px, 0px, 0px, 0px)"],
+  ["clip", "/* x */ rect(0px 0px 0px 0px)", "1", "1", "rect(0px, 0px, 0px, 0px)", "rect(0px, 0px, 0px, 0px)"],
+  ["clip", "rect(0px /*x*/ 0px 0px 0px)", "1", "1", "rect(0px, 0px, 0px, 0px)", "rect(0px, 0px, 0px, 0px)"],
+  ["clip", "rect(0px/*x*/0px 0px 0px)", "1", "1", "rect(0px, 0px, 0px, 0px)", "rect(0px, 0px, 0px, 0px)"],
+  ["clip", "rect(0px 0px 0px 0px) /* x", "1", "1", "rect(0px, 0px, 0px, 0px)", "rect(0px, 0px, 0px, 0px)"],
+  ["width", "10px /* x */", "1", "1", "10px", "10px"],
+  ["width", "10px/*x*/", "1", "1", "10px", "10px"],
+  ["margin", "1px/*c*/2px", "1", "4", "1px 2px", "1px 2px"],
+  ["margin", "1px /*c*/ 2px", "1", "4", "1px 2px", "1px 2px"],
+  ["background-color", "rgb(1/*x*/,2/*x*/,3)", "1", "1", "rgb(1, 2, 3)", "rgb(1, 2, 3)"],
+  ["color", "red /* x */", "1", "1", "red", "rgb(255, 0, 0)"],
+  ["content", "\"/*\"", "1", "1", "\"/*\"", "\"/*\""],
+  ["border-width", "thin/*x*/thick", "1", "4", "thin thick", "0px"],
+  ["padding", "1px /*c*/ 2px 3px", "1", "4", "1px 2px 3px", "1px 2px 3px"],
+  ["font", "12px/*x*/ serif", "1", "19", "12px serif", "12px serif"],
+  ["grid-template-columns", "10px/*c*/20px", "1", "1", "10px 20px", "10px 20px"],
+  ["transition", "all 1s/*c*/ease", "1", "5", "1s", "1s"],
+  ["line-height", "/*x*/2", "1", "1", "2", "32px"],
+  ["width", "/*x*/", "0", "0", "", "0px"],
+  ["width", "calc(1px/*c*/+ 2px)", "~", "~", "~", "~"],
+  ["width", "-10px", "~", "~", "~", "~"],
+  ["width", "-0.5px", "~", "~", "~", "~"],
+  ["width", "-0px", "~", "~", "~", "~"],
+  ["width", "calc(-10px)", "1", "~", "calc(-10px)", "0px"],
+  ["height", "-10px", "~", "~", "~", "~"],
+  ["min-width", "-10px", "0", "~", "", "0px"],
+  ["max-width", "-10px", "0", "~", "", "none"],
+  ["margin-left", "-10px", "1", "~", "-10px", "-10px"],
+  ["padding-left", "-10px", "0", "~", "", "0px"],
+  ["top", "-10px", "1", "~", "-10px", "-10px"],
+  ["border-spacing", "-10px", "0", "~", "", "0px"],
+  ["outline-width", "-10px", "0", "~", "", "3px"],
+  ["border-width", "-10px", "0", "~", "", "0px"],
+  ["clip", "rect(-10px -10px -10px -10px)", "1", "~", "rect(-10px, -10px, -10px, -10px)", "rect(-10px, -10px, -10px, -10px)"],
+  ["clip", "rect(-10px 0px 0px -10px)", "1", "~", "rect(-10px, 0px, 0px, -10px)", "rect(-10px, 0px, 0px, -10px)"],
+  ["clip", "rect(0px -10px -10px 0px)", "1", "~", "rect(0px, -10px, -10px, 0px)", "rect(0px, -10px, -10px, 0px)"],
+  ["letter-spacing", "-10px", "1", "~", "-10px", "-10px"],
+  ["word-spacing", "-10px", "1", "~", "-10px", "-10px"],
+  ["text-indent", "-10px", "1", "~", "-10px", "-10px"],
+  ["row-gap", "-10px", "0", "~", "", "normal"],
+  ["translate", "-10px", "1", "~", "-10px", "-10px"],
+  ["inset", "-10px", "1", "~", "-10px", "-10px"],
+  ["border-radius", "-10px", "0", "~", "", "0px"],
+  ["font-size", "-10px", "0", "~", "", "16px"],
+  ["line-height", "-10px", "0", "~", "", "normal"],
+  ["perspective", "-10px", "0", "~", "", "none"],
+  ["clip", "rect(2147483647px 1px 1px 1px)", "1", "~", "rect(2.14748e+09px, 1px, 1px, 1px)", "rect(3.35544e+07px, 1px, 1px, 1px)"],
+  ["clip", "rect(16777215px 16777216px 16777217px 33554431px)", "1", "~", "rect(1.67772e+07px, 1.67772e+07px, 1.67772e+07px, 3.35544e+07px)", "rect(1.67772e+07px, 1.67772e+07px, 1.67772e+07px, 3.35544e+07px)"],
+  ["clip", "rect(33554432px 33554433px 100000000px 100000000000px)", "1", "~", "rect(3.35544e+07px, 3.35544e+07px, 1e+08px, 1e+11px)", "rect(3.35544e+07px, 3.35544e+07px, 3.35544e+07px, 3.35544e+07px)"],
+  ["clip", "rect(-2147483647px -1px -1px -1px)", "1", "~", "rect(-2.14748e+09px, -1px, -1px, -1px)", "rect(-3.35544e+07px, -1px, -1px, -1px)"],
+  ["clip", "rect(-33554433px 1px 1px 1px)", "1", "~", "rect(-3.35544e+07px, 1px, 1px, 1px)", "rect(-3.35544e+07px, 1px, 1px, 1px)"],
+  ["width", "2147483647px", "1", "~", "2.14748e+09px", "3.35544e+07px"],
+  ["font-size", "2147483647px", "1", "~", "2.14748e+09px", "10000px"],
+  ["line-height", "2147483647px", "1", "~", "2.14748e+09px", "3.35544e+07px"],
+  ["border-width", "2147483647px", "1", "~", "2.14748e+09px", "0px"],
+  ["outline-width", "2147483647px", "1", "~", "2.14748e+09px", "3.35544e+07px"],
+  ["letter-spacing", "2147483647px", "1", "~", "2.14748e+09px", "3.35544e+07px"],
+  ["text-indent", "2147483647px", "1", "~", "2.14748e+09px", "3.35544e+07px"],
+  ["translate", "2147483647px", "1", "~", "2.14748e+09px", "3.35544e+07px"],
+  ["transform", "translateX(2147483647px)", "1", "~", "translateX(2.14748e+09px)", "matrix(1, 0, 0, 1, 3.35544e+07, 0)"],
+  ["padding-left", "2147483647px", "1", "~", "2.14748e+09px", "3.35544e+07px"],
+  ["inset-inline-start", "2147483647px", "1", "~", "2.14748e+09px", "3.35544e+07px"],
+  ["background-position-x", "2147483647px", "1", "~", "2.14748e+09px", "3.35544e+07px"],
+  ["border-radius", "2147483647px", "1", "~", "2.14748e+09px", "3.35544e+07px"],
+  ["clip", "rect(1e30px 1px 1px 1px)", "1", "~", "rect(1e+30px, 1px, 1px, 1px)", "rect(3.35544e+07px, 1px, 1px, 1px)"],
+  ["clip", "rect(infinity 1px 1px 1px)", "0", "~", "", "auto"],
+  ["width", "999999px", "1", "~", "999999px", "999999px"],
+  ["width", "1000000px", "1", "~", "1e+06px", "1e+06px"],
+  ["width", "123456px", "1", "~", "123456px", "123456px"],
+  ["width", "1234567px", "1", "~", "1.23457e+06px", "1.23457e+06px"],
+  ["margin-left", "1.0000001px", "~", "~", "1px", "1px"],
+  ["margin-left", "1.0000004px", "~", "~", "1px", "1px"],
+  ["margin-left", "1.0000005px", "~", "~", "1px", "1px"],
+  ["margin-left", "1.0000014px", "~", "~", "1px", "1px"],
+  ["margin-left", "1.9999994px", "~", "~", "2px", "2px"],
+  ["margin-left", "1.9999995px", "~", "~", "2px", "2px"],
+  ["margin-left", "0.19999994px", "~", "~", "~", "~"],
+  ["margin-left", "0.19999995px", "~", "~", "~", "~"],
+  ["margin-left", "0.01234565001px", "~", "~", "~", "~"],
+  ["margin-left", "0.000199999px", "~", "~", "~", "~"],
+  ["margin-left", "0.0001234567px", "~", "~", "~", "~"],
+  ["margin-left", "0.0000999999px", "~", "~", "~", "~"],
+  ["margin-left", "0.00000001234px", "~", "~", "~", "~"],
+  ["margin-left", "9999999px", "~", "~", "1e+07px", "1e+07px"],
+  ["margin-left", "123456789012345px", "~", "~", "1.23457e+14px", "3.35544e+07px"],
+  ["margin-left", "0.5px", "~", "~", "0.5px", "0.5px"],
+  ["margin-left", "16.666666px", "~", "~", "16.6667px", "16.6667px"],
+  ["margin-left", "2px", "~", "~", "2px", "2px"],
+  ["margin-left", "2.0px", "~", "~", "2px", "2px"],
+  ["margin-left", "2.00px", "~", "~", "2px", "2px"],
+  ["margin-left", "-0.000123456789px", "~", "~", "~", "~"],
+  ["margin-left", "-1.23456789px", "~", "~", "~", "~"]
+];
+
+// The layout box a clip must NOT change: the rect cuts the painting, and the geometry stays where
+// the page put it. These are the boxes' own numbers, read back as an offset from #stage.
+var GUARDS = [
+  ['g-1', 0, 70, 80, 40], ['g-2', 90, 70, 80, 80], ['g-3', 160, 70, 60, 40],
+  ['g-4', 230, 70, 40, 40], ['g-5', 0, 120, 80, 40], ['g-6', 90, 120, 60, 60],
+  ['g-7', 160, 120, 60, 60], ['g-8', 230, 120, 90, 40]
+];
+
+var stage = document.getElementById('stage');
+var out = [], pass = 0, fail = 0;
+
+function check(got, want, label) {
+  if (want === '~') return;
+  if (String(got) === String(want)) pass++;
+  else { fail++; out.push('FAIL ' + label + ' want=' + JSON.stringify(want)
+                        + ' got=' + JSON.stringify(String(got))); }
+}
+
+var sr = stage.getBoundingClientRect();
+function measure(prop, value) {
+  // The probe pages left a fresh div at the document's own 16px font; this page sets a 14px body
+  // for its report, so the row is measured inside a holder that names the font the want cells were
+  // read in — a 'line-height: 2' or an 'em' side of a rect has one answer only when both engines
+  // know which font priced it. The font goes on the holder and not on the element, because a
+  // declaration of its own would be counted in the longhand total and would answer for a refused
+  // 'font-size' of its own.
+  var holder = document.createElement('div');
+  holder.style.fontSize = '16px';
+  // …and the line the report's own 18px would have handed down, because a refused 'line-height'
+  // reads back the keyword the reference engine's document had, not this page's.
+  holder.style.lineHeight = 'normal';
+  var el = document.createElement('div');
+  holder.appendChild(el);
+  stage.appendChild(holder);
+  var sup = CSS.supports(prop, value) ? 1 : 0;
+  el.style.setProperty(prop, value);
+  var n = sup ? el.style.length : 0;
+  var echo = el.style.getPropertyValue(prop);
+  var comp = String(getComputedStyle(el).getPropertyValue(prop));
+  holder.remove();
+  return { sup: sup, n: n, echo: echo, comp: comp };
+}
+
+var index = 0;
+for (var i = 0; i < ROWS.length; i++) {
+  var row = ROWS[i];
+  var prop = row[0], value = row[1];
+  var wantSup = row[2], wantN = row[3], wantEcho = row[4], wantComp = row[5];
+  var wantPar = row.length > 6 ? row[6] : null;
+  if (prop === 'clip-inherited') {
+    var par = document.createElement('div');
+    var kid = document.createElement('div');
+    par.appendChild(kid);
+    stage.appendChild(par);
+    par.style.setProperty('clip', value);
+    var parGot = String(getComputedStyle(par).getPropertyValue('clip'));
+    var kidGot = String(getComputedStyle(kid).getPropertyValue('clip'));
+    check(kidGot, wantComp, 'row ' + index + ' clip-inherited [comp]');
+    check(parGot, wantPar, 'row ' + index + ' clip-inherited [par]');
+    par.remove();
+    index++;
+    continue;
+  }
+  var got = measure(prop, value);
+  check(got.sup, wantSup, 'row ' + index + ' ' + prop + ': ' + value + ' [sup]');
+  check(got.n, wantN, 'row ' + index + ' ' + prop + ': ' + value + ' [n]');
+  check(got.echo, wantEcho, 'row ' + index + ' ' + prop + ': ' + value + ' [echo]');
+  check(got.comp, wantComp, 'row ' + index + ' ' + prop + ': ' + value + ' [comp]');
+  index++;
+}
+
+// The geometry of the paint boxes, the one part of a clip a script can read in both engines.
+for (var g = 0; g < GUARDS.length; g++) {
+  var id = GUARDS[g][0];
+  var box = document.getElementById(id).getBoundingClientRect();
+  var dx = Math.round(box.left - sr.left), dy = Math.round(box.top - sr.top);
+  check(dx, GUARDS[g][1], id + ' [dx]');
+  check(dy, GUARDS[g][2], id + ' [dy]');
+  check(Math.round(box.width), GUARDS[g][3], id + ' [w]');
+  check(Math.round(box.height), GUARDS[g][4], id + ' [h]');
+}
+
+out.push((fail === 0 ? 'ALLPASS' : 'FAIL') + ' b295: ' + pass + '/' + (pass + fail)
+         + ' cells pass (' + index + ' rows, ' + GUARDS.length + ' guards)');
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+window.GUARDS = JSON.stringify(GUARDS);
+</script>
+</body></html>

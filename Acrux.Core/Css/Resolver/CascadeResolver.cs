@@ -753,7 +753,7 @@ public class CascadeResolver
         {
             var v = CssFunctionEvaluator.Evaluate(fontWeightVal, element, style.FontSize, RootFontSize(), _viewportWidth, _viewportHeight);
             if (!TryApplyCssWideKeyword(style, "font-weight", v, parentStyle))
-                style.FontWeight = ParseFontWeight(v);
+                CssPropertyApplier.ApplyFontWeight(style, v);
         }
 
         if (_cascadeMap.TryGetValue("font-style", out var fontStyleVal))

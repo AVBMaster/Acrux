@@ -1,0 +1,77 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b295 big length probe</title></head>
+<body>
+<div id="host"></div>
+<script>
+// How far a computed length is allowed to go. A number the property can hold is not a number the
+// engine can lay out, and the question this page answers is where the reference engine stops
+// printing the author's number and starts printing its own ceiling — and whether the ceiling is a
+// property rule at all, or one rule the whole computed surface shares.
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+let index = 0;
+
+function one(prop, value) {
+  const el = document.createElement('div');
+  host.appendChild(el);
+  el.style.setProperty(prop, value);
+  rows.push(index + '|' + prop + '|' + value
+      + '|sup=' + (CSS.supports(prop, value) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(prop)
+      + '|comp=' + getComputedStyle(el).getPropertyValue(prop));
+  index++;
+}
+
+one('clip', 'rect(2147483647px 1px 1px 1px)');
+one('clip', 'rect(16777215px 16777216px 16777217px 33554431px)');
+one('clip', 'rect(33554432px 33554433px 100000000px 100000000000px)');
+one('clip', 'rect(-2147483647px -1px -1px -1px)');
+one('clip', 'rect(-33554433px 1px 1px 1px)');
+one('width', '2147483647px');
+one('width', '33554432px');
+one('width', '100000000px');
+one('height', '2147483647px');
+one('margin-left', '2147483647px');
+one('top', '2147483647px');
+one('font-size', '2147483647px');
+one('line-height', '2147483647px');
+one('border-width', '2147483647px');
+one('outline-width', '2147483647px');
+one('letter-spacing', '2147483647px');
+one('text-indent', '2147483647px');
+one('translate', '2147483647px');
+one('transform', 'translateX(2147483647px)');
+one('padding-left', '2147483647px');
+one('inset-inline-start', '2147483647px');
+one('background-position-x', '2147483647px');
+one('border-radius', '2147483647px');
+one('clip', 'rect(1e30px 1px 1px 1px)');
+one('clip', 'rect(infinity 1px 1px 1px)');
+one('width', '1e30px');
+
+// Where the six-significant-digit printing switches to an exponent, and what it does with a
+// number that has more digits than the print can carry.
+one('width', '999999px');
+one('width', '1000000px');
+one('width', '123456px');
+one('width', '1234567px');
+one('width', '12345.678px');
+one('width', '1.9999999px');
+one('width', '0.123456789px');
+one('width', '0.000123456px');
+one('width', '0.000012345px');
+one('width', '1e-7px');
+one('width', '-2147483647px');
+one('width', '-1234567px');
+one('margin-left', '999999.5px');
+one('margin-left', '0.000001px');
+one('margin-left', '-0.000001px');
+
+window.__probe = rows.join('\n');
+console.log(window.__probe);
+}
+build();
+</script>
+</body></html>

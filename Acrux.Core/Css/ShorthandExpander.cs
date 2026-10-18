@@ -945,17 +945,34 @@ public static class ShorthandExpander
         foreach (var layer in layers)
         {
             var parts = new List<string>(7);
-            if (layer.Image.Length > 0) parts.Add(layer.Image);
+            // 'none' is what a mask layer's image is with nothing written on it, and the reference
+            // engine leaves it out: 'mask: 1px' reads back the position alone, and only a layer with
+            // nothing at all to say falls back to the word (all measured).
+            if (layer.Image.Length > 0 && !layer.Image.Equals("none", StringComparison.OrdinalIgnoreCase))
+                parts.Add(layer.Image);
+            // The size says nothing when it says what a mask layer means without it, and the slash
+            // that introduced it goes with it (measured: 'mask: url(a.png) 1px / auto' reads back
+            // 'url("a.png") 1px center', while '… 50% / auto 1px' keeps both of its size terms).
+            var size = layer.Size != null
+                && !layer.Size.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase)
+                ? layer.Size : null;
             if (layer.Position != null)
             {
                 var position = PositionPairText(layer.Position) ?? layer.Position;
-                parts.Add(layer.Size != null ? position + " / " + layer.Size : position);
+                parts.Add(size != null ? position + " / " + size : position);
             }
             if (layer.Repeat != null && !Acrux.Core.Css.MaskLayerParser.RepeatIsInitial(layer.Repeat))
                 parts.Add(layer.Repeat);
             AddMaskBoxParts(parts, layer);
-            if (layer.Composite != null) parts.Add(layer.Composite);
-            if (layer.Mode != null) parts.Add(layer.Mode);
+            // 'add' and 'match-source' are the composite and the mode a layer means with no word
+            // saying them, so neither is written down (measured: 'mask: url(a.png) add' reads back
+            // the image alone while '… intersect' and '… luminance' each keep their word).
+            if (layer.Composite != null
+                && !layer.Composite.Trim().Equals("add", StringComparison.OrdinalIgnoreCase))
+                parts.Add(layer.Composite);
+            if (layer.Mode != null
+                && !layer.Mode.Trim().Equals("match-source", StringComparison.OrdinalIgnoreCase))
+                parts.Add(layer.Mode);
             printed.Add(parts.Count > 0 ? string.Join(" ", parts) : "none");
         }
         return string.Join(", ", printed);
@@ -1102,6 +1119,68 @@ public static class ShorthandExpander
         "place-items" => new[] { "align-items", "justify-items" },
         "place-content" => new[] { "align-content", "justify-content" },
         "place-self" => new[] { "align-self", "justify-self" },
+        // CSS Logical 1 §4 with CSS 2.1 §17.2: the four logical border shorthands and the physical
+        // side each count the longhands they write, and the two-axis ones group them by side and
+        // then by component — width, width, style, style, colour, colour — which is the order the
+        // reference engine enumerates them in, not the order the longhands are named after
+        // (measured, every name read back through style.item(i): 'border-block: 1px solid red' has
+        // length 6 with item(0) 'border-block-start-width' and item(1) 'border-block-end-width').
+        "border-block" => new[] { "border-block-start-width", "border-block-end-width",
+            "border-block-start-style", "border-block-end-style",
+            "border-block-start-color", "border-block-end-color" },
+        "border-inline" => new[] { "border-inline-start-width", "border-inline-end-width",
+            "border-inline-start-style", "border-inline-end-style",
+            "border-inline-start-color", "border-inline-end-color" },
+        "border-block-start" => new[] { "border-block-start-width", "border-block-start-style",
+            "border-block-start-color" },
+        "border-block-end" => new[] { "border-block-end-width", "border-block-end-style",
+            "border-block-end-color" },
+        "border-inline-start" => new[] { "border-inline-start-width", "border-inline-start-style",
+            "border-inline-start-color" },
+        "border-inline-end" => new[] { "border-inline-end-width", "border-inline-end-style",
+            "border-inline-end-color" },
+        "border-top" => new[] { "border-top-width", "border-top-style", "border-top-color" },
+        "border-right" => new[] { "border-right-width", "border-right-style", "border-right-color" },
+        "border-bottom" => new[] { "border-bottom-width", "border-bottom-style",
+            "border-bottom-color" },
+        "border-left" => new[] { "border-left-width", "border-left-style", "border-left-color" },
+        // CSS Multi-column 1 §6: the rule's three parts, in the order the engine enumerates them
+        // (measured: 'column-rule: 1px' has length 3).
+        "column-rule" => new[] { "column-rule-width", "column-rule-style", "column-rule-color" },
+        // CSS Fonts 4 §8.7: the shorthand enumerates the seven variant families it writes, in the
+        // order the reference engine lists them (measured: 'font-variant: small-caps' has length 7
+        // and item(0) is 'font-variant-ligatures').
+        "font-variant" => new[] { "font-variant-ligatures", "font-variant-numeric",
+            "font-variant-east-asian", "font-variant-caps", "font-variant-alternates",
+            "font-variant-position", "font-variant-emoji" },
+        // CSS Fonts 4 §8.12: the three synthesis axes (measured: length 3, weight first).
+        "font-synthesis" => new[] { "font-synthesis-weight", "font-synthesis-style",
+            "font-synthesis-small-caps" },
+        // CSS Motion Path 1 §2: the five parts of the offset shorthand, with the position the
+        // page did not write still enumerated (measured: 'offset: path("M0 0")' has length 5).
+        "offset" => new[] { "offset-position", "offset-path", "offset-distance",
+            "offset-rotate", "offset-anchor" },
+        // CSS Masking 1 §9.1: the mask position is the pair of axes the background position is,
+        // and the engine lists them under their prefixed names (measured: 'mask-position: 1px' has
+        // length 2, item(0) '-webkit-mask-position-x').
+        "mask-position" => new[] { "-webkit-mask-position-x", "-webkit-mask-position-y" },
+        // CSS Grid 1 §7.2 (the legacy gap pair): the two axes, row first (measured: 'grid-gap' has
+        // length 2, item(0) 'row-gap').
+        "grid-gap" => new[] { "row-gap", "column-gap" },
+        // Scroll-driven animations 1 §3: the range pair counts its two edges, whichever of them the
+        // page said (measured: 'animation-range: 1px' has length 2, item(0) 'animation-range-start').
+        "animation-range" => new[] { "animation-range-start", "animation-range-end" },
+        // CSS Logical 1 §4: each component of the logical border pair counts the two edges it
+        // writes, whichever of them the page named (measured: 'border-block-style: solid' has
+        // length 2, item(0) 'border-block-start-style').
+        "border-block-style" => new[] { "border-block-start-style", "border-block-end-style" },
+        "border-block-width" => new[] { "border-block-start-width", "border-block-end-width" },
+        "border-block-color" => new[] { "border-block-start-color", "border-block-end-color" },
+        "border-inline-style" => new[] { "border-inline-start-style", "border-inline-end-style" },
+        "border-inline-width" => new[] { "border-inline-start-width", "border-inline-end-width" },
+        "border-inline-color" => new[] { "border-inline-start-color", "border-inline-end-color" },
+        "grid-column-gap" => new[] { "column-gap" },
+        "grid-row-gap" => new[] { "row-gap" },
         "background-position" => new[] { "background-position-x", "background-position-y" },
         "background" => new[] {
             "background-image", "background-position-x", "background-position-y", "background-size",
@@ -1948,7 +2027,9 @@ public static class ShorthandExpander
             directions.Add(part[4].Length > 0 ? part[4] : "normal");
             fills.Add(part[5].Length > 0 ? part[5] : "none");
             plays.Add(part[6].Length > 0 ? part[6] : "running");
-            names.Add(part[7].Length > 0 ? part[7] : "none");
+            // A quoted name is the same keyframe set the ident names, and every surface prints the
+            // ident (measured: 'animation: "slide"' names 'slide').
+            names.Add(part[7].Length > 0 ? CssValueText.UnquoteNameList(part[7]) : "none");
         }
 
         result["animation-name"] = string.Join(", ", names);
@@ -2022,11 +2103,11 @@ public static class ShorthandExpander
                 else if (p is "normal" or "reverse" or "alternate" or "alternate-reverse") slot[4] = p;
                 else if (p is "running" or "paused") slot[6] = p;
                 else if (p == "none" && !nameSeen) { slot[7] = p; nameSeen = true; }
-                else if (p is "none" or "forwards" or "backwards" or "both")
-                {
-                    slot[5] = p;
-                    nameSeen = true;
-                }
+                // A fill word claims its own slot and says nothing about the name: 'none' is the
+                // name the entry has when no ident follows, so 'both' must not be what makes the
+                // 'none' behind it a fill (measured: 'animation: both' names nothing and fills with
+                // 'both', while 'animation: f 1s none' names f and fills with 'none').
+                else if (p is "none" or "forwards" or "backwards" or "both") slot[5] = p;
                 else { slot[7] = text; nameSeen = true; }
             }
             parts.Add(slot);
@@ -2434,7 +2515,10 @@ public static class ShorthandExpander
             }
             styleWords.Add(p);
         }
-        if (styleWords.Count == 0) return null;
+        // A colour on its own is the shorthand's own value: the mark stays 'none' and only the
+        // colour is said (measured: 'text-emphasis: red' reads back 'red' and computes
+        // 'none rgb(255, 0, 0)').
+        if (styleWords.Count == 0) return colour == null ? null : ("none", colour);
         var style = ParseEmphasisStyle(string.Join(" ", styleWords));
         return style == null ? null : (style, colour);
     }
@@ -2649,23 +2733,35 @@ public static class ShorthandExpander
         if (tokens.Count == 0) return;
         int index = 0;
 
-        // Where the path starts is the one part written in front of it, and it is the keywords that
-        // name an edge, or 'auto'/'normal': a length in this position is the distance along the
-        // path, and an angle is the rotation at the end of it.
+        // Which slot a length lands in is decided by whether the path has been written yet: the
+        // one or two tokens in front of it are the position the path starts at, and the one behind
+        // it is the distance along it (measured: 'offset: 1px' reads '1px center' — the pair the
+        // position prints — while 'offset: path("M0 0") 1px' leaves the position at 'normal' and
+        // puts the 1px on the distance; 'offset: 1px 2px 3px' is three lengths in front of any path
+        // and a position is at most two).
         string? position = null;
-        if (IsOneOfKeyword(tokens[index], "auto", "normal"))
+        var head = new List<string>();
+        if (IsOneOfKeyword(tokens[index], "auto", "normal")
+            || IsOneOfKeyword(tokens[index], PositionEdgeKeywords)
+            || Css.CssValueGrammar.IsLengthPercentageOrMath(tokens[index]))
         {
-            position = tokens[index];
-            index = 1;
-        }
-        else
-        {
-            int run = index;
-            while (run < tokens.Count && IsOneOfKeyword(tokens[run], PositionEdgeKeywords)) run++;
-            if (run > index)
+            // The position is one or two axes, or the four-token edge syntax that names both of
+            // them with their offsets (measured: 'offset: left 10px top 20px' stands and
+            // 'offset: 1px 2px 3px' does not).
+            while (index < tokens.Count
+                && (IsOneOfKeyword(tokens[index], PositionEdgeKeywords)
+                    || Css.CssValueGrammar.IsLengthPercentageOrMath(tokens[index]))
+                && head.Count < 4)
             {
-                position = string.Join(" ", tokens.GetRange(index, run - index));
-                index = run;
+                head.Add(tokens[index]);
+                index++;
+            }
+            if (head.Count == 3) return;
+            if (head.Count > 0) position = string.Join(" ", head);
+            else if (IsOneOfKeyword(tokens[index], "auto", "normal"))
+            {
+                position = tokens[index];
+                index++;
             }
         }
 
@@ -2674,10 +2770,14 @@ public static class ShorthandExpander
         for (; index < tokens.Count; index++)
         {
             var token = tokens[index];
+            if (token == "/") continue;
             if (IsOneOfKeyword(token, "none")
                 || Acrux.Core.Css.Resolver.EchoedProperties.IsOffsetBoxKeyword(token)
                 || Acrux.Core.Css.Resolver.EchoedProperties.IsOffsetPathShape(token))
             {
+                // A path is one shape, and no second shape has a reading — which is also why a
+                // length written after a second one would have nowhere to be counted from.
+                if (shape.Count > 0) return;
                 shape.Add(token);
                 continue;
             }
@@ -2689,13 +2789,18 @@ public static class ShorthandExpander
                 continue;
             }
             if (distance == null && !IsOffsetAngle(token)
-                && Acrux.Core.Css.Resolver.CssPropertyApplier.IsLengthOrPercentageToken(token))
+                && Css.CssValueGrammar.IsLengthPercentageOrMath(token)
+                && shape.Count > 0)
             {
                 distance = token;
                 continue;
             }
             return;
         }
+        // A length in front of no path is a position, and a position with no path beside it is the
+        // whole of what 'offset: 1px 2px' says; a rotation written where the position belongs has
+        // no reading either ('offset: 45deg' and 'offset: normal 1px' are each dropped, measured).
+        if (shape.Count == 0 && rotate != null) return;
 
         // Each part is echoed by the longhand that owns it, so a second shape, a second distance or
         // a rotation spelled twice is refused here exactly as it is on the longhand.

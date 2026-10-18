@@ -125,6 +125,9 @@ public class StyleResolver
         // whose document element was never reached — fixes it for every element after it.
         if (ReferenceEquals(element, _rootElement)) _rootFontSize = style.FontSize;
         style.RootFontSize = _rootFontSize;
+        // A computed length is absolute (CSS Values 3 §7), and the layout reads the style on that
+        // assumption: a box field still holding an 'em' or a 'rem' is a box field it does not see.
+        style.ResolveDefiniteLengths();
 
         return style;
     }

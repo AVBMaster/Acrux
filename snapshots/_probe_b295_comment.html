@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b295 comment probe</title></head>
+<body>
+<div id="host"></div>
+<script>
+// Comments in a declaration value, asked through the CSSOM rather than a stylesheet: the parser of
+// a 'style' attribute is given the author's text, and the question is whether the engine throws a
+// comment away as nothing at all or as the whitespace CSS Syntax 3 §4 says it stands for. The two
+// answers differ for '1px/*c*/2px', and they differ again for a comment that never closes.
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+let index = 0;
+
+function one(prop, value) {
+  const el = document.createElement('div');
+  host.appendChild(el);
+  const sup = CSS.supports(prop, value) ? 1 : 0;
+  el.style.setProperty(prop, value);
+  const n = sup ? el.style.length : 0;
+  rows.push(index + '|' + prop + '|' + value
+      + '|sup=' + sup + '|n=' + n
+      + '|echo=' + el.style.getPropertyValue(prop)
+      + '|comp=' + getComputedStyle(el).getPropertyValue(prop)
+      + '|css=' + el.getAttribute('style'));
+  index++;
+}
+
+one('clip', 'rect(0px 0px 0px 0px) /* x */');
+one('clip', '/* x */ rect(0px 0px 0px 0px)');
+one('clip', 'rect(0px /*x*/ 0px 0px 0px)');
+one('clip', 'rect(0px/*x*/0px 0px 0px)');
+one('clip', 'rect(0px 0px 0px 0px) /* x');
+one('width', '10px /* x */');
+one('width', '10px/*x*/');
+one('margin', '1px/*c*/2px');
+one('margin', '1px /*c*/ 2px');
+one('background-color', 'rgb(1/*x*/,2/*x*/,3)');
+one('color', 'red /* x */');
+one('content', '"/*"');
+one('border-width', 'thin/*x*/thick');
+one('padding', '1px /*c*/ 2px 3px');
+one('font', '12px/*x*/ serif');
+one('grid-template-columns', '10px/*c*/20px');
+one('transition', 'all 1s/*c*/ease');
+one('line-height', '/*x*/2');
+one('width', '/*x*/');
+one('width', 'calc(1px/*c*/+ 2px)');
+
+window.__probe = rows.join('\n');
+console.log(window.__probe);
+}
+build();
+</script>
+</body></html>

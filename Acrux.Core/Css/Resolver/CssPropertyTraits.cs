@@ -215,9 +215,16 @@ public static class CssPropertyTraits
         ["-webkit-mask-box-image-width"] = ("auto", false),
         ["-webkit-tap-highlight-color"] = ("rgba(0, 0, 0, 0.18)", true),
         ["-webkit-text-decorations-in-effect"] = ("none", false),
+        // CSS Writing Modes 3 §5.4 in its prefixed spelling: this name has its own initial, and it
+        // is not the modern property's. 'text-orientation' begins at 'mixed'; the legacy name
+        // begins at 'vertical-right', runs down the tree like the text property it is, and folds the
+        // long sideways spelling onto the short one on the computed surface (all measured: 'upright'
+        // says 'upright' on the element and on its child, 'sideways-right' and 'sideways' both say
+        // 'sideways', and a box that wrote nothing says 'vertical-right').
         // Both of these are painted with the text colour when the page wrote nothing, so their
         // initial is 'currentcolor' rather than a number (measured on a box whose colour is
         // rgb(9,9,9): both compute 'rgb(9, 9, 9)'; the ComputedValueSerializer reads the sentinel).
+        ["-webkit-text-orientation"] = ("vertical-right", true),
         ["-webkit-text-fill-color"] = ("currentcolor", true),
         // The stroke always answers both halves, so its initial says both of them and the colour
         // half carries the same 'currentcolor' sentinel the serializer reads (measured: a box that
@@ -263,6 +270,10 @@ public static class CssPropertyTraits
                 "block-axis" => "vertical",
                 _ => declared,
             };
+        // The prefixed orientation says its long sideways spelling with the short word
+        // (measured: '-webkit-text-orientation: sideways-right' computes 'sideways').
+        if (name.Equals("-webkit-text-orientation", StringComparison.OrdinalIgnoreCase))
+            return declared.Trim().ToLowerInvariant() == "sideways-right" ? "sideways" : declared;
         if (!name.Equals("-webkit-box-reflect", StringComparison.OrdinalIgnoreCase)) return declared;
         var words = declared.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
         bool direction = words.Length > 0 && words[0] is "above" or "below" or "left" or "right";
@@ -456,7 +467,13 @@ public static class CssPropertyTraits
             case "background-image": to.BackgroundImage = from.BackgroundImage; break;
             case "font-family": to.FontFamily = from.FontFamily; break;
             case "font-size": to.FontSize = from.FontSize; break;
-            case "font-weight": to.FontWeight = from.FontWeight; break;
+            case "font-weight":
+                to.FontWeight = from.FontWeight;
+                // The number the computed value says travels with the step the face selection
+                // chose, or an inherited '550' would print as the enum rounded it.
+                to.FontWeightNumber = from.FontWeightNumber;
+                to.InheritedFontWeightNumber = from.FontWeightNumber;
+                break;
             case "font-style": to.FontStyle = from.FontStyle; break;
             case "line-height":
                 to.LineHeight = from.LineHeight;
@@ -507,6 +524,10 @@ public static class CssPropertyTraits
             case "contain": to.Contain = from.Contain; break;
             case "content-visibility": to.ContentVisibility = from.ContentVisibility; break;
             case "field-sizing": to.FieldSizing = from.FieldSizing; break;
+            // CSS MathML Core §5.3: both are inherited, so a maths element that says 'compact'
+            // passes it down the tree the way the reference engine does (measured).
+            case "math-style": to.MathStyle = from.MathStyle; break;
+            case "math-shift": to.MathShift = from.MathShift; break;
             case "contain-intrinsic-size":
                 to.ContainIntrinsicWidth = from.ContainIntrinsicWidth;
                 to.ContainIntrinsicWidthIsAuto = from.ContainIntrinsicWidthIsAuto;

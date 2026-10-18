@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="html"><head><meta charset="utf-8">
+<title>css-standard-verify295 &#8212; the rect a box is cut to, the comment a value carries and the number a length stops at</title>
+<style>
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 8px; background: rgb(255,255,255); }
+h2 { font-size: 15px; margin: 12px 0 4px; }
+/* Every paint box says its own size, so the region a clip leaves is the same number in two
+ * engines that have different viewports, and the root font is named because an 'em' side of a
+ * clip has one answer only when both engines know the number it is a share of. */
+html { font-size: 16px; }
+#stage { position: relative; width: 420px; height: 330px; }
+#stage > div { position: absolute; }
+/* The legacy rect takes its four sides from the top-left corner of the border box: 'right' is a
+ * distance from the LEFT edge, not an inset from the right (CSS 2.1 §11.1.2). */
+#g-1 { left: 0; top: 70px; width: 80px; height: 40px; background: rgb(0,0,255);
+       clip: rect(0px 20px 40px 0px); }
+/* A border is inside the rect, so a rect narrower than the box cuts the border ring as well. */
+#g-2 { left: 90px; top: 70px; width: 60px; height: 60px; background: rgb(255,128,128);
+       border: 10px solid rgb(0,0,128); clip: rect(10px 50px 50px 10px); }
+/* 'auto' is the edge the side names, and nothing else moves. */
+#g-3 { left: 160px; top: 70px; width: 60px; height: 40px; background: rgb(0,128,0);
+       clip: rect(auto 20px auto auto); }
+/* A rectangle turned inside out paints nothing at all. */
+#g-4 { left: 230px; top: 70px; width: 40px; height: 40px; background: rgb(255,0,255);
+       clip: rect(30px 10px 10px 30px); }
+/* A box that stays in the flow carries the value and paints as though it did not. The rule has to
+ * out-specify '#stage > div' above, or the box is taken out of the flow by that one and the guard
+ * measures the wrong thing. */
+#stage > div#g-5 { position: relative; left: 0; top: 120px; width: 80px; height: 40px;
+       background: rgb(0,0,255); clip: rect(0px 20px 40px 0px); }
+/* The rect and a clip-path on one box clip the same region twice: what is left is their share. */
+#g-6 { left: 90px; top: 120px; width: 60px; height: 60px; background: rgb(255,128,0);
+       clip: rect(0px 60px 30px 0px); clip-path: inset(0 30px 0 0); }
+/* The clip covers the subtree, not only the box's own paint. */
+#g-7 { left: 160px; top: 120px; width: 60px; height: 60px; background: rgb(128,128,128);
+       clip: rect(0px 30px 60px 0px); }
+#g-7 > div { position: static; margin: 0; width: 60px; height: 20px; background: rgb(0,0,0); }
+/* A side written in 'em' is priced in the element's own font, and the text inside the box is
+ * clipped by the rect like any other paint. */
+#g-8 { left: 230px; top: 120px; width: 90px; height: 40px; font: 14px monospace;
+       color: rgb(9,9,9); background: rgb(230,230,230); clip: rect(0.5em 3.5em 40px 0px); }
+#report { font: 14px/18px monospace; white-space: pre; }
+</style></head><body>
+<h2>the region a clip leaves, the text a comment leaves and the number a length leaves</h2>
+<div id="stage">
+  <div id="g-1"></div>
+  <div id="g-2"></div>
+  <div id="g-3"></div>
+  <div id="g-4"></div>
+  <div id="g-5"></div>
+  <div id="g-6"></div>
+  <div id="g-7"><div></div></div>
+  <div id="g-8">clip clip clip</div>
+</div>
+<div id="report"></div>
+<script>
+// Every want cell below is a transcription of what the reference engine printed for the same row
+// (snapshots/out/_b295_ref_probeClip.txt, _b295_ref_comment.txt, _b295_ref_number.txt,
+// _b295_ref_biglength.txt and _b295_ref_digits.txt); nothing here is derived from a rule. A cell
+// the reference answers with data this engine does not have is marked '~' and filed as a gap.
+var ROWS = [
+@@ROWS@@
+];
+
+// The layout box a clip must NOT change: the rect cuts the painting, and the geometry stays where
+// the page put it. These are the boxes' own numbers, read back as an offset from #stage.
+var GUARDS = [
+  ['g-1', 0, 70, 80, 40], ['g-2', 90, 70, 80, 80], ['g-3', 160, 70, 60, 40],
+  ['g-4', 230, 70, 40, 40], ['g-5', 0, 120, 80, 40], ['g-6', 90, 120, 60, 60],
+  ['g-7', 160, 120, 60, 60], ['g-8', 230, 120, 90, 40]
+];
+
+var stage = document.getElementById('stage');
+var out = [], pass = 0, fail = 0;
+
+function check(got, want, label) {
+  if (want === '~') return;
+  if (String(got) === String(want)) pass++;
+  else { fail++; out.push('FAIL ' + label + ' want=' + JSON.stringify(want)
+                        + ' got=' + JSON.stringify(String(got))); }
+}
+
+var sr = stage.getBoundingClientRect();
+function measure(prop, value) {
+  // The probe pages left a fresh div at the document's own 16px font; this page sets a 14px body
+  // for its report, so the row is measured inside a holder that names the font the want cells were
+  // read in — a 'line-height: 2' or an 'em' side of a rect has one answer only when both engines
+  // know which font priced it. The font goes on the holder and not on the element, because a
+  // declaration of its own would be counted in the longhand total and would answer for a refused
+  // 'font-size' of its own.
+  var holder = document.createElement('div');
+  holder.style.fontSize = '16px';
+  // …and the line the report's own 18px would have handed down, because a refused 'line-height'
+  // reads back the keyword the reference engine's document had, not this page's.
+  holder.style.lineHeight = 'normal';
+  var el = document.createElement('div');
+  holder.appendChild(el);
+  stage.appendChild(holder);
+  var sup = CSS.supports(prop, value) ? 1 : 0;
+  el.style.setProperty(prop, value);
+  var n = sup ? el.style.length : 0;
+  var echo = el.style.getPropertyValue(prop);
+  var comp = String(getComputedStyle(el).getPropertyValue(prop));
+  holder.remove();
+  return { sup: sup, n: n, echo: echo, comp: comp };
+}
+
+var index = 0;
+for (var i = 0; i < ROWS.length; i++) {
+  var row = ROWS[i];
+  var prop = row[0], value = row[1];
+  var wantSup = row[2], wantN = row[3], wantEcho = row[4], wantComp = row[5];
+  var wantPar = row.length > 6 ? row[6] : null;
+  if (prop === 'clip-inherited') {
+    var par = document.createElement('div');
+    var kid = document.createElement('div');
+    par.appendChild(kid);
+    stage.appendChild(par);
+    par.style.setProperty('clip', value);
+    var parGot = String(getComputedStyle(par).getPropertyValue('clip'));
+    var kidGot = String(getComputedStyle(kid).getPropertyValue('clip'));
+    check(kidGot, wantComp, 'row ' + index + ' clip-inherited [comp]');
+    check(parGot, wantPar, 'row ' + index + ' clip-inherited [par]');
+    par.remove();
+    index++;
+    continue;
+  }
+  var got = measure(prop, value);
+  check(got.sup, wantSup, 'row ' + index + ' ' + prop + ': ' + value + ' [sup]');
+  check(got.n, wantN, 'row ' + index + ' ' + prop + ': ' + value + ' [n]');
+  check(got.echo, wantEcho, 'row ' + index + ' ' + prop + ': ' + value + ' [echo]');
+  check(got.comp, wantComp, 'row ' + index + ' ' + prop + ': ' + value + ' [comp]');
+  index++;
+}
+
+// The geometry of the paint boxes, the one part of a clip a script can read in both engines.
+for (var g = 0; g < GUARDS.length; g++) {
+  var id = GUARDS[g][0];
+  var box = document.getElementById(id).getBoundingClientRect();
+  var dx = Math.round(box.left - sr.left), dy = Math.round(box.top - sr.top);
+  check(dx, GUARDS[g][1], id + ' [dx]');
+  check(dy, GUARDS[g][2], id + ' [dy]');
+  check(Math.round(box.width), GUARDS[g][3], id + ' [w]');
+  check(Math.round(box.height), GUARDS[g][4], id + ' [h]');
+}
+
+out.push((fail === 0 ? 'ALLPASS' : 'FAIL') + ' b295: ' + pass + '/' + (pass + fail)
+         + ' cells pass (' + index + ' rows, ' + GUARDS.length + ' guards)');
+document.getElementById('report').textContent = out.join('\n');
+console.log(out.join('\n'));
+window.GUARDS = JSON.stringify(GUARDS);
+</script>
+</body></html>

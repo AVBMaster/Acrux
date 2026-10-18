@@ -91,6 +91,11 @@ public static class MaskLayerParser
                 else if (RepeatKeywords.Contains(lower)) { /* the pair is read by the parser */ }
                 else if (PositionOrSizeWords.Contains(lower) || IsLengthOrPercentageTerm(lower))
                 {
+                    // 'cover', 'contain' and 'auto' are sizes, and a size has no place in front of
+                    // the slash — 'mask: contain' is no mask at all (measured, and the same for
+                    // 'auto' and 'cover'), while 'mask: url(a) center / contain' is one.
+                    if (!afterSlash
+                        && (lower == "cover" || lower == "contain" || lower == "auto")) return false;
                     if (afterSlash) sizeWords++; else positionWords++;
                 }
                 else return false;

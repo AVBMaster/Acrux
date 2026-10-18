@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b294 probe A &#8212; what a font-relative length is worth where a box is measured</title>
+<style>
+/* The root's font and the element's own are deliberately different: 'rem' and 'em' then cannot be
+ * confused for one another, and a path that prices one as the other shows up as a wrong number
+ * rather than as an accident. Every box is inside a stage that states its own size, so a percentage
+ * has the same base in two engines. */
+html { font-size: 16px; }
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 0; background: rgb(255,255,255); }
+#stage { position: relative; width: 200px; height: 100px; }
+#stage > div { position: absolute; left: 0; top: 0; }
+</style></head><body>
+<div id="stage"></div>
+<pre id="report"></pre>
+<script>
+/* One row per (property, value): the box's own rectangle, the property's computed text, and — where
+ * the property is about a box's edge — the offset the rectangle actually took. A layout path that
+ * only recognises a pixel length answers the containing block where the reference answers the unit. */
+var CASES = [
+  "width: 1rem", "width: 1em", "width: 2ex", "width: 1ch", "width: 1vw", "width: 1vh",
+  "width: calc(1rem)", "width: calc(1rem + 1em)", "width: 1lh", "width: 1cap",
+  "height: 1rem", "height: 1em", "height: 2ex", "height: 1lh", "height: calc(1rem)",
+  "min-width: 1rem", "max-width: 1rem", "min-height: 1rem", "max-height: 1rem",
+  "margin-left: 1rem", "margin-top: 1em", "padding-left: 1rem", "padding-top: 1em",
+  "left: 1rem", "top: 1em", "right: 1rem", "bottom: 1em",
+  "border-left-width: 1rem", "border-top-width: 1em",
+  "text-indent: 1rem", "line-height: 1rem", "letter-spacing: 1rem", "word-spacing: 1rem",
+  "vertical-align: 1rem", "flex-basis: 1rem", "column-width: 1rem", "gap: 1rem",
+  "outline-offset: 1rem", "border-radius: 1rem", "translate: 1rem", "inset-inline-start: 1rem",
+  "block-size: 1rem", "inline-size: 1rem", "margin-inline-start: 1rem",
+  "font-size: 1rem", "background-position-x: 1rem", "caret-color: red",
+  "width: 1rem; height: 1rem", "padding: 1rem", "margin: 1rem", "border: 1rem solid rgb(0,0,255)",
+  "inset: 1rem", "gap: 1rem 2rem", "translate: 1rem 2rem", "outline: 1rem solid rgb(255,0,0)",
+  "text-underline-offset: 1rem", "top: calc(1rem + 1em)", "width: 1rem !important"
+];
+var stage = document.getElementById('stage'), out = [];
+for (var i = 0; i < CASES.length; i++) {
+  var d = document.createElement('div');
+  stage.appendChild(d);
+  d.style.cssText = CASES[i];
+  void d.offsetHeight;
+  var r = d.getBoundingClientRect();
+  var s = getComputedStyle(d);
+  var first = CASES[i].split(';')[0];
+  var prop = first.split(':')[0].trim();
+  var value = first.slice(first.indexOf(':') + 1).trim();
+  out.push(i + '|' + prop + '|' + value
+    + '|rect=' + r.width.toFixed(1) + ',' + r.height.toFixed(1) + ',' + r.left.toFixed(1) + ',' + r.top.toFixed(1)
+    + '|comp=' + s.getPropertyValue(prop)
+    + '|scroll=' + d.scrollWidth + ',' + d.scrollHeight);
+}
+text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

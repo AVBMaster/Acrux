@@ -1,0 +1,164 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b294 micro probe</title></head>
+<body>
+<div id="host"></div>
+<script>
+// One page, two engines: every row asks the four questions this round keeps answering from
+// different places — what the grammar says (sup), how many longhands the CSSOM counts (n), how the
+// style attribute echoes (echo) and what the computed value says (comp). A pair of rows that needs
+// an ancestor prints 'par=' and 'kid=' instead.
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+let index = 0;
+
+function cell(d) {
+  return String(d);
+}
+
+function one(label, prop, value, extra) {
+  const el = document.createElement('div');
+  host.appendChild(el);
+  const sup = CSS.supports(prop, value) ? 1 : 0;
+  el.style.setProperty(prop, value);
+  // A refused value never reaches the style attribute, so the count is only read when the grammar
+  // said yes; the echo and the computed value are read either way, because a refused declaration
+  // still leaves the property at its initial value for the computed surface to print.
+  const n = sup ? el.style.length : 0;
+  const echo = el.style.getPropertyValue(prop);
+  const comp = cell(getComputedStyle(el).getPropertyValue(prop));
+  let line = index + '|' + label + '|' + prop + '|' + value +
+      '|sup=' + sup + '|n=' + n + '|echo=' + echo + '|comp=' + comp;
+  if (extra) line += '|' + extra;
+  rows.push(line);
+  index++;
+}
+
+function inherited(label, prop, value) {
+  const par = document.createElement('div');
+  const kid = document.createElement('div');
+  par.appendChild(kid);
+  host.appendChild(par);
+  par.style.setProperty(prop, value);
+  rows.push(index + '|' + label + '|' + prop + '|' + value +
+      '|comp=' + cell(getComputedStyle(kid).getPropertyValue(prop)) +
+      '|par=' + cell(getComputedStyle(par).getPropertyValue(prop)));
+  index++;
+}
+
+const direct = [
+  ['font-weight', 'bolder'], ['font-weight', 'lighter'], ['font-weight', '550'],
+  ['font-stretch', 'normal'], ['font-stretch', 'semi-condensed'], ['font-stretch', '150%'],
+  ['writing-mode', 'tb'], ['writing-mode', 'tb-rl'], ['writing-mode', 'sideways-lr'],
+  ['writing-mode', 'sideways-rl'], ['writing-mode', 'vertical-rl'],
+  ['-webkit-text-orientation', 'upright'], ['-webkit-text-orientation', 'sideways'],
+  ['-webkit-text-orientation', 'sideways-right'], ['-webkit-text-orientation', 'mixed'],
+  ['word-wrap', 'break-word'], ['overflow-wrap', 'normal break-word'], ['overflow-wrap', 'break-word'],
+  ['math-style', 'compact'], ['math-shift', 'superiors'], ['field-sizing', 'content'],
+  ['list-style-type', 'upper-alpha'], ['list-style-type', 'upper-latin'], ['list-style-type', 'urdu'],
+  ['list-style-type', 'auto'], ['list-style-type', 'foo'], ['list-style-type', '"x"'],
+  ['list-style-type', 'none'], ['list-style', 'none none'], ['list-style', 'inside outside'],
+  ['list-style', 'auto'], ['list-style', 'upper-alpha'], ['list-style', 'lower-alpha'],
+  ['list-style-image', 'url(a.png)'], ['list-style-image', 'image-set(url(a.png) 1x)'],
+  ['list-style-image', '-webkit-image-set(url(a.png) 1x)'], ['list-style-image', 'paint(x)'],
+  ['list-style-image', 'linear-gradient(red, blue)'], ['list-style-image', 'url(a.png), url(b.png)'],
+  ['border-image-source', 'image-set(url(a.png) 1x)'],
+  ['border-image-source', '-webkit-image-set(url(a.png) 1x)'],
+  ['background-image', 'image-set(url(a.png) 1x)'],
+  ['mask-image', 'image-set(url(a.png) 1x)'],
+  ['mask-image', '-webkit-image-set(url(a.png) 1x)'],
+  ['mask-image', 'linear-gradient(red, blue)'],
+  ['clip', 'rect(0 0 0 0)'], ['clip', 'rect(0px 1px 2px 3px)'],
+  ['clip', 'rect(auto auto auto auto)'], ['clip', 'rect(0px, 1px, 2px, 3px)'],
+  ['clip', 'rect(1px)'], ['clip', 'auto'],
+  ['border-style', 'hidden'], ['border-top-style', 'hidden'], ['border-block-style', 'hidden'],
+  ['border-inline-style', 'dotted dashed'], ['border-block-color', 'red blue'],
+  ['border-inline-color', 'red blue'], ['border-inline-width', '1px 2px'],
+  ['border-block-width', 'thin thick'], ['column-rule', 'hidden'], ['column-rule', 'url(a.png)'],
+  ['column-rule', '1px solid red'], ['column-rule', 'none'], ['column-rule-style', 'hidden'],
+  ['outline-style', 'hidden'], ['border-end-end-radius', '1px 2px'],
+  ['border-start-start-radius', '50%'], ['border-end-start-radius', '1px'],
+  ['border-start-end-radius', '1px 2px'], ['border-radius', '10px 20px / 30px'],
+  ['border-radius', 'auto'], ['border-radius', 'top left 1px'], ['border-radius', '1px, 2px'],
+  ['border-radius', '50%'], ['border-radius', '1px 2px 3px 4px 5px'],
+  ['mask-clip', 'border-box padding-box'], ['mask-clip', 'padding-box'], ['mask-clip', 'no-clip'],
+  ['mask-clip', 'content-box, border-box'], ['mask-origin', 'border-box padding-box'],
+  ['mask-origin', 'content-box, border-box'], ['mask-clip', 'border'], ['mask-clip', 'fill-box'],
+  ['mask-size', '0'], ['mask-size', 'auto'], ['mask-size', '10px'], ['mask-size', 'cover'],
+  ['mask-position', 'right 1px bottom'], ['mask-position', 'right 1px'],
+  ['mask-position', 'bottom right 1px top 2px'],
+  ['background-position', 'right 1px bottom'], ['background-position', 'left 1px top 2px'],
+  ['color-scheme', 'light only dark'], ['color-scheme', 'only light'],
+  ['color-scheme', 'only light dark'], ['color-scheme', 'light dark only'],
+  ['color-scheme', 'only'], ['color-scheme', 'normal only'], ['color-scheme', 'dark light'],
+  ['color-scheme', 'only dark only light'],
+  ['grid-template-columns', '50%'], ['grid-template-columns', 'min-content'],
+  ['grid-template-columns', 'max-content'], ['grid-template-columns', 'auto'],
+  ['grid-template-columns', '1fr'], ['grid-template-columns', 'calc(10px + 1fr)'],
+  ['grid-template-columns', 'repeat(2, 1fr)'], ['grid-template-columns', 'none'],
+  ['grid-template-columns', '100px 50%'], ['grid-template-columns', 'subgrid'],
+  ['grid-template-rows', '50%'], ['grid', 'none / none'], ['grid-template', 'none / none'],
+  ['grid', '1px / 2px'], ['grid-template', '[a] 1px [b]'],
+  ['grid-gap', 'normal'], ['grid-gap', '1px'], ['grid-gap', '50%'], ['grid-gap', '1px 2px'],
+  ['grid-gap', 'auto'], ['grid-gap', '0'], ['grid-column-gap', '1px 2px'], ['grid-row-gap', '0'],
+  ['gap', 'normal'], ['gap', '1px 2px'],
+  ['animation-range', 'entry, exit'], ['animation-range', 'entry 10%'],
+  ['animation-range', 'entry exit'], ['animation-range', 'calc(1px + 2px)'],
+  ['animation-range', 'normal'], ['animation-range', 'cover'],
+  ['animation-range', 'entry 0% exit 100%'], ['animation-range', 'exit 10px, entry 20px'],
+  ['animation', 'forwards'], ['animation', 'both'], ['animation', 'backwards'],
+  ['animation', 'slide'], ['animation', '"slide"'], ['animation', 'none'],
+  ['animation', 'auto 1s'], ['animation', '1s auto'], ['animation', '2s linear 3s slide'],
+  ['animation-name', '"quoted"'], ['animation-name', 'quoted'], ['animation-name', 'auto'],
+  ['animation-name', 'normal'], ['animation-name', 'none, slide'],
+  ['offset', 'calc(1px + 2px)'], ['offset', '10px 20px'], ['offset', '10px'], ['offset', 'top'],
+  ['offset', '50% 50%'], ['offset', 'calc(10%) calc(20%)'], ['offset', 'left 10px top 20px'],
+  ['offset', "path('M0 0')"], ['offset', "path('M0 0') 10px"],
+  ['scale', '1, 2'], ['scale', '1 2'], ['scale', '50%'], ['translate', '1px, 2px'],
+  ['translate', '1px 2px'], ['rotate', '45deg, 1px'], ['rotate', 'z 45deg'], ['rotate', 'x 45deg'],
+  ['place-items', 'self-start'], ['place-items', 'self-end'], ['align-items', 'self-start'],
+  ['justify-items', 'self-start'], ['align-self', 'self-start'], ['justify-self', 'self-start'],
+  ['place-self', 'unsafe center'], ['place-self', 'center auto'], ['place-self', 'auto center'],
+  ['place-self', 'auto auto'], ['place-self', 'legacy right'], ['place-content', 'self-start'],
+  ['text-emphasis', 'red'], ['text-emphasis', 'dot red'], ['text-emphasis', 'none'],
+  ['counter-reset', 'x 2147483648'], ['counter-reset', 'x, y'], ['counter-reset', 'x 5 y'],
+  ['counter-increment', 'x, y'], ['counter-increment', 'x 3'],
+  ['font-variant', 'historical-forms'], ['font-variant', 'small-caps oldstyle-nums'],
+];
+for (const pair of direct) one('D', pair[0], pair[1]);
+
+const inherit = [
+  ['math-style', 'compact'], ['math-shift', 'superiors'], ['field-sizing', 'content'],
+  ['-webkit-text-orientation', 'upright'], ['-webkit-text-orientation', 'sideways-right'],
+  ['font-weight', '550'], ['font-weight', '300'], ['font-weight', '700'], ['font-weight', '999'],
+  ['font-stretch', '150%'], ['text-emphasis', 'red'], ['writing-mode', 'sideways-lr'],
+  ['writing-mode', 'tb'], ['list-style-type', 'foo'], ['list-style-type', 'upper-alpha'],
+  ['clip', 'rect(1px 2px 3px 4px)'], ['word-wrap', 'break-word'], ['text-wrap-style', 'stable'],
+  ['color-scheme', 'dark'], ['mask-clip', 'padding-box'],
+];
+for (const pair of inherit) inherited('I', pair[0], pair[1]);
+
+// 'bolder' and 'lighter' are read against the weight the element inherited, so each parent weight
+// gets its own pair of children.
+for (const parent of ['100', '150', '200', '300', '350', '400', '450', '500', '550', '600',
+                      '700', '750', '800', '900', '1.5', '250', '999', 'normal', 'bold']) {
+  const par = document.createElement('div');
+  par.style.fontWeight = parent;
+  const up = document.createElement('div'); up.style.fontWeight = 'bolder';
+  const down = document.createElement('div'); down.style.fontWeight = 'lighter';
+  par.appendChild(up); par.appendChild(down);
+  host.appendChild(par);
+  rows.push(index + '|W|font-weight|' + parent +
+      '|comp=' + cell(getComputedStyle(par).fontWeight) +
+      '|bolder=' + cell(getComputedStyle(up).fontWeight) +
+      '|lighter=' + cell(getComputedStyle(down).fontWeight));
+  index++;
+}
+
+return rows;
+}
+window.__probe = build().join('\n');
+console.log(window.__probe);
+</script>
+</body></html>

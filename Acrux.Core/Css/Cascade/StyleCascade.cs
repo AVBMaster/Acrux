@@ -378,7 +378,7 @@ public class CascadeResolverState
                 FontSize = style.FontSize;
                 return;
             case CssPropertyId.FontWeight:
-                style.FontWeight = CssPropertyApplier.ParseFontWeight(text);
+                CssPropertyApplier.ApplyFontWeight(style, text);
                 return;
             case CssPropertyId.FontStyle:
                 style.FontStyle = CssPropertyApplier.ParseFontStyle(text, style);
@@ -536,12 +536,10 @@ public class CascadeResolverState
         _ => Dom.VerticalAlignType.Baseline
     };
 
-    private static Dom.WritingModeType ParseWritingMode(string value) => value.ToLowerInvariant() switch
-    {
-        "vertical-rl" => Dom.WritingModeType.VerticalRl,
-        "vertical-lr" => Dom.WritingModeType.VerticalLr,
-        _ => Dom.WritingModeType.HorizontalTb
-    };
+    // The one spelling table this engine has for the property, shared with the other cascade path
+    // so a legacy 'tb' cannot mean two things depending on which resolver ran.
+    private static Dom.WritingModeType ParseWritingMode(string value)
+        => Css.Resolver.CssPropertyApplier.ParseWritingMode(value);
 
     private static Dom.BackgroundRepeat ParseBackgroundRepeat(string value)
         => CssPropertyApplier.ParseBackgroundRepeat(value);

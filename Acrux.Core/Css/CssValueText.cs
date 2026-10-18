@@ -45,6 +45,14 @@ public static class CssValueText
         if (property != null && property.Equals("animation", StringComparison.OrdinalIgnoreCase))
             value = CanonicalAnimationShorthand(value);
 
+        // CSS Images 4 §4.2: '-webkit-image-set()' is the same function under its legacy name, and
+        // every surface prints the modern one (measured: 'mask-image: -webkit-image-set(url(a.png)
+        // 1x)' reads back 'image-set(url("a.png") 1x)').
+        if (value.IndexOf("-webkit-image-set(", StringComparison.OrdinalIgnoreCase) >= 0)
+            value = System.Text.RegularExpressions.Regex.Replace(value,
+                "-webkit-image-set\\(", "image-set(",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
         // '-webkit-mask-box-image-slice' prints its numbers ahead of its 'fill' flag, whichever end
         // of the list the author put the flag on: 'fill 3' reads back as '3 fill' (measured).
         if (property != null
@@ -54,6 +62,16 @@ public static class CssValueText
         // Whether a bare 0 in this value is a length. Known by the property, not by the text:
         // 'columns: 0' is a width and prints '0px', 'scale: 0' is a factor and prints '0'.
         bool lengths = property != null && Resolver.CssPropertyTraits.TakesLength(property);
+        // The counter properties hold <integer>s, and an integer keeps the digits it was written
+        // with: the six-significant-digit spelling below is a float's rule, and applied to
+        // 'counter-reset: x 2147483648' it left '2.14748e+09' — a number whose own clamp could no
+        // longer recover what the page meant (measured: the reference engine reads back
+        // 'x 2147483647', the largest integer the property can hold).
+        bool counters = property is "counter-reset" or "counter-increment" or "counter-set";
+        // The box's own numbers are cut at seven decimals before the six-significant-digit print,
+        // and only for that family: 'margin-left: 0.000123456789px' echoes as '0.0001234px' while
+        // 'line-height: 0.000123456789px' echoes as '0.000123457px' (measured, both).
+        bool cut = Acrux.Core.Dom.Animations.CssValueTokenizer.CutsAtSevenDecimals(property);
 
         var sb = new System.Text.StringBuilder(value.Length + 8);
         bool pendingSpace = false;
@@ -191,6 +209,12 @@ public static class CssValueText
                 while (i < value.Length && (IsIdentPart(value[i]) || value[i] == '%')) i++;
                 var token = value.Substring(start, i - start);
                 if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
+                if (counters && IsIntegerDigits(token))
+                {
+                    sb.Append(token);
+                    afterSlash = false;
+                    continue;
+                }
                 // A sign with no space in front of it is not a number's: written straight after a
                 // value it belongs to the sum the page meant to write, and re-spelling '+1' as '1'
                 // here glued the two operands into 'calc(11)' — a value the property's grammar has no
@@ -199,7 +223,7 @@ public static class CssValueText
                 // the grammar is left to drop it (measured: 'flex-grow: calc(1+1)' reads back empty).
                 if (signed && sb.Length > 0 && !IsComponentSeparator(sb[^1]))
                 {
-                    sb.Append(c).Append(FoldNumberAndUnit(token[1..]));
+                    sb.Append(c).Append(FoldNumberAndUnit(token[1..], cut));
                     afterSlash = false;
                     continue;
                 }
@@ -207,7 +231,7 @@ public static class CssValueText
                 // A unit is a keyword and CSS keywords are ASCII case-insensitive, so a reference
                 // engine prints the one spelling of it: 'border-top: 1PX solid red' and
                 // 'margin: 10Px auto' both read back with a lower-case unit (measured).
-                sb.Append(FoldNumberAndUnit(token));
+                sb.Append(FoldNumberAndUnit(token, cut));
                 afterSlash = false;
                 continue;
             }
@@ -295,6 +319,7 @@ public static class CssValueText
                     result = CanonicalizeScrollInset(result, property);
                     result = CanonicalizeBorderImage(result, property);
                     result = CanonicalizeB284(result, property);
+                    result = CanonicalizeB294(result, property);
                     result = CanonicalizeTextDecoration(result, property);
                     result = CanonicalizeColumnRule(result, property);
                     result = CanonicalizeListStyle(result, property);
@@ -805,7 +830,15 @@ public static class CssValueText
         {
             if (Resolver.CssPropertyTraits.IsCssWideKeyword(text.Trim())) return text;
             if (ShorthandExpander.ParseTextEmphasisParts(text) is not { } parts) return text;
-            return parts.Color == null ? parts.Style : parts.Style + " " + parts.Color;
+            if (parts.Color == null) return parts.Style;
+            // 'none' is what the style slot says when the page named only a colour, and the echo
+            // does not print a word nobody wrote (measured: 'text-emphasis: red' reads 'red', while
+            // the computed value of the same declaration says both parts).
+            bool saysNone = ShorthandExpander.SplitShorthand(text)
+                .Any(word => word.Equals("none", StringComparison.OrdinalIgnoreCase));
+            return parts.Style.Equals("none", StringComparison.OrdinalIgnoreCase) && !saysNone
+                ? parts.Color
+                : parts.Style + " " + parts.Color;
         }
         return text;
     }
@@ -977,6 +1010,374 @@ public static class CssValueText
     /// <summary>'filter' and 'backdrop-filter' print a <c>drop-shadow()</c> with its colour in
     /// front of the offsets, whichever end of the list the page wrote it on (CSS Filter Effects 1
     /// §29.1, measured); the rest of the list is what it was.</summary>
+    /// <summary>The value texts b294 measured one property at a time
+    /// (snapshots/out/_b294_ref_probeE.txt and _b294_ref_probeF.txt). Each of these is a fact the
+    /// reference engine states twice — in the CSSOM echo and in the text a sheet reads back — so
+    /// all of them live in this one printer rather than in the applier that stores the value.</summary>
+    private static string CanonicalizeB294(string text, string property)
+    {
+        var p = property.ToLowerInvariant();
+        switch (p)
+        {
+            // CSS Masking 1 §9.2: 'mask-repeat' prints the two-word legacy pair as the one word it
+            // means, and a pair of equal words as the single word (measured: 'repeat no-repeat'
+            // reads 'repeat-x', 'no-repeat repeat' reads 'repeat-y', 'repeat repeat' and
+            // 'no-repeat no-repeat' each read one word, while 'repeat space' — no legacy spelling
+            // of anything — keeps both).
+            case "mask-repeat":
+                return MaskRepeatPair(text);
+
+            // CSS Masking 1 §9.1: a mask size of two terms keeps the second only when it says
+            // something the first did not (measured: '1px auto' reads '1px' and 'auto auto' reads
+            // 'auto'), which is the same rule the background size prints by.
+            case "mask-size":
+                return MaskSizePair(text);
+
+            // CSS Overflow 3 §3.1 with CSS Box Alignment 3 §6: the two axes of 'overflow' and of a
+            // 'place-*' shorthand print as one word when they agree (measured: 'auto auto' and
+            // 'place-self: center center' each read back a single word).
+            case "overflow":
+                return CollapseEqualPair(text);
+            case "place-content":
+                return Acrux.Core.Css.Resolver.CssPropertyApplier.PlacePairCanonical(text,
+                    Acrux.Core.Css.Resolver.CssPropertyApplier.AlignContentWords,
+                    Acrux.Core.Css.Resolver.CssPropertyApplier.JustifyContentWords);
+            case "place-items":
+                return Acrux.Core.Css.Resolver.CssPropertyApplier.PlacePairCanonical(text,
+                    Acrux.Core.Css.Resolver.CssPropertyApplier.AlignItemsWords,
+                    Acrux.Core.Css.Resolver.CssPropertyApplier.JustifyItemsWords);
+            case "place-self":
+                return Acrux.Core.Css.Resolver.CssPropertyApplier.PlacePairCanonical(text,
+                    Acrux.Core.Css.Resolver.CssPropertyApplier.AlignSelfWords,
+                    Acrux.Core.Css.Resolver.CssPropertyApplier.JustifySelfWords);
+
+            // CSS Logical 1 §4 with CSS 2.1 §17.2: the logical border pair prints one word when
+            // both edges wear the same style (measured: 'border-block-style: solid solid' reads
+            // 'solid').
+            case "border-block-style":
+            case "border-inline-style":
+            case "border-block-width":
+            case "border-inline-width":
+            case "border-block-color":
+            case "border-inline-color":
+                return CollapseEqualPair(text);
+
+            // CSS 2.1 §11.1.2: the legacy rect() prints its four sides with commas, whichever
+            // separator the page used, and every side carries its unit
+            // (measured: 'rect(0px 1px 2px 3px)' reads back 'rect(0px, 1px, 2px, 3px)').
+            case "clip":
+                return LegacyClipText(text);
+
+            // CSS Transforms 2 §3: 'scale' has no percentage — the number a percentage multiplies
+            // is the factor the property stores (measured: 'scale: 50%' reads '0.5' and
+            // 'scale: 1 50%' reads '1 0.5'), and a pair of equal factors reads one.
+            case "scale":
+                return ScaleText(text);
+
+            // CSS Transforms 2 §4.2: the axis of a one-axis rotation is the same rotation spelled
+            // with a vector, so the vector that names x, y or z prints as that letter and the
+            // vector that names z prints as nothing at all (measured: 'rotate: 1 0 0 45deg' reads
+            // 'x 45deg' and 'rotate: z 45deg' reads '45deg').
+            case "rotate":
+                return RotateAxisText(text);
+
+            // CSS Fonts 4 §8.7: the variant families print in the order the shorthand's grammar
+            // takes them, not the order the page wrote them (measured: 'small-caps
+            // common-ligatures' reads back 'common-ligatures small-caps').
+            case "font-variant":
+                return OrderWords(text, FontVariantFamilyOrder);
+
+            // CSS Backgrounds 3 §5.3: 'border-radius' is the four-corner list twice over, the two
+            // axes divided by a slash, and each half collapses on its own
+            // (measured: '1px 1px 1px 1px' reads '1px', '0 0 0 0' reads '0px', and
+            // '1px 1px 1px 1px / 2px 2px 2px 2px' reads '1px / 2px').
+            case "border-radius":
+                return CollapseRadiusHalves(text);
+
+            // CSS Grid 1 §7.2: the template with no areas and no tracks on either axis is the one
+            // word 'none', not the pair the page wrote (measured: 'grid: none / none' and
+            // 'grid-template: none / none' both read back 'none').
+            case "grid":
+            case "grid-template":
+                return CollapseGridNone(text);
+
+            // CSS Animations 1 §3.6: a quoted name is the keyframe set the ident of the same
+            // spelling names, and the engine prints the ident (measured: 'animation-name: "quoted"'
+            // reads back 'quoted').
+            case "animation-name":
+                return UnquoteNameList(text);
+
+            default:
+                return text;
+        }
+    }
+
+    /// <summary>Whether a template says nothing on both of its axes — the pair the grammar allows
+    /// and the value that has one word of its own.</summary>
+    private static string CollapseGridNone(string text)
+    {
+        var halves = SplitRatioSides(text);
+        if (halves.Count != 2) return text;
+        return halves[0].Trim().Equals("none", StringComparison.OrdinalIgnoreCase)
+            && halves[1].Trim().Equals("none", StringComparison.OrdinalIgnoreCase)
+            ? "none" : text;
+    }
+
+    /// <summary>A comma list of custom idents, each with its quotes taken off — the spelling a
+    /// quoted keyframe name, an animation name or a timeline name reads back as.</summary>
+    public static string UnquoteNameList(string text)
+    {
+        var layers = SplitTopLevelCommas(text);
+        var printed = new List<string>(layers.Count);
+        foreach (var layer in layers)
+        {
+            var words = SplitTerms(layer);
+            printed.Add(words.Count == 1 ? StripQuotes(words[0]) : string.Join(" ", words));
+        }
+        return string.Join(", ", printed);
+    }
+
+    private static string StripQuotes(string token)
+        => token.Length >= 2 && ((token[0] == '"' && token[^1] == '"')
+            || (token[0] == '\'' && token[^1] == '\''))
+            ? token[1..^1] : token;
+
+    /// <summary>Each side of a 'border-radius' value, folded to the shortest list of corners that
+    /// still says all four. A percentage and a length are compared as the texts the page wrote,
+    /// which is what the engine prints back.</summary>
+    private static string CollapseRadiusHalves(string text)
+    {
+        var halves = text.Split('/', 2);
+        var horizontal = CollapseFourCornerList(halves[0].Trim());
+        if (halves.Length == 1) return horizontal;
+        return horizontal + " / " + CollapseFourCornerList(halves[1].Trim());
+    }
+
+    private static string CollapseFourCornerList(string text)
+    {
+        var words = SplitTerms(text);
+        if (words.Count != 4) return text;
+        if (words[0] == words[1] && words[1] == words[2] && words[2] == words[3]) return words[0];
+        if (words[0] == words[2] && words[1] == words[3]) return words[0] + " " + words[1];
+        if (words[1] == words[3]) return words[0] + " " + words[1] + " " + words[2];
+        return string.Join(" ", words);
+    }
+
+    /// <summary>The order the 'font-variant' shorthand prints its families in: ligatures, then
+    /// numeric forms, then east-asian, then caps, then alternates (measured across the pairs that
+    /// were asked about; every other list keeps its words because each family appears once).</summary>
+    private static readonly string[] FontVariantFamilyOrder =
+    {
+        "common-ligatures", "no-common-ligatures", "discretionary-ligatures",
+        "no-discretionary-ligatures", "historical-ligatures", "no-historical-ligatures",
+        "contextual", "no-contextual",
+        // The caps family comes before the numeric one, which is where the shorthand's grammar
+        // puts it (measured: 'font-variant: small-caps oldstyle-nums' reads back in that order).
+        "small-caps", "all-small-caps", "petite-caps", "all-petite-caps", "unicase",
+        "titling-caps", "historical-forms",
+        "lining-nums", "oldstyle-nums", "proportional-nums", "tabular-nums",
+        "diagonal-fractions", "stacked-fractions", "ordinal", "slashed-zero",
+        "jis78", "jis04", "simplified", "traditional", "proportional-width", "full-width",
+        "half-width", "third-width", "quarter-width", "ruby", "isolated-ligatures",
+        "no-isolated-ligatures",
+        "sub", "super",
+    };
+
+    /// <summary>Words sorted into a named order, with the ones the list does not name keeping
+    /// their place at the end.</summary>
+    private static string OrderWords(string text, string[] order)
+    {
+        var words = System.Text.RegularExpressions.Regex
+            .Split(text.Trim(), "\\s+").Where(w => w.Length > 0).ToList();
+        if (words.Count < 2) return text;
+        int Rank(string word)
+        {
+            int index = System.Array.IndexOf(order, word.ToLowerInvariant());
+            return index < 0 ? order.Length : index;
+        }
+        // A stable sort keeps two words of the same family in the order the page wrote them.
+        var numbered = words.Select((word, index) => (word, index)).ToList();
+        numbered.Sort((a, b) =>
+        {
+            int byRank = Rank(a.word).CompareTo(Rank(b.word));
+            return byRank != 0 ? byRank : a.index.CompareTo(b.index);
+        });
+        return string.Join(" ", numbered.Select(t => t.word));
+    }
+
+    /// <summary>The two-axis mask repeat as the one word it means (see
+    /// <see cref="CanonicalizeB294"/>). A comma separates layers, and each layer is judged on
+    /// its own terms.</summary>
+    private static string MaskRepeatPair(string text)
+    {
+        var layers = SplitTopLevelCommas(text);
+        var printed = new List<string>(layers.Count);
+        foreach (var layer in layers)
+        {
+            var words = SplitTerms(layer);
+            if (words.Count == 2)
+            {
+                var pair = words[0] + " " + words[1];
+                if (pair.Equals("repeat no-repeat", StringComparison.OrdinalIgnoreCase))
+                { printed.Add("repeat-x"); continue; }
+                if (pair.Equals("no-repeat repeat", StringComparison.OrdinalIgnoreCase))
+                { printed.Add("repeat-y"); continue; }
+                if (words[0].Equals(words[1], StringComparison.OrdinalIgnoreCase))
+                { printed.Add(words[0].ToLowerInvariant()); continue; }
+            }
+            printed.Add(string.Join(" ", SplitTerms(layer).Select(w => w.ToLowerInvariant())));
+        }
+        return string.Join(", ", printed);
+    }
+
+    /// <summary>The mask size with its second term left out when it repeats what the first says
+    /// (measured: '1px auto' is '1px', 'auto auto' is 'auto', '1px 2px' is both).</summary>
+    private static string MaskSizePair(string text)
+    {
+        var layers = SplitTopLevelCommas(text);
+        var printed = new List<string>(layers.Count);
+        foreach (var layer in layers)
+        {
+            var words = SplitTerms(layer);
+            if (words.Count == 2 && words[1].Equals("auto", StringComparison.OrdinalIgnoreCase))
+                printed.Add(words[0]);
+            else if (words.Count == 2 && words[0].Equals("auto", StringComparison.OrdinalIgnoreCase)
+                && words[1].Equals("auto", StringComparison.OrdinalIgnoreCase))
+                printed.Add("auto");
+            else printed.Add(string.Join(" ", words.Select(WithZeroUnit)));
+        }
+        return string.Join(", ", printed);
+    }
+
+    /// <summary>A zero written without its unit is printed with one (measured: 'mask-size: 0' reads
+    /// back '0px'), and every other term is left exactly as it was said.</summary>
+    private static string WithZeroUnit(string word)
+        => word is "0" or "-0" or "+0" or "00" ? "0px" : word;
+
+    /// <summary>The legacy rect() printed with the commas the reference engine prints, each side
+    /// carrying the unit it was measured in (measured: 'rect(0 0 0 0)' is nobody's rect and never
+    /// reaches here; 'rect(10px 5px 20px 5px)' reads back 'rect(10px, 5px, 20px, 5px)').</summary>
+    private static string LegacyClipText(string text)
+    {
+        // The same split the grammar answers with, so a rect that reaches the value text cannot be
+        // cut into a different number of sides than the one the declaration was accepted for.
+        var sides = CssValueGrammar.LegacyClipSides(text);
+        if (sides == null) return text.Trim().ToLowerInvariant();
+        var printed = new List<string>(4);
+        foreach (var side in sides)
+        {
+            // A zero is a zero whatever shape it was written in, and this property prints its
+            // unit even when the page left it out.
+            if (side != "auto" && double.TryParse(side, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var number) && number == 0)
+                printed.Add("0px");
+            else printed.Add(side);
+        }
+        return "rect(" + string.Join(", ", printed) + ")";
+    }
+
+    /// <summary>'scale' as the engine stores it: every percentage folded to the factor it says,
+    /// and a pair of equal factors read as one (measured: 'scale: 50% 50%' is '0.5' and
+    /// 'scale: 2 50% 2' is '2 0.5 2').</summary>
+    private static string ScaleText(string text)
+    {
+        var layers = SplitTopLevelCommas(text);
+        var printed = new List<string>(layers.Count);
+        foreach (var layer in layers)
+        {
+            var words = SplitTerms(layer).Select(FactorTerm).ToList();
+            if (words.Count == 2 && words[0] == words[1]) words.RemoveAt(1);
+            printed.Add(string.Join(" ", words));
+        }
+        return string.Join(", ", printed);
+    }
+
+    /// <summary>One term of a scale: a percentage is the hundredth it names, written as the number
+    /// the property holds.</summary>
+    private static string FactorTerm(string word)
+    {
+        word = word.ToLowerInvariant();
+        if (!word.EndsWith("%", StringComparison.Ordinal)) return word;
+        if (!double.TryParse(word[..^1], NumberStyles.Float, CultureInfo.InvariantCulture,
+                out var share)) return word;
+        // '50%' is the factor '0.5' and '10%' is '0.1'; the trim is the same one every number in a
+        // value text gets, so '2 50% 2' does not come out as '2 0.50 2'.
+        return (share / 100.0).ToString("0.#############################", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>'rotate' with its axis written the way the engine writes it: the unit vector that
+    /// names one axis becomes that axis's letter, and the letter 'z' is the rotation the property
+    /// means with no letter at all (measured, all three spellings).</summary>
+    private static string RotateAxisText(string text)
+    {
+        var words = SplitTerms(text.Trim());
+        if (words.Count == 4)
+        {
+            // Only the three vectors that name one axis fold; '1 1 0 45deg' is a real vector and
+            // prints as written (measured, both).
+            var vector = (words[0], words[1], words[2]);
+            var angle = words[3];
+            return vector switch
+            {
+                ("1", "0", "0") => "x " + angle,
+                ("0", "1", "0") => "y " + angle,
+                ("0", "0", "1") => angle,
+                _ => string.Join(" ", words),
+            };
+        }
+        // 'z 45deg' is the rotation the property means with no axis named (measured).
+        if (words.Count == 2 && words[0].Equals("z", StringComparison.OrdinalIgnoreCase))
+            return words[1];
+        return text;
+    }
+
+    /// <summary>A pair of comma-free terms printed once when both say the same thing
+    /// (measured for 'overflow' and for the logical border pairs: 'auto auto' is 'auto').</summary>
+    private static string CollapseEqualPair(string text)
+    {
+        var layers = SplitTopLevelCommas(text);
+        var printed = new List<string>(layers.Count);
+        foreach (var layer in layers)
+        {
+            var words = SplitTerms(layer);
+            printed.Add(words.Count == 2
+                && words[0].Equals(words[1], StringComparison.OrdinalIgnoreCase)
+                ? words[0].ToLowerInvariant() : string.Join(" ", words));
+        }
+        return string.Join(", ", printed);
+    }
+
+    /// <summary>The whitespace-separated terms of one layer. A parenthesis or a quotation holds its
+    /// own spaces in, so a gradient is one term however many spaces it carries.</summary>
+    private static List<string> SplitTerms(string text)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')' && depth > 0) depth--;
+            else if (c is '"' or '\'')
+            {
+                char quote = c;
+                for (i++; i < text.Length; i++)
+                {
+                    if (text[i] == '\\' && i + 1 < text.Length) i++;
+                    else if (text[i] == quote) break;
+                }
+                continue;
+            }
+            else if (depth == 0 && char.IsWhiteSpace(c))
+            {
+                if (i > start) parts.Add(text[start..i]);
+                start = i + 1;
+            }
+        }
+        if (text.Length > start) parts.Add(text[start..]);
+        return parts;
+    }
+
     private static string CanonicalizeFilterList(string text, string property)
         => property.Equals("filter", StringComparison.OrdinalIgnoreCase)
             || property.Equals("backdrop-filter", StringComparison.OrdinalIgnoreCase)
@@ -1394,9 +1795,17 @@ public static class CssValueText
                 || name.Equals("normal", StringComparison.OrdinalIgnoreCase)
                 || !IsCounterNameToken(name)) return null;
             string value = defaultValue;
-            if (i + 1 < words.Count && ShorthandExpander.IsNumberToken(words[i + 1]))
+            if (i + 1 < words.Count
+                && double.TryParse(words[i + 1], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out _))
             {
-                value = words[i + 1];
+                // An <integer> that does not fit is read as the closest one that does and printed
+                // as a whole number (measured: 'counter-reset: x 2147483648' reads 'x 2147483647').
+                value = double.TryParse(words[i + 1], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var number)
+                    ? ((long)Math.Clamp(Math.Round(number), int.MinValue, int.MaxValue))
+                        .ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : words[i + 1];
                 i++;
             }
             parts.Add(name + " " + value);
@@ -1465,8 +1874,11 @@ public static class CssValueText
         var expanded = ShorthandExpander.ExpandProperty(property, text);
         if (expanded.Count == 0) return text;
         var parts = new List<string>();
+        // The position is a position, and a position prints as its two axes with the horizontal
+        // one first (measured: 'offset: 1px' reads '1px center' and 'offset: top' reads
+        // 'center top' — the same pair 'background-position' writes).
         if (expanded.TryGetValue("offset-position", out var position) && position != "normal")
-            parts.Add(position);
+            parts.Add(ShorthandExpander.PositionPairText(position) ?? position);
         if (expanded.TryGetValue("offset-path", out var path) && path != "none")
             parts.Add(path);
         if (expanded.TryGetValue("offset-distance", out var distance) && distance != "0px")
@@ -1486,18 +1898,19 @@ public static class CssValueText
     {
         if (!property.Equals("list-style", StringComparison.OrdinalIgnoreCase)) return text;
         string? position = null, image = null, type = null;
+        // The three slots are filled in the order the words arrive, each word going to the first
+        // open slot that can read it — which is how the engine reads the shapes a strict per-slot
+        // count refuses (measured: 'none none' prints the image and the type, and 'inside outside'
+        // prints the position and a type whose name happens to be a position word).
         foreach (var word in SplitTopLevelWords(text))
         {
             var p = word.ToLowerInvariant();
-            if (p is "inside" or "outside") { position = p; continue; }
-            if (p.StartsWith("url(", StringComparison.Ordinal)
-                || p.StartsWith("image-set(", StringComparison.Ordinal)
-                || (p.StartsWith("linear-gradient(", StringComparison.Ordinal)))
+            if (position == null && p is "inside" or "outside") { position = p; continue; }
+            if (image == null && (p.Contains("(") && !p.StartsWith("calc(", StringComparison.Ordinal)))
             { image = word; continue; }
-            // 'none' is both a position's and an image's word and a type of its own; the first one
-            // seen goes to the image, which is where the engine prints it ('outside none disc').
-            if (p == "none" && image == null && position != null) { image = p; continue; }
-            type ??= word;
+            if (image == null && p == "none") { image = p; continue; }
+            if (type == null) { type = word; continue; }
+            return text;
         }
         var parts = new List<string>();
         if (position != null) parts.Add(position);
@@ -1549,7 +1962,18 @@ public static class CssValueText
     /// (measured), and a unit is a keyword, so it has the one spelling. Only a token that begins
     /// with a number is touched, so a hex colour, an identifier and a unicode range keep their
     /// characters.</summary>
-    private static string FoldNumberAndUnit(string token)
+    /// <summary>A token that is nothing but an integer's digits, with the one sign a page may put
+    /// in front of them — the spelling an &lt;integer&gt; keeps as it was written.</summary>
+    private static bool IsIntegerDigits(string token)
+    {
+        int i = token.Length > 0 && (token[0] == '+' || token[0] == '-') ? 1 : 0;
+        if (i >= token.Length) return false;
+        for (; i < token.Length; i++)
+            if (!char.IsAsciiDigit(token[i])) return false;
+        return true;
+    }
+
+    private static string FoldNumberAndUnit(string token, bool cut = false)
     {
         if (token.Length == 0
             || !(char.IsAsciiDigit(token[0]) || token[0] == '.' || token[0] == '+' || token[0] == '-'))
@@ -1575,15 +1999,12 @@ public static class CssValueText
             || double.IsNaN(value) || double.IsInfinity(value))
             return token;
         var unit = token[unitStart..].ToLowerInvariant();
-        return CanonicalNumber(value) + unit;
+        // A six-digit print, and for the box family the number first cut at seven decimals. The cut
+        // is taken on the digits the page wrote, which are still in hand here: they are not always
+        // how the parser's own widening would be written again.
+        return (cut ? Acrux.Core.Dom.Animations.CssValueTokenizer.NumCutText(number)
+                    : Acrux.Core.Dom.Animations.CssValueTokenizer.Num(value)) + unit;
     }
-
-    /// <summary>A number printed the way the reference engine prints one: to six significant
-    /// digits, in exponent notation when it does not fit (measured: '0.123456789px' reads
-    /// '0.123457px', '33.333333px' reads '33.3333px', '1234567px' reads '1.23457e+06px' and a
-    /// '2.123456789' line-height reads '2.12346'). The engine stores what the number means, so
-    /// '1.50px' is '1.5px' and a unit is a keyword with the one spelling.</summary>
-    private static string CanonicalNumber(double value) => CssMathValue.Number(value);
 
     /// <summary>Rewrite each colour a colour-valued property carries. A named colour prints as its
     /// own lower-case name; anything else — a hex, an <c>hsl()</c>, a modern <c>rgb()</c> written
@@ -1727,7 +2148,9 @@ public static class CssValueText
                 part[4].Length > 0 ? part[4] : "normal",
                 part[5].Length > 0 ? part[5] : "none",
                 part[6].Length > 0 ? part[6] : "running",
-                part[7].Length > 0 ? part[7] : "none",
+                // The keyframe set's name prints without the quotes a string spelling carried
+                // (measured: 'animation: "slide"' names 'slide').
+                part[7].Length > 0 ? StripQuotes(part[7]) : "none",
             }));
         }
         return string.Join(", ", layers);

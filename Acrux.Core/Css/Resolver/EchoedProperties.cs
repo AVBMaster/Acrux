@@ -77,7 +77,7 @@ public static class EchoedProperties
 
             // ===== Writing Modes 4 §3.4 and Ruby 1 §3.3. 'sideways-left' is not a value here, and
             // 'vertical-rl' belongs to 'writing-mode' alone (both measured).
-            new() { Name = "text-orientation", Initial = "mixed",
+            new() { Name = "text-orientation", Initial = "mixed", Inherited = true,
                 Normalize = Single("mixed", "upright", "sideways-right", "sideways"),
                 // 'sideways-right' is the long spelling of the same orientation, and the computed
                 // value only ever says the short one (measured).
@@ -134,12 +134,20 @@ public static class EchoedProperties
             // keywords — one per keyframe animation, so a space between two of them is no list.
             new() { Name = "animation-composition", Initial = "replace",
                 Normalize = NormalizeCompositionList },
+            // Scroll-driven animations 1 §3: the range pair, and the two edges it is made of, are
+            // one range per comma-separated timeline animation. An offset may be an expression,
+            // which the specified value keeps and the computed value prices
+            // (measured: 'animation-range: calc(1px + 2px)' reads 'calc(3px)' and computes '3px';
+            // 'animation-range: entry, exit' is two layers and reads back as written).
             new() { Name = "animation-range", Initial = "normal",
-                Normalize = NormalizeAnimationRange },
+                Normalize = NormalizeAnimationRangeList,
+                ComputedText = AnimationRangeComputed },
             new() { Name = "animation-range-start", Initial = "normal",
-                Normalize = NormalizeAnimationRangeEdge },
+                Normalize = NormalizeAnimationRangeEdgeList,
+                ComputedText = AnimationRangeComputed },
             new() { Name = "animation-range-end", Initial = "normal",
-                Normalize = NormalizeAnimationRangeEdge },
+                Normalize = NormalizeAnimationRangeEdgeList,
+                ComputedText = AnimationRangeComputed },
             new() { Name = "scroll-timeline-axis", Initial = "block",
                 Normalize = Single("block", "inline", "x", "y", "initial") },
             new() { Name = "view-timeline-axis", Initial = "block",
@@ -618,38 +626,188 @@ public static class EchoedProperties
         return string.Join(" ", words.Select(w => w.ToLowerInvariant()));
     }
 
+    /// <summary>Scroll-driven animations 1 §3: the range pair. Each edge is a timeline-range name
+    /// with an optional offset, or a bare offset on the 'normal' range, or 'normal' alone — and the
+    /// second edge may be left out, in which case it stays at its own default. Three words are the
+    /// pair with one offset missing, so the split is decided by what reads rather than by a count
+    /// of spaces; '1px 2px 3px' has no split that reads and falls, while 'entry 50% exit' splits as
+    /// two and one (measured, both). 'auto' is nobody's range and a name the timeline does not have
+    /// ('span-a') falls with it.</summary>
+    /// <summary>One range per comma-separated animation, each read by the grammar of a single
+    /// range (CSS Scroll-driven Animations 1 §3; measured: 'entry, exit' is two layers, while a
+    /// space between the two words names one range's two edges).</summary>
+    private static string? NormalizeAnimationRangeList(string value) =>
+        KeywordListByLayer(value, NormalizeAnimationRange);
+
+    /// <summary>The same list for one edge, where a layer is a name with an optional offset.</summary>
+    private static string? NormalizeAnimationRangeEdgeList(string value) =>
+        KeywordListByLayer(value, NormalizeAnimationRangeEdge);
+
+    /// <summary>Apply one layer's reader to every comma-separated layer of a value and rejoin them
+    /// the way the engine prints a list — a comma with a space after it.</summary>
+    private static string? KeywordListByLayer(string value, Func<string, string?> readLayer)
+    {
+        var layers = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(value, ',');
+        if (layers.Count == 0) return null;
+        var printed = new System.Collections.Generic.List<string>(layers.Count);
+        foreach (var layer in layers)
+        {
+            var text = readLayer(layer);
+            if (text == null) return null;
+            printed.Add(text);
+        }
+        return string.Join(", ", printed);
+    }
+
+    /// <summary>The computed text of a range list: every offset priced against the element, every
+    /// name said as the page said it (measured: 'calc(1px + 2px)' computes '3px').</summary>
+    private static string AnimationRangeComputed(string canonical,
+        Acrux.Core.Dom.ComputedStyle? style)
+    {
+        var layers = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(canonical, ',');
+        var printed = new System.Collections.Generic.List<string>(layers.Count);
+        foreach (var layer in layers)
+        {
+            var words = SplitTopLevel(layer).ToArray();
+            var parts = new System.Collections.Generic.List<string>(words.Length);
+            foreach (var word in words)
+                parts.Add(Acrux.Core.Css.CssValueGrammar.IsLengthPercentageOrMath(word)
+                    ? RangeOffsetComputed(word, style)
+                    : word);
+            printed.Add(string.Join(" ", parts));
+        }
+        return string.Join(", ", printed);
+    }
+
+    private static string RangeOffsetComputed(string token,
+        Acrux.Core.Dom.ComputedStyle? style)
+    {
+        if (style == null) return token;
+        if (!Acrux.Core.Css.CssFunctionEvaluator.IsMathFunctionText(token))
+            return LengthPercentageComputed(token, style);
+        var folded = Acrux.Core.Css.CssMathValue.Fold(token);
+        var length = Acrux.Core.Dom.Length.Parse(folded.ToLowerInvariant());
+        return length is null or Acrux.Core.Dom.AutoLength
+            ? folded : style.ComputedLengthCss(length);
+    }
+
     private static string? NormalizeAnimationRange(string value)
     {
-        var words = Words(value);
-        if (words.Length == 0 || words.Length > 4) return null;
-        if (words.Length == 1 && words[0].Equals("normal", StringComparison.OrdinalIgnoreCase))
-            return "normal";
-        // The shorthand says both edges, and each edge is a range name with an optional offset —
-        // so the whole value is up to four words, two per edge (measured: 'entry 10% exit 90%'
-        // stands and reads back as written, while 'entry 10% 10%' does not).
-        if (NormalizeAnimationRangeEdge(value) != null) return string.Join(" ", words);
-        if (words.Length != 4) return null;
-        var start = NormalizeAnimationRangeEdge(string.Join(" ", words[..2]));
-        var end = NormalizeAnimationRangeEdge(string.Join(" ", words[2..]));
-        return start != null && end != null ? string.Join(" ", words) : null;
+        // Split outside every parenthesis: an offset may be a math expression, and its own spaces
+        // are not the spaces between the two edges of the range (measured:
+        // 'animation-range: calc(1px + 2px)' is one offset and reads back 'calc(3px)').
+        var words = SplitTopLevel(value).ToArray();
+        if (words.Length is < 1 or > 4) return null;
+        (string text, bool named)? start = null, end = null;
+        if (words.Length <= 2)
+        {
+            // One edge first — 'entry 50%' is one range, not two — and only when that reading
+            // fails is the pair of words the two edges ('normal cover' and '1px 2px', both
+            // measured).
+            start = ReadRangeEdge(words, 0, words.Length, isEnd: false);
+            if (start == null && words.Length == 2)
+            {
+                start = ReadRangeEdge(words, 0, 1, isEnd: false);
+                end = start == null ? null : ReadRangeEdge(words, 1, 1, isEnd: true);
+            }
+        }
+        else if (words.Length == 3)
+        {
+            start = ReadRangeEdge(words, 0, 2, isEnd: false);
+            end = start == null ? null : ReadRangeEdge(words, 2, 1, isEnd: true);
+            if (start == null || end == null)
+            {
+                start = ReadRangeEdge(words, 0, 1, isEnd: false);
+                end = start == null ? null : ReadRangeEdge(words, 1, 2, isEnd: true);
+            }
+        }
+        else
+        {
+            start = ReadRangeEdge(words, 0, 2, isEnd: false);
+            end = start == null ? null : ReadRangeEdge(words, 2, 2, isEnd: true);
+        }
+        if (start == null) return null;
+        if (words.Length > 2 && end == null) return null;
+        if (end == null) return start.Value.text;
+        // The end is left out when it says nothing the start did not already say: 'normal' is the
+        // edge's own default, and a named edge repeated is the same range on both sides (measured:
+        // 'normal normal' and 'cover cover' each read back one word while '1px 1px' reads back two).
+        if (end.Value.text == "normal") return start.Value.text;
+        if (end.Value.named && end.Value.text == start.Value.text) return start.Value.text;
+        return start.Value.text + " " + end.Value.text;
+    }
+
+    /// <summary>One edge of a scroll-driven range, read from <paramref name="words"/> at
+    /// <paramref name="from"/> for <paramref name="count"/> words and printed as the engine prints
+    /// it: the name carries over, and the offset the edge would have taken with no word saying it
+    /// does not (measured: 'entry 0%' reads 'entry', 'exit 100%' reads 'exit 100%',
+    /// 'contain 100%' reads 'contain', and a bare '0%' keeps its number because a number with no
+    /// name has no default to fall back on).</summary>
+    private static (string text, bool named)? ReadRangeEdge(string[] words, int from, int count,
+        bool isEnd)
+    {
+        if (count is < 1 or > 2 || from + count > words.Length) return null;
+        var first = words[from].ToLowerInvariant();
+        bool firstName = System.Array.IndexOf(RangeNames, first) >= 0 || first == "normal";
+        string? offset = null;
+        if (firstName)
+        {
+            if (count == 2)
+            {
+                if (!Acrux.Core.Css.CssValueGrammar.IsLengthPercentageOrMath(words[from + 1]))
+                    return null;
+                offset = PrintRangeOffset(words[from + 1]);
+            }
+        }
+        else
+        {
+            if (count != 1 || !Acrux.Core.Css.CssValueGrammar.IsLengthPercentageOrMath(first))
+                return null;
+            offset = PrintRangeOffset(first);
+        }
+        if (offset != null && firstName)
+        {
+            // The offset this edge would have taken anyway: the top of the range at the start and
+            // the bottom at the end.
+            if (offset == (isEnd ? "100%" : "0%")) offset = null;
+        }
+        if (!firstName)
+        {
+            // 'normal' at the END of the range means its bottom edge, which is the 100% no word
+            // would have said (measured: 'animation-range: 0% 100%' reads back the one '0%', while
+            // a start of '0%' says itself).
+            if (isEnd && offset == "100%") return ("normal", false);
+            return offset == null ? null : (offset, false);
+        }
+        return offset == null ? (first, true) : (first + " " + offset, true);
+    }
+
+    /// <summary>The length text the engine prints for an offset: a number is a pixel length, and a
+    /// percentage keeps its sign (measured: 'animation-range: 0' reads back '0px').</summary>
+    private static string PrintRangeOffset(string token)
+    {
+        token = token.ToLowerInvariant();
+        return token == "0" ? "0px" : token;
     }
 
     private static string? NormalizeAnimationRangeEdge(string value)
     {
-        var words = Words(value);
+        var words = SplitTopLevel(value).ToArray();
         if (words.Length is < 1 or > 2) return null;
         if (words[0].Equals("normal", StringComparison.OrdinalIgnoreCase))
             return words.Length == 1 ? "normal" : null;
         bool firstName = System.Array.IndexOf(RangeNames, words[0].ToLowerInvariant()) >= 0;
         if (firstName)
         {
-            if (words.Length == 2 && !Acrux.Core.Css.CssValueGrammar.IsLengthOrPercentage(words[1]))
+            if (words.Length == 2
+                && !Acrux.Core.Css.CssValueGrammar.IsLengthPercentageOrMath(words[1]))
                 return null;
-            return string.Join(" ", words.Select(w => w.ToLowerInvariant()));
+            return string.Join(" ", words.Select(w => PrintRangeOffset(w)));
         }
-        if (words.Length != 1 || !Acrux.Core.Css.CssValueGrammar.IsLengthOrPercentage(words[0]))
+        if (words.Length != 1
+            || !Acrux.Core.Css.CssValueGrammar.IsLengthPercentageOrMath(words[0]))
             return null;
-        return words[0].ToLowerInvariant();
+        return PrintRangeOffset(words[0]);
     }
 
     private static readonly string[] RangeNames =
@@ -2099,15 +2257,31 @@ public static class EchoedProperties
             // 'calc(2px)').
             : SvgLengthComputed(canonical, style);
 
-    /// <summary>CSS View Transitions 1 §6: how a snapshot group is sized. The four words the
-    /// property names, and a dashed ident beside them — a group can be named after a custom
-    /// ident of its own (measured: '--a' reads back '--a' while '1' is dropped).</summary>
+    /// <summary>CSS View Transitions 1 §6: how a snapshot group is sized. The three words the
+    /// property names, the two the shorthand answers with, a dashed ident beside them — and any
+    /// other ident, because the value is a name the page gives a group of its own
+    /// (measured: 'unknown-ident' and '--a' each read back as written while '1px' and the pair
+    /// 'normal contain' are dropped).</summary>
     private static string? NormalizeViewTransitionGroup(string text)
     {
         var trimmed = text.Trim();
         if (IsOneOfWord(trimmed, "normal", "contain", "allow-discrete", "none", "auto"))
             return trimmed.ToLowerInvariant();
-        return IsDashedIdent(trimmed) ? trimmed : null;
+        if (IsDashedIdent(trimmed)) return trimmed;
+        return IsIdentifierText(trimmed) ? trimmed.ToLowerInvariant() : null;
+    }
+
+    /// <summary>A CSS &lt;ident&gt;: it does not begin with a digit, a sign or a dot, and every
+    /// character of it is a name character. '1px' and '50%' are numbers, and 'unknown-ident' is a
+    /// name the page gave a group of its own (both measured).</summary>
+    private static bool IsIdentifierText(string token)
+    {
+        if (token.Length == 0) return false;
+        if (char.IsAsciiDigit(token[0]) || token[0] is '-' or '+' or '.' or '%' or '(') return false;
+        foreach (var c in token)
+            if (!char.IsLetterOrDigit(c) && c != '_' && c != '-' && c != '.' && c <= '\u007F')
+                return false;
+        return true;
     }
 
     private static bool IsOneOfWord(string text, params string[] words)

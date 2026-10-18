@@ -1929,6 +1929,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
     internal void PushObjectEffects(ComputedStyle style, LayoutBox layoutBox, SKRect offsetBorderBox, ScopedPaintState objectPaintState)
     {
         bool hasClipPath = ClipPathClipper.HasClipPath(style.ClipPath);
+        bool hasLegacyClip = LegacyClip.HasClip(style);
         bool hasOpacityLayer = style.Opacity < 1.0f && style.Opacity >= 0f;
         bool hasBlendMode = style.MixBlendMode != MixBlendModeType.Normal;
         bool hasMask = _maskPainter.HasMask(style);
@@ -1944,7 +1945,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         if (hasFilter)
             elementFilter = FilterRenderer.ParseAndChain(style.Filter, style.Color, out filterInflation);
 
-        if (hasFilter || hasOpacityLayer || hasBlendMode || hasClipPath || hasMask)
+        if (hasFilter || hasOpacityLayer || hasBlendMode || hasClipPath || hasLegacyClip || hasMask)
         {
             SKPath? clipPath = null;
             if (hasClipPath)
@@ -1957,6 +1958,30 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
                 if (clipPath != null)
                     clipPath.Offset(offsetBorderBox.Left - layoutBox.BorderBox.Left,
                                     offsetBorderBox.Top - layoutBox.BorderBox.Top);
+            }
+            // The legacy 'clip' rect clips the box and its whole subtree just like a
+            // clip-path, so an element that carries both is clipped by the region the two
+            // shapes share (CSS 2.1 §11.1.2 with CSS Masking 1 §1.1).
+            if (hasLegacyClip)
+            {
+                using var legacy = LegacyClip.Parse(style.Clip, layoutBox, style);
+                if (legacy != null)
+                {
+                    legacy.Offset(offsetBorderBox.Left - layoutBox.BorderBox.Left,
+                                  offsetBorderBox.Top - layoutBox.BorderBox.Top);
+                    if (clipPath == null)
+                        clipPath = new SKPath(legacy);
+                    else
+                    {
+                        var shared = new SKPath();
+                        if (clipPath.Op(legacy, SKPathOp.Intersect, shared))
+                        {
+                            clipPath.Dispose();
+                            clipPath = shared;
+                        }
+                        else shared.Dispose();
+                    }
+                }
             }
             objectPaintState.PushLayer(hasOpacityLayer ? style.Opacity : 1.0f,
                 elementFilter, clipPath, offsetBorderBox, maskImage,
@@ -2375,7 +2400,7 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
 
         // A5: multicol column rules — vertical separators between columns.
         if (box.IsMultiColumn && box.ColumnCount > 1 &&
-            style.ColumnRuleStyle != BorderStyle.None && style.ColumnRuleWidth > 0)
+            style.ColumnRuleStyle.IsDrawn() && style.ColumnRuleWidth > 0)
         {
             DrawColumnRules(box, style);
         }
@@ -4055,10 +4080,10 @@ private static SKBlendMode MixBlendModeToSkBlendMode(MixBlendModeType mode) => m
         bool hasColor = style.BackgroundColor.HasValue && style.BackgroundColor.Value.Alpha > 0;
         bool hasImage = style.BackgroundImage is { Count: > 0 } &&
                         style.BackgroundImage!.Any(s => !string.IsNullOrEmpty(s) && s != "none");
-        bool hasBorder = (style.BorderTopWidth > 0 && style.BorderTopStyle != BorderStyle.None) ||
-                         (style.BorderRightWidth > 0 && style.BorderRightStyle != BorderStyle.None) ||
-                         (style.BorderBottomWidth > 0 && style.BorderBottomStyle != BorderStyle.None) ||
-                         (style.BorderLeftWidth > 0 && style.BorderLeftStyle != BorderStyle.None);
+        bool hasBorder = (style.BorderTopWidth > 0 && style.BorderTopStyle.IsDrawn()) ||
+                         (style.BorderRightWidth > 0 && style.BorderRightStyle.IsDrawn()) ||
+                         (style.BorderBottomWidth > 0 && style.BorderBottomStyle.IsDrawn()) ||
+                         (style.BorderLeftWidth > 0 && style.BorderLeftStyle.IsDrawn());
         bool hasOutline = style.OutlineWidth > 0 && style.OutlineStyle != BorderStyle.None;
         if (!hasColor && !hasImage && !hasBorder && !hasOutline)
             return;

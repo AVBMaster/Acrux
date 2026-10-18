@@ -33,7 +33,7 @@ public struct BorderEdge
         return style;
     }
 
-    public bool HasVisibleColorAndStyle => Style != BorderStyle.None && Color.Alpha > 0;
+    public bool HasVisibleColorAndStyle => Style.IsDrawn() && Color.Alpha > 0;
 
     public bool ShouldRender => IsPresent && Width != 0 && HasVisibleColorAndStyle;
 
@@ -801,6 +801,7 @@ public sealed class BoxBorderPainter
         switch (style)
         {
             case BorderStyle.None:
+            case BorderStyle.Hidden:
                 return;
             case BorderStyle.Dotted:
             case BorderStyle.Dashed:
@@ -900,6 +901,10 @@ public sealed class BoxBorderPainter
             BorderStyle.Inset or BorderStyle.Groove or BorderStyle.Outset or BorderStyle.Ridge => 2,
             BorderStyle.Dotted or BorderStyle.Dashed or BorderStyle.Double => 1,
             BorderStyle.Solid => 3,
+            // CSS 2.1 §8.5.1: 'hidden' beats 'none' when two edges collapse, and loses to every
+            // drawn style, so it sits one step above 'none' here.
+            BorderStyle.Hidden => 0,
+            BorderStyle.None => -1,
             _ => 0
         };
 
@@ -1411,6 +1416,7 @@ public sealed class BoxBorderPainter
         switch (borderStyle)
         {
             case BorderStyle.None:
+            case BorderStyle.Hidden:
                 return;
             case BorderStyle.Dotted:
             case BorderStyle.Dashed:

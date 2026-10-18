@@ -18,12 +18,36 @@ public static class ClipPathHitTest
     {
         for (; element != null; element = element.ParentElement)
         {
-            string? clip = element.ComputedStyle?.ClipPath;
-            if (!ClipPathClipper.HasClipPath(clip)) continue;
+            var style = element.ComputedStyle;
             var box = element.LayoutBox;
-            if (box == null) continue;
+            if (style == null || box == null) continue;
 
-            SKPath? path = ClipPathClipper.Parse(clip, box);
+            string? clip = style.ClipPath;
+            bool hasClipPath = ClipPathClipper.HasClipPath(clip);
+            // The legacy 'clip' rect takes the pointer with the region it leaves visible,
+            // exactly like a clip-path on the same box (CSS Masking 1 §1.1).
+            bool hasLegacyClip = LegacyClip.HasClip(style);
+            if (!hasClipPath && !hasLegacyClip) continue;
+
+            SKPath? path = hasClipPath ? ClipPathClipper.Parse(clip, box) : null;
+            if (hasLegacyClip)
+            {
+                using var legacy = LegacyClip.Parse(style.Clip, box, style);
+                if (legacy != null)
+                {
+                    if (path == null) path = new SKPath(legacy);
+                    else
+                    {
+                        var shared = new SKPath();
+                        if (path.Op(legacy, SKPathOp.Intersect, shared))
+                        {
+                            path.Dispose();
+                            path = shared;
+                        }
+                        else shared.Dispose();
+                    }
+                }
+            }
             if (path == null) continue;
             try
             {

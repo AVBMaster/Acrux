@@ -322,7 +322,7 @@ public static class InlineGeometry
     private static float Edge(Length? length, ComputedStyle style)
     {
         if (length == null) return 0;
-        float px = length.ToPixels(style.FontSize, style.FontSize, 0, 0);
+        float px = length.ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0, 0);
         return float.IsNaN(px) || px < 0 ? 0 : px;
     }
 }

@@ -832,6 +832,12 @@ public class ComputedStyle
     /// <c>stroke-width: 1rem</c> as 16px and <c>1em</c> as 14px. Zero means the resolver never said,
     /// which leaves a caller's own argument in charge.</summary>
     public float RootFontSize { get; set; }
+    /// <summary>The number a 'rem' on this element is a share of, ready to hand to a length
+    /// resolution: the root's font once the resolver has recorded it, and the initial 16px before
+    /// that. Passing <see cref="FontSize"/> here instead — which is what several applier sites did —
+    /// quietly prices '1rem' as '1em' (CSS Values 4 §6.3, measured: a 14px box inside a 16px root
+    /// computes 'margin-left: 1rem' as 16px).</summary>
+    public float RootFontSizeOrInitial => RootFontSize > 0 ? RootFontSize : Length.FontSizeMedium;
     /// <summary>True while 'font-size' has never been given a real value anywhere up
     /// the chain — nothing declared, or only the initial keyword 'medium' (and
     /// descendants inheriting that). The generic 'monospace' carries its own size in a
@@ -842,6 +848,19 @@ public class ComputedStyle
     /// See <c>StyleAdjuster.AdjustMonospaceGenericFontSize</c>.</summary>
     public bool FontSizeIsDefault { get; set; } = true;
     public FontWeight FontWeight { get; set; } = FontWeight.Normal;
+    /// <summary>'font-weight' as the page measured it (CSS Fonts 4 §4.2): a weight is any number
+    /// from 1 to 1000 and the computed value says the number the page wrote — '550', '999' and
+    /// '1.5' are each kept — while <see cref="FontWeight"/> is the enum step the face selection
+    /// chooses. 'normal' and 'bold' write their numbers, and the two relative keywords are resolved
+    /// against the parent's weight before either field is set (the whole table of §4.2 is measured
+    /// in snapshots/out/_b294_ref_probeF.txt).</summary>
+    public float FontWeightNumber { get; set; } = 400f;
+    /// <summary>The weight this element inherited, kept apart from <see cref="FontWeightNumber">
+    /// because 'bolder' and 'lighter' are read against the PARENT's weight (CSS Fonts 4 §4.2) and a
+    /// second declaration on the same element must not resolve against the first one's answer —
+    /// 'font: bolder 12px serif' applies its weight twice in this engine's pipeline, and resolving
+    /// against the running value turned a 400 parent into 900 (measured: 700).</summary>
+    public float? InheritedFontWeightNumber { get; set; }
     public FontStyleType FontStyle { get; set; } = FontStyleType.Normal;
     /// <summary>Authored angle of 'font-style: oblique &lt;angle&gt;' (CSS Fonts 4 §3.2.2).
     /// Null means the style asked for the font family's own oblique/italic face.</summary>
@@ -1573,7 +1592,18 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     /// size of its own content — the value text, or the placeholder when there is none. The
     /// initial 'normal' keeps the widget size, which is what the reference engine reports as
     /// the computed value <c>fixed</c> on a form control.</summary>
-    public FieldSizingType FieldSizing { get; set; } = FieldSizingType.Normal;
+    public FieldSizingType FieldSizing { get; set; } = FieldSizingType.Fixed;
+    /// <summary>'math-style' and 'math-shift' (CSS MathML Core §5.3): both inherited, one with two
+    /// words and one with the single word the engines measured here answer. 'superscript' and
+    /// 'subscript' are the spec's 'math-shift' and this engine keeps the field for them without
+    /// claiming the values (measured: both are dropped by the reference engine).</summary>
+    public string MathStyle { get; set; } = "normal";
+    public string MathShift { get; set; } = "normal";
+    /// <summary>'clip' (CSS 2.1 §11.1.2) as the engine prints it: 'auto', or the rect() with its
+    /// four comma-separated sides. The modern clipping is 'clip-path'; this is the legacy property
+    /// an absolutely positioned box still answers, and the reference engine reports the text back
+    /// exactly as its own canonicaliser writes it (measured: 'rect(0px, 1px, 2px, 3px)').</summary>
+    public string Clip { get; set; } = "auto";
 
     public ForcedColorAdjustType ForcedColorAdjust { get; set; } = ForcedColorAdjustType.Auto;
     public ImageRenderingType ImageRendering { get; set; } = ImageRenderingType.Auto;
@@ -1700,7 +1730,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     /// text, because inventing one would print a number the layout never used.
     /// </summary>
     public string ComputedLengthCss(Length length, float viewportWidth = 0, float viewportHeight = 0,
-        float? percentageBase = null)
+        float? percentageBase = null, bool cut = false)
     {
         if (length is AutoLength auto) return auto.ToString();
         if (length is PercentLength percent)
@@ -1735,7 +1765,63 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
                 viewportWidth > 0 ? viewportWidth : ComputedViewportWidth,
                 viewportHeight > 0 ? viewportHeight : ComputedViewportHeight);
         return float.IsNaN(px) ? length.ToString()
-            : Acrux.Core.Dom.Animations.CssValueTokenizer.Num(px) + "px";
+            : cut
+                ? Acrux.Core.Dom.Animations.CssValueTokenizer
+                    .NumCut(Acrux.Core.Dom.Animations.CssValueTokenizer.ClampComputedPixels(px)) + "px"
+                : Acrux.Core.Dom.Animations.CssValueTokenizer.Num(
+                    Acrux.Core.Dom.Animations.CssValueTokenizer.ClampComputedPixels(px)) + "px";
+    }
+
+    /// <summary>Turn every length the layout reads into the absolute pixels its computed value means
+    /// (CSS Values 3 §7: a computed length has no font left to be relative to). A style that keeps an
+    /// 'em' or a 'rem' in a box field is a style the layout cannot see at all: the paths that size a
+    /// box match a pixel length, a percentage and 'auto', and anything else quietly becomes 'auto' —
+    /// which is how 'width: 1rem' filled its 200px containing block instead of being 16px, and
+    /// 'margin-left: 1rem' moved the box by the element's own font (both measured).
+    ///
+    /// It settles the inheritance question the same fields had: an inherited '1em' belongs to the
+    /// font of the element that WROTE it, so a priced pixel is what travels down the tree and the
+    /// unit repriced in the child is not (CSS Cascade 5 §3).
+    ///
+    /// What is left alone is what a computed value genuinely cannot know: 'auto', a percentage, an
+    /// intrinsic-size keyword, a far edge, a container-query unit, and a math expression that still
+    /// carries a percentage.</summary>
+    public void ResolveDefiniteLengths()
+    {
+        using var _fontContext = FontUnitContext.Use(this);
+        Width = Absolute(Width); Height = Absolute(Height);
+        Top = Absolute(Top); Right = Absolute(Right);
+        Bottom = Absolute(Bottom); Left = Absolute(Left);
+        MarginTop = Absolute(MarginTop); MarginRight = Absolute(MarginRight);
+        MarginBottom = Absolute(MarginBottom); MarginLeft = Absolute(MarginLeft);
+        PaddingTop = Absolute(PaddingTop); PaddingRight = Absolute(PaddingRight);
+        PaddingBottom = Absolute(PaddingBottom); PaddingLeft = Absolute(PaddingLeft);
+        FlexBasis = Absolute(FlexBasis);
+        RowGap = Absolute(RowGap); ColumnGap = Absolute(ColumnGap);
+        if (ColumnWidth != null) ColumnWidth = Absolute(ColumnWidth);
+    }
+
+    /// <summary>One box length, priced when the element can price it and left as authored when it
+    /// cannot.</summary>
+    private Length Absolute(Length length)
+    {
+        switch (length)
+        {
+            case null:
+            case AutoLength:
+            case PercentLength:
+            case IntrinsicLength:
+            case FarEdgeLength:
+            case CqWLength or CqHLength or CqILength or CqBLength or CqMinLength or CqMaxLength:
+                return length;
+            // A percentage inside an expression is a share of a box no one has measured yet, and
+            // the layout owns it; an expression without one is a number by now.
+            case MathLength math when math.Expression.Contains('%'):
+                return length;
+        }
+        float px = length.ToPixels(FontSize > 0 ? FontSize : 16f, RootFontSizeOrInitial,
+            ComputedViewportWidth, ComputedViewportHeight);
+        return float.IsNaN(px) || float.IsInfinity(px) ? length : new PixelLength(px);
     }
 
     /// <summary>Copy a per-layer background list so a cloned style never shares a
@@ -1748,9 +1834,10 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     /// or height has no meaning, so the used value is nothing wide and the reference engine
     /// answers '0px' (measured: 'width: calc(10px - 4em)' computes as '0px'), while a negative
     /// margin keeps its sign because an overlap does mean something.</summary>
-    public string ComputedSizeCss(Length length, float viewportWidth = 0, float viewportHeight = 0)
+    public string ComputedSizeCss(Length length, float viewportWidth = 0, float viewportHeight = 0,
+        bool cut = false)
     {
-        var text = ComputedLengthCss(length, viewportWidth, viewportHeight);
+        var text = ComputedLengthCss(length, viewportWidth, viewportHeight, cut: cut);
         return text.StartsWith("-", StringComparison.Ordinal) ? "0px" : text;
     }
 
@@ -1778,7 +1865,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             BorderBottomRightRadiusY = BorderBottomRightRadiusY, BorderBottomLeftRadiusY = BorderBottomLeftRadiusY,
             Display = Display, DisplayIsFlowRoot = DisplayIsFlowRoot,
             Position = Position, Float = Float, Clear = Clear,
-            FontFamily = FontFamily, FontSize = FontSize, FontSizeIsDefault = FontSizeIsDefault, FontWeight = FontWeight,
+            FontFamily = FontFamily, FontSize = FontSize, FontSizeIsDefault = FontSizeIsDefault, FontWeight = FontWeight, FontWeightNumber = FontWeightNumber,
             FontStyle = FontStyle, FontStyleObliqueDegrees = FontStyleObliqueDegrees, LineHeight = LineHeight,
             LineHeightIsNormal = LineHeightIsNormal, LineHeightPx = LineHeightPx,
             LineHeightFromMath = LineHeightFromMath,
@@ -1900,7 +1987,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             ContainIntrinsicWidth = ContainIntrinsicWidth, ContainIntrinsicHeight = ContainIntrinsicHeight,
             ContainIntrinsicWidthIsAuto = ContainIntrinsicWidthIsAuto,
             ContainIntrinsicHeightIsAuto = ContainIntrinsicHeightIsAuto,
-            WillChange = WillChange, Appearance = Appearance, NativeThemeFamily = NativeThemeFamily, FieldSizing = FieldSizing, AccentColor = AccentColor, CaretColor = CaretColor,
+            WillChange = WillChange, Appearance = Appearance, NativeThemeFamily = NativeThemeFamily, FieldSizing = FieldSizing, MathStyle = MathStyle, MathShift = MathShift, Clip = Clip, AccentColor = AccentColor, CaretColor = CaretColor,
             ColorScheme = ColorScheme, EffectiveColorScheme = EffectiveColorScheme, ForcedColorAdjust = ForcedColorAdjust,
             ImageRendering = ImageRendering, Isolation = Isolation, MixBlendMode = MixBlendMode,
             Filter = Filter, BackdropFilter = BackdropFilter, ClipPath = ClipPath,
@@ -2102,7 +2189,10 @@ public static class CssFloatKeywords
         _ => "none",
     };
 }
-public enum BorderStyle { None, Solid, Dashed, Dotted, Double, Groove, Ridge, Inset, Outset }
+/// <summary>CSS 2.1 §8.5.1's styles, and the two that draw nothing: 'hidden' is a style of its own
+/// (it wins the collapsing-border comparison 'none' loses, and the computed value prints it), but no
+/// line is painted for it — so every consumer that asks whether a border is there asks this way.</summary>
+public enum BorderStyle { None, Solid, Dashed, Dotted, Double, Groove, Ridge, Inset, Outset, Hidden }
 public enum FontWeight
 {
     Thin = 100, ExtraLight = 200, Light = 300, Normal = 400, Medium = 500,
@@ -2264,7 +2354,12 @@ public enum MixBlendModeType { Normal, Multiply, Screen, Overlay, Darken, Lighte
 public enum LineBreakType { Auto, Loose, Normal, Strict, Anywhere }
 public enum TextJustifyType { Auto, InterWord, InterCharacter, None }
 public enum HyphensType { None, Manual, Auto }
-public enum WritingModeType { HorizontalTb, VerticalRl, VerticalLr }
+/// <summary>Writing Modes 4 §3. The two sideways modes write the block axis the way vertical
+/// modes do and turn the glyphs 90 degrees on their sides; this engine lays them out as the
+/// vertical mode they share a block axis with (issue #280), but the value, the inherited value and
+/// the computed value all keep the spelling the page used (measured: 'sideways-lr' reads back
+/// 'sideways-lr', and 'tb' reads back as the 'vertical-rl' it is short for).</summary>
+public enum WritingModeType { HorizontalTb, VerticalRl, VerticalLr, SidewaysLr, SidewaysRl }
 /// <summary>'resize' (CSS UI 4 §7.2). The two logical directions are what a page writes in a
 /// bidirectional layout; the engine drags a handle along the physical axis the pair resolves to,
 /// which is what the four start/end spellings would have needed a direction for (measured: this
@@ -2273,7 +2368,11 @@ public enum ResizeType { None, Both, Horizontal, Vertical, Block, Inline }
 
 /// <summary>'field-sizing' (CSS Form Control sizing): 'normal' keeps the widget's rendered
 /// size, 'content' sizes the control from its own content.</summary>
-public enum FieldSizingType { Normal, Content }
+/// <summary>'field-sizing' (CSS Form Control Size Adjustment): 'fixed' keeps the widget's own
+/// size, 'content' lets it grow with the text inside it, and 'normal' is the spelling the earlier
+/// draft of the property carried — which this engine still answers as 'fixed', the value the
+/// reference engine gives a control with nothing written on it (measured).</summary>
+public enum FieldSizingType { Fixed, Normal, Content }
 public enum ForcedColorAdjustType { Auto, None }
 public enum TextOverflowType { Clip, Ellipsis }
 public enum ColorSchemeType { Normal, Light, Dark, Only }
@@ -2619,5 +2718,23 @@ public static class CssEnumFormatter
     public static string ToCssString(this BorderStyle style) => style switch
     {
         _ => style.ToString().ToLowerInvariant()
+    };
+
+    /// <summary>Whether a border edge with this style puts any ink on the page. 'hidden' is the one
+    /// style that is present but paints nothing (CSS 2.1 §8.5.1).</summary>
+    public static bool IsDrawn(this BorderStyle style) => style is not (BorderStyle.None or BorderStyle.Hidden);
+
+    /// <summary>Whether the writing mode puts the block axis on the vertical — which is what every
+    /// consumer that has no sideways support asks (the two sideways modes flow like the vertical
+    /// modes that share their block direction; only the glyph rotation is missing, issue #280).</summary>
+    public static bool IsVertical(this WritingModeType mode) => mode is not WritingModeType.HorizontalTb;
+
+    /// <summary>The physical writing mode a sideways mode flows in, for the layout paths that can
+    /// only do one of the three.</summary>
+    public static WritingModeType VerticalEquivalent(this WritingModeType mode) => mode switch
+    {
+        WritingModeType.SidewaysLr => WritingModeType.VerticalLr,
+        WritingModeType.SidewaysRl => WritingModeType.VerticalRl,
+        _ => mode,
     };
 }

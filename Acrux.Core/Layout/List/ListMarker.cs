@@ -192,7 +192,7 @@ public class ListMarker
     {
         if (item?.MarkerStyles is { } styles && styles.TryGetValue("font-size", out string? text))
         {
-            float resolved = Length.Parse(text.Trim()).ToPixels(style.FontSize, style.FontSize, 0, 0);
+            float resolved = Length.Parse(text.Trim()).ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0, 0);
             if (!float.IsNaN(resolved) && resolved > 0) return resolved;
         }
         return style.FontSize;

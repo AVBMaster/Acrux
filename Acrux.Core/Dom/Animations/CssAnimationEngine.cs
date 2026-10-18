@@ -956,8 +956,8 @@ public sealed class CssAnimationEngine
                     // An absolute px/rem target needs no context; a relative unit
                     // would need the parent's size, and the keyframe values the
                     // engine produces are already resolved lengths.
-                    float px = Length.Parse(value) is { } l && !float.IsNaN(l.ToPixels(style.FontSize, style.FontSize, 0, 0))
-                        ? l.ToPixels(style.FontSize, style.FontSize, 0, 0)
+                    float px = Length.Parse(value) is { } l && !float.IsNaN(l.ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0, 0))
+                        ? l.ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0, 0)
                         : float.NaN;
                     if (!float.IsNaN(px) && px > 0)
                     {
@@ -969,7 +969,7 @@ public sealed class CssAnimationEngine
                     return false;
                 }
                 case "font-weight":
-                    style.FontWeight = CssPropertyApplier.ParseFontWeight(value);
+                    CssPropertyApplier.ApplyFontWeight(style, value);
                     return true;
                 case "font-style":
                     style.FontStyle = CssPropertyApplier.ParseFontStyle(value, style);

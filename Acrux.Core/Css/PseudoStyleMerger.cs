@@ -85,7 +85,7 @@ public static class PseudoStyleMerger
                     Css.Resolver.CssPropertyApplier.SetFontSize(style, value, Css.Resolver.CssPropertyApplier.ParseFontSize(value, baseStyle));
                     continue;
                 case "font-weight":
-                    style.FontWeight = Css.Resolver.CssPropertyApplier.ParseFontWeight(value);
+                    Css.Resolver.CssPropertyApplier.ApplyFontWeight(style, value);
                     continue;
                 case "font-style":
                     style.FontStyle = Css.Resolver.CssPropertyApplier.ParseFontStyle(value, style);

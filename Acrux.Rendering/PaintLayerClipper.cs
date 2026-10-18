@@ -55,6 +55,26 @@ internal sealed class PaintLayerClipper
             SKPath? shapeClip = ClipPathClipper.HasClipPath(style.ClipPath)
                 ? ClipPathClipper.Parse(style.ClipPath, box)
                 : null;
+            // The legacy 'clip' rect is a clip of the same kind (CSS 2.1 §11.1.2): it hides
+            // the box and everything inside it, so the layer walk has to replay it here too.
+            if (LegacyClip.HasClip(style))
+            {
+                using var legacy = LegacyClip.Parse(style.Clip, box, style);
+                if (legacy != null)
+                {
+                    if (shapeClip == null) shapeClip = new SKPath(legacy);
+                    else
+                    {
+                        var shared = new SKPath();
+                        if (shapeClip.Op(legacy, SKPathOp.Intersect, shared))
+                        {
+                            shapeClip.Dispose();
+                            shapeClip = shared;
+                        }
+                        else shared.Dispose();
+                    }
+                }
+            }
             if (shapeClip != null)
                 shapeClip.Offset(-ax, contentOffsetY - ay);
 

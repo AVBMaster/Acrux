@@ -512,18 +512,21 @@ public static class CssPropertyApplier
             case "border-inline-end-style": SetBorderStyleSide(style, InlineEndSide(style), value); break;
             case "border-inline-start-color": SetBorderColorSide(style, InlineStartSide(style), value); break;
             case "border-inline-end-color": SetBorderColorSide(style, InlineEndSide(style), value); break;
-            case "border-inline-width": SetBorderWidthSide(style, InlineStartSide(style), value); SetBorderWidthSide(style, InlineEndSide(style), value); break;
-            case "border-inline-style": SetBorderStyleSide(style, InlineStartSide(style), value); SetBorderStyleSide(style, InlineEndSide(style), value); break;
-            case "border-inline-color": SetBorderColorSide(style, InlineStartSide(style), value); SetBorderColorSide(style, InlineEndSide(style), value); break;
+            case "border-inline-width": SetBorderPairSides(style, SetBorderWidthSide,
+                InlineStartSide(style), InlineEndSide(style), value); break;
+            case "border-inline-style": SetBorderPairSides(style, SetBorderStyleSide,
+                InlineStartSide(style), InlineEndSide(style), value); break;
+            case "border-inline-color": SetBorderPairSides(style, SetBorderColorSide,
+                InlineStartSide(style), InlineEndSide(style), value); break;
             case "border-block-start-width": SetBorderWidthSide(style, "top", value); break;
             case "border-block-end-width": SetBorderWidthSide(style, "bottom", value); break;
             case "border-block-start-style": SetBorderStyleSide(style, "top", value); break;
             case "border-block-end-style": SetBorderStyleSide(style, "bottom", value); break;
             case "border-block-start-color": SetBorderColorSide(style, "top", value); break;
             case "border-block-end-color": SetBorderColorSide(style, "bottom", value); break;
-            case "border-block-width": SetBorderWidthSide(style, "top", value); SetBorderWidthSide(style, "bottom", value); break;
-            case "border-block-style": SetBorderStyleSide(style, "top", value); SetBorderStyleSide(style, "bottom", value); break;
-            case "border-block-color": ParseBorderColorBothAxes(style, value); break;
+            case "border-block-width": SetBorderPairSides(style, SetBorderWidthSide, "top", "bottom", value); break;
+            case "border-block-style": SetBorderPairSides(style, SetBorderStyleSide, "top", "bottom", value); break;
+            case "border-block-color": SetBorderPairSides(style, SetBorderColorSide, "top", "bottom", value); break;
             case "border-width": ParseBorderWidth(value, style); break;
             case "border-color": ParseBorderColor(value, style); break;
             case "border-style": ParseBorderStyle(value, style); break;
@@ -611,7 +614,7 @@ public static class CssPropertyApplier
             case "order": if (int.TryParse(value, out var ord)) style.Order = ord; break;
             case "justify-content":
                 {
-                    var jc = CanonicalAlignmentValue(value);
+                    var jc = CanonicalAlignmentValue(value, JustifyContentWords);
                     if (jc == null) break;
                     style.JustifyContent = ParseJustifyContent(jc);
                     style.JustifyContentCssText = jc;
@@ -619,19 +622,19 @@ public static class CssPropertyApplier
                 break;
             case "justify-items":
                 {
-                    var ji = CanonicalAlignmentValue(value, legacyAllowed: true);
+                    var ji = CanonicalAlignmentValue(value, JustifyItemsWords);
                     if (ji != null) style.JustifyItems = ji;
                 }
                 break;
             case "justify-self":
                 {
-                    var js = CanonicalAlignmentValue(value);
+                    var js = CanonicalAlignmentValue(value, JustifySelfWords);
                     if (js != null) style.JustifySelf = js;
                 }
                 break;
             case "align-items":
                 {
-                    var ai = CanonicalAlignmentValue(value);
+                    var ai = CanonicalAlignmentValue(value, AlignItemsWords);
                     if (ai == null) break;
                     style.AlignItems = ParseAlignItems(ai);
                     style.AlignItemsCssText = ai;
@@ -639,7 +642,7 @@ public static class CssPropertyApplier
                 break;
             case "align-self":
                 {
-                    var asf = CanonicalAlignmentValue(value);
+                    var asf = CanonicalAlignmentValue(value, AlignSelfWords);
                     if (asf == null) break;
                     style.AlignSelf = ParseAlignSelf(asf);
                     style.AlignSelfCssText = asf;
@@ -647,14 +650,14 @@ public static class CssPropertyApplier
                 break;
             case "align-content":
                 {
-                    var ac = CanonicalAlignmentValue(value);
+                    var ac = CanonicalAlignmentValue(value, AlignContentWords);
                     if (ac != null) style.AlignContent = ac;
                 }
                 break;
             case "place-content":
                 {
-                    style.PlaceContent = value.ToLowerInvariant();
-                    var (block, inline) = PlacePair(value);
+                    var (block, inline) = PlacePair(value, AlignContentWords, JustifyContentWords);
+                    style.PlaceContent = PlacePairText(block, inline);
                     ApplyPlace(v => { style.AlignContent = v; },
                         v => { style.JustifyContent = ParseJustifyContent(v); style.JustifyContentCssText = v; },
                         block, inline);
@@ -662,18 +665,21 @@ public static class CssPropertyApplier
                 break;
             case "place-items":
                 {
-                    style.PlaceItems = value.ToLowerInvariant();
-                    // The inline side of 'place-items' is 'justify-items', legacy family and all.
-                    var (block, inline) = PlacePair(value, inlineAllowsLegacy: true);
+                    var (block, inline) = PlacePair(value, AlignItemsWords, JustifyItemsWords);
+                    style.PlaceItems = PlacePairText(block, inline);
                     ApplyPlace(v => { style.AlignItems = ParseAlignItems(v); style.AlignItemsCssText = v; },
                         v => style.JustifyItems = v, block, inline);
                 }
                 break;
             case "place-self":
                 {
-                    style.PlaceSelf = value.ToLowerInvariant();
-                    var (block, inline) = PlacePair(value);
-                    ApplyPlace(v => style.AlignSelf = ParseAlignSelf(v), v => style.JustifySelf = v, block, inline);
+                    var (block, inline) = PlacePair(value, AlignSelfWords, JustifySelfWords);
+                    style.PlaceSelf = PlacePairText(block, inline);
+                    // The spelling travels with the enum, exactly as the 'align-self' longhand's own
+                    // case writes it, or a 'place-self: unsafe center' would compute the keyword the
+                    // page never wrote (measured: both sides read 'unsafe center').
+                    ApplyPlace(v => { style.AlignSelf = ParseAlignSelf(v); style.AlignSelfCssText = v; },
+                        v => style.JustifySelf = v, block, inline);
                 }
                 break;
             case "gap": ParseGap(value, style); break;
@@ -699,7 +705,18 @@ public static class CssPropertyApplier
                 break;
             case "column-rule-style": style.ColumnRuleStyle = ParseBorderStyleValue(value); break;
             case "column-rule-color": style.ColumnRuleColor = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.ColumnRule, value); break;
-            case "grid": style.Grid = value; break;
+            // CSS Grid 1 §7.2.1: 'grid' is the template, the flow and the two implicit lists at
+            // once, so the shorthand writes all six longhands — the two axes and the areas out of
+            // the template it carries, the rest at their initial, which is what a page that says
+            // 'grid: 1px / 2px' asked for (measured: that computes
+            // '1px / 2px / none / row / auto / auto', six parts the computed value always says).
+            case "grid":
+                style.Grid = value;
+                ParseGridTemplateShorthand(value, style);
+                style.GridAutoFlow = GridAutoFlowType.Row;
+                style.GridAutoRows = "auto";
+                style.GridAutoColumns = "auto";
+                break;
             case "grid-template": ParseGridTemplateShorthand(value, style); break;
             case "grid-template-columns": style.GridTemplateColumns = value == "none" ? null : value; break;
             case "grid-template-rows": style.GridTemplateRows = value == "none" ? null : value; break;
@@ -735,7 +752,12 @@ public static class CssPropertyApplier
             case "inset-inline-end": ApplyInlineInset(style, null, Length.Parse(value)); break;
             case "list-style-type": style.ListStyleType = ParseListStyleType(value, style); break;
             case "list-style-position": style.ListStylePosition = value.Contains("inside") ? ListStylePosition.Inside : ListStylePosition.Outside; break;
-            case "list-style-image": style.ListStyleImage = NormalizeUrlValue(value); break;
+            // An image is more than an address: a gradient is a marker too, and the computed value
+            // says the whole function back with its colours resolved
+            // (measured: 'list-style-image: linear-gradient(red, blue)' computes the gradient where
+            // the address-only reader answered 'none').
+            case "list-style-image": style.ListStyleImage = NormalizeImageSource(value) ?? "none";
+                break;
             case "list-style": ParseListStyle(value, style); break;
             case "cursor": style.Cursor = value; break;
             case "transform": style.Transform = value; break;
@@ -858,7 +880,7 @@ public static class CssPropertyApplier
                         {
                             // em/ex/ch/lh resolve against this element's own font, which is only
                             // known once the font properties have been applied.
-                            style.TextIndent = ti.ToPixels(style.FontSize, style.FontSize, 0, 0);
+                            style.TextIndent = ti.ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0, 0);
                             style.TextIndentPercent = 0;
                         }
                     }
@@ -874,7 +896,7 @@ public static class CssPropertyApplier
                 }
                 else if (Length.TryParse(value, out var ls))
                 {
-                    style.LetterSpacing = ls.ToPixels(style.FontSize, style.FontSize, 0, 0);
+                    style.LetterSpacing = ls.ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0, 0);
                     style.LetterSpacingIsNormal = false;
                     style.LetterSpacingPercent = PercentOf(value);
                 }
@@ -887,7 +909,7 @@ public static class CssPropertyApplier
                 }
                 else if (Length.TryParse(value, out var ws))
                 {
-                    style.WordSpacing = ws.ToPixels(style.FontSize, style.FontSize, 0, 0);
+                    style.WordSpacing = ws.ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0, 0);
                     style.WordSpacingIsNormal = false;
                     style.WordSpacingPercent = PercentOf(value);
                 }
@@ -1164,15 +1186,35 @@ public static class CssPropertyApplier
                 break;
             case "resize": style.Resize = ParseResize(value); break;
             case "field-sizing":
-                // 'field-sizing: normal | content'. An unknown keyword (the draft's 'size'
-                // among them) invalidates the declaration rather than resetting the axis, so
-                // it must not be folded into the 'normal' branch.
+                // 'field-sizing: fixed | content'. The two words the draft spelled beside them
+                // ('normal' and 'size') invalidate the declaration rather than resetting the axis,
+                // so neither is folded into the fixed branch the property starts in
+                // (measured: 'field-sizing: normal' and '… : size' each read back nothing).
                 switch (value.Trim().ToLowerInvariant())
                 {
+                    case "fixed": style.FieldSizing = FieldSizingType.Fixed; break;
+                    // The older draft's spelling of the same thing, still answered for the pages
+                    // that wrote it before the keyword was renamed.
                     case "normal": style.FieldSizing = FieldSizingType.Normal; break;
                     case "content": style.FieldSizing = FieldSizingType.Content; break;
                 }
                 break;
+            // CSS MathML Core §5.3: two inherited words, each from its own closed set. The
+            // grammar has refused anything else by now, so the value is stored lower-cased and the
+            // computed value says it back (measured: 'math-style: compact' computes 'compact' and
+            // 'math-shift' has only the 'normal' this engine answers).
+            case "math-style":
+                if (IsOneOfLower(value, "normal", "compact"))
+                    style.MathStyle = value.Trim().ToLowerInvariant();
+                break;
+            case "math-shift":
+                if (IsOneOfLower(value, "normal")) style.MathShift = "normal";
+                break;
+            // CSS 2.1 §11.1.2: the legacy 'clip' of an absolutely positioned box. The engine keeps
+            // the text its own canonicaliser wrote — 'auto' or a rect() with four sides — because
+            // that is exactly what a page reads back (measured), and the clipping rectangle itself
+            // is the layout's to price when it draws the box.
+            case "clip": style.Clip = value.Trim().ToLowerInvariant(); break;
             case "zoom": style.Zoom = ParseZoom(value); break;
             case "all": break; // all shorthand - handled via reset cascade
             // Read, validated, stored and echoed but not consumed: no layout drops a large initial
@@ -1282,10 +1324,16 @@ public static class CssPropertyApplier
     /// authored (measured in Edge, see ComputedStyle.FontSizeIsDefault).</summary>
     public static void SetFontSize(ComputedStyle style, string? specified, float size)
     {
-        style.FontSize = size;
+        // The number a font size stops at: the reference engine reports and lays out
+        // '10000px' for any size above it, because a larger glyph is outside what its font
+        // machinery can measure (measured: 'font-size: 2147483647px' computes '10000px').
+        style.FontSize = size > MaxFontSize ? MaxFontSize : size;
         string s = specified?.Trim().ToLowerInvariant() ?? "";
         style.FontSizeIsDefault = s.Length == 0 || s == "medium" || s == "auto";
     }
+
+    /// <summary>The largest font size the engine carries, in CSS pixels.</summary>
+    public const float MaxFontSize = 10000f;
 
     public static float ParseFontSize(string value, ComputedStyle? parentStyle,
         float rootFontSize = 16f, float viewportWidth = 0f, float viewportHeight = 0f)
@@ -1358,6 +1406,90 @@ public static class CssPropertyApplier
                 && (char.IsDigit(v[0]) || v[0] == '.' || v[0] == '+' || v[0] == '-'))
                 return true;
         return false;
+    }
+
+    /// <summary>'font-weight' onto the two fields the property has: the enum step the face
+    /// selection chooses and the number the computed value says. A weight is any number from 1 to
+    /// 1000, and the number the page wrote is the number the engine prints — '550' does not become
+    /// '600' and '1.5' does not become '2' (both measured). The two relative keywords are resolved
+    /// against the weight the element inherited, which is the number already in the style being
+    /// built, and the table CSS Fonts 4 §4.2 gives is the one the reference engine answers from:
+    /// 100-300 → lighter 100 / bolder 400, 400-600 → 100 / 700, 700 → 400 / 900, 800-900 →
+    /// 700 / 900 (measured at every one of those parents).</summary>
+    public static void ApplyFontWeight(ComputedStyle style, string value)
+    {
+        var v = value.Trim().ToLowerInvariant();
+        // The parent's weight, not the element's own running value: a second relative declaration
+        // on the same element reads the same parent (CSS Fonts 4 §4.2).
+        float parent = style.InheritedFontWeightNumber ?? (style.FontWeightNumber > 0 ? style.FontWeightNumber : 400f);
+        if (v.Equals("bolder", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("lighter", StringComparison.OrdinalIgnoreCase))
+        {
+            bool up = v.Length == 6;
+            float number = ResolveRelativeWeight(parent, up);
+            style.FontWeightNumber = number;
+            style.FontWeight = NearestFontWeight(number);
+            return;
+        }
+        if (v.Equals("normal", StringComparison.OrdinalIgnoreCase))
+        {
+            style.FontWeightNumber = 400f;
+            style.FontWeight = FontWeight.Normal;
+            return;
+        }
+        if (v.Equals("bold", StringComparison.OrdinalIgnoreCase))
+        {
+            style.FontWeightNumber = 700f;
+            style.FontWeight = FontWeight.Bold;
+            return;
+        }
+        if (TryWeightNumber(v, out var weight))
+        {
+            style.FontWeightNumber = weight;
+            style.FontWeight = NearestFontWeight(weight);
+            return;
+        }
+        style.FontWeightNumber = 400f;
+        style.FontWeight = FontWeight.Normal;
+    }
+
+    /// <summary>Whether a token spells a weight number. A leading '+' is the same weight written
+    /// longer (measured: '+500' reads back '500'), and the fraction a variable font answers is a
+    /// weight too.</summary>
+    private static bool TryWeightNumber(string token, out float weight)
+    {
+        weight = 0f;
+        if (token.StartsWith("+", StringComparison.Ordinal)) token = token[1..];
+        if (!float.TryParse(token, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed)) return false;
+        if (float.IsNaN(parsed) || float.IsInfinity(parsed)) return false;
+        if (parsed < 1 || parsed > 1000) return false;
+        weight = parsed;
+        return true;
+    }
+
+    /// <summary>The step the face selection takes for a weight the enum has no name for: the
+    /// nearest of the nine, which is what the renderer has always been given.</summary>
+    public static FontWeight NearestFontWeight(float weight)
+        => (FontWeight)(int)Math.Clamp(Math.Round(weight / 100.0) * 100, 100, 900);
+
+    /// <summary>The relative-weight table of CSS Fonts 4 §4.2, read at the thresholds the reference
+    /// engine actually answers from. Measured at every parent from 1.5 to 999: 'bolder' is 400 below
+    /// a 350 parent, 700 below a 550 one and 900 from there up, and 'lighter' is 100 up to a 500
+    /// parent, 400 up to a 700 one and 700 beyond. A parent the table has already passed keeps its
+    /// own weight, which is why a 999 answers 'bolder' with 999 and a 1.5 answers 'lighter' with
+    /// 1.5 (both measured).</summary>
+    public static float ResolveRelativeWeight(float parent, bool bolder)
+    {
+        if (bolder)
+            return parent < 350 ? 400
+                 : parent < 550 ? 700
+                 : parent <= 900 ? 900
+                 : parent;
+        return parent <= 100 ? parent
+             : parent <= 500 ? 100
+             : parent <= 700 ? 400
+             : 700;
     }
 
     public static FontWeight ParseFontWeight(string value)
@@ -1755,7 +1887,7 @@ public static class CssPropertyApplier
             else
             {
                 style.VerticalAlign = VerticalAlignType.Length;
-                style.VerticalAlignOffsetPx = length.ToPixels(style.FontSize, style.FontSize, 0, 0);
+                style.VerticalAlignOffsetPx = length.ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0, 0);
             }
         }
     }
@@ -2041,6 +2173,11 @@ public static class CssPropertyApplier
         // 'Visible' — so the declaration parsed, matched, and the box stopped clipping
         // at all, which is the opposite of what the keyword asks for.
         "clip" => OverflowType.Clip,
+        // CSS Overflow 3 §3.4: the scrollbar-inflation keyword of the same family is accepted,
+        // behaves as 'auto', and is reported as 'auto' — the box scrolls and the computed value
+        // says which of the two scrollings it is
+        // (measured: 'overflow-x: overlay' echoes 'overlay' and computes 'auto').
+        "overlay" => OverflowType.Auto,
         _ => OverflowType.Visible
     };
 
@@ -2422,7 +2559,13 @@ public static class CssPropertyApplier
             || v.StartsWith("radial-gradient(", StringComparison.OrdinalIgnoreCase)
             || v.StartsWith("repeating-radial-gradient(", StringComparison.OrdinalIgnoreCase)
             || v.StartsWith("conic-gradient(", StringComparison.OrdinalIgnoreCase)
-            || v.StartsWith("repeating-conic-gradient(", StringComparison.OrdinalIgnoreCase);
+            || v.StartsWith("repeating-conic-gradient(", StringComparison.OrdinalIgnoreCase)
+            // The rest of the <image> grammar is a function of its own, and a longhand that takes
+            // an image keeps the whole thing (measured: 'list-style-image: image-set(url(a.png) 1x)'
+            // and 'mask-image: paint(x)' each compute the function back, not 'none').
+            || v.StartsWith("image-set(", StringComparison.OrdinalIgnoreCase)
+            || v.StartsWith("-webkit-image-set(", StringComparison.OrdinalIgnoreCase)
+            || v.StartsWith("paint(", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Normalise an &lt;image&gt; longhand: url(), a generated gradient, or none.</summary>
@@ -2654,24 +2797,79 @@ public static class CssPropertyApplier
     private static readonly HashSet<string> AlignmentKeywords = new(StringComparer.OrdinalIgnoreCase)
     {
         "normal", "auto", "stretch", "start", "end", "flex-start", "flex-end", "center",
+        // CSS Box Alignment 3 §5: the two edges of the item's own box, words of item and self
+        // alignment alone (measured: 'align-items: self-end' and 'justify-self: self-start' stand).
+        "self-start", "self-end",
         "left", "right", "baseline", "first baseline", "last baseline",
         "space-between", "space-around", "space-evenly",
         // The legacy family is 'justify-items' alone (CSS Box Alignment 3 §8), and it is written
         // with a space: measured, 'legacy right' stands there while 'legacy-right' and
         // 'align-content: legacy center' both fall.
         "legacy", "legacy left", "legacy right", "legacy center",
+        // CSS Anchor Positioning 1 §5: the one anchor spelling self alignment answers.
+        "anchor-center",
     };
 
     /// <summary>The canonical spelling of an alignment value: lower-case, whitespace collapsed,
     /// and null when the token is not an alignment keyword. The property stores this text because
     /// its computed value is the keyword the page used — 'end' answers 'end' and an authored
     /// 'flex-end' answers 'flex-end' (measured), which a single enum could not tell apart.</summary>
+    /// <summary>Which words one alignment property answers. The six properties share the keyword
+    /// family of CSS Box Alignment 3 §4 and still differ on five of its members, each measured
+    /// value by value (snapshots/out/_b294_ref_probeF.txt and _b294_ref_probeG.txt): 'auto' belongs
+    /// to self alignment alone, 'left' and 'right' to the content distribution and to
+    /// 'justify-items' but not to 'align-*', 'baseline' is nobody's 'justify-content' while
+    /// 'last baseline' is not 'align-content''s, 'stretch' is not a content-distribution word in
+    /// this engine's table, and the legacy family is the inline axis's own tail.</summary>
+    [System.Flags]
+    public enum AlignmentWords
+    {
+        None = 0,
+        Auto = 1,
+        Side = 2,
+        Baseline = 4,
+        LastBaseline = 8,
+        Stretch = 16,
+        Legacy = 32,
+        /// <summary>The two self-alignment edges, which the four item and self properties answer
+        /// and the two content-distribution properties do not (measured: 'align-items: self-start'
+        /// stands while 'place-content: self-start' falls).</summary>
+        Self = 64,
+        /// <summary>Every word the six properties have between them — the set the helpers fall
+        /// back to when a caller does not name a property.</summary>
+        Everything = Auto | Side | Baseline | LastBaseline | Stretch | Legacy | Self,
+    }
+
+    public const AlignmentWords AlignContentWords = AlignmentWords.Baseline | AlignmentWords.Stretch;
+    public const AlignmentWords JustifyContentWords
+        = AlignmentWords.Side | AlignmentWords.Stretch;
+    public const AlignmentWords AlignItemsWords
+        = AlignmentWords.Baseline | AlignmentWords.LastBaseline | AlignmentWords.Stretch
+        | AlignmentWords.Self;
+    public const AlignmentWords JustifyItemsWords
+        = AlignmentWords.Side | AlignmentWords.Baseline | AlignmentWords.LastBaseline
+        | AlignmentWords.Stretch | AlignmentWords.Legacy | AlignmentWords.Self;
+    public const AlignmentWords AlignSelfWords
+        = AlignmentWords.Auto | AlignmentWords.Baseline | AlignmentWords.LastBaseline
+        | AlignmentWords.Stretch | AlignmentWords.Self;
+    public const AlignmentWords JustifySelfWords
+        = AlignmentWords.Auto | AlignmentWords.Side | AlignmentWords.Baseline
+        | AlignmentWords.LastBaseline | AlignmentWords.Stretch | AlignmentWords.Self;
+
     /// <summary>Whether a value is one of the alignment keywords, asked of the same function the
     /// cascade uses so no surface answers twice about one declaration.</summary>
-    public static bool IsAlignmentValue(string value, bool legacyAllowed = false) =>
-        CanonicalAlignmentValue(value, legacyAllowed) != null;
+    public static bool IsAlignmentValue(string value,
+        AlignmentWords words = AlignmentWords.Everything) =>
+        CanonicalAlignmentValue(value, words) != null;
 
-    private static string? CanonicalAlignmentValue(string value, bool legacyAllowed = false)
+    /// <summary>The canonical spelling of one alignment value, or null when the property asking has
+    /// no such word. The grammar of a 'place-*' shorthand needs the spelling itself — not just the
+    /// yes or no — because it has to know how many words the first half of the pair took.</summary>
+    public static string? CanonicalAlignmentOf(string value, AlignmentWords words) =>
+        CanonicalAlignmentValue(value, words);
+
+    private static string? CanonicalAlignmentValue(string value,
+        AlignmentWords words = AlignmentWords.Everything)
     {
         // Collapse the runs of space a multi-word keyword may be written with, so that
         // 'first  baseline' and 'first baseline' are the same value.
@@ -2696,44 +2894,105 @@ public static class CssPropertyApplier
                 var rest = text[qualifier.Length..];
                 if (!AlignmentKeywords.Contains(rest) || rest is "normal" or "auto" or "stretch")
                     return null;
-                if (rest.StartsWith("legacy", StringComparison.OrdinalIgnoreCase) && !legacyAllowed)
-                    return null;
+                // 'unsafe left' is a position the property has to answer as well as the qualifier
+                // does (measured: 'place-content: unsafe start' stands and
+                // 'align-items: unsafe left' is no value at all).
+                if (!Allows(rest, words)) return null;
                 return text.ToLowerInvariant();
             }
         }
         if (!AlignmentKeywords.Contains(text)) return null;
+        if (!Allows(text, words)) return null;
         var canonical = text.ToLowerInvariant();
         // 'first' is the baseline the other keyword already names (measured: 'align-items: first
-        // baseline' reads 'baseline'), and the legacy family belongs to 'justify-items' alone.
+        // baseline' and 'align-content: first baseline' both read back 'baseline').
         if (canonical == "first baseline") canonical = "baseline";
-        if (canonical.StartsWith("legacy", StringComparison.Ordinal) && !legacyAllowed) return null;
         return canonical;
+    }
+
+    /// <summary>Whether one alignment keyword is a word of the property asking. The families the
+    /// table holds are the five the six properties divide up between them, and the anchor spelling
+    /// belongs to self alignment with 'auto' (all measured).
+    private static bool Allows(string keyword, AlignmentWords words)
+    {
+        var lower = keyword.ToLowerInvariant();
+        switch (lower)
+        {
+            case "auto":
+            case "anchor-center":
+                return (words & AlignmentWords.Auto) != 0;
+            case "left":
+            case "right":
+                return (words & AlignmentWords.Side) != 0;
+            case "baseline":
+            case "first baseline":
+                return (words & AlignmentWords.Baseline) != 0;
+            case "last baseline":
+                return (words & AlignmentWords.LastBaseline) != 0;
+            case "stretch":
+                return (words & AlignmentWords.Stretch) != 0;
+            case "self-start":
+            case "self-end":
+                return (words & AlignmentWords.Self) != 0;
+            default:
+                if (lower.StartsWith("legacy", StringComparison.Ordinal))
+                    return (words & AlignmentWords.Legacy) != 0;
+                return true;
+        }
     }
 
     /// <summary>Splits a 'place-*' value into its block and inline side, the inline side
     /// defaulting to the block one (CSS Box Alignment 3 §6). A side that is not an alignment
     /// keyword makes the whole declaration invalid.</summary>
+    /// <summary>The text a 'place-*' value reads back as: the two sides in the order the grammar
+    /// takes them, with the second left out when it repeats the first, and each side in the
+    /// spelling its own longhand uses (measured: 'place-self: center center' and
+    /// 'place-content: normal normal' each say one word, 'place-content: first baseline' says
+    /// 'baseline start', and 'place-items: center start' says both).</summary>
+    public static string PlacePairCanonical(string value, AlignmentWords blockWords,
+        AlignmentWords inlineWords)
+    {
+        var (block, inlineAxis) = PlacePair(value, blockWords, inlineWords);
+        return PlacePairText(block, inlineAxis);
+    }
+
     private static (string? block, string? inlineAxis) PlacePair(string value,
-        bool inlineAllowsLegacy = false)
+        AlignmentWords blockWords = AlignmentWords.Everything,
+        AlignmentWords inlineWords = AlignmentWords.Everything)
     {
         var parts = ShorthandExpander.SplitShorthand(value).ToArray();
         if (parts.Length == 0) return (null, null);
         // A side of the pair can itself be two words ('place-items: baseline last baseline'), so
         // the split is decided by what parses rather than by how many spaces there are: the first
         // side is the longest prefix that is a value, and the rest is the second (measured).
-        int blockWords = 1;
-        string? block = CanonicalAlignmentValue(parts[0]);
-        if (block == null && parts.Length > 2)
+        int taken = 1;
+        string? block = CanonicalAlignmentValue(parts[0], blockWords);
+        if (block == null && parts.Length >= 2)
         {
-            block = CanonicalAlignmentValue(parts[0] + " " + parts[1]);
-            blockWords = 2;
+            block = CanonicalAlignmentValue(parts[0] + " " + parts[1], blockWords);
+            taken = 2;
         }
-        var rest = parts[blockWords..];
+        var rest = parts[taken..];
         var inlineAxis = rest.Length == 0
             ? block
-            : CanonicalAlignmentValue(string.Join(" ", rest), inlineAllowsLegacy);
+            : CanonicalAlignmentValue(string.Join(" ", rest), inlineWords);
+        // A single 'baseline' is a block-axis word the inline axis has no reading for, and the
+        // engine answers it with the start edge (measured: 'place-content: baseline' and
+        // 'place-content: first baseline' both read back 'baseline start').
+        if (rest.Length == 0 && inlineAxis == "baseline"
+            && (blockWords & AlignmentWords.Baseline) != 0
+            && (inlineWords & AlignmentWords.Baseline) == 0) inlineAxis = "start";
         return block == null || inlineAxis == null ? (null, null) : (block, inlineAxis);
     }
+
+    /// <summary>The text a 'place-*' value reads back as: the two sides, with the second left out
+    /// when it repeats the first (measured: 'place-self: center center', 'place-content: normal
+    /// normal' and 'place-items: center center' each say one word, while 'center start' says two).
+    /// A pair that does not read keeps the text the page wrote, because a printer may not invent a
+    /// value the grammar refused.</summary>
+    private static string PlacePairText(string? block, string? inlineAxis)
+        => block == null || inlineAxis == null ? "normal"
+            : inlineAxis == block ? block : block + " " + inlineAxis;
 
     /// <summary>Writes the two sides of a 'place-*' value onto the pair of longhands it stands
     /// for. Both sides are forwarded as written, because 'normal' means something different to
@@ -2939,6 +3198,9 @@ public static class CssPropertyApplier
         "ridge" => BorderStyle.Ridge,
         "inset" => BorderStyle.Inset,
         "outset" => BorderStyle.Outset,
+        // 'hidden' is a style of its own, not a spelling of 'none': it wins the collapsing-border
+        // comparison and the computed value prints it (CSS 2.1 §8.5.1, measured).
+        "hidden" => BorderStyle.Hidden,
         _ => BorderStyle.None
     };
 
@@ -2957,8 +3219,12 @@ public static class CssPropertyApplier
 
         if (Length.TryParse(text, out var length) && length != null)
         {
-            float font = FontUnitContext.Current?.FontSize ?? 16f;
-            float px = length.ToPixels(font, font, 0, 0);
+            // 'em' is the element's own font and 'rem' the root's: handing the same number to both
+            // roles priced a 'border: 1rem' at the element's font (CSS Values 4 §6.3, measured: a
+            // 14px box inside a 16px root gives a 32px border box, not a 28px one).
+            var ambient = FontUnitContext.Current;
+            float font = ambient?.FontSize ?? 16f;
+            float px = length.ToPixels(font, ambient?.RootFontSizeOrInitial ?? 16f, 0, 0);
             if (!float.IsNaN(px)) return px;
         }
         return null;
@@ -3105,8 +3371,11 @@ public static class CssPropertyApplier
 
     public static AlignItemsType ParseAlignItems(string value) => value.ToLowerInvariant() switch
     {
-        "flex-start" or "start" or "left" => AlignItemsType.FlexStart,
-        "flex-end" or "end" or "right" => AlignItemsType.FlexEnd,
+        // CSS Box Alignment 3 §5: the item's own start and end edges, which in this engine's one
+        // writing mode are the same edges 'start' and 'end' name (measured: 'place-items: self-end'
+        // puts a grid item on the container's bottom edge).
+        "flex-start" or "start" or "left" or "self-start" => AlignItemsType.FlexStart,
+        "flex-end" or "end" or "right" or "self-end" => AlignItemsType.FlexEnd,
         "center" => AlignItemsType.Center,
         "baseline" or "first baseline" => AlignItemsType.Baseline,
         _ => AlignItemsType.Stretch
@@ -3114,8 +3383,8 @@ public static class CssPropertyApplier
 
     public static AlignSelfType ParseAlignSelf(string value) => value.ToLowerInvariant() switch
     {
-        "flex-start" or "start" => AlignSelfType.FlexStart,
-        "flex-end" or "end" => AlignSelfType.FlexEnd,
+        "flex-start" or "start" or "self-start" => AlignSelfType.FlexStart,
+        "flex-end" or "end" or "self-end" => AlignSelfType.FlexEnd,
         "center" => AlignSelfType.Center,
         "baseline" => AlignSelfType.Baseline,
         "stretch" => AlignSelfType.Stretch,
@@ -3145,7 +3414,16 @@ public static class CssPropertyApplier
         }
         string lower = text.ToLowerInvariant();
         if (MatchListStyleType(lower) is { } preset)
+        {
+            // The name the page wrote is the computed value's spelling: an alias of a predefined
+            // style keeps its own word rather than the canonical one the enum carries
+            // (measured: 'list-style-type: upper-alpha' computes 'upper-alpha', 'urdu' computes
+            // 'urdu' and 'auto' computes 'auto' — none of them the 'upper-latin', 'persian' or
+            // 'disc' the enum would print). The marker generator reads the enum, so the name is
+            // only the surface a script sees.
+            if (style != null) style.ListStyleTypeName = text;
             return preset;
+        }
 
         // Every other ident names a @counter-style rule (CSS Counter Styles §3.2). The
         // name is kept rather than resolved here: the rule can live in a sheet the
@@ -3155,6 +3433,13 @@ public static class CssPropertyApplier
         {
             style.ListStyleTypeName = text;
             return ListStyleType.Custom;
+        }
+        // 'auto' is a type of its own (CSS Lists 3 §3.1) and the word the computed value says,
+        // even though no counter style by that name exists to resolve (measured).
+        if (style != null && lower == "auto")
+        {
+            style.ListStyleTypeName = text;
+            return ListStyleType.Disc;
         }
         return ListStyleType.Disc;
     }
@@ -3243,28 +3528,41 @@ public static class CssPropertyApplier
     public static void ParseListStyle(string value, ComputedStyle style)
     {
         var parts = ShorthandExpander.SplitShorthand(value);
-        bool sawType = false;
+        bool sawType = false, sawImage = false, sawPosition = false, saysNoneImage = false;
         style.ListStylePosition = ListStylePosition.Outside;
         style.ListStyleImage = "none";
+        // One slot per word, in the order the words arrive — the same reading the grammar uses, and
+        // the reason a second position word is a type rather than a redraw of the first
+        // (measured: 'list-style: inside outside' computes 'inside none outside').
         foreach (var part in parts)
         {
             var lower = part.ToLowerInvariant();
-            if (lower is "inside" or "outside")
-                style.ListStylePosition = lower == "inside" ? ListStylePosition.Inside : ListStylePosition.Outside;
-            else if (lower.StartsWith("url("))
-                style.ListStyleImage = NormalizeUrlValue(part);
-            // 'none' is a marker type of its own, not only an image keyword: 'list-style: none'
-            // computes 'outside none none' (measured), so it must claim the type slot rather than
-            // fall through to the reset that would put 'disc' back.
-            else if (!sawType && lower == "none")
+            if (!sawPosition && lower is "inside" or "outside")
             {
-                style.ListStyleType = ListStyleType.None;
-                style.ListStyleTypeString = null;
-                style.ListStyleTypeName = null;
-                sawType = true;
+                style.ListStylePosition = lower == "inside"
+                    ? ListStylePosition.Inside : ListStylePosition.Outside;
+                sawPosition = true;
+                continue;
             }
-            else if (!sawType && (MatchListStyleType(lower) is { } type || IsQuotedString(part)
-                                  || IsCounterStyleName(part)))
+            if (!sawImage && lower.Contains('(') && !lower.StartsWith("calc(", StringComparison.Ordinal))
+            {
+                style.ListStyleImage = NormalizeImageSource(part) ?? "none";
+                sawImage = true;
+                continue;
+            }
+            // 'none' is an image keyword and a marker type of its own: 'list-style: none' computes
+            // 'outside none none' (measured), so it claims the image first and a second 'none' then
+            // claims the type rather than falling through to the reset that would put 'disc' back.
+            if (!sawImage && lower == "none")
+            {
+                sawImage = true;
+                // CSS Lists 3 §3.6: 'none' used as the image is also the type, unless the page
+                // named a type of its own (measured: 'list-style: none' computes the pair
+                // 'outside none none' while 'list-style: none disc' keeps 'disc').
+                saysNoneImage = true;
+                continue;
+            }
+            if (!sawType)
             {
                 style.ListStyleType = ParseListStyleType(part, style);
                 sawType = true;
@@ -3272,12 +3570,13 @@ public static class CssPropertyApplier
         }
 
         // The shorthand resets every component it does not carry, so 'list-style: inside'
-        // computes the marker type back to its initial 'disc' and forgets a custom string.
+        // computes the marker type back to its initial 'disc' and forgets a custom string — except
+        // after a 'none' image, which says the type too (CSS Lists 3 §3.6, measured).
         if (!sawType)
         {
-            style.ListStyleType = ListStyleType.Disc;
+            style.ListStyleType = saysNoneImage ? ListStyleType.None : ListStyleType.Disc;
             style.ListStyleTypeString = null;
-            style.ListStyleTypeName = null;
+            style.ListStyleTypeName = saysNoneImage ? "none" : null;
         }
     }
 
@@ -3424,7 +3723,7 @@ public static class CssPropertyApplier
             style.FontVariant = parts.Variant;
             style.FontVariantCaps = parts.Variant;
         }
-        if (parts.Weight != null) style.FontWeight = ParseFontWeight(parts.Weight);
+        if (parts.Weight != null) ApplyFontWeight(style, parts.Weight);
         if (parts.Stretch != null) style.FontStretch = parts.Stretch;
         SetFontSize(style, parts.Size, Length.ParseFontSize(parts.Size, style.FontSize));
         if (parts.LineHeight != null
@@ -3645,17 +3944,19 @@ public static class CssPropertyApplier
         }
     }
 
-    /// <summary>'border-block-color: &lt;a&gt; &lt;b&gt;' addresses block-start then
-    /// block-end, which for the supported horizontal writing modes are top/bottom.
-    /// Split on the raw text: these are colors, so they never go through Length.</summary>
-    private static void ParseBorderColorBothAxes(ComputedStyle style, string value)
+    /// <summary>Every logical pair shorthand's value list, read the same way (CSS Logical
+    /// Properties 1 §4): one value says both edges, two put the first on the start edge and the
+    /// second on the end one. Measured across all six: 'border-inline-color: red blue' computes
+    /// 'rgb(255, 0, 0) rgb(0, 0, 255)', 'border-inline-style: dotted dashed' computes
+    /// 'dotted dashed', and one word still says both.</summary>
+    private static void SetBorderPairSides(ComputedStyle style,
+        Action<ComputedStyle, string, string> setSide, string startSide, string endSide,
+        string value)
     {
-        var parts = ShorthandExpander.SplitShorthand(value).ToArray();
-        if (parts.Length == 0) return;
-        string start = parts[0];
-        string end = parts.Length > 1 ? parts[1] : parts[0];
-        SetBorderColorSide(style, "top", start);
-        SetBorderColorSide(style, "bottom", end);
+        var parts = ShorthandExpander.SplitShorthand(value);
+        if (parts.Count == 0) return;
+        setSide(style, startSide, parts[0]);
+        setSide(style, endSide, parts.Count > 1 ? parts[1] : parts[0]);
     }
 
     /// <summary>
@@ -3738,7 +4039,7 @@ public static class CssPropertyApplier
         // was for the computed value, which the reference engine does not resolve (measured).
         style.TextDecorationThicknessPercent =
             length is PercentLength thicknessPercent ? thicknessPercent.Value * 100f : 0;
-        style.TextDecorationThickness = Math.Max(0, length.ToPixels(style.FontSize, style.FontSize, 0, 0));
+        style.TextDecorationThickness = Math.Max(0, length.ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0, 0));
     }
 
     /// <summary>'text-decoration-color: auto | &lt;color&gt;' (CSS Text Decoration 4
@@ -3789,7 +4090,7 @@ public static class CssPropertyApplier
         style.TextUnderlineOffsetPercent =
             Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out var percent, out var unit)
             && unit == "%" ? (float)percent : 0f;
-        style.TextUnderlineOffset = length.ToPixels(style.FontSize, style.FontSize, 0, 0);
+        style.TextUnderlineOffset = length.ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0, 0);
     }
 
     /// <summary>'text-underline-position: auto | from-font | alphabetic | under | left | right'.</summary>
@@ -4025,7 +4326,7 @@ public static class CssPropertyApplier
         bool hasUnit = text.Length > 0 && !char.IsAsciiDigit(text[text.Length - 1]) && text[^1] != '.';
         if (hasUnit && Length.TryParse(text, out var length) && length is not AutoLength)
         {
-            float px = length.ToPixels(style.FontSize, style.FontSize, 0f, 0f);
+            float px = length.ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0f, 0f);
             if (px < 0) return;   // a negative tab size is out of range and drops the declaration
             style.TabSizePx = px;
             style.TabSize = 8;
@@ -4137,10 +4438,16 @@ public static class CssPropertyApplier
         }
     }
 
+    /// <summary>Writing Modes 4 §3 plus §3.2's legacy spellings. The four-word forms from the draft
+    /// all stand and each computes to the modern mode it means (measured: 'tb' and 'tb-rl' both read
+    /// 'vertical-rl', 'tb-lr' reads 'vertical-lr', and 'lr', 'rl', 'lr-tb' and 'rl-tb' all read
+    /// 'horizontal-tb'); the two sideways modes are values of their own and keep their spelling.</summary>
     public static WritingModeType ParseWritingMode(string value) => value.ToLowerInvariant() switch
     {
-        "vertical-rl" => WritingModeType.VerticalRl,
-        "vertical-lr" => WritingModeType.VerticalLr,
+        "vertical-rl" or "tb" or "tb-rl" => WritingModeType.VerticalRl,
+        "vertical-lr" or "tb-lr" => WritingModeType.VerticalLr,
+        "sideways-lr" => WritingModeType.SidewaysLr,
+        "sideways-rl" => WritingModeType.SidewaysRl,
         _ => WritingModeType.HorizontalTb
     };
 
@@ -4434,7 +4741,7 @@ public static class CssPropertyApplier
         var parsed = ParseContainIntrinsicToken(tokens[^1]);
         if (parsed == null) return;
         parsed = (parsed.Value.Size, parsed.Value.Auto || auto);
-        bool vertical = style.WritingMode is WritingModeType.VerticalRl or WritingModeType.VerticalLr;
+        bool vertical = style.WritingMode.IsVertical();
         switch (axis)
         {
             case "width": SetContainIntrinsic(style, parsed, null); break;

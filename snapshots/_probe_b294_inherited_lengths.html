@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>b294 probe C &#8212; an inherited length belongs to the font that wrote it</title>
+<style>
+/* The parent's font and the child's are different on purpose: an inherited length that still carries
+ * its unit is repriced in the child's font, and the two answers are then distinguishable. */
+html { font-size: 16px; }
+body { font: 14px/18px monospace; color: rgb(9,9,9); margin: 0; background: rgb(255,255,255); }
+#box { width: 200px; }
+.p { font-size: 24px; }
+.c { font-size: 10px; }
+</style></head><body>
+<div id="box"></div>
+<pre id="report"></pre>
+<script>
+var out = [];
+
+/* 1. The inherited length family: what the parent says, and what the child is left with. */
+var INHERIT = [
+  ["line-height", "1em"], ["line-height", "2rem"], ["text-indent", "1em"],
+  ["letter-spacing", "1em"], ["word-spacing", "2em"], ["text-decoration-thickness", "1em"],
+  ["margin-left", "1em"], ["padding-left", "1em"], ["width", "1em"], ["top", "1em"],
+  ["font-size", "1em"], ["border-spacing", "1em"], ["column-gap", "1em"],
+  ["outline-offset", "1em"], ["scroll-margin-top", "1em"], ["shape-margin", "1em"],
+  ["vertical-align", "1em"], ["line-height", "100%"], ["width", "50%"], ["margin-top", "auto"]
+];
+var host = document.getElementById('box');
+for (var i = 0; i < INHERIT.length; i++) {
+  var name = INHERIT[i][0], word = INHERIT[i][1];
+  var p = document.createElement('div'); p.className = 'p'; host.appendChild(p);
+  p.style.setProperty(name, word);
+  var c = document.createElement('div'); c.className = 'c'; p.appendChild(c);
+  void c.offsetHeight;
+  out.push(i + '|' + name + '|' + word
+    + '|parent=' + getComputedStyle(p).getPropertyValue(name)
+    + '|child=' + getComputedStyle(c).getPropertyValue(name));
+}
+
+/* 2. The rest of the length-valued properties, each with a plain 'rem' and with a plain 'em', read
+ *    where the engine reports it: the computed surface and, for the box ones, the rectangle. */
+var DIRECT = [
+  "border-spacing: 1rem", "text-decoration-thickness: 1rem", "scroll-margin-top: 1rem",
+  "shape-margin: 1rem", "column-gap: 1rem", "row-gap: 1rem", "inset-block-start: 1rem",
+  "translate: 1rem", "top: 1rem", "width: 1rem", "line-height: 1rem", "font-size: 1rem",
+  "border-top-left-radius: 1rem", "outline-offset: 1rem", "background-position: 1rem",
+  "text-indent: 1rem", "letter-spacing: 1rem", "perspective: 1rem", "mask-position: 1rem",
+  "caret-color: red", "width: 1em", "height: 1em", "margin-left: 1em", "padding-top: 1em"
+];
+for (var j = 0; j < DIRECT.length; j++) {
+  var decl = DIRECT[j];
+  var prop = decl.slice(0, decl.indexOf(':')).trim();
+  var value = decl.slice(decl.indexOf(':') + 1).trim();
+  var d = document.createElement('div');
+  d.style.cssText = decl;
+  host.appendChild(d);
+  void d.offsetHeight;
+  var r = d.getBoundingClientRect();
+  out.push('D' + j + '|' + prop + '|' + value
+    + '|rect=' + r.width.toFixed(1) + ',' + r.height.toFixed(1) + ',' + r.left.toFixed(1) + ',' + r.top.toFixed(1)
+    + '|comp=' + getComputedStyle(d).getPropertyValue(prop));
+}
+text = out.join('\n');
+document.getElementById('report').textContent = text;
+console.log(text);
+</script></body></html>

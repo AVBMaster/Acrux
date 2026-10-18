@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b295 printer probe</title></head>
+<body>
+<div id="host"></div>
+<script>
+// Which printing rule each length property answers with. The two rules agree on every ordinary
+// number and differ only when a value has more than seven decimals: one cuts the value to seven
+// decimals first, the other rounds the number the page wrote straight to six significant digits.
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+let index = 0;
+
+const props = ['margin-left', 'margin-top', 'padding-left', 'width', 'height', 'top', 'left',
+               'line-height', 'letter-spacing', 'word-spacing', 'text-indent', 'border-radius',
+               'border-width', 'outline-width', 'translate', 'inset-inline-start',
+               'background-position-x', 'font-size', 'column-width', 'row-gap', 'flex-basis',
+               'shape-margin', 'text-underline-offset', 'caret-shape no', 'max-width', 'gap',
+               'scroll-margin-left', 'clip', 'stroke-width'];
+const numbers = ['0.000123456789px', '0.0000123456789px', '0.01234565px', '12345.6789px'];
+
+for (const prop of props) {
+  for (const number of numbers) {
+    const value = prop === 'clip'
+      ? 'rect(' + number + ' ' + number + ' ' + number + ' ' + number + ')'
+      : number;
+    const el = document.createElement('div');
+    host.appendChild(el);
+    el.style.setProperty(prop, value);
+    rows.push(index + '|' + prop + '|' + value
+        + '|sup=' + (CSS.supports(prop, value) ? 1 : 0)
+        + '|echo=' + el.style.getPropertyValue(prop)
+        + '|comp=' + getComputedStyle(el).getPropertyValue(prop));
+    index++;
+  }
+}
+
+window.__probe = rows.join('\n');
+console.log(window.__probe);
+}
+build();
+</script>
+</body></html>

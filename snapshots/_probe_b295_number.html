@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b295 number probe</title></head>
+<body>
+<div id="host"></div>
+<script>
+// Two questions the big-length probe opened. First: how many digits of a number survive the
+// reference engine's own printing of it, in every range a length can land in — the answer is the
+// spelling every computed value has to match. Second: whether a negative length is refused by the
+// property's grammar or only clamped by the box, which decides what CSS.supports says.
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+let index = 0;
+
+function one(prop, value) {
+  const el = document.createElement('div');
+  host.appendChild(el);
+  el.style.setProperty(prop, value);
+  rows.push(index + '|' + prop + '|' + value
+      + '|sup=' + (CSS.supports(prop, value) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(prop)
+      + '|comp=' + getComputedStyle(el).getPropertyValue(prop));
+  index++;
+}
+
+// The digit sweep: one number with nine significant digits, written so the decimal point sits in
+// a different place each time.
+const digits = ['123456789', '12345.6789', '1234.56789', '123.456789', '12.3456789',
+                '1.23456789', '0.123456789', '0.0123456789', '0.00123456789',
+                '0.000123456789', '0.0000123456789', '0.00000123456789',
+                '0.000000123456789', '123456789.', '1.0', '1.5', '0.5', '1.9999999',
+                '999999.5', '1000000.5', '99999.5', '0.0078125', '0.015625'];
+for (const d of digits) one('margin-left', d + 'px');
+for (const d of ['123456789', '0.123456789', '0.000123456789', '0.0000123456789'])
+  one('line-height', d + 'px');
+
+// Does a negative length fall, or does it land and get clamped?
+one('width', '-10px');
+one('width', '-0.5px');
+one('width', '-0px');
+one('width', 'calc(-10px)');
+one('height', '-10px');
+one('min-width', '-10px');
+one('max-width', '-10px');
+one('margin-left', '-10px');
+one('padding-left', '-10px');
+one('top', '-10px');
+one('border-spacing', '-10px');
+one('outline-width', '-10px');
+one('border-width', '-10px');
+one('clip', 'rect(-10px -10px -10px -10px)');
+one('clip', 'rect(-10px 0px 0px -10px)');
+one('clip', 'rect(0px -10px -10px 0px)');
+one('letter-spacing', '-10px');
+one('word-spacing', '-10px');
+one('text-indent', '-10px');
+one('row-gap', '-10px');
+one('translate', '-10px');
+one('inset', '-10px');
+one('border-radius', '-10px');
+one('font-size', '-10px');
+one('line-height', '-10px');
+one('perspective', '-10px');
+
+window.__probe = rows.join('\n');
+console.log(window.__probe);
+}
+build();
+</script>
+</body></html>
