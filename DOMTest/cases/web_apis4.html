@@ -91,7 +91,10 @@
     var h = new Headers({ 'Content-Type': 'text/plain', 'X-Custom': 'a' });
     __T('Headers.get', h.get('content-type') === 'text/plain', 'ct=' + h.get('content-type'));
     h.append('X-Multi', '1'); h.append('X-Multi', '2');
-    __T('Headers.getAll', (h.getAll ? h.getAll('x-multi').length : h.get('x-multi')) >= 1, 'all=' + JSON.stringify(h.getAll && h.getAll('x-multi')));
+    // Fetch §4.6: a name written twice reads back joined, and the reference no longer carries the old
+    // all-values view of every name (measured: 'typeof Headers.prototype.getAll' is undefined).
+    __T('Headers repeated name joins', h.get('x-multi') === '1, 2' && typeof h.getAll === 'undefined',
+        'get=' + JSON.stringify(h.get('x-multi')) + ' getAll=' + typeof h.getAll);
     h.set('x-custom', 'b');
     __T('Headers.set overwrites', h.get('x-custom') === 'b', 'xc=' + h.get('x-custom'));
     __T('Headers.has', h.has('content-type') === true && h.has('nope') === false);

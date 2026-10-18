@@ -85,6 +85,7 @@ public abstract class Element : Node
         // one of them is script data, so the whole change is handed over and the script decides.
         CustomElements.AttributeChanged(this, name, oldValue, value,
             AttributeNamespaces.TryGetValue(name, out var attributeNs) ? attributeNs : null);
+        DomMutationTracker.NoteAttribute(this, name, attributeNs, oldValue, value);
 
         if (name.Equals("class", StringComparison.OrdinalIgnoreCase))
             _classListCache = null;
@@ -110,6 +111,7 @@ public abstract class Element : Node
 
         OnAttributeChanged(name, oldValue, null);
         CustomElements.AttributeChanged(this, name, oldValue, null, removedNamespace);
+        DomMutationTracker.NoteAttribute(this, name, removedNamespace, oldValue, null);
 
         if (name.Equals("class", StringComparison.OrdinalIgnoreCase))
             _classListCache = null;
@@ -705,11 +707,7 @@ public abstract class Element : Node
     }
 
     public void ReplaceChildren(params Node[] nodes)
-    {
-        Children.Clear();
-        foreach (var node in nodes)
-            AppendChild(node);
-    }
+        => ReplaceAllWith(nodes);
 
     public void Before(params Node[] nodes)
     {
@@ -738,9 +736,22 @@ public abstract class Element : Node
             parent.InsertBefore(node, next);
     }
 
+    /// <summary>DOM §4.2.4: the position is one of the four keywords of the 'Position' enumeration, and
+    /// a page that names anything else is refused before the tree is touched — the reference names the
+    /// method, the value it was given and the four keywords it accepts, in their capitalised spelling
+    /// (measured: "is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'").</summary>
+    internal static string AdjacentPosition(string methodName, string? position)
+    {
+        var lowered = (position ?? string.Empty).ToLowerInvariant();
+        if (lowered is "beforebegin" or "afterbegin" or "beforeend" or "afterend") return lowered;
+        throw new DOMException($"Failed to execute '{methodName}' on 'Element': The value provided "
+            + $"('{position}') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.",
+            "SyntaxError");
+    }
+
     public void InsertAdjacentElement(string position, Element element)
     {
-        switch (position.ToLowerInvariant())
+        switch (AdjacentPosition("insertAdjacentElement", position))
         {
             case "beforebegin":
                 ParentNode?.InsertBefore(element, this);
@@ -759,8 +770,9 @@ public abstract class Element : Node
 
     public void InsertAdjacentText(string position, string text)
     {
+        var where = AdjacentPosition("insertAdjacentText", position);
         var textNode = new TextNode(text);
-        switch (position.ToLowerInvariant())
+        switch (where)
         {
             case "beforebegin":
                 ParentNode?.InsertBefore(textNode, this);
@@ -779,8 +791,9 @@ public abstract class Element : Node
 
     public void InsertAdjacentHTML(string position, string text)
     {
+        var where = AdjacentPosition("insertAdjacentHTML", position);
         var parsed = JavaScript.HtmlParser.ParseFragment(text, TagName);
-        switch (position.ToLowerInvariant())
+        switch (where)
         {
             case "beforebegin":
                 var parent = ParentNode;

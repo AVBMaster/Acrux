@@ -131,7 +131,9 @@ public partial class ElementHost
     private static string OptionValue(DomElement option)
     {
         var written = option.GetAttribute("value");
-        if (!string.IsNullOrEmpty(written)) return written!;
+        // The attribute being present is what counts, and an empty one is the empty value the
+        // specification says the option carries — not its text (HTML §4.10.7.1).
+        if (written is not null) return written;
         // An option with no 'value' attribute answers its text, with the runs of space the markup
         // scattered through it folded together (HTML §4.10.11.1).
         return System.Net.WebUtility.HtmlEncode("").Length == 0
@@ -609,7 +611,21 @@ public partial class ElementHost
     /// 'customError' and answers this text (HTML §4.10.4.4).</summary>
     public void setCustomValidity(string? message) => _customValidityMessage = message ?? "";
 
-    public ValidationStateHost validity => new(() => ValidationFlags());
+    public ValidationStateHost validity => new(() => TagIs(_element, "FORM") ? FormFlags() : ValidationFlags());
+
+    /// <summary>§4.10.22.2: a form's validity is the union of the flags its listed controls carry —
+    /// the form fails with the bit the first failing control fails with.</summary>
+    private Dictionary<string, bool> FormFlags()
+    {
+        var union = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var control in ValidationControls())
+        {
+            if (!control.willValidate) continue;
+            foreach (var pair in control.ValidationFlags())
+                if (pair.Value) union[pair.Key] = true;
+        }
+        return union;
+    }
 
     /// <summary>HTML §4.10.4: the first thing that is wrong with the control, told in the sentence the
     /// engine writes. The reference localises these strings to its own UI language, so a page must not
@@ -643,7 +659,7 @@ public partial class ElementHost
     /// <summary>The flags the control's current value sets (HTML §4.10.4). 'tooLong' and 'tooShort'
     /// wait for the user to have typed, which is why a value the script wrote never trips them
     /// (measured: a 'minlength' field holding less than it asks is still 'valid').</summary>
-    private Dictionary<string, bool> ValidationFlags()
+    internal Dictionary<string, bool> ValidationFlags()
     {
         var flags = new Dictionary<string, bool>(StringComparer.Ordinal);
         var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
@@ -698,6 +714,9 @@ public partial class ElementHost
     /// for 'checkValidity', one more for 'reportValidity').</summary>
     public bool checkValidity()
     {
+        // HTML §4.10.22.3: a form asks the controls it lists, and the first one that fails is the one
+        // that hears the 'invalid' event — the form itself is never a candidate.
+        if (TagIs(_element, "FORM")) return FormValidity();
         if (!willValidate) return true;
         if (ValidityIsClean()) return true;
         var evt = new ScriptEvent("invalid", this) { cancelable = true };
@@ -707,7 +726,48 @@ public partial class ElementHost
 
     public bool reportValidity() => checkValidity();
 
-    private bool ValidityIsClean()
+    /// <summary>The controls a form lists for validation (HTML §4.10.22): the submittable controls
+    /// inside it, in document order, with the ones a nested form owns left out. They are handed over as
+    /// the wrappers the page already holds, because the 'invalid' event has to reach the listeners the
+    /// page registered — a second host for one element would keep them on the first.</summary>
+    private List<ElementHost> ValidationControls()
+    {
+        var found = new List<DomElement>();
+        CollectValidationControls(_element, found);
+        var hosts = new List<ElementHost>(found.Count);
+        foreach (var control in found)
+        {
+            var host = WrapWithCache(control) ?? new ElementHost(control);
+            hosts.Add(host);
+        }
+        return hosts;
+    }
+
+    private static void CollectValidationControls(DomElement root, List<DomElement> into)
+    {
+        foreach (var child in root.Children.OfType<DomElement>())
+        {
+            if (TagIs(child, "FORM")) continue;
+            if (child.TagName is "INPUT" or "SELECT" or "TEXTAREA" or "BUTTON" or "OUTPUT" or "FIELDSET")
+                into.Add(child);
+            CollectValidationControls(child, into);
+        }
+    }
+
+    private bool FormValidity()
+    {
+        foreach (var control in ValidationControls())
+        {
+            if (!control.willValidate) continue;
+            if (control.ValidityIsClean()) continue;
+            var evt = new ScriptEvent("invalid", control) { cancelable = true };
+            control.DispatchEvent(evt);
+            return false;
+        }
+        return true;
+    }
+
+    internal bool ValidityIsClean()
     {
         var flags = ValidationFlags();
         return !flags.Values.Any(v => v);
@@ -740,8 +800,16 @@ public class JsFileList : IDomPrototypeHost
 /// from the control as it stands now — the required bit, the type and pattern the value does not match,
 /// the range and step it is outside, the lengths it crosses, and the message the script wrote into it.
 /// 'valid' is the answer that none of them is set.</summary>
-public class ValidationStateHost
+public class ValidationStateHost : IDomPrototypeHost
 {
+    // The flags object is read as the interface it is (HTML §4.10.4): the tag, 'instanceof' and the
+    // level the page sees all come from the ValidityState prototype (measured).
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "ValidityState" };
+
+    public string? __domType => "ValidityState";
+
+    public override string ToString() => DomHostString.Tagged(this);
+
     private readonly Func<Dictionary<string, bool>> _flags;
 
     internal ValidationStateHost(Func<Dictionary<string, bool>> flags) => _flags = flags;

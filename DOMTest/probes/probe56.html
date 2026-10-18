@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html><head><title>Probe 56</title></head><body>
+<div id="d" data-foo-bar="1" role="button" aria-label="lbl" aria-hidden="true"><p id="p1">one</p></div>
+<form id="f"><input id="req" required><input id="mail" type="email" value="nope">
+<select id="sel" required><option value="">--</option><option value="v">V</option></select></form>
+<template id="tpl"><span class="t1">in</span><b>bold</b></template>
+<script>
+(function () {
+  var out = {}; function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + e.name + '::' + e.message; } } var J = JSON.stringify;
+  var d = document.getElementById('d'), p1 = document.getElementById('p1'), f = document.getElementById('f'),
+      req = document.getElementById('req'), mail = document.getElementById('mail'), sel = document.getElementById('sel'),
+      tpl = document.getElementById('tpl');
+  t('template', function () { return J([tagName(tpl.content), tpl.content.nodeType, tpl.content.childElementCount,
+    tpl.content.querySelector('.t1').textContent, tagName(tpl), typeof tpl.assignedSlots,
+    (function () { var other = document.createElement('template'); other.innerHTML = '<i>x</i>';
+      return other.content.childElementCount + '/' + other.innerHTML; })(),
+    (function () { var clone = tpl.content.cloneNode(true); return clone.childElementCount + '/' + tagName(clone); })(),
+    typeof tpl.content.appendChild]); });
+  function tagName(v) { return Object.prototype.toString.call(v); }
+  t('aria reflection', function () { return J([typeof d.ariaRole, d.ariaRole, typeof d.ariaLabel, d.ariaLabel,
+    d.ariaHidden, typeof d.ariaChecked, typeof d.ariaDescribedByElements,
+    typeof Element.prototype.ariaRole, tagName(d.attributes.getNamedItem('role')),
+    (function () { d.ariaLabel = 'second'; return d.getAttribute('aria-label'); })(),
+    (function () { d.ariaLabel = 'second'; return d.ariaLabel; })()]); });
+  t('dataset', function () { return J([typeof d.dataset, tagName(d.dataset), d.dataset.fooBar,
+    (function () { d.dataset.newKey = '7'; return [d.getAttribute('data-new-key'), d.dataset.newKey].join(','); })(),
+    (function () { d.dataset.newKey = '7'; return J(Object.keys(d.dataset).sort().slice(0, 6)); })(),
+    typeof d.dataset.hasAttribute, typeof d.dataset.delete, J(JSON.stringify(d.dataset))]); });
+  t('validity', function () { return J([tagName(req.validity), req.validity.valueMissing, req.checkValidity(),
+    req.willValidate, req.validationMessage, typeof req.reportValidity, typeof req.setCustomValidity,
+    (function () { req.setCustomValidity('nope'); return [req.validity.valid, req.validationMessage, req.validity.customError].join('/'); })(),
+    mail.validity.typeMismatch, mail.validationMessage.length > 0, sel.validity.valueMissing,
+    typeof ValidityState, tagName(f), typeof f.checkValidity, f.checkValidity(), typeof f.reportValidity,
+    typeof f.requestSubmit, typeof f.submit, f.elements.length, f.length]); });
+  t('event options', function () { var hits = [];
+    function once() { hits.push('once'); }
+    function cap() { hits.push('cap'); }
+    p1.addEventListener('click', once, { once: true });
+    p1.addEventListener('click', cap, true);
+    p1.dispatchEvent(new Event('click'));
+    p1.dispatchEvent(new Event('click'));
+    p1.removeEventListener('click', once, { once: true });
+    p1.removeEventListener('click', cap, true);
+    var passiveWorks = 'unknown';
+    var ev = new Event('test', { cancelable: true });
+    ev.addEventListener && 0;
+    return J([hits.join(','), typeof EventTarget, typeof p1.addEventListener,
+      (function () { var e = new Event('x'); return typeof e.composedPath; })(),
+      (function () { var e = new Event('x'); p1.appendChild(document.createTextNode('t')); try { return J(e.composedPath().length); } catch (err) { return 'ERR'; } })(),
+      typeof new EventTarget(), (function () { try { new EventTarget(); return 'constructed'; } catch (e) { return e.name; } })()]); });
+  t('signal option', function () { var hits = 0;
+    var c = new AbortController();
+    p1.addEventListener('ping', function () { hits++; }, { signal: c.signal });
+    p1.dispatchEvent(new Event('ping'));
+    c.abort();
+    p1.dispatchEvent(new Event('ping'));
+    return J([hits, typeof AbortSignal, c.signal.aborted, typeof c.signal.reason, p1.dispatchEvent(new Event('ping'))]); });
+  t('mutation record iface', function () { var recs = [];
+    var mo = new MutationObserver(function (list) { recs = list; });
+    mo.observe(d, { attributes: true, attributeOldValue: true, childList: true, subtree: true });
+    d.setAttribute('data-x', '1'); d.setAttribute('data-x', '2');
+    var box = d.querySelector('b') || document.createElement('b');
+    d.appendChild(box);
+    var taken = mo.takeRecords();
+    return J([taken.length, tagName(taken[0]), typeof MutationRecord,
+      taken[0] && taken[0].type, taken[0] && taken[0].attributeName, taken[0] && String(taken[0].oldValue),
+      typeof taken[0].addedNodes, taken[0] && taken[0].addedNodes && taken[0].addedNodes.length,
+      taken[0] && tagName(taken[0].addedNodes), taken[0] && taken[0].target === d,
+      (function () { try { return Object.getOwnPropertyNames(MutationRecord.prototype).join(','); } catch (e) { return 'ERR ' + e.name; } })(),
+      mo.takeRecords().length]); });
+  t('file reader binary', function () { var b = new Blob([new Uint8Array([104, 105, 0, 255])]);
+    var r = new FileReader();
+    return J([typeof b.arrayBuffer, typeof r.readAsDataURL, typeof r.abort, typeof r.error, r.readyState,
+      FileReader.EMPTY, FileReader.LOADING, FileReader.DONE, tagName(b), b.size]); });
+  t('headers iface', function () { var h = new Headers({ 'x-a': '1' }); h.append('x-b', '2');
+    return J([typeof h.getSetCookie, J(h.entries().next().value), J(Array.from(h.keys())),
+      tagName(h), h instanceof Headers, typeof Headers.prototype.getAll,
+      (function () { try { return String(Headers.prototype.get); } catch (e) { return 'ERR ' + e.name; } })()]); });
+  t('url edge', function () { var u = new URL('https://a:b@c.example.com:8443/p/q?s=1#h');
+    return J([u.origin, u.username, u.password, u.host, u.port, u.pathname, u.search, u.hash,
+      typeof u.toJSON, typeof u[Symbol.iterator], String(new URLSearchParams('a').size),
+      (function () { var p2 = new URLSearchParams('a=1&b=2'); p2.sort(); return p2.toString(); })(),
+      (function () { try { return new URL('not a url').href; } catch (e) { return 'ERR ' + e.name; } })(),
+      (function () { var p3 = new URLSearchParams([['a', 1], ['a', 2]]); return p3.toString() + '/' + p3.getAll('a').length; })(),
+      typeof URL.canParse, typeof URL.createObjectURL, typeof URL.revokeObjectURL]); });
+  t('range selection iface', function () { var r = document.createRange();
+    return J([tagName(r), r instanceof Range, typeof Range, tagName(getSelection()), getSelection() instanceof Selection,
+      typeof Selection, typeof StaticRange, (function () { try { return String(Range.prototype.startContainer); }
+        catch (e) { return 'ERR ' + e.name + ':' + e.message; } })(),
+      (function () { try { return String(Selection.prototype.anchorNode); } catch (e) { return 'ERR ' + e.name; } })(),
+      typeof r.compareBoundaryPoints, typeof r.selectNodeContents, typeof r.setEnd, typeof r.cloneRange,
+      Range.START_TO_START, Range.END_TO_END, r.cloneRange().toString()]); });
+  t('node normalize', function () { var box = document.createElement('p'); box.appendChild(document.createTextNode('a'));
+    box.appendChild(document.createTextNode('b')); box.normalize();
+    var mixed = document.createElement('p'); mixed.innerHTML = 'x<b>y</b>z';
+    return J([box.childNodes.length, box.firstChild.data, typeof box.normalize, box.textContent,
+      mixed.childNodes.length, mixed.normalize === undefined, (function () { mixed.normalize();
+        return mixed.innerHTML + '/' + mixed.childNodes.length; })()]); });
+  t('image video', function () { var img = new Image(10, 20);
+    return J([img.width, img.height, tagName(img), typeof img.complete, img.complete, typeof img.naturalWidth,
+      img.naturalWidth, typeof img.decode, typeof img.currentSrc, img.src,
+      (function () { var a = new Audio(); return tagName(a) + '/' + typeof a.play; })()]); });
+  t('scroll api', function () { return J([typeof d.scrollTop, d.scrollTop, typeof d.clientTop, d.clientTop,
+    typeof d.clientWidth, typeof d.scrollHeight, typeof d.scrollWidth, typeof d.getBoundingClientRect,
+    typeof document.documentElement.scrollTop, typeof window.scrollY, typeof d.scrollTo, typeof d.scrollBy,
+    typeof d.scrollIntoView, typeof Element.prototype.scrollTo]); });
+  __T('probe56', true, J(out, null, 1));
+})();
+</script></body></html>

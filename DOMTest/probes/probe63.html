@@ -1,0 +1,16 @@
+<!DOCTYPE html><html><head><title>P63</title></head><body><script>
+(function () {
+  function g(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  var out = {};
+  out.a = g(function () { return new URL('http://a/b/c').pathname; });
+  out.b = g(function () { return new URL('http://a/b/c', '').pathname; });
+  out.c = g(function () { return new URL('http://a/b/c', undefined).pathname; });
+  out.d = g(function () { return URL.parse('http://a/b/c').pathname; });
+  out.e = g(function () { return URL.canParse('http://a/b/c'); });
+  out.f = g(function () { return new URL('http://a/b/c').href; });
+  out.g2 = g(function () { return new URL('b/c', 'http://a/x/y').pathname; });
+  out.h = g(function () { return new URL('http://a/b/c') instanceof URL; });
+  out.i = g(function () { return Object.getPrototypeOf(new URL('http://a/x')).constructor && Object.getPrototypeOf(new URL('http://a/x')).constructor.name; });
+  __T('p63', true, JSON.stringify(out));
+})();
+</script></body></html>

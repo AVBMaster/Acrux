@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html><head><title>Probe 60</title></head><body>
+<div id="d"><p id="p1">t</p></div>
+<form id="f"><input id="i1" value="a"></form>
+<script>
+(function () {
+  var out = {}; function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + e.name + '::' + e.message; } }
+  function g(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  var J = JSON.stringify;
+  function tag(v) { return Object.prototype.toString.call(v); }
+  var d = document.getElementById('d'), p1 = document.getElementById('p1'), i1 = document.getElementById('i1');
+  t('text own', function () { var tn = new Text('hello');
+    return J([tag(tn), tn.nodeValue, tn.data, tn.length, typeof tn.splitText]); });
+  t('text wholeText', function () { var tn = new Text('hello');
+    return J([g(function () { return tn.wholeText; }), g(function () { return String(tn.replaceWithData); }),
+      g(function () { return String(tn.assignedSlot); }), tn.parentElement, g(function () { return tag(tn.cloneNode(true)); })]); });
+  t('cdata in html', function () { return J([g(function () { return tag(document.createCDATASection('x')); }),
+    g(function () { return document.createCDATASection('x').data; })]); });
+  t('cdata in xml', function () { var xml = new DOMParser().parseFromString('<a></a>', 'text/xml');
+    return J([g(function () { return tag(xml.createCDATASection('y')); }),
+      g(function () { return xml.createCDATASection(']]>').nodeType; })]); });
+  t('adjacent messages', function () { var box = document.createElement('div'); box.innerHTML = '<p id="q">a</p>';
+    var q = box.querySelector('p');
+    return J([g(function () { return q.insertAdjacentElement('nonsense', document.createElement('b')); }),
+      g(function () { return q.insertAdjacentText('NONSENSE', 'x'); }),
+      g(function () { return q.insertAdjacentHTML('', '<i></i>'); }),
+      g(function () { return q.insertAdjacentElement('beforeend', document.createElement('i')); })]); });
+  t('formdata ctor', function () { return J([g(function () { return FormData(); }),
+    g(function () { return new FormData('nope'); }), g(function () { return String(new FormData().entries); })]); });
+  t('crypto surface', function () { return J([tag(window.crypto), J(Object.keys(window.crypto)),
+    J(Object.getOwnPropertyNames(Crypto.prototype).sort()), g(function () { return Crypto(); }),
+    g(function () { return new Crypto(); }), J(Object.getOwnPropertyNames(Crypto).sort()),
+    window.crypto.subtle === window.crypto.subtle, window.crypto instanceof EventTarget]); });
+  t('location keys', function () { var keys = []; for (var k in window.location) keys.push(k);
+    return J([J(Object.keys(window.location)), keys, J(Object.getOwnPropertyNames(Location.prototype).sort()),
+      g(function () { return String(window.location.assign); }), g(function () { return String(Location.prototype.href); }),
+      g(function () { return String(window.location); })]); });
+  t('matrix keys', function () { var m = new DOMMatrix();
+    return J([tag(m), J(Object.keys(m).length), J(Object.getOwnPropertyNames(DOMMatrix.prototype).slice(0, 6).sort()),
+      g(function () { return DOMMatrix(); }), m.is2D, typeof m.multiplySelf,
+      tag(new DOMMatrixReadOnly('rotate(45deg)'))]); });
+  t('value record', function () { var seen = [];
+    var mo = new MutationObserver(function (l) { seen = seen.concat(l.map(function (r) { return r.type + '+' + r.addedNodes.length + '-' + r.removedNodes.length + '@' + r.target.tagName; })); });
+    mo.observe(i1, { childList: true, attributes: true, subtree: true });
+    i1.value = 'zz';
+    i1.setAttribute('size', '4');
+    var taken = mo.takeRecords();
+    return J([taken.length, seen, J(i1.value), i1.getAttribute('value')]); });
+  t('journal order', function () { var recs = [];
+    var mo = new MutationObserver(function (l) { recs = recs.concat(l); });
+    mo.observe(d, { attributes: true, attributeOldValue: true, childList: true, characterData: true, subtree: true });
+    d.setAttribute('a', '1');
+    var span = document.createElement('span'); d.appendChild(span);
+    span.setAttribute('b', '2');
+    d.removeChild(span);
+    var txt = p1.firstChild; txt.appendData('!');
+    var list = mo.takeRecords().map(function (r) { return r.type + '/' + (r.attributeName || '') + '/' + String(r.oldValue)
+      + '/' + (r.target === d ? 'd' : r.target === p1 ? 'p1' : tag(r.target)); });
+    return J([list.length, list]); });
+  t('detached target', function () { var host = document.createElement('div');
+    var inner = document.createElement('p'); host.appendChild(inner);
+    var mo = new MutationObserver(function () { });
+    mo.observe(host, { attributes: true, childList: true, subtree: true });
+    inner.setAttribute('x', '1');
+    host.removeChild(inner);
+    inner.setAttribute('y', '2');
+    return J(mo.takeRecords().map(function (r) { return r.type + '@' + tag(r.target) + '/' + (r.attributeName || ''); })); });
+  t('shadow scope', function () { var host = document.createElement('div'); document.body.appendChild(host);
+    var shadow = host.attachShadow({ mode: 'open' });
+    var inside = document.createElement('p'); shadow.appendChild(inside);
+    var mo = new MutationObserver(function () { });
+    mo.observe(host, { attributes: true, subtree: true });
+    inside.setAttribute('z', '1');
+    var inShadow = [];
+    mo.observe(shadow, { attributes: true, subtree: true });
+    inside.setAttribute('w', '1');
+    inShadow = mo.takeRecords().map(function (r) { return r.attributeName; });
+    return J([inShadow, J(Object.keys(shadow))]); });
+  __T('probe60', true, J(out, null, 1));
+})();
+</script></body></html>

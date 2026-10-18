@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html><head><title>Probe 61</title></head><body>
+<div id="d"><p id="p1">t</p></div>
+<script>
+(function () {
+  var out = {}; function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + e.name + '::' + e.message; } }
+  function g(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  var J = JSON.stringify;
+  function tag(v) { return Object.prototype.toString.call(v); }
+  var d = document.getElementById('d'), p1 = document.getElementById('p1');
+  t('signal bridge', function () { var hits = 0;
+    var c = new AbortController();
+    var tokenFn = typeof window.__acruxSignalToken;
+    var direct = g(function () { return String(window.__acruxSignalToken({ signal: c.signal })); });
+    var abortedDirect = g(function () { c.abort(); return String(window.__acruxSignalAborted(1)); });
+    p1.addEventListener('ping', function () { hits++; }, { signal: c.signal });
+    p1.dispatchEvent(new Event('ping'));
+    var mid = hits;
+    var c2 = new AbortController();
+    p1.addEventListener('pong', function () { hits++; }, { signal: c2.signal });
+    c2.abort();
+    p1.dispatchEvent(new Event('pong'));
+    var late = g(function () { var e = new Event('x'); e.preventDefault(); return e.defaultPrevented; });
+    return J([tokenFn, direct, abortedDirect, mid, hits, late, c.signal.aborted,
+      g(function () { return AbortSignal.abort().aborted; }), typeof AbortSignal.timeout]); });
+  t('node ctors', function () { return J([g(function () { return new DocumentFragment(); }),
+    g(function () { return new CharacterData(); }),
+    g(function () { return new CDATASection(); }),
+    g(function () { return new ProcessingInstruction(); }),
+    g(function () { return new Text(); }), g(function () { return new Comment(); })]); });
+  t('text build', function () { var tn = new Text('hello');
+    return J([tn.data, tn.ownerDocument === document, tn.parentNode, tag(tn.cloneNode(true)),
+      g(function () { return tn.splitText(2).data; }), tn.length, typeof tn.assignedSlot]); });
+  t('proto polish', function () { return J([
+    Object.getOwnPropertyNames(FormData.prototype).sort().join(','),
+    g(function () { return String(Headers.prototype.get); }),
+    g(function () { return String(new Headers().entries); }),
+    Headers.length, URLSearchParams.length, FormData.length,
+    g(function () { return String(new URLSearchParams('a=1').keys); }),
+    g(function () { return tag(new URLSearchParams('a=1').values()); }),
+    (function () { var it = new URLSearchParams('a=1').entries(); var s = it.next(); return J([s.value, it.next().done, J(Array.from(new Headers({ a: '1' })))]); })()]); });
+  t('location keys', function () { return J([J(Object.keys(window.location)), g(function () { return String(window.location); }),
+    g(function () { return typeof window.location.toString; }), g(function () { return window.location.toString(); })]); });
+  t('illegal levels', function () { return J([g(function () { return new Range(); }),
+    g(function () { return new Selection(); }), g(function () { return new Node(); }),
+    g(function () { return new Element(); }), g(function () { return new HTMLDivElement(); }),
+    g(function () { return new XMLHttpRequest(); }), typeof XMLHttpRequest]); });
+  t('mutation on input', function () { var box = document.createElement('input');
+    box.value = 'a'; document.body.appendChild(box);
+    var recs = [];
+    var mo = new MutationObserver(function (l) { recs = l; });
+    mo.observe(box, { childList: true, subtree: true, attributes: true });
+    box.value = 'bb';
+    box.setAttribute('size', '3');
+    var taken = mo.takeRecords();
+    return J([taken.length, taken.map(function (r) { return r.type + '+' + r.addedNodes.length + '-' + r.removedNodes.length + '/' + (r.attributeName || ''); }), box.value]); });
+  __T('probe61', true, J(out, null, 1));
+})();
+</script></body></html>

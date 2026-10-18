@@ -49,12 +49,16 @@
     var usp = new URLSearchParams('a=1&b=2');
     var names = [];
     if (typeof usp.forEach === 'function') usp.forEach(function(v,k){ names.push(k+'='+v); });
-    var ent = usp.entries();
-    var ks = usp.keys();
+    // URL §5: keys/values/entries answer an ITERATOR, so the pairs are taken through the protocol
+    // rather than read off a length (measured: 'usp.entries().next().value' is the first pair).
+    var ent = Array.from(usp.entries());
+    var ks = Array.from(usp.keys());
     __T('URLSearchParams methods + forEach',
         typeof usp.entries === 'function' && typeof usp.keys === 'function' && typeof usp.values === 'function'
-        && ent.length === 2 && ks.length === 2 && names.length === 2,
-        'ent=' + ent.length + ' keys=' + ks.length + ' forEach=' + names.join('|'));
+        && ent.length === 2 && ks.length === 2 && names.length === 2
+        && ent[0][0] === 'a' && ent[0][1] === '1' && ks[1] === 'b'
+        && usp.entries().next().done === false,
+        'ent=' + JSON.stringify(ent) + ' keys=' + JSON.stringify(ks) + ' forEach=' + names.join('|'));
   } catch (e) { __T('usp iteration', false, e.message); }
 
   // --- Node.getRootNode / isDefaultNamespace ---

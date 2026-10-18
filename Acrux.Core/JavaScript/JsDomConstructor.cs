@@ -201,6 +201,11 @@ public class JsDomPrototypeSystem
         catch { }
     }
 
+    /// <summary>The data a node constructor was handed: the first argument, read as the string the
+    /// interface says it is — nothing in hand is the empty string rather than an absence.</summary>
+    private static string NodeData(object?[]? args)
+        => args is { Length: > 0 } ? Convert.ToString(args[0]) ?? string.Empty : string.Empty;
+
     public void Reset()
     {
         _prototypesInitialized = false;
@@ -225,8 +230,14 @@ public class JsDomPrototypeSystem
         // one is stamped with this, so the tag and the 'instanceof' answer follow the kind of the tree.
         RegisterConstructor("XMLDocument", new[] { "Object", "EventTarget", "Node", "Document" }, _ => null);
 
-        RegisterConstructor("Text", new[] { "Object", "EventTarget", "Node", "CharacterData" }, _ => null);
-        RegisterConstructor("Comment", new[] { "Object", "EventTarget", "Node", "CharacterData" }, _ => null);
+        // DOM §4.4.1, §4.4.2: 'Text' and 'Comment' are the two node interfaces a page can build with
+        // 'new'. What it gets is the node the document makes, so the owner, the host members and the
+        // prototype are the ones every other node read answers (measured: 'new Text("hello").data' is
+        // 'hello', its 'assignedSlot' answers null and it clones as [object Text]).
+        RegisterConstructor("Text", new[] { "Object", "EventTarget", "Node", "CharacterData" },
+            args => JavaScriptEngine.Current?.IntegrationService?.Document?.createTextNode(NodeData(args)));
+        RegisterConstructor("Comment", new[] { "Object", "EventTarget", "Node", "CharacterData" },
+            args => JavaScriptEngine.Current?.IntegrationService?.Document?.createComment(NodeData(args)));
         RegisterConstructor("ProcessingInstruction", new[] { "Object", "EventTarget", "Node", "CharacterData" }, _ => null);
         RegisterConstructor("CDATASection", new[] { "Object", "EventTarget", "Node", "CharacterData", "Text" }, _ => null);
         RegisterConstructor("DocumentFragment", new[] { "Object", "EventTarget", "Node" }, _ => null);

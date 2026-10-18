@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html><head><title>Probe 58</title></head><body>
+<div id="d"><p id="p1">t</p></div>
+<script>
+(function () {
+  var out = {}; function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + e.name + '::' + e.message; } }
+  var J = JSON.stringify;
+  function tag(v) { return Object.prototype.toString.call(v); }
+  t('headers shape', function () { var h = new Headers({ 'a': '1' });
+    return J([tag(h), h instanceof Headers, J(Object.keys(h)),
+      J(Object.getOwnPropertyNames(Headers.prototype).sort()),
+      String(Headers.prototype.get), String(Headers.prototype[Symbol.iterator]),
+      Headers.name, Headers.length, typeof Headers.prototype.constructor,
+      (function () { try { return String(Headers.prototype.get.call({})); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } })(),
+      (function () { try { return String(Headers.prototype.get.call(h)); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } })(),
+      (function () { try { return String(Headers()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } })(),
+      Object.getPrototypeOf(h) === Headers.prototype,
+      Headers.prototype.propertyIsEnumerable('get')]); });
+  t('usp shape', function () { var u = new URLSearchParams('a=1');
+    return J([tag(u), J(Object.keys(u)), J(Object.getOwnPropertyNames(URLSearchParams.prototype).sort()),
+      String(URLSearchParams.prototype.get), URLSearchParams.length,
+      (function () { try { return String(URLSearchParams.prototype.get.call(u)); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } })(),
+      (function () { try { return String(new URLSearchParams()); } catch (e) { return 'ERR ' + e.name; } })(),
+      (function () { try { return String(URLSearchParams()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } })()]); });
+  t('formdata shape', function () { var f = new FormData();
+    return J([tag(f), J(Object.keys(f)), J(Object.getOwnPropertyNames(FormData.prototype).sort()),
+      String(FormData.prototype.append),
+      (function () { try { return String(FormData.prototype.append.call(f, 'a', 'b')); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } })(),
+      f.append('k', 'v'), typeof f[Symbol.iterator]]); });
+  t('blob shape', function () { var b = new Blob(['x'], { type: 'text/a' });
+    return J([tag(b), J(Object.keys(b)), J(Object.getOwnPropertyNames(Blob.prototype).sort()),
+      String(Blob.prototype.size), (function () { try { return String(Blob.prototype.slice.call(b, 0, 1)); }
+        catch (e) { return 'ERR ' + e.name + ':' + e.message; } })(),
+      tag(new File(['y'], 'n.txt')), J(Object.getOwnPropertyNames(File.prototype).sort()), File.length]); });
+  t('record queue granularity', function () { var d = document.getElementById('d'), p1 = document.getElementById('p1');
+    var recs = [];
+    var mo = new MutationObserver(function (l) { recs = recs.concat(l); });
+    mo.observe(d, { attributes: true, attributeOldValue: true, childList: true, subtree: true, characterData: true });
+    d.setAttribute('data-a', '1'); d.setAttribute('data-a', '2'); d.setAttribute('data-b', '3');
+    d.removeAttribute('data-b');
+    var c1 = document.createElement('i'), c2 = document.createElement('b');
+    d.appendChild(c1); d.appendChild(c2);
+    d.insertBefore(document.createElement('u'), p1);
+    d.removeChild(c2);
+    var txt = p1.firstChild; txt.data = 'zz'; txt.data = 'qq';
+    d.replaceChild(document.createElement('s'), c1);
+    d.append('after');
+    p1.textContent = 'changed';
+    d.replaceChildren();
+    var kinds = [];
+    var taken = mo.takeRecords();
+    for (var i = 0; i < taken.length; i++) {
+      var r = taken[i];
+      kinds.push([r.type, r.target === d ? 'd' : (r.target === p1 ? 'p1' : tag(r.target)), r.attributeName,
+        String(r.oldValue), r.addedNodes.length, r.removedNodes.length,
+        r.previousSibling ? r.previousSibling.nodeName : null, r.nextSibling ? r.nextSibling.nodeName : null].join('|'));
+    }
+    return J([taken.length, kinds]); });
+  t('move record', function () { var d = document.getElementById('d');
+    var made = document.createElement('span'); d.appendChild(made);
+    var host = document.createElement('div'); document.body.appendChild(host);
+    var got = [];
+    var mo = new MutationObserver(function (l) { got = got.concat(l); });
+    mo.observe(d, { childList: true }); mo.observe(host, { childList: true });
+    host.appendChild(made);
+    var list = [];
+    var taken = mo.takeRecords();
+    for (var i = 0; i < taken.length; i++) {
+      list.push(taken[i].type + '/' + taken[i].addedNodes.length + '/' + taken[i].removedNodes.length + '/' + taken[i].target.nodeName);
+    }
+    return J([taken.length, list, got.length]); });
+  t('attr ns record', function () { var d = document.getElementById('d');
+    var got = [];
+    var mo = new MutationObserver(function (l) { got = l; });
+    mo.observe(d, { attributes: true, attributeNamespace: true });
+    d.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '#x');
+    var taken = mo.takeRecords();
+    return J([taken.length, taken[0] && taken[0].attributeName, taken[0] && String(taken[0].attributeNamespace),
+      taken[0] && String(taken[0].oldValue)]); });
+  t('filter option', function () { var d = document.getElementById('d');
+    var seen = 0;
+    var mo = new MutationObserver(function () { seen++; });
+    mo.observe(d, { attributes: true, attributeFilter: ['data-only'] });
+    d.setAttribute('data-other', '1'); d.setAttribute('data-only', '1'); d.removeAttribute('data-only');
+    mo.takeRecords();
+    return J([seen, d.getAttribute('data-other')]); });
+  __T('probe58', true, J(out, null, 1));
+})();
+</script></body></html>

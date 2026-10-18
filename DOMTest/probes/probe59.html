@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html><head><title>Probe 59</title></head><body>
+<div id="d"><p id="p1">t</p></div>
+<script>
+(function () {
+  var out = {}; function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + e.name + '::' + e.message; } }
+  function g(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  var J = JSON.stringify;
+  function tag(v) { return Object.prototype.toString.call(v); }
+  t('blob shape', function () { var b = new Blob(['x'], { type: 'text/a' });
+    return J([tag(b), J(Object.keys(b)), J(Object.getOwnPropertyNames(Blob.prototype).sort()),
+      Blob.length, g(function () { return String(Blob.prototype.size); }),
+      g(function () { return String(Blob()); }),
+      g(function () { return Blob.prototype.slice.call(b, 0, 1).size; }),
+      g(function () { return Blob.prototype.slice.call({}, 0, 1); }),
+      b.type, b.size, g(function () { return String(b.slice) === String(Blob.prototype.slice); }),
+      g(function () { return tag(new Blob([b], { type: '' })); })]); });
+  t('file shape', function () { var f = new File(['y'], 'n.txt', { type: 'text/b', lastModified: 12 });
+    return J([tag(f), J(Object.keys(f)), J(Object.getOwnPropertyNames(File.prototype).sort()), File.length,
+      f.name, f.type, f.size, typeof f.lastModified, f.lastModified,
+      g(function () { return String(File()); }),
+      g(function () { return String(new File(['z'])); }),
+      g(function () { return String(new File(['z'], 55)); })]); });
+  t('reader shape', function () { var r = new FileReader();
+    return J([tag(r), J(Object.keys(r)), J(Object.getOwnPropertyNames(FileReader.prototype).sort()),
+      FileReader.length, J(Object.getOwnPropertyNames(FileReader).sort()), r.readyState,
+      g(function () { return String(FileReader.prototype.readAsText); }),
+      g(function () { return String(FileReader.prototype.readAsText.call(r)); }),
+      r.onload, g(function () { return String(FileReader()); })]); });
+  t('url shape', function () { var u = new URL('https://a.b/c');
+    return J([tag(u), J(Object.keys(u)), J(Object.getOwnPropertyNames(URL.prototype).sort()),
+      URL.length, J(Object.getOwnPropertyNames(URL).sort()),
+      g(function () { return String(u.href); }), g(function () { return String(URL()); }),
+      typeof URL.canParse, g(function () { return URL.canParse('not a url', 'https://a.b'); }),
+      g(function () { return String(URL.parse('https://a.b/c').pathname); }),
+      tag(u.searchParams), g(function () { return String(u.origin); })]); });
+  t('iterator tags', function () { var it = new Headers().entries(); var usp = new URLSearchParams('a=1');
+    return J([tag(it), J(Object.getOwnPropertyNames(Object.getPrototypeOf(it)).sort()),
+      typeof it[Symbol.iterator], J(Object.getOwnPropertyNames(Object.getPrototypeOf(usp)).sort()),
+      tag(usp.keys()), typeof usp.size, usp.size,
+      g(function () { return String(usp[Symbol.iterator]); }),
+      J(Object.getOwnPropertyNames(Headers.prototype).sort()),
+      tag(new FormData().entries())]); });
+  t('inner html record', function () { var d = document.getElementById('d');
+    var mo = new MutationObserver(function () { });
+    mo.observe(d, { childList: true, subtree: true });
+    d.innerHTML = '<b></b><i></i>';
+    d.innerHTML = '';
+    var list = [];
+    var taken = mo.takeRecords();
+    for (var i = 0; i < taken.length; i++) {
+      list.push(taken[i].type + '+' + taken[i].addedNodes.length + '-' + taken[i].removedNodes.length
+        + '@' + taken[i].target.nodeName + '/' + taken[i].previousSibling + '/' + taken[i].nextSibling);
+    }
+    return J([taken.length, list]); });
+  t('text set record', function () { var d = document.getElementById('d');
+    d.innerHTML = '<b></b><i></i><u></u>';
+    var mo = new MutationObserver(function () { });
+    mo.observe(d, { childList: true });
+    d.textContent = 'one';
+    var taken = mo.takeRecords();
+    return J([taken.length, (function () { var l = []; for (var i = 0; i < taken.length; i++) {
+      l.push(taken[i].type + '+' + taken[i].addedNodes.length + '-' + taken[i].removedNodes.length); } return l; })(),
+      d.childNodes.length, tag(d.firstChild)]); });
+  t('attr set record', function () { var d = document.getElementById('d');
+    d.removeAttribute('class'); d.className = 'a';
+    var mo = new MutationObserver(function () { });
+    mo.observe(d, { attributes: true, attributeOldValue: true });
+    d.className = 'b';
+    d.setAttribute('data-x', '1');
+    var attr = document.createAttribute('data-y'); attr.value = '2';
+    d.setAttributeNode(attr);
+    attr.value = '3';
+    d.removeAttribute('data-x');
+    var taken = mo.takeRecords();
+    var l = [];
+    for (var i = 0; i < taken.length; i++) l.push(taken[i].attributeName + '=' + String(taken[i].oldValue));
+    return J([taken.length, l, d.getAttribute('class')]); });
+  t('char set record', function () { var tn = document.createTextNode('abc');
+    var host = document.createElement('p'); host.appendChild(tn); document.body.appendChild(host);
+    var mo = new MutationObserver(function () { });
+    mo.observe(host, { characterData: true, subtree: true, characterDataOldValue: true });
+    tn.appendData('d'); tn.data = 'xy'; tn.insertData(1, 'q'); tn.replaceData(0, 1, 'z');
+    tn.remove();
+    var taken = mo.takeRecords();
+    var l = [];
+    for (var i = 0; i < taken.length; i++) l.push(taken[i].type + '/' + String(taken[i].oldValue));
+    return J([taken.length, l]); });
+  __T('probe59', true, J(out, null, 1));
+})();
+</script></body></html>

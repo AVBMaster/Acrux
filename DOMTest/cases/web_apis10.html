@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head><title>Templates, ARIA reflection, constraint validation, the listener options and the record interface (HTML §4.12.3, §2.9, §4.10.4, §4.10.7.1, §4.10.22.2-§4.10.22.3, DOM §2.7.7, §2.9, Mutation Observers §4.2, Fetch §5.4, URL §4.6, §2.7, Range §2.4, Selection §2.3, CSSOM View §3)</title></head>
+<body>
+<div id="d" data-foo-bar="1" aria-label="lbl" aria-hidden="true"><p id="p1">one</p></div>
+<form id="f"><input id="req" required><input id="mail" type="email" value="nope">
+<select id="sel" required><option value="">--</option><option value="v">V</option></select></form>
+<template id="tpl"><span class="t1">in</span><b>bold</b></template>
+<script>
+// Every answer below was read off the reference in this session; the probes are kept in out/.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+function ckAll(name, pairs, extra) {
+    var fails = [];
+    try {
+        for (var i = 0; i < pairs.length; i++) if (!pairs[i][1]) fails.push(pairs[i][0]);
+    } catch (e) { fails.push('threw ' + (e && e.name) + ': ' + (e && e.message)); }
+    __T(name, fails.length === 0, (fails.length ? fails.join(' ; ') + ' | ' : '') + (extra || ''));
+}
+function done(name, fn) {
+    var promise;
+    try { promise = fn(); } catch (e) {
+        __T(name, false, 'threw ' + (e && e.name) + ': ' + (e && e.message));
+        return Promise.resolve(null);
+    }
+    return promise.then(function (v) { __T(name, !!v, ''); return null; },
+        function (e) { __T(name, false, 'rej ' + (e && e.name) + ': ' + (e && e.message)); return null; });
+}
+function refused(fn) {
+    try { fn(); return 'constructed'; } catch (e) { return e.name + ':' + e.message; }
+}
+function tagName(v) { return Object.prototype.toString.call(v); }
+var d = document.getElementById('d'), p1 = document.getElementById('p1'), f = document.getElementById('f'),
+    req = document.getElementById('req'), sel = document.getElementById('sel'), tpl = document.getElementById('tpl');
+
+// ── A. The template keeps its markup in a fragment (HTML §4.12.3) ───────────
+ckAll('A1 a template holds a content fragment, not children', [
+    ['fragment', tagName(tpl.content) === '[object DocumentFragment]' && tpl.content.nodeType === 11],
+    ['parsed in', tpl.content.childElementCount === 2
+        && tpl.content.querySelector('.t1').textContent === 'in'],
+    ['element has no rendered children', d.contains(tpl.content) === false],
+    ['identity', tpl.content === tpl.content],
+    ['innerHTML reads the fragment', (function () {
+        var other = document.createElement('template');
+        other.innerHTML = '<i>x</i>';
+        return other.content.childElementCount === 1 && other.innerHTML === '<i>x</i>';
+    })()],
+    ['clone of the fragment', (function () { var made = tpl.content.cloneNode(true);
+        return tagName(made) === '[object DocumentFragment]' && made.childElementCount === 2; })()],
+    ['tag', tagName(tpl) === '[object HTMLTemplateElement]']
+]);
+
+// ── B. The ARIA attributes reflected on every element (HTML §2.9) ───────────
+ckAll('B2 aria attributes read and write through to the attribute', [
+    ['read', d.ariaLabel === 'lbl' && d.ariaHidden === 'true'],
+    ['absent is null', d.ariaChecked === null && d.ariaLive === null],
+    ['no ariaRole', typeof d.ariaRole === 'undefined'],
+    ['write moves the attribute', (function () { d.ariaLabel = 'second';
+        return d.getAttribute('aria-label') === 'second' && d.ariaLabel === 'second'; })()],
+    ['writing null takes it off', (function () { d.ariaHidden = null;
+        return d.hasAttribute('aria-hidden') === false && d.ariaHidden === null; })()],
+    ['on the element interface', refused(function () { return Element.prototype.ariaLabel; })
+        === 'TypeError:Illegal invocation' || typeof Element.prototype.ariaLabel === 'undefined'],
+    ['the element lists read null', d.ariaDescribedByElements === null
+        && d.ariaLabelledByElements === null && d.ariaActiveDescendantElement === null]
+]);
+
+// ── C. Constraint validation (HTML §4.10.4, §4.10.22) ───────────────────────
+ckAll('C1 the flags object is the interface it names', [
+    ['tag', tagName(req.validity) === '[object ValidityState]'],
+    ['instance', typeof ValidityState === 'function'],
+    ['missing value', req.validity.valueMissing === true && req.validity.valid === false],
+    ['willValidate', req.willValidate === true && req.checkValidity() === false],
+    ['a message is told', typeof req.validationMessage === 'string' && req.validationMessage.length > 0],
+    ['custom error wins', (function () { req.setCustomValidity('nope');
+        var made = req.validity.customError && req.validationMessage === 'nope'
+            && req.checkValidity() === false;
+        req.setCustomValidity('');
+        return made && req.validity.customError === false; })()]
+]);
+
+ckAll('C2 a select with an empty option is unanswered, and the form asks its controls', [
+    ['select value', sel.value === '' && sel.validity.valueMissing === true],
+    ['option value is the attribute', sel.options[0].value === ''],
+    ['form checkValidity', f.checkValidity() === false],
+    ['form reportValidity', typeof f.reportValidity === 'function'],
+    ['form validity aggregates', f.validity.valueMissing === true && f.validity.valid === false],
+    ['the invalid event reaches the control', (function () { var heard = 0;
+        req.addEventListener('invalid', function () { heard++; });
+        f.checkValidity(); req.removeEventListener('invalid', function () { });
+        return heard >= 1; })()],
+    ['submit candidates', typeof f.requestSubmit === 'function' && typeof f.submit === 'function']
+]);
+
+// ── D. The listener options (DOM §2.7.7, §2.9) ──────────────────────────────
+ckAll('D1 the options dictionary is honoured', [
+    ['once', (function () { var hits = 0;
+        function only() { hits++; }
+        p1.addEventListener('probe-once', only, { once: true });
+        p1.dispatchEvent(new Event('probe-once'));
+        p1.dispatchEvent(new Event('probe-once'));
+        p1.removeEventListener('probe-once', only);
+        return hits === 1; })()],
+    ['capture runs first at the target', (function () { var order = [];
+        function second() { order.push('once'); }
+        function first() { order.push('cap'); }
+        p1.addEventListener('probe-order', second, false);
+        p1.addEventListener('probe-order', first, true);
+        p1.dispatchEvent(new Event('probe-order'));
+        p1.removeEventListener('probe-order', second, false);
+        p1.removeEventListener('probe-order', first, true);
+        return order.join(',') === 'cap,once'; })()],
+    ['passive is accepted', (function () { var hits = 0;
+        function fn(e) { hits++; }
+        p1.addEventListener('probe-passive', fn, { passive: true });
+        p1.dispatchEvent(new Event('probe-passive'));
+        p1.removeEventListener('probe-passive', fn);
+        return hits === 1; })()],
+    ['aborted signal never registers', (function () { var hits = 0;
+        var c = new AbortController(); c.abort();
+        p1.addEventListener('probe-dead', function () { hits++; }, { signal: c.signal });
+        p1.dispatchEvent(new Event('probe-dead'));
+        return hits === 0; })()],
+    ['live signal retires the listener', (function () { var hits = 0;
+        var c = new AbortController();
+        p1.addEventListener('probe-live', function () { hits++; }, { signal: c.signal });
+        p1.dispatchEvent(new Event('probe-live'));
+        c.abort();
+        p1.dispatchEvent(new Event('probe-live'));
+        return hits === 1; })()],
+    ['EventTarget is constructible', typeof EventTarget === 'function'
+        && (function () { try { return new EventTarget() instanceof EventTarget; } catch (e) { return false; } })()]
+]);
+
+// ── E. The record interface (Mutation Observers §4.2) ───────────────────────
+ckAll('E1 a record carries its interface', [
+    ['ctor named', typeof MutationRecord === 'function'],
+    ['illegal', refused(function () { return new MutationRecord(); })
+        === 'TypeError:Failed to construct \'MutationRecord\': Illegal constructor'],
+    ['prototype names', (function () { var names = Object.getOwnPropertyNames(MutationRecord.prototype);
+        return ['type', 'target', 'addedNodes', 'removedNodes', 'previousSibling', 'nextSibling',
+            'attributeName', 'attributeNamespace', 'oldValue'].every(function (k) {
+                return names.indexOf(k) >= 0; }); })()],
+    ['brand', refused(function () { return MutationRecord.prototype.type; })
+        === 'TypeError:Illegal invocation'],
+    ['record tag', (function () { var box = document.createElement('div'); document.body.appendChild(box);
+        var mo = new MutationObserver(function () { });
+        mo.observe(box, { childList: true });
+        box.appendChild(document.createElement('i'));
+        var made = mo.takeRecords();
+        mo.disconnect();
+        return made.length === 1 && tagName(made[0]) === '[object MutationRecord]'
+            && made[0].type === 'childList' && made[0].target === box
+            && tagName(made[0].addedNodes) === '[object NodeList]'
+            && made[0].addedNodes.length === 1 && made[0].addedNodes.item(0).tagName === 'I'
+            && made[0].removedNodes.length === 0 && made[0].attributeName === null; })()],
+    ['attributes carry their name and old value', (function () { var box = document.createElement('div');
+        box.setAttribute('data-a', '1'); document.body.appendChild(box);
+        var mo = new MutationObserver(function () { });
+        mo.observe(box, { attributes: true, attributeOldValue: true });
+        box.setAttribute('data-a', '2');
+        var made = mo.takeRecords();
+        mo.disconnect();
+        return made.length === 1 && made[0].type === 'attributes'
+            && made[0].attributeName === 'data-a' && made[0].oldValue === '1'; })()],
+    ['an attribute that appeared has no old side', (function () { var box = document.createElement('div');
+        document.body.appendChild(box);
+        var mo = new MutationObserver(function () { });
+        mo.observe(box, { attributes: true, attributeOldValue: true });
+        box.setAttribute('data-new', 'x');
+        var made = mo.takeRecords();
+        mo.disconnect();
+        return made.length === 1 && made[0].oldValue === null; })()],
+    ['takeRecords drains', (function () { var box = document.createElement('div');
+        document.body.appendChild(box);
+        var mo = new MutationObserver(function () { });
+        mo.observe(box, { childList: true });
+        box.appendChild(document.createElement('b'));
+        var first = mo.takeRecords().length;
+        return first === 1 && mo.takeRecords().length === 0; })()],
+    ['an attribute write is told before the child added after it', (function () {
+        var mo = new MutationObserver(function () { });
+        mo.observe(d, { childList: true, attributes: true });
+        d.setAttribute('data-order', '1');
+        var box = document.createElement('em'); d.appendChild(box);
+        var made = mo.takeRecords();
+        mo.disconnect();
+        return made.length >= 2 && made[0].type === 'attributes'
+            && made[made.length - 1].type === 'childList'; })()]
+]);
+
+// ── F. Iterators and the serialisations (Fetch §5.4, URL §2.7, §4.6) ────────
+ckAll('F1 the list-shaped interfaces answer iterators', [
+    ['headers entries', (function () { var h = new Headers({ 'x-a': '1' });
+        var it = h.entries();
+        return it && typeof it.next === 'function'
+            && it.next().value[0] === 'x-a'; })()],
+    ['headers keys', (function () { var h = new Headers({ 'x-a': '1', 'x-b': '2' });
+        return Array.from(h.keys()).join(',') === 'x-a,x-b'; })()],
+    ['getSetCookie', typeof new Headers({}).getSetCookie === 'function'
+        && new Headers({}).getSetCookie().length === 0],
+    ['params entries', (function () { var p = new URLSearchParams('a=1&b=2');
+        var it = p.entries();
+        return it && typeof it.next === 'function' && it.next().value[0] === 'a'; })()],
+    ['params iteration', Array.from(new URLSearchParams('a=1')).map(function (pair) {
+        return pair[0] + '=' + pair[1]; }).join(',') === 'a=1'],
+    ['url toJSON', (function () { var made = new URL('https://example.com/p?q=1#h').toJSON();
+        return made && made.href === 'https://example.com/p?q=1#h' && made.hostname === 'example.com'
+            && made.pathname === '/p' && made.search === '?q=1' && made.hash === '#h'
+            && made.origin === 'https://example.com'; })()]
+]);
+
+// ── G. The range and the selection interfaces (Range §2.4, Selection §2.3) ──
+ckAll('G1 the boundary reads belong to the interface', [
+    ['range ctor', typeof Range === 'function'],
+    ['startContainer brand', refused(function () { return Range.prototype.startContainer; })
+        === 'TypeError:Illegal invocation'],
+    ['collapsed brand', refused(function () { return Range.prototype.collapsed; })
+        === 'TypeError:Illegal invocation'],
+    ['instance reads work', (function () { var r = document.createRange();
+        r.selectNodeContents(d);
+        return r.startContainer === d && r.collapsed === false
+            && typeof r.endOffset === 'number'; })()],
+    ['selection brand', refused(function () { return Selection.prototype.anchorNode; })
+        === 'TypeError:Illegal invocation'],
+    ['selection reads', (function () { var sel2 = getSelection();
+        return typeof sel2.rangeCount === 'number' && typeof sel2.type === 'string'; })()],
+    ['scroll methods on the interface', typeof Element.prototype.scrollTo === 'function'
+        && typeof Element.prototype.scroll === 'function'
+        && typeof p1.scrollTo === 'function']
+]);
+
+ck('G2 an image with no source answers the empty string', function () {
+    var im = new Image();
+    return im.src === '' && im.complete === true && im.naturalWidth === 0;
+}, function () { var im = new Image(); return String(im.src) + '/' + typeof im.src; });
+</script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html><head><title>Probe 62</title></head><body>
+<div id="d"><p id="p1">t</p></div>
+<script>
+(function () {
+  var out = {}; function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + e.name + '::' + e.message; } }
+  var J = JSON.stringify;
+  var d = document.getElementById('d'), p1 = document.getElementById('p1');
+  t('D4 conditions', function () {
+    var a = Object.getOwnPropertyDescriptor(AbstractRange.prototype, 'startContainer');
+    var b = Object.getOwnPropertyDescriptor(Range.prototype, 'startContainer');
+    return J([!!a, !!(a && a.get), !(a && a.set), a && a.enumerable, a && a.configurable,
+      b === undefined, J(Object.getOwnPropertyNames(AbstractRange.prototype).sort()),
+      J(Object.getOwnPropertyNames(Range.prototype).sort())]); });
+  t('U1 conditions', function () {
+    var p = new URLSearchParams('b=2&a=1&b=3'); p.sort();
+    return J([
+      p.toString() === 'a=1&b=2&b=3',
+      new URL('/x', 'http://a/b').href === 'http://a/x',
+      new URL('http://a/b/c').origin === 'http://a',
+      typeof URL.canParse, typeof URL.parse, typeof URL.fromJSON,
+      URL.canParse('nope', 'http://a/b'), URL.canParse('nope'),
+      g(function () { return URL.parse('http://a/b/c').pathname; }),
+      g(function () { return String(URL.parse('nope')); }),
+      g(function () { return new URL('http://a/b/c') instanceof URL; }),
+      g(function () { return Object.prototype.toString.call(new URL('http://a/b/c')); }),
+      g(function () { return J(Object.keys(new URL('http://a/b/c'))); })]); });
+  function g(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  t('headers read', function () { var h = new Headers({ 'x-multi': '1' }); h.append('x-multi', '2');
+    return J([h.get('x-multi'), typeof h.getAll, J(Array.from(h.entries())), J(Array.from(new URLSearchParams('a=1&b=2').keys()))]); });
+  t('usp iteration', function () { var usp = new URLSearchParams('a=1&b=2');
+    return J([typeof usp.entries, usp.entries().length, J(Array.from(usp.entries())),
+      (function () { var names = []; usp.forEach(function (v, k) { names.push(k + '=' + v); }); return names.join('|'); })(),
+      (function () { var host = document.createElement('a'); host.href = 'http://q.b/x?c=3';
+        return [typeof host.searchParams, J(Array.from(host.searchParams.entries()))].join('/'); })()]); });
+  t('dompointread', function () { return J([typeof URLSearchParams.prototype.size,
+    (function () { var u = new URLSearchParams('a=1'); try { return u.size; } catch (e) { return 'ERR ' + e.message; } })(),
+    (function () { var u = new URLSearchParams('a=1'); try { return Object.prototype.toString.call(u.entries()); } catch (e) { return 'ERR ' + e.message; } })()]); });
+  __T('probe62', true, J(out, null, 1));
+})();
+</script></body></html>

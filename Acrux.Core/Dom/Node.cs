@@ -74,6 +74,10 @@ public abstract class Node : EventTarget
     public IReadOnlyList<Node> ChildNodes => _children.AsReadOnly();
     public List<Node> Children => _children;
 
+    /// <summary>The empty side of a child-list note: an operation that only adds, or only takes away,
+    /// still names the list it did not change.</summary>
+    internal static readonly Node[] EmptyChildren = System.Array.Empty<Node>();
+
     /// <summary>Stamps the owning document on this node and everything below it. The
     /// insertion path copies the link from the parent, which for the root of a document is
     /// the Document itself - and a Document's own OwnerDocument is null by spec, so the
@@ -100,12 +104,9 @@ public abstract class Node : EventTarget
     public virtual string? TextContent
     {
         get => GetTextContent();
-        set
-        {
-            _children.Clear();
-            if (value != null)
-                AppendChild(new TextNode(value));
-        }
+        set => ReplaceAllWith(value == null
+            ? EmptyChildren
+            : new Node[] { new TextNode(value) });
     }
 
     // ===== Legacy compatibility properties =====
@@ -264,11 +265,13 @@ public abstract class Node : EventTarget
 
         child.Remove();
         var previousOwner = child.OwnerDocument;
+        var frame = _children.Count > 0 ? _children[^1] : null;
         child._parent = this;
         _children.Add(child);
         child.OwnerDocument = InsertedChildOwner;
         OnChildInserted(child);
         CustomElements.Inserted(child, previousOwner);
+        DomMutationTracker.NoteChildList(this, new[] { child }, EmptyChildren, frame, null);
         DomMutationTracker.Notify();
         return child;
     }
@@ -297,22 +300,26 @@ public abstract class Node : EventTarget
 
         newChild.Remove();
         var previousOwner = newChild.OwnerDocument;
+        var frame = index > 0 ? _children[index - 1] : null;
         newChild._parent = this;
         _children.Insert(index, newChild);
         newChild.OwnerDocument = InsertedChildOwner;
         OnChildInserted(newChild);
         CustomElements.Inserted(newChild, previousOwner);
+        DomMutationTracker.NoteChildList(this, new[] { newChild }, EmptyChildren, frame, refChild);
         DomMutationTracker.Notify();
         return newChild;
     }
 
     public virtual Node RemoveChild(Node child)
     {
+        var frame = (child.PreviousSibling, child.NextSibling);
         if (!_children.Remove(child))
             throw new DOMException("Node is not a child", "NotFoundError");
         child._parent = null;
         OnChildRemoved(child);
         CustomElements.Removed(child);
+        DomMutationTracker.NoteChildList(this, EmptyChildren, new[] { child }, frame.Item1, frame.Item2);
         DomMutationTracker.Notify();
         return child;
     }
@@ -324,7 +331,14 @@ public abstract class Node : EventTarget
             throw new DOMException("Node is not a child", "NotFoundError");
 
         newChild.Remove();
+        // The slot is found again after the incoming node left the tree: when it was one of this
+        // parent's children and sat before the one being replaced, the removal has shifted the
+        // position the first lookup answered (DOM §4.1 'replace').
+        index = _children.IndexOf(oldChild);
+        if (index < 0)
+            throw new DOMException("Node is not a child", "NotFoundError");
         var previousOwner = newChild.OwnerDocument;
+        var frame = (oldChild.PreviousSibling, oldChild.NextSibling);
         newChild._parent = this;
         _children[index] = newChild;
         oldChild._parent = null;
@@ -336,6 +350,8 @@ public abstract class Node : EventTarget
         // owed, in that order (DOM §4.1 replace, HTML §1).
         CustomElements.Removed(oldChild);
         CustomElements.Inserted(newChild, previousOwner);
+        DomMutationTracker.NoteChildList(this, new[] { newChild }, new[] { oldChild },
+            frame.Item1, frame.Item2);
         DomMutationTracker.Notify();
         return oldChild;
     }
@@ -343,6 +359,40 @@ public abstract class Node : EventTarget
     public void Remove()
     {
         _parent?.RemoveChild(this);
+    }
+
+    /// <summary>DOM §4.1 'replace all': the children the node held all leave and the list that comes
+    /// in takes their place, and the whole exchange is <em>one</em> mutation — the record the reference
+    /// answers carries both lists, not a record per child (measured: three children out and one text
+    /// node in is one record of one added and three removed). A node that arrives from another parent
+    /// is still removed from it first, which is its own record, as the specification has it.</summary>
+    internal void ReplaceAllWith(IReadOnlyList<Node> incoming)
+    {
+        var removed = _children.ToArray();
+        _children.Clear();
+        for (var i = 0; i < removed.Length; i++)
+        {
+            removed[i]._parent = null;
+            OnChildRemoved(removed[i]);
+            CustomElements.Removed(removed[i]);
+        }
+        var added = new List<Node>(incoming.Count);
+        foreach (var node in incoming)
+        {
+            node.Remove();
+            var previousOwner = node.OwnerDocument;
+            node._parent = this;
+            _children.Add(node);
+            node.OwnerDocument = InsertedChildOwner;
+            OnChildInserted(node);
+            CustomElements.Inserted(node, previousOwner);
+            added.Add(node);
+        }
+        if (removed.Length != 0 || added.Count != 0)
+        {
+            DomMutationTracker.NoteChildList(this, added, removed, null, null);
+            DomMutationTracker.Notify();
+        }
     }
 
     // ===== Utility Methods =====

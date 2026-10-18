@@ -1,0 +1,23 @@
+<!DOCTYPE html><html><head><title>P64</title></head><body>
+<div id="d" aria-label="lbl" aria-hidden="true"></div>
+<script>
+(function () {
+  function g(f) { try { return String(f()); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } }
+  var d = document.getElementById('d');
+  var out = {};
+  out.ariaLabel = g(function () { return d.ariaLabel; });
+  out.ariaHidden = g(function () { return d.ariaHidden; });
+  out.ariaChecked = g(function () { return d.ariaChecked; });
+  out.ariaLive = g(function () { return d.ariaLive; });
+  out.ariaRole = g(function () { return typeof d.ariaRole; });
+  out.write = g(function () { d.ariaLabel = 'second'; return d.getAttribute('aria-label') + '/' + d.ariaLabel; });
+  out.writeNull = g(function () { d.ariaHidden = null; return d.hasAttribute('aria-hidden') + '/' + d.ariaHidden; });
+  out.protoRead = g(function () { return typeof Object.getPrototypeOf(d).ariaLabel; });
+  out.elemProto = g(function () { return typeof Element.prototype.ariaLabel; });
+  out.refs = g(function () { return [d.ariaDescribedByElements, d.ariaLabelledByElements, d.ariaActiveDescendantElement].join(','); });
+  out.rangeBrand = g(function () { return Range.prototype.startContainer; });
+  out.abstractBrand = g(function () { return Object.getOwnPropertyNames(AbstractRange.prototype).sort().join(','); });
+  out.rangeOwn = g(function () { return Object.getOwnPropertyNames(Range.prototype).sort().join(','); });
+  __T('p64', true, JSON.stringify(out));
+})();
+</script></body></html>

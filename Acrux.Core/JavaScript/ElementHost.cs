@@ -20,6 +20,10 @@ public partial class ElementHost : IDomPrototypeHost
     // Which phase of the dispatch walk each stored listener belongs to (DOM §2.7). The list is keyed by
     // type alone, so the flag has to sit beside the callback id it was registered with.
     private readonly Dictionary<int, bool> _listenerCapture = new();
+    /// <summary>The listeners registered with an <c>{signal:}</c> option, by the token the script side
+    /// handed back for that signal (DOM §2.7.7): the token is asked, once per dispatch, whether the
+    /// controller behind it has aborted.</summary>
+    private readonly Dictionary<int, int> _listenerSignal = new();
     internal JavaScriptEngine? Engine { get; set; }
 
     public ElementHost(Element element)
@@ -103,15 +107,23 @@ public partial class ElementHost : IDomPrototypeHost
         get => GetTextContent();
         set
         {
-            _element.Children.Clear();
-            if (!string.IsNullOrEmpty(value))
-                _element.AppendChild(new TextNode(value));
+            // Setting the text of an element is 'replace all' with one text node: the children that
+            // leave and the text that comes in are a single record, not a removal per child followed
+            // by an insertion (DOM §4.1, measured: one record of one added and the old count removed).
+            _element.ReplaceAllWith(string.IsNullOrEmpty(value)
+                ? Node.EmptyChildren
+                : new Node[] { new TextNode(value) });
         }
     }
 
     public string? innerHTML
     {
-        get => BuildInnerHtml();
+        // HTML §4.12.3: a template's children live in its content fragment, and the fragment is what
+        // 'innerHTML' reads back — the element itself keeps no rendered children (measured: writing
+        // '<i>x</i>' into a fresh template answers 'innerHTML' as that same markup).
+        get => _element is Acrux.Core.Dom.Html.HTMLTemplateElement template
+            ? SerializeChildren(TemplateContent(template).ChildNodes)
+            : BuildInnerHtml();
         set
         {
             if (string.IsNullOrEmpty(value))
@@ -389,12 +401,27 @@ public partial class ElementHost : IDomPrototypeHost
 
     /// <summary>DOM §5.5 (ParentNode): the children are replaced in one go — everything the element
     /// held leaves first, then each argument is inserted in the order it was written, with strings
-    /// becoming text nodes and a fragment contributing its own children.</summary>
+    /// becoming text nodes and a fragment contributing its own children. The exchange is one mutation
+    /// for the observer, not a removal per child.</summary>
     public void replaceChildren(params object?[] nodes)
     {
-        for (var i = _element.Children.Count - 1; i >= 0; i--)
-            _element.RemoveChild(_element.Children[i]);
-        foreach (var n in nodes) InsertChild(n, atEnd: true);
+        var incoming = new List<Node>();
+        foreach (var n in nodes) CollectChildNodes(n, incoming);
+        _element.ReplaceAllWith(incoming);
+    }
+
+    /// <summary>The node list a 'children' mutation method works on: a string becomes a text node and a
+    /// fragment contributes the children it holds rather than itself.</summary>
+    internal static void CollectChildNodes(object? child, List<Node> into)
+    {
+        Node? node = child is string s ? new TextNode(s) : UnwrapNode(child);
+        if (node == null) return;
+        if (node is DocumentFragment frag)
+        {
+            foreach (var moved in frag.Children.ToList()) into.Add(moved);
+            return;
+        }
+        into.Add(node);
     }
 
     /// <summary>Element.append(nodes…) inserts each argument at the end, accepting strings as text
@@ -489,29 +516,17 @@ public partial class ElementHost : IDomPrototypeHost
         return false;
     }
 
-    public void addEventListener(string type, object callback)
-    {
-        addEventListener(type, callback, null);
-    }
-
-    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "JS engine assemblies are rooted - reflection on options object is safe")]
-    public void addEventListener(string type, object callback, object? options)
+    /// <summary>DOM §2.7: the registration the dispatch walk reads. The three flags arrive as values
+    /// rather than as the page's options dictionary, because a dictionary handed over from script keeps
+    /// its booleans but loses the object it holds — and the abort signal has to be the very object the
+    /// page passed, since it is what the listener is taken off when the signal fires. So the script side
+    /// reads the dictionary, turns a live signal into a token, and calls this with what they amount to
+    /// (measured: a listener whose signal aborted never hears the event, and one registered against an
+    /// already-aborted signal is never registered at all).</summary>
+    public void addEventListenerFlags(string type, object callback, bool useCapture, bool once, int signalToken)
     {
         var engine = JavaScriptEngine.Current ?? Engine;
         if (engine == null) return;
-
-        bool useCapture = false;
-        bool once = false;
-        if (options is bool b)
-            useCapture = b;
-        else if (options != null)
-        {
-            // A JS options object ({capture:true, once:true}) reaches the host as an interop
-            // value with no CLR members, so its flags are read back through the engine rather
-            // than reflection (DOM 4 §2.7).
-            useCapture = ReadEngineOption(engine, options, "capture");
-            once = ReadEngineOption(engine, options, "once");
-        }
 
         int cbId;
         var integration = engine.IntegrationService;
@@ -542,6 +557,7 @@ public partial class ElementHost : IDomPrototypeHost
             _onceCallbacks.Add(cbId);
 
         _listenerCapture[cbId] = useCapture;
+        if (signalToken > 0) _listenerSignal[cbId] = signalToken;
 
         if (!_eventCallbackIds.TryGetValue(type, out var list))
         {
@@ -573,6 +589,7 @@ public partial class ElementHost : IDomPrototypeHost
                 engine.RemoveCallback(cbId);
                 _listenerCapture.Remove(cbId);
                 _onceCallbacks.Remove(cbId);
+                _listenerSignal.Remove(cbId);
             }
             list.Clear();
             _eventCallbackIds.Remove(type);
@@ -1151,11 +1168,22 @@ public partial class ElementHost : IDomPrototypeHost
         if (engine == null) return;
         if (_eventCallbackIds.TryGetValue(evt.type, out var cbIds))
         {
-            foreach (var cbId in cbIds.ToList())
+            // §2.9: the walk runs the capture listeners on the way in and the rest on the way out; at
+            // the target itself both kinds run, and the reference puts the capture ones first
+            // (measured: a capture listener registered second still hears the event before the
+            // non-capture one registered first).
+            var order = cbIds.ToList();
+            if (phase == 2) order.Sort((a, b) => CaptureRank(a).CompareTo(CaptureRank(b)));
+            foreach (var cbId in order)
             {
                 if (evt.ImmediateStopped) break;
                 var capture = _listenerCapture.TryGetValue(cbId, out var flag) && flag;
                 if ((phase == 1 && !capture) || (phase == 3 && capture)) continue;
+                if (_listenerSignal.TryGetValue(cbId, out var token) && SignalAborted(engine, token))
+                {
+                    DropListener(cbIds, cbId, engine);
+                    continue;
+                }
                 try
                 {
                     evt.currentTarget = this;
@@ -1178,6 +1206,38 @@ public partial class ElementHost : IDomPrototypeHost
             }
         }
         RunInlineHandler(evt, engine, phase);
+    }
+
+    private int CaptureRank(int cbId)
+        => _listenerCapture.TryGetValue(cbId, out var flag) && flag ? 0 : 1;
+
+    /// <summary>Takes one listener out of the element's bookkeeping, releasing the callback the engine
+    /// is holding for it.</summary>
+    private void DropListener(List<int> cbIds, int cbId, JavaScriptEngine engine)
+    {
+        cbIds.Remove(cbId);
+        _listenerCapture.Remove(cbId);
+        _onceCallbacks.Remove(cbId);
+        _listenerSignal.Remove(cbId);
+        engine.RemoveCallback(cbId);
+    }
+
+    /// <summary>Asks the script side, by the token it handed back at registration, whether the signal a
+    /// listener was registered against has aborted since (DOM §2.7.7).</summary>
+
+    private static bool SignalAborted(JavaScriptEngine engine, int token)
+    {
+        var bridge = engine.Adapter;
+        if (bridge == null) return false;
+        try
+        {
+            var made = bridge.Evaluate($"__acruxSignalAborted({token.ToString(System.Globalization.CultureInfo.InvariantCulture)})");
+            return made switch
+            {
+                bool b => b, double d => d != 0, long l => l != 0, int i => i != 0, _ => false
+            };
+        }
+        catch { return false; }
     }
 
     /// <summary>The 'on-type' attribute the markup carries is a listener of the element it sits on, so
@@ -1209,10 +1269,14 @@ public partial class ElementHost : IDomPrototypeHost
             CollectText(child, sb);
     }
 
-    private string BuildInnerHtml()
+    private string BuildInnerHtml() => SerializeChildren(_element.Children);
+
+    /// <summary>The markup of a list of nodes — the children of an element, or of the fragment a
+    /// template or a shadow root keeps — through the one serialiser every path shares.</summary>
+    private static string SerializeChildren(System.Collections.Generic.IReadOnlyList<Node> children)
     {
         var sb = new System.Text.StringBuilder();
-        foreach (var child in _element.Children)
+        foreach (var child in children)
             SerializeNode(child, sb);
         return sb.ToString();
     }
@@ -1382,8 +1446,10 @@ public partial class ElementHost : IDomPrototypeHost
 
     public void insertAdjacentHTML(string position, string text)
     {
+        // The position is judged before anything is parsed or moved (DOM §4.2.4, measured).
+        var where = Element.AdjacentPosition("insertAdjacentHTML", position);
         var parsed = HtmlParser.ParseFragment(text, _element.TagName);
-        switch (position.ToLowerInvariant())
+        switch (where)
         {
             case "beforebegin":
                 var parent = _element.ParentElement;
@@ -1408,22 +1474,23 @@ public partial class ElementHost : IDomPrototypeHost
 
     public void insertAdjacentText(string position, string text)
     {
-        InsertAt(position, new TextNode(text ?? ""), asText: true);
+        InsertAt(Element.AdjacentPosition("insertAdjacentText", position), new TextNode(text ?? ""), asText: true);
     }
 
     /// <summary>Element.insertAdjacentElement(position, element) (DOM 4 §5.5): puts the given node
     /// at one of the four positions and answers the node, or null when the node could not move.</summary>
     public object? insertAdjacentElement(string position, object? element)
     {
+        var where = Element.AdjacentPosition("insertAdjacentElement", position);
         var node = UnwrapNode(element);
         if (node == null) return null;
-        InsertAt(position, node, asText: false);
+        InsertAt(where, node, asText: false);
         return element;
     }
 
     private void InsertAt(string position, Node node, bool asText)
     {
-        switch ((position ?? "").ToLowerInvariant())
+        switch (position)
         {
             case "beforebegin":
                 _element.Parent?.InsertBefore(node, _element);
@@ -2226,7 +2293,10 @@ public partial class ElementHost : IDomPrototypeHost
     // Generic attribute-backed src (works for script, img, iframe, media, etc.)
     public string? src
     {
-        get => _element.GetAttribute("src");
+        // The IDL is a URL, not the author's string: an absent attribute reads the empty string
+        // (measured: a fresh image answers 'src' as ''), and a present one reads back resolved
+        // against the document's base — 'file:///tmp/a.png' for markup that said 'a.png' (measured).
+        get => AbsoluteOrNull(_element.GetAttribute("src") ?? "") ?? "";
         set => _element.SetAttribute("src", value ?? "");
     }
 
@@ -2382,6 +2452,44 @@ public partial class ElementHost : IDomPrototypeHost
 
     public RelTokenListHost relList => _relList ??= new(this);
 
+    /// <summary>HTML §4.10.5: the frame's sandboxing flags are the space-separated tokens of its
+    /// 'sandbox' attribute, read and written through the same list interface 'classList' uses.</summary>
+    public RelTokenListHost sandbox => new(this, "sandbox");
+
+    // The frame and the picture sources reflect their own content attributes (HTML §4.10.5, §4.8.5):
+    // a reflected DOMString answers the empty string when the attribute is not there, and the two
+    // booleans the frame carries are the presence of the attribute, not its value.
+    public string frameBorder
+    {
+        get => _element.GetAttribute("frameborder") ?? "";
+        set => _element.SetAttribute("frameborder", value ?? "");
+    }
+
+    public bool allowFullscreen
+    {
+        get => _element.HasAttribute("allowfullscreen");
+        set
+        {
+            if (value) _element.SetAttribute("allowfullscreen", "");
+            else _element.RemoveAttribute("allowfullscreen");
+        }
+    }
+
+    public string srcset
+    {
+        // 'srcset' is the author's candidate list, kept as it was written — the picture does not
+        // resolve it into absolute addresses the way 'src' does (measured: 'a.webp' reads back as
+        // 'a.webp'), while 'sizes' is the plain source-size string beside it.
+        get => _element.GetAttribute("srcset") ?? "";
+        set => _element.SetAttribute("srcset", value ?? "");
+    }
+
+    public string sizes
+    {
+        get => _element.GetAttribute("sizes") ?? "";
+        set => _element.SetAttribute("sizes", value ?? "");
+    }
+
     // Reflected content attributes the standard names directly on the element interface. A reflected
     // DOMString is the empty string when the attribute is not there — not null (measured: 'a.download',
     // 'a.target', 'a.type', 'a.shape' and 'a.coords' all answer '' on a link that does not carry them).
@@ -2457,10 +2565,20 @@ public partial class ElementHost : IDomPrototypeHost
     {
         if (!_element.TagName.Equals("TEMPLATE", StringComparison.OrdinalIgnoreCase)) return null;
         if (_element is not Acrux.Core.Dom.Html.HTMLTemplateElement template) return null;
+        return JsIntegrationService.WrapAny(TemplateContent(template));
+    }
+
+    /// <summary>HTML §4.12.3: the fragment a template keeps its markup in. The parser fills a
+    /// template's children the way it fills any other element, so the first time the fragment is asked
+    /// for — by 'content' or by 'innerHTML' — those children move into it, and afterwards both reads
+    /// see the same list. The fragment is the element's own, so 'tpl.content === tpl.content' holds.</summary>
+    internal static Acrux.Core.Dom.DocumentFragment TemplateContent(
+        Acrux.Core.Dom.Html.HTMLTemplateElement template)
+    {
         var fragment = template.Content;
-        if (fragment.OwnerDocument == null) fragment.OwnerDocument = _element.OwnerDocument;
-        foreach (var child in _element.Children.ToList()) fragment.AppendChild(child);
-        return JsIntegrationService.WrapAny(fragment);
+        if (fragment.OwnerDocument == null) fragment.OwnerDocument = template.OwnerDocument;
+        foreach (var child in template.Children.ToList()) fragment.AppendChild(child);
+        return fragment;
     }
 
     /// <summary>HTMLSelectElement.selectedOptions — the options the select answers as chosen (§4.10.9).</summary>
@@ -2602,11 +2720,16 @@ public partial class ElementHost : IDomPrototypeHost
 public class RelTokenListHost : IDomPrototypeHost
 {
     private readonly ElementHost _element;
-    public RelTokenListHost(ElementHost element) => _element = element;
+    private readonly string _attribute;
+    public RelTokenListHost(ElementHost element, string attribute = "rel")
+    {
+        _element = element;
+        _attribute = attribute;
+    }
     private Element El => _element.NativeElement;
     private List<string> Tokens() =>
-        (El.GetAttribute("rel") ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
-    private void SetTokens(List<string> t) => El.SetAttribute("rel", string.Join(" ", t));
+        (El.GetAttribute(_attribute) ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+    private void SetTokens(List<string> t) => El.SetAttribute(_attribute, string.Join(" ", t));
 
     // 'relList' is the same interface as 'classList' — one level, which the page can see by comparing
     // the prototypes (measured: 'Object.getPrototypeOf(a.relList) === DOMTokenList.prototype').
@@ -2734,6 +2857,16 @@ public class TextNodeWrapper : IDomPrototypeHost
     }
     public void remove() => _node.Parent?.RemoveChild(_node);
 
+    // The Node members a text node answers like any other node of the tree (DOM §4.2): the wrappers
+    // each interface owns has to carry them itself, since a page that reads one of these is refused by
+    // the interface level rather than answered by a member that is not there.
+    public bool isConnected => _node.IsConnected;
+    public bool hasChildNodes() => _node.HasChildNodes();
+    public void normalize() => _node.Normalize();
+    public object? getRootNode() => JsIntegrationService.WrapAny(_node.GetRootNode());
+    public bool isEqualNode(object? other) => _node.IsEqualNode(ElementHost.UnwrapNode(other));
+    public bool isSameNode(object? other) => _node.IsSameNode(ElementHost.UnwrapNode(other));
+
     // CharacterData mixin (DOM 4 §4.5): the mutating methods every text/comment node answers,
     // forwarded to the underlying node that already implements them.
     public int length => _node.Data?.Length ?? 0;
@@ -2786,6 +2919,13 @@ public class CommentHost : IDomPrototypeHost
     }
     public object? cloneNode(bool deep) => JsIntegrationService.WrapAny(_node.CloneNode(deep));
     public void remove() => _node.Parent?.RemoveChild(_node);
+
+    // DOM §4.2: the node members a comment answers the same way a text node does — the wrapper has to
+    // carry them, since a page that reads one is refused by the interface level otherwise.
+    public bool isConnected => _node.IsConnected;
+    public object? getRootNode() => JsIntegrationService.WrapAny(_node.GetRootNode());
+    public bool isEqualNode(object? other) => _node.IsEqualNode(ElementHost.UnwrapNode(other));
+    public bool isSameNode(object? other) => _node.IsSameNode(ElementHost.UnwrapNode(other));
 
     // CharacterData mixin (DOM 4 §4.5) — a comment answers the same methods a text node does.
     public string substringData(int offset, int count) => _node.SubstringData(offset, count);

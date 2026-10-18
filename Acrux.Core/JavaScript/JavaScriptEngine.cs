@@ -826,28 +826,86 @@ public class JavaScriptEngine : IDisposable
                 return __acrux.createXMLHttpRequest();
             }
 
-            function URL(url, base) {
-                return __acrux.createURL(url, base || '');
+            function URL(url) {
+                // URL §2.5: the base is optional, so the constructor reports one required argument
+                // (measured: 'URL.length' 1), and the interface is not callable without 'new'.
+                if (!(this instanceof URL)) throw constructionRefusal('URL');
+                return __acrux.createURL(url, arguments.length > 1 ? arguments[1] : '');
             }
 
             // URLSearchParams lives in script so its iteration (forEach, keys, values, entries and
             // the for..of protocol) reads like the standard's list-of-pairs; the host object it used
             // to wrap could not be made iterable across the interop boundary. Pairs keep insertion
             // order, which is what 'getAll' and 'toString' answer from.
-            function URLSearchParams(init) {
-                var self = this;
+            // The list-shaped interfaces keep their entries behind a slot the page cannot see and put
+            // every operation on the prototype (URL §5, Fetch §4.6, FormData §4.2): the object prints as
+            // the interface, 'Object.keys' of it is empty, and a method taken away from the object it
+            // belongs to is refused as an illegal invocation (measured for all three). The methods that
+            // need their arguments name how many the interface asks for and how many came.
+            function ifaceQuote(value) { return String.fromCharCode(39) + String(value) + String.fromCharCode(39); }
+            function argumentRefusal(ifaceName, methodName, required, given) {
+                return new TypeError('Failed to execute ' + ifaceQuote(methodName) + ' on '
+                    + ifaceQuote(ifaceName) + ': ' + required + ' argument'
+                    + (required === 1 ? '' : 's') + ' required, but only ' + given + ' present.');
+            }
+            function constructionRefusal(ifaceName) {
+                return new TypeError('Failed to construct ' + ifaceQuote(ifaceName) + ': Please use the '
+                    + ifaceQuote('new') + ' operator, this DOM object constructor cannot be called as a '
+                    + 'function.');
+            }
+            // An iterator is an instance of an interface of its own: the pair it hands out comes from
+            // the prototype, which names it, and the object carries nothing of its own (measured:
+            // '[object URLSearchParams Iterator]' with only 'next' on its prototype).
+            var ITERATOR_LEVELS = {};
+            function iteratorLevel(ifaceName) {
+                var made = ITERATOR_LEVELS[ifaceName];
+                if (made) return made;
+                made = {};
+                made.next = function () {
+                    var held = ITERATOR_SLOTS.get(this);
+                    if (!held) throw new TypeError('Illegal invocation');
+                    if (held.at >= held.items.length) {
+                        held.at = held.items.length;
+                        return { value: undefined, done: true };
+                    }
+                    return { value: held.items[held.at++], done: false };
+                };
+                made[Symbol.iterator] = function () { return this; };
+                Object.defineProperty(made, Symbol.toStringTag,
+                    { value: ifaceName + ' Iterator', configurable: true });
+                ITERATOR_LEVELS[ifaceName] = made;
+                return made;
+            }
+            var ITERATOR_SLOTS = new WeakMap();
+            function listIterator(items, ifaceName) {
+                var made = Object.create(iteratorLevel(ifaceName || 'List'));
+                ITERATOR_SLOTS.set(made, { items: items, at: 0 });
+                return made;
+            }
+            // A host object that holds a list — a URL's query — cannot build an iterator of its own, so
+            // it hands the items here and the interface's own iterator comes back (URL §5).
+            window.__acruxMakeIterator = function (iface, items) {
+                var made = [];
+                for (var i = 0; i < items.length; i++) made.push(items[i]);
+                return listIterator(made, iface);
+            };
+
+            function URLSearchParams() {
+                if (!(this instanceof URLSearchParams)) throw constructionRefusal('URLSearchParams');
                 var pairs = [];
                 function dec(s) { try { return decodeURIComponent(String(s).replace(/\+/g, ' ')); } catch (e) { return String(s); } }
                 function enc(s) { return encodeURIComponent(String(s)); }
                 function find(k) { var out = []; for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === k) out.push(pairs[i][1]); return out; }
                 // A sequence of pairs initialises as the standard's sequence<sequence<USVString>>;
-                // anything else (a query string) is parsed.
-                if (init && typeof init !== 'string' && typeof init.forEach === 'function') {
+                // anything else (a query string) is parsed. The argument is optional, so the
+                // constructor reports no required arguments at all (measured: 'length' 0).
+                var seedValue = arguments.length > 0 ? arguments[0] : '';
+                if (seedValue && typeof seedValue !== 'string' && typeof seedValue.forEach === 'function') {
                     var seed = [];
-                    init.forEach(function (pair) { seed.push(pair); });
+                    seedValue.forEach(function (pair) { seed.push(pair); });
                     for (var si = 0; si < seed.length; si++) pairs.push([String(seed[si][0]), String(seed[si][1])]);
                 } else {
-                    var q = (init === null || init === undefined) ? '' : String(init);
+                    var q = (seedValue === null || seedValue === undefined) ? '' : String(seedValue);
                     if (q.charAt(0) === '?') q = q.slice(1);
                     if (q) q.split('&').forEach(function (kv) {
                         if (kv === '') return;
@@ -855,25 +913,97 @@ public class JavaScriptEngine : IDisposable
                         pairs.push([dec(i < 0 ? kv : kv.slice(0, i)), dec(i < 0 ? '' : kv.slice(i + 1))]);
                     });
                 }
-                this.append = function (k, v) { pairs.push([String(k), String(v)]); };
-                this.delete = function (k) { k = String(k); for (var i = pairs.length - 1; i >= 0; i--) if (pairs[i][0] === k) pairs.splice(i, 1); };
-                this.get = function (k) { var f = find(String(k)); return f.length ? f[0] : null; };
-                this.getAll = function (k) { return find(String(k)); };
-                this.has = function (k) { return find(String(k)).length > 0; };
-                this.set = function (k, v) {
-                    k = String(k); var done = false;
-                    for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === k) { if (!done) { pairs[i][1] = String(v); done = true; } else { pairs.splice(i, 1); i--; } }
-                    if (!done) pairs.push([k, String(v)]);
-                };
-                this.sort = function () { pairs.sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; }); };
-                this.toString = function () { return pairs.map(function (p) { return enc(p[0]) + '=' + enc(p[1]); }).join('&'); };
-                this.forEach = function (cb, ts) { for (var i = 0; i < pairs.length; i++) cb.call(ts || null, pairs[i][1], pairs[i][0], self); };
-                this.keys = function () { return pairs.map(function (p) { return p[0]; }); };
-                this.values = function () { return pairs.map(function (p) { return p[1]; }); };
-                this.entries = function () { return pairs.map(function (p) { return [p[0], p[1]]; }); };
-                this[Symbol.iterator] = function () { return self.entries()[Symbol.iterator](); };
-                Object.defineProperty(this, 'size', { get: function () { return pairs.length; } });
+                URL_SLOTS.set(this, {
+                    pairs: pairs, encode: enc,
+                    list: function (pick) {
+                        var out = [];
+                        for (var i = 0; i < pairs.length; i++) out.push(pick(pairs[i]));
+                        return out;
+                    }
+                });
             }
+            var URL_SLOTS = new WeakMap();
+            function urlSlot(host) {
+                var held = URL_SLOTS.get(host);
+                if (!held) throw new TypeError('Illegal invocation');
+                return held;
+            }
+            (function () {
+                var proto = URLSearchParams.prototype;
+                var iface = 'URLSearchParams';
+                proto.append = function (k, v) {
+                    var held = urlSlot(this);
+                    if (arguments.length < 2) throw argumentRefusal(iface, 'append', 2, arguments.length);
+                    held.pairs.push([String(k), String(v)]);
+                };
+                proto.delete = function (k) {
+                    var held = urlSlot(this);
+                    if (arguments.length < 1) throw argumentRefusal(iface, 'delete', 1, arguments.length);
+                    k = String(k);
+                    for (var i = held.pairs.length - 1; i >= 0; i--) if (held.pairs[i][0] === k) held.pairs.splice(i, 1);
+                };
+                proto.get = function (k) {
+                    var held = urlSlot(this);
+                    if (arguments.length < 1) throw argumentRefusal(iface, 'get', 1, arguments.length);
+                    for (var i = 0; i < held.pairs.length; i++) if (held.pairs[i][0] === String(k)) return held.pairs[i][1];
+                    return null;
+                };
+                proto.getAll = function (k) {
+                    var held = urlSlot(this);
+                    if (arguments.length < 1) throw argumentRefusal(iface, 'getAll', 1, arguments.length);
+                    var out = [];
+                    for (var i = 0; i < held.pairs.length; i++) if (held.pairs[i][0] === String(k)) out.push(held.pairs[i][1]);
+                    return out;
+                };
+                proto.has = function (k) {
+                    var held = urlSlot(this);
+                    if (arguments.length < 1) throw argumentRefusal(iface, 'has', 1, arguments.length);
+                    for (var i = 0; i < held.pairs.length; i++) if (held.pairs[i][0] === String(k)) return true;
+                    return false;
+                };
+                proto.set = function (k, v) {
+                    var held = urlSlot(this);
+                    if (arguments.length < 2) throw argumentRefusal(iface, 'set', 2, arguments.length);
+                    k = String(k); var done = false;
+                    for (var i = 0; i < held.pairs.length; i++) {
+                        if (held.pairs[i][0] !== k) continue;
+                        if (!done) { held.pairs[i][1] = String(v); done = true; }
+                        else { held.pairs.splice(i, 1); i--; }
+                    }
+                    if (!done) held.pairs.push([k, String(v)]);
+                };
+                proto.sort = function () {
+                    var held = urlSlot(this);
+                    held.pairs.sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
+                };
+                proto.toString = function () {
+                    var held = urlSlot(this);
+                    return held.pairs.map(function (p) { return held.encode(p[0]) + '=' + held.encode(p[1]); }).join('&');
+                };
+                proto.forEach = function (cb, ts) {
+                    var held = urlSlot(this);
+                    if (arguments.length < 1) throw argumentRefusal(iface, 'forEach', 1, arguments.length);
+                    for (var i = 0; i < held.pairs.length; i++) {
+                        cb.call(ts || null, held.pairs[i][1], held.pairs[i][0], this);
+                    }
+                };
+                proto.keys = function () {
+                    return listIterator(urlSlot(this).list(function (p) { return p[0]; }), iface);
+                };
+                proto.values = function () {
+                    return listIterator(urlSlot(this).list(function (p) { return p[1]; }), iface);
+                };
+                proto.entries = function () {
+                    return listIterator(urlSlot(this).list(function (p) { return [p[0], p[1]]; }), iface);
+                };
+                proto[Symbol.iterator] = proto.entries;
+                Object.defineProperty(proto, 'size', {
+                    configurable: true, enumerable: false,
+                    get: function () { return urlSlot(this).pairs.length; }
+                });
+                Object.defineProperty(proto, Symbol.toStringTag,
+                    { value: iface, configurable: true });
+            })();
 
             // CSSOM View §5.1 — DOMRectReadOnly, and the writable DOMRect over it. Four numbers in, the
             // rectangle and its derived edges out; a negative width or height flips the origin the way
@@ -928,6 +1058,9 @@ public class JavaScriptEngine : IDisposable
             // read back under any casing; combining a repeated name is a comma-space join while the
             // get-all view keeps the values apart. 'forEach' hands a Headers (and FormData) its own
             // collection as the third argument, as the interface defines.
+            // The platform's list-shaped interfaces answer an ITERATOR from keys/values/entries — the
+            // Fetch, URL and FormData specifications all say 'return a new iterator', so 'next()' has to
+            // be there (measured: 'h.entries().next().value' is the pair, not an array index).
             function makeNameMap(init) {
                 var map = Object.create(null);
                 function push(k, v) {
@@ -941,42 +1074,82 @@ public class JavaScriptEngine : IDisposable
                 }
                 return map;
             }
-            function Headers(init) {
-                var self = this;
-                var map = makeNameMap(
-                    (init && typeof init.headers === 'object' && typeof init.headers.forEach === 'function')
-                        ? init.headers : init);
-                function key(k) { return String(k).toLowerCase(); }
-                // A name written twice reads back as the pair the fetch spec joins — the same value
-                // 'forEach' and 'values' hand out, and 'getAll' is the view that keeps them apart.
-                this.get = function (k) { var a = map[key(k)]; return a ? a.join(', ') : null; };
-                this.getAll = function (k) { var a = map[key(k)]; return a ? a.slice() : []; };
-                // 'set-cookie' is the one name a response keeps its repetitions apart for — a
-                // comma-joined read would fold the attributes of each cookie together — so the
-                // interface adds a getter that hands the stored list back (Fetch §5.4).
-                this.getSetCookie = function () {
-                    var a = map['set-cookie'];
+            function Headers() {
+                if (!(this instanceof Headers)) throw constructionRefusal('Headers');
+                // The init of a Headers is a Headers object, a sequence of pairs or a record; the
+                // argument is optional, so the constructor reports none (measured: 'Headers.length' 0).
+                var seed = arguments.length > 0 ? arguments[0] : undefined;
+                HEADERS_SLOTS.set(this, makeNameMap(
+                    (seed && typeof seed.headers === 'object' && typeof seed.forEach === 'function')
+                        ? seed.headers : seed));
+            }
+            var HEADERS_SLOTS = new WeakMap();
+            function headersSlot(host) {
+                var held = HEADERS_SLOTS.get(host);
+                if (!held) throw new TypeError('Illegal invocation');
+                return held;
+            }
+            (function () {
+                var proto = Headers.prototype;
+                var iface = 'Headers';
+                function names(map) { var o = []; for (var k in map) o.push(k); return o.sort(); }
+                // A name written twice reads back as the list the fetch spec joins — the same value
+                // 'forEach' and 'values' hand out. 'getSetCookie' is the one name that keeps its
+                // repetitions apart (Fetch §5.4), and the reference no longer carries the old
+                // all-values view of every name at all (measured: 'getAll' is not on the prototype).
+                proto.get = function (k) {
+                    var map = headersSlot(this);
+                    if (arguments.length < 1) throw argumentRefusal(iface, 'get', 1, arguments.length);
+                    var a = map[String(k).toLowerCase()];
+                    return a ? a.join(', ') : null;
+                };
+                proto.getSetCookie = function () {
+                    var a = headersSlot(this)['set-cookie'];
                     return a ? a.slice() : [];
                 };
-                this.has = function (k) { return map[key(k)] !== undefined; };
-                this.set = function (k, v) { map[key(k)] = [String(v)]; };
-                this.append = function (k, v) {
-                    k = key(k); if (map[k] === undefined) map[k] = []; map[k].push(String(v));
+                proto.has = function (k) {
+                    var map = headersSlot(this);
+                    if (arguments.length < 1) throw argumentRefusal(iface, 'has', 1, arguments.length);
+                    return map[String(k).toLowerCase()] !== undefined;
                 };
-                this.delete = function (k) { delete map[key(k)]; };
-                this.forEach = function (cb, ts) {
-                    Object.keys(map).sort().forEach(function (k) { cb.call(ts || null, map[k].join(', '), k, self); });
+                proto.set = function (k, v) {
+                    var map = headersSlot(this);
+                    if (arguments.length < 2) throw argumentRefusal(iface, 'set', 2, arguments.length);
+                    map[String(k).toLowerCase()] = [String(v)];
                 };
-                this.keys = function () { var o = []; Object.keys(map).sort().forEach(function (k) { o.push(k); }); return o; };
-                this.values = function () { var o = []; Object.keys(map).sort().forEach(function (k) { o.push(map[k].join(', ')); }); return o; };
-                this.entries = function () { var o = []; Object.keys(map).sort().forEach(function (k) { o.push([k, map[k].join(', ')]); }); return o; };
-                this[Symbol.iterator] = function () { return self.entries()[Symbol.iterator](); };
-                // The guard the interface runs on a name (an illegal character refuses rather than
-                // storing): every byte in the HTTP token set, no separators, no space, no control.
-                this._check = function (name) {
-                    return /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(String(name));
+                proto.append = function (k, v) {
+                    var map = headersSlot(this);
+                    if (arguments.length < 2) throw argumentRefusal(iface, 'append', 2, arguments.length);
+                    var key = String(k).toLowerCase();
+                    if (map[key] === undefined) map[key] = [];
+                    map[key].push(String(v));
                 };
-            }
+                proto.delete = function (k) {
+                    var map = headersSlot(this);
+                    if (arguments.length < 1) throw argumentRefusal(iface, 'delete', 1, arguments.length);
+                    delete map[String(k).toLowerCase()];
+                };
+                proto.forEach = function (cb, ts) {
+                    var map = headersSlot(this);
+                    if (arguments.length < 1) throw argumentRefusal(iface, 'forEach', 1, arguments.length);
+                    var own = this;
+                    names(map).forEach(function (k) { cb.call(ts || null, map[k].join(', '), k, own); });
+                };
+                proto.keys = function () {
+                    return listIterator(names(headersSlot(this)), iface);
+                };
+                proto.values = function () {
+                    var map = headersSlot(this);
+                    return listIterator(names(map).map(function (k) { return map[k].join(', '); }), iface);
+                };
+                proto.entries = function () {
+                    var map = headersSlot(this);
+                    return listIterator(names(map).map(function (k) { return [k, map[k].join(', ')]; }), iface);
+                };
+                proto[Symbol.iterator] = proto.entries;
+                Object.defineProperty(proto, Symbol.toStringTag,
+                    { value: iface, configurable: true });
+            })();
 
             // ── FormData (XHR §4, HTML §17.10.4) ────────────────────────────────
             // A list of entries. Built from a form it starts with the entries that form would submit:
@@ -1039,20 +1212,18 @@ public class JavaScriptEngine : IDisposable
                     // Output, progress and meter carry no entry of their own; a button never does.
                 }
             }
-            function FormData(form) {
-                if (!(this instanceof FormData)) {
-                    throw new TypeError('Failed to construct ' + formDataQuote('FormData') + ': Please use '
-                        + 'the ' + formDataQuote('new') + ' operator, this object constructor cannot be '
-                        + 'called as a function.');
-                }
-                this.__entries = [];
+            function FormData() {
+                if (!(this instanceof FormData)) throw constructionRefusal('FormData');
+                var form = arguments.length > 0 ? arguments[0] : null;
+                var entries = [];
+                FORM_SLOTS.set(this, entries);
                 if (form === undefined || form === null) return;
                 var isForm = !!form && String(form.tagName || '').toUpperCase() === 'FORM';
                 if (!isForm) {
                     throw new TypeError('Failed to construct ' + formDataQuote('FormData') + ': parameter 1 '
                         + 'is not of type ' + formDataQuote('HTMLFormElement') + '.');
                 }
-                collectFormEntries(form, this.__entries);
+                collectFormEntries(form, entries);
             }
             function formDataEntryValue(value) {
                 // A blob that is not a file is given a file name, which is what the entry the receiver
@@ -1063,6 +1234,12 @@ public class JavaScriptEngine : IDisposable
                 }
                 return value;
             }
+            var FORM_SLOTS = new WeakMap();
+            function formEntries(host) {
+                var held = FORM_SLOTS.get(host);
+                if (!held) throw new TypeError('Illegal invocation');
+                return held;
+            }
             FormData.prototype.append = function (name, value, filename) {
                 if (arguments.length < 2) {
                     throw new TypeError('Failed to execute ' + formDataQuote('append') + ' on '
@@ -1070,7 +1247,7 @@ public class JavaScriptEngine : IDisposable
                         + arguments.length + ' present.');
                 }
                 var entry = formDataEntryValue(value);
-                this.__entries.push([String(name), filename !== undefined
+                formEntries(this).push([String(name), filename !== undefined
                     ? new File([entry], String(filename)) : entry]);
             };
             FormData.prototype.set = function (name, value, filename) {
@@ -1079,77 +1256,71 @@ public class JavaScriptEngine : IDisposable
                         + formDataQuote('FormData') + ': 2 arguments required, but only '
                         + arguments.length + ' present.');
                 }
+                var entries = formEntries(this);
                 var key = String(name);
                 var entry = filename !== undefined ? new File([formDataEntryValue(value)], String(filename))
                     : formDataEntryValue(value);
                 var found = -1;
-                for (var i = 0; i < this.__entries.length; i++) {
-                    if (this.__entries[i][0] !== key) continue;
-                    if (found < 0) { found = i; this.__entries[i][1] = entry; }
-                    else { this.__entries.splice(i, 1); i--; }
+                for (var i = 0; i < entries.length; i++) {
+                    if (entries[i][0] !== key) continue;
+                    if (found < 0) { found = i; entries[i][1] = entry; }
+                    else { entries.splice(i, 1); i--; }
                 }
-                if (found < 0) this.__entries.push([key, entry]);
+                if (found < 0) entries.push([key, entry]);
             };
             FormData.prototype.get = function (name) {
+                var entries = formEntries(this);
+                if (arguments.length < 1) throw argumentRefusal('FormData', 'get', 1, arguments.length);
                 var key = String(name);
-                for (var i = 0; i < this.__entries.length; i++)
-                    if (this.__entries[i][0] === key) return this.__entries[i][1];
+                for (var i = 0; i < entries.length; i++)
+                    if (entries[i][0] === key) return entries[i][1];
                 return null;
             };
             FormData.prototype.getAll = function (name) {
+                var entries = formEntries(this);
+                if (arguments.length < 1) throw argumentRefusal('FormData', 'getAll', 1, arguments.length);
                 var key = String(name), out = [];
-                for (var i = 0; i < this.__entries.length; i++)
-                    if (this.__entries[i][0] === key) out.push(this.__entries[i][1]);
+                for (var i = 0; i < entries.length; i++)
+                    if (entries[i][0] === key) out.push(entries[i][1]);
                 return out;
             };
             FormData.prototype.has = function (name) {
+                var entries = formEntries(this);
+                if (arguments.length < 1) throw argumentRefusal('FormData', 'has', 1, arguments.length);
                 var key = String(name);
-                for (var i = 0; i < this.__entries.length; i++)
-                    if (this.__entries[i][0] === key) return true;
+                for (var i = 0; i < entries.length; i++)
+                    if (entries[i][0] === key) return true;
                 return false;
             };
             FormData.prototype.delete = function (name) {
+                var entries = formEntries(this);
+                if (arguments.length < 1) throw argumentRefusal('FormData', 'delete', 1, arguments.length);
                 var key = String(name);
-                for (var i = this.__entries.length - 1; i >= 0; i--)
-                    if (this.__entries[i][0] === key) this.__entries.splice(i, 1);
+                for (var i = entries.length - 1; i >= 0; i--)
+                    if (entries[i][0] === key) entries.splice(i, 1);
             };
             FormData.prototype.forEach = function (callback, thisArg) {
-                var copy = this.__entries.slice();
+                var entries = formEntries(this);
+                if (arguments.length < 1) throw argumentRefusal('FormData', 'forEach', 1, arguments.length);
+                var copy = entries.slice();
                 for (var i = 0; i < copy.length; i++) callback.call(thisArg, copy[i][1], copy[i][0], this);
             };
-            function formDataPairs(self) {
+            function formDataPairs(host) {
                 var out = [];
-                for (var i = 0; i < self.__entries.length; i++)
-                    out.push([self.__entries[i][0], self.__entries[i][1]]);
+                var entries = formEntries(host);
+                for (var i = 0; i < entries.length; i++) out.push([entries[i][0], entries[i][1]]);
                 return out;
             }
             FormData.prototype.entries = function () {
-                var made = formDataPairs(this), at = 0;
-                return { next: function () {
-                    return at < made.length
-                        ? { value: made[at++], done: false } : { value: undefined, done: true };
-                }, [Symbol.iterator]: function () { return this; } };
+                return listIterator(formDataPairs(this), 'FormData');
             };
             FormData.prototype.keys = function () {
-                var made = formDataPairs(this).map(function (p) { return p[0]; }), at = 0;
-                return { next: function () {
-                    return at < made.length
-                        ? { value: made[at++], done: false } : { value: undefined, done: true };
-                }, [Symbol.iterator]: function () { return this; } };
+                return listIterator(formDataPairs(this).map(function (p) { return p[0]; }), 'FormData');
             };
             FormData.prototype.values = function () {
-                var made = formDataPairs(this).map(function (p) { return p[1]; }), at = 0;
-                return { next: function () {
-                    return at < made.length
-                        ? { value: made[at++], done: false } : { value: undefined, done: true };
-                }, [Symbol.iterator]: function () { return this; } };
+                return listIterator(formDataPairs(this).map(function (p) { return p[1]; }), 'FormData');
             };
             FormData.prototype[Symbol.iterator] = FormData.prototype.entries;
-            // The historical read the engine already carried: the number of entries.
-            Object.defineProperty(FormData.prototype, 'length', {
-                get: function () { return this.__entries.length; },
-                enumerable: false, configurable: true
-            });
             Object.defineProperty(FormData.prototype, Symbol.toStringTag,
                 { value: 'FormData', configurable: true });
 
@@ -1470,16 +1641,38 @@ public class JavaScriptEngine : IDisposable
             Object.defineProperty(SubtleCrypto.prototype, Symbol.toStringTag,
                 { value: 'SubtleCrypto', configurable: true });
             window.SubtleCrypto = SubtleCrypto;
-            var crypto = {
-                randomUUID: function () { return __acrux.randomUUID(); },
-                getRandomValues: function (array) {
-                    if (!array) return array;
-                    for (var i = 0; i < array.length; i++)
-                        array[i] = Math.floor(Math.random() * 256);
-                    return array;
-                },
-                subtle: new SubtleCrypto()
+            // The Crypto interface (Web Crypto §5.1) is the object the page reads randomness from: its
+            // three reads are the interface's, so they sit on a prototype the singleton inherits and the
+            // object itself carries nothing the page can enumerate (measured: '[object Crypto]').
+            var CryptoProto = Object.create(Object.prototype);
+            function Crypto() {
+                // The interface names no constructor a page can use: called as a function it is
+                // refused as an illegal invocation, built with 'new' it is refused with the sentence
+                // that names it (Web Crypto §5.1, measured both).
+                if (!new.target) throw new TypeError('Illegal constructor');
+                throw new TypeError('Failed to construct ' + String.fromCharCode(39) + 'Crypto'
+                    + String.fromCharCode(39) + ': Illegal constructor');
+            }
+            Crypto.prototype = CryptoProto;
+            var cryptoSubtle = new SubtleCrypto();
+            CryptoProto.randomUUID = function randomUUID() { return __acrux.randomUUID(); };
+            CryptoProto.getRandomValues = function getRandomValues(array) {
+                if (!array) return array;
+                for (var i = 0; i < array.length; i++)
+                    array[i] = Math.floor(Math.random() * 256);
+                return array;
             };
+            Object.defineProperty(CryptoProto, 'subtle', {
+                configurable: true, enumerable: false,
+                get: function () { return cryptoSubtle; }
+            });
+            Object.defineProperty(CryptoProto, 'constructor',
+                { value: Crypto, writable: true, configurable: true });
+            Object.defineProperty(CryptoProto, Symbol.toStringTag,
+                { value: 'Crypto', configurable: true });
+            (window.__domProto || (window.__domProto = {})).Crypto = CryptoProto;
+            window.Crypto = Crypto;
+            var crypto = Object.create(CryptoProto);
 
             // DOMParser builds a fresh Document out of markup (the host parses it through the same
             // HTML pipeline the live page went through), so the result answers getElementById and
@@ -2203,7 +2396,12 @@ public class JavaScriptEngine : IDisposable
                 return new TextEncoder().encode(blob && blob.__text !== undefined ? blob.__text : String(blob));
             }
             function blobToString(blob) { return blob.__text === undefined ? String(blob) : blob.__text; }
+            // File API §4.1: a blob is its bytes, a type and a size, and the two reads the interface
+            // names are accessors on the prototype — the object itself carries nothing the page can
+            // enumerate (measured: 'Object.keys(b)' is empty and 'Blob.prototype.size' is refused as an
+            // illegal invocation when read away from a blob).
             function Blob(blobParts, options) {
+                if (!(this instanceof Blob)) throw constructionRefusal('Blob');
                 var parts = blobParts || [];
                 var joined = [], total = 0, i, p;
                 for (i = 0; i < parts.length; i++) {
@@ -2216,23 +2414,38 @@ public class JavaScriptEngine : IDisposable
                 for (i = 0; i < joined.length; i++) { bytes.set(joined[i], at); at += joined[i].length; }
                 Object.defineProperty(this, '__bytes', { value: bytes, configurable: true });
                 Object.defineProperty(this, '__text', { value: new TextDecoder().decode(bytes), configurable: true });
-                this.type = (options && options.type) ? String(options.type) : '';
-                this.size = bytes.length;
+                Object.defineProperty(this, '__type',
+                    { value: (options && options.type) ? String(options.type) : '', configurable: true });
             }
-            Blob.prototype.text = function () { return Promise.resolve(blobToString(this)); };
-            Blob.prototype.arrayBuffer = function () {
+            function blobBytesOf(host) {
+                if (!host || host.__bytes === undefined) throw new TypeError('Illegal invocation');
+                return host.__bytes;
+            }
+            Object.defineProperty(Blob.prototype, 'size', {
+                configurable: true, enumerable: false,
+                get: function () { return blobBytesOf(this).length; }
+            });
+            Object.defineProperty(Blob.prototype, 'type', {
+                configurable: true, enumerable: false,
+                get: function () {
+                    if (!this || this.__type === undefined) throw new TypeError('Illegal invocation');
+                    return this.__type;
+                }
+            });
+            Blob.prototype.text = function text() { return Promise.resolve(blobToString(this)); };
+            Blob.prototype.arrayBuffer = function arrayBuffer() {
                 var copy = blobBytes(this).slice();
                 return Promise.resolve(copy.buffer);
             };
             // A blob reads as one chunk: the whole byte range arrives in the first pull, which is what
             // the reference gives for a blob this small (measured: the first chunk of a four-byte blob
             // is a Uint8Array of byteLength 4).
-            Blob.prototype.stream = function () { return singleChunkStream(blobBytes(this).slice()); };
-            Blob.prototype.bytes = function () { return Promise.resolve(blobBytes(this).slice()); };
-            Blob.prototype.slice = function (start, end, contentType) {
+            Blob.prototype.stream = function stream() { return singleChunkStream(blobBytes(this).slice()); };
+            Blob.prototype.bytes = function bytes() { return Promise.resolve(blobBytes(this).slice()); };
+            Blob.prototype.slice = function slice(start, end, contentType) {
                 // §4.1.1.8: the range is in bytes, a negative bound counts back from the end, and the
                 // two bounds are clamped and swapped before the run is taken.
-                var total = this.size;
+                var total = blobBytesOf(this).length;
                 var s = start === undefined ? 0 : Number(start) || 0;
                 var e = end === undefined ? total : Number(end) || 0;
                 if (s < 0) s = Math.max(total + s, 0); else s = Math.min(s, total);
@@ -2243,28 +2456,48 @@ public class JavaScriptEngine : IDisposable
             Object.defineProperty(Blob.prototype, Symbol.toStringTag,
                 { value: 'Blob', configurable: true });
 
+            // §4.2: a file is a blob with a name, a last-modified instant and the directory the picker
+            // saw it in. The two required arguments are the content and the name, and the brand check
+            // that the constructor came through 'new' runs before either is counted (measured).
             function File(fileBits, fileName, options) {
+                if (!(this instanceof File)) throw constructionRefusal('File');
                 if (arguments.length < 2) {
                     throw new TypeError('Failed to construct ' + formDataQuote('File') + ': '
                         + 2 + ' arguments required, but only ' + arguments.length + ' present.');
                 }
                 Blob.call(this, fileBits, options);
-                this.name = String(fileName === undefined ? '' : fileName);
+                Object.defineProperty(this, '__name',
+                    { value: String(fileName === undefined ? '' : fileName), configurable: true });
+                Object.defineProperty(this, '__lastModified', {
+                    value: (options && options.lastModified !== undefined)
+                        ? Number(options.lastModified) : Date.now(), configurable: true
+                });
                 var path = options && options.webkitPath ? String(options.webkitPath) : '';
                 var mark = path.lastIndexOf('/');
-                this.webkitPath = mark < 0 ? '' : path.slice(0, mark);
-                this.lastModified = (options && options.lastModified !== undefined)
-                    ? Number(options.lastModified) : Date.now();
+                Object.defineProperty(this, '__relative',
+                    { value: mark < 0 ? '' : path.slice(0, mark), configurable: true });
             }
             File.prototype = Object.create(Blob.prototype);
             File.prototype.constructor = File;
-            Object.defineProperty(File.prototype, 'webkitRelativePath', {
+            ['name', 'lastModified', 'webkitRelativePath'].forEach(function (field) {
+                Object.defineProperty(File.prototype, field, {
+                    configurable: true, enumerable: false,
+                    get: function () {
+                        // The three reads an HTML §4.8.11 file names all ask for the file itself first:
+                        // the reference refuses a read taken away from one as an illegal invocation.
+                        if (!(this instanceof File)) throw new TypeError('Illegal invocation');
+                        if (field === 'name') return this.__name === undefined ? '' : this.__name;
+                        if (field === 'lastModified') return this.__lastModified === undefined ? 0 : this.__lastModified;
+                        return this.__relative === undefined ? '' : this.__relative;
+                    }
+                });
+            });
+            Object.defineProperty(File.prototype, 'lastModifiedDate', {
+                configurable: true, enumerable: false,
                 get: function () {
-                    // A file the script built has no directory beside it; one the user picked through a
-                    // file input carries the path the picker knew.
-                    return this.__relative === undefined ? '' : this.__relative;
-                },
-                enumerable: true, configurable: true
+                    if (!(this instanceof File)) throw new TypeError('Illegal invocation');
+                    return new Date(this.__lastModified === undefined ? 0 : this.__lastModified);
+                }
             });
             Object.defineProperty(File.prototype, Symbol.toStringTag,
                 { value: 'File', configurable: true });
@@ -2301,13 +2534,18 @@ public class JavaScriptEngine : IDisposable
                     return out;
                 }
             };
-            function FileReader() { }
+            function FileReader() {
+                // File API §4: the reader is made with 'new' and carries no argument (measured:
+                // 'FileReader.length' 0, and calling it as a function is refused).
+                if (!(this instanceof FileReader)) throw constructionRefusal('FileReader');
+            }
             FileReader.prototype.result = null;
             FileReader.prototype.error = null;
             FileReader.prototype.readyState = 0;
             FileReader.prototype.onloadstart = null;
             FileReader.prototype.onprogress = null;
             FileReader.prototype.onload = null;
+            FileReader.prototype.onabort = null;
             FileReader.prototype.onerror = null;
             FileReader.prototype.onloadend = null;
             function readerRefused(method) {
@@ -2316,7 +2554,12 @@ public class JavaScriptEngine : IDisposable
                     + formDataQuote('Blob') + '.');
             }
             function readerRun(self, method, blob) {
-                if (arguments.length < 3 || !(blob instanceof Blob)) throw readerRefused(method);
+                // File API §4: the blob is required, and a call that brought nothing names the count it
+                // asked for before the type of what it did not get is judged (measured).
+                if (arguments.length < 3) {
+                    throw argumentRefusal('FileReader', method, 1, Math.max(arguments.length - 2, 0));
+                }
+                if (!(blob instanceof Blob)) throw readerRefused(method);
                 if (self.readyState === 1) {
                     throw new DOMException('Failed to execute ' + formDataQuote(method) + ' on '
                         + formDataQuote('FileReader') + ': The object is in state '
@@ -2378,7 +2621,11 @@ public class JavaScriptEngine : IDisposable
                 try { self.dispatchEvent(readerEvent(self, type, self.result ? 1 : 0)); } catch (e) { }
             }
             function makeReaderMethod(name) {
-                return function (blob) { readerRun(this, name, blob); };
+                var made = function (blob) { readerRun(this, name, blob); };
+                // The method the page prints is the one the interface names (measured: 'FileReader
+                // .prototype.readAsText' reads back as 'function readAsText() …').
+                try { Object.defineProperty(made, 'name', { value: name, configurable: true }); } catch (e) { }
+                return made;
             }
             for (var readerName in FILE_READERS) {
                 if (Object.prototype.hasOwnProperty.call(FILE_READERS, readerName))
@@ -4087,79 +4334,137 @@ public class JavaScriptEngine : IDisposable
                 var observers = [];
                 var flushing = false;
 
-                // DOM §4.5.7: the old value a characterData record carries is the data the node held
-                // before that one edit, and an edit that happens between two checkpoints leaves no
-                // trace in a snapshot comparison — the node may not have been in the tree yet at
-                // the last look. So the host records each text mutation as it happens and the
-                // observer drains those entries here, one record per mutation, in order.
-                var pendingCharData = new Map();
-                var charGeneration = 0;
+                // DOM §4.5.4, §4.5.7: a record is the account of ONE mutation, and the value it carries
+                // is the one the target held before that mutation. A snapshot comparison can give
+                // neither: two writes to one name collapse into a single record, a name added and taken
+                // away again leaves no trace at all, and the old value is already gone by the time the
+                // next look happens. So the host writes down every mutation as it happens — the
+                // attribute, the child list, the text — and the observer turns the entries into records,
+                // one each, in the order they happened.
+                var journal = [];
+                var journalGeneration = 0;
+                // A record is told once: each registration remembers how far it has read, so a second
+                // 'takeRecords' answers the mutations that came after the first call rather than the
+                // same list again (Mutation Observers §4.5.1).
+                var journalSequence = 0;
 
-                function collectCharData() {
+                function collectMutations() {
                     if (typeof __acrux === 'undefined'
-                        || typeof __acrux.takeCharacterDataChanges !== 'function') return;
+                        || typeof __acrux.takeMutationChanges !== 'function') return;
                     var list;
-                    try { list = __acrux.takeCharacterDataChanges(); } catch (e) { return; }
+                    try { list = __acrux.takeMutationChanges(); } catch (e) { return; }
                     if (!list || !list.length) return;
-                    charGeneration++;
+                    journalGeneration++;
                     for (var i = 0; i < list.length; i++) {
-                        var pair = list[i];
-                        var node = pair && pair[0];
-                        if (!node) continue;
-                        var edits = pendingCharData.get(node);
-                        if (!edits) { edits = []; pendingCharData.set(node, edits); }
-                        edits.push({ generation: charGeneration, oldValue: String(pair[1]) });
+                        var change = list[i];
+                        if (!change) continue;
+                        journal.push({ generation: journalGeneration, seq: ++journalSequence, change: change });
                     }
+                    pruneJournal();
                 }
 
-                // A registration only hears about edits made after it was put in place, and an
-                // entry no live registration can still reach is dropped rather than kept alive.
-                function pruneCharData() {
-                    var lowest = charGeneration + 1;
+                // A registration only hears about mutations made after it was put in place, and an entry
+                // no live registration can still reach is dropped rather than held on to.
+                function pruneJournal() {
+                    var lowest = journalGeneration + 1;
                     for (var i = 0; i < observers.length; i++) {
                         if (observers[i].generation < lowest) lowest = observers[i].generation;
                     }
-                    var keys = [];
-                    pendingCharData.forEach(function (edits, node) { keys.push([node, edits]); });
-                    for (var k = 0; k < keys.length; k++) {
-                        var kept = [];
-                        for (var e = 0; e < keys[k][1].length; e++) {
-                            if (keys[k][1][e].generation >= lowest) kept.push(keys[k][1][e]);
-                        }
-                        if (kept.length) pendingCharData.set(keys[k][0], kept);
-                        else pendingCharData.delete(keys[k][0]);
+                    var kept = [];
+                    for (var j = 0; j < journal.length; j++) {
+                        if (journal[j].generation >= lowest) kept.push(journal[j]);
                     }
+                    journal = kept;
+                    // A page that mutates without ever reaching a checkpoint must not grow this bound.
+                    if (journal.length > 8192) journal.splice(0, journal.length - 8192);
                 }
 
-                function syncCharDataTracking() {
+                // The three recordings the host keeps are turned on together with the registrations that
+                // ask for them, so a page that never observes pays nothing for a typewriter demo.
+                function syncTracking() {
                     if (typeof __acrux === 'undefined'
-                        || typeof __acrux.setCharacterDataTracking !== 'function') return;
-                    var wanted = false;
+                        || typeof __acrux.setMutationTracking !== 'function') return;
+                    var attributes = false, childList = false, characterData = false;
                     for (var i = 0; i < observers.length; i++) {
-                        if (observers[i].options.characterData) { wanted = true; break; }
+                        var asked = observers[i].options;
+                        if (asked.attributes) attributes = true;
+                        if (asked.childList) childList = true;
+                        if (asked.characterData) characterData = true;
                     }
-                    __acrux.setCharacterDataTracking(wanted);
+                    __acrux.setMutationTracking(attributes, childList, characterData);
                 }
 
-                function charDataRecords(reg, node, oldValue) {
+                function heldString(value) {
+                    return value === undefined || value === null ? null : String(value);
+                }
+
+                function filteredName(reg, name) {
+                    var filter = reg.options.attributeFilter;
+                    if (!filter) return true;
+                    for (var i = 0; i < filter.length; i++) if (String(filter[i]) === name) return true;
+                    return false;
+                }
+
+                // §4.5.4: a registration covers the node it was put on, and with 'subtree' everything
+                // that was below it WHEN THE CHANGE HAPPENED — which is why the host hands over the
+                // ancestors the target had at that moment: a child that was moved out of the observed
+                // subtree before the checkpoint is still told about (measured: the attribute written on
+                // it and its removal both reach the observer of the parent).
+                function coveredBy(reg, change) {
+                    var scope = change[9] || [];
+                    if (!scope.length) return change[1] === reg.target;
+                    if (!reg.options.subtree) return scope[0] === reg.target;
+                    for (var i = 0; i < scope.length; i++) if (scope[i] === reg.target) return true;
+                    return false;
+                }
+
+                function journalRecords(reg) {
                     var out = [];
-                    var edits = pendingCharData.get(node);
-                    if (edits) {
-                        for (var i = 0; i < edits.length; i++) {
-                            if (edits[i].generation < reg.generation) continue;
-                            out.push(makeCharDataRecord(reg, node,
-                                reg.options.characterDataOldValue ? edits[i].oldValue : null));
+                    for (var i = 0; i < journal.length; i++) {
+                        var held = journal[i];
+                        if (held.generation < reg.generation) continue;
+                        if (held.seq <= reg.cursor) continue;
+                        var change = held.change;
+                        var kind = String(change[0]);
+                        var node = change[1];
+                        if (!node || !coveredBy(reg, change)) continue;
+                        if (kind === 'attributes') {
+                            if (!reg.options.attributes) continue;
+                            var name = heldString(change[2]);
+                            if (!filteredName(reg, name)) continue;
+                            out.push(makeRecord({
+                                type: 'attributes', target: node,
+                                addedNodes: [], removedNodes: [],
+                                previousSibling: null, nextSibling: null,
+                                attributeName: name,
+                                attributeNamespace: heldString(change[3]),
+                                oldValue: reg.options.attributeOldValue ? heldString(change[4]) : null
+                            }));
+                        } else if (kind === 'childList') {
+                            if (!reg.options.childList) continue;
+                            out.push(makeRecord({
+                                type: 'childList', target: node,
+                                addedNodes: change[5] || [], removedNodes: change[6] || [],
+                                previousSibling: change[7] || null, nextSibling: change[8] || null,
+                                attributeName: null, attributeNamespace: null, oldValue: null
+                            }));
+                        } else if (kind === 'characterData') {
+                            if (!reg.options.characterData) continue;
+                            out.push(makeRecord({
+                                type: 'characterData', target: node,
+                                addedNodes: [], removedNodes: [],
+                                previousSibling: null, nextSibling: null,
+                                attributeName: null, attributeNamespace: null,
+                                oldValue: reg.options.characterDataOldValue ? heldString(change[4]) : null
+                            }));
                         }
                     }
-                    if (out.length === 0 && oldValue !== null) {
-                        out.push(makeCharDataRecord(reg, node,
-                            reg.options.characterDataOldValue ? oldValue : null));
-                    }
+                    reg.cursor = journalSequence;
                     return out;
                 }
 
                 function makeCharDataRecord(reg, node, oldValue) {
-                    return {
+                    return makeRecord({
                         type: 'characterData',
                         target: node,
                         addedNodes: [],
@@ -4167,9 +4472,9 @@ public class JavaScriptEngine : IDisposable
                         previousSibling: null,
                         nextSibling: null,
                         attributeName: null,
-                        namespaceURI: null,
+                        attributeNamespace: null,
                         oldValue: oldValue
-                    };
+                    });
                 }
 
 
@@ -4263,6 +4568,26 @@ public class JavaScriptEngine : IDisposable
                     };
                 }
 
+                // A record is handed over as the interface's own object: the nine reads live on the
+                // prototype and the two node lists are NodeLists (Mutation Observers §4.2; measured).
+                function makeRecord(fields) {
+                    var made = Object.create(recordProto || Object.prototype);
+                    var names = ['type', 'target', 'addedNodes', 'removedNodes', 'previousSibling',
+                        'nextSibling', 'attributeName', 'attributeNamespace', 'oldValue'];
+                    for (var i = 0; i < names.length; i++) {
+                        var field = names[i];
+                        var value = fields[field];
+                        if (field === 'addedNodes' || field === 'removedNodes') {
+                            value = recordNodeList(value || []);
+                        }
+                        Object.defineProperty(made, '__' + field, {
+                            value: value === undefined ? null : value,
+                            enumerable: false, configurable: true, writable: true
+                        });
+                    }
+                    return made;
+                }
+
                 function diff(reg) {
                     var fresh = snapshot(reg);
                     var oldByNode = entriesByNode(reg.snapshot);
@@ -4281,6 +4606,7 @@ public class JavaScriptEngine : IDisposable
                         var node = parents[p];
                         var oldEntry = oldByNode.get(node) || { kids: [], attrs: [], data: null };
                         var newEntry = newByNode.get(node) || { kids: [], attrs: [], data: null };
+                        var childRecord = null;
                         var oldKids = nodesOf(oldEntry.kids);
                         var newKids = nodesOf(newEntry.kids);
                         var added = without(newKids, oldKids);
@@ -4288,7 +4614,10 @@ public class JavaScriptEngine : IDisposable
 
                         if (reg.options.childList && (added.length || removed.length)) {
                             var around = added.length ? siblings(newKids, added[0]) : siblings(oldKids, removed[0]);
-                            records.push({
+                            // The childList record is kept back and queued after the attribute records
+                            // of the same node: a page that wrote an attribute and then added a child
+                            // is told about them in that order (measured).
+                            childRecord = makeRecord({
                                 type: 'childList',
                                 target: node,
                                 addedNodes: added,
@@ -4296,7 +4625,7 @@ public class JavaScriptEngine : IDisposable
                                 previousSibling: around.previous,
                                 nextSibling: around.next,
                                 attributeName: null,
-                                namespaceURI: null,
+                                attributeNamespace: null,
                                 oldValue: null
                             });
                         }
@@ -4319,7 +4648,7 @@ public class JavaScriptEngine : IDisposable
                                 var before = attrValue(oldEntry.attrs, name);
                                 var after = attrValue(newEntry.attrs, name);
                                 if (before === after) continue;
-                                records.push({
+                                records.push(makeRecord({
                                     type: 'attributes',
                                     target: node,
                                     addedNodes: [],
@@ -4327,30 +4656,45 @@ public class JavaScriptEngine : IDisposable
                                     previousSibling: null,
                                     nextSibling: null,
                                     attributeName: name,
-                                    namespaceURI: null,
+                                    attributeNamespace: null,
                                     oldValue: reg.options.attributeOldValue ? before : null
-                                });
+                                }));
                             }
                         }
 
-                        if (reg.options.characterData && (node.nodeType === 3 || node.nodeType === 8)) {
-                            var edits = charDataRecords(reg, node,
-                                comparable && oldEntry.data !== newEntry.data ? oldEntry.data : null);
-                            for (var c = 0; c < edits.length; c++) records.push(edits[c]);
+                        if (reg.options.characterData && comparable
+                            && (node.nodeType === 3 || node.nodeType === 8)
+                            && oldEntry.data !== newEntry.data) {
+                            records.push(makeCharDataRecord(reg, node,
+                                reg.options.characterDataOldValue ? oldEntry.data : null));
                         }
+                        if (childRecord) records.push(childRecord);
                     }
 
                     reg.snapshot = fresh;
                     return records;
                 }
 
+                // The mutation journal is the account of what happened; the snapshot comparison is
+                // kept for a mutation the host could not have written down. Whichever one answers for a
+                // registration, the snapshot is brought up to date so the other path cannot repeat it.
+                function recordsFor(reg) {
+                    var made = journalRecords(reg);
+                    if (made.length) {
+                        try { reg.snapshot = snapshot(reg); } catch (e) { }
+                        return made;
+                    }
+                    reg.cursor = journalSequence;
+                    return diff(reg);
+                }
+
                 function deliver(registry) {
-                    collectCharData();
+                    collectMutations();
                     var buckets = [];
                     for (var i = 0; i < observers.length; i++) {
                         var reg = observers[i];
                         if (registry && reg.observer !== registry) continue;
-                        var made = diff(reg);
+                        var made = recordsFor(reg);
                         if (!made.length) continue;
                         var bucket = null;
                         for (var j = 0; j < buckets.length; j++) {
@@ -4378,7 +4722,7 @@ public class JavaScriptEngine : IDisposable
                         for (var pass = 0; pass < 8; pass++) {
                             if (!deliver(null)) break;
                         }
-                        pruneCharData();
+                        pruneJournal();
                     } finally {
                         flushing = false;
                     }
@@ -4399,11 +4743,12 @@ public class JavaScriptEngine : IDisposable
                     var filter = hasFilter ? Array.prototype.slice.call(options.attributeFilter) : null;
                     // Everything the host recorded up to now belongs to the registrations that were
                     // already in place; this one starts from the tree as it stands.
-                    collectCharData();
+                    collectMutations();
                     var reg = {
                         observer: this,
                         target: target,
-                        generation: charGeneration + 1,
+                        generation: journalGeneration + 1,
+                        cursor: journalSequence,
                         options: {
                             childList: childList,
                             attributes: attributes,
@@ -4423,35 +4768,97 @@ public class JavaScriptEngine : IDisposable
                         }
                     }
                     observers.push(reg);
-                    syncCharDataTracking();
+                    syncTracking();
                 };
 
                 MutationObserver.prototype.disconnect = function () {
                     for (var i = observers.length - 1; i >= 0; i--) {
                         if (observers[i].observer === this) observers.splice(i, 1);
                     }
-                    syncCharDataTracking();
+                    syncTracking();
                 };
 
                 // takeRecords empties the queue without running the callback, so the records are
                 // collected and handed straight back.
                 MutationObserver.prototype.takeRecords = function () {
-                    collectCharData();
+                    collectMutations();
                     var out = [];
                     for (var i = 0; i < observers.length; i++) {
                         if (observers[i].observer !== this) continue;
-                        var made = diff(observers[i]);
+                        var made = recordsFor(observers[i]);
                         for (var j = 0; j < made.length; j++) out.push(made[j]);
                     }
-                    pruneCharData();
+                    pruneJournal();
                     return out;
                 };
 
                 window.MutationObserver = MutationObserver;
-                window.MutationRecord = function MutationRecord() {
-                    throw new TypeError('Illegal constructor');
-                };
+                // Mutation Observers §4.2: a record is not built by a page, and the ten reads the
+                // interface names sit on its prototype — the record the engine queues is a plain
+                // entry today, so the level is installed onto each record as it is handed over
+                // (measured: a record prints [object MutationRecord] and lists those names).
+                var recordProto = Object.create(Object.prototype);
+                function MutationRecord() {
+                    throw new TypeError('Failed to construct '
+                        + String.fromCharCode(39) + 'MutationRecord' + String.fromCharCode(39)
+                        + ': Illegal constructor');
+                }
+                Object.defineProperty(MutationRecord, 'name',
+                    { value: 'MutationRecord', configurable: true });
+                MutationRecord.prototype = recordProto;
+                Object.defineProperty(recordProto, Symbol.toStringTag,
+                    { value: 'MutationRecord', configurable: true });
+                ['type', 'target', 'addedNodes', 'removedNodes', 'previousSibling', 'nextSibling',
+                 'attributeName', 'attributeNamespace', 'oldValue'].forEach(function (field) {
+                    Object.defineProperty(recordProto, field, { configurable: true, enumerable: false,
+                        get: function () {
+                            if (!Object.prototype.hasOwnProperty.call(this, '__' + field)) {
+                                throw new TypeError('Illegal invocation');
+                            }
+                            return this['__' + field];
+                        } });
+                });
+                // The reference lists 'constructor' last among the ten names (measured), which is the
+                // order a class body writes them in: the members first, the constructor after.
+                Object.defineProperty(recordProto, 'constructor',
+                    { value: MutationRecord, writable: true, configurable: true });
+                window.MutationRecord = MutationRecord;
+                // The two node lists a childList record carries are NodeLists, not arrays (§4.2.4,
+                // measured: [object NodeList] with 'item' and a length).
+                function recordNodeList(nodes) {
+                    var made = nodes.slice();
+                    for (var i = 0; i < made.length; i++) made[i] = nodes[i];
+                    var list = made.slice();
+                    list.item = function (index) {
+                        index = Number(index) | 0;
+                        return index >= 0 && index < list.length ? list[index] : null;
+                    };
+                    Object.setPrototypeOf(list, (window.__domProto || {}).NodeList || Object.prototype);
+                    return list;
+                }
             })();
+
+            // DOM §2.7.7: an event listener may be given an abort signal, and the signal — not the
+            // element — decides when the listener is gone. The signal object is script data, so the
+            // host asks these two questions of it rather than holding a JS value across the boundary:
+            // whether a signal is still live (a token back, or -1 when it has already aborted, which
+            // means the listener never registers), and whether the one behind a token has aborted
+            // since. The signal is handed over by the script that read the options dictionary, because
+            // the dictionary itself does not survive the crossing with its object members intact.
+            var __acruxSignals = [];
+            window.__acruxSignalToken = function (signal) {
+                if (!signal || typeof signal !== 'object') return 0;
+                if (signal.aborted) return -1;
+                for (var i = 0; i < __acruxSignals.length; i++) {
+                    if (__acruxSignals[i] === signal) return i + 1;
+                }
+                __acruxSignals.push(signal);
+                return __acruxSignals.length;
+            };
+            window.__acruxSignalAborted = function (token) {
+                var signal = __acruxSignals[(Number(token) || 0) - 1];
+                return signal ? (signal.aborted ? 1 : 0) : 0;
+            };
 
             // The microtask checkpoint is where a queued observer callback runs (DOM §4.5.6.1), and
             // the host calls this from it — after a script, after a timer, after an event.
@@ -5180,6 +5587,15 @@ public class JavaScriptEngine : IDisposable
                 eventCtor('ProgressEvent', [['lengthComputable', false], ['loaded', 0], ['total', 0]]);
                 eventCtor('SubmitEvent', [['submitter', null]]);
                 eventCtor('ToggleEvent', [['oldState', ''], ['newState', '']]);
+                // The form-data event the submit button carries (HTML §4.10.22.3) and the update event a
+                // payment request answers with (Payment Request §6): both are events with one member of
+                // their own, and the reference makes either with 'new' (measured).
+                eventCtor('FormDataEvent', [['formData', null]]);
+                eventCtor('PaymentRequestUpdateEvent', [['targetName', ''], ['paymentMethodDetails', null]]);
+                var paymentUpdateLevel = protoMap['PaymentRequestUpdateEvent'];
+                if (paymentUpdateLevel) {
+                    paymentUpdateLevel.updateWith = function updateWith(response) { return undefined; };
+                }
                 // A beforeunload event is the platform's to raise: a page that asks for one is refused,
                 // the same as the reference (UI Events §5.9, measured: 'Illegal constructor').
                 if (window.BeforeUnloadEvent) {
@@ -5242,10 +5658,14 @@ public class JavaScriptEngine : IDisposable
                 var eventTargetLevel = defineInterface('EventTarget', null, function () { });
                 function listenerFlags(record) {
                     // The IDL takes either the capture boolean or the dictionary; both carry the same
-                    // two flags this far.
-                    if (record === true || record === false) return { capture: !!record, once: false };
+                    // flags — the third of which, 'signal', retires the listener when the controller
+                    // behind the signal aborts (DOM §2.7.7).
+                    if (record === true || record === false) {
+                        return { capture: !!record, once: false, passive: false, signal: null };
+                    }
                     record = record || {};
-                    return { capture: !!record.capture, once: !!record.once };
+                    return { capture: !!record.capture, once: !!record.once, passive: !!record.passive,
+                        signal: record.signal || null };
                 }
                 function listenerBag(self) {
                     // The bag is hidden and non-enumerable, so a page that walks the object it built
@@ -5264,9 +5684,35 @@ public class JavaScriptEngine : IDisposable
                 }
                 defineOnLevel(eventTargetLevel, 'addEventListener', function (type, listener, options) {
                     if (listener == null) return;
+                    var flags = listenerFlags(options);
+                    // An object the engine holds books its listeners itself: the flags are read here,
+                    // where the page's dictionary is still a script value, and handed over as the values
+                    // the host can carry. A signal is turned into the token the dispatch walk asks about
+                    // (§2.7.7); one that already aborted means the listener is never registered.
+                    if (typeof this.addEventListenerFlags === 'function') {
+                        var token = 0;
+                        if (flags.signal) {
+                            token = window.__acruxSignalToken(flags.signal);
+                            if (token < 0) return;
+                        }
+                        this.addEventListenerFlags(String(type), listener, flags.capture === true,
+                            flags.once === true, token);
+                        return;
+                    }
                     var bag = listenerBag(this);
                     var list = bag[String(type)] = bag[String(type)] || [];
-                    var flags = listenerFlags(options);
+                    // A signal that is already aborted never registers at all; one still live takes the
+                    // listener off when it aborts, once (§2.7.7 step 5).
+                    if (flags.signal) {
+                        if (flags.signal.aborted) return;
+                        var owner = this;
+                        try {
+                            flags.signal.addEventListener('abort', function () {
+                                try { owner.removeEventListener(type, listener, !!flags.capture); }
+                                catch (e) { }
+                            }, { once: true });
+                        } catch (e) { }
+                    }
                     for (var i = 0; i < list.length; i++) {
                         if (list[i].fn === listener && list[i].capture === flags.capture) return;
                     }
@@ -7086,6 +7532,22 @@ public class JavaScriptEngine : IDisposable
                 adopt('Blob', null, window.Blob);
                 adopt('File', 'Blob', window.File);
                 adopt('FileReader', 'EventTarget', window.FileReader);
+                adopt('Headers', null, window.Headers);
+                adopt('URLSearchParams', null, window.URLSearchParams);
+                // The address the page builds with 'new URL()' is an instance of the interface, so the
+                // prototype the host object is stamped with has to be the constructor's own (measured:
+                // 'new URL(...) instanceof URL' is true).
+                adopt('URL', null, window.URL);
+                // DOM §4.4.4, §4.4.7, §4.4.9: the character-data interfaces a page cannot build are
+                // refused with the sentence that names them, while a fragment is one of the few node
+                // types 'new' does make (measured: 'new DocumentFragment()' answers an empty fragment and
+                // 'new CharacterData()' is refused).
+                level('CharacterData', 'Node');
+                level('CDATASection', 'Text');
+                level('ProcessingInstruction', 'Node');
+                level('DocumentFragment', 'Node', function DocumentFragment() {
+                    return document.createDocumentFragment();
+                });
                 level('MediaQueryList', 'EventTarget', refuse('MediaQueryList'));
                 level('MediaQueryListEvent', 'Event', function (type, init) {
                     var event = new Event(type, init);
@@ -7166,7 +7628,9 @@ public class JavaScriptEngine : IDisposable
                 function allElements() {
                     var out = [];
                     function walk(node) {
-                        var kids = node.children;
+                        // A document with no root element has no tree to walk — the collection is empty
+                        // there, not broken.
+                        var kids = node && node.children;
                         var count = kids && typeof kids.length === 'number' ? kids.length : 0;
                         for (var i = 0; i < count; i++) {
                             var kid = kids.item ? kids.item(i) : kids[i];
@@ -7268,23 +7732,11 @@ public class JavaScriptEngine : IDisposable
                 }
 
                 // ── What the URL surface still owes (URL §2.5, §4.6) ──────────────
-                // 'URL.fromJSON' parses a record the page read from somewhere and answers a url or
-                // null — never a throw — and 'sort' puts a query's entries back in key order, keeping
-                // the order the pairs came in when the key is the same (WHATWG sorts by key only).
-                if (window.URL && !URL.fromJSON) {
-                    URL.fromJSON = function (json) {
-                        var record = json;
-                        if (typeof record === 'string') {
-                            try { record = JSON.parse(record); } catch (e) { return null; }
-                        }
-                        if (!record || typeof record !== 'object') return null;
-                        var href = record.href === undefined ? '' : String(record.href);
-                        var base = record.base === undefined ? undefined : String(record.base);
-                        try {
-                            return base ? new URL(href, base) : new URL(href);
-                        } catch (e) { return null; }
-                    };
-                }
+                // 'sort' puts a query's entries back in key order, keeping the order the pairs came in
+                // when the key is the same (WHATWG sorts by key only). 'URL.fromJSON' is not part of the
+                // interface — the statics the reference answers are canParse, createObjectURL, parse and
+                // revokeObjectURL (measured) — so the parser-side helper is not on the page's URL.
+
 
                 // ── The image the page makes with 'new Image()' (HTML §4.8.11) ──────
                 // The rest of what the interface carries: the lazy-loading and decoding keywords, the
@@ -8251,6 +8703,10 @@ public class JavaScriptEngine : IDisposable
                 for (var key in geometryProtos) {
                     (window.__domProto || {})[key] = geometryProtos[key].prototype;
                 }
+                Object.defineProperty(DOMMatrixReadOnly.prototype, Symbol.toStringTag,
+                    { value: 'DOMMatrixReadOnly', configurable: true });
+                Object.defineProperty(DOMMatrix.prototype, Symbol.toStringTag,
+                    { value: 'DOMMatrix', configurable: true });
                 window.DOMMatrixReadOnly = DOMMatrixReadOnly;
                 window.DOMMatrix = DOMMatrix;
 
@@ -8347,7 +8803,12 @@ public class JavaScriptEngine : IDisposable
                                 configurable: true, enumerable: true,
                                 get: function () {
                                     var p = this[points];
-                                    if (!p) return undefined;
+                                    // The read belongs to a range: the prototype of an interface is not
+                                    // one, and a page that asks it is refused the way the reference
+                                    // refuses it (measured: 'Range.prototype.startContainer' raises
+                                    // 'Illegal invocation'). A range the engine made answers its own
+                                    // member before this getter is ever looked at.
+                                    if (!p) throw new TypeError('Illegal invocation');
                                     if (key === 'collapsed') return p[0] === p[2] && p[1] === p[3];
                                     return p[pointNames.indexOf(key)];
                                 }
@@ -8777,6 +9238,14 @@ public class JavaScriptEngine : IDisposable
                         throw new TypeError('Failed to execute ' + quoted(name) + ' on ' + quoted(iface)
                             + ': Illegal invocation');
                     });
+                }
+                function readMember(iface, name) {
+                    var proto = levels[iface];
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: false,
+                            get: function () { refusal(); }, set: function () { refusal(); } });
+                    } catch (e) { }
                 }
                 function brandRead(iface, name, value) {
                     var proto = levels[iface];
@@ -9306,6 +9775,80 @@ public class JavaScriptEngine : IDisposable
                         return window.__acruxScheduler;
                     } });
 
+                // HTML §2.9: the ARIA attributes reflected on every element. Each one is the attribute
+                // of the same name in lower-case dashes, so a write moves the attribute and a read of
+                // an absent one answers null rather than nothing (measured: 'ariaLabel' reads the
+                // attribute, writing it changes 'getAttribute', and there is no 'ariaRole' at all —
+                // 'role' is not part of the reflection).
+                var ARIA = ['ariaActiveDescendant', 'ariaAtomic', 'ariaAutoComplete', 'ariaBrailleLabel',
+                    'ariaBrailleRoleDescription', 'ariaBusy', 'ariaChecked', 'ariaColCount', 'ariaColIndex',
+                    'ariaColIndexText', 'ariaColSpan', 'ariaCurrent', 'ariaDescription', 'ariaDisabled',
+                    'ariaExpanded', 'ariaHasPopup', 'ariaHidden', 'ariaInvalid', 'ariaKeyShortcuts',
+                    'ariaLabel', 'ariaLevel', 'ariaLive', 'ariaModal', 'ariaMultiLine',
+                    'ariaMultiSelectable', 'ariaOrientation', 'ariaPlaceholder', 'ariaPosInSet',
+                    'ariaPressed', 'ariaReadOnly', 'ariaRelevant', 'ariaRequired', 'ariaRoleDescription',
+                    'ariaRowCount', 'ariaRowIndex', 'ariaRowIndexText', 'ariaRowSpan', 'ariaSelected',
+                    'ariaSetSize', 'ariaSort', 'ariaValueMax', 'ariaValueMin', 'ariaValueNow',
+                    'ariaValueText'];
+                function attributeNameOf(member) {
+                    var out = '';
+                    for (var i = 0; i < member.length; i++) {
+                        var ch = member.charAt(i);
+                        if (ch >= 'A' && ch <= 'Z') out += '-' + ch.toLowerCase(); else out += ch;
+                    }
+                    return out;
+                }
+                ARIA.forEach(function (member) {
+                    var attr = attributeNameOf(member);
+                    var proto = levels.Element;
+                    if (!proto || Object.prototype.hasOwnProperty.call(proto, member)) return;
+                    try {
+                        Object.defineProperty(proto, member, {
+                            configurable: true, enumerable: false,
+                            get: function () {
+                                if (!isNode(this) || typeof this.getAttribute !== 'function') refusal();
+                                var made = this.getAttribute(attr);
+                                return made === undefined || made === null ? null : String(made);
+                            },
+                            set: function (value) {
+                                if (!isNode(this) || typeof this.setAttribute !== 'function') refusal();
+                                if (value === null || value === undefined) this.removeAttribute(attr);
+                                else this.setAttribute(attr, String(value));
+                            }
+                        });
+                    } catch (e) { }
+                });
+                // The eight aria attributes that name elements are reflected as frozen element lists;
+                // this engine keeps no relation store, so they read the way an unanswered one reads on
+                // the reference — null, and writable back to null (measured).
+                ['ariaActiveDescendantElement', 'ariaControlsElements', 'ariaDescribedByElements',
+                 'ariaDetailsElements', 'ariaErrorMessageElements', 'ariaFlowToElements',
+                 'ariaLabelledByElements', 'ariaOwnsElements'].forEach(function (member) {
+                    var proto = levels.Element;
+                    if (!proto || Object.prototype.hasOwnProperty.call(proto, member)) return;
+                    try {
+                        Object.defineProperty(proto, member, {
+                            configurable: true, enumerable: false,
+                            get: function () { if (!isNode(this)) refusal(); return null; },
+                            set: function () { if (!isNode(this)) refusal(); }
+                        });
+                    } catch (e) { }
+                });
+                // The members the range answers through its own interface: an instance reads its host
+                // member first, so these stand for the interface's shape and refuse a receiver that is
+                // not one (measured: 'Range.prototype.startContainer' raises). The four points and
+                // 'collapsed' belong to AbstractRange and are real accessors there — a StaticRange is a
+                // script object whose points are read through them — while the reference keeps
+                // 'commonAncestorContainer' and 'rootNode' on Range itself (measured in 'D4').
+                ['commonAncestorContainer', 'rootNode'].forEach(function (member) {
+                    readMember('Range', member);
+                });
+                ['anchorNode', 'focusNode', 'anchorOffset', 'focusOffset', 'isCollapsed', 'rangeCount',
+                 'type', 'direction'].forEach(function (member) { readMember('Selection', member); });
+                ['scrollTo', 'scrollBy', 'scroll'].forEach(function (member) {
+                    brandMethod('Element', member);
+                });
+
                 method('HTMLElement', 'attachInternals', function () {
                     if (!isNode(this) || typeof this.tagName !== 'string') refusal();
                     if (this.tagName.indexOf('-') < 0) {
@@ -9395,6 +9938,91 @@ public class JavaScriptEngine : IDisposable
                     return out;
                 };
             }
+
+            // The three things every interface owes the page and neither the interpreter nor the host
+            // gives it by itself: the 'constructor' back-reference (a prototype the levels build by hand
+            // has none until it is written), the name each operation answers with (a method written by
+            // assignment is anonymous, and 'String(Headers.prototype.get)' is read out of a log), and the
+            // absence of 'arguments' and 'caller' - the two legacy function properties the interpreter
+            // carries on every script function but no interface names (measured: the statics of
+            // FileReader are the three constants, length, name and prototype, and nothing else).
+            (function () {
+                function polish(proto, maker) {
+                    if (!proto || typeof proto !== 'object') return;
+                    var names;
+                    try { names = Object.getOwnPropertyNames(proto); } catch (e) { return; }
+                    for (var i = 0; i < names.length; i++) {
+                        var member;
+                        try { member = proto[names[i]]; } catch (e) { continue; }
+                        if (typeof member === 'function' && !member.name) {
+                            try {
+                                Object.defineProperty(member, 'name',
+                                    { value: names[i], configurable: true });
+                            } catch (e) { }
+                        }
+                    }
+                    if (typeof maker === 'function'
+                        && !Object.prototype.hasOwnProperty.call(proto, 'constructor')) {
+                        try {
+                            Object.defineProperty(proto, 'constructor',
+                                { value: maker, writable: true, enumerable: false, configurable: true });
+                        } catch (e) { }
+                    }
+                }
+                var levels = window.__domProto || { };
+                for (var name in levels) {
+                    if (!Object.prototype.hasOwnProperty.call(levels, name)) continue;
+                    polish(levels[name], window[name]);
+                    var named = window[name];
+                    if (typeof named !== 'function') continue;
+                    try { delete named.arguments; } catch (e) { }
+                    try { delete named.caller; } catch (e) { }
+                }
+                // The interfaces a page reaches through 'new' are polished the same way, whether or not
+                // they also carry a level: the prototype of the constructor is what the page reads.
+                for (var key in window) {
+                    var made;
+                    try { made = window[key]; } catch (e) { continue; }
+                    if (typeof made !== 'function') continue;
+                    try { delete made.arguments; } catch (e) { }
+                    try { delete made.caller; } catch (e) { }
+                    // The level of a callable is read from the object, and a callable that answers through
+                    // a proxy can refuse the question — 'document.all' is one, and a sweep of the whole
+                    // window must not be at the mercy of what one of its members throws.
+                    var proto;
+                    try { proto = made.prototype; } catch (e) { continue; }
+                    if (!proto) continue;
+                    polish(proto, made);
+                }
+            })();
+
+            // DOM §4.4.1, §4.4.2: 'Text' and 'Comment' are the two node interfaces a page can build for
+            // itself, and what it gets has to be the node the document makes — with its owner, its host
+            // members and its prototype answering like every other node. The constructor registered for
+            // the name hands back nothing of its own, so the two that are constructible are pointed at
+            // the document here (measured: 'new Text('hello').data' is 'hello', it clones as the Text
+            // interface names, 'splitText(2)' answers the tail and 'assignedSlot' is null).
+            (function () {
+                var levels = window.__domProto || { };
+                function nodeCtor(name, craft) {
+                    var proto = levels[name];
+                    if (!proto) return;
+                    var Built = function (data) {
+                        if (!new.target) {
+                            throw new TypeError('Failed to construct ' + ifaceQuote(name) + ': Please use '
+                                + 'the ' + ifaceQuote('new') + ' operator, this DOM object constructor '
+                                + 'cannot be called as a function.');
+                        }
+                        return craft(String(data === undefined ? '' : data));
+                    };
+                    try { Object.defineProperty(Built, 'name', { value: name, configurable: true }); }
+                    catch (e) { }
+                    Built.prototype = proto;
+                    window[name] = Built;
+                }
+                nodeCtor('Text', function (text) { return document.createTextNode(text); });
+                nodeCtor('Comment', function (text) { return document.createComment(text); });
+            })();
         ";
     }
 
@@ -9859,24 +10487,53 @@ public class AcruxBuiltins
     private readonly Dictionary<int, CancellationTokenSource> _fetchTokens = new();
     private readonly object _fetchTokenLock = new();
 
-    /// <summary>DOM §4.5.6: the JS MutationObserver turns text-change recording on while one of its
-    /// registrations asks for characterData and off when none does, so a page that never observes
-    /// pays nothing for every keystroke of a typewriter demo.</summary>
-    public void setCharacterDataTracking(bool on)
-        => Acrux.Core.Dom.DomMutationTracker.TrackCharacterData = on;
+    /// <summary>DOM §4.5.6: the JS MutationObserver turns each kind of recording on while one of its
+    /// registrations asks for it and off when none does, so a page that never observes pays nothing for
+    /// every keystroke of a typewriter demo or every attribute of a virtual list.</summary>
+    public void setMutationTracking(bool attributes, bool childList, bool characterData)
+        => Acrux.Core.Dom.DomMutationTracker.SetTracking(attributes, childList, characterData);
 
-    /// <summary>The text edits queued since the last call, as [wrapped node, old value] pairs —
-    /// the observer diff cannot reconstruct an old value a node has already lost.</summary>
-    public object[][] takeCharacterDataChanges()
+    /// <summary>The mutations queued since the last call, each one as
+    /// [kind, target, name, namespace, oldValue, added, removed, previousSibling, nextSibling] with the
+    /// nodes already wrapped for the page. The observer's own diff cannot reconstruct the value a node
+    /// has already lost, nor split two writes to one name into the two records they were (§4.5.7).</summary>
+    public object[][] takeMutationChanges()
     {
-        var changes = Acrux.Core.Dom.DomMutationTracker.TakeCharacterDataChanges();
-        var outList = new List<object[]>(changes.Count);
+        var changes = Acrux.Core.Dom.DomMutationTracker.TakeChanges();
+        var taken = new List<object[]>(changes.Count);
         foreach (var change in changes)
         {
-            object?[] pair = [JsIntegrationService.WrapAny(change.Node), change.OldValue];
-            outList.Add(pair);
+            object?[] made = new object?[]
+            {
+                KindOf(change.Kind),
+                JsIntegrationService.WrapAny(change.Node),
+                change.Name,
+                change.Namespace,
+                change.OldValue,
+                WrapJournalNodes(change.Added),
+                WrapJournalNodes(change.Removed),
+                change.PreviousSibling == null ? null : JsIntegrationService.WrapAny(change.PreviousSibling),
+                change.NextSibling == null ? null : JsIntegrationService.WrapAny(change.NextSibling),
+                WrapJournalNodes(change.Scope),
+            };
+            taken.Add(made);
         }
-        return outList.ToArray();
+        return taken.ToArray();
+    }
+
+    private static string KindOf(Acrux.Core.Dom.MutationJournalKind kind) => kind switch
+    {
+        Acrux.Core.Dom.MutationJournalKind.Attribute => "attributes",
+        Acrux.Core.Dom.MutationJournalKind.ChildList => "childList",
+        _ => "characterData",
+    };
+
+    private static object[] WrapJournalNodes(Acrux.Core.Dom.Node[]? nodes)
+    {
+        if (nodes == null || nodes.Length == 0) return Array.Empty<object>();
+        var made = new object[nodes.Length];
+        for (var i = 0; i < nodes.Length; i++) made[i] = JsIntegrationService.WrapAny(nodes[i])!;
+        return made;
     }
 
     /// <summary>Fetch §5: the signal the page passed in aborts the request. The task is cancelled
@@ -10365,7 +11022,7 @@ public class NavigatorHost : IDomPrototypeHost
     }
 }
 
-public class LocationHost : IDomPrototypeHost
+public class LocationHost : IDomPrototypeHost, IDomEnumerableHost
 {
     string[] IDomPrototypeHost.__domTypeChain => new[] { "Location" };
 
@@ -10459,6 +11116,21 @@ public class LocationHost : IDomPrototypeHost
     {
         OnReload?.Invoke();
     }
+
+    /// <summary>DOM §6.1: the Location is the one interface whose members the page enumerates from the
+    /// object itself (measured: 'Object.keys(window.location)' answers these fourteen, and a 'for..in'
+    /// over it reads the same list).</summary>
+    string[] IDomEnumerableHost.__domOwnKeys => new[]
+    {
+        "ancestorOrigins", "href", "origin", "protocol", "host", "hostname", "port", "pathname",
+        "search", "hash", "assign", "reload", "replace", "toString",
+    };
+
+    /// <summary>URL §2.6: turned into a string the location is its address — 'String(window.location)'
+    /// and 'location + ""' both read the href (measured), and the interface names the method that does
+    /// it for a page that asks directly.</summary>
+    public string toString() => href;
+    public override string ToString() => href;
 }
 
 public class HistoryHost : IDomPrototypeHost

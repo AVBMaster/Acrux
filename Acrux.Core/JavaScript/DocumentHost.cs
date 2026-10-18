@@ -75,7 +75,9 @@ public class DocumentHost : IDomPrototypeHost
 
     public string title
     {
-        get => _document.Title;
+        // A document with no title element has no title, and the IDL says so with the empty string
+        // rather than with nothing at all (measured: an iframe's document answers '' for 'title').
+        get => _document.Title ?? "";
         set => _document.Title = value;
     }
 
@@ -96,8 +98,10 @@ public class DocumentHost : IDomPrototypeHost
     public Node? ownerDocument => null;
 
     // A Document is a Node, so it carries the child-node accessors too. Its only element child is
-    // the document element; the rest (doctype, comments) are non-element children.
-    public object[] children => _document.Children.OfType<DomElement>().Select(e => (object)WrapElement(e)!).ToArray();
+    // the document element; the rest (doctype, comments) are non-element children. The element read is
+    // the live HTMLCollection the interface names, not a snapshot array (HTML §4.5.4).
+    public object children => new JsLiveElementList(
+        () => _document.Children.OfType<DomElement>().ToList(), "HTMLCollection");
     public object[] childNodes => _document.Children.Select(WrapAnyDocumentNode).Where(x => x != null).Select(x => x!).ToArray();
     // The tree reads a document answers as well as an element does (§4.1): 'document.firstChild' is
     // the doctype on a page the parser built, and 'previousSibling' of the root is how a page finds it.
@@ -353,9 +357,9 @@ public class DocumentHost : IDomPrototypeHost
 
     public void replaceChildren(params object?[] nodes)
     {
-        for (var i = _document.Children.Count - 1; i >= 0; i--)
-            _document.RemoveChild(_document.Children[i]);
-        foreach (var n in nodes) InsertOnDocument(n, atEnd: true);
+        var incoming = new List<Acrux.Core.Dom.Node>();
+        foreach (var n in nodes) ElementHost.CollectChildNodes(n, incoming);
+        _document.ReplaceAllWith(incoming);
     }
 
     private void InsertOnDocument(object? child, bool atEnd)
@@ -593,24 +597,15 @@ public class DocumentHost : IDomPrototypeHost
     {
     }
 
-    public void addEventListener(string type, object callback)
-    {
-        addEventListener(type, callback, null);
-    }
-
-    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "JS engine assemblies are rooted - dynamic access to options is safe")]
-    public void addEventListener(string type, object callback, object? options)
+    /// <summary>DOM §2.7: the flags arrive as values, the same way they do for an element — the page's
+    /// options dictionary is read on the script side, which keeps the object it may hold (a signal)
+    /// alive. A document listener is booked with the bridge that walks the tree, so what it carries is
+    /// the capture flag; 'once' and a signal are answered for elements, where the walk is the host's
+    /// own.</summary>
+    public void addEventListenerFlags(string type, object callback, bool useCapture, bool once, int signalToken)
     {
         var engine = JavaScriptEngine.Current ?? Engine;
         if (engine == null) return;
-
-        bool useCapture = false;
-        if (options is bool b)
-            useCapture = b;
-        else if (options != null)
-        {
-            try { dynamic opts = options; useCapture = opts.capture ?? false; } catch { }
-        }
 
         var integration = engine.IntegrationService;
         if (integration != null)
@@ -829,125 +824,63 @@ public class DocumentHost : IDomPrototypeHost
         }
 
         var computedStyle = element.NativeElement.ComputedStyle;
-        Dictionary<string, string> props;
         if (computedStyle == null)
+            // An element the cascade has never styled — one that is not in a document — has no
+            // computed values to report: every property reads back the empty string and the view
+            // lists nothing (measured: 'getComputedStyle(document.createElement("div")).display'
+            // is '' and its 'length' is 0, while an element in the tree whose own 'display' is
+            // 'none' still answers its whole computed style). A map of invented UA defaults would
+            // show a script a box the engine never worked out.
+            return new ComputedStyleHost(new Dictionary<string, string>(), null, null);
+        var props = new Dictionary<string, string>
         {
-            // Provide reasonable UA defaults so scripts inspecting computed styles do not get undefined
-            props = CreateDefaultComputedStyleForElement(element);
-        }
-        else
-        {
-            props = new Dictionary<string, string>
-            {
-                    ["box-sizing"] = computedStyle.BoxSizing.ToCssString(),
-                // A length is resolved at computed-value time (CSS Values 3 §7), so a box
-                // authored 'width: 10em' answers in pixels against its own 12px font. A box
-                // size additionally clamps: nothing is never narrower than nothing.
-                ["width"] = computedStyle.ComputedSizeCss(computedStyle.Width),
-                ["height"] = computedStyle.ComputedSizeCss(computedStyle.Height),
-                ["display"] = computedStyle.DisplayCssText,
-                ["position"] = computedStyle.Position.ToCssString(),
-                ["float"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Float.ToString()),
-                ["clear"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Clear.ToString()),
-                ["color"] = CssColorText.FromColor(computedStyle.Color),
-                ["font-family"] = computedStyle.FontFamily ?? "",
-                ["font-size"] = $"{computedStyle.FontSize}px",
-                ["font-weight"] = ((int)computedStyle.FontWeight).ToString(),
-                ["font-style"] = computedStyle.FontStyleCssText,
-                ["line-height"] = computedStyle.LineHeightCssText,
-                ["text-align"] = computedStyle.TextAlignLegacyKeyword ?? Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.TextAlign.ToString()),
-                ["text-decoration"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.TextDecoration.ToString()),
-                ["white-space"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.WhiteSpace.ToString()),
-                ["word-break"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.WordBreak.ToString()),
-                ["overflow-wrap"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.OverflowWrap.ToString()),
-                ["visibility"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Visibility.ToString()),
-                ["overflow"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Overflow.ToString()),
-                ["opacity"] = computedStyle.Opacity.ToString(),
-                ["z-index"] = computedStyle.ZIndex?.ToString() ?? "auto",
-                ["background-color"] = computedStyle.BackgroundColor.HasValue
-                    ? CssColorText.FromColor(computedStyle.BackgroundColor.Value)
-                    : CssColorText.Transparent,
-                ["margin-top"] = computedStyle.ComputedLengthCss(computedStyle.MarginTop),
-                ["margin-right"] = computedStyle.ComputedLengthCss(computedStyle.MarginRight),
-                ["margin-bottom"] = computedStyle.ComputedLengthCss(computedStyle.MarginBottom),
-                ["margin-left"] = computedStyle.ComputedLengthCss(computedStyle.MarginLeft),
-                ["padding-top"] = computedStyle.ComputedLengthCss(computedStyle.PaddingTop),
-                ["padding-right"] = computedStyle.ComputedLengthCss(computedStyle.PaddingRight),
-                ["padding-bottom"] = computedStyle.ComputedLengthCss(computedStyle.PaddingBottom),
-                ["padding-left"] = computedStyle.ComputedLengthCss(computedStyle.PaddingLeft),
-                ["border-top-width"] = $"{computedStyle.BorderTopWidth}px",
-                ["border-right-width"] = $"{computedStyle.BorderRightWidth}px",
-                ["border-bottom-width"] = $"{computedStyle.BorderBottomWidth}px",
-                ["border-left-width"] = $"{computedStyle.BorderLeftWidth}px",
-                ["flex-direction"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.FlexDirection.ToString()),
-                ["flex-wrap"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.FlexWrap.ToString()),
-                ["justify-content"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.JustifyContent.ToString()),
-                ["align-items"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.AlignItems.ToString())
-            };
-        }
-
-        return new ComputedStyleHost(props, element.NativeElement.ComputedStyle, element.NativeElement);
-    }
-
-    private static Dictionary<string, string> CreateDefaultComputedStyleForElement(ElementHost element)
-    {
-        // Basic UA defaults to avoid undefined values when computed style is not available yet
-        var tag = element.NativeElement.TagName?.ToLowerInvariant() ?? "";
-        var blockElements = new HashSet<string>{"div","p","h1","h2","h3","h4","h5","h6","ul","ol","li","table","header","footer","section","article","nav","body"};
-        var display = blockElements.Contains(tag) ? "block" : "inline";
-
-        var d = new Dictionary<string, string>
-        {
-            ["display"] = display,
-            ["position"] = "static",
-            ["box-sizing"] = "content-box",
-            ["width"] = "auto",
-            ["height"] = "auto",
-            ["color"] = "rgb(0, 0, 0)",
-            ["font-family"] = Acrux.Core.Fonts.FontManager.StandardFontFamily,
-            ["font-size"] = "16px",
-            ["line-height"] = "normal",
-            ["text-align"] = "start",
-            ["visibility"] = "visible",
-            ["overflow"] = "visible",
-            ["opacity"] = "1",
-            ["background-color"] = "transparent",
-            ["margin-top"] = "0",
-            ["margin-right"] = "0",
-            ["margin-bottom"] = "0",
-            ["margin-left"] = "0",
-            ["padding-top"] = "0",
-            ["padding-right"] = "0",
-            ["padding-bottom"] = "0",
-            ["padding-left"] = "0",
-            ["border-top-width"] = "0px",
-            ["border-right-width"] = "0px",
-            ["border-bottom-width"] = "0px",
-            ["border-left-width"] = "0px",
+            ["box-sizing"] = computedStyle.BoxSizing.ToCssString(),
+            // A length is resolved at computed-value time (CSS Values 3 §7), so a box
+            // authored 'width: 10em' answers in pixels against its own 12px font. A box
+            // size additionally clamps: nothing is never narrower than nothing.
+            ["width"] = computedStyle.ComputedSizeCss(computedStyle.Width),
+            ["height"] = computedStyle.ComputedSizeCss(computedStyle.Height),
+            ["display"] = computedStyle.DisplayCssText,
+            ["position"] = computedStyle.Position.ToCssString(),
+            ["float"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Float.ToString()),
+            ["clear"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Clear.ToString()),
+            ["color"] = CssColorText.FromColor(computedStyle.Color),
+            ["font-family"] = computedStyle.FontFamily ?? "",
+            ["font-size"] = $"{computedStyle.FontSize}px",
+            ["font-weight"] = ((int)computedStyle.FontWeight).ToString(),
+            ["font-style"] = computedStyle.FontStyleCssText,
+            ["line-height"] = computedStyle.LineHeightCssText,
+            ["text-align"] = computedStyle.TextAlignLegacyKeyword ?? Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.TextAlign.ToString()),
+            ["text-decoration"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.TextDecoration.ToString()),
+            ["white-space"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.WhiteSpace.ToString()),
+            ["word-break"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.WordBreak.ToString()),
+            ["overflow-wrap"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.OverflowWrap.ToString()),
+            ["visibility"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Visibility.ToString()),
+            ["overflow"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.Overflow.ToString()),
+            ["opacity"] = computedStyle.Opacity.ToString(),
+            ["z-index"] = computedStyle.ZIndex?.ToString() ?? "auto",
+            ["background-color"] = computedStyle.BackgroundColor.HasValue
+                ? CssColorText.FromColor(computedStyle.BackgroundColor.Value)
+                : CssColorText.Transparent,
+            ["margin-top"] = computedStyle.ComputedLengthCss(computedStyle.MarginTop),
+            ["margin-right"] = computedStyle.ComputedLengthCss(computedStyle.MarginRight),
+            ["margin-bottom"] = computedStyle.ComputedLengthCss(computedStyle.MarginBottom),
+            ["margin-left"] = computedStyle.ComputedLengthCss(computedStyle.MarginLeft),
+            ["padding-top"] = computedStyle.ComputedLengthCss(computedStyle.PaddingTop),
+            ["padding-right"] = computedStyle.ComputedLengthCss(computedStyle.PaddingRight),
+            ["padding-bottom"] = computedStyle.ComputedLengthCss(computedStyle.PaddingBottom),
+            ["padding-left"] = computedStyle.ComputedLengthCss(computedStyle.PaddingLeft),
+            ["border-top-width"] = $"{computedStyle.BorderTopWidth}px",
+            ["border-right-width"] = $"{computedStyle.BorderRightWidth}px",
+            ["border-bottom-width"] = $"{computedStyle.BorderBottomWidth}px",
+            ["border-left-width"] = $"{computedStyle.BorderLeftWidth}px",
+            ["flex-direction"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.FlexDirection.ToString()),
+            ["flex-wrap"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.FlexWrap.ToString()),
+            ["justify-content"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.JustifyContent.ToString()),
+            ["align-items"] = Dom.CssEnumFormatter.CssKeywordFromEnum(computedStyle.AlignItems.ToString())
         };
 
-        // UA defaults for specific elements to better match Chromium
-        if (tag == "body")
-        {
-            d["padding-top"] = "20px";
-            d["padding-right"] = "20px";
-            d["padding-bottom"] = "20px";
-            d["padding-left"] = "20px";
-            d["background-color"] = "rgb(245, 245, 245)";
-        }
-        else if (tag == "button")
-        {
-            d["display"] = "inline-block";
-            d["box-sizing"] = "border-box";
-            d["font-size"] = "14px";
-            d["padding-top"] = "10px";
-            d["padding-bottom"] = "10px";
-            d["padding-left"] = "20px";
-            d["padding-right"] = "20px";
-            d["background-color"] = "rgb(33, 150, 243)";
-            d["color"] = "rgb(255, 255, 255)";
-        }
-        return d;
+        return new ComputedStyleHost(props, element.NativeElement.ComputedStyle, element.NativeElement);
     }
 
     /// <summary>HTML §2.8.2: the legacy 'createEvent' answers by event family, and the same door is
@@ -1116,14 +1049,17 @@ public class ComputedStyleHost
         return System.Linq.Enumerable.Distinct(plain).ToArray();
     }
 
-    /// <summary>How many properties a computed style reports.</summary>
-    public int length => PropertyNames.Length;
+    /// <summary>How many properties a computed style reports. A view that has no style behind it —
+    /// a detached element, or a name that is no pseudo-element — reports nothing, and the property
+    /// list goes with the values (measured: both answers 0 where an element in the tree lists the
+    /// engine's whole property set).</summary>
+    public int length => _style == null ? 0 : PropertyNames.Length;
 
     /// <summary>The name at an index; past either end the empty string, which is what the IDL's
     /// DOMString return gives (measured for an inline block, and the same rule the declaration
     /// object follows).</summary>
     public string item(int index) =>
-        index < 0 || index >= PropertyNames.Length ? "" : PropertyNames[index];
+        _style == null || index < 0 || index >= PropertyNames.Length ? "" : PropertyNames[index];
 
     /// <summary>Numeric indexing of a computed style: <c>getComputedStyle(el)[0]</c> is
     /// <c>item(0)</c>. An integer indexer is what makes that work through the interop; a string
@@ -1978,6 +1914,7 @@ public class AttributeHost : IDomPrototypeHost
     public bool specified => true;
     public bool isId => name.Equals("id", StringComparison.OrdinalIgnoreCase);
     public string? namespaceURI { get; internal set; }
+
     public string nodeName => name;
 
     // DOM §4.3.3: the two halves of an attribute's name. An attribute that carries a namespace is

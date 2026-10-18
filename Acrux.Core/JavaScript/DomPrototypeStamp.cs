@@ -57,4 +57,17 @@ internal static class DomPrototypeStamp
         }
     }
 }
+
+/// <summary>The own keys an enumerable host reports, handed to the engine in the shape it reads them
+/// in (Jint's property-key list is its own value type, so the names are turned over here rather than
+/// in the host, which knows nothing about the engine).</summary>
+internal static class DomOwnKeys
+{
+    public static JsValue[] Of(string[] names)
+    {
+        var made = new JsValue[names.Length];
+        for (var i = 0; i < names.Length; i++) made[i] = names[i];
+        return made;
+    }
+}
 #endif

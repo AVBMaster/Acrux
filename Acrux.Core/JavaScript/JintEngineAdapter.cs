@@ -48,9 +48,12 @@ public class JintEngineAdapter : IJavaScriptEngineAdapter, IDisposable
             // its interface prototype, which is what 'Object.keys(document.body)' and a 'for..in'
             // over an element answer on the reference (measured: an empty list). The host members
             // stay readable — they are the implementation of those members — they just are not
-            // reported as own, which is exactly how the interface objects look.
+            // reported as own, which is exactly how the interface objects look. One interface is the
+            // exception: a Location carries its members on the object itself, and the page enumerates
+            // them from there (measured: 'Object.keys(location)' is the fourteen names).
             options.Interop.ObjectWrapperReportedPropertyKeys = (engine, target) =>
-                target is IDomPrototypeHost ? System.Array.Empty<JsValue>() : null;
+                target is IDomEnumerableHost enumerable ? DomOwnKeys.Of(enumerable.__domOwnKeys)
+                    : target is IDomPrototypeHost ? System.Array.Empty<JsValue>() : null;
             // DOM §2.8 reaches the JavaScript side here: one CLR object has to be one JavaScript
             // object for as long as it lives. Jint's default is a ring of the eight most recently
             // wrapped targets, so a node the page still held could arrive a second time as a new

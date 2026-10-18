@@ -13,3 +13,14 @@ internal interface IDomPrototypeHost
 {
     string[] __domTypeChain { get; }
 }
+
+/// <summary>
+/// A host whose members the page enumerates from the object itself rather than from its prototype.
+/// One interface in the platform is written that way: a Location carries its fourteen members as own
+/// properties, and 'Object.keys(window.location)' answers them (measured), while every other host
+/// answers an empty list.
+/// </summary>
+internal interface IDomEnumerableHost
+{
+    string[] __domOwnKeys { get; }
+}

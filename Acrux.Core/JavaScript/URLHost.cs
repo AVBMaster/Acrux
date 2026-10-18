@@ -1,8 +1,13 @@
 using Acrux.Core.Dom;
 
+using System.Collections.Generic;
+
 namespace Acrux.Core.JavaScript;
 
-public class URLHost
+/// <summary>The URL interface (URL §2.2): the parts read back out of the parsed address, each one
+/// writable through the whole it belongs to. The host declares its interface so the page sees a URL and
+/// not the fields behind it (measured: '[object URL]' with no own keys).</summary>
+public class URLHost : IDomPrototypeHost
 {
     private readonly Uri _uri;
     private URLSearchParamsHost? _searchParams;
@@ -92,17 +97,34 @@ public class URLHost
         }
     }
 
+    /// <summary>URL §4.6: the serialisation the interface gives — every component of the address the
+    /// page holds, under the names the interface reads them by.</summary>
+    public Dictionary<string, object?> toJSON() => new()
+    {
+        ["href"] = href, ["origin"] = origin, ["protocol"] = protocol, ["username"] = username,
+        ["password"] = password, ["host"] = host, ["hostname"] = hostname, ["port"] = port,
+        ["pathname"] = pathname, ["search"] = search, ["hash"] = hash
+    };
+
     public void assign(string url) { }
     public void replace(string url) { }
     public void reload() { }
+
+    public string __domType => "URL";
+    public string[] __domTypeChain => new[] { "URL" };
 
     public override string ToString() => href;
 
     public static URLHost Create(string url, string? baseUrl = null) => new URLHost(url, baseUrl);
 }
 
-public class URLSearchParamsHost
+/// <summary>The query of a URL, read and written as a list of name-value pairs (URL §4). The list is
+/// the interface the page walks, so it declares itself as one (measured: '[object URLSearchParams]'
+/// with its members on the prototype and no own keys of its own).</summary>
+public class URLSearchParamsHost : IDomPrototypeHost
 {
+    public string __domType => "URLSearchParams";
+    public string[] __domTypeChain => new[] { "URLSearchParams" };
     private readonly Dictionary<string, List<string>> _params = new();
 
     public URLSearchParamsHost(string? queryString)
@@ -183,26 +205,40 @@ public class URLSearchParamsHost
 
     public int size => _params.Sum(kv => kv.Value.Count);
 
-    // keys/values/entries are the iterator methods the interface defines (URL §5), each answering
-    // the pairs/keys/values the page enumerates — methods, not properties.
-    public object[] keys()
+    // keys/values/entries are the iterator methods the interface defines (URL §5), each answering the
+    // pairs/keys/values the page enumerates. The iterator is built on the script side — the interface
+    // it belongs to is script data — so the host hands the items over and gets the object back.
+    public object keys() => AsIterator("URLSearchParams", Names());
+    public object values() => AsIterator("URLSearchParams", Values());
+    public object entries() => AsIterator("URLSearchParams", Pairs());
+
+    private List<object> Names()
     {
         var list = new List<object>();
         foreach (var kv in _params) foreach (var _ in kv.Value) list.Add(kv.Key);
-        return list.ToArray();
+        return list;
     }
 
-    public object[] values()
+    private List<object> Values()
     {
         var list = new List<object>();
         foreach (var kv in _params) foreach (var v in kv.Value) list.Add(v);
-        return list.ToArray();
+        return list;
     }
 
-    public object[] entries()
+    private List<object> Pairs()
     {
         var list = new List<object>();
         foreach (var kv in _params) foreach (var v in kv.Value) list.Add(new object[] { kv.Key, v });
-        return list.ToArray();
+        return list;
+    }
+
+    private static object AsIterator(string interfaceName, List<object> items)
+    {
+        // The iterator an interface names is built on the script side, which owns that interface; the
+        // host only has the items to hand over (URL §5). A host with no script side keeps the array.
+        var made = JavaScriptEngine.Current?.IntegrationService?.CallGlobal(
+            "__acruxMakeIterator", interfaceName, items.ToArray());
+        return made ?? items.ToArray();
     }
 }

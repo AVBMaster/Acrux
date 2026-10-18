@@ -107,7 +107,7 @@ ckAll('F1 a form builds the entries it would submit', (function () {
 ckAll('F2 the entry list answers append, set, delete and iteration', (function () {
     var fd = new FormData();
     fd.append('k', '1'); fd.append('k', '2');
-    var before = [fd.get('k'), fd.getAll('k').join('/'), fd.length].join(',');
+    var before = [fd.get('k'), fd.getAll('k').join('/'), fd.getAll('k').length].join(',');
     fd.set('k', '3');
     var after = [fd.get('k'), fd.getAll('k').length].join(',');
     fd.append('a', new Blob(['xy'], { type: 'text/plain' }));
@@ -307,12 +307,17 @@ ck('U1 a url that does not parse is refused, not replaced', function () {
         && new URL('/x', 'http://a/b').href === 'http://a/x'
         && new URL('http://a/b/c').origin === 'http://a'
         && p.toString() === 'a=1&b=2&b=3'
-        && String(URL.fromJSON({ href: 'http://a/x' })) === 'http://a/x'
-        && URL.fromJSON({ href: 'nope' }) === null && URL.fromJSON(null) === null;
+        && typeof URL.canParse === 'function' && typeof URL.parse === 'function'
+        && URL.canParse('nope', 'http://a/b') === true
+        && URL.canParse('nope') === false
+        && URL.canParse('/x', 'http://a/b') === true
+        && URL.parse('http://a.b/c').pathname === '/c'
+        && URL.parse('nope') === null
+        && typeof URL.fromJSON === 'undefined';
 }, function () {
     var a = ''; try { new URL('nope'); } catch (e) { a = e.name + '|' + e.message; }
     var b = ''; try { new URL('/x', 'nope'); } catch (e) { b = e.name + '|' + e.message; }
-    return [a, b, typeof URL.fromJSON].join(' || ');
+    return [a, b, typeof URL.canParse, typeof URL.parse, typeof URL.fromJSON].join(' || ');
 });
 
 ck('I1 an image carries the loading surface', function () {
