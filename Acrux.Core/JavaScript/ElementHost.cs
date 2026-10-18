@@ -1236,7 +1236,12 @@ public partial class ElementHost : IDomPrototypeHost
         }
         else if (node is Element el)
         {
-            sb.Append('<').Append(el.TagName.ToLowerInvariant());
+            // DOM §12.5: the serialiser writes the element's qualified name as it stands. The folding
+            // an HTML name went through happened when the document was parsed, and a tree that came
+            // from an XML parse keeps the case it was written with (measured: an XML '<Child>'
+            // serialises as '<Child>').
+            var name = el.QualifiedName;
+            sb.Append('<').Append(name);
             foreach (var attr in el.Attributes)
             {
                 // HTML §13.4: every attribute is written as name="value" — an empty value still gets
@@ -1254,7 +1259,7 @@ public partial class ElementHost : IDomPrototypeHost
             sb.Append('>');
             foreach (var child in el.Children)
                 SerializeNode(child, sb);
-            sb.Append("</").Append(el.TagName.ToLowerInvariant()).Append('>');
+            sb.Append("</").Append(name).Append('>');
         }
     }
 

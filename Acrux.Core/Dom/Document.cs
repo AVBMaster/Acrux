@@ -181,6 +181,20 @@ public class Document : Node
     {
         var el = CreateHtmlElement(tagName);
         el.OwnerDocument = this;
+        // DOM §4.2.1, step for a document that is not an HTML one: there is no case folding there at
+        // all, so the spelling the page wrote is the one every name reads back — the tree an XML
+        // parse of '<Child>' builds answers 'Child' from node name, tag name and local name alike
+        // (measured), and an element the XML reader made without a namespace is the same case.
+        if (!IsHtmlDocument)
+        {
+            el.TagName = tagName;
+            el.LocalName = tagName;
+            el.Prefix = null;
+            // An element made by an XML document has no namespace until one is given to it — the HTML
+            // namespace the element class carries from its constructor is not it (measured: a parse of
+            // '<a>' as XML answers null from 'namespaceURI').
+            el.NamespaceUri = null;
+        }
         return el;
     }
 

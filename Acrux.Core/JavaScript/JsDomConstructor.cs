@@ -221,6 +221,9 @@ public class JsDomPrototypeSystem
         RegisterConstructor("HTMLElement", new[] { "Object", "EventTarget", "Node", "Element" }, _ => null);
         RegisterConstructor("Document", new[] { "Object", "EventTarget", "Node" }, _ => null);
         RegisterConstructor("HTMLDocument", new[] { "Object", "EventTarget", "Node", "Document" }, _ => null);
+        // DOM §3.2: the interface an XML document is read as. A wrapper whose document is not an HTML
+        // one is stamped with this, so the tag and the 'instanceof' answer follow the kind of the tree.
+        RegisterConstructor("XMLDocument", new[] { "Object", "EventTarget", "Node", "Document" }, _ => null);
 
         RegisterConstructor("Text", new[] { "Object", "EventTarget", "Node", "CharacterData" }, _ => null);
         RegisterConstructor("Comment", new[] { "Object", "EventTarget", "Node", "CharacterData" }, _ => null);

@@ -53,7 +53,10 @@ public class ShadowRoot : DocumentFragment
             sb.Append(System.Net.WebUtility.HtmlEncode(tn.Data));
         else if (node is Element el)
         {
-            sb.Append('<').Append(el.TagName.ToLowerInvariant());
+            // DOM §12.5: the qualified name as it stands, the same rule the element wrapper's own
+            // serialiser follows — one name, one spelling, whichever printer reaches it.
+            var name = el.QualifiedName;
+            sb.Append('<').Append(name);
             foreach (var attr in el.Attributes)
             {
                 // HTML §13.4: every attribute is written with its value in quotes, an empty one included.
@@ -63,7 +66,7 @@ public class ShadowRoot : DocumentFragment
             sb.Append('>');
             foreach (var child in el.Children)
                 SerializeNode(child, sb);
-            sb.Append("</").Append(el.TagName.ToLowerInvariant()).Append('>');
+            sb.Append("</").Append(name).Append('>');
         }
     }
 }

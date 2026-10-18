@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html><head><title>Probe 51</title></head><body>
+<script>
+(function () {
+  var out = {}; function t(k, f) { try { out[k] = f(); } catch (e) { out[k] = 'ERR ' + e.name + '::' + e.message; } } var J = JSON.stringify;
+  t('streams', function () { return J([typeof ReadableStream, typeof WritableStream, typeof TransformStream, typeof Blob.prototype.stream, typeof Blob.prototype.bytes, typeof Response.prototype.body]); });
+  t('stream surface', function () {
+    var rs = new ReadableStream({ start: function (c) { c.enqueue('a'); c.close(); } });
+    var r = rs.getReader();
+    return J([Object.prototype.toString.call(rs), Object.prototype.toString.call(r), typeof rs.getReader, typeof rs.cancel,
+      typeof rs.pipeTo, typeof rs.pipeThrough, typeof rs.tee, typeof r.read, typeof r.releaseLock, typeof r.cancel,
+      typeof rs.locked, typeof r.closed, typeof ReadableStreamDefaultReader, typeof ReadableStreamDefaultController,
+      typeof Object.getOwnPropertyDescriptor(ReadableStream.prototype, 'values').get, typeof rs[Symbol.asyncIterator]]);
+  });
+  t('writable surface', function () { var ws = new WritableStream({ write: function () { } }); var w = ws.getWriter();
+    return J([Object.prototype.toString.call(ws), Object.prototype.toString.call(w), typeof ws.getWriter, typeof ws.close,
+      typeof ws.abort, typeof ws.locked, typeof w.write, typeof w.close, typeof w.abort, typeof w.releaseLock, typeof w.ready,
+      Object.prototype.toString.call(new TransformStream()), Object.prototype.toString.call(new TransformStream().readable)]); });
+  t('blob stream', function () { var b = new Blob(['hi']); return J([typeof b.stream, Object.prototype.toString.call(b.stream()),
+    Object.prototype.toString.call(new Response('x').body), Object.keys(new Response('x')).length, Object.keys(new Request('http://a/b')).length]); });
+  t('xmlserializer', function () { var p = new DOMParser().parseFromString('<a b="1">x</a>', 'text/xml'); var s = new XMLSerializer();
+    return J([typeof XMLSerializer, (function () { try { return s.serializeToString(p.documentElement).slice(0, 40); } catch (e) { return 'ERR ' + e.name + ':' + e.message; } })(),
+      p.documentElement ? p.documentElement.nodeName : 'no doc', typeof p.documentElement.namespaceURI, typeof document.implementation.createDocument]); });
+  t('xml ns', function () { var p = new DOMParser().parseFromString('<r xmlns="urn:x" xmlns:p="urn:y"><p:c a="1">t</p:c></r>', 'text/xml');
+    var e = p.documentElement.firstChild;
+    return J([e.nodeName, e.namespaceURI, e.localName, e.prefix, e.getAttribute('a'), e.getAttributeNS('urn:y','a'),
+      p.contentType, p.xmlVersion, p.xmlEncoding, Object.prototype.toString.call(p)]); });
+  t('implementation', function () { var di = document.implementation; var doc = di.createDocument ? di.createDocument(null, 'root', null) : null;
+    return J([Object.prototype.toString.call(di), doc.documentElement ? doc.documentElement.nodeName : 'none', typeof di.createDocumentType,
+      typeof di.createHTMLDocument, typeof di.hasFeature, typeof di.createRange]); });
+  t('msgchannel', function () { var mc = new MessageChannel(); return J([Object.prototype.toString.call(mc), Object.prototype.toString.call(mc.port1),
+    typeof mc.port1.postMessage, String(typeof mc.port1.onmessage), typeof mc.port1.start, typeof mc.port1.close, typeof BroadcastChannel,
+    (function () { try { return Object.prototype.toString.call(new BroadcastChannel('x')); } catch (e) { return 'ERR ' + e.name; } })(), typeof MessageEvent,
+    J(Object.keys(mc)), J(Object.keys(mc.port1))]); });
+  t('perf', function () { var p = performance; p.mark('m51'); var e = p.getEntriesByName('m51');
+    return J([p.timeOrigin > 1e12, typeof p.mark, typeof p.measure, typeof p.clearMarks, typeof p.getEntriesByName, typeof p.getEntriesByType, typeof p.now,
+      typeof p.toJSON, String(typeof p.memory), String(typeof p.navigation), e.length + '/' + (e[0] && e[0].entryType) + '/' + typeof (e[0] && e[0].startTime),
+      String(p.timing !== undefined), p.getEntries().length, J(Object.keys(p)), Object.prototype.toString.call(p)]); });
+  t('perf entries', function () { var p = performance; var m = p.mark('mx'); var ms = p.measure('mm', 'mx');
+    return J([Object.prototype.toString.call(m), Object.prototype.toString.call(ms), J(Object.keys(m)),
+      typeof PerformanceEntry, typeof PerformanceMark, typeof PerformanceMeasure, m instanceof PerformanceEntry,
+      (function () { try { new PerformanceEntry(); return 'constructed'; } catch (e) { return e.name + ':' + e.message; } })(),
+      (function () { var x = new PerformanceMark('pm', { detail: { a: 1 } }); return x.detail.a + '/' + x.entryType + '/' + x.duration + '/buffered=' + p.getEntriesByName('pm').length; })(),
+      ms.duration >= 0, typeof m.toJSON, m.toJSON().entryType, J(Object.keys(m.toJSON()))]); });
+  t('perf legacy', function () { var p = performance;
+    return J([Object.prototype.toString.call(p.timing), Object.keys(p.timing).length, typeof p.timing.navigationStart,
+      Object.prototype.toString.call(p.navigation), p.navigation.type, p.navigation.redirectCount,
+      Object.prototype.toString.call(p.memory), typeof p.memory.totalJSHeapSize, Object.prototype.toString.call(p.eventCounts),
+      J(Object.keys(p.toJSON())), typeof p.interactionCount, String(p.onresourcetimingbufferfull)]); });
+  t('navigator.surface', function () { var n = navigator; return J([typeof n.userAgent, typeof n.platform, typeof n.language, Array.isArray(n.languages),
+    typeof n.hardwareConcurrency, typeof n.maxTouchPoints, typeof n.vendor, typeof n.appName, typeof n.appVersion, typeof n.product, typeof n.productSub,
+    typeof n.onLine, typeof n.serviceWorker, typeof n.mediaDevices, typeof n.geolocation, typeof n.permissions, typeof n.wakeLock, typeof n.clipboard]); });
+  t('navigator shapes', function () { var n = navigator; return J([n.vendor, n.productSub, String(n.doNotTrack), String(n.globalDoNotTrack), n.maxTouchPoints,
+    Object.prototype.toString.call(n.geolocation), Object.prototype.toString.call(n.permissions), typeof n.geolocation.getCurrentPosition,
+    typeof n.permissions.query, typeof n.storage, Object.prototype.toString.call(n.connection || null), String(n.webdriver), n.platform]); });
+  t('window.surface2', function () { return J([typeof window.innerWidth, typeof window.innerHeight, typeof window.visualViewport, typeof window.scroll,
+    typeof window.scrollTo, typeof window.scrollBy, typeof window.find, typeof window.caches, typeof window.indexedDB, typeof window.locationbar,
+    typeof window.menubar, typeof window.onerror, typeof window.customElements, String(window.top === window), typeof window.performance,
+    typeof window.frameElement, typeof window.internal, typeof window.localStorage, typeof window.event]); });
+  t('barprops', function () { var names = ['locationbar','menubar','personalbar','scrollbars','statusbar','toolbar'];
+    return J(names.map(function (k) { return k + '=' + Object.prototype.toString.call(window[k]) + '/' + window[k].visible; })); });
+  t('errorevent', function () { var ee = new ErrorEvent('error', { message: 'm', filename: 'f', lineno: 3, colno: 4, error: new Error('x') });
+    return J([ee.message, ee.filename, ee.lineno, ee.colno, ee.error instanceof Error, Object.prototype.toString.call(ee),
+      typeof ErrorEvent, ee.bubbles, ee.cancelable, typeof ee.composed, String(typeof ee.srcElement), ee instanceof Event, J(Object.keys(ee))]); });
+  t('domrect.json', function () { var r = new DOMRect(1, 2, 3, 4); return J([typeof r.toJSON, r.toJSON ? J(r.toJSON()) : '', typeof r.fromPoint, typeof DOMRectReadOnly.fromRect, Object.prototype.toString.call(r)]); });
+  t('timers', function () { return J([typeof setTimeout, setTimeout.length, typeof clearTimeout, typeof setInterval, setInterval.length, typeof clearInterval, typeof queueMicrotask,
+    typeof requestAnimationFrame, typeof cancelAnimationFrame, typeof requestIdleCallback, typeof structuredClone]); });
+  __T('probe51', true, J(out, null, 1));
+})();
+</script></body></html>

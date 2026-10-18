@@ -119,15 +119,28 @@ public class DocumentHost : IDomPrototypeHost
 
     public object? location => Engine?.LocationHost;
 
-    public string __domType => "HTMLDocument";
+    // An XML document is read through the interface that names it (DOM §3.2): the tag, the prototype
+    // the page walks and the 'instanceof' answer all follow from the document's own kind, and an HTML
+    // one keeps the interface it has always answered.
+    public string __domType => _document.IsHtmlDocument ? "HTMLDocument" : "XMLDocument";
 
-    public string[] __domTypeChain => new[] { "EventTarget", "Node", "HTMLDocument" };
+    public string[] __domTypeChain => _document.IsHtmlDocument
+        ? new[] { "EventTarget", "Node", "Document", "HTMLDocument" }
+        : new[] { "EventTarget", "Node", "Document", "XMLDocument" };
     public override string ToString() => DomHostString.Tagged(this);
     public string? characterSet => "UTF-8";
     // DOM §3.2: the content type is the one the document was built with — 'text/html' for the page the
     // shell navigated to, and what 'DOMParser.parseFromString' or 'createDocument' was given for the
     // ones a script made.
     public string? contentType => _document.ContentType;
+    /// <summary>DOM §3.2.1: the three members an XML document answers. The declaration the engine read
+    /// carries the version the XML specification is written against, and the encoding it names is the
+    /// one the reader settled on — but the text is handed over already decoded, so the document keeps
+    /// no encoding of its own and the member reads null, which is what a document built from a string
+    /// answers on the reference too (measured).</summary>
+    public string? xmlVersion => _document.IsHtmlDocument ? null : "1.0";
+    public string? xmlEncoding => null;
+    public bool strictErrorChecking => false;
 
     // ===== Document collections =====
     /// <summary>HTML §4.10.21: the document collections answer an HTMLCollection — live, itemised and
@@ -2075,10 +2088,18 @@ public class AttributeHost : IDomPrototypeHost
 
 /// <summary>The object 'document.implementation' answers (DOM §3.3, HTML). It builds fresh,
 /// detached documents — an HTML one with the root/head/body/title a page expects to find.</summary>
-public class DOMImplementationHost
+public class DOMImplementationHost : IDomPrototypeHost
 {
     private readonly JavaScriptEngine? _engine;
     public DOMImplementationHost(JavaScriptEngine? engine) => _engine = engine;
+
+    // The wrapper the page reads carries the interface it belongs to, so the tag, the constructor and
+    // the 'instanceof' answer all come from the DOMImplementation level (measured: [object
+    // DOMImplementation]).
+    public string? __domType => "DOMImplementation";
+    string[] IDomPrototypeHost.__domTypeChain => new[] { "DOMImplementation" };
+
+    public override string ToString() => DomHostString.Tagged(this);
 
     public bool hasFeature(string? feature, object? version = null) => true;
 

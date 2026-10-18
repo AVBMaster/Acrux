@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html>
+<head><title>Streams, performance entries, the navigator and window surface, the object tags and XML names (Streams §6-§9, Fetch §5-§7, File API §4, Performance API §3, High Resolution Time §4-§5, Navigation Timing §4, User Timing §3, Performance Timeline §3.6, HTML §7.3.4, §7.4.5, §8.3, §8.6.8, Geolocation §5, Permissions §4.3, DOM §3.2, §3.3, UI Events §7, XPath-free XML)</title></head>
+<body>
+<div id="d"><p>one</p></div>
+<script>
+// Every answer below was read off the reference in this session; the probes are kept in out/.
+function ck(name, cond, info) {
+    var ok = false;
+    try { ok = !!cond(); } catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : e); }
+    __T(name, ok, info === undefined ? '' : String(typeof info === 'function' ? info() : info));
+}
+function ckAll(name, pairs, extra) {
+    var fails = [];
+    try {
+        for (var i = 0; i < pairs.length; i++) if (!pairs[i][1]) fails.push(pairs[i][0]);
+    } catch (e) { fails.push('threw ' + (e && e.name) + ': ' + (e && e.message)); }
+    __T(name, fails.length === 0, (fails.length ? fails.join(' ; ') + ' | ' : '') + (extra || ''));
+}
+function done(name, fn) {
+    var promise;
+    try { promise = fn(); } catch (e) {
+        __T(name, false, 'threw ' + (e && e.name) + ': ' + (e && e.message));
+        return Promise.resolve(null);
+    }
+    return promise.then(function (v) { __T(name, !!v, ''); return null; },
+        function (e) { __T(name, false, 'rej ' + (e && e.name) + ': ' + (e && e.message)); return null; });
+}
+function refused(name, fn) {
+    try { fn(); return 'constructed'; } catch (e) { return e.name + ':' + e.message; }
+}
+
+// ── A. The readable stream (Streams §6.2) ──────────────────────────────────
+ckAll('A1 the stream family is named and shaped', [
+    ['ReadableStream', typeof ReadableStream === 'function'],
+    ['reader', typeof ReadableStreamDefaultReader === 'function'],
+    ['controller', typeof ReadableStreamDefaultController === 'function'],
+    ['WritableStream', typeof WritableStream === 'function'],
+    ['writer', typeof WritableStreamDefaultWriter === 'function'],
+    ['TransformStream', typeof TransformStream === 'function'],
+    ['rs methods', typeof new ReadableStream().getReader === 'function'
+        && typeof new ReadableStream().cancel === 'function'
+        && typeof new ReadableStream().pipeTo === 'function'
+        && typeof new ReadableStream().pipeThrough === 'function'
+        && typeof new ReadableStream().tee === 'function'],
+    ['tags', Object.prototype.toString.call(new ReadableStream()) === '[object ReadableStream]'
+        && Object.prototype.toString.call(new ReadableStream().getReader())
+            === '[object ReadableStreamDefaultReader]'
+        && Object.prototype.toString.call(new WritableStream()) === '[object WritableStream]'
+        && Object.prototype.toString.call(new WritableStream().getWriter())
+            === '[object WritableStreamDefaultWriter]'
+        && Object.prototype.toString.call(new TransformStream()) === '[object TransformStream]'],
+    ['locked boolean', typeof new ReadableStream().locked === 'boolean'
+        && new ReadableStream().locked === false]
+]);
+
+ck('A2 a read walks the queue and ends with done', function () {
+    var rs = new ReadableStream({ start: function (c) { c.enqueue('a'); c.enqueue('b'); c.close(); } });
+    var r = rs.getReader();
+    return r.read().then(function (x) {
+        if (x.value !== 'a' || x.done !== false) return false;
+        return r.read().then(function (y) {
+            if (y.value !== 'b' || y.done !== false) return false;
+            return r.read().then(function (z) {
+                if (z.value !== undefined || z.done !== true) return false;
+                return rs.locked === true;
+            });
+        });
+    });
+});
+
+ck('A3 a second reader is refused and a released lock lets one in', function () {
+    var rs = new ReadableStream();
+    var r = rs.getReader();
+    var twice = refused('x', function () { rs.getReader(); });
+    r.releaseLock();
+    return twice.indexOf('TypeError') === 0 && rs.locked === false && typeof rs.getReader() === 'object';
+});
+
+ck('A4 the controller fills the queue and counts what it holds', function () {
+    var controller = null;
+    var rs = new ReadableStream({ start: function (c) { controller = c; } });
+    var tag = Object.prototype.toString.call(controller);
+    var desired = controller.desiredSize;
+    controller.enqueue(1);
+    var after = controller.desiredSize;
+    return tag === '[object ReadableStreamDefaultController]'
+        && desired === 1 && after === 0
+        && typeof controller.enqueue === 'function' && typeof controller.close === 'function'
+        && typeof controller.error === 'function';
+});
+
+ck('A5 a cancel reaches the source and unlocks the stream', function () {
+    var heard = 'none';
+    var rs = new ReadableStream({ cancel: function (reason) { heard = reason; return Promise.resolve(); } });
+    var reader = rs.getReader();
+    return reader.cancel('because').then(function () {
+        return heard === 'because' && rs.locked === false;
+    });
+});
+
+ck('A6 tee hands both branches the same chunks', function () {
+    var rs = new ReadableStream({ start: function (c) { c.enqueue(1); c.enqueue(2); c.close(); } });
+    var pair = rs.tee();
+    if (pair.length !== 2) return false;
+    return pair[0].getReader().read().then(function (a) {
+        return pair[1].getReader().read().then(function (b) {
+            return a.value === 1 && b.value === 1;
+        });
+    });
+});
+
+ck('A7 the async iterator walks the stream', function () {
+    var rs = new ReadableStream({ start: function (c) { c.enqueue('x'); c.enqueue('y'); c.close(); } });
+    var seen = [];
+    function step(iterator) {
+        return iterator.next().then(function (result) {
+            if (result.done) return seen.join('');
+            seen.push(result.value);
+            return step(iterator);
+        });
+    }
+    return step(rs[Symbol.asyncIterator]()).then(function (joined) {
+        return joined === 'xy' && typeof rs.values === 'function';
+    });
+});
+
+ck('A8 an errored stream rejects the reads it has and the ones it gets', function () {
+    var controller = null;
+    var rs = new ReadableStream({ start: function (c) { controller = c; } });
+    var reader = rs.getReader();
+    var pending = reader.read();
+    controller.error(new Error('gone'));
+    return pending.then(function () { return 'resolved'; }, function (e) {
+        return reader.read().then(function () { return 'second resolved'; },
+            function (e2) { return e2 instanceof Error && e.message === 'gone'; });
+    });
+});
+
+// ── B. The writable side (Streams §6.3) ────────────────────────────────────
+ck('B1 a writer hands the sink each chunk and closes once', function () {
+    var chunks = [], closed = 0;
+    var ws = new WritableStream({ write: function (c) { chunks.push(c); },
+        close: function () { closed++; } });
+    var writer = ws.getWriter();
+    return writer.write('a').then(function () {
+        return writer.write('b');
+    }).then(function () {
+        return writer.close();
+    }).then(function () {
+        return chunks.join('') === 'ab' && closed === 1 && typeof writer.ready === 'object'
+            && typeof writer.closed === 'object' && ws.locked === true;
+    });
+});
+
+ck('B2 an abort closes the stream and refuses the writes that follow', function () {
+    var aborted = 'none', heard = [];
+    var ws = new WritableStream({ write: function (c) { heard.push(c); },
+        abort: function (reason) { aborted = reason; return Promise.resolve(); } });
+    var writer = ws.getWriter();
+    var first = writer.abort('stopped');
+    var second = writer.write('b');
+    return first.then(function () {
+        return second.then(function () { return 'second resolved'; },
+            function () { return aborted === 'stopped' && heard.length === 0; });
+    });
+});
+
+ck('B3 pipeTo moves every chunk across', function () {
+    var out = [];
+    var rs = new ReadableStream({ start: function (c) { c.enqueue(1); c.enqueue(2); c.close(); } });
+    var ws = new WritableStream({ write: function (c) { out.push(c); } });
+    return rs.pipeTo(ws).then(function () { return out.join('') === '12'; });
+});
+
+ck('B4 a transform passes a chunk through', function () {
+    var ts = new TransformStream();
+    var rs = new ReadableStream({ start: function (c) { c.enqueue('q'); c.close(); } });
+    var read = rs.pipeThrough(ts).getReader().read();
+    return read.then(function (r) { return r.value === 'q'; });
+});
+
+ck('B5 a custom transform sees the controller it is handed', function () {
+    var ts = new TransformStream({ transform: function (chunk, controller) {
+        controller.enqueue(chunk + chunk);
+    } });
+    var rs = new ReadableStream({ start: function (c) { c.enqueue('z'); c.close(); } });
+    return rs.pipeThrough(ts).getReader().read().then(function (r) { return r.value === 'zz'; });
+});
+
+// ── C. Bodies as streams (Fetch §6.3, File API §4.1.2) ─────────────────────
+ckAll('C1 a blob reads as bytes, text and a stream', [
+    ['stream', typeof Blob.prototype.stream === 'function'],
+    ['bytes', typeof Blob.prototype.bytes === 'function'],
+    ['tag', Object.prototype.toString.call(new Blob(['hi']).stream()) === '[object ReadableStream]'],
+    ['text', new Blob(['hi']).text() instanceof Promise]
+]);
+
+done('C2 the blob stream carries the whole byte range as one chunk', function () {
+    var b = new Blob(['abcd'], { type: 'text/plain' });
+    return b.stream().getReader().read().then(function (r) {
+        return r.value instanceof Uint8Array && r.value.byteLength === 4 && r.done === false
+            && b.size === 4 && b.type === 'text/plain';
+    });
+});
+
+done('C3 bytes reads the same range back', function () {
+    return new Blob(['ab']).bytes().then(function (v) {
+        return v instanceof Uint8Array && v[0] === 97 && v.length === 2;
+    });
+});
+
+ckAll('C4 a response body is a stream and the interface owns its members', [
+    ['body tag', Object.prototype.toString.call(new Response('x').body) === '[object ReadableStream]'],
+    ['no body', new Response().body === null],
+    ['keys', Object.keys(new Response('x')).length === 0],
+    ['prototype list', typeof Response.prototype.text === 'function'
+        && typeof Response.prototype.json === 'function'
+        && typeof Response.prototype.arrayBuffer === 'function'
+        && typeof Response.prototype.blob === 'function'
+        && typeof Response.prototype.bytes === 'function'
+        && typeof Response.prototype.formData === 'function'
+        && typeof Response.prototype.clone === 'function'],
+    ['illegal invocation', refused('b', function () { return Response.prototype.body; })
+        .indexOf('TypeError') === 0],
+    ['request body', Object.prototype.toString.call(new Request('http://a/b', { method: 'POST',
+        body: 'x' }).body) === '[object ReadableStream]'],
+    ['request keys', Object.keys(new Request('http://a/b')).length === 0]
+]);
+
+done('C5 a body read once is marked used and the buffer is a buffer', function () {
+    var r = new Response('abc');
+    return r.arrayBuffer().then(function (b) {
+        var view = new Uint8Array(b);
+        var r2 = new Response('abc');
+        return r2.text().then(function (t) {
+            return Object.prototype.toString.call(b) === '[object ArrayBuffer]' && b.byteLength === 3
+                && view[0] === 97 && t === 'abc' && r2.bodyUsed === true;
+        });
+    });
+});
+
+done('C6 a stream body is drained by the read the page asks for', function () {
+    var source = new ReadableStream({ start: function (c) { c.enqueue('he'); c.enqueue('llo'); c.close(); } });
+    var r = new Response(source);
+    return r.text().then(function (t) { return t === 'hello' && r.bodyUsed === true; });
+});
+
+done('C7 a url-encoded body reads back as the form it names', function () {
+    var r = new Response('a=1&b=2', { headers: { 'content-type': 'application/x-www-form-urlencoded' } });
+    return r.formData().then(function (fd) {
+        return fd.get('a') === '1' && fd.get('b') === '2';
+    });
+});
+
+done('C8 a clone keeps the response it was built from', function () {
+    var r = new Response('abc', { status: 201, statusText: 'Created' });
+    var c = r.clone();
+    return c.text().then(function (t) {
+        return t === 'abc' && c.status === 201 && c.statusText === 'Created'
+            && c.headers.get('content-type').indexOf('text/plain') === 0
+            && r.bodyUsed === false && c instanceof Response;
+    });
+});
+
+// ── D. Performance (Performance API §3, User Timing §3, Navigation Timing §4) ──
+ckAll('D1 the performance singleton is the interface it names', [
+    ['tag', Object.prototype.toString.call(performance) === '[object Performance]'],
+    ['no own keys', Object.keys(performance).length === 0],
+    ['illegal ctor', refused('p', function () { return new Performance(); }) === 'TypeError:Failed to construct \'Performance\': Illegal constructor'],
+    ['members', typeof performance.now === 'function' && typeof performance.mark === 'function'
+        && typeof performance.measure === 'function' && typeof performance.clearMarks === 'function'
+        && typeof performance.clearMeasures === 'function' && typeof performance.getEntries === 'function'
+        && typeof performance.getEntriesByType === 'function'
+        && typeof performance.getEntriesByName === 'function' && typeof performance.toJSON === 'function'
+        && typeof performance.clearResourceTimings === 'function'
+        && typeof performance.setResourceTimingBufferSize === 'function'],
+    ['clock', typeof performance.now() === 'number' && performance.now() >= 0
+        && performance.timeOrigin > 1e12],
+    ['legacy', String(performance.onresourcetimingbufferfull) === 'null']
+]);
+
+ckAll('D2 the timing, navigation, memory and event reads carry their interfaces', [
+    ['timing tag', Object.prototype.toString.call(performance.timing) === '[object PerformanceTiming]'],
+    ['timing keys', Object.keys(performance.timing).length === 0],
+    ['timing fields', typeof performance.timing.navigationStart === 'number'
+        && typeof performance.timing.domComplete === 'number'
+        && typeof performance.timing.loadEventEnd === 'number'
+        && typeof performance.timing.secureConnectionStart === 'number'],
+    ['navigation', Object.prototype.toString.call(performance.navigation) === '[object PerformanceNavigation]'
+        && performance.navigation.type === 0 && performance.navigation.redirectCount === 0
+        && performance.navigation.TYPE_NAVIGATE === 0 && performance.navigation.TYPE_RELOAD === 1
+        && performance.navigation.TYPE_BACK_FORWARD === 2 && performance.navigation.TYPE_RESERVED === 255],
+    ['memory', Object.prototype.toString.call(performance.memory) === '[object MemoryInfo]'
+        && typeof performance.memory.totalJSHeapSize === 'number'
+        && typeof performance.memory.usedJSHeapSize === 'number'
+        && typeof performance.memory.jsHeapSizeLimit === 'number'],
+    ['eventCounts', Object.prototype.toString.call(performance.eventCounts) === '[object EventCounts]'],
+    ['interactionCount', typeof performance.interactionCount === 'number'],
+    ['json', (function () { var j = performance.toJSON();
+        return Object.keys(j).join(',') === 'timeOrigin,timing,navigation'; })()]
+]);
+
+ckAll('D3 an entry is the interface the timing names', [
+    ['mark tag', Object.prototype.toString.call(performance.mark('d3')) === '[object PerformanceMark]'],
+    ['measure tag', Object.prototype.toString.call(performance.measure('d3m', 'd3'))
+        === '[object PerformanceMeasure]'],
+    ['instance', performance.getEntriesByName('d3')[0] instanceof PerformanceEntry],
+    ['no own keys', Object.keys(performance.getEntriesByName('d3')[0]).length === 0],
+    ['reads', (function () { var e = performance.getEntriesByName('d3')[0];
+        return e.name === 'd3' && e.entryType === 'mark' && typeof e.startTime === 'number'
+            && e.duration === 0 && e.detail === null; })()],
+    ['toJSON', (function () { var j = performance.getEntriesByName('d3')[0].toJSON();
+        return Object.keys(j).join(',') === 'name,entryType,startTime,duration'
+            && j.entryType === 'mark'; })()],
+    ['illegal entry', refused('e', function () { return new PerformanceEntry(); })
+        === 'TypeError:Failed to construct \'PerformanceEntry\': Illegal constructor'],
+    ['illegal measure', refused('m', function () { return new PerformanceMeasure(); })
+        === 'TypeError:Failed to construct \'PerformanceMeasure\': Illegal constructor'],
+    ['mark built by hand', (function () { var m = new PerformanceMark('d3b', { detail: { a: 1 } });
+        return m.detail.a === 1 && m.entryType === 'mark' && m.duration === 0
+            && performance.getEntriesByName('d3b').length === 0; })()],
+    ['buffer holds the mark', performance.getEntriesByType('mark').length > 0],
+    ['measure duration', performance.getEntriesByName('d3m')[0].duration >= 0]
+]);
+
+ck('D4 clearing takes the named entry and then the whole list', function () {
+    performance.mark('d4one');
+    performance.mark('d4two');
+    performance.clearMarks('d4one');
+    var afterOne = performance.getEntriesByName('d4one').length === 0
+        && performance.getEntriesByName('d4two').length === 1;
+    performance.clearMarks();
+    return afterOne && performance.getEntriesByType('mark').length === 0;
+});
+
+ck('D5 the clock does not run backwards', function () {
+    var a = performance.now(), b = performance.now();
+    return b >= a && a < 1e9;
+});
+
+done('D6 an observer sees the marks it asked for, buffered or not', function () {
+    performance.mark('d6before');
+    var seen = [];
+    var listTag = '';
+    var observer = new PerformanceObserver(function (list) {
+        listTag = Object.prototype.toString.call(list);
+        seen = list.getEntries().map(function (e) { return e.name + '/' + e.entryType; });
+    });
+    observer.observe({ type: 'mark', buffered: true });
+    performance.mark('d6after');
+    return new Promise(function (resolve) {
+        setTimeout(function () {
+            observer.disconnect();
+            resolve(listTag === '[object PerformanceObserverEntryList]'
+                && seen.indexOf('d6before/mark') >= 0 && seen.indexOf('d6after/mark') >= 0
+                && typeof PerformanceObserverEntryList === 'function'
+                && refused('l', function () { return new PerformanceObserverEntryList(); })
+                    .indexOf('TypeError') === 0);
+        }, 40);
+    });
+});
+
+done('D7 the list reads its entries by type and name', function () {
+    performance.mark('d7m');
+    var observer = new PerformanceObserver(function (list) {
+        observer.disconnect();
+        resolveList(list);
+    });
+    var resolveList = function () { };
+    var waited = new Promise(function (res) { resolveList = res; });
+    observer.observe({ entryTypes: ['mark'] });
+    return waited.then(function (list) {
+        var named = list.getEntriesByName('d7m');
+        return named.length === 1 && named[0] instanceof PerformanceEntry
+            && list.getEntriesByType('mark').length >= 1
+            && list.getEntries().length >= 1;
+    });
+});
+
+// ── E. The window surface (HTML §7.4.5, §8.3, §8.4) ────────────────────────
+ckAll('E1 the six browser-UI bars read as the interface names them', [
+    ['names', ['locationbar', 'menubar', 'personalbar', 'scrollbars', 'statusbar', 'toolbar']
+        .map(function (k) { return window[k]; }).every(function (bar) {
+            return Object.prototype.toString.call(bar) === '[object BarProp]'
+                && bar.visible === true; })],
+    ['illegal ctor', refused('b', function () { return new BarProp(); }).indexOf('TypeError') === 0],
+    ['one bar per name', window.locationbar === window.locationbar],
+    ['distinct bars', window.locationbar !== window.menubar]
+]);
+
+ckAll('E2 the finder and the timer arities answer what the interfaces declare', [
+    ['find', typeof window.find === 'function' && window.find('anything') === false],
+    ['setTimeout length', setTimeout.length === 1],
+    ['setInterval length', setInterval.length === 1],
+    ['timer still runs', true]
+]);
+
+done('E3 a timer built with the optional delay still fires', function () {
+    return new Promise(function (resolve) { setTimeout(function () { resolve(true); }, 5); });
+});
+
+// ── F. The navigator (HTML §7.3.4, Geolocation §5, Permissions §4.3) ───────
+ckAll('F1 the navigator answers the members the interface declares', [
+    ['maxTouchPoints', navigator.maxTouchPoints === 0],
+    ['vendor', typeof navigator.vendor === 'string'],
+    ['productSub', navigator.productSub === '20030107'],
+    ['doNotTrack', navigator.doNotTrack === null],
+    ['webdriver', navigator.webdriver === false],
+    ['platform names the host', typeof navigator.platform === 'string'
+        && navigator.platform.length > 0],
+    ['geolocation', Object.prototype.toString.call(navigator.geolocation) === '[object Geolocation]'
+        && typeof navigator.geolocation.getCurrentPosition === 'function'
+        && typeof navigator.geolocation.watchPosition === 'function'
+        && typeof navigator.geolocation.clearWatch === 'function'],
+    ['permissions', Object.prototype.toString.call(navigator.permissions) === '[object Permissions]'
+        && typeof navigator.permissions.query === 'function'],
+    ['storage', Object.prototype.toString.call(navigator.storage) === '[object StorageManager]'
+        && typeof navigator.storage.estimate === 'function'],
+    ['connection', Object.prototype.toString.call(navigator.connection) === '[object NetworkInformation]']
+]);
+
+done('F2 a permission the page was never granted answers the state the user has not answered', function () {
+    return navigator.permissions.query({ name: 'geolocation' }).then(function (status) {
+        return Object.prototype.toString.call(status) === '[object PermissionStatus]'
+            && status.name === 'geolocation' && status.state === 'prompt'
+            && typeof status.addEventListener === 'function';
+    });
+});
+
+ck('F3 a name the interface does not hold is refused in its own sentence', function () {
+    var refusedName = refused('q', function () { navigator.permissions.query({ name: 'not-a-permission' }); });
+    return refusedName.indexOf('TypeError:Failed to execute') === 0
+        && refusedName.indexOf('PermissionName') > 0;
+});
+
+done('F4 a position request with no provider fails as unavailable', function () {
+    return new Promise(function (resolve) {
+        navigator.geolocation.getCurrentPosition(function () { resolve(false); },
+            function (err) { resolve(err.code === 2 && typeof err.message === 'string'
+                && Object.prototype.toString.call(err) === '[object GeolocationPositionError]'); },
+            { timeout: 1000 });
+    });
+});
+
+// ── G. The tags an object carries (DOM §3.3, HTML §8.6.8, UI Events §7) ────
+ckAll('G1 the channel objects print as the interfaces they are', [
+    ['channel', Object.prototype.toString.call(new MessageChannel()) === '[object MessageChannel]'],
+    ['port', Object.prototype.toString.call(new MessageChannel().port1) === '[object MessagePort]'],
+    ['broadcast', Object.prototype.toString.call(new BroadcastChannel('g1')) === '[object BroadcastChannel]'],
+    ['no bookkeeping', Object.keys(new MessageChannel().port1).length <= 1
+        && Object.keys(new MessageChannel()).length === 0],
+    ['ends are the interface reads', (function () { var mc = new MessageChannel();
+        return mc.port1 !== mc.port2 && typeof mc.port1.postMessage === 'function'
+            && typeof mc.port1.start === 'function' && typeof mc.port1.close === 'function'; })()]
+]);
+
+ck('G2 the implementation carries its interface', function () {
+    return Object.prototype.toString.call(document.implementation) === '[object DOMImplementation]'
+        && document.implementation instanceof DOMImplementation
+        && refused('i', function () { return new DOMImplementation(); })
+            === 'TypeError:Failed to construct \'DOMImplementation\': Illegal constructor'
+        && typeof document.implementation.createRange === 'undefined'
+        && typeof document.implementation.createDocumentType === 'function'
+        && typeof document.implementation.createHTMLDocument === 'function'
+        && document.implementation.hasFeature('', '') === true;
+});
+
+ckAll('G3 an error event is the interface the dispatch names', [
+    ['tag', Object.prototype.toString.call(new ErrorEvent('error')) === '[object ErrorEvent]'],
+    ['instance', new ErrorEvent('error') instanceof ErrorEvent
+        && new ErrorEvent('error') instanceof Event],
+    ['members', (function () { var err = new Error('x');
+        var e = new ErrorEvent('error', { message: 'm', filename: 'f', lineno: 3, colno: 4, error: err });
+        return e.message === 'm' && e.filename === 'f' && e.lineno === 3 && e.colno === 4
+            && e.error === err; })()],
+    ['defaults', (function () { var e = new ErrorEvent('error');
+        return e.message === '' && e.filename === '' && e.lineno === 0 && e.colno === 0
+            && e.error === null && e.bubbles === false && e.cancelable === false; })()]
+]);
+
+// ── H. XML names keep the spelling they were written with ───────────────────
+ckAll('H1 an XML tree keeps the case of every name it was given', [
+    ['contentType', (function () { var doc = new DOMParser().parseFromString('<a b="1">x</a>', 'text/xml');
+        return doc.contentType === 'text/xml' && doc.documentElement.nodeName === 'a'; })()],
+    ['element case', (function () { var doc = new DOMParser().parseFromString('<root><Child a="1">t</Child></root>', 'text/xml');
+        var child = doc.documentElement.firstChild;
+        return child.nodeName === 'Child' && child.tagName === 'Child' && child.localName === 'Child'; })()],
+    ['qualified name', (function () { var doc = new DOMParser().parseFromString(
+        '<r xmlns:p="urn:y"><p:C a="1">t</p:C></r>', 'text/xml');
+        var child = doc.documentElement.firstChild;
+        return child.nodeName === 'p:C' && child.localName === 'C' && child.prefix === 'p'
+            && child.namespaceURI === 'urn:y'; })()],
+    ['no namespace is null', (function () { var doc = new DOMParser().parseFromString('<a>x</a>', 'text/xml');
+        return doc.documentElement.namespaceURI === null; })()],
+    ['unprefixed attribute has no namespace', (function () {
+        var doc = new DOMParser().parseFromString('<r xmlns:p="urn:y"><C p:a="1" b="2">t</C></r>', 'text/xml');
+        var c = doc.documentElement.firstChild;
+        return c.getAttribute('b') === '2' && c.getAttributeNS('urn:y', 'a') === '1'
+            && c.getAttributeNS('urn:y', 'b') === null && c.getAttributeNS(null, 'b') === '2'; })()],
+    ['html stays folded', (function () { var doc = new DOMParser().parseFromString('<div><P>x</p></div>', 'text/html');
+        return doc.documentElement.nodeName === 'HTML' && doc.body.firstChild.nodeName === 'DIV'
+            && doc.contentType === 'text/html'; })()]
+]);
+
+ckAll('H2 the XML document answers the members its interface declares', [
+    ['tag', Object.prototype.toString.call(new DOMParser().parseFromString('<a/>', 'text/xml'))
+        === '[object XMLDocument]'],
+    ['html tag', Object.prototype.toString.call(document) === '[object HTMLDocument]'],
+    ['version', new DOMParser().parseFromString('<a/>', 'text/xml').xmlVersion === '1.0'],
+    ['html has no version', document.xmlVersion === null],
+    ['encoding', new DOMParser().parseFromString('<a/>', 'text/xml').xmlEncoding === null],
+    ['strict', new DOMParser().parseFromString('<a/>', 'text/xml').strictErrorChecking === false],
+    ['charset', new DOMParser().parseFromString('<a/>', 'text/xml').characterSet === 'UTF-8']
+]);
+
+ck('H3 a document the implementation builds keeps its name too', function () {
+    var doc = document.implementation.createDocument(null, 'root', null);
+    var other = document.implementation.createDocument('urn:x', 'p:Root', null);
+    return doc.documentElement.nodeName === 'root'
+        && other.documentElement.nodeName === 'p:Root'
+        && other.documentElement.namespaceURI === 'urn:x'
+        && Object.prototype.toString.call(other) === '[object XMLDocument]'
+        && other.contentType === 'application/xml';
+});
+
+ck('H4 an XML serialisation writes the names it was given', function () {
+    var doc = new DOMParser().parseFromString('<root><Child a="1">t</Child></root>', 'text/xml');
+    var text = new XMLSerializer().serializeToString(doc.documentElement);
+    return text === '<root><Child a="1">t</Child></root>'
+        && doc.documentElement.firstChild.outerHTML === '<Child a="1">t</Child>';
+}, function () {
+    var doc = new DOMParser().parseFromString('<root><Child a="1">t</Child></root>', 'text/xml');
+    return [new XMLSerializer().serializeToString(doc.documentElement),
+        doc.documentElement.firstChild.outerHTML].join(' | ');
+});
+</script>
+</body>
+</html>

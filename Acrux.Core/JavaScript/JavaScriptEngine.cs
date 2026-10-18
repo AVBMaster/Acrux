@@ -702,13 +702,16 @@ public class JavaScriptEngine : IDisposable
             var globalThis = this;
             var self = this;
 
-            function setTimeout(fn, ms) {
+            // HTML §8.3: the delay is an optional argument, so the function's own length is one — the
+            // rest of what the page passes arrives through 'arguments' the same way the extra
+            // arguments to a timer callback do.
+            function setTimeout(fn) {
                 var id = __g_store(fn);
-                return __acrux.setTimeout(id, ms || 0);
+                return __acrux.setTimeout(id, arguments.length > 1 ? (arguments[1] || 0) : 0);
             }
-            function setInterval(fn, ms) {
+            function setInterval(fn) {
                 var id = __g_store(fn);
-                return __acrux.setInterval(id, ms || 0);
+                return __acrux.setInterval(id, arguments.length > 1 ? (arguments[1] || 0) : 0);
             }
             function clearTimeout(id) { __acrux.clearTimeout(id); }
             function clearInterval(id) { __acrux.clearInterval(id); }
@@ -859,25 +862,53 @@ public class JavaScriptEngine : IDisposable
                 Object.defineProperty(this, 'size', { get: function () { return pairs.length; } });
             }
 
-            // CSSOM View §5.1 — DOMRect. Four numbers in, the rectangle and its derived edges out;
-            // a negative width/height flips the origin the way the geometry model says it must.
-            function DOMRect(x, y, w, h) {
+            // CSSOM View §5.1 — DOMRectReadOnly, and the writable DOMRect over it. Four numbers in, the
+            // rectangle and its derived edges out; a negative width or height flips the origin the way
+            // the geometry model says it must. The reads live on the prototype so the object prints and
+            // tests as the interface it is, and 'toJSON' answers the eight numbers the reference gives.
+            function rectShape(x, y, w, h) {
                 x = x === undefined ? 0 : Number(x);
                 y = y === undefined ? 0 : Number(y);
                 w = w === undefined ? 0 : Number(w);
                 h = h === undefined ? 0 : Number(h);
-                this.x = this.left = Math.min(x, x + w);
-                this.y = this.top = Math.min(y, y + h);
-                this.width = Math.abs(w);
-                this.height = Math.abs(h);
-                this.right = this.left + this.width;
-                this.bottom = this.top + this.height;
-                this.toJSON = function () {
-                    return { x: this.x, y: this.y, width: this.width, height: this.height,
-                        top: this.top, right: this.right, bottom: this.bottom, left: this.left };
+                return {
+                    x: Math.min(x, x + w), y: Math.min(y, y + h),
+                    width: Math.abs(w), height: Math.abs(h)
                 };
             }
-            DOMRect.fromRect = function (o) { return new DOMRect(o.x, o.y, o.width, o.height); };
+            function DOMRectReadOnly(x, y, w, h) {
+                var made = rectShape(x, y, w, h);
+                Object.defineProperties(this, {
+                    x: { value: made.x, enumerable: true, configurable: true, writable: true },
+                    y: { value: made.y, enumerable: true, configurable: true, writable: true },
+                    width: { value: made.width, enumerable: true, configurable: true, writable: true },
+                    height: { value: made.height, enumerable: true, configurable: true, writable: true },
+                    left: { value: made.x, enumerable: true, configurable: true, writable: true },
+                    top: { value: made.y, enumerable: true, configurable: true, writable: true },
+                    right: { value: made.x + made.width, enumerable: true, configurable: true, writable: true },
+                    bottom: { value: made.y + made.height, enumerable: true, configurable: true, writable: true }
+                });
+            }
+            DOMRectReadOnly.prototype.toJSON = function () {
+                return { x: this.x, y: this.y, width: this.width, height: this.height,
+                    top: this.top, right: this.right, bottom: this.bottom, left: this.left };
+            };
+            DOMRectReadOnly.fromRect = function (other) {
+                var read = other || { };
+                return new DOMRectReadOnly(read.x, read.y, read.width, read.height);
+            };
+            DOMRectReadOnly.fromPoint = function (other) {
+                var read = other || { };
+                return new DOMRectReadOnly(read.x, read.y, 0, 0);
+            };
+            function DOMRect(x, y, w, h) { DOMRectReadOnly.call(this, x, y, w, h); }
+            DOMRect.prototype = Object.create(DOMRectReadOnly.prototype);
+            DOMRect.prototype.constructor = DOMRect;
+            DOMRect.fromRect = DOMRectReadOnly.fromRect;
+            Object.defineProperty(DOMRectReadOnly.prototype, Symbol.toStringTag,
+                { value: 'DOMRectReadOnly', configurable: true });
+            Object.defineProperty(DOMRect.prototype, Symbol.toStringTag,
+                { value: 'DOMRect', configurable: true });
 
             // ── Headers / FormData (Fetch §4, HTML §4.10.22.5) ─────────────────
             // A case-insensitive multimap of the HTTP kinds: a name is stored once, lower-cased, and
@@ -1392,6 +1423,667 @@ public class JavaScriptEngine : IDisposable
                 return String(node);
             };
 
+            // ── Streams (Streams Spec §6.2-§6.8, §7, §9) ──────────────────────────
+            // A readable stream is a queue with a controller that fills it, one reader at a time, and
+            // the promises a page awaits; a writable one is the mirror of that. A read that finds the
+            // queue empty parks until the controller enqueues, so a pull that has not run yet still
+            // hands the chunk to the reader that asked first. Nothing in the engine chunks a network
+            // body yet, so a body that answers a stream hands over its bytes as the one and only
+            // chunk — which is what the reference gives for a small body too (measured: a four-byte
+            // blob reads back a single Uint8Array of byteLength 4).
+            var STREAM_STATE = new WeakMap();
+            var STREAM_CONTROLLER = new WeakMap();
+            var STREAM_READER = new WeakMap();
+            var WRITABLE_STATE = new WeakMap();
+            var WRITABLE_CONTROLLER = new WeakMap();
+            var WRITABLE_WRITER = new WeakMap();
+
+            function deferred() {
+                var box = { promise: null, resolve: null, reject: null };
+                box.promise = new Promise(function (res, rej) { box.resolve = res; box.reject = rej; });
+                return box;
+            }
+
+            function newStreamQueue(highWaterMark) {
+                var closeBox = deferred();
+                closeBox.promise.catch(function () { });
+                return { chunks: [], waiting: [], closed: false, finished: false, errored: undefined,
+                    highWaterMark: highWaterMark === undefined ? 1 : Number(highWaterMark) || 0,
+                    pull: null, cancel: null, controller: null, reader: null, locked: false,
+                    closedPromise: closeBox.promise, closedBox: closeBox };
+            }
+
+            function streamQueueOf(stream) {
+                if (!stream || typeof stream !== 'object') return null;
+                var state = STREAM_STATE.get(stream);
+                return state && state.chunks !== undefined ? state : null;
+            }
+
+            function queueFinished(state) {
+                if (state.finished) return;
+                if (state.errored !== undefined) {
+                    state.finished = true;
+                    state.closedBox.reject(state.errored);
+                    return;
+                }
+                if (state.closed && !state.chunks.length) {
+                    state.finished = true;
+                    state.closedBox.resolve(undefined);
+                }
+            }
+
+            function queueSettle(state) {
+                while (state.waiting.length) {
+                    var waiter = state.waiting[0];
+                    if (state.errored !== undefined) {
+                        state.waiting.shift(); waiter.reject(state.errored); continue;
+                    }
+                    if (state.chunks.length) {
+                        state.waiting.shift(); waiter.resolve({ value: state.chunks.shift(), done: false });
+                        continue;
+                    }
+                    if (state.closed) {
+                        state.waiting.shift(); waiter.resolve({ value: undefined, done: true }); continue;
+                    }
+                    break;
+                }
+                queueFinished(state);
+                queuePull(state);
+            }
+
+            function queuePull(state) {
+                if (!state.pull || state.closed || state.errored !== undefined || state.pullRunning) return;
+                if (state.chunks.length > state.highWaterMark) return;
+                state.pullRunning = true;
+                var made;
+                try { made = state.pull(state.controller); }
+                catch (e) { state.errored = e; queueFinished(state); return; }
+                Promise.resolve(made).then(function () { state.pullRunning = false; queueSettle(state); },
+                    function (err) { state.pullRunning = false; streamErrorController(state, err); });
+            }
+
+            function streamErrorController(state, error) {
+                if (state.errored !== undefined) return;
+                state.errored = error === undefined ? new Error('Uncaught (in promise) TypeError: Invalid reason') : error;
+                var waits = state.waiting.splice(0);
+                for (var i = 0; i < waits.length; i++) waits[i].reject(state.errored);
+                queueFinished(state);
+            }
+
+            function ReadableStream(underlyingSource, queuingStrategy) {
+                var source = underlyingSource || { };
+                var mark = queuingStrategy && queuingStrategy.highWaterMark !== undefined
+                    ? Number(queuingStrategy.highWaterMark) : 1;
+                var state = newStreamQueue(mark);
+                STREAM_STATE.set(this, state);
+                var controller = Object.create(ReadableStreamDefaultController.prototype);
+                STREAM_CONTROLLER.set(controller, state);
+                state.controller = controller;
+                if (typeof source.pull === 'function') state.pull = function (c) { return source.pull(c); };
+                if (typeof source.cancel === 'function') state.cancel = function (r) { return source.cancel(r); };
+                if (typeof source.start === 'function') {
+                    try { var started = source.start(controller); Promise.resolve(started).catch(function (e) { streamErrorController(state, e); }); }
+                    catch (e) { streamErrorController(state, e); }
+                }
+                queueSettle(state);
+            }
+
+            function readableState(stream, name) {
+                var state = streamQueueOf(stream);
+                if (!state) {
+                    throw new TypeError('Failed to execute ' + formDataQuote(name) + ' on '
+                        + formDataQuote('ReadableStream') + ': Illegal invocation');
+                }
+                return state;
+            }
+
+            ReadableStream.prototype.getReader = function (options) {
+                var state = readableState(this, 'getReader');
+                if (options && options.mode !== undefined && options.mode !== null && options.mode !== 'byob') {
+                    throw new TypeError('Failed to execute ' + formDataQuote('getReader') + ' on '
+                        + formDataQuote('ReadableStream') + ': The mode provided is not supported.');
+                }
+                if (state.locked) {
+                    throw new TypeError('Failed to execute ' + formDataQuote('getReader') + ' on '
+                        + formDataQuote('ReadableStream') + ': This stream is already locked.');
+                }
+                return new ReadableStreamDefaultReader(this);
+            };
+
+            function streamRead(state) {
+                if (state.errored !== undefined) return Promise.reject(state.errored);
+                if (state.chunks.length) {
+                    var made = { value: state.chunks.shift(), done: false };
+                    queueSettle(state);
+                    return Promise.resolve(made);
+                }
+                if (state.closed) return Promise.resolve({ value: undefined, done: true });
+                return new Promise(function (resolve, reject) {
+                    state.waiting.push({ resolve: resolve, reject: reject });
+                    queuePull(state);
+                });
+            }
+
+            function streamCancel(state, reason) {
+                var made = state.cancel ? Promise.resolve(state.cancel(reason)) : Promise.resolve(undefined);
+                return made.then(function () {
+                    if (state.chunks.length) state.chunks.length = 0;
+                    state.closed = true;
+                    queueSettle(state);
+                    if (state.reader) releaseReader(state);
+                });
+            }
+
+            ReadableStream.prototype.cancel = function (reason) {
+                var state = readableState(this, 'cancel');
+                return streamCancel(state, reason);
+            };
+
+            ReadableStream.prototype.pipeTo = function (destination) {
+                var state = readableState(this, 'pipeTo');
+                var writable = destination && WRITABLE_STATE ? WRITABLE_STATE.get(destination) : null;
+                if (!writable) {
+                    return Promise.reject(new TypeError('Failed to execute ' + formDataQuote('pipeTo')
+                        + ' on ' + formDataQuote('ReadableStream') + ': parameter 1 is not of type '
+                        + formDataQuote('WritableStream') + '.'));
+                }
+                if (state.locked) {
+                    return Promise.reject(new TypeError('Invalid state: the source stream is already locked.'));
+                }
+                var reader = new ReadableStreamDefaultReader(this);
+                var writer = new WritableStreamDefaultWriter(destination);
+                var sourceErrored = false;
+                function step() {
+                    return reader.read().then(function (result) {
+                        if (result.done) return writer.close();
+                        return writer.write(result.value).then(step, function (err) {
+                            sourceErrored = true;
+                            reader.releaseLock();
+                            return writer.abort(err);
+                        });
+                    });
+                }
+                return step().catch(function (err) {
+                    if (!sourceErrored) { try { writer.abort(err); } catch (e) { } }
+                    throw err;
+                });
+            };
+
+            ReadableStream.prototype.pipeThrough = function (transformStream, options) {
+                readableState(this, 'pipeThrough');
+                var pair = transformStream || { };
+                if (!pair.writable || !pair.readable) {
+                    throw new TypeError('Failed to execute ' + formDataQuote('pipeThrough')
+                        + ' on ' + formDataQuote('ReadableStream') + ': parameter 1 is not of type '
+                        + formDataQuote('ReadableStreamAndWritableStream') + '.');
+                }
+                this.pipeTo(pair.writable);
+                return pair.readable;
+            };
+
+            ReadableStream.prototype.tee = function () {
+                readableState(this, 'tee');
+                var left = new ReadableStream(), right = new ReadableStream();
+                var leftState = STREAM_STATE.get(left), rightState = STREAM_STATE.get(right);
+                var reader = new ReadableStreamDefaultReader(this);
+                function step() {
+                    return reader.read().then(function (result) {
+                        if (result.done) {
+                            leftState.controller.close(); rightState.controller.close();
+                            return;
+                        }
+                        leftState.controller.enqueue(result.value);
+                        rightState.controller.enqueue(result.value);
+                        return step();
+                    }, function (err) {
+                        streamErrorController(leftState, err); streamErrorController(rightState, err);
+                    });
+                }
+                step();
+                return [left, right];
+            };
+
+            function streamAsyncIterator(stream) {
+                var iterator = {
+                    next: function () {
+                        return streamRead(STREAM_STATE.get(stream)).then(function (result) {
+                            if (result.done) iterator.__done = true;
+                            return { value: result.value, done: !!result.done };
+                        });
+                    },
+                    return: function () { return streamCancel(STREAM_STATE.get(stream)).then(function () {
+                        return { value: undefined, done: true }; }); }
+                };
+                iterator[Symbol.asyncIterator] = function () { return iterator; };
+                return iterator;
+            }
+
+            Object.defineProperty(ReadableStream.prototype, 'locked', {
+                configurable: true, enumerable: true,
+                get: function () { return readableState(this, 'locked').locked; }
+            });
+            // The iteration methods are accessors that hand back the function, the way the interface
+            // defines them, so 'stream.values' reads as a function and 'stream.values()' as the
+            // iterator (measured both).
+            Object.defineProperty(ReadableStream.prototype, 'values', {
+                configurable: true, enumerable: true,
+                get: function () {
+                    var self = this;
+                    if (!streamQueueOf(self)) {
+                        throw new TypeError('Failed to execute ' + formDataQuote('values') + ' on '
+                            + formDataQuote('ReadableStream') + ': Illegal invocation');
+                    }
+                    return function () { return streamAsyncIterator(self); };
+                }
+            });
+            Object.defineProperty(ReadableStream.prototype, Symbol.asyncIterator, {
+                configurable: true, enumerable: false,
+                get: function () {
+                    var self = this;
+                    if (!streamQueueOf(self)) {
+                        throw new TypeError('Failed to execute ' + formDataQuote('Symbol.asyncIterator')
+                            + ' on ' + formDataQuote('ReadableStream') + ': Illegal invocation');
+                    }
+                    return function () { return streamAsyncIterator(self); };
+                }
+            });
+
+            function ReadableStreamDefaultController() {
+                throw new TypeError('Failed to construct ' + formDataQuote('ReadableStreamDefaultController')
+                    + ': Illegal constructor');
+            }
+            function controllerState(controller) {
+                var state = STREAM_CONTROLLER.get(controller);
+                if (!state) {
+                    throw new TypeError('Illegal invocation');
+                }
+                return state;
+            }
+            ReadableStreamDefaultController.prototype.enqueue = function (chunk) {
+                var state = controllerState(this);
+                if (state.closed || state.errored !== undefined) throw new TypeError('Invalid state');
+                state.chunks.push(chunk);
+                queueSettle(state);
+            };
+            ReadableStreamDefaultController.prototype.close = function () {
+                var state = controllerState(this);
+                if (state.closed) throw new TypeError('Invalid state');
+                state.closed = true;
+                queueSettle(state);
+            };
+            ReadableStreamDefaultController.prototype.error = function (reason) {
+                var state = controllerState(this);
+                if (state.closed || state.errored !== undefined) return;
+                streamErrorController(state, reason);
+            };
+            Object.defineProperty(ReadableStreamDefaultController.prototype, 'desiredSize', {
+                configurable: true, enumerable: true,
+                get: function () {
+                    var state = controllerState(this);
+                    if (state.closed || state.errored !== undefined) return null;
+                    return state.highWaterMark - state.chunks.length;
+                }
+            });
+
+            function ReadableStreamDefaultReader(stream) {
+                if (arguments.length < 1) {
+                    throw new TypeError('Failed to construct ' + formDataQuote('ReadableStreamDefaultReader')
+                        + ': 1 argument required, but only ' + arguments.length + ' present.');
+                }
+                var state = streamQueueOf(stream);
+                if (!state) {
+                    throw new TypeError('Failed to construct ' + formDataQuote('ReadableStreamDefaultReader')
+                        + ': parameter 1 is not of type ' + formDataQuote('ReadableStream') + '.');
+                }
+                if (state.locked) {
+                    throw new TypeError('Failed to construct ' + formDataQuote('ReadableStreamDefaultReader')
+                        + ': This stream is already locked.');
+                }
+                state.locked = true;
+                state.reader = this;
+                STREAM_READER.set(this, state);
+            }
+            function readerState(reader) {
+                var state = STREAM_READER.get(reader);
+                if (!state || state.reader !== reader) throw new TypeError('Reader was released');
+                return state;
+            }
+            function releaseReader(state) {
+                var reader = state.reader;
+                state.reader = null;
+                state.locked = false;
+                if (reader) STREAM_READER.delete(reader);
+            }
+            ReadableStreamDefaultReader.prototype.read = function () {
+                var state;
+                try { state = readerState(this); }
+                catch (e) { return Promise.reject(e); }
+                return streamRead(state);
+            };
+            ReadableStreamDefaultReader.prototype.cancel = function (reason) {
+                var state = readerState(this);
+                return streamCancel(state, reason);
+            };
+            ReadableStreamDefaultReader.prototype.releaseLock = function () {
+                var state = readerState(this);
+                releaseReader(state);
+            };
+            Object.defineProperty(ReadableStreamDefaultReader.prototype, 'closed', {
+                configurable: true, enumerable: true,
+                get: function () { return readerState(this).closedPromise; }
+            });
+            Object.defineProperty(ReadableStreamDefaultReader.prototype, 'readable', {
+                configurable: true, enumerable: true,
+                get: function () {
+                    var state = readerState(this);
+                    return state.stream;
+                }
+            });
+
+            function writableState(stream) {
+                var state = stream && WRITABLE_STATE.get(stream);
+                if (!state) {
+                    throw new TypeError('Failed to execute on ' + formDataQuote('WritableStream')
+                        + ': Illegal invocation');
+                }
+                return state;
+            }
+
+            function WritableStream(underlyingSink, queuingStrategy) {
+                var sink = underlyingSink || { };
+                var mark = queuingStrategy && queuingStrategy.highWaterMark !== undefined
+                    ? Number(queuingStrategy.highWaterMark) : 1;
+                var closeBox = deferred();
+                closeBox.promise.catch(function () { });
+                var state = { write: typeof sink.write === 'function' ? sink.write : null,
+                    close: typeof sink.close === 'function' ? sink.close : null,
+                    abort: typeof sink.abort === 'function' ? sink.abort : null,
+                    queued: [], waiting: [], highWaterMark: mark || 0, closed: false,
+                    finished: false, error: undefined, locked: false, writer: null,
+                    closedPromise: closeBox.promise, closedBox: closeBox, draining: false,
+                    signal: AbortSignal._make(), abortCalled: false };
+                WRITABLE_STATE.set(this, state);
+                var controller = Object.create(WritableStreamDefaultController.prototype);
+                WRITABLE_CONTROLLER.set(controller, state);
+                state.controller = controller;
+                if (typeof sink.start === 'function') {
+                    try { Promise.resolve(sink.start(controller)).catch(function (e) { writableAbort(state, e); }); }
+                    catch (e) { writableAbort(state, e); }
+                }
+            }
+
+            function writableFinish(state, error) {
+                if (state.finished) return;
+                state.finished = true;
+                if (error !== undefined) { state.error = error; state.closedBox.reject(error); }
+                else state.closedBox.resolve(undefined);
+            }
+
+            function writableDrain(state) {
+                if (state.draining) return;
+                state.draining = true;
+                function next() {
+                    var waiter = state.queued.shift();
+                    if (!waiter) {
+                        state.draining = false;
+                        if (state.closed) writableFinish(state, state.error);
+                        writableSettle(state);
+                        return;
+                    }
+                    if (waiter.kind === 'write' && (state.error !== undefined || state.closed)) {
+                        waiter.reject(state.error === undefined
+                            ? new TypeError('Invalid state') : state.error);
+                        next();
+                        return;
+                    }
+                    if (waiter.kind === 'close') {
+                        if (state.closed) { waiter.reject(new TypeError('Invalid state')); next(); return; }
+                        var made = state.close ? state.close() : undefined;
+                        Promise.resolve(made).then(function () {
+                            state.closed = true;
+                            waiter.resolve(undefined);
+                            next();
+                        }, function (e) { waiter.reject(e); writableAbort(state, e); });
+                        return;
+                    }
+                    if (waiter.kind === 'abort') {
+                        state.abortCalled = true;
+                        var aborted = state.abort ? state.abort(waiter.reason) : undefined;
+                        Promise.resolve(aborted).then(function () {
+                            waiter.resolve(undefined);
+                            writableAbort(state, waiter.reason);
+                        }, function (e) { waiter.reject(e); writableAbort(state, e); });
+                        return;
+                    }
+                    var written = state.write ? state.write(waiter.chunk, state.controller) : undefined;
+                    Promise.resolve(written).then(function () {
+                        waiter.resolve(undefined);
+                        writableSettle(state);
+                        next();
+                    }, function (e) { waiter.reject(e); writableAbort(state, e); });
+                }
+                next();
+            }
+
+            // Aborting is the one path that ends a writable stream without closing it: everything still
+            // queued is refused, the sink is told once, and the closed promise is the one that rejects
+            // (§6.3.4).
+            function writableAbort(state, reason) {
+                if (state.error !== undefined || state.finished) return;
+                state.error = reason === undefined ? new Error('The stream was aborted.') : reason;
+                state.closed = true;
+                var waits = state.queued.splice(0);
+                for (var i = 0; i < waits.length; i++) {
+                    if (waits[i].kind === 'abort') waits[i].resolve(undefined);
+                    else waits[i].reject(state.error);
+                }
+                state.draining = false;
+                if (!state.abortCalled && state.abort) {
+                    state.abortCalled = true;
+                    try { Promise.resolve(state.abort(state.error)).catch(function () { }); }
+                    catch (e) { }
+                }
+                if (state.signal) { try { AbortSignal._abort(state.signal, state.error); } catch (e) { } }
+                writableFinish(state, state.error);
+                writableSettle(state);
+            }
+
+            function writableSettle(state) {
+                while (state.waiting.length && state.error === undefined
+                    && state.queued.length <= state.highWaterMark && !state.closed) {
+                    var waiter = state.waiting.shift();
+                    waiter.resolve(state.controller);
+                }
+                if (state.error !== undefined) {
+                    var rejected = state.waiting.splice(0);
+                    for (var i = 0; i < rejected.length; i++) rejected[i].reject(state.error);
+                }
+            }
+
+            function writableQueue(state, kind, chunkOrReason) {
+                return new Promise(function (resolve, reject) {
+                    var waiter = { kind: kind, resolve: resolve, reject: reject };
+                    if (kind === 'write') waiter.chunk = chunkOrReason;
+                    else waiter.reason = chunkOrReason;
+                    state.queued.push(waiter);
+                    writableDrain(state);
+                });
+            }
+
+            function WritableStreamDefaultWriter(stream) {
+                var state = stream && WRITABLE_STATE.get(stream);
+                if (!state) {
+                    throw new TypeError('Failed to construct ' + formDataQuote('WritableStreamDefaultWriter')
+                        + ': parameter 1 is not of type ' + formDataQuote('WritableStream') + '.');
+                }
+                if (state.locked) {
+                    throw new TypeError('Failed to construct ' + formDataQuote('WritableStreamDefaultWriter')
+                        + ': This stream is already locked.');
+                }
+                state.locked = true;
+                state.writer = this;
+                WRITABLE_WRITER.set(this, state);
+            }
+
+            function writerState(writer) {
+                var state = WRITABLE_WRITER.get(writer);
+                if (!state || state.writer !== writer) throw new TypeError('Writer was released');
+                return state;
+            }
+
+            WritableStreamDefaultWriter.prototype.write = function (chunk) {
+                var state;
+                try { state = writerState(this); } catch (e) { return Promise.reject(e); }
+                return writableQueue(state, 'write', chunk);
+            };
+            WritableStreamDefaultWriter.prototype.close = function () {
+                return writableQueue(writerState(this), 'close');
+            };
+            WritableStreamDefaultWriter.prototype.abort = function (reason) {
+                var state = writerState(this);
+                if (state.error !== undefined || state.finished) return Promise.resolve(undefined);
+                return writableQueue(state, 'abort', reason);
+            };
+            WritableStreamDefaultWriter.prototype.releaseLock = function () {
+                var state = writerState(this);
+                state.writer = null;
+                state.locked = false;
+                WRITABLE_WRITER.delete(this);
+            };
+            ['ready', 'closed', 'desiredSize'].forEach(function (name) {
+                Object.defineProperty(WritableStreamDefaultWriter.prototype, name, {
+                    configurable: true, enumerable: true,
+                    get: function () {
+                        var state = writerState(this);
+                        if (name === 'closed') return state.closedPromise;
+                        if (name === 'desiredSize') {
+                            if (state.error !== undefined || state.finished) return null;
+                            return state.highWaterMark - state.queued.length;
+                        }
+                        if (state.error !== undefined) return Promise.reject(state.error);
+                        return new Promise(function (resolve, reject) {
+                            if (state.closed) { reject(new TypeError('Invalid state')); return; }
+                            state.waiting.push({ resolve: resolve, reject: reject });
+                            writableSettle(state);
+                        });
+                    }
+                });
+            });
+
+            function WritableStreamDefaultController() {
+                throw new TypeError('Failed to construct ' + formDataQuote('WritableStreamDefaultController')
+                    + ': Illegal constructor');
+            }
+            ['desiredSize', 'abortReason', 'signal'].forEach(function (name) {
+                Object.defineProperty(WritableStreamDefaultController.prototype, name, {
+                    configurable: true, enumerable: true,
+                    get: function () {
+                        var state = WRITABLE_CONTROLLER.get(this);
+                        if (!state) throw new TypeError('Illegal invocation');
+                        if (name === 'abortReason') return state.error;
+                        if (name === 'desiredSize') {
+                            if (state.error !== undefined || state.finished) return null;
+                            return state.highWaterMark - state.queued.length;
+                        }
+                        return state.signal;
+                    }
+                });
+            });
+            WritableStreamDefaultController.prototype.error = function (reason) {
+                var state = WRITABLE_CONTROLLER.get(this);
+                if (!state) throw new TypeError('Illegal invocation');
+                writableAbort(state, reason);
+            };
+            WritableStreamDefaultController.prototype.terminate = function () {
+                var state = WRITABLE_CONTROLLER.get(this);
+                if (!state) throw new TypeError('Illegal invocation');
+                if (state.closed) return;
+                state.closed = true;
+                writableFinish(state);
+            };
+
+            Object.defineProperty(WritableStream.prototype, 'locked', {
+                configurable: true, enumerable: true,
+                get: function () { return writableState(this).locked; }
+            });
+            WritableStream.prototype.getWriter = function () {
+                var state = WRITABLE_STATE.get(this);
+                if (!state) {
+                    throw new TypeError('Failed to execute ' + formDataQuote('getWriter') + ' on '
+                        + formDataQuote('WritableStream') + ': Illegal invocation');
+                }
+                if (state.locked) {
+                    throw new TypeError('Failed to execute ' + formDataQuote('getWriter') + ' on '
+                        + formDataQuote('WritableStream') + ': This stream is already locked.');
+                }
+                return new WritableStreamDefaultWriter(this);
+            };
+            WritableStream.prototype.close = function () {
+                var state = writableState(this);
+                if (state.closed) return Promise.reject(new TypeError('Invalid state'));
+                return writableQueue(state, 'close');
+            };
+            WritableStream.prototype.abort = function (reason) {
+                var state = writableState(this);
+                if (state.error !== undefined || state.finished) return Promise.resolve(undefined);
+                return writableQueue(state, 'abort', reason);
+            };
+
+            // TransformStream §4.4: the default transform hands every chunk to the readable side
+            // unchanged; a transformer may enqueue instead, and when it does the value it returns is
+            // dropped so the chunk is not passed twice.
+            function TransformStream(transformer, writableStrategy, readableStrategy) {
+                var transform = transformer || { };
+                var readable = new ReadableStream({ }, readableStrategy);
+                var outState = STREAM_STATE.get(readable);
+                var writable = new WritableStream({
+                    write: function (chunk) {
+                        if (typeof transform.transform !== 'function') {
+                            outState.controller.enqueue(chunk);
+                            return undefined;
+                        }
+                        var before = outState.chunks.length;
+                        var made = transform.transform(chunk, outState.controller);
+                        return Promise.resolve(made).then(function (value) {
+                            if (outState.chunks.length === before && value !== undefined) {
+                                outState.controller.enqueue(value);
+                            }
+                        });
+                    },
+                    close: function () {
+                        if (typeof transform.flush === 'function') transform.flush(outState.controller);
+                        outState.controller.close();
+                    },
+                    abort: function (reason) { streamErrorController(outState, reason); }
+                }, writableStrategy);
+                Object.defineProperties(this, {
+                    readable: { value: readable, enumerable: true, configurable: true },
+                    writable: { value: writable, enumerable: true, configurable: true }
+                });
+            }
+
+            function singleChunkStream(bytes) {
+                var made = new ReadableStream();
+                var state = STREAM_STATE.get(made);
+                state.controller.enqueue(bytes);
+                state.controller.close();
+                return made;
+            }
+
+            [ReadableStream, ReadableStreamDefaultReader, ReadableStreamDefaultController,
+             WritableStream, WritableStreamDefaultWriter, WritableStreamDefaultController,
+             TransformStream].forEach(function (ctor) {
+                Object.defineProperty(ctor.prototype, Symbol.toStringTag,
+                    { value: ctor.name, configurable: true });
+            });
+            window.ReadableStream = ReadableStream;
+            window.ReadableStreamDefaultReader = ReadableStreamDefaultReader;
+            window.ReadableStreamDefaultController = ReadableStreamDefaultController;
+            window.WritableStream = WritableStream;
+            window.WritableStreamDefaultWriter = WritableStreamDefaultWriter;
+            window.WritableStreamDefaultController = WritableStreamDefaultController;
+            window.TransformStream = TransformStream;
+
             // Blob holds concatenated string parts; 'size' is the UTF-8 byte length and 'text'/'
             // arrayBuffer' are the async reads a page awaits on. File is a Blob with a name.
             function blobBytes(blob) { return new TextEncoder().encode(blob.__text || ''); }
@@ -1410,6 +2102,11 @@ public class JavaScriptEngine : IDisposable
             }
             Blob.prototype.text = function () { var t = this.__text; return Promise.resolve(t); };
             Blob.prototype.arrayBuffer = function () { return Promise.resolve(blobBytes(this).buffer); };
+            // A blob reads as one chunk: the whole byte range arrives in the first pull, which is what
+            // the reference gives for a blob this small (measured: the first chunk of a four-byte blob
+            // is a Uint8Array of byteLength 4).
+            Blob.prototype.stream = function () { return singleChunkStream(blobBytes(this)); };
+            Blob.prototype.bytes = function () { return Promise.resolve(blobBytes(this)); };
             Blob.prototype.slice = function (start, end, contentType) {
                 var t = this.__text;
                 var s = start < 0 ? Math.max(t.length + start, 0) : (start || 0);
@@ -1640,14 +2337,33 @@ public class JavaScriptEngine : IDisposable
                 init = init || { };
                 var evt = new Event(String(type === undefined ? '' : type),
                     { bubbles: !!init.bubbles, cancelable: !!init.cancelable });
-                evt.message = init.message === undefined ? '' : String(init.message);
-                evt.error = init.error;
-                evt.filename = init.filename === undefined ? '' : String(init.filename);
-                evt.lineno = Number(init.lineno) || 0;
-                evt.colno = Number(init.colno) || 0;
+                // The five members the interface declares belong to it, not to the event the page
+                // happens to have been handed, so they are kept non-enumerably and read through the
+                // prototype — which is also what makes the object print as an ErrorEvent rather than
+                // as the Event its dispatch was built from (measured).
+                function keep(key, value) {
+                    try { evt[key] = value; } catch (e) { }
+                    try {
+                        Object.defineProperty(evt, key, { value: value, writable: true,
+                            enumerable: false, configurable: true });
+                    } catch (e) { }
+                }
+                keep('message', init.message === undefined ? '' : String(init.message));
+                keep('error', init.error === undefined ? null : init.error);
+                keep('filename', init.filename === undefined ? '' : String(init.filename));
+                keep('lineno', Number(init.lineno) || 0);
+                keep('colno', Number(init.colno) || 0);
+                try {
+                    var level = window.ErrorEvent && window.ErrorEvent.prototype;
+                    if (level) Object.setPrototypeOf(evt, level);
+                } catch (e) { }
                 return evt;
             }
+            ErrorEvent.prototype = Object.create(Object.prototype);
+            Object.defineProperty(ErrorEvent.prototype, 'constructor',
+                { value: ErrorEvent, writable: true, configurable: true });
             window.ErrorEvent = ErrorEvent;
+            (window.__domProto || (window.__domProto = {})).ErrorEvent = ErrorEvent.prototype;
             window.reportError = function (value) {
                 var message = 'Uncaught ';
                 if (value && typeof value === 'object' && value.name && value.message)
@@ -1747,79 +2463,219 @@ public class JavaScriptEngine : IDisposable
             }
 
             // ── Request and Response (Fetch §3, §6, §7) ────────────────────────
-            // A body is held as text here: the page-facing half of the interface is the shape around
-            // it — the headers as a Headers object, 'ok', 'type' and 'url' derived from the exchange,
-            // and the read methods each handing back a promise that can only be taken once (§6.3).
-            function bodyToText(body) {
-                if (body === undefined || body === null) return '';
-                if (typeof body === 'string') return body;
-                if (typeof body === 'object' && typeof body._text === 'string') return body._text;
-                return String(body);
+            // A body is held as text here, or as the stream the page handed over: the page-facing half
+            // of the interface is the shape around it — the headers as a Headers object, 'ok', 'type'
+            // and 'url' derived from the exchange, and the read methods each handing back a promise
+            // that can only be taken once (§6.3). 'body' and 'bodyUsed' are accessors the interface
+            // declares, so reading them off the prototype is refused the way the reference refuses it
+            // (measured: 'Response.prototype.body' raises an illegal invocation rather than answering
+            // undefined), and 'arrayBuffer' hands the buffer, not a view of it (§4.5.4).
+            var BODY_SLOTS = new WeakMap();
+            var RESPONSE_SLOTS = new WeakMap();
+            var REQUEST_SLOTS = new WeakMap();
+            function bodyOf(target, name) {
+                var state = BODY_SLOTS.get(target);
+                if (!state) {
+                    // Reading a member off an object that is not one is refused with the reference's
+                    // own sentence: the body read throws 'Illegal invocation' as the whole message,
+                    // while a method names itself first (both measured).
+                    if (name === 'body' || name === 'bodyUsed') throw new TypeError('Illegal invocation');
+                    throw new TypeError('Failed to execute ' + formDataQuote(name) + ' on '
+                        + formDataQuote('Body') + ': Illegal invocation');
+                }
+                return state;
+            }
+            function textBytes(text) {
+                if (typeof Uint8Array === 'function' && typeof TextEncoder === 'function') {
+                    return new TextEncoder().encode(text);
+                }
+                var bytes = [];
+                for (var i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    if (code < 128) bytes.push(code);
+                    else if (code < 2048) {
+                        bytes.push(192 | (code >> 6));
+                        bytes.push(128 | (code & 63));
+                    } else {
+                        bytes.push(224 | (code >> 12));
+                        bytes.push(128 | ((code >> 6) & 63));
+                        bytes.push(128 | (code & 63));
+                    }
+                }
+                return typeof Uint8Array === 'function' ? new Uint8Array(bytes) : bytes;
+            }
+            function bytesText(bytes) {
+                if (typeof TextDecoder === 'function') return new TextDecoder().decode(bytes);
+                var out = '';
+                for (var i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
+                return out;
+            }
+            function bodyParts(body) {
+                if (body === undefined || body === null) return { text: '', stream: null };
+                if (typeof body === 'string') return { text: body, stream: null };
+                if (streamQueueOf(body)) return { text: '', stream: body };
+                if (typeof body === 'object') {
+                    if (typeof body.__text === 'string') return { text: body.__text, stream: null };
+                    if (typeof ArrayBuffer === 'function' && body instanceof ArrayBuffer) {
+                        return { text: bytesText(new Uint8Array(body)), stream: null };
+                    }
+                    if (body.buffer instanceof ArrayBuffer) {
+                        return { text: bytesText(new Uint8Array(body.buffer,
+                            body.byteOffset || 0, body.byteLength)), stream: null };
+                    }
+                    if (typeof body.toString === 'function') {
+                        var made = body.toString();
+                        if (made !== '[object Object]') return { text: String(made), stream: null };
+                    }
+                }
+                return { text: String(body), stream: null };
+            }
+            function drainBodyStream(state) {
+                var iterator = streamAsyncIterator(state.stream);
+                var chunks = [];
+                function step() {
+                    return iterator.next().then(function (result) {
+                        if (result.done) {
+                            var total = 0, i;
+                            for (i = 0; i < chunks.length; i++) total += chunks[i].length || 0;
+                            var joined = typeof Uint8Array === 'function'
+                                ? new Uint8Array(total) : [];
+                            var at = 0;
+                            for (i = 0; i < chunks.length; i++) {
+                                for (var j = 0; j < (chunks[i].length || 0); j++) joined[at++] = chunks[i][j];
+                            }
+                            return joined;
+                        }
+                        chunks.push(typeof result.value === 'string' ? textBytes(result.value) : result.value);
+                        return step();
+                    });
+                }
+                return step();
             }
             function readBody(state) {
                 if (state.used) throw new TypeError('Body already read');
                 state.used = true;
             }
-            function bodyMethods(state, headers) {
-                var self = this;
-                this.text = function () {
+            var BODY_MEMBERS = {
+                text: function () {
+                    var state = bodyOf(this, 'text');
                     readBody(state);
+                    if (state.stream) {
+                        return drainBodyStream(state).then(function (bytes) {
+                            state.text = bytesText(bytes); return state.text; });
+                    }
                     return Promise.resolve(state.text);
-                };
-                this.json = function () {
+                },
+                json: function () {
+                    var state = bodyOf(this, 'json');
                     readBody(state);
+                    if (state.stream) {
+                        return drainBodyStream(state).then(function (bytes) {
+                            return JSON.parse(bytesText(bytes)); });
+                    }
                     try { return Promise.resolve(JSON.parse(state.text)); }
                     catch (e) { return Promise.reject(new SyntaxError(String(e.message))); }
-                };
-                this.arrayBuffer = function () {
+                },
+                arrayBuffer: function () {
+                    var state = bodyOf(this, 'arrayBuffer');
                     readBody(state);
-                    var bytes = [];
-                    var source = state.text;
-                    for (var i = 0; i < source.length; i++) {
-                        var code = source.charCodeAt(i);
-                        if (code < 128) bytes.push(code);
-                        else if (code < 2048) {
-                            bytes.push(192 | (code >> 6));
-                            bytes.push(128 | (code & 63));
-                        } else {
-                            bytes.push(224 | (code >> 12));
-                            bytes.push(128 | ((code >> 6) & 63));
-                            bytes.push(128 | (code & 63));
-                        }
+                    if (state.stream) {
+                        return drainBodyStream(state).then(function (bytes) {
+                            return bytes.buffer ? bytes.buffer : bytes; });
                     }
-                    return Promise.resolve(typeof Uint8Array === 'function' ? new Uint8Array(bytes) : bytes);
-                };
-                this.blob = function () {
+                    var made = textBytes(state.text);
+                    return Promise.resolve(made.buffer === undefined ? made : made.buffer);
+                },
+                blob: function () {
+                    var state = bodyOf(this, 'blob');
                     readBody(state);
-                    return Promise.resolve(new Blob([state.text],
-                        { type: headers.get('content-type') || '' }));
-                };
-                Object.defineProperty(this, 'bodyUsed', {
-                    configurable: true,
-                    get: function () { return state.used; }
+                    var type = state.headers ? (state.headers.get('content-type') || '') : '';
+                    if (state.stream) {
+                        return drainBodyStream(state).then(function (bytes) {
+                            return new Blob([bytesText(bytes)], { type: type }); });
+                    }
+                    return Promise.resolve(new Blob([state.text], { type: type }));
+                },
+                bytes: function () {
+                    var state = bodyOf(this, 'bytes');
+                    readBody(state);
+                    if (state.stream) return drainBodyStream(state);
+                    return Promise.resolve(textBytes(state.text));
+                },
+                formData: function () {
+                    var state = bodyOf(this, 'formData');
+                    readBody(state);
+                    var made = new FormData();
+                    var type = state.headers ? String(state.headers.get('content-type') || '') : '';
+                    var text = state.text;
+                    // A url-encoded body is the pair list the form interface would have handed over;
+                    // anything else is the empty set, because this engine has no multipart reader yet.
+                    if (type.indexOf('urlencoded') >= 0 || type === '') {
+                        var pairs = new URLSearchParams(text);
+                        pairs.forEach(function (value, key) { made.append(key, value); });
+                    }
+                    return Promise.resolve(made);
+                }
+            };
+            function installBodyMembers(proto) {
+                Object.keys(BODY_MEMBERS).forEach(function (member) {
+                    Object.defineProperty(proto, member, {
+                        value: BODY_MEMBERS[member], writable: true, configurable: true,
+                        enumerable: false
+                    });
+                });
+                Object.defineProperty(proto, 'bodyUsed', {
+                    configurable: true, enumerable: false,
+                    get: function () { return bodyOf(this, 'bodyUsed').used; }
+                });
+                Object.defineProperty(proto, 'body', {
+                    configurable: true, enumerable: false,
+                    get: function () {
+                        var state = bodyOf(this, 'body');
+                        if (state.stream) return state.stream;
+                        if (!state.text.length) return null;
+                        if (state.bodyStream === undefined) {
+                            state.bodyStream = singleChunkStream(textBytes(state.text));
+                        }
+                        return state.bodyStream;
+                    }
+                });
+            }
+            // The members of an interface live on its prototype, so an instance owns nothing and a
+            // page that lists its keys sees the empty list the reference gives (measured: a key list
+            // of a fresh Response is empty).
+            function installAccessors(proto, store, name, members) {
+                Object.keys(members).forEach(function (member) {
+                    Object.defineProperty(proto, member, {
+                        configurable: true, enumerable: false,
+                        get: function () {
+                            var state = store.get(this);
+                            if (!state) {
+                                throw new TypeError('Failed to get ' + formDataQuote(member) + ' on '
+                                    + formDataQuote(name) + ': Illegal invocation');
+                            }
+                            return members[member](state);
+                        }
+                    });
                 });
             }
 
             function Response(body, init) {
-                var self = this;
-                init = init || { };
-                var state = { text: bodyToText(body), used: false };
-                var status = init.status === undefined ? 200 : Number(init.status);
-                this.headers = new Headers(init.headers || { });
-                if (state.text.length && !this.headers.has('content-type'))
-                    this.headers.set('content-type', 'text/plain;charset=UTF-8');
-                this.url = init.url === undefined ? '' : String(init.url);
-                this.redirected = !!init.redirected;
-                this.type = init.type === undefined ? 'default' : String(init.type);
-                this.status = status;
-                this.statusText = init.statusText === undefined ? '' : String(init.statusText);
-                this.ok = status >= 200 && status <= 299;
-                this.body = state.text.length ? state.text : null;
-                bodyMethods.call(this, state, this.headers);
-                this.clone = function () {
-                    return new Response(state.text, { status: self.status, statusText: self.statusText,
-                        headers: self.headers, url: self.url, type: self.type });
-                };
+                var options = init || { };
+                var parts = bodyParts(body);
+                var status = options.status === undefined ? 200 : Number(options.status);
+                var state = { text: parts.text, used: false, stream: parts.stream,
+                    headers: new Headers(options.headers || { }),
+                    url: options.url === undefined ? '' : String(options.url),
+                    redirected: !!options.redirected,
+                    type: options.type === undefined ? 'default' : String(options.type),
+                    status: status,
+                    statusText: options.statusText === undefined ? '' : String(options.statusText),
+                    trailer: new Headers(options.trailer || { }) };
+                if (state.text.length && !state.headers.has('content-type'))
+                    state.headers.set('content-type', 'text/plain;charset=UTF-8');
+                BODY_SLOTS.set(this, state);
+                RESPONSE_SLOTS.set(this, state);
             }
             Response.error = function () { return new Response('', { status: 0, type: 'error' }); };
             Response.redirect = function (url, status) {
@@ -1839,46 +2695,109 @@ public class JavaScriptEngine : IDisposable
                 made.headers.set('content-type', 'application/json');
                 return made;
             };
+            installBodyMembers(Response.prototype);
+            installAccessors(Response.prototype, RESPONSE_SLOTS, 'Response', {
+                type: function (s) { return s.type; },
+                url: function (s) { return s.url; },
+                redirected: function (s) { return s.redirected; },
+                status: function (s) { return s.status; },
+                ok: function (s) { return s.status >= 200 && s.status <= 299; },
+                statusText: function (s) { return s.statusText; },
+                headers: function (s) { return s.headers; },
+                trailer: function (s) { return s.trailer; }
+            });
+            Object.defineProperty(Response.prototype, 'clone', {
+                configurable: true, writable: true, enumerable: false,
+                value: function () {
+                    var state = RESPONSE_SLOTS.get(this);
+                    if (!state) {
+                        throw new TypeError('Failed to execute ' + formDataQuote('clone') + ' on '
+                            + formDataQuote('Response') + ': Illegal invocation');
+                    }
+                    if (state.used) {
+                        throw new TypeError('Failed to execute ' + formDataQuote('clone') + ' on '
+                            + formDataQuote('Response') + ': Cannot clone a consumed response body.');
+                    }
+                    var made = new Response(state.stream ? state.stream : state.text,
+                        { status: state.status, statusText: state.statusText, headers: state.headers,
+                            url: state.url, type: state.type });
+                    return made;
+                }
+            });
 
             function Request(input, init) {
-                var self = this;
                 init = init || { };
-                var copied = (input && typeof input === 'object' && input.url !== undefined) ? input : null;
+                var copied = (input && typeof input === 'object'
+                    && (input instanceof Request || input instanceof Response)) ? input : null;
                 var target = copied ? copied.url : String(input === undefined ? '' : input);
                 var base = '';
                 try { base = window.location ? window.location.href : ''; } catch (e) { base = ''; }
                 try { if (base) target = new URL(target, base).href; } catch (e) { }
-                var body = init.body !== undefined ? init.body : (copied ? copied.body : undefined);
-                var state = { text: bodyToText(body), used: false };
-                this.url = target;
-                this.method = String(init.method !== undefined ? init.method
-                    : (copied ? copied.method : 'GET')).toUpperCase();
-                this.headers = new Headers(init.headers !== undefined ? init.headers
-                    : (copied ? copied.headers : null));
-                this.mode = init.mode !== undefined ? String(init.mode) : (copied ? copied.mode : 'cors');
-                this.credentials = init.credentials !== undefined ? String(init.credentials)
-                    : (copied ? copied.credentials : 'same-origin');
-                this.cache = init.cache !== undefined ? String(init.cache) : 'default';
-                this.redirect = init.redirect !== undefined ? String(init.redirect) : 'follow';
-                this.referrer = init.referrer !== undefined ? String(init.referrer) : '';
-                this.referrerPolicy = init.referrerPolicy !== undefined
-                    ? String(init.referrerPolicy) : '';
-                this.integrity = init.integrity !== undefined ? String(init.integrity) : '';
-                this.keepalive = !!init.keepalive;
-                this.destination = init.destination !== undefined ? String(init.destination) : '';
-                this.isHistoryDownload = false;
-                this.isReloaded = false;
-                this.isClientNavigate = false;
-                this.signal = (init.signal !== undefined && init.signal !== null)
-                    ? init.signal : AbortSignal._make();
-                this.body = state.text.length ? state.text : null;
-                bodyMethods.call(this, state, this.headers);
-                this.clone = function () {
-                    return new Request(self.url, { method: self.method, headers: self.headers,
-                        body: state.text, mode: self.mode, credentials: self.credentials,
-                        referrerPolicy: self.referrerPolicy });
-                };
+                var copiedState = copied ? BODY_SLOTS.get(copied) : null;
+                var body = init.body !== undefined ? init.body
+                    : (copiedState ? (copiedState.stream || copiedState.text) : undefined);
+                var parts = bodyParts(body);
+                var state = { text: parts.text, used: false, stream: parts.stream,
+                    url: target,
+                    method: String(init.method !== undefined ? init.method
+                        : (copied ? copied.method : 'GET')).toUpperCase(),
+                    headers: new Headers(init.headers !== undefined ? init.headers
+                        : (copied ? copied.headers : null)),
+                    mode: init.mode !== undefined ? String(init.mode) : (copied ? copied.mode : 'cors'),
+                    credentials: init.credentials !== undefined ? String(init.credentials)
+                        : (copied ? copied.credentials : 'same-origin'),
+                    cache: init.cache !== undefined ? String(init.cache) : 'default',
+                    redirect: init.redirect !== undefined ? String(init.redirect) : 'follow',
+                    referrer: init.referrer !== undefined ? String(init.referrer) : '',
+                    referrerPolicy: init.referrerPolicy !== undefined
+                        ? String(init.referrerPolicy) : '',
+                    integrity: init.integrity !== undefined ? String(init.integrity) : '',
+                    keepalive: !!init.keepalive,
+                    destination: init.destination !== undefined ? String(init.destination) : '',
+                    isHistoryDownload: false, isReloaded: false, isClientNavigate: false,
+                    signal: (init.signal !== undefined && init.signal !== null)
+                        ? init.signal : AbortSignal._make() };
+                BODY_SLOTS.set(this, state);
+                REQUEST_SLOTS.set(this, state);
             }
+            installBodyMembers(Request.prototype);
+            installAccessors(Request.prototype, REQUEST_SLOTS, 'Request', {
+                url: function (s) { return s.url; },
+                method: function (s) { return s.method; },
+                headers: function (s) { return s.headers; },
+                mode: function (s) { return s.mode; },
+                credentials: function (s) { return s.credentials; },
+                cache: function (s) { return s.cache; },
+                redirect: function (s) { return s.redirect; },
+                referrer: function (s) { return s.referrer; },
+                referrerPolicy: function (s) { return s.referrerPolicy; },
+                integrity: function (s) { return s.integrity; },
+                keepalive: function (s) { return s.keepalive; },
+                destination: function (s) { return s.destination; },
+                signal: function (s) { return s.signal; },
+                isHistoryDownload: function (s) { return s.isHistoryDownload; },
+                isReloaded: function (s) { return s.isReloaded; },
+                isClientNavigate: function (s) { return s.isClientNavigate; }
+            });
+            Object.defineProperty(Request.prototype, 'clone', {
+                configurable: true, writable: true, enumerable: false,
+                value: function () {
+                    var state = REQUEST_SLOTS.get(this);
+                    if (!state) {
+                        throw new TypeError('Failed to execute ' + formDataQuote('clone') + ' on '
+                            + formDataQuote('Request') + ': Illegal invocation');
+                    }
+                    return new Request(state.url, { method: state.method, headers: state.headers,
+                        body: state.stream ? state.stream : state.text, mode: state.mode,
+                        credentials: state.credentials, referrerPolicy: state.referrerPolicy,
+                        integrity: state.integrity, keepalive: state.keepalive,
+                        redirect: state.redirect, signal: state.signal });
+                }
+            });
+            Object.defineProperty(Response.prototype, Symbol.toStringTag,
+                { value: 'Response', configurable: true });
+            Object.defineProperty(Request.prototype, Symbol.toStringTag,
+                { value: 'Request', configurable: true });
             window.DOMPoint = DOMPoint;
             window.DOMPointReadOnly = DOMPointReadOnly;
             window.DOMRectList = DOMRectList;
@@ -1955,6 +2874,32 @@ public class JavaScriptEngine : IDisposable
             window.scrollTo = function(x, y) { __acrux.scrollTo(x || 0, y || 0); };
             window.scrollBy = function(x, y) { __acrux.scrollBy(x || 0, y || 0); };
             window.scroll = window.scrollTo;
+            // HTML §7.4.5: the six browser-UI bars the window names, each an object of the same
+            // interface. This engine draws none of them and the interface has no way to hide one, so
+            // every bar reads as visible — the state the reference gives (measured: all six answer
+            // [object BarProp] with 'visible' true) — and writing it changes nothing.
+            function BarProp() {
+                throw new TypeError('Failed to construct ' + String.fromCharCode(39) + 'BarProp'
+                    + String.fromCharCode(39) + ': Illegal constructor');
+            }
+            Object.defineProperty(BarProp.prototype, 'visible', {
+                configurable: true, enumerable: true,
+                get: function () { return true; }, set: function () { }
+            });
+            Object.defineProperty(BarProp.prototype, Symbol.toStringTag,
+                { value: 'BarProp', configurable: true });
+            window.BarProp = BarProp;
+            var barNames = ['locationbar', 'menubar', 'personalbar', 'scrollbars', 'statusbar', 'toolbar'];
+            for (var barAt = 0; barAt < barNames.length; barAt++) {
+                (function (name) {
+                    var bar = Object.create(BarProp.prototype);
+                    Object.defineProperty(window, name, { configurable: true, enumerable: true,
+                        get: function () { return bar; } });
+                })(barNames[barAt]);
+            }
+            // HTML §8.9 (the legacy finder): this engine wires no search of its own, so the call
+            // answers the way a search that found nothing does.
+            window.find = function (searchString) { return false; };
             // CSSOM: every longhand of a computed style reads as a camelCase property as
             // well as through getPropertyValue('dashed-name'). The host object only carries
             // members for the properties the C# side wrote out by hand, so the rest are
@@ -2041,7 +2986,13 @@ public class JavaScriptEngine : IDisposable
             window.resizeTo = function(x, y) {};
             // 'postMessage' and 'getSelection' are built with the rest of the DOM surface below,
             // where the message event and the selection range actually live.
-            window.requestIdleCallback = function(cb, opts) { return setTimeout(cb, 50); };
+            // HTML §8.3: the options dictionary is an optional argument, so the interface's own length
+            // is one (measured), and the timeout it carries is the deadline the page asked to be run by.
+            window.requestIdleCallback = function (cb) {
+                var opts = arguments.length > 1 ? arguments[1] : null;
+                var delay = opts && opts.timeout !== undefined ? Number(opts.timeout) || 0 : 50;
+                return setTimeout(cb, delay);
+            };
             window.cancelIdleCallback = function(id) { clearTimeout(id); };
 
             // HTML: 'queueMicrotask' schedules on the same job queue a resolved promise runs on, so
@@ -2162,24 +3113,156 @@ public class JavaScriptEngine : IDisposable
                 return cloneInto(value, seen);
             };
 
-            // User Timing (Performance API §3): the clock the page measures against. 'now' is the
-            // milliseconds since the page began, 'mark'/'measure' keep the named timestamps a
-            // profiler reads back. The high-resolution origin is the host's monotonic clock; a
-            // wall-clock fallback is fine when one is not wired.
-            // Performance Timeline §3.4, §3.5: the clock a page measures with runs from the time
-            // origin, and a mark or a measure is an entry the buffer keeps until it is cleared —
-            // 'getEntries' answers them in the order they started, and 'now' is the milliseconds
-            // since the origin rather than the wall clock.
-            var perfOrigin = Date.now();
+            // ── Performance (Performance API §3, High Resolution Time §4-§5,
+            //    Navigation Timing §4, User Timing §3) ────────────────────────────
+            // The clock a page measures with runs from the time origin on the platform's monotonic
+            // tick, and a mark or a measure is an entry the buffer keeps until it is cleared:
+            // 'getEntries' answers them in the order they started.
+            // Every read of these interfaces lives on the prototype and the data behind it is a slot
+            // only the interface's own accessors reach, so an entry owns no keys at all and the object
+            // prints as the kind of entry it is (measured: a mark reads [object PerformanceMark], is an
+            // instance of PerformanceEntry, lists no own keys, and a page that asks its JSON gets the
+            // four numbers back). The same is true of the singleton: 'Object.keys(performance)' is
+            // empty and 'toJSON' answers the time origin, the timing and the navigation.
+            var perfWallOrigin = Date.now();
+            var perfOriginClock = __acrux.monotonicNow();
             var perfBuffer = { mark: [], measure: [] };
-            function perfEntry(type, name, startTime, duration) {
-                return { name: String(name), entryType: type,
+            var PERF_ENTRY = new WeakMap();
+            var PERFORMANCE_SLOTS = new WeakMap();
+            function perfNow() { return __acrux.monotonicNow() - perfOriginClock; }
+
+            function PerformanceEntry() {
+                throw new TypeError('Failed to construct ' + formDataQuote('PerformanceEntry')
+                    + ': Illegal constructor');
+            }
+            function entrySlots(entry, name) {
+                var slots = PERF_ENTRY.get(entry);
+                if (!slots) {
+                    throw new TypeError('Failed to get ' + formDataQuote(name || 'name') + ' on '
+                        + formDataQuote('PerformanceEntry') + ': Illegal invocation');
+                }
+                return slots;
+            }
+            ['name', 'entryType', 'startTime', 'duration'].forEach(function (field) {
+                Object.defineProperty(PerformanceEntry.prototype, field, { configurable: true,
+                    enumerable: false,
+                    get: function () { return entrySlots(this, field)[field]; } });
+            });
+            Object.defineProperty(PerformanceEntry.prototype, 'toJSON', {
+                configurable: true, writable: true, enumerable: false,
+                value: function () {
+                    var slots = entrySlots(this, 'toJSON');
+                    return { name: slots.name, entryType: slots.entryType,
+                        startTime: slots.startTime, duration: slots.duration };
+                }
+            });
+            function newPerfEntry(proto, entryType, name, startTime, duration, detail) {
+                var made = Object.create(proto);
+                PERF_ENTRY.set(made, { name: String(name), entryType: entryType,
                     startTime: Number(startTime) || 0, duration: Number(duration) || 0,
-                    toJSON: function () {
-                        return { name: this.name, entryType: this.entryType,
-                            startTime: this.startTime, duration: this.duration };
-                    },
-                    detail: null };
+                    detail: detail === undefined ? null : detail });
+                return made;
+            }
+            // A mark the page constructs itself is the one entry type the interface lets it build; it
+            // does not go into the buffer, which is why 'getEntriesByName' still answers nothing for it
+            // (measured).
+            function PerformanceMark(name, options) {
+                if (arguments.length < 1) {
+                    throw new TypeError('Failed to construct ' + formDataQuote('PerformanceMark')
+                        + ': 1 argument required, but only ' + arguments.length + ' present.');
+                }
+                var read = options || { };
+                return newPerfEntry(PerformanceMark.prototype, 'mark', name,
+                    read.startTime === undefined ? perfNow() : Number(read.startTime) || 0, 0,
+                    read.detail);
+            }
+            PerformanceMark.prototype = Object.create(PerformanceEntry.prototype);
+            PerformanceMark.prototype.constructor = PerformanceMark;
+            Object.defineProperty(PerformanceMark.prototype, 'detail', { configurable: true,
+                enumerable: false,
+                get: function () { return entrySlots(this, 'detail').detail; } });
+            function PerformanceMeasure() {
+                throw new TypeError('Failed to construct ' + formDataQuote('PerformanceMeasure')
+                    + ': Illegal constructor');
+            }
+            PerformanceMeasure.prototype = Object.create(PerformanceEntry.prototype);
+            PerformanceMeasure.prototype.constructor = PerformanceMeasure;
+
+            // Navigation Timing §4: the legacy 'timing' and 'navigation' objects the reference still
+            // answers. This engine stamps no navigation milestones, so every mark of the timing is the
+            // same instant and the deprecated sentinel of 0 is what the interface reports; the
+            // navigation is the one that brought the page in, with no redirects.
+            var PERF_TIMING_FIELDS = ['navigationStart', 'unloadEventStart', 'unloadEventEnd',
+                'redirectStart', 'redirectEnd', 'fetchStart', 'domainLookupStart', 'domainLookupEnd',
+                'connectStart', 'connectEnd', 'secureConnectionStart', 'requestStart', 'responseStart',
+                'responseEnd', 'domLoading', 'domInteractive', 'domContentLoadedEventStart',
+                'domContentLoadedEventEnd', 'domComplete', 'loadEventStart', 'loadEventEnd'];
+            function PerformanceTiming() {
+                throw new TypeError('Failed to construct ' + formDataQuote('PerformanceTiming')
+                    + ': Illegal constructor');
+            }
+            PERF_TIMING_FIELDS.forEach(function (field) {
+                Object.defineProperty(PerformanceTiming.prototype, field, { configurable: true,
+                    enumerable: false,
+                    get: function () {
+                        if (this !== performanceTiming) throw new TypeError('Illegal invocation');
+                        return 0;
+                    } });
+            });
+            Object.defineProperty(PerformanceTiming.prototype, 'toJSON', {
+                configurable: true, writable: true, enumerable: false,
+                value: function () {
+                    var made = { };
+                    PERF_TIMING_FIELDS.forEach(function (field) { made[field] = this[field]; });
+                    return made;
+                }
+            });
+            function PerformanceNavigation() {
+                throw new TypeError('Failed to construct ' + formDataQuote('PerformanceNavigation')
+                    + ': Illegal constructor');
+            }
+            Object.defineProperties(PerformanceNavigation.prototype, {
+                type: { configurable: true, enumerable: false, get: function () { return 0; } },
+                redirectCount: { configurable: true, enumerable: false, get: function () { return 0; } },
+                toJSON: { configurable: true, writable: true, enumerable: false,
+                    value: function () { return { type: this.type, redirectCount: this.redirectCount }; } }
+            });
+            [['TYPE_NAVIGATE', 0], ['TYPE_RELOAD', 1], ['TYPE_BACK_FORWARD', 2],
+             ['TYPE_RESERVED', 255]].forEach(function (pair) {
+                Object.defineProperty(PerformanceNavigation.prototype, pair[0],
+                    { value: pair[1], configurable: true, enumerable: false });
+                Object.defineProperty(PerformanceNavigation, pair[0],
+                    { value: pair[1], configurable: true, enumerable: false });
+            });
+            // The heap read is the collector's own: the engine is the only side that knows how many
+            // bytes it is holding.
+            function MemoryInfo() {
+                throw new TypeError('Failed to construct ' + formDataQuote('MemoryInfo')
+                    + ': Illegal constructor');
+            }
+            ['totalJSHeapSize', 'usedJSHeapSize', 'jsHeapSizeLimit'].forEach(function (field, index) {
+                Object.defineProperty(MemoryInfo.prototype, field, { configurable: true,
+                    enumerable: false,
+                    get: function () { return heapInfo()[index]; } });
+            });
+            var heapCache = { at: 0, values: [0, 0, 0] };
+            function heapInfo() {
+                var now = perfNow();
+                if (now - heapCache.at > 50 || heapCache.at === 0) {
+                    heapCache.at = now;
+                    try { heapCache.values = __acrux.memoryInfo(); } catch (e) { heapCache.values = [0, 0, 0]; }
+                }
+                return heapCache.values;
+            }
+            function EventCounts() {
+                throw new TypeError('Failed to construct ' + formDataQuote('EventCounts')
+                    + ': Illegal constructor');
+            }
+            function performanceBrand(receiver, name) {
+                if (!PERFORMANCE_SLOTS.get(receiver)) {
+                    throw new TypeError('Failed to execute ' + formDataQuote(name) + ' on '
+                        + formDataQuote('Performance') + ': Illegal invocation');
+                }
             }
             function perfSorted(type) {
                 var list = type === undefined ? perfBuffer.mark.concat(perfBuffer.measure)
@@ -2191,52 +3274,175 @@ public class JavaScriptEngine : IDisposable
                 for (var i = 0; i < found.length; i++) if (found[i].name === String(name)) return found[i].startTime;
                 return undefined;
             }
-            var performance = {
-                timeOrigin: perfOrigin,
-                now: function () { return Date.now() - perfOrigin; },
-                mark: function (name) {
-                    var made = perfEntry('mark', name === undefined ? '' : name, this.now(), 0);
-                    perfBuffer.mark.push(made);
-                    return made;
-                },
-                measure: function (name, startOrOptions, end) {
-                    var start = 0, duration = 0;
-                    if (startOrOptions && typeof startOrOptions === 'object') {
-                        start = startOrOptions.start === undefined
-                            ? (perfMarkStart(startOrOptions.startMark) || 0)
-                            : Number(startOrOptions.start) || 0;
-                        duration = startOrOptions.duration === undefined
-                            ? (startOrOptions.end === undefined ? 0
-                                : (Number(startOrOptions.end) || 0) - start)
-                            : Number(startOrOptions.duration) || 0;
-                    } else if (startOrOptions === undefined) {
-                        start = 0;
-                    } else {
-                        var from = perfMarkStart(startOrOptions);
-                        var to = perfMarkStart(end);
-                        start = from === undefined ? this.now() : from;
-                        duration = (to === undefined ? this.now() : to) - start;
-                    }
-                    var made = perfEntry('measure', name === undefined ? '' : name, start, duration);
-                    perfBuffer.measure.push(made);
-                    return made;
-                },
-                clearMarks: function (name) {
-                    if (name === undefined) { perfBuffer.mark = []; return; }
-                    perfBuffer.mark = perfBuffer.mark.filter(function (e) { return e.name !== String(name); });
-                },
-                clearMeasures: function (name) {
-                    if (name === undefined) { perfBuffer.measure = []; return; }
-                    perfBuffer.measure = perfBuffer.measure.filter(function (e) { return e.name !== String(name); });
-                },
-                getEntries: function () { return perfSorted(); },
-                getEntriesByType: function (type) { return perfSorted(String(type)); },
-                getEntriesByName: function (name) {
-                    return perfSorted().filter(function (e) { return e.name === String(name); });
-                },
-                memory: {}
-            };
+            var performanceTiming = Object.create(PerformanceTiming.prototype);
+            var performanceNavigation = Object.create(PerformanceNavigation.prototype);
+            var performanceMemory = Object.create(MemoryInfo.prototype);
+            var performanceEventCounts = Object.create(EventCounts.prototype);
+            var performanceResourceBuffer = { size: Infinity, full: null };
+
+            function Performance() {
+                throw new TypeError('Failed to construct ' + formDataQuote('Performance')
+                    + ': Illegal constructor');
+            }
+            Object.defineProperties(Performance.prototype, {
+                timeOrigin: { configurable: true, enumerable: false,
+                    get: function () { performanceBrand(this, 'timeOrigin'); return perfWallOrigin; } },
+                now: { configurable: true, writable: true, enumerable: false,
+                    value: function () { performanceBrand(this, 'now'); return perfNow(); } },
+                timing: { configurable: true, enumerable: false,
+                    get: function () { performanceBrand(this, 'timing'); return performanceTiming; } },
+                navigation: { configurable: true, enumerable: false,
+                    get: function () { performanceBrand(this, 'navigation'); return performanceNavigation; } },
+                memory: { configurable: true, enumerable: false,
+                    get: function () { performanceBrand(this, 'memory'); return performanceMemory; } },
+                eventCounts: { configurable: true, enumerable: false,
+                    get: function () { performanceBrand(this, 'eventCounts'); return performanceEventCounts; } },
+                interactionCount: { configurable: true, enumerable: false,
+                    get: function () { performanceBrand(this, 'interactionCount'); return 0; } },
+                onresourcetimingbufferfull: { configurable: true, enumerable: false,
+                    get: function () { performanceBrand(this, 'onresourcetimingbufferfull');
+                        return performanceResourceBuffer.full; },
+                    set: function (handler) {
+                        performanceBrand(this, 'onresourcetimingbufferfull');
+                        performanceResourceBuffer.full = typeof handler === 'function' ? handler : null;
+                    } },
+                mark: { configurable: true, writable: true, enumerable: false,
+                    value: function (name) {
+                        performanceBrand(this, 'mark');
+                        if (arguments.length < 1) {
+                            throw new TypeError('Failed to execute ' + formDataQuote('mark') + ' on '
+                                + formDataQuote('Performance') + ': 1 argument required, but only '
+                                + arguments.length + ' present.');
+                        }
+                        var read = arguments.length > 1 ? (arguments[1] || { }) : { };
+                        var made = newPerfEntry(PerformanceMark.prototype, 'mark', name, this.now(), 0,
+                            read.detail);
+                        perfBuffer.mark.push(made);
+                        return made;
+                    } },
+                measure: { configurable: true, writable: true, enumerable: false,
+                    value: function (name, startOrOptions, end) {
+                        performanceBrand(this, 'measure');
+                        var start = 0, duration = 0, detail = null;
+                        if (startOrOptions && typeof startOrOptions === 'object') {
+                            start = startOrOptions.start === undefined
+                                ? (perfMarkStart(startOrOptions.startMark) || 0)
+                                : Number(startOrOptions.start) || 0;
+                            duration = startOrOptions.duration === undefined
+                                ? (startOrOptions.end === undefined ? 0
+                                    : (Number(startOrOptions.end) || 0) - start)
+                                : Number(startOrOptions.duration) || 0;
+                            detail = startOrOptions.detail === undefined ? null : startOrOptions.detail;
+                        } else if (startOrOptions === undefined) {
+                            start = 0;
+                        } else {
+                            var from = perfMarkStart(startOrOptions);
+                            var to = perfMarkStart(end);
+                            start = from === undefined ? this.now() : from;
+                            duration = (to === undefined ? this.now() : to) - start;
+                        }
+                        var made = newPerfEntry(PerformanceMeasure.prototype, 'measure',
+                            name === undefined ? '' : name, start, duration, detail);
+                        perfBuffer.measure.push(made);
+                        return made;
+                    } },
+                clearMarks: { configurable: true, writable: true, enumerable: false,
+                    value: function (name) {
+                        performanceBrand(this, 'clearMarks');
+                        if (name === undefined) { perfBuffer.mark = []; return; }
+                        perfBuffer.mark = perfBuffer.mark.filter(function (e) {
+                            return e.name !== String(name); });
+                    } },
+                clearMeasures: { configurable: true, writable: true, enumerable: false,
+                    value: function (name) {
+                        performanceBrand(this, 'clearMeasures');
+                        if (name === undefined) { perfBuffer.measure = []; return; }
+                        perfBuffer.measure = perfBuffer.measure.filter(function (e) {
+                            return e.name !== String(name); });
+                    } },
+                getEntries: { configurable: true, writable: true, enumerable: false,
+                    value: function () { performanceBrand(this, 'getEntries'); return perfSorted(); } },
+                getEntriesByType: { configurable: true, writable: true, enumerable: false,
+                    value: function (type) {
+                        performanceBrand(this, 'getEntriesByType'); return perfSorted(String(type));
+                    } },
+                getEntriesByName: { configurable: true, writable: true, enumerable: false,
+                    value: function (name) {
+                        performanceBrand(this, 'getEntriesByName');
+                        return perfSorted().filter(function (e) { return e.name === String(name); });
+                    } },
+                clearResourceTimings: { configurable: true, writable: true, enumerable: false,
+                    value: function () { performanceBrand(this, 'clearResourceTimings'); } },
+                setResourceTimingBufferSize: { configurable: true, writable: true, enumerable: false,
+                    value: function (size) {
+                        performanceBrand(this, 'setResourceTimingBufferSize');
+                        performanceResourceBuffer.size = Number(size) || 0;
+                    } },
+                toJSON: { configurable: true, writable: true, enumerable: false,
+                    value: function () {
+                        performanceBrand(this, 'toJSON');
+                        // The three the reference names, in its own order: the entries are not part of
+                        // this serialisation even though the buffer is read through other members.
+                        return { timeOrigin: this.timeOrigin, timing: this.timing.toJSON(),
+                            navigation: this.navigation.toJSON() };
+                    } }
+            });
+            [Performance, PerformanceEntry, PerformanceMark, PerformanceMeasure, PerformanceTiming,
+             PerformanceNavigation, MemoryInfo, EventCounts].forEach(function (ctor) {
+                Object.defineProperty(ctor.prototype, Symbol.toStringTag,
+                    { value: ctor.name, configurable: true, enumerable: false });
+            });
+            // Performance Timeline §3.6: the records handed to an observer callback are a list of the
+            // same entry objects, read back through the three members the interface names — the page
+            // gets the entries themselves, not a copy whose properties it cannot read (measured: an
+            // observer watching marks answers their names and types).
+            var PERF_LIST_SLOTS = new WeakMap();
+            function PerformanceObserverEntryList() {
+                throw new TypeError('Failed to construct ' + formDataQuote('PerformanceObserverEntryList')
+                    + ': Illegal constructor');
+            }
+            function entryListRecords(list, name) {
+                var records = PERF_LIST_SLOTS.get(list);
+                if (records === undefined) {
+                    throw new TypeError('Failed to execute ' + formDataQuote(name) + ' on '
+                        + formDataQuote('PerformanceObserverEntryList') + ': Illegal invocation');
+                }
+                return records;
+            }
+            Object.defineProperties(PerformanceObserverEntryList.prototype, {
+                getEntries: { configurable: true, writable: true, enumerable: false,
+                    value: function () { return entryListRecords(this, 'getEntries').slice(); } },
+                getEntriesByType: { configurable: true, writable: true, enumerable: false,
+                    value: function (type) {
+                        return entryListRecords(this, 'getEntriesByType').filter(function (entry) {
+                            return entry.entryType === String(type); });
+                    } },
+                getEntriesByName: { configurable: true, writable: true, enumerable: false,
+                    value: function (name) {
+                        return entryListRecords(this, 'getEntriesByName').filter(function (entry) {
+                            return entry.name === String(name); });
+                    } }
+            });
+            Object.defineProperty(PerformanceObserverEntryList.prototype, Symbol.toStringTag,
+                { value: 'PerformanceObserverEntryList', configurable: true, enumerable: false });
+            function newPerfEntryList(records) {
+                var made = Object.create(PerformanceObserverEntryList.prototype);
+                PERF_LIST_SLOTS.set(made, records);
+                return made;
+            }
+            window.PerformanceObserverEntryList = PerformanceObserverEntryList;
+            var performance = Object.create(Performance.prototype);
+            PERFORMANCE_SLOTS.set(performance, { });
             window.performance = performance;
+            window.Performance = Performance;
+            window.PerformanceEntry = PerformanceEntry;
+            window.PerformanceMark = PerformanceMark;
+            window.PerformanceMeasure = PerformanceMeasure;
+            window.PerformanceTiming = PerformanceTiming;
+            window.PerformanceNavigation = PerformanceNavigation;
+            window.MemoryInfo = MemoryInfo;
+            window.EventCounts = EventCounts;
+
 
             // HTML §6.1.5.2 — the 'on*' IDL event handler attributes. Assigning el.onclick = fn
             // is one slot, not a stacking listener, and the assignment has to reach dispatch. The
@@ -3652,9 +4858,29 @@ public class JavaScriptEngine : IDisposable
                     }
                 }
                 defineInterface('EventSource', 'EventTarget');
+                // The object 'document.implementation' answers (DOM §3.3): the level gives the host
+                // wrapper its tag, its constructor name and the sentence the reference writes for a
+                // page that tries to build one itself.
+                defineInterface('DOMImplementation');
                 // The interface a canvas 2D context measures with. This engine has no 2D context to
                 // hand one out from, so the name exists and the constructor refuses, which is what a
                 // page finds on a browser that never made one for it.
+                var errorEventCtor = window.ErrorEvent;
+                var errorEventLevel = defineInterface('ErrorEvent', 'Event');
+                if (typeof errorEventCtor === 'function') {
+                    // The script built this one itself, so the constructor the page calls stays its own
+                    // and only the level moves under it: the tag, the 'instanceof' answer and the
+                    // members the interface declares all read from there. The level the script made
+                    // stands on its own until the event family is built, so it is hung below 'Event'
+                    // here — otherwise 'errorEvent instanceof Event' would read false.
+                    if (Object.getPrototypeOf(errorEventLevel) === Object.prototype) {
+                        try {
+                            Object.setPrototypeOf(errorEventLevel, protoMap['Event'] || Object.prototype);
+                        } catch (e) { }
+                    }
+                    errorEventCtor.prototype = errorEventLevel;
+                    window.ErrorEvent = errorEventCtor;
+                }
                 defineInterface('TextMetrics');
                 defineInterface('ShadowRoot', 'DocumentFragment');
                 defineInterface('ElementInternals');
@@ -5948,28 +7174,129 @@ public class JavaScriptEngine : IDisposable
                 accessor('Location', 'ancestorOrigins', function () {
                     return typeof DOMStringList === 'function' ? new DOMStringList([]) : [];
                 });
-                // Navigation Timing §4: the legacy 'performance.timing' object the reference still
-                // answers. Every mark is the same instant for an engine that stamps no navigation
-                // milestones, and the deprecated 'loadEventEnd' sentinel of 0 is what the interface
-                // reports while a load is still running.
-                if (window.performance) {
-                    var timing = { navigationStart: 0, unloadEventStart: 0, unloadEventEnd: 0,
-                        redirectStart: 0, redirectEnd: 0, fetchStart: 0, domainLookupStart: 0,
-                        domainLookupEnd: 0, connectStart: 0, connectEnd: 0, secureConnectionStart: 0,
-                        requestStart: 0, responseStart: 0, responseEnd: 0, domLoading: 0,
-                        domInteractive: 0, domContentLoadedEventStart: 0, domContentLoadedEventEnd: 0,
-                        domComplete: 0, loadEventStart: 0, loadEventEnd: 0 };
-                    try {
-                        Object.defineProperty(timing, Symbol.toStringTag,
-                            { value: 'PerformanceTiming', configurable: true });
-                    } catch (e) { }
-                    Object.defineProperty(window.performance, 'timing', { configurable: true,
-                        get: function () { return timing; } });
-                    if (typeof window.performance.navigation === 'undefined') {
-                        Object.defineProperty(window.performance, 'navigation', { configurable: true,
-                            get: function () { return { type: 0, redirectCount: 0 }; } });
-                    }
+                // Geolocation §5, Permissions §4.3, Storage §4.2, Network Information §3: the objects a
+                // page reaches through the navigator. This engine has no position provider, no
+                // permission database, no quota to measure and no link to sample, so each interface
+                // answers the one state it can honestly report — a request that fails as unavailable, a
+                // permission the page was never given, an estimate of no bytes — while the object still
+                // carries the members and the tag the interface names (measured: each one reads as
+                // [object Geolocation], [object Permissions], [object PermissionStatus], and the rest).
+                function refusedInterface(name, baseProto) {
+                    var ctor = function () {
+                        throw new TypeError('Failed to construct ' + formDataQuote(name)
+                            + ': Illegal constructor');
+                    };
+                    Object.defineProperty(ctor, 'name', { value: name, configurable: true });
+                    var proto = Object.create(baseProto || Object.prototype);
+                    Object.defineProperty(proto, 'constructor',
+                        { value: ctor, writable: true, configurable: true });
+                    Object.defineProperty(proto, Symbol.toStringTag, { value: name, configurable: true });
+                    window[name] = ctor;
+                    if (protoMap[name] === undefined) protoMap[name] = proto;
+                    return proto;
                 }
+                function member(proto, name, value) {
+                    Object.defineProperty(proto, name, { value: value, writable: true,
+                        configurable: true, enumerable: false });
+                }
+                var eventTargetLevel = protoMap['EventTarget'] || Object.prototype;
+                var GEO_SLOTS = new WeakMap();
+                var geolocationProto = refusedInterface('Geolocation', null);
+                var positionErrorProto = refusedInterface('GeolocationPositionError', null);
+                ['code', 'message'].forEach(function (field) {
+                    Object.defineProperty(positionErrorProto, field, { configurable: true, enumerable: false,
+                        get: function () {
+                            var slots = GEO_SLOTS.get(this);
+                            if (!slots) throw new TypeError('Illegal invocation');
+                            return slots[field];
+                        } });
+                });
+                function positionError(code, message) {
+                    var made = Object.create(positionErrorProto);
+                    GEO_SLOTS.set(made, { code: code, message: message });
+                    return made;
+                }
+                var geoWatchId = 0;
+                member(geolocationProto, 'getCurrentPosition', function (success, error) {
+                    // No provider is wired, so the request completes the way a device without a
+                    // position source does: on the next task, as an error the page's own callback hears.
+                    if (typeof error === 'function') {
+                        setTimeout(function () {
+                            try { error(positionError(2, 'Position information is unavailable in this engine.')); }
+                            catch (e) { }
+                        }, 0);
+                    }
+                });
+                member(geolocationProto, 'watchPosition', function () { return ++geoWatchId; });
+                member(geolocationProto, 'clearWatch', function () { });
+                var geolocation = Object.create(geolocationProto);
+
+                var PERMISSION_NAMES = ['accelerometer', 'accessibility-events', 'ambient-light-sensor',
+                    'background-sync', 'camera', 'clipboard-read', 'clipboard-write',
+                    'geolocation', 'gyroscope', 'magnetometer', 'microphone', 'midi', 'notifications',
+                    'payment-handler', 'persistent-storage', 'push', 'screen-wake-lock', 'storage-access'];
+                var permissionStatusProto = refusedInterface('PermissionStatus', eventTargetLevel);
+                var PERM_SLOTS = new WeakMap();
+                ['name', 'state', 'onchange'].forEach(function (field) {
+                    Object.defineProperty(permissionStatusProto, field, { configurable: true, enumerable: false,
+                        get: function () {
+                            var slots = PERM_SLOTS.get(this);
+                            if (!slots) throw new TypeError('Illegal invocation');
+                            return slots[field];
+                        } });
+                });
+                member(permissionStatusProto, 'toJSON', function () {
+                    var slots = PERM_SLOTS.get(this);
+                    if (!slots) throw new TypeError('Illegal invocation');
+                    return { name: slots.name, state: slots.state };
+                });
+                var permissionsProto = refusedInterface('Permissions', null);
+                member(permissionsProto, 'query', function (descriptor) {
+                    var read = descriptor || { };
+                    var name = read.name === undefined ? '' : String(read.name);
+                    if (PERMISSION_NAMES.indexOf(name) < 0) {
+                        var quote = String.fromCharCode(39);
+                        throw new TypeError('Failed to execute ' + quote + 'query' + quote
+                            + ' on ' + quote + 'Permissions' + quote + ': Failed to read the '
+                            + quote + 'name' + quote + ' property from ' + quote + 'PermissionDescriptor'
+                            + quote + ': The provided value ' + quote + name + quote
+                            + ' is not a valid enum value of type PermissionName.');
+                    }
+                    // Nothing has been granted and nothing has been refused: the state a page hears
+                    // back is the one the user has not answered yet.
+                    var made = Object.create(permissionStatusProto);
+                    PERM_SLOTS.set(made, { name: name, state: 'prompt', onchange: null });
+                    return Promise.resolve(made);
+                });
+                var permissions = Object.create(permissionsProto);
+
+                var storageManagerProto = refusedInterface('StorageManager', null);
+                member(storageManagerProto, 'estimate', function () {
+                    return Promise.resolve({ usage: 0, quota: 0, usageDetails: { } });
+                });
+                member(storageManagerProto, 'persist', function () { return Promise.resolve(false); });
+                member(storageManagerProto, 'persisted', function () { return Promise.resolve(false); });
+                member(storageManagerProto, 'getDirectory', function () {
+                    return Promise.reject(new DOMException('The origin is not persisted.', 'NotAllowedError'));
+                });
+                var storageManager = Object.create(storageManagerProto);
+
+                var networkInfoProto = refusedInterface('NetworkInformation', eventTargetLevel);
+                ['effectiveType', 'rtt', 'downlink', 'saveData', 'type'].forEach(function (field) {
+                    var values = { effectiveType: '4g', rtt: 0, downlink: 0, saveData: false, type: 'unknown' };
+                    Object.defineProperty(networkInfoProto, field, { configurable: true, enumerable: false,
+                        get: function () {
+                            if (this !== networkInformation) throw new TypeError('Illegal invocation');
+                            return values[field];
+                        } });
+                });
+                var networkInformation = Object.create(networkInfoProto);
+
+                accessor('Navigator', 'geolocation', function () { return geolocation; });
+                accessor('Navigator', 'permissions', function () { return permissions; });
+                accessor('Navigator', 'storage', function () { return storageManager; });
+                accessor('Navigator', 'connection', function () { return networkInformation; });
+                accessor('Navigator', 'webdriver', function () { return false; });
             })();
 
             // ── The observers (Intersection Observer §2, Resize Observer §2,
@@ -6011,8 +7338,8 @@ public class JavaScriptEngine : IDisposable
                     'boundingClientRect', 'intersectionRect', 'intersectionRatio', 'isIntersecting']);
                 entryInterface('ResizeObserverEntry', ['target', 'contentRect', 'contentBoxSize',
                     'borderBoxSize', 'devicePixelContentBoxSize']);
-                entryInterface('PerformanceEntry', ['name', 'entryType', 'startTime', 'duration']);
-
+                // The performance entry interfaces are the ones the timing block above declares; an
+                // observer hands out those very objects, so no second level is made for them here.
                 function makeObserver(ctorName, compute) {
                     var states = new WeakMap();
                     var proto = (window.__domProto || {})[ctorName] || Object.create(Object.prototype);
@@ -6165,24 +7492,16 @@ public class JavaScriptEngine : IDisposable
                 var supportedTypes = ['element', 'event', 'first-input', 'largest-contentful-paint',
                     'layout-shift', 'long-animation-frame', 'longtask', 'navigation', 'paint',
                     'resource'];
-                function PerformanceObserver(callback, options) {
+                function PerformanceObserver(callback) {
                     if (typeof callback !== 'function') {
                         throw new TypeError('Failed to construct \'PerformanceObserver\': parameter 1'
                             + ' is not of type \'Function\'.');
-                        }
+                    }
                     var self = this;
                     var wanted = [];
                     var scheduled = false;
                     var seen = [];
-                    function entryList(records) {
-                        var list = Object.create(Object.prototype);
-                        list.getEntries = function () { return records.slice(); };
-                        list.getEntriesByType = function (type) {
-                            return records.filter(function (e) { return e.entryType === type; });
-                        };
-                        list.buffered = !!options && !!options.buffered;
-                        return list;
-                    }
+                    function entryList(records) { return newPerfEntryList(records); }
                     function collect() {
                         var out = [];
                         var all = [];
@@ -6193,11 +7512,7 @@ public class JavaScriptEngine : IDisposable
                             if (!raw || wanted.indexOf(String(raw.entryType)) < 0) continue;
                             if (seen.indexOf(raw) >= 0) continue;
                             seen.push(raw);
-                            var made = Object.create((window.__domProto || {}).PerformanceEntry
-                                || Object.prototype);
-                            made.__name = raw.name; made.__entryType = raw.entryType;
-                            made.__startTime = raw.startTime; made.__duration = raw.duration;
-                            out.push(made);
+                            out.push(raw);
                         }
                         return out;
                     }
@@ -6628,14 +7943,6 @@ public class JavaScriptEngine : IDisposable
                 window.DOMQuad = DOMQuad;
                 (window.__domProto || {}).DOMQuad = DOMQuad.prototype;
 
-                // Performance Timeline §3.7: the list a performance observer's callback is handed.
-                function PerformanceObserverEntryList() { }
-                PerformanceObserverEntryList.prototype.getEntries = function () { return []; };
-                PerformanceObserverEntryList.prototype.getEntriesByType = function () { return []; };
-                PerformanceObserverEntryList.prototype.getEntriesByName = function () { return []; };
-                Object.defineProperty(PerformanceObserverEntryList.prototype, Symbol.toStringTag,
-                    { value: 'PerformanceObserverEntryList', configurable: true });
-                window.PerformanceObserverEntryList = PerformanceObserverEntryList;
             })();
 
             // ── NodeFilter (DOM §4.6.2) ─────────────────────────────────────────
@@ -6922,7 +8229,29 @@ public class JavaScriptEngine : IDisposable
                         if (event && event.type) fireEvent(this, this._listeners && this._listeners[event.type], 'on' + event.type, event);
                         return true;
                     };
+                    // An IDL event handler attribute sits on the prototype and stores the function
+                    // beside the listener bag, so assigning one never gives the object a key of its own
+                    // (measured: a port owns no keys at all, and reading a handler that was never
+                    // installed answers null).
+                    if (!Object.prototype.hasOwnProperty.call(proto, 'onmessage')) {
+                        Object.defineProperty(proto, 'onmessage', {
+                            configurable: true, enumerable: false,
+                            get: function () { return handlerBag(this).message; },
+                            set: function (fn) {
+                                handlerBag(this).message = typeof fn === 'function' ? fn : null;
+                            }
+                        });
+                    }
                     return proto;
+                }
+                function handlerBag(self) {
+                    if (!Object.prototype.hasOwnProperty.call(self, '__handlers')) {
+                        Object.defineProperty(self, '__handlers', { value: { message: null },
+                            writable: true, enumerable: false, configurable: true });
+                    }
+                    var bag = self.__handlers;
+                    if (bag.message === undefined) bag.message = null;
+                    return bag;
                 }
 
                 // A message event carries data, which the engine's event host has no slot for, so
@@ -6953,13 +8282,18 @@ public class JavaScriptEngine : IDisposable
                 }
 
                 // A port is one end of a channel: what goes in one end comes out of the other.
+                // The bookkeeping an end keeps is hidden — a page that walks a port sees the interface,
+                // not the engine's queue under it.
+                function hide(self, key, value) {
+                    Object.defineProperty(self, key, { value: value, writable: true,
+                        enumerable: false, configurable: true });
+                }
                 function MessagePort() {
-                    this._queue = [];
-                    this._listeners = {};
-                    this.onmessage = null;
-                    this._other = null;
-                    this._started = false;
-                    this._closed = false;
+                    hide(this, '_queue', []);
+                    hide(this, '_listeners', {});
+                    hide(this, '_other', null);
+                    hide(this, '_started', false);
+                    hide(this, '_closed', false);
                 }
                 makeTarget(MessagePort.prototype);
                 MessagePort.prototype.postMessage = function (data) {
@@ -6990,30 +8324,43 @@ public class JavaScriptEngine : IDisposable
                     }
                 };
 
+                var CHANNEL_SLOTS = new WeakMap();
                 function MessageChannel() {
                     var port1 = new MessagePort();
                     var port2 = new MessagePort();
                     port1._other = port2;
                     port2._other = port1;
-                    this.port1 = port1;
-                    this.port2 = port2;
+                    CHANNEL_SLOTS.set(this, { port1: port1, port2: port2 });
                 }
+                function channelSlots(channel) {
+                    var slots = CHANNEL_SLOTS.get(channel);
+                    if (!slots) throw new TypeError('Illegal invocation');
+                    return slots;
+                }
+                // The two ends read through the interface, so a channel owns nothing a page can list.
+                ['port1', 'port2'].forEach(function (field) {
+                    Object.defineProperty(MessageChannel.prototype, field, { configurable: true,
+                        enumerable: false,
+                        get: function () { return channelSlots(this)[field]; } });
+                });
 
-                var channelsByName = {};
 
+                var CHANNEL_NAMED = {};
                 function BroadcastChannel(name) {
                     var self = this;
-                    this.name = String(name);
-                    this.onmessage = null;
-                    this._listeners = {};
-                    this._closed = false;
-                    var list = channelsByName[this.name] = channelsByName[this.name] || [];
+                    // The name is a read the interface declares, and the handler sits on the
+                    // prototype, so a channel owns no key of its own (measured: a port lists none).
+                    var made = String(name);
+                    var list = CHANNEL_NAMED[made] = CHANNEL_NAMED[made] || [];
+                    hide(this, 'name', made);
+                    hide(this, '_listeners', {});
+                    hide(this, '_closed', false);
                     list.push(self);
                 }
                 makeTarget(BroadcastChannel.prototype);
                 BroadcastChannel.prototype.postMessage = function (data) {
                     if (this._closed) return;
-                    var list = channelsByName[this.name] || [];
+                    var list = CHANNEL_NAMED[this.name] || [];
                     for (var i = 0; i < list.length; i++) {
                         var channel = list[i];
                         // The channel that posted does not hear its own message; the other ends of
@@ -7030,7 +8377,7 @@ public class JavaScriptEngine : IDisposable
                 };
                 BroadcastChannel.prototype.close = function () {
                     this._closed = true;
-                    var list = channelsByName[this.name] || [];
+                    var list = CHANNEL_NAMED[this.name] || [];
                     var index = list.indexOf(this);
                     if (index >= 0) list.splice(index, 1);
                 };
@@ -7039,11 +8386,22 @@ public class JavaScriptEngine : IDisposable
                 window.MessagePort = MessagePort;
                 window.MessageChannel = MessageChannel;
                 window.BroadcastChannel = BroadcastChannel;
+                // The tag each interface gives the objects it builds (measured: a channel reads
+                // [object MessageChannel], a port [object MessagePort], a broadcast channel
+                // [object BroadcastChannel]).
+                var messageProtoMap = window.__domProto || (window.__domProto = {});
+                [['MessageChannel', MessageChannel], ['MessagePort', MessagePort],
+                 ['BroadcastChannel', BroadcastChannel]].forEach(function (pair) {
+                    Object.defineProperty(pair[1].prototype, Symbol.toStringTag,
+                        { value: pair[0], configurable: true, enumerable: false });
+                    if (!messageProtoMap[pair[0]]) messageProtoMap[pair[0]] = pair[1].prototype;
+                });
 
                 // window.postMessage(message, targetOrigin) — the message comes back to this window
                 // as a message event, which is what a page that shells out to itself sees. The
-                // listeners live on the window (see window.addEventListener).
-                window.postMessage = function (message, targetOrigin, transfer) {
+                // listeners live on the window (see window.addEventListener). The interface's length is
+                // one: the origin and the transfer list are optional arguments (measured).
+                window.postMessage = function (message) {
                     setTimeout(function () {
                         fireEvent(window, window.__winMessage || [], 'onmessage',
                             new MessageEvent('message', { data: message, origin: location.origin, source: window }));
@@ -7275,6 +8633,27 @@ public class AcruxBuiltins
     public CssStyleSheetHost createCSSStyleSheet() => new CssStyleSheetHost(new Acrux.Core.Css.Rules.StyleSheetContents());
 
     // ── Web Crypto / DOMParser hosts ──────────────────────────
+
+    /// <summary>High Resolution Time §5.1: the clock 'performance.now' counts on. It is the platform's
+    /// monotonic tick rather than the wall clock, so a step in the system time cannot make a
+    /// measurement negative or jump a page's own timing forward.</summary>
+    public double monotonicNow()
+        => System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+
+    /// <summary>'performance.memory' (the legacy heap read): the bytes the collector is holding, the
+    /// heap it is holding them in and the ceiling the runtime would grow to. The engine is the only
+    /// side that knows, so the three numbers come from the garbage collector rather than a constant.
+    /// Order: total, used, limit.</summary>
+    public double[] memoryInfo()
+    {
+        var info = GC.GetGCMemoryInfo();
+        var used = (double)GC.GetTotalMemory(false);
+        var total = info.HeapSizeBytes > 0
+            ? (double)info.HeapSizeBytes : used;
+        var limit = info.HighMemoryLoadThresholdBytes > 0
+            ? (double)info.HighMemoryLoadThresholdBytes : total;
+        return new[] { total, used, limit };
+    }
 
     /// <summary>'crypto.randomUUID()' (Web Crypto §5.5): a version-4 identifier. The engine is
     /// the only place with a real random source, so the string is minted here.</summary>
@@ -7942,11 +9321,52 @@ public class NavigatorHost : IDomPrototypeHost
     // declares — a clipboard, a service worker registration — is reachable on the host object.
     string[] IDomPrototypeHost.__domTypeChain => new[] { "EventTarget", "Navigator" };
 
-    public string userAgent => "Acrux/1.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+    public string userAgent => "Acrux/1.0 (" + OperatingSystemComment() + ") AppleWebKit/537.36";
     public string appCodeName => "Mozilla";
     public string appName => "Acrux";
     public string appVersion => "1.0";
-    public string platform => "Win32";
+
+    /// <summary>HTML §7.3.4: 'platform' names the operating system the engine is running on, so one
+    /// build answers 'Linux x86_64', 'Win32' or 'MacIntel' according to the host it is on rather than a
+    /// string baked into the source.</summary>
+    public string platform => NavigatorPlatform();
+
+    /// <summary>HTML §7.3.4: 'vendor' is the string the browser ships with and the empty value is what
+    /// an engine that is not one of the three that fill it reports (measured: the reference names its
+    /// own maker here, the interface default is the empty string).</summary>
+    public string vendor => "";
+
+    /// <summary>HTML §7.3.4: the interface's own default, fixed by the specification rather than by
+    /// the build date.</summary>
+    public string productSub => "20030107";
+
+    /// <summary>Do Not Track §3: the preference the user has not set reads back null, and this engine
+    /// does not carry a setting for it.</summary>
+    public string? doNotTrack => null;
+
+    /// <summary>Pointer Events §5: the number of simultaneous touch contacts the device holds. A
+    /// pointer the engine cannot read is not a touch, so the answer is the interface's zero.</summary>
+    public ulong maxTouchPoints => 0;
+
+    private static string NavigatorPlatform()
+    {
+        if (OperatingSystem.IsWindows()) return "Win32";
+        if (OperatingSystem.IsMacOS())
+            return System.Runtime.InteropServices.RuntimeInformation.OSArchitecture ==
+                System.Runtime.InteropServices.Architecture.Arm64 ? "MacArm" : "MacIntel";
+        var arch = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture ==
+            System.Runtime.InteropServices.Architecture.Arm64 ? "aarch64" : "x86_64";
+        return "Linux " + arch;
+    }
+
+    private static string OperatingSystemComment()
+    {
+        if (OperatingSystem.IsWindows()) return "Windows NT 10.0; Win64; x64";
+        if (OperatingSystem.IsMacOS()) return "Macintosh; Intel Mac OS X 10_15_7";
+        return "X11; Linux " + (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture ==
+            System.Runtime.InteropServices.Architecture.Arm64 ? "aarch64" : "x86_64");
+    }
+
     public string product => "Gecko";
     public string language => "zh-CN";
     public string[] languages => new[] { "zh-CN", "en" };

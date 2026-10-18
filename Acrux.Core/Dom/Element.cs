@@ -840,14 +840,19 @@ public abstract class Element : Node
     private static string SerializeElement(Element el)
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append('<').Append(el.TagName.ToLowerInvariant());
+        // DOM §12.5: the serialiser writes the element's qualified name as it stands — the folding an
+        // HTML document's names went through happened when it was parsed, and a tree that came from an
+        // XML parse keeps the case it was written with (measured: an XML '<Child>' serialises as
+        // '<Child>', while a parsed HTML element still writes its lowercase local name).
+        var name = el.QualifiedName;
+        sb.Append('<').Append(name);
         foreach (var attr in el.Attributes)
             sb.Append(' ').Append(attr.Key).Append("=\"").Append(attr.Value.Replace("\"", "&quot;")).Append('"');
-        if (el.Children.Count == 0 && !voidElements.Contains(el.TagName.ToLowerInvariant()))
+        if (el.Children.Count == 0 && !voidElements.Contains(el.TagName))
         {
-            sb.Append("></").Append(el.TagName.ToLowerInvariant()).Append('>');
+            sb.Append("></").Append(name).Append('>');
         }
-        else if (voidElements.Contains(el.TagName.ToLowerInvariant()))
+        else if (voidElements.Contains(el.TagName))
         {
             sb.Append(" />");
         }
@@ -867,7 +872,7 @@ public abstract class Element : Node
                 else if (child is CommentNode comment)
                     sb.Append("<!--").Append(comment.Data).Append("-->");
             }
-            sb.Append("</").Append(el.TagName.ToLowerInvariant()).Append('>');
+            sb.Append("</").Append(name).Append('>');
         }
         return sb.ToString();
     }

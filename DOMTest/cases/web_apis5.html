@@ -147,10 +147,18 @@ ckErr('E6 a value that cannot be serialised is refused', 'TypeError',
 ck('E7 the body read answers a promise of bytes too', function () {
     var r = new Response('abc');
     r.arrayBuffer().then(function (b) {
-        __T('E7a the bytes arrived', b && b.length === 3 && b[0] === 97, b ? String(b.length) : 'none');
+        var view = new Uint8Array(b);
+        __T('E7a the bytes arrived',
+            Object.prototype.toString.call(b) === '[object ArrayBuffer]' && b.byteLength === 3
+                && view[0] === 97 && view[2] === 99,
+            Object.prototype.toString.call(b) + '/' + String(b.byteLength) + '/' + String(view[0]));
     });
     var r2 = new Response('x');
-    r2.blob().then(function (b) { __T('E7b the blob arrived', !!b && b.size === 1, b ? String(b.size) : 'none'); });
+    r2.bytes().then(function (v) {
+        __T('E7c the byte read answers a view', v instanceof Uint8Array && v.length === 1 && v[0] === 120);
+    });
+    var r3 = new Response('x');
+    r3.blob().then(function (b) { __T('E7b the blob arrived', !!b && b.size === 1, b ? String(b.size) : 'none'); });
     return true;
 });
 
