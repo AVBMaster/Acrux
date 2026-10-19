@@ -14,6 +14,7 @@ public class CssTokenizer
     private bool _unicodeRangesAllowed;
     private int _line;
     private int _column;
+    private string? _skippedComments;
 
     public CssTokenizer(string input, int offset = 0)
     {
@@ -28,6 +29,12 @@ public class CssTokenizer
     public int TokenCount => _tokenCount;
     public int Line => _line;
     public int Column => _column;
+
+    /// <summary>The comment text dropped while producing the token just returned, or the empty string.
+    /// CSS Syntax 3 §4 drops a comment, but it still keeps the token on either side of it apart, and a
+    /// caller that writes a token stream back out as the text of a declaration cannot tell where one
+    /// was without this: 'margin: 1px/*c*/2px' would otherwise be written on as '1px2px'.</summary>
+    public string SkippedComments => _skippedComments ?? "";
 
     public void SetUnicodeRangesAllowed(bool allowed) => _unicodeRangesAllowed = allowed;
 
@@ -661,6 +668,7 @@ public class CssTokenizer
     {
         _tokenCount++;
         _prevPos = _pos;
+        _skippedComments = null;
         int tokenLine = _line;
         int tokenColumn = _column;
 
@@ -770,6 +778,11 @@ public class CssTokenizer
                         {
                             return CssParserToken.CreateComment(comment);
                         }
+                        // A comment is dropped, but it is not nothing: it stands between the token it
+                        // follows and the one after it, and a caller that writes the token stream back
+                        // out as text has to be told it was there, or 'margin: 1px/*c*/2px' comes back
+                        // as the single word '1px2px' (CSS Syntax 3 §4).
+                        _skippedComments = (_skippedComments ?? "") + "/*" + comment + "*/";
                         continue;
                     }
                     return CssParserToken.CreateDelimiter('/');

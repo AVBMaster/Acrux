@@ -364,7 +364,7 @@ public static class CssFunctionEvaluator
             if (el.ComputedStyle != null)
             {
                 var computed = el.ComputedStyle.GetCustomProperty(name);
-                if (computed != null) return computed;
+                if (computed != null) return CommentAsSpace(computed);
             }
 
             var inlineVal = el.GetAttribute("style");
@@ -379,23 +379,30 @@ public static class CssFunctionEvaluator
                         var pname = prop[..colon].Trim();
                         var pval = prop[(colon + 1)..].Trim();
                         if (pname.Equals("--" + name, StringComparison.OrdinalIgnoreCase))
-                            return pval;
+                            return CommentAsSpace(pval);
                     }
                 }
             }
         }
 
         var registered = GetCustomProperty(name);
-        if (registered != null) return registered;
+        if (registered != null) return CommentAsSpace(registered);
 
         if (context?.ComputedStyle != null)
         {
             var cp = context.ComputedStyle.GetCustomProperty(name);
-            if (cp != null) return cp;
+            if (cp != null) return CommentAsSpace(cp);
         }
 
         return null;
     }
+
+    /// <summary>A custom property keeps the text the page wrote, comment and all (CSS Variables 1
+    /// §3, measured: '--x: calc(1px/*c*/+ 2px)' reads back with the comment inside it). The
+    /// substitution that puts that text into somebody else's value is where the comment becomes the
+    /// token boundary CSS Syntax 3 §4 says it is, because nothing below this line reads a comment.</summary>
+    private static string CommentAsSpace(string value)
+        => Acrux.Core.Css.CssValueGrammar.WithCommentsAsWhitespace(value);
 
     /// <summary>Whether the text asks for a custom property that nothing in the element's chain
     /// answers — or answers with nothing — while no fallback is there to answer it instead. CSS

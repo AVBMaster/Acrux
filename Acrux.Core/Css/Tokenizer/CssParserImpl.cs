@@ -1431,14 +1431,24 @@ public class CssParserImpl
             valueText = valueText[..^"!important".Length].Trim();
         }
 
-        // A comment inside the value is the token boundary CSS Syntax 3 §4 makes it, and the text
-        // this engine keeps for the declaration has to say the same thing a tokenized stylesheet
-        // does: 'margin: 1px/*c*/2px' is two lengths, and the rect a script reads back from
-        // 'rect(0px 0px 0px 0px) /* x */' carries no comment at all (measured, both).
-        valueText = Acrux.Core.Css.CssValueGrammar.WithCommentsAsWhitespace(valueText);
+        // A comment is the token boundary CSS Syntax 3 §4 makes it, but it is never the whitespace
+        // CSS Values 4 §10.3 demands on both sides of a math operator: a sum whose only space is a
+        // comment is no expression, and the declaration goes the way of every other unparseable
+        // value (measured: 'width: calc(1px/*c*/+ 2px)' leaves the property untouched). Two kinds of
+        // value are not asked: a custom property, which holds somebody else's expression, and a value
+        // that still carries a var(), which is no expression yet — both keep the characters they were
+        // written with, comment included (CSS Variables 1 §3, §3.1; measured: '--x:
+        // calc(1px/*c*/+ 2px)' reads back the same text through the CSSOM and the computed style).
+        bool keepsItsOwnText = propertyName.StartsWith("--", StringComparison.Ordinal)
+            || Acrux.Core.Css.CssValueGrammar.IsPendingSubstitution(valueText);
+        bool commentStandsInForSpace = !keepsItsOwnText
+            && Acrux.Core.Css.CssValueGrammar.CommentSuppliesMathWhitespace(valueText);
+        if (!keepsItsOwnText)
+            valueText = Acrux.Core.Css.CssValueGrammar.WithCommentsAsWhitespace(valueText);
 
         // Convert to CssValue and add to parsed properties
-        if (!string.IsNullOrEmpty(propertyName) && !string.IsNullOrEmpty(valueText))
+        if (!string.IsNullOrEmpty(propertyName) && !string.IsNullOrEmpty(valueText)
+            && !commentStandsInForSpace)
         {
             var name = DeclarationName(propertyName);
             if (name != null)
@@ -1741,10 +1751,16 @@ public class CssParserImpl
         var result = new System.Text.StringBuilder();
         int depth = 0;
         bool invalid = false;
-
+        // A comment sits between two tokens and the tokenizer drops it (CSS Syntax 3 §4), so a value
+        // read back from the tokens alone loses the separation it was written with: 'margin:
+        // 1px/*c*/2px' becomes the one fused word '1px2px', and every later reader — the grammar, the
+        // printer, the rule that says a comment is never an operator's whitespace (CSS Values 4 §10.3)
+        // — is asked about a text that never existed. The stream is therefore asked for the comment it
+        // skipped, and each reader folds it the way it reads a comment.
         while (!_stream.Current.IsEof)
         {
             var t = _stream.Current;
+            if (!string.IsNullOrEmpty(_stream.PrecedingComments)) result.Append(_stream.PrecedingComments);
 
             if (t.Type == CssTokenType.SemicolonToken && depth == 0)
                 break;
@@ -1842,6 +1858,26 @@ public class CssParserImpl
 
     private CssValue? ParseCssValue(string propertyName, string valueText, bool descriptorsOnly = false)
     {
+        // A custom property is a token stream the engine holds for somebody else to substitute, and
+        // the text it was handed is the text it keeps: nothing of it is parsed, re-spaced or folded,
+        // because none of it is this engine's value (CSS Variables 1 §3, measured: '--x:
+        // 1px/*c*/2px' and '--y: a/*c*/b' both read back exactly as written, through the CSSOM and
+        // through the computed style).
+        if (propertyName.StartsWith("--", StringComparison.Ordinal))
+            return new CssUnparsedValue(valueText.Trim());
+
+        // A value that still carries a var() is kept the same way — as the text the page wrote —
+        // because nothing of it can be read until the substitution has run. The property's grammar is
+        // still asked, but of the text with its comments put back as the space this engine reads them
+        // for, since a comment inside a pending value separates two tokens without being anybody's
+        // whitespace (CSS Variables 1 §3.1; measured: 'width: calc(var(--x)/*c*/+ 1px)' is a
+        // declaration and echoes the comment).
+        if (Acrux.Core.Css.CssValueGrammar.IsPendingSubstitution(valueText))
+            return Acrux.Core.Css.CssValueGrammar.TextIsValidFor(propertyName,
+                    Acrux.Core.Css.CssValueGrammar.WithCommentsAsWhitespace(valueText))
+                ? new CssUnparsedValue(valueText.Trim())
+                : null;
+
         // One spelling for every declaration. A reference engine prints the value it parsed
         // rather than the characters it was handed, whether that value is a single number or a
         // whole layer list, so the text is canonicalised first and everything below reads the
@@ -2441,8 +2477,12 @@ public class CssParserImpl
         // leaves a space behind here — '1px/*c*/2px' is two lengths, while the same cut that a
         // media list asks for (MediaFeatureValue.StripComments, where the measured reading is that
         // the space goes with the comment) would fuse them into one token that is no value.
-        var value = Acrux.Core.Css.CssValueGrammar.WithCommentsAsWhitespace(
-            text[ends[colon]..ends[to - 1]]).Trim();
+        var declared = text[ends[colon]..ends[to - 1]];
+        // The same reading 'CSS.supports' gives a declaration in a sheet: a comment that is the only
+        // thing keeping a math operator apart from its operand makes the group no condition at all
+        // (measured: 'supports(width, calc(1px/*c*/+ 2px))' is false).
+        if (Acrux.Core.Css.CssValueGrammar.CommentSuppliesMathWhitespace(declared)) return false;
+        var value = Acrux.Core.Css.CssValueGrammar.WithCommentsAsWhitespace(declared).Trim();
         // A ';' in the value is a second declaration, and a group holds one declaration
         // (measured: '(color: red; color: blue)' and '(background:red; color:blue)' are no
         // condition, while a comma belongs to the value and '(transition:all 1s, color 2s)' is one).

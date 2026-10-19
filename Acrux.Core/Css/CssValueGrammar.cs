@@ -40,7 +40,13 @@ public static class CssValueGrammar
         // 'offset-path: content-box' written in a sheet or a style attribute was refused by the
         // property's own id grammar while the echo table — the one that also decides the cascade and
         // 'getComputedStyle' — accepted it through 'setProperty'.
-        return ValueTextIsValid(name.ToCssString(), value.CssText());
+        var text = value.CssText();
+        // A pending value keeps the characters it was written with, comment included, and a comment is
+        // no one's operator yet either: the grammar is asked of the text with each comment read as the
+        // space this engine keeps for one (CSS Variables 1 §3.1; measured: 'width:
+        // calc(var(--x)/*c*/+ 1px)' is a declaration that echoes the comment back).
+        if (IsPendingSubstitution(text)) text = WithCommentsAsWhitespace(text);
+        return ValueTextIsValid(name.ToCssString(), text);
     }
 
     /// <summary>Whether a value text carries an exclamation mark outside every string and every
@@ -71,16 +77,57 @@ public static class CssValueGrammar
         return false;
     }
 
+    /// <summary>Whether a comment in this value is standing in for the whitespace a math operator
+    /// demands. CSS Values 4 §10.3 makes that space part of the operator: 'calc(1px + 2px)' is a sum
+    /// and 'calc(1px+2px)' is no expression at all, and a comment between the sign and its neighbour
+    /// is still not space (measured through 'CSS.supports' on both sides: 'calc(1px/*c*/+ 2px)' and
+    /// 'calc(1px +/*c*/2px)' are refused). A comment that sits beside real space is only the token
+    /// boundary CSS Syntax 3 §4 says it is, so 'calc(1px /*c*/ + 2px)' stands and
+    /// 'margin: 1px/*c*/2px' stays the two lengths it has always been.</summary>
+    public static bool CommentSuppliesMathWhitespace(string? value)
+    {
+        if (string.IsNullOrEmpty(value) || value!.IndexOf("/*", StringComparison.Ordinal) < 0)
+            return false;
+        // A value that carries a var() is no one's expression yet: the grammar is not asked what it
+        // thinks of it until the substitution has run (CSS Variables 1 §3), so the spacing a comment
+        // may or may not supply is not decided here either (measured: 'width:
+        // calc(var(--x)/*c*/+ 1px)' is accepted and echoes its own text).
+        if (value.IndexOf("var(", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+        // Two readings of one text: the comment as the space this engine keeps, and the comment as
+        // nothing. Only a value whose operators are spaced in the first reading and unspaced in the
+        // second had a comment doing a space's job.
+        return MathOperatorsAreSpaced(WithCommentsAsWhitespace(value))
+            && !MathOperatorsAreSpaced(Acrux.Core.Css.MediaFeatureValue.StripComments(value));
+    }
+
+    private static bool MathOperatorsAreSpaced(string text)
+    {
+        foreach (var call in CssMathValue.MathCalls(text))
+        {
+            // A sum inside a sum is still a sum: 'calc(1px + calc(2px/*c*/+ 3px))' is refused by the
+            // inner operator, and a scan that stopped at the outer argument would never see it
+            // (measured, through 'CSS.supports').
+            if (!CssMathValue.OperatorsAreSpaced(call.Argument)) return false;
+            if (!MathOperatorsAreSpaced(call.Argument)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>Whether a value is a pending-substitution value: one that still carries a <c>var()</c>
+    /// the engine has not been allowed to read. Nothing of it is this engine's expression yet, so it
+    /// is held as the token stream the page wrote — comments and all — and printed back the same way
+    /// (CSS Variables 1 §3.1; measured: 'width: calc(var(--x)/*c*/+ 1px)' echoes exactly that text and
+    /// 'CSS.supports' takes it, while the same shape without a var() is no value at all).</summary>
+    public static bool IsPendingSubstitution(string? value) =>
+        !string.IsNullOrEmpty(value) && value.IndexOf("var(", StringComparison.OrdinalIgnoreCase) >= 0;
+
     /// <summary>A declaration value with every CSS comment replaced by the one space it stands for.
-    /// A stylesheet never shows this text — its tokenizer takes comments out while it splits the
-    /// stream into tokens — but a value handed to <c>setProperty</c> or written into a 'style'
-    /// attribute arrives as the author typed it, and CSS Syntax 3 §4 says a comment is a token
-    /// boundary, not nothing: '1px/*c*/2px' is two lengths, and the same text with the comment cut
-    /// out entirely would be one impossible one (measured: the reference engine makes four longhands
-    /// out of <c>margin: 1px/*c*/2px</c> and echoes '1px 2px', stores 'rect(0px, 0px, 0px, 0px)' for
-    /// a rect with a comment on either side of it, and says '12px serif' for
-    /// <c>font: 12px/*x*/ serif</c>). A comment that never closes runs to the end of the value, and a
-    /// '/*' inside a quoted string is a string, not a comment.</summary>
+    /// A comment is a token boundary, not nothing: '1px/*c*/2px' is two lengths, and the same text with
+    /// the comment cut out entirely would be one impossible one (measured: the reference engine makes
+    /// four longhands out of <c>margin: 1px/*c*/2px</c> and echoes '1px 2px', stores
+    /// 'rect(0px, 0px, 0px, 0px)' for a rect with a comment on either side of it, and says
+    /// '12px serif' for <c>font: 12px/*x*/ serif</c>). A comment that never closes runs to the end of
+    /// the value, and a '/*' inside a quoted string is a string, not a comment.</summary>
     public static string WithCommentsAsWhitespace(string? value)
     {
         if (string.IsNullOrEmpty(value) || value!.IndexOf("/*", StringComparison.Ordinal) < 0)
@@ -970,7 +1017,7 @@ public static class CssValueGrammar
             if (word.Equals("auto", StringComparison.OrdinalIgnoreCase)
                 || word.Equals("content", StringComparison.OrdinalIgnoreCase)) return true;
             if (IsMathFunctionCall(word, IsLengthOrPercentage)) return true;
-            return !IsFitContentFunction(word) && IsNonNegativeLengthOrPercentage(word);
+            return !IsFitContentFunction(word) && IsNonNegativeBoxLength(word);
         },
         // CSS Color Adjustment 1 §5.2: 'normal' alone, or a list of scheme keywords and custom
         // names. Measured word by word: 'light dark', 'light only' and even 'brown' stand, 'normal
@@ -1137,23 +1184,32 @@ public static class CssValueGrammar
             => static text => IsScrollInset(text, 2, padding: true),
         CssPropertyId.ScrollMargin => static text => IsScrollInset(text, 4, padding: false),
         CssPropertyId.ScrollPadding => static text => IsScrollInset(text, 4, padding: true),
-        CssPropertyId.Margin or CssPropertyId.MarginTop or CssPropertyId.MarginRight
-            or CssPropertyId.MarginBottom or CssPropertyId.MarginLeft
-            or CssPropertyId.MarginBlock or CssPropertyId.MarginBlockStart or CssPropertyId.MarginBlockEnd
-            or CssPropertyId.MarginInline or CssPropertyId.MarginInlineStart or CssPropertyId.MarginInlineEnd
+        CssPropertyId.Margin or CssPropertyId.Padding
+            or CssPropertyId.Inset
             // The four-edge shorthands take one to four values and no more: a fifth is no
             // declaration at all (measured on 'margin:1px 1px 1px 1px 1px').
             => static text => IsLengthListUpTo(text, 4, "auto"),
-        CssPropertyId.Padding or CssPropertyId.PaddingTop or CssPropertyId.PaddingRight
-            or CssPropertyId.PaddingBottom or CssPropertyId.PaddingLeft
-            or CssPropertyId.PaddingBlock or CssPropertyId.PaddingBlockStart or CssPropertyId.PaddingBlockEnd
-            or CssPropertyId.PaddingInline or CssPropertyId.PaddingInlineStart or CssPropertyId.PaddingInlineEnd
-            => static text => SplitComponents(text).Count <= 4 && IsNonNegativeLengthList(text),
-        CssPropertyId.Inset or CssPropertyId.Top or CssPropertyId.Right
+        CssPropertyId.MarginBlock or CssPropertyId.MarginInline
+            or CssPropertyId.PaddingBlock or CssPropertyId.PaddingInline
+            or CssPropertyId.InsetBlock or CssPropertyId.InsetInline
+            => static text => IsLengthListUpTo(text, 2, "auto"),
+        // An edge takes one value and not two: 'margin-left: 1px 2px' is no declaration, the same
+        // way 'width: auto 30px' is not one (measured) — the second word belongs to the shorthand
+        // that writes four edges, not to the edge itself.
+        CssPropertyId.MarginTop or CssPropertyId.MarginRight
+            or CssPropertyId.MarginBottom or CssPropertyId.MarginLeft
+            or CssPropertyId.MarginBlockStart or CssPropertyId.MarginBlockEnd
+            or CssPropertyId.MarginInlineStart or CssPropertyId.MarginInlineEnd
+            or CssPropertyId.Top or CssPropertyId.Right
             or CssPropertyId.Bottom or CssPropertyId.Left
-            or CssPropertyId.InsetBlock or CssPropertyId.InsetBlockStart or CssPropertyId.InsetBlockEnd
-            or CssPropertyId.InsetInline or CssPropertyId.InsetInlineStart or CssPropertyId.InsetInlineEnd
-            => static text => IsLengthListUpTo(text, 4, "auto"),
+            or CssPropertyId.InsetBlockStart or CssPropertyId.InsetBlockEnd
+            or CssPropertyId.InsetInlineStart or CssPropertyId.InsetInlineEnd
+            => static text => IsSingleLength(text, "auto"),
+        CssPropertyId.PaddingTop or CssPropertyId.PaddingRight
+            or CssPropertyId.PaddingBottom or CssPropertyId.PaddingLeft
+            or CssPropertyId.PaddingBlockStart or CssPropertyId.PaddingBlockEnd
+            or CssPropertyId.PaddingInlineStart or CssPropertyId.PaddingInlineEnd
+            => static text => IsNonNegativeSingleLength(text),
         // CSS 2.1 §17.3: a border side's width is <line-width> — a non-negative length or one of
         // the three words — and ONE of them per side. 'auto' is the word of 'border-image-width'
         // and of no border side (measured: 'border-top-width: auto' is dropped), a percentage is
@@ -2524,7 +2580,7 @@ public static class CssValueGrammar
         {
             if (word.Equals("normal", StringComparison.OrdinalIgnoreCase)) continue;
             if (IsMathFunctionCall(word, IsLengthOrPercentage)) continue;
-            if (!IsNonNegativeLengthOrPercentage(word)) return false;
+            if (!IsNonNegativeBoxLength(word)) return false;
         }
         return true;
     }
@@ -2564,7 +2620,7 @@ public static class CssValueGrammar
         foreach (var word in words)
         {
             if (IsMathFunctionCall(word, IsLengthOrPercentage)) continue;
-            if (IsLengthOrPercentage(word) && !SaysAKeywordNotALength(word)) continue;
+            if (IsBoxLength(word) && !SaysAKeywordNotALength(word)) continue;
             return false;
         }
         return true;
@@ -2604,9 +2660,7 @@ public static class CssValueGrammar
     private static bool IsRadiusCornerValue(string token)
     {
         if (IsMathFunctionCall(token, IsLengthOrPercentage)) return true;
-        if (!IsLengthOrPercentage(token)) return false;
-        return !Acrux.Core.Dom.Animations.CssValueTokenizer
-            .TrySplitUnit(token, out var number, out _) || number >= 0;
+        return IsNonNegativeBoxLength(token);
     }
 
     /// <summary>One <image> — the set every image property draws from, and the list of them is the
@@ -3696,6 +3750,22 @@ public static class CssValueGrammar
         return unit.Length > 0 && unit != "%" && IsLengthOrPercentage(token);
     }
 
+    /// <summary>A &lt;length-percentage&gt; that says what it is measured in, the bare zero of CSS 2.1
+    /// kept and a math function left to its own type rules. This is the shape every box property
+    /// takes, and a bare number is not in it: 'width: 12', 'margin-left: 12', 'font-size: 12',
+    /// 'border-width: 12', 'row-gap: 12', 'flex-basis: 12', 'border-radius: 12', 'translate: 12',
+    /// 'scroll-padding-left: 12' and 'inset: 12' are each dropped by the reference engine (measured,
+    /// one row per property) while 'width: 0', 'width: 50%' and 'width: calc(2 * 1px)' all stand. The
+    /// seats whose whole value IS a number — 'line-height', 'zoom', 'tab-size', 'border-image-width'
+    /// and an SVG stroke — ask a grammar of their own and are untouched here.</summary>
+    internal static bool IsBoxLength(string token) =>
+        IsDimensionedLengthOrZero(token) || IsPercentage(token);
+
+    /// <summary>A &lt;length-percentage&gt; of the box family that is not negative — the shape the
+    /// paddings, the gaps, a flex basis and a corner radius are written in.</summary>
+    private static bool IsNonNegativeBoxLength(string token) =>
+        IsBoxLength(token) && !IsNegativeValue(token);
+
     private static bool IsBareZero(string token) =>
         Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out var number, out var unit)
         && unit.Length == 0 && number == 0;
@@ -3762,14 +3832,11 @@ public static class CssValueGrammar
         return true;
     }
 
-    private static bool IsNonNegativeLengthOrPercentage(string token)
-    {
-        if (!IsLengthOrPercentage(token)) return false;
-        if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out var number, out _))
-            return false;
-        return number >= 0;
-    }
-
+    /// <summary>Whether the text is one number as a value may spell it: an optional sign, digits, and
+    /// a fraction that — when a decimal point is written at all — has at least one digit after it.
+    /// CSS Syntax 3 §4.3.12 lets a token end on the period, but no reference engine reads a value
+    /// there: 'opacity: 12.', 'line-height: 12.', 'flex-grow: 12.' and 'z-index: 12.' are each refused
+    /// while '12', '12.5' and '.5' all stand (measured, snapshots/_probe_b307_number.html).</summary>
     private static bool IsNumber(string text)
     {
         if (text.Length == 0) return false;
@@ -3782,7 +3849,8 @@ public static class CssValueGrammar
             i++;
             int frac = i;
             while (i < text.Length && char.IsAsciiDigit(text[i])) i++;
-            any |= i > frac;
+            if (i == frac) return false;
+            any = true;
         }
         return any && i == text.Length;
     }
@@ -4493,7 +4561,7 @@ public static class CssValueGrammar
     {
         foreach (var token in SplitComponents(text))
         {
-            if (IsLengthOrPercentage(token)) continue;
+            if (IsBoxLength(token)) continue;
             if (IsOneOf(token, keywords)) continue;
             // A math function is the one parenthesis this grammar can decide: its arguments are
             // numbers, lengths and percentages whatever the property, so 'calc(bogus)' is no
@@ -4517,8 +4585,7 @@ public static class CssValueGrammar
             if (padding && part.Equals("auto", StringComparison.OrdinalIgnoreCase)) continue;
             bool saysPercentage = part.Contains('%', StringComparison.Ordinal);
             if (saysPercentage && !padding) return false;
-            if (!IsLengthOrPercentage(part) && !IsMathFunctionCall(part, IsLengthOrPercentage))
-                return false;
+            if (!IsBoxLength(part)) return false;
         }
         return true;
     }
@@ -4657,7 +4724,7 @@ public static class CssValueGrammar
             // A width is a length: 'auto' is a style word and no width, and a bare ident is not a
             // length either (measured: 'border-width: auto' is dropped).
             if (word.Length == 0 || !IsAsciiNumericStart(word)) return false;
-            if (!IsNonNegativeLengthOrPercentage(word) || IsPercentage(word)) return false;
+            if (!IsNonNegativeBoxLength(word) || IsPercentage(word)) return false;
         }
         return true;
     }
@@ -4706,14 +4773,14 @@ public static class CssValueGrammar
         int i = 0;
         if (i < token.Length && (token[i] == '+' || token[i] == '-')) i++;
         int digits = i;
-        // A point belongs to the number only when a digit follows it (or when the number simply
-        // ends there): '1.5px' is a length and '1.' is a number, but '1.px' is a number with a
-        // point left hanging off it, and the reference engine's fast path reads no such thing
-        // (measured: 'margin-left: 123456789.px' is dropped while '123456789px' stands).
+        // A point belongs to the number only when a digit follows it. CSS Syntax 3 §4.3.12 lets a
+        // token run to the period, but no reference engine reads a value there: 'margin-left:
+        // 123456789.px', 'width: 12.' and 'line-height: 12.' are each dropped while '123456789px',
+        // '12px' and '12' stand (measured), and the same holds inside a unit — 'rotate: 12.deg'
+        // falls with it.
         while (i < token.Length && (char.IsAsciiDigit(token[i])
                 || (token[i] == '.' && i + 1 < token.Length && char.IsAsciiDigit(token[i + 1])))) i++;
         if (i == digits) return false;
-        if (i < token.Length && token[i] == '.' && i + 1 == token.Length) i++;
         if (i < token.Length && (token[i] == 'e' || token[i] == 'E'))
         {
             int probe = i + 1;

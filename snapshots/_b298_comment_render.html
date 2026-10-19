@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b298 comment as separator</title>
+<style>
+  body { margin: 0; font: 12px monospace; }
+  .row { display: block; }
+  /* Four authored roads, each carrying a comment where a separator is needed and never as an
+     operator's space. The reference engine gives every one of them the same four margins, so the
+     bar below each label has to start 10px in from the left and be 20px shorter than the box. */
+  #a { margin: 10px/*c*/20px; }
+  #b { margin: 10px 20px; }
+  #c { padding: 4px/*c*/8px; background: #ffe; }
+  #d { width: calc(100px/*c*/+ 40px); background: #fdd; }   /* refused: no space of its own */
+  #e { width: calc(140px); background: #dfd; }
+</style>
+</head>
+<body>
+<div class="row">A authored 'margin: 10px/*c*/20px' — four longhands</div>
+<div id="a" class="row" style="height: 8px; background: #447"></div>
+<div class="row">B authored 'margin: 10px 20px' — the same box</div>
+<div id="b" class="row" style="height: 8px; background: #447"></div>
+<div class="row">C authored 'padding: 4px/*c*/8px' — the text sits 4px below the edge</div>
+<div id="c" class="row">text</div>
+<div class="row">D authored 'width: calc(100px/*c*/+ 40px)' — refused, so auto (the full row)</div>
+<div id="d" class="row" style="height: 8px"></div>
+<div class="row">E 'width: calc(140px)' — 140px</div>
+<div id="e" class="row" style="height: 8px"></div>
+<script>
+// The computed answer of each road, printed as the page reads it: the attribute, the CSSOM and the
+// cascade all three have to agree about what a comment is.
+const rows = [];
+for (const id of ['a', 'b', 'c', 'd', 'e']) {
+  const el = document.getElementById(id);
+  const cs = getComputedStyle(el);
+  rows.push(id + '|mt=' + cs.marginTop + '|mr=' + cs.marginRight + '|mb=' + cs.marginBottom
+    + '|ml=' + cs.marginLeft + '|pt=' + cs.paddingTop + '|pl=' + cs.paddingLeft
+    + '|w=' + cs.width);
+}
+rows.push('declA=' + document.getElementById('a').style.cssText);
+rows.push('declD=' + document.getElementById('d').style.cssText);
+console.log(rows.join('\n'));
+</script>
+</body></html>

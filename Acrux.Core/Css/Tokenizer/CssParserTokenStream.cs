@@ -16,6 +16,8 @@ public class CssParserTokenStream
     private int _lookaheadStart;
     private int _currentLine;
     private int _currentColumn;
+    private string _currentComments = "";
+    private string _lookaheadComments = "";
 
     public CssParserTokenStream(string input)
         : this(new CssTokenizer(input))
@@ -30,10 +32,18 @@ public class CssParserTokenStream
         _currentStart = _tokenizer.PreviousOffset;
         _currentLine = _tokenizer.Line;
         _currentColumn = _tokenizer.Column;
+        _currentComments = _tokenizer.SkippedComments;
     }
 
     public CssParserToken Current => _current;
     public int Offset => _currentOffset;
+
+    /// <summary>The comment text the tokenizer dropped between the token before this one and this one,
+    /// or the empty string. A comment is not whitespace, but it is not nothing either: it keeps two
+    /// neighbours apart, so a caller that writes a token stream back out as the text of a declaration
+    /// has to put it back — otherwise 'margin: 1px/*c*/2px' is written on as the one word '1px2px',
+    /// which is no value of anything (CSS Syntax 3 §4).</summary>
+    public string PrecedingComments => _currentComments;
 
     /// <summary>Tell the tokenizer to read 'U+41' as one token. CSS Syntax 3 §4.3.14 allows a
     /// unicode range in the declarations of an '@font-face' block and nowhere else, so a stream
@@ -61,6 +71,7 @@ public class CssParserTokenStream
             _lookahead = _tokenizer.TokenizeSingle();
             _lookaheadOffset = _tokenizer.Offset;
             _lookaheadStart = _tokenizer.PreviousOffset;
+            _lookaheadComments = _tokenizer.SkippedComments;
             _hasLookahead = true;
         }
         return _lookahead;
@@ -75,6 +86,7 @@ public class CssParserTokenStream
             _currentStart = _lookaheadStart;
             _currentLine = _lookahead.Line;
             _currentColumn = _lookahead.Column;
+            _currentComments = _lookaheadComments;
             _hasLookahead = false;
         }
         else
@@ -84,6 +96,7 @@ public class CssParserTokenStream
             _currentStart = _tokenizer.PreviousOffset;
             _currentLine = _tokenizer.Line;
             _currentColumn = _tokenizer.Column;
+            _currentComments = _tokenizer.SkippedComments;
         }
         return _current;
     }

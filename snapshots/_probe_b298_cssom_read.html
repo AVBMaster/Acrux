@@ -1,0 +1,27 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>iso</title></head>
+<body>
+<div id="host"></div>
+<script>
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const cases = [["width","calc(1px -/*c*/ 2px)"],["width","calc(1px -  2px)"],["width","calc(1px  - 2px)"],["width","calc(1px -2px)"],["width","calc(1px/*x*/ - 2px)"],["margin","1px/*c*/2px"],["--x","calc(1px/*c*/+ 2px)"],["width","calc(var(--x)/*c*/+ 1px)"]];
+const rows = [];
+for (let i = 0; i < cases.length; i++) {
+  const el = document.createElement('div');
+  host.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+    + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+    + '|echo=' + el.style.getPropertyValue(cases[i][0])
+    + '|css=' + el.style.cssText
+    + '|len=' + el.style.length
+    + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0])
+    + '|w=' + getComputedStyle(el).width);
+}
+console.log(rows.join('\n'));
+}
+build();
+</script>
+</body></html>

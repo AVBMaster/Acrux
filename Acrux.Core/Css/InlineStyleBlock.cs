@@ -31,6 +31,24 @@ public static class InlineStyleBlock
             // setter gives the same text (measured: 'style="margin: 1px/*c*/2px"' makes four
             // longhands and echoes '1px 2px').
             var name = kv.Key;
+            // A custom property is a token stream the engine holds for somebody else to substitute,
+            // so it keeps its text exactly as the page wrote it — comments and all — and is never
+            // grammar-checked here (CSS Variables 1 §3, measured: '--x: calc(1px/*c*/+ 2px)' reads
+            // back with the comment still inside it).
+            if (name.StartsWith("--", StringComparison.Ordinal))
+            {
+                Store(element, name, kv.Value);
+                continue;
+            }
+            // A value that still carries a var() is nobody's expression yet, and the characters the
+            // page wrote are what it will be read back as (CSS Variables 1 §3.1, measured: 'width:
+            // calc(var(--x)/*c*/+ 1px)' echoes that text). It is still asked of the grammar as if the
+            // comment were the space this engine keeps for a declaration.
+            bool pending = CssValueGrammar.IsPendingSubstitution(kv.Value);
+            // A comment cannot be the space a math operator needs (CSS Values 4 §10.3), so a
+            // declaration whose sum stands on one is never in the block at all — the same answer the
+            // same text gets in a stylesheet and through 'CSS.supports' (measured).
+            if (!pending && CssValueGrammar.CommentSuppliesMathWhitespace(kv.Value)) continue;
             var authored = CssValueGrammar.WithCommentsAsWhitespace(kv.Value);
             // The same question the CSSOM's setter asks, because the attribute and setProperty are
             // two roads to one block: a declaration the property's grammar refuses is never in the
@@ -38,7 +56,7 @@ public static class InlineStyleBlock
             // 'style="text-decoration: underline red overline"' answers getPropertyValue with the
             // empty string and paints no line).
             if (!CssValueGrammar.TextIsValidFor(name, authored)) continue;
-            Store(element, name, authored);
+            Store(element, name, pending ? kv.Value : authored);
         }
         element.StyleMirrorText = text;
     }
@@ -47,6 +65,12 @@ public static class InlineStyleBlock
     /// the value spelled the way the engine prints it (see <see cref="CanonicalSpecifiedValue"/>).</summary>
     public static void Store(Element element, string name, string value)
     {
+        // Every road into the block ends here, including the one a '!important' takes around the
+        // setter's own check, so the rule a comment is never an operator's space is enforced once
+        // (CSS Values 4 §10.3; measured: 'width: calc(1px/*c*/+ 2px) !important' makes no
+        // declaration at all). A custom property keeps its text and is not read this way.
+        if (!name.StartsWith("--", StringComparison.Ordinal)
+            && CssValueGrammar.CommentSuppliesMathWhitespace(value)) return;
         // The three CSS 2.1 break names are recorded under the property they alias, with the value
         // folded onto that name's set (LegacyBreakAlias; measured through both ends of the block —
         // setProperty and an authored 'style="page-break-before: always"' each leave the block

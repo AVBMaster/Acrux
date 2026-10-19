@@ -205,10 +205,25 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         // so in both cases nothing changes and nothing is invalidated.
         name = CssPropertyIdExtensions.CanonicalName(name);
         var remove = string.IsNullOrEmpty(value);
-        // The author's text is read the way a stylesheet's is: a comment is the space it stands
-        // for, and neither the grammar nor the block ever sees the comment itself.
-        value = CssValueGrammar.WithCommentsAsWhitespace(value);
-        if (!remove && !CssValueGrammar.TextIsValidFor(name, value)) return;
+        // A custom property is a token stream the engine holds for somebody else to substitute, so
+        // nothing of it is read on the way in: no math whitespace rule, no comment folding, no grammar
+        // (CSS Variables 1 §3, measured: '--x: calc(1px/*c*/+ 2px)' reads back with the comment still
+        // inside it).
+        bool custom = CssPropertyIdExtensions.IsCustomPropertyName(name);
+        // A value that still carries a var() is not this engine's expression yet either: it is held as
+        // the tokens the page wrote, comment included (CSS Variables 1 §3.1, measured: 'width:
+        // calc(var(--x)/*c*/+ 1px)' echoes that text, and 'CSS.supports' takes it).
+        bool pending = CssValueGrammar.IsPendingSubstitution(value);
+        // Every other value is read the way a stylesheet's is: a comment is a token boundary but never
+        // the whitespace a math operator stands on, so such a declaration is refused here exactly as
+        // the sheet refuses it (CSS Values 4 §10.3, measured).
+        var read = CssValueGrammar.WithCommentsAsWhitespace(value);
+        if (!remove && !custom)
+        {
+            if (!pending && CssValueGrammar.CommentSuppliesMathWhitespace(value)) return;
+            if (!CssValueGrammar.TextIsValidFor(name, read)) return;
+        }
+        if (!custom && !pending) value = read;
         SyncWithAttribute();
         if (remove)
         {
@@ -222,9 +237,13 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
 
     private void WriteIfValid(string name, string value)
     {
-        value = CssValueGrammar.WithCommentsAsWhitespace(value);
-        if (CssValueGrammar.TextIsValidFor(name, value))
-            StoreDeclaration(name, value);
+        // The same three readings 'SetStyle' makes, for the road that writes a whole block at once.
+        bool custom = CssPropertyIdExtensions.IsCustomPropertyName(name);
+        bool pending = CssValueGrammar.IsPendingSubstitution(value);
+        if (!custom && !pending && CssValueGrammar.CommentSuppliesMathWhitespace(value)) return;
+        var read = CssValueGrammar.WithCommentsAsWhitespace(value);
+        if (!custom && !CssValueGrammar.TextIsValidFor(name, read)) return;
+        StoreDeclaration(name, custom || pending ? value : read);
     }
 
     /// <summary>Put one declaration into the block. One name is special: the reference engine keeps

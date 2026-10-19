@@ -422,17 +422,21 @@ public static class IndividualTransforms
         if (string.IsNullOrEmpty(token)) return false;
         int i = 0;
         if (token[0] is '+' or '-') i++;
-        bool digits = false, dot = false, exponent = false;
+        bool digits = false, dot = false, exponent = false, digitAfterDot = true;
         while (i < token.Length)
         {
             char c = token[i];
-            if (char.IsAsciiDigit(c)) { digits = true; }
-            else if (c == '.' && !dot && !exponent) dot = true;
+            if (char.IsAsciiDigit(c)) { digits = true; if (dot && !exponent) digitAfterDot = true; }
+            else if (c == '.' && !dot && !exponent) { dot = true; digitAfterDot = false; }
             else if ((c == 'e' || c == 'E') && digits && !exponent) { exponent = true; if (i + 1 < token.Length && (token[i + 1] is '+' or '-')) i++; }
             else return false;
             i++;
         }
         if (!digits) return false;
+        // A number that stops on its decimal point is no number: CSS Syntax 3 §4.3.12 lets the token
+        // run that far and the reference engine stops reading there (measured: 'rotate: 12.deg' is
+        // dropped while 'rotate: 12deg' stands).
+        if (!digitAfterDot) return false;
         if (!double.TryParse(token, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out value)) return false;
         return !double.IsNaN(value) && !double.IsInfinity(value);

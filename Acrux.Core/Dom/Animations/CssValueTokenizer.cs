@@ -337,6 +337,10 @@ internal static class CssValueTokenizer
 
         var numText = t[..i];
         if (numText.Length == 0) return false;
+        // A number that ends on its decimal point is no number: CSS Syntax 3 §4.3.12 lets the token
+        // run to the period, but the reference engine reads '12.px', '12.s' and '12.deg' as nothing at
+        // all (measured, in each of the three seats). 'double' would have taken them.
+        if (numText[numText.Length - 1] == '.') return false;
         if (!double.TryParse(numText, NumberStyles.Float, CultureInfo.InvariantCulture, out number))
             return false;
         return true;
