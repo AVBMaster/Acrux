@@ -1372,78 +1372,134 @@ public class JavaScriptEngine : IDisposable
             // abort or a combination makes one, so the internal factory carries the sentinel the
             // constructor insists on.
             var __signalCraft = 0;
+            var SIG_SLOTS = new WeakMap();
+            var CTRL_SLOTS = new WeakMap();
+            function signalState(receiver) {
+                var made = SIG_SLOTS.get(receiver);
+                if (!made) throw new TypeError('Illegal invocation');
+                return made;
+            }
             function AbortSignal() {
                 if (!__signalCraft) {
                     throw new TypeError('Failed to construct \'AbortSignal\': Illegal constructor');
                 }
-                var self = this;
-                this._aborted = false;
-                this._reason = undefined;
-                this._listeners = [];
-                Object.defineProperty(this, 'aborted', { get: function () { return self._aborted; } });
-                Object.defineProperty(this, 'reason', { get: function () { return self._reason; } });
-                this.onabort = null;
+                SIG_SLOTS.set(this, { aborted: false, reason: undefined, onabort: null });
             }
-            AbortSignal.prototype.addEventListener = function (t, l) {
-                if (t === 'abort' && l && this._listeners.indexOf(l) < 0) this._listeners.push(l);
-            };
-            AbortSignal.prototype.removeEventListener = function (t, l) {
-                if (t !== 'abort') return;
-                var i = this._listeners.indexOf(l);
-                if (i >= 0) this._listeners.splice(i, 1);
-            };
-            AbortSignal.prototype.throwIfAborted = function () {
-                if (!this.aborted) return;
-                throw abortReason(this);
-            };
-            AbortSignal.prototype._fire = function () {
-                var self = this;
-                var ev = new Event('abort');
-                try { ev.target = self; } catch (e) { }
-                var list = self._listeners.slice();
-                for (var i = 0; i < list.length; i++) {
-                    var l = list[i];
-                    try { (typeof l === 'function' ? l : l.handleEvent).call(self, ev); } catch (e) { }
-                }
-                if (typeof self.onabort === 'function') { try { self.onabort(ev); } catch (e) { } }
-            };
-            AbortSignal._make = function () {
+            // The level is built rather than the one the declaration comes with, for the back-pointer
+            // is a name the page reads off it and the engine does not list off a default prototype.
+            AbortSignal.prototype = Object.create(Object.prototype);
+            // The signal is an event target, and the interface declares four reads beside that: the
+            // listeners come down from the target a signal stands on, and nothing at all is written
+            // on the object the controller hands out (DOM §4.6, measured:
+            // 'Object.getOwnPropertyNames(AbortSignal.prototype)' is
+            // 'aborted,constructor,onabort,reason,throwIfAborted' and a signal owns nothing).
+            Object.defineProperties(AbortSignal.prototype, {
+                aborted: { configurable: true, enumerable: true,
+                    get: function () { return signalState(this).aborted; } },
+                reason: { configurable: true, enumerable: true,
+                    get: function () { return signalState(this).reason; } },
+                onabort: { configurable: true, enumerable: true,
+                    get: function () { var held = signalState(this);
+                        return held.onabort === undefined ? null : held.onabort; },
+                    set: function (value) { signalState(this).onabort =
+                        typeof value === 'function' ? value : null; } },
+                throwIfAborted: { configurable: true, writable: true, enumerable: true,
+                    value: ({ throwIfAborted: function () {
+                        var held = signalState(this);
+                        if (!held.aborted) return undefined;
+                        throw held.reason === undefined
+                            ? new DOMException('The operation was aborted.', 'AbortError')
+                            : held.reason;
+                    } }).throwIfAborted }
+            });
+            try {
+                Object.defineProperty(AbortSignal.prototype, Symbol.toStringTag,
+                    { value: 'AbortSignal', writable: false, enumerable: false, configurable: true });
+            } catch (e) { }
+            function signalMake() {
                 __signalCraft++;
                 try { return new AbortSignal(); } finally { __signalCraft--; }
-            };
-            // The one way a signal turns aborted: the reason it carries, then the listeners it has.
-            AbortSignal._abort = function (signal, reason) {
-                if (signal._aborted) return signal;
-                signal._aborted = true;
-                signal._reason = (reason === undefined)
+            }
+            // The one way a signal turns aborted: the reason it carries is written first, and the
+            // walk is the event target's own — the listeners and the handler it names all run there.
+            function signalAbort(signal, reason) {
+                var held = SIG_SLOTS.get(signal);
+                if (!held || held.aborted) return signal;
+                held.aborted = true;
+                held.reason = reason === undefined
                     ? new DOMException('The operation was aborted.', 'AbortError') : reason;
-                signal._fire();
+                try {
+                    if (typeof signal.dispatchEvent === 'function'
+                        && typeof window.__acruxScriptEvent === 'function') {
+                        signal.dispatchEvent(window.__acruxScriptEvent('abort', signal));
+                    } else if (typeof held.onabort === 'function') {
+                        held.onabort.call(signal, { type: 'abort', target: signal });
+                    }
+                } catch (e) { }
                 return signal;
-            };
-            AbortSignal.abort = function (reason) {
-                var s = AbortSignal._make();
-                s._aborted = true;
-                s._reason = (reason === undefined) ? new DOMException('The operation was aborted.', 'AbortError') : reason;
-                return s;
-            };
+            }
+            AbortSignal.abort = ({ abort: function () {
+                var made = signalMake();
+                var held = SIG_SLOTS.get(made);
+                held.aborted = true;
+                held.reason = arguments.length > 0 && arguments[0] !== undefined
+                    ? arguments[0]
+                    : new DOMException('The operation was aborted.', 'AbortError');
+                return made;
+            } }).abort;
             // A timeout signal aborts on its own, with the TimeoutError the spec names, and the
             // timer is the engine's own so it runs at the same clock setTimeout does.
-            AbortSignal.timeout = function (ms) {
-                var s = AbortSignal._make();
+            AbortSignal.timeout = ({ timeout: function (ms) {
+                var made = signalMake();
                 setTimeout(function () {
-                    if (s._aborted) return;
-                    s._aborted = true;
-                    s._reason = new DOMException('Timing provided for the signal elapsed', 'TimeoutError');
-                    s._fire();
+                    signalAbort(made, new DOMException('Timing provided for the signal elapsed',
+                        'TimeoutError'));
                 }, ms || 0);
-                return s;
-            };
+                return made;
+            } }).timeout;
 
             function AbortController() {
-                var self = this;
-                this.signal = AbortSignal._make();
-                this.abort = function (reason) { AbortSignal._abort(self.signal, reason); };
+                // The one signal this controller will hand out, made the moment the page asks for
+                // the controller (DOM §4.6.1) — the read and the method sit on the interface, not on
+                // the object.
+                CTRL_SLOTS.set(this, signalMake());
             }
+            AbortController.prototype = Object.create(Object.prototype);
+            Object.defineProperties(AbortController.prototype, {
+                signal: { configurable: true, enumerable: true,
+                    get: function () {
+                        var made = CTRL_SLOTS.get(this);
+                        if (!made) throw new TypeError('Illegal invocation');
+                        return made;
+                    } },
+                abort: { configurable: true, writable: true, enumerable: true,
+                    // The reason is optional, so the method declares no argument at all and reads
+                    // whatever the call handed it (measured: 'AbortController.prototype.abort
+                    // .length' is 0).
+                    value: ({ abort: function () {
+                        var made = CTRL_SLOTS.get(this);
+                        if (!made) throw new TypeError('Illegal invocation');
+                        signalAbort(made, arguments.length > 0 ? arguments[0] : undefined);
+                        return undefined;
+                    } }).abort }
+            });
+            try {
+                Object.defineProperty(AbortController.prototype, Symbol.toStringTag,
+                    { value: 'AbortController', writable: false, enumerable: false,
+                        configurable: true });
+            } catch (e) { }
+            // The two levels are the interface's own, so the page reads them off the names as well.
+            try {
+                Object.defineProperty(AbortSignal.prototype, 'constructor', { value: AbortSignal,
+                    writable: true, enumerable: false, configurable: true });
+                Object.defineProperty(AbortController.prototype, 'constructor',
+                    { value: AbortController, writable: true, enumerable: false, configurable: true });
+            } catch (e) { }
+            (function () {
+                var levels = window.__domProto || (window.__domProto = { });
+                levels['AbortSignal'] = AbortSignal.prototype;
+                levels['AbortController'] = AbortController.prototype;
+            })();
 
             // The Option and Image constructors the HTML defines as convenience wrappers over a
             // created element (HTMLOptionElement / HTMLImageElement).
@@ -2132,7 +2188,7 @@ public class JavaScriptEngine : IDisposable
                     queued: [], waiting: [], highWaterMark: mark || 0, closed: false,
                     finished: false, error: undefined, locked: false, writer: null,
                     closedPromise: closeBox.promise, closedBox: closeBox, draining: false,
-                    signal: AbortSignal._make(), abortCalled: false };
+                    signal: signalMake(), abortCalled: false };
                 WRITABLE_STATE.set(this, state);
                 var controller = Object.create(WritableStreamDefaultController.prototype);
                 WRITABLE_CONTROLLER.set(controller, state);
@@ -2214,7 +2270,7 @@ public class JavaScriptEngine : IDisposable
                     try { Promise.resolve(state.abort(state.error)).catch(function () { }); }
                     catch (e) { }
                 }
-                if (state.signal) { try { AbortSignal._abort(state.signal, state.error); } catch (e) { } }
+                if (state.signal) { try { signalAbort(state.signal, state.error); } catch (e) { } }
                 writableFinish(state, state.error);
                 writableSettle(state);
             }
@@ -2821,14 +2877,14 @@ public class JavaScriptEngine : IDisposable
                             + ' convert value to \'AbortSignal\'.');
                     }
                 }
-                var made = AbortSignal._make();
+                var made = signalMake();
                 for (var j = 0; j < list.length; j++) {
-                    if (list[j].aborted) return AbortSignal._abort(made, list[j].reason);
+                    if (list[j].aborted) return signalAbort(made, list[j].reason);
                 }
                 for (var k = 0; k < list.length; k++) {
                     (function (source) {
                         source.addEventListener('abort', function () {
-                            AbortSignal._abort(made, source.reason);
+                            signalAbort(made, source.reason);
                         });
                     })(list[k]);
                 }
@@ -3279,7 +3335,7 @@ public class JavaScriptEngine : IDisposable
                     destination: init.destination !== undefined ? String(init.destination) : '',
                     isHistoryDownload: false, isReloaded: false, isClientNavigate: false,
                     signal: (init.signal !== undefined && init.signal !== null)
-                        ? init.signal : AbortSignal._make() };
+                        ? init.signal : signalMake() };
                 BODY_SLOTS.set(this, state);
                 REQUEST_SLOTS.set(this, state);
             }
@@ -5612,6 +5668,29 @@ public class JavaScriptEngine : IDisposable
                     if (!held) { held = {}; EVENT_HOLDINGS.set(evt, held); }
                     held[key] = value;
                 }
+                // A hook for the walks the engine runs over objects of its own — the signal a
+                // controller aborts, the media list that flipped — where the event's target has to
+                // stay the very object the page holds. A host event cannot carry a script object
+                // without turning it into a copy of itself, so these events are built the way the page
+                // builds its own: state behind a slot, the reads through the interface.
+                window.__acruxScriptEvent = function (type, target, bubbles, cancelable) {
+                    var evt = Object.create(protoMap['Event'] || Object.prototype);
+                    eventHold(evt, 'type', String(type === undefined ? '' : type));
+                    eventHold(evt, 'target', target === undefined ? null : target);
+                    eventHold(evt, 'currentTarget', target === undefined ? null : target);
+                    eventHold(evt, 'eventPhase', target === undefined ? 0 : 2);
+                    eventHold(evt, 'bubbles', !!bubbles);
+                    eventHold(evt, 'cancelable', !!cancelable);
+                    eventHold(evt, 'composed', false);
+                    eventHold(evt, 'defaultPrevented', false);
+                    eventHold(evt, 'timeStamp', Date.now());
+                    try {
+                        // The one name an event carries on itself, exactly as the interface writes it.
+                        Object.defineProperty(evt, 'isTrusted', { value: false, writable: false,
+                            enumerable: true, configurable: true });
+                    } catch (e) { }
+                    return evt;
+                };
                 function eventCtor(name, members, initOnly) {
                     // A Touch is the one event the interfaces build from a dictionary alone: there
                     // is no type to name it, the identifier and the coordinates are the whole thing.
@@ -6173,15 +6252,14 @@ public class JavaScriptEngine : IDisposable
                     return { capture: !!record.capture, once: !!record.once, passive: !!record.passive,
                         signal: record.signal || null };
                 }
+                var LISTENER_BAGS = new WeakMap();
                 function listenerBag(self) {
-                    // The bag is hidden and non-enumerable, so a page that walks the object it built
-                    // sees the interface, not the engine's bookkeeping.
-                    if (!Object.prototype.hasOwnProperty.call(self, '__domListeners')) {
-                        Object.defineProperty(self, '__domListeners', {
-                            value: {}, writable: true, enumerable: false, configurable: true
-                        });
-                    }
-                    return self.__domListeners;
+                    // The bookkeeping sits beside the object rather than on it: a page that walks the
+                    // event target it built sees the interface, not a name the engine added (measured:
+                    // 'Object.getOwnPropertyNames(new AbortController())' is empty).
+                    var bag = LISTENER_BAGS.get(self);
+                    if (!bag) { bag = { }; LISTENER_BAGS.set(self, bag); }
+                    return bag;
                 }
                 function defineOnLevel(level, key, value) {
                     if (Object.prototype.hasOwnProperty.call(level, key)) return;
@@ -8086,7 +8164,28 @@ public class JavaScriptEngine : IDisposable
                 level('RadioNodeList', 'NodeList', refuse('RadioNodeList'));
                 level('FileList', null);
                 level('NamedNodeMap', null, refuse('NamedNodeMap'));
-                level('HTMLAllCollection', null, refuse('HTMLAllCollection'));
+                var allLevel = level('HTMLAllCollection', null, refuse('HTMLAllCollection'));
+                // The interface names the position read, the two lookups and the count; the
+                // collection the document hands out answers them itself, but a page that reads the
+                // interface still finds the members there (HTML §4.3.2, measured).
+                if (allLevel) {
+                    member(allLevel, 'item', function (index) {
+                        var list = allElements();
+                        var at = Math.floor(Number(index));
+                        if (!(at >= 0) || at >= list.length) return null;
+                        return list[at];
+                    });
+                    member(allLevel, 'namedItem', function (name) {
+                        return allNamed(allElements(), String(name === undefined ? '' : name));
+                    });
+                    try {
+                        Object.defineProperty(allLevel, 'length', { configurable: true,
+                            enumerable: true, get: function () { return allElements().length; } });
+                        Object.defineProperty(allLevel, Symbol.toStringTag,
+                            { value: 'HTMLAllCollection', writable: false, enumerable: false,
+                                configurable: true });
+                    } catch (e) { }
+                }
                 // The four the script builds keep the constructors the page already calls — the level
                 // only joins the map so 'instanceof' and the tag read the interface.
                 adopt('FormData', null, window.FormData);
@@ -8268,7 +8367,10 @@ public class JavaScriptEngine : IDisposable
                     if (!hits.length) return null;
                     return hits.length === 1 ? hits[0] : hits;
                 }
-                var allCollection = new Proxy(function () { }, {
+                // The target is a function because the member is called; an arrow is the one
+                // function with no prototype of its own, which is what lets the list report only
+                // the keys a collection has.
+                var allCollection = new Proxy(() => { }, {
                     apply: function (target, thisArg, args) {
                         var list = allElements();
                         if (!args.length) return list;
@@ -8278,39 +8380,71 @@ public class JavaScriptEngine : IDisposable
                         if (/^[0-9]+$/.test(text)) return list[Number(text)] === undefined ? null : list[Number(text)];
                         return allNamed(list, text);
                     },
-                    get: function (target, key) {
+                    get: function (target, key, receiver) {
                         var list = allElements();
                         if (key === Symbol.toStringTag) return 'HTMLAllCollection';
                         if (key === 'length') return list.length;
                         if (key === 'item') return function (index) {
-                            var at = Number(index) | 0;
-                            return list[at] === undefined ? null : list[at];
+                            // The read is the one the interface declares, and an index outside the
+                            // collection is nothing at all (HTML §4.3.2, measured).
+                            var at = Math.floor(Number(index));
+                            if (!(at >= 0) || at >= list.length) return null;
+                            return list[at];
                         };
-                        if (key === 'namedItem') return function (name) { return allNamed(allElements(), name); };
-                        if (key === 'call' || key === 'constructor' || key === 'apply')
-                            return target[key];
+                        if (key === 'namedItem') return function (name) {
+                            return allNamed(allElements(), String(name === undefined ? '' : name));
+                        };
+                        if (key === Symbol.iterator) {
+                            return function () {
+                                var made = list.slice(), at = 0;
+                                return { next: function () {
+                                    return at < made.length
+                                        ? { value: made[at++], done: false } : { value: undefined, done: true };
+                                } };
+                            };
+                        }
                         if (typeof key === 'string' && /^[0-9]+$/.test(key))
                             return list[Number(key)] === undefined ? undefined : list[Number(key)];
-                        return undefined;
+                        if (typeof key === 'string' && allNamed(list, key) !== null) {
+                            return allNamed(list, key);
+                        }
+                        // What the list does not model is read from the interface it wears, so the
+                        // object answers the ordinary questions as well as the collection's own.
+                        return Reflect.get(target, key, receiver);
                     },
                     has: function (target, key) {
-                        if (key === 'length' || key === 'item' || key === 'namedItem') return true;
-                        return typeof key === 'string' && /^[0-9]+$/.test(key)
-                            && Number(key) < allElements().length;
+                        if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
+                            return Number(key) < allElements().length;
+                        }
+                        if (typeof key === 'string') return allNamed(allElements(), key) !== null;
+                        return Reflect.has(target, key);
                     },
+                    // The keys the collection owns are the elements by position and the ones its
+                    // legacy named getter reaches — not 'length', which is the interface's read
+                    // rather than a key of the object (HTML §4.3.2, measured).
                     ownKeys: function () {
                         var out = [];
                         var list = allElements();
                         for (var i = 0; i < list.length; i++) out.push(String(i));
-                        out.push('length');
+                        for (var j = 0; j < list.length; j++) {
+                            var named = list[j].getAttribute
+                                ? (list[j].getAttribute('id') || list[j].getAttribute('name'))
+                                : null;
+                            if (named && out.indexOf(named) < 0) out.push(named);
+                        }
                         return out;
                     },
                     getOwnPropertyDescriptor: function (target, key) {
                         var list = allElements();
-                        if (key === 'length')
-                            return { value: list.length, writable: false, enumerable: false, configurable: true };
                         if (typeof key === 'string' && /^[0-9]+$/.test(key) && Number(key) < list.length)
                             return { value: list[Number(key)], writable: false, enumerable: true, configurable: true };
+                        if (typeof key === 'string') {
+                            var named = allNamed(list, key);
+                            if (named !== null) {
+                                return { value: named, writable: false, enumerable: true,
+                                    configurable: true };
+                            }
+                        }
                         return Reflect.getOwnPropertyDescriptor(target, key);
                     }
                 });
@@ -9667,36 +9801,41 @@ public class JavaScriptEngine : IDisposable
                     interfaceMethod(eventTargetLevel, 'when', function when(type) {
                         var target = this;
                         var options = arguments.length > 1 ? arguments[1] : undefined;
-                        if (!target || typeof target.addEventListener !== 'function') {
+                        // The receiver is asked first, because the level itself carries the methods a
+                        // target has without being one: a call taken off the interface is refused
+                        // before the arguments are counted (measured: 'EventTarget.prototype.when()'
+                        // is the illegal invocation, not the missing argument).
+                        var level = target && Object.getOwnPropertyDescriptor(target, 'constructor');
+                        if (!target || typeof target.addEventListener !== 'function'
+                            || (level && level.value === window.EventTarget)) {
                             throw new TypeError('Illegal invocation');
                         }
                         if (arguments.length < 1) {
                             throw new TypeError('Failed to execute ' + formDataQuote('when') + ' on '
-                                + formDataQuote('EventTarget') + ': 1 argument required, but only 0 present.');
+                                + formDataQuote('EventTarget') + ': 1 argument required, but only 0 '
+                                + 'present.');
                         }
                         var name = String(type === undefined ? '' : type);
-                        var capture = options === true || options === false
-                            ? !!options : !!(options && options.capture);
-                        var flags = { capture: capture };
-                        if (options && typeof options === 'object') {
-                            if (options.once) flags.once = true;
-                            if (options.passive) flags.passive = true;
-                            if (options.signal) flags.signal = options.signal;
-                        }
-                        return new Promise(function (resolve, reject) {
-                            function hear(event) {
-                                target.removeEventListener(name, hear, flags);
-                                resolve(event);
-                            }
-                            var signal = flags.signal;
-                            if (signal) {
-                                if (signal.aborted) { reject(signal.reason); return; }
-                                signal.addEventListener('abort', function () {
-                                    target.removeEventListener(name, hear, flags);
-                                    reject(signal.reason);
-                                }, { once: true });
-                            }
+                        var flags = options === true || options === false
+                            ? { capture: !!options }
+                            : { capture: !!(options && options.capture),
+                                passive: !!(options && options.passive) };
+                        var signal = options && typeof options === 'object' ? options.signal : null;
+                        // Every subscribe puts its own listener on the target and takes it back off
+                        // when its subscriber closes, so two consumers of one 'when' both hear every
+                        // dispatch — and the flag a page may think stops the second one is not read
+                        // here at all (measured: 'once' heard both events).
+                        return new window.Observable(function (subscriber) {
+                            function hear(event) { subscriber.next(event); }
                             target.addEventListener(name, hear, flags);
+                            subscriber.addTeardown(function () {
+                                target.removeEventListener(name, hear, flags);
+                            });
+                            if (!signal) return;
+                            if (signal.aborted) { subscriber.complete(); return; }
+                            signal.addEventListener('abort', function () {
+                                subscriber.complete();
+                            }, { once: true });
                         });
                     });
                 }
@@ -12563,6 +12702,781 @@ public class JavaScriptEngine : IDisposable
                 }
                 nodeCtor('Text', function (text) { return document.createTextNode(text); });
                 nodeCtor('Comment', function (text) { return document.createComment(text); });
+            })();
+
+            // ── The stream a page subscribes to (the Observable the reference carries behind
+            // 'EventTarget.when') ──────────────────────────────────────────────
+            // An observable is the function it was built with and nothing else: a page that
+            // subscribes runs that function again with a subscriber of its own, so two consumers of
+            // one stream never share a value or a flag (measured: the executor ran twice for two
+            // subscribes). The consumer is handed no handle at all — 'subscribe' answers nothing —
+            // and the only doors out of a stream are the cleanups the producer registers and the
+            // signal the subscriber carries, which moves the moment the stream closes.
+            (function () {
+                var OBS_SOURCE = new WeakMap();
+                var SUB_STATE = new WeakMap();
+                function q(text) { return String.fromCharCode(39) + text + String.fromCharCode(39); }
+                function obsRefusal(method, detail) {
+                    return new TypeError('Failed to execute ' + q(method) + ' on ' + q('Observable')
+                        + ': ' + detail);
+                }
+                function subRefusal(method, detail) {
+                    return new TypeError('Failed to execute ' + q(method) + ' on ' + q('Subscriber')
+                        + ': ' + detail);
+                }
+                function requiredCallback(value, method, position) {
+                    if (typeof value === 'function') return value;
+                    throw obsRefusal(method, 'parameter ' + position + ' is not of type '
+                        + q('Function') + '.');
+                }
+                function requiredObservable(value, method, position) {
+                    if (value && OBS_SOURCE.get(value) !== undefined) return value;
+                    throw obsRefusal(method, 'parameter ' + position + ' is not of type '
+                        + q('Observable') + '.');
+                }
+                // A method of an interface is a writable, enumerable value named for itself, and the
+                // length a page reads is the number of arguments the interface declares (measured:
+                // 'subscribe' and 'inspect' declare none — they take what the call hands them).
+                function methodOf(proto, name, count, body) {
+                    var made = body;
+                    if (count === 0) {
+                        made = function () { return body.apply(undefined, [this, arguments]); };
+                    } else if (count === 1) {
+                        made = function (first) { return body.apply(undefined, [this, arguments]); };
+                    } else if (count === 2) {
+                        made = function (first, second) {
+                            return body.apply(undefined, [this, arguments]);
+                        };
+                    }
+                    try {
+                        Object.defineProperty(made, 'name', { value: name, configurable: true });
+                    } catch (e) { }
+                    try {
+                        Object.defineProperty(proto, name, { value: made, writable: true,
+                            enumerable: true, configurable: true });
+                    } catch (e) { }
+                }
+
+                function Observable(subscriberFunction) {
+                    if (!new.target) {
+                        throw new TypeError('Failed to construct ' + q('Observable') + ': Please use '
+                            + 'the ' + q('new') + ' operator, this DOM object constructor cannot be '
+                            + 'called as a function.');
+                    }
+                    if (arguments.length < 1) {
+                        throw new TypeError('Failed to construct ' + q('Observable') + ': 1 argument '
+                            + 'required, but only 0 present.');
+                    }
+                    if (typeof subscriberFunction !== 'function') {
+                        throw new TypeError('Failed to construct ' + q('Observable') + ': parameter 1 '
+                            + 'is not of type ' + q('Function') + '.');
+                    }
+                    OBS_SOURCE.set(this, subscriberFunction);
+                }
+                // The level is built rather than the one the declaration comes with: the
+                // back-pointer a function carries by itself is not a name the engine enumerates off
+                // it, and the interface lists it with the rest (Web IDL §4.4.3).
+                Observable.prototype = Object.create(Object.prototype);
+                // The subscriber is the producer's side of one subscription: values go out through
+                // it, cleanups come in through it, and once it has closed every door stops quietly.
+                function Subscriber() {
+                    throw new TypeError('Failed to construct ' + q('Subscriber')
+                        + ': Illegal constructor');
+                }
+                Subscriber.prototype = Object.create(Object.prototype);
+                try {
+                    Object.defineProperty(Subscriber.prototype, 'constructor', { value: Subscriber,
+                        writable: true, enumerable: false, configurable: true });
+                    Object.defineProperty(Subscriber.prototype, Symbol.toStringTag,
+                        { value: 'Subscriber', writable: false, enumerable: false,
+                            configurable: true });
+                } catch (e) { }
+                function subState(receiver) {
+                    var made = SUB_STATE.get(receiver);
+                    if (!made) throw new TypeError('Illegal invocation');
+                    return made;
+                }
+                function subscriberNext(value) {
+                    var state = subState(this);
+                    if (state.closed) return undefined;
+                    try { if (state.next) state.next(value); }
+                    catch (e) { subscriberError.call(this, e); }
+                    return undefined;
+                }
+                function subscriberError(reason) {
+                    var state = subState(this);
+                    if (state.closed) return undefined;
+                    // The signal moves first — a consumer that was watching it learns the stream is
+                    // over before its own handler runs — and the cleanups go back out in the order
+                    // they were not put in (measured: two teardowns ran 'last, first').
+                    state.closed = true;
+                    try { state.controller.abort(); } catch (e) { }
+                    var list = state.teardowns;
+                    state.teardowns = [];
+                    for (var i = list.length - 1; i >= 0; i--) {
+                        try { list[i].call(state.self); } catch (e) { }
+                    }
+                    try { if (state.error) state.error(reason); } catch (e) { }
+                    return undefined;
+                }
+                function subscriberComplete() {
+                    var state = subState(this);
+                    if (state.closed) return undefined;
+                    state.closed = true;
+                    try { state.controller.abort(); } catch (e) { }
+                    var list = state.teardowns;
+                    state.teardowns = [];
+                    for (var j = list.length - 1; j >= 0; j--) {
+                        try { list[j].call(state.self); } catch (e) { }
+                    }
+                    try { if (state.complete) state.complete(); } catch (e) { }
+                    return undefined;
+                }
+                function subscriberAddTeardown(cleanup) {
+                    var state = subState(this);
+                    if (typeof cleanup !== 'function') {
+                        throw subRefusal('addTeardown', 'parameter 1 is not of type '
+                            + q('Function') + '.');
+                    }
+                    if (state.closed) {
+                        try { cleanup.call(state.self); } catch (e) { }
+                        return undefined;
+                    }
+                    state.teardowns.push(cleanup);
+                    return undefined;
+                }
+                [['next', subscriberNext, 1], ['error', subscriberError, 1],
+                    ['complete', subscriberComplete, 0], ['addTeardown', subscriberAddTeardown, 1]]
+                    .forEach(function (made) {
+                        try {
+                            Object.defineProperty(Subscriber.prototype, made[0], { value: made[1],
+                                writable: true, enumerable: true, configurable: true });
+                            Object.defineProperty(made[1], 'length', { value: made[2],
+                                configurable: true });
+                        } catch (e) { }
+                    });
+                try {
+                    Object.defineProperty(Subscriber.prototype, 'active', { configurable: true,
+                        enumerable: true, get: function () { return !subState(this).closed; } });
+                    Object.defineProperty(Subscriber.prototype, 'signal', { configurable: true,
+                        enumerable: true,
+                        get: function () { return subState(this).controller.signal; } });
+                } catch (e) { }
+                window.Subscriber = Subscriber;
+
+                function handlersOf(first, second, third) {
+                    var made = { next: null, error: null, complete: null };
+                    if (typeof first === 'function') {
+                        made.next = first;
+                        if (second !== undefined && second !== null) {
+                            made.error = requiredCallback(second, 'subscribe', 2);
+                        }
+                        if (third !== undefined && third !== null) {
+                            made.complete = requiredCallback(third, 'subscribe', 3);
+                        }
+                        return made;
+                    }
+                    if (first === undefined || first === null) return made;
+                    if (typeof first !== 'object') {
+                        throw obsRefusal('subscribe', 'The provided value is not of type '
+                            + q('(Observer or ObserverCallback)') + '.');
+                    }
+                    [['next', 'next'], ['error', 'error'], ['complete', 'complete']]
+                        .forEach(function (pair) {
+                            if (first[pair[0]] === undefined || first[pair[0]] === null) return;
+                            made[pair[1]] = requiredCallback(first[pair[0]], 'subscribe', 1);
+                        });
+                    return made;
+                }
+                function observableSubscribe(args) {
+                    var source = OBS_SOURCE.get(this);
+                    if (source === undefined) throw new TypeError('Illegal invocation');
+                    var handlers = handlersOf(args.length > 0 ? args[0] : undefined,
+                        args.length > 1 ? args[1] : undefined,
+                        args.length > 2 ? args[2] : undefined);
+                    var state = { next: handlers.next, error: handlers.error,
+                        complete: handlers.complete, teardowns: [], closed: false,
+                        controller: new AbortController(), self: null };
+                    var subscriber = Object.create(Subscriber.prototype);
+                    state.self = subscriber;
+                    SUB_STATE.set(subscriber, state);
+                    // The producer's function is called with the subscriber as its one argument, and
+                    // an exception out of it is the stream's error rather than the page's.
+                    try { source.call(undefined, subscriber); }
+                    catch (e) { subscriberError.call(subscriber, e); }
+                    return undefined;
+                }
+
+                // An operator is a new stream over an old one: what comes out is what the callback
+                // made of what went in, and a stream that closes takes its derivative with it.
+                function through(source, wire) {
+                    return new Observable(function (out) {
+                        wire(out, function (handlers) {
+                            source.subscribe(handlers);
+                        });
+                    });
+                }
+                function terminal(source, build) {
+                    return new Promise(function (resolve, reject) {
+                        source.subscribe(build(resolve, reject));
+                    });
+                }
+                var FIRST_EMPTY = 'No values in Observable';
+                methodOf(Observable.prototype, 'subscribe', 0, function (self, args) {
+                    return observableSubscribe.call(self, args);
+                });
+                methodOf(Observable.prototype, 'map', 1, function (self, args) {
+                    var callback = requiredCallback(args[0], 'map', 1);
+                    return through(self, function (out, upstream) {
+                        var index = 0;
+                        upstream({ next: function (value) {
+                                // The index is the position in the stream, so a page that maps over
+                                // a count reads 0 for the first value it was handed (measured).
+                                var made;
+                                try { made = callback(value, index++); }
+                                catch (e) { out.error(e); return; }
+                                out.next(made);
+                            },
+                            error: function (reason) { out.error(reason); },
+                            complete: function () { out.complete(); } });
+                    });
+                });
+                methodOf(Observable.prototype, 'filter', 1, function (self, args) {
+                    var callback = requiredCallback(args[0], 'filter', 1);
+                    return through(self, function (out, upstream) {
+                        var index = 0;
+                        upstream({ next: function (value) {
+                                var keep = false;
+                                try { keep = !!callback(value, index++); }
+                                catch (e) { out.error(e); return; }
+                                if (keep) out.next(value);
+                            },
+                            error: function (reason) { out.error(reason); },
+                            complete: function () { out.complete(); } });
+                    });
+                });
+                methodOf(Observable.prototype, 'take', 1, function (self, args) {
+                    if (args.length < 1) {
+                        throw obsRefusal('take', '1 argument required, but only 0 present.');
+                    }
+                    var wanted = Number(args[0]);
+                    if (!(wanted > 0)) {
+                        return new Observable(function (out) { out.complete(); });
+                    }
+                    return through(self, function (out, upstream) {
+                        var seen = 0;
+                        upstream({ next: function (value) {
+                                if (seen >= wanted) return;
+                                seen++;
+                                out.next(value);
+                                if (seen >= wanted) out.complete();
+                            },
+                            error: function (reason) { out.error(reason); },
+                            complete: function () { out.complete(); } });
+                    });
+                });
+                methodOf(Observable.prototype, 'drop', 1, function (self, args) {
+                    if (args.length < 1) {
+                        throw obsRefusal('drop', '1 argument required, but only 0 present.');
+                    }
+                    var skipped = Number(args[0]) || 0;
+                    return through(self, function (out, upstream) {
+                        var seen = 0;
+                        upstream({ next: function (value) {
+                                if (seen++ < skipped) return;
+                                out.next(value);
+                            },
+                            error: function (reason) { out.error(reason); },
+                            complete: function () { out.complete(); } });
+                    });
+                });
+                methodOf(Observable.prototype, 'inspect', 0, function (self, args) {
+                    var next = args.length > 0 && args[0] !== null && args[0] !== undefined
+                        ? requiredCallback(args[0], 'inspect', 1) : null;
+                    var onError = args.length > 1 && args[1] !== null && args[1] !== undefined
+                        ? requiredCallback(args[1], 'inspect', 2) : null;
+                    var done = args.length > 2 && args[2] !== null && args[2] !== undefined
+                        ? requiredCallback(args[2], 'inspect', 3) : null;
+                    return through(self, function (out, upstream) {
+                        var index = 0;
+                        upstream({ next: function (value) {
+                                if (next) { try { next(value, index); } catch (e) { out.error(e); return; } }
+                                index++;
+                                out.next(value);
+                            },
+                            error: function (reason) {
+                                if (onError) { try { onError(reason); } catch (e) { out.error(e); return; } }
+                                out.error(reason);
+                            },
+                            complete: function () {
+                                if (done) { try { done(); } catch (e) { out.error(e); return; } }
+                                out.complete();
+                            } });
+                    });
+                });
+                methodOf(Observable.prototype, 'catch', 1, function (self, args) {
+                    var callback = requiredCallback(args[0], 'catch', 1);
+                    return through(self, function (out, upstream) {
+                        upstream({ next: function (value) { out.next(value); },
+                            error: function (reason) {
+                                // The values the stream had already handed out stay in the result;
+                                // only the error is replaced by the stream the handler names.
+                                var again;
+                                try { again = requiredObservable(callback(reason), 'catch', 1); }
+                                catch (e) { out.error(e); return; }
+                                again.subscribe({ next: function (value) { out.next(value); },
+                                    error: function (more) { out.error(more); },
+                                    complete: function () { out.complete(); } });
+                            },
+                            complete: function () { out.complete(); } });
+                    });
+                });
+                methodOf(Observable.prototype, 'finally', 1, function (self, args) {
+                    var callback = requiredCallback(args[0], 'finally', 1);
+                    return through(self, function (out, upstream) {
+                        upstream({ next: function (value) { out.next(value); },
+                            error: function (reason) {
+                                try { callback(); } catch (e) { }
+                                out.error(reason);
+                            },
+                            complete: function () {
+                                try { callback(); } catch (e) { }
+                                out.complete();
+                            } });
+                    });
+                });
+                methodOf(Observable.prototype, 'takeUntil', 1, function (self, args) {
+                    var other = requiredObservable(args[0], 'takeUntil', 1);
+                    return through(self, function (out, upstream) {
+                        var stopped = false;
+                        other.subscribe({ next: function () {
+                                if (stopped) return;
+                                stopped = true;
+                                out.complete();
+                            },
+                            error: function (reason) {
+                                if (stopped) return;
+                                stopped = true;
+                                out.error(reason);
+                            },
+                            complete: function () {
+                                if (stopped) return;
+                                stopped = true;
+                                out.complete();
+                            } });
+                        upstream({ next: function (value) { if (!stopped) out.next(value); },
+                            error: function (reason) { if (!stopped) out.error(reason); },
+                            complete: function () { if (!stopped) out.complete(); } });
+                    });
+                });
+                methodOf(Observable.prototype, 'flatMap', 1, function (self, args) {
+                    var callback = requiredCallback(args[0], 'flatMap', 1);
+                    return through(self, function (out, upstream) {
+                        var open = 0;
+                        var upstreamDone = false;
+                        function finish() { if (upstreamDone && open === 0) out.complete(); }
+                        upstream({ next: function (value) {
+                                var inner;
+                                try { inner = callback(value); } catch (e) { out.error(e); return; }
+                                if (!inner || OBS_SOURCE.get(inner) === undefined) return;
+                                open++;
+                                inner.subscribe({ next: function (made) { out.next(made); },
+                                    error: function (reason) { out.error(reason); },
+                                    complete: function () { open--; finish(); } });
+                            },
+                            error: function (reason) { out.error(reason); },
+                            complete: function () { upstreamDone = true; finish(); } });
+                    });
+                });
+                methodOf(Observable.prototype, 'switchMap', 1, function (self, args) {
+                    var callback = requiredCallback(args[0], 'switchMap', 1);
+                    return through(self, function (out, upstream) {
+                        // Only the newest inner stream is listened to: what an older one hands over
+                        // is dropped on the floor rather than closing anything.
+                        var generation = 0;
+                        var upstreamDone = false;
+                        var open = false;
+                        function finish() { if (upstreamDone && !open) out.complete(); }
+                        upstream({ next: function (value) {
+                                var inner;
+                                try { inner = callback(value); } catch (e) { out.error(e); return; }
+                                if (!inner || OBS_SOURCE.get(inner) === undefined) return;
+                                generation++;
+                                var mine = generation;
+                                open = true;
+                                inner.subscribe({ next: function (made) {
+                                        if (mine === generation) out.next(made);
+                                    },
+                                    error: function (reason) {
+                                        if (mine === generation) out.error(reason);
+                                    },
+                                    complete: function () {
+                                        if (mine !== generation) return;
+                                        open = false;
+                                        finish();
+                                    } });
+                            },
+                            error: function (reason) { out.error(reason); },
+                            complete: function () { upstreamDone = true; finish(); } });
+                    });
+                });
+                // The terminal methods answer a promise: it settles with the value the stream was
+                // asked for, and an error the stream never handled is the reason it rejects (the
+                // empty stream is a RangeError of its own for the two reads that need a value).
+                methodOf(Observable.prototype, 'toArray', 0, function (self) {
+                    return terminal(self, function (resolve) {
+                        var collected = [];
+                        return { next: function (value) { collected.push(value); },
+                            error: function (reason) { reject(reason); },
+                            complete: function () { resolve(collected); } };
+                    });
+                });
+                methodOf(Observable.prototype, 'forEach', 1, function (self, args) {
+                    var callback = requiredCallback(args[0], 'forEach', 1);
+                    return terminal(self, function (resolve, reject) {
+                        return { next: function (value) {
+                                try { callback(value); } catch (e) { reject(e); }
+                            },
+                            error: function (reason) { reject(reason); },
+                            complete: function () { resolve(undefined); } };
+                    });
+                });
+                methodOf(Observable.prototype, 'reduce', 1, function (self, args) {
+                    var callback = requiredCallback(args[0], 'reduce', 1);
+                    var seeded = args.length > 1;
+                    var seed = seeded ? args[1] : undefined;
+                    return terminal(self, function (resolve, reject) {
+                        var had = false;
+                        var made = seed;
+                        var index = seeded ? 0 : -1;
+                        return { next: function (value) {
+                                if (!had && !seeded) { made = value; had = true; index = 0; return; }
+                                had = true;
+                                try { made = callback(made, value, index++); }
+                                catch (e) { reject(e); }
+                            },
+                            error: function (reason) { reject(reason); },
+                            complete: function () {
+                                if (!had && !seeded) {
+                                    reject(new TypeError('Reduce of an Observable with no values and '
+                                        + 'no initial value'));
+                                    return;
+                                }
+                                resolve(made);
+                            } };
+                    });
+                });
+                methodOf(Observable.prototype, 'first', 0, function (self) {
+                    var seen = false;
+                    return terminal(self, function (resolve, reject) {
+                        return { next: function (value) {
+                                if (seen) return;
+                                seen = true;
+                                resolve(value);
+                            },
+                            error: function (reason) { reject(reason); },
+                            complete: function () { if (!seen) reject(new RangeError(FIRST_EMPTY)); } };
+                    });
+                });
+                methodOf(Observable.prototype, 'last', 0, function (self) {
+                    var seen = false;
+                    var answer;
+                    return terminal(self, function (resolve, reject) {
+                        return { next: function (value) { seen = true; answer = value; },
+                            error: function (reason) { reject(reason); },
+                            complete: function () {
+                                if (!seen) { reject(new RangeError(FIRST_EMPTY)); return; }
+                                resolve(answer);
+                            } };
+                    });
+                });
+                methodOf(Observable.prototype, 'find', 1, function (self, args) {
+                    var callback = requiredCallback(args[0], 'find', 1);
+                    var seen = false;
+                    return terminal(self, function (resolve, reject) {
+                        return { next: function (value) {
+                                if (seen) return;
+                                var made = false;
+                                try { made = !!callback(value); } catch (e) { reject(e); return; }
+                                if (!made) return;
+                                seen = true;
+                                resolve(value);
+                            },
+                            error: function (reason) { reject(reason); },
+                            complete: function () { if (!seen) resolve(undefined); } };
+                    });
+                });
+                methodOf(Observable.prototype, 'some', 1, function (self, args) {
+                    var callback = requiredCallback(args[0], 'some', 1);
+                    var seen = false;
+                    return terminal(self, function (resolve, reject) {
+                        return { next: function (value) {
+                                if (seen) return;
+                                var made = false;
+                                try { made = !!callback(value); } catch (e) { reject(e); return; }
+                                if (!made) return;
+                                seen = true;
+                                resolve(true);
+                            },
+                            error: function (reason) { reject(reason); },
+                            complete: function () { if (!seen) resolve(false); } };
+                    });
+                });
+                methodOf(Observable.prototype, 'every', 1, function (self, args) {
+                    var callback = requiredCallback(args[0], 'every', 1);
+                    var seen = false;
+                    return terminal(self, function (resolve, reject) {
+                        return { next: function (value) {
+                                if (seen) return;
+                                var made = false;
+                                try { made = !!callback(value); } catch (e) { reject(e); return; }
+                                if (made) return;
+                                seen = true;
+                                resolve(false);
+                            },
+                            error: function (reason) { reject(reason); },
+                            complete: function () { if (!seen) resolve(true); } };
+                    });
+                });
+                // 'from' takes the iterable or the observable the page already has and answers it as
+                // a stream; a value that is neither is refused, and so is a string, which the
+                // reference will not read one character at a time (measured).
+                function from(value) {
+                    if (arguments.length < 1) {
+                        throw obsRefusal('from', '1 argument required, but only 0 present.');
+                    }
+                    var refusal = 'Cannot convert value to an Observable. Input value must be an '
+                        + 'Observable, async iterable, iterable, or Promise.';
+                    if (value && OBS_SOURCE.get(value) !== undefined) {
+                        return through(value, function (out, upstream) {
+                            upstream({ next: function (made) { out.next(made); },
+                                error: function (reason) { out.error(reason); },
+                                complete: function () { out.complete(); } });
+                        });
+                    }
+                    // A promise is the stream of the one value it settles with, and it closes there;
+                    // a stream that is walked with 'await' hands its items as each one settles.
+                    if (value !== null && value !== undefined && typeof value.then === 'function') {
+                        return new Observable(function (out) {
+                            value.then(function (made) { out.next(made); out.complete(); },
+                                function (reason) { out.error(reason); });
+                        });
+                    }
+                    var walkable = value !== null && value !== undefined
+                        && typeof value !== 'string' && typeof value[Symbol.iterator] === 'function';
+                    if (value !== null && value !== undefined && typeof value !== 'string'
+                        && typeof value[Symbol.asyncIterator] === 'function') {
+                        return new Observable(function (out) {
+                            var walk = value[Symbol.asyncIterator]();
+                            function step() {
+                                walk.next().then(function (made) {
+                                    if (made.done) { out.complete(); return; }
+                                    out.next(made.value);
+                                    if (subState(out).closed) return;
+                                    step();
+                                }, function (reason) { out.error(reason); });
+                            }
+                            step();
+                        });
+                    }
+                    if (!walkable) throw obsRefusal('from', refusal);
+                    return new Observable(function (out) {
+                        var walk = value[Symbol.iterator]();
+                        var made = walk.next();
+                        while (!made.done) {
+                            out.next(made.value);
+                            if (subState(out).closed) return;
+                            made = walk.next();
+                        }
+                        out.complete();
+                    });
+                }
+                try {
+                    Object.defineProperty(Observable, 'from', { value: from, writable: true,
+                        enumerable: true, configurable: true });
+                } catch (e) { }
+                try {
+                    Object.defineProperty(Observable.prototype, 'constructor', { value: Observable,
+                        writable: true, enumerable: false, configurable: true });
+                    Object.defineProperty(Observable.prototype, Symbol.toStringTag,
+                        { value: 'Observable', writable: false, enumerable: false,
+                            configurable: true });
+                    Object.defineProperty(Observable, 'prototype', { value: Observable.prototype,
+                        writable: false, enumerable: false, configurable: false });
+                } catch (e) { }
+                // The two names every sloppy function carries in this engine are not part of the
+                // interface a page reads (measured: 'Object.getOwnPropertyNames(Observable)' is
+                // 'from,length,name,prototype'), and they are the only two a page cannot ask for.
+                try { delete Observable.caller; delete Observable.arguments; } catch (e) { }
+                try { delete Subscriber.caller; delete Subscriber.arguments; } catch (e) { }
+                window.Observable = Observable;
+                var levels = window.__domProto || { };
+                levels.Observable = Observable.prototype;
+                levels.Subscriber = Subscriber.prototype;
+            })();
+
+            // The signal is the event target the interface says it is: the listener methods it answers
+            // are the ones every target answers, and they arrive from the level beneath it rather than
+            // being written on the signal again (DOM §4.6, measured: 'AbortSignal.prototype' names only
+            // the four reads and its constructor).
+            (function () {
+                var levels = window.__domProto || { };
+                var target = levels['EventTarget'];
+                if (typeof window.AbortSignal === 'function' && target
+                    && Object.getPrototypeOf(window.AbortSignal.prototype) !== target) {
+                    try { Object.setPrototypeOf(window.AbortSignal.prototype, target); } catch (e) { }
+                }
+            })();
+
+            // A function a script declares carries two more names than an interface method does, and
+            // neither is part of what the page reads (measured: the own names of a method of an
+            // interface are its 'length' and its 'name' — an interface method has no prototype of its
+            // own either). The sweep takes the extras off what a page can reach: the globals, the
+            // methods of every interface level, and the accessors they read through.
+            (function () {
+                function strip(fn, method) {
+                    if (!fn || typeof fn !== 'function') return;
+                    try { delete fn.caller; delete fn.arguments; } catch (e) { }
+                    if (method) { try { delete fn.prototype; } catch (e) { } }
+                }
+                // A method of an interface is a function that carries nothing but its own name and
+                // the number of arguments it declares: no prototype of its own, and none of the two
+                // names a sloppy script gives every function (measured:
+                // 'Object.getOwnPropertyNames(History.prototype.pushState)' is 'length,name'). A
+                // function written that way is the shorthand form, so each member is written again
+                // over the one that was made — the call still arrives at the same body, with the
+                // same receiver and the same arguments.
+                function reshaped(fn, label, accessor) {
+                    if (!fn || typeof fn !== 'function') return null;
+                    // A read of the literal is taken through its descriptor: an accessor written
+                    // there is a door, and reading the property would walk through it rather than
+                    // hand back the function the interface actually carries.
+                    var made;
+                    try {
+                        if (accessor === 'get') {
+                            made = Object.getOwnPropertyDescriptor(
+                                { get [label]() { return fn.apply(this, arguments); } }, label).get;
+                        } else if (accessor === 'set') {
+                            made = Object.getOwnPropertyDescriptor(
+                                { set [label](value) { return fn.apply(this, arguments); } },
+                                label).set;
+                        } else {
+                            made = ({ [label]() { return fn.apply(this, arguments); } })[label];
+                        }
+                    } catch (e) { return null; }
+                    if (!made) return null;
+                    try {
+                        Object.defineProperty(made, 'name', { value: fn.name, configurable: true });
+                        if (made.length !== fn.length) {
+                            Object.defineProperty(made, 'length', { value: fn.length,
+                                configurable: true });
+                        }
+                        delete made.caller; delete made.arguments; delete made.prototype;
+                    } catch (e) { }
+                    return made;
+                }
+                function needsShape(fn) {
+                    // A method the engine hosts already carries nothing but its name and its arity;
+                    // only the ones the script wrote as function expressions bring a prototype along,
+                    // and those are the ones worth writing again.
+                    if (!fn || typeof fn !== 'function') return false;
+                    try {
+                        return Object.getOwnPropertyNames(fn).indexOf('prototype') >= 0;
+                    } catch (e) { return false; }
+                }
+                function reshapeMember(proto, name) {
+                    var made = Object.getOwnPropertyDescriptor(proto, name);
+                    if (!made) return;
+                    if (typeof made.value === 'function' && name !== 'constructor'
+                        && needsShape(made.value)) {
+                        var asMethod = reshaped(made.value, name, null);
+                        if (asMethod) {
+                            try {
+                                Object.defineProperty(proto, name, { value: asMethod,
+                                    writable: made.writable, enumerable: made.enumerable,
+                                    configurable: made.configurable });
+                            } catch (e) { }
+                        }
+                        return;
+                    }
+                    if (!made.get && !made.set) return;
+                    if (!(made.get && needsShape(made.get)) && !(made.set && needsShape(made.set))) {
+                        return;
+                    }
+                    var getter = made.get ? (needsShape(made.get)
+                        ? reshaped(made.get, name, 'get') : made.get) : undefined;
+                    var setter = made.set ? (needsShape(made.set)
+                        ? reshaped(made.set, name, 'set') : made.set) : undefined;
+                    // A read that could not be written again is left exactly where it was: the shape
+                    // is worth less than the member.
+                    if (made.get && !getter) return;
+                    if (made.set && !setter) return;
+                    try {
+                        Object.defineProperty(proto, name, { get: getter, set: setter,
+                            enumerable: made.enumerable, configurable: made.configurable });
+                    } catch (e) { }
+                }
+                var levels = window.__domProto || { };
+                Object.keys(levels).forEach(function (name) {
+                    var proto = levels[name];
+                    if (!proto || (typeof proto !== 'object' && typeof proto !== 'function')) return;
+                    var own = Object.getOwnPropertyNames(proto);
+                    for (var i = 0; i < own.length; i++) {
+                        var made = Object.getOwnPropertyDescriptor(proto, own[i]);
+                        if (!made) continue;
+                        if (made.value !== undefined) strip(made.value, own[i] !== 'constructor');
+                        if (made.get) strip(made.get, true);
+                        if (made.set) strip(made.set, true);
+                        reshapeMember(proto, own[i]);
+                    }
+                });
+                function stripLevel(proto) {
+                    if (!proto || (typeof proto !== 'object' && typeof proto !== 'function')) return;
+                    var names = Object.getOwnPropertyNames(proto);
+                    for (var i = 0; i < names.length; i++) {
+                        var made;
+                        try { made = Object.getOwnPropertyDescriptor(proto, names[i]); }
+                        catch (e) { continue; }
+                        if (!made) continue;
+                        if (made.value !== undefined) strip(made.value, names[i] !== 'constructor');
+                        if (made.get) strip(made.get, true);
+                        if (made.set) strip(made.set, true);
+                    }
+                }
+                var globals = Object.getOwnPropertyNames(window);
+                for (var g = 0; g < globals.length; g++) {
+                    var value;
+                    try { value = window[globals[g]]; } catch (e) { continue; }
+                    if (typeof value !== 'function') continue;
+                    strip(value, false);
+                    stripLevel(value.prototype);
+                }
+                ['Observable', 'Subscriber'].forEach(function (name) {
+                    if (typeof window[name] === 'function') strip(window[name], false);
+                });
+                // The reads a constructor hands out are methods of the interface as much as the ones
+                // on its level are, and they carry the same shape (measured: 'own(AbortSignal)' names
+                // 'abort', 'any' and 'timeout' and each of them reads 'length,name').
+                function reshapeStatics(owner) {
+                    var names = Object.getOwnPropertyNames(owner);
+                    for (var i = 0; i < names.length; i++) {
+                        if (names[i] === 'length' || names[i] === 'name' || names[i] === 'prototype'
+                            || names[i] === 'constructor') continue;
+                        var made = Object.getOwnPropertyDescriptor(owner, names[i]);
+                        if (!made || typeof made.value !== 'function'
+                            || !needsShape(made.value)) continue;
+                        var asMethod = reshaped(made.value, names[i], null);
+                        if (!asMethod) continue;
+                        try {
+                            Object.defineProperty(owner, names[i], { value: asMethod,
+                                writable: made.writable, enumerable: made.enumerable,
+                                configurable: made.configurable });
+                        } catch (e) { }
+                    }
+                }
+                ['AbortSignal', 'AbortController', 'Observable'].forEach(function (name) {
+                    if (typeof window[name] === 'function') reshapeStatics(window[name]);
+                });
             })();
 
             // Every accessor an interface declares is named for the member it answers, the way the

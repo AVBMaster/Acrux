@@ -1,0 +1,160 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe95 — Observable subscriber, subscription and operators</title></head><body><div id="d">x</div>
+<script>
+(function () {
+    function J(v){try{return JSON.stringify(v);}catch(e){return 'JERR';}}
+    function own(o){try{return Object.getOwnPropertyNames(o).sort().join(',');}catch(e){return 'ERR';}}
+    function g(f){try{var v=f();return typeof v==='string'?v:JSON.stringify(v);}catch(e){return 'ERR '+e.name+':'+String(e.message).slice(0,70);}}
+    var out={};
+
+    // A. The subscriber object the executor is handed, and the subscription subscribe() returns.
+    out.subscriber=g(function(){var seen='never ran';
+        var o=new Observable(function (s) {
+            seen=[Object.prototype.toString.call(s), own(Object(s)),
+                own(Object.getPrototypeOf(Object(s))||{}), typeof s.next, typeof s.error,
+                typeof s.complete, typeof s.cleanup, typeof s.unsubscribe, String(s.closed),
+                typeof s.id, this===o].join('|');
+        });
+        o.subscribe({});
+        return seen;});
+    out.subscription=g(function(){var o=new Observable(function (s) { s.complete(); });
+        var sub=o.subscribe({});
+        return [Object.prototype.toString.call(sub), own(Object(sub)),
+            own(Object.getPrototypeOf(Object(sub))||{}), typeof sub.unsubscribe,
+            String(sub.closed), sub instanceof Promise].join('|');});
+    out.subscriptionClosed=g(function(){var ref=null;
+        var o=new Observable(function (s) { ref=s; });
+        var sub=o.subscribe({}); var before=sub.closed;
+        sub.unsubscribe();
+        return [String(before), String(sub.closed), String(ref&&ref.closed)].join('|');});
+    out.names=g(function(){return [typeof window.Subscription, typeof window.ObservableSubscription,
+        window.Subscription?own(window.Subscription.prototype):'-'].join('|');});
+    out.executorRuns=g(function(){var runs=0;
+        var o=new Observable(function (s) { runs++; s.complete(); });
+        o.subscribe({}); o.subscribe({});
+        return runs;});
+    out.executorThrows=g(function(){var heard=[];
+        var o=new Observable(function (s) { throw new Error('bad'); });
+        o.subscribe({error:function(e){heard.push('E'+(e&&e.message));},
+            complete:function(){heard.push('C');}});
+        return heard.join(',');});
+    out.subscriberAfterError=g(function(){var ref=null; var heard=[];
+        var o=new Observable(function (s) { ref=s; });
+        o.subscribe({next:function(v){heard.push('n'+v);},error:function(){heard.push('E');},
+            complete:function(){heard.push('C');}});
+        ref.error(new Error('x'));
+        heard.push(g(function(){ ref.next(2); ref.complete(); return 'ok'; }));
+        return heard.join(',');});
+    out.cleanupOrder=g(function(){var order=[]; var ref=null;
+        var o=new Observable(function (s) { ref=s;
+            if (typeof s.cleanup==='function') s.cleanup(function(){order.push('c1');});
+            else order.push('no cleanup'); });
+        var sub=o.subscribe({next:function(v){order.push('n'+v);},complete:function(){order.push('C');}});
+        sub.unsubscribe();
+        return [order.join(','), g(function(){ if (ref) ref.complete(); return 'done'; }),
+            order.join(',')].join(' | ');});
+    out.cleanupOnComplete=g(function(){var order=[];
+        var o=new Observable(function (s) { s.cleanup(function(){order.push('c');}); s.complete(); });
+        o.subscribe({complete:function(){order.push('C');}});
+        return order.join(',');});
+
+    // B. The operators, with the values they answer.
+    function source(values, finish) {
+        return new Observable(function (s) {
+            for (var i = 0; i < values.length; i++) s.next(values[i]);
+            if (finish !== 'error') s.complete(); else s.error(new Error('src'));
+        });
+    }
+    out.syncCollect=g(function(){var heard=[];
+        source([1,2,3]).subscribe(function (v) { heard.push(v); });
+        return heard.join(',');});
+    out.map=g(function(){var heard=[]; source([1,2]).map(function (v) { return v*2; })
+        .subscribe(function (v) { heard.push(v); }); return heard.join(',');});
+    out.mapArgs=g(function(){var seen=[]; source([1]).map(function (v, i) { seen.push(v+'/'+i); })
+        .subscribe({}); return seen.join(',');});
+    out.filter=g(function(){var heard=[]; source([1,2,3,4]).filter(function (v) { return v%2===0; })
+        .subscribe(function (v) { heard.push(v); }); return heard.join(',');});
+    out.take=g(function(){var heard=[]; var c=0; source([1,2,3]).take(2)
+        .subscribe({next:function(v){heard.push(v);},complete:function(){c++;}});
+        return heard.join(',')+'/'+c;});
+    out.takeZero=g(function(){return g(function(){var heard=[]; source([1,2]).take(0)
+        .subscribe(function(v){heard.push(v);}); return heard.join(',')+'|';});});
+    out.drop=g(function(){var heard=[]; source([1,2,3]).drop(2).subscribe(function(v){heard.push(v);});
+        return heard.join(',');});
+    out.toArray=g(function(){return g(function(){return source([1,2]).toArray().then(function(a){return J(a);});});});
+    out.reduce=g(function(){return g(function(){return source([1,2,3]).reduce(function(a,b){return a+b;},10)
+        .then(function(v){return String(v);});});});
+    out.forEach=g(function(){var heard=[]; return g(function(){
+        source([1,2]).forEach(function (v) { heard.push(v); }).then(function () { return 'then'; });});});
+    out.firstLast=g(function(){return g(function(){return source([7,8]).first().then(function(v){return 'f'+v;});});});
+    out.findSomeEvery=g(function(){return [g(function(){return source([1,2]).find(function(v){return v===2;})
+        .then(function(v){return 'found'+v;});}),
+        g(function(){return source([1,2]).some(function(v){return v===2;}).then(function(v){return 'some'+v;});}),
+        g(function(){return source([1,2]).every(function(v){return v>0;}).then(function(v){return 'every'+v;});})].join('|');});
+    out.flatMap=g(function(){var heard=[]; source([1,2]).flatMap(function (v) { return source([v, v*10]); })
+        .subscribe(function (v) { heard.push(v); }); return heard.join(',');});
+    out.switchMap=g(function(){var heard=[]; source([1]).switchMap(function (v) { return source([v,'x']); })
+        .subscribe(function (v) { heard.push(v); }); return heard.join(',');});
+    out.inspect=g(function(){var seen=[]; source([1,2]).inspect(function (v) { seen.push(v); })
+        .subscribe(function (v) { }); return seen.join(',');});
+    out.catching=g(function(){var heard=[];
+        source([1],'error').catch(function () { return source([99]); })
+            .subscribe({next:function(v){heard.push(v);},error:function(){heard.push('E');}});
+        return heard.join(',');});
+    out.fin=g(function(){var heard=[];
+        source([1],'error').finally(function(){heard.push('F');}).subscribe({next:function(v){heard.push(v);}});
+        return heard.join(',');});
+    out.takeUntil=g(function(){var heard=[]; var stop=new Observable(function(s){ heard.push('stop'); });
+        return g(function(){ source([1,2]).takeUntil(stop).subscribe(function(v){heard.push(v);}); });});
+    out.chained=g(function(){var heard=[];
+        source([1,2,3,4,5]).filter(function(v){return v%2===1;}).map(function(v){return v*100;})
+            .take(2).subscribe(function(v){heard.push(v);});
+        return heard.join(',');});
+
+    // C. from(), and the constructor's own face.
+    out.from=g(function(){var heard=[]; Observable.from([1,2,3]).subscribe(function(v){heard.push(v);});
+        return [heard.join(','), Object.prototype.toString.call(Observable.from([1])),
+            g(function(){return Observable.from('ab');}).slice(0,40)].join('|');});
+    out.fromSet=g(function(){var heard=[]; Observable.from(new Set([5,6])).subscribe(function(v){heard.push(v);});
+        return heard.join(',');});
+    out.ctorFace=g(function(){return [own(Observable), own(Observable.prototype),
+        Object.getPrototypeOf(Observable.prototype)===Object.prototype,
+        Object.prototype.toString.call(Observable), String(Observable.name), Observable.length].join('|');});
+    out.instanceFace=g(function(){var o=new Observable(function(){});
+        return [own(o), Object.keys(o).join(','), Object.getPrototypeOf(o)===Observable.prototype,
+            Object.prototype.toString.call(o)].join('|');});
+    out.arityErrors=g(function(){return [g(function(){return new Observable();}),
+        g(function(){return new Observable(7);}), g(function(){return Observable.from();}),
+        g(function(){return source([1]).map(7);}), g(function(){return source([1]).take('a');})].join(' || ');});
+
+    // D. EventTarget.when on top of it.
+    out.when=g(function(){var el=document.createElement('div'); document.body.appendChild(el);
+        var heard=[]; var obs=el.when('p95');
+        var sub=obs.subscribe({next:function(e){heard.push(e.type);},complete:function(){heard.push('C');}});
+        el.dispatchEvent(new Event('p95'));
+        el.dispatchEvent(new Event('p95'));
+        if (sub && typeof sub.unsubscribe==='function') sub.unsubscribe(); else heard.push('no-sub');
+        el.dispatchEvent(new Event('p95'));
+        return [heard.join(','), Object.prototype.toString.call(obs),
+            Object.getPrototypeOf(obs)===Observable.prototype].join('|');});
+    out.whenOnce=g(function(){var el=document.createElement('div'); document.body.appendChild(el);
+        var heard=[]; el.when('p95b',{once:true}).subscribe({next:function(e){heard.push(e.type);},
+            complete:function(){heard.push('C');}});
+        el.dispatchEvent(new Event('p95b')); el.dispatchEvent(new Event('p95b'));
+        return heard.join(',');});
+    out.whenOptions=g(function(){var el=document.createElement('div');
+        var obs=el.when('p95c',{signal:(new AbortController()).signal});
+        return [Object.prototype.toString.call(obs),
+            g(function(){ el.when('x',{capture:true,passive:true}); return 'ok'; })].join('|');});
+    out.whenMany=g(function(){var el=document.createElement('div'); var heard=[];
+        var obs=el.when('p95d');
+        obs.subscribe(function(v){heard.push('one'+v.type);});
+        obs.subscribe(function(v){heard.push('two'+v.type);});
+        el.dispatchEvent(new Event('p95d'));
+        return heard.join(',');});
+
+    document.title='P95 done';
+    window.__REPORT=JSON.stringify(out);
+    window.__T && window.__T('probe95', true, JSON.stringify(out));
+})();
+</script>
+<div>probe95</div></body></html>

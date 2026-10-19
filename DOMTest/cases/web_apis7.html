@@ -173,6 +173,24 @@ ckAll('A1 document.all is the collection every old page reaches for', (function 
         ['namedItem', all.namedItem('s1') === document.getElementById('s1')],
         ['item by index', all.item(2).tagName === 'TITLE'],
         ['instanceof', all instanceof HTMLAllCollection],
+        ['the interface names the reads', (function () {
+            return Object.getOwnPropertyNames(HTMLAllCollection.prototype).sort().join(',')
+                === 'constructor,item,length,namedItem'
+                && HTMLAllCollection.length === 0;
+        })()],
+        ['a string of the list is its tag', (function () {
+            try { return String(all) === '[object HTMLAllCollection]'; } catch (e) { return false; }
+        })()],
+        ['the named entries are keys of the list', (function () {
+            var keys = Object.getOwnPropertyNames(all);
+            return keys.indexOf('p1') >= 0 && keys.indexOf('length') < 0
+                && all.propertyIsEnumerable('0');
+        })()],
+        ['the list is iterable', (function () {
+            var seen = 0;
+            for (var node of all) { if (node && node.nodeType === 1) seen++; }
+            return seen === all.length;
+        })()],
         ['not page-built', (function () { try { new HTMLAllCollection(); return false; } catch (e) { return e.name === 'TypeError'; } })()]
     ];
 })(), 'typeof=' + typeof document.all + ' length=' + document.all.length);

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head><title>AbortController and AbortSignal (DOM §4.6)</title></head>
+<body>
+<div id="box"><p id="kid">a</p></div>
+<script>
+(function () {
+    function own(o) { try { return Object.getOwnPropertyNames(o).sort().join(','); } catch (e) { return 'ERR'; } }
+    function tag(v) { try { return Object.prototype.toString.call(v); } catch (e) { return 'TAGERR'; } }
+    function refused(fn) {
+        try { var v = fn(); return 'no-throw:' + (v === undefined ? 'undefined' : String(v)); }
+        catch (e) { return String(e && e.name) + ':' + String(e && e.message); }
+    }
+    function dsc(o, n) {
+        var d = Object.getOwnPropertyDescriptor(o, n);
+        if (!d) return 'ABSENT';
+        return [typeof d.get, typeof d.set, d.enumerable, d.configurable, typeof d.value, d.writable]
+            .join('/');
+    }
+    function ck(name, cond, info) { window.__T(name, cond === true, info === undefined ? '' : String(info)); }
+    function done(name, fn) {
+        var promise;
+        try { promise = fn(); } catch (e) {
+            window.__T(name, false, 'threw ' + (e && e.name) + ': ' + (e && e.message));
+            return;
+        }
+        promise.then(function (v) { window.__T(name, v === true, ''); },
+            function (e) { window.__T(name, false, 'rej ' + (e && e.name) + ': ' + (e && e.message)); });
+    }
+    var SIGNAL_NAMES = 'aborted,constructor,onabort,reason,throwIfAborted';
+    var CONTROLLER_NAMES = 'abort,constructor,signal';
+    var SIGNAL_STATIC_NAMES = 'abort,any,length,name,prototype,timeout';
+
+    // ── A. What the two interfaces name, and what the objects own ─────────────
+    ck('A1 the controller names the read and the method, and owns nothing',
+        own(AbortController.prototype) === CONTROLLER_NAMES
+        && own(new AbortController()) === '' && Object.keys(new AbortController()).join(',') === ''
+        && tag(new AbortController()) === '[object AbortController]'
+        && AbortController.name === 'AbortController' && AbortController.length === 0,
+        [own(AbortController.prototype), own(new AbortController()),
+            tag(new AbortController()), String(AbortController.length)].join('|'));
+    ck('A2 the signal names the four reads and the one method',
+        own(AbortSignal.prototype) === SIGNAL_NAMES
+        && own(new AbortController().signal) === ''
+        && tag(new AbortController().signal) === '[object AbortSignal]'
+        && own(AbortSignal) === SIGNAL_STATIC_NAMES,
+        [own(AbortSignal.prototype), own(new AbortController().signal),
+            tag(new AbortController().signal), own(AbortSignal)].join('|'));
+    ck('A3 the listener methods are the event target\'s, not written again',
+        Object.getPrototypeOf(AbortSignal.prototype) === EventTarget.prototype
+        && typeof new AbortController().signal.addEventListener === 'function'
+        && typeof new AbortController().signal.dispatchEvent === 'function'
+        && !Object.prototype.hasOwnProperty.call(AbortSignal.prototype, 'addEventListener')
+        && !Object.prototype.hasOwnProperty.call(AbortSignal.prototype, 'removeEventListener'),
+        [Object.getPrototypeOf(AbortSignal.prototype) === EventTarget.prototype,
+            String(Object.prototype.hasOwnProperty.call(AbortSignal.prototype, 'addEventListener'))]
+            .join('/'));
+    ck('A4 a page cannot build a signal of its own',
+        refused(function () { return new AbortSignal(); })
+            === "TypeError:Failed to construct 'AbortSignal': Illegal constructor",
+        refused(function () { return new AbortSignal(); }));
+    ck('A5 the two reads are answers and the handler is a pair',
+        dsc(AbortSignal.prototype, 'aborted') === 'function/undefined/true/true/undefined/'
+        && dsc(AbortSignal.prototype, 'reason') === 'function/undefined/true/true/undefined/'
+        && dsc(AbortSignal.prototype, 'onabort') === 'function/function/true/true/undefined/'
+        && dsc(AbortController.prototype, 'signal') === 'function/undefined/true/true/undefined/'
+        && dsc(AbortController.prototype, 'abort') === 'undefined/undefined/true/true/function/true',
+        dsc(AbortSignal.prototype, 'onabort') + '|' + dsc(AbortController.prototype, 'abort'));
+    ck('A6 a read taken away from the signal is refused',
+        refused(function () { return AbortSignal.prototype.aborted; }) === 'TypeError:Illegal invocation'
+        && refused(function () { return AbortSignal.prototype.reason; }) === 'TypeError:Illegal invocation'
+        && refused(function () { return AbortController.prototype.abort.call({ }); })
+            === 'TypeError:Illegal invocation'
+        && refused(function () { return AbortController.prototype.signal; })
+            === 'TypeError:Illegal invocation',
+        refused(function () { return AbortSignal.prototype.aborted; }));
+
+    // ── B. The abort itself ───────────────────────────────────────────────────
+    ck('B1 a fresh signal reads the state the interface begins with',
+        (function () {
+            var signal = new AbortController().signal;
+            // The reason is the value the signal was aborted with, and there is none of that before
+            // the abort: the read is the missing value rather than an empty one (DOM §4.6.2).
+            return signal.aborted === false && signal.reason === undefined
+                && signal.onabort === null
+                && !Object.prototype.hasOwnProperty.call(signal, 'reason');
+        })(),
+        (function () { var s = new AbortController().signal;
+            return [s.aborted, String(s.reason), String(s.onabort),
+                Object.prototype.hasOwnProperty.call(s, 'reason')].join('/'); })());
+    ck('B2 the reason the page gives is the reason the signal carries',
+        (function () {
+            var made = new AbortController();
+            made.abort('because');
+            return made.signal.aborted === true && made.signal.reason === 'because'
+                && made.signal.onabort === null;
+        })(),
+        (function () { var made = new AbortController(); made.abort('because');
+            return [made.signal.aborted, String(made.signal.reason)].join('/'); })());
+    ck('B3 no reason is the AbortError the specification names',
+        (function () {
+            var made = new AbortController();
+            made.abort();
+            var reason = made.signal.reason;
+            return reason && reason.name === 'AbortError'
+                && String(reason.message).indexOf('aborted') >= 0;
+        })(),
+        (function () { var made = new AbortController(); made.abort();
+            return String(made.signal.reason && made.signal.reason.name); })());
+    ck('B4 the same controller aborts once and keeps the first reason',
+        (function () {
+            var made = new AbortController();
+            made.abort('first');
+            made.abort('second');
+            return made.signal.reason === 'first';
+        })(),
+        (function () { var made = new AbortController(); made.abort('first'); made.abort('second');
+            return String(made.signal.reason); })());
+    ck('B5 throwIfAborted answers the reason the signal holds',
+        (function () {
+            var made = new AbortController();
+            var before = refused(function () { return made.signal.throwIfAborted(); });
+            made.abort('gone');
+            var thrown = 'none';
+            try { made.signal.throwIfAborted(); } catch (value) { thrown = String(value); }
+            return before === 'no-throw:undefined' && thrown === 'gone';
+        })(),
+        (function () { var made = new AbortController(); made.abort('gone');
+            var thrown = 'none';
+            try { made.signal.throwIfAborted(); } catch (value) { thrown = String(value); }
+            return thrown; })());
+    ck('B6 the listeners and the handler both hear the one abort',
+        (function () {
+            var made = new AbortController();
+            var heard = [];
+            made.signal.addEventListener('abort', function (event) {
+                heard.push('one' + '/' + event.type + '/' + (event.target === made.signal));
+            });
+            made.signal.onabort = function () { heard.push('handler'); };
+            made.signal.dispatchEvent = made.signal.dispatchEvent;
+            made.abort();
+            return heard.join(',') === 'one/abort/true,handler';
+        })(),
+        (function () {
+            var made = new AbortController();
+            var heard = [];
+            made.signal.addEventListener('abort', function (event) {
+                heard.push('one' + '/' + event.type + '/' + (event.target === made.signal));
+            });
+            made.signal.onabort = function () { heard.push('handler'); };
+            made.abort();
+            return heard.join(',');
+        })());
+    ck('B7 a listener the signal already retired never runs again',
+        (function () {
+            var made = new AbortController();
+            var runs = 0;
+            made.signal.addEventListener('abort', function () { runs++; }, { once: true });
+            made.signal.addEventListener('abort', function () { runs += 10; });
+            made.abort();
+            made.abort();
+            return runs === 11;
+        })(),
+        (function () { var made = new AbortController(); var runs = 0;
+            made.signal.addEventListener('abort', function () { runs++; }, { once: true });
+            made.abort(); made.abort(); return String(runs); })());
+    ck('B8 a listener taken away never hears the abort',
+        (function () {
+            var made = new AbortController();
+            var heard = 0;
+            function hear() { heard++; }
+            made.signal.addEventListener('abort', hear);
+            made.signal.removeEventListener('abort', hear);
+            made.abort();
+            return heard === 0;
+        })(),
+        (function () { var made = new AbortController(); var heard = 0;
+            function hear() { heard++; }
+            made.signal.addEventListener('abort', hear);
+            made.signal.removeEventListener('abort', hear);
+            made.abort(); return String(heard); })());
+
+    // ── C. The three ways a signal comes to be ────────────────────────────────
+    ck('C1 AbortSignal.abort hands out a signal that is already aborted',
+        (function () {
+            var made = AbortSignal.abort('spent');
+            return made.aborted === true && made.reason === 'spent' && tag(made) === '[object AbortSignal]';
+        })(),
+        (function () { var made = AbortSignal.abort('spent');
+            return [made.aborted, String(made.reason), tag(made)].join('/'); })());
+    ck('C2 the list of signals is the one the page asked to combine',
+        (function () {
+            var a = new AbortController(); var b = new AbortController();
+            var merged = AbortSignal.any([a.signal, b.signal]);
+            var heard = '';
+            merged.addEventListener('abort', function () { heard = 'aborted'; });
+            b.abort('from b');
+            return merged.aborted === true && merged.reason === 'from b' && heard === 'aborted'
+                && a.signal.aborted === false;
+        })(),
+        (function () { var a = new AbortController(); var b = new AbortController();
+            var merged = AbortSignal.any([a.signal, b.signal]); b.abort('from b');
+            return [merged.aborted, String(merged.reason), String(a.signal.aborted)].join('/'); })());
+    ck('C3 a list that is not a sequence, or holds a stranger, is refused',
+        refused(function () { return AbortSignal.any(7); })
+            === "TypeError:Failed to execute 'any' on 'AbortSignal': The provided value cannot be converted to a sequence."
+        && refused(function () { return AbortSignal.any([7]); })
+            === "TypeError:Failed to execute 'any' on 'AbortSignal': Failed to convert value to 'AbortSignal'.",
+        refused(function () { return AbortSignal.any([7]); }));
+    ck('C4 the signal of an aborted member is the combination at once',
+        (function () {
+            var made = new AbortController();
+            made.abort('early');
+            var merged = AbortSignal.any([made.signal, new AbortController().signal]);
+            return merged.aborted === true && merged.reason === 'early';
+        })(),
+        (function () { var made = new AbortController(); made.abort('early');
+            return String(AbortSignal.any([made.signal]).reason); })());
+    done('C5 a timeout signal aborts itself with the TimeoutError it names', function () {
+        var made = AbortSignal.timeout(5);
+        if (made.aborted !== false) return Promise.resolve(false);
+        return new Promise(function (resolve) {
+            made.addEventListener('abort', function () {
+                resolve(made.aborted === true && made.reason.name === 'TimeoutError');
+            });
+            setTimeout(function () { resolve(false); }, 120);
+        });
+    });
+    ck('C6 the arity a page reads on the three ways',
+        AbortSignal.abort.length === 0 && AbortSignal.any.length === 1
+        && AbortSignal.timeout.length === 1 && AbortController.prototype.abort.length === 0
+        && AbortSignal.prototype.throwIfAborted.length === 0,
+        [AbortSignal.abort.length, AbortSignal.any.length, AbortSignal.timeout.length,
+            AbortController.prototype.abort.length, AbortSignal.prototype.throwIfAborted.length]
+            .join('/'));
+    // A method of an interface carries only its name and its arity: the two names a sloppy script
+    // adds to every function, and the prototype a function expression comes with, are not part of
+    // what the page reads off the interface (measured).
+    ck('C7 a method of the interface names itself and keeps no script leftovers',
+        AbortController.prototype.abort.name === 'abort'
+        && AbortSignal.prototype.throwIfAborted.name === 'throwIfAborted'
+        && own(AbortController.prototype.abort) === 'length,name'
+        && own(AbortSignal.abort) === 'length,name'
+        && own(AbortSignal.prototype.throwIfAborted) === 'length,name'
+        && own(AbortController) === 'length,name,prototype'
+        && own(AbortSignal).indexOf('_make') < 0 && own(AbortSignal).indexOf('_abort') < 0
+        && own(new AbortController().signal).indexOf('_listeners') < 0,
+        [own(AbortController.prototype.abort), own(AbortSignal.abort),
+            own(AbortSignal.prototype.throwIfAborted), own(AbortController)].join('|'));
+
+    // ── D. The signal as the listener options know it ─────────────────────────
+    ck('D1 a listener registered against a live signal is taken off when it aborts',
+        (function () {
+            var made = new AbortController();
+            var target = document.createElement('div');
+            var heard = 0;
+            target.addEventListener('ping', function () { heard++; }, { signal: made.signal });
+            target.dispatchEvent(new Event('ping'));
+            made.abort();
+            target.dispatchEvent(new Event('ping'));
+            return heard === 1;
+        })(),
+        (function () { var made = new AbortController(); var target = document.createElement('div');
+            var heard = 0;
+            target.addEventListener('ping', function () { heard++; }, { signal: made.signal });
+            target.dispatchEvent(new Event('ping')); made.abort();
+            target.dispatchEvent(new Event('ping')); return String(heard); })());
+    ck('D2 a signal that already aborted never registers the listener at all',
+        (function () {
+            var made = new AbortController();
+            made.abort();
+            var target = document.createElement('div');
+            var heard = 0;
+            target.addEventListener('ping', function () { heard++; }, { signal: made.signal });
+            target.dispatchEvent(new Event('ping'));
+            return heard === 0;
+        })(),
+        (function () { var made = new AbortController(); made.abort();
+            var target = document.createElement('div'); var heard = 0;
+            target.addEventListener('ping', function () { heard++; }, { signal: made.signal });
+            target.dispatchEvent(new Event('ping')); return String(heard); })());
+})();
+</script>
+</body>
+</html>

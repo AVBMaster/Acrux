@@ -1,0 +1,17 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe100 — method definition shape</title></head><body><div>x</div>
+<script>
+(function () {
+    function own(o){try{return Object.getOwnPropertyNames(o).sort().join(',');}catch(e){return 'ERR';}}
+    var out={};
+    out.shorthand = own(({ m: function () {} }).m);
+    out.methodDef = own(({ m: function m() {} }).m);
+    out.concise = own({ concise: function () {} }.concise);
+    var name = 'computed';
+    out.computedMethod = own(({ [name]: function () {} })[name]);
+    try { out.trueConcise = own((({ ['conciseTest']() { return 1; } }).conciseTest)); } catch (e) { out.trueConcise='ERR '+e.message; }
+    out.lengthOfConcise = (({ take: function (count) { return count; } }).take).length;
+    out.argsWork = (({ sum: function (a, b) { return a + '/' + (arguments.length); } }).sum)(1);
+    document.title='P100 '+JSON.stringify(out);
+    window.__T && window.__T('probe100', true, JSON.stringify(out));
+})();
+</script></body></html>

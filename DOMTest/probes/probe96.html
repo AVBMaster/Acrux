@@ -1,0 +1,116 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe96 — Observable teardowns, signals and terminal values</title></head><body><div id="d">x</div>
+<script>
+(function () {
+    function J(v){try{return JSON.stringify(v);}catch(e){return 'JERR';}}
+    function g(f){try{var v=f();return typeof v==='string'?v:J(v);}catch(e){return 'ERR '+e.name+':'+String(e.message).slice(0,80);}}
+    var out={ async: {} };
+    function src(values, finish) {
+        return new Observable(function (s) {
+            for (var i = 0; i < values.length; i++) s.next(values[i]);
+            if (finish === 'error') s.error(new Error('src'));
+            else if (finish === 'none') { }
+            else s.complete();
+        });
+    }
+
+    // A. Teardowns, the signal and 'active'.
+    out.teardownOnComplete=g(function(){var order=[];
+        src([1]).subscribe({next:function(v){order.push('n'+v);},complete:function(){order.push('C');}});
+        var o=new Observable(function (s) { s.addTeardown(function(){order.push('t');}); s.complete(); });
+        o.subscribe({complete:function(){order.push('C2');}});
+        return order.join(',');});
+    out.teardownOnError=g(function(){var order=[];
+        var o=new Observable(function (s) { s.addTeardown(function(){order.push('t1');});
+            s.addTeardown(function(){order.push('t2');}); s.error(new Error('x')); });
+        o.subscribe({error:function(){order.push('E');}});
+        return order.join(',');});
+    out.teardownArgs=g(function(){var seen='none';
+        var o=new Observable(function (s) { s.addTeardown(function (a) { seen=[this===undefined?'undef':'obj',String(a)].join('/'); }); s.complete(); });
+        o.subscribe({}); return seen;});
+    out.teardownBad=g(function(){return [g(function(){return src([1]).subscribe({});}),
+        g(function(){var o=new Observable(function(s){ s.addTeardown(7); });return o.subscribe({}); })].join(' || ');});
+    out.signalState=g(function(){var seen=[];
+        var o=new Observable(function (s) { seen.push(['complete? no', s.signal&&s.signal.constructor.name,
+            String(s.signal&&s.signal.aborted), s.active].join('/')); s.complete();
+            seen.push(['after complete', String(s.signal&&s.signal.aborted), s.active].join('/')); });
+        o.subscribe({}); return seen.join(' | ');});
+    out.signalAfterError=g(function(){var seen=[];
+        var o=new Observable(function (s) { s.error(new Error('q')); seen.push(String(s.signal.aborted)+'/'+s.active); });
+        o.subscribe({error:function(){}}); return seen.join(',');});
+    out.nextAfterTeardown=g(function(){var heard=[];
+        var ref=null; var o=new Observable(function (s) { ref=s; s.addTeardown(function(){heard.push('t');}); });
+        o.subscribe({next:function(v){heard.push('n'+v);}});
+        g(function(){ ref.next(1); }); return heard.join(',');});
+
+    // B. Terminal values (promises) and their rejections.
+    function later(name, promise) {
+        if (!promise || typeof promise.then !== 'function') { out.async[name]='not a promise'; return; }
+        promise.then(function (v) { out.async[name]='ok:'+J(v); },
+            function (e) { out.async[name]='rej:'+(e&&e.name)+':'+String(e&&e.message).slice(0,50); });
+    }
+    later('toArray', src([1,2,3]).toArray());
+    later('reduce', src([1,2,3]).reduce(function (a, b) { return a + b; }, 10));
+    later('reduceNoSeed', src([1,2,3]).reduce(function (a, b) { return a + b; }));
+    later('first', src([7,8]).first());
+    later('last', src([7,8]).last());
+    later('find', src([1,2,3]).find(function (v) { return v === 2; }));
+    later('findMissing', src([1,2,3]).find(function (v) { return v === 99; }));
+    later('some', src([1,2]).some(function (v) { return v === 2; }));
+    later('every', src([1,2]).every(function (v) { return v > 5; }));
+    later('forEach', src([1,2]).forEach(function (v) { }));
+    later('toArrayEmpty', src([]).toArray());
+    later('firstEmpty', src([]).first());
+    later('lastEmpty', src([]).last());
+    later('reduceEmpty', src([]).reduce(function (a, b) { return a + b; }, 0));
+    later('rejectOnStreamError', src([1], 'error').toArray());
+    later('rejectOnEmptyFirst', src([1], 'none').first());
+    later('mapNoArgs', src([1,2]).map(function (v, i) { return v + '/' + i; }).toArray());
+    later('filterIndex', src([1,2,3,4]).filter(function (v, i) { return i === 1; }).toArray());
+    later('catchArgs', src([1],'error').catch(function (e) { return src(['recovered:'+(e&&e.message)]); }).toArray());
+    later('takeUntil', new Observable(function (s) { setTimeout(function () { s.next('go'); }, 1); })
+        .takeUntil(src([1])).toArray());
+    later('finallyOrder', src([1],'error').finally(function(){ out.finallyRan=true; }).toArray());
+
+    // C. from(), and the shapes the operators demand.
+    out.fromBad=g(function(){return [g(function(){return Observable.from('ab');}),
+        g(function(){return Observable.from({});}),
+        g(function(){var o=src([5]); var f=Observable.from(o); var heard=[];
+            f.subscribe(function(v){heard.push(v);}); return heard.join(',');}),
+        g(function(){return Observable.from(new Map([['a',1]])); })].join(' || ');});
+    out.fromLengths=g(function(){return Observable.from.length+'/'+Observable.length;});
+    out.needFn=g(function(){return [g(function(){return src([1]).filter(7);}),
+        g(function(){return src([1]).reduce(7);}),
+        g(function(){return src([1]).flatMap(7);}),
+        g(function(){return src([1]).inspect(7);}),
+        g(function(){return src([1]).catch(7);}),
+        g(function(){return src([1]).finally(7);}),
+        g(function(){return src([1]).takeUntil(7);}),
+        g(function(){return src([1]).take();})].join(' || ');});
+    out.flatMapBadReturn=g(function(){return g(function(){var heard=[];
+        src([1]).flatMap(function () { return 7; }).subscribe(function(v){heard.push(v);});
+        return heard.join(',')+'|';});});
+    out.catchBadReturn=g(function(){return g(function(){var heard=[];
+        src([1],'error').catch(function(){ return 7; }).subscribe({next:function(v){heard.push(v);},
+            error:function(){heard.push('E');}}); return heard.join(',');});});
+    out.subscribeBad=g(function(){return [g(function(){return src([1]).subscribe(7);}),
+        g(function(){return src([1]).subscribe('x');})].join(' || ');});
+    out.subscriberThis=g(function(){var seen='none';
+        var o=new Observable(function (s) { seen=[Object.getPrototypeOf(s)===Subscriber?
+            'Subscriber proto':'no global', typeof Subscriber].join('/'); });
+        o.subscribe({}); return seen;});
+    out.subscriberProto=g(function(){try{var s=null;new Observable(function(x){s=x;}).subscribe({});
+        return [Object.getOwnPropertyNames(s).sort().join(','),
+            Object.getOwnPropertyNames(Object.getPrototypeOf(s)).sort().join(','),
+            Object.getPrototypeOf(Object.getPrototypeOf(s))===Object.prototype,
+            String(Object.getOwnPropertyDescriptor(Object.getPrototypeOf(s),'next').enumerable),
+            String(Object.getOwnPropertyDescriptor(Object.getPrototypeOf(s),'active').get)].join('|');}
+        catch(e){return 'ERR '+e.message;}});
+
+    setTimeout(function () {
+        window.__REPORT2 = J(out);
+        document.title = 'P96 ' + J(out.async);
+    }, 30);
+    window.__T && window.__T('probe96', true, J(out));
+})();
+</script>
+<div>probe96</div></body></html>

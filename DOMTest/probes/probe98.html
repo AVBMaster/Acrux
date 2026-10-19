@@ -1,0 +1,47 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe98 — AbortSignal and AbortController faces</title></head><body><div id="d">x</div>
+<script>
+(function () {
+    function J(v){try{return JSON.stringify(v);}catch(e){return 'JERR';}}
+    function own(o){try{return Object.getOwnPropertyNames(o).sort().join(',');}catch(e){return 'ERR';}}
+    function g(f){try{var v=f();return typeof v==='string'?v:J(v);}catch(e){return 'ERR '+e.name+':'+String(e.message).slice(0,60);}}
+    function dsc(o,n){try{var d=Object.getOwnPropertyDescriptor(o,n);if(!d)return 'ABSENT';
+        return [typeof d.get,typeof d.set,d.enumerable,d.configurable,typeof d.value,d.writable,
+            d.value&&d.value.name!==undefined?String(d.value.name):'',
+            d.value&&d.value.length!==undefined?String(d.value.length):''].join('/');}
+        catch(e){return 'ERR '+e.name;}}
+    var out={};
+    var c=new AbortController(); var s=c.signal;
+    out.ctorAbortSignal=[typeof AbortSignal, AbortSignal&&AbortSignal.name, AbortSignal&&AbortSignal.length,
+        own(AbortSignal)].join('|');
+    out.signalProto=own(AbortSignal.prototype);
+    out.signalInstance=[Object.prototype.toString.call(s), own(s), Object.keys(s).join(','),
+        Object.getPrototypeOf(s)===AbortSignal.prototype].join('|');
+    out.signalDescs=[dsc(AbortSignal.prototype,'aborted'),dsc(AbortSignal.prototype,'reason'),
+        dsc(AbortSignal.prototype,'onabort'),dsc(AbortSignal.prototype,'throwIfAborted'),
+        dsc(AbortSignal.prototype,'addEventListener'),dsc(AbortSignal.prototype,Symbol.toStringTag),
+        dsc(AbortSignal.prototype,'constructor')].join(' | ');
+    out.ctorController=[typeof AbortController, AbortController.name, AbortController.length,
+        own(AbortController), own(AbortController.prototype)].join('|');
+    out.controllerInstance=[Object.prototype.toString.call(c), own(c), Object.keys(c).join(','),
+        Object.getPrototypeOf(c)===AbortController.prototype].join('|');
+    out.controllerDescs=[dsc(AbortController.prototype,'signal'),
+        dsc(AbortController.prototype,'abort')].join(' | ');
+    out.statics=[dsc(AbortSignal,'abort'),dsc(AbortSignal,'timeout'),dsc(AbortSignal,'any'),
+        g(function(){return AbortSignal.any([]);}), g(function(){return AbortSignal.timeout('a');})].join(' | ');
+    out.abortReason=g(function(){var reason='none';
+        try { c.abort('because'); } catch (e) { reason='threw '+e.name; }
+        return [reason, String(s.aborted), String(s.reason), Object.prototype.toString.call(s.reason)].join('|');});
+    out.onabort=g(function(){var heard='none'; c.signal.onabort=function (e) { heard='e'; };
+        c.abort(new Error('x')); return [heard, String(c.signal.reason.message)].join('|');});
+    out.anyWorks=g(function(){var a=new AbortController(); var merged=AbortSignal.any([a.signal]);
+        var heard='none'; merged.addEventListener('abort',function(){heard='aborted';});
+        a.abort('why'); return [String(merged.aborted), heard, String(merged.reason)].join('/');});
+    out.ctorNoNew=g(function(){return AbortController();});
+    out.signalCtor=g(function(){return new AbortSignal();});
+    out.tagOfController=g(function(){return Object.prototype.toString.call(new AbortController());});
+    document.title='P98 done';
+    window.__REPORT=J(out);
+    window.__T && window.__T('probe98', true, J(out));
+})();
+</script>
+<div>probe98</div></body></html>

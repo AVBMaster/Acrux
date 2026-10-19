@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html>
+<head><title>Observable and Subscriber (the stream a page subscribes to, and EventTarget.when on top of it)</title></head>
+<body>
+<div id="box"><p id="kid">a</p></div>
+<script>
+(function () {
+    function own(o) { try { return Object.getOwnPropertyNames(o).sort().join(','); } catch (e) { return 'ERR'; } }
+    function tag(v) { try { return Object.prototype.toString.call(v); } catch (e) { return 'TAGERR'; } }
+    function refused(fn) {
+        try { var v = fn(); return 'no-throw:' + (v === undefined ? 'undefined' : String(v)); }
+        catch (e) { return String(e && e.name) + ':' + String(e && e.message); }
+    }
+    function dsc(o, n) {
+        var d = Object.getOwnPropertyDescriptor(o, n);
+        if (!d) return 'ABSENT';
+        return [typeof d.get, typeof d.set, d.enumerable, d.configurable, typeof d.value, d.writable,
+            d.value && d.value.name !== undefined ? String(d.value.name) : '',
+            d.value && d.value.length !== undefined ? String(d.value.length) : ''].join('/');
+    }
+    function guard(fn) { try { fn(); return 'quiet'; } catch (e) { return 'threw ' + e.name; } }
+    function ck(name, cond, info) { window.__T(name, cond === true, info === undefined ? '' : String(info)); }
+    function done(name, fn) {
+        var promise;
+        try { promise = fn(); } catch (e) {
+            window.__T(name, false, 'threw ' + (e && e.name) + ': ' + (e && e.message));
+            return;
+        }
+        promise.then(function (v) { window.__T(name, v === true, ''); },
+            function (e) { window.__T(name, false, 'rej ' + (e && e.name) + ': ' + (e && e.message)); });
+    }
+    function source(values, finish) {
+        return new Observable(function (s) {
+            for (var i = 0; i < values.length; i++) s.next(values[i]);
+            if (finish === 'error') s.error(new Error('src'));
+            else if (finish === 'none') return;
+            else s.complete();
+        });
+    }
+    function collect(observable) {
+        var heard = [];
+        observable.subscribe({ next: function (v) { heard.push(v); },
+            error: function () { heard.push('E'); }, complete: function () { heard.push('C'); } });
+        return heard.join(',');
+    }
+    var OBS_NAMES = 'catch,constructor,drop,every,filter,finally,find,first,flatMap,forEach,inspect,'
+        + 'last,map,reduce,some,subscribe,switchMap,take,takeUntil,toArray';
+    var SUB_NAMES = 'active,addTeardown,complete,constructor,error,next,signal';
+
+    // ── A. The two interfaces the page reads ──────────────────────────────────
+    ck('A1 the stream is a constructor the page calls with new',
+        typeof Observable === 'function' && Observable.name === 'Observable'
+        && Observable.length === 1 && own(Observable) === 'from,length,name,prototype'
+        && tag(Observable) === '[object Function]'
+        && dsc(Observable, 'of') === 'ABSENT',
+        [typeof Observable, String(Observable.length), own(Observable),
+            dsc(Observable, 'of')].join('|'));
+    ck('A2 the stream names its nineteen members and its constructor',
+        own(Observable.prototype) === OBS_NAMES, own(Observable.prototype));
+    ck('A3 the subscriber names the six doors and its constructor',
+        own(Subscriber.prototype) === SUB_NAMES && typeof Subscriber === 'function'
+        && Subscriber.name === 'Subscriber' && Subscriber.length === 0
+        && own(Subscriber) === 'length,name,prototype',
+        own(Subscriber.prototype) + '|' + own(Subscriber));
+    ck('A4 what the constructor builds owns nothing and wears the tag',
+        (function () {
+            var made = new Observable(function () { });
+            return own(made) === '' && Object.keys(made).join(',') === ''
+                && Object.getPrototypeOf(made) === Observable.prototype
+                && tag(made) === '[object Observable]'
+                && Object.getPrototypeOf(Observable.prototype) === Object.prototype
+                && Object.getPrototypeOf(Subscriber.prototype) === Object.prototype;
+        })(),
+        (function () { var m = new Observable(function () { });
+            return own(m) + '|' + tag(m); })());
+    ck('A5 the tag sits on the level the way an interface writes it',
+        (function () {
+            var onStream = Object.getOwnPropertyDescriptor(Observable.prototype, Symbol.toStringTag);
+            var onSub = Object.getOwnPropertyDescriptor(Subscriber.prototype, Symbol.toStringTag);
+            return !!onStream && onStream.value === 'Observable'
+                && onStream.writable === false && onStream.enumerable === false
+                && onStream.configurable === true
+                && !!onSub && onSub.value === 'Subscriber'
+                && onSub.enumerable === false && onSub.configurable === true;
+        })(),
+        String(Object.getOwnPropertyDescriptor(Observable.prototype, Symbol.toStringTag)) + '/'
+        + String(Object.getOwnPropertyDescriptor(Subscriber.prototype, Symbol.toStringTag)));
+    ck('A6 a member of the interface is a writable enumerable value named for itself',
+        dsc(Observable.prototype, 'subscribe') === 'undefined/undefined/true/true/function/true/subscribe/0'
+        && dsc(Observable.prototype, 'map') === 'undefined/undefined/true/true/function/true/map/1'
+        && dsc(Observable.prototype, 'toArray') === 'undefined/undefined/true/true/function/true/toArray/0'
+        && dsc(Observable.prototype, 'inspect') === 'undefined/undefined/true/true/function/true/inspect/0'
+        && dsc(Observable.prototype, 'constructor')
+            === 'undefined/undefined/false/true/function/true/Observable/1',
+        [dsc(Observable.prototype, 'subscribe'), dsc(Observable.prototype, 'map'),
+            dsc(Observable.prototype, 'toArray'), dsc(Observable.prototype, 'inspect'),
+            dsc(Observable.prototype, 'constructor')].join(' | '));
+    ck('A7 the arity a page reads is the arguments the interface declares',
+        [Observable.prototype.subscribe.length, Observable.prototype.map.length,
+            Observable.prototype.filter.length, Observable.prototype.take.length,
+            Observable.prototype.drop.length, Observable.prototype.forEach.length,
+            Observable.prototype.toArray.length, Observable.prototype.reduce.length,
+            Observable.prototype.first.length, Observable.prototype.last.length,
+            Observable.prototype.find.length, Observable.prototype.some.length,
+            Observable.prototype.every.length, Observable.prototype.flatMap.length,
+            Observable.prototype.switchMap.length, Observable.prototype.inspect.length,
+            Observable.prototype.catch.length, Observable.prototype.finally.length,
+            Observable.prototype.takeUntil.length, Observable.from.length].join(',')
+        === '0,1,1,1,1,1,0,1,0,0,1,1,1,1,1,0,1,1,1,1',
+        [Observable.prototype.subscribe.length, Observable.prototype.first.length,
+            Observable.prototype.inspect.length, Observable.prototype.takeUntil.length,
+            Observable.from.length].join(','));
+    ck('A8 the producer is the page and the subscriber is the engine\'s',
+        refused(function () { return new Subscriber(function () { }); })
+            === "TypeError:Failed to construct 'Subscriber': Illegal constructor"
+        && refused(function () { return new Observable(); })
+            === "TypeError:Failed to construct 'Observable': 1 argument required, but only 0 present."
+        && refused(function () { return new Observable(7); })
+            === "TypeError:Failed to construct 'Observable': parameter 1 is not of type 'Function'.",
+        refused(function () { return new Observable(7); }));
+
+    // ── B. One subscription, one producer run ─────────────────────────────────
+    ck('B1 subscribing hands the consumer nothing to unsubscribe with',
+        source([1]).subscribe({ next: function () { } }) === undefined
+        && source([1]).subscribe() === undefined,
+        String(source([1]).subscribe({ next: function () { } })));
+    ck('B2 the producer runs again for every consumer',
+        (function () {
+            var runs = 0;
+            var made = new Observable(function (s) { runs++; s.complete(); });
+            made.subscribe({ }); made.subscribe({ });
+            return runs === 2;
+        })(), String('runs'));
+    ck('B3 the values go out synchronously and stop when the stream closes',
+        collect(source([1, 2, 3])) === '1,2,3,C'
+        && collect(source([1], 'error')) === '1,E'
+        && collect(source([1, 2], 'none')) === '1,2',
+        collect(source([1, 2, 3])) + '|' + collect(source([1], 'error')));
+    ck('B4 the subscriber is the interface level it reads as',
+        (function () {
+            var seen = null;
+            new Observable(function (s) { seen = s; }).subscribe({ });
+            return tag(seen) === '[object Subscriber]' && own(seen) === ''
+                && Object.getPrototypeOf(seen) === Subscriber.prototype;
+        })(),
+        (function () { var s = null; new Observable(function (x) { s = x; }).subscribe({});
+            return tag(s) + '|' + own(s); })());
+    ck('B5 a door that has closed stops answering, and does not throw',
+        (function () {
+            var heard = [];
+            var producer = null;
+            var made = new Observable(function (s) { producer = s; });
+            made.subscribe({ next: function (v) { heard.push('n' + v); },
+                error: function () { heard.push('E'); },
+                complete: function () { heard.push('C'); } });
+            heard.push(String(producer.next === undefined ? 'gone' : typeof producer.next));
+            producer.complete();
+            heard.push(guard(function () { producer.next(2); producer.error(3); producer.complete(); }));
+            return heard.join(',');
+        })().indexOf('C,quiet') >= 0,
+        (function () {
+            var heard = []; var producer = null;
+            new Observable(function (s) { producer = s; }).subscribe({
+                complete: function () { heard.push('C'); } });
+            producer.complete();
+            heard.push(guard(function () { producer.next(2); producer.error(3); }));
+            return heard.join(',');
+        })());
+    ck('B6 an exception out of the producer is the stream\'s error, not the page\'s',
+        (function () {
+            var heard = [];
+            new Observable(function () { throw new Error('bad'); }).subscribe({
+                error: function (e) { heard.push('E' + (e && e.message)); } });
+            return heard.join(',') === 'Ebad';
+        })(),
+        (function () { var heard = [];
+            new Observable(function () { throw new Error('bad'); }).subscribe({
+                error: function (e) { heard.push('E' + (e && e.message)); } });
+            return heard.join(','); })());
+    ck('B7 the subscriber carries the state a consumer watches',
+        (function () {
+            var before = null, after = null;
+            new Observable(function (s) {
+                before = [s.active, s.signal && s.signal.aborted, tag(s.signal)].join('/');
+                s.complete();
+                after = [s.active, s.signal && s.signal.aborted].join('/');
+            }).subscribe({ });
+            return before === 'true/false/[object AbortSignal]' && after === 'false/true';
+        })(),
+        (function () { var before = '', after = '';
+            new Observable(function (s) {
+                before = [s.active, s.signal && s.signal.aborted, tag(s.signal)].join('/');
+                s.complete();
+                after = [s.active, s.signal && s.signal.aborted].join('/');
+            }).subscribe({ }); return before + ' | ' + after; })());
+    ck('B8 the cleanups go back out in the order they were not put in, before the handler',
+        (function () {
+            var order = [];
+            new Observable(function (s) {
+                s.addTeardown(function () { order.push('t1'); });
+                s.addTeardown(function () { order.push('t2'); });
+                s.complete();
+            }).subscribe({ complete: function () { order.push('C'); } });
+            return order.join(',') === 't2,t1,C';
+        })(),
+        (function () { var order = [];
+            new Observable(function (s) {
+                s.addTeardown(function () { order.push('t1'); });
+                s.addTeardown(function () { order.push('t2'); });
+                s.error(new Error('x'));
+            }).subscribe({ error: function () { order.push('E'); } });
+            return order.join(','); })());
+    ck('B9 a value that is not an observer is refused the way the reference words it',
+        refused(function () { return source([1]).subscribe(7); })
+            === "TypeError:Failed to execute 'subscribe' on 'Observable': The provided value is not of type '(Observer or ObserverCallback)'.",
+        refused(function () { return source([1]).subscribe(7); }));
+    ck('B10 a cleanup that is not a function is the stream\'s error and one after the close still runs',
+        (function () {
+            var answer = '';
+            new Observable(function (s) { s.addTeardown(7); }).subscribe({
+                error: function (e) { answer = String(e && e.name) + ':' + String(e && e.message); } });
+            return answer
+                === "TypeError:Failed to execute 'addTeardown' on 'Subscriber': parameter 1 is not of type 'Function'.";
+        })()
+        && (function () {
+            var ran = false;
+            var producer = null;
+            new Observable(function (s) { producer = s; s.complete(); }).subscribe({ });
+            producer.addTeardown(function () { ran = true; });
+            return ran;
+        })(),
+        (function () {
+            var answer = '';
+            new Observable(function (s) { s.addTeardown(7); }).subscribe({
+                error: function (e) { answer = String(e && e.name); } });
+            return answer;
+        })());
+
+    // ── C. The operators, value by value ──────────────────────────────────────
+    ck('C1 the reads that move the stream answer the values the callback made',
+        collect(source([1, 2]).map(function (v) { return v * 2; })) === '2,4,C'
+        && collect(source([1, 2, 3, 4]).filter(function (v) { return v % 2 === 0; })) === '2,4,C'
+        && collect(source([1, 2, 3]).drop(2)) === '3,C'
+        && collect(source([1, 2, 3]).take(2)) === '1,2,C'
+        && collect(source([1, 2]).take(0)) === 'C'
+        && collect(source([1, 2, 3, 4, 5]).filter(function (v) { return v % 2 === 1; })
+            .map(function (v) { return v * 100; }).take(2)) === '100,300,C',
+        collect(source([1, 2, 3, 4, 5]).filter(function (v) { return v % 2 === 1; })
+            .map(function (v) { return v * 100; }).take(2)));
+    ck('C2 the callback reads its position in the stream',
+        (function () {
+            var seen = [];
+            source([1, 2]).map(function (v, i) { seen.push(v + '/' + i); }).subscribe({ });
+            return seen.join(',') === '1/0,2/1';
+        })(),
+        (function () { var seen = [];
+            source([1, 2]).map(function (v, i) { seen.push(v + '/' + i); }).subscribe({ });
+            return seen.join(','); })());
+    ck('C3 the side-effect reads keep the values they were handed',
+        (function () {
+            var seen = [];
+            var heard = collect(source([1, 2]).inspect(function (v) { seen.push(v); }));
+            return heard === '1,2,C' && seen.join(',') === '1,2';
+        })(),
+        (function () { var seen = [];
+            var heard = collect(source([1, 2]).inspect(function (v) { seen.push(v); }));
+            return heard + '|' + seen.join(','); })());
+    ck('C4 the two joins over other streams answer what the reference answers',
+        collect(source([1, 2]).flatMap(function (v) { return source([v, v * 10]); })) === '1,10,2,20,C'
+        && collect(source([1]).switchMap(function (v) { return source([v, 'x']); })) === '1,x,C',
+        collect(source([1, 2]).flatMap(function (v) { return source([v, v * 10]); })));
+    ck('C5 the two doors a closed stream leaves answer the recovery they name',
+        collect(source([1], 'error').catch(function () { return source([99]); })) === '1,99,C'
+        && (function () {
+            var ran = false;
+            collect(source([1], 'error').finally(function () { ran = true; }));
+            return ran;
+        })(),
+        collect(source([1], 'error').catch(function () { return source([99]); })));
+    ck('C6 an operator asked for a function or a stream is refused',
+        refused(function () { return source([1]).filter(7); })
+            === "TypeError:Failed to execute 'filter' on 'Observable': parameter 1 is not of type 'Function'."
+        && refused(function () { return source([1]).flatMap(7); })
+            === "TypeError:Failed to execute 'flatMap' on 'Observable': parameter 1 is not of type 'Function'."
+        && refused(function () { return source([1]).catch(7); })
+            === "TypeError:Failed to execute 'catch' on 'Observable': parameter 1 is not of type 'Function'."
+        && refused(function () { return source([1]).takeUntil(7); })
+            === "TypeError:Failed to execute 'takeUntil' on 'Observable': parameter 1 is not of type 'Observable'."
+        && refused(function () { return source([1]).take(); })
+            === "TypeError:Failed to execute 'take' on 'Observable': 1 argument required, but only 0 present.",
+        refused(function () { return source([1]).takeUntil(7); }));
+    ck('C7 takeUntil closes the result when the other stream answers',
+        (function () {
+            var heard = [];
+            source([1, 2, 3]).takeUntil(source([9])).subscribe({
+                next: function (v) { heard.push(v); }, complete: function () { heard.push('C'); } });
+            return heard.join(',') === 'C';
+        })(),
+        (function () { var heard = [];
+            source([1, 2, 3]).takeUntil(source([9])).subscribe({
+                next: function (v) { heard.push(v); }, complete: function () { heard.push('C'); } });
+            return heard.join(','); })());
+
+    // ── D. from: the value the page already has, read as a stream ─────────────
+    ck('D1 an iterable the engine can walk is a stream of its items',
+        collect(Observable.from([1, 2, 3])) === '1,2,3,C'
+        && collect(Observable.from(new Set([5, 6]))) === '5,6,C'
+        && tag(Observable.from(new Map([['a', 1]]))) === '[object Observable]'
+        && collect(Observable.from(source([7]))) === '7,C',
+        collect(Observable.from([1, 2, 3])) + '|' + collect(Observable.from(new Set([5, 6]))));
+    var FROM_REFUSAL = "TypeError:Failed to execute 'from' on 'Observable': Cannot convert value "
+        + 'to an Observable. Input value must be an Observable, async iterable, iterable, or Promise.';
+    ck('D2 a value that is not a stream or an iterable is refused',
+        refused(function () { return Observable.from('ab'); }) === FROM_REFUSAL
+        && refused(function () { return Observable.from({}); }) === FROM_REFUSAL
+        && refused(function () { return Observable.from(); })
+            === "TypeError:Failed to execute 'from' on 'Observable': 1 argument required, but only 0 present.",
+        refused(function () { return Observable.from('ab'); }));
+
+    // ── E. The terminal reads answer promises ─────────────────────────────────
+    done('D3 a promise and a stream walked with await are read as sources', function () {
+        var heard = [];
+        Observable.from(Promise.resolve('one')).subscribe({
+            next: function (v) { heard.push(v); }, complete: function () { heard.push('C'); } });
+        var asyncSource = {};
+        asyncSource[Symbol.asyncIterator] = function () {
+            var left = ['a', 'b'];
+            return { next: function () {
+                return Promise.resolve(left.length
+                    ? { value: left.shift(), done: false } : { value: undefined, done: true });
+            } };
+        };
+        return new Promise(function (resolve) {
+            Observable.from(asyncSource).subscribe({
+                next: function (v) { heard.push(v); },
+                complete: function () { heard.push('C');
+                    setTimeout(function () { resolve(heard.join(',') === 'one,C,a,b,C'); }, 0); }
+            });
+        });
+    });
+    done('E1 the collected stream settles with the array it gathered', function () {
+        return Promise.all([source([1, 2, 3]).toArray(), source([]).toArray()])
+            .then(function (made) {
+                return JSON.stringify(made[0]) === '[1,2,3]' && JSON.stringify(made[1]) === '[]';
+            });
+    });
+    done('E2 the fold settles with the value the callback built', function () {
+        return Promise.all([source([1, 2, 3]).reduce(function (a, b) { return a + b; }, 10),
+            source([1, 2, 3]).reduce(function (a, b) { return a + b; }),
+            source([]).reduce(function (a, b) { return a + b; }, 7)])
+            .then(function (made) { return made.join(',') === '16,6,7'; });
+    });
+    done('E3 the first and the last value settle as soon as they can', function () {
+        return Promise.all([source([7, 8]).first(), source([7, 8]).last(),
+            new Observable(function (s) { s.next('now'); }).first()])
+            .then(function (made) { return made.join(',') === '7,8,now'; });
+    });
+    done('E4 a stream that closes with nothing is the error the read names', function () {
+        var refusedFirst = 'none', refusedLast = 'none';
+        return source([]).first().catch(function (e) { refusedFirst = e.name + ':' + e.message; })
+            .then(function () {
+                return source([]).last().catch(function (e) {
+                    refusedLast = e.name + ':' + e.message;
+                });
+            })
+            .then(function () {
+                return refusedFirst === 'RangeError:No values in Observable'
+                    && refusedLast === 'RangeError:No values in Observable';
+            });
+    });
+    done('E5 the question reads settle on the answer they ask for', function () {
+        return Promise.all([source([1, 2, 3]).find(function (v) { return v === 2; }),
+            source([1, 2, 3]).find(function (v) { return v === 99; }),
+            source([1, 2]).some(function (v) { return v === 2; }),
+            source([1, 2]).every(function (v) { return v > 5; }),
+            source([1, 2]).every(function (v) { return v > 0; }),
+            source([1, 2]).forEach(function (v) { })])
+            .then(function (made) { return made.join(',') === '2,,true,false,true,'; });
+    });
+    done('E6 an error the stream never handled is the reason the promise rejects', function () {
+        return source([1], 'error').toArray().then(function () { return false; },
+            function (e) { return e.message === 'src'; });
+    });
+    done('E7 takeUntil lets the values before the other stream through', function () {
+        var stop = null;
+        var first = new Observable(function (s) { stop = s; });
+        var heard = [];
+        new Observable(function (s) {
+            s.next('a');
+            s.next('b');
+            setTimeout(function () { s.next('c'); s.complete(); }, 2);
+        }).takeUntil(first).subscribe({ next: function (v) { heard.push(v); },
+            complete: function () { heard.push('C'); } });
+        stop.next('go');
+        return new Promise(function (resolve) {
+            setTimeout(function () { resolve(heard.join(',') === 'a,b,go,C' || heard.join(',') === 'a,b,C'); }, 6);
+        });
+    });
+
+    // ── F. EventTarget.when is a stream over the events ───────────────────────
+    ck('F1 the awaited event is a stream the subscriber hears',
+        (function () {
+            var target = document.createElement('div');
+            document.body.appendChild(target);
+            var made = target.when('f1');
+            if (tag(made) !== '[object Observable]'
+                || Object.getPrototypeOf(made) !== Observable.prototype) return false;
+            var heard = [];
+            made.subscribe({ next: function (event) { heard.push(event.type); } });
+            made.subscribe({ next: function (event) { heard.push('two' + event.type); } });
+            target.dispatchEvent(new Event('f1'));
+            target.dispatchEvent(new Event('f1'));
+            return heard.join(',') === 'f1,twof1,f1,twof1';
+        })(),
+        (function () {
+            var target = document.createElement('div');
+            var made = target.when('f1');
+            var heard = [];
+            made.subscribe({ next: function (e) { heard.push(e.type); } });
+            target.dispatchEvent(new Event('f1'));
+            target.dispatchEvent(new Event('f1'));
+            return tag(made) + '|' + heard.join(',');
+        })());
+    ck('F2 the method is the event target\'s and the receiver is asked first',
+        typeof EventTarget.prototype.when === 'function'
+        && EventTarget.prototype.when.name === 'when'
+        && EventTarget.prototype.when.length === 1
+        && refused(function () { return EventTarget.prototype.when.call({ }, 'x'); })
+            === 'TypeError:Illegal invocation'
+        && refused(function () { return EventTarget.prototype.when(); })
+            === 'TypeError:Illegal invocation'
+        && refused(function () { return document.createElement('div').when(); })
+            === "TypeError:Failed to execute 'when' on 'EventTarget': 1 argument required, but only 0 present.",
+        refused(function () { return EventTarget.prototype.when(); }) + ' | '
+        + refused(function () { return document.createElement('div').when(); }));
+    // This is the one place the engine is ahead of the reference: 'when' takes the signal the options
+    // dictionary names, and a page that aborts it stops hearing the event. The reference still hears
+    // both dispatches here (measured), so this cell reads as a difference in that browser and the
+    // behaviour follows the text of the interface.
+    ck('F3 a signal the page hands in closes the stream it registers',
+        (function () {
+            var target = document.createElement('div');
+            var controller = new AbortController();
+            var heard = [];
+            target.when('f3', { signal: controller.signal }).subscribe({
+                next: function (event) { heard.push(event.type); },
+                complete: function () { heard.push('C'); } });
+            target.dispatchEvent(new Event('f3'));
+            controller.abort();
+            target.dispatchEvent(new Event('f3'));
+            return heard.join(',') === 'f3,C';
+        })(),
+        (function () {
+            var target = document.createElement('div');
+            var controller = new AbortController();
+            var heard = [];
+            target.when('f3', { signal: controller.signal }).subscribe({
+                next: function (e) { heard.push(e.type); }, complete: function () { heard.push('C'); } });
+            target.dispatchEvent(new Event('f3'));
+            controller.abort();
+            target.dispatchEvent(new Event('f3'));
+            return heard.join(',');
+        })());
+})();
+</script>
+</body>
+</html>
