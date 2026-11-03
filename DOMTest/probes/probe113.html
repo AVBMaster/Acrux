@@ -1,0 +1,24 @@
+<!DOCTYPE html><html><body><div id="d"><p id="p">hi</p></div><script>
+(function () {
+    var out = {};
+    function msg(f) { try { return 'ok:' + JSON.stringify(f()); } catch (e) { return 'ERR:' + e.name + ':' + String(e.message).slice(0,40); } }
+    var d = document.getElementById('d'), p = document.getElementById('p'), t = p.firstChild;
+    var detached = document.createElement('i');
+    out.bits = msg(function () { return [d.compareDocumentPosition(detached), detached.compareDocumentPosition(d),
+        t.compareDocumentPosition(detached), detached.compareDocumentPosition(t),
+        detached.compareDocumentPosition(document.createElement('u'))]; });
+    out.rootElement = msg(function () { return [String(document.rootElement), document.rootElement === null,
+        String(document.documentElement), document.webkitFullscreenEnabled, document.webkitIsFullScreen,
+        document.fullscreen, document.fullscreenEnabled]; });
+    out.scriptDefault = msg(function () { var s = document.createElement('script');
+        return [s.async, s.defer, s.noModule, s.getAttribute('async')]; });
+    out.linkRefl = msg(function () { var l = document.createElement('link');
+        return [l.as, l.integrity, l.fetchPriority, l.crossOrigin, document.createElement('table').cellPadding]; });
+    out.linkAfter = msg(function () { var l = document.createElement('link'); l.as = 'script';
+        return [l.as, l.getAttribute('as')]; });
+    out.docChildNodes = msg(function () { return [Object.prototype.toString.call(document.childNodes),
+        document.childNodes.length, String(document.childNodes.item(0)), document.childNodes[0] === undefined]; });
+    window.__REPORT = JSON.stringify(out);
+    document.title = "again"; window.__T && window.__T("probe113", true, window.__REPORT);
+})();
+</script></body></html>

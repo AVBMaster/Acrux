@@ -1,0 +1,39 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe111 — the detached node, the disconnected pair, the leaf collection</title></head>
+<body><div id="d"><p id="p">hi<b id="b">y</b></p></div>
+<script>
+// Round 18's second set of measurements: what a node with no parent does when a ChildNode door is
+// used, what the two nodes of different trees report for each other, and what a leaf's child reads
+// give. The same page runs in the reference and in Acrux.
+(function () {
+    var out = {};
+    function msg(fn) {
+        try { return 'ok:' + JSON.stringify(fn()); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message); }
+    }
+    var d = document.getElementById('d'), p = document.getElementById('p'), b = document.getElementById('b');
+    out.el_before_detached = msg(function () { var x = document.createElement('div');
+        x.before('a'); return [String(x.firstChild), String(x.parentNode), typeof x.before]; });
+    out.el_after_detached = msg(function () { var x = document.createElement('div');
+        x.after(document.createElement('i')); return String(x.parentNode); });
+    out.el_replaceWith_detached = msg(function () { var x = document.createElement('div');
+        x.replaceWith(document.createElement('i')); return [String(x.parentNode), x.childNodes.length]; });
+    out.text_before_detached = msg(function () { var x = document.createTextNode('t');
+        x.before('a'); return [String(x.parentNode), x.data]; });
+    out.disc_el_pair = msg(function () { return d.compareDocumentPosition(document.createElement('i')); });
+    out.disc_el_pair2 = msg(function () { return document.createElement('i').compareDocumentPosition(d); });
+    out.disc_text_pair = msg(function () { return p.firstChild.compareDocumentPosition(document.createElement('i')); });
+    out.disc_two_detached = msg(function () { return document.createElement('i').compareDocumentPosition(document.createElement('b')); });
+    out.disc_with_fragment = msg(function () { return d.compareDocumentPosition(document.createDocumentFragment()); });
+    out.leaf_collection = msg(function () { var t = p.firstChild;
+        return [Object.prototype.toString.call(t.childNodes), t.childNodes.length,
+            String(t.childNodes.item(0)), String(t.childNodes[0]), t.childNodes.item === undefined]; });
+    out.leaf_named = msg(function () { var t = p.firstChild;
+        return [String(t.attributes), String(t.children), String(t.firstElementChild)]; });
+    out.doc_leaf = msg(function () { return [Object.prototype.toString.call(document.childNodes),
+        document.childNodes.length, String(document.doctype.childNodes.length)]; });
+    window.__REPORT = JSON.stringify(out);
+    document.title = 'P111';
+    window.__T && window.__T('probe111', true, window.__REPORT);
+})();
+</script>
+<div>probe111</div></body></html>

@@ -1,0 +1,25 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe108 — do host members read as own</title></head><body><div id="d"><span id="s">x</span></div>
+<script>
+(function () {
+    function g(f){try{return String(f());}catch(e){return 'ERR '+e.name+':'+String(e.message).slice(0,40);}}
+    var el = document.getElementById('s');
+    var out={};
+    out.element = ['childNodes','nodeType','className','id','style','onclick','addEventListener','appendChild']
+        .map(function (n) { return n + ':' + Object.prototype.hasOwnProperty.call(el, n); }).join(',');
+    out.doc = ['createElement','body','title','cookie','documentElement','all']
+        .map(function (n) { return n + ':' + Object.prototype.hasOwnProperty.call(document, n); }).join(',');
+    var url = new URL('http://a.test/p');
+    out.url = ['href','search','hash','toString'].map(function (n) { return n + ':' + Object.prototype.hasOwnProperty.call(url, n); }).join(',');
+    var xhr = new XMLHttpRequest();
+    out.xhr = ['readyState','open','send','status'].map(function (n) { return n + ':' + Object.prototype.hasOwnProperty.call(xhr, n); }).join(',');
+    var range = document.createRange();
+    out.range = ['startOffset','setStart','collapse'].map(function (n) { return n + ':' + Object.prototype.hasOwnProperty.call(range, n); }).join(',');
+    out.nodelist = (function(){ var l = document.childNodes;
+        return ['length','item','forEach'].map(function (n) { return n + ':' + Object.prototype.hasOwnProperty.call(l, n); }).join(','); })();
+    out.shadowOnProto = g(function(){ return Object.prototype.hasOwnProperty.call(Object.getPrototypeOf(el), 'childNodes'); });
+    out.protoChainHas = g(function(){ return 'childNodes' in el; });
+    document.title='P108';
+    window.__T && window.__T('probe108', true, JSON.stringify(out));
+})();
+</script>
+<div>probe108</div></body></html>

@@ -1523,7 +1523,12 @@ public class JavaScriptEngine : IDisposable
             // TextEncoder/TextDecoder carry the UTF-8 transformation the Web platform uses to move
             // text across the byte-oriented APIs; surrogate pairs are combined before encoding so an
             // astral character becomes its four bytes, exactly as the standard's algorithm does.
-            function TextEncoder() { this.encoding = 'utf-8'; }
+            // Same reason as the decoder: the level declares 'encoding', so the encoder's own value
+            // is written as a property rather than assigned through that declaration.
+            function TextEncoder() {
+                Object.defineProperty(this, 'encoding', { value: 'utf-8', writable: true,
+                    enumerable: true, configurable: true });
+            }
             TextEncoder.prototype.encode = function (input) {
                 var str = (input === undefined || input === null) ? '' : String(input);
                 var out = [];
@@ -1569,9 +1574,16 @@ public class JavaScriptEngine : IDisposable
                         + ': The encoding label provided (' + Q + given + Q + ') is invalid.');
                 }
                 var init = options && typeof options === 'object' ? options : {};
-                this.encoding = name;
-                this.fatal = !!init.fatal;
-                this.ignoreBOM = !!init.ignoreBOM;
+                // The three reads of the interface are declared on its level, so the decoder writes
+                // its own state through the descriptor rather than by assignment: an assignment that
+                // finds a read-only door on the prototype is dropped without a word in a sloppy
+                // script, and the decoder then answers nothing at all.
+                Object.defineProperty(this, 'encoding', { value: name, writable: true,
+                    enumerable: true, configurable: true });
+                Object.defineProperty(this, 'fatal', { value: !!init.fatal, writable: true,
+                    enumerable: true, configurable: true });
+                Object.defineProperty(this, 'ignoreBOM', { value: !!init.ignoreBOM, writable: true,
+                    enumerable: true, configurable: true });
             }
             function utf16Run(bytes, bigEndian, fatal, skipBom) {
                 // Encoding Standard §2.4 UTF-16 decoder: two bytes at a time, a surrogate pair joined,
@@ -4293,14 +4305,19 @@ public class JavaScriptEngine : IDisposable
                 // '@media' rule as readily as onto a button — and the interface's own key list the
                 // reference prints has no handler on it at all (measured).
                 function handlerLevel(name) {
-                    return /^(HTML|SVG|MathML)[A-Za-z]*Element$/.test(name) || name === 'Element'
-                        || name === 'HTMLElement' || name === 'Document' || name === 'HTMLDocument'
-                        || name === 'XMLDocument' || name === 'DocumentFragment'
-                        || name === 'ShadowRoot' || name === 'Node' || name === 'Window';
+                    // GlobalEventHandlers (HTML §6.1.5) is mixed into HTMLElement, Document, SVGElement
+                    // and MathMLElement, and BodyEventHandlers into HTMLBodyElement. The subtypes of
+                    // HTMLElement inherit the slots and own none of them (measured: the level of
+                    // HTMLInputElement has no 'oninput' and no 'onselect', while HTMLElement.prototype
+                    // owns 'ontoggle'), and Element, Node, a fragment and a shadow root are not in the
+                    // mixin at all — the handful of names Element does own arrive with the table the
+                    // later pass writes.
+                    return name === 'HTMLElement' || name === 'Document' || name === 'HTMLDocument'
+                        || name === 'XMLDocument' || name === 'HTMLBodyElement'
+                        || name === 'SVGElement' || name === 'MathMLElement';
                 }
                 if (P) { for (var k in P) if (handlerLevel(k)) defOn(P[k]); }
                 defOn(window.HTMLElement && window.HTMLElement.prototype);
-                defOn(window.Element && window.Element.prototype);
                 // WindowEventHandlers (HTML §6.7.1): window.onload / onerror / onscroll and friends
                 // are the same one-slot accessors, installed on the global itself.
                 defOn(window);
@@ -6410,7 +6427,7 @@ public class JavaScriptEngine : IDisposable
                     ['DOCUMENT_POSITION_FOLLOWING', 4], ['DOCUMENT_POSITION_CONTAINS', 8],
                     ['DOCUMENT_POSITION_CONTAINED_BY', 16], ['DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC', 32]];
                 var nodeLevel = protoMap['Node'] || (window.Node && window.Node.prototype);
-                var constantShape = { writable: false, enumerable: false, configurable: false };
+                var constantShape = { writable: false, enumerable: true, configurable: false };
                 for (var nc = 0; nc < nodeConstants.length; nc++) {
                     var cname = nodeConstants[nc][0];
                     var cvalue = nodeConstants[nc][1];
@@ -8606,7 +8623,12 @@ public class JavaScriptEngine : IDisposable
                     } catch (e) { }
                 }
                 accessor('Document', 'fullscreenElement', function () { return null; });
-                accessor('Document', 'fullscreenEnabled', function () { return false; });
+                // Fullscreen §5: the flag says the document is allowed to ask, which the reference
+                // reports as true even for a page that never enters fullscreen (measured: both
+                // 'document.fullscreenEnabled' and 'document.webkitFullscreenEnabled' are true, while
+                // 'document.fullscreen', 'document.webkitIsFullScreen' and 'fullscreenElement' stay
+                // false/null).
+                accessor('Document', 'fullscreenEnabled', function () { return true; });
                 accessor('Document', 'pictureInPictureElement', function () { return null; });
                 accessor('Document', 'pictureInPictureEnabled', function () { return false; });
                 accessor('Document', 'pointerLockElement', function () { return null; });
@@ -11490,9 +11512,12 @@ public class JavaScriptEngine : IDisposable
                 function method(iface, name, body) {
                     var proto = levels[iface];
                     if (!proto) return;
+                    // An operation of an interface is enumerable, the same as its reads are (Web IDL
+                    // §4.4.3; measured: 'Object.keys(Node.prototype)' names 'contains' and
+                    // 'compareDocumentPosition' among the rest).
                     try {
                         Object.defineProperty(proto, name, {
-                            configurable: true, writable: true, enumerable: false, value: body
+                            configurable: true, writable: true, enumerable: true, value: body
                         });
                     } catch (e) { }
                 }
@@ -11510,7 +11535,7 @@ public class JavaScriptEngine : IDisposable
                     var proto = levels[iface];
                     if (!proto) return;
                     try {
-                        Object.defineProperty(proto, name, { configurable: true, enumerable: false,
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
                             get: function () { refusal(); }, set: function () { refusal(); } });
                     } catch (e) { }
                 }
@@ -11519,7 +11544,7 @@ public class JavaScriptEngine : IDisposable
                     if (!proto) return;
                     try {
                         Object.defineProperty(proto, name, {
-                            configurable: true, enumerable: false,
+                            configurable: true, enumerable: true,
                             get: function () { if (!isNode(this)) refusal(); return typeof value === 'function' ? value(this) : value; },
                             set: refusal
                         });
@@ -13477,6 +13502,1270 @@ public class JavaScriptEngine : IDisposable
                 ['AbortSignal', 'AbortController', 'Observable'].forEach(function (name) {
                     if (typeof window[name] === 'function') reshapeStatics(window[name]);
                 });
+            })();
+
+
+
+            // ── The members every interface declares and the level had never named ──────
+            // A member of an interface is a getter, a setter or a function on the interface's own
+            // prototype (Web IDL §4.4.2-§4.4.3). This engine's objects answer their members from the
+            // host first, so until now the level of, say, Node named only some of the reads the
+            // interface declares: a page that listed the interface, or read a member off the level,
+            // saw less than the reference shows. The three tables below were read from the reference
+            // browser itself (the dumps under DOMTest/out/notes) and filtered twice over: to the
+            // interfaces this engine has a level for, and to the members its own object actually
+            // answers — naming a member the object cannot answer would be a promise the engine cannot
+            // keep, so those are left out rather than declared only to read undefined.
+            (function () {
+                var SURFACE = {'Attr':{r:['localName','name','namespaceURI','ownerElement','prefix','specified'],w:['value'],m:{}},'CharacterData':{r:['length'],w:['data'],m:{'appendData':1,'deleteData':2,'insertData':2,'remove':0,'replaceData':3,'substringData':2}},'Clipboard':{r:[],w:[],m:{'read':0,'readText':0,'write':1,'writeText':1}},'DOMTokenList':{r:['length'],w:['value'],m:{'add':0,'contains':1,'item':1,'remove':0,'replace':2,'toString':0,'toggle':1}},'Document':{r:['URL','activeElement','all','characterSet','charset','childElementCount','children','compatMode','contentType','currentScript','defaultView','doctype','documentElement','documentURI','firstElementChild','fonts','forms','head','hidden','images','implementation','inputEncoding','lastElementChild','lastModified','links','plugins','readyState','referrer','scripts','styleSheets','visibilityState','xmlEncoding'],w:['adoptedStyleSheets','body','cookie','dir','domain','title','xmlStandalone','xmlVersion'],m:{'adoptNode':1,'append':0,'close':0,'createAttribute':1,'createAttributeNS':2,'createCDATASection':1,'createComment':1,'createDocumentFragment':0,'createElement':1,'createElementNS':2,'createEvent':1,'createExpression':1,'createNSResolver':1,'createProcessingInstruction':2,'createRange':0,'createTextNode':1,'elementFromPoint':2,'elementsFromPoint':2,'evaluate':2,'execCommand':1,'getElementById':1,'getElementsByClassName':1,'getElementsByName':1,'getElementsByTagName':1,'getSelection':0,'hasFocus':0,'importNode':1,'open':0,'prepend':0,'queryCommandEnabled':1,'queryCommandState':1,'queryCommandSupported':1,'queryCommandValue':1,'replaceChildren':0,'write':0,'writeln':0}},'DocumentFragment':{r:['childElementCount','children','firstElementChild','lastElementChild'],w:[],m:{'append':0,'getElementById':1,'prepend':0,'querySelector':1,'querySelectorAll':1,'replaceChildren':0}},'DocumentType':{r:['name','publicId','systemId'],w:[],m:{'remove':0}},'Element':{r:['assignedSlot','attributes','childElementCount','children','clientHeight','clientLeft','clientTop','clientWidth','firstElementChild','lastElementChild','localName','namespaceURI','nextElementSibling','prefix','previousElementSibling','scrollHeight','scrollWidth','shadowRoot','tagName'],w:['classList','className','elementTiming','id','innerHTML','outerHTML','role','scrollLeft','scrollTop'],m:{'getAttribute':1,'getAttributeNS':2,'getAttributeNode':1,'getAttributeNodeNS':2,'getElementsByClassName':1,'getElementsByTagName':1,'hasAttribute':1,'hasAttributeNS':2,'querySelector':1,'querySelectorAll':1,'removeAttribute':1,'removeAttributeNS':2,'removeAttributeNode':1,'setAttribute':2,'setAttributeNS':3,'setAttributeNode':1,'setAttributeNodeNS':1,'toggleAttribute':1}},'HTMLAnchorElement':{r:['origin'],w:['coords','download','hash','host','hostname','href','hreflang','name','pathname','port','protocol','referrerPolicy','rel','relList','search','shape','target','text','type'],m:{'toString':0}},'HTMLAreaElement':{r:['origin'],w:['alt','coords','download','hash','host','hostname','href','pathname','port','protocol','referrerPolicy','rel','relList','search','shape','target'],m:{'toString':0}},'HTMLBaseElement':{r:[],w:['href','target'],m:{}},'HTMLBodyElement':{r:[],w:['text'],m:{}},'HTMLButtonElement':{r:['form','labels','validationMessage','validity','willValidate'],w:['disabled','formAction','name','type','value'],m:{'checkValidity':0,'reportValidity':0,'setCustomValidity':1}},'HTMLCanvasElement':{r:[],w:['height','width'],m:{'getContext':1,'toDataURL':0}},'HTMLCollection':{r:['length'],w:[],m:{'item':1}},'HTMLDataElement':{r:[],w:['value'],m:{}},'HTMLDataListElement':{r:['options'],w:[],m:{}},'HTMLDetailsElement':{r:[],w:['name'],m:{}},'HTMLElement':{r:['offsetHeight','offsetLeft','offsetParent','offsetTop','offsetWidth'],w:['accessKey','autofocus','contentEditable','dir','draggable','hidden','lang','spellcheck','style','tabIndex','title','translate'],m:{'blur':0,'focus':0}},'HTMLEmbedElement':{r:[],w:['height','name','src','type','width'],m:{}},'HTMLFieldSetElement':{r:['elements','form','type','validationMessage','validity','willValidate'],w:['disabled','name'],m:{'checkValidity':0,'reportValidity':0,'setCustomValidity':1}},'HTMLFormElement':{r:['elements'],w:['acceptCharset','action','autocomplete','enctype','method','name','noValidate','rel','relList','target'],m:{'checkValidity':0,'reportValidity':0,'requestSubmit':0,'reset':0,'submit':0}},'HTMLHRElement':{r:[],w:['size','width'],m:{}},'HTMLIFrameElement':{r:['contentDocument','contentWindow'],w:['allowFullscreen','frameBorder','height','name','referrerPolicy','sandbox','src','srcdoc','width'],m:{}},'HTMLImageElement':{r:['complete','naturalHeight','naturalWidth'],w:['alt','height','name','src','width'],m:{}},'HTMLInputElement':{r:['form','labels','list','validationMessage','validity','willValidate'],w:['accept','alt','autocomplete','checked','defaultChecked','defaultValue','dirName','disabled','files','formAction','height','indeterminate','max','maxLength','min','minLength','multiple','name','pattern','placeholder','readOnly','required','selectionDirection','selectionEnd','selectionStart','size','src','step','type','value','valueAsDate','valueAsNumber','width'],m:{'checkValidity':0,'reportValidity':0,'select':0,'setCustomValidity':1,'setRangeText':1,'setSelectionRange':2,'showPicker':0,'stepDown':0,'stepUp':0}},'HTMLLIElement':{r:[],w:['type','value'],m:{}},'HTMLLabelElement':{r:['form'],w:['htmlFor'],m:{}},'HTMLLinkElement':{r:['sheet'],w:['disabled','href','hreflang','media','referrerPolicy','rel','relList','sizes','target','type'],m:{}},'HTMLMediaElement':{r:['duration','ended','paused'],w:['currentTime','muted','src','volume'],m:{'canPlayType':1,'load':0,'pause':0,'play':0}},'HTMLMetaElement':{r:[],w:['media','name'],m:{}},'HTMLMeterElement':{r:['labels'],w:['high','low','max','min','optimum','value'],m:{}},'HTMLOListElement':{r:[],w:['type'],m:{}},'HTMLObjectElement':{r:['contentDocument','contentWindow','form','validationMessage','validity','willValidate'],w:['height','name','type','width'],m:{'checkValidity':0,'reportValidity':0,'setCustomValidity':1}},'HTMLOptionElement':{r:['form','index'],w:['defaultSelected','disabled','label','selected','text','value'],m:{}},'HTMLOutputElement':{r:['form','labels','type','validationMessage','validity','willValidate'],w:['defaultValue','htmlFor','name','value'],m:{'checkValidity':0,'reportValidity':0,'setCustomValidity':1}},'HTMLParamElement':{r:[],w:['name','type','value'],m:{}},'HTMLPreElement':{r:[],w:['width'],m:{}},'HTMLProgressElement':{r:['labels','position'],w:['max','value'],m:{}},'HTMLScriptElement':{r:[],w:['htmlFor','innerText','referrerPolicy','src','text','textContent','type'],m:{}},'HTMLSelectElement':{r:['form','labels','options','selectedOptions','type','validationMessage','validity','willValidate'],w:['autocomplete','disabled','multiple','name','required','selectedIndex','value'],m:{'checkValidity':0,'item':1,'namedItem':1,'remove':0,'reportValidity':0,'setCustomValidity':1,'showPicker':0}},'HTMLSlotElement':{r:[],w:['name'],m:{}},'HTMLSourceElement':{r:[],w:['height','media','sizes','src','srcset','type','width'],m:{}},'HTMLStyleElement':{r:['sheet'],w:['disabled','media','type'],m:{}},'HTMLTableCellElement':{r:['cellIndex'],w:['abbr','colSpan','headers','height','rowSpan','scope','width'],m:{}},'HTMLTableElement':{r:['rows','tBodies'],w:['caption','tFoot','tHead','width'],m:{'createCaption':0,'createTFoot':0,'createTHead':0,'deleteCaption':0,'deleteRow':1,'deleteTFoot':0,'deleteTHead':0,'insertRow':0}},'HTMLTableRowElement':{r:['cells','rowIndex','sectionRowIndex'],w:[],m:{'deleteCell':1,'insertCell':0}},'HTMLTableSectionElement':{r:['rows'],w:[],m:{'deleteRow':1,'insertRow':0}},'HTMLTemplateElement':{r:[],w:['htmlFor'],m:{}},'HTMLTextAreaElement':{r:['form','labels','textLength','type','validationMessage','validity','willValidate'],w:['autocomplete','cols','defaultValue','dirName','disabled','maxLength','minLength','name','placeholder','readOnly','required','rows','selectionDirection','selectionEnd','selectionStart','value','wrap'],m:{'checkValidity':0,'reportValidity':0,'select':0,'setCustomValidity':1,'setRangeText':1,'setSelectionRange':2}},'HTMLTitleElement':{r:[],w:['text'],m:{}},'HTMLTrackElement':{r:[],w:['label','src'],m:{}},'HTMLUListElement':{r:[],w:['type'],m:{}},'HTMLVideoElement':{r:[],w:['height','width'],m:{}},'NamedNodeMap':{r:['length'],w:[],m:{'getNamedItem':1,'getNamedItemNS':2,'item':1,'removeNamedItem':1,'removeNamedItemNS':2,'setNamedItem':1,'setNamedItemNS':1}},'Node':{r:['childNodes','firstChild','isConnected','lastChild','nextSibling','nodeName','nodeType','ownerDocument','parentElement','parentNode','previousSibling'],w:['nodeValue','textContent'],m:{'hasChildNodes':0,'isDefaultNamespace':1,'isSameNode':1}},'NodeIterator':{r:['pointerBeforeReferenceNode','referenceNode','root','whatToShow'],w:[],m:{'detach':0,'nextNode':0,'previousNode':0}},'PerformanceObserver':{r:[],w:[],m:{'disconnect':0,'observe':0,'takeRecords':0}},'Range':{r:[],w:[],m:{'cloneContents':0,'cloneRange':0,'collapse':0,'compareBoundaryPoints':2,'comparePoint':2,'createContextualFragment':1,'deleteContents':0,'detach':0,'expand':0,'extractContents':0,'getBoundingClientRect':0,'getClientRects':0,'insertNode':1,'intersectsNode':1,'isPointInRange':2,'selectNode':1,'selectNodeContents':1,'setEnd':2,'setEndAfter':1,'setEndBefore':1,'setStart':2,'setStartAfter':1,'setStartBefore':1,'surroundContents':1,'toString':0}},'SVGElement':{r:['className','dataset'],w:['autofocus','style','tabIndex'],m:{'blur':0,'focus':0}},'Selection':{r:['baseNode','baseOffset','extentNode','extentOffset'],w:[],m:{'collapseToEnd':0,'collapseToStart':0,'deleteFromDocument':0,'modify':0,'removeAllRanges':0,'toString':0}},'ShadowRoot':{r:['activeElement','clonable','delegatesFocus','host','mode','serializable','slotAssignment','styleSheets'],w:['adoptedStyleSheets','innerHTML'],m:{'getSelection':0}},'Text':{r:['assignedSlot','wholeText'],w:[],m:{'splitText':1}},'TextDecoder':{r:['encoding','fatal','ignoreBOM'],w:[],m:{}},'TextEncoder':{r:['encoding'],w:[],m:{}},'TransformStream':{r:['readable','writable'],w:[],m:{}},'TreeWalker':{r:['root','whatToShow'],w:['currentNode'],m:{'firstChild':0,'lastChild':0,'nextNode':0,'nextSibling':0,'parentNode':0,'previousNode':0,'previousSibling':0}},'URL':{r:['origin','searchParams'],w:['hash','host','hostname','href','password','pathname','port','protocol','search','username'],m:{'toJSON':0,'toString':0}},'XMLHttpRequest':{r:['readyState','response','responseText','responseURL','responseXML','status','statusText','upload'],w:['responseType','timeout','withCredentials'],m:{'abort':0,'getAllResponseHeaders':0,'getResponseHeader':1,'open':2,'overrideMimeType':1,'send':0,'setRequestHeader':2}}};
+                var HANDLERS = {'Document':['abort','animationcancel','animationend','animationiteration','animationstart','auxclick','beforecopy','beforecut','beforeinput','beforematch','beforepaste','beforetoggle','beforexrselect','blur','cancel','canplay','canplaythrough','change','click','close','command','contentvisibilityautostatechange','contextlost','contextmenu','contextrestored','copy','cuechange','cut','dblclick','drag','dragend','dragenter','dragleave','dragover','dragstart','drop','durationchange','emptied','ended','error','focus','formdata','freeze','fullscreenchange','fullscreenerror','gotpointercapture','input','invalid','keydown','keypress','keyup','load','loadeddata','loadedmetadata','loadstart','lostpointercapture','mousedown','mouseenter','mouseleave','mousemove','mouseout','mouseover','mouseup','mousewheel','paste','pause','play','playing','pointercancel','pointerdown','pointerenter','pointerleave','pointerlockchange','pointerlockerror','pointermove','pointerout','pointerover','pointerrawupdate','pointerup','prerenderingchange','progress','ratechange','readystatechange','reset','resize','resume','scroll','scrollend','scrollsnapchange','scrollsnapchanging','search','securitypolicyviolation','seeked','seeking','select','selectionchange','selectstart','slotchange','stalled','submit','suspend','timeupdate','toggle','transitioncancel','transitionend','transitionrun','transitionstart','visibilitychange','volumechange','waiting','webkitanimationend','webkitanimationiteration','webkitanimationstart','webkitfullscreenchange','webkitfullscreenerror','webkittransitionend','wheel'],'EventSource':['error','message','open'],'FileReader':['abort','error','load','loadend','loadstart','progress'],'HTMLBodyElement':['afterprint','beforeprint','beforeunload','blur','error','focus','gamepadconnected','gamepaddisconnected','hashchange','languagechange','load','message','messageerror','offline','online','pagehide','pageshow','popstate','rejectionhandled','resize','scroll','storage','unhandledrejection','unload'],'HTMLElement':['abort','animationcancel','animationend','animationiteration','animationstart','auxclick','beforeinput','beforematch','beforetoggle','beforexrselect','blur','cancel','canplay','canplaythrough','change','click','close','command','contentvisibilityautostatechange','contextlost','contextmenu','contextrestored','copy','cuechange','cut','dblclick','drag','dragend','dragenter','dragleave','dragover','dragstart','drop','durationchange','emptied','ended','error','focus','formdata','gotpointercapture','input','invalid','keydown','keypress','keyup','load','loadeddata','loadedmetadata','loadstart','lostpointercapture','mousedown','mouseenter','mouseleave','mousemove','mouseout','mouseover','mouseup','mousewheel','paste','pause','play','playing','pointercancel','pointerdown','pointerenter','pointerleave','pointermove','pointerout','pointerover','pointerrawupdate','pointerup','progress','ratechange','reset','resize','scroll','scrollend','scrollsnapchange','scrollsnapchanging','securitypolicyviolation','seeked','seeking','select','selectionchange','selectstart','slotchange','stalled','submit','suspend','timeupdate','toggle','transitioncancel','transitionend','transitionrun','transitionstart','volumechange','waiting','webkitanimationend','webkitanimationiteration','webkitanimationstart','webkittransitionend','wheel'],'HTMLMediaElement':['encrypted','waitingforkey'],'HTMLVideoElement':['enterpictureinpicture','leavepictureinpicture'],'MediaQueryList':['change'],'MessagePort':['close','message','messageerror'],'SVGElement':['abort','animationcancel','animationend','animationiteration','animationstart','auxclick','beforeinput','beforematch','beforetoggle','beforexrselect','blur','cancel','canplay','canplaythrough','change','click','close','command','contentvisibilityautostatechange','contextlost','contextmenu','contextrestored','copy','cuechange','cut','dblclick','drag','dragend','dragenter','dragleave','dragover','dragstart','drop','durationchange','emptied','ended','error','focus','formdata','gotpointercapture','input','invalid','keydown','keypress','keyup','load','loadeddata','loadedmetadata','loadstart','lostpointercapture','mousedown','mouseenter','mouseleave','mousemove','mouseout','mouseover','mouseup','mousewheel','paste','pause','play','playing','pointercancel','pointerdown','pointerenter','pointerleave','pointermove','pointerout','pointerover','pointerrawupdate','pointerup','progress','ratechange','reset','resize','scroll','scrollend','scrollsnapchange','scrollsnapchanging','securitypolicyviolation','seeked','seeking','select','selectionchange','selectstart','slotchange','stalled','submit','suspend','timeupdate','toggle','transitioncancel','transitionend','transitionrun','transitionstart','volumechange','waiting','webkitanimationend','webkitanimationiteration','webkitanimationstart','webkittransitionend','wheel'],'XMLHttpRequest':['readystatechange']};
+                var FIXES = {'Blob':{'slice':0},'CSSRule':{'parentRule':'r','parentStyleSheet':'r','type':'r'},'CSSRuleList':{'item':1,'length':'r'},'CSSStyleDeclaration':{'getPropertyPriority':1,'getPropertyValue':1,'item':1,'length':'r','parentRule':'r','removeProperty':1,'setProperty':2},'CSSStyleSheet':{'cssRules':'r','deleteRule':1,'insertRule':1,'ownerRule':'r','replaceSync':1},'DOMTokenList':{'forEach':1,'supports':1},'Document':{'activeViewTransition':'r','anchors':'r','applets':'r','createNodeIterator':1,'createTreeWalker':1,'customElementRegistry':'r','embeds':'r','featurePolicy':'r','fragmentDirective':'r','pictureInPictureElement':'r','pictureInPictureEnabled':'r','pointerLockElement':'r','prerendering':'r','querySelector':1,'querySelectorAll':1,'requestStorageAccessFor':1,'scrollingElement':'r','timeline':'r','wasDiscarded':'r'},'Element':{'activeViewTransition':'r','animate':1,'ariaNotify':1,'attachShadow':1,'closest':1,'currentCSSZoom':'r','customElementRegistry':'r','hasPointerCapture':1,'insertAdjacentElement':2,'insertAdjacentHTML':2,'insertAdjacentText':2,'matches':1,'moveBefore':2,'releasePointerCapture':1,'setHTML':1,'setHTMLUnsafe':1,'setPointerCapture':1,'webkitMatchesSelector':1},'EventTarget':{'addEventListener':2,'removeEventListener':2},'FileReader':{'error':'r','onabort':'rw','onerror':'rw','onload':'rw','onloadend':'rw','onloadstart':'rw','onprogress':'rw','readyState':'r','result':'r'},'FormData':{'append':2,'forEach':1,'set':2},'Geolocation':{'clearWatch':1,'getCurrentPosition':1,'watchPosition':1},'HTMLCanvasElement':{'toBlob':1},'HTMLElement':{'dataset':'r','isContentEditable':'r'},'HTMLImageElement':{'x':'r'},'HTMLSelectElement':{'add':1},'Headers':{'forEach':1},'IntersectionObserver':{'observe':1},'MediaList':{'appendMedium':1,'deleteMedium':1,'item':1,'length':'r'},'MutationObserver':{'observe':1},'Navigator':{'clipboard':'r','connection':'r','credentials':'r','geolocation':'r','joinAdInterestGroup':1,'keyboard':'r','locks':'r','mediaCapabilities':'r','mediaDevices':'r','mimeTypes':'r','permissions':'r','plugins':'r','presentation':'r','scheduling':'r','serviceWorker':'r','storage':'r','userActivation':'r','userAgentData':'r','wakeLock':'r','windowControlsOverlay':'r'},'Node':{'appendChild':1,'baseURI':'r','compareDocumentPosition':1,'contains':1,'insertBefore':2,'isEqualNode':1,'lookupNamespaceURI':1,'lookupPrefix':1,'removeChild':1,'replaceChild':2},'NodeList':{'forEach':1},'Performance':{'clearMarks':0,'clearMeasures':0,'measure':1},'PermissionStatus':{'onchange':'rw'},'Range':{'commonAncestorContainer':'r'},'ReadableStream':{'cancel':0,'getReader':0,'pipeThrough':1},'ReadableStreamDefaultReader':{'cancel':0},'ResizeObserver':{'observe':1},'Selection':{'anchorNode':'r','anchorOffset':'r','direction':'r','focusNode':'r','focusOffset':'r','isCollapsed':'r','rangeCount':'r','type':'r'},'SubtleCrypto':{'decrypt':3,'deriveBits':2,'deriveKey':5,'encrypt':3,'exportKey':2,'generateKey':3,'importKey':5,'sign':3,'unwrapKey':7,'verify':4,'wrapKey':4},'TextDecoder':{'decode':0},'TextEncoder':{'encode':0},'URLSearchParams':{'forEach':1},'WritableStream':{'abort':0},'WritableStreamDefaultWriter':{'abort':0,'write':0},'XPathEvaluator':{'createExpression':1,'evaluate':2}};
+                var levels = window.__domProto || { };
+                var store = new WeakMap();
+                // A declaration is a door onto the member the host already answers, never a member of
+                // its own — so the one receiver that must not be walked through it is the level that
+                // carries it. The level owns its own accessor, so a plain 'hasOwnProperty' says yes
+                // and reaching for the member is reaching through the same door again (measured:
+                // 'Node.prototype.childNodes' recursed until the stack gave out). Every accessor and
+                // wrapper this block installs is marked, and a marked own member is a refused read.
+                var declared = new WeakMap();
+                function mark(made) {
+                    if (typeof made === 'function') declared.set(made, true);
+                    return made;
+                }
+                function owned(receiver, name) {
+                    // The host's own member answers before any of this, so a read that reaches the
+                    // accessor is a read taken away from such an object — and the level is never one
+                    // (measured: 'Node.prototype.childNodes' is 'TypeError: Illegal invocation').
+                    if (!receiver || typeof receiver === 'function') return false;
+                    var made;
+                    try { made = Object.getOwnPropertyDescriptor(receiver, name); } catch (e) { made = null; }
+                    return !!made && !(declared.get(made.get) || declared.get(made.set)
+                        || declared.get(made.value));
+                }
+                // A pass-through that reaches itself again has no host behind the name at all, and the
+                // second entry is the refusal rather than the stack running out. The mark is put on
+                // before the question is asked: the question reads the receiver, and a read of the
+                // level is what sent it round again (measured: 'Element.prototype.nodeType' is the
+                // refusal, not a stack that gives out).
+                var passing = null;
+                function passThrough(receiver, name, read) {
+                    var earlier = passing;
+                    if (earlier && earlier.receiver === receiver && earlier.name === name) refused();
+                    passing = { receiver: receiver, name: name };
+                    try {
+                        if (!owned(receiver, name)) refused();
+                        return read(receiver);
+                    } finally { passing = earlier; }
+                }
+                function refused() { throw new TypeError('Illegal invocation'); }
+                function levelOf(iface) {
+                    var proto = levels[iface];
+                    if (proto) return proto;
+                    var Built = window[iface];
+                    return typeof Built === 'function' && Built.prototype ? Built.prototype : null;
+                }
+                function call(receiver, name, args) {
+                    if (!owned(receiver, name)) refused();
+                    var made = receiver[name];
+                    if (typeof made !== 'function') return undefined;
+                    return made.apply(receiver, args);
+                }
+                // A declaration is written in the one shape an interface member has — a concise method
+                // and an accessor taken through its descriptor, so it carries no 'prototype' of its own
+                // and the finishing pass at the end has nothing to write again. That matters beyond the
+                // shape: the mark below is what tells a read of the level from a read of the host's
+                // member, and a pass that rebuilt the function would lose it (measured: an unmarked
+                // declaration reads 'Element.prototype.id' back through itself until the stack gives
+                // out).
+                // A declaration is only ever made where nothing answers yet: a member the level
+                // already carries may be the host's own accessor or a body some earlier pass wrote, and
+                // putting a pass-through over it refuses the objects that answer it today (measured:
+                // 'new Blob(a).size' and 'new TextDecoder().encoding' are reads the engine serves, not
+                // 'Illegal invocation'). Only a door this same block installed is one it may rewrite.
+                function carried(proto, name) {
+                    var made;
+                    try { made = Object.getOwnPropertyDescriptor(proto, name); } catch (e) { return true; }
+                    if (!made) return false;
+                    if (made.get || made.set) return !(declared.get(made.get) || declared.get(made.set));
+                    if (typeof made.value === 'function') return !declared.get(made.value);
+                    return true;
+                }
+                function declareRead(proto, name) {
+                    if (carried(proto, name)) return;
+                    try {
+                        var getter = Object.getOwnPropertyDescriptor({ get [name]() {
+                            return passThrough(this, name, function (self) { return self[name]; });
+                        } }, name).get;
+                        if (!getter) return;
+                        mark(getter);
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                            get: getter });
+                    } catch (e) { }
+                }
+                function declarePair(proto, name) {
+                    if (carried(proto, name)) return;
+                    try {
+                        var pair = Object.getOwnPropertyDescriptor({
+                            get [name]() {
+                                return passThrough(this, name, function (self) { return self[name]; });
+                            },
+                            set [name](value) {
+                                return passThrough(this, name, function (self) { self[name] = value; });
+                            } }, name);
+                        if (!pair || !pair.get || !pair.set) return;
+                        mark(pair.get); mark(pair.set);
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                            get: pair.get, set: pair.set });
+                    } catch (e) { }
+                }
+                // The number of names a method declares is the number of arguments the interface
+                // requires; whatever else the call hands it arrives through 'arguments'.
+                function declareMethod(proto, name, arity) {
+                    if (carried(proto, name)) return;
+                    // The concise form is the one that carries no 'prototype' of its own, which is the
+                    // shape an operation of an interface has (Web IDL §4.4.3) — and the one the
+                    // finishing pass at the end leaves alone, so the mark below survives.
+                    var made = arity === 1
+                        ? ({ [name](first) { return call(this, name, arguments); } })[name]
+                        : arity === 2
+                            ? ({ [name](first, second) {
+                                return call(this, name, arguments); } })[name]
+                            : arity === 3
+                                ? ({ [name](first, second, third) {
+                                    return call(this, name, arguments); } })[name]
+                                : arity === 4
+                                    ? ({ [name](first, second, third, fourth) {
+                                        return call(this, name, arguments); } })[name]
+                                    : ({ [name]() {
+                                        return call(this, name, arguments); } })[name];
+                    try {
+                        mark(made);
+                        Object.defineProperty(made, 'name', { value: name, configurable: true });
+                        Object.defineProperty(proto, name, { value: made, writable: true,
+                            enumerable: true, configurable: true });
+                    } catch (e) { }
+                }
+                Object.keys(SURFACE).forEach(function (iface) {
+                    var proto = levelOf(iface);
+                    var spec = SURFACE[iface];
+                    if (!proto || !spec) return;
+                    spec.r.forEach(function (name) { declareRead(proto, name); });
+                    spec.w.forEach(function (name) { declarePair(proto, name); });
+                    Object.keys(spec.m).forEach(function (name) {
+                        declareMethod(proto, name, spec.m[name]);
+                    });
+                });
+                // The 'on' members are the one-slot handlers of §6.1.5.2: the element carries the
+                // function the page wrote, reading it back answers that function or null, and writing
+                // again releases the listener the previous one registered.
+                Object.keys(HANDLERS).forEach(function (iface) {
+                    var proto = levelOf(iface);
+                    if (!proto) return;
+                    HANDLERS[iface].forEach(function (type) {
+                        var prop = 'on' + type;
+                        if (Object.prototype.hasOwnProperty.call(proto, prop)) return;
+                        try {
+                            Object.defineProperty(proto, prop, {
+                                configurable: true, enumerable: true,
+                                get: function () {
+                                    var held = store.get(this);
+                                    return held && held[prop] !== undefined ? held[prop] : null;
+                                },
+                                set: function (value) {
+                                    var held = store.get(this);
+                                    if (!held) { held = { }; store.set(this, held); }
+                                    var earlier = held[prop];
+                                    if (typeof earlier === 'function') {
+                                        try { this.removeEventListener(type, earlier); } catch (e) { }
+                                    }
+                                    var next = typeof value === 'function' ? value : null;
+                                    held[prop] = next;
+                                    if (next) {
+                                        try { this.addEventListener(type, next); } catch (e) { }
+                                    }
+                                } });
+                        } catch (e) { }
+                    });
+                });
+                // A member the level already carries can still be the wrong kind (a read the
+                // interface also lets a page write) or carry the wrong arity.
+                Object.keys(FIXES).forEach(function (iface) {
+                    var proto = levelOf(iface);
+                    var spec = FIXES[iface];
+                    if (!proto || !spec) return;
+                    Object.keys(spec).forEach(function (name) {
+                        var wanted = spec[name];
+                        var made = Object.getOwnPropertyDescriptor(proto, name);
+                        if (!made) return;
+                        if (typeof wanted === 'number' && typeof made.value === 'function') {
+                            if (made.value.length === wanted) return;
+                            try {
+                                Object.defineProperty(made.value, 'length', { value: wanted,
+                                    configurable: true });
+                            } catch (e) { }
+                            return;
+                        }
+                        // The kind the table asks for is corrected on the accessor the level already
+                        // carries. It is not replaced by a read of the host's member: a member the
+                        // script implements itself — the timeline, the dataset, a handler slot, the
+                        // document's own state reads — has no host member behind it, and a pass-through
+                        // there refuses the very object the engine built (measured: 'document.timeline'
+                        // and 'd.dataset' answer, they are not 'Illegal invocation').
+                        if (wanted === 'rw' && made.get && !made.set && declared.get(made.get)) {
+                            declarePair(proto, name);
+                        } else if (wanted === 'r' && made.get && made.set) {
+                            try {
+                                Object.defineProperty(proto, name, { get: made.get, set: undefined,
+                                    enumerable: made.enumerable, configurable: made.configurable });
+                            } catch (e) { }
+                        }
+                    });
+                });
+            })();
+
+
+            // ── The content attributes an interface reflects, and the numbers it names ──────
+            // A reflected attribute is a getter that reads the content attribute and a setter that
+            // writes, removes, or toggles it (HTML §2.5.1): a boolean one answers whether the
+            // attribute is there at all, an enumerated or string one answers the empty string when it
+            // is not. The tables below were read from the reference browser — the member answers a
+            // boolean there, a string there, and the attribute it is written under — so this is the
+            // implementation of those members rather than a declaration of them: a page that sets
+            // 'script.defer = true' finds 'defer' on the element and reads it back from the markup.
+            (function () {
+                var BOOL = {'HTMLAreaElement':[['noHref','nohref']],'HTMLButtonElement':[['formNoValidate','formnovalidate']],'HTMLDetailsElement':[['open','open']],'HTMLDialogElement':[['open','open']],'HTMLHRElement':[['noShade','noshade']],'HTMLIFrameElement':[['adAuctionHeaders','adauctionheaders'],['allowPaymentRequest','allowpaymentrequest'],['browsingTopics','browsingtopics'],['credentialless','credentialless'],['sharedStorageWritable','sharedstoragewritable']],'HTMLImageElement':[['browsingTopics','browsingtopics'],['isMap','ismap'],['sharedStorageWritable','sharedstoragewritable']],'HTMLInputElement':[['formNoValidate','formnovalidate'],['incremental','incremental'],['webkitdirectory','webkitdirectory']],'HTMLOListElement':[['compact','compact'],['reversed','reversed']],'HTMLObjectElement':[['declare','declare']],'HTMLScriptElement':[['async','async'],['defer','defer'],['noModule','nomodule']],'HTMLTableCellElement':[['noWrap','nowrap']],'HTMLTemplateElement':[['shadowRootClonable','shadowrootclonable'],['shadowRootDelegatesFocus','shadowrootdelegatesfocus'],['shadowRootSerializable','shadowrootserializable']],'HTMLTrackElement':[['default','default']],'HTMLUListElement':[['compact','compact']],'HTMLVideoElement':[['disablePictureInPicture','disablepictureinpicture'],['playsInline','playsinline']],'HTMLMediaElement':[['autoplay','autoplay'],['controls','controls'],['loop','loop'],['defaultMuted','defaultmuted'],['disableRemotePlayback','disableremoteplayback'],['preservesPitch','preservespitch']]};
+                var STRING = {'HTMLAnchorElement':[['attributionSrc','attributionsrc'],['charset','charset'],['password','password'],['ping','ping'],['rev','rev'],['username','username']],'HTMLAreaElement':[['attributionSrc','attributionsrc'],['password','password'],['ping','ping'],['username','username']],'HTMLBRElement':[['clear','clear']],'HTMLBodyElement':[['aLink','alink'],['background','background'],['bgColor','bgcolor'],['link','link'],['vLink','vlink']],'HTMLButtonElement':[['command','command'],['formEnctype','formenctype'],['formMethod','formmethod'],['formTarget','formtarget'],['popoverTargetAction','popovertargetaction']],'HTMLDialogElement':[['closedBy','closedby'],['returnValue','returnvalue']],'HTMLEmbedElement':[['align','align']],'HTMLFormElement':[['encoding','encoding']],'HTMLHRElement':[['align','align'],['color','color']],'HTMLIFrameElement':[['align','align'],['allow','allow'],['csp','csp'],['loading','loading'],['longDesc','longdesc'],['marginHeight','marginheight'],['marginWidth','marginwidth'],['privateToken','privatetoken'],['scrolling','scrolling']],'HTMLImageElement':[['align','align'],['attributionSrc','attributionsrc'],['border','border'],['longDesc','longdesc'],['lowsrc','lowsrc'],['useMap','usemap']],'HTMLInputElement':[['align','align'],['formEnctype','formenctype'],['formMethod','formmethod'],['formTarget','formtarget'],['popoverTargetAction','popovertargetaction'],['useMap','usemap']],'HTMLLegendElement':[['align','align']],'HTMLLinkElement':[['as','as'],['charset','charset'],['imageSizes','imagesizes'],['imageSrcset','imagesrcset'],['integrity','integrity'],['rev','rev']],'HTMLMetaElement':[['content','content'],['httpEquiv','http-equiv'],['scheme','scheme']],'HTMLObjectElement':[['align','align'],['archive','archive'],['border','border'],['code','code'],['codeBase','codebase'],['codeType','codetype'],['data','data'],['standby','standby'],['useMap','usemap']],'HTMLParagraphElement':[['align','align']],'HTMLParamElement':[['valueType','valuetype']],'HTMLQuoteElement':[['cite','cite']],'HTMLScriptElement':[['attributionSrc','attributionsrc'],['charset','charset'],['event','event'],['integrity','integrity']],'HTMLTableCellElement':[['align','align'],['axis','axis'],['bgColor','bgcolor'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTableElement':[['align','align'],['bgColor','bgcolor'],['border','border'],['cellPadding','cellpadding'],['cellSpacing','cellspacing'],['frame','frame'],['rules','rules'],['summary','summary']],'HTMLTableRowElement':[['align','align'],['bgColor','bgcolor'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTableSectionElement':[['align','align'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTemplateElement':[['shadowRootCustomElementRegistry','shadowrootcustomelementregistry'],['shadowRootMode','shadowrootmode']],'HTMLTimeElement':[['dateTime','datetime']],'HTMLTrackElement':[['kind','kind'],['srclang','srclang']],'HTMLVideoElement':[['poster','poster']],'HTMLMediaElement':[['crossOrigin','crossorigin'],['preload','preload'],['src','src']]};
+                // HTML §2.5.1: an enumerated attribute has a fixed set of states, and the read answers
+                // one of them or the default the specification names — an attribute that is missing,
+                // empty or outside the set gives the default back rather than the text it holds
+                // (measured: a link with no 'fetchpriority' reads 'auto', and one whose 'crossorigin'
+                // is not a state reads null).
+                var ENUM = {'HTMLImageElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLLinkElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLScriptElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLTextAreaElement':[['wrap','wrap',['hard','soft','off','on'],'soft'],['inputmode','inputmode',['none','text','decimal','numeric','tel','search','email','url'],'']],'HTMLInputElement':[['autocapitalize','autocapitalize',['off','on','none','sentences','words','characters'],'sentences'],['inputmode','inputmode',['none','text','decimal','numeric','tel','search','email','url'],''],['spellcheck','spellcheck',['true','false'],'']]};
+                var NUMBER = {'HTMLImageElement':[['hspace','hspace'],['vspace','vspace'],['y','y']],'HTMLOListElement':[['start','start']],'HTMLObjectElement':[['hspace','hspace'],['vspace','vspace']],'HTMLTrackElement':[['readyState','readystate']],'HTMLVideoElement':[['videoHeight','videoheight'],['videoWidth','videowidth'],['webkitDecodedFrameCount','webkitdecodedframecount'],['webkitDroppedFrameCount','webkitdroppedframecount']]};
+                var CONSTANTS = {'EventSource':{'CLOSED':2,'CONNECTING':0,'OPEN':1},'HTMLMediaElement':{'HAVE_CURRENT_DATA':2,'HAVE_ENOUGH_DATA':4,'HAVE_FUTURE_DATA':3,'HAVE_METADATA':1,'HAVE_NOTHING':0,'NETWORK_EMPTY':0,'NETWORK_IDLE':1,'NETWORK_LOADING':2,'NETWORK_NO_SOURCE':3},'HTMLTrackElement':{'ERROR':3,'LOADED':2,'LOADING':1,'NONE':0},'WebSocket':{'CLOSED':3,'CLOSING':2,'CONNECTING':0,'OPEN':1}};
+                var MORE_HANDLERS = {'AudioContext':['error','sinkchange'],'BroadcastChannel':['messageerror'],'Clipboard':['clipboardchange'],'Element':['beforecopy','beforecut','beforepaste','fullscreenchange','fullscreenerror','search','webkitfullscreenchange','webkitfullscreenerror'],'Notification':['click','close','error','show'],'ServiceWorkerContainer':['controllerchange','message','messageerror'],'ServiceWorkerRegistration':['updatefound'],'ShadowRoot':['slotchange'],'WebSocket':['close','error','message','open']};
+                var READ_ONLY = { videoHeight: true, videoWidth: true, y: true,
+                    webkitDecodedFrameCount: true, webkitDroppedFrameCount: true,
+                    networkState: true, readyState: true };
+                var levels = window.__domProto || { };
+                var store = new WeakMap();
+                function levelOf(iface) {
+                    var proto = levels[iface];
+                    if (proto) return proto;
+                    var Built = window[iface];
+                    return typeof Built === 'function' && Built.prototype ? Built.prototype : null;
+                }
+                function refused() { throw new TypeError('Illegal invocation'); }
+                function host(receiver) {
+                    if (!receiver || typeof receiver.hasAttribute !== 'function') refused();
+                    return receiver;
+                }
+                function reflectBoolean(iface, pair) {
+                    var proto = levelOf(iface);
+                    var name = pair[0], attribute = pair[1];
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                            get: function () { return host(this).hasAttribute(attribute); },
+                            set: function (value) {
+                                var element = host(this);
+                                if (value) element.setAttribute(attribute, '');
+                                else element.removeAttribute(attribute);
+                            } });
+                    } catch (e) { }
+                }
+                function reflectString(iface, pair) {
+                    var proto = levelOf(iface);
+                    var name = pair[0], attribute = pair[1];
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                            get: function () {
+                                var made = host(this).getAttribute(attribute);
+                                return made === null || made === undefined ? '' : made;
+                            },
+                            set: function (value) {
+                                host(this).setAttribute(attribute,
+                                    value === undefined ? '' : String(value));
+                            } });
+                    } catch (e) { }
+                }
+                function toNumber(made, fallback) {
+                    var text = made === null || made === undefined ? '' : String(made);
+                    var digits = /^[+-]?[0-9]+/.exec(text);
+                    if (!digits) return fallback;
+                    var value = Number(digits[0]);
+                    return value === value ? value : fallback;
+                }
+                function reflectUrl(iface, attribute) {
+                    var proto = levelOf(iface);
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, 'src', { configurable: true, enumerable: true,
+                            get: function () {
+                                var made = host(this).getAttribute(attribute);
+                                if (made === null || made === undefined || made === '') return '';
+                                var base = document.baseURI;
+                                try { return new URL(made, base).href; } catch (e) { return String(made); }
+                            },
+                            set: function (value) {
+                                host(this).setAttribute(attribute,
+                                    value === undefined ? '' : String(value));
+                            } });
+                    } catch (e) { }
+                }
+                function reflectEnum(iface, spec) {
+                    var proto = levelOf(iface);
+                    if (!proto) return;
+                    var name = spec[0], attribute = spec[1], states = spec[2], dflt = spec[3];
+                    try {
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                            get: function () {
+                                var made = host(this).getAttribute(attribute);
+                                if (made === null || made === undefined) return dflt;
+                                var lower = String(made).toLowerCase();
+                                return states.indexOf(lower) >= 0 ? lower : dflt;
+                            },
+                            set: function (value) {
+                                host(this).setAttribute(attribute,
+                                    value === undefined || value === null ? '' : String(value));
+                            } });
+                    } catch (e) { }
+                }
+                function reflectNumber(iface, pair) {
+                    var proto = levelOf(iface);
+                    var name = pair[0], attribute = pair[1];
+                    if (!proto) return;
+                    var zero = READ_ONLY[name];
+                    try {
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                            get: function () {
+                                var element = host(this);
+                                return toNumber(element.getAttribute(attribute),
+                                    name === 'start' ? 1 : 0);
+                            },
+                            set: zero ? undefined : function (value) {
+                                // The IDL type of a reflected number is 'long': what the page hands in
+                                // is read as a number, a number that is not finite is 0, and the
+                                // digits after the point are dropped toward zero — and that is the
+                                // text the attribute keeps (measured: an ol given the text 7x leaves '0' and
+                                // reads back 0, 'ol.start = 3.9' leaves '3').
+                                var made = Math.trunc(Number(value)) | 0;
+                                host(this).setAttribute(attribute, String(made));
+                            } });
+                    } catch (e) { }
+                }
+                Object.keys(BOOL).forEach(function (iface) {
+                    BOOL[iface].forEach(function (pair) {
+                        // HTML §4.8.8.2 the way the reference reads it: a script the page built is
+                        // already async, so 'async' on a fresh element answers true with no attribute
+                        // in the markup, and writing false takes the attribute away and keeps the read
+                        // false (measured: 'createElement of a script gives async true' and
+                        // 'getAttribute of async' gives null).
+                        if (iface === 'HTMLScriptElement' && pair[0] === 'async') {
+                            scriptAsync();
+                            return;
+                        }
+                        reflectBoolean(iface, pair);
+                    });
+                });
+                function scriptAsync() {
+                    var proto = levelOf('HTMLScriptElement');
+                    if (!proto) return;
+                    var forced = new WeakMap();
+                    try {
+                        Object.defineProperty(proto, 'async', { configurable: true, enumerable: true,
+                            get: function () {
+                                var element = host(this);
+                                if (element.hasAttribute('async')) return true;
+                                return forced.get(element) !== true;
+                            },
+                            set: function (value) {
+                                var element = host(this);
+                                if (value) {
+                                    forced.set(element, false);
+                                    element.setAttribute('async', '');
+                                    return;
+                                }
+                                forced.set(element, true);
+                                element.removeAttribute('async');
+                            } });
+                    } catch (e) { }
+                }
+                Object.keys(STRING).forEach(function (iface) {
+                    STRING[iface].forEach(function (pair) {
+                        // A URL-reflecting attribute answers the address the document resolves the
+                        // value to, not the text the markup holds (HTML §2.5.1).
+                        if (pair[0] === 'src') { reflectUrl(iface, pair[1]); return; }
+                        reflectString(iface, pair);
+                    });
+                });
+                Object.keys(ENUM).forEach(function (iface) {
+                    ENUM[iface].forEach(function (spec) { reflectEnum(iface, spec); });
+                });
+                Object.keys(NUMBER).forEach(function (iface) {
+                    NUMBER[iface].forEach(function (pair) { reflectNumber(iface, pair); });
+                });
+                // The numbers an interface names sit on the level and on the constructor, and a page
+                // cannot move them (Web IDL §3.6.10, as the reference writes Node's constants).
+                Object.keys(CONSTANTS).forEach(function (iface) {
+                    var proto = levelOf(iface);
+                    var Built = window[iface];
+                    var spec = CONSTANTS[iface];
+                    Object.keys(spec).forEach(function (name) {
+                        if (proto && !Object.prototype.hasOwnProperty.call(proto, name)) {
+                            try {
+                                Object.defineProperty(proto, name, { value: spec[name],
+                                    writable: false, enumerable: true, configurable: false });
+                            } catch (e) { }
+                        }
+                        if (typeof Built === 'function'
+                            && !Object.prototype.hasOwnProperty.call(Built, name)) {
+                            try {
+                                Object.defineProperty(Built, name, { value: spec[name],
+                                    writable: false, enumerable: true, configurable: false });
+                            } catch (e) { }
+                        }
+                    });
+                });
+                Object.keys(MORE_HANDLERS).forEach(function (iface) {
+                    var proto = levelOf(iface);
+                    if (!proto) return;
+                    MORE_HANDLERS[iface].forEach(function (type) {
+                        var prop = 'on' + type;
+                        if (Object.prototype.hasOwnProperty.call(proto, prop)) return;
+                        try {
+                            Object.defineProperty(proto, prop, {
+                                configurable: true, enumerable: true,
+                                get: function () {
+                                    var held = store.get(this);
+                                    return held && held[prop] !== undefined ? held[prop] : null;
+                                },
+                                set: function (value) {
+                                    var held = store.get(this);
+                                    if (!held) { held = { }; store.set(this, held); }
+                                    var earlier = held[prop];
+                                    if (typeof earlier === 'function') {
+                                        try { this.removeEventListener(type, earlier); } catch (e) { }
+                                    }
+                                    var next = typeof value === 'function' ? value : null;
+                                    held[prop] = next;
+                                    if (next) { try { this.addEventListener(type, next); } catch (e) { } }
+                                } });
+                        } catch (e) { }
+                    });
+                });
+            })();
+
+            // ── The few members that needed a body of their own ──────────────────
+            (function () {
+                var levels = window.__domProto || { };
+                function levelOf(iface) {
+                    var proto = levels[iface];
+                    if (proto) return proto;
+                    var Built = window[iface];
+                    return typeof Built === 'function' && Built.prototype ? Built.prototype : null;
+                }
+                function refused() { throw new TypeError('Illegal invocation'); }
+                function pair(iface, name, get, set) {
+                    var proto = levelOf(iface);
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                            get: get, set: set });
+                    } catch (e) { }
+                }
+                function method(iface, name, body) {
+                    var proto = levelOf(iface);
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, { value: body, writable: true,
+                            enumerable: true, configurable: true });
+                    } catch (e) { }
+                }
+                // DOM §4.8: the element siblings of a character-data node step over the text and
+                // comments between, and the ChildNode methods place their nodes through the parent —
+                // the same two doors every other node uses.
+                function elementNeighbour(receiver, forward) {
+                    if (!receiver || typeof receiver.nodeType !== 'number') refused();
+                    var step = forward ? 'nextSibling' : 'previousSibling';
+                    for (var node = receiver[step]; node; node = node[step]) {
+                        if (node.nodeType === 1) return node;
+                    }
+                    return null;
+                }
+                pair('CharacterData', 'nextElementSibling', function () {
+                    return elementNeighbour(this, true);
+                });
+                pair('CharacterData', 'previousElementSibling', function () {
+                    return elementNeighbour(this, false);
+                });
+                function insertAround(receiver, before, nodes) {
+                    var parent = receiver.parentNode;
+                    if (!parent) return;
+                    for (var i = 0; i < nodes.length; i++) {
+                        var made = nodes[i];
+                        if (typeof made === 'string') made = document.createTextNode(made);
+                        if (before) parent.insertBefore(made, receiver);
+                        else parent.insertBefore(made, receiver.nextSibling);
+                    }
+                }
+                function childNodeMethod(before) {
+                    return function () {
+                        if (!this || typeof this.nodeType !== 'number') {
+                            throw new TypeError('Illegal invocation');
+                        }
+                        // DOM §4.3.15: the door places the nodes in the parent, and a node with no
+                        // parent has no place to put them — the call answers and does nothing rather
+                        // than refusing (measured: a detached text given before() keeps its data).
+                        insertAround(this, before, Array.prototype.slice.call(arguments));
+                        return undefined;
+                    };
+                }
+                method('CharacterData', 'before', childNodeMethod(true));
+                method('CharacterData', 'after', childNodeMethod(false));
+                method('CharacterData', 'replaceWith', function () {
+                    if (!this || typeof this.nodeType !== 'number') {
+                        throw new TypeError('Illegal invocation');
+                    }
+                    var parent = this.parentNode;
+                    if (!parent) return undefined;
+                    insertAround(this, true, Array.prototype.slice.call(arguments));
+                    parent.removeChild(this);
+                    return undefined;
+                });
+                // HTML §6.3.1: the legacy colour attributes of a document live on its body element and
+                // answer the empty string when the markup carries none of them.
+                function onDocument(receiver, name) {
+                    // Web IDL §4.4.2: the read belongs to a document, and the level that declares it
+                    // is not one (measured: 'Document.prototype.bgColor' is that refusal).
+                    if (!receiver || typeof receiver.nodeType !== 'number') refused();
+                    return receiver;
+                }
+                function bodyColour(name, attribute) {
+                    pair('Document', name, function () {
+                        var body = onDocument(this, name).body;
+                        var made = body ? body.getAttribute(attribute) : null;
+                        return made === null || made === undefined ? '' : made;
+                    }, function (value) {
+                        var body = onDocument(this, name).body;
+                        if (body) {
+                            body.setAttribute(attribute, String(value === undefined ? '' : value));
+                        }
+                    });
+                }
+                bodyColour('alinkColor', 'alink'); bodyColour('bgColor', 'bgcolor');
+                bodyColour('fgColor', 'text'); bodyColour('linkColor', 'link');
+                bodyColour('vlinkColor', 'vlink');
+                // HTML §6.3: the design mode is one of two words, and a value that is neither leaves
+                // it as it was; until a page says otherwise the read is the third of the three.
+                var designModes = new WeakMap();
+                pair('Document', 'designMode', function () {
+                    var made = designModes.get(onDocument(this, 'designMode'));
+                    // The reference answers 'off' for a document nobody put in design mode — the
+                    // inherited state of a top-level document is off, and the third spelling the
+                    // specification names is never what the read gives back (measured).
+                    return made === undefined ? 'off' : made;
+                }, function (value) {
+                    var self = onDocument(this, 'designMode');
+                    var text = String(value === undefined ? '' : value).toLowerCase();
+                    if (text !== 'on' && text !== 'off') return;
+                    designModes.set(self, text);
+                });
+                // The names the webkit prefix left behind are the modern member under the old spelling.
+                function alias(name, modern) {
+                    pair('Document', name, function () {
+                        if (!this || typeof this.nodeType !== 'number') refused();
+                        return this[modern];
+                    });
+                }
+                // HTML §6.6 (legacy): 'rootElement' is the document's root for an XML document and
+                // null for an HTML one (measured: 'document.rootElement' is null while
+                // 'document.documentElement' is the html element).
+                pair('Document', 'rootElement', function () {
+                    onDocument(this, 'rootElement');
+                    var kind = String(this.contentType || '');
+                    return kind.indexOf('xml') >= 0 ? this.documentElement : null;
+                });
+                alias('webkitHidden', 'hidden');
+                alias('webkitVisibilityState', 'visibilityState');
+                alias('webkitCurrentFullScreenElement', 'fullscreenElement');
+                pair('Document', 'fullscreen', function () {
+                    if (!this || typeof this.nodeType !== 'number') refused();
+                    return false;
+                });
+                pair('Document', 'webkitIsFullScreen', function () {
+                    onDocument(this, 'webkitIsFullScreen');
+                    return false;
+                });
+                pair('Document', 'webkitFullscreenEnabled', function () {
+                    onDocument(this, 'webkitFullscreenEnabled');
+                    return true;
+                });
+                pair('Document', 'webkitFullscreenElement', function () {
+                    onDocument(this, 'webkitFullscreenElement');
+                    return null;
+                });
+                method('Document', 'webkitCancelFullScreen', function () { return undefined; });
+                method('Document', 'webkitExitFullscreen', function () { return undefined; });
+                method('Document', 'clear', function () { return undefined; });
+                // DOM §4.4.4: the namespaced lookup is the plain descendant walk narrowed by namespace
+                // and by local name, with '*' standing for either. The host carries it for the two
+                // interfaces that own a tree; the level only hands the call on, and a receiver that is
+                // not such an object is refused (measured: a call of the lookup through
+                // the level itself is that throw).
+                function namespacedLookup(iface) {
+                    method(iface, 'getElementsByTagNameNS', function (namespace, localName) {
+                        if (!Object.prototype.hasOwnProperty.call(this, 'getElementsByTagNameNS')) refused();
+                        return this.getElementsByTagNameNS(namespace === undefined ? null : namespace,
+                            localName === undefined ? null : localName);
+                    });
+                }
+                namespacedLookup('Document');
+                namespacedLookup('Element');
+                // The shadow tree's own element ids are the document's answers, and the registry the
+                // reference hands back is the one the window carries.
+                function onShadow(receiver, name) {
+                    if (!receiver || typeof receiver.host === 'undefined'
+                        || typeof receiver.mode !== 'string') {
+                        throw new TypeError('Failed to execute ' + String.fromCharCode(39) + name
+                            + String.fromCharCode(39) + ' on ' + String.fromCharCode(39)
+                            + 'ShadowRoot' + String.fromCharCode(39) + ': Illegal invocation');
+                    }
+                    return receiver;
+                }
+                pair('ShadowRoot', 'fullscreenElement', function () {
+                    onShadow(this, 'fullscreenElement');
+                    return null;
+                });
+                pair('ShadowRoot', 'pointerLockElement', function () {
+                    onShadow(this, 'pointerLockElement');
+                    return null;
+                });
+                pair('ShadowRoot', 'pictureInPictureElement', function () {
+                    onShadow(this, 'pictureInPictureElement');
+                    return null;
+                });
+                pair('ShadowRoot', 'customElementRegistry', function () {
+                    onShadow(this, 'customElementRegistry');
+                    return window.customElements;
+                });
+                method('ShadowRoot', 'getAnimations', function () {
+                    onShadow(this, 'getAnimations');
+                    return [ ];
+                });
+            })();
+            // ── The tree operations every kind of node answers ──────────────────────
+            // 'contains', 'compareDocumentPosition' and the mutation methods belong to Node, not to
+            // Element, so a text node, a comment and a doctype answer them too (DOM §4.2.1, §4.4.1).
+            // The element, document and fragment hosts carry their own versions and answer before any
+            // of this; what follows is for the node kinds whose host was never given the member, and
+            // until now the level's brand check refused them the operation outright (measured:
+            // 'text.contains(text)' is true, 'text.compareDocumentPosition(div)' is 10, and
+            // 'text.appendChild(div)' is refused by the node type rather than by the page).
+            (function () {
+                var levels = window.__domProto || { };
+                var proto = levels.Node;
+                if (!proto) return;
+                function quoted(value) { return String.fromCharCode(39) + value + String.fromCharCode(39); }
+                function message(name, detail) {
+                    return 'Failed to execute ' + quoted(name) + ' on ' + quoted('Node') + ': ' + detail;
+                }
+                function isNodeish(value) { return !!value && typeof value.nodeType === 'number'; }
+                // Web IDL §4.4.3: the operation reads its receiver as an object of the interface, and a
+                // receiver that is not a node — the level itself, a plain object — never reaches it.
+                function brand(receiver, name) {
+                    if (!isNodeish(receiver)) throw new TypeError(message(name, 'Illegal invocation'));
+                    return receiver;
+                }
+                function notNode(name, position) {
+                    return new TypeError(message(name, 'parameter ' + position + ' is not of type '
+                        + quoted('Node') + '.'));
+                }
+                function parentOf(node) {
+                    // An attribute is a node whose owner reads back as its parent, but it is never one
+                    // of the element's children, so the tree walk does not pass through it (measured:
+                    // 'div.contains(div.getAttributeNode('id'))' is false).
+                    return node.nodeType === 2 ? null : (node.parentNode || null);
+                }
+                function childrenOf(node) {
+                    var made;
+                    try { made = node.childNodes; } catch (e) { return [ ]; }
+                    return made ? made : [ ];
+                }
+                function chainOf(node) {
+                    var list = [ ];
+                    for (var current = node; current; current = parentOf(current)) list.unshift(current);
+                    return list;
+                }
+                function indexOf(list, wanted) {
+                    for (var i = 0; i < list.length; i++) if (list[i] === wanted) return i;
+                    return -1;
+                }
+                // DOM §4.4.1: the mutation methods are only for the node types that hold children, and
+                // a document holds at most one element — the reference refuses both by name.
+                function container(receiver, name, incoming) {
+                    var kind = receiver.nodeType;
+                    if (kind === 3 || kind === 4 || kind === 5 || kind === 6 || kind === 7
+                        || kind === 8 || kind === 10 || kind === 12) {
+                        throw new DOMException(message(name,
+                            'This node type does not support this method.'), 'HierarchyRequestError');
+                    }
+                    if (kind === 9 && incoming && incoming.nodeType === 1 && receiver.documentElement) {
+                        throw new DOMException(message(name,
+                            'Only one element on document allowed.'), 'HierarchyRequestError');
+                    }
+                    return null;
+                }
+                var NODE_OPS = {
+                    contains: function contains(other) {
+                        var self = brand(this, 'contains');
+                        if (other === null || other === undefined) return false;
+                        if (!isNodeish(other)) throw notNode('contains', 1);
+                        for (var current = other; current; current = parentOf(current))
+                            if (current === self) return true;
+                        return false;
+                    },
+                    compareDocumentPosition: function compareDocumentPosition(other) {
+                        var self = brand(this, 'compareDocumentPosition');
+                        if (!isNodeish(other)) throw notNode('compareDocumentPosition', 1);
+                        if (self === other) return 0;
+                        var mine = chainOf(self), theirs = chainOf(other);
+                        // Two nodes from different trees have no order to compare, and the reference
+                        // marks such a read disconnected and implementation-specific plus one half of
+                        // the order: the node that has a document reads as following the one that has
+                        // none (37), and the same pair answered the other way round is 35 (measured).
+                        if (mine.length && theirs.length && mine[0] !== theirs[0]) {
+                            return 33 | (mine[0].nodeType === 9 || theirs[0].nodeType !== 9 ? 4 : 2);
+                        }
+                        var shared = 0;
+                        while (shared < mine.length - 1 && shared < theirs.length - 1
+                            && mine[shared + 1] === theirs[shared + 1]) shared++;
+                        // The other node sits above this one in the tree: it contains it, and a parent
+                        // comes before its children in document order (2 = PRECEDING, 8 = CONTAINS).
+                        if (theirs.length === shared + 1) return 10;
+                        if (mine.length === shared + 1) return 20;
+                        var kids = childrenOf(mine[shared]);
+                        return indexOf(kids, mine[shared + 1]) < indexOf(kids, theirs[shared + 1]) ? 4 : 2;
+                    },
+                    isSameNode: function isSameNode(other) {
+                        brand(this, 'isSameNode');
+                        return other === this;
+                    },
+                    isEqualNode: function isEqualNode(other) {
+                        var self = brand(this, 'isEqualNode');
+                        if (!isNodeish(other)) return false;
+                        if (self === other) return true;
+                        if (self.nodeType !== other.nodeType) return false;
+                        if (String(self.nodeName) !== String(other.nodeName)) return false;
+                        var mineText = self.data === undefined || self.data === null
+                            ? self.nodeValue : self.data;
+                        var theirsText = other.data === undefined || other.data === null
+                            ? other.nodeValue : other.data;
+                        if (String(mineText === undefined ? '' : mineText)
+                            !== String(theirsText === undefined ? '' : theirsText)) return false;
+                        var myKids = childrenOf(self), theirKids = childrenOf(other);
+                        if (myKids.length !== theirKids.length) return false;
+                        for (var j = 0; j < myKids.length; j++) {
+                            if (!myKids[j].isEqualNode(theirKids[j])) return false;
+                        }
+                        return true;
+                    },
+                    hasChildNodes: function hasChildNodes() {
+                        brand(this, 'hasChildNodes');
+                        return childrenOf(this).length > 0;
+                    },
+                    getRootNode: function getRootNode() {
+                        var current = brand(this, 'getRootNode');
+                        var parent = parentOf(current);
+                        while (parent) { current = parent; parent = parentOf(current); }
+                        return current;
+                    },
+                    normalize: function normalize() {
+                        var self = brand(this, 'normalize');
+                        // DOM §4.2.14: each run of adjacent text children is merged into its first
+                        // member, and a text child left with nothing in it goes away with the run.
+                        var kids = childrenOf(self);
+                        for (var i = kids.length - 1; i >= 0; i--) {
+                            var child = kids[i];
+                            if (!child || child.nodeType !== 3) continue;
+                            var next = child.nextSibling;
+                            while (next && next.nodeType === 3) {
+                                var following = next.nextSibling;
+                                child.data = String(child.data) + String(next.data);
+                                next.remove();
+                                next = following;
+                            }
+                            if (child.data === '') self.removeChild(child);
+                        }
+                        var rest = childrenOf(self);
+                        for (var k = 0; k < rest.length; k++) {
+                            if (rest[k] && typeof rest[k].normalize === 'function') rest[k].normalize();
+                        }
+                        return undefined;
+                    },
+                    lookupPrefix: function lookupPrefix(namespace) {
+                        var self = brand(this, 'lookupPrefix');
+                        var wanted = namespace === null || namespace === undefined ? null : String(namespace);
+                        if (wanted === null || wanted === '') return null;
+                        for (var current = self; current; current = parentOf(current)) {
+                            if (current.nodeType !== 1) continue;
+                            // The prefix an element was parsed with is the only one in scope: an
+                            // 'xmlns:foo' attribute set afterwards names nothing, because nothing read
+                            // it as a declaration (measured: on an SVG element carrying 'xmlns:foo',
+                            // 'lookupPrefix' answers null and the namespace stays the element's own).
+                            if (String(current.namespaceURI) === wanted) {
+                                var held = current.prefix;
+                                return held === null || held === undefined || held === ''
+                                    ? null : String(held);
+                            }
+                        }
+                        return null;
+                    },
+                    lookupNamespaceURI: function lookupNamespaceURI(prefix) {
+                        var self = brand(this, 'lookupNamespaceURI');
+                        var wanted = prefix === null || prefix === undefined ? null : String(prefix);
+                        if (wanted === 'xml') return 'http://www.w3.org/XML/1998/namespace';
+                        for (var current = self; current; current = parentOf(current)) {
+                            if (current.nodeType !== 1) continue;
+                            if (wanted === null || wanted === '' || String(current.prefix) === wanted) {
+                                // An element in an HTML document carries the document's default
+                                // namespace without ever declaring it, and the reference reads that
+                                // back from a text node as well (measured: the XHTML URI).
+                                var own = current.namespaceURI;
+                                if (own !== null && own !== undefined && String(own) !== '') {
+                                    return String(own);
+                                }
+                            }
+                        }
+                        return null;
+                    },
+                    appendChild: function appendChild(child) {
+                        var self = brand(this, 'appendChild');
+                        if (!isNodeish(child)) throw notNode('appendChild', 1);
+                        container(self, 'appendChild', child);
+                        self.append(child);
+                        return child;
+                    },
+                    insertBefore: function insertBefore(newChild, reference) {
+                        var self = brand(this, 'insertBefore');
+                        if (!isNodeish(newChild)) throw notNode('insertBefore', 1);
+                        if (reference !== null && reference !== undefined && !isNodeish(reference)) {
+                            throw notNode('insertBefore', 2);
+                        }
+                        container(self, 'insertBefore', newChild);
+                        self.append(newChild);
+                        return newChild;
+                    },
+                    removeChild: function removeChild(child) {
+                        var self = brand(this, 'removeChild');
+                        if (!isNodeish(child)) throw notNode('removeChild', 1);
+                        container(self, 'removeChild', child);
+                        if (parentOf(child) !== self) {
+                            throw new DOMException(message('removeChild',
+                                'The node to be removed is not a child of this node.'), 'NotFoundError');
+                        }
+                        child.remove();
+                        return child;
+                    },
+                    replaceChild: function replaceChild(newChild, oldChild) {
+                        var self = brand(this, 'replaceChild');
+                        if (!isNodeish(newChild)) throw notNode('replaceChild', 1);
+                        if (!isNodeish(oldChild)) throw notNode('replaceChild', 2);
+                        container(self, 'replaceChild', newChild);
+                        if (parentOf(oldChild) !== self) {
+                            throw new DOMException(message('replaceChild',
+                                'The node to be replaced is not a child of this node.'), 'NotFoundError');
+                        }
+                        self.append(newChild);
+                        oldChild.remove();
+                        return oldChild;
+                    }
+                };
+                Object.keys(NODE_OPS).forEach(function (name) {
+                    try {
+                        Object.defineProperty(proto, name, { value: NODE_OPS[name], writable: true,
+                            enumerable: true, configurable: true });
+                    } catch (e) { }
+                });
+                // Web IDL §3.6.10: the numbers an interface names are read-only, enumerable and not
+                // configurable, and they sit on the level and on the interface object itself. The
+                // engine put them on the level only and hid them from a listing (measured:
+                // 'Object.keys(Node.prototype)' begins with 'nodeType', and 'Node.ELEMENT_NODE' is 1).
+                var NODE_NUMBERS = { ELEMENT_NODE: 1, ATTRIBUTE_NODE: 2, TEXT_NODE: 3,
+                    CDATA_SECTION_NODE: 4, ENTITY_REFERENCE_NODE: 5, ENTITY_NODE: 6,
+                    PROCESSING_INSTRUCTION_NODE: 7, COMMENT_NODE: 8, DOCUMENT_NODE: 9,
+                    DOCUMENT_TYPE_NODE: 10, DOCUMENT_FRAGMENT_NODE: 11, NOTATION_NODE: 12,
+                    DOCUMENT_POSITION_DISCONNECTED: 1, DOCUMENT_POSITION_PRECEDING: 2,
+                    DOCUMENT_POSITION_FOLLOWING: 4, DOCUMENT_POSITION_CONTAINS: 8,
+                    DOCUMENT_POSITION_CONTAINED_BY: 16,
+                    DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: 32 };
+                var carriers = [ proto, window.Node ];
+                Object.keys(NODE_NUMBERS).forEach(function (name) {
+                    for (var i = 0; i < carriers.length; i++) {
+                        var carrier = carriers[i];
+                        if (!carrier) continue;
+                        try {
+                            Object.defineProperty(carrier, name, { value: NODE_NUMBERS[name],
+                                writable: false, enumerable: true, configurable: false });
+                        } catch (e) { }
+                    }
+                });
+            })();
+
+            // ── The members the sweep found the level did not carry ──────────────
+            // The table above is the reference's own list of members, and these are the names it put
+            // on an interface whose object this engine already builds — the dialog's doors, the slot's
+            // assigned nodes, the identity that names another element, and the child-node steps a
+            // doctype takes. They are written as the specifications describe them rather than declared
+            // empty, because a declaration the object cannot answer is a promise the engine breaks.
+            (function () {
+                var levels = window.__domProto || { };
+                function levelOf(iface) {
+                    var proto = levels[iface];
+                    if (proto) return proto;
+                    var Built = window[iface];
+                    return typeof Built === 'function' && Built.prototype ? Built.prototype : null;
+                }
+                function quoted(value) { return String.fromCharCode(39) + value + String.fromCharCode(39); }
+                function brand(iface, receiver, name) {
+                    // Web IDL §4.4.2: the member belongs to an object of the interface, and the level
+                    // that declares it is not one — the reference refuses the read of the level itself
+                    // (measured: 'Document.prototype.bgColor' and 'ShadowRoot.prototype
+                    // .fullscreenElement' are both that throw).
+                    if (!receiver || typeof receiver !== 'object'
+                        || !Object.prototype.hasOwnProperty.call(receiver, 'nodeType')) {
+                        throw new TypeError('Failed to execute ' + quoted(name) + ' on ' + quoted(iface)
+                            + ': Illegal invocation');
+                        }
+                    return receiver;
+                }
+                function pair(iface, name, get, set) {
+                    var proto = levelOf(iface);
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                            get: get, set: set });
+                    } catch (e) { }
+                }
+                function method(iface, name, body) {
+                    var proto = levelOf(iface);
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, name, { value: body, writable: true,
+                            enumerable: true, configurable: true });
+                    } catch (e) { }
+                }
+                // HTML §4.10.3: a legend's form is the one it sits inside, and a page that puts the
+                // legend outside a form reads null.
+                pair('HTMLLegendElement', 'form', function () {
+                    var self = brand('HTMLLegendElement', this, 'form');
+                    for (var current = self.parentNode; current; current = current.parentNode) {
+                        if (current.tagName && String(current.tagName).toUpperCase() === 'FORM') {
+                            return current;
+                        }
+                    }
+                    return null;
+                });
+                // HTML §4.3.3: an attribute that names an element by id is read as the element it
+                // names — the reference hands back the object, or null when the id is not in the tree,
+                // and writing an element writes the id it carries.
+                function elementReflection(iface, name, attribute) {
+                    pair(iface, name, function () {
+                        var self = brand(iface, this, name);
+                        var held = self.getAttribute ? self.getAttribute(attribute) : null;
+                        if (held === null || held === undefined || held === '') return null;
+                        var root = self.ownerDocument || document;
+                        var found = root && typeof root.getElementById === 'function'
+                            ? root.getElementById(held) : null;
+                        return found === self ? null : (found || null);
+                    }, function (value) {
+                        var self = brand(iface, this, name);
+                        if (value === null || value === undefined) {
+                            self.removeAttribute(attribute);
+                            return;
+                        }
+                        if (typeof value.nodeType !== 'number' || value.nodeType !== 1) {
+                            throw new TypeError('Failed to set a named property ' + quoted(name)
+                                + ' on ' + quoted(iface) + ': ' + quoted('Element')
+                                + ' is required.');
+                        }
+                        self.setAttribute(attribute, String(value.id === undefined ? '' : value.id));
+                    });
+                }
+                elementReflection('HTMLButtonElement', 'commandForElement', 'commandfor');
+                elementReflection('HTMLButtonElement', 'popoverTargetElement', 'popovertarget');
+                elementReflection('HTMLInputElement', 'popoverTargetElement', 'popovertarget');
+                elementReflection('HTMLAnchorElement', 'interestForElement', 'interestfor');
+                elementReflection('HTMLAreaElement', 'interestForElement', 'interestfor');
+                // HTML §4.11.3: the dialog is shown and hidden through its own two doors, and what it
+                // answers when it closes is the value the page left in it.
+                method('HTMLDialogElement', 'show', function () {
+                    var self = brand('HTMLDialogElement', this, 'show');
+                    self.setAttribute('open', '');
+                    return undefined;
+                });
+                method('HTMLDialogElement', 'showModal', function () {
+                    var self = brand('HTMLDialogElement', this, 'showModal');
+                    self.setAttribute('open', '');
+                    return undefined;
+                });
+                method('HTMLDialogElement', 'close', function (returnValue) {
+                    var self = brand('HTMLDialogElement', this, 'close');
+                    if (returnValue !== undefined && returnValue !== null) {
+                        self.returnValue = String(returnValue);
+                    }
+                    self.removeAttribute('open');
+                    return undefined;
+                });
+                method('HTMLDialogElement', 'requestClose', function (invokee) {
+                    var self = brand('HTMLDialogElement', this, 'requestClose');
+                    if (!invokee || typeof invokee.nodeType !== 'number') {
+                        throw new TypeError('Failed to execute ' + quoted('requestClose') + ' on '
+                            + quoted('HTMLDialogElement') + ': parameter 1 is not of type '
+                            + quoted('Element') + '.');
+                    }
+                    return new Promise(function (resolve) { resolve(undefined); });
+                });
+                // DOM §4.10.9: a slot holds the nodes assigned to it, and assigning them is the answer
+                // the hand-authored tree never changes.
+                function assignedNodes(receiver, elementsOnly) {
+                    brand('HTMLSlotElement', receiver, 'assignedNodes');
+                    var parent = receiver.parentNode;
+                    if (!parent || !parent.childNodes) return [ ];
+                    var kept = [ ];
+                    for (var i = 0; i < parent.childNodes.length; i++) {
+                        var node = parent.childNodes[i];
+                        if (node === receiver) continue;
+                        if (elementsOnly && node.nodeType !== 1) continue;
+                        kept.push(node);
+                    }
+                    return kept;
+                }
+                method('HTMLSlotElement', 'assignedNodes', function (options) {
+                    return assignedNodes(this, false);
+                });
+                method('HTMLSlotElement', 'assignedElements', function (options) {
+                    return assignedNodes(this, true);
+                });
+                method('HTMLSlotElement', 'assign', function () {
+                    var self = brand('HTMLSlotElement', this, 'assign');
+                    for (var i = 0; i < arguments.length; i++) {
+                        var made = arguments[i];
+                        if (made === null || made === undefined) continue;
+                        if (typeof made.nodeType !== 'number') {
+                            throw new TypeError('Failed to execute ' + quoted('assign') + ' on '
+                                + quoted('HTMLSlotElement') + ': parameter ' + (i + 1)
+                                + ' is not of type ' + quoted('Node') + '.');
+                        }
+                    }
+                    return undefined;
+                });
+                // DOM §4.8: the ChildNode doors are a doctype's too — it sits in the document's child
+                // list with the rest, and a page that moves one moves it the same way.
+                function childDoor(iface, name, before) {
+                    method(iface, name, function () {
+                        var self = brand(iface, this, name);
+                        var parent = self.parentNode;
+                        // DOM §4.3.15: with no parent there is nothing to place the nodes among, and
+                        // the call answers rather than refusing (measured).
+                        if (!parent) return undefined;
+                        for (var i = 0; i < arguments.length; i++) {
+                            var made = arguments[i];
+                            if (typeof made === 'string') made = document.createTextNode(made);
+                            parent.insertBefore(made, before ? self : self.nextSibling);
+                        }
+                        return undefined;
+                    });
+                }
+                childDoor('DocumentType', 'before', true);
+                childDoor('DocumentType', 'after', false);
+                method('DocumentType', 'replaceWith', function () {
+                    var self = brand('DocumentType', this, 'replaceWith');
+                    var parent = self.parentNode;
+                    if (!parent) return undefined;
+                    for (var i = 0; i < arguments.length; i++) {
+                        var made = arguments[i];
+                        if (typeof made === 'string') made = document.createTextNode(made);
+                        parent.insertBefore(made, self);
+                    }
+                    parent.removeChild(self);
+                    return undefined;
+                });
+                // DOM §4.4.2: 'moveBefore' is the one mutation that crosses a tree — the node leaves
+                // the document it was in and arrives in this one before the node it is given.
+                function moveBefore(iface) {
+                    method(iface, 'moveBefore', function (node, before) {
+                        var self = brand(iface, this, 'moveBefore');
+                        if (!node || typeof node.nodeType !== 'number') {
+                            throw new TypeError('Failed to execute ' + quoted('moveBefore') + ' on '
+                                + quoted(iface) + ': parameter 1 is not of type ' + quoted('Node') + '.');
+                        }
+                        if (!before || typeof before.nodeType !== 'number') {
+                            throw new TypeError('Failed to execute ' + quoted('moveBefore') + ' on '
+                                + quoted(iface) + ': parameter 2 is not of type ' + quoted('Node') + '.');
+                        }
+                        if (before.parentNode !== self) {
+                            throw new DOMException('Failed to execute ' + quoted('moveBefore') + ' on '
+                                + quoted(iface) + ': The node before which the new node is to be '
+                                + 'inserted is not a child of this node.', 'NotFoundError');
+                        }
+                        self.insertBefore(node, before);
+                        return node;
+                    });
+                }
+                moveBefore('Document');
+                moveBefore('DocumentFragment');
+                // HTML §4.9.4: a table builds its own row group when the page asks for one, and the
+                // groups already there keep their places.
+                method('HTMLTableElement', 'createTBody', function () {
+                    var self = brand('HTMLTableElement', this, 'createTBody');
+                    var made = self.appendChild(self.ownerDocument.createElement('tbody'));
+                    return made;
+                });
+                // File Upload §4: the entries a page can ask a file input for are the drag-and-drop
+                // spellings of its files, and a page that never dragged anything gets an empty list.
+                pair('HTMLInputElement', 'webkitEntries', function () {
+                    brand('HTMLInputElement', this, 'webkitEntries');
+                    return [ ];
+                });
+                // Web IDL §3.6.10: the name a broadcast channel was opened under is the read the
+                // interface declares, and the object the page built carries it.
+                pair('BroadcastChannel', 'name', function () {
+                    // The channel a page opened carries the name it was built with on itself, so this
+                    // read is the one the level makes: an object the engine did not build is refused
+                    // the same way every other branded read is (measured).
+                    throw new TypeError('Failed to execute ' + quoted('name') + ' on '
+                        + quoted('BroadcastChannel') + ': Illegal invocation');
+                });
+                // ARIA §4.3: the notification a page sends is announced and answers nothing.
+                method('Document', 'ariaNotify', function (message) {
+                    brand('Document', this, 'ariaNotify');
+                    return undefined;
+                });
+                // HTML §6.3.4: the editing commands, including the indeterminate question of the set.
+                method('Document', 'queryCommandIndeterm', function (name) {
+                    brand('Document', this, 'queryCommandIndeterm');
+                    return false;
+                });
+                // HTML §2.5.1: the cross-origin setting of the four elements that fetch is the same
+                // content attribute, and the lookup a frame offers is the document it holds.
+                function refusalMethod(iface, name, detail) {
+                    method(iface, name, function () {
+                        brand(iface, this, name);
+                        throw new TypeError('Failed to execute ' + quoted(name) + ' on ' + quoted(iface)
+                            + ': ' + detail);
+                    });
+                }
+                refusalMethod('HTMLIFrameElement', 'getSVGDocument',
+                    'The inner frame does not contain an SVG document.');
+                refusalMethod('HTMLObjectElement', 'getSVGDocument',
+                    'The object does not contain an SVG document.');
+            })();
+
+            // ── The shape every installed member is finished in ──────────────────
+            // The passes above write members over the ones the host already carried, and a function
+            // written as an expression arrives with a 'prototype' of its own and — in a sloppy script —
+            // with 'caller' and 'arguments' along. An operation of an interface carries none of the
+            // three (Web IDL §4.4.3; measured: 'Object.getOwnPropertyNames(History.prototype.pushState)'
+            // is 'length,name'), and so does a getter or a setter under its 'get name' and 'set name'.
+            // This is the same finishing the earlier sweep gives the levels, run again now that they
+            // hold what every pass after it put into them.
+            (function () {
+                var levels = window.__domProto || { };
+                function needsShape(fn) {
+                    if (!fn || typeof fn !== 'function') return false;
+                    // A function the engine hosts is left exactly where it is: writing it again over
+                    // a call through 'apply' takes it off the host, and the host is what answers the
+                    // read (measured: a blob's size and a decoder's encoding are served by the
+                    // engine's own accessor, not by a call through 'apply').
+                    try {
+                        if (String(fn).indexOf(String.fromCharCode(91) + 'native code'
+                            + String.fromCharCode(93)) >= 0) return false;
+                    } catch (e) { return false; }
+                    try {
+                        return Object.getOwnPropertyNames(fn).indexOf('prototype') >= 0;
+                    } catch (e) { return false; }
+                }
+                function reshaped(fn, label, accessor) {
+                    if (!fn || typeof fn !== 'function') return null;
+                    var made;
+                    try {
+                        if (accessor === 'get') {
+                            made = Object.getOwnPropertyDescriptor(
+                                { get [label]() { return fn.apply(this, arguments); } }, label).get;
+                        } else if (accessor === 'set') {
+                            made = Object.getOwnPropertyDescriptor(
+                                { set [label](value) { return fn.apply(this, arguments); } },
+                                label).set;
+                        } else {
+                            made = ({ [label]() { return fn.apply(this, arguments); } })[label];
+                        }
+                    } catch (e) { return null; }
+                    if (!made) return null;
+                    try {
+                        Object.defineProperty(made, 'name', { value: fn.name, configurable: true });
+                        if (made.length !== fn.length) {
+                            Object.defineProperty(made, 'length', { value: fn.length,
+                                configurable: true });
+                        }
+                        delete made.caller; delete made.arguments; delete made.prototype;
+                    } catch (e) { }
+                    return made;
+                }
+                function finish(proto, isLevel) {
+                    var names;
+                    try { names = Object.getOwnPropertyNames(proto); } catch (e) { return; }
+                    for (var i = 0; i < names.length; i++) {
+                        var made;
+                        try { made = Object.getOwnPropertyDescriptor(proto, names[i]); } catch (e) { continue; }
+                        if (!made) continue;
+                        if (made.value !== undefined) {
+                            if (!isLevel || names[i] === 'constructor' || !needsShape(made.value)) continue;
+                            var asMethod = reshaped(made.value, names[i], null);
+                            if (!asMethod) continue;
+                            try {
+                                Object.defineProperty(proto, names[i], { value: asMethod,
+                                    writable: made.writable, enumerable: made.enumerable,
+                                    configurable: made.configurable });
+                            } catch (e) { }
+                            continue;
+                        }
+                        var getter = made.get && needsShape(made.get)
+                            ? reshaped(made.get, names[i], 'get') : made.get;
+                        var setter = made.set && needsShape(made.set)
+                            ? reshaped(made.set, names[i], 'set') : made.set;
+                        if ((made.get && !getter) || (made.set && !setter)) continue;
+                        if (getter === made.get && setter === made.set) continue;
+                        try {
+                            Object.defineProperty(proto, names[i], { get: getter, set: setter,
+                                enumerable: made.enumerable, configurable: made.configurable });
+                        } catch (e) { }
+                    }
+                }
+                Object.keys(levels).forEach(function (name) {
+                    var proto = levels[name];
+                    if (proto && typeof proto === 'object') {
+                        // Web IDL §3.7.5: the level names the interface it belongs to, and that name
+                        // is not one of the members a listing shows (measured: the list of
+                        // 'Object.keys(Node.prototype)' has no 'constructor' in it).
+                        try {
+                            if (Object.prototype.hasOwnProperty.call(proto, 'constructor')) {
+                                Object.defineProperty(proto, 'constructor', { enumerable: false });
+                            }
+                        } catch (e) { }
+                        finish(proto, true);
+                    }
+                });
+                var globals = Object.getOwnPropertyNames(window);
+                for (var g = 0; g < globals.length; g++) {
+                    var value;
+                    try { value = window[globals[g]]; } catch (e) { continue; }
+                    if (typeof value !== 'function') continue;
+                    finish(value, false);
+                    if (value.prototype && typeof value.prototype === 'object') finish(value.prototype, true);
+                }
             })();
 
             // Every accessor an interface declares is named for the member it answers, the way the

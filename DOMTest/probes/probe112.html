@@ -1,0 +1,70 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe112 — the clauses of the sweep case, one by one</title></head>
+<body><div id="box"><p id="kid">a</p></div>
+<script>
+// The five rows of cases/interface_surface_sweep.html that the first reference run disagreed with,
+// taken clause by clause so the difference is a name rather than a guess.
+(function () {
+    var out = {};
+    function msg(fn) { try { return 'ok:' + JSON.stringify(fn()); } catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0,50); } }
+    var XHTML = 'http://www.w3.org/1999/xhtml', SVG = 'http://www.w3.org/2000/svg';
+    out.B1 = msg(function () {
+        var script = document.createElement('script');
+        script.async = true;
+        var a = [script.getAttribute('async'), script.hasAttribute('async'), script.async];
+        script.async = false;
+        var fresh = document.createElement('script');
+        return [a, [script.hasAttribute('async'), script.async],
+            [fresh.async, fresh.defer, fresh.noModule, typeof fresh.noModule]];
+    });
+    out.B2 = msg(function () {
+        var link = document.createElement('link');
+        var table = document.createElement('table');
+        var before = [link.as, link.integrity, link.fetchPriority, table.cellPadding];
+        link.as = 'script'; link.integrity = 'sha384-x';
+        return [before, [link.as, link.getAttribute('as'), link.integrity]];
+    });
+    out.E2 = msg(function () {
+        var leaf = document.createTextNode('x');
+        var r = [typeof CharacterData.prototype.before, typeof DocumentType.prototype.before,
+            typeof DocumentType.prototype.replaceWith];
+        leaf.before('y'); r.push([String(leaf.parentNode), leaf.data]);
+        leaf.after('z'); r.push([String(leaf.parentNode), leaf.data]);
+        r.push(msg(function () { return String(CharacterData.prototype.before); }));
+        return r;
+    });
+    out.F3 = msg(function () {
+        return [document.webkitVisibilityState, document.visibilityState,
+            String(document.rootElement), String(document.documentElement),
+            document.rootElement === document.documentElement,
+            typeof document.rootElement, String(document.fullscreen),
+            String(document.webkitIsFullScreen), String(document.webkitFullscreenEnabled),
+            String(document.webkitHidden), String(document.hidden)];
+    });
+    out.I1 = msg(function () {
+        var box = document.createElement('div');
+        box.innerHTML = '<p id="p1">hi<b id="b1">y</b></p>';
+        document.body.appendChild(box);
+        var para = box.firstChild, text = para.firstChild, bold = text.nextSibling;
+        var loose = document.createElement('i');
+        return [text.contains(text), text.contains(para), para.contains(text),
+            text.isSameNode(text), text.isSameNode(bold),
+            text.isEqualNode(document.createTextNode('hi')),
+            text.compareDocumentPosition(para), para.compareDocumentPosition(text),
+            text.compareDocumentPosition(bold), bold.compareDocumentPosition(text),
+            text.compareDocumentPosition(text), text.compareDocumentPosition(loose),
+            loose.compareDocumentPosition(text),
+            document.createElement('u').compareDocumentPosition(loose),
+            text.getRootNode() === document, text.hasChildNodes(), text.childNodes.length,
+            String(text.childNodes.item(0)), String(text.childNodes[0]), String(text.firstChild),
+            text.lookupNamespaceURI(null), text.lookupNamespaceURI('xml'),
+            text.lookupNamespaceURI(''), text.lookupNamespaceURI('svg'),
+            text.lookupPrefix(XHTML), String(text.cloneNode()), text.cloneNode().isSameNode(text),
+            text.cloneNode().data, Object.prototype.toString.call(text.childNodes),
+            String(box.parentNode)];
+    });
+    window.__REPORT = JSON.stringify(out);
+    document.title = 'P112';
+    window.__T && window.__T('probe112', true, window.__REPORT);
+})();
+</script>
+<div>probe112</div></body></html>

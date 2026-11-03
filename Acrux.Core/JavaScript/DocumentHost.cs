@@ -102,7 +102,11 @@ public class DocumentHost : IDomPrototypeHost
     // the live HTMLCollection the interface names, not a snapshot array (HTML §4.5.4).
     public object children => new JsLiveElementList(
         () => _document.Children.OfType<DomElement>().ToList(), "HTMLCollection");
-    public object[] childNodes => _document.Children.Select(WrapAnyDocumentNode).Where(x => x != null).Select(x => x!).ToArray();
+    /// <summary>DOM §4.1: a document is a node, and the child reads answer the live list rather than
+    /// a snapshot array (measured: 'document.childNodes' is a NodeList holding the doctype and the
+    /// document element).</summary>
+    private JsNodeList? _childNodesList;
+    public JsNodeList childNodes => _childNodesList ??= new JsNodeList(_document, Engine);
     // The tree reads a document answers as well as an element does (§4.1): 'document.firstChild' is
     // the doctype on a page the parser built, and 'previousSibling' of the root is how a page finds it.
     public object? firstChild => WrapAnyDocumentNode(_document.Children.FirstOrDefault());
@@ -216,6 +220,14 @@ public class DocumentHost : IDomPrototypeHost
     {
         if (_document.DocumentElement == null) return new object[0];
         return new JsLiveElementList(() => _document.GetElementsByClassName(className));
+    }
+
+    /// <summary>DOM §4.4.4: the document's namespaced lookup covers the whole tree, the document
+    /// element included, and compares both halves of the query exactly (see ElementHost).</summary>
+    public object getElementsByTagNameNS(string? namespaceUri, string? localName)
+    {
+        if (_document.DocumentElement == null) return new object[0];
+        return new JsLiveElementList(() => ElementHost.NamespacedUnder(_document, namespaceUri, localName, true));
     }
 
     public object getElementsByName(string name)
@@ -382,12 +394,59 @@ public class DocumentHost : IDomPrototypeHost
         else _document.InsertBefore(node, _document.Children.FirstOrDefault());
     }
 
+    /// <summary>DOM §4.4.1: a document is a node, so the four mutation methods reach its children the
+    /// same way they reach an element's — and the tree a document allows is the one the reference
+    /// guards by name (measured: 'document.appendChild(secondElement)' is a HierarchyRequestError
+    /// reading 'Only one element on document allowed.').</summary>
+    public object? appendChild(object? child)
+    {
+        var node = ElementHost.NodeArgument(child, "appendChild", 1);
+        RequireDocumentSlot(node, "appendChild");
+        _document.AppendChild(node);
+        return child;
+    }
+
+    public object? insertBefore(object? newChild, object? refChild)
+    {
+        var node = ElementHost.NodeArgument(newChild, "insertBefore", 1);
+        RequireDocumentSlot(node, "insertBefore");
+        Node? refNode = refChild == null ? null : ElementHost.UnwrapNode(refChild);
+        _document.InsertBefore(node, refNode);
+        return newChild;
+    }
+
+    public object? removeChild(object? child)
+    {
+        var node = ElementHost.NodeArgument(child, "removeChild", 1);
+        _document.RemoveChild(node);
+        return child;
+    }
+
+    public object? replaceChild(object? newChild, object? oldChild)
+    {
+        var newNode = ElementHost.NodeArgument(newChild, "replaceChild", 1);
+        var oldNode = ElementHost.NodeArgument(oldChild, "replaceChild", 2);
+        RequireDocumentSlot(newNode, "replaceChild");
+        _document.ReplaceChild(newNode, oldNode);
+        return oldChild;
+    }
+
+    private void RequireDocumentSlot(Node node, string operation)
+    {
+        if (node is not Element || _document.DocumentElement == null) return;
+        // The element being moved out of the document is not a second element child, so the guard
+        // is only the arrival of an element the document does not already hold.
+        if (ReferenceEquals(node, _document.DocumentElement)) return;
+        throw new DOMException("Failed to execute '" + operation + "' on 'Node': Only one element "
+            + "on document allowed.", "HierarchyRequestError");
+    }
+
     /// <summary>DOM §4.1: 'document.contains(other)' is the ancestor question asked from the root of
     /// the tree — a node the document holds, including its own document element, answers true.</summary>
     public bool contains(object? other)
     {
-        var node = ElementHost.UnwrapNode(other);
-        if (node == null) return false;
+        if (other is null || other is AttributeHost) return false;
+        var node = ElementHost.NodeArgument(other, "contains", 1);
         for (var current = node; current != null; current = current.ParentNode)
             if (ReferenceEquals(current, _document)) return true;
         return false;
@@ -680,9 +739,12 @@ public class DocumentHost : IDomPrototypeHost
         RunInlineHandler(engine, evt);
     }
 
-    // Fullscreen §5: 'fullscreenEnabled' is an attribute of the document, not a method a page calls
-    // (measured: 'typeof document.fullscreenEnabled' is 'boolean').
-    public bool fullscreenEnabled => false;
+    /// <summary>Fullscreen §5: 'fullscreenEnabled' is an attribute of the document, not a method a
+    /// page calls, and it says whether the document may ask — the reference answers true for a page
+    /// that has never entered fullscreen, because it is the permission the flag carries rather than
+    /// the state (measured: 'document.fullscreenEnabled' is true while 'document.fullscreen' and
+    /// 'document.fullscreenElement' stay false and null).</summary>
+    public bool fullscreenEnabled => true;
 
 
 
@@ -1734,7 +1796,7 @@ public class DocumentFragmentHost : IDomPrototypeHost
     public string? nodeValue { get => null; set { } }
     public void remove() => _fragment.Remove();
 
-    public object cloneNode(bool deep = true)
+    public object cloneNode(bool deep = false)
         => JsIntegrationService.WrapAny(_fragment.CloneNode(deep)) ?? this;
 
     public string? textContent
@@ -1824,7 +1886,7 @@ public class DocumentTypeHost : IDomPrototypeHost
     // rather than an undefined member.
     public object? entities => null;
     public object? notations => null;
-    public object? cloneNode(bool deep) => JsIntegrationService.WrapAny(_docType.CloneNode(deep));
+    public object? cloneNode(bool deep = false) => JsIntegrationService.WrapAny(_docType.CloneNode(deep));
     public void remove() => _docType.Parent?.RemoveChild(_docType);
 }
 
@@ -1955,6 +2017,15 @@ public class AttributeHost : IDomPrototypeHost
     public string? namespaceURI { get; internal set; }
 
     public string nodeName => name;
+
+    /// <summary>DOM §4.2: an attribute is a node, and a leaf — the child reads answer the empty the
+    /// way every other leaf's do (measured: 'attribute.childNodes.length' is 0), while its parent is
+    /// nothing at all and only 'ownerElement' names where it hangs.</summary>
+    private JsNodeList? _attrList;
+    public JsNodeList childNodes => _attrList ??= new JsNodeList(JavaScriptEngine.Current);
+    public object? firstChild => null;
+    public object? lastChild => null;
+    public bool hasChildNodes() => false;
 
     // DOM §4.3.3: the two halves of an attribute's name. An attribute that carries a namespace is
     // split at its first ':' — 'x:y' is prefix 'x', local name 'y'; one the parser made in an HTML

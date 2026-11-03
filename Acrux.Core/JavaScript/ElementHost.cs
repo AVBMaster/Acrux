@@ -357,6 +357,38 @@ public partial class ElementHost : IDomPrototypeHost
     public JsHtmlCollection getElementsByClassName(string className) =>
         new JsHtmlCollection(_element, Engine, null, className);
 
+    /// <summary>DOM §4.4.4: the namespaced lookup is the descendant walk narrowed by namespace and by
+    /// local name, with '*' standing for anything in either place. Neither half is folded to lower
+    /// case — the folding belongs to the element-name lookup, and here 'SPAN' finds nothing where
+    /// 'span' finds the element (measured), and a null namespace is no namespace rather than any.</summary>
+    public JsLiveElementList getElementsByTagNameNS(string? namespaceUri, string? localName) =>
+        new(() => NamespacedUnder(_element, namespaceUri, localName, false));
+
+    internal static List<Element> NamespacedUnder(Node root, string? namespaceUri, string? localName,
+        bool includeRoot)
+    {
+        var found = new List<Element>();
+        if (includeRoot && root is Element self && MatchesNames(self, namespaceUri, localName))
+            found.Add(self);
+        foreach (var child in root.Children)
+        {
+            // Only an element has a namespace and a local name to compare; a text or comment child is
+            // stepped through and never matched (DOM §4.4.4).
+            if (child is not Element element) continue;
+            if (MatchesNames(element, namespaceUri, localName)) found.Add(element);
+            found.AddRange(NamespacedUnder(element, namespaceUri, localName, false));
+        }
+        return found;
+    }
+
+    private static bool MatchesNames(Element element, string? namespaceUri, string? localName)
+    {
+        var ns = element.NamespaceUri ?? string.Empty;
+        if (namespaceUri != "*" && namespaceUri != ns) return false;
+        if (localName != "*" && localName != element.LocalName) return false;
+        return true;
+    }
+
     /// <summary>The DOM node a script-side wrapper stands for. A node reaches a mutation method
     /// as the host object the engine handed the page — an element, a text or comment node, or a
     /// document fragment — and each keeps its own CLR identity, so unwrapping here is what lets
@@ -381,15 +413,24 @@ public partial class ElementHost : IDomPrototypeHost
         _ => null,
     };
 
+    /// <summary>DOM §4.4.1: the mutation methods take a node, and a page that hands one of them
+    /// anything else is refused before the tree is touched — by a TypeError that names the operation,
+    /// the interface and the position of the argument (measured: 'div.appendChild("x")' reads
+    /// "Failed to execute 'appendChild' on 'Node': parameter 1 is not of type 'Node'."). The unwrap
+    /// alone could not tell that argument from a node the engine simply did not recognise, so the
+    /// refusal said NotFoundError and the page's 'try' caught the wrong thing.</summary>
+    internal static Node NodeArgument(object? value, string operation, int position)
+        => UnwrapNode(value) ?? throw new DOMException(
+            $"Failed to execute '{operation}' on 'Node': parameter {position} is not of type 'Node'.",
+            "TypeError");
+
     // Every mutation method answers the node the specification names: appendChild and
     // insertBefore give back the child that was inserted (the fragment, when a fragment was
     // handed in), removeChild and replaceChild give back the node that came away. The page's own
     // wrapper object is returned so identity holds ('x === node').
     public object? appendChild(object? child)
     {
-        var node = UnwrapNode(child);
-        if (node == null)
-            throw new DOMException("The node to be appended is not a node of this document.", "NotFoundError");
+        var node = NodeArgument(child, "appendChild", 1);
         if (node is DocumentFragment frag)
         {
             foreach (var moved in frag.Children.ToList())
@@ -456,9 +497,7 @@ public partial class ElementHost : IDomPrototypeHost
 
     public object? insertBefore(object? newChild, object? refChild)
     {
-        var node = UnwrapNode(newChild);
-        if (node == null)
-            throw new DOMException("The node to be inserted is not a node of this document.", "NotFoundError");
+        var node = NodeArgument(newChild, "insertBefore", 1);
         Node? refNode = refChild == null ? null : UnwrapNode(refChild);
         if (node is DocumentFragment frag)
         {
@@ -472,19 +511,15 @@ public partial class ElementHost : IDomPrototypeHost
 
     public object? removeChild(object? child)
     {
-        var node = UnwrapNode(child);
-        if (node == null)
-            throw new DOMException("The node to be removed is not a child of this node.", "NotFoundError");
+        var node = NodeArgument(child, "removeChild", 1);
         _element.RemoveChild(node);
         return child;
     }
 
     public object? replaceChild(object? newChild, object? oldChild)
     {
-        var newNode = UnwrapNode(newChild);
-        var oldNode = UnwrapNode(oldChild);
-        if (newNode == null || oldNode == null)
-            throw new DOMException("The node to be replaced is not a child of this node.", "NotFoundError");
+        var newNode = NodeArgument(newChild, "replaceChild", 1);
+        var oldNode = NodeArgument(oldChild, "replaceChild", 2);
         if (newNode is DocumentFragment frag)
         {
             int idx = _element.Children.IndexOf(oldNode);
@@ -501,7 +536,7 @@ public partial class ElementHost : IDomPrototypeHost
         return oldChild;
     }
 
-    public object cloneNode(bool deep)
+    public object cloneNode(bool deep = false)
     {
         // The element clones itself: a second cloner here had its own list of what travels, and it
         // left the namespace, the prefix, the namespace an attribute was set under and every comment
@@ -512,8 +547,19 @@ public partial class ElementHost : IDomPrototypeHost
 
     public bool contains(object? other)
     {
-        if (other is ElementHost host)
-            return ContainsElement(_element, host.NativeElement);
+        // DOM §4.4.1: 'contains' is the ancestor question, so it is answered by walking up from
+        // whatever node the page hands over — a text node is a descendant just as an element is, and
+        // an only-element walk said false for 'div.contains(div.firstChild)' when that child was the
+        // text the markup holds. Something that is not a node at all is refused before the walk
+        // begins, and null is the one answer the interface gives back as false (measured).
+        if (other is null) return false;
+        // An attribute is a node and its owner is the element, but it is never one of that element's
+        // children, so the ancestor question about it is always 'no' (DOM §4.4.1, measured:
+        // 'div.contains(div.getAttributeNode("id"))' is false).
+        if (other is AttributeHost) return false;
+        var node = NodeArgument(other, "contains", 1);
+        for (var current = node; current != null; current = current.ParentNode)
+            if (ReferenceEquals(current, _element)) return true;
         return false;
     }
 
@@ -1373,17 +1419,6 @@ public partial class ElementHost : IDomPrototypeHost
         return result;
     }
 
-    private static bool ContainsElement(Element parent, Element child)
-    {
-        if (parent == child) return true;
-        foreach (var c in parent.Children.OfType<Element>())
-        {
-            if (ContainsElement(c, child))
-                return true;
-        }
-        return false;
-    }
-
     private object WrapNode(Node node) => JsIntegrationService.WrapAny(node)!;
 
     // 'getClientRects()' is the real list above; the name is kept off the stub that used to
@@ -1850,11 +1885,20 @@ public partial class ElementHost : IDomPrototypeHost
         if (other == null) return 0;
         if (ReferenceEquals(other, self)) return 0;
         const int Disconnected = 1, Preceding = 2, Following = 4, Contains = 8, ContainedBy = 16;
+        const int ImplementationSpecific = 32;
         var mine = PathToRoot(self);
         var theirs = PathToRoot(other);
         int result = 0;
         if (mine.Count > 0 && theirs.Count > 0 && !ReferenceEquals(mine[0], theirs[0]))
-            result |= Disconnected;
+        {
+            // DOM §4.2.1: a pair from different trees is disconnected, and the reference adds the
+            // implementation-specific bit plus one half of the order — the node that has a document to
+            // itself reads as following the one that has none (measured: a node of the page against a
+            // detached element is 37, the detached element answering about that node is 35, and two
+            // detached elements read 37 either way).
+            result |= Disconnected | ImplementationSpecific
+                | (RootIsDocument(mine) || !RootIsDocument(theirs) ? Following : Preceding);
+        }
         // DOM §4.4.1: containment carries its half of document order with it — a node that holds the
         // other comes before it, so the pair reads 20 (CONTAINED_BY|FOLLOWING) from the ancestor and
         // 10 (CONTAINS|PRECEDING) from the descendant (measured).
@@ -1878,6 +1922,12 @@ public partial class ElementHost : IDomPrototypeHost
         }
         return result;
     }
+
+    /// <summary>Whether the chain of parents ends at a document — that is, whether the node is in a
+    /// tree at all rather than sitting on its own.</summary>
+    // The chain is root first, so the head of it is the tree the node belongs to.
+    private static bool RootIsDocument(List<Node> path)
+        => path.Count > 0 && path[0] is Document;
 
     private static List<Node> PathToRoot(Node node)
     {
@@ -3032,7 +3082,7 @@ public class TextNodeWrapper : IDomPrototypeHost
     {
         get => JsIntegrationService.WrapAny(_node.PreviousSibling);
     }
-    public object? cloneNode(bool deep)
+    public object? cloneNode(bool deep = false)
     {
         var cloned = _node.CloneNode(deep);
         var engine = JavaScriptEngine.Current;
@@ -3051,6 +3101,15 @@ public class TextNodeWrapper : IDomPrototypeHost
     public object? getRootNode() => JsIntegrationService.WrapAny(_node.GetRootNode());
     public bool isEqualNode(object? other) => _node.IsEqualNode(ElementHost.UnwrapNode(other));
     public bool isSameNode(object? other) => _node.IsSameNode(ElementHost.UnwrapNode(other));
+
+    // A text node holds no children, and the reference does not refuse the reads that ask about them:
+    // it answers an empty list and two nulls, the same shape an element with nothing in it gives
+    // (measured: 'text.childNodes.length' is 0, 'text.childNodes.item(0)' is null, and a page walking
+    // the tree never has to know which node type it reached).
+    private JsNodeList? _emptyList;
+    public JsNodeList childNodes => _emptyList ??= new JsNodeList(JavaScriptEngine.Current);
+    public object? firstChild => null;
+    public object? lastChild => null;
 
     // CharacterData mixin (DOM 4 §4.5): the mutating methods every text/comment node answers,
     // forwarded to the underlying node that already implements them.
@@ -3102,11 +3161,19 @@ public class CommentHost : IDomPrototypeHost
     {
         get => JsIntegrationService.WrapAny(_node.PreviousSibling);
     }
-    public object? cloneNode(bool deep) => JsIntegrationService.WrapAny(_node.CloneNode(deep));
+    public object? cloneNode(bool deep = false) => JsIntegrationService.WrapAny(_node.CloneNode(deep));
     public void remove() => _node.Parent?.RemoveChild(_node);
 
     // DOM §4.2: the node members a comment answers the same way a text node does — the wrapper has to
-    // carry them, since a page that reads one is refused by the interface level otherwise.
+    // carry them, since a page that reads one is refused by the interface level otherwise. A comment
+    // is a leaf: the child reads answer the empty, exactly as the reference gives them (measured:
+    // 'comment.childNodes.length' is 0 and 'comment.firstChild' is null).
+    private JsNodeList? _commentList;
+    public JsNodeList childNodes => _commentList ??= new JsNodeList(JavaScriptEngine.Current);
+    public object? firstChild => null;
+    public object? lastChild => null;
+    public bool hasChildNodes() => false;
+    public void normalize() { }
     public bool isConnected => _node.IsConnected;
     public object? getRootNode() => JsIntegrationService.WrapAny(_node.GetRootNode());
     public bool isEqualNode(object? other) => _node.IsEqualNode(ElementHost.UnwrapNode(other));
@@ -3419,7 +3486,7 @@ public class ProcessingInstructionHost : IDomPrototypeHost
     public object? firstChild => null;
     public object? lastChild => null;
     public bool hasChildNodes() => false;
-    public object? cloneNode(bool deep) => JsIntegrationService.WrapAny(_node.CloneNode(deep));
+    public object? cloneNode(bool deep = false) => JsIntegrationService.WrapAny(_node.CloneNode(deep));
     public void remove() => _node.Parent?.RemoveChild(_node);
 
     // CharacterData mixin (DOM 4 §4.5) — the same methods a text and a comment node answer.

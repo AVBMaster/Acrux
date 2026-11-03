@@ -257,7 +257,7 @@ function done(name, fn) {
     // ── J. the remaining reads of the document and the window ────────────────────────────────────
     ckAll('J1 the document answers the flags and the point reads', [
         ['prerendering', document.prerendering === false],
-        ['fullscreen flags', document.fullscreenEnabled === false && document.fullscreenElement === null],
+        ['fullscreen flags', document.fullscreenEnabled === true && document.fullscreenElement === null],
         ['xml reads', document.xmlStandalone === false && document.xmlVersion === null],
         ['caret', document.caretPositionFromPoint(4, 4) === null && typeof CaretPosition === 'function'],
         ['feature policy', tag(document.featurePolicy) === '[object FeaturePolicy]'

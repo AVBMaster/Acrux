@@ -1,0 +1,80 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe110 — the node operations every kind of node answers</title></head>
+<body><div id="d"><p id="p">hi<b id="b">y</b></p><!--c--></div>
+<script>
+// The reference measurements behind round 18's Node work: the tree operations a text node, a comment,
+// a doctype and a fragment answer as well as an element, the refusal sentence each one gives when the
+// argument is not a node, and the reads a leaf answers about its children. Run this page in the
+// reference and in Acrux and compare the JSON — the rows are what cases/interface_surface_sweep.html
+// now asserts.
+(function () {
+    var out = {};
+    function msg(fn) {
+        try { return 'ok:' + JSON.stringify(fn()); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message); }
+    }
+    var d = document.getElementById('d'), p = document.getElementById('p');
+    var t = p.firstChild;                       // the text 'hi'
+    var c = d.lastChild;                        // the comment
+    var doc = document;
+    out.t_contains_self = msg(function () { return t.contains(t); });
+    out.t_contains_other = msg(function () { return t.contains(d); });
+    out.t_contains_string = msg(function () { return t.contains('x'); });
+    out.t_isSameNode_self = msg(function () { return t.isSameNode(t); });
+    out.t_isEqualNode_copy = msg(function () { return t.isEqualNode(doc.createTextNode('hi')); });
+    out.t_compareDocumentPosition_d = msg(function () { return t.compareDocumentPosition(d); });
+    out.d_compareDocumentPosition_t = msg(function () { return d.compareDocumentPosition(t); });
+    out.t_compareDocumentPosition_orphan = msg(function () {
+        return t.compareDocumentPosition(doc.createElement('i'));
+    });
+    out.t_getRootNode = msg(function () { return t.getRootNode() === doc; });
+    out.t_normalize = msg(function () { t.normalize(); return 'done'; });
+    out.t_cloneNode = msg(function () { var k = t.cloneNode(); return [k.nodeType, k.data, k !== t]; });
+    out.t_cloneNodeDeep = msg(function () { return t.cloneNode(true).nodeType; });
+    out.t_appendChild = msg(function () { return t.appendChild(doc.createElement('b')); });
+    out.t_insertBefore = msg(function () { return t.insertBefore(doc.createElement('b'), null); });
+    out.t_removeChild = msg(function () { return t.removeChild(t.firstChild); });
+    out.t_hasChildNodes = msg(function () { return t.hasChildNodes(); });
+    out.t_childNodes = msg(function () { return [t.childNodes.length, t.childNodes.item(0),
+        Object.prototype.toString.call(t.childNodes)]; });
+    out.t_lookupPrefix = msg(function () { return t.lookupPrefix('http://www.w3.org/1999/xhtml'); });
+    out.t_lookupNamespaceURI = msg(function () { return t.lookupNamespaceURI(null); });
+    out.t_lookupNamespaceURI_xml = msg(function () { return t.lookupNamespaceURI('xml'); });
+    out.t_lookupNamespaceURI_empty = msg(function () { return t.lookupNamespaceURI(''); });
+    out.t_lookupNamespaceURI_svg = msg(function () { return t.lookupNamespaceURI('svg'); });
+    out.c_contains_self = msg(function () { return c.contains(c); });
+    out.c_childNodes = msg(function () { return [c.childNodes.length, c.firstChild, c.lastChild,
+        c.hasChildNodes()]; });
+    out.c_cloneNode = msg(function () { return c.cloneNode().data; });
+    out.doc_appendChild = msg(function () { return doc.appendChild(doc.createElement('b')); });
+    out.d_appendChild_string = msg(function () { return d.appendChild('txt'); });
+    out.t_appendChild_string = msg(function () { return t.appendChild('txt'); });
+    out.d_contains_attr = msg(function () { return d.contains(d.getAttributeNode('id')); });
+    out.d_contains_text_arg = msg(function () { return d.contains(t); });
+    out.d_contains_range = msg(function () { return d.contains(doc.createRange()); });
+    out.d_contains_null = msg(function () { return d.contains(null); });
+    out.attr_childNodes = msg(function () { var a = d.getAttributeNode('id');
+        return [a.nodeType, a.childNodes.length, String(a.parentNode), String(a.ownerElement === d)]; });
+    out.fragment_contains = msg(function () { var f = doc.createDocumentFragment();
+        var b = doc.createElement('b'); f.appendChild(b); return [f.contains(b), b.contains(f)]; });
+    out.doctype_contains = msg(function () { return doc.doctype.contains(doc.documentElement); });
+    out.doctype_clone = msg(function () { return doc.doctype.cloneNode().name; });
+    out.level_childNodes = msg(function () { return Node.prototype.childNodes; });
+    out.level_contains = msg(function () { return Node.prototype.contains(p); });
+    out.level_nodeType = msg(function () { return Element.prototype.nodeType; });
+    out.node_keys = msg(function () { return Object.keys(Node.prototype); });
+    out.node_desc_children = msg(function () { var x = Object.getOwnPropertyDescriptor(Node.prototype,
+        'childNodes'); return x && [x.writable, x.enumerable, x.configurable, !!x.get]; });
+    out.node_desc_contains = msg(function () { return Object.getOwnPropertyNames(Node.prototype.contains)
+        .join(',') + '/' + Node.prototype.contains.length; });
+    out.node_constant_shape = msg(function () { var x = Object.getOwnPropertyDescriptor(Node.prototype,
+        'ELEMENT_NODE'); return x && [x.value, x.writable, x.enumerable, x.configurable]; });
+    out.node_constant_ctor = msg(function () { var x = Object.getOwnPropertyDescriptor(Node,
+        'ELEMENT_NODE'); return x && [x.value, x.writable, x.enumerable, x.configurable]; });
+    out.proto_appendChild_shape = msg(function () { var x = Object.getOwnPropertyDescriptor(Node.prototype,
+        'appendChild'); return x && [x.writable, x.enumerable, x.configurable]; });
+    window.__REPORT = JSON.stringify(out);
+    document.title = 'P110';
+    window.__T && window.__T('probe110', true, window.__REPORT);
+})();
+</script>
+<div>probe110</div></body></html>

@@ -184,7 +184,9 @@ public class JsHtmlCollection : IList, IDomPrototypeHost
 
 public class JsNodeList : IList, IDomPrototypeHost
 {
-    private readonly DomElement _root;
+    // The root of a live list is any node: an element, a document, a fragment — the children of a
+    // document (its doctype and its element) are a child list like any other (DOM §4.1).
+    private readonly Node? _root;
     private readonly Func<DomElement, List<DomElement>>? _filter;
     private readonly bool _childNodes;
     private readonly JavaScriptEngine? _engine;
@@ -194,6 +196,16 @@ public class JsNodeList : IList, IDomPrototypeHost
         _root = root;
         _filter = filter;
         _engine = JavaScriptEngine.Current;
+    }
+
+    /// <summary>A node that holds no children still answers 'childNodes' with a list of its own —
+    /// an empty NodeList, with the same reads the family carries (measured: 'text.childNodes.length'
+    /// is 0, 'text.childNodes.item(0)' is null and the list is iterable).</summary>
+    internal JsNodeList(JavaScriptEngine? engine)
+    {
+        _root = null;
+        _engine = engine;
+        _childNodes = true;
     }
 
     internal JsNodeList(DomElement root, JavaScriptEngine? engine, Func<DomElement, List<DomElement>>? filter = null,
@@ -222,6 +234,16 @@ public class JsNodeList : IList, IDomPrototypeHost
         _root = root;
         _engine = engine;
         _childNodes = childNodes;
+    }
+
+    /// <summary>The child list of a node that is not an element — the document's, above all, whose
+    /// children are the doctype and the document element (measured: 'document.childNodes' reads a
+    /// NodeList of two, not the bare array the wrapper used to hand back).</summary>
+    internal JsNodeList(Node root, JavaScriptEngine? engine)
+    {
+        _root = root;
+        _engine = engine;
+        _childNodes = true;
     }
 
     public int length => GetNodes().Count;
@@ -268,10 +290,11 @@ public class JsNodeList : IList, IDomPrototypeHost
 
     private List<Node> GetNodes()
     {
+        if (_root == null) return new List<Node>();
         if (_childNodes)
             return _root.Children.ToList();
-        if (_filter != null)
-            return _filter(_root).Cast<Node>().ToList();
+        if (_root is DomElement element && _filter != null)
+            return _filter(element).Cast<Node>().ToList();
         return _root.Children.OfType<DomElement>().Cast<Node>().ToList();
     }
 

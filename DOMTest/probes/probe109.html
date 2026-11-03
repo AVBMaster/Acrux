@@ -1,0 +1,121 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe109 — classify the members still missing</title></head><body><div id="d">x</div>
+<script>
+(function () {
+    var PLAN = {
+        'CharacterData': [null, ['after','before','nextElementSibling','previousElementSibling','replaceWith']],
+        'Document': [null, ['alinkColor','ariaNotify','bgColor','browsingTopics','clear','designMode','fgColor','fullscreen','getElementsByTagNameNS','hasPrivateToken','hasRedemptionRecord','linkColor','moveBefore','queryCommandIndeterm','rootElement','vlinkColor','webkitCancelFullScreen','webkitCurrentFullScreenElement','webkitExitFullscreen','webkitFullscreenElement','webkitFullscreenEnabled','webkitHidden','webkitIsFullScreen','webkitVisibilityState']],
+        'DocumentFragment': [null, ['moveBefore']],
+        'ShadowRoot': [null, ['customElementRegistry','elementFromPoint','elementsFromPoint','fullscreenElement','getAnimations','getHTML','onslotchange','pictureInPictureElement','pointerLockElement','setHTML','setHTMLUnsafe']],
+        'Element': [null, ['getElementsByTagNameNS','onbeforecopy','onbeforecut','onbeforepaste','onfullscreenchange','onfullscreenerror','onsearch','onwebkitfullscreenchange','onwebkitfullscreenerror']],
+        'HTMLElement': [null, ['attributeStyleMap','outerText']],
+        'SVGElement': [null, ['attributeStyleMap','focusGroup','focusGroupStart','nonce','ownerSVGElement','viewportElement']],
+        'HTMLAnchorElement': ['a', ['attributionSrc','charset','interestForElement','password','ping','rev','username']],
+        'HTMLFormElement': ['form', ['encoding']],
+        'HTMLInputElement': ['input', ['align','formEnctype','formMethod','formNoValidate','formTarget','incremental','popoverTargetAction','popoverTargetElement','useMap','webkitEntries','webkitdirectory']],
+        'HTMLButtonElement': ['button', ['command','commandForElement','formEnctype','formMethod','formNoValidate','formTarget','interestForElement','popoverTargetAction','popoverTargetElement']],
+        'HTMLCanvasElement': ['canvas', ['captureStream','transferControlToOffscreen']],
+        'HTMLImageElement': ['img', ['align','attributionSrc','border','browsingTopics','crossOrigin','fetchPriority','hspace','isMap','longDesc','lowsrc','sharedStorageWritable','useMap','vspace','y']],
+        'HTMLSlotElement': ['slot', ['assign','assignedElements','assignedNodes']],
+        'HTMLTemplateElement': ['template', ['shadowRootClonable','shadowRootCustomElementRegistry','shadowRootDelegatesFocus','shadowRootMode','shadowRootSerializable']],
+        'HTMLIFrameElement': ['iframe', ['adAuctionHeaders','align','allow','allowPaymentRequest','browsingTopics','credentialless','csp','featurePolicy','getSVGDocument','loading','longDesc','marginHeight','marginWidth','privateToken','scrolling','sharedStorageWritable']],
+        'HTMLMediaElement': [null, ['HAVE_CURRENT_DATA','HAVE_ENOUGH_DATA','HAVE_FUTURE_DATA','HAVE_METADATA','HAVE_NOTHING','NETWORK_EMPTY','NETWORK_IDLE','NETWORK_LOADING','NETWORK_NO_SOURCE','addTextTrack','autoplay','buffered','captureStream','controls','controlsList','crossOrigin','currentSrc','defaultMuted','defaultPlaybackRate','disableRemotePlayback','error','loading','loop','mediaKeys','networkState','playbackRate','played','preload','preservesPitch','readyState','remote','seekable','seeking','setMediaKeys','setSinkId','sinkId','srcObject','textTracks','webkitAudioDecodedByteCount','webkitVideoDecodedByteCount']],
+        'HTMLTableElement': ['table', ['align','bgColor','border','cellPadding','cellSpacing','createTBody','frame','rules','summary']],
+        'NodeList': [null, ['length']],
+        'DocumentType': [null, ['after','before','replaceWith']],
+        'ProcessingInstruction': [null, ['getAttribute','getAttributeNames','hasAttribute','hasAttributes','removeAttribute','setAttribute','sheet','target','toggleAttribute']],
+        'XMLHttpRequest': [null, ['setAttributionReporting','setPrivateToken']],
+        'EventSource': [null, ['CLOSED','CONNECTING','OPEN','close','readyState','url','withCredentials']],
+        'Request': [null, ['duplex','isHistoryNavigation','isReloadNavigation']],
+        'IntersectionObserver': [null, ['delay','scrollMargin','trackVisibility']],
+        'CustomElementRegistry': [null, ['initialize']],
+        'Navigator': [null, ['adAuctionComponents','canLoadAdAuctionFencedFrame','clearAppBadge','clearOriginJoinedAdInterestGroups','createAuctionNonce','deprecatedReplaceInURN','deprecatedRunAdAuctionEnforcesKAnonymity','deprecatedURNToURL','devicePosture','getInterestGroupAdAuctionData','getUserMedia','protectedAudience','registerProtocolHandler','requestMIDIAccess','runAdAuction','setAppBadge','unregisterProtocolHandler','webkitGetUserMedia']],
+        'MediaList': [null, ['toString']],
+        'CSSStyleSheet': [null, ['addRule','removeRule','replace','rules']],
+        'CanvasRenderingContext2D': [null, ['arc','arcTo','beginPath','bezierCurveTo','canvas','clearRect','clip','closePath','createConicGradient','createImageData','createLinearGradient','createPattern','createRadialGradient','direction','drawFocusIfNeeded','drawImage','ellipse','fill','fillRect','fillStyle','fillText','filter','font','fontKerning','fontStretch','fontVariantCaps','getContextAttributes','getImageData','getLineDash','getTransform','globalAlpha','globalCompositeOperation','imageSmoothingEnabled','imageSmoothingQuality','isContextLost','isPointInPath','isPointInStroke','lang','letterSpacing','lineCap','lineDashOffset','lineJoin','lineTo','lineWidth','measureText','miterLimit','moveTo','putImageData','quadraticCurveTo','rect','reset','resetTransform','restore','rotate','roundRect','save','scale','setLineDash','setTransform','shadowBlur','shadowColor','shadowOffsetX','shadowOffsetY','stroke','strokeRect','strokeStyle','strokeText','textAlign','textBaseline','textRendering','transform','translate','wordSpacing']],
+        'ImageData': [null, ['colorSpace','data','height','pixelFormat','width']],
+        'CanvasGradient': [null, ['addColorStop']],
+        'Clipboard': [null, ['onclipboardchange']],
+        'ServiceWorkerContainer': [null, ['controller','getRegistration','getRegistrations','oncontrollerchange','onmessage','onmessageerror','ready','register','startMessages']],
+        'ServiceWorkerRegistration': [null, ['active','backgroundFetch','cookies','getNotifications','installing','navigationPreload','onupdatefound','paymentManager','periodicSync','pushManager','scope','showNotification','sync','unregister','update','updateViaCache','waiting']],
+        'Cache': [null, ['add','addAll','delete','keys','match','matchAll','put']],
+        'CacheStorage': [null, ['delete','has','keys','match','open']],
+        'Notification': [null, ['actions','badge','body','close','data','dir','icon','image','lang','onclick','onclose','onerror','onshow','renotify','requireInteraction','silent','tag','timestamp','title','vibrate']],
+        'WebSocket': [null, ['CLOSED','CLOSING','CONNECTING','OPEN','binaryType','bufferedAmount','close','extensions','onclose','onerror','onmessage','onopen','protocol','readyState','send','url']],
+        'BroadcastChannel': [null, ['name','onmessageerror']],
+        'IDBKeyRange': [null, ['includes','lower','lowerOpen','upper','upperOpen']],
+        'AudioContext': [null, ['baseLatency','close','createMediaElementSource','createMediaStreamDestination','createMediaStreamSource','getOutputTimestamp','onerror','onsinkchange','outputLatency','playbackStats','resume','setSinkId','sinkId','suspend']],
+        'AudioNode': [null, ['channelCount','channelCountMode','channelInterpretation','connect','context','disconnect','numberOfInputs','numberOfOutputs']],
+        'OscillatorNode': [null, ['detune','frequency','setPeriodicWave','type']],
+        'AudioParam': [null, ['automationRate','cancelAndHoldAtTime','cancelScheduledValues','defaultValue','exponentialRampToValueAtTime','linearRampToValueAtTime','maxValue','minValue','setTargetAtTime','setValueAtTime','setValueCurveAtTime','value']],
+        'HTMLDialogElement': ['dialog', ['close','closedBy','open','requestClose','returnValue','show','showModal']],
+        'HTMLDetailsElement': ['details', ['open']],
+        'HTMLLabelElement': ['label', ['control']],
+        'HTMLScriptElement': ['script', ['async','attributionSrc','blocking','charset','crossOrigin','defer','event','fetchPriority','integrity','noModule']],
+        'HTMLStyleElement': ['style', ['blocking']],
+        'HTMLLinkElement': ['link', ['as','blocking','charset','crossOrigin','fetchPriority','imageSizes','imageSrcset','integrity','rev']],
+        'HTMLMetaElement': ['meta', ['content','httpEquiv','scheme']],
+        'HTMLAreaElement': ['area', ['attributionSrc','interestForElement','noHref','password','ping','username']],
+        'HTMLLegendElement': ['legend', ['align','form']],
+        'HTMLTableSectionElement': ['tbody', ['align','ch','chOff','vAlign']],
+        'HTMLTableCellElement': ['td', ['align','axis','bgColor','ch','chOff','noWrap','vAlign']],
+        'HTMLTableRowElement': ['tr', ['align','bgColor','ch','chOff','vAlign']],
+        'HTMLTrackElement': ['track', ['ERROR','LOADED','LOADING','NONE','default','kind','readyState','srclang','track']],
+        'HTMLTimeElement': ['time', ['dateTime']],
+        'HTMLQuoteElement': ['q', ['cite']],
+        'HTMLModElement': [null, ['cite','dateTime']],
+        'HTMLObjectElement': ['object', ['align','archive','border','code','codeBase','codeType','data','declare','getSVGDocument','hspace','standby','useMap','vspace']],
+        'HTMLEmbedElement': ['embed', ['align','getSVGDocument']],
+        'HTMLParamElement': ['param', ['valueType']],
+        'HTMLVideoElement': ['video', ['cancelVideoFrameCallback','disablePictureInPicture','getVideoPlaybackQuality','playsInline','poster','requestPictureInPicture','requestVideoFrameCallback','videoHeight','videoWidth','webkitDecodedFrameCount','webkitDroppedFrameCount']],
+        'HTMLUListElement': ['ul', ['compact']],
+        'HTMLOListElement': ['ol', ['compact','reversed','start']],
+        'HTMLDListElement': [null, ['compact']],
+        'HTMLHRElement': ['hr', ['align','color','noShade']],
+        'HTMLHeadingElement': [null, ['align']],
+        'HTMLParagraphElement': ['p', ['align']],
+        'HTMLBRElement': ['br', ['clear']],
+        'HTMLBodyElement': ['body', ['aLink','background','bgColor','link','vLink']]
+    };
+    function g(f){try{return f();}catch(e){return 'THROWS:'+e.name;}}
+    function valueOf(obj, name) {
+        return g(function () {
+            var v = obj[name];
+            if (typeof v === 'function') return 'function:' + v.length;
+            if (v === null) return 'null';
+            if (typeof v === 'object') return Object.prototype.toString.call(v);
+            return typeof v + ':' + String(v).slice(0, 24);
+        });
+    }
+    var out = {};
+    Object.keys(PLAN).forEach(function (iface) {
+        var tag = PLAN[iface][0], names = PLAN[iface][1];
+        var obj;
+        if (tag) { try { obj = document.createElement(tag); } catch (e) { obj = null; } }
+        else if (iface === 'Document') obj = document;
+        else if (iface === 'DocumentFragment') obj = document.createDocumentFragment();
+        else if (iface === 'ShadowRoot') obj = g(function(){ return document.createElement('div').attachShadow({mode:'open'}); });
+        else if (iface === 'Attr') obj = g(function(){ var e = document.createElement('div'); e.id='x'; return e.getAttributeNode('id'); });
+        else if (iface === 'Text') obj = document.createTextNode('t');
+        else if (iface === 'Comment') obj = document.createComment('c');
+        else if (iface === 'ProcessingInstruction') obj = g(function(){ return document.createProcessingInstruction('xml-stylesheet','a'); });
+        else if (iface === 'DocumentType') obj = document.doctype;
+        else if (iface === 'Range') obj = document.createRange();
+        else if (iface === 'Selection') obj = window.getSelection();
+        else if (iface === 'StaticRange') obj = g(function(){ return new StaticRange({startContainer: document.body, startOffset:0, endContainer: document.body, endOffset:0}); });
+        else if (iface === 'NodeIterator') obj = document.createNodeIterator(document.body, 1, null);
+        else if (iface === 'TreeWalker') obj = document.createTreeWalker(document.body, 1, null);
+        else if (iface === 'Element') obj = document.createElement('div');
+        else if (iface === 'HTMLElement') obj = document.createElement('div');
+        else if (iface === 'Node') obj = document.createElement('div');
+        else obj = g(function(){ return window[iface] ? (typeof window[iface].prototype === 'object' ? Object.create(window[iface].prototype) : null) : null; });
+        if (!obj || typeof obj !== 'object') { out[iface] = 'NO-INSTANCE'; return; }
+        var res = {};
+        names.forEach(function (n) { res[n] = valueOf(obj, n); });
+        out[iface] = res;
+    });
+    window.__REPORT = JSON.stringify(out);
+    document.title = 'P109';
+    window.__T && window.__T('probe109', true, JSON.stringify(out));
+})();
+</script>
+<div>probe109</div></body></html>

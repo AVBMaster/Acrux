@@ -1,0 +1,24 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe107 — event handler properties</title></head><body><div id="d"><div id="a" onclick="window.__attr = (window.__attr||0)+1">a</div></div>
+<script>
+(function () {
+    function g(f){try{return String(f());}catch(e){return 'ERR '+e.name+':'+String(e.message).slice(0,50);}}
+    var out={};
+    var el=document.getElementById('a');
+    out.ownOn = g(function(){ return Object.getOwnPropertyNames(HTMLElement.prototype).filter(function(n){return n.indexOf('on')===0;}).join(','); });
+    out.onclickType = g(function(){ return typeof el.onclick; });
+    out.assignAndFire = g(function(){ var fired=0; el.onclick=function(e){ fired++; return e.type; };
+        el.dispatchEvent(new MouseEvent('click',{bubbles:true}));
+        return [fired, typeof el.onclick].join('/'); });
+    out.attrFires = g(function(){ window.__attr=0; el.dispatchEvent(new MouseEvent('click',{bubbles:true})); return String(window.__attr); });
+    out.attrReadback = g(function(){ return typeof el.onclick + '|' + String(el.onclick).slice(0,40); });
+    out.afterNull = g(function(){ var before = typeof el.onclick; el.onclick = null; return before + '->' + typeof el.onclick; });
+    out.onabortLevel = g(function(){ return [typeof HTMLElement.prototype.onabort,
+        typeof SVGElement.prototype.onabort, typeof Document.prototype.onabort,
+        typeof window.onabort, typeof HTMLBodyElement.prototype.onabort].join('/'); });
+    out.newFunction = g(function(){ return typeof Function('return 1'); });
+    out.evalWorks = g(function(){ return eval('1+1'); });
+    document.title='P107';
+    window.__T && window.__T('probe107', true, JSON.stringify(out));
+})();
+</script>
+<div>probe107</div></body></html>

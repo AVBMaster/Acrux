@@ -1,0 +1,67 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe103 — interface member and arity sweep</title></head><body><div id="d">x</div>
+<script>
+(function () {
+    function own(o){try{return Object.getOwnPropertyNames(o);}catch(e){return [];}}
+    var IFACES = ['EventTarget','Node','CharacterData','Text','Comment','CDATASection','Attr','Document',
+        'HTMLDocument','XMLDocument','DocumentFragment','ShadowRoot','Element','HTMLElement','SVGElement',
+        'HTMLAnchorElement','HTMLFormElement','HTMLInputElement','HTMLButtonElement','HTMLSelectElement',
+        'HTMLOptionElement','HTMLTextAreaElement','HTMLCanvasElement','HTMLImageElement','HTMLSlotElement',
+        'HTMLTemplateElement','HTMLIFrameElement','HTMLMediaElement','HTMLTableElement',
+        'DOMTokenList','NamedNodeMap','NodeList','HTMLCollection','HTMLFormControlsCollection',
+        'DocumentType','ProcessingInstruction','Range','StaticRange','Selection','NodeIterator','TreeWalker',
+        'XMLHttpRequest','XMLHttpRequestUpload','EventSource','FileReader','FileReaderSync','Blob','File',
+        'FormData','Headers','Request','Response','URL','URLSearchParams','AbortController','AbortSignal',
+        'MutationObserver','ResizeObserver','IntersectionObserver','CustomElementRegistry','DOMParser',
+        'XMLSerializer','XPathEvaluator','XPathResult','History','Location','Navigator','Screen',
+        'Performance','PerformanceObserver','MediaQueryList','CSSStyleDeclaration','CSSRule','CSSRuleList',
+        'MediaList','CSSStyleSheet','CSSRule','TextDecoder','TextEncoder','ReadableStream','WritableStream',
+        'TransformStream','ReadableStreamDefaultReader','WritableStreamDefaultWriter','CanvasRenderingContext2D',
+        'ImageData','CanvasGradient','Storage','StorageManager','Clipboard','Permissions','PermissionStatus',
+        'Geolocation','Crypto','SubtleCrypto','ServiceWorkerContainer','ServiceWorkerRegistration','Cache',
+        'CacheStorage','Notification','WebSocket','BroadcastChannel','MessageChannel','MessagePort','IDBKeyRange',
+        'AudioContext','AudioNode','OscillatorNode','AudioParam','HTMLDialogElement','HTMLDetailsElement',
+        'HTMLLabelElement','HTMLLIElement','HTMLProgressElement','HTMLMeterElement','HTMLDialogElement',
+        'HTMLScriptElement','HTMLStyleElement','HTMLLinkElement','HTMLMetaElement','HTMLAreaElement',
+        'HTMLOutputElement','HTMLFieldSetElement','HTMLLegendElement','HTMLTableSectionElement',
+        'HTMLTableCellElement','HTMLTableRowElement','HTMLDataListElement','HTMLPictureElement',
+        'HTMLSourceElement','HTMLTrackElement','HTMLDataElement','HTMLTimeElement','HTMLQuoteElement',
+        'HTMLModElement','HTMLObjectElement','HTMLEmbedElement','HTMLParamElement','HTMLVideoElement',
+        'HTMLAudioElement','HTMLUListElement','HTMLOListElement','HTMLDListElement','HTMLHRElement',
+        'HTMLPreElement','HTMLHeadingElement','HTMLParagraphElement','HTMLBRElement','HTMLBaseElement',
+        'HTMLBodyElement','HTMLHeadElement','HTMLTitleElement','HtmlElement','HTMLDocument'];
+    var seen = { };
+    var out = { };
+    for (var i = 0; i < IFACES.length; i++) {
+        var name = IFACES[i];
+        if (seen[name]) continue;
+        seen[name] = true;
+        var C = window[name];
+        if (typeof C !== 'function') { out[name] = 'ABSENT'; continue; }
+        var proto;
+        try { proto = C.prototype; } catch (e) { out[name] = 'ERR'; continue; }
+        var names = own(proto);
+        var entry = { };
+        for (var j = 0; j < names.length; j++) {
+            var key = names[j];
+            if (key === 'constructor') continue;
+            var d;
+            try { d = Object.getOwnPropertyDescriptor(proto, key); } catch (e) { continue; }
+            if (!d) continue;
+            if (typeof d.value === 'function') entry[key] = d.value.length;
+            else if (d.get) entry[key] = 'r';
+            else if ('value' in d) entry[key] = 'v';
+            else entry[key] = '?';
+        }
+        var symbols = [];
+        try {
+            var syms = Object.getOwnPropertySymbols(proto);
+            for (var k = 0; k < syms.length; k++) symbols.push(String(syms[k]));
+        } catch (e) { }
+        out[name] = { ctor: C.length, members: entry, symbols: symbols.sort().join(',') };
+    }
+    window.__REPORT = JSON.stringify(out);
+    document.title = 'P103 ' + Object.keys(out).length;
+    window.__T && window.__T('probe103 dump', true, JSON.stringify(out));
+})();
+</script>
+<div>probe103</div></body></html>

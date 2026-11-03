@@ -1,0 +1,111 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe104 — which member each object actually answers</title></head><body><div id="d"><p id="p1">a</p><input id="in1" value="v"><form id="f1"></form><canvas id="c1"></canvas></div>
+<script>
+(function () {
+    function chainHas(obj, proto) {
+        if (!obj || !proto) return false;
+        for (var p = Object.getPrototypeOf(obj); p; p = Object.getPrototypeOf(p)) if (p === proto) return true;
+        return false;
+    }
+    function tryIt(f) { try { return f(); } catch (e) { return null; } }
+    var text = document.createTextNode('t');
+    var comment = document.createComment('c');
+    var el = document.getElementById('p1');
+    var attr = el.getAttributeNode('id');
+    var fragment = document.createDocumentFragment();
+    var range = tryIt(function () { return document.createRange(); });
+    var selection = tryIt(function () { return window.getSelection(); });
+    var walker = tryIt(function () { return document.createTreeWalker(el, 1, null); });
+    var iterator = tryIt(function () { return document.createNodeIterator(el, 1, null); });
+    var doctype = document.doctype;
+    function make(f) { try { return f(); } catch (e) { return null; } }
+    var samples = {
+        Document: document, HTMLDocument: document, Element: el, HTMLElement: el,
+        HTMLParagraphElement: el, HTMLInputElement: document.getElementById('in1'),
+        HTMLFormElement: document.getElementById('f1'), HTMLCanvasElement: document.getElementById('c1'),
+        Text: text, Comment: comment, Attr: attr, CDATASection: null,
+        DocumentFragment: fragment, Range: range, StaticRange: null, Selection: selection,
+        TreeWalker: walker, NodeIterator: iterator, DocumentType: doctype,
+        XMLHttpRequest: make(function(){return new XMLHttpRequest();}), FileReader: make(function(){return new FileReader();}),
+        Blob: make(function(){return new Blob(['x']);}), File: make(function(){return new File(['x'],'n.txt');}), FormData: make(function(){return new FormData();}),
+        Headers: make(function(){return new Headers();}), URL: make(function(){return new URL('http://a.test/p?q=1');}),
+        URLSearchParams: make(function(){return new URLSearchParams('a=1');}),
+        MutationObserver: make(function(){return new MutationObserver(function(){});}),
+        ResizeObserver: window.ResizeObserver ? new ResizeObserver(function () { }) : null,
+        IntersectionObserver: window.IntersectionObserver ? new IntersectionObserver(function () { }) : null,
+        DOMParser: make(function(){return new DOMParser();}), XMLSerializer: make(function(){return new XMLSerializer();}),
+        XPathEvaluator: make(function(){return new XPathEvaluator();}),
+        MediaQueryList: window.matchMedia('(min-width: 1px)'),
+        Navigator: navigator, History: history, Location: location, Screen: screen,
+        Performance: performance, Storage: localStorage, CustomElementRegistry: customElements,
+        CSSStyleDeclaration: el.style, CSSStyleSheet: document.styleSheets[0] || null,
+        MediaList: (document.styleSheets[0] || { media: null }).media,
+        DOMTokenList: el.classList, NamedNodeMap: el.attributes,
+        NodeList: document.childNodes, HTMLCollection: document.children,
+        AbortController: make(function(){return new AbortController();}), AbortSignal: make(function(){return (new AbortController()).signal;}),
+        TextEncoder: make(function(){return new TextEncoder();}), TextDecoder: make(function(){return new TextDecoder();}),
+        ReadableStream: make(function(){return new ReadableStream({ start: function (c) { c.close(); } });}),
+        WritableStream: make(function(){return new WritableStream({ write: function () { } });}),
+        TransformStream: make(function(){return new TransformStream();}),
+        Clipboard: navigator.clipboard, Permissions: navigator.permissions,
+        Crypto: crypto, SubtleCrypto: crypto.subtle, Geolocation: navigator.geolocation,
+        StorageManager: navigator.storage, EventTarget: el, Node: el, CharacterData: text,
+        ProcessingInstruction: null, ShadowRoot: null, HTMLAnchorElement: document.createElement('a'),
+        HTMLButtonElement: document.createElement('button'), HTMLSelectElement: document.createElement('select'),
+        HTMLOptionElement: document.createElement('option'), HTMLTextAreaElement: document.createElement('textarea'),
+        HTMLImageElement: document.createElement('img'), HTMLSlotElement: document.createElement('slot'),
+        HTMLTemplateElement: document.createElement('template'), HTMLIFrameElement: document.createElement('iframe'),
+        HTMLTableElement: document.createElement('table'), SVGElement: document.createElementNS('http://www.w3.org/2000/svg', 'svg'),
+        CanvasRenderingContext2D: document.getElementById('c1').getContext ? document.getElementById('c1').getContext('2d') : null,
+        ImageData: make(function(){return new ImageData(1,1);}), Event: make(function(){return new Event('x');}), CustomEvent: make(function(){return new CustomEvent('x');}),
+        MessageChannel: make(function(){return new MessageChannel();}), MessagePort: make(function(){return (new MessageChannel()).port1;}),
+        HTMLDialogElement: document.createElement('dialog'), HTMLMediaElement: document.createElement('video'),
+        HTMLScriptElement: document.createElement('script'), HTMLStyleElement: document.createElement('style'),
+        HTMLLinkElement: document.createElement('link'), HTMLMetaElement: document.createElement('meta'),
+        HTMLFieldSetElement: document.createElement('fieldset'), HTMLOutputElement: document.createElement('output'),
+        HTMLProgressElement: document.createElement('progress'), HTMLMeterElement: document.createElement('meter'),
+        HTMLDetailsElement: document.createElement('details'), HTMLLabelElement: document.createElement('label'),
+        HTMLLIElement: document.createElement('li'), HTMLTableRowElement: document.createElement('tr'),
+        HTMLTableCellElement: document.createElement('td'), HTMLTableSectionElement: document.createElement('tbody'),
+        HTMLSourceElement: document.createElement('source'), HTMLTrackElement: document.createElement('track'),
+        HTMLPictureElement: document.createElement('picture'), HTMLDataElement: document.createElement('data'),
+        HTMLTimeElement: document.createElement('time'), HTMLQuoteElement: document.createElement('q'),
+        HTMLModElement: document.createElement('ins'), HTMLObjectElement: document.createElement('object'),
+        HTMLEmbedElement: document.createElement('embed'), HTMLParamElement: document.createElement('param'),
+        HTMLVideoElement: document.createElement('video'), HTMLAudioElement: document.createElement('audio'),
+        HTMLAreaElement: document.createElement('area'), HTMLBaseElement: document.createElement('base'),
+        HTMLBodyElement: document.body, HTMLHeadElement: document.head,
+        HTMLTitleElement: document.title ? document.getElementsByTagName('title')[0] : null,
+        HTMLHtmlElement: document.documentElement, HTMLHRElement: document.createElement('hr'),
+        HTMLPreElement: document.createElement('pre'), HTMLBRElement: document.createElement('br'),
+        HTMLHeadingElement: document.createElement('h1'), HTMLParagraphElement2: document.createElement('p'),
+        HTMLUListElement: document.createElement('ul'), HTMLOListElement: document.createElement('ol'),
+        HTMLDListElement: document.createElement('dl'), HTMLLegendElement: document.createElement('legend'),
+        HTMLDataListElement: document.createElement('datalist'), HTMLDivElement: document.createElement('div'),
+        HTMLSpanElement: document.createElement('span'), HTMLLabelElement2: document.createElement('label'),
+        HTMLDocument: document, XMLDocument: make(function(){return (new DOMParser()).parseFromString('<a/>', 'text/xml');}),
+        HTMLFormControlsCollection: make(function(){return document.getElementById('f1').elements;}),
+        FileList: null, ValidityState: make(function(){return document.getElementById('in1').validity;}),
+        DOMStringMap: make(function(){return el.dataset;}), Highlight: null, FontFace: window.FontFace ? new FontFace('x', 'url(y)') : null
+    };
+    var out = {};
+    Object.keys(samples).forEach(function (iface) {
+        var obj = samples[iface];
+        var proto = window[iface] ? window[iface].prototype : null;
+        var entry = { has: !!obj, chain: obj && proto ? chainHas(obj, proto) : false, answers: { } };
+        if (obj && proto) {
+            var names = Object.getOwnPropertyNames(proto);
+            for (var i = 0; i < names.length; i++) {
+                var key = names[i];
+                if (key === 'constructor') continue;
+                try { entry.answers[key] = typeof obj[key]; } catch (e) { entry.answers[key] = 'throws'; }
+            }
+            // and the reference's names that our level does not carry at all
+        }
+        out[iface] = entry;
+    });
+    window.__REPORT = JSON.stringify(out);
+    document.title = 'P104 ' + Object.keys(out).length;
+    window.__T && window.__T('probe104 dump', true, JSON.stringify(out));
+})();
+</script>
+<div>probe104</div></body></html>

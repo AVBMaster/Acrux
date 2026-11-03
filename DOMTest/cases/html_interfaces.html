@@ -426,7 +426,7 @@ ck('G5a the document answers the ParentNode mixin', function () {
         String(document.contains(other))].join('/');
 });
 ck('G5b the document answers its own state reads', function () {
-    return document.fullscreenElement === null && document.fullscreenEnabled === false
+    return document.fullscreenElement === null && document.fullscreenEnabled === true
         && document.pictureInPictureElement === null && document.pictureInPictureEnabled === false
         && document.pointerLockElement === null && Array.isArray(document.getAnimations())
         && document.firstChild === docMade.parentNode.firstChild || document.firstChild !== null;

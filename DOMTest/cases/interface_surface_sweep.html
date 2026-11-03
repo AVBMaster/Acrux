@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html>
+<head><title>Interface member surfaces the level must name (Web IDL §4.4, HTML §2.5.1, §6.1.5.2, DOM §4.3/§4.8)</title></head>
+<body>
+<div id="box"><p id="kid">a</p></div>
+<script>
+(function () {
+    function own(o) { try { return Object.getOwnPropertyNames(o); } catch (e) { return []; } }
+    function g(f) { try { return f(); } catch (e) { return 'THREW:' + (e && e.name); } }
+    function refused(fn) {
+        try { var v = fn(); return 'no-throw:' + (v === undefined ? 'undefined' : String(v)); }
+        catch (e) { return String(e && e.name) + ':' + String(e && e.message).slice(0, 60); }
+    }
+    function ck(name, cond, info) { window.__T(name, cond === true, info === undefined ? '' : String(info)); }
+    // One fresh container per row: a page that reads what an earlier row wrote is a test that
+    // changes shape when the rows are reordered.
+    function mkBox(html) {
+        var made = document.createElement('div');
+        if (html) made.innerHTML = html;
+        document.body.appendChild(made);
+        return made;
+    }
+    // The reference's own member list for each interface, read from the running reference browser
+    // (the dumps under DOMTest/out/notes). A page that lists an interface has to find these names on
+    // the level the interface owns — whether the object answers them from the host or from here.
+    var SURFACE = {
+        'Attr': ['localName','name','namespaceURI','ownerElement','prefix','specified','value'],
+        'BroadcastChannel': ['close','name','onmessage','onmessageerror','postMessage'],
+        'CharacterData': ['after','appendData','before','data','deleteData','insertData','length','nextElementSibling','previousElementSibling','remove','replaceData','replaceWith','substringData'],
+        'Comment': [],
+        'DOMTokenList': ['add','contains','entries','forEach','item','keys','length','remove','replace','supports','toString','toggle','value','values'],
+        'Document': ['URL','activeElement','activeViewTransition','adoptNode','adoptedStyleSheets','alinkColor','all','anchors','append','applets','ariaNotify','bgColor','body','browsingTopics','captureEvents','caretPositionFromPoint','caretRangeFromPoint','characterSet','charset','childElementCount','children','clear','close','compatMode','contentType','cookie','createAttribute','createAttributeNS','createCDATASection','createComment','createDocumentFragment','createElement','createElementNS','createEvent','createExpression','createNSResolver','createNodeIterator','createProcessingInstruction','createRange','createTextNode','createTreeWalker','currentScript','customElementRegistry','defaultView','designMode','dir','doctype','documentElement','documentURI','domain','elementFromPoint','elementsFromPoint','embeds','evaluate','execCommand','exitFullscreen','exitPictureInPicture','exitPointerLock','featurePolicy','fgColor','firstElementChild','fonts','forms','fragmentDirective','fullscreen','fullscreenElement','fullscreenEnabled','getAnimations','getElementById','getElementsByClassName','getElementsByName','getElementsByTagName','getElementsByTagNameNS','getSelection','hasFocus','hasPrivateToken','hasRedemptionRecord','hasStorageAccess','hasUnpartitionedCookieAccess','head','hidden','images','implementation','importNode','inputEncoding','lastElementChild','lastModified','linkColor','links','moveBefore','onabort','onanimationcancel','onanimationend','onanimationiteration','onanimationstart','onauxclick','onbeforecopy','onbeforecut','onbeforeinput','onbeforematch','onbeforepaste','onbeforetoggle','onbeforexrselect','onblur','oncancel','oncanplay','oncanplaythrough','onchange','onclick','onclose','oncommand','oncontentvisibilityautostatechange','oncontextlost','oncontextmenu','oncontextrestored','oncopy','oncuechange','oncut','ondblclick','ondrag','ondragend','ondragenter','ondragleave','ondragover','ondragstart','ondrop','ondurationchange','onemptied','onended','onerror','onfocus','onformdata','onfreeze','onfullscreenchange','onfullscreenerror','ongotpointercapture','oninput','oninvalid','onkeydown','onkeypress','onkeyup','onload','onloadeddata','onloadedmetadata','onloadstart','onlostpointercapture','onmousedown','onmouseenter','onmouseleave','onmousemove','onmouseout','onmouseover','onmouseup','onmousewheel','onpaste','onpause','onplay','onplaying','onpointercancel','onpointerdown','onpointerenter','onpointerleave','onpointerlockchange','onpointerlockerror','onpointermove','onpointerout','onpointerover','onpointerrawupdate','onpointerup','onprerenderingchange','onprogress','onratechange','onreadystatechange','onreset','onresize','onresume','onscroll','onscrollend','onscrollsnapchange','onscrollsnapchanging','onsearch','onsecuritypolicyviolation','onseeked','onseeking','onselect','onselectionchange','onselectstart','onslotchange','onstalled','onsubmit','onsuspend','ontimeupdate','ontoggle','ontransitioncancel','ontransitionend','ontransitionrun','ontransitionstart','onvisibilitychange','onvolumechange','onwaiting','onwebkitanimationend','onwebkitanimationiteration','onwebkitanimationstart','onwebkitfullscreenchange','onwebkitfullscreenerror','onwebkittransitionend','onwheel','open','pictureInPictureElement','pictureInPictureEnabled','plugins','pointerLockElement','prepend','prerendering','queryCommandEnabled','queryCommandIndeterm','queryCommandState','queryCommandSupported','queryCommandValue','querySelector','querySelectorAll','readyState','referrer','releaseEvents','replaceChildren','requestStorageAccess','requestStorageAccessFor','rootElement','scripts','scrollingElement','startViewTransition','styleSheets','timeline','title','visibilityState','vlinkColor','wasDiscarded','webkitCancelFullScreen','webkitCurrentFullScreenElement','webkitExitFullscreen','webkitFullscreenElement','webkitFullscreenEnabled','webkitHidden','webkitIsFullScreen','webkitVisibilityState','write','writeln','xmlEncoding','xmlStandalone','xmlVersion'],
+        'DocumentFragment': ['append','childElementCount','children','firstElementChild','getElementById','lastElementChild','moveBefore','prepend','querySelector','querySelectorAll','replaceChildren'],
+        'DocumentType': ['after','before','name','publicId','remove','replaceWith','systemId'],
+        'Element': ['activeViewTransition','after','animate','append','ariaActiveDescendantElement','ariaAtomic','ariaAutoComplete','ariaBrailleLabel','ariaBrailleRoleDescription','ariaBusy','ariaChecked','ariaColCount','ariaColIndex','ariaColIndexText','ariaColSpan','ariaControlsElements','ariaCurrent','ariaDescribedByElements','ariaDescription','ariaDetailsElements','ariaDisabled','ariaErrorMessageElements','ariaExpanded','ariaFlowToElements','ariaHasPopup','ariaHidden','ariaInvalid','ariaKeyShortcuts','ariaLabel','ariaLabelledByElements','ariaLevel','ariaLive','ariaModal','ariaMultiLine','ariaMultiSelectable','ariaNotify','ariaOrientation','ariaPlaceholder','ariaPosInSet','ariaPressed','ariaReadOnly','ariaRelevant','ariaRequired','ariaRoleDescription','ariaRowCount','ariaRowIndex','ariaRowIndexText','ariaRowSpan','ariaSelected','ariaSetSize','ariaSort','ariaValueMax','ariaValueMin','ariaValueNow','ariaValueText','assignedSlot','attachShadow','attributes','before','checkVisibility','childElementCount','children','classList','className','clientHeight','clientLeft','clientTop','clientWidth','closest','computedStyleMap','currentCSSZoom','customElementRegistry','elementTiming','firstElementChild','getAnimations','getAttribute','getAttributeNS','getAttributeNames','getAttributeNode','getAttributeNodeNS','getBoundingClientRect','getClientRects','getElementsByClassName','getElementsByTagName','getElementsByTagNameNS','getHTML','hasAttribute','hasAttributeNS','hasAttributes','hasPointerCapture','id','innerHTML','insertAdjacentElement','insertAdjacentHTML','insertAdjacentText','lastElementChild','localName','matches','moveBefore','namespaceURI','nextElementSibling','onbeforecopy','onbeforecut','onbeforepaste','onfullscreenchange','onfullscreenerror','onsearch','onwebkitfullscreenchange','onwebkitfullscreenerror','outerHTML','part','prefix','prepend','previousElementSibling','pseudo','querySelector','querySelectorAll','releasePointerCapture','remove','removeAttribute','removeAttributeNS','removeAttributeNode','replaceChildren','replaceWith','requestFullscreen','requestPointerLock','role','scroll','scrollBy','scrollHeight','scrollIntoView','scrollIntoViewIfNeeded','scrollLeft','scrollTo','scrollTop','scrollWidth','setAttribute','setAttributeNS','setAttributeNode','setAttributeNodeNS','setHTML','setHTMLUnsafe','setPointerCapture','shadowRoot','slot','startViewTransition','tagName','toggleAttribute','webkitMatchesSelector','webkitRequestFullScreen','webkitRequestFullscreen'],
+        'EventSource': ['CLOSED','CONNECTING','OPEN','close','onerror','onmessage','onopen','readyState','url','withCredentials'],
+        'EventTarget': ['addEventListener','dispatchEvent','removeEventListener','when'],
+        'FormData': ['append','delete','entries','forEach','get','getAll','has','keys','set','values'],
+        'HTMLAnchorElement': ['attributionSrc','charset','coords','download','hash','host','hostname','href','hreflang','interestForElement','name','origin','password','pathname','ping','port','protocol','referrerPolicy','rel','relList','rev','search','shape','target','text','toString','type','username'],
+        'HTMLAreaElement': ['alt','attributionSrc','coords','download','hash','host','hostname','href','interestForElement','noHref','origin','password','pathname','ping','port','protocol','referrerPolicy','rel','relList','search','shape','target','toString','username'],
+        'HTMLBodyElement': ['aLink','background','bgColor','link','onafterprint','onbeforeprint','onbeforeunload','onblur','onerror','onfocus','ongamepadconnected','ongamepaddisconnected','onhashchange','onlanguagechange','onload','onmessage','onmessageerror','onoffline','ononline','onpagehide','onpageshow','onpopstate','onrejectionhandled','onresize','onscroll','onstorage','onunhandledrejection','onunload','text','vLink'],
+        'HTMLButtonElement': ['checkValidity','command','commandForElement','disabled','form','formAction','formEnctype','formMethod','formNoValidate','formTarget','interestForElement','labels','name','popoverTargetAction','popoverTargetElement','reportValidity','setCustomValidity','type','validationMessage','validity','value','willValidate'],
+        'HTMLDetailsElement': ['name','open'],
+        'HTMLDialogElement': ['close','closedBy','open','requestClose','returnValue','show','showModal'],
+        'HTMLFieldSetElement': ['checkValidity','disabled','elements','form','name','reportValidity','setCustomValidity','type','validationMessage','validity','willValidate'],
+        'HTMLIFrameElement': ['adAuctionHeaders','align','allow','allowFullscreen','allowPaymentRequest','browsingTopics','contentDocument','contentWindow','credentialless','csp','featurePolicy','frameBorder','getSVGDocument','height','loading','longDesc','marginHeight','marginWidth','name','privateToken','referrerPolicy','sandbox','scrolling','sharedStorageWritable','src','srcdoc','width'],
+        'HTMLImageElement': ['align','alt','attributionSrc','border','browsingTopics','complete','crossOrigin','currentSrc','decode','decoding','fetchPriority','height','hspace','isMap','loading','longDesc','lowsrc','name','naturalHeight','naturalWidth','referrerPolicy','sharedStorageWritable','sizes','src','srcset','useMap','vspace','width','x','y'],
+        'HTMLInputElement': ['accept','align','alt','autocomplete','checkValidity','checked','defaultChecked','defaultValue','dirName','disabled','files','form','formAction','formEnctype','formMethod','formNoValidate','formTarget','height','incremental','indeterminate','labels','list','max','maxLength','min','minLength','multiple','name','pattern','placeholder','popoverTargetAction','popoverTargetElement','readOnly','reportValidity','required','select','selectionDirection','selectionEnd','selectionStart','setCustomValidity','setRangeText','setSelectionRange','showPicker','size','src','step','stepDown','stepUp','type','useMap','validationMessage','validity','value','valueAsDate','valueAsNumber','webkitEntries','webkitdirectory','width','willValidate'],
+        'HTMLLIElement': ['type','value'],
+        'HTMLLegendElement': ['align','form'],
+        'HTMLLinkElement': ['as','blocking','charset','crossOrigin','disabled','fetchPriority','href','hreflang','imageSizes','imageSrcset','integrity','media','referrerPolicy','rel','relList','rev','sheet','sizes','target','type'],
+        'HTMLMediaElement': ['HAVE_CURRENT_DATA','HAVE_ENOUGH_DATA','HAVE_FUTURE_DATA','HAVE_METADATA','HAVE_NOTHING','NETWORK_EMPTY','NETWORK_IDLE','NETWORK_LOADING','NETWORK_NO_SOURCE','addTextTrack','autoplay','buffered','canPlayType','captureStream','controls','controlsList','crossOrigin','currentSrc','currentTime','defaultMuted','defaultPlaybackRate','disableRemotePlayback','duration','ended','error','load','loading','loop','mediaKeys','muted','networkState','onencrypted','onwaitingforkey','pause','paused','play','playbackRate','played','preload','preservesPitch','readyState','remote','seekable','seeking','setMediaKeys','setSinkId','sinkId','src','srcObject','textTracks','volume','webkitAudioDecodedByteCount','webkitVideoDecodedByteCount'],
+        'HTMLMetaElement': ['content','httpEquiv','media','name','scheme'],
+        'HTMLMeterElement': ['high','labels','low','max','min','optimum','value'],
+        'HTMLOListElement': ['compact','reversed','start','type'],
+        'HTMLObjectElement': ['align','archive','border','checkValidity','code','codeBase','codeType','contentDocument','contentWindow','data','declare','form','getSVGDocument','height','hspace','name','reportValidity','setCustomValidity','standby','type','useMap','validationMessage','validity','vspace','width','willValidate'],
+        'HTMLOutputElement': ['checkValidity','defaultValue','form','htmlFor','labels','name','reportValidity','setCustomValidity','type','validationMessage','validity','value','willValidate'],
+        'HTMLProgressElement': ['labels','max','position','value'],
+        'HTMLQuoteElement': ['cite'],
+        'HTMLScriptElement': ['async','attributionSrc','blocking','charset','crossOrigin','defer','event','fetchPriority','htmlFor','innerText','integrity','noModule','referrerPolicy','src','text','textContent','type'],
+        'HTMLSelectElement': ['add','autocomplete','checkValidity','disabled','form','item','labels','length','multiple','name','namedItem','options','remove','reportValidity','required','selectedIndex','selectedOptions','setCustomValidity','showPicker','size','type','validationMessage','validity','value','willValidate'],
+        'HTMLSlotElement': ['assign','assignedElements','assignedNodes','name'],
+        'HTMLSourceElement': ['height','media','sizes','src','srcset','type','width'],
+        'HTMLStyleElement': ['blocking','disabled','media','sheet','type'],
+        'HTMLTableCellElement': ['abbr','align','axis','bgColor','cellIndex','ch','chOff','colSpan','headers','height','noWrap','rowSpan','scope','vAlign','width'],
+        'HTMLTableElement': ['align','bgColor','border','caption','cellPadding','cellSpacing','createCaption','createTBody','createTFoot','createTHead','deleteCaption','deleteRow','deleteTFoot','deleteTHead','frame','insertRow','rows','rules','summary','tBodies','tFoot','tHead','width'],
+        'HTMLTableRowElement': ['align','bgColor','cells','ch','chOff','deleteCell','insertCell','rowIndex','sectionRowIndex','vAlign'],
+        'HTMLTableSectionElement': ['align','ch','chOff','deleteRow','insertRow','rows','vAlign'],
+        'HTMLTemplateElement': ['content','htmlFor','shadowRootClonable','shadowRootCustomElementRegistry','shadowRootDelegatesFocus','shadowRootMode','shadowRootSerializable'],
+        'HTMLTextAreaElement': ['autocomplete','checkValidity','cols','defaultValue','dirName','disabled','form','labels','maxLength','minLength','name','placeholder','readOnly','reportValidity','required','rows','select','selectionDirection','selectionEnd','selectionStart','setCustomValidity','setRangeText','setSelectionRange','textLength','type','validationMessage','validity','value','willValidate','wrap'],
+        'HTMLTimeElement': ['dateTime'],
+        'HTMLTitleElement': ['text'],
+        'HTMLTrackElement': ['ERROR','LOADED','LOADING','NONE','default','kind','label','readyState','src','srclang','track'],
+        'HTMLUListElement': ['compact','type'],
+        'HTMLVideoElement': ['cancelVideoFrameCallback','disablePictureInPicture','getVideoPlaybackQuality','height','onenterpictureinpicture','onleavepictureinpicture','playsInline','poster','requestPictureInPicture','requestVideoFrameCallback','videoHeight','videoWidth','webkitDecodedFrameCount','webkitDroppedFrameCount','width'],
+        'Headers': ['append','delete','entries','forEach','get','getSetCookie','has','keys','set','values'],
+        'Navigator': ['adAuctionComponents','appCodeName','appName','appVersion','canLoadAdAuctionFencedFrame','clearAppBadge','clearOriginJoinedAdInterestGroups','clipboard','connection','cookieEnabled','createAuctionNonce','credentials','deprecatedReplaceInURN','deprecatedRunAdAuctionEnforcesKAnonymity','deprecatedURNToURL','deviceMemory','devicePosture','doNotTrack','geolocation','getBattery','getGamepads','getInstalledRelatedApps','getInterestGroupAdAuctionData','getUserMedia','gpu','hardwareConcurrency','hid','ink','javaEnabled','joinAdInterestGroup','keyboard','language','languages','leaveAdInterestGroup','locks','login','managed','maxTouchPoints','mediaCapabilities','mediaDevices','mediaSession','mimeTypes','onLine','pdfViewerEnabled','permissions','platform','plugins','presentation','product','productSub','protectedAudience','registerProtocolHandler','requestMIDIAccess','requestMediaKeySystemAccess','runAdAuction','scheduling','sendBeacon','serial','serviceWorker','setAppBadge','storage','storageBuckets','unregisterProtocolHandler','updateAdInterestGroups','usb','userActivation','userAgent','userAgentData','vendor','vendorSub','vibrate','virtualKeyboard','wakeLock','webdriver','webkitGetUserMedia','webkitPersistentStorage','webkitTemporaryStorage','windowControlsOverlay','xr'],
+        'Node': ['ATTRIBUTE_NODE','CDATA_SECTION_NODE','COMMENT_NODE','DOCUMENT_FRAGMENT_NODE','DOCUMENT_NODE','DOCUMENT_POSITION_CONTAINED_BY','DOCUMENT_POSITION_CONTAINS','DOCUMENT_POSITION_DISCONNECTED','DOCUMENT_POSITION_FOLLOWING','DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC','DOCUMENT_POSITION_PRECEDING','DOCUMENT_TYPE_NODE','ELEMENT_NODE','ENTITY_NODE','ENTITY_REFERENCE_NODE','NOTATION_NODE','PROCESSING_INSTRUCTION_NODE','TEXT_NODE','appendChild','baseURI','childNodes','cloneNode','compareDocumentPosition','contains','firstChild','getRootNode','hasChildNodes','insertBefore','isConnected','isDefaultNamespace','isEqualNode','isSameNode','lastChild','lookupNamespaceURI','lookupPrefix','nextSibling','nodeName','nodeType','nodeValue','normalize','ownerDocument','parentElement','parentNode','previousSibling','removeChild','replaceChild','textContent'],
+        'NodeIterator': ['detach','filter','nextNode','pointerBeforeReferenceNode','previousNode','referenceNode','root','whatToShow'],
+        'ProcessingInstruction': ['getAttribute','getAttributeNames','hasAttribute','hasAttributes','removeAttribute','setAttribute','sheet','target','toggleAttribute'],
+        'Range': ['END_TO_END','END_TO_START','START_TO_END','START_TO_START','cloneContents','cloneRange','collapse','commonAncestorContainer','compareBoundaryPoints','comparePoint','createContextualFragment','deleteContents','detach','expand','extractContents','getBoundingClientRect','getClientRects','insertNode','intersectsNode','isPointInRange','selectNode','selectNodeContents','setEnd','setEndAfter','setEndBefore','setStart','setStartAfter','setStartBefore','surroundContents','toString'],
+        'Selection': ['addRange','anchorNode','anchorOffset','baseNode','baseOffset','collapse','collapseToEnd','collapseToStart','containsNode','deleteFromDocument','direction','empty','extend','extentNode','extentOffset','focusNode','focusOffset','getComposedRanges','getRangeAt','isCollapsed','modify','rangeCount','removeAllRanges','removeRange','selectAllChildren','setBaseAndExtent','setPosition','toString','type'],
+        'ShadowRoot': ['activeElement','adoptedStyleSheets','clonable','customElementRegistry','delegatesFocus','elementFromPoint','elementsFromPoint','fullscreenElement','getAnimations','getHTML','getSelection','host','innerHTML','mode','onslotchange','pictureInPictureElement','pointerLockElement','serializable','setHTML','setHTMLUnsafe','slotAssignment','styleSheets'],
+        'Text': ['assignedSlot','splitText','wholeText'],
+        'TreeWalker': ['currentNode','filter','firstChild','lastChild','nextNode','nextSibling','parentNode','previousNode','previousSibling','root','whatToShow'],
+        'URL': ['hash','host','hostname','href','origin','password','pathname','port','protocol','search','searchParams','toJSON','toString','username'],
+        'WebSocket': ['CLOSED','CLOSING','CONNECTING','OPEN','binaryType','bufferedAmount','close','extensions','onclose','onerror','onmessage','onopen','protocol','readyState','send','url'],
+        'XMLHttpRequest': ['DONE','HEADERS_RECEIVED','LOADING','OPENED','UNSENT','abort','getAllResponseHeaders','getResponseHeader','onreadystatechange','open','overrideMimeType','readyState','response','responseText','responseType','responseURL','responseXML','send','setAttributionReporting','setPrivateToken','setRequestHeader','status','statusText','timeout','upload','withCredentials']
+    };
+    // The names the reference puts on an interface this engine has no object for yet. They are
+    // written down rather than wished away: closing one means deleting the name from here, and a
+    // new missing name shows up as a failure of the row below.
+    //  WebSocket and the Navigator ad/media surfaces — no transport, no media, no permissions back end.
+    //  HTMLMediaElement / HTMLTrackElement / HTMLVideoElement — no decoder, so no TimeRanges,
+    //  TextTrack or playback-rate object to hand back.
+    //  EventSource — no server-sent-events reader.
+    //  ProcessingInstruction's attribute reads — DOM §4.3.5 gives a PI an attribute list, and the
+    //  parser the engine uses never fills one.
+    //  ShadowRoot.elementFromPoint / getHTML / setHTMLUnsafe — the paint side has no hit test for a
+    //  shadow tree, and the fragment-serialising algorithm is not written.
+    //  Document.browsingTopics / hasPrivateToken / hasRedemptionRecord, XHR's two ad methods,
+    //  iframe/element featurePolicy — the feature policy the engine does not evaluate.
+    //  HTML*Element.blocking — a DOMTokenList over a content attribute the engine never reads.
+    //  WebSocket — the interface is not built at all: there is no transport behind it, so the engine
+    //  has no object to hand back and no frames to read. It is the first name on the next round.
+    var GAP = {
+        'Document': ['browsingTopics', 'hasPrivateToken', 'hasRedemptionRecord'],
+        'EventSource': ['close', 'readyState', 'url', 'withCredentials'],
+        'HTMLButtonElement': ['interestForElement'],
+        'HTMLIFrameElement': ['featurePolicy'],
+        'HTMLLinkElement': ['blocking'],
+        'HTMLMediaElement': ['addTextTrack', 'buffered', 'captureStream', 'controlsList', 'currentSrc',
+            'defaultPlaybackRate', 'error', 'loading', 'mediaKeys', 'networkState', 'playbackRate',
+            'played', 'readyState', 'remote', 'seekable', 'seeking', 'setMediaKeys', 'setSinkId',
+            'sinkId', 'srcObject', 'textTracks', 'webkitAudioDecodedByteCount',
+            'webkitVideoDecodedByteCount'],
+        'HTMLScriptElement': ['blocking'],
+        'HTMLStyleElement': ['blocking'],
+        'HTMLTrackElement': ['track'],
+        'HTMLVideoElement': ['cancelVideoFrameCallback', 'getVideoPlaybackQuality',
+            'requestPictureInPicture', 'requestVideoFrameCallback'],
+        'Navigator': ['adAuctionComponents', 'canLoadAdAuctionFencedFrame', 'clearAppBadge',
+            'clearOriginJoinedAdInterestGroups', 'createAuctionNonce', 'deprecatedReplaceInURN',
+            'deprecatedRunAdAuctionEnforcesKAnonymity', 'deprecatedURNToURL', 'devicePosture',
+            'getInterestGroupAdAuctionData', 'getUserMedia', 'protectedAudience',
+            'registerProtocolHandler', 'requestMIDIAccess', 'runAdAuction', 'setAppBadge',
+            'unregisterProtocolHandler', 'webkitGetUserMedia'],
+        'ProcessingInstruction': ['getAttribute', 'getAttributeNames', 'hasAttribute', 'hasAttributes',
+            'removeAttribute', 'setAttribute', 'sheet', 'target', 'toggleAttribute'],
+        'ShadowRoot': ['elementFromPoint', 'elementsFromPoint', 'getHTML', 'setHTML', 'setHTMLUnsafe'],
+        'WebSocket': SURFACE.WebSocket.slice(0),
+        'XMLHttpRequest': ['setAttributionReporting', 'setPrivateToken']
+    };
+    var problems = [];
+    var reported = [];
+    Object.keys(SURFACE).forEach(function (iface) {
+        var Built = window[iface];
+        if (typeof Built !== 'function') {
+            // An interface the table lists and the engine does not build is the largest gap of all,
+            // so it is checked against the record too rather than allowed to fail quietly.
+            if (!GAP[iface] || GAP[iface].length !== SURFACE[iface].length) {
+                problems.push(iface + ':no-interface');
+            }
+            return;
+        }
+        var listed = ',' + own(Built.prototype).sort().join(',') + ',';
+        var held = GAP[iface] || [];
+        var absent = SURFACE[iface].filter(function (name) {
+            return listed.indexOf(',' + name + ',') < 0 && held.indexOf(name) < 0;
+        });
+        var closed = held.filter(function (name) {
+            return listed.indexOf(',' + name + ',') >= 0;
+        });
+        // A name that no longer needs the record is taken out of it here, so the list shrinks as the
+        // engine grows and never hides a new gap. (In the reference every recorded gap reads as
+        // closed — the list describes this engine, not that one.)
+        if (closed.length) reported.push(iface + ' closed: ' + closed.join(','));
+        if (absent.length) problems.push(iface + ' missing ' + absent.join(','));
+    });
+    ck('A1 every interface names the members the reference lists', problems.length === 0,
+        problems.join(' | '));
+    ck('A1b the gap record only names what is really missing', reported.length === 0,
+        reported.join(' | '));
+
+    // A read of one of those members away from the object that carries it is refused, and the level
+    // itself never answers (Web IDL §4.4.2, measured: 'Node.prototype.childNodes' is that throw).
+    ck('A2 a read taken off the level is refused', (function () {
+        var samples = [[Node.prototype, 'childNodes'], [Node.prototype, 'parentElement'],
+            [Element.prototype, 'classList'], [Element.prototype, 'attributes'],
+            [CharacterData.prototype, 'data'], [HTMLScriptElement.prototype, 'async'],
+            [HTMLMediaElement.prototype, 'autoplay'], [Document.prototype, 'designMode'],
+            [Document.prototype, 'bgColor'], [ShadowRoot.prototype, 'fullscreenElement']];
+        for (var i = 0; i < samples.length; i++) {
+            var level = samples[i][0], name = samples[i][1];
+            if (g(function () { return level[name]; }) !== 'THREW:TypeError') return false;
+        }
+        return true;
+    })(), g(function () { return Node.prototype.childNodes; }));
+    ck('A3 the member sits on the level the interface owns',
+        Object.prototype.hasOwnProperty.call(Node.prototype, 'childNodes')
+        && Object.prototype.hasOwnProperty.call(Node.prototype, 'hasChildNodes')
+        && Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'onpointerrawupdate')
+        && Object.prototype.hasOwnProperty.call(HTMLMediaElement.prototype, 'HAVE_NOTHING'),
+        [Object.prototype.hasOwnProperty.call(Node.prototype, 'childNodes'),
+            Object.prototype.hasOwnProperty.call(Node.prototype, 'hasChildNodes'),
+            Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'onpointerrawupdate'),
+            Object.prototype.hasOwnProperty.call(HTMLMediaElement.prototype, 'HAVE_NOTHING')].join('/'));
+
+    // HTML §2.5.1: a reflected attribute reads the content attribute and writes it back. A boolean
+    // one is the presence of the attribute; an enumerated or string one is the empty string without it.
+    // HTML §2.5.1: a boolean reflection writes the empty attribute and takes it away again. The
+    // script's 'async' has one more rule on top of the reflection — a script the page built is async
+    // before the page says otherwise (measured: 'createElement of a script reads async true' with no
+    // attribute held, and writing false leaves the read false and the attribute gone).
+    ck('B1 a boolean reflection writes and removes the attribute', (function () {
+        var script = document.createElement('script');
+        script.async = true;
+        var on = script.getAttribute('async') === '' && script.hasAttribute('async');
+        script.async = false;
+        var off = !script.hasAttribute('async') && script.async === false;
+        var fresh = document.createElement('script');
+        return on && off && fresh.async === true && fresh.getAttribute('async') === null
+            && fresh.defer === false && fresh.noModule === false;
+    })(), (function () { var s = document.createElement('script'); var f = document.createElement('script');
+        f.async = false;
+        return [String(f.async), String(f.getAttribute('async')), String(s.defer), String(s.noModule)]
+            .join('/'); })());
+    // HTML §2.5.1: a string reflection answers the empty string when the markup holds nothing, while
+    // an enumerated one answers the default state — 'fetchpriority' is 'auto' and 'crossorigin' has
+    // no default at all, so its missing answer is null (measured).
+    ck('B2 a string reflection answers the empty string and an enum its default', (function () {
+        var link = document.createElement('link');
+        if (link.as !== '' || link.integrity !== '') return false;
+        if (link.fetchPriority !== 'auto' || link.crossOrigin !== null) return false;
+        link.as = 'script'; link.integrity = 'sha384-x';
+        if (link.getAttribute('as') !== 'script' || link.integrity !== 'sha384-x') return false;
+        link.crossOrigin = 'anonymous';
+        if (link.crossOrigin !== 'anonymous') return false;
+        link.crossOrigin = 'nonsense';
+        if (link.crossOrigin !== null || !link.hasAttribute('crossorigin')) return false;
+        return document.createElement('table').cellPadding === '';
+    })(), (function () { var l = document.createElement('link'); l.as = 'script';
+        return [l.as, l.getAttribute('as'), l.fetchPriority, String(l.crossOrigin),
+            document.createElement('table').cellPadding].join('/'); })());
+    ck('B3 the camel-case name reaches the hyphenated attribute',
+        (function () {
+            var meta = document.createElement('meta');
+            meta.httpEquiv = 'content-type';
+            return meta.getAttribute('http-equiv') === 'content-type'
+                && meta.httpEquiv === 'content-type';
+        })(),
+        (function () { var m = document.createElement('meta'); m.httpEquiv = 'content-type';
+            return [String(m.getAttribute('http-equiv')), m.httpEquiv].join('/'); })());
+    // HTML §2.5.1 with Web IDL §4.1.14: the read of a reflected number is a 'long', so what the page
+    // hands in is taken as a number first — a text that is not one becomes 0 and the attribute keeps
+    // 0, and a number with digits after the point is cut toward zero (measured in the reference:
+    // 'ol.start' starts at 1, 'ol.start = 7x' leaves '0', 'ol.start = 3.9' leaves '3', and an image
+    // given hspace 4.7 holds '4').
+    ck('B4 a number reflection keeps the long the IDL type makes of it',
+        (function () {
+            var list = document.createElement('ol');
+            if (list.start !== 1) return false;
+            list.start = 7;
+            if (list.start !== 7 || list.getAttribute('start') !== '7') return false;
+            list.start = '7x';
+            if (list.start !== 0 || list.getAttribute('start') !== '0') return false;
+            list.start = 3.9;
+            if (list.start !== 3 || list.getAttribute('start') !== '3') return false;
+            var img = document.createElement('img');
+            img.hspace = 4.7;
+            return img.hspace === 4 && img.getAttribute('hspace') === '4'
+                && document.createElement('img').vspace === 0;
+        })(),
+        (function () { var o = document.createElement('ol'); var before = o.start; o.start = 3.9;
+            return [before, o.start, o.getAttribute('start')].join('/'); })());
+    ck('B5 the form-owner reflections write the attributes the form reads',
+        (function () {
+            var button = document.createElement('button');
+            button.formMethod = 'post';
+            button.formEnctype = 'multipart/form-data';
+            button.formNoValidate = true;
+            return button.getAttribute('formmethod') === 'post'
+                && button.formMethod === 'post' && button.formNoValidate === true
+                && button.formEnctype === 'multipart/form-data';
+        })(),
+        (function () { var b = document.createElement('button'); b.formMethod = 'post';
+            return [b.formMethod, b.getAttribute('formmethod'), b.formNoValidate].join('/'); })());
+
+    // Web IDL §3.6.10: the numbers an interface names sit on the level and on the constructor.
+    ck('C1 the media and track states are the numbers the interface names',
+        HTMLMediaElement.HAVE_NOTHING === 0 && HTMLMediaElement.HAVE_METADATA === 1
+        && HTMLMediaElement.HAVE_CURRENT_DATA === 2 && HTMLMediaElement.HAVE_FUTURE_DATA === 3
+        && HTMLMediaElement.HAVE_ENOUGH_DATA === 4 && HTMLMediaElement.NETWORK_EMPTY === 0
+        && HTMLMediaElement.NETWORK_IDLE === 1 && HTMLMediaElement.NETWORK_LOADING === 2
+        && HTMLMediaElement.NETWORK_NO_SOURCE === 3
+        && HTMLTrackElement.NONE === 0 && HTMLTrackElement.LOADING === 1
+        && HTMLTrackElement.LOADED === 2 && HTMLTrackElement.ERROR === 3,
+        [HTMLMediaElement.HAVE_NOTHING, HTMLMediaElement.HAVE_ENOUGH_DATA,
+            HTMLMediaElement.NETWORK_NO_SOURCE, HTMLTrackElement.ERROR].join('/'));
+    ck('C2 the constants cannot be moved by a page', (function () {
+        var proto = HTMLMediaElement.prototype;
+        try { proto.HAVE_NOTHING = 9; } catch (e) { }
+        var made = Object.getOwnPropertyDescriptor(proto, 'HAVE_NOTHING');
+        return proto.HAVE_NOTHING === 0 && made.writable === false && made.configurable === false
+            && Object.prototype.propertyIsEnumerable.call(proto, 'HAVE_NOTHING')
+            && Object.prototype.propertyIsEnumerable.call(HTMLMediaElement, 'HAVE_NOTHING');
+    })(), (function () { var d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'HAVE_NOTHING');
+        return [HTMLMediaElement.prototype.HAVE_NOTHING, d.writable, d.enumerable, d.configurable]
+            .join('/'); })());
+
+    // HTML §6.1.5.2: the handler is one slot that reaches dispatch, and null until it is written.
+    ck('D1 a handler the page writes is the one listener the element carries', (function () {
+        var el = document.createElement('div');
+        document.body.appendChild(el);
+        if (el.onpointerdown !== null) return false;
+        var heard = [];
+        el.onpointerdown = function (event) { heard.push(event.type); };
+        el.dispatchEvent(new Event('pointerdown'));
+        el.onpointerdown = function () { heard.push('second'); };
+        el.dispatchEvent(new Event('pointerdown'));
+        el.onpointerdown = null;
+        el.dispatchEvent(new Event('pointerdown'));
+        return heard.join(',') === 'pointerdown,second';
+    })(), (function () { var el = document.createElement('div'); var heard = [];
+        el.onpointerdown = function () { heard.push(1); };
+        el.dispatchEvent(new Event('pointerdown'));
+        return [String(el.onpointerdown === null), heard.join(',')].join('/'); })());
+    // HTML §6.1.5: GlobalEventHandlers is mixed into HTMLElement, Document, SVGElement and
+    // MathMLElement, so the subtypes inherit the slots and own none of them (measured: the level of
+    // HTMLDetailsElement has no 'ontoggle' and the level of HTMLInputElement has no 'onselect', while
+    // HTMLElement owns both).
+    ck('D2 the handler is on the interface the reference puts it on',
+        Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'onbeforetoggle')
+        && Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'oncontentvisibilityautostatechange')
+        && Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'ontoggle')
+        && !Object.prototype.hasOwnProperty.call(HTMLDetailsElement.prototype, 'ontoggle')
+        && !Object.prototype.hasOwnProperty.call(HTMLInputElement.prototype, 'onselect')
+        && Object.prototype.hasOwnProperty.call(Document.prototype, 'onselectionchange')
+        && document.createElement('details').ontoggle === null
+        && document.createElement('input').onselect === null,
+        [Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'onbeforetoggle'),
+            Object.prototype.hasOwnProperty.call(HTMLDetailsElement.prototype, 'ontoggle'),
+            Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'ontoggle'),
+            Object.prototype.hasOwnProperty.call(Document.prototype, 'onselectionchange')].join('/'));
+
+    // DOM §4.8: the ChildNode doors and the element siblings of a text node.
+    // DOM §4.8: a text node steps to the next element over the text between, and the ChildNode doors
+    // take strings as well as nodes (measured: the walk gives 'b', the step back gives null because
+    // the only earlier sibling is text, and the four children after the two insertions are the two
+    // texts, the text that was there and the element).
+    ck('E1 a text node steps over its siblings to the next element', (function () {
+        var box = mkBox();
+        var bold = document.createElement('b');
+        box.appendChild(document.createTextNode('t'));
+        box.appendChild(bold);
+        var text = box.firstChild;
+        if (text.nextElementSibling !== bold) return false;
+        if (bold.previousElementSibling !== null) return false;
+        if (text.previousElementSibling !== null) return false;
+        text.before('head');
+        text.after('tail');
+        var order = Array.prototype.map.call(box.childNodes, function (n) {
+            return n.nodeType === 3 ? '#' + n.data : n.nodeName.toLowerCase(); }).join(',');
+        var kinds = Array.prototype.map.call(box.childNodes, function (n) { return n.nodeType; }).join(',');
+        text.replaceWith(document.createElement('i'));
+        return order === '#head,#t,#tail,b' && kinds === '3,3,3,1'
+            && box.childNodes.length === 4 && box.firstChild.nodeType === 3
+            && box.childNodes[1].nodeName.toLowerCase() === 'i';
+    })(), (function () { var box = mkBox(); var bold = document.createElement('b');
+        box.appendChild(document.createTextNode('t')); box.appendChild(bold);
+        var text = box.firstChild; text.before('head'); text.after('tail');
+        return [Array.prototype.map.call(box.childNodes, function (n) {
+            return n.nodeType === 3 ? '#' + n.data : n.nodeName.toLowerCase(); }).join(','),
+            String(bold.previousElementSibling)].join('/'); })());
+    // DOM §4.3.15: the doors belong to the interface, and a node with no parent has nowhere to put
+    // anything — the call answers and changes nothing (measured: 'detachedText.before("y")' is
+    // undefined and the text keeps its data, and the same hold for a doctype).
+    ck('E2 the ChildNode doors are the interface\'s own and do nothing without a parent',
+        typeof CharacterData.prototype.before === 'function'
+        && typeof CharacterData.prototype.after === 'function'
+        && typeof CharacterData.prototype.replaceWith === 'function'
+        && (function () {
+            var leaf = document.createTextNode('x');
+            leaf.before('y');
+            leaf.after('z');
+            return leaf.parentNode === null && leaf.data === 'x';
+        })()
+        && typeof DocumentType.prototype.before === 'function'
+        && typeof DocumentType.prototype.replaceWith === 'function'
+        // A method is a value the level carries, so reading it off the level answers the function;
+        // it is the read of an attribute that is refused (I3 covers that half).
+        && typeof CharacterData.prototype.before === 'function'
+        && refused(function () { return document.doctype.before('y'); }).indexOf('no-throw') === 0,
+        [typeof CharacterData.prototype.before, typeof DocumentType.prototype.before,
+            refused(function () { var leaf = document.createTextNode('x'); leaf.before('y');
+                return leaf.data; })].join('/'));
+
+    // HTML §6.3: the legacy document members, which are the body element and the modern state.
+    ck('F1 the legacy colours live on the body element', (function () {
+        document.bgColor = '#0a0a0a';
+        var written = document.body.getAttribute('bgcolor') === '#0a0a0a'
+            && document.bgColor === '#0a0a0a';
+        document.body.removeAttribute('bgcolor');
+        return written && document.bgColor === '';
+    })(), (function () { document.bgColor = '#0a0a0a';
+        return [String(document.body.getAttribute('bgcolor')), document.fgColor, document.linkColor]
+            .join('/'); })());
+    ck('F2 the design mode keeps only the two words it may hold', (function () {
+        var before = document.designMode;
+        document.designMode = 'on';
+        var on = document.designMode === 'on';
+        document.designMode = 'nonsense';
+        var kept = document.designMode === 'on';
+        document.designMode = before;
+        return on && kept && document.designMode === before;
+    })(), (function () { var b = document.designMode; document.designMode = 'on';
+        return [b, document.designMode].join('/'); })());
+    // The webkit spellings answer the modern member, and two of them are not aliases at all:
+    // 'rootElement' is the root of an XML document and null in an HTML one, and the fullscreen
+    // enabled flag is the permission rather than the state (measured: rootElement is null while
+    // documentElement is the html element, and both enabled flags are true).
+    ck('F3 the webkit spellings answer the modern member',
+        document.webkitVisibilityState === document.visibilityState
+        && document.webkitHidden === document.hidden
+        && document.rootElement === null
+        && document.documentElement !== null
+        && document.webkitFullscreenEnabled === true
+        && document.fullscreenEnabled === true
+        && document.webkitIsFullScreen === false
+        && document.fullscreen === false
+        && document.webkitCurrentFullScreenElement === document.fullscreenElement,
+        [document.webkitVisibilityState, String(document.rootElement),
+            String(document.fullscreen), String(document.fullscreenEnabled)].join('/'));
+    // DOM §4.4.4: the namespace narrows the plain lookup, '*' stands for anything, and the local name
+    // is compared as it is spelled — the case fold belongs to the element-name lookup alone
+    // (measured: 'SPAN' finds nothing where 'span' finds the element). The SVG half of the query is
+    // the parser's foreign content, which is a filed gap: an <svg> read out of markup still arrives in
+    // the HTML namespace, so the engine cannot answer a namespace that its own tree never carries.
+    ck('F4 the namespaced lookup narrows by namespace and local name', (function () {
+        var box = mkBox('<span id="one"></span>');
+        var made = box.getElementsByTagNameNS('http://www.w3.org/1999/xhtml', 'span');
+        if (made.length !== 1 || made[0].id !== 'one') return false;
+        if (box.getElementsByTagNameNS('http://www.w3.org/1999/xhtml', 'SPAN').length !== 0) return false;
+        if (box.getElementsByTagNameNS('*', 'span').length !== 1) return false;
+        if (box.getElementsByTagNameNS(null, 'span').length !== 0) return false;
+        if (Object.prototype.toString.call(made) !== '[object HTMLCollection]') return false;
+        if (made.item(0) !== made[0] || made.item(5) !== null) return false;
+        var built = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        var holder = mkBox();
+        holder.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'));
+        holder.firstChild.appendChild(built);
+        return holder.getElementsByTagNameNS('http://www.w3.org/2000/svg', 'circle').length === 1
+            && holder.getElementsByTagNameNS('http://www.w3.org/1999/xhtml', 'circle').length === 0;
+    })(), (function () { var box = mkBox('<span id="one"></span>');
+        return [box.getElementsByTagNameNS('http://www.w3.org/1999/xhtml', 'span').length,
+            box.getElementsByTagNameNS('http://www.w3.org/1999/xhtml', 'SPAN').length,
+            box.getElementsByTagNameNS(null, 'span').length].join('/'); })());
+    ck('F5 the document keeps the calls that no longer do anything',
+        typeof document.clear === 'function' && document.clear() === undefined
+        && typeof document.webkitExitFullscreen === 'function'
+        && typeof document.webkitCancelFullScreen === 'function',
+        [typeof document.clear, typeof document.webkitExitFullscreen].join('/'));
+    ck('G1 the shadow tree answers the ids the document answers',
+        (function () {
+            var host = document.createElement('div');
+            var root = host.attachShadow({ mode: 'open' });
+            return root.fullscreenElement === null && root.pointerLockElement === null
+                && root.pictureInPictureElement === null
+                && Array.isArray(root.getAnimations())
+                && root.customElementRegistry === window.customElements;
+        })(),
+        (function () { var host = document.createElement('div');
+            var root = host.attachShadow({ mode: 'open' });
+            return [String(root.fullscreenElement), String(root.getAnimations().length),
+                String(root.customElementRegistry === window.customElements)].join('/'); })());
+    ck('G2 the pointer-capture questions answer honestly',
+        (function () {
+            var el = document.createElement('div');
+            el.releasePointerCapture(1);
+            return el.hasPointerCapture(1) === false;
+        })(), g(function () { return document.createElement('div').hasPointerCapture(1); }));
+    // DOM §4.2.1, §4.4.1, §4.4.13: the operations Node owns are answered by every node, and a
+    // member the level declares is refused when it is read off the level itself. Web IDL §3.6.10
+    // and §4.4.2 then fix what a listing of the level shows.
+    ck('I1 a text node answers the operations Node declares', (function () {
+        var box = mkBox('<p id="p1">hi<b id="b1">y</b></p>');
+        var para = box.firstChild, text = para.firstChild, bold = text.nextSibling;
+        if (text.contains(text) !== true) return false;
+        if (text.contains(para) !== false) return false;
+        if (para.contains(text) !== true) return false;
+        if (text.isSameNode(text) !== true || text.isSameNode(bold) !== false) return false;
+        if (text.compareDocumentPosition(para) !== 10) return false;
+        if (para.compareDocumentPosition(text) !== 20) return false;
+        if (text.compareDocumentPosition(bold) !== 4) return false;
+        if (bold.compareDocumentPosition(text) !== 2) return false;
+        if (text.compareDocumentPosition(text) !== 0) return false;
+        var loose = document.createElement('i');
+        if (text.compareDocumentPosition(loose) !== 37) return false;
+        if (loose.compareDocumentPosition(text) !== 35) return false;
+        if (document.createElement('u').compareDocumentPosition(loose) !== 37) return false;
+        if (text.getRootNode() !== document) return false;
+        if (text.hasChildNodes() !== false) return false;
+        if (text.childNodes.length !== 0 || text.childNodes.item(0) !== null) return false;
+        if (text.firstChild !== null || text.lastChild !== null) return false;
+        if (text.lookupNamespaceURI(null) !== 'http://www.w3.org/1999/xhtml') return false;
+        if (text.lookupNamespaceURI('xml') !== 'http://www.w3.org/XML/1998/namespace') return false;
+        if (text.lookupNamespaceURI('svg') !== null) return false;
+        if (text.lookupPrefix('http://www.w3.org/1999/xhtml') !== null) return false;
+        return text.cloneNode().isSameNode(text) === false
+            && text.cloneNode().data === text.data;
+    })(), (function () { var box = mkBox('<p>hi<b>y</b></p>'); var t = box.firstChild.firstChild;
+        return [t.compareDocumentPosition(box.firstChild), t.compareDocumentPosition(t),
+            String(t.childNodes.length), Object.prototype.toString.call(t.childNodes),
+            String(t.childNodes.item(0))].join('/'); })());
+    ck('I2 a node that holds no children is refused the mutation by its type', (function () {
+        var text = document.createTextNode('t');
+        var element = mkBox();
+        var said = refused(function () { return text.appendChild(element); });
+        if (said.indexOf('HierarchyRequestError') !== 0) return false;
+        // (the sentence the harness prints is cut at sixty characters, so the head of it is what the
+        // row compares — the full text is in out/notes/round18_ref_followups.json)
+        if (said.indexOf('This node type') < 0) return false;
+        said = refused(function () { return text.removeChild(null); });
+        if (said.indexOf('TypeError') !== 0 || said.indexOf('parameter 1') < 0) return false;
+        said = refused(function () { return element.appendChild('text'); });
+        if (said.indexOf('TypeError') !== 0 || said.indexOf('parameter 1') < 0) return false;
+        if (element.contains(null) !== false) return false;
+        said = refused(function () { return element.contains(document.createRange()); });
+        // (the DOM refuses a Range where the interface asks for a Node, by parameter number)
+        return said.indexOf('TypeError') === 0 && said.indexOf('parameter 1') >= 0;
+    })(), (function () { var leaf = document.createTextNode('t');
+        return refused(function () { return leaf.appendChild(mkBox()); }); })());
+    ck('I3 a member read off the level is refused and the level still names it', (function () {
+        var samples = [[Node.prototype, 'childNodes'], [Node.prototype, 'contains'],
+            [Element.prototype, 'classList'], [Element.prototype, 'attributes'],
+            [CharacterData.prototype, 'data'], [HTMLScriptElement.prototype, 'async'],
+            [HTMLMediaElement.prototype, 'autoplay'], [Document.prototype, 'designMode'],
+            [Document.prototype, 'bgColor'], [ShadowRoot.prototype, 'fullscreenElement'],
+            [HTMLDialogElement.prototype, 'showModal'], [HTMLSlotElement.prototype, 'assignedNodes'],
+            [DocumentType.prototype, 'before'], [Element.prototype, 'getElementsByTagNameNS']];
+        for (var i = 0; i < samples.length; i++) {
+            if (g(function () { return samples[i][0][samples[i][1]]; }) !== 'THREW:TypeError') return false;
+            if (!Object.prototype.hasOwnProperty.call(samples[i][0], samples[i][1])) return false;
+        }
+        return true;
+    })(), g(function () { return Node.prototype.contains; })());
+    ck('I4 the level lists its members and names its constants', (function () {
+        var keys = Object.keys(Node.prototype);
+        var wanted = ['nodeType', 'nodeName', 'baseURI', 'isConnected', 'ownerDocument', 'parentNode',
+            'parentElement', 'childNodes', 'firstChild', 'lastChild', 'previousSibling', 'nextSibling',
+            'nodeValue', 'textContent', 'ELEMENT_NODE', 'ATTRIBUTE_NODE', 'TEXT_NODE',
+            'CDATA_SECTION_NODE', 'ENTITY_REFERENCE_NODE', 'ENTITY_NODE',
+            'PROCESSING_INSTRUCTION_NODE', 'COMMENT_NODE', 'DOCUMENT_NODE', 'DOCUMENT_TYPE_NODE',
+            'DOCUMENT_FRAGMENT_NODE', 'NOTATION_NODE', 'DOCUMENT_POSITION_DISCONNECTED',
+            'DOCUMENT_POSITION_PRECEDING', 'DOCUMENT_POSITION_FOLLOWING', 'DOCUMENT_POSITION_CONTAINS',
+            'DOCUMENT_POSITION_CONTAINED_BY', 'DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC', 'appendChild',
+            'cloneNode', 'compareDocumentPosition', 'contains', 'getRootNode', 'hasChildNodes',
+            'insertBefore', 'isDefaultNamespace', 'isEqualNode', 'isSameNode', 'lookupNamespaceURI',
+            'lookupPrefix', 'normalize', 'removeChild', 'replaceChild'];
+        for (var i = 0; i < wanted.length; i++) {
+            if (keys.indexOf(wanted[i]) < 0) return false;
+        }
+        if (keys.indexOf('constructor') >= 0) return false;
+        if (Node.ELEMENT_NODE !== 1 || Node.DOCUMENT_POSITION_CONTAINED_BY !== 16) return false;
+        var shape = Object.getOwnPropertyDescriptor(Node.prototype, 'ELEMENT_NODE');
+        if (shape.writable !== false || shape.enumerable !== true || shape.configurable !== false) {
+            return false;
+        }
+        var method = Object.getOwnPropertyDescriptor(Node.prototype, 'contains');
+        if (method.enumerable !== true || method.configurable !== true || method.writable !== true) {
+            return false;
+        }
+        return Object.getOwnPropertyNames(Node.prototype.contains).join(',') === 'length,name'
+            && Node.prototype.contains.length === 1;
+    })(), (function () {
+        return [Object.keys(Node.prototype).indexOf('constructor'),
+            Object.getOwnPropertyNames(Node.prototype.contains).join(','),
+            Node.prototype.contains.length].join('/'); })());
+    ck('I5 the dialog, the slot and the namespaced lookups answer', (function () {
+        var dialog = mkBox().appendChild(document.createElement('dialog'));
+        if (typeof dialog.show !== 'function' || typeof dialog.showModal !== 'function'
+            || typeof dialog.close !== 'function') return false;
+        dialog.show();
+        if (dialog.open !== true) return false;
+        dialog.close('done');
+        if (dialog.open !== false || dialog.returnValue !== 'done') return false;
+        var slot = document.createElement('slot');
+        if (typeof slot.assign !== 'function' || typeof slot.assignedNodes !== 'function'
+            || typeof slot.assignedElements !== 'function') return false;
+        if (slot.assignedNodes().length !== 0) return false;
+        var table = document.createElement('table');
+        var body = table.createTBody();
+        if (!body || body.tagName !== 'TBODY' || table.tBodies.length !== 1) return false;
+        var legend = document.createElement('legend');
+        if (legend.form !== null) return false;
+        var input = document.createElement('input');
+        if (input.webkitEntries.length !== 0) return false;
+        var img = document.createElement('img');
+        img.crossOrigin = 'anonymous';
+        if (img.getAttribute('crossorigin') !== 'anonymous' || img.crossOrigin !== 'anonymous') {
+            return false;
+        }
+        return document.webkitFullscreenElement === null
+            && document.webkitFullscreenEnabled === false
+            && document.ariaNotify('hello') === undefined;
+    })(), (function () { var d = mkBox().appendChild(document.createElement('dialog'));
+        d.show(); return [String(d.open), typeof d.close, typeof d.assignedNodes].join('/'); })());
+
+    ck('H1 the sweep left the members that already worked alone',
+        mkBox('<p id="kid">a</p>').firstChild.textContent === 'a'
+        && document.links.length === 0
+        && typeof document.createElementNS === 'function'
+        && new URL('http://a.test/p?q=1').searchParams.get('q') === '1'
+        && document.createElement('div').classList.contains('x') === false,
+        [document.getElementsByTagName('p').length, document.links.length,
+            typeof document.createElementNS].join('/'));
+})();
+</script>
+</body>
+</html>
