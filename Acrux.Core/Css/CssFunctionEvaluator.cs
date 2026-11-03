@@ -19,7 +19,14 @@ public static class CssFunctionEvaluator
     private static readonly Regex RepeatingLinearGradRegex = new(@"repeating-linear-gradient\s*\((.+)\)", RegexOptions.IgnoreCase);
     private static readonly Regex RepeatingRadialGradRegex = new(@"repeating-radial-gradient\s*\((.+)\)", RegexOptions.IgnoreCase);
     private static readonly Regex RepeatingConicGradRegex = new(@"repeating-conic-gradient\s*\((.+)\)", RegexOptions.IgnoreCase);
-    private static readonly Regex NumberRegex = new(@"^[+-]?\d+(\.\d+)?");
+    /// <summary>A number as the expression reader meets it: a sign, the digits with their one
+    /// decimal point or a leading point, and the exponent CSS Syntax 3 §4.3.12 lets it carry. The
+    /// exponent belongs to the number — without it 'calc(1e-08px)' read as '1' in a unit no engine
+    /// knows, minus '08px', and came out <c>-7px</c>, and 'calc(1e8px)' came out '9px' (measured,
+    /// both; the first is the spelling this engine's own printer writes, so a folded value could not
+    /// be priced by the engine that folded it).</summary>
+    private static readonly Regex NumberRegex =
+        new(@"^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?");
     private static readonly Regex UnitRegex = new(@"^[a-z%]+", RegexOptions.IgnoreCase);
 
     private static readonly Dictionary<string, string> _customProperties = new(StringComparer.OrdinalIgnoreCase);
@@ -895,6 +902,15 @@ public static class CssFunctionEvaluator
                     }
                 }
 
+                // If no number follows, the sign may still belong to one of the words a folded
+                // expression carries — '-infinity' is printed as two tokens — and only if that is
+                // not it either does the sign stand as a binary operator.
+                if (TryReadNonFinite(expr, ref i, out var signedFinite))
+                {
+                    tokens.Add(new NumToken { Value = sign == '-' ? -signedFinite : signedFinite });
+                    continue;
+                }
+
                 // If no number follows, treat as binary operator
                 tokens.Add(new OpToken { Value = sign });
                 continue;
@@ -922,10 +938,36 @@ public static class CssFunctionEvaluator
                 }
             }
 
+            // The two words a folded expression carries when its own arithmetic left the numbers,
+            // and the word for the value that is neither: 'calc(1px / 0)' folds to
+            // 'calc(infinity * 1px)', and the engine that printed it has to be able to price it
+            // back (the reference engine's layout takes the largest length it can hold).
+            if (TryReadNonFinite(expr, ref i, out var nonFinite))
+            {
+                tokens.Add(new NumToken { Value = nonFinite });
+                continue;
+            }
+
             i++;
         }
 
         return tokens;
+    }
+
+    /// <summary>Read the words <c>infinity</c> and <c>NaN</c> where a number may stand, leaving the
+    /// index past them. Anything else — including an identifier that merely starts the same way —
+    /// is not this reader's.</summary>
+    private static bool TryReadNonFinite(string expr, ref int i, out float value)
+    {
+        value = 0;
+        int rest = expr.Length - i;
+        if (rest >= 8 && expr.AsSpan(i, 8).Equals("infinity", StringComparison.OrdinalIgnoreCase)
+            && (i + 8 == expr.Length || !char.IsLetter(expr[i + 8])))
+        { i += 8; value = float.PositiveInfinity; return true; }
+        if (rest >= 3 && expr.AsSpan(i, 3).Equals("nan", StringComparison.OrdinalIgnoreCase)
+            && (i + 3 == expr.Length || !char.IsLetter(expr[i + 3])))
+        { i += 3; value = float.NaN; return true; }
+        return false;
     }
 
     /// <summary>

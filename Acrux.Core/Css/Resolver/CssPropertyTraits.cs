@@ -165,9 +165,12 @@ public static class CssPropertyTraits
         if (name.StartsWith("-webkit-", StringComparison.Ordinal))
             // Either an alias of an unprefixed property this table knows, or one of the legacy
             // spellings that are properties of their own — the set behind the legacy value grammars
-            // and the declared-only table, both measured name by name.
+            // and the declared-only table, both measured name by name. An entry the echo table
+            // carries under its OWN prefixed spelling is that third case: '-webkit-text-combine'
+            // and '-webkit-rtl-ordering' have no unprefixed twin for them to fold onto (measured).
             return WebkitAliases.Contains(name["-webkit-".Length..])
                 || LegacyDeclaredOnly.ContainsKey(name)
+                || Acrux.Core.Css.Resolver.EchoedProperties.Find(name) != null
                 || Css.CssValueGrammar.IsLegacyPrefixedName(name);
         // The IDL spelling of a prefixed property carries no dash, and only the member path turns
         // it back into the CSS name (CssStyleDeclaration.ToCssName). Written into setProperty, the
@@ -314,7 +317,6 @@ public static class CssPropertyTraits
     {
         "baseline-source",
         "overflow-block", "overflow-inline", "paint-order",
-        "x", "y",
     };
 
     /// <summary>Ids this engine keeps in its property table that are not properties the reference

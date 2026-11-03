@@ -37,6 +37,11 @@ public static class CssValueText
     {
         if (string.IsNullOrEmpty(value)) return value ?? string.Empty;
         if (value!.IndexOf("var(", StringComparison.OrdinalIgnoreCase) >= 0) return value;
+        // A function left open at the end of the declaration is closed there, before anything is
+        // folded, so the stored text is the value the reference engine reads and every surface that
+        // prints it later prints the same thing (measured: 'width: calc(1px + 2px' echoes
+        // 'calc(3px)').
+        value = CssValueGrammar.CloseUnfinishedFunctions(value);
 
         // The 'animation' shorthand prints all eight of its parts in their canonical order, written
         // or not, so the reorder happens before anything else is folded and the parts it puts in are
@@ -58,6 +63,13 @@ public static class CssValueText
         if (property != null
             && property.Equals("-webkit-mask-box-image-slice", StringComparison.OrdinalIgnoreCase))
             value = MaskBoxImageShorthand.NormalizeSlice(value);
+
+        // CSS Line Grid 1 §4.1: 'initial-letter' prints its ascent and then the side of the line it
+        // sits on, whichever order the page wrote them in — 'drop 2' reads '2 drop' (measured). The
+        // applier already puts the value into that order for the computed surface, and both read one
+        // printer rather than keeping the rule twice.
+        if (property != null && property.Equals("initial-letter", StringComparison.OrdinalIgnoreCase))
+            value = Acrux.Core.Css.Resolver.CssPropertyApplier.CanonicalInitialLetterText(value) ?? value;
 
         // Whether a bare 0 in this value is a length. Known by the property, not by the text:
         // 'columns: 0' is a width and prints '0px', 'scale: 0' is a factor and prints '0'.
@@ -854,7 +866,12 @@ public static class CssValueText
     /// </summary>
     private static string CanonicalizeTextDecoration(string text, string property)
     {
-        if (!property.Equals("text-decoration", StringComparison.OrdinalIgnoreCase)) return text;
+        // The longhand's list is the shorthand's line run with nothing else in it, and it is printed
+        // in the same order: 'text-decoration-line: blink underline' reads 'underline blink' just as
+        // the shorthand does (measured, both).
+        if (!property.Equals("text-decoration", StringComparison.OrdinalIgnoreCase)
+            && !property.Equals("text-decoration-line", StringComparison.OrdinalIgnoreCase))
+            return text;
         var lines = new List<string>();
         string? style = null, color = null, thickness = null;
         foreach (var word in SplitTopLevelWords(text))

@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b308 math robustness: unclosed calls, NaN and infinity</title></head>
+<body>
+<div id="host"></div>
+<script>
+// What a math expression is allowed to leave unsaid, and what it is allowed to divide by.
+// The 'unclosed' group asks whether a function that runs to the end of the declaration is still a
+// declaration (CSS Syntax 3 §5.4.4 says the value simply ends there), and the 'nan' group asks what
+// the engine prints when its own arithmetic leaves the numbers: a division by zero, a logarithm of
+// nothing, a rounding against a step of zero.
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["width","calc(1px + 2px","unclosed"],["width","calc((1px + 2px)","unclosed"],["width","calc(1px +","unclosed"],["width","min(1px, 2px","unclosed"],["color","rgb(1, 2","unclosed"],["width","calc(1px) + 2px)","unclosed"],["width","calc(1px + 2px))","unclosed"],["width","calc((1px + 2px)","unclosed"],["width","calc()","unclosed"],["width","calc(","unclosed"],["width","calc(1px + (2px","unclosed"],["color","rgb(1, 2, 3","unclosed"],
+["width","calc(1px / 0)","nan"],["width","calc(-1px / 0)","nan"],["width","calc(0px / 0px)","nan"],["width","calc(1px / 0px)","nan"],["opacity","calc(0 / 0)","nan"],["opacity","calc(1 / 0)","nan"],["opacity","calc(-1 / 0)","nan"],["width","round(1.5px, 0px)","nan"],["width","round(nearest, 1.5px, 0px)","nan"],["width","mod(7px, 0px)","nan"],["width","rem(7px, 0px)","nan"],["width","sqrt(-1px)","nan"],["width","log(-1px)","nan"],["width","log(0px)","nan"],["width","asin(2)","nan"],["width","pow(-1px, 0.5)","nan"],["opacity","asin(2)","nan"],["opacity","acos(2)","nan"],["opacity","log(0)","nan"],["opacity","sqrt(-1)","nan"],
+["width","calc(1e308px * 10)","big"],["width","calc(1px * 1e30)","big"],["opacity","calc(1e-30)","big"],["width","calc(0.0000000001px + 0px)","big"],["line-height","calc(1 / 3)","big"],["width","calc(100% / 3)","big"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][2] + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

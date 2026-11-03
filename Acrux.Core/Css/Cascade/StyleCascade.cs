@@ -599,11 +599,15 @@ public class CascadeResolverState
     {
         "crisp-edges" => Dom.ImageRenderingType.CrispEdges,
         "pixelated" => Dom.ImageRenderingType.Pixelated,
+        "-webkit-optimize-contrast" => Dom.ImageRenderingType.WebkitOptimizeContrast,
         _ => Dom.ImageRenderingType.Auto
     };
 
     private static Dom.ForcedColorAdjustType ParseForcedColorAdjust(string value) =>
-        value.Equals("none", StringComparison.OrdinalIgnoreCase) ? Dom.ForcedColorAdjustType.None : Dom.ForcedColorAdjustType.Auto;
+        value.Equals("none", StringComparison.OrdinalIgnoreCase) ? Dom.ForcedColorAdjustType.None
+        : value.Equals("preserve-parent-color", StringComparison.OrdinalIgnoreCase)
+            ? Dom.ForcedColorAdjustType.PreserveParentColor
+            : Dom.ForcedColorAdjustType.Auto;
 
     private static Dom.HyphensType ParseHyphens(string value) => value.ToLowerInvariant() switch
     {

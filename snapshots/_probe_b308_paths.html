@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b308 path data and zero lengths</title></head>
+<body>
+<div id="host"></div>
+<script>
+// Two questions the sweeps left open. Is a path string VALIDATED, or only reformatted — and does
+// the same answer hold for 'offset-path' as for SVG 2's 'd'? And which family prints a zero length
+// as '0px' rather than as the bare '0' the page wrote: the geometry properties do (measured), but
+// 'stroke-width' and its kin share their reader with them and may not.
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["offset-path","path('a')","path"],["offset-path","path('M0')","path"],["offset-path","path('M 0 0')","path"],["offset-path","path('M 0')","path"],["offset-path","path('q 1 2 3 4')","path"],["offset-path","path('zz')","path"],["offset-path","path('M 0 0 L 1 1')","path"],["d","path('a')","path"],["d","path('M0')","path"],["d","path('M 0')","path"],["d","path('q 1 2 3 4')","path"],["d","path('M 0 0 C 1 1 2 2 3 3')","path"],["stroke-width","0","zero"],["stroke-dashoffset","0","zero"],["stroke-width","0px","zero"],["r","0","zero"],["rx","0","zero"],["cx","0","zero"],["cx","0.0","zero"],["cy","-0","zero"],["baseline-shift","0","zero"],["stroke-miterlimit","0","zero"],["fill-opacity","0","zero"],["width","0","zero"],["margin-left","0","zero"],["stroke-dasharray","0","zero"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][2] + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

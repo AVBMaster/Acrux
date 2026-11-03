@@ -277,7 +277,7 @@ public static class CssPropertyApplier
             case "appearance": case "-webkit-appearance":
                 style.Appearance = value.ToLowerInvariant();
                 break;
-            case "forced-color-adjust": style.ForcedColorAdjust = value.ToLowerInvariant() == "none" ? ForcedColorAdjustType.None : ForcedColorAdjustType.Auto; break;
+            case "forced-color-adjust": style.ForcedColorAdjust = ParseForcedColorAdjust(value); break;
             case "background": ParseBackgroundShorthand(value, style); break;
             case "background-color":
                 style.BackgroundColor = ColorParser.Parse(value, style);
@@ -1221,7 +1221,7 @@ public static class CssPropertyApplier
             // and no platform inflates a font size, so the value is kept for the surfaces a page
             // reads it back through (measured: both compute what was written).
             case "initial-letter":
-                style.InitialLetter = CanonicalNumberPair(value, "normal"); break;
+                style.InitialLetter = CanonicalInitialLetterText(value) ?? "normal"; break;
             case "text-size-adjust":
             case "-webkit-text-size-adjust":
                 style.TextSizeAdjust = value.Trim().ToLowerInvariant(); break;
@@ -4799,10 +4799,24 @@ public static class CssPropertyApplier
         _ => ContentVisibilityType.Visible
     };
 
+    /// <summary>CSS Color Adjust 1 §5.3 plus the word this reference engine shipped beside it:
+    /// 'preserve-parent-color' asks for the colour of the box above, and it is a value of its own,
+    /// not a variant of 'auto' (measured: it echoes itself and computes itself).</summary>
+    public static ForcedColorAdjustType ParseForcedColorAdjust(string value) =>
+        value.Trim().ToLowerInvariant() switch
+        {
+            "none" => ForcedColorAdjustType.None,
+            "preserve-parent-color" => ForcedColorAdjustType.PreserveParentColor,
+            _ => ForcedColorAdjustType.Auto
+        };
+
     public static ImageRenderingType ParseImageRendering(string value) => value.ToLowerInvariant() switch
     {
         "crisp-edges" => ImageRenderingType.CrispEdges,
         "pixelated" => ImageRenderingType.Pixelated,
+        // The prefixed spelling this reference engine still takes. It is its own word in the CSSOM
+        // and paints the way 'crisp-edges' does (measured: both echo themselves and inherit).
+        "-webkit-optimize-contrast" => ImageRenderingType.WebkitOptimizeContrast,
         _ => ImageRenderingType.Auto
     };
 
@@ -4823,6 +4837,9 @@ public static class CssPropertyApplier
         "saturation" => MixBlendModeType.Saturation,
         "color" => MixBlendModeType.Color,
         "luminosity" => MixBlendModeType.Luminosity,
+        // Compositing's word, which 'mix-blend-mode' takes and 'background-blend-mode' does not
+        // (measured: the same spelling stands in one property and falls in the other).
+        "plus-lighter" => MixBlendModeType.PlusLighter,
         _ => MixBlendModeType.Normal
     };
 
@@ -5189,6 +5206,33 @@ public static class CssPropertyApplier
                     ?? LegacyLengthText(word, style, viewportWidth, viewportHeight);
         }
         return (width ?? "0px") + " " + (colour ?? CssColorText.FromColor(style.Color));
+    }
+
+    /// <summary>CSS Inline 3 §4.1's ascent with its side of the line. The reference engine prints
+    /// the number first whichever order the page wrote, and folds its keyword to lower case
+    /// (measured: 'drop 2', '2 drop' and 'DROP 2' each read '2 drop'), while a value with no keyword
+    /// keeps the number pair's own spelling. Null for a text that is no value of the property at
+    /// all: the applier then stores the initial, and the declaration printer leaves the text alone
+    /// for the grammar to refuse.</summary>
+    public static string? CanonicalInitialLetterText(string value)
+    {
+        var parts = ShorthandExpander.SplitShorthand(value);
+        if (parts.Count == 1 && parts[0].Equals("normal", StringComparison.OrdinalIgnoreCase))
+            return "normal";
+        var word = parts.FirstOrDefault(p => p.Equals("drop", StringComparison.OrdinalIgnoreCase)
+                                          || p.Equals("raise", StringComparison.OrdinalIgnoreCase));
+        if (word == null)
+        {
+            var pair = CanonicalNumberPair(value, "\0");
+            return pair == "\0" ? null : pair;
+        }
+        var numbers = parts.Where(p => !p.Equals(word, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (numbers.Count != 1
+            || !double.TryParse(numbers[0], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var ascent)
+            || ascent <= 0) return null;
+        return Acrux.Core.Dom.Animations.CssValueTokenizer.Num(ascent) + " "
+             + word.ToLowerInvariant();
     }
 
     /// <summary>One number, or a pair of them, kept in the spelling the reference engine prints:

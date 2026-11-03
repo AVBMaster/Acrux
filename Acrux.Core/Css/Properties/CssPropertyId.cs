@@ -525,6 +525,29 @@ public enum CssPropertyId
     ShapeOutside,
     ShapeMargin,
     ShapeImageThreshold,
+    // SVG 2 §5.10-§5.12: the geometry a shape's box is drawn from, which CSS reads as a property
+    // like any other. A bare number IS a length here (the user unit the attribute took), so these
+    // sit outside the rule a CSS length must carry its unit (#307), and none of them inherits: a
+    // child of a 'cx: 5' parent computes its own initial (measured, every one of the eight).
+    // 'x' and 'y' were declared only for a '@supports' test until now, so their computed surface
+    // had no answer at all.
+    Cx,
+    Cy,
+    R,
+    Rx,
+    Ry,
+    X,
+    Y,
+    // SVG 2 §10.3.3: the path a shape follows, as 'none' or a quoted path string. This engine draws
+    // no CSS-specified path yet, but the reference engine reads, echoes and computes the value, so
+    // it needs the id the cascade dispatches on.
+    D,
+    // Two '-webkit-' names the reference engine declares with a value set of their own, and answers
+    // a computed value for even when the page wrote nothing: 'logical' is the only spelling
+    // '-webkit-rtl-ordering' takes ('numeric' is refused — measured, sup=0 with the initial still
+    // printed), and '-webkit-text-combine' is 'none' or 'horizontal'. Both inherit.
+    WebkitRtlOrdering,
+    WebkitTextCombine,
     // The names below are declared by the reference engine and read, validated, stored and echoed
     // here, but no layout step consumes them yet (the timeline pair has no scroll or view timeline
     // to name, 'interactivity' has no inert-region behaviour, 'caret-animation' has no caret). They

@@ -371,6 +371,43 @@ public static class EchoedProperties
             new() { Name = "marker-end", Initial = "none", Inherited = true,
                 Normalize = NormalizeMarker, ComputedText = MarkerComputed },
 
+            // ===== SVG 2 §5.10-§5.12: the geometry a shape's box is drawn from, which CSS holds as
+            // a property beside the paint. A bare number IS a length here — the user unit the
+            // presentation attribute took — so these sit outside the rule that a CSS length must say
+            // what it measures, and the specified value keeps the unitless spelling while the
+            // computed one adds the pixel it means (measured: 'cx: 5' echoes '5' and computes '5px',
+            // 'cx: 1in' computes '96px' and 'cx: 0%' keeps the percentage). A radius can be nothing
+            // but not less than nothing ('r: -1' falls, 'cx: -5' stands), and the two radii are also
+            // the two that take 'auto', whose computed value is the word. None of the seven inherits:
+            // a child of a 'cx: 5' box computes its own '0px' (measured, every one of them).
+            new() { Name = "cx", Initial = "0px", Normalize = NormalizeGeometryLength,
+                ComputedText = SvgLengthComputed, KeepsMath = true },
+            new() { Name = "cy", Initial = "0px", Normalize = NormalizeGeometryLength,
+                ComputedText = SvgLengthComputed, KeepsMath = true },
+            new() { Name = "x", Initial = "0px", Normalize = NormalizeGeometryLength,
+                ComputedText = SvgLengthComputed, KeepsMath = true },
+            new() { Name = "y", Initial = "0px", Normalize = NormalizeGeometryLength,
+                ComputedText = SvgLengthComputed, KeepsMath = true },
+            new() { Name = "r", Initial = "0px", Normalize = text => NormalizeGeometryCore(text, false),
+                ComputedText = SvgLengthComputed, KeepsMath = true },
+            new() { Name = "rx", Initial = "auto", Normalize = NormalizeGeometryRadius,
+                ComputedText = SvgLengthComputed, KeepsMath = true },
+            new() { Name = "ry", Initial = "auto", Normalize = NormalizeGeometryRadius,
+                ComputedText = SvgLengthComputed, KeepsMath = true },
+            // SVG 2 §10.3.3: the path a shape follows. Same reprint as 'offset-path' — a command
+            // letter, then its numbers, each separated — with the empty string read as 'none' rather
+            // than refused, and an unquoted path, a url() or a second argument making no declaration
+            // (all measured).
+            new() { Name = "d", Initial = "none", Normalize = NormalizePathData },
+            // The two '-webkit-' names of the reference engine that carry a value set of their own
+            // and inherit. 'numeric' is not a value of '-webkit-rtl-ordering' any more — the grammar
+            // refuses it while the computed surface still answers the initial 'logical' (measured) —
+            // and '-webkit-text-combine' is one of two words, never both.
+            new() { Name = "-webkit-rtl-ordering", Initial = "logical", Inherited = true,
+                Normalize = Single("logical") },
+            new() { Name = "-webkit-text-combine", Initial = "none", Inherited = true,
+                Normalize = Single("none", "horizontal") },
+
             // ===== Scroll-driven Animations 1, View Transitions 1 and Anchor Position 1. A name is
             // a dashed ident here, so a bare 't' is refused while '--t' is kept; 'view-transition-name'
             // reserves 'auto' (measured: it is refused).
@@ -1692,18 +1729,44 @@ public static class EchoedProperties
     }
 
     /// <summary>Re-print SVG path data: each command letter on its own, its numbers after it.
-    /// A letter the grammar does not know, or a number it cannot read, is no path at all.</summary>
+    /// A letter the grammar does not know, or a number it cannot read, is no path at all.
+    ///
+    /// The data is also VALIDATED, not only reformatted, because the reference engine reads it as
+    /// a path: the first command must be a moveto, every other command must be given a whole
+    /// argument list of its own arity, and 'Z' takes none (measured on both properties that hold a
+    /// path — 'path("M 0 0")' and 'path("M 0 0 L 1 1")' stand while 'path("a")', 'path("M 0")',
+    /// 'path("q 1 2 3 4")' and 'path("zz")' are each refused, the last two because a path may not
+    /// begin with anything but a moveto and a moveto is two numbers). The same answer for
+    /// 'offset-path' and for SVG 2's 'd' is why this lives in the one reprint both read.</summary>
     internal static string? CanonicalPathData(string data)
     {
         var parts = new List<string>();
         int i = 0;
+        bool moved = false;
         while (i < data.Length)
         {
             char c = data[i];
             if (char.IsWhiteSpace(c)) { i++; continue; }
             if ("MmLlHhVvCcSsQqTtAaZz".IndexOf(c) < 0) return null;
+            var command = char.ToUpperInvariant(c);
+            // Every command but 'Z' is repeated in blocks of its own argument count: 'L 1 2 3 4' is
+            // two lineto pairs, and three numbers are no pair of them.
+            int arity = command switch
+            {
+                'H' or 'V' => 1,
+                'C' => 6,
+                'A' => 7,
+                'S' or 'Q' => 4,
+                'Z' => 0,
+                _ => 2,
+            };
+            // A path that does not begin with a moveto names no point to start from (measured:
+            // 'path("q 1 2 3 4")' and 'path("zz")' are each refused).
+            if (!moved && command != 'M') return null;
+            moved = true;
             parts.Add(c.ToString());
             i++;
+            int numbers = 0;
             while (i < data.Length)
             {
                 int start = i;
@@ -1716,10 +1779,13 @@ public static class EchoedProperties
                     if (!double.TryParse(data[start..i], NumberStyles.Float, CultureInfo.InvariantCulture,
                             out var value)) return null;
                     parts.Add(Number(value));
+                    numbers++;
                 }
                 else if (char.IsWhiteSpace(data[i])) { i++; }
                 else break;
             }
+            if (arity == 0) { if (numbers != 0) return null; }
+            else if (numbers == 0 || numbers % arity != 0) return null;
         }
         return parts.Count == 0 ? null : string.Join(" ", parts);
     }
@@ -2248,6 +2314,47 @@ public static class EchoedProperties
         var trimmed = text.Trim();
         if (IsOneOfWord(trimmed, "baseline", "sub", "super")) return trimmed.ToLowerInvariant();
         return NormalizeSvgLength(trimmed);
+    }
+
+    /// <summary>SVG 2 §5.10-§5.12's geometry length: the paint family's &lt;length&gt;,
+    /// &lt;percentage&gt; or bare number, with one spelling of its own — a zero is a pixel length
+    /// even when the page wrote a bare digit, while every other number keeps the unitless spelling
+    /// it was given (measured: 'cx: 0' and 'cx: 0.0' and 'cy: -0' each read '0px' while 'cx: 5'
+    /// reads '5' and 'cx: 0%' keeps the percentage). The rule is the geometry family's alone:
+    /// 'stroke-width: 0' beside it reads '0' (measured).</summary>
+    private static string? NormalizeGeometryLength(string text) => NormalizeGeometryCore(text, true);
+
+    /// <summary>A corner radius: 'auto', or a geometry length that is not less than nothing.</summary>
+    private static string? NormalizeGeometryRadius(string text)
+    {
+        var trimmed = text.Trim();
+        return trimmed.Equals("auto", StringComparison.OrdinalIgnoreCase) ? "auto"
+            : NormalizeGeometryCore(trimmed, false);
+    }
+
+    private static string? NormalizeGeometryCore(string text, bool negativeAllowed)
+    {
+        var canonical = negativeAllowed
+            ? NormalizeSvgLengthCore(text, true) : NormalizeNonNegativeSvgLength(text);
+        if (canonical == null) return null;
+        return canonical.Equals("0", StringComparison.Ordinal) ? "0px" : canonical;
+    }
+
+    /// <summary>SVG 2 §10.3.3's 'd': 'none' or a quoted path string. The data inside is printed the
+    /// way 'offset-path' prints it, and a path with nothing in it is no path at all, which the
+    /// reference engine says as 'none' rather than refusing the declaration (measured:
+    /// 'path('')' reads 'none' while 'path(M 0 0)' and 'path('a')' are each dropped).</summary>
+    private static string? NormalizePathData(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
+        if (!trimmed.StartsWith("path(", StringComparison.OrdinalIgnoreCase)
+            || !trimmed.EndsWith(")", StringComparison.Ordinal)) return null;
+        var inner = trimmed[5..^1].Trim();
+        if (!IsQuotedString(inner)) return null;
+        var data = Unquote(inner);
+        if (data.Trim().Length == 0) return "none";
+        return CanonicalPathData(data) is { } canonical ? "path(\"" + canonical + "\")" : null;
     }
 
     private static string BaselineShiftComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style) =>

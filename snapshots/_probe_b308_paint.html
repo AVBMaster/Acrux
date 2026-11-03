@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b308 paint record: decorations, blends and SVG geometry</title>
+<style>
+body { margin:0; background:#fff; font:16px/1.4 monospace; color:#000; }
+.box { position:absolute; left:0; width:800px; height:60px; }
+#t1 { top:0;   background:#eee; }
+#t2 { top:60px;background:#eee; }
+#t3 { top:120px;background:#eee; }
+#t4 { top:180px;background:#eee; }
+/* The line list now carries 'blink' beside the words that draw. Each of these must keep the
+   underline it was given: a list the painter cannot read would drop the line with the word. */
+#t1 span { text-decoration-line: underline blink; color:#008000; }
+#t2 span { text-decoration: blink; color:#008000; }
+#t3 span { text-decoration-line: underline overline line-through blink; color:#008000; }
+#t4 span { text-decoration-line: blink underline; color:#008000; }
+/* The blend word is a new enum member; the box it lands on must paint the way the engine's
+   unknown-word fallback does rather than erase the layer under it. */
+#blendA { position:absolute; left:0; top:260px; width:120px; height:60px; background:#ff0000; }
+#blendB { position:absolute; left:60px; top:280px; width:120px; height:60px;
+          background:#00ff00; mix-blend-mode:plus-lighter; }
+#blendC { position:absolute; left:240px; top:260px; width:120px; height:60px; background:#ff0000; }
+#blendD { position:absolute; left:300px; top:280px; width:120px; height:60px;
+          background:#00ff00; mix-blend-mode:multiply; }
+/* A shape placed by its attributes, with the same numbers written as CSS properties beside it.
+   The CSS geometry properties are read and echoed here but no box is drawn from them yet, so the
+   two circles are the regression check: nothing a page writes in CSS may move a shape that the
+   attributes already placed. */
+svg { position:absolute; left:480px; top:240px; }
+#cssonly circle { cx:60px; cy:110px; r:20px; }
+</style></head>
+<body>
+<div class="box" id="t1"><span>underline+blink</span></div>
+<div class="box" id="t2"><span>blink only</span></div>
+<div class="box" id="t3"><span>all four words</span></div>
+<div class="box" id="t4"><span>blink first</span></div>
+<div id="blendA"></div><div id="blendB"></div>
+<div id="blendC"></div><div id="blendD"></div>
+<svg width="300" height="200">
+  <circle cx="40" cy="40" r="20" fill="#0000ff"/>
+  <circle cx="120" cy="40" r="20" fill="#800080" style="cx:400px; r:4px"/>
+</svg>
+<svg id="cssonly" width="300" height="200" style="left:640px; top:240px">
+  <circle cx="40" cy="40" r="20" fill="#ff8000"/>
+</svg>
+</body></html>

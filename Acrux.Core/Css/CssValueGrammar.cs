@@ -165,6 +165,10 @@ public static class CssValueGrammar
     public static bool TextIsValidFor(string propertyName, string value)
     {
         if (propertyName.StartsWith("--")) return true;
+        // A function the declaration left open is closed where the value ends (CSS Syntax 3
+        // §5.4.4), so the grammar is asked of the value the reference engine reads rather than of
+        // the characters that survived (measured: 'width: calc(1px + 2px' is a declaration).
+        value = CloseUnfinishedFunctions(value);
         // A name the reference engine has no property for has no value either. This engine knows a
         // handful of names only its own code paths use ('initial-letter-align', 'max-lines',
         // 'imemode' …, see CssPropertyTraits.EngineOnlyNames), and echoing a declaration under one
@@ -1623,13 +1627,17 @@ public static class CssValueGrammar
         // CSS Images 3 §5.1: one keyword of the five.
         CssPropertyId.ObjectFit => static text => IsOneWordOnly(text,
             "fill", "contain", "cover", "none", "scale-down"),
-        // CSS Images 3 §5.3: three words. 'smooth', 'high-quality' and 'low-quality' are the
-        // Compositing draft's vocabulary and the reference engine drops all three (measured).
+        // CSS Images 3 §5.3: four words, three of which the Compositing draft spelled. 'smooth',
+        // 'high-quality' and 'low-quality' are dropped by the reference engine (measured), while its
+        // own prefixed spelling of 'crisp-edges' is taken and printed back as written (measured:
+        // '-WEBKIT-OPTIMIZE-CONTRAST' echoes '-webkit-optimize-contrast').
         CssPropertyId.ImageRendering => static text => IsOneWordOnly(text,
-            "auto", "crisp-edges", "pixelated"),
+            "auto", "crisp-edges", "pixelated", "-webkit-optimize-contrast"),
         // CSS Blend 1 §3: the sixteen, one at a time — 'plus-darker' belongs to the Compositing
-        // draft and is dropped here (measured).
-        CssPropertyId.MixBlendMode => static text => IsOneWordOnly(text, BlendModeWords),
+        // draft and is dropped here (measured). 'plus-lighter' is the draft's word that this engine
+        // DID ship, and only for 'mix-blend-mode': the background's list has no room for it
+        // (measured, the same word standing in one property and falling in the other).
+        CssPropertyId.MixBlendMode => static text => IsOneWordOnly(text, MixBlendModeWords),
         // The background's is a COMMA list, one blend per layer; the same words separated by a space
         // are no value (measured: 'multiply, screen' stands, 'multiply screen' falls).
         CssPropertyId.BackgroundBlendMode => static text =>
@@ -1651,7 +1659,8 @@ public static class CssValueGrammar
         // CSS Scrollbars 1 §3.2: one keyword.
         CssPropertyId.ScrollbarWidth => static text => IsOneWordOnly(text, "auto", "thin", "none"),
         // CSS Adjust 1 §4.2: one keyword.
-        CssPropertyId.ForcedColorAdjust => static text => IsOneWordOnly(text, "auto", "none"),
+        CssPropertyId.ForcedColorAdjust => static text => IsOneWordOnly(text,
+            "auto", "none", "preserve-parent-color"),
         // CSS Tables 1 §4.2: 'top' and 'bottom'. The side captions CSS 2.1 §11.2.2 spelled
         // 'left'/'right' — and the logical pair a later draft added — are dropped (measured).
         CssPropertyId.CaptionSide => static text => IsOneWordOnly(text, "top", "bottom"),
@@ -1788,6 +1797,25 @@ public static class CssValueGrammar
             if (parts.Count is < 1 or > 2) return false;
             if (parts.Count == 1
                 && parts[0].Equals("normal", StringComparison.OrdinalIgnoreCase)) return true;
+            // CSS Inline 3 §4.1's keyword names which side of the line the initial sits on, and the
+            // reference engine reads it on EITHER side of the number, printing the number first and
+            // its word folded to lower case (measured: 'drop 2.5' and '2 drop' and 'DROP 2' read
+            // '2.5 drop', '2 drop', '2 drop'; 'raise 0' and 'drop' alone are refused).
+            // The engine's second question — what a stored declaration is asked of the text its own
+            // printer wrote — is why a fraction is allowed on either side here. The reference engine
+            // refuses '0.5 drop' as WRITTEN yet prints '2.5 drop' for the value it took as
+            // 'drop 2.5'; a grammar that kept that asymmetry would drop the declaration its own echo
+            // produces (the rule b292 measured: a grammar must read the words its printer writes).
+            if (parts.Count == 2)
+            {
+                bool headIsWord = IsOneOf(parts[0], "drop", "raise");
+                bool tailIsWord = IsOneOf(parts[1], "drop", "raise");
+                if (headIsWord != tailIsWord)
+                {
+                    var number = headIsWord ? parts[1] : parts[0];
+                    return IsNumber(number) && TryPlainNumber(number, out var side) && side > 0;
+                }
+            }
             for (int i = 0; i < parts.Count; i++)
             {
                 if (!IsNumber(parts[i]) || !TryPlainNumber(parts[i], out var value) || value <= 0)
@@ -1948,9 +1976,11 @@ public static class CssValueGrammar
         CssPropertyId.TextDecorationStyle => static text =>
             IsOneWordOnly(text, "solid", "double", "dotted", "dashed", "wavy"),
         // CSS Text Decoration 4 §3.1: the line list, where 'none' says the whole list on its own,
-        // a word appears at most once, and the two error words and 'blink' — each of which already
-        // says a whole decoration — appear alone (measured: 'none underline' and
-        // 'underline underline' fall, 'underline overline' stands).
+        // a word appears at most once, and the two error words — each of which already says a whole
+        // decoration — appear alone (measured: 'none underline' and 'underline underline' fall).
+        // 'blink' is the fourth of the words that COMBINE, not one of the words that stand alone:
+        // 'blink underline' is a list, printed with the words in their own order as
+        // 'underline blink', while 'blink blink' and 'blink none' are each refused (measured, both).
         CssPropertyId.TextDecorationLine => static text =>
         {
             var words = SplitComponents(text);
@@ -1960,7 +1990,7 @@ public static class CssValueGrammar
             var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var word in words)
             {
-                if (!IsOneOf(word, "underline", "overline", "line-through")) return false;
+                if (!IsOneOf(word, "underline", "overline", "line-through", "blink")) return false;
                 if (!seen.Add(word.ToLowerInvariant())) return false;
             }
             return true;
@@ -2846,6 +2876,12 @@ public static class CssValueGrammar
         "luminosity",
     };
 
+    /// <summary>The blend words 'mix-blend-mode' takes: the sixteen of CSS Blend 1 §3 plus the
+    /// Compositing draft's 'plus-lighter', which this reference engine ships for the one property
+    /// and not for 'background-blend-mode' (measured, both).</summary>
+    private static readonly string[] MixBlendModeWords =
+        BlendModeWords.Append("plus-lighter").ToArray();
+
     /// <summary>CSS Anchor Positioning 1 §4.1: the inset-area vocabulary, split by the axis each
     /// word measures along. Two words name one area only when they take one slot each; the same
     /// axis twice is no area (measured: 'x-start y-end' and 'left top' stand).</summary>
@@ -3402,12 +3438,14 @@ public static class CssValueGrammar
             var args = SplitTopLevel(inner);
             return args.Count == 2 && IsExpression(args[0], isOperand) && IsExpression(args[1], isOperand);
         }
-        // 'min()' and 'max()' take a comma-separated list of two or more expressions, which is the
-        // one place a comma belongs inside a math function; the single-argument forms take one.
+        // 'min()' and 'max()' take a comma-separated list of expressions, which is the one place a
+        // comma belongs inside a math function — and CSS Values 4 §10.5 writes that list as one or
+        // more, so 'min(2px)' is the smaller of one value and the reference engine works it out as
+        // 'calc(2px)' (measured; 'hypot()' and 'abs()' already read the same way here).
         if (name is "min" or "max")
         {
             var args = SplitTopLevel(inner);
-            return args.Count >= 2 && args.All(a => IsExpression(a, isOperand));
+            return args.Count >= 1 && args.All(a => IsExpression(a, isOperand));
         }
         if (name is "abs" or "sign" or "sqrt" or "exp" or "log")
         {
@@ -3478,6 +3516,12 @@ public static class CssValueGrammar
         // what makes 'calc((10px + 2px))' and 'calc(2 * (1px + 2px))' values (measured, both).
         if (text[0] == '(' && MatchingClose(text, 0) == text.Length - 1)
             return IsExpression(text[1..^1], isOperand);
+        // A group that never closes is no group: the reader below would otherwise hand the same
+        // text back to this one and the two would call each other until the process died
+        // (measured: 'calc((1px + 2px)' is a value because the declaration ends there, which is the
+        // case <see cref="CloseUnfinishedFunctions"/> settles; anything still unbalanced here is
+        // simply not a value).
+        if (text[0] == '(' && MatchingClose(text, 0) < 0) return false;
         if (text.StartsWith("(", StringComparison.Ordinal) && text.EndsWith(")"))
             text = text[1..^1].Trim();
         // Split on the spaces that are outside every parenthesis: a nested 'calc(100px - 50px)' is
@@ -3509,6 +3553,30 @@ public static class CssValueGrammar
             else if (c == ')') { depth--; if (depth == 0) return i; }
         }
         return -1;
+    }
+
+    /// <summary>Close the functions a declaration value left open when the value ran out.
+    ///
+    /// CSS Syntax 3 §5.4.4 ends a declaration's value at the end of the input, and a function token
+    /// that never met its <c>)</c> simply ends there with it — so the reference engine reads
+    /// 'width: calc(1px + 2px' as the sum it would have read inside the parentheses and prints
+    /// 'calc(3px)' (measured; 'min(1px, 2px' and 'rgb(1, 2, 3' and 'calc(1px + (2px' each go the
+    /// same way). What the closing does NOT do is rescue a value that was never an expression:
+    /// 'calc(1px +' still has an operator with nothing after it, 'rgb(1, 2' still has two of a
+    /// colour's three channels, and a value with more closing parens than opening ones is left
+    /// exactly as it was, because appending to it would invent a different mistake (all measured).</summary>
+    public static string CloseUnfinishedFunctions(string text)
+    {
+        if (text.Length == 0 || text.IndexOf('(') < 0) return text;
+        int depth = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c is '"' or '\'') { i = SkipString(text, i); continue; }
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+        }
+        return depth <= 0 ? text : text + new string(')', depth);
     }
 
     private static List<string> SplitOutsideParentheses(string text)

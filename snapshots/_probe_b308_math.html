@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b308 math function sweep</title></head>
+<body>
+<div id="host"></div>
+<script>
+// The math library of CSS Values 4 §10-§12, asked of a length, a number and an angle seat: the
+// functions that take a type (min/max/clamp), the rounding pair, the trig set that answers a
+// NUMBER and consumes an ANGLE, the exponential set that consumes a number, and the arithmetic
+// rules a folded expression has to survive.
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["width","calc(1px + 1px)","plain"],["width","calc(2 * 3px)","plain"],["width","calc(100% / 3)","plain"],["width","calc(1px + 1%)","plain"],["width","min(1px, 2px)","minmax"],["width","min(2px)","minmax"],["width","min(1px, 2px, 3px)","minmax"],["width","clamp(1px, 2vw, 3px)","minmax"],["width","max(1px, 2%)","minmax"],["width","min(1px, 2em)","minmax"],["width","min(1px, red)","minmax"],["width","calc(min(1px, 2px) + 1px)","minmax"],["width","round(1.6px, 1px)","round"],["width","round(up, 1.5px, 2px)","round"],["width","round(down, 1.5px, 2px)","round"],["width","round(nearest, 1.5px, 2px)","round"],["width","round(to-zero, -1.5px, 2px)","round"],["width","round(1.5px)","round"],["width","round(1.5px, 0px)","round"],["width","round(nearest, 1.5, 2)","round"],["width","mod(7px, 3px)","modrem"],["width","rem(-7px, 3px)","modrem"],["width","mod(7, 3)","modrem"],["width","calc(7px % 3px)","modrem"],["opacity","sin(0.5turn)","trig"],["opacity","cos(0)","trig"],["opacity","tan(45deg)","trig"],["opacity","asin(0.5)","trig"],["opacity","acos(1)","trig"],["opacity","atan(1)","trig"],["opacity","atan2(1, 2)","trig"],["opacity","sin(1px)","trig"],["width","sin(0.5turn) * 1px","trig"],["rotate","sin(0.5turn)","trig"],["width","pow(2, 3px)","expo"],["width","pow(2, 3)","expo"],["width","sqrt(4px)","expo"],["width","sqrt(4)","expo"],["width","hypot(3px, 4px)","expo"],["width","hypot(3, 4)","expo"],["width","log(100, 10)","expo"],["width","exp(1)","expo"],["width","calc(exp(1) * 1px)","expo"],["width","abs(-3px)","expo"],["width","sign(-3px)","expo"],["width","abs(-3)","expo"],["width","calc(1px + calc(2px + 3px))","nest"],["width","calc(calc(1px) * 2)","nest"],["width","calc((1px + 2px) * 2)","nest"],["width","calc(1px * 2 + 3px)","nest"],["width","calc(1px / 0)","nest"],["width","calc(1px - -1px)","nest"],["width","calc( 1px + 2px )","nest"],["width","calc(1px + 2px","nest"],["width","calc()","nest"],["width","calc(var(--x))","nest"],["width","calc(1px + var(--x))","nest"],["width","min(calc(1px + 1px), 2px)","nest"],["width","calc(1e3px)","num"],["width","calc(1E3px)","num"],["width","calc(+1px)","num"],["width","calc(- 1px)","num"],["width","calc(1px*2)","num"],["width","calc(1px/2)","num"],["width","calc(1px*2px)","num"],["width","calc(2/1px)","num"],["width","calc(1px + 1px + 1px)","num"],["line-height","calc(1.5)","num"],["line-height","calc(2 * 1.5)","num"],["z-index","calc(1 + 1)","num"],["opacity","calc(0.5 + 0.5)","num"],["flex-grow","calc(1 + 1)","num"],["width","calc(1px + 1)","num"],["width","calc(100% - 50%)","num"],["width","calc(2 * 50%)","num"],["margin-left","calc(-1 * 2px)","num"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][2] + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

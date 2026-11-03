@@ -2348,9 +2348,9 @@ public enum FontSynthesisType
 }
 public enum ScrollBehaviorType { Auto, Smooth }
 public enum OverscrollBehaviorType { Auto, Contain, None }
-public enum ImageRenderingType { Auto, CrispEdges, Pixelated }
+public enum ImageRenderingType { Auto, CrispEdges, Pixelated, WebkitOptimizeContrast }
 public enum IsolationType { Auto, Isolate }
-public enum MixBlendModeType { Normal, Multiply, Screen, Overlay, Darken, Lighten, ColorDodge, ColorBurn, HardLight, SoftLight, Difference, Exclusion, Hue, Saturation, Color, Luminosity }
+public enum MixBlendModeType { Normal, Multiply, Screen, Overlay, Darken, Lighten, ColorDodge, ColorBurn, HardLight, SoftLight, Difference, Exclusion, Hue, Saturation, Color, Luminosity, PlusLighter }
 public enum LineBreakType { Auto, Loose, Normal, Strict, Anywhere }
 public enum TextJustifyType { Auto, InterWord, InterCharacter, None }
 public enum HyphensType { None, Manual, Auto }
@@ -2373,7 +2373,7 @@ public enum ResizeType { None, Both, Horizontal, Vertical, Block, Inline }
 /// draft of the property carried — which this engine still answers as 'fixed', the value the
 /// reference engine gives a control with nothing written on it (measured).</summary>
 public enum FieldSizingType { Fixed, Normal, Content }
-public enum ForcedColorAdjustType { Auto, None }
+public enum ForcedColorAdjustType { Auto, None, PreserveParentColor }
 public enum TextOverflowType { Clip, Ellipsis }
 public enum ColorSchemeType { Normal, Light, Dark, Only }
 public enum BackgroundClipType { BorderBox, PaddingBox, ContentBox, Text }

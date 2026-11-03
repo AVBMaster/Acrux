@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b308 svg sweep</title></head>
+<body>
+<div id="host"></div>
+<script>
+// svg
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["fill","#f00","svg"],["fill","rgb(1,2,3)","svg"],["fill","currentcolor","svg"],["fill","NONE","svg"],["fill","url(#a)","svg"],["fill","url(#a) red","svg"],["fill","transparent","svg"],["fill","none red","svg"],["fill","#ff0000ff","svg"],["fill","hsl(120 50% 50%)","svg"],["fill-opacity","0.5","svg"],["fill-opacity","50%","svg"],["fill-opacity","-1","svg"],["fill-opacity","2","svg"],["fill-opacity","0","svg"],["fill-opacity","1","svg"],["fill-rule","nonzero","svg"],["fill-rule","evenodd","svg"],["fill-rule","evenodd nonzero","svg"],["fill-rule","inherit","svg"],["fill-rule","winding","svg"],["stroke","#00ff00","svg"],["stroke","url(#g)","svg"],["stroke","none","svg"],["stroke","red blue","svg"],["stroke-width","2","svg"],["stroke-width","2px","svg"],["stroke-width","50%","svg"],["stroke-width","thin","svg"],["stroke-width","-1","svg"],["stroke-width","0","svg"],["stroke-linecap","butt","svg"],["stroke-linecap","round","svg"],["stroke-linecap","square","svg"],["stroke-linecap","triangle","svg"],["stroke-linecap","BUTT","svg"],["stroke-linejoin","miter","svg"],["stroke-linejoin","round","svg"],["stroke-linejoin","bevel","svg"],["stroke-linejoin","arcs","svg"],["stroke-linejoin","miter-clip","svg"],["stroke-linejoin","ortho","svg"],["stroke-miterlimit","4","svg"],["stroke-miterlimit","1","svg"],["stroke-miterlimit","0","svg"],["stroke-miterlimit","1000","svg"],["stroke-miterlimit","4px","svg"],["stroke-dasharray","none","svg"],["stroke-dasharray","5","svg"],["stroke-dasharray","5 3","svg"],["stroke-dasharray","5px,3px","svg"],["stroke-dasharray","5 3 2","svg"],["stroke-dasharray","100%","svg"],["stroke-dasharray","-5","svg"],["stroke-dasharray","5, 3, 2","svg"],["stroke-dasharray","none 5","svg"],["stroke-dashoffset","4","svg"],["stroke-dashoffset","4px","svg"],["stroke-dashoffset","50%","svg"],["stroke-dashoffset","-4","svg"],["stroke-dashoffset","0","svg"],["stroke-opacity","0.4","svg"],["stroke-opacity","40%","svg"],["stroke-opacity","1.5","svg"],["shape-rendering","auto","svg"],["shape-rendering","crispEdges","svg"],["shape-rendering","optimizeSpeed","svg"],["shape-rendering","geometricPrecision","svg"],["shape-rendering","smooth","svg"],["shape-rendering","crispedges","svg"],["text-rendering","auto","svg"],["text-rendering","optimizeLegibility","svg"],["text-rendering","geometricPrecision","svg"],["text-rendering","optimizeSpeed","svg"],["text-rendering","optimizeQuality","svg"],["image-rendering","auto","svg"],["image-rendering","crisp-edges","svg"],["image-rendering","pixelated","svg"],["image-rendering","smooth","svg"],["image-rendering","high-quality","svg"],["image-rendering","low-quality","svg"],["image-rendering","-webkit-optimize-contrast","svg"],["image-rendering","optimizespeed","svg"],["image-rendering","optimizequality","svg"],["image-rendering","crispEdges","svg"],["color-interpolation-filters","auto","svg"],["color-interpolation-filters","sRGB","svg"],["color-interpolation-filters","linearRGB","svg"],["color-interpolation-filters","srgb","svg"],["color-interpolation-filters","rgb","svg"],["paint-order","normal","svg"],["paint-order","fill","svg"],["paint-order","fill stroke","svg"],["paint-order","stroke markers fill","svg"],["paint-order","markers","svg"],["paint-order","normal fill","svg"],["paint-order","fill fill","svg"],["paint-order","markup","svg"],["clip-rule","evenodd","svg"],["clip-rule","nonzero","svg"],["clip-rule","inherit","svg"],["marker-start","url(#a)","svg"],["marker-start","none","svg"],["marker-start","red","svg"],["marker-mid","url(#a)","svg"],["marker-end","none","svg"],["marker-width","10","svg"],["marker-height","10px","svg"],["marker-unit","userSpaceOnUse","svg"],["flood-color","red","svg"],["flood-color","currentColor","svg"],["flood-opacity","0.5","svg"],["flood-opacity","50%","svg"],["stop-color","#fff","svg"],["stop-color","transparent","svg"],["stop-opacity","1","svg"],["stop-opacity","50%","svg"],["lighting-color","red","svg"],["color-interpolation","auto","svg"],["dominant-baseline","auto","svg"],["dominant-baseline","middle","svg"],["dominant-baseline","central","svg"],["dominant-baseline","hanging","svg"],["dominant-baseline","text-bottom","svg"],["dominant-baseline","ideographic","svg"],["dominant-baseline","alphabetic","svg"],["alignment-baseline","auto","svg"],["alignment-baseline","baseline","svg"],["alignment-baseline","before-edge","svg"],["alignment-baseline","central","svg"],["baseline-shift","2","svg"],["baseline-shift","super","svg"],["baseline-shift","50%","svg"],["baseline-shift","2px","svg"],["baseline-shift","sub","svg"],["cx","10","svg"],["cx","10px","svg"],["cx","50%","svg"],["cy","10px","svg"],["r","5","svg"],["r","auto","svg"],["x","1","svg"],["y","1px","svg"],["width","10px","svg"],["rx","5","svg"],["d","path('M 0 0')","svg"],["d","url(#p)","svg"],["d","none","svg"],["offset-distance","10px","svg"],["offset-rotate","auto","svg"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  if (cases[i][1] !== '~') el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][2] + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (cases[i][1] === '~' ? '-' : (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0))
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

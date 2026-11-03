@@ -489,6 +489,9 @@ public static class ComputedValueSerializer
             {
                 ImageRenderingType.CrispEdges => "crisp-edges",
                 ImageRenderingType.Pixelated => "pixelated",
+                // Its own spelling, dashes and prefix and all (measured: the computed value repeats
+                // what the page wrote, never the unprefixed word it stands for).
+                ImageRenderingType.WebkitOptimizeContrast => "-webkit-optimize-contrast",
                 _ => "auto",
             };
             case "pointer-events": return style.PointerEvents ?? "auto";
@@ -1226,7 +1229,11 @@ public static class ComputedValueSerializer
         // carries 'translate3d(1px, 2px, 0px)' or 'rotateZ(45deg)' is flat and prints as a
         // matrix(), while 'scaleZ(2)' is not (all measured).
         var m = Acrux.Core.Css.TransformParser.ToMatrix4(operations);
-        string N(float value) => CssValueTokenizer.Num(value);
+        // A matrix entry the engine multiplied its way to is printed as nothing when the product is
+        // under a ten-millionth of a unit: 'rotate(0.5turn)' is 'matrix(-1, 0, 0, -1, 0, 0)' and not
+        // the -8.74228e-08 its own cosine of π produced (measured). The rule belongs to this print
+        // alone — a number a page wrote is never hidden (measured: 'opacity: 1e-30' reads '1e-30').
+        string N(float value) => System.Math.Abs(value) < 1e-7 ? "0" : CssValueTokenizer.Num(value);
         // The two entries that carry a pixel distance answer with the largest pixel distance a
         // computed length can be (measured: 'translateX(2147483647px)' is
         // 'matrix(1, 0, 0, 1, 3.35544e+07, 0)'); the ratios have no such ceiling.

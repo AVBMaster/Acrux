@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b308 tiny numbers: where does a small value become zero</title></head>
+<body>
+<div id="host"></div>
+<script>
+// The engine has one rule that hides a number under a ten-millionth of a unit, and it was measured
+// on a MATRIX the engine computed ('rotate: .5turn' prints 'matrix(-1, 0, 0, -1, 0, 0)', not the
+// -8.74e-08 its own arithmetic produced). This page asks where else that rule reaches: a number the
+// page wrote, the same number inside a calc(), and the same number on the computed surface.
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["opacity","1e-30"],["opacity","1e-8"],["opacity","1e-7"],["opacity","0.0000001"],["opacity","calc(1e-30)"],["opacity","calc(1e-8)"],["opacity","calc(1e-6)"],["width","1e-8px"],["width","calc(1e-8px)"],["width","calc(1e-10px)"],["width","calc(0.0000001px)"],["width","calc(1px * 1e-8)"],["width","calc(1px / 100000000)"],["margin-left","calc(1e-8px)"],["line-height","calc(1e-8)"],["rotate","0.5turn"],["transform","rotate(0.5turn)"],["translate","1e-8px"],["opacity","calc(0.000000001 + 0.000000001)"],["width","calc(1px / 0)"],["width","calc(1px / 0px)"],["opacity","calc(1 / 0)"],["opacity","log(0)"],["opacity","sqrt(-1)"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|tiny|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

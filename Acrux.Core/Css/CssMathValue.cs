@@ -167,10 +167,16 @@ public static class CssMathValue
             "hypot" => System.Math.Sqrt(values.Sum(value => value.Value * value.Value)),
             "sqrt" => values[0].Value < 0 ? double.NaN : System.Math.Sqrt(values[0].Value),
             "exp" => System.Math.Exp(values[0].Value),
-            "log" => values[0].Value <= 0 ? double.NaN : System.Math.Log(values[0].Value),
+            // The logarithm of nothing is the infinity the reader means, not a NaN: 'log(0)' reads
+            // 'calc(-infinity)' while a logarithm of a negative is no value at all (measured).
+            "log" => values[0].Value < 0 ? double.NaN
+                : values[0].Value == 0 ? double.NegativeInfinity
+                : System.Math.Log(values[0].Value),
             "pow" => System.Math.Pow(values[0].Value, values[1].Value),
-            "sin" => System.Math.Sin(Radians(values[0])),
-            "cos" => System.Math.Cos(Radians(values[0])),
+            "sin" => ExactTrig(values[0], cosine: false) is { } sinExact
+                ? sinExact : System.Math.Sin(Radians(values[0])),
+            "cos" => ExactTrig(values[0], cosine: true) is { } cosExact
+                ? cosExact : System.Math.Cos(Radians(values[0])),
             "tan" => System.Math.Tan(Radians(values[0])),
             "asin" => System.Math.Abs(values[0].Value) > 1 ? double.NaN
                 : System.Math.Asin(values[0].Value) * DegreesPerRadian,
@@ -183,11 +189,19 @@ public static class CssMathValue
         return Finitish(result, unit, name, inner);
     }
 
-    /// <summary>The reduced function, or the author's text when the arithmetic came out of the
-    /// numbers — a division by zero, a logarithm of nothing — that no value can carry.</summary>
+    /// <summary>The reduced function. A result that left the numbers — a rounding against a step of
+    /// zero, a remainder of nothing — is printed the way the reference engine prints it, in the
+    /// number-times-a-unit form: 'round(1.5px, 0px)' reads 'calc(NaN * 1px)' and 'log(0)' on a count
+    /// reads 'calc(-infinity)' (measured, both).</summary>
     private static string Finitish(double result, string unit, string name, string inner)
-        => double.IsNaN(result) || double.IsInfinity(result)
-            ? name + "(" + inner + ")" : "calc(" + PrintTerm(result, unit) + ")";
+        => "calc(" + (double.IsNaN(result) || double.IsInfinity(result)
+            ? NonFiniteWord(result) + (unit.Length == 0 ? "" : " * 1" + unit)
+            : PrintTerm(result, unit)) + ")";
+
+    /// <summary>The word a reference engine puts where a number that is not one stands. It is lower
+    /// case for the two infinities and capital for the value that is neither (measured).</summary>
+    private static string NonFiniteWord(double value) =>
+        double.IsNaN(value) ? "NaN" : value < 0 ? "-infinity" : "infinity";
 
     /// <summary>The number of arguments a math function takes. min(), max() and hypot() take a list
     /// of them, clamp() always three, round() a value and a resolution with an optional strategy,
@@ -291,6 +305,28 @@ public static class CssMathValue
     private static double Radians((double Value, string Unit) argument)
         => argument.Unit.Length == 0 ? argument.Value : argument.Value / DegreesPerRadian;
 
+    /// <summary>The value of sine or cosine at an exact quarter turn, or null at any other angle.
+    /// The four are the angles a page actually writes, and a binary sine of them is not the number
+    /// the reader expects: 'sin(0.5turn)' is 'calc(0)' on the reference engine and
+    /// 'calc(1.22465e-16)' from a double's 'sin(π)' (measured), which is arithmetic noise rather
+    /// than the value the angle names. A bare number is radians, whose quarters are not exactly
+    /// representable, so it is left to the library.</summary>
+    private static double? ExactTrig((double Value, string Unit) argument, bool cosine)
+    {
+        if (argument.Unit.Length == 0) return null;
+        double degrees = argument.Value % 360;
+        if (degrees < 0) degrees += 360;
+        double quarter = degrees / 90;
+        if (quarter != System.Math.Round(quarter)) return null;
+        return (int)quarter % 4 switch
+        {
+            0 => cosine ? 1 : 0,
+            1 => cosine ? 0 : 1,
+            2 => cosine ? -1 : 0,
+            _ => cosine ? 0 : -1,
+        };
+    }
+
     /// <summary>The units whose value a comparison can be settled without being told the box, the
     /// font or the viewport: the pixels an absolute length is printed as, the degree an angle is
     /// printed as, the second a time is printed as and a plain number.</summary>
@@ -386,7 +422,19 @@ public static class CssMathValue
             foreach (var unit in keys)
             {
                 var value = Terms[unit];
-                if (double.IsNaN(value) || double.IsInfinity(value)) return "";
+                // A term whose arithmetic left the numbers — a division by zero — is still a value
+                // the reference engine prints, and it prints it in the form that says a number
+                // times a unit rather than gluing the two together (measured: 'calc(1px / 0)' reads
+                // 'calc(infinity * 1px)', 'calc(-1px / 0)' reads 'calc(-infinity * 1px)', and
+                // 'calc(0 / 0)' on a count reads 'calc(NaN)' with no unit after it).
+                if (double.IsNaN(value) || double.IsInfinity(value))
+                {
+                    // The sign of the infinity joins the sum the way a number's sign does, so a
+                    // leading term reads '-infinity' and a later one ' - infinity'.
+                    Append(sb, value < 0, NonFiniteWord(System.Math.Abs(value))
+                        + (unit.Length == 0 ? "" : " * 1" + unit));
+                    continue;
+                }
                 Append(sb, value < 0, Number(System.Math.Abs(value)) + unit);
             }
             foreach (var (sign, text) in Opaque) Append(sb, sign < 0, text);
@@ -1049,8 +1097,11 @@ public static class CssMathValue
                 if (factor.IsCount)
                 {
                     double value = factor.CountValue;
-                    // Only a number divides, and division by zero is not a value.
-                    if (divide && value == 0) return null;
+                    // Only a number divides. A zero divisor is not a refused expression: the
+                    // reference engine takes the IEEE answer and prints it, so 'calc(1px / 0)' is
+                    // 'calc(infinity * 1px)', 'calc(1 / 0)' is 'calc(infinity)' and 'calc(0 / 0)'
+                    // is 'calc(NaN)' (measured, all three). What the type grammar still refuses is
+                    // a length over a length — 'calc(1px / 0px)' names a number, not a width.
                     if (divide) number /= value;
                     else number *= value;
                     continue;

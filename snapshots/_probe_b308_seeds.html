@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b308 seeds sweep</title></head>
+<body>
+<div id="host"></div>
+<script>
+// seeds
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["cx","~","init"],["cy","~","init"],["r","~","init"],["rx","~","init"],["ry","~","init"],["x","~","init"],["y","~","init"],["d","~","init"],["-webkit-rtl-ordering","~","init"],["-webkit-text-combine","~","init"],["initial-letter","~","init"],["forced-color-adjust","~","init"],["mix-blend-mode","~","init"],["image-rendering","~","init"],["text-decoration-line","~","init"],["text-decoration-skip-ink","~","init"],["cx","5 5","geo"],["cx","auto","geo"],["cx","-5","geo"],["cx","calc(1px + 1%)","geo"],["cx","1em","geo"],["cx","1","geo"],["cx","1vw","geo"],["cx","inherit","geo"],["rx","5px 3px","geo"],["ry","3","geo"],["r","5%","geo"],["r","1em","geo"],["x","50%","geo"],["y","auto","geo"],["cx","0","geo"],["d","path('M0 0')","d"],["d","path('')","d"],["d","path('M 0 0 L 1 1')","d"],["d","url(#p) path('M0')","d"],["d","normal","d"],["d","inherit","d"],["d","path('M 0 0') none","d"],["initial-letter","drop 2.5","word"],["initial-letter","raise 0","word"],["initial-letter","2 drop","word"],["initial-letter","drop","word"],["initial-letter","drop 2 raise 3","word"],["initial-letter","normal","word"],["forced-color-adjust","preserve-parent-color auto","word"],["mix-blend-mode","plus-lighter multiply","word"],["background-blend-mode","plus-lighter","word"],["text-decoration-line","blink underline","word"],["text-decoration-line","blink blink","word"],["text-decoration-line","underline line-through","word"],["text-decoration","underline overline line-through blink","word"],["image-rendering","-webkit-optimize-contrast pixelated","word"],["image-rendering","optimizecontrast","word"],["-webkit-rtl-ordering","numeric","word"],["-webkit-rtl-ordering","logical numeric","word"],["-webkit-text-combine","digits","word"],["-webkit-text-combine","vertical","word"],["-webkit-text-combine","horizontal digits 2","word"],["cx","10PX","spell"],["r","5.50","spell"],["rx","5.0","spell"],["initial-letter","DROP 2","spell"],["d","NONE","spell"],["-webkit-text-combine","NONE","spell"],["forced-color-adjust","PRESERVE-PARENT-COLOR","spell"],["mix-blend-mode","PLUS-LIGHTER","spell"],["text-decoration-line","BLINK","spell"],["image-rendering","-WEBKIT-OPTIMIZE-CONTRAST","spell"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  if (cases[i][1] !== '~') el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][2] + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (cases[i][1] === '~' ? '-' : (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0))
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

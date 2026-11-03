@@ -189,12 +189,13 @@ internal static class CssValueTokenizer
         float.IsNaN(value) || float.IsInfinity(value) || value == 0
             ? "0" : PrintSix(((double)value).ToString("G6", CultureInfo.InvariantCulture));
 
-    /// <summary>One six-digit print to the spelling the reference engine uses: a lower-case 'e', a
-    /// signed exponent of at least two digits, and nothing at all for a number under a
-    /// ten-millionth of a unit. That last rule is what hides the arithmetic noise under a value the
-    /// engine just worked out — 'rotate(0.5turn)' is 'matrix(-1, 0, 0, -1, 0, 0)', not
-    /// 'matrix(-1, -8.74228e-08, …)' (measured) — and it is the same line the layout's own fixed
-    /// point draws.</summary>
+    /// <summary>One six-digit print to the spelling the reference engine uses: a lower-case 'e' and a
+    /// signed exponent of at least two digits. That last part is the whole of what this print does to
+    /// a value: a number the page wrote is printed however small it is (measured: 'opacity: 1e-30'
+    /// echoes '1e-30' and computes '1e-30', and 'calc(0.000000001 + 0.000000001)' reads
+    /// 'calc(2e-09)' on both surfaces). The engine's own arithmetic noise — the -8.74e-08 a rotation
+    /// of a half turn leaves in a matrix — is hidden where it is COMPUTED, which is the matrix
+    /// printer's rule and not this one.</summary>
     private static string PrintSix(string printed)
     {
         int at = printed.IndexOfAny(['e', 'E']);
@@ -202,7 +203,6 @@ internal static class CssValueTokenizer
         if (!int.TryParse(printed[(at + 1)..], NumberStyles.AllowLeadingSign,
                 CultureInfo.InvariantCulture, out int exponent))
             return printed;
-        if (exponent < -7) return "0";
         return printed[..at] + "e" + (exponent < 0 ? "-" : "+")
              + Math.Abs(exponent).ToString("00", CultureInfo.InvariantCulture);
     }
