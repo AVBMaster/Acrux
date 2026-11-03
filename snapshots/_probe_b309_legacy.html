@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b309 legacy seats and alignment</title></head>
+<body>
+<div id="host"></div>
+<script>
+// legacyseats
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["-webkit-user-drag","element"],["-webkit-user-drag","elements"],["-webkit-user-drag","none"],["-webkit-user-drag","auto"],["-webkit-user-drag","IMAGE"],["-webkit-touch-callout","none"],["-webkit-touch-callout","auto"],["-webkit-touch-callout","default"],["-webkit-clip-path","none"],["-webkit-clip-path","inset(10px)"],["-webkit-clip-path","circle(50%)"],["-webkit-clip-path","polygon(0 0, 10px 10px)"],["-webkit-mask","none"],["-webkit-column-break-before","auto"],["-webkit-column-break-before","always"],["-webkit-column-break-after","avoid"],["-webkit-column-break-inside","avoid"],["column-gap","normal"],["column-gap","10px 20px"],["row-gap","normal"],["row-gap","1em"],["gap","10px"],["gap","10px 20px"],["gap","normal normal"],["text-decoration-thickness","2px 3px"],["text-decoration-color","currentcolor"],["text-underline-offset","auto"],["text-underline-offset","from-font"],["hyphenate-character","auto"],["hyphenate-character","none"],["hyphenate-character","'-'"],["hyphenate-limit-chars","auto"],["hyphenate-limit-chars","5"],["hyphenate-limit-chars","5 3 2"],["item-align","start"],["item-align","self-start"],["align-content","normal"],["align-content","first baseline"],["align-content","unsafe center"],["align-content","legacy left"],["justify-content","legacy right"],["justify-items","self-start"],["justify-items","legacy"],["place-content","center space-between"],["place-items","center start"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  if (cases[i][1] !== '~') el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (cases[i][1] === '~' ? '-' : (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0))
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

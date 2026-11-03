@@ -548,6 +548,10 @@ public enum CssPropertyId
     // printed), and '-webkit-text-combine' is 'none' or 'horizontal'. Both inherit.
     WebkitRtlOrdering,
     WebkitTextCombine,
+    // Chrome's own seat: the region of the window a page hands to the window manager. 'drag' and
+    // 'no-drag' are the two values and 'none' is a third spelling of 'no-drag' that keeps its own
+    // echo (measured); 'auto' — the word the property would need for "no region" — is refused.
+    WebkitAppRegion,
     // The names below are declared by the reference engine and read, validated, stored and echoed
     // here, but no layout step consumes them yet (the timeline pair has no scroll or view timeline
     // to name, 'interactivity' has no inert-region behaviour, 'caret-animation' has no caret). They

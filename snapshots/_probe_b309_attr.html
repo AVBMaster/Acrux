@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b309 svg presentation attributes</title></head>
+<body>
+<svg id="svg" width="120" height="120" viewBox="0 0 120 120">
+  <circle id="c" cx="5" cy="6" r="7" fill="red" stroke="blue" stroke-width="2"></circle>
+  <circle id="c2" cx="1in" cy="50%" r="3.5cm"></circle>
+  <rect id="r" x="1" y="2" rx="5" ry="6" width="3" height="4"></rect>
+  <ellipse id="e" cx="9" rx="4" ry="2"></ellipse>
+  <line id="l" x1="1" y1="2" x2="3" y2="4"></line>
+  <path id="p" d="M 0 0 L 10 10" fill="green" fill-rule="evenodd" stroke-linecap="round"
+        stroke-dasharray="5 2" stroke-dashoffset="1" opacity="0.5" paint-order="stroke"
+        marker-mid="url(#m)" vector-effect="non-scaling-stroke" transform="translate(1 1)"></path>
+  <text id="t" x="3" y="4" text-anchor="middle" dominant-baseline="middle" font-size="12"
+        font-family="serif" letter-spacing="2" word-spacing="1" text-decoration="underline"
+        fill="currentColor"></text>
+  <g id="g" fill="orange" stroke-width="3"></g>
+</svg>
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap"></pre>
+<script>
+function build() {
+  const rows = [];
+  const props = ['cx','cy','r','rx','ry','x','y','d','fill','stroke','stroke-width',
+    'fill-rule','stroke-linecap','stroke-dasharray','stroke-dashoffset','opacity',
+    'paint-order','vector-effect','marker-mid','transform','text-anchor','dominant-baseline',
+    'font-size','font-family','letter-spacing','word-spacing','text-decoration','width','height',
+    'stroke-opacity','shape-rendering','clip-rule'];
+  const ids = ['c','c2','r','e','l','p','t','g'];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    for (const p of props) {
+      const cs = getComputedStyle(el).getPropertyValue(p);
+      const attr = el.getAttribute(p);
+      rows.push(id + '|' + p + '|attr=' + (attr === null ? '-' : attr) + '|comp=' + cs);
+    }
+  }
+  document.getElementById('record').textContent = rows.join('\n');
+}
+build();
+</script>
+</body></html>

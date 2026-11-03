@@ -40,7 +40,12 @@ public static class ComputedValueSerializer
         // and consumer is taken out of that table, so it is never answered twice.
         if (Acrux.Core.Css.Resolver.EchoedProperties.Find(property) is { } echo)
         {
-            var written = style.GetEchoed(echo.Name) ?? echo.Initial;
+            var written = style.GetEchoed(echo.Name);
+            // The one entry shape where the word a box writes is not the word the same spelling
+            // answers when the box writes nothing ('-webkit-app-region', measured): the second of
+            // the two is said outright, not run through the print of the first.
+            if (written == null && echo.InitialComputed is { } unwritten) return unwritten;
+            written ??= echo.Initial;
             // The entries that say something in the computed value that the specified value does
             // not answer it themselves: 'math-depth' the integer, 'offset-rotate' the rotation,
             // a length or position the box it is measured in.
@@ -512,9 +517,12 @@ public static class ComputedValueSerializer
             case "font-optical-sizing": return style.FontOpticalSizing;
             // A ratio prints as the number it is and the initial prints as its own word (measured:
             // 'font-size-adjust: 0.5' computes '0.5', 'none' computes 'none', and the unset case is
-            // 'none' — never the empty string the property used to answer).
-            case "font-size-adjust": return style.FontSizeAdjust is float ratio
-                ? CssValueTokenizer.Num(ratio) : "none";
+            // 'none' — never the empty string the property used to answer). CSS Fonts 4 §8.6's
+            // metric stands in front of it, and the metric a bare number already means is the one
+            // that is not written (measured: 'ex-height 0.5' computes '0.5' while
+            // 'cap-height 0.8' computes 'cap-height 0.8').
+            case "font-size-adjust": return (style.FontSizeAdjustTag is { } fasTag ? fasTag + " " : "")
+                + (style.FontSizeAdjust is float ratio ? CssValueTokenizer.Num(ratio) : "none");
             // 'normal' is reported as the percentage it means.
             // CSS Fonts 4 §6.3: the computed value of a stretch is the percentage the word names,
             // and a property with nothing written on it says '100%' — the initial the engine

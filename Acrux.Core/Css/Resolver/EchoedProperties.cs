@@ -38,6 +38,13 @@ public static class EchoedProperties
         /// font. The style is handed to the hook for that alone; an entry that only re-spells a
         /// keyword ignores it.</summary>
         public Func<string, Acrux.Core.Dom.ComputedStyle, string>? ComputedText { get; init; }
+        /// <summary>The answer for a box that wrote nothing, on the rare property whose initial word
+        /// is NOT what that same word computes to when a page writes it:
+        /// <c>-webkit-app-region</c> takes 'none' as a spelling of 'no-drag' and still says 'none'
+        /// for a box that never mentioned the property (measured, both). Without this the entry's
+        /// <see cref="Initial"/> would be handed to <see cref="ComputedText"/> like any other text
+        /// and the unset case would print the value the keyword means.</summary>
+        public string? InitialComputed { get; init; }
         /// <summary>Set when the computed value keeps the math expression the page wrote rather than
         /// the number it works out to — the <c>stroke-width: calc(2)</c> that reads back
         /// <c>calc(2px)</c> (measured). The cascade prices an expression on its way through, so an
@@ -221,11 +228,14 @@ public static class EchoedProperties
                 Normalize = NormalizePositionTryFallbacks },
             // CSS Anchor Positioning §3.2/§4.5/§4.6: an anchor name is 'none' or ONE
             // <dashed-ident>, 'anchor-scope' adds 'all', and 'position-try-order' is one of the
-            // three orderings (measured, both surfaces).
+            // five orderings — the two physical and the two logical beside 'normal'.
+            // 'least-*' is the draft's word that this engine does not take, and two orderings
+            // together are no value (all measured, both surfaces).
             new() { Name = "anchor-name", Initial = "none", Normalize = NormalizeTimelineName },
             new() { Name = "anchor-scope", Initial = "none", Normalize = NormalizeAnchorScope },
             new() { Name = "position-try-order", Initial = "normal",
-                Normalize = Single("normal", "most-width", "most-height") },
+                Normalize = Single("normal", "most-width", "most-height",
+                    "most-inline-size", "most-block-size") },
 
             // ===== Fonts 4 §9. A tag is a quoted string, and the engine prints it with double
             // quotes whichever way the page wrote it (measured: "'SIN'" reads '"SIN"').
@@ -300,9 +310,15 @@ public static class EchoedProperties
             // ===== SVG 2 properties CSS inherits: each is one keyword of a closed set.
             new() { Name = "text-anchor", Initial = "start", Inherited = true,
                 Normalize = Single("start", "middle", "end") },
+            // SVG 2 §11.3.6's baseline. The four legacy spellings 'reset-size', 'no-change',
+            // 'text-before-edge' and 'text-after-edge' are what this engine still takes, and the
+            // words WITHOUT the 'text-' prefix are not: 'baseline', 'before-edge' and 'after-edge'
+            // are 'alignment-baseline' words, and this property answers a refusal for them
+            // (measured, the pair side by side).
             new() { Name = "dominant-baseline", Initial = "auto", Inherited = true,
                 Normalize = Single("auto", "alphabetic", "hanging", "ideographic", "middle",
-                    "mathematical", "central", "use-script") },
+                    "mathematical", "central", "use-script", "text-before-edge",
+                    "text-after-edge", "reset-size", "no-change") },
             new() { Name = "alignment-baseline", Initial = "auto", Inherited = true,
                 Normalize = Single("auto", "baseline", "before-edge", "text-before-edge", "middle",
                     "central", "after-edge", "text-after-edge", "ideographic", "alphabetic",
@@ -407,6 +423,16 @@ public static class EchoedProperties
                 Normalize = Single("logical") },
             new() { Name = "-webkit-text-combine", Initial = "none", Inherited = true,
                 Normalize = Single("none", "horizontal") },
+            // Chrome's own seat for the window manager: which part of the page a window may be
+            // dragged by. 'none' is taken and echoed, but the computed surface answers it with the
+            // word the value means, 'no-drag' (measured) — while a box that wrote nothing answers
+            // the initial 'none'. 'auto' is not a value of this property (measured), and it does
+            // not inherit: a child of a 'drag' box computes 'none'.
+            new() { Name = "-webkit-app-region", Initial = "none",
+                Normalize = Single("none", "drag", "no-drag"),
+                InitialComputed = "none",
+                ComputedText = (canonical, _) =>
+                    canonical.Equals("none", StringComparison.Ordinal) ? "no-drag" : canonical },
 
             // ===== Scroll-driven Animations 1, View Transitions 1 and Anchor Position 1. A name is
             // a dashed ident here, so a bare 't' is refused while '--t' is kept; 'view-transition-name'

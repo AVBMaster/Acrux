@@ -1,0 +1,81 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b309 attr rules v4</title>
+<style id="sheet"></style>
+</head>
+<body>
+<svg id="svg" width="120" height="120">
+  <circle id="a_rxOnCircle" rx="5" ry="6" cx="7"></circle>
+  <circle id="a_rNeg" r="-5"></circle>
+  <circle id="a_cxBogus" cx="abc"></circle>
+  <circle id="a_cxEmpty" cx=""></circle>
+  <circle id="a_cxPercent" cx="25%"></circle>
+  <circle id="a_cxEms" cx="2em"></circle>
+  <rect id="a_cxOnRect" cx="5" r="3" d="M 0 0"></rect>
+  <rect id="a_rxNeg" rx="-2"></rect>
+  <text id="a_xOnText" x="9" y="9" dx="2" dy="3">hi</text>
+  <tspan id="a_xOnTspan" x="4">hi</tspan>
+  <g id="a_xOnG" x="4" cx="3" r="2" width="9" height="8" d="M 0 0"></g>
+  <image id="a_image" x="1" y="2" width="3" height="4"></image>
+  <use id="a_use" x="1" y="2" href="#a_image"></use>
+  <foreignObject id="a_fo" x="1" y="2" width="3" height="4"></foreignObject>
+  <path id="a_dInvalid" d="M 0"></path>
+  <path id="a_dBogus" d="not a path"></path>
+  <circle id="a_swNeg" stroke-width="-1"></circle>
+  <circle id="a_swPct" stroke-width="50%"></circle>
+  <circle id="a_fillBogus" fill="notacolor"></circle>
+  <circle id="a_opBig" opacity="5"></circle>
+  <circle id="a_veBogus" vector-effect="bogus"></circle>
+  <circle id="a_dashNone" stroke-dasharray="none"></circle>
+  <circle id="a_fontSize" font-size="50%"></circle>
+  <circle id="a_marker" marker-mid="url(#m)"></circle>
+  <circle id="a_markerBogus" marker-mid="bogus"></circle>
+  <circle id="cascade1" cx="5" r="7"></circle>
+  <circle id="cascade2" r="7" style="r:9px"></circle>
+  <line id="a_lineEnds" x1="1" y1="2" x2="3" y2="4"></line>
+  <polygon id="a_points" points="0,0 1,1"></polygon>
+  <div id="a_div" cx="5" fill="red" r="3" stroke-width="9"></div>
+</svg>
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">NOTRUN</pre>
+<script>
+const props = ['cx','cy','r','rx','ry','x','y','d','width','height','fill','stroke','stroke-width',
+  'opacity','vector-effect','stroke-dasharray','marker-mid','font-size','dx','dy','points',
+  'transform','text-anchor','display','visibility','color'];
+const record = document.getElementById('record');
+function out(line) { record.textContent += '\n' + line; }
+record.textContent = 'BEGIN';
+const ids = ['a_rxOnCircle','a_rNeg','a_cxBogus','a_cxEmpty','a_cxPercent','a_cxEms','a_cxOnRect',
+  'a_rxNeg','a_xOnText','a_xOnTspan','a_xOnG','a_image','a_use','a_fo','a_dInvalid','a_dBogus',
+  'a_swNeg','a_swPct','a_fillBogus','a_opBig','a_veBogus','a_dashNone','a_fontSize','a_marker',
+  'a_markerBogus','cascade1','cascade2','a_lineEnds','a_points','a_div'];
+for (const id of ids) {
+  try {
+    const el = document.getElementById(id);
+    if (!el) { out(id + '|MISSING'); continue; }
+    for (const p of props) {
+      let cs = '?', ns = '?';
+      try { cs = getComputedStyle(el).getPropertyValue(p); } catch (e) { cs = 'ERR'; }
+      ns = el.namespaceURI === 'http://www.w3.org/2000/svg' ? 'svg' : 'html';
+      out(id + '|' + p + '|ns=' + ns + '|comp=' + cs);
+    }
+  } catch (e) { out(id + '|THREW|' + e); }
+}
+const sheet = document.getElementById('sheet');
+const targets = ['cascade1', 'a_rxOnCircle'];
+const cases = [['none', ''], ['type', 'circle { cx: 20px }'], ['id', '#cascade1 { cx: 21px }'],
+  ['star', '* { cx: 22px }'], ['important', 'circle { cx: 23px !important }'],
+  ['inline', ''], ['mediaAndAttr', '@media screen { circle { cx: 24px } }']];
+for (const t of targets) {
+  for (const [label, css] of cases) {
+    try {
+      sheet.textContent = css;
+      const el = document.getElementById(t);
+      out('cascade|' + t + '|' + label + '|cx=' + getComputedStyle(el).getPropertyValue('cx')
+        + '|fill=' + getComputedStyle(el).getPropertyValue('fill')
+        + '|display=' + getComputedStyle(el).getPropertyValue('display'));
+    } catch (e) { out('cascade|' + t + '|' + label + '|THREW|' + e); }
+  }
+}
+sheet.textContent = '';
+out('END');
+</script>
+</body></html>

@@ -971,12 +971,12 @@ public static class CssPropertyApplier
             case "font-size-adjust":
                 // 'none' says so in words and a ratio says so in a number; the grammar has already
                 // refused a percentage and a negative, and 'from-font' leaves the property at 'none'
-                // because there is no font-aspect table to read the value out of yet (#278).
-                var fas = value.Trim();
-                if (fas.Equals("none", StringComparison.OrdinalIgnoreCase)) style.FontSizeAdjust = null;
-                else if (float.TryParse(fas, System.Globalization.NumberStyles.Float,
-                         System.Globalization.CultureInfo.InvariantCulture, out var fsa))
-                    style.FontSizeAdjust = fsa;
+                // because there is no font-aspect table to read the value out of yet (#278). The
+                // metric the ratio is measured from travels beside it, and 'ex-height' — the metric
+                // a bare number already means — keeps no word of its own (measured).
+                var fas = CanonicalFontSizeAdjust(value);
+                style.FontSizeAdjustTag = fas.Text == null ? null : fas.Tag;
+                style.FontSizeAdjust = fas.Text == null ? null : fas.Ratio;
                 break;
             case "outline": ParseOutlineShorthand(value, style); break;
             case "outline-width":
@@ -4798,6 +4798,34 @@ public static class CssPropertyApplier
         "hidden" => ContentVisibilityType.Hidden,
         _ => ContentVisibilityType.Visible
     };
+
+    /// <summary>CSS Fonts 4 §8.6: the metric a 'font-size-adjust' ratio is measured from, the ratio
+    /// the engine can hold, and the text both are printed as — in that order, with the metric folded
+    /// to lower case and a bare number keeping its own spelling. 'ex-height' is the metric a bare
+    /// number already means, so the reference engine writes no word for it (measured: 'ex-height 0.5'
+    /// and 'EX-HEIGHT 0.5' each read '0.5'), while 'cap-height 0.8' keeps its word (measured). Null
+    /// text for a shape the property does not take, which leaves the declaration to the grammar.</summary>
+    public static (string? Tag, float? Ratio, string? Text) CanonicalFontSizeAdjust(string value)
+    {
+        var parts = ShorthandExpander.SplitShorthand(value);
+        if (parts.Count is < 1 or > 2) return (null, null, null);
+        string? tag = null;
+        var ratio = parts[^1];
+        if (parts.Count == 2)
+        {
+            if (!Acrux.Core.Css.CssValueGrammar.IsFontSizeAdjustMetricText(parts[0]))
+                return (null, null, null);
+            tag = parts[0].ToLowerInvariant();
+            if (tag == "ex-height") tag = null;
+        }
+        else if (Acrux.Core.Css.CssValueGrammar.IsFontSizeAdjustMetricText(parts[0]))
+            return (null, null, null);
+        if (!Acrux.Core.Css.CssValueGrammar.IsFontSizeAdjustRatioText(ratio)) return (null, null, null);
+        float? number = float.TryParse(ratio, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed) && parsed >= 0
+            ? parsed : null;
+        return (tag, number, (tag != null ? tag + " " : "") + ratio.ToLowerInvariant());
+    }
 
     /// <summary>CSS Color Adjust 1 §5.3 plus the word this reference engine shipped beside it:
     /// 'preserve-parent-color' asks for the colour of the box above, and it is a value of its own,

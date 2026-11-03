@@ -1113,6 +1113,7 @@ public class CascadeResolver
         dest.FontVariationSettings = src.FontVariationSettings;
         dest.FontFeatureSettings = src.FontFeatureSettings;
         dest.FontSizeAdjust = src.FontSizeAdjust;
+        dest.FontSizeAdjustTag = src.FontSizeAdjustTag;
         dest.AccentColor = src.AccentColor;
         dest.CaretColor = src.CaretColor;
         dest.ColorScheme = src.ColorScheme;

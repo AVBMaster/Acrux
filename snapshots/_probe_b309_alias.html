@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b309 alias read-back</title></head>
+<body>
+<div id="host"></div>
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">NOTRUN</pre>
+<script>
+const rows = [];
+function out(l) { document.getElementById('record').textContent += '\n' + l; }
+document.getElementById('record').textContent = 'BEGIN';
+function probe(name, value, twin) {
+  const el = document.createElement('div');
+  document.getElementById('host').appendChild(el);
+  el.style.setProperty(name, value);
+  out(name + '=' + value + '|n=' + el.style.length + '|self=' + el.style.getPropertyValue(name)
+    + '|twin=' + (twin ? el.style.getPropertyValue(twin) : '-')
+    + '|cssText=' + el.style.cssText
+    + '|comp=' + getComputedStyle(el).getPropertyValue(name)
+    + '|compTwin=' + (twin ? getComputedStyle(el).getPropertyValue(twin) : '-'));
+  el.remove();
+}
+probe('-webkit-column-break-before', 'avoid', 'break-before');
+probe('-webkit-column-break-inside', 'avoid', 'break-inside');
+probe('break-before', 'avoid', '-webkit-column-break-before');
+probe('-webkit-background-clip', 'text', 'background-clip');
+probe('-webkit-text-fill-color', 'red', null);
+probe('-webkit-column-break-before', 'always', 'break-before');
+out('END');
+</script>
+</body></html>

@@ -71,6 +71,14 @@ public static class CssValueText
         if (property != null && property.Equals("initial-letter", StringComparison.OrdinalIgnoreCase))
             value = Acrux.Core.Css.Resolver.CssPropertyApplier.CanonicalInitialLetterText(value) ?? value;
 
+        // CSS Fonts 4 §8.6: the metric a 'font-size-adjust' ratio is measured from is folded to
+        // lower case, and the metric a bare number already means — 'ex-height' — is not written at
+        // all (measured: 'EX-HEIGHT 0.5' reads '0.5' while 'cap-height 0.8' keeps its word). The
+        // applier reads the same printer the computed surface prints from.
+        if (property != null && property.Equals("font-size-adjust", StringComparison.OrdinalIgnoreCase))
+            value = Acrux.Core.Css.Resolver.CssPropertyApplier.CanonicalFontSizeAdjust(value).Text
+                    ?? value;
+
         // Whether a bare 0 in this value is a length. Known by the property, not by the text:
         // 'columns: 0' is a width and prints '0px', 'scale: 0' is a factor and prints '0'.
         bool lengths = property != null && Resolver.CssPropertyTraits.TakesLength(property);
@@ -2045,9 +2053,15 @@ public static class CssValueText
     /// <summary>'border-spacing' is the pair of table axes and prints the shortest spelling that
     /// says the same thing: '0 0' is '0px' and '1px 1px' is '1px', while two different axes keep both
     /// words (measured). The same rule the four-side shorthands follow, on two sides.</summary>
+    /// <summary>A two-sided property that prints one side when both say the same thing
+    /// (CSS Tables 1 §4.2 for 'border-spacing', CSS Gap 1 §3 for 'gap' and its legacy name —
+    /// measured: 'gap: 10px 10px' reads '10px' and 'gap: normal normal' reads 'normal', while
+    /// 'normal 10px' says both).</summary>
     private static string CanonicalizeBorderSpacing(string text, string property)
     {
-        if (!property.Equals("border-spacing", StringComparison.OrdinalIgnoreCase)) return text;
+        if (!property.Equals("border-spacing", StringComparison.OrdinalIgnoreCase)
+            && !property.Equals("gap", StringComparison.OrdinalIgnoreCase)
+            && !property.Equals("grid-gap", StringComparison.OrdinalIgnoreCase)) return text;
         var words = SplitTopLevelWords(text);
         if (words.Count != 2) return text;
         return words[0].Equals(words[1], StringComparison.OrdinalIgnoreCase) ? words[0] : text;

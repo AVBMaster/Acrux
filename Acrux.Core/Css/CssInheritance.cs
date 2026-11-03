@@ -46,6 +46,7 @@ public static class CssInheritance
         child.FontVariationSettings = parent.FontVariationSettings;
         child.FontFeatureSettings = parent.FontFeatureSettings;
         child.FontSizeAdjust = parent.FontSizeAdjust;
+        child.FontSizeAdjustTag = parent.FontSizeAdjustTag;
         // 'line-height' inherits its computed value, so the 'normal' flag and any absolute
         // length must travel with the multiplier.
         child.LineHeight = parent.LineHeight;

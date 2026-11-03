@@ -1068,7 +1068,10 @@ public static class CssValueGrammar
                 }
                 // A bare number is no length for this property (measured: 'overflow-clip-margin: 0'
                 // falls while '0px' stands), which is the one place the zero is not allowed through.
-                else if (length == null && IsDimensionedLength(word)) length = p;
+                // Nor is a length below nothing: the margin is a distance an edge is MOVED OUT by,
+                // and the reference engine has no word for moving it in (measured: '-5px' falls).
+                else if (length == null && IsDimensionedLength(word) && !IsNegativeValue(word))
+                    length = p;
                 else return false;
             }
             return box != null || length != null;
@@ -1078,22 +1081,24 @@ public static class CssValueGrammar
         // (measured: 'left over' stands and reads back 'over left', while a lone 'left' falls).
         CssPropertyId.TextEmphasisPosition => static text =>
             CanonicalTextEmphasisPosition(text) != null,
-        // CSS Fonts 3 §7.4: 'none', a ratio, or the font's own aspect value. A percentage is not a
-        // ratio here (measured: 'font-size-adjust: 50%' is dropped).
+        // CSS Fonts 3 §7.4 and Fonts 4 §8.6: 'none', a ratio, or the font's own aspect value — and
+        // CSS Fonts 4 §8.6 puts the METRIC the ratio is measured from in front of it. A percentage is
+        // not a ratio here (measured: 'font-size-adjust: 50%' is dropped), the metric may not stand
+        // on its own, and the number may not come first (measured: 'ex-height' and
+        // '0.5 cap-height' each fall). 'bu-scale' is the fifth metric the draft names and this
+        // engine does not take (measured), and a negative ratio is no ratio anywhere.
         CssPropertyId.FontSizeAdjust => static text =>
         {
             var words = SplitComponents(text);
-            if (words.Count != 1) return false;
-            var p = words[0].ToLowerInvariant();
-            if (p is "none" or "from-font") return true;
-            // A ratio written as a math function is a ratio the engine has not finished computing
-            // (measured: 'font-size-adjust: calc(0.5)' stands and computes '0.5').
-            if (IsMathFunctionCall(p, IsNumber)) return true;
-            return !p.EndsWith("%", StringComparison.Ordinal)
-                && !p.EndsWith("px", StringComparison.Ordinal)
-                && double.TryParse(p, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var ratio)
-                && !double.IsNaN(ratio) && ratio >= 0;
+            if (words.Count is < 1 or > 2) return false;
+            int at = 0;
+            if (words.Count == 2)
+            {
+                if (!IsFontSizeAdjustMetric(words[0])) return false;
+                at = 1;
+            }
+            else if (IsFontSizeAdjustMetric(words[0])) return false;
+            return IsFontSizeAdjustRatio(words[at]);
         },
         // CSS Fonts 4 §8.6 and §10.1: a list of four-character tags, each with its value. The
         // reference engine refuses a three- or five-character tag, an unquoted one, a decimal
@@ -2598,14 +2603,15 @@ public static class CssValueGrammar
     /// <summary>CSS Gap 1 §3: 'normal' or a non-negative <length-percentage>, at most
     /// <paramref name="max"/> of them. 'auto' is the value the flexbox draft gave the property and
     /// no engine measured here reads it, a comma is no separator and a negative gap is no gap at
-    /// all (measured: 'row-gap: auto', 'gap: 1px, 2px' and 'column-gap: -1px' each fall).</summary>
+    /// all (measured: 'row-gap: auto', 'gap: 1px, 2px' and 'column-gap: -1px' each fall).
+    /// 'normal' stands on EITHER side of the pair — 'normal 10px' and '10px normal' are each a gap
+    /// the reference engine reads (measured, both) — it is only the one-axis properties that cannot
+    /// take two of anything.</summary>
     private static bool IsGapValue(string text, int max)
     {
         if (text.IndexOf(',') >= 0) return false;
         var words = SplitComponents(text);
         if (words.Count == 0 || words.Count > max) return false;
-        if (words.Count > 1 && words.Any(word => word.Equals("normal",
-                StringComparison.OrdinalIgnoreCase))) return false;
         foreach (var word in words)
         {
             if (word.Equals("normal", StringComparison.OrdinalIgnoreCase)) continue;
@@ -3805,6 +3811,39 @@ public static class CssValueGrammar
     /// 'text-decoration-thickness: 1' and 'text-underline-offset: 1' are not. 'overflow-clip-margin'
     /// is the one that does not even take the bare zero (measured: '0' falls, '0px' stands), so it
     /// asks for <see cref="IsDimensionedLength"/> instead.</summary>
+    /// <summary>The metric, asked of the text a declaration carries — the same question the grammar
+    /// arm asks, and the applier's only route to it.</summary>
+    public static bool IsFontSizeAdjustMetricText(string word) => IsFontSizeAdjustMetric(word);
+
+    /// <summary>CSS Fonts 4 §8.6: the metric a 'font-size-adjust' ratio is measured from. Four of
+    /// the draft's five are taken; 'bu-scale' is the one this reference engine refuses (measured),
+    /// and a bare metric with no ratio after it is no value (measured).</summary>
+    private static bool IsFontSizeAdjustMetric(string word) =>
+        word.Equals("ex-height", StringComparison.OrdinalIgnoreCase)
+        || word.Equals("cap-height", StringComparison.OrdinalIgnoreCase)
+        || word.Equals("ch-width", StringComparison.OrdinalIgnoreCase)
+        || word.Equals("ic-height", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The ratio itself: 'none', the font's own aspect value, a number that is not less
+    /// than nothing, or a math function that has not finished being one (measured:
+    /// 'font-size-adjust: calc(0.5)' stands and computes '0.5', while 'cap-height 50%' and
+    /// 'ex-height -1' each fall and a length inside the function is the wrong type).</summary>
+    private static bool IsFontSizeAdjustRatio(string word)
+    {
+        var p = word.ToLowerInvariant();
+        if (p is "none" or "from-font") return true;
+        if (IsMathFunctionCall(p, IsNumber)) return true;
+        return !p.EndsWith("%", StringComparison.Ordinal)
+            && !p.EndsWith("px", StringComparison.Ordinal)
+            && double.TryParse(p, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var ratio)
+            && !double.IsNaN(ratio) && ratio >= 0;
+    }
+
+    /// <summary>The ratio on its own, asked of the text a declaration carries — the question the
+    /// applier asks before it stores the metric beside it.</summary>
+    public static bool IsFontSizeAdjustRatioText(string word) => IsFontSizeAdjustRatio(word);
+
     private static bool IsDimensionedLengthOrZero(string token) =>
         IsDimensionedLength(token) || IsBareZero(token);
 

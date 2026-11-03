@@ -1680,6 +1680,12 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     /// sentinel. 'from-font' is the third spelling the reference engine answers with the font's own
     /// aspect value; this engine has no aspect table to read, so it stays 'none' (gap #278).</summary>
     public float? FontSizeAdjust { get; set; }
+    /// <summary>CSS Fonts 4 §8.6: the metric the ratio beside it is measured from. 'ex-height' is
+    /// the metric a bare number means, so it keeps no word of its own here and the print does not
+    /// write it (measured: 'ex-height 0.5' echoes and computes '0.5'); the other three the reference
+    /// engine takes — 'cap-height', 'ch-width' and 'ic-height' — are written back before the number
+    /// on both surfaces (measured, all three, and 'bu-scale' is refused).</summary>
+    public string? FontSizeAdjustTag { get; set; }
     public string TextRendering { get; set; } = "auto";
     public string UnicodeBidi { get; set; } = "normal";
 
@@ -2006,7 +2012,8 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             FontKerning = FontKerning, FontStretch = FontStretch,
             FontSynthesis = FontSynthesis, FontOpticalSizing = FontOpticalSizing,
             FontVariationSettings = FontVariationSettings, FontFeatureSettings = FontFeatureSettings,
-            FontSizeAdjust = FontSizeAdjust, TextRendering = TextRendering, UnicodeBidi = UnicodeBidi
+            FontSizeAdjust = FontSizeAdjust, FontSizeAdjustTag = FontSizeAdjustTag,
+            TextRendering = TextRendering, UnicodeBidi = UnicodeBidi
         };
         foreach (var entry in _declaredOnlyValues) clone._declaredOnlyValues[entry.Key] = entry.Value;
         return clone;

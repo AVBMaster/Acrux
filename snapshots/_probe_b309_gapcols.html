@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b309 gap and column-break</title></head>
+<body>
+<div id="host"></div>
+<script>
+// gapcolumns
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["gap","10px 10px"],["gap","normal 10px"],["gap","10px normal"],["gap","normal normal"],["gap","normal auto"],["gap","auto auto"],["gap","1em 1em"],["gap","50% 50%"],["gap","20px 10px 30px"],["-webkit-column-break-before","auto"],["-webkit-column-break-before","always"],["-webkit-column-break-before","avoid"],["-webkit-column-break-before","left"],["-webkit-column-break-before","right"],["-webkit-column-break-before","page"],["-webkit-column-break-before","column"],["-webkit-column-break-before","avoid-page"],["-webkit-column-break-before","avoid-column"],["-webkit-column-break-before","recto"],["-webkit-column-break-before","AVOID"],["-webkit-column-break-before","inherit"],["-webkit-column-break-after","always"],["-webkit-column-break-after","avoid"],["-webkit-column-break-inside","auto"],["-webkit-column-break-inside","avoid"],["-webkit-column-break-inside","avoid-column"],["break-before","always"],["break-before","avoid"],["break-before","column"],["break-after","avoid"],["break-inside","avoid"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  if (cases[i][1] !== '~') el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (cases[i][1] === '~' ? '-' : (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0))
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0])
+      + '|n=' + el.style.length);
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>
