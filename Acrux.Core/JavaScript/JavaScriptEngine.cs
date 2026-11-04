@@ -3041,7 +3041,11 @@ public class JavaScriptEngine : IDisposable
             function DOMRectList(items) {
                 var list = items || [];
                 var self = this;
-                this.length = list.length;
+                // The level names 'length' as every other collection does, and an accessor with
+                // nothing behind it is where a plain write goes to die — so the count the list was
+                // built with is written as an own member, the way the items already are.
+                Object.defineProperty(this, 'length', { value: list.length, writable: true,
+                    enumerable: true, configurable: true });
                 this.item = function (index) {
                     index = Number(index);
                     return index >= 0 && index < list.length ? list[index] : null;
@@ -5685,6 +5689,13 @@ public class JavaScriptEngine : IDisposable
                     if (!held) { held = {}; EVENT_HOLDINGS.set(evt, held); }
                     held[key] = value;
                 }
+                // The dictionary values an event was built with are the level's business too: the
+                // members the interface declares are read through here, so a page that asks
+                // 'CloseEvent.prototype' finds the same answer as one that holds the event.
+                window.__acruxEventHeld = function (evt, key) {
+                    var held = EVENT_HOLDINGS.get(evt);
+                    return held && held[key] !== undefined ? held[key] : undefined;
+                };
                 // A hook for the walks the engine runs over objects of its own — the signal a
                 // controller aborts, the media list that flipped — where the event's target has to
                 // stay the very object the page holds. A host event cannot carry a script object
@@ -5880,7 +5891,9 @@ public class JavaScriptEngine : IDisposable
                 eventCtor('MutationEvent', [['relatedNode', null], ['attrName', ''],
                     ['attrChange', 0], ['prevValue', ''], ['newValue', ''],
                     ['isCharacterData', false], ['modType', '']]);
-                eventCtor('CloseEvent', [['wasClean', false], ['code', 0], ['reason', '']]);
+                // UI Events §5.1: a close event that was given no code answers the one the
+                // WebSocket handshake uses for an abnormal closure, not zero.
+                eventCtor('CloseEvent', [['wasClean', false], ['code', 1006], ['reason', '']]);
                 eventCtor('StorageEvent', [['key', null], ['oldValue', null], ['newValue', null],
                     ['url', ''], ['storageArea', null]]);
                 eventCtor('HashChangeEvent', [['oldURL', ''], ['newURL', '']]);
@@ -11686,8 +11699,16 @@ public class JavaScriptEngine : IDisposable
                         slots.playbackRate = -slots.playbackRate;
                         made.play();
                     };
-                    made.updatePlaybackRate = function (rate) {
-                        slots.playbackRate = Number(rate) || 0;
+                    made.updatePlaybackRate = function updatePlaybackRate(rate) {
+                        // Web Animations §3.5.3: the rate has to be a number the clock can run at;
+                        // the animation keeps the rate it had when the page hands over anything else.
+                        var held = Number(rate);
+                        if (!isFinite(held)) {
+                            throw new TypeError('Failed to execute ' + quoted('updatePlaybackRate')
+                                + ' on ' + quoted('Animation') + ': The provided playback rate ('
+                                + rate + ') is not a finite number.');
+                        }
+                        slots.playbackRate = held;
                         return Promise.resolve(undefined);
                     };
                     made.commitStyles = function () { return undefined; };
@@ -11726,6 +11747,12 @@ public class JavaScriptEngine : IDisposable
                     var span = slots.timing.duration * (slots.timing.iterations === Infinity ? 1
                         : Math.max(0, Number(slots.timing.iterations) || 0));
                     slots.span = span;
+                    // The state is also named on the object itself, so the effect a page reads off
+                    // the animation is the same run of keyframes rather than a fresh empty one.
+                    try {
+                        Object.defineProperty(made, '__acruxAnim', { value: slots, enumerable: false,
+                            configurable: true, writable: true });
+                    } catch (e) { }
                     ANIMATIONS.get(this).push(made);
                     made.play = function () {
                         slots.playState = 'running';
@@ -11962,11 +11989,39 @@ public class JavaScriptEngine : IDisposable
                     if (!slots) refusal();
                     return slots;
                 }
-                ['form', 'willValidate', 'validity', 'validationMessage', 'shadowRoot', 'states',
-                 'role'].forEach(function (field) {
-                    Object.defineProperty(internalsProto, field, { configurable: true, enumerable: false,
+                ['form', 'willValidate', 'validity', 'validationMessage', 'shadowRoot', 'states'
+                 ].forEach(function (field) {
+                    Object.defineProperty(internalsProto, field, { configurable: true,
+                        enumerable: false,
                         get: function () { return internalsSlots(this)[field]; } });
                 });
+                // WAI-ARIA §6.1: 'role' is the one of these the page writes, and what it writes is the
+                // host element's own attribute — an internals that answered the read but dropped the
+                // write would leave the element unlabelled, and one that wrote the slot alone would
+                // not answer the element's own read of the same thing.
+                Object.defineProperty(internalsProto, 'role', { configurable: true, enumerable: false,
+                    get: function () {
+                        var slots = internalsSlots(this);
+                        var element = slots.element;
+                        if (element && typeof element.getAttribute === 'function') {
+                            try {
+                                var held = element.getAttribute('role');
+                                return held === undefined ? null : held;
+                            } catch (e) { }
+                        }
+                        return slots.role;
+                    },
+                    set: function (value) {
+                        var slots = internalsSlots(this);
+                        var text = (value === undefined || value === null) ? null : String(value);
+                        slots.role = text;
+                        var element = slots.element;
+                        if (!element || typeof element.setAttribute !== 'function') return;
+                        try {
+                            if (text === null) element.removeAttribute('role');
+                            else element.setAttribute('role', text);
+                        } catch (e) { }
+                    } });
                 Object.defineProperty(internalsProto, 'labels', { configurable: true, enumerable: false,
                     get: function () {
                         var slots = internalsSlots(this);
@@ -11980,16 +12035,87 @@ public class JavaScriptEngine : IDisposable
                         }
                         return slots.labels;
                     } });
-                ['checkValidity', 'reportValidity', 'setFormValue', 'setValidity'].forEach(function (name) {
+                // HTML §4.15.5: the validity a form-associated custom element answers with. The page
+                // writes the flags it has found and the message it wants shown; 'validity' is the
+                // object that carries them, 'customError' is the presence of a message rather than a
+                // flag a page sets, and a flag written without any message is the refusal the
+                // specification names. The wording of that refusal is ours — the reference has been
+                // unreachable since round 19, so only the kind of the error is pinned by a test.
+                var VALIDITY_FLAGS = ['valueMissing', 'typeMismatch', 'patternMismatch', 'tooLong',
+                    'tooShort', 'rangeUnderflow', 'rangeOverflow', 'stepMismatch', 'badInput'];
+                function validityState(flags, message) {
+                    var held = { };
+                    var any = false;
+                    VALIDITY_FLAGS.forEach(function (key) {
+                        var on = !!(flags && flags[key]);
+                        held[key] = on;
+                        if (on) any = true;
+                    });
+                    // HTML §4.15.2.10: 'customError' is the state of a control whose error came from
+                    // the page's words alone; a flag the page named says what is wrong, and then the
+                    // message is only its description.
+                    held.customError = message !== '' && !any;
+                    held.valid = !any && message === '';
+                    var level = levels.ValidityState;
+                    var made = level ? Object.create(level) : { };
+                    Object.keys(held).forEach(function (key) {
+                        // The eleven answers are read off the level in the reference and an object a
+                        // page holds lists nothing of its own, so the values the page wrote are held
+                        // unenumerably — the read is the same, the listing agrees.
+                        try {
+                            Object.defineProperty(made, key, { value: held[key], enumerable: false,
+                                writable: false, configurable: true });
+                        } catch (e) { }
+                    });
+                    return made;
+                }
+                Object.defineProperty(internalsProto, 'setFormValue', {
+                    configurable: true, writable: true, enumerable: false,
+                    value: function setFormValue() { internalsSlots(this); return undefined; } });
+                ['checkValidity', 'reportValidity'].forEach(function (name) {
                     Object.defineProperty(internalsProto, name, {
                         configurable: true, writable: true, enumerable: false,
                         value: function () {
-                            internalsSlots(this);
-                            if (name === 'checkValidity' || name === 'reportValidity') return true;
-                            return undefined;
-                        }
-                    });
+                            var slots = internalsSlots(this);
+                            var held = slots.validity;
+                            return !held || held.valid !== false;
+                        } });
                 });
+                Object.defineProperty(internalsProto, 'setValidity', {
+                    configurable: true, writable: true, enumerable: false,
+                    value: function setValidity(flags, message, anchor) {
+                        var slots = internalsSlots(this);
+                        if (flags !== undefined && flags !== null
+                            && typeof flags !== 'object' && typeof flags !== 'function') {
+                            throw new TypeError('Failed to execute ' + quoted('setValidity') + ' on '
+                                + quoted('ElementInternals') + ': parameter 1 is not of type '
+                                + quoted('ValidityStateFlags') + '.');
+                        }
+                        // The anchor is where the message is anchored; an object that is not an
+                        // element cannot anchor anything, and the reference names the parameter it
+                        // refused in the same shape it names every other wrong-typed argument.
+                        if (anchor !== undefined && anchor !== null) {
+                            var elementLevel = levels.HTMLElement;
+                            if (!elementLevel || !elementLevel.isPrototypeOf(anchor)) {
+                                throw new TypeError('Failed to execute ' + quoted('setValidity')
+                                    + ' on ' + quoted('ElementInternals') + ': parameter 3 is not of '
+                                    + 'type ' + quoted('HTMLElement') + '.');
+                            }
+                        }
+                        var text = message === undefined || message === null ? '' : String(message);
+                        var any = false;
+                        VALIDITY_FLAGS.forEach(function (key) {
+                            if (flags && flags[key]) any = true;
+                        });
+                        if (any && text === '') {
+                            throw new TypeError('Failed to execute ' + quoted('setValidity') + ' on '
+                                + quoted('ElementInternals') + ': the ' + quoted('message')
+                                + ' argument is required when a flag is set.');
+                        }
+                        slots.validationMessage = text;
+                        slots.validity = validityState(flags, text);
+                        return undefined;
+                    } });
                 // HTML §5.6: the bridge the history's own traversal calls. The event is built here,
                 // through the interface's constructor, and sent down the tree the window's listeners
                 // live on — the same path a dispatched event takes.
@@ -12152,10 +12278,12 @@ public class JavaScriptEngine : IDisposable
                             + 'non-custom elements.', 'NotSupportedError');
                     }
                     var made = Object.create(internalsProto);
-                    INTERNALS_SLOTS.set(made, { form: null, willValidate: false, validity: null,
+                    INTERNALS_SLOTS.set(made, { form: null, willValidate: false,
+                        validity: validityState(null, ''),
                         validationMessage: '', shadowRoot: this.shadowRoot === undefined ? null
-                            : this.shadowRoot, states: { }, role: null, labels: [],
-                        formAssociated: false });
+                            : this.shadowRoot,
+                        states: window.__acruxStateSet ? window.__acruxStateSet() : { },
+                        role: null, labels: [], formAssociated: false, element: this });
                     return made;
                 });
 
@@ -16307,6 +16435,15 @@ public class JavaScriptEngine : IDisposable
                     } catch (e) { }
                 }
                 function method(owner, iface, name, needed, body) {
+                    // The five arguments are the whole contract. A call that writes them in the older
+                    // three-argument order names the member '0' and answers nothing at all, which is
+                    // how two members of one interface vanished unnoticed; the mistake is raised where
+                    // it is made instead of becoming a silent hole in a level. An operation the spec
+                    // table gives no arity for takes none.
+                    if (typeof name !== 'string' || typeof body !== 'function') {
+                        throw new TypeError('method called with ' + String(name) + ' as the name');
+                    }
+                    if (typeof needed !== 'number') needed = 0;
                     if (!owner || carried(owner, name)) return;
                     var made = function () {
                         as(this, iface, name);
@@ -17960,6 +18097,849 @@ public class JavaScriptEngine : IDisposable
                         } catch (e) { }
                         window[name] = made;
                     });
+                // The helpers this block built are the ones the next block needs too: an interface is
+                // declared the same way wherever it is written.
+                window.__acruxIface = { level: level, expose: expose, read: slotRead,
+                    write: slotWrite, method: method, refused: refused, promised: promised,
+                    as: as, quoted: quoted, constants: constants, both: both, shell: shell,
+                    state: state, adopted: adopted };
+            })();
+
+            // ── The members the DOM text names and the level had never answered ──
+            // probe120 parses every 'interface X { ... }' block of docs/DOM.txt and asks whether a
+            // page can read the member off the prototype the interface owns. 1433 members were
+            // checked and 47 interfaces fell short. What follows is the part of that list the
+            // standard really puts on the level: the members an object answers for itself are also
+            // named where the interface says them (Web IDL §3.5, §4.4.2 — a page that tests
+            // ''in X.prototype'' and a page that holds an object must agree), the operations that
+            // the engine can carry out are written for real, and the legacy numbers a page still
+            // reads are given the values the specifications fixed. What the document lists through
+            // a mixin, or what the running specifications have since dropped, is named in the probe
+            // rather than moved onto a level that has no business carrying it.
+            (function () {
+                var IF = window.__acruxIface;
+                if (!IF) return;
+                var levels = window.__domProto || { };
+                var quoted = IF.quoted;
+                function refusedAttribute() { return new TypeError('Illegal invocation'); }
+                // A member the instance carries itself — a host object answers through the engine's
+                // own surface, which shadows the level — is named here so that the level lists it
+                // too. The value written is the one the interface begins an unattached object with.
+                function named(iface, name, value) {
+                    var level = IF.level(iface, null);
+                    if (!level) return;
+                    var held;
+                    try { held = Object.getOwnPropertyDescriptor(level, name); } catch (e) { held = null; }
+                    // An existing answer that a page cannot reconfigure is the engine's own.
+                    if (held && held.configurable === false) return;
+                    // A second kind of existing answer is a read the engine gave the interface
+                    // itself — the length of a list counts the items the list holds — and it is not
+                    // one of the marked placeholders this bootstrap left where an event keeps its
+                    // dictionary. Overwriting it with the interface's default would silence a real
+                    // read, so it is carried into the version below and asked first.
+                    var declared = window.__acruxDeclared;
+                    var marked = false;
+                    if (held && declared) {
+                        try {
+                            marked = !!(declared.get(held.get) || declared.get(held.set)
+                                || declared.get(held.value));
+                        } catch (e) { marked = false; }
+                    }
+                    var carried = null;
+                    var carriedSet = null;
+                    if (held && !marked) {
+                        if (typeof held.get === 'function') carried = held.get;
+                        if (typeof held.set === 'function') carriedSet = held.set;
+                    }
+                    try {
+                        Object.defineProperty(level, name, { configurable: true,
+                            enumerable: held ? held.enumerable !== false : true,
+                            get: function () {
+                                IF.as(this, iface, name, true);
+                                var stored = window.__acruxEventHeld
+                                    ? window.__acruxEventHeld(this, name) : undefined;
+                                if (stored !== undefined) return stored;
+                                if (carried) {
+                                    try {
+                                        var answered = carried.call(this);
+                                        if (answered !== undefined) return answered;
+                                    } catch (e) { }
+                                }
+                                return typeof value === 'function' ? value.call(this) : value;
+                            },
+                            set: carriedSet ? function (written) {
+                                IF.as(this, iface, name, true);
+                                carriedSet.call(this, written);
+                            } : undefined });
+                    } catch (e) { }
+                }
+                function writableNamed(iface, name, read, write) {
+                    var level = IF.level(iface, null);
+                    if (!level) return;
+                    var held;
+                    try { held = Object.getOwnPropertyDescriptor(level, name); } catch (e) { held = null; }
+                    if (held) return;
+                    try {
+                        Object.defineProperty(level, name, { configurable: true, enumerable: true,
+                            get: function () {
+                                IF.as(this, iface, name, true);
+                                return read.call(this);
+                            },
+                            set: function (value) {
+                                IF.as(this, iface, name);
+                                if (write) write.call(this, value);
+                            } });
+                    } catch (e) { }
+                }
+                function operation(iface, name, needed, body) {
+                    var level = IF.level(iface, null);
+                    if (!level) return;
+                    IF.method(level, iface, name, needed, body);
+                }
+
+                // ── DOM §2.4, §4.6.8 and the event families ──────────────────────
+                // An event the engine dispatched is trusted; one a page built is not, and the
+                // distinction is a member of the interface, not of the instance a page holds.
+                // DOM §2.9: only the engine raises a trusted event, and the object it raises carries
+                // the flag itself — the level answers for the objects that hold nothing.
+                named('Event', 'isTrusted', false);
+                named('UIEvent', 'detail', 0);
+                named('CloseEvent', 'wasClean', false);
+                named('CloseEvent', 'code', 1006);
+                named('CloseEvent', 'reason', '');
+                named('ErrorEvent', 'message', '');
+                named('ErrorEvent', 'filename', '');
+                named('ErrorEvent', 'lineno', 0);
+                named('ErrorEvent', 'colno', 0);
+                named('ErrorEvent', 'error', null);
+                named('CompositionEvent', 'locale', '');
+                named('ClipboardEvent', 'clipboardData', null);
+                named('FormDataEvent', 'formData', null);
+                named('PointerEvent', 'coalescedEvents', function () { return [ ]; });
+                named('PointerEvent', 'predictedEvents', function () { return [ ]; });
+                named('Touch', 'altitudeAngle', Math.PI / 2);
+                named('Touch', 'azimuthAngle', 0);
+                named('Touch', 'touchType', 'direct');
+                named('Touch', 'force', 1);
+                named('NodeList', 'length', 0);
+                named('DOMRectList', 'length', 0);
+                named('FileList', 'length', 0);
+                named('StyleSheetList', 'length', 0);
+                named('HTMLCollection', 'length', 0);
+                named('NodeList', 'item', 1, function item(index) { return null; });
+                // DOM §5.3: the fragment serialisation a page asks for without the safety net is the
+                // same text the tree already answers with.
+                operation('ShadowRoot', 'getHTMLUnsafe', 0, function getHTMLUnsafe() {
+                    return this.innerHTML === undefined ? '' : String(this.innerHTML);
+                });
+
+                // ── DOM §4.15: the legacy code a DOMException still carries ───────
+                var LEGACY = { INDEX_SIZE_ERR: 1, DOMSTRING_SIZE_ERR: 2, HIERARCHY_REQUEST_ERR: 3,
+                    WRONG_DOCUMENT_ERR: 4, INVALID_CHARACTER_ERR: 5, NO_DATA_ALLOWED_ERR: 6,
+                    NO_MODIFICATION_ALLOWED_ERR: 7, NOT_FOUND_ERR: 8, NOT_SUPPORTED_ERR: 9,
+                    INUSE_ATTRIBUTE_ERR: 10, INVALID_STATE_ERR: 11, SYNTAX_ERR: 12,
+                    INVALID_MODIFICATION_ERR: 13, NAMESPACE_ERR: 14, INVALID_ACCESS_ERR: 15,
+                    VALIDATION_ERR: 16, TYPE_MISMATCH_ERR: 17, SECURITY_ERR: 18, NETWORK_ERR: 19,
+                    ABORT_ERR: 20, URL_MISMATCH_ERR: 21, QUOTA_EXCEEDED_ERR: 22, TIMEOUT_ERR: 23,
+                    INVALID_NODE_TYPE_ERR: 24, DATA_CLONE_ERR: 25 };
+                // The name a message was written under, and the number that name had before the
+                // names came in (DOM §4.15): a name the table does not hold — every one the later
+                // specifications added — answers 0, which is what the reference gives.
+                var CODE = { IndexSizeError: 1, HierarchyRequestError: 3, WrongDocumentError: 4,
+                    InvalidCharacterError: 5, NoModificationAllowedError: 7, NotFoundError: 8,
+                    NotSupportedError: 9, InUseAttributeError: 10, InvalidStateError: 11,
+                    SyntaxError: 12, InvalidModificationError: 13, NamespaceError: 14,
+                    InvalidAccessError: 15, TypeMismatchError: 17, SecurityError: 18,
+                    NetworkError: 19, AbortError: 20, URLMismatchError: 21, QuotaExceededError: 22,
+                    TimeoutError: 23, InvalidNodeTypeError: 24, DataCloneError: 25 };
+                (function () {
+                    var level = IF.level('DOMException', 'Error');
+                    IF.both('DOMException', LEGACY);
+                    var held;
+                    try { held = Object.getOwnPropertyDescriptor(level, 'code'); } catch (e) { held = null; }
+                    if (!held) {
+                        try {
+                            Object.defineProperty(level, 'code', { configurable: true,
+                                enumerable: true, get: function () {
+                                    IF.as(this, 'DOMException', 'code', true);
+                                    return CODE[String(this.name)] || 0;
+                                }, set: function () { } });
+                        } catch (e) { }
+                    }
+                })();
+
+                // ── HTML §4.10.6: the states a control's validity answers with ───
+                ['valueMissing', 'typeMismatch', 'patternMismatch', 'tooLong', 'tooShort',
+                    'rangeUnderflow', 'rangeOverflow', 'stepMismatch', 'badInput', 'customError',
+                    'valid'].forEach(function (name) {
+                        named('ValidityState', name, false);
+                    });
+
+                // ── HTML §4.10, §4.8.15: the elements whose reads the level had not named ──
+                named('HTMLLabelElement', 'control', function () {
+                    var held = this.getAttribute('for');
+                    if (held !== null && held !== undefined) {
+                        var found = document.getElementById(String(held));
+                        if (found) return found;
+                    }
+                    var node = this.parentNode;
+                    while (node && node.nodeType === 1) {
+                        var label = node.nodeName;
+                        if (label === 'LABEL') return node;
+                        node = node.parentNode;
+                    }
+                    return null;
+                });
+                writableNamed('HTMLOptGroupElement', 'label', function () {
+                    var held = this.getAttribute('label');
+                    return held === null || held === undefined ? '' : String(held);
+                }, function (value) { this.setAttribute('label', String(value)); });
+                named('HTMLOptGroupElement', 'disabled', function () {
+                    return this.getAttribute('disabled') !== null;
+                });
+                writableNamed('HTMLMapElement', 'name', function () {
+                    var held = this.getAttribute('name');
+                    return held === null || held === undefined ? '' : String(held);
+                }, function (value) { this.setAttribute('name', String(value)); });
+                named('HTMLMapElement', 'areas', function () {
+                    return this.getElementsByTagName('area');
+                });
+                named('HTMLImageElement', 'naturalOrientation', 'from-image');
+                operation('HTMLCanvasElement', 'probablySupportsContext', 1,
+                    function probablySupportsContext(type) {
+                        var held = String(type === undefined ? '' : type).toLowerCase();
+                        return held === '2d' || held === 'bitmaprenderer' || held === 'webgl'
+                            || held === 'webgl2' || held === 'experimental-webgl';
+                    });
+                operation('HTMLCanvasElement', 'isContextLost', 0, function isContextLost() {
+                    return false;
+                });
+                operation('HTMLCanvasElement', 'transferControlToOffscreen', 0,
+                    function transferControlToOffscreen() {
+                        return new OffscreenCanvas(this.width, this.height);
+                    });
+                // HTML §4.12.3: 'supports' is asked of the interface, not of a script element.
+                (function () {
+                    var iface = window.HTMLScriptElement;
+                    if (typeof iface !== 'function' || typeof iface.supports === 'function') return;
+                    var supports = function supports(type) {
+                        if (arguments.length < 1) {
+                            throw new TypeError('Failed to execute ' + quoted('supports') + ' on '
+                                + quoted('HTMLScriptElement') + ': 1 argument required, but only '
+                                + arguments.length + ' present.');
+                        }
+                        return String(type === undefined ? '' : type).toLowerCase() === 'importmap';
+                    };
+                    try {
+                        Object.defineProperty(supports, 'name', { value: 'supports',
+                            configurable: true });
+                        Object.defineProperty(iface, 'supports', { value: supports, writable: true,
+                            enumerable: true, configurable: true });
+                    } catch (e) { }
+                })();
+
+                // ── CSSOM §5.3, §5.4: the legacy face of a style sheet ───────────
+                named('CSSStyleSheet', 'rules', function () { return this.cssRules; });
+                operation('CSSStyleSheet', 'replace', 1, function replace(input) {
+                    if (typeof input !== 'string') {
+                        return Promise.reject(new TypeError('Failed to execute '
+                            + quoted('replace') + ' on ' + quoted('CSSStyleSheet') + ': parameter 1 '
+                            + 'is not of type ' + quoted('USVString') + '.'));
+                    }
+                    try {
+                        this.replaceSync(input);
+                    } catch (e) {
+                        return Promise.reject(e);
+                    }
+                    return Promise.resolve(undefined);
+                });
+                operation('CSSStyleSheet', 'addRule', 1, function addRule(selector, style, index) {
+                    var at = index === undefined ? this.cssRules.length : Number(index);
+                    return this.insertRule(String(selector === undefined ? '' : selector) + '{'
+                        + String(style === undefined ? '' : style) + '}', at);
+                });
+                operation('CSSStyleSheet', 'removeRule', 0, function removeRule(index) {
+                    var at = index === undefined ? this.cssRules.length - 1 : Number(index);
+                    this.deleteRule(at);
+                    return undefined;
+                });
+                if (levels.CSSImportRule) named('CSSImportRule', 'styleSheet', null);
+                // HTML §4.8.10.23: an embed with no document inside answers null, which is what a
+                // page that has to read a document out of a frame asks first.
+                operation('HTMLEmbedElement', 'getSVGDocument', 0, function getSVGDocument() {
+                    return null;
+                });
+                // DOM §2.9.5 and CSS Pseudo-Element §4.2: the filter constants a TreeWalker answers
+                // with, and the two small objects a resize and a custom state are read through.
+                (function () {
+                    IF.level('NodeFilter', null);
+                    IF.level('ResizeObserverSize', null);
+                    var filters = { FILTER_ACCEPT: 1, FILTER_REJECT: 2, FILTER_SKIP: 3,
+                        SHOW_ALL: 0xFFFFFFFF, SHOW_ELEMENT: 0x1, SHOW_ATTRIBUTE: 0x2,
+                        SHOW_TEXT: 0x4, SHOW_CDATA_SECTION: 0x8, SHOW_ENTITY_REFERENCE: 0x10,
+                        SHOW_ENTITY: 0x20, SHOW_PROCESSING_INSTRUCTION: 0x40, SHOW_COMMENT: 0x80,
+                        SHOW_DOCUMENT: 0x100, SHOW_DOCUMENT_TYPE: 0x200,
+                        SHOW_DOCUMENT_FRAGMENT: 0x400, SHOW_NOTATION: 0x800 };
+                    IF.both('NodeFilter', filters);
+                    var sizes = { inlineSize: 0, blockSize: 0 };
+                    IF.both('ResizeObserverSize', sizes);
+                    // CSS Custom States §3: the set a page writes its own pseudo-class names into. The
+                    // interface names no constructor — a page reaches one through an element's
+                    // internals — so the objects are made from the level by the factory the
+                    // 'attachInternals' operation keeps, and each one holds its own list.
+                    var states = IF.level('CustomStateSet', null);
+                    // The list a set holds is kept on the set itself, where every pass of this script
+                    // finds it again: a WeakMap written into a single run's closure is a state two
+                    // runs cannot share, and the read of the size is the one member that asks the
+                    // object rather than a method the first run left behind.
+                    function bag(receiver) {
+                        var made;
+                        try { made = receiver.__acruxStates; } catch (e) { made = null; }
+                        if (made) return made;
+                        var bags = window.__acruxStateBags;
+                        if (!bags) {
+                            bags = new WeakMap();
+                            window.__acruxStateBags = bags;
+                        }
+                        made = bags.get(receiver);
+                        if (!made) {
+                            made = [ ];
+                            try { bags.set(receiver, made); } catch (e) { }
+                        }
+                        return made;
+                    }
+                    ['add', 'delete', 'has'].forEach(function (verb) {
+                        IF.method(states, 'CustomStateSet', verb, 1, function (value) {
+                            var list = bag(this);
+                            var text = String(value);
+                            var at = list.indexOf(text);
+                            if (verb === 'add') {
+                                if (at < 0) list.push(text);
+                                return undefined;
+                            }
+                            if (verb === 'delete') {
+                                if (at >= 0) list.splice(at, 1);
+                                return at >= 0;
+                            }
+                            return at >= 0;
+                        });
+                    });
+                    IF.method(states, 'CustomStateSet', 'clear', 0, function clear() {
+                        bag(this).length = 0;
+                        return undefined;
+                    });
+                    try {
+                        Object.defineProperty(states, 'size', { configurable: true,
+                            enumerable: true, get: function () {
+                                return bag(IF.as(this, 'CustomStateSet', 'size', true)).length;
+                            } });
+                    } catch (e) { }
+                    ['entries', 'keys', 'values'].forEach(function (verb) {
+                        IF.method(states, 'CustomStateSet', verb, 0, function () {
+                            var list = bag(this).slice(0);
+                            if (verb !== 'entries') return list[Symbol.iterator]();
+                            var made = [ ];
+                            for (var i = 0; i < list.length; i++) made.push([list[i], list[i]]);
+                            return made[Symbol.iterator]();
+                        });
+                    });
+                    IF.method(states, 'CustomStateSet', 'forEach', 1,
+                        function forEach(callback, thisArg) {
+                            if (typeof callback !== 'function') return undefined;
+                            var list = bag(this).slice(0);
+                            for (var i = 0; i < list.length; i++) {
+                                callback.call(thisArg, list[i], list[i], this);
+                            }
+                            return undefined;
+                        });
+                    // The iterable the interface declares is its values, and it is the member a page
+                    // reads the whole set through with a for-of or an Array.from.
+                    try {
+                        Object.defineProperty(states, Symbol.iterator, { value: states.values,
+                            writable: true, enumerable: false, configurable: true });
+                    } catch (e) { }
+                    window.__acruxStateSet = function () {
+                        var made = Object.create(states);
+                        try {
+                            Object.defineProperty(made, '__acruxStates', { value: [ ],
+                                enumerable: false, configurable: true, writable: true });
+                        } catch (e) { }
+                        return made;
+                    };
+                })();
+                // ── CSSOM Typed OM §3, §4: the small parse a page can lean on ────
+                // The engine keeps a declaration as the text the page wrote, so a typed value is
+                // built here out of the two shapes that carry a meaning without a stylesheet behind
+                // them: a number with a unit, and a bare keyword. Anything else — a function, a
+                // calc(), a list — is refused rather than answered with a value that would mean
+                // something else, which is what the reference does for a string it cannot read.
+                function typedValue(text) {
+                    var run = String(text === undefined || text === null ? '' : text).trim();
+                    var units = /^([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)%?([a-zA-Z]*)$/;
+                    var held = units.exec(run);
+                    if (held) {
+                        if (held[2] === '' && run.indexOf('%') < 0) {
+                            return new CSSUnitValue(Number(held[1]), 'number');
+                        }
+                        return new CSSUnitValue(Number(held[1]),
+                            run.indexOf('%') >= 0 ? 'percent' : held[2]);
+                    }
+                    if (/^[A-Za-z_-][A-Za-z0-9_-]*$/.test(run)) return new CSSKeywordValue(run);
+                    return null;
+                }
+                (function () {
+                    var level = levels.CSSStyleValue;
+                    if (!level || typeof window.CSSStyleValue !== 'function') return;
+                    var parse = function parse(property, value) {
+                        var held = typedValue(value);
+                        if (held === null) {
+                            throw new SyntaxError('Failed to execute ' + quoted('parse') + ' on '
+                                + quoted('CSSStyleValue') + ': ' + quoted(String(value))
+                                + ' is not a valid value for the property '
+                                + quoted(String(property)) + '.');
+                        }
+                        return held;
+                    };
+                    try {
+                        Object.defineProperty(parse, 'name', { value: 'parse',
+                            configurable: true });
+                        Object.defineProperty(window.CSSStyleValue, 'parse', { value: parse,
+                            writable: true, enumerable: true, configurable: true });
+                    } catch (e) { }
+                })();
+                operation('CSSNumericValue', 'toSum', 1, function toSum() {
+                    // §6.4.2: a value already expressed in the units asked for is a sum of one term;
+                    // the engine converts nothing, so a unit other than the value's own is refused.
+                    var units = Array.prototype.slice.call(arguments);
+                    var held = this.unit === undefined ? null : String(this.unit);
+                    var i;
+                    for (i = 0; i < units.length; i++) {
+                        if (String(units[i]) !== held) {
+                            throw new DOMException('Failed to execute ' + quoted('toSum') + ' on '
+                                + quoted('CSSNumericValue') + ': the engine cannot express a '
+                                + 'value in ' + quoted(String(units[i])) + '.', 'NotSupportedError');
+                        }
+                    }
+                    // §6.4.2: the sum of one term the value is already a sum of.
+                    return IF.shell('CSSMathSum', { values: [ this ] });
+                });
+                named('CSSStyleRule', 'cssRules', function () {
+                    var held = this.__acruxNested;
+                    return held || [ ];
+                });
+                named('CSSPageRule', 'marginRules', function () { return [ ]; });
+                named('CSSScopeRule', 'start', null);
+                named('CSSScopeRule', 'end', null);
+                named('CSSNestedDeclarations', 'style', null);
+                // CSS Scoping §3.3 and CSS Nested §3: the two groups the engine's parser keeps as
+                // text it does not re-walk answer with the empty list, and an insert into a group the
+                // engine never built is refused by name rather than dropped quietly.
+                (function () {
+                    var group = levels.CSSStartingStyleRule;
+                    if (!group) return;
+                    named('CSSStartingStyleRule', 'cssRules', function () {
+                        var held = this.__acruxGroup;
+                        return held && held.rules ? held.rules : [ ];
+                    });
+                    if (!Object.getOwnPropertyDescriptor(group, 'insertRule')) {
+                        IF.refused(group, 'CSSStartingStyleRule', 'insertRule', 1,
+                            'the engine has no starting-style block to write a rule into.');
+                    }
+                    if (!Object.getOwnPropertyDescriptor(group, 'deleteRule')) {
+                        IF.refused(group, 'CSSStartingStyleRule', 'deleteRule', 1,
+                            'the engine has no starting-style block to take a rule out of.');
+                    }
+                })();
+                named('CSSCounterStyleRule', 'prefix', '');
+                named('CSSCounterStyleRule', 'suffix', '');
+                operation('CSSKeyframesRule', 'findRule', 1, function findRule(name) {
+                    var held = this.cssRules;
+                    var want = String(name === undefined ? '' : name);
+                    for (var i = 0; held && i < held.length; i++) {
+                        if (String(held[i].keyText) === want) return held[i];
+                    }
+                    return null;
+                });
+                // CSS Properties and Values API §5: a named property of a declaration is the property
+                // the page writes, so the three the audit found unlisted read and write through the
+                // declaration's own get/set.
+                [['background', 'background'], ['zIndex', 'z-index'], ['azimuth', 'azimuth']]
+                    .forEach(function (pair) {
+                        var level = levels.CSSStyleDeclaration;
+                        if (!level) return;
+                        var held;
+                        try {
+                            held = Object.getOwnPropertyDescriptor(level, pair[0]);
+                        } catch (e) { held = null; }
+                        if (held) return;
+                        try {
+                            Object.defineProperty(level, pair[0], { configurable: true,
+                                enumerable: true,
+                                get: function () { return this.getPropertyValue(pair[1]); },
+                                set: function (value) {
+                                    if (value === '' || value === undefined) {
+                                        this.removeProperty(pair[1]);
+                                        return;
+                                    }
+                                    this.setProperty(pair[1], String(value));
+                                } });
+                        } catch (e) { }
+                    });
+                // §3: 'parse' and 'parseAll' are operations of the interface, so they sit on the
+                // interface object where a page calls them (Web IDL §4.4.3).
+                (function () {
+                    var iface = window.CSSStyleValue;
+                    if (typeof iface !== 'function' || typeof iface.parseAll === 'function') return;
+                    var parseAll = function parseAll(property, value) {
+                        var held = iface.parse(property, value);
+                        return held === null || held === undefined ? [ ] : [ held ];
+                    };
+                    try {
+                        Object.defineProperty(parseAll, 'name', { value: 'parseAll',
+                            configurable: true });
+                        Object.defineProperty(iface, 'parseAll', { value: parseAll, writable: true,
+                            enumerable: true, configurable: true });
+                    } catch (e) { }
+                })();
+
+                // ── Web Animations §3, §4: the timing a page reads back ──────────
+                // An effect is one object per animation, not a fresh one per read (the attribute is
+                // [SameObject]), and it carries the keyframes and the timing the animation runs on.
+                function timingOf(init) {
+                    var dict = init === undefined || init === null || typeof init !== 'object'
+                        ? (init === undefined || init === null ? { } : { duration: init }) : init;
+                    var made = { delay: 0, endDelay: 0, fill: 'none', iterateStart: 0,
+                        iterations: 1, duration: 'auto', direction: 'normal', easing: 'linear',
+                        compression: 1 };
+                    ['delay', 'endDelay', 'iterateStart', 'iterations', 'duration'].forEach(
+                        function (name) {
+                            if (dict[name] === undefined) return;
+                            made[name] = name === 'duration' && dict[name] === 'auto'
+                                ? 'auto' : Number(dict[name]);
+                        });
+                    ['fill', 'direction', 'easing'].forEach(function (name) {
+                        if (dict[name] !== undefined) made[name] = String(dict[name]);
+                    });
+                    return made;
+                }
+                function computedOf(timing, animation) {
+                    var span = (timing.duration === 'auto' ? 0 : Number(timing.duration))
+                        * (timing.iterations === Infinity ? 1 : Math.max(0,
+                            Number(timing.iterations) || 0));
+                    var made = { targetTiming: timing, activeDuration: span,
+                        iterationStart: timing.iterateStart, iterations: timing.iterations,
+                        iterationDuration: span, iterationStart_: 0, currentIteration: null,
+                        iterationProgress: null, progress: null, localTime: null, startTime: null,
+                        endpointFillMode: timing.fill };
+                    if (animation) {
+                        made.localTime = animation.currentTime === undefined ? null
+                            : animation.currentTime;
+                        made.startTime = animation.startTime === undefined ? null
+                            : animation.startTime;
+                        made.currentIteration = span > 0 && made.localTime !== null
+                            ? Math.min(Number(timing.iterations) || 0,
+                                Math.floor(made.localTime / span)) : null;
+                        made.iterationProgress = span > 0 && made.localTime !== null
+                            ? (made.localTime % span) / span : null;
+                        made.progress = made.iterationProgress;
+                    }
+                    return made;
+                }
+                function effectOf(animation) {
+                    var held = null;
+                    try { held = animation.__acruxEffect; } catch (e) { held = null; }
+                    if (held) return held;
+                    var slots = null;
+                    try { slots = animation.__acruxAnim || null; } catch (e) { slots = null; }
+                    var made = Object.create(levels.KeyframeEffect || Object.prototype);
+                    var state = { animation: animation, slots: slots,
+                        timing: slots && slots.timing ? slots.timing : timingOf(null),
+                        keyframes: slots && slots.keyframes !== undefined
+                            ? slots.keyframes : [ ], target: slots ? slots.target : null,
+                        pseudoElement: '', composite: 'replace', iterationComposite: 'replace',
+                        mixBlendMode: 'normal', spacing: 'distribute', id: '' };
+                    try {
+                        Object.defineProperty(made, '__acruxEffect', { value: state,
+                            enumerable: false, configurable: true, writable: true });
+                        Object.defineProperty(animation, '__acruxEffect', { value: made,
+                            enumerable: false, configurable: true, writable: true });
+                    } catch (e) { }
+                    return made;
+                }
+                function effectState(receiver) {
+                    var held = null;
+                    try { held = receiver.__acruxEffect; } catch (e) { held = null; }
+                    return held;
+                }
+                // The effect's own timing, and the numbers the animation has run to.
+                ['timing', 'computedTiming', 'localTime', 'startTime', 'targetTiming'].forEach(
+                    function (name) {
+                        var level = IF.level('AnimationEffect', null);
+                        var held;
+                        try { held = Object.getOwnPropertyDescriptor(level, name); }
+                        catch (e) { held = null; }
+                        if (held) return;
+                        Object.defineProperty(level, name, { configurable: true, enumerable: true,
+                            get: function () {
+                                IF.as(this, 'AnimationEffect', name, true);
+                                var state = effectState(this);
+                                var animation = state && state.animation;
+                                if (name === 'timing' || name === 'targetTiming') {
+                                    return state ? (name === 'targetTiming'
+                                        ? state.timing : state.timing) : timingOf(null);
+                                }
+                                if (name === 'computedTiming') {
+                                    return state ? computedOf(state.timing, animation)
+                                        : computedOf(timingOf(null), null);
+                                }
+                                if (name === 'localTime') return animation ? animation.currentTime : null;
+                                return animation && animation.startTime !== undefined
+                                    ? animation.startTime : null;
+                            }, set: function () { } });
+                    });
+                operation('AnimationEffect', 'getTiming', 0, function getTiming() {
+                    var state = effectState(this);
+                    return state ? state.timing : timingOf(null);
+                });
+                operation('AnimationEffect', 'getComputedTiming', 0, function getComputedTiming() {
+                    var state = effectState(this);
+                    return state ? computedOf(state.timing, state.animation)
+                        : computedOf(timingOf(null), null);
+                });
+                operation('AnimationEffect', 'updateTiming', 0, function updateTiming(dict) {
+                    var state = effectState(this);
+                    if (!state) return undefined;
+                    if (dict === undefined || dict === null) return undefined;
+                    if (typeof dict !== 'object') {
+                        throw new TypeError('Failed to execute ' + quoted('updateTiming') + ' on '
+                            + quoted('AnimationEffect') + ': parameter 1 is not of type '
+                            + quoted('optional EffectTiming') + '.');
+                    }
+                    var timing = timingOf(dict);
+                    Object.keys(dict).forEach(function (name) {
+                        if (name in timing) state.timing[name] = timing[name];
+                    });
+                    return undefined;
+                });
+                ['target', 'pseudoElement', 'composite', 'iterationComposite', 'mixBlendMode',
+                    'spacing', 'id'].forEach(function (name) {
+                        var level = IF.level('KeyframeEffect', 'AnimationEffect');
+                        var held;
+                        try { held = Object.getOwnPropertyDescriptor(level, name); }
+                        catch (e) { held = null; }
+                        if (held) return;
+                        Object.defineProperty(level, name, { configurable: true, enumerable: true,
+                            get: function () {
+                                IF.as(this, 'KeyframeEffect', name, true);
+                                var state = effectState(this);
+                                if (!state) {
+                                    return name === 'target' ? null : (name === 'id' ? ''
+                                        : (name === 'mixBlendMode' ? 'normal'
+                                            : (name === 'spacing' ? 'distribute'
+                                                : (name === 'pseudoElement' ? '' : 'replace'))));
+                                }
+                                return state[name];
+                            },
+                            set: function (value) {
+                                IF.as(this, 'KeyframeEffect', name);
+                                var state = effectState(this);
+                                if (!state) return;
+                                state[name] = name === 'id' ? (value === undefined || value === null
+                                    ? '' : String(value)) : (value === undefined ? null : value);
+                            } });
+                    });
+                operation('KeyframeEffect', 'getKeyframes', 0, function getKeyframes() {
+                    var state = effectState(this);
+                    var held = state && state.keyframes;
+                    if (held === null || held === undefined) return [ ];
+                    var made = [ ];
+                    for (var i = 0; i < held.length; i++) {
+                        if (typeof held[i] !== 'object' || held[i] === null) {
+                            throw new TypeError('Failed to execute ' + quoted('getKeyframes')
+                                + ' on ' + quoted('KeyframeEffect') + ': the keyframes held a '
+                                + 'value that is not a keyframe.');
+                        }
+                        var one = { composite: 'add', easing: 'linear', offset: null,
+                            computedOffset: i / (held.length || 1),
+                            computedEasing: 'linear' };
+                        Object.keys(held[i]).forEach(function (key) { one[key] = held[i][key]; });
+                        one.offset = held[i].offset === undefined ? null : Number(held[i].offset);
+                        made.push(one);
+                    }
+                    return made;
+                });
+                operation('KeyframeEffect', 'setKeyframes', 1, function setKeyframes(keyframes) {
+                    var state = effectState(this);
+                    if (keyframes === null || keyframes === undefined || typeof keyframes !== 'object') {
+                        throw new TypeError('Failed to execute ' + quoted('setKeyframes') + ' on '
+                            + quoted('KeyframeEffect') + ': parameter 1 is not of type '
+                            + quoted('sequence<Keyframe> or PropertyIndexedKeyframes') + '.');
+                    }
+                    if (state) state.keyframes = keyframes;
+                    return undefined;
+                });
+                operation('Animation', 'clone', 0, function clone(options) {
+                    var made = new Animation(null, null, null);
+                    var slots = null;
+                    try { slots = this.__acruxAnim || null; } catch (e) { slots = null; }
+                    var held = this.__acruxEffect;
+                    if (slots && !held) held = effectOf(this);
+                    try {
+                        Object.defineProperty(made, '__acruxAnim', { value: {
+                            playState: 'idle', currentTime: slots ? slots.currentTime : 0,
+                            startTime: null, playbackRate: this.playbackRate,
+                            id: String(this.id === undefined ? '' : this.id),
+                            timing: held ? held.__acruxEffect.timing : timingOf(null),
+                            keyframes: held ? held.__acruxEffect.keyframes : null,
+                            target: slots ? slots.target : null, span: slots ? slots.span : 0,
+                            timeline: document.timeline, rangeStart: { offset: 0,
+                                rangeType: 'normal' },
+                            rangeEnd: { offset: null, rangeType: 'normal' } },
+                            enumerable: false, configurable: true, writable: true });
+                    } catch (e) { }
+                    return made;
+                });
+                operation('Animation', 'persist', 0, function persist() {
+                    // Web Animations §3.5.2: only an animation attached to a target and an effect can
+                    // be persisted, which is the state the engine's own list holds.
+                    if (!this.effect || !this.effect.target) {
+                        throw new DOMException('Failed to execute ' + quoted('persist') + ' on '
+                            + quoted('Animation') + ': Unable to persist the animation with a '
+                            + 'null target or effect.', 'InvalidStateError');
+                    }
+                    return undefined;
+                });
+                operation('Animation', 'updatePlaybackRate', 1, function updatePlaybackRate(rate) {
+                    var held = Number(rate);
+                    if (!isFinite(held)) {
+                        throw new TypeError('Failed to execute ' + quoted('updatePlaybackRate')
+                            + ' on ' + quoted('Animation') + ': The provided playback rate (' + rate
+                            + ') is not a finite number.');
+                    }
+                    try { this.playbackRate = held; } catch (e) { }
+                    // The rate set through this operation takes effect at the next orientation
+                    // change (Web Animations §3.5.3); the engine has no pending interval to wait on,
+                    // so the promise the operation returns settles at once.
+                    return Promise.resolve(undefined);
+                });
+                (function () {
+                    var level = IF.level('Animation', null);
+                    if (!level) return;
+                    var held;
+                    try { held = Object.getOwnPropertyDescriptor(level, 'effect'); }
+                    catch (e) { held = null; }
+                    // The attribute is [SameObject]: the effect a page reads twice is the one object,
+                    // and it carries the keyframes and the timing the animation runs on.
+                    try {
+                        Object.defineProperty(level, 'effect', { configurable: true,
+                            enumerable: false,
+                            get: function () {
+                                var slots = null;
+                                try { slots = this.__acruxAnim || null; } catch (e) { slots = null; }
+                                if (!slots) return null;
+                                // An animation the page built itself carries the effect it was handed;
+                                // one an element started carries the effect of its keyframes.
+                                if (Object.prototype.hasOwnProperty.call(slots, 'effect')) {
+                                    return slots.effect;
+                                }
+                                return effectOf(this);
+                            },
+                            set: function (value) {
+                                IF.as(this, 'Animation', 'effect');
+                                var state = effectOf(this);
+                                if (state && state.__acruxEffect) {
+                                    state.__acruxEffect.keyframes = value === null ? null
+                                        : value;
+                                }
+                            } });
+                    } catch (e) { }
+                })();
+                // Web Animations §3.5.3: the constructor is not an abstraction the engine hides —
+                // 'new Animation()' answers an animation in the idle state, and every read the
+                // interface declares works on it. The fields the engine's own block wrote read a map
+                // only the engine can enter, so the same reads are taken over here for the objects a
+                // page builds, and handed back for the ones the engine built.
+                (function () {
+                    var level = IF.level('Animation', null);
+                    if (!level) return;
+                    var fields = ['startTime', 'currentTime', 'playbackRate', 'playState',
+                        'pending', 'duration', 'startDelay', 'finishDuration', 'replaceState',
+                        'rangeStart', 'rangeEnd', 'id', 'onfinish', 'oncancel', 'onremove',
+                        'ready', 'finished'];
+                    var BEGIN = { startTime: null, currentTime: null, playbackRate: 1,
+                        playState: 'idle', pending: false, duration: NaN, startDelay: 0,
+                        finishDuration: NaN, replaceState: 'active', id: '', onfinish: null,
+                        oncancel: null, onremove: null };
+                    fields.forEach(function (field) {
+                        var held;
+                        try { held = Object.getOwnPropertyDescriptor(level, field); }
+                        catch (e) { held = null; }
+                        if (held && held.configurable === false) return;
+                        var earlier = held && held.get;
+                        var writer = held && held.set;
+                        try {
+                            Object.defineProperty(level, field, { configurable: true,
+                                enumerable: held ? held.enumerable : false,
+                                get: function () {
+                                    var slots = this.__acruxAnim;
+                                    if (!slots) {
+                                        return earlier ? earlier.call(this) : BEGIN[field];
+                                    }
+                                    if (field === 'ready' || field === 'finished') {
+                                        return Promise.resolve(this);
+                                    }
+                                    if (field === 'duration') {
+                                        return slots.span === undefined ? NaN : slots.span;
+                                    }
+                                    if (field === 'finishDuration') {
+                                        return slots.span === undefined ? NaN : slots.span;
+                                    }
+                                    return slots[field] !== undefined ? slots[field]
+                                        : BEGIN[field];
+                                },
+                                set: writer ? function (value) {
+                                    var slots = this.__acruxAnim;
+                                    if (!slots) { writer.call(this, value); return; }
+                                    slots[field] = value;
+                                } : undefined });
+                        } catch (e) { }
+                    });
+                    window.Animation = function Animation(effect, timeline) {
+                        var self = Object.create(window.Animation.prototype);
+                        var slots = { playState: 'idle', currentTime: null, startTime: null,
+                            playbackRate: 1, pending: false, id: '', replaceState: 'active',
+                            onfinish: null, oncancel: null, onremove: null, startDelay: 0,
+                            timeline: timeline || document.timeline,
+                            rangeStart: { offset: 0, rangeType: 'normal' },
+                            rangeEnd: { offset: null, rangeType: 'normal' },
+                            effect: effect === undefined ? null : effect };
+                        Object.defineProperty(self, '__acruxAnim', { value: slots,
+                            enumerable: false, configurable: true, writable: true });
+                        return self;
+                    };
+                    window.Animation.prototype = level;
+                    try {
+                        Object.defineProperty(level, 'constructor', { value: window.Animation,
+                            writable: true, enumerable: false, configurable: true });
+                    } catch (e) { }
+                })();
+                (function () {
+                    var level = IF.level('KeyframeEffect', 'AnimationEffect');
+                    var earlier = window.KeyframeEffect;
+                    if (typeof earlier !== 'function' || !level) return;
+                    window.KeyframeEffect = function KeyframeEffect(target, keyframes, options) {
+                        var made = effectOf({ __acruxAnim: { target: target || null,
+                            keyframes: keyframes || [ ], timing: timingOf(options),
+                            currentTime: 0, playbackRate: 1 },
+                            playbackRate: 1, id: '', currentTime: 0 });
+                        return made;
+                    };
+                    window.KeyframeEffect.prototype = level;
+                    try {
+                        Object.defineProperty(level, 'constructor', { value: window.KeyframeEffect,
+                            writable: true, enumerable: false, configurable: true });
+                    } catch (e) { }
+                })();
             })();
 
             // ── The shape every installed member is finished in ──────────────────

@@ -18,7 +18,8 @@
     var LEVELS = {
         Event: ['AT_TARGET', 'BUBBLING_PHASE', 'CAPTURING_PHASE', 'NONE', 'bubbles',
             'cancelBubble', 'cancelable', 'composed', 'composedPath', 'constructor',
-            'currentTarget', 'defaultPrevented', 'eventPhase', 'initEvent', 'preventDefault',
+            'currentTarget', 'defaultPrevented', 'eventPhase', 'initEvent', 'isTrusted',
+            'preventDefault',
             'returnValue', 'srcElement', 'stopImmediatePropagation', 'stopPropagation', 'target',
             'timeStamp', 'type'],
         CustomEvent: ['constructor', 'detail', 'initCustomEvent'],
@@ -38,12 +39,14 @@
         WheelEvent: ['DOM_DELTA_LINE', 'DOM_DELTA_PAGE', 'DOM_DELTA_PIXEL', 'constructor',
             'deltaMode', 'deltaX', 'deltaY', 'deltaZ', 'wheelDelta', 'wheelDeltaX', 'wheelDeltaY'],
         DragEvent: ['constructor', 'dataTransfer'],
-        PointerEvent: ['altitudeAngle', 'azimuthAngle', 'constructor', 'getCoalescedEvents',
+        PointerEvent: ['altitudeAngle', 'azimuthAngle', 'coalescedEvents', 'constructor',
+            'getCoalescedEvents',
             'getPredictedEvents', 'height', 'isPrimary', 'persistentDeviceId', 'pointerId',
-            'pointerType', 'pressure', 'tangentialPressure', 'tiltX', 'tiltY', 'twist', 'width'],
+            'pointerType', 'predictedEvents', 'pressure', 'tangentialPressure', 'tiltX', 'tiltY',
+            'twist', 'width'],
         TouchEvent: ['altKey', 'changedTouches', 'constructor', 'ctrlKey', 'metaKey', 'shiftKey',
             'targetTouches', 'touches'],
-        CompositionEvent: ['constructor', 'data', 'initCompositionEvent'],
+        CompositionEvent: ['constructor', 'data', 'initCompositionEvent', 'locale'],
         ProgressEvent: ['constructor', 'lengthComputable', 'loaded', 'total'],
         MessageEvent: ['constructor', 'data', 'initMessageEvent', 'lastEventId', 'origin', 'ports',
             'source', 'userActivation'],
@@ -75,13 +78,15 @@
     });
 
     // ── B. The instance carries the trusted flag and nothing else ────────────
-    // DOM §2.9: 'isTrusted' is the one member an event owns; a page that builds an event is not the
-    // engine, so the flag answers false (measured for the constructor and the legacy factory alike).
+    // DOM §2.9: 'isTrusted' is the one member an event owns, and only the engine raises a trusted
+    // one — a page that builds an event, with the constructor or with the legacy factory, is not the
+    // engine. Round 21 fixed the legacy factory: 'DocumentHost.createEvent' was handing out a
+    // 'ScriptEvent' whose flag defaulted to true.
     ck('B1 an event owns only isTrusted', (function () {
         return own(new Event('x')) === 'isTrusted' && own(new MouseEvent('x')) === 'isTrusted'
             && Object.keys(new Event('x')).join(',') === 'isTrusted'
             && new Event('x').isTrusted === false
-            && document.createEvent('HTMLEvents').isTrusted === true;
+            && document.createEvent('HTMLEvents').isTrusted === false;
     })(), (function () {
         return [own(new Event('x')), Object.keys(new Event('x')), String(new Event('x').isTrusted),
             String(document.createEvent('HTMLEvents').isTrusted),

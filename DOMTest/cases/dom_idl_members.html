@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html>
+<head><title>The members docs/DOM.txt puts on the level (DOM §2.4, §4.15, §5.3, HTML §4.8.10.2, §4.8.15, §4.10.6, §4.10.9, CSSOM §5.3-§5.5, CSSOM Typed OM §3-§6, Web Animations §3.5, §4.4-§4.6)</title></head>
+<body>
+<div id="box"><label id="lab" for="txt">L</label><input id="txt" required>
+<select id="sel"><optgroup id="og" label="Group" disabled><option>x</option></optgroup></select>
+<map id="mp" name="here"><area id="ar" href="/a" alt="a"></map>
+<canvas id="cv" width="8" height="6"></canvas></div>
+<script>
+// Round 21. The reference browser has been unreachable since round 19, so this round's expected
+// values come from the interface text in docs/DOM.txt and from the specifications each row cites;
+// every one of them is a member the audit probe (probes/probe120.html) found missing from a level
+// the engine publishes. Nothing here is read off a live reference, and the record says so.
+function ck(name, fn, info) {
+    var ok = false;
+    try { ok = !!fn(); }
+    catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message); }
+    __T(name, ok === true, info === undefined ? '' : String(
+        typeof info === 'function' ? info() : info));
+}
+function done(name, fn) {
+    var made;
+    try { made = fn(); }
+    catch (e) {
+        __T(name, false, 'threw ' + (e && e.name) + ': ' + (e && e.message));
+        return Promise.resolve(null);
+    }
+    return Promise.resolve(made).then(function (value) {
+        __T(name, value === true, typeof value === 'string' ? value : '');
+        return null;
+    }, function (error) {
+        __T(name, false, 'rej ' + (error && error.name) + ': ' + (error && error.message));
+        return null;
+    });
+}
+function refused(fn) {
+    try { var v = fn(); return 'no-throw:' + (v === undefined ? 'undefined' : String(v)); }
+    catch (e) { return String(e && e.name) + ':' + String(e && e.message); }
+}
+function refuses(fn, beginning) { return refused(fn).indexOf(beginning) === 0; }
+function tag(o) { try { return Object.prototype.toString.call(o); } catch (e) { return 'ERR'; } }
+function named(iface, members) {
+    var level = window[iface].prototype;
+    for (var i = 0; i < members.length; i++) {
+        if (!(members[i] in level)) return 'no ' + members[i];
+    }
+    return '';
+}
+
+(function () {
+    // ── A. the members an event answers whether or not the page built it ─────────
+    ck('A1 an event the engine dispatched is trusted and one the page built is not',
+        function () {
+            return named('Event', ['isTrusted']) === ''
+                && new Event('x').isTrusted === false
+                && document.createEvent('MouseEvents').isTrusted === false;
+        }, function () { return String(new Event('x').isTrusted); });
+    ck('A2 the close event keeps the code and the reason it was closed with', function () {
+        var plain = new CloseEvent('c');
+        var held = new CloseEvent('c', { wasClean: true, code: 1000, reason: 'bye' });
+        return named('CloseEvent', ['wasClean', 'code', 'reason']) === ''
+            && plain.wasClean === false && plain.code === 1006 && plain.reason === ''
+            && held.wasClean === true && held.code === 1000 && held.reason === 'bye'
+            && tag(held) === '[object CloseEvent]';
+    }, function () {
+        var plain = new CloseEvent('c');
+        return [plain.wasClean, plain.code, JSON.stringify(plain.reason)].join('/');
+    });
+    ck('A3 the error, composition, clipboard and form-data events name their own members',
+        function () {
+            var err = new ErrorEvent('e');
+            return named('ErrorEvent', ['message', 'filename', 'lineno', 'colno', 'error']) === ''
+                && named('CompositionEvent', ['locale']) === ''
+                && named('ClipboardEvent', ['clipboardData']) === ''
+                && named('FormDataEvent', ['formData']) === ''
+                && err.message === '' && err.filename === '' && err.lineno === 0
+                && err.colno === 0 && err.error === null
+                && new ErrorEvent('e', { message: 'bad', lineno: 3 }).message === 'bad'
+                && new CompositionEvent('x').locale === '';
+        }, function () {
+            var err = new ErrorEvent('e');
+            return [err.message, err.lineno, String(err.error)].join('/');
+        });
+    ck('A4 a pointer event answers the coalesced runs with empty lists', function () {
+        return named('PointerEvent', ['coalescedEvents', 'predictedEvents']) === ''
+            && Array.isArray(new PointerEvent('p').coalescedEvents)
+            && new PointerEvent('p').coalescedEvents.length === 0
+            && new PointerEvent('p').predictedEvents.length === 0;
+    }, function () { return String(new PointerEvent('p').coalescedEvents); });
+    ck('A5 a touch carries the angles and the kind the interface begins it with', function () {
+        return named('Touch', ['altitudeAngle', 'azimuthAngle', 'touchType', 'force']) === ''
+            && Math.abs(Object.create(Touch.prototype).altitudeAngle - Math.PI / 2) < 1e-12
+            && Object.create(Touch.prototype).azimuthAngle === 0
+            && Object.create(Touch.prototype).touchType === 'direct'
+            && refused(function () { return Touch.prototype.altitudeAngle; })
+                === 'TypeError:Illegal invocation';
+    }, function () { return String(Object.create(Touch.prototype).touchType); });
+    ck('A6 the list interfaces answer a length even before an object holds anything', function () {
+        return named('NodeList', ['length']) === '' && named('HTMLCollection', ['length']) === ''
+            && named('StyleSheetList', ['length']) === '' && named('DOMRectList', ['length']) === ''
+            && named('FileList', ['length']) === ''
+            && Object.create(NodeList.prototype).length === 0
+            && document.childNodes.length === document.childNodes.length;
+    }, function () { return String(Object.create(NodeList.prototype).length); });
+
+    // ── B. DOM §4.15: the legacy code a DOMException still answers ───────────────
+    ck('B1 the legacy numbers are on the level and on the interface object', function () {
+        var want = [['INDEX_SIZE_ERR', 1], ['DOMSTRING_SIZE_ERR', 2], ['HIERARCHY_REQUEST_ERR', 3],
+            ['WRONG_DOCUMENT_ERR', 4], ['INVALID_CHARACTER_ERR', 5], ['NO_DATA_ALLOWED_ERR', 6],
+            ['NO_MODIFICATION_ALLOWED_ERR', 7], ['NOT_FOUND_ERR', 8], ['NOT_SUPPORTED_ERR', 9],
+            ['INUSE_ATTRIBUTE_ERR', 10], ['INVALID_STATE_ERR', 11], ['SYNTAX_ERR', 12],
+            ['INVALID_MODIFICATION_ERR', 13], ['NAMESPACE_ERR', 14], ['INVALID_ACCESS_ERR', 15],
+            ['VALIDATION_ERR', 16], ['TYPE_MISMATCH_ERR', 17], ['SECURITY_ERR', 18],
+            ['NETWORK_ERR', 19], ['ABORT_ERR', 20], ['URL_MISMATCH_ERR', 21],
+            ['QUOTA_EXCEEDED_ERR', 22], ['TIMEOUT_ERR', 23], ['INVALID_NODE_TYPE_ERR', 24],
+            ['DATA_CLONE_ERR', 25]];
+        for (var i = 0; i < want.length; i++) {
+            if (DOMException[want[i][0]] !== want[i][1]) return 'object ' + want[i][0];
+            if (DOMException.prototype[want[i][0]] !== want[i][1]) return 'level ' + want[i][0];
+            if (Object.getOwnPropertyDescriptor(DOMException.prototype, want[i][0]).writable) {
+                return 'writable ' + want[i][0];
+            }
+        }
+        return true;
+    }, function () { return [String(DOMException.INDEX_SIZE_ERR),
+        String(DOMException.prototype.DATA_CLONE_ERR)].join('/'); });
+    ck('B2 code answers the number the name had before the names came in', function () {
+        var size = new DOMException('x', 'IndexSizeError');
+        var notAllowed = new DOMException('x', 'NotAllowedError');
+        var bare = new DOMException('x');
+        return 'code' in DOMException.prototype && size.code === 1
+            && notAllowed.code === 0 && bare.code === 0
+            && new DOMException('x', 'DataCloneError').code === 25
+            && refused(function () { return DOMException.prototype.code; })
+                === 'TypeError:Illegal invocation';
+    }, function () {
+        return [new DOMException('x', 'IndexSizeError').code,
+            new DOMException('x', 'NotAllowedError').code].join('/');
+    });
+
+    // ── C. HTML §4.10.6: the states a control's validity answers with ──────────
+    ck('C1 the ten states are members of the interface, not only of an object', function () {
+        var input = document.getElementById('txt');
+        var state = input.validity;
+        return named('ValidityState', ['valueMissing', 'typeMismatch', 'patternMismatch', 'tooLong',
+            'tooShort', 'rangeUnderflow', 'rangeOverflow', 'stepMismatch', 'badInput',
+            'customError', 'valid']) === ''
+            && state.valueMissing === true && state.valid === false
+            && Object.create(ValidityState.prototype).valid === false
+            && refused(function () { return ValidityState.prototype.valid; })
+                === 'TypeError:Illegal invocation';
+    }, function () {
+        var state = document.getElementById('txt').validity;
+        return [state.valueMissing, state.valid, 'valid' in ValidityState.prototype].join('/');
+    });
+    ck('C2 the members a mixin contributes stay on the interface that includes it', function () {
+        // The document flattens HTMLOrForeignElement and GlobalEventHandlers into the elements that
+        // include them, and the reference writes the result on HTMLElement — a level that listed them
+        // beside Element's own members would make a page's 'in Element.prototype' answer a lie.
+        return 'focus' in HTMLElement.prototype && 'click' in HTMLElement.prototype
+            && 'innerText' in HTMLElement.prototype && 'style' in HTMLElement.prototype
+            && !('focus' in Element.prototype) && !('innerText' in Element.prototype);
+    }, function () {
+        return ['focus' in HTMLElement.prototype, 'focus' in Element.prototype,
+            'innerText' in HTMLElement.prototype].join('/');
+    });
+    ck('C3 an internals answers the validity the page wrote into it', function () {
+        if (!customElements.get('idl-validity')) {
+            customElements.define('idl-validity', class extends HTMLElement { });
+        }
+        var internals = document.createElement('idl-validity').attachInternals();
+        var fresh = internals.validity;
+        var held = tag(fresh) === '[object ValidityState]' && fresh.valid === true
+            && fresh.valueMissing === false && fresh.customError === false
+            && internals.checkValidity() === true && internals.reportValidity() === true
+            && internals.validationMessage === '';
+        internals.setValidity({ valueMissing: true, tooLong: true }, 'fill me in');
+        held = held && internals.validity.valueMissing === true
+            && internals.validity.tooLong === true && internals.validity.valid === false
+            && internals.validity.customError === false
+            && internals.validationMessage === 'fill me in'
+            && internals.checkValidity() === false && internals.reportValidity() === false;
+        // A message on its own is the custom error the specification describes.
+        internals.setValidity({ }, 'nope');
+        held = held && internals.validity.customError === true && internals.validity.valid === false
+            && internals.validationMessage === 'nope';
+        internals.setValidity({});
+        held = held && internals.validity.valid === true && internals.validationMessage === ''
+            && internals.checkValidity() === true;
+        // The argument the dictionary cannot read, a flag with nothing to say, and an anchor that
+        // is not an element are the three refusals the operation has.
+        return held && refused(function () { internals.setValidity('not a dictionary'); })
+                .indexOf('TypeError:Failed to execute ') === 0
+            && refused(function () { internals.setValidity({ stepMismatch: true }); })
+                .indexOf('TypeError:Failed to execute ') === 0
+            && refused(function () { internals.setValidity({ }, 'x', 7); })
+                === "TypeError:Failed to execute 'setValidity' on 'ElementInternals': parameter 3"
+                + " is not of type 'HTMLElement'."
+            && refused(function () { internals.setValidity({ }, 'x', document.getElementById('txt')); })
+                .indexOf('no-throw') === 0;
+    }, function () {
+        var internals = document.createElement('idl-validity').attachInternals();
+        internals.setValidity({ valueMissing: true }, 'fill me in');
+        return [tag(internals.validity), internals.validity.valueMissing,
+            internals.validity.valid, internals.validationMessage].join('/');
+    });
+    ck('C4 the role an internals is given is the host element writes', function () {
+        if (!customElements.get('idl-role')) {
+            customElements.define('idl-role', class extends HTMLElement { });
+        }
+        var element = document.createElement('idl-role');
+        var internals = element.attachInternals();
+        internals.role = 'button';
+        return internals.role === 'button' && element.getAttribute('role') === 'button'
+            && element.hasAttribute('role') === true
+            && (function () {
+                element.setAttribute('role', 'link');
+                return internals.role === 'link';
+            })()
+            && (function () {
+                internals.role = null;
+                return element.hasAttribute('role') === false && internals.role === null;
+            })();
+    }, function () {
+        var element = document.createElement('idl-role');
+        var internals = element.attachInternals();
+        internals.role = 'button';
+        return [internals.role, element.getAttribute('role')].join('/');
+    });
+
+    // ── D. the element members the level had not named ─────────────────────────
+    ck('D1 a label answers the control it labels', function () {
+        var lab = document.getElementById('lab');
+        return 'control' in HTMLLabelElement.prototype
+            && lab.control === document.getElementById('txt')
+            && document.createElement('label').control === null;
+    }, function () { return String(document.getElementById('lab').control); });
+    ck('D2 an option group reads its label and its disabled state off the attribute', function () {
+        var group = document.getElementById('og');
+        return 'label' in HTMLOptGroupElement.prototype
+            && 'disabled' in HTMLOptGroupElement.prototype
+            && group.label === 'Group' && group.disabled === true
+            && (group.label = 'Next') === 'Next' && group.getAttribute('label') === 'Next'
+            && document.createElement('optgroup').disabled === false;
+    }, function () {
+        var group = document.getElementById('og');
+        return [group.label, group.disabled, group.getAttribute('disabled') === ''].join('/');
+    });
+    ck('D3 a map answers its name and the areas it holds', function () {
+        var map = document.getElementById('mp');
+        return 'name' in HTMLMapElement.prototype && 'areas' in HTMLMapElement.prototype
+            && map.name === 'here' && map.areas.length === 1 && map.areas[0].id === 'ar';
+    }, function () {
+        var map = document.getElementById('mp');
+        return [map.name, map.areas.length, tag(map.areas)].join('/');
+    });
+    ck('D4 a canvas answers the context questions and hands off its control', function () {
+        var canvas = document.getElementById('cv');
+        return 'probablySupportsContext' in HTMLCanvasElement.prototype
+            && 'isContextLost' in HTMLCanvasElement.prototype
+            && canvas.probablySupportsContext('2d') === true
+            && canvas.probablySupportsContext('webgl') === true
+            && canvas.probablySupportsContext('nope') === false
+            && canvas.isContextLost() === false
+            && tag(canvas.transferControlToOffscreen()) === '[object OffscreenCanvas]'
+            && canvas.transferControlToOffscreen().width === 8;
+    }, function () {
+        var canvas = document.getElementById('cv');
+        return [canvas.probablySupportsContext('2d'), canvas.isContextLost(),
+            tag(canvas.transferControlToOffscreen())].join('/');
+    });
+    ck('D5 an image answers its orientation and a script its supported type', function () {
+        var image = document.createElement('img');
+        return 'naturalOrientation' in HTMLImageElement.prototype
+            && image.naturalOrientation === 'from-image'
+            && HTMLScriptElement.supports('importmap') === true
+            && HTMLScriptElement.supports('module') === false
+            && refused(function () { HTMLScriptElement.supports(); }) === 'TypeError:Failed to '
+                + 'execute \'supports\' on \'HTMLScriptElement\': 1 argument required, but only 0 '
+                + 'present.';
+    }, function () { return String(document.createElement('img').naturalOrientation); });
+    ck('D6 a shadow tree serialises when the page asks for the text it holds', function () {
+        var root = document.createElement('div').attachShadow({ mode: 'open' });
+        root.innerHTML = '<b>k</b>';
+        return typeof root.getHTMLUnsafe === 'function'
+            && root.getHTMLUnsafe() === '<b>k</b>'
+            && refused(function () {
+                return ShadowRoot.prototype.getHTMLUnsafe.call({ });
+            }).indexOf('TypeError:Failed to execute') === 0;
+    }, function () {
+        var root = document.createElement('div').attachShadow({ mode: 'open' });
+        root.innerHTML = '<b>k</b>';
+        return [root.getHTMLUnsafe(), refused(function () {
+            return ShadowRoot.prototype.getHTMLUnsafe.call({ });
+        })].join(' | ');
+    });
+
+    // ── E. CSSOM: the face a style sheet has had since the beginning ───────────
+    ck('E1 a sheet answers rules as the alias of its rule list', function () {
+        var sheet = new CSSStyleSheet();
+        sheet.replaceSync('#a { color: green }');
+        return 'rules' in CSSStyleSheet.prototype && sheet.rules.length === 1
+            && sheet.rules[0].selectorText === '#a'
+            && sheet.addRule('#b', 'color: red') === 1 && sheet.cssRules.length === 2
+            && (sheet.removeRule(0), sheet.cssRules.length === 1)
+            && sheet.cssRules[0].selectorText === '#b';
+    }, function () {
+        var sheet = new CSSStyleSheet();
+        sheet.replaceSync('#a { color: green }');
+        return [String('rules' in CSSStyleSheet.prototype), sheet.rules.length,
+            String(sheet.rules[0] && sheet.rules[0].selectorText)].join('/');
+    });
+    ck('E2 addRule and removeRule are the legacy pair of insertRule and deleteRule', function () {
+        var sheet = new CSSStyleSheet();
+        sheet.addRule('#a', 'color: green');
+        var first = sheet.cssRules[0];
+        var made = !!first && first.selectorText === '#a'
+            && sheet.cssRules[0].style.color === 'green';
+        sheet.removeRule(0);
+        return made && sheet.cssRules.length === 0;
+    }, function () {
+        var sheet = new CSSStyleSheet();
+        sheet.addRule('#a', 'color: green');
+        return [sheet.cssRules.length, String(sheet.cssRules[0]
+            && sheet.cssRules[0].selectorText)].join('/');
+    });
+    done('E3 replace returns the promise the asynchronous face of the sheet answers with',
+        function () {
+            var sheet = new CSSStyleSheet();
+            return sheet.replace('#b { color: red }').then(function () {
+                return sheet.cssRules.length === 1 && sheet.cssRules[0].selectorText === '#b'
+                    ? true : 'read back ' + sheet.cssRules.length;
+            }).then(function (held) {
+                if (held !== true) return held;
+                // The empty sheet answers an empty list, which is what a page that cleared a sheet
+                // through the asynchronous face reads back.
+                return sheet.replace('').then(function () {
+                    return sheet.cssRules.length === 0;
+                });
+            });
+        });
+    ck('E4 a value is parsed out of the two shapes that need no stylesheet', function () {
+        var ten = CSSStyleValue.parse('width', '10px');
+        var half = CSSStyleValue.parse('width', '50%');
+        var bare = CSSStyleValue.parse('width', '-4');
+        var word = CSSStyleValue.parse('display', 'block');
+        return ten.value === 10 && ten.unit === 'px' && tag(ten) === '[object CSSUnitValue]'
+            && half.unit === 'percent' && bare.unit === 'number' && bare.value === -4
+            && word.value === 'block' && tag(word) === '[object CSSKeywordValue]'
+            && refuses(function () { return CSSStyleValue.parse('width', 'calc(1px + 2%)'); },
+                'SyntaxError:Failed to execute \'parse\' on \'CSSStyleValue\'')
+            && CSSStyleValue.parseAll('width', '10px').length === 1;
+    }, function () {
+        var ten = CSSStyleValue.parse('width', '10px');
+        return [ten.value, ten.unit, tag(ten)].join('/');
+    });
+    ck('E5 a value already in the units asked for is a sum of one term', function () {
+        var ten = CSS.px(10);
+        var sum = ten.toSum('px');
+        return tag(sum) === '[object CSSMathSum]' && sum.operator === 'sum'
+            && sum.values.length === 1 && sum.values[0].value === 10
+            && sum.values[0].unit === 'px'
+            && refused(function () { return ten.toSum('em'); }) === 'NotSupportedError:Failed to '
+                + 'execute \'toSum\' on \'CSSNumericValue\': the engine cannot express a value in '
+                + '\'em\'.';
+    }, function () {
+        var sum = CSS.px(10).toSum('px');
+        return [tag(sum), sum.operator, sum.values && sum.values.length].join('/');
+    });
+    ck('E6 the groups the parser keeps as text answer their members and refuse the writes',
+        function () {
+            var level = CSSStartingStyleRule.prototype;
+            var held = Object.create(level);
+            return 'cssRules' in level && Array.isArray(held.cssRules) && held.cssRules.length === 0
+                && 'insertRule' in level && 'deleteRule' in level
+                && refuses(function () { return level.insertRule.call(held, 'x'); },
+                    'NotSupportedError:Failed to execute \'insertRule\'')
+                && 'styleSheet' in CSSImportRule.prototype
+                && 'marginRules' in CSSPageRule.prototype
+                && 'prefix' in CSSCounterStyleRule.prototype
+                && 'start' in CSSScopeRule.prototype && 'end' in CSSScopeRule.prototype
+                && 'style' in CSSNestedDeclarations.prototype;
+        }, function () {
+            return ['styleSheet' in CSSImportRule.prototype, 'marginRules' in CSSPageRule.prototype,
+                'cssRules' in CSSStartingStyleRule.prototype].join('/');
+        });
+    ck('E7 a named property of a declaration is the property the page writes', function () {
+        var style = document.getElementById('box').style;
+        style.zIndex = '7';
+        var held = style.zIndex === '7' && style.getPropertyValue('z-index') === '7';
+        style.background = 'red';
+        held = held && style.getPropertyValue('background').indexOf('red') >= 0;
+        style.zIndex = '';
+        return held && style.getPropertyValue('z-index') === ''
+            && 'azimuth' in CSSStyleDeclaration.prototype
+            && 'background' in CSSStyleDeclaration.prototype;
+    }, function () {
+        var style = document.getElementById('box').style;
+        style.zIndex = '3';
+        return [style.zIndex, style.getPropertyValue('z-index'),
+            'background' in CSSStyleDeclaration.prototype].join('/');
+    });
+
+    ck('E8 the filter constants sit on the interface object a page names', function () {
+        return NodeFilter.FILTER_ACCEPT === 1 && NodeFilter.FILTER_REJECT === 2
+            && NodeFilter.FILTER_SKIP === 3 && NodeFilter.SHOW_ALL === 4294967295
+            && NodeFilter.SHOW_ELEMENT === 1 && NodeFilter.SHOW_TEXT === 4
+            && NodeFilter.SHOW_COMMENT === 128 && NodeFilter.SHOW_DOCUMENT === 256
+            // A callback interface is named by a function that builds nothing and has no level
+            // behind it (Web IDL §3.2.1; measured: the nineteen names are own members of the
+            // object and 'NodeFilter.prototype' is undefined), so the constants are read off it.
+            && typeof NodeFilter === 'function' && NodeFilter.prototype === undefined
+            && 'inlineSize' in ResizeObserverSize.prototype
+            && 'blockSize' in ResizeObserverSize.prototype;
+    }, function () {
+        return [NodeFilter.FILTER_ACCEPT, String(NodeFilter.prototype),
+            'inlineSize' in ResizeObserverSize.prototype].join('/');
+    });
+    ck('E8b the state set a custom element holds answers the interface it is', function () {
+        if (!customElements.get('idl-states')) {
+            customElements.define('idl-states', class extends HTMLElement { });
+        }
+        var internals = document.createElement('idl-states').attachInternals();
+        var states = internals.states;
+        states.add('--open');
+        states.add('--open');
+        var seen = [tag(states), states.size, states.has('--open'), states.has('--closed'),
+            Array.from(states).join(','), internals.states === states].join('|');
+        var each = '';
+        states.forEach(function (value, key) { each += key + ';'; });
+        var entries = Array.from(states.entries()).map(function (pair) {
+            return pair.join('=');
+        }).join(',');
+        var keys = Array.from(states.keys()).join(',');
+        states.delete('--open');
+        states.add('--x');
+        states.clear();
+        return seen === '[object CustomStateSet]|1|true|false|--open|true'
+            && each === '--open;' && entries === '--open=--open' && keys === '--open'
+            && states.size === 0 && Array.from(states).length === 0
+            && refused(function () { return new CustomStateSet(); })
+                === "TypeError:Failed to construct 'CustomStateSet': Illegal constructor"
+            && refused(function () { return CustomStateSet.prototype.has.call({ }); })
+                === "TypeError:Failed to execute 'has' on 'CustomStateSet': Illegal invocation"
+            && refused(function () { return CustomStateSet.prototype.size; })
+                === 'TypeError:Illegal invocation';
+    }, function () {
+        if (!customElements.get('idl-states')) return 'the element never got defined';
+        var states = document.createElement('idl-states').attachInternals().states;
+        return [tag(states), states.size].join('|');
+    });
+
+    // ── F. Web Animations: the timing a page reads back ───────────────────────
+    ck('F1 an animation answers one effect, and the effect carries the keyframes', function () {
+        var target = document.getElementById('box');
+        var made = target.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 100 });
+        var effect = made.effect;
+        return effect === made.effect && tag(effect) === '[object KeyframeEffect]'
+            && effect.target === target && effect.pseudoElement === ''
+            && effect.composite === 'replace' && effect.getKeyframes().length === 2
+            && effect.getKeyframes()[1].opacity === 1
+            && effect.getTiming().duration === 100
+            && effect.getComputedTiming().activeDuration === 100
+            && effect.getComputedTiming().iterations === 1
+            && effect.timing.duration === 100
+            && made.finished instanceof Promise;
+    }, function () {
+        var made = document.getElementById('box').animate([{ opacity: 0 }], { duration: 100 });
+        return [made.effect === made.effect, made.effect.getTiming().duration,
+            made.effect.getKeyframes().length].join('/');
+    });
+    ck('F2 updateTiming writes the numbers the page gives and nothing else', function () {
+        var made = document.getElementById('box').animate([{ opacity: 0 }], { duration: 100 });
+        var effect = made.effect;
+        effect.updateTiming({ iterations: 3, direction: 'alternate', nonsense: 1 });
+        var held = effect.getTiming();
+        return held.iterations === 3 && held.direction === 'alternate' && held.duration === 100
+            && !('nonsense' in held)
+            && refuses(function () { return effect.updateTiming('x'); },
+                'TypeError:Failed to execute \'updateTiming\'');
+    }, function () {
+        var made = document.getElementById('box').animate([{ opacity: 0 }], { duration: 100 });
+        made.effect.updateTiming({ iterations: 2 });
+        return [made.effect.getTiming().iterations,
+            made.effect.getComputedTiming().iterations].join('/');
+    });
+    ck('F3 an animation can be cloned into an idle copy of the same run', function () {
+        var made = document.getElementById('box').animate([{ opacity: 0 }], { duration: 100 });
+        var copy = made.clone();
+        return tag(copy) === '[object Animation]' && copy !== made
+            && copy.effect.getTiming().duration === 100
+            && copy.playState === 'idle' && copy.playbackRate === made.playbackRate;
+    }, function () {
+        var made = document.getElementById('box').animate([{ opacity: 0 }], { duration: 100 });
+        var copy = made.clone();
+        return [tag(copy), copy.playState, copy.effect.getTiming().duration,
+            copy.playbackRate].join(' | ');
+    });
+    ck('F3b an animation the page built is idle, and persist and the rate are refused', function () {
+        var made = document.getElementById('box').animate([{ opacity: 0 }], { duration: 100 });
+        return tag(new Animation()) === '[object Animation]' && new Animation().playState === 'idle'
+            && new Animation().effect === null && new Animation().currentTime === null
+            && refuses(function () { return new Animation().persist(); },
+                'InvalidStateError:Failed to execute \'persist\' on \'Animation\'')
+            && refuses(function () { return made.updatePlaybackRate(NaN); },
+                'TypeError:Failed to execute \'updatePlaybackRate\'');
+    }, function () {
+        return [refused(function () { return new Animation().persist(); }).slice(0, 46),
+            refused(function () {
+                return document.getElementById('box').animate([{ opacity: 0 }], { duration: 50 })
+                    .updatePlaybackRate(NaN);
+            }).slice(0, 46)].join(' | ');
+    });
+    done('F4 a new playback rate settles the promise the operation returns', function () {
+        var made = document.getElementById('box').animate([{ opacity: 0 }], { duration: 100 });
+        return made.updatePlaybackRate(2).then(function () { return made.playbackRate === 2; });
+    });
+    ck('F5 a keyframe effect is a thing a page can build and rewrite', function () {
+        var target = document.getElementById('box');
+        var made = new KeyframeEffect(target, [{ opacity: 0 }, { opacity: 1 }], 250);
+        made.setKeyframes([{ opacity: 0.5 }]);
+        return tag(made) === '[object KeyframeEffect]' && made.target === target
+            && made.getTiming().duration === 250
+            && made.getKeyframes().length === 1
+            && made.iterationComposite === 'replace'
+            && refuses(function () { made.setKeyframes('x'); },
+                'TypeError:Failed to execute \'setKeyframes\'')
+            && refuses(function () { return KeyframeEffect.prototype.getKeyframes.call({ }); },
+                'TypeError:Failed to execute \'getKeyframes\' on \'KeyframeEffect\'')
+            && 'target' in KeyframeEffect.prototype && 'pseudoElement' in KeyframeEffect.prototype
+            && 'composite' in KeyframeEffect.prototype && 'setKeyframes' in KeyframeEffect.prototype;
+    }, function () {
+        var made = new KeyframeEffect(document.getElementById('box'), [{ opacity: 0 }], 250);
+        return [tag(made), made.getTiming().duration, made.getKeyframes().length].join('/');
+    });
+})();
+</script>
+<div>the members the DOM text puts on the level</div>
+</body>
+</html>

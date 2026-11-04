@@ -1031,7 +1031,10 @@ public class DocumentHost : IDomPrototypeHost
                     "Failed to execute 'createEvent' on 'Document': The provided event type ("
                     + "'" + given + "') is invalid.", "NotSupportedError")
         };
-        return new ScriptEvent(name, null) { Kind = name };
+        // DOM §2.3.5 and HTML §2.8.2: an event a page made for itself is not one the engine raised,
+        // and the trusted flag is the member that says which. The constructor paths write the same
+        // flag over this one; the engine's own raises build the object directly, so they keep theirs.
+        return new ScriptEvent(name, null) { Kind = name, isTrusted = false };
     }
 
     private ElementHost? WrapElement(Element? element)
