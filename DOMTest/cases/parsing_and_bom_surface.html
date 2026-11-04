@@ -122,17 +122,22 @@ ck('C3 the default namespace is the one written', function () {
     var doc = new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/2000/svg"><g/></svg>', 'image/svg+xml');
     return String(doc.documentElement.namespaceURI) + '/' + String(doc.documentElement.firstChild.namespaceURI);
 });
-ck('C4 markup that is not well formed reports inside the tree it reached', function () {
+ck('C4 markup that is not well formed comes back as the error document', function () {
+    // DOM Parsing §3, the XML branch: what comes back from a document that could not be read IS the
+    // error document — its document element is a 'parsererror' in the HTML namespace — and the tree
+    // the parser had reached is not part of the answer. Round 23 changed this row: the engine used to
+    // append the error inside that half-built tree, which is what the older pin recorded, and the
+    // text names the root rather than the attachment. The sentence inside it is the engine's own.
     var doc = new DOMParser().parseFromString('<r><c></r>', 'text/xml');
-    var pe = doc.querySelector('parsererror');
-    return doc.documentElement.localName === 'r' && pe !== null
-        && pe.namespaceURI === 'http://www.w3.org/1999/xhtml'
-        && /^This page contains the following errors:/.test(pe.textContent);
+    var root = doc.documentElement;
+    return root.localName === 'parsererror'
+        && root.namespaceURI === 'http://www.w3.org/1999/xhtml'
+        && /^This page contains the following errors:/.test(root.textContent)
+        && doc.querySelector('r') === null;
 }, function () {
     var doc = new DOMParser().parseFromString('<r><c></r>', 'text/xml');
-    var pe = doc.querySelector('parsererror');
-    return String(doc.documentElement && doc.documentElement.localName) + '/' + String(pe)
-        + '/' + (pe ? String(pe.namespaceURI) : '-');
+    var root = doc.documentElement;
+    return String(root && root.localName) + '/' + String(root && root.namespaceURI);
 });
 
 // ── D. toggleAttribute, and the name it refuses ──────────────────────────────

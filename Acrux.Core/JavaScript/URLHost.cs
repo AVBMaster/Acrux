@@ -124,10 +124,6 @@ public class URLHost : IDomPrototypeHost
         ["pathname"] = pathname, ["search"] = search, ["hash"] = hash
     };
 
-    public void assign(string url) { }
-    public void replace(string url) { }
-    public void reload() { }
-
     public string __domType => "URL";
     public string[] __domTypeChain => new[] { "URL" };
 

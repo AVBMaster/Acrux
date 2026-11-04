@@ -1,0 +1,291 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>the algorithms a page runs into (URL §2.2, Fetch §4, §7-§8, DOM §2.12-§2.13, §3.3.7, §3.6, Web Storage §4, HTML §5.9, §7.3, CSS Custom States §3)</title></head>
+<body><div id="box"><span id="sp">hello <b id="bold">world</b></span><p id="p2">next</p></div>
+<script>
+// Round 23. The interface surface (rounds 19-21) and the fixed values (round 22) left a third kind
+// of question: what an OPERATION does, in what order, and what it refuses. The rows below answer it
+// for the parts the text settles by itself — the members a URL object carries and does not, the
+// enumerated dictionary members of Request and Response, the token list's grammar, the map's
+// case-insensitive read of an HTML element, the document the XML parser hands back when the markup
+// cannot be read, the storage area's named members, the state a history entry keeps, the range a
+// selection holds and the copy that carries its cycles.
+// Two questions were left out on purpose and recorded in the notes instead: the error NAME for a
+// boundary set on the far side of the other boundary, and the name for comparing boundaries of two
+// documents. The living text and the older platform documents name them differently, and the
+// reference that would settle it has been unreachable since round 19. The same rows are kept as the
+// measuring probe in DOMTest/probes/probe123.html.
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 44); }
+    }
+    function name(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, want) {
+        var g = String(got), w = String(want);
+        window.__T(label, g === w, 'got=[' + g + '] want=[' + w + ']');
+    }
+
+    // ── A. what a URL object is made of (URL §2.2) ────────────────────────────
+    var u = new URL('http://a.example:8443/p/q?s=1#h');
+    eq('A1 the parts are reads of the level and the object keeps none of its own', safe(function () {
+        return [Object.getOwnPropertyNames(u).join('+'),
+            Object.prototype.toString.call(u), 'href' in u, String(u)].join('|');
+    }), 'ok:|[object URL]|true|http://a.example:8443/p/q?s=1#h');
+    // §2.2 names thirteen reads and no navigation: a url is an address, not a window.
+    eq('A2 the interface carries no navigation members', safe(function () {
+        return [typeof u.assign, typeof u.replace, typeof u.reload, typeof u.pathname].join('|');
+    }), 'ok:undefined|undefined|undefined|string');
+    eq('A3 the parts are written as the standard makes them read back', safe(function () {
+        var w = new URL('http://a.example/x');
+        w.protocol = 'https';
+        w.username = 'us';
+        w.password = 'pw';
+        w.hostname = 'b.example';
+        w.port = '9000';
+        w.pathname = '/y z';
+        w.search = 'q=1 2';
+        w.hash = 'top';
+        return w.href;
+    }), 'ok:https://us:pw@b.example:9000/y%20z?q=1%202#top');
+
+    // ── B. the enums a Request and a Response dictionary takes (Fetch §8.1, §7.1) ──
+    eq('B1 a mode the request cannot mean is refused', safe(function () {
+        return [new Request('http://e/', { mode: 'same-origin' }).mode,
+            name(function () { return new Request('http://e/', { mode: 'bogus' }); }),
+            new Request('http://e/', { credentials: 'include' }).credentials,
+            name(function () { return new Request('http://e/', { credentials: 'bogus' }); }),
+            name(function () { return new Request('http://e/', { cache: 'bogus' }); }),
+            name(function () { return new Request('http://e/', { redirect: 'bogus' }); }),
+            name(function () { return new Request('http://e/', { referrerPolicy: 'bogus' }); })].join('|');
+    }), 'ok:same-origin|TypeError|include|TypeError|TypeError|TypeError|TypeError');
+    eq('B2 a method that is not a token is refused and a custom one keeps its spelling',
+        safe(function () {
+            return [new Request('http://e/', { method: 'post' }).method,
+                new Request('http://e/', { method: 'x-cust' }).method,
+                name(function () { return new Request('http://e/', { method: 'a b' }); })].join('|');
+        }), 'ok:POST|x-cust|TypeError');
+    // §8.1: the referrer a page may name is an address of its own origin, or none.
+    eq('B3 a referrer from another origin is refused and one from this origin is kept',
+        safe(function () {
+            return [name(function () { return new Request('http://e/', { referrer: 'http://other/x' }); }),
+                name(function () { return new Request('http://e/', { referrer: location.href }); }),
+                new Request('http://e/', { referrer: '' }).referrer].join('|');
+        }), 'ok:TypeError|no-throw|');
+    eq('B4 the type a response may be given is default or error', safe(function () {
+        return [name(function () { return new Response('', { type: 'opaque' }); }),
+            new Response('', { type: 'default' }).type,
+            name(function () { return new Response('x', { type: 'error' }); }),
+            new Response(null, { type: 'error' }).type,
+            name(function () { return new Response('', { statusText: 'bad\nphrase' }); }),
+            new Response('', { statusText: 'all right' }).statusText].join('|');
+    }), 'ok:TypeError|default|TypeError|error|TypeError|all right');
+
+    // ── C. Headers: the copy, the cookie and the spaces (Fetch §4.4, §4.5, §4.1) ──
+    eq('C1 a Headers copies a Headers', safe(function () {
+        var a = new Headers({ 'x-a': '1' }), b = new Headers(a);
+        b.set('x-b', '2');
+        return [String(a.get('x-b')), b.get('x-a'), a !== b].join('|');
+    }), 'ok:null|1|true');
+    eq('C2 set-cookie keeps its repetitions apart and joins on the ordinary read', safe(function () {
+        var h = new Headers();
+        h.append('set-cookie', 'a=1');
+        h.append('set-cookie', 'b=2');
+        return [h.getSetCookie().join('/'), h.get('set-cookie')].join('|');
+    }), 'ok:a=1/b=2|a=1, b=2');
+    eq('C3 a value written with surrounding spaces is stored without them', safe(function () {
+        var h = new Headers();
+        h.set('x-a', '  spaced  ');
+        return h.get('x-a');
+    }), 'ok:spaced');
+
+    // ── D. Web Storage (Web Storage §4) ───────────────────────────────────────
+    eq('D1 a write coerces and an index reads the name', safe(function () {
+        localStorage.clear();
+        localStorage.setItem('a', 1);
+        localStorage.b = 'two';
+        return [localStorage.a, localStorage.length, localStorage.key(0),
+            String(localStorage.key(5)), typeof localStorage.getItem].join('|');
+    }), 'ok:1|2|a|null|function');
+    eq('D2 the names a page writes are its own, and clear takes them off', safe(function () {
+        localStorage.clear();
+        localStorage.setItem('x', '1');
+        var seen = Object.keys(localStorage).join(',');
+        localStorage.clear();
+        return [seen, localStorage.length].join('|');
+    }), 'ok:x|0');
+
+    // ── E. the history and the location of the same document (HTML §5.9, §7.3) ──
+    eq('E1 the state of the entry a page made is the state it reads back', safe(function () {
+        var before = history.length;
+        history.pushState({ a: 1 }, '', '#one');
+        var held = [JSON.stringify(history.state), /#one$/.test(location.href),
+            history.length === before + 1];
+        history.pushState(null, '', '#two');
+        held.push(String(history.state));
+        return held.join('|');
+    }), 'ok:{"a":1}|true|true|null');
+    // §7.3.2: the search and the hash are written over the same address, each keeping the other.
+    eq('E2 the parts a page writes are the parts it reads back', safe(function () {
+        location.hash = '#via-hash';
+        var afterHash = /#via-hash$/.test(location.href);
+        location.search = '?q=1';
+        var held = [afterHash, location.search, location.hash];
+        location.hash = '';
+        location.search = '';
+        return held.join('|');
+    }), 'ok:true|?q=1|#via-hash');
+    eq('E3 the parts of a location read the same as a url of the same address', safe(function () {
+        var w = new URL(location.href);
+        return [location.protocol === w.protocol, location.hostname === w.hostname,
+            location.pathname === w.pathname, location.origin === w.origin].join(',');
+    }), 'ok:true,true,true,true');
+
+    // ── F. the Range and Selection algorithms (DOM §3.6) ──────────────────────
+    eq('F3 the fragments the range cuts answer in document order', safe(function () {
+        var host = document.createElement('div');
+        host.innerHTML = '<span id="r1">hello <b id="r2">world</b></span>';
+        document.body.appendChild(host);
+        var r = document.createRange();
+        r.setStart(document.getElementById('r1').firstChild, 2);
+        r.setEnd(document.getElementById('r2').firstChild, 3);
+        var made = document.createElement('div');
+        made.appendChild(r.extractContents());
+        var held = [made.textContent, r.collapsed];
+        document.body.removeChild(host);
+        return held.join('|');
+    }), 'ok:llo wor|true');
+    eq('F4 the selection reads the range it holds and nothing else', safe(function () {
+        var host = document.createElement('p');
+        host.innerHTML = 'one <b id="selB">two</b> three';
+        document.body.appendChild(host);
+        var sel = document.getSelection();
+        var r = document.createRange();
+        r.selectNodeContents(document.getElementById('selB'));
+        sel.removeAllRanges();
+        sel.addRange(r);
+        var held = [sel.rangeCount, sel.isCollapsed, sel.toString(), sel.getRangeAt(0) === r];
+        sel.removeAllRanges();
+        held.push(sel.rangeCount, sel.isCollapsed);
+        document.body.removeChild(host);
+        return held.join(',');
+    }), 'ok:1,false,two,true,0,true');
+
+    // ── G. DOMTokenList (DOM §3.3.7) ──────────────────────────────────────────
+    var box = document.getElementById('box');
+    box.className = 'a b  a';
+    var cl = box.classList;
+    eq('G1 the value is read with its duplicates and spaces folded', safe(function () {
+        return [cl.length, cl.value, cl.item(0), String(cl.item(9)), cl.contains('a')].join('|');
+    }), 'ok:3|a b a|a|null|true');
+    // §3.3.7 splits the two refusals: the empty token is a SyntaxError, a token that carries
+    // whitespace is an InvalidCharacterError.
+    eq('G2 the empty token and a token with a space in it are the two errors the text names',
+        safe(function () {
+            return [name(function () { return cl.add('c d'); }),
+                name(function () { return cl.add(''); })].join(',');
+        }), 'ok:InvalidCharacterError,SyntaxError');
+    eq('G3 toggle answers the state it leaves the token in', safe(function () {
+        cl.remove('c');
+        return [cl.toggle('c'), cl.toggle('c'), cl.toggle('d', true), cl.contains('d'),
+            cl.toggle('e', false)].join(',');
+    }), 'ok:true,false,true,true,false');
+    eq('G4 replace only moves a token the list holds', safe(function () {
+        box.className = 'a b a';
+        cl.replace('missing', 'x');
+        var held = [cl.contains('missing'), cl.contains('x')];
+        held.push(cl.replace('a', 'z'));
+        // only the first of the two is moved, which is what the list of tokens means
+        held.push(cl.contains('z'), cl.contains('a'));
+        return held.join(',');
+    }), 'ok:false,false,true,true,true');
+    // The class list declares no supported tokens and refuses the question (measured against the
+    // reference in an earlier round, sentence and all — see token_list_event_target E1). What the
+    // living text says about custom states would answer true for '--x'; the pin here is the measured
+    // answer, and the row is the one this round left for the reference to settle again.
+    eq('G5 the list iterates and the class list refuses what it supports', safe(function () {
+        box.className = 'a b';
+        return [Array.from(cl).join(','), typeof cl[Symbol.iterator],
+            name(function () { return cl.supports('--x'); })].join('|');
+    }), 'ok:a,b|function|TypeError');
+
+    // ── H. attributes and their map (DOM §3.2, §3.3) ──────────────────────────
+    eq('H1 the map reads by name, by index and by namespace', safe(function () {
+        var node = document.createElement('div');
+        node.id = 'attrNode';
+        node.setAttribute('data-x', '1');
+        node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:lang', 'en');
+        var at = node.attributes;
+        return [at.length, String(at.item(-1)), String(at.getNamedItem('nope')),
+            at.getNamedItem('id').value,
+            at.getNamedItemNS('http://www.w3.org/XML/1998/namespace', 'lang').value,
+            at.getNamedItem('ID') !== null].join('|');
+    }), 'ok:3|null|null|attrNode|en|true');
+    eq('H2 an attribute names its prefix, its local name and the element it belongs to',
+        safe(function () {
+            var node = document.createElement('div');
+            node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:lang', 'en');
+            node.setAttribute('data-x', '1');
+            var xml = node.getAttributeNodeNS('http://www.w3.org/XML/1998/namespace', 'lang');
+            var data = node.getAttributeNode('data-x');
+            return [xml.name, xml.prefix, xml.localName,
+                xml.namespaceURI === 'http://www.w3.org/XML/1998/namespace',
+                xml.ownerElement === node, data.specified].join('|');
+        }), 'ok:xml:lang|xml|lang|true|true|true');
+
+    // ── I. the two serialisations (DOM §2.12, §2.13) ──────────────────────────
+    eq('I1 an xml document parses with its structure kept', safe(function () {
+        var d = new DOMParser().parseFromString('<root a="1"><child>t</child></root>', 'text/xml');
+        return [d.documentElement.tagName, d.documentElement.getAttribute('a'),
+            d.documentElement.firstChild.textContent,
+            Object.prototype.toString.call(d)].join('|');
+    }), 'ok:root|1|t|[object XMLDocument]');
+    // §2.12: the document that could not be read comes back as the error document — a 'parsererror'
+    // root in the HTML namespace — and not as the tree the parser had reached.
+    eq('I2 a document that cannot be parsed carries the error element as its root', safe(function () {
+        var d = new DOMParser().parseFromString('<a><b></a>', 'text/xml');
+        return [d.documentElement.namespaceURI, d.documentElement.tagName,
+            d.documentElement.textContent.indexOf('error') >= 0].join('|');
+    }), 'ok:http://www.w3.org/1999/xhtml|parsererror|true');
+    eq('I3 a content type the parser does not know is refused', safe(function () {
+        return name(function () { return new DOMParser().parseFromString('x', 'not/a/type'); });
+    }), 'ok:TypeError');
+    eq('I4 the serialiser writes back what the parser read, namespace included', safe(function () {
+        var s = new XMLSerializer();
+        var d = new DOMParser().parseFromString('<r xmlns:n="urn:x"><n:c/></r>', 'text/xml');
+        var made = s.serializeToString(d.documentElement);
+        var leaf = document.createElement('i');
+        leaf.setAttribute('id', 'serI');
+        leaf.textContent = 'text';
+        return [made.indexOf('n:c') >= 0, made.indexOf('urn:x') >= 0,
+            s.serializeToString(leaf)].join('|');
+    }), 'ok:true|true|<i id="serI">text</i>');
+
+    // ── J. the async face of a stream (Streams §12.4, File §2.1) ──────────────
+    eq('J1 a readable stream can be walked with await', safe(function () {
+        var r = new Response('ab').body;
+        return [typeof r[Symbol.asyncIterator], typeof r.getReader].join('|');
+    }), 'ok:function|function');
+    eq('J2 a blob reads as text, as bytes and as a stream', safe(function () {
+        var b = new Blob(['ab']);
+        return [typeof b.text, typeof b.arrayBuffer, typeof b.stream, b.size].join('|');
+    }), 'ok:function|function|function|2');
+
+    // ── K. structuredClone (HTML §7.3.10) ─────────────────────────────────────
+    eq('K1 the clone is a copy, not the same object', safe(function () {
+        var made = { a: [1], b: { c: 2 } };
+        var out = structuredClone(made);
+        out.a.push(3);
+        return [made.a.length, out.a.length, out.b.c, made === out].join('|');
+    }), 'ok:1|2|2|false');
+    // §7.3.10.1: the cycles are the point of this copy — a function is what it refuses.
+    eq('K2 a cycle is copied and a function is refused', safe(function () {
+        var o = { };
+        o.self = o;
+        return [String(structuredClone(o).self !== o), name(function () { return structuredClone(function () { }); })].join('|');
+    }), 'ok:true|DataCloneError');
+})();
+
+</script>
+<div>the algorithms</div></body></html>

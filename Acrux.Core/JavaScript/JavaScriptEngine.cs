@@ -3456,15 +3456,26 @@ public class JavaScriptEngine : IDisposable
                         throw new TypeError('Failed to construct ' + ifaceQuote('Response') + ': '
                             + 'Response with null body status ' + status + ' cannot have body.');
                     }
+                    // §7.1: the error response is the one the module builds for a failed fetch, and a
+                    // page may not assemble one itself out of a status or a body — the pair would
+                    // claim a network answer the network never gave.
+                    if (options.type !== undefined
+                        && String(options.type).toLowerCase() === 'error'
+                        && (options.status !== undefined || (body !== undefined && body !== null))) {
+                        throw new TypeError('Failed to construct ' + ifaceQuote('Response') + ': The '
+                            + 'type provided: ' + ifaceQuote('error') + ' is invalid.');
+                    }
                 }
                 var carried = isNullBodyStatus(status) ? { text: '', stream: null } : parts;
                 var state = { text: carried.text, used: false, stream: carried.stream,
                     headers: new Headers(options.headers || { }),
                     url: options.url === undefined ? '' : String(options.url),
                     redirected: !!options.redirected,
-                    type: options.type === undefined ? 'default' : String(options.type),
+                    type: options.type === undefined ? 'default'
+                        : enumMember('Response', 'type', options.type),
                     status: status,
-                    statusText: options.statusText === undefined ? '' : String(options.statusText),
+                    statusText: options.statusText === undefined ? ''
+                        : statusTextMember(options.statusText),
                     trailer: new Headers(options.trailer || { }) };
                 if (state.text.length && !state.headers.has('content-type'))
                     state.headers.set('content-type', 'text/plain;charset=UTF-8');
@@ -3530,6 +3541,76 @@ public class JavaScriptEngine : IDisposable
                 }
             });
 
+            // Fetch §8.1, §7.1: the dictionary members that are enumerated IDL types refuse a value
+            // the enumeration does not name, and they name the type the conversion was reading. A
+            // method has to be a token the protocol can write, a referrer has to be an address of the
+            // origin the request goes out from, and a reason phrase carries no control character.
+            var ENUM_TYPES = {
+                mode: ['RequestMode', ['same-origin', 'cors', 'no-cors', 'navigate']],
+                credentials: ['RequestCredentials', ['omit', 'same-origin', 'include']],
+                cache: ['RequestCache', ['default', 'no-store', 'reload', 'no-cache',
+                    'force-cache', 'only-if-cached']],
+                redirect: ['RequestRedirect', ['follow', 'manual', 'error']],
+                referrerPolicy: ['ReferrerPolicy', ['', 'no-referrer', 'no-referrer-when-downgrade',
+                    'origin', 'origin-when-cross-origin', 'same-origin', 'strict-origin',
+                    'strict-origin-when-cross-origin', 'unsafe-url']],
+                type: ['ResponseType', ['default', 'error']]
+            };
+            function enumMember(iface, field, value) {
+                var held = ENUM_TYPES[field];
+                var text = String(value).toLowerCase();
+                if (held[1].indexOf(text) < 0) {
+                    throw new TypeError('Failed to construct ' + ifaceQuote(iface) + ': The provided '
+                        + 'value ' + ifaceQuote(String(value)) + ' is not a valid enum value of type '
+                        + held[0] + '.');
+                }
+                return text;
+            }
+            var HTTP_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+            function methodMember(iface, value) {
+                var text = String(value);
+                var folded = text.toUpperCase();
+                // §8.1, normalize a method: only the six the protocol names are folded to their
+                // uppercase spelling; a custom method keeps the case the page wrote it in, as long as
+                // it is a token at all.
+                if (folded === 'GET' || folded === 'HEAD' || folded === 'OPTIONS' || folded === 'POST'
+                    || folded === 'PUT' || folded === 'DELETE') return folded;
+                if (!HTTP_TOKEN.test(text)) {
+                    throw new TypeError('Failed to construct ' + ifaceQuote(iface) + ': The provided '
+                        + 'method is not a valid HTTP method.');
+                }
+                return text;
+            }
+            function referrerMember(iface, value) {
+                var text = String(value === undefined || value === null ? '' : value);
+                if (text === '' || text === 'client') return '';
+                var made;
+                try {
+                    made = new URL(text, window.location ? window.location.href : '');
+                } catch (e) {
+                    throw new TypeError('Failed to construct ' + ifaceQuote(iface) + ': The referrer '
+                        + 'is not a valid URL.');
+                }
+                // §8.1: a referrer a page may name is one from the origin the request goes out from;
+                // any other address would hand over a page the document has no right to point at.
+                if (window.location && made.origin !== window.location.origin) {
+                    throw new TypeError('Failed to construct ' + ifaceQuote(iface) + ': Referrer must '
+                        + 'be either a same-origin URL, about:client, or the empty string.');
+                }
+                return made.href;
+            }
+            function statusTextMember(value) {
+                var text = String(value), i;
+                for (i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    // RFC 9110's reason-phrase: the horizontal tab, the space, and anything above the
+                    // space — no other control character (§7.1).
+                    if (code === 0x09 || code >= 0x20) continue;
+                    throw new TypeError('Failed to construct ' + ifaceQuote('Response') + ': The '
+                        + 'statusText is not a valid reason phrase.');
+                }
+                return text;
+            }
             function Request(input, init) {
                 init = init || { };
                 var copied = (input && typeof input === 'object'
@@ -3541,12 +3622,13 @@ public class JavaScriptEngine : IDisposable
                 var copiedState = copied ? BODY_SLOTS.get(copied) : null;
                 var body = init.body !== undefined ? init.body
                     : (copiedState ? (copiedState.stream || copiedState.text) : undefined);
-                var namedMethod = String(init.method !== undefined ? init.method
-                    : (copied ? copied.method : 'GET')).toUpperCase();
+                var namedMethod = methodMember('Request', init.method !== undefined ? init.method
+                    : (copied ? copied.method : 'GET'));
                 // Fetch §8.1: three methods a page may not ask of a Request at all, and a body only
                 // for a method that can carry one. Both are refused where they are written, which is
                 // the last point a page can still be told what it did wrong.
-                if (namedMethod === 'TRACE' || namedMethod === 'TRACK' || namedMethod === 'CONNECT') {
+                if (namedMethod.toUpperCase() === 'TRACE' || namedMethod.toUpperCase() === 'TRACK'
+                    || namedMethod.toUpperCase() === 'CONNECT') {
                     throw new TypeError('Failed to construct ' + ifaceQuote('Request') + ': The '
                         + 'method ' + namedMethod + ' is not allowed.');
                 }
@@ -3561,14 +3643,19 @@ public class JavaScriptEngine : IDisposable
                     method: namedMethod,
                     headers: new Headers(init.headers !== undefined ? init.headers
                         : (copied ? copied.headers : null)),
-                    mode: init.mode !== undefined ? String(init.mode) : (copied ? copied.mode : 'cors'),
-                    credentials: init.credentials !== undefined ? String(init.credentials)
+                    mode: init.mode !== undefined ? enumMember('Request', 'mode', init.mode)
+                        : (copied ? copied.mode : 'cors'),
+                    credentials: init.credentials !== undefined
+                        ? enumMember('Request', 'credentials', init.credentials)
                         : (copied ? copied.credentials : 'same-origin'),
-                    cache: init.cache !== undefined ? String(init.cache) : 'default',
-                    redirect: init.redirect !== undefined ? String(init.redirect) : 'follow',
-                    referrer: init.referrer !== undefined ? String(init.referrer) : '',
+                    cache: init.cache !== undefined ? enumMember('Request', 'cache', init.cache)
+                        : 'default',
+                    redirect: init.redirect !== undefined
+                        ? enumMember('Request', 'redirect', init.redirect) : 'follow',
+                    referrer: init.referrer !== undefined
+                        ? referrerMember('Request', init.referrer) : (copied ? copied.referrer : ''),
                     referrerPolicy: init.referrerPolicy !== undefined
-                        ? String(init.referrerPolicy) : '',
+                        ? enumMember('Request', 'referrerPolicy', init.referrerPolicy) : '',
                     integrity: init.integrity !== undefined ? String(init.integrity) : '',
                     keepalive: !!init.keepalive,
                     destination: init.destination !== undefined ? String(init.destination) : '',
@@ -19748,15 +19835,18 @@ public class AcruxBuiltins
 
         if (failure != null)
         {
+            // DOM Parsing §3, the XML branch: what comes back from a document that could not be read
+            // is the error document — the tree the parser had reached so far is not part of the
+            // answer. Its root is a 'parsererror' element in the HTML namespace whose text says what
+            // the parser hit, and a page that asks the document element asks that.
+            var swept = new List<Acrux.Core.Dom.Node>();
+            foreach (var child in doc.ChildNodes) swept.Add(child);
+            foreach (var child in swept) doc.RemoveChild(child);
             var error = doc.CreateElementNS("http://www.w3.org/1999/xhtml", "parsererror");
             error.TextContent = "This page contains the following errors:"
                 + $"error on line {failureLine} at column {failureColumn}: {failure}";
-            if (doc.DocumentElement != null) doc.DocumentElement.AppendChild(error);
-            else
-            {
-                doc.AppendChild(error);
-                doc.DocumentElement = error;
-            }
+            doc.AppendChild(error);
+            doc.DocumentElement = error;
         }
         return JsIntegrationService.WrapAny(doc) ?? new DocumentHost(doc);
     }
