@@ -16,8 +16,8 @@ public static class PageHitTest
         Element? result = null;
         float lastZ = float.MinValue;
 
-        HitTestElement(doc.DocumentElement, x, y, ref result, ref lastZ);
-        if (result == null) HitTestElement(doc.Body, x, y, ref result, ref lastZ);
+        HitTestElement(doc, doc.DocumentElement, x, y, ref result, ref lastZ);
+        if (result == null) HitTestElement(doc, doc.Body, x, y, ref result, ref lastZ);
 
         // Inline elements have no box of their own — their geometry lives in the lines of
         // the block that lays them out — so a pointer over a link resolves to that link's
@@ -85,7 +85,7 @@ public static class PageHitTest
     }
 
 
-    private static void HitTestElement(Element? element, float x, float y,
+    private static void HitTestElement(Document doc, Element? element, float x, float y,
         ref Element? result, ref float lastZ)
     {
         if (element == null) return;
@@ -94,8 +94,9 @@ public static class PageHitTest
         // CSS UI 4 §11: 'pointer-events: none' takes this box out of the hit set, but the
         // walk still descends — a descendant may set the property back to 'auto' and become
         // the target of the very pointer that passes through its parent.
-        if (box != null && IsHittable(element, box) && box.BorderBox.Contains(x, y) &&
-            !Acrux.Rendering.ClipPathHitTest.IsClippedAway(element, x, y))
+        // The box and the clip are read through the document's own test so that a click and
+        // elementFromPoint cannot drift apart (CSSOM View §3.5).
+        if (box != null && IsHittable(element, box) && doc.HoldsPoint(element, x, y))
         {
             // A generated box (::before / ::after / a floated ::first-letter) has no node to
             // receive the event, so the pointer is attributed to the element that declared it.
@@ -112,7 +113,7 @@ public static class PageHitTest
         }
 
         foreach (var child in element.Children.OfType<Element>())
-            HitTestElement(child, x, y, ref result, ref lastZ);
+            HitTestElement(doc, child, x, y, ref result, ref lastZ);
     }
 
     /// <summary>The element a box belongs to: itself, or the originating element of a

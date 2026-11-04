@@ -613,6 +613,12 @@ public enum CssPropertyId
     CornerStartEndShape,
     CornerEndStartShape,
     CornerEndEndShape,
+    // CSS Animations 2 §6. The reference engine declares 'animation-trigger' and answers 'none'
+    // for it even when the page writes an event name, a dashed token or 'auto' — each of those is
+    // refused as a value (all measured) — so the property is read, echoed and computed while the
+    // trigger itself has nothing here to fire on. It needs an id for the reason the note above
+    // gives: without one the computed surface answers nothing at all.
+    AnimationTrigger,
     MaxProperties
 }
 

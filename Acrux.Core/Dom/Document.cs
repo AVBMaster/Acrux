@@ -176,6 +176,11 @@ public class Document : Node
         return chain.Count > 0 ? chain[0] : null;
     }
 
+    /// <summary>Whether a point that lands inside a box's border box reaches it at all. The
+    /// renderer installs this: a clip-path is a painted shape, so only the side that builds it can
+    /// say whether the point is inside. With nothing installed the border box is the whole test.</summary>
+    public static Func<Element, double, double, bool>? ClippedAway;
+
     public List<Element> ElementsFromPoint(double x, double y)
     {
         var chain = new List<Element>();
@@ -214,12 +219,28 @@ public class Document : Node
             .ToList();
     }
 
-    private static bool HoldsPoint(Element element, double x, double y)
+    /// <summary>Whether the point lands on this box for the pointer: its border box, grown to the
+    /// viewport when it is the document element's, and the clip's visible region on top of that
+    /// (CSSOM View §3.5, CSS Masking 1 §1.1). The page's own walk and the debug channel read the
+    /// point through here, so the two cannot drift apart.</summary>
+    public bool HoldsPoint(Element element, double x, double y)
     {
         var box = element.LayoutBox;
         if (box == null) return false;
         var rect = box.BorderBox;
-        return x >= rect.Left && x <= rect.Right && y >= rect.Top && y <= rect.Bottom;
+        // The document element's box is the height of its content — measured: its own rect answers
+        // '439x0' in both engines for a page whose children are all out of flow — while the canvas
+        // its background propagates to, and therefore the pointer's fallback, is the viewport.
+        if (ReferenceEquals(element, DocumentElement) && element.ComputedStyle is { } root)
+        {
+            if (root.ComputedViewportWidth > rect.Right) rect.Right = root.ComputedViewportWidth;
+            if (root.ComputedViewportHeight > rect.Bottom) rect.Bottom = root.ComputedViewportHeight;
+        }
+        if (x < rect.Left || x > rect.Right || y < rect.Top || y > rect.Bottom) return false;
+        // A clip takes the pointer with the region it leaves visible (CSS Masking 1 §1.1), and the
+        // shape is read from the paint's geometry, which this surface does not own — so the
+        // renderer answers for it, and a box with no renderer in front of it has no clip.
+        return ClippedAway is not { } clipped || !clipped(element, x, y);
     }
 
     private static bool Reachable(Element element)

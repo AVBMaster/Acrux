@@ -1236,13 +1236,16 @@ public static class CssPropertyApplier
             // CSS MathML Core §5.3: two inherited words, each from its own closed set. The
             // grammar has refused anything else by now, so the value is stored lower-cased and the
             // computed value says it back (measured: 'math-style: compact' computes 'compact' and
-            // 'math-shift' has only the 'normal' this engine answers).
+            // so does 'math-shift: compact'; the TeX words 'superscript' and 'subscript' are
+            // refused by both engines).
             case "math-style":
-                if (IsOneOfLower(value, "normal", "compact"))
-                    style.MathStyle = value.Trim().ToLowerInvariant();
-                break;
             case "math-shift":
-                if (IsOneOfLower(value, "normal")) style.MathShift = "normal";
+                if (IsOneOfLower(value, "normal", "compact"))
+                {
+                    if (name.Equals("math-style", StringComparison.OrdinalIgnoreCase))
+                        style.MathStyle = value.Trim().ToLowerInvariant();
+                    else style.MathShift = value.Trim().ToLowerInvariant();
+                }
                 break;
             // CSS 2.1 §11.1.2: the legacy 'clip' of an absolutely positioned box. The engine keeps
             // the text its own canonicaliser wrote — 'auto' or a rect() with four sides — because

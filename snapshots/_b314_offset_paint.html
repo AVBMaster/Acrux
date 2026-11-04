@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b314 shapes and paint</title>
+<style>
+  body { margin: 0; background: #ffffff; font: 12px monospace; }
+  .box { position: absolute; width: 60px; height: 60px; }
+  /* A triangle: the canonical reprint adds 'px' to a bare number, so the painter reads the
+     clipped shape from 'polygon(0px 0px, 60px 0px, 0px 60px)', not from what the page wrote. */
+  #poly   { left: 10px;  top: 10px; background: #ff0000;
+            clip-path: polygon(0 0, 60px 0, 0 60px); }
+  /* Four sides that collapse into two words on the computed surface; the paint must not move. */
+  #inset2 { left: 90px;  top: 10px; background: #00ff00;
+            clip-path: inset(10px 20px 10px 20px); }
+  /* xywh over the whole box computes to 'inset(0%)' — nothing is cropped. */
+  #whole  { left: 170px; top: 10px; background: #0000ff;
+            clip-path: xywh(0% 0% 100% 100%); }
+  /* A worklet image is a value the grammar keeps and nothing here paints, so the colour under it
+     is the answer: 'background-image' alone leaves the element's own background-color visible. */
+  #paint  { left: 250px; top: 10px; background-color: #808080;
+            background-image: paint(my-worklet); }
+  /* The same call with an argument is refused, so this box keeps the gradient it was also given. */
+  #refuse { left: 330px; top: 10px; background-image: paint(my-worklet, 10px), linear-gradient(#ff8000, #ff8000); }
+</style></head>
+<body>
+<div class="box" id="poly"></div>
+<div class="box" id="inset2"></div>
+<div class="box" id="whole"></div>
+<div class="box" id="paint"></div>
+<div class="box" id="refuse"></div>
+<script>
+// b314_offset_paint
+function build() {
+const rows = [];
+const ids = ['poly', 'inset2', 'whole', 'paint', 'refuse'];
+for (let i = 0; i < ids.length; i++) {
+  const el = document.getElementById(ids[i]);
+  const r = el.getBoundingClientRect();
+  rows.push(ids[i] + '|rect=' + Math.round(r.x) + ',' + Math.round(r.y) + ' '
+      + Math.round(r.width) + 'x' + Math.round(r.height)
+      + '|comp=' + getComputedStyle(el).getPropertyValue('clip-path')
+      + '|echo=' + el.style.getPropertyValue('clip-path'));
+}
+// A point outside the clip answers the body, not the box (CSS Masking 1 §5.3).
+const pts = [[15, 15], [65, 65], [120, 35], [95, 35], [120, 12], [200, 40], [280, 40], [360, 40]];
+for (let i = 0; i < pts.length; i++) {
+  const hit = document.elementFromPoint(pts[i][0], pts[i][1]);
+  rows.push('hit ' + pts[i][0] + ',' + pts[i][1] + '=' + (hit && hit.id ? hit.id : hit ? hit.tagName : 'null'));
+}
+for (const id of ['poly', 'inset2', 'whole', 'paint', 'refuse']) {
+  rows.push('comp ' + id + '=' + getComputedStyle(document.getElementById(id)).backgroundImage);
+}
+const ms = document.createElement('div');
+document.body.appendChild(ms);
+ms.style.setProperty('math-shift', 'compact');
+rows.push('math-shift|sup=' + (CSS.supports('math-shift', 'compact') ? 1 : 0)
+    + '|echo=' + ms.style.getPropertyValue('math-shift')
+    + '|comp=' + getComputedStyle(ms).getPropertyValue('math-shift'));
+ms.remove();
+const at = document.createElement('div');
+document.body.appendChild(at);
+at.style.setProperty('animation-trigger', 'none');
+rows.push('animation-trigger|sup=' + (CSS.supports('animation-trigger', 'none') ? 1 : 0)
+    + '|echo=' + at.style.getPropertyValue('animation-trigger')
+    + '|comp=' + getComputedStyle(at).getPropertyValue('animation-trigger'));
+at.remove();
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="position:absolute;left:10px;top:90px;font:10px/1.35 monospace;white-space:pre-wrap"></pre>');
+// textContent, not HTML: a value carrying '<' is otherwise read as a tag and vanishes.
+document.getElementById('record').textContent = rows.join('\n');
+console.log(rows.join('\n'));
+}
+build();
+</script></body></html>

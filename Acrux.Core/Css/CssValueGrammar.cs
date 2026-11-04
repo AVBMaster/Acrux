@@ -910,9 +910,32 @@ public static class CssValueGrammar
         if (open <= 0) return false;
         var name = token[..open];
         if (name.Equals("url", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.Equals("paint", StringComparison.OrdinalIgnoreCase)) return IsPaintCall(token, open);
         foreach (var image in ImageFunctionNames)
             if (name.Equals(image, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
+    }
+
+    /// <summary>Houdini Painting 3 §3.1 writes 'paint()' with the worklet's name and, in the draft,
+    /// arguments behind a comma. The reference engine reads the name and refuses what a comma
+    /// introduces, so 'paint(my-worklet)' and 'paint(my-worklet var(--x))' are images while
+    /// 'paint(my-worklet, 10px)' and 'paint()' are not (all measured, in 'background-image' and in
+    /// the 'mask-image' twin alike).</summary>
+    private static bool IsPaintCall(string token, int open)
+    {
+        if (!token.EndsWith(")", StringComparison.Ordinal)) return false;
+        var inner = token[(open + 1)..^1].Trim();
+        if (inner.Length == 0 || inner.Contains(',', StringComparison.Ordinal)) return false;
+        string? first = null;
+        foreach (var word in SplitWords(inner))
+        {
+            first = word;
+            break;
+        }
+        if (first == null || first.Contains('(', StringComparison.Ordinal)
+            || first.StartsWith("--", StringComparison.Ordinal)
+            || !(char.IsLetter(first[0]) || first[0] is '_' or '-')) return false;
+        return true;
     }
 
     /// <summary>True when the text is one image function and nothing else — the closing parenthesis
@@ -2039,11 +2062,13 @@ public static class CssValueGrammar
         CssPropertyId.PointerEvents => static text =>
             IsOneWordOnly(text, "auto", "none", "visiblePainted", "visibleFill", "visibleStroke",
                 "visible", "painted", "fill", "stroke", "all", "bounding-box"),
-        // CSS MathML Core §5.3: 'math-style' takes its two words; 'math-shift' is the property an
-        // engine answers only 'normal' for — 'superscript' and 'subscript' are its spec words and
-        // are refused here exactly as they are there (measured, every one).
+        // CSS MathML Core §5.3: two inherited words each from its own closed set. 'math-style'
+        // takes 'normal' and 'compact'; 'math-shift' takes the same two — the older round measured
+        // only 'superscript' and 'subscript', which are TeX's words and are refused here exactly as
+        // the reference engine refuses them, and 'compact' was missed until measured (both words
+        // now measured: 'math-shift: compact' answers 'compact').
         CssPropertyId.MathStyle => static text => IsOneWordOnly(text, "normal", "compact"),
-        CssPropertyId.MathShift => static text => IsOneWordOnly(text, "normal"),
+        CssPropertyId.MathShift => static text => IsOneWordOnly(text, "normal", "compact"),
         // CSS Multi-column 1 §7.2: 'none' or 'all'. 'auto' is the word the first edition carried
         // and a number is not a span (both measured).
         CssPropertyId.ColumnSpan => static text => IsOneWordOnly(text, "none", "all"),
@@ -3485,7 +3510,7 @@ public static class CssValueGrammar
 
     /// <summary>polygon(): an optional fill rule, then the coordinate pairs. One pair is still a
     /// value — the reference engine accepts 'polygon(0 0)' and prints it back (measured).</summary>
-    private static bool IsPolygonShape(string inner)
+    internal static bool IsPolygonShape(string inner)
     {
         var points = SplitOnTopLevelCommas(inner);
         if (points.Length == 0) return false;

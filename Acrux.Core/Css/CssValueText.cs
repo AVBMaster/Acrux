@@ -1586,7 +1586,7 @@ public static class CssValueText
     /// engine prints (measured: 'inset(0)' reads 'inset(0px)', and the same fold shows in
     /// 'xywh(0 0 10px 10px)' → 'xywh(0px 0px 10px 10px)'). A nested call is left alone, because its
     /// own arguments are not lengths this fold may touch.</summary>
-    private static string FoldShapeLengths(string token)
+    internal static string FoldShapeLengths(string token)
     {
         int open = token.IndexOf('(');
         if (open <= 0 || !token.EndsWith(")", StringComparison.Ordinal)) return token;

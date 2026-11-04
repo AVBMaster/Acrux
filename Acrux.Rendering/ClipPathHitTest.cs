@@ -12,6 +12,14 @@ namespace Acrux.Rendering;
 /// </summary>
 public static class ClipPathHitTest
 {
+    /// <summary>The document's own point test knows the border box and the paint order, not the
+    /// shape a clip leaves visible — that geometry is built here. Masking 1 §1.1 puts the clip on
+    /// the pointer, so the renderer hands the walk this test as soon as it is loaded; a document
+    /// with no renderer in front of it has no clip to consult and keeps the border-box answer.</summary>
+    [System.Runtime.CompilerServices.ModuleInitializer]
+    internal static void WireIntoPointTest()
+        => Document.ClippedAway = (element, x, y) => IsClippedAway(element, (float)x, (float)y);
+
     /// <summary>Whether (<paramref name="x"/>,<paramref name="y"/>) — document coordinates —
     /// is clipped away by <paramref name="element"/> or by any ancestor's clip-path.</summary>
     public static bool IsClippedAway(Element? element, float x, float y)

@@ -141,6 +141,11 @@ public static class EchoedProperties
             // keywords — one per keyframe animation, so a space between two of them is no list.
             new() { Name = "animation-composition", Initial = "replace",
                 Normalize = NormalizeCompositionList },
+            // CSS Animations 2 §6: the reference engine declares 'animation-trigger' and answers
+            // 'none' for it, while 'auto', a plain event name, a dashed token and a comma list of
+            // any of those are all refused (measured on both surfaces). Nothing here fires on a
+            // trigger, but the property is read, echoed and computed.
+            new() { Name = "animation-trigger", Initial = "none", Normalize = Single("none") },
             // Scroll-driven animations 1 §3: the range pair, and the two edges it is made of, are
             // one range per comma-separated timeline animation. An offset may be an expression,
             // which the specified value keeps and the computed value prices
@@ -1530,13 +1535,49 @@ public static class EchoedProperties
             }
             case "ray":
             {
-                // The shape position of a ray is not a value this engine reads (measured:
-                // 'ray(center 45deg)' is refused while 'ray(45deg contain)' is kept whole).
-                var words = inner.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-                if (words.Length == 0
-                    || words[0].ToLowerInvariant() is "left" or "center" or "right"
-                        or "top" or "bottom") return false;
-                canonical = token.ToLowerInvariant();
+                // Motion Path 1 §3.2 as the reference engine reads it: an angle, at most one size
+                // word and at most the word 'contain'. The draft's 'cover', 'with-origin',
+                // 'reverse' and the ray's own offset are refused there — 'ray(45deg cover)',
+                // 'ray(45deg with-origin contain)', 'ray(45deg contain 20px)' and
+                // 'ray(45deg contain reverse)' each drop the declaration (all measured), and a bare
+                // number is no angle ('ray(0)' falls). 'closest-side' is what 'contain' means, so
+                // the two are not said together (measured: 'ray(45deg closest-side contain)' reads
+                // 'ray(45deg contain)' while 'ray(45deg farthest-side contain)' keeps both).
+                var words = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(inner, ' ');
+                if (words.Count is < 1 or > 3) return false;
+                var angle = words[0].ToLowerInvariant();
+                if (!IsAngle(angle) && !IsCalc(angle)) return false;
+                string? size = null;
+                bool contain = false;
+                for (int i = 1; i < words.Count; i++)
+                {
+                    var word = words[i].ToLowerInvariant();
+                    if (word is "closest-side" or "closest-corner" or "farthest-side"
+                        or "farthest-corner")
+                    {
+                        if (size != null) return false;
+                        size = word;
+                        continue;
+                    }
+                    if (word != "contain") return false;
+                    if (contain) return false;
+                    contain = true;
+                }
+                var said = new List<string> { angle };
+                if (size != null && !(contain && size == "closest-side")) said.Add(size);
+                if (contain) said.Add("contain");
+                canonical = "ray(" + string.Join(" ", said) + ")";
+                return true;
+            }
+            case "polygon":
+            {
+                // Shapes 2 §4.1: the reading 'clip-path' already gives a polygon — a comma list of
+                // two-number points, an optional fill rule said first, and the draft's
+                // 'polygon evenodd(…)' prefix is no shape name at all — with the numbers folded to
+                // the lengths they mean (measured: 'polygon(0 0, 10px 10px, 0 20px)' reads
+                // 'polygon(0px 0px, 10px 10px, 0px 20px)' while 'polygon(0 0, 10px)' is refused).
+                if (!Acrux.Core.Css.CssValueGrammar.IsPolygonShape(inner)) return false;
+                canonical = Acrux.Core.Css.CssValueText.FoldShapeLengths(token);
                 return true;
             }
             case "url":
@@ -1787,9 +1828,13 @@ public static class EchoedProperties
                 TryEdgeValue(resolved[3], out var hPx, out var hPct);
                 // The box is the four insets it leaves: the top and the left are the origin the
                 // page wrote, and the right and the bottom are what is left of the reference box
-                // once the origin and the size are taken off it.
-                return "inset(" + resolved[1] + " " + RemainingInset(xPx, xPct, wPx, wPct) + " "
-                     + RemainingInset(yPx, yPct, hPx, hPct) + " " + resolved[0] + ")";
+                // once the origin and the size are taken off it. The four are then said in the
+                // shortest form that means them, exactly as an inset() the page wrote is said —
+                // so a box over the whole reference box is 'inset(0%)' and not
+                // 'inset(0% 0% 0% 0%)' (measured).
+                var edges = new[] { resolved[1], RemainingInset(xPx, xPct, wPx, wPct),
+                                    RemainingInset(yPx, yPct, hPx, hPct), resolved[0] };
+                return "inset(" + ShorthandReparse.CollapseFourSides(edges) + ")";
             }
             default:
                 return name + "(" + inner + ")";

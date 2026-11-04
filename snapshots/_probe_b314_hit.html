@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b314 hit probe</title>
+<style>
+  body { margin: 0; background: #ffffff; font: 16px monospace; }
+  #para { position: absolute; left: 10px; top: 10px; width: 200px; }
+  #link { color: #0000ff; }
+  #clip { position: absolute; left: 10px; top: 60px; width: 60px; height: 60px;
+          background: #ff0000; clip-path: inset(0 50% 50% 0); }
+  #kid  { position: absolute; left: 20px; top: 70px; width: 10px; height: 10px; background: #00ff00; }
+  #none { position: absolute; left: 100px; top: 60px; width: 40px; height: 40px; background: #0000ff;
+          pointer-events: none; }
+</style></head>
+<body>
+<div id="para">text <a id="link" href="#x">link</a> tail</div>
+<div id="clip"><div id="kid"></div></div>
+<div id="none"></div>
+<script>
+// b314_hit_probe
+function build() {
+const rows = [];
+const pts = [[15, 20], [40, 20], [70, 20], [35, 35], [15, 65], [55, 100], [25, 75], [110, 70], [300, 300]];
+for (let i = 0; i < pts.length; i++) {
+  const hit = document.elementFromPoint(pts[i][0], pts[i][1]);
+  const chain = document.elementsFromPoint(pts[i][0], pts[i][1]);
+  const names = [];
+  for (let j = 0; j < chain.length; j++) names.push(chain[j].id || chain[j].tagName);
+  rows.push(pts[i][0] + ',' + pts[i][1] + '=' + (hit ? (hit.id || hit.tagName) : 'null')
+      + '|chain=' + (names.length ? names.join('>') : '-'));
+}
+const dr = document.documentElement.getBoundingClientRect();
+rows.push('rootrect=' + Math.round(dr.width) + 'x' + Math.round(dr.height) + '|ih=' + window.innerHeight);
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="position:absolute;left:10px;top:130px;font:10px/1.35 monospace;white-space:pre-wrap"></pre>');
+// textContent, not HTML: a value carrying '<' is otherwise read as a tag and vanishes.
+document.getElementById('record').textContent = rows.join('\n');
+console.log(rows.join('\n'));
+}
+build();
+</script></body></html>
