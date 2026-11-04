@@ -1,0 +1,110 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe118 — the point test the layout tree answers</title></head>
+<body><div id="box" style="width:200px;height:120px;position:relative;margin:0">
+    <p id="p" style="margin:0">text</p>
+    <div id="cover" style="position:absolute;left:0;top:0;width:40px;height:40px;
+        pointer-events:none;background:#f00"></div>
+    <div id="hid" style="position:absolute;left:50px;top:50px;width:40px;height:40px;
+        visibility:hidden;background:#0f0"></div>
+    <div id="stackA" style="position:absolute;right:0;top:0;width:40px;height:40px"></div>
+    <div id="stackB" style="position:absolute;right:0;top:0;width:40px;height:40px;z-index:2"></div>
+</div>
+<script>
+// CSSOM Views §3.5 is a question about the page as it is drawn, so every answer here is asked at a
+// point the page can name: the box the element was laid out in. The rows are the ones a hit test has
+// to get right — the deepest box, the chain it is drawn through, the element the pointer is told to
+// pass through, the hidden one, the two stacked ones, a point outside every box, and the same
+// questions asked of a shadow tree.
+(function () {
+    var out = {};
+    function msg(fn) {
+        try { return 'ok:' + JSON.stringify(fn()); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 90); }
+    }
+    function tag(o) { return Object.prototype.toString.call(o); }
+    function names(list) {
+        var made = [ ];
+        for (var i = 0; i < list.length; i++) made.push(list[i].id || list[i].tagName.toLowerCase());
+        return made;
+    }
+    function at(el, dx, dy) {
+        var r = el.getBoundingClientRect();
+        return [r.left + dx, r.top + dy];
+    }
+    var box = document.getElementById('box');
+    var p = document.getElementById('p');
+    var cover = document.getElementById('cover');
+    var hid = document.getElementById('hid');
+    var stackB = document.getElementById('stackB');
+
+    out.boxes = msg(function () {
+        return [[].concat(at(box, 0, 0), [box.offsetWidth, box.offsetHeight]),
+            [].concat(at(p, 1, 1), [p.offsetWidth, p.offsetHeight]),
+            at(cover, 1, 1), at(hid, 1, 1), at(stackB, 1, 1)];
+    });
+    out.deepest = msg(function () {
+        var point = at(p, 5, 5);
+        return [String(document.elementFromPoint(point[0], point[1])),
+            names(document.elementsFromPoint(point[0], point[1]))];
+    });
+    out.pass_through = msg(function () {
+        var point = at(cover, 5, 5);
+        return [String(document.elementFromPoint(point[0], point[1])),
+            String(cover.style.pointerEvents)];
+    });
+    out.hidden_box = msg(function () {
+        var point = at(hid, 5, 5);
+        return [String(document.elementFromPoint(point[0], point[1])), String(hid.offsetParent)];
+    });
+    out.stacked = msg(function () {
+        var point = at(stackB, 5, 5);
+        return [String(document.elementFromPoint(point[0], point[1])),
+            names(document.elementsFromPoint(point[0], point[1]))];
+    });
+    out.outside = msg(function () {
+        return [String(document.elementFromPoint(2000, 2000)),
+            document.elementsFromPoint(2000, 2000).length,
+            String(document.elementFromPoint(-4, -4)),
+            String(document.elementFromPoint(2, 2))];
+    });
+    out.text_point = msg(function () {
+        var point = at(p, 12, 9);
+        var made = document.caretPositionFromPoint(point[0], point[1]);
+        return made === null ? 'null' : [tag(made), String(made.offsetNode), made.offset,
+            String(made.getRect ? made.getRect() : undefined)].join('|');
+    });
+    out.shadow_tree = msg(function () {
+        var host = document.createElement('div');
+        host.style.cssText = 'width:120px;height:60px;margin:0';
+        document.body.appendChild(host);
+        var root = host.attachShadow({ mode: 'open' });
+        root.innerHTML = '<p id="inner" style="margin:0;width:40px;height:20px">hi</p>';
+        var point = [host.getBoundingClientRect().left + 5, host.getBoundingClientRect().top + 5];
+        var made = [String(root.elementFromPoint(point[0], point[1])),
+            root.elementsFromPoint(point[0], point[1]).length,
+            String(document.elementFromPoint(point[0], point[1])),
+            names(document.elementsFromPoint(point[0], point[1])),
+            String(host.ownerDocument === document)];
+        document.body.removeChild(host);
+        return made;
+    });
+    out.display_contents = msg(function () {
+        var outer = document.createElement('div');
+        outer.style.cssText = 'display:contents;width:80px;height:80px';
+        outer.id = 'outer';
+        var inner = document.createElement('div');
+        inner.id = 'innerc';
+        inner.style.cssText = 'width:80px;height:80px';
+        outer.appendChild(inner);
+        document.body.appendChild(outer);
+        var r = inner.getBoundingClientRect();
+        var made = [String(document.elementFromPoint(r.left + 4, r.top + 4)),
+            [].concat(r.left, r.top, r.width, r.height)];
+        document.body.removeChild(outer);
+        return made;
+    });
+    window.__REPORT = JSON.stringify(out);
+    document.title = 'P118';
+    window.__T && window.__T('probe118', true, window.__REPORT);
+})();
+</script>
+</body></html>

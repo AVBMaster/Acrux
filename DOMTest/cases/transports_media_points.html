@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html>
+<head><title>Transports, media, the navigator and the point test (HTML §4.8.11-§4.8.12, §6.8.3, WebSocket, SSE, DOM §5.3, CSSOM Views §3.5, Web IDL §3.5)</title></head>
+<body>
+<div id="box"><p id="kid">a</p></div>
+<script>
+// Round 19. Every expected value below was read out of the running reference browser and saved
+// under DOMTest/out/notes (round19_ref_probe114.json, round19_ref_probe116.json), except the point
+// test rows, which ask the questions CSSOM Views §3.5 answers from the layout tree.
+(function () {
+    function own(o) { try { return Object.getOwnPropertyNames(o).sort(); } catch (e) { return []; } }
+    function refused(fn) {
+        try { var v = fn(); return 'no-throw:' + (v === undefined ? 'undefined' : String(v)); }
+        catch (e) { return String(e && e.name) + ':' + String(e && e.message); }
+    }
+    // The refusal is compared by its beginning: the sentences the reference writes run long, and a
+    // row that repeats one in full breaks on the part a page never reads.
+    function refuses(fn, beginning) { return refused(fn).indexOf(beginning) === 0; }
+    function tag(o) { return Object.prototype.toString.call(o); }
+    function list(o) { return own(o).join(','); }
+    function ck(name, cond, info) { window.__T(name, cond === true, info === undefined ? '' : String(info)); }
+    function mkBox(html) {
+        var made = document.createElement('div');
+        if (html) made.innerHTML = html;
+        document.body.appendChild(made);
+        return made;
+    }
+
+    // ── A. the socket ─────────────────────────────────────────────────────────
+    // The interface the transport has no frames for still names the members, keeps the state a
+    // connection that never opened is in, and refuses the calls that would need one.
+    var WS_OWN = 'CLOSED,CLOSING,CONNECTING,OPEN,binaryType,bufferedAmount,close,constructor,'
+        + 'extensions,onclose,onerror,onmessage,onopen,protocol,readyState,send,url';
+    ck('A1 the socket names the members the reference lists',
+        list(WebSocket.prototype) === WS_OWN, list(WebSocket.prototype));
+    ck('A2 the interface object carries the four constants and no legacy pair',
+        list(WebSocket).indexOf('caller') < 0 && list(WebSocket).indexOf('arguments') < 0
+        && [WebSocket.CONNECTING, WebSocket.OPEN, WebSocket.CLOSING, WebSocket.CLOSED].join(',')
+            === '0,1,2,3'
+        && WebSocket.prototype.CONNECTING === 0 && WebSocket.CLOSED === 3,
+        own(WebSocket).join(','));
+    ck('A3 the constructor refuses the missing argument and a scheme it cannot open',
+        refuses(function () { return new WebSocket(); },
+            "TypeError:Failed to construct 'WebSocket': 1 argument required, but only 0 present")
+        && refuses(function () { return new WebSocket('not a url'); },
+            "SyntaxError:Failed to construct 'WebSocket': The URL's scheme must be either 'http'")
+        && refuses(function () { return new WebSocket('/relative', ['chat']); },
+            "SyntaxError:Failed to construct 'WebSocket': The URL's scheme must be either 'http'"),
+        refused(function () { return new WebSocket(); }));
+    ck('A4 a socket the transport never opened reads the state of one', (function () {
+        var s = new WebSocket('wss://example.invalid/sock?q=1', ['chat']);
+        var made = [s.url, String(s.readyState), s.protocol, s.extensions, s.binaryType,
+            String(s.onopen), String(s.onmessage), String(s.onerror), String(s.onclose), tag(s),
+            typeof s.send, typeof s.close];
+        return made.join('|') === 'wss://example.invalid/sock?q=1|0|||blob|null|null|null|null|'
+            + '[object WebSocket]|function|function';
+    })(), (function () {
+        var s = new WebSocket('wss://example.invalid/sock?q=1', ['chat']);
+        return [s.url, String(s.readyState), s.binaryType, String(s.onopen)].join('|');
+    })());
+    ck('A5 the calls that would need a socket are refused by name', (function () {
+        var s = new WebSocket('wss://example.invalid/sock');
+        return refuses(function () { return s.send('text'); },
+            "InvalidStateError:Failed to execute 'send' on 'WebSocket': Still in CONNECTING state")
+        // The code a page gives has to be one the protocol allows a script to ask for; the rest of
+        // the sentence is the engine's wording until the reference's own is measured whole.
+        && refuses(function () { return s.close(42); },
+            "InvalidAccessError:Failed to execute 'close' on 'WebSocket': The close code")
+        // A refusal to close leaves the socket where it was: the state only a close that the
+        // transport accepts moves.
+        && s.readyState === 0;
+    })(), (function () {
+        var s = new WebSocket('wss://example.invalid/sock');
+        return [refused(function () { return s.send('text'); }).slice(0, 60),
+            String(s.readyState)].join(' | ');
+    })());
+    ck('A6 an attribute off the level is the bare refusal and an operation the named one', (function () {
+        return refused(function () { return WebSocket.prototype.binaryType; })
+            === 'TypeError:Illegal invocation'
+        && refused(function () { return WebSocket.prototype.send.call({}, 'x'); })
+            === "TypeError:Failed to execute 'send' on 'WebSocket': Illegal invocation";
+    })(), refused(function () { return WebSocket.prototype.binaryType; }));
+    ck('A7 the four events a socket dispatches are handler members', (function () {
+        var s = new WebSocket('wss://example.invalid/sock');
+        var names = ['onopen', 'onmessage', 'onerror', 'onclose'];
+        for (var i = 0; i < names.length; i++) {
+            if (s[names[i]] !== null) return false;
+            if (!Object.getOwnPropertyDescriptor(WebSocket.prototype, names[i]).enumerable) return false;
+        }
+        return true;
+    })(), 'ok');
+
+    // ── B. the event stream ───────────────────────────────────────────────────
+    var ES_OWN = 'CLOSED,CONNECTING,OPEN,close,constructor,onerror,onmessage,onopen,readyState,'
+        + 'url,withCredentials';
+    ck('B1 the stream names the members the reference lists',
+        list(EventSource.prototype) === ES_OWN, list(EventSource.prototype));
+    ck('B2 the three states are on the level and on the interface object',
+        [EventSource.CONNECTING, EventSource.OPEN, EventSource.CLOSED].join(',') === '0,1,2'
+        && EventSource.prototype.CLOSED === 2, own(EventSource).join(','));
+    ck('B3 the stream reads the address the document resolved', (function () {
+        var made = new EventSource('events');
+        return made.url === new URL('events', document.baseURI).href && made.readyState === 0
+            && made.withCredentials === false && made.onmessage === null && made.onerror === null
+            && made.onopen === null;
+    })(), new EventSource('events').url);
+    ck('B4 the options are read, and closing ends the stream', (function () {
+        var held = new EventSource('events', { withCredentials: true });
+        var s = new EventSource('events');
+        s.close();
+        return held.withCredentials === true && s.readyState === 2
+            && s.dispatchEvent(new Event('open')) === true;
+    })(), (function () {
+        var s = new EventSource('events');
+        s.close();
+        return [String(s.withCredentials), String(s.readyState)].join('/');
+    })());
+
+    // ── C. the media element ──────────────────────────────────────────────────
+    var MEDIA_OWN = 'HAVE_CURRENT_DATA,HAVE_ENOUGH_DATA,HAVE_FUTURE_DATA,HAVE_METADATA,'
+        + 'HAVE_NOTHING,NETWORK_EMPTY,NETWORK_IDLE,NETWORK_LOADING,NETWORK_NO_SOURCE,addTextTrack,'
+        + 'autoplay,buffered,canPlayType,captureStream,constructor,controls,controlsList,crossOrigin,'
+        + 'currentSrc,currentTime,defaultMuted,defaultPlaybackRate,disableRemotePlayback,duration,'
+        + 'ended,error,load,loading,loop,mediaKeys,muted,networkState,onencrypted,onwaitingforkey,'
+        + 'pause,paused,play,playbackRate,played,preload,preservesPitch,readyState,remote,seekable,'
+        + 'seeking,setMediaKeys,setSinkId,sinkId,src,srcObject,textTracks,volume,'
+        + 'webkitAudioDecodedByteCount,webkitVideoDecodedByteCount';
+    var VIDEO_OWN = 'cancelVideoFrameCallback,constructor,disablePictureInPicture,'
+        + 'getVideoPlaybackQuality,height,onenterpictureinpicture,onleavepictureinpicture,playsInline,'
+        + 'poster,requestPictureInPicture,requestVideoFrameCallback,videoHeight,videoWidth,'
+        + 'webkitDecodedFrameCount,webkitDroppedFrameCount,width';
+    ck('C1 the media interface names the members the reference lists',
+        list(HTMLMediaElement.prototype) === MEDIA_OWN, list(HTMLMediaElement.prototype).slice(0, 90));
+    ck('C2 the video level alone names the frame callbacks and the quality read',
+        list(HTMLVideoElement.prototype) === VIDEO_OWN
+        && HTMLMediaElement.prototype.requestVideoFrameCallback === undefined
+        && HTMLMediaElement.prototype.getVideoPlaybackQuality === undefined,
+        list(HTMLVideoElement.prototype));
+    ck('C3 an element with no decoder reads the state the specification begins it in', (function () {
+        var v = document.createElement('video');
+        var made = JSON.stringify([v.readyState, v.networkState, v.duration, v.currentTime, v.paused,
+            v.volume, v.muted, v.playbackRate, v.defaultPlaybackRate, v.seeking, v.loop, v.autoplay,
+            v.controls, v.preload, v.crossOrigin, v.currentSrc, v.srcObject, v.error,
+            tag(v.played), tag(v.seekable), tag(v.buffered), tag(v.textTracks),
+            v.controlsList, v.remote, v.disableRemotePlayback, v.sinkId, v.preservesPitch]);
+        return made === '[0,0,null,0,true,1,false,1,1,false,false,false,false,"metadata",null,"",'
+            + 'null,null,"[object TimeRanges]","[object TimeRanges]","[object TimeRanges]",'
+            + '"[object TextTrackList]",{},{},false,"",true]';
+    })(), (function () {
+        var v = document.createElement('video');
+        return JSON.stringify([v.readyState, v.networkState, v.duration, v.preservesPitch,
+            v.disableRemotePlayback, v.sinkId]);
+    })());
+    ck('C4 the state that is not a number answers as one, and the flags as themselves', (function () {
+        var v = document.createElement('video');
+        return Number.isNaN(v.duration) && v.currentTime === 0 && v.paused === true
+            && v.playbackRate === 1 && v.defaultPlaybackRate === 1
+            && v.disableRemotePlayback === false && v.preservesPitch === true && v.sinkId === ''
+            && v.crossOrigin === null && v.currentSrc === '' && v.srcObject === null
+            && v.error === null && v.networkState === 0 && v.readyState === 0;
+    })(), 'ok');
+    ck('C5 the calls a decoder would answer are refused or answered empty', (function () {
+        var v = document.createElement('video');
+        return String(v.load()) === 'undefined' && String(v.pause()) === 'undefined'
+            && typeof v.play().then === 'function' && v.canPlayType('video/mp4') === 'maybe'
+            && v.getVideoPlaybackQuality().totalVideoFrames === 0
+            && refuses(function () { return v.captureStream(); },
+                "NotSupportedError:Failed to execute 'captureStream' on 'HTMLMediaElement'")
+            && typeof v.setSinkId('x').then === 'function';
+    })(), refused(function () {
+        var v = document.createElement('video');
+        return v.captureStream();
+    }).slice(0, 70));
+    ck('C6 the nine numbers are on the level and on the interface object', (function () {
+        var pairs = [['NETWORK_EMPTY', 0], ['NETWORK_IDLE', 1], ['NETWORK_LOADING', 2],
+            ['NETWORK_NO_SOURCE', 3], ['HAVE_NOTHING', 0], ['HAVE_METADATA', 1],
+            ['HAVE_CURRENT_DATA', 2], ['HAVE_FUTURE_DATA', 3], ['HAVE_ENOUGH_DATA', 4]];
+        for (var i = 0; i < pairs.length; i++) {
+            if (HTMLMediaElement.prototype[pairs[i][0]] !== pairs[i][1]) return false;
+            if (HTMLMediaElement[pairs[i][0]] !== pairs[i][1]) return false;
+            if (Object.getOwnPropertyDescriptor(
+                HTMLMediaElement.prototype, pairs[i][0]).writable) return false;
+        }
+        return true;
+    })(), 'ok');
+    ck('C7 the levels a media element hands out are interfaces of their own', (function () {
+        var names = ['TimeRanges', 'MediaError', 'TextTrack', 'TextTrackList',
+            'VideoPlaybackQuality', 'RemotePlayback', 'HTMLSourceElement'];
+        for (var i = 0; i < names.length; i++) if (typeof window[names[i]] !== 'function') return false;
+        var v = document.createElement('video');
+        return tag(v.played) === '[object TimeRanges]' && tag(v.remote) === '[object RemotePlayback]'
+            && tag(v.textTracks) === '[object TextTrackList]';
+    })(), 'ok');
+    ck('C8 a track element answers the one TextTrack it declares', (function () {
+        var t = document.createElement('track');
+        return [tag(t.track), t.kind, t.srclang, t.label, String(t.default), String(t.readyState)]
+            .join('|') === '[object TextTrack]|subtitles|||false|0';
+    })(), (function () {
+        var t = document.createElement('track');
+        return [tag(t.track), String(t.readyState)].join('|');
+    })());
+    ck('C9 a token list the engine hands out keeps its members off the listing', (function () {
+        var v = document.createElement('video');
+        return JSON.stringify(v.controlsList) === '{}' && typeof v.controlsList.contains === 'function'
+            && v.controlsList.length === 0 && v.controlsList.value === '';
+    })(), JSON.stringify(document.createElement('video').controlsList));
+
+    // ── D. the navigator, the requests and the processing instruction ─────────
+    var NAV_OWN = 'adAuctionComponents,appCodeName,appName,appVersion,'
+        + 'canLoadAdAuctionFencedFrame,clearAppBadge,clearOriginJoinedAdInterestGroups,clipboard,'
+        + 'connection,constructor,cookieEnabled,createAuctionNonce,credentials,deprecatedReplaceInURN,'
+        + 'deprecatedRunAdAuctionEnforcesKAnonymity,deprecatedURNToURL,deviceMemory,devicePosture,'
+        + 'doNotTrack,geolocation,getBattery,getGamepads,getInstalledRelatedApps,'
+        + 'getInterestGroupAdAuctionData,getUserMedia,gpu,hardwareConcurrency,hid,ink,javaEnabled,'
+        + 'joinAdInterestGroup,keyboard,language,languages,leaveAdInterestGroup,locks,login,managed,'
+        + 'maxTouchPoints,mediaCapabilities,mediaDevices,mediaSession,mimeTypes,onLine,'
+        + 'pdfViewerEnabled,permissions,platform,plugins,presentation,product,productSub,'
+        + 'protectedAudience,registerProtocolHandler,requestMIDIAccess,requestMediaKeySystemAccess,'
+        + 'runAdAuction,scheduling,sendBeacon,serial,serviceWorker,setAppBadge,storage,'
+        + 'storageBuckets,unregisterProtocolHandler,updateAdInterestGroups,usb,userActivation,'
+        + 'userAgent,userAgentData,vendor,vendorSub,vibrate,virtualKeyboard,wakeLock,webdriver,'
+        + 'webkitGetUserMedia,webkitPersistentStorage,webkitTemporaryStorage,'
+        + 'windowControlsOverlay,xr';
+    ck('D1 the navigator names the members the reference lists',
+        list(Navigator.prototype) === NAV_OWN,
+        (function () {
+            var held = own(Navigator.prototype);
+            var want = NAV_OWN.split(',');
+            var missing = want.filter(function (n) { return held.indexOf(n) < 0; });
+            var extra = held.filter(function (n) { return want.indexOf(n) < 0; });
+            return 'missing ' + missing.join(',') + ' extra ' + extra.join(',');
+        })());
+    ck('D2 the protocol handler is checked by count, then by scheme, then by address', (function () {
+        return refuses(function () { return navigator.registerProtocolHandler('web+foo'); },
+            "TypeError:Failed to execute 'registerProtocolHandler' on 'Navigator': 2 arguments req")
+        && refused(function () {
+            return navigator.registerProtocolHandler('http://x', 'h?a=%s');
+        }) === "SecurityError:Failed to execute 'registerProtocolHandler' on 'Navigator': The "
+            + "scheme name 'http://x' is not allowed by URI syntax (RFC3986)."
+        && refused(function () {
+            return navigator.registerProtocolHandler('web+foo', 'h?a=%s');
+        }) === "SecurityError:Failed to execute 'registerProtocolHandler' on 'Navigator': The "
+            + "scheme of the url provided must be HTTP(S)."
+        && navigator.unregisterProtocolHandler('web+foo', 'https://example.com/h?a=%s') === undefined;
+    })(), refused(function () { return navigator.registerProtocolHandler('http://x', 'h?a=%s'); }));
+    ck('D3 a dictionary argument is refused as a value or as a missing member', (function () {
+        var x = new XMLHttpRequest();
+        return refused(function () { return x.setPrivateToken('token'); })
+            === "TypeError:Failed to execute 'setPrivateToken' on 'XMLHttpRequest': The provided "
+                + "value is not of type 'PrivateToken'."
+        && refused(function () {
+            return x.setPrivateToken({ issuer: 'https://i.example', token: 't' });
+        }) === "TypeError:Failed to execute 'setPrivateToken' on 'XMLHttpRequest': Failed to read "
+            + "the 'operation' property from 'PrivateToken': Required member is undefined."
+        && refused(function () { return x.setAttributionReporting({}); })
+            === "TypeError:Failed to execute 'setAttributionReporting' on 'XMLHttpRequest': Failed "
+                + "to read the 'eventSourceEligible' property from "
+                + "'AttributionReportingRequestOptions': Required member is undefined.";
+    })(), refused(function () { return new XMLHttpRequest().setPrivateToken('token'); }));
+    ck('D4 the posture and the overlay are objects of the interfaces that name them', (function () {
+        return tag(navigator.devicePosture) === '[object DevicePosture]'
+            && navigator.devicePosture.type === 'continuous'
+            && list(Object.getPrototypeOf(navigator.devicePosture)) === 'constructor,onchange,type'
+            && tag(navigator.windowControlsOverlay) === '[object WindowControlsOverlay]'
+            && navigator.windowControlsOverlay.visible === false
+            && tag(navigator.windowControlsOverlay.getTitlebarAreaRect())
+                === '[object DOMRectReadOnly]'
+            && refused(function () {
+                return Object.getPrototypeOf(navigator.devicePosture).type;
+            }) === 'TypeError:Illegal invocation';
+    })(), tag(navigator.devicePosture) + ' ' + navigator.devicePosture.type);
+    ck('D5 a processing instruction reads the attributes its data holds', (function () {
+        var pi = document.createProcessingInstruction('xml-stylesheet',
+            'type="text/css" href="s.css"');
+        return pi.target === 'xml-stylesheet' && pi.data === 'type="text/css" href="s.css"'
+            && pi.getAttribute('type') === 'text/css' && pi.hasAttribute('href') === true
+            && pi.getAttributeNames().join(',') === 'type,href'
+            && pi.hasAttributes() === true && pi.sheet === null
+            && tag(pi) === '[object ProcessingInstruction]'
+            && list(ProcessingInstruction.prototype)
+                === 'constructor,getAttribute,getAttributeNames,hasAttribute,hasAttributes,'
+                    + 'removeAttribute,setAttribute,sheet,target,toggleAttribute';
+    })(), list(ProcessingInstruction.prototype));
+    ck('D6 a blocking attribute is the token list the specification says it is', (function () {
+        var made = [document.createElement('script'), document.createElement('style'),
+            document.createElement('link')];
+        for (var i = 0; i < made.length; i++) {
+            if (tag(made[i].blocking) !== '[object DOMTokenList]') return false;
+            if (made[i].blocking.length !== 0 || made[i].blocking.value !== '') return false;
+        }
+        made[0].setAttribute('blocking', 'foo bar');
+        return made[0].blocking.length === 2 && made[0].blocking.contains('foo')
+            && String(made[0].blocking) === 'foo bar';
+    })(), 'ok');
+
+    ck('D7 the visible area is the window the page is drawn in', (function () {
+        var v = window.visualViewport;
+        return tag(v) === '[object VisualViewport]' && v.scale === 1
+            && v.width === window.innerWidth && v.height === window.innerHeight
+            && v.pageLeft === window.scrollX && v.pageTop === window.scrollY
+            && v.offsetLeft === 0 && v.offsetTop === 0;
+    })(), [window.visualViewport.width, window.visualViewport.height,
+        window.innerWidth, window.scrollX].join('/'));
+
+    // ── E. the point test ─────────────────────────────────────────────────────
+    // CSSOM Views §3.5: the answer is the deepest box that holds the point, read in paint order, and
+    // the chain of elements it is drawn through. Every point below is one the layout tree placed.
+    function point(el, dx, dy) {
+        var r = el.getBoundingClientRect();
+        return [r.left + dx, r.top + dy];
+    }
+    function chain(made) {
+        var out = [];
+        for (var i = 0; i < made.length; i++) {
+            out.push(made[i].id ? made[i].id : made[i].tagName.toLowerCase());
+        }
+        return out.join(',');
+    }
+    var hitBox = mkBox('<div id="hb" style="width:200px;height:120px;position:relative;margin:0">'
+        + '<p id="hp" style="margin:0">text</p>'
+        + '<div id="hc" style="position:absolute;left:0;top:0;width:40px;height:40px;'
+        + 'pointer-events:none"></div>'
+        + '<div id="hh" style="position:absolute;left:50px;top:50px;width:40px;height:40px;'
+        + 'visibility:hidden"></div>'
+        + '<div id="ha" style="position:absolute;right:0;top:0;width:40px;height:40px"></div>'
+        + '<div id="hbb" style="position:absolute;right:0;top:0;width:40px;height:40px;'
+        + 'z-index:2"></div></div>');
+    var hb = hitBox.querySelector('#hb');
+    var hp = hitBox.querySelector('#hp');
+    ck('E1 the deepest box at the point answers, with the chain it is drawn through', (function () {
+        var where = point(hp, 5, 5);
+        return document.elementFromPoint(where[0], where[1]) === hp
+            && chain(document.elementsFromPoint(where[0], where[1])) === 'hp,hb,div,body,html';
+    })(), (function () {
+        var where = point(hp, 5, 5);
+        return [String(document.elementFromPoint(where[0], where[1])),
+            chain(document.elementsFromPoint(where[0], where[1]))].join(' ');
+    })());
+    ck('E2 an element the pointer is told to pass through does not answer', (function () {
+        var where = point(hitBox.querySelector('#hc'), 5, 5);
+        return document.elementFromPoint(where[0], where[1]) === hp;
+    })(), (function () {
+        var where = point(hitBox.querySelector('#hc'), 5, 5);
+        return String(document.elementFromPoint(where[0], where[1]));
+    })());
+    ck('E3 an element the page hides is not reached either', (function () {
+        var where = point(hitBox.querySelector('#hh'), 5, 5);
+        return document.elementFromPoint(where[0], where[1]) === hb;
+    })(), (function () {
+        var where = point(hitBox.querySelector('#hh'), 5, 5);
+        return String(document.elementFromPoint(where[0], where[1]));
+    })());
+    ck('E4 the element painted on top of another is the one that answers', (function () {
+        var top = hitBox.querySelector('#hbb');
+        var where = point(top, 5, 5);
+        return document.elementFromPoint(where[0], where[1]) === top
+            && chain(document.elementsFromPoint(where[0], where[1])) === 'hbb,hb,div,body,html';
+    })(), (function () {
+        var where = point(hitBox.querySelector('#hbb'), 5, 5);
+        return [String(document.elementFromPoint(where[0], where[1])),
+            chain(document.elementsFromPoint(where[0], where[1]))].join(' ');
+    })());
+    ck('E5 a point no box holds answers null, and the viewport answers the root', (function () {
+        return document.elementFromPoint(2000, 2000) === null
+            && document.elementsFromPoint(2000, 2000).length === 0
+            && document.elementFromPoint(-4, -4) === null
+            && tag(document.elementFromPoint(2, 2)) === '[object HTMLHtmlElement]'
+            && document.elementsFromPoint(2, 2).length === 1;
+    })(), String(document.elementFromPoint(2000, 2000)));
+    ck('E6 an element with no box of its own still carries the ones below it', (function () {
+        var outer = document.createElement('div');
+        outer.style.cssText = 'display:contents;width:80px;height:80px';
+        var inner = document.createElement('div');
+        inner.style.cssText = 'width:80px;height:80px';
+        outer.appendChild(inner);
+        hitBox.appendChild(outer);
+        var where = point(inner, 4, 4);
+        var made = document.elementFromPoint(where[0], where[1]) === inner;
+        hitBox.removeChild(outer);
+        return made;
+    })(), 'ok');
+    ck('E7 the shadow tree answers its own point test the way the document does', (function () {
+        var host = document.createElement('div');
+        host.style.cssText = 'width:120px;height:60px;margin:0';
+        document.body.appendChild(host);
+        var root = host.attachShadow({ mode: 'open' });
+        root.innerHTML = '<p style="margin:0;width:40px;height:20px">hi</p>';
+        var where = point(host, 5, 5);
+        // The tree is not laid out by this engine, so a point inside it answers with the chain the
+        // document shows there — the host, then its ancestors — and a point the tree holds nothing at
+        // answers with the document's own deepest box, which is what the reference gives from either
+        // object for that point (measured: the document element, and the list holding only it).
+        var made = document.elementsFromPoint(where[0], where[1]);
+        var answered = root.elementFromPoint(where[0], where[1]) === made[0]
+            && root.elementsFromPoint(where[0], where[1]).length === made.length
+            && tag(root.elementFromPoint(1, 1)) === '[object HTMLHtmlElement]'
+            && root.elementsFromPoint(1, 1).length === 1;
+        document.body.removeChild(host);
+        return answered;
+    })(), 'ok');
+    ck('E8 the fragment serialisation a shadow tree answers is its own markup', (function () {
+        var host = document.createElement('div');
+        var root = host.attachShadow({ mode: 'open' });
+        root.innerHTML = '<p id="s">hi</p>';
+        return root.getHTML() === '<p id="s">hi</p>'
+            && root.getHTML({ requireWellFormed: false }) === '<p id="s">hi</p>'
+            && refuses(function () { return root.getHTML('x'); },
+                "TypeError:Failed to execute 'getHTML' on 'ShadowRoot': parameter 1 is not of type ")
+            && typeof root.setHTMLUnsafe === 'function'
+            && String(root.setHTML('<b>x</b>')) === 'undefined' && root.innerHTML === '<b>x</b>';
+    })(), refused(function () {
+        var host = document.createElement('div');
+        return host.attachShadow({ mode: 'open' }).getHTML('x');
+    }));
+
+    // One row that says plainly what this round did not close: a caret needs the line boxes the
+    // engine paints, and a shadow tree needs the layout the engine does not give it.
+    ck('Z1 the reads that depend on painting stay recorded as they are', (function () {
+        var where = point(hp, 12, 9);
+        return document.caretPositionFromPoint(where[0], where[1]) === null
+            && typeof CaretPosition === 'function';
+    })(), String(document.caretPositionFromPoint(10, 10)));
+})();
+</script>
+<div>transports, media and the point test</div>
+</body>
+</html>

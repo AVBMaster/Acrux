@@ -1,0 +1,36 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe117 — what the headless channel can measure of geometry</title></head>
+<body><div id="box" style="width:120px;height:60px;margin:0"><p id="p" style="margin:0">text</p></div>
+<script>
+// The point test answers from the layout tree, so this page asks whether the channel the tests run
+// in has a layout tree at all: the boxes, the offsets and the scroll reads are the same numbers the
+// hit test would have to walk.
+(function () {
+    var out = {};
+    function msg(fn) {
+        try { return 'ok:' + JSON.stringify(fn()); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 120); }
+    }
+    var box = document.getElementById('box');
+    var p = document.getElementById('p');
+    out.rects = msg(function () {
+        var r = box.getBoundingClientRect();
+        var q = p.getBoundingClientRect();
+        return [[r.left, r.top, r.width, r.height], [q.left, q.top, q.width, q.height],
+            [box.offsetWidth, box.offsetHeight, box.offsetLeft, box.offsetTop],
+            [document.documentElement.clientWidth, document.documentElement.clientHeight],
+            [window.innerWidth, window.innerHeight]];
+    });
+    out.points = msg(function () {
+        return [String(document.elementFromPoint(10, 10)), String(document.elementFromPoint(60, 30)),
+            document.elementsFromPoint(60, 30).length, String(document.caretPositionFromPoint(10, 10))];
+    });
+    out.sizes = msg(function () {
+        return [String(getComputedStyle(box).width), String(getComputedStyle(box).display),
+            String(window.visualViewport && window.visualViewport.width)];
+    });
+    window.__REPORT = JSON.stringify(out);
+    document.title = 'P117';
+    window.__T && window.__T('probe117', true, window.__REPORT);
+})();
+</script>
+<div>probe117</div></body></html>

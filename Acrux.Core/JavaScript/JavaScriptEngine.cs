@@ -9295,10 +9295,8 @@ public class JavaScriptEngine : IDisposable
                 // Visual Viewport §3: the interface the pinch-zoom of a real device would report; this
                 // engine has one viewport at scale one.
                 var visualViewportProto = refusedInterface('VisualViewport', eventTargetLevel);
-                ['width', 'height', 'pageLeft', 'pageTop', 'offsetLeft', 'offsetTop'].forEach(function (f) {
-                    Object.defineProperty(visualViewportProto, f, { configurable: true, enumerable: true,
-                        get: function () { return 0; } });
-                });
+                // The six reads of §9 — the visible area and the two offsets — are written where the
+                // object the window hands out is stamped onto this level, further down.
                 Object.defineProperty(visualViewportProto, 'scale', { configurable: true,
                     enumerable: true, get: function () { return 1; } });
                 ['onresize', 'onscroll', 'onscrollend'].forEach(function (f) {
@@ -9799,13 +9797,22 @@ public class JavaScriptEngine : IDisposable
                         });
                 }
                 if (visualViewportProto) {
-                    ['width', 'height', 'pageLeft', 'pageTop', 'offsetLeft', 'offsetTop'].forEach(
-                        function (name) {
-                            Object.defineProperty(visualViewportProto, name, { configurable: true,
-                                enumerable: true, get: function () {
-                                    bomSelf(this, 'VisualViewport'); return 0;
-                                } });
-                        });
+                    // §9 again, on the level the window's object is actually stamped from: the visible
+                    // area is the window's own and the page offsets are what the document has scrolled
+                    // (measured against the reference, where the two widths are the same number).
+                    var viewportReads = { width: function () { return window.innerWidth; },
+                        height: function () { return window.innerHeight; },
+                        pageLeft: function () { return window.scrollX; },
+                        pageTop: function () { return window.scrollY; },
+                        offsetLeft: function () { return 0; },
+                        offsetTop: function () { return 0; } };
+                    Object.keys(viewportReads).forEach(function (name) {
+                        Object.defineProperty(visualViewportProto, name, { configurable: true,
+                            enumerable: true, get: function () {
+                                bomSelf(this, 'VisualViewport');
+                                return viewportReads[name]();
+                            } });
+                    });
                     Object.defineProperty(visualViewportProto, 'scale', { configurable: true,
                         enumerable: true, get: function () {
                             bomSelf(this, 'VisualViewport'); return 1;
@@ -13533,6 +13540,10 @@ public class JavaScriptEngine : IDisposable
                     if (typeof made === 'function') declared.set(made, true);
                     return made;
                 }
+                // The mark is the whole difference between a door this bootstrap wrote and an answer
+                // the engine built for itself, so the blocks that run later ask it before replacing
+                // (window.__acruxDeclared, used by the surfaces block below).
+                window.__acruxDeclared = declared;
                 function owned(receiver, name) {
                     // The host's own member answers before any of this, so a read that reaches the
                     // accessor is a read taken away from such an object — and the level is never one
@@ -13735,13 +13746,21 @@ public class JavaScriptEngine : IDisposable
             // 'script.defer = true' finds 'defer' on the element and reads it back from the markup.
             (function () {
                 var BOOL = {'HTMLAreaElement':[['noHref','nohref']],'HTMLButtonElement':[['formNoValidate','formnovalidate']],'HTMLDetailsElement':[['open','open']],'HTMLDialogElement':[['open','open']],'HTMLHRElement':[['noShade','noshade']],'HTMLIFrameElement':[['adAuctionHeaders','adauctionheaders'],['allowPaymentRequest','allowpaymentrequest'],['browsingTopics','browsingtopics'],['credentialless','credentialless'],['sharedStorageWritable','sharedstoragewritable']],'HTMLImageElement':[['browsingTopics','browsingtopics'],['isMap','ismap'],['sharedStorageWritable','sharedstoragewritable']],'HTMLInputElement':[['formNoValidate','formnovalidate'],['incremental','incremental'],['webkitdirectory','webkitdirectory']],'HTMLOListElement':[['compact','compact'],['reversed','reversed']],'HTMLObjectElement':[['declare','declare']],'HTMLScriptElement':[['async','async'],['defer','defer'],['noModule','nomodule']],'HTMLTableCellElement':[['noWrap','nowrap']],'HTMLTemplateElement':[['shadowRootClonable','shadowrootclonable'],['shadowRootDelegatesFocus','shadowrootdelegatesfocus'],['shadowRootSerializable','shadowrootserializable']],'HTMLTrackElement':[['default','default']],'HTMLUListElement':[['compact','compact']],'HTMLVideoElement':[['disablePictureInPicture','disablepictureinpicture'],['playsInline','playsinline']],'HTMLMediaElement':[['autoplay','autoplay'],['controls','controls'],['loop','loop'],['defaultMuted','defaultmuted'],['disableRemotePlayback','disableremoteplayback'],['preservesPitch','preservespitch']]};
-                var STRING = {'HTMLAnchorElement':[['attributionSrc','attributionsrc'],['charset','charset'],['password','password'],['ping','ping'],['rev','rev'],['username','username']],'HTMLAreaElement':[['attributionSrc','attributionsrc'],['password','password'],['ping','ping'],['username','username']],'HTMLBRElement':[['clear','clear']],'HTMLBodyElement':[['aLink','alink'],['background','background'],['bgColor','bgcolor'],['link','link'],['vLink','vlink']],'HTMLButtonElement':[['command','command'],['formEnctype','formenctype'],['formMethod','formmethod'],['formTarget','formtarget'],['popoverTargetAction','popovertargetaction']],'HTMLDialogElement':[['closedBy','closedby'],['returnValue','returnvalue']],'HTMLEmbedElement':[['align','align']],'HTMLFormElement':[['encoding','encoding']],'HTMLHRElement':[['align','align'],['color','color']],'HTMLIFrameElement':[['align','align'],['allow','allow'],['csp','csp'],['loading','loading'],['longDesc','longdesc'],['marginHeight','marginheight'],['marginWidth','marginwidth'],['privateToken','privatetoken'],['scrolling','scrolling']],'HTMLImageElement':[['align','align'],['attributionSrc','attributionsrc'],['border','border'],['longDesc','longdesc'],['lowsrc','lowsrc'],['useMap','usemap']],'HTMLInputElement':[['align','align'],['formEnctype','formenctype'],['formMethod','formmethod'],['formTarget','formtarget'],['popoverTargetAction','popovertargetaction'],['useMap','usemap']],'HTMLLegendElement':[['align','align']],'HTMLLinkElement':[['as','as'],['charset','charset'],['imageSizes','imagesizes'],['imageSrcset','imagesrcset'],['integrity','integrity'],['rev','rev']],'HTMLMetaElement':[['content','content'],['httpEquiv','http-equiv'],['scheme','scheme']],'HTMLObjectElement':[['align','align'],['archive','archive'],['border','border'],['code','code'],['codeBase','codebase'],['codeType','codetype'],['data','data'],['standby','standby'],['useMap','usemap']],'HTMLParagraphElement':[['align','align']],'HTMLParamElement':[['valueType','valuetype']],'HTMLQuoteElement':[['cite','cite']],'HTMLScriptElement':[['attributionSrc','attributionsrc'],['charset','charset'],['event','event'],['integrity','integrity']],'HTMLTableCellElement':[['align','align'],['axis','axis'],['bgColor','bgcolor'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTableElement':[['align','align'],['bgColor','bgcolor'],['border','border'],['cellPadding','cellpadding'],['cellSpacing','cellspacing'],['frame','frame'],['rules','rules'],['summary','summary']],'HTMLTableRowElement':[['align','align'],['bgColor','bgcolor'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTableSectionElement':[['align','align'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTemplateElement':[['shadowRootCustomElementRegistry','shadowrootcustomelementregistry'],['shadowRootMode','shadowrootmode']],'HTMLTimeElement':[['dateTime','datetime']],'HTMLTrackElement':[['kind','kind'],['srclang','srclang']],'HTMLVideoElement':[['poster','poster']],'HTMLMediaElement':[['crossOrigin','crossorigin'],['preload','preload'],['src','src']]};
+                var STRING = {'HTMLAnchorElement':[['attributionSrc','attributionsrc'],['charset','charset'],['password','password'],['ping','ping'],['rev','rev'],['username','username']],'HTMLAreaElement':[['attributionSrc','attributionsrc'],['password','password'],['ping','ping'],['username','username']],'HTMLBRElement':[['clear','clear']],'HTMLBodyElement':[['aLink','alink'],['background','background'],['bgColor','bgcolor'],['link','link'],['vLink','vlink']],'HTMLButtonElement':[['command','command'],['formEnctype','formenctype'],['formMethod','formmethod'],['formTarget','formtarget'],['popoverTargetAction','popovertargetaction']],'HTMLDialogElement':[['closedBy','closedby'],['returnValue','returnvalue']],'HTMLEmbedElement':[['align','align']],'HTMLFormElement':[['encoding','encoding']],'HTMLHRElement':[['align','align'],['color','color']],'HTMLIFrameElement':[['align','align'],['allow','allow'],['csp','csp'],['loading','loading'],['longDesc','longdesc'],['marginHeight','marginheight'],['marginWidth','marginwidth'],['privateToken','privatetoken'],['scrolling','scrolling']],'HTMLImageElement':[['align','align'],['attributionSrc','attributionsrc'],['border','border'],['longDesc','longdesc'],['lowsrc','lowsrc'],['useMap','usemap']],'HTMLInputElement':[['align','align'],['formEnctype','formenctype'],['formMethod','formmethod'],['formTarget','formtarget'],['popoverTargetAction','popovertargetaction'],['useMap','usemap']],'HTMLLegendElement':[['align','align']],'HTMLLinkElement':[['as','as'],['charset','charset'],['imageSizes','imagesizes'],['imageSrcset','imagesrcset'],['integrity','integrity'],['rev','rev']],'HTMLMetaElement':[['content','content'],['httpEquiv','http-equiv'],['scheme','scheme']],'HTMLObjectElement':[['align','align'],['archive','archive'],['border','border'],['code','code'],['codeBase','codebase'],['codeType','codetype'],['data','data'],['standby','standby'],['useMap','usemap']],'HTMLParagraphElement':[['align','align']],'HTMLParamElement':[['valueType','valuetype']],'HTMLQuoteElement':[['cite','cite']],'HTMLScriptElement':[['attributionSrc','attributionsrc'],['charset','charset'],['event','event'],['integrity','integrity']],'HTMLTableCellElement':[['align','align'],['axis','axis'],['bgColor','bgcolor'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTableElement':[['align','align'],['bgColor','bgcolor'],['border','border'],['cellPadding','cellpadding'],['cellSpacing','cellspacing'],['frame','frame'],['rules','rules'],['summary','summary']],'HTMLTableRowElement':[['align','align'],['bgColor','bgcolor'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTableSectionElement':[['align','align'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTemplateElement':[['shadowRootCustomElementRegistry','shadowrootcustomelementregistry'],['shadowRootMode','shadowrootmode']],'HTMLTimeElement':[['dateTime','datetime']],'HTMLTrackElement':[['srclang','srclang']],'HTMLVideoElement':[['poster','poster']],'HTMLMediaElement':[['src','src']]};
                 // HTML §2.5.1: an enumerated attribute has a fixed set of states, and the read answers
                 // one of them or the default the specification names — an attribute that is missing,
                 // empty or outside the set gives the default back rather than the text it holds
                 // (measured: a link with no 'fetchpriority' reads 'auto', and one whose 'crossorigin'
                 // is not a state reads null).
-                var ENUM = {'HTMLImageElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLLinkElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLScriptElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLTextAreaElement':[['wrap','wrap',['hard','soft','off','on'],'soft'],['inputmode','inputmode',['none','text','decimal','numeric','tel','search','email','url'],'']],'HTMLInputElement':[['autocapitalize','autocapitalize',['off','on','none','sentences','words','characters'],'sentences'],['inputmode','inputmode',['none','text','decimal','numeric','tel','search','email','url'],''],['spellcheck','spellcheck',['true','false'],'']]};
+                // HTML §2.5.1 and §4.8.11: an enumerated attribute answers one of a fixed set of
+                // states, or the default the specification gives it when the attribute is missing,
+                // empty or outside the set — 'preload' is metadata, a track with no kind is a
+                // subtitle track, and 'crossorigin' has no default at all so its answer is null
+                // (measured: 'video.preload' is metadata and 'video.crossOrigin' is null on an
+                // element with neither attribute).
+                var ENUM = {'HTMLMediaElement':[['preload','preload',['none','metadata','auto'],'metadata'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],
+                    'HTMLTrackElement':[['kind','kind',['subtitles','captions','descriptions','chapters','metadata'],'subtitles']],
+                    'HTMLImageElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLLinkElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLScriptElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLTextAreaElement':[['wrap','wrap',['hard','soft','off','on'],'soft'],['inputmode','inputmode',['none','text','decimal','numeric','tel','search','email','url'],'']],'HTMLInputElement':[['autocapitalize','autocapitalize',['off','on','none','sentences','words','characters'],'sentences'],['inputmode','inputmode',['none','text','decimal','numeric','tel','search','email','url'],''],['spellcheck','spellcheck',['true','false'],'']]};
                 var NUMBER = {'HTMLImageElement':[['hspace','hspace'],['vspace','vspace'],['y','y']],'HTMLOListElement':[['start','start']],'HTMLObjectElement':[['hspace','hspace'],['vspace','vspace']],'HTMLTrackElement':[['readyState','readystate']],'HTMLVideoElement':[['videoHeight','videoheight'],['videoWidth','videowidth'],['webkitDecodedFrameCount','webkitdecodedframecount'],['webkitDroppedFrameCount','webkitdroppedframecount']]};
                 var CONSTANTS = {'EventSource':{'CLOSED':2,'CONNECTING':0,'OPEN':1},'HTMLMediaElement':{'HAVE_CURRENT_DATA':2,'HAVE_ENOUGH_DATA':4,'HAVE_FUTURE_DATA':3,'HAVE_METADATA':1,'HAVE_NOTHING':0,'NETWORK_EMPTY':0,'NETWORK_IDLE':1,'NETWORK_LOADING':2,'NETWORK_NO_SOURCE':3},'HTMLTrackElement':{'ERROR':3,'LOADED':2,'LOADING':1,'NONE':0},'WebSocket':{'CLOSED':3,'CLOSING':2,'CONNECTING':0,'OPEN':1}};
                 var MORE_HANDLERS = {'AudioContext':['error','sinkchange'],'BroadcastChannel':['messageerror'],'Clipboard':['clipboardchange'],'Element':['beforecopy','beforecut','beforepaste','fullscreenchange','fullscreenerror','search','webkitfullscreenchange','webkitfullscreenerror'],'Notification':['click','close','error','show'],'ServiceWorkerContainer':['controllerchange','message','messageerror'],'ServiceWorkerRegistration':['updatefound'],'ShadowRoot':['slotchange'],'WebSocket':['close','error','message','open']};
@@ -14664,6 +14683,1454 @@ public class JavaScriptEngine : IDisposable
                     'The object does not contain an SVG document.');
             })();
 
+            // ── The media element's state, and the levels it hands out ───────────
+            // HTML §4.8.11: a media element answers the whole playback state before it has ever had a
+            // source to play — the network and decoding states are 0, the timeline is 0 with a
+            // duration that is not a number — and the ranges, the track list, the error, the controls
+            // list and the remote are objects of their own interfaces (measured: 'video.readyState' is
+            // 0, 'Number.isNaN(video.duration)', 'video.played' reads [object TimeRanges],
+            // 'video.textTracks' [object TextTrackList], 'video.remote' [object RemotePlayback],
+            // 'video.sinkId' the empty string, 'video.preservesPitch' true). The engine has no
+            // decoder, so the state stays where it begins and the calls that would need one are
+            // refused by name rather than answered with a number nobody can check.
+            (function () {
+                var levels = window.__domProto || { };
+                var APOS = String.fromCharCode(39);
+                function quoted(value) { return APOS + value + APOS; }
+                // The reference writes the two refusals differently: reading an attribute away from an
+                // object of the interface is the bare sentence, while calling an operation names the
+                // operation and the interface (measured: 'video.readyState' off the level is
+                // 'Illegal invocation' and 'Node.prototype.contains(el)' is the longer one).
+                function illegal(name, iface) {
+                    return new TypeError('Failed to execute ' + quoted(name) + ' on ' + quoted(iface)
+                        + ': Illegal invocation');
+                }
+                function refusedAttribute() {
+                    return new TypeError('Illegal invocation');
+                }
+                function level(name, base) {
+                    var made = levels[name];
+                    if (made) return made;
+                    made = Object.create(base && levels[base] ? levels[base] : Object.prototype);
+                    levels[name] = made;
+                    var ctor = function () {
+                        throw new TypeError('Failed to construct ' + quoted(name)
+                            + ': Illegal constructor');
+                    };
+                    try { Object.defineProperty(ctor, 'name', { value: name, configurable: true }); }
+                    catch (e) { }
+                    ctor.prototype = made;
+                    try {
+                        Object.defineProperty(made, 'constructor', { value: ctor, writable: true,
+                            enumerable: false, configurable: true });
+                    } catch (e) { }
+                    window[name] = ctor;
+                    try {
+                        Object.defineProperty(made, Symbol.toStringTag,
+                            { value: name, configurable: true });
+                    } catch (e) { }
+                    return made;
+                }
+                function read(owner, name, get, set) {
+                    try {
+                        Object.defineProperty(owner, name, { configurable: true, enumerable: true,
+                            get: get, set: set === undefined ? function () { } : set });
+                    } catch (e) { }
+                }
+                // Web IDL §3.6.10: the constants an interface names sit on the level and on the
+                // interface object, read-only, enumerable and not configurable.
+                function numbers(name, table) {
+                    var carriers = [ levels[name ] ];
+                    if (typeof window[name] === 'function') carriers.push(window[name]);
+                    for (var c = 0; c < carriers.length; c++) {
+                        var carrier = carriers[c];
+                        if (!carrier) continue;
+                        Object.keys(table).forEach(function (key) {
+                            try {
+                                Object.defineProperty(carrier, key, { value: table[key],
+                                    writable: false, enumerable: true, configurable: false });
+                            } catch (e) { }
+                        });
+                    }
+                }
+                // The two brand checks: a node of an interface, and one of the value objects the
+                // interface hands out. A level that declares a member is never such an object.
+                function asNode(receiver, iface, name) {
+                    if (!receiver || typeof receiver.nodeType !== 'number') throw refusedAttribute();
+                    return receiver;
+                }
+                function asValue(receiver, levelObj, iface, name) {
+                    if (!receiver || (typeof receiver !== 'object' && typeof receiver !== 'function')
+                        || (levelObj !== receiver && !levelObj.isPrototypeOf(receiver))) {
+                        throw refusedAttribute();
+                    }
+                    return receiver;
+                }
+                var media = levels.HTMLMediaElement;
+                var videoProto = levels.HTMLVideoElement;
+                var trackHost = levels.HTMLTrackElement;
+                var rangesLevel = level('TimeRanges', null);
+                var errorLevel = level('MediaError', null);
+                var textLevel = level('TextTrack', 'EventTarget');
+                var listLevel = level('TextTrackList', 'EventTarget');
+                var qualityLevel = level('VideoPlaybackQuality', null);
+                var remoteLevel = level('RemotePlayback', 'EventTarget');
+                level('MediaKeySession', 'EventTarget');
+                level('MediaKeys', null);
+                level('TimeRanges', null);
+                numbers('MediaError', { MEDIA_ERR_ABORTED: 1, MEDIA_ERR_NETWORK: 2,
+                    MEDIA_ERR_DECODE: 3, MEDIA_ERR_SRC_NOT_SUPPORTED: 4 });
+                numbers('TextTrack', { DISABLED: 0, HIDDEN: 1, SHOWING: 2, ERROR: 3,
+                    SUBTITLES: 'subtitles', CAPTIONS: 'captions', DESCRIPTIONS: 'descriptions',
+                    CHAPTERS: 'chapters', METADATA: 'metadata',
+                    READY_STATE_NONE: 0, READY_STATE_LOADING: 1, READY_STATE_LOADED: 2,
+                    READY_STATE_ERROR: 3 });
+                numbers('HTMLTrackElement', { NONE: 0, LOADING: 1, LOADED: 2, ERROR: 3 });
+                read(errorLevel, 'code', function () {
+                    asValue(this, errorLevel, 'MediaError', 'code');
+                    return this.__acruxCode;
+                });
+                read(errorLevel, 'message', function () {
+                    asValue(this, errorLevel, 'MediaError', 'message');
+                    return this.__acruxMessage || '';
+                });
+                // §4.8.11.4: a ranges object is a list of pairs, and asking for one the list does not
+                // hold is an index error that names the index and the maximum it may hold.
+                function rangeAt(pairs, method, index) {
+                    if (!(index >= 0 && index < pairs.length)) {
+                        throw new DOMException('Failed to execute ' + quoted(method) + ' on '
+                            + quoted('TimeRanges') + ': The index provided (' + index
+                            + ') is greater than the maximum index (' + (pairs.length - 1) + ').',
+                            'IndexSizeError');
+                    }
+                    return pairs[index];
+                }
+                read(rangesLevel, 'length', function () {
+                    asValue(this, rangesLevel, 'TimeRanges', 'length');
+                    return this.__acruxPairs.length;
+                });
+                rangesLevel.start = function start(index) {
+                    var held = asValue(this, rangesLevel, 'TimeRanges', 'start').__acruxPairs;
+                    return rangeAt(held, 'start', index)[0];
+                };
+                rangesLevel.end = function end(index) {
+                    var held = asValue(this, rangesLevel, 'TimeRanges', 'end').__acruxPairs;
+                    return rangeAt(held, 'end', index)[1];
+                };
+                function makeRanges() {
+                    var made = Object.create(rangesLevel);
+                    Object.defineProperty(made, '__acruxPairs', { value: [ ], enumerable: false });
+                    return made;
+                }
+                var KINDS = ['subtitles', 'captions', 'descriptions', 'chapters', 'metadata'];
+                var trackStates = new WeakMap();
+                function trackState(receiver, name) {
+                    asValue(receiver, textLevel, 'TextTrack', name);
+                    var made = trackStates.get(receiver);
+                    if (!made) {
+                        made = { kind: 'subtitles', label: '', language: '', id: '',
+                            mode: 'disabled', cues: [ ] };
+                        trackStates.set(receiver, made);
+                    }
+                    return made;
+                }
+                function makeTrack(kind, label, language) {
+                    var made = Object.create(textLevel);
+                    trackStates.set(made, { kind: kind, label: label, language: language, id: '',
+                        mode: 'disabled', cues: [ ] });
+                    return made;
+                }
+                read(textLevel, 'kind', function () { return trackState(this, 'kind').kind; });
+                read(textLevel, 'label', function () { return trackState(this, 'label').label; },
+                    function (value) { trackState(this, 'label').label = String(value); });
+                read(textLevel, 'language', function () {
+                    return trackState(this, 'language').language;
+                }, function (value) { trackState(this, 'language').language = String(value); });
+                read(textLevel, 'id', function () { return trackState(this, 'id').id; },
+                    function (value) { trackState(this, 'id').id = String(value); });
+                read(textLevel, 'inBandMetadataTrackDispatchType', function () { return ''; });
+                read(textLevel, 'mode', function () { return trackState(this, 'mode').mode; },
+                    function (value) {
+                        var held = trackState(this, 'mode');
+                        var text = String(value);
+                        if (text !== 'disabled' && text !== 'hidden' && text !== 'showing') return;
+                        held.mode = text;
+                    });
+                read(textLevel, 'cues', function () { return trackState(this, 'cues').cues; });
+                read(textLevel, 'activeCues', function () { return [ ]; });
+                read(textLevel, 'readyState', function () {
+                    trackState(this, 'readyState');
+                    return 0;
+                });
+                textLevel.addCue = function addCue(cue) {
+                    trackState(this, 'addCue').cues.push(cue);
+                    return undefined;
+                };
+                textLevel.removeCue = function removeCue(cue) {
+                    var held = trackState(this, 'removeCue').cues;
+                    var at = held.indexOf(cue);
+                    if (at >= 0) held.splice(at, 1);
+                    return undefined;
+                };
+                // §4.8.11.11: the track list is live, so the length and the indexed reads come out of
+                // the array the element holds rather than a copy taken when the list was made.
+                function makeList(items) {
+                    var target = Object.create(listLevel);
+                    return new Proxy(target, {
+                        get: function (holder, key) {
+                            if (key === '__acruxList') return items;
+                            if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
+                                var at = Number(key);
+                                return at < items.length ? items[at] : undefined;
+                            }
+                            return holder[key];
+                        },
+                        has: function (holder, key) {
+                            if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
+                                return Number(key) < items.length;
+                            }
+                            return Reflect.has(holder, key);
+                        },
+                        ownKeys: function () {
+                            var names = [ ];
+                            for (var i = 0; i < items.length; i++) names.push(String(i));
+                            names.push('length');
+                            return names;
+                        },
+                        getOwnPropertyDescriptor: function (holder, key) {
+                            if (key === 'length') {
+                                return { value: items.length, writable: false, enumerable: true,
+                                    configurable: true };
+                            }
+                            if (typeof key === 'string' && /^[0-9]+$/.test(key)
+                                && Number(key) < items.length) {
+                                return { value: items[Number(key)], writable: false,
+                                    enumerable: true, configurable: true };
+                            }
+                            return Reflect.getOwnPropertyDescriptor(holder, key);
+                        },
+                        set: function (holder, key, value) { return Reflect.set(holder, key, value); }
+                    });
+                }
+                function asList(receiver, name) {
+                    var held = asValue(receiver, listLevel, 'TextTrackList', name).__acruxList;
+                    if (!held) throw illegal(name, 'TextTrackList');
+                    return held;
+                }
+                read(listLevel, 'length', function () { return asList(this, 'length').length; });
+                read(listLevel, 'onaddtrack', function () {
+                    asList(this, 'onaddtrack');
+                    return this.__acruxOn === undefined ? null : this.__acruxOn.add;
+                }, function (value) {
+                    if (!this.__acruxOn) this.__acruxOn = { };
+                    this.__acruxOn.add = typeof value === 'function' ? value : null;
+                });
+                read(listLevel, 'onremovetrack', function () {
+                    asList(this, 'onremovetrack');
+                    return this.__acruxOn === undefined ? null : this.__acruxOn.remove;
+                }, function (value) {
+                    if (!this.__acruxOn) this.__acruxOn = { };
+                    this.__acruxOn.remove = typeof value === 'function' ? value : null;
+                });
+                read(listLevel, 'onchange', function () {
+                    asList(this, 'onchange');
+                    return this.__acruxOn === undefined ? null : this.__acruxOn.change;
+                }, function (value) {
+                    if (!this.__acruxOn) this.__acruxOn = { };
+                    this.__acruxOn.change = typeof value === 'function' ? value : null;
+                });
+                listLevel.getTrackById = function getTrackById(id) {
+                    var held = asList(this, 'getTrackById');
+                    for (var i = 0; i < held.length; i++) if (held[i].id === id) return held[i];
+                    return null;
+                };
+                read(qualityLevel, 'totalVideoFrames', function () {
+                    asValue(this, qualityLevel, 'VideoPlaybackQuality', 'totalVideoFrames');
+                    return 0;
+                });
+                read(qualityLevel, 'droppedVideoFrames', function () {
+                    asValue(this, qualityLevel, 'VideoPlaybackQuality', 'droppedVideoFrames');
+                    return 0;
+                });
+                read(qualityLevel, 'corruptedVideoFrames', function () {
+                    asValue(this, qualityLevel, 'VideoPlaybackQuality', 'corruptedVideoFrames');
+                    return 0;
+                });
+                read(remoteLevel, 'state', function () {
+                    asValue(this, remoteLevel, 'RemotePlayback', 'state');
+                    return 'disconnected';
+                });
+                read(remoteLevel, 'canvas', function () {
+                    asValue(this, remoteLevel, 'RemotePlayback', 'canvas');
+                    return null;
+                });
+                remoteLevel.prompt = function prompt() {
+                    asValue(this, remoteLevel, 'RemotePlayback', 'prompt');
+                    return Promise.reject(new DOMException('Failed to execute ' + quoted('prompt')
+                        + ' on ' + quoted('RemotePlayback') + ': the engine has no remote device to '
+                        + 'choose.', 'NotSupportedError'));
+                };
+                // One playback state per media element, made the first time the page asks for it.
+                var mediaStates = new WeakMap();
+                function playback(receiver, iface, name) {
+                    asNode(receiver, iface, name);
+                    var made = mediaStates.get(receiver);
+                    if (!made) {
+                        made = { tracks: [ ], list: null, rate: 1, defaultRate: 1, time: 0,
+                            srcObject: null, remote: Object.create(remoteLevel) };
+                        mediaStates.set(receiver, made);
+                    }
+                    return made;
+                }
+                if (media) {
+                    read(media, 'networkState', function () {
+                        playback(this, 'HTMLMediaElement', 'networkState');
+                        return 0;
+                    });
+                    read(media, 'readyState', function () {
+                        playback(this, 'HTMLMediaElement', 'readyState');
+                        return 0;
+                    });
+                    read(media, 'currentSrc', function () { return ''; });
+                    read(media, 'seeking', function () {
+                        playback(this, 'HTMLMediaElement', 'seeking');
+                        return false;
+                    });
+                    read(media, 'played', function () { return makeRanges(); });
+                    read(media, 'seekable', function () { return makeRanges(); });
+                    read(media, 'buffered', function () { return makeRanges(); });
+                    read(media, 'textTracks', function () {
+                        var state = playback(this, 'HTMLMediaElement', 'textTracks');
+                        if (!state.list) state.list = makeList(state.tracks);
+                        return state.list;
+                    });
+                    read(media, 'error', function () {
+                        playback(this, 'HTMLMediaElement', 'error');
+                        return null;
+                    });
+                    read(media, 'playbackRate', function () {
+                        return playback(this, 'HTMLMediaElement', 'playbackRate').rate;
+                    }, function (value) {
+                        var held = Number(value);
+                        if (!isFinite(held)) {
+                            throw new TypeError('Failed to set the ' + quoted('playbackRate')
+                                + ' member on ' + quoted('HTMLMediaElement') + ': The provided '
+                                + 'value is non-finite.');
+                        }
+                        playback(this, 'HTMLMediaElement', 'playbackRate').rate = held;
+                    });
+                    read(media, 'defaultPlaybackRate', function () {
+                        return playback(this, 'HTMLMediaElement', 'defaultPlaybackRate').defaultRate;
+                    }, function (value) {
+                        var held = Number(value);
+                        if (!isFinite(held)) return;
+                        playback(this, 'HTMLMediaElement', 'defaultPlaybackRate').defaultRate = held;
+                    });
+                    read(media, 'sinkId', function () {
+                        playback(this, 'HTMLMediaElement', 'sinkId');
+                        return '';
+                    });
+                    // The one boolean of the interface whose missing attribute means true (measured:
+                    // 'video.preservesPitch' is true before any attribute is written), so the ordinary
+                    // reflection the sweep installs for the other flags is the wrong default here.
+                    read(media, 'preservesPitch', function () {
+                        asNode(this, 'HTMLMediaElement', 'preservesPitch');
+                        var held = this.getAttribute('preservespitch');
+                        return held === null || held === undefined ? true : String(held) !== 'false';
+                    }, function (value) {
+                        asNode(this, 'HTMLMediaElement', 'preservesPitch');
+                        this.setAttribute('preservespitch', value ? 'true' : 'false');
+                    });
+                    read(media, 'mediaKeys', function () {
+                        playback(this, 'HTMLMediaElement', 'mediaKeys');
+                        return null;
+                    });
+                    read(media, 'srcObject', function () {
+                        return playback(this, 'HTMLMediaElement', 'srcObject').srcObject;
+                    }, function (value) {
+                        playback(this, 'HTMLMediaElement', 'srcObject').srcObject
+                            = value === undefined ? null : value;
+                    });
+                    read(media, 'loading', function () { return 'auto'; });
+                    read(media, 'webkitAudioDecodedByteCount', function () {
+                        playback(this, 'HTMLMediaElement', 'webkitAudioDecodedByteCount');
+                        return 0;
+                    });
+                    read(media, 'webkitVideoDecodedByteCount', function () {
+                        playback(this, 'HTMLMediaElement', 'webkitVideoDecodedByteCount');
+                        return 0;
+                    });
+                    // 'controlsList' is a token list over the content attribute; the block that
+                    // writes the other token-list attributes carries it.
+                    read(media, 'remote', function () {
+                        return playback(this, 'HTMLMediaElement', 'remote').remote;
+                    });
+                    media.play = function play() {
+                        playback(this, 'HTMLMediaElement', 'play');
+                        return Promise.resolve(undefined);
+                    };
+                    media.pause = function pause() {
+                        playback(this, 'HTMLMediaElement', 'pause');
+                        return undefined;
+                    };
+                    media.load = function load() {
+                        playback(this, 'HTMLMediaElement', 'load');
+                        return undefined;
+                    };
+                    media.addTextTrack = function addTextTrack(kind, label, language) {
+                        var state = playback(this, 'HTMLMediaElement', 'addTextTrack');
+                        var held = kind === undefined || kind === null || kind === ''
+                            ? 'metadata' : String(kind);
+                        if (KINDS.indexOf(held) < 0) {
+                            throw new DOMException('Failed to execute ' + quoted('addTextTrack')
+                                + ' on ' + quoted('HTMLMediaElement') + ': The provided kind ('
+                                + quoted(held) + ') is not a valid enumeration value.', 'TypeError');
+                        }
+                        var made = makeTrack(held, label === undefined ? '' : String(label),
+                            language === undefined ? '' : String(language));
+                        state.tracks.push(made);
+                        return made;
+                    };
+                    media.canPlayType = function canPlayType(type) {
+                        playback(this, 'HTMLMediaElement', 'canPlayType');
+                        var held = String(type === undefined ? '' : type).toLowerCase();
+                        return /^audio\/|^video\/|^application\/(ogg|mp4|m3u8)/.test(held)
+                            ? 'maybe' : '';
+                    };
+                    media.setMediaKeys = function setMediaKeys(keys) {
+                        playback(this, 'HTMLMediaElement', 'setMediaKeys');
+                        if (keys === null || keys === undefined) return Promise.resolve(undefined);
+                        return Promise.reject(new DOMException('Failed to execute '
+                            + quoted('setMediaKeys') + ' on ' + quoted('HTMLMediaElement')
+                            + ': the engine has no content decryption module.', 'NotSupportedError'));
+                    };
+                    media.setSinkId = function setSinkId(id) {
+                        playback(this, 'HTMLMediaElement', 'setSinkId');
+                        return Promise.reject(new DOMException('Failed to execute '
+                            + quoted('setSinkId') + ' on ' + quoted('HTMLMediaElement')
+                            + ': the engine has no audio output to choose.', 'NotSupportedError'));
+                    };
+                    media.captureStream = function captureStream() {
+                        playback(this, 'HTMLMediaElement', 'captureStream');
+                        throw new DOMException('Failed to execute ' + quoted('captureStream')
+                            + ' on ' + quoted('HTMLMediaElement') + ': the engine has no decoder to '
+                            + 'capture.', 'NotSupportedError');
+                    };
+                    var getVideoPlaybackQuality = function getVideoPlaybackQuality() {
+                        playback(this, 'HTMLVideoElement', 'getVideoPlaybackQuality');
+                        return Object.create(qualityLevel);
+                    };
+                    var frames = 0;
+                    var requestVideoFrameCallback = function requestVideoFrameCallback(callback) {
+                        playback(this, 'HTMLVideoElement', 'requestVideoFrameCallback');
+                        if (typeof callback !== 'function') {
+                            throw new TypeError('Failed to execute '
+                                + quoted('requestVideoFrameCallback') + ' on '
+                                + quoted('HTMLVideoElement') + ': parameter 1 is not of type '
+                                + quoted('Function') + '.');
+                        }
+                        frames += 1;
+                        return String(frames);
+                    };
+                    var cancelVideoFrameCallback = function cancelVideoFrameCallback(handle) {
+                        playback(this, 'HTMLVideoElement', 'cancelVideoFrameCallback');
+                        return frames > 0 && String(handle) === String(frames);
+                    };
+                }
+                if (videoProto) {
+                    // §4.8.12 and HTML §4.8.11.6: the frame callbacks and the quality read are named
+                    // on the video interface alone (measured: 'HTMLMediaElement.prototype' holds none
+                    // of the three, while the video level holds all of them and answers on an element).
+                    var frameMembers = { requestVideoFrameCallback: requestVideoFrameCallback,
+                        cancelVideoFrameCallback: cancelVideoFrameCallback,
+                        getVideoPlaybackQuality: getVideoPlaybackQuality };
+                    Object.keys(frameMembers).forEach(function (name) {
+                        if (typeof frameMembers[name] !== 'function') return;
+                        try {
+                            Object.defineProperty(videoProto, name, { value: frameMembers[name],
+                                writable: true, enumerable: true, configurable: true });
+                        } catch (e) { }
+                    });
+                    videoProto.requestPictureInPicture = function requestPictureInPicture() {
+                        asNode(this, 'HTMLVideoElement', 'requestPictureInPicture');
+                        return Promise.reject(new DOMException('Failed to execute '
+                            + quoted('requestPictureInPicture') + ' on '
+                            + quoted('HTMLVideoElement') + ': the engine has no picture-in-picture '
+                            + 'window.', 'NotSupportedError'));
+                    };
+                }
+                if (trackHost) {
+                    var hostTracks = new WeakMap();
+                    read(trackHost, 'track', function () {
+                        asNode(this, 'HTMLTrackElement', 'track');
+                        var made = hostTracks.get(this);
+                        if (!made) {
+                            var held = null;
+                            try { held = this.kind; } catch (e) { held = null; }
+                            made = makeTrack(held ? String(held) : 'subtitles',
+                                this.label ? String(this.label) : '',
+                                this.srclang ? String(this.srclang) : '');
+                            hostTracks.set(this, made);
+                        }
+                        return made;
+                    });
+                    read(trackHost, 'readyState', function () {
+                        asNode(this, 'HTMLTrackElement', 'readyState');
+                        return 0;
+                    });
+                }
+            })();
+
+            // ── The socket and the event stream ─────────────────────────────────
+            // The engine has an HTTP stack but no WebSocket transport and no server-sent-events
+            // reader, so these two interfaces are built the way the specifications build them and
+            // answered as far as the transport goes: the constructor validates its arguments the way
+            // the reference validates them, the state a page reads is the state a connection that
+            // never opened is in, and the calls that would need a socket are refused by name
+            // (measured: 'new WebSocket()' is the arity refusal, a text that is not an address is the
+            // SyntaxError about the scheme, 'socket.url' is the address the document resolved,
+            // 'binaryType' is 'blob', 'send' before the connection is open is an InvalidStateError,
+            // and 'EventSource' keeps the resolved url, the withCredentials flag it was given and
+            // readyState 0 until the reader gives up, when it answers 2).
+            (function () {
+                var levels = window.__domProto || { };
+                var APOS = String.fromCharCode(39);
+                function quoted(value) { return APOS + value + APOS; }
+                function illegal(name, iface) {
+                    return new TypeError('Failed to execute ' + quoted(name) + ' on ' + quoted(iface)
+                        + ': Illegal invocation');
+                }
+                // An attribute read away from its object is refused by the bare sentence, an operation
+                // by the one that names the operation (measured: 'WebSocket.prototype.binaryType' is
+                // the first, and sending on a socket the engine never opened is the second).
+                function refusedAttribute() {
+                    return new TypeError('Illegal invocation');
+                }
+                function read(owner, name, get, set) {
+                    try {
+                        Object.defineProperty(owner, name, { configurable: true, enumerable: true,
+                            get: get, set: set === undefined ? function () { } : set });
+                    } catch (e) { }
+                }
+                function numbers(carrier, table) {
+                    if (!carrier) return;
+                    Object.keys(table).forEach(function (key) {
+                        try {
+                            Object.defineProperty(carrier, key, { value: table[key],
+                                writable: false, enumerable: true, configurable: false });
+                        } catch (e) { }
+                    });
+                }
+                // A level the page can build: the constructor is the page's own function, so the
+                // prototype is written over it and the tag, the constructor name and the event-target
+                // methods all come from the same place the host levels use.
+                function build(name, baseName, ctor) {
+                    var made = levels[name];
+                    if (!made) {
+                        made = Object.create(baseName && levels[baseName]
+                            ? levels[baseName] : Object.prototype);
+                        levels[name] = made;
+                        try {
+                            Object.defineProperty(made, Symbol.toStringTag,
+                                { value: name, configurable: true });
+                        } catch (e) { }
+                    }
+                    if (typeof ctor !== 'function') return { level: made, ctor: window[name] };
+                    try { Object.defineProperty(ctor, 'name', { value: name, configurable: true }); }
+                    catch (e) { }
+                    ctor.prototype = made;
+                    try {
+                        Object.defineProperty(made, 'constructor', { value: ctor, writable: true,
+                            enumerable: false, configurable: true });
+                    } catch (e) { }
+                    window[name] = ctor;
+                    return { level: made, ctor: ctor };
+                }
+                function resolvedUrl(value, name) {
+                    var text = String(value === undefined ? '' : value);
+                    var made;
+                    try { made = new URL(text, document.baseURI); }
+                    catch (e) {
+                        throw new SyntaxError('Failed to construct ' + quoted(name) + ': The URL '
+                            + quoted(text) + ' is invalid.');
+                    }
+                    return made;
+                }
+                function fire(target, type, extra) {
+                    var event = null;
+                    try { event = new Event(type); } catch (e) { event = null; }
+                    if (event && extra) {
+                        Object.keys(extra).forEach(function (key) {
+                            try { event[key] = extra[key]; } catch (e) { }
+                        });
+                    }
+                    var held = target['on' + type];
+                    if (typeof held === 'function') {
+                        try { held.call(target, event); } catch (e) { }
+                    }
+                    if (event && typeof target.dispatchEvent === 'function') {
+                        try { target.dispatchEvent(event); } catch (e) { }
+                    }
+                    return undefined;
+                }
+                // ── WebSocket (HTML §4.6.2) ───────────────────────────────────────
+                var sockets = new WeakMap();
+                function socketState(receiver, name, bare) {
+                    var made = receiver && sockets.get(receiver);
+                    if (!made) throw bare ? refusedAttribute() : illegal(name, 'WebSocket');
+                    return made;
+                }
+                function WebSocketSocket(url, protocols) {
+                    if (arguments.length < 1) {
+                        throw new TypeError('Failed to construct ' + quoted('WebSocket')
+                            + ': 1 argument required, but only 0 present.');
+                    }
+                    var address = resolvedUrl(url, 'WebSocket');
+                    if (address.protocol !== 'ws:' && address.protocol !== 'wss:') {
+                        throw new SyntaxError('Failed to construct ' + quoted('WebSocket')
+                            + ': The URL\'s scheme must be either ' + quoted('http') + ', '
+                            + quoted('https') + ', ' + quoted('ws') + ', or ' + quoted('wss')
+                            + '. ' + quoted(address.href) + ' is not a valid URL.');
+                    }
+                    var held = [ ];
+                    if (protocols !== undefined && protocols !== null) {
+                        var list = typeof protocols === 'string' ? [protocols] : protocols;
+                        if (typeof list.length !== 'number') list = [String(list)];
+                        if (list.length === 0) {
+                            throw new SyntaxError('Failed to construct ' + quoted('WebSocket')
+                                + ': The subprotocol list must not be empty.');
+                        }
+                        for (var i = 0; i < list.length; i++) {
+                            var token = String(list[i]);
+                            if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(token)) {
+                                throw new SyntaxError('Failed to construct ' + quoted('WebSocket')
+                                    + ': The subprotocol ' + quoted(token) + ' is invalid.');
+                            }
+                            if (held.indexOf(token) >= 0) {
+                                throw new SyntaxError('Failed to construct ' + quoted('WebSocket')
+                                    + ': The subprotocol ' + quoted(token) + ' is duplicated.');
+                            }
+                            held.push(token);
+                        }
+                    }
+                    var state = { url: address.href, readyState: 0, binaryType: 'blob', protocol: '',
+                        extensions: '', bufferedAmount: 0, ended: false, protocols: held };
+                    sockets.set(this, state);
+                    // The transport the engine does not have: the connection fails the way an
+                    // unreachable one does, with an error and then a close that says nothing was
+                    // agreed. A page that waits for 'open' never gets it, which is the truth about
+                    // this engine rather than a promise it cannot keep.
+                    var self = this;
+                    setTimeout(function () {
+                        if (state.ended) return;
+                        state.ended = true;
+                        state.readyState = 3;
+                        fire(self, 'error');
+                        fire(self, 'close', { code: 1006, reason: '', wasClean: false });
+                    }, 0);
+                }
+                var socketBuilt = build('WebSocket', 'EventTarget', WebSocketSocket);
+                var socketLevel = socketBuilt.level;
+                read(socketLevel, 'url', function () { return socketState(this, 'url', true).url; });
+                read(socketLevel, 'readyState', function () {
+                    return socketState(this, 'readyState', true).readyState;
+                });
+                read(socketLevel, 'bufferedAmount', function () {
+                    socketState(this, 'bufferedAmount', true);
+                    return 0;
+                });
+                read(socketLevel, 'extensions', function () {
+                    return socketState(this, 'extensions', true).extensions;
+                });
+                read(socketLevel, 'protocol', function () {
+                    return socketState(this, 'protocol', true).protocol;
+                });
+                read(socketLevel, 'binaryType', function () {
+                    return socketState(this, 'binaryType', true).binaryType;
+                }, function (value) {
+                    var state = socketState(this, 'binaryType', true);
+                    var text = String(value);
+                    if (text !== 'blob' && text !== 'arraybuffer') {
+                        throw new TypeError('Failed to set the ' + quoted('binaryType') + ' member on '
+                            + quoted('WebSocket') + ': The provided value ' + quoted(text)
+                            + ' is not a valid enumeration value.');
+                    }
+                    state.binaryType = text;
+                });
+                ['onopen', 'onmessage', 'onerror', 'onclose'].forEach(function (name) {
+                    read(socketLevel, name, function () {
+                        var state = socketState(this, name, true);
+                        return state[name] === undefined ? null : state[name];
+                    }, function (value) {
+                        var state = socketState(this, name, true);
+                        state[name] = typeof value === 'function' ? value : null;
+                    });
+                });
+                socketLevel.send = function send(data) {
+                    var state = socketState(this, 'send');
+                    if (state.readyState !== 1) {
+                        throw new DOMException('Failed to execute ' + quoted('send') + ' on '
+                            + quoted('WebSocket') + ': Still in CONNECTING state.',
+                            'InvalidStateError');
+                    }
+                    return undefined;
+                };
+                socketLevel.close = function close(code, reason) {
+                    var state = socketState(this, 'close');
+                    if (code !== undefined && code !== 1000 && !(code >= 3000 && code <= 4999)) {
+                        throw new DOMException('Failed to execute ' + quoted('close') + ' on '
+                            + quoted('WebSocket') + ': The close code must be either 1000, or between '
+                            + '3000 and 4999.', 'InvalidAccessError');
+                    }
+                    if (reason !== undefined && String(reason).length > 123) {
+                        throw new DOMException('Failed to execute ' + quoted('close') + ' on '
+                            + quoted('WebSocket') + ': The close reason is too long.',
+                            'InvalidAccessError');
+                    }
+                    var self = this;
+                    if (state.readyState === 3) return undefined;
+                    state.readyState = 2;
+                    setTimeout(function () {
+                        if (state.ended) return;
+                        state.ended = true;
+                        state.readyState = 3;
+                        fire(self, 'close', { code: code === undefined ? 1006 : code,
+                            reason: reason === undefined ? '' : String(reason), wasClean: true });
+                    }, 0);
+                    return undefined;
+                };
+                numbers(socketLevel, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
+                numbers(socketBuilt.ctor, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
+                // ── EventSource (HTML §9.2) ───────────────────────────────────────
+                var streams = new WeakMap();
+                function streamState(receiver, name, bare) {
+                    var made = receiver && streams.get(receiver);
+                    if (!made) throw bare ? refusedAttribute() : illegal(name, 'EventSource');
+                    return made;
+                }
+                function EventSourceStream(url, withCredentials) {
+                    var options = withCredentials;
+                    if (options && typeof options === 'object'
+                        && options.withCredentials !== undefined) {
+                        options = options.withCredentials;
+                    }
+                    var address = resolvedUrl(url, 'EventSource');
+                    var state = { url: address.href, readyState: 0,
+                        withCredentials: !!options, ended: false };
+                    streams.set(this, state);
+                    var self = this;
+                    // The reader the engine does not have: the request goes out through the same fetch
+                    // a page uses, and whatever comes back is read for 'data:' lines. A stream that
+                    // cannot be reached ends the way the reference ends one it has given up on.
+                    if (typeof fetch === 'function') {
+                        try {
+                            fetch(address.href).then(function (response) {
+                                if (state.ended) return undefined;
+                                if (!response || response.ok !== true) {
+                                    state.ended = true;
+                                    state.readyState = 2;
+                                    fire(self, 'error');
+                                    return undefined;
+                                }
+                                state.readyState = 1;
+                                fire(self, 'open');
+                                return typeof response.text === 'function'
+                                    ? response.text() : '';
+                            }).then(function (text) {
+                                if (state.ended || !text || typeof text !== 'string') return undefined;
+                                readFrames(self, state, text);
+                                return undefined;
+                            })['catch'](function () {
+                                if (state.ended) return undefined;
+                                state.ended = true;
+                                state.readyState = 2;
+                                fire(self, 'error');
+                            });
+                        } catch (e) {
+                            state.ended = true;
+                            state.readyState = 2;
+                            fire(self, 'error');
+                        }
+                    }
+                }
+                function readFrames(target, state, text) {
+                    // §9.2.5: the stream is read as blocks split by a blank line, each block a set of
+                    // 'field: value' lines, and only a 'data' line carries a message.
+                    var blocks = String(text).split(/\r?\n\r?\n/);
+                    for (var i = 0; i < blocks.length; i++) {
+                        var lines = blocks[i].split(/\r?\n/);
+                        var data = null, name = 'message';
+                        for (var j = 0; j < lines.length; j++) {
+                            var line = lines[j];
+                            if (line.indexOf('data:') === 0) {
+                                var held = line.slice(5);
+                                if (held.charAt(0) === ' ') held = held.slice(1);
+                                data = data === null ? held : data + '\n' + held;
+                            } else if (line.indexOf('event:') === 0) {
+                                name = line.slice(6).replace(/^ /, '');
+                            }
+                        }
+                        if (data === null) continue;
+                        var event;
+                        try { event = new MessageEvent(name, { data: data }); }
+                        catch (e) { continue; }
+                        var held2 = target['on' + name];
+                        if (typeof held2 === 'function') { try { held2.call(target, event); } catch (e) { } }
+                        try { target.dispatchEvent(event); } catch (e) { }
+                    }
+                    return undefined;
+                }
+                var streamBuilt = build('EventSource', 'EventTarget', EventSourceStream);
+                var streamLevel = streamBuilt.level;
+                read(streamLevel, 'url', function () { return streamState(this, 'url', true).url; });
+                read(streamLevel, 'withCredentials', function () {
+                    return streamState(this, 'withCredentials', true).withCredentials;
+                });
+                read(streamLevel, 'readyState', function () {
+                    return streamState(this, 'readyState', true).readyState;
+                });
+                ['onopen', 'onmessage', 'onerror'].forEach(function (name) {
+                    read(streamLevel, name, function () {
+                        var state = streamState(this, name, true);
+                        return state[name] === undefined ? null : state[name];
+                    }, function (value) {
+                        var state = streamState(this, name, true);
+                        state[name] = typeof value === 'function' ? value : null;
+                    });
+                });
+                streamLevel.close = function close() {
+                    var state = streamState(this, 'close');
+                    state.readyState = 2;
+                    state.ended = true;
+                    return undefined;
+                };
+                numbers(streamLevel, { CONNECTING: 0, OPEN: 1, CLOSED: 2 });
+                numbers(streamBuilt.ctor, { CONNECTING: 0, OPEN: 1, CLOSED: 2 });
+                window.__acruxTransports = { sockets: sockets, streams: streams };
+            })();
+
+            // ── The surfaces that name a token list, a policy or a device ────────
+            // The remaining names the reference puts on interfaces this engine already builds: the
+            // token-list attributes a document reads out of markup, the feature policy and the
+            // fragment directive a document carries, the shadow tree's own point test and fragment
+            // serialisation, the processing instruction's attribute list, and the navigator's
+            // handler, badge and ad-auction calls. Each one is answered the way the reference answers
+            // it, or refused with the sentence the reference writes when the engine has nothing
+            // behind it.
+            (function () {
+                var levels = window.__domProto || { };
+                var APOS = String.fromCharCode(39);
+                function quoted(value) { return APOS + value + APOS; }
+                function illegal(name, iface) {
+                    return new TypeError('Failed to execute ' + quoted(name) + ' on ' + quoted(iface)
+                        + ': Illegal invocation');
+                }
+                function refusedAttribute() {
+                    return new TypeError('Illegal invocation');
+                }
+                // A name the level already carries from the host, or from a block that built a real
+                // object behind it, is not this block's to write: an answer written over that answer
+                // is how a round turns into a regression (measured the hard way — the navigator's
+                // mediaDevices accessor replaced by one that hands out the level makes every brand
+                // check on the engine's one object refuse). A door this bootstrap's own machinery put
+                // up is not an answer, so those are replaced by the implementation below.
+                var declared = window.__acruxDeclared;
+                function carried(owner, name) {
+                    var made;
+                    try { made = Object.getOwnPropertyDescriptor(owner, name); } catch (e) { return false; }
+                    if (!made) return false;
+                    return !(declared && (declared.get(made.get) || declared.get(made.set)
+                        || declared.get(made.value)));
+                }
+                function read(owner, name, get, set) {
+                    if (!owner || carried(owner, name)) return;
+                    try {
+                        Object.defineProperty(owner, name, { configurable: true, enumerable: true,
+                            get: get, set: set === undefined ? function () { } : set });
+                    } catch (e) { }
+                }
+                function method(owner, name, body) {
+                    if (!owner || carried(owner, name)) return;
+                    try {
+                        Object.defineProperty(owner, name, { value: body, writable: true,
+                            enumerable: true, configurable: true });
+                    } catch (e) { }
+                }
+                // A token list the engine hands out carries its members on the level, so the ones
+                // written over the attribute are put on the object without being enumerated
+                // (measured: 'JSON.stringify(video.controlsList)' is the empty object).
+                function hidden(owner, name, body) {
+                    try {
+                        Object.defineProperty(owner, name, { value: body, writable: true,
+                            enumerable: false, configurable: true });
+                    } catch (e) { }
+                }
+                function asNode(receiver, iface, name, bare) {
+                    if (!receiver || typeof receiver.nodeType !== 'number') {
+                        throw bare ? refusedAttribute() : illegal(name, iface);
+                    }
+                    return receiver;
+                }
+                // §2.5.1: a space-separated set attribute is a list over the attribute's text. Every
+                // member is written on the object rather than taken from the host's level, because
+                // this list has no host behind it — the element's attribute is the store.
+                function attributeTokens(receiver, attribute, iface) {
+                    var made = Object.create(levels.DOMTokenList || Object.prototype);
+                    function text() {
+                        var held = receiver.getAttribute(attribute);
+                        return held === null || held === undefined ? '' : String(held);
+                    }
+                    function tokens() {
+                        return text().split(/[ \t\n\r\f]+/).filter(function (token) {
+                            return token !== '';
+                        });
+                    }
+                    function write(list) { receiver.setAttribute(attribute, list.join(' ')); }
+                    function check(token) {
+                        var text = String(token);
+                        if (text === '' || /\s/.test(text)) {
+                            throw new DOMException('Failed to execute ' + quoted('add') + ' on '
+                                + quoted('DOMTokenList') + ': The token provided (' + quoted(text)
+                                + ') contains HTML space characters, which are not valid in tokens.',
+                                'InvalidCharacterError');
+                        }
+                        return text;
+                    }
+                    Object.defineProperty(made, 'length', { get: function () {
+                        return tokens().length;
+                    }, enumerable: false, configurable: true });
+                    Object.defineProperty(made, 'value', { get: text, set: function (value) {
+                        receiver.setAttribute(attribute, String(value));
+                    }, enumerable: false, configurable: true });
+                    hidden(made, 'item', function (index) {
+                        var held = tokens();
+                        return index >= 0 && index < held.length ? held[index] : null;
+                    });
+                    hidden(made, 'contains', function (token) {
+                        return tokens().indexOf(String(token)) >= 0;
+                    });
+                    hidden(made, 'add', function () {
+                        var held = tokens();
+                        for (var i = 0; i < arguments.length; i++) {
+                            var token = check(arguments[i]);
+                            if (held.indexOf(token) < 0) held.push(token);
+                        }
+                        write(held);
+                        return undefined;
+                    });
+                    hidden(made, 'remove', function () {
+                        var held = tokens();
+                        for (var i = 0; i < arguments.length; i++) {
+                            var at = held.indexOf(String(arguments[i]));
+                            if (at >= 0) held.splice(at, 1);
+                        }
+                        write(held);
+                        return undefined;
+                    });
+                    hidden(made, 'toggle', function (token, force) {
+                        var held = tokens();
+                        var name = check(token);
+                        var at = held.indexOf(name);
+                        if (at >= 0 && (force === undefined || force === false)) {
+                            held.splice(at, 1); write(held); return false;
+                        }
+                        if (at < 0 && (force === undefined || force === true)) {
+                            held.push(name); write(held); return true;
+                        }
+                        return at >= 0;
+                    });
+                    hidden(made, 'replace', function (token, next) {
+                        var held = tokens();
+                        var at = held.indexOf(String(token));
+                        if (at < 0) return false;
+                        held[at] = String(next);
+                        write(held);
+                        return true;
+                    });
+                    hidden(made, 'supports', function (token) {
+                        return tokens().indexOf(String(token)) >= 0;
+                    });
+                    hidden(made, 'toString', text);
+                    Object.defineProperty(made, '__acruxTokenOwner', { value: receiver,
+                        enumerable: false });
+                    return made;
+                }
+                var tokenLists = new WeakMap();
+                function tokenOf(receiver, iface, name, attribute) {
+                    asNode(receiver, iface, name, true);
+                    var held = tokenLists.get(receiver);
+                    if (!held) { held = { }; tokenLists.set(receiver, held); }
+                    if (!held[attribute]) held[attribute] = attributeTokens(receiver, attribute, iface);
+                    return held[attribute];
+                }
+                ['HTMLStyleElement', 'HTMLLinkElement', 'HTMLScriptElement'].forEach(function (iface) {
+                    read(levels[iface], 'blocking', function () {
+                        return tokenOf(this, iface, 'blocking', 'blocking');
+                    });
+                });
+                if (levels.HTMLMediaElement) {
+                    read(levels.HTMLMediaElement, 'controlsList', function () {
+                        return tokenOf(this, 'HTMLMediaElement', 'controlsList', 'controlslist');
+                    });
+                }
+                if (levels.HTMLElement) {
+                    // HTML §6.5.4: a popover's invocator is a token list too, and the element the id
+                    // names is the one the reference hands back.
+                    read(levels.HTMLElement, 'popover', function () {
+                        return tokenOf(this, 'HTMLElement', 'popover', 'popover');
+                    });
+                }
+                // DOM §4.3.5: a processing instruction carries the attribute list its target text
+                // spells, and the reads the interface names work on that list.
+                (function () {
+                    var proto = levels.ProcessingInstruction;
+                    if (!proto) return;
+                    var parsed = new WeakMap();
+                    function list(receiver, name) {
+                        asNode(receiver, 'ProcessingInstruction', name);
+                        var held = parsed.get(receiver);
+                        if (!held) {
+                            held = { order: [ ], values: { } };
+                            parsed.set(receiver, held);
+                            var text = String(receiver.data === undefined ? '' : receiver.data);
+                            // The attribute list a processing instruction carries is spelled with
+                            // either kind of quotation mark, so the pattern is built from both rather
+                            // than from a literal the host language would take away.
+                            var dquote = String.fromCharCode(34);
+                            var space = String.fromCharCode(92) + 's';
+                            var pattern = new RegExp('([^' + space + '=]+)[' + space + ']*='
+                                + '[' + space + ']*(?:' + dquote + '([^' + dquote + ']*)' + dquote
+                                + '|\'([^\']*)\'|([^' + space + '\'<' + dquote + '>]+))'
+                                + '|([^' + space + '=]+)', 'g');
+                            var found;
+                            while ((found = pattern.exec(text)) !== null) {
+                                var key = found[1] || found[5];
+                                var value = found[2] !== undefined ? found[2]
+                                    : found[3] !== undefined ? found[3]
+                                    : found[4] !== undefined ? found[4] : '';
+                                if (key === '') continue;
+                                if (found[1] === undefined) value = '';
+                                if (held.values[key] === undefined) held.order.push(key);
+                                held.values[key] = value;
+                            }
+                        }
+                        return held;
+                    }
+                    read(proto, 'target', function () {
+                        asNode(this, 'ProcessingInstruction', 'target', true);
+                        return String(this.nodeName);
+                    });
+                    read(proto, 'sheet', function () {
+                        asNode(this, 'ProcessingInstruction', 'sheet', true);
+                        return null;
+                    });
+                    proto.getAttribute = function getAttribute(name) {
+                        var held = list(this, 'getAttribute');
+                        var key = String(name === undefined ? '' : name);
+                        return held.values[key] === undefined ? null : held.values[key];
+                    };
+                    proto.hasAttribute = function hasAttribute(name) {
+                        var held = list(this, 'hasAttribute');
+                        return held.values[String(name === undefined ? '' : name)] !== undefined;
+                    };
+                    proto.hasAttributes = function hasAttributes() {
+                        return list(this, 'hasAttributes').order.length > 0;
+                    };
+                    proto.getAttributeNames = function getAttributeNames() {
+                        return list(this, 'getAttributeNames').order.slice(0);
+                    };
+                    proto.setAttribute = function setAttribute(name, value) {
+                        var held = list(this, 'setAttribute');
+                        var key = String(name === undefined ? '' : name);
+                        if (held.values[key] === undefined) held.order.push(key);
+                        held.values[key] = String(value === undefined ? '' : value);
+                        return undefined;
+                    };
+                    proto.removeAttribute = function removeAttribute(name) {
+                        var held = list(this, 'removeAttribute');
+                        var key = String(name === undefined ? '' : name);
+                        if (held.values[key] === undefined) return undefined;
+                        delete held.values[key];
+                        held.order.splice(held.order.indexOf(key), 1);
+                        return undefined;
+                    };
+                    proto.toggleAttribute = function toggleAttribute(name, force) {
+                        var held = list(this, 'toggleAttribute');
+                        var key = String(name === undefined ? '' : name);
+                        var on = held.values[key] !== undefined;
+                        if (on && (force === undefined || force === false)) {
+                            delete held.values[key];
+                            held.order.splice(held.order.indexOf(key), 1);
+                            return false;
+                        }
+                        if (!on && (force === undefined || force === true)) {
+                            held.values[key] = '';
+                            held.order.push(key);
+                            return true;
+                        }
+                        return on;
+                    };
+                })();
+                // DOM §5.3: the shadow tree answers the point test the document answers, and the
+                // fragment serialisation is the markup the tree holds.
+                (function () {
+                    var proto = levels.ShadowRoot;
+                    if (!proto) return;
+                    function own(receiver, name, bare) {
+                        if (!receiver || typeof receiver.host !== 'object' || receiver.host === null
+                            || typeof receiver.mode !== 'string') {
+                            throw bare ? refusedAttribute() : illegal(name, 'ShadowRoot');
+                        }
+                        return receiver;
+                    }
+                    // DOM §5.3 with CSSOM Views §3.5: the tree's point test is the document's hit
+                    // chain read inside this tree. A node the tree holds at the point is the answer;
+                    // a point the tree holds nothing at is the document's own answer, which is what
+                    // the reference gives from either object (measured: at a point only the viewport
+                    // covers, 'root.elementFromPoint(1, 1)' and 'document.elementFromPoint(1, 1)' are
+                    // both the document element, and each list holds the one element).
+                    function chain(self, x, y) {
+                        var made;
+                        try { made = self.host.ownerDocument.elementsFromPoint(x, y); }
+                        catch (e) { made = [ ]; }
+                        return made || [ ];
+                    }
+                    proto.elementFromPoint = function elementFromPoint(x, y) {
+                        var self = own(this, 'elementFromPoint');
+                        var made = chain(self, x, y);
+                        for (var i = 0; i < made.length; i++) {
+                            try { if (self.contains(made[i])) return made[i]; } catch (e) { }
+                        }
+                        return made.length ? made[0] : null;
+                    };
+                    proto.elementsFromPoint = function elementsFromPoint(x, y) {
+                        var self = own(this, 'elementsFromPoint');
+                        var made = chain(self, x, y);
+                        var list = [ ];
+                        for (var i = 0; i < made.length; i++) {
+                            try { if (self.contains(made[i])) list.push(made[i]); } catch (e) { }
+                        }
+                        if (list.length) return list;
+                        for (var j = 0; j < made.length; j++) list.push(made[j]);
+                        return list;
+                    };
+                    proto.getHTML = function getHTML(options) {
+                        var self = own(this, 'getHTML');
+                        if (options !== undefined && (options === null || typeof options !== 'object')) {
+                            throw new TypeError('Failed to execute ' + quoted('getHTML') + ' on '
+                                + quoted('ShadowRoot') + ': parameter 1 is not of type '
+                                + quoted('ShadowRootGetHTMLOptions') + '.');
+                        }
+                        return String(self.innerHTML === undefined ? '' : self.innerHTML);
+                    };
+                    proto.setHTML = function setHTML(fragment, options) {
+                        var self = own(this, 'setHTML');
+                        self.innerHTML = String(fragment === undefined || fragment === null
+                            ? '' : fragment);
+                        return undefined;
+                    };
+                    proto.setHTMLUnsafe = function setHTMLUnsafe(fragment) {
+                        return proto.setHTML.call(this, fragment);
+                    };
+                })();
+                // Private Context Manager, Topic Access and the feature policy: the calls exist and
+                // answer the empty promise or the empty policy the engine has.
+                (function () {
+                    var doc = levels.Document;
+                    if (!doc) return;
+                    function asDocument(receiver, name) {
+                        if (!receiver || typeof receiver.nodeType !== 'number') {
+                            throw illegal(name, 'Document');
+                        }
+                        return receiver;
+                    }
+                    function promiseReject(name, sentence) {
+                        return Promise.reject(new DOMException('Failed to execute ' + quoted(name)
+                            + ' on ' + quoted('Document') + ': ' + sentence, 'NotAllowedError'));
+                    }
+                    doc.browsingTopics = function browsingTopics(options) {
+                        asDocument(this, 'browsingTopics');
+                        return promiseReject('browsingTopics',
+                            'the engine keeps no topic state to select.');
+                    };
+                    doc.hasPrivateToken = function hasPrivateToken(options) {
+                        asDocument(this, 'hasPrivateToken');
+                        if (!options || typeof options !== 'object') {
+                            throw new TypeError('Failed to execute ' + quoted('hasPrivateToken')
+                                + ' on ' + quoted('Document') + ': parameter 1 is not of type '
+                                + quoted('HasTrustTokenOptions') + '.');
+                        }
+                        return Promise.resolve(false);
+                    };
+                    doc.hasRedemptionRecord = function hasRedemptionRecord(options) {
+                        asDocument(this, 'hasRedemptionRecord');
+                        if (!options || typeof options !== 'object') {
+                            throw new TypeError('Failed to execute ' + quoted('hasRedemptionRecord')
+                                + ' on ' + quoted('Document') + ': parameter 1 is not of type '
+                                + quoted('HasTrustTokenOptions') + '.');
+                        }
+                        return Promise.resolve(false);
+                    };
+                    var policy = {
+                        allowedFeatures: function () { return [ ]; },
+                        features: function () { return [ ]; },
+                        allowsFeature: function () { return false; },
+                        defaultPolicy: function () { return null; }
+                    };
+                    read(doc, 'featurePolicy', function () {
+                        asDocument(this, 'featurePolicy');
+                        return policy;
+                    });
+                    read(doc, 'fragmentDirective', function () {
+                        asDocument(this, 'fragmentDirective');
+                        var held = null;
+                        try { held = location.hash; } catch (e) { held = ''; }
+                        return { toString: function () { return String(held || ''); } };
+                    });
+                    read(levels.HTMLIFrameElement, 'featurePolicy', function () {
+                        asNode(this, 'HTMLIFrameElement', 'featurePolicy', true);
+                        return policy;
+                    });
+                })();
+                // HTML §4.8.10.6: the object a frame's or an object's document lookup answers, for a
+                // document that holds no SVG at all.
+                ['HTMLIFrameElement', 'HTMLObjectElement'].forEach(function (iface) {
+                    method(levels[iface], 'getSVGDocument', function (target) {
+                        asNode(this, iface, 'getSVGDocument');
+                        return Promise.resolve(null);
+                    });
+                });
+                // XMLHttpRequest's ad-networking calls take a dictionary, and a page that hands one of
+                // them a string is refused the way the reference refuses it.
+                (function () {
+                    var proto = levels.XMLHttpRequest;
+                    if (!proto) return;
+                    // Web IDL §3.5 turns a dictionary argument in two steps, and the reference
+                    // writes each one differently: a value that is not a dictionary at all is
+                    // 'The provided value is not of type X.', and a dictionary that leaves a required
+                    // member out is 'Failed to read the Y property from X: Required member is
+                    // undefined.' (both measured whole, with X the dictionary's own name).
+                    function dictionary(receiver, name, value, iface, required) {
+                        if (!receiver || typeof receiver.__acruxXhr !== 'number'
+                            && !Object.prototype.hasOwnProperty.call(receiver, 'readyState')) {
+                            throw illegal(name, 'XMLHttpRequest');
+                        }
+                        if (value === null || (typeof value !== 'object'
+                            && typeof value !== 'function')) {
+                            throw new TypeError('Failed to execute ' + quoted(name) + ' on '
+                                + quoted('XMLHttpRequest') + ': The provided value is not of type '
+                                + quoted(iface) + '.');
+                        }
+                        for (var r = 0; r < required.length; r++) {
+                            if (value[required[r]] === undefined) {
+                                throw new TypeError('Failed to execute ' + quoted(name) + ' on '
+                                    + quoted('XMLHttpRequest') + ': Failed to read the '
+                                    + quoted(required[r]) + ' property from ' + quoted(iface)
+                                    + ': Required member is undefined.');
+                            }
+                        }
+                        return undefined;
+                    }
+                    method(proto, 'setPrivateToken', function setPrivateToken(options) {
+                        return dictionary(this, 'setPrivateToken', options, 'PrivateToken',
+                            ['operation', 'issuer']);
+                    });
+                    method(proto, 'setAttributionReporting', function setAttributionReporting(options) {
+                        return dictionary(this, 'setAttributionReporting', options,
+                            'AttributionReportingRequestOptions', ['eventSourceEligible',
+                                'triggerSpecsEligible']);
+                    });
+                })();
+                // HTML §6.8.3 and the Device Posture, Window Controls Overlay and Media Capture
+                // surfaces: the objects a page reads off the navigator, with the state the engine has.
+                (function () {
+                    function level(name, base) {
+                        var made = levels[name];
+                        if (made) return made;
+                        made = Object.create(base && levels[base] ? levels[base] : Object.prototype);
+                        levels[name] = made;
+                        var ctor = function () {
+                            throw new TypeError('Failed to construct ' + quoted(name)
+                                + ': Illegal constructor');
+                        };
+                        try {
+                            Object.defineProperty(ctor, 'name', { value: name, configurable: true });
+                        } catch (e) { }
+                        ctor.prototype = made;
+                        try {
+                            Object.defineProperty(made, 'constructor', { value: ctor, writable: true,
+                                enumerable: false, configurable: true });
+                        } catch (e) { }
+                        window[name] = ctor;
+                        try {
+                            Object.defineProperty(made, Symbol.toStringTag,
+                                { value: name, configurable: true });
+                        } catch (e) { }
+                        return made;
+                    }
+                    // Device Posture §4: the interface names two members, and the posture of a
+                    // laptop the engine cannot rotate is the one that never changes (measured: the
+                    // level holds constructor, onchange and type, 'navigator.devicePosture.type' is
+                    // 'continuous' and there is no 'angle' to read).
+                    var postureLevel = level('DevicePosture', 'EventTarget');
+                    var POSTURE = new WeakMap();
+                    read(postureLevel, 'type', function () {
+                        if (!POSTURE.has(this)) throw refusedAttribute();
+                        return 'continuous';
+                    });
+                    if (typeof eventHandler === 'function') {
+                        try { eventHandler(postureLevel, 'onchange'); } catch (e) { }
+                    } else if (!carried(postureLevel, 'onchange')) {
+                        read(postureLevel, 'onchange', function () {
+                            return POSTURE.has(this) ? null : undefined;
+                        }, function () { });
+                    }
+                    var posture = Object.create(postureLevel);
+                    POSTURE.set(posture, true);
+                    var devices = levels.MediaDevices;
+                    function refusalMethod(owner, name, iface, sentence) {
+                        method(owner, name, function () {
+                            if (!this || typeof this !== 'object') throw illegal(name, iface);
+                            return Promise.reject(new DOMException('Failed to execute ' + quoted(name)
+                                + ' on ' + quoted(iface) + ': ' + sentence, 'NotAllowedError'));
+                        });
+                    }
+                    refusalMethod(devices, 'getUserMedia', 'MediaDevices',
+                        'the engine has no camera or microphone to open.');
+                    refusalMethod(devices, 'getDisplayMedia', 'MediaDevices',
+                        'the engine has no screen to capture.');
+                    method(devices, 'enumerateDevices', function enumerateDevices() {
+                        return Promise.resolve([ ]);
+                    });
+                    level('MediaStream', 'EventTarget');
+                    level('MediaStreamTrack', 'EventTarget');
+                    // The navigator's own calls: the badge, the protocol handler and the ad-auction
+                    // surface, answered the way the reference answers a context that is not secure.
+                    var nav = levels.Navigator;
+                    if (nav) {
+                        read(nav, 'devicePosture', function () { return posture; });
+                        method(nav, 'getUserMedia', function getUserMedia() {
+                            return Promise.reject(new DOMException('Failed to execute '
+                                + quoted('getUserMedia') + ' on ' + quoted('Navigator')
+                                + ': the engine has no camera or microphone to open.',
+                                'NotAllowedError'));
+                        });
+                        // HTML §6.8.3: the two arguments are checked in order — the count, then the
+                        // scheme name against the URI syntax, then the address it would send the user
+                        // to (measured, each sentence read whole: 'The scheme name ' + quoted + ' is
+                        // not allowed by URI syntax (RFC3986).' and 'The scheme of the url provided
+                        // must be HTTP(S).'). The engine has no handler registry and no prompt to show,
+                        // so a document that passes all three checks is answered as the registration
+                        // the shell would have asked about: with nothing.
+                        var SCHEME_NAME = /^[A-Za-z][A-Za-z0-9+.\-]*$/;
+                        function protocolHandler(name, count, scheme, url) {
+                            if (!this || typeof this.appName !== 'string') {
+                                throw illegal(name, 'Navigator');
+                            }
+                            if (count < 2) {
+                                throw new TypeError('Failed to execute ' + quoted(name) + ' on '
+                                    + quoted('Navigator') + ': 2 arguments required, but only '
+                                    + count + ' present.');
+                            }
+                            var text = String(scheme);
+                            if (!SCHEME_NAME.test(text)) {
+                                throw new DOMException('Failed to execute ' + quoted(name) + ' on '
+                                    + quoted('Navigator') + ': The scheme name ' + quoted(text)
+                                    + ' is not allowed by URI syntax (RFC3986).', 'SecurityError');
+                            }
+                            var made;
+                            try { made = new URL(String(url), document.baseURI); }
+                            catch (e) { made = null; }
+                            if (!made || !(made.protocol === 'http:' || made.protocol === 'https:')) {
+                                throw new DOMException('Failed to execute ' + quoted(name) + ' on '
+                                    + quoted('Navigator') + ': The scheme of the url provided '
+                                    + 'must be HTTP(S).', 'SecurityError');
+                            }
+                            return undefined;
+                        }
+                        method(nav, 'registerProtocolHandler', function registerProtocolHandler(scheme, url) {
+                            return protocolHandler.call(this, 'registerProtocolHandler',
+                                arguments.length, scheme, url);
+                        });
+                        method(nav, 'unregisterProtocolHandler', function unregisterProtocolHandler(scheme, url) {
+                            return protocolHandler.call(this, 'unregisterProtocolHandler',
+                                arguments.length, scheme, url);
+                        });
+                        ['setAppBadge', 'clearAppBadge'].forEach(function (name) {
+                            refusalMethod(nav, name, 'Navigator',
+                                'the engine has no application badge to set.');
+                        });
+                        method(nav, 'createAuctionNonce', function createAuctionNonce() {
+                            if (!this || typeof this.appName !== 'string') {
+                                throw illegal('createAuctionNonce', 'Navigator');
+                            }
+                            return null;
+                        });
+                        ['adAuctionComponents', 'runAdAuction', 'getInterestGroupAdAuctionData',
+                            'joinAdInterestGroup', 'leaveAdInterestGroup',
+                            'clearOriginJoinedAdInterestGroups'].forEach(function (name) {
+                                refusalMethod(nav, name, 'Navigator',
+                                    'the engine has no ad auction to take part in.');
+                            });
+                        // Protected Audience §the navigator surface: the same auction calls gathered on
+                        // one object the document holds. The engine takes part in no auction, so the
+                        // object is named and the calls it carries refuse by name.
+                        var audience = levels.ProtectedAudience || level('ProtectedAudience', null);
+                        var audienceObject = Object.create(audience);
+                        ['joinAdInterestGroup', 'leaveAdInterestGroup',
+                            'clearOriginJoinedAdInterestGroups', 'updateAdInterestGroups',
+                            'runAdAuction', 'createAuctionNonce', 'adAuctionComponents',
+                            'getInterestGroupAdAuctionData'].forEach(function (name) {
+                            if (typeof audience[name] !== 'function') {
+                                refusalMethod(audience, name, 'ProtectedAudience',
+                                    'the engine has no ad auction to take part in.');
+                            }
+                        });
+                        read(nav, 'protectedAudience', function () { return audienceObject; });
+                        method(nav, 'requestMIDIAccess', function requestMIDIAccess() {
+                            if (!this || typeof this.appName !== 'string') {
+                                throw illegal('requestMIDIAccess', 'Navigator');
+                            }
+                            return Promise.reject(new DOMException('Failed to execute '
+                                + quoted('requestMIDIAccess') + ' on ' + quoted('Navigator')
+                                + ': the engine has no MIDI device to reach.', 'NotSupportedError'));
+                        });
+                        // The prefixed predecessor of getUserMedia answers with the same refusal and
+                        // the same sentence, the way the reference keeps the alias (measured: both
+                        // names are on the level and the webkit one is a function).
+                        method(nav, 'webkitGetUserMedia', function webkitGetUserMedia() {
+                            if (!this || typeof this.appName !== 'string') {
+                                throw illegal('webkitGetUserMedia', 'Navigator');
+                            }
+                            return Promise.reject(new DOMException('Failed to execute '
+                                + quoted('webkitGetUserMedia') + ' on ' + quoted('Navigator')
+                                + ': the engine has no camera or microphone to open.',
+                                'NotAllowedError'));
+                        });
+                        read(nav, 'deprecatedRunAdAuctionEnforcesKAnonymity', function () {
+                            return false;
+                        });
+                        method(nav, 'deprecatedURNToURL', function deprecatedURNToURL(urn) {
+                            if (!this || typeof this.appName !== 'string') {
+                                throw illegal('deprecatedURNToURL', 'Navigator');
+                            }
+                            return String(urn === undefined ? '' : urn);
+                        });
+                        method(nav, 'deprecatedReplaceInURN', function deprecatedReplaceInURN(urn, replacements) {
+                            if (!this || typeof this.appName !== 'string') {
+                                throw illegal('deprecatedReplaceInURN', 'Navigator');
+                            }
+                            return String(urn === undefined ? '' : urn);
+                        });
+                        method(nav, 'canLoadAdAuctionFencedFrame', function canLoadAdAuctionFencedFrame() {
+                            if (!this || typeof this.appName !== 'string') {
+                                throw illegal('canLoadAdAuctionFencedFrame', 'Navigator');
+                            }
+                            return Promise.resolve(false);
+                        });
+                    }
+                })();
+            })();
             // ── The shape every installed member is finished in ──────────────────
             // The passes above write members over the ones the host already carried, and a function
             // written as an expression arrives with a 'prototype' of its own and — in a sloppy script —
@@ -14722,7 +16189,19 @@ public class JavaScriptEngine : IDisposable
                         try { made = Object.getOwnPropertyDescriptor(proto, names[i]); } catch (e) { continue; }
                         if (!made) continue;
                         if (made.value !== undefined) {
-                            if (!isLevel || names[i] === 'constructor' || !needsShape(made.value)) continue;
+                            if (!isLevel) continue;
+                            if (names[i] === 'constructor') {
+                                // The interface object is not an operation: it keeps the prototype the
+                                // level hangs off it, so only the pair a sloppy script leaves behind
+                                // comes off (measured: 'Object.getOwnPropertyNames(WebSocket)' is the
+                                // constants and length, name, prototype — 'caller' and 'arguments'
+                                // are inherited from Function.prototype, not written on the object).
+                                try {
+                                    delete made.value.caller; delete made.value.arguments;
+                                } catch (e) { }
+                                continue;
+                            }
+                            if (!needsShape(made.value)) continue;
                             var asMethod = reshaped(made.value, names[i], null);
                             if (!asMethod) continue;
                             try {
@@ -14763,6 +16242,9 @@ public class JavaScriptEngine : IDisposable
                     var value;
                     try { value = window[globals[g]]; } catch (e) { continue; }
                     if (typeof value !== 'function') continue;
+                    try {
+                        delete value.caller; delete value.arguments;
+                    } catch (e) { }
                     finish(value, false);
                     if (value.prototype && typeof value.prototype === 'object') finish(value.prototype, true);
                 }

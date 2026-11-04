@@ -1,0 +1,83 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe116 — the sentences and fallbacks probe114 cut short</title></head>
+<body><div id="box"></div>
+<script>
+// probe114 truncated every refusal at 90 characters, so the rows that differ between the engine
+// and the reference cannot be told apart. This page asks the same questions with the whole answer,
+// and adds the fallback the reference gives when a shadow tree holds nothing at a point.
+(function () {
+    var out = {};
+    function msg(fn) {
+        try { return 'ok:' + JSON.stringify(fn()); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message); }
+    }
+    function own(o) { try { return Object.getOwnPropertyNames(o).sort(); } catch (e) { return ['ERR']; } }
+
+    out.npr_scheme = msg(function () { return navigator.registerProtocolHandler('web+foo', 'h?a=%s'); });
+    out.npr_ordinary = msg(function () { return navigator.registerProtocolHandler('http://x', 'h?a=%s'); });
+    out.npr_badargs = msg(function () { return navigator.registerProtocolHandler('web+foo'); });
+    out.xhr_token = msg(function () { return new XMLHttpRequest().setPrivateToken('token'); });
+    out.xhr_token_obj = msg(function () {
+        return new XMLHttpRequest().setPrivateToken({ issuer: 'https://i.example', token: 't' });
+    });
+    out.xhr_attr = msg(function () { return new XMLHttpRequest().setAttributionReporting({}); });
+    out.xhr_attr_words = msg(function () {
+        return new XMLHttpRequest().setAttributionReporting({ eventSourceELID: true });
+    });
+
+    out.posture_shape = msg(function () {
+        var p = navigator.devicePosture;
+        return [Object.prototype.toString.call(p), p.type, p.angle, own(Object.getPrototypeOf(p))];
+    });
+    out.overlay_shape = msg(function () {
+        var o = navigator.windowControlsOverlay;
+        return [Object.prototype.toString.call(o), o.visible, typeof o.getBoundingClientRect,
+            own(Object.getPrototypeOf(o)), String(o.getBoundingClientRect())];
+    });
+    out.posture_bare = msg(function () {
+        return [String(Object.getOwnPropertyDescriptor(
+            Object.getPrototypeOf(navigator.devicePosture), 'type').get.call({})),
+            String(Object.getOwnPropertyDescriptor(
+                Object.getPrototypeOf(navigator.windowControlsOverlay), 'visible').get.call({}))];
+    });
+
+    out.shadow_point = msg(function () {
+        var host = document.createElement('div');
+        document.body.appendChild(host);
+        var root = host.attachShadow({ mode: 'open' });
+        root.innerHTML = '<p id="s">hi</p>';
+        var p = root.getElementById('s');
+        var r = p.getBoundingClientRect();
+        return [String(root.elementFromPoint(1, 1)), root.elementsFromPoint(1, 1).length,
+            String(document.elementFromPoint(1, 1)), document.elementsFromPoint(1, 1).length,
+            [r.left, r.top, r.width, r.height],
+            String(root.elementFromPoint(r.left + 2, r.top + 2)),
+            root.elementsFromPoint(r.left + 2, r.top + 2).length,
+            String(document.elementFromPoint(r.left + 2, r.top + 2))];
+    });
+    out.shadow_point_detached = msg(function () {
+        var root = document.createElement('div').attachShadow({ mode: 'open' });
+        root.innerHTML = '<p>hi</p>';
+        return [String(root.elementFromPoint(1, 1)), root.elementsFromPoint(1, 1).length];
+    });
+
+    out.media_group = msg(function () {
+        var v = document.createElement('video');
+        return [String('mediaGroup' in v), String('orientation' in v), String('webkitMuted' in v),
+            String('webkitWiredNetworkState' in v), v.preservesPitch, String('captureStream' in v),
+            String('mediaCapabilities' in window)];
+    });
+    out.ctor_own = msg(function () {
+        return [own(window.WebSocket), own(window.EventSource), own(window.MediaQueryList),
+            own(window.XMLHttpRequest)];
+    });
+    out.ctor_caller = msg(function () {
+        var d = Object.getOwnPropertyDescriptor(window.WebSocket, 'caller');
+        return [typeof window.WebSocket.caller, !!d, d && d.configurable, d && typeof d.get];
+    });
+
+    window.__REPORT = JSON.stringify(out);
+    document.title = 'P116';
+    window.__T && window.__T('probe116', true, window.__REPORT);
+})();
+</script>
+<div>probe116</div></body></html>

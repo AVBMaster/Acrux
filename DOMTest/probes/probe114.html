@@ -1,0 +1,208 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe114 — the interfaces the sweep recorded as missing, plus the ECMAScript surface</title></head>
+<body><div id="box"><video id="v" src="x.mp4"></video><audio id="a"></audio></div>
+<script>
+// Round 18 left a list of interfaces the level does not carry, and this page measures what the
+// reference actually answers for them — the constructor shape, the constants, the default reads and
+// the refusal each method gives when the engine has no back end. The ECMAScript half is the same
+// idea: the built-ins a page writes today, read off the running engine.
+(function () {
+    var out = {};
+    function msg(fn) {
+        try { return 'ok:' + JSON.stringify(fn()); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 90); }
+    }
+    function own(o) { try { return Object.getOwnPropertyNames(o).sort(); } catch (e) { return ['ERR']; } }
+    function shape(o, name) {
+        var d = Object.getOwnPropertyDescriptor(o, name);
+        return d && [typeof d.value === 'function' ? 'fn' : typeof d.value, !!d.get, !!d.set,
+            d.writable, d.enumerable, d.configurable];
+    }
+    // ── A. WebSocket ──────────────────────────────────────────────────────────
+    out.ws_has = msg(function () { return typeof window.WebSocket; });
+    out.ws_own = msg(function () { return own(window.WebSocket.prototype); });
+    out.ws_static = msg(function () { return own(window.WebSocket); });
+    out.ws_ctor_one = msg(function () { return new WebSocket(); });
+    out.ws_ctor_bad = msg(function () { return new WebSocket('not a url'); });
+    out.ws_ctor_two = msg(function () { return new WebSocket('/relative', ['chat']); });
+    out.ws_shape = msg(function () {
+        var s = new WebSocket('wss://example.invalid/sock?q=1', ['chat']);
+        return [s.url, s.readyState, s.protocol, s.extensions, s.binaryType,
+            s.onopen, s.onmessage, s.onerror, s.onclose, Object.prototype.toString.call(s),
+            typeof s.send, typeof s.close];
+    });
+    out.ws_send = msg(function () {
+        var s = new WebSocket('wss://example.invalid/sock');
+        return [String(s.send('text')), String(s.close()), String(s.close(1000, 'bye')),
+            String(s.close(42))];
+    });
+    out.ws_constants = msg(function () {
+        return [WebSocket.CONNECTING, WebSocket.OPEN, WebSocket.CLOSING, WebSocket.CLOSED,
+            WebSocket.prototype.CONNECTING, WebSocket.prototype.binaryType === undefined];
+    });
+    // ── B. EventSource ────────────────────────────────────────────────────────
+    out.es_has = msg(function () { return typeof window.EventSource; });
+    out.es_own = msg(function () { return own(window.EventSource.prototype); });
+    out.es_shape = msg(function () {
+        var s = new EventSource('events', { withCredentials: true });
+        return [s.url, s.readyState, s.withCredentials, s.onopen, s.onmessage, s.onerror];
+    });
+    out.es_after_close = msg(function () {
+        var s = new EventSource('events'); s.close();
+        return [s.readyState, String(s.close())];
+    });
+    // ── C. the media elements ─────────────────────────────────────────────────
+    out.media_own = msg(function () { return own(HTMLMediaElement.prototype); });
+    out.video_own = msg(function () { return own(HTMLVideoElement.prototype); });
+    out.media_reads = msg(function () {
+        var v = document.createElement('video');
+        return [v.readyState, v.networkState, v.duration, v.currentTime, v.paused, v.volume,
+            v.muted, v.playbackRate, v.defaultPlaybackRate, v.seeking, v.loop, v.autoplay,
+            v.controls, v.preload, v.crossOrigin, v.currentSrc, v.srcObject, v.error,
+            Object.prototype.toString.call(v.played), Object.prototype.toString.call(v.seekable),
+            Object.prototype.toString.call(v.buffered), Object.prototype.toString.call(v.textTracks),
+            v.controlsList, v.remote, v.disableRemotePlayback, v.sinkId, v.preservesPitch];
+    });
+    out.media_calls = msg(function () {
+        var v = document.createElement('video');
+        return [String(v.load()), String(v.pause()), typeof v.play().then === 'function',
+            String(v.canPlayType('video/mp4')), String(v.getVideoPlaybackQuality &&
+            v.getVideoPlaybackQuality().totalVideoFrames)];
+    });
+    out.media_levels = msg(function () {
+        return [typeof window.TimeRanges, typeof window.MediaError, typeof window.TextTrack,
+            typeof window.TextTrackList, typeof window.VideoPlaybackQuality,
+            typeof window.RemotePlayback, typeof window.HTMLSourceElement];
+    });
+    out.track_shape = msg(function () {
+        var t = document.createElement('track');
+        return [String(t.track), t.kind, t.srclang, t.label, t.default, t.readyState];
+    });
+    out.video_frames = msg(function () {
+        var v = document.createElement('video');
+        return [typeof v.requestVideoFrameCallback, typeof v.cancelVideoFrameCallback,
+            typeof v.getVideoPlaybackQuality, typeof v.requestPictureInPicture];
+    });
+    // ── D. Navigator ──────────────────────────────────────────────────────────
+    out.nav_own = msg(function () { return own(Navigator.prototype); });
+    out.nav_calls = msg(function () {
+        var n = navigator;
+        return [msg(function () { return n.getUserMedia; }),
+            msg(function () { return n.mediaDevices && typeof n.mediaDevices.getUserMedia; }),
+            msg(function () { return n.registerProtocolHandler('web+foo', 'h?a=%s'); }),
+            msg(function () { return n.createAuctionNonce && typeof n.createAuctionNonce(); }),
+            msg(function () { return n.setAppBadge && n.setAppBadge(1); }),
+            msg(function () { return n.clearAppBadge && n.clearAppBadge(); }),
+            msg(function () { return n.devicePosture && n.devicePosture.type; }),
+            msg(function () { return n.windowControlsOverlay && n.windowControlsOverlay.visible; }),
+            msg(function () { return n.getInstalled && n.getInstalled(); }),
+            msg(function () { return n.canLoadAdAuctionFencedFrames && n.canLoadAdAuctionFencedFrames(); }),
+            msg(function () { return n.deprecatedRunAdAuctionEnforcesKAnonymity; })];
+    });
+    out.nav_levels = msg(function () {
+        return [typeof window.MediaDevices, typeof window.MediaStream, typeof window.Geolocation,
+            typeof window.PermissionStatus, typeof window.MimeType, typeof window.MimeTypeArray,
+            typeof window.Plugin, typeof window.PluginArray];
+    });
+    // ── E. ShadowRoot ─────────────────────────────────────────────────────────
+    out.shadow_own = msg(function () { return own(ShadowRoot.prototype); });
+    out.shadow_calls = msg(function () {
+        var host = document.createElement('div');
+        document.body.appendChild(host);
+        var root = host.attachShadow({ mode: 'open' });
+        root.innerHTML = '<p id="s">hi</p>';
+        return [String(root.elementFromPoint(1, 1)), root.elementsFromPoint(1, 1).length,
+            root.getHTML(), root.getHTML({ requireWellFormed: false }),
+            String(root.activeElement), String(root.fullsheet === undefined)];
+    });
+    out.shadow_sethtml = msg(function () {
+        var host = document.createElement('div');
+        var root = host.attachShadow({ mode: 'open' });
+        return [typeof root.setHTML, String(root.setHTML('<b>x</b>')), root.innerHTML,
+            typeof root.setHTMLUnsafe];
+    });
+    // ── F. ProcessingInstruction ──────────────────────────────────────────────
+    out.pi_own = msg(function () { return own(ProcessingInstruction.prototype); });
+    out.pi_reads = msg(function () {
+        var pi = document.createProcessingInstruction('xml-stylesheet',
+            'type="text/css" href="s.css"');
+        return [pi.target, pi.data, pi.getAttributes && pi.getAttributes().length,
+            pi.getAttribute('type'), pi.hasAttribute('href'), pi.getAttributeNames(),
+            pi.sheet, Object.prototype.toString.call(pi)];
+    });
+    // ── G. blocking, featurePolicy, the ad-method XHR calls ──────────────────
+    out.blocking = msg(function () {
+        var s = document.createElement('style');
+        var l = document.createElement('link');
+        var t = document.createElement('script');
+        return [Object.prototype.toString.call(s.blocking), String(s.blocking.length),
+            String(l.blocking.contains('render')), String(t.blocking)];
+    });
+    out.doc_ad = msg(function () {
+        return [msg(function () { return document.browsingTopics(); }),
+            msg(function () { return document.hasPrivateToken({ issuer: 'a' }); }),
+            msg(function () { return document.hasRedemptionRecord({ issuer: 'a', topFrameOrigin: 'b' }); }),
+            msg(function () { return document.featurePolicy; }),
+            msg(function () { return document.wasDiscarded; }),
+            msg(function () { return document.prerendering; }),
+            msg(function () { return document.fragmentDirective; })];
+    });
+    out.xhr_ad = msg(function () {
+        var x = new XMLHttpRequest();
+        return [typeof x.setAttributionReporting, typeof x.setPrivateToken,
+            String(x.setPrivateToken('token')), String(x.setAttributionReporting({}))];
+    });
+    // ── H. the ECMAScript surface ────────────────────────────────────────────
+    out.es_features = msg(function () {
+        return [
+            'groupBy=' + typeof Object.groupBy,
+            'hasOwn=' + typeof Object.hasOwn,
+            'withResolvers=' + typeof Promise.withResolvers,
+            'promiseTry=' + typeof Promise.try,
+            'fromAsync=' + typeof Array.fromAsync,
+            'findLast=' + typeof [].findLast,
+            'toSorted=' + typeof [].toSorted,
+            'structuredClone=' + typeof structuredClone,
+            'setMethods=' + typeof new Set().union,
+            'sumPrecise=' + typeof Math.sumPrecise,
+            'regExpEscape=' + typeof RegExp.escape,
+            'isWellFormed=' + typeof ''.isWellFormed,
+            'at=' + typeof ''.at,
+            'flat=' + typeof [].flat,
+            'cause=' + 'cause' in new Error('x', { cause: 1 }),
+            'symbolDispose=' + String(!!Symbol.dispose),
+            'asyncDispose=' + String(!!Symbol.asyncDispose),
+            'getOrInsert=' + typeof new WeakMap().getOrInsert,
+            'isRawJSON=' + typeof JSON.isRawJSON,
+            'rawJSON=' + typeof JSON.rawJSON,
+            'pause=' + typeof Atomics.pause,
+            'randomUUID=' + typeof crypto.randomUUID,
+            'uint8base64=' + typeof Uint8Array.prototype.toBase64,
+            'iteratorHelpers=' + typeof [][Symbol.iterator]().map,
+            'toHex=' + typeof Uint8Array.prototype.toHex,
+            'Array.fromAsync=' + typeof Array.fromAsync
+        ].join(' ');
+    });
+    out.iterator_shape = msg(function () {
+        var it = [1, 2, 3][Symbol.iterator]();
+        return [typeof it.map, typeof it.take, typeof it.drop, typeof it.flatMap, typeof it.toArray,
+            typeof it.forEach, typeof it.reduce, typeof it.some, typeof it.every, typeof it.find];
+    });
+    out.iter_result_shape = msg(function () {
+        var it = [1, 2][Symbol.iterator]();
+        return Object.getOwnPropertyNames(Object.getPrototypeOf(it)).sort().join(',');
+    });
+    out.set_methods = msg(function () {
+        var a = new Set([1, 2]), b = new Set([2]);
+        return [a.union(b).size, a.intersection(b).size, a.difference(b).size, a.symmetricDifference(b).size,
+            a.isSubsetOf(b), a.isSupersetOf(b), a.isDisjointFrom(b)];
+    });
+    out.group_by = msg(function () {
+        var made = Object.groupBy([1, 2, 3], function (n) { return n % 2 ? 'odd' : 'even'; });
+        return [Object.keys(made).join(','), made.odd.length, Object.getPrototypeOf(made) === null];
+    });
+    window.__REPORT = JSON.stringify(out);
+    document.title = 'P114';
+    window.__T && window.__T('probe114', true, window.__REPORT);
+})();
+</script>
+<div>probe114</div></body></html>

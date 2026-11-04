@@ -1,0 +1,170 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe115 — the sentences and the late states of the new interfaces</title></head>
+<body><div id="box"><video id="v"></video></div>
+<script>
+// The refusal word-for-word (nothing sliced away), the object each new interface answers, and the
+// state a socket or an event stream reaches once the network has answered. The late rows are written
+// into window.__LATE about a third of a second after load, so the reader must ask for them second.
+(function () {
+    var out = {};
+    function full(fn) { try { return 'ok:' + JSON.stringify(fn()); } catch (e) { return 'ERR:' + String(e && e.name) + ' :: ' + String(e && e.message); } }
+    function own(o) { try { return Object.getOwnPropertyNames(o).sort(); } catch (e) { return ['ERR']; } }
+    out.ws_arity = full(function () { return new WebSocket(); });
+    out.ws_bad_scheme = full(function () { return new WebSocket('not a url'); });
+    out.ws_relative = full(function () { return new WebSocket('/rel'); });
+    out.ws_proto_empty = full(function () { return new WebSocket('ws://a/', []); });
+    out.ws_proto_dup = full(function () { return new WebSocket('ws://a/', ['x', 'x']); });
+    out.ws_proto_bad = full(function () { return new WebSocket('ws://a/', ['has space']); });
+    out.ws_send_number = full(function () { var s = new WebSocket('ws://a/'); return s.send(5); });
+    out.ws_send_object = full(function () { var s = new WebSocket('ws://a/'); return s.send({}); });
+    out.ws_send_buffer = full(function () { var s = new WebSocket('ws://a/'); return s.send(new Uint8Array([1])); });
+    out.ws_close_args = full(function () {
+        var s = new WebSocket('ws://a/');
+        var one = full(function () { return s.close(7); });
+        var two = full(function () { return s.close(1000, 'bye'); });
+        var long = full(function () { return s.close(1000, new Array(200).join('x')); });
+        return [one, two, long, s.readyState];
+    });
+    out.ws_binary_setters = full(function () {
+        var s = new WebSocket('ws://a/');
+        s.binaryType = 'arraybuffer'; var a = s.binaryType;
+        s.binaryType = 'nonsense'; var b = s.binaryType;
+        s.binaryType = null; return [a, b, s.binaryType, s.bufferedAmount];
+    });
+    out.ws_handler_data = full(function () {
+        var s = new WebSocket('ws://a/');
+        s.onopen = 42; var o = String(s.onopen);
+        s.onopen = null; return [o, String(s.onopen), s.url, s.protocol, s.extensions, s.readyState];
+    });
+    out.es_ctor = full(function () { return new EventSource(); });
+    out.es_with = full(function () {
+        var a = new EventSource('e1'), b = new EventSource('e2', { withCredentials: true });
+        return [a.url, a.readyState, a.withCredentials, b.withCredentials, b.url];
+    });
+    out.es_reuse = full(function () { var s = new EventSource('e3'); s.close(); s.close(); return s.readyState; });
+    out.media_levels_own = full(function () {
+        return { TimeRanges: own(TimeRanges.prototype), MediaError: own(MediaError.prototype),
+            TextTrack: own(TextTrack.prototype), TextTrackList: own(TextTrackList.prototype),
+            VideoPlaybackQuality: own(VideoPlaybackQuality.prototype),
+            RemotePlayback: own(RemotePlayback.prototype),
+            MediaErrorCodes: [MediaError.MEDIA_ERR_ABORTED, MediaError.MEDIA_ERR_NETWORK,
+                MediaError.MEDIA_ERR_DECODE, MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED] };
+    });
+    out.media_new = full(function () { return [String(new TimeRanges()), String(new TextTrack())]; });
+    out.video_play = full(function () { var v = document.createElement('video'); var p = v.play();
+        return [Object.prototype.toString.call(p), typeof p.then, typeof p.catch]; });
+    out.video_tracks = full(function () {
+        var v = document.createElement('video');
+        var t = v.addTextTrack('subtitles', 'label', 'en');
+        return [Object.prototype.toString.call(t), t.kind, t.label, t.language, t.mode,
+            t.readyState, v.textTracks.length, Object.prototype.toString.call(v.textTracks),
+            v.textTracks.kind, v.textTracks.onaddtrack, v.textTracks.getTrackById('x')];
+    });
+    out.video_lists = full(function () {
+        var v = document.createElement('video');
+        v.controlsList.add('nodownload');
+        return [String(v.getAttribute('controlsList')), v.controlsList.length,
+            Object.prototype.toString.call(v.remote), typeof v.remote.prompt,
+            v.canPlayType('bogus'), v.canPlayType('video/mp4'), v.canPlayType('audio/wav')];
+    });
+    out.video_quality = full(function () {
+        var v = document.createElement('video');
+        var q = v.getVideoPlaybackQuality();
+        return [Object.prototype.toString.call(q), q.totalVideoFrames, q.droppedVideoFrames,
+            q.corruptedVideoFrames, typeof v.requestVideoFrameCallback,
+            v.requestVideoFrameCallback(function () { }), typeof v.cancelVideoFrameCallback,
+            v.cancelVideoFrameCallback('1'), full(function () { return v.requestPictureInPicture(); })];
+    });
+    out.nav_words = full(function () {
+        return [full(function () { return navigator.registerProtocolHandler('web+foo', 'l'); }),
+            full(function () { return navigator.registerProtocolHandler('web+foo', 'https://a/%s'); }),
+            full(function () { return navigator.unregisterProtocolHandler('web+foo'); }),
+            full(function () { return navigator.getUserMedia(); }),
+            full(function () { return navigator.createAuctionNonce(); }),
+            full(function () { return navigator.adAuctionComponents([]); }),
+            full(function () { return navigator.runAdAuction({}); }),
+            full(function () { return navigator.deprecatedURNToURL('https://a'); }),
+            full(function () { return navigator.deprecatedReplaceInURN('a', 'b'); }),
+            full(function () { return navigator.getInterestGroupAdAuctionData('x', new Uint8Array(1)); }),
+            full(function () { return navigator.canLoadAdAuctionFencedFrame(); }),
+            full(function () { return navigator.clearOriginJoinedAdInterestGroups('o', ['a']); }),
+            full(function () { return navigator.joinAdInterestGroup({}, 'https://a', 100); }),
+            full(function () { return navigator.setAppBadge(); }),
+            full(function () { return navigator.getInstalled(); })];
+    });
+    out.nav_posture = full(function () {
+        return [Object.prototype.toString.call(navigator.devicePosture), navigator.devicePosture.type,
+            navigator.devicePosture.currentSide, typeof navigator.devicePosture.addEventListener,
+            Object.prototype.toString.call(navigator.windowControlsOverlay),
+            navigator.windowControlsOverlay.visible,
+            full(function () { return navigator.windowControlsOverlay.getTitlebarArea(); }),
+            Object.prototype.toString.call(navigator.mediaDevices), own(MediaDevices.prototype)];
+    });
+    out.shadow_words = full(function () {
+        var host = document.createElement('div');
+        document.body.appendChild(host);
+        var root = host.attachShadow({ mode: 'open' });
+        root.innerHTML = '<p>x</p>';
+        var r = host.getBoundingClientRect();
+        return [full(function () { return root.elementFromPoint(r.left + 1, r.top + 1); }),
+            root.elementsFromPoint(2, 2).length, root.getHTML(),
+            full(function () { return root.getHTML({ wrongOption: 1 }); }),
+            full(function () { return root.setHTML('<b>y</b>', {}); }), root.innerHTML,
+            full(function () { return root.setHTMLUnsafe('<img src=x>'); }), root.innerHTML];
+    });
+    out.pi_words = full(function () {
+        var pi = document.createProcessingInstruction('target', 'a="1" b="2" c');
+        return [pi.target, pi.data, pi.getAttribute('a'), pi.getAttribute('c'), pi.getAttribute('nope'),
+            pi.getAttributeNames(), pi.hasAttributes(), pi.attributes.length,
+            Object.prototype.toString.call(pi.attributes), String(pi.setAttribute('a', '9')),
+            pi.getAttribute('a'), String(pi.removeAttribute('b')), pi.getAttributeNames(),
+            String(pi.toggleAttribute('z')), pi.getAttributeNames(), pi.sheet, pi.namespaceURI,
+            pi.prefix, pi.localName, pi.nodeType, pi.nodeName];
+    });
+    out.xhr_words = full(function () {
+        var x = new XMLHttpRequest();
+        return [full(function () { return x.setPrivateToken('t'); }),
+            full(function () { return x.setPrivateToken({ token: 't' }); }),
+            full(function () { return x.setAttributionReporting(); }),
+            full(function () { return x.setAttributionReporting({}); }),
+            full(function () { return x.setAttributionReporting({ eventSourceUri: 'https://a' }); })];
+    });
+    out.doc_words = full(function () {
+        return [Object.prototype.toString.call(document.featurePolicy),
+            full(function () { return document.featurePolicy.allowedFeatures(); }),
+            full(function () { return document.featurePolicy.features(); }),
+            full(function () { return document.featurePolicy.allowsFeature('fullscreen'); }),
+            Object.prototype.toString.call(document.fragmentDirective),
+            full(function () { return document.fragmentDirective.fragment; }),
+            typeof document.browsingTopics, typeof document.hasPrivateToken,
+            typeof document.hasRedemptionRecord,
+            full(function () { return document.hasPrivateToken(); }),
+            typeof document.requestStorageAccess, full(function () { return document.requestStorageAccess(); })];
+    });
+    window.__REPORT = JSON.stringify(out);
+    // The late half: what the network actually answers, once it has had the chance.
+    window.__LATE = { ws: [], es: [] };
+    (function () {
+        var s = new WebSocket('wss://example.invalid/late');
+        var heard = [];
+        s.onopen = function () { heard.push('open'); };
+        s.onerror = function () { heard.push('error'); };
+        s.onclose = function (e) { heard.push('close:' + e.code + ':' + e.reason + ':' + e.wasClean); };
+        window.__LATE.wsPush = function () { };
+        setTimeout(function () {
+            window.__LATE.ws = [s.readyState, heard.join(','), s.bufferedAmount,
+                Object.prototype.toString.call(s)];
+        }, 400);
+        var e = new EventSource('http://example.invalid/late');
+        var heard2 = [];
+        e.onopen = function () { heard2.push('open'); };
+        e.onerror = function (ev) { heard2.push('error:' + ev.type); };
+        e.addEventListener('message', function () { heard2.push('message'); });
+        setTimeout(function () {
+            window.__LATE.es = [e.readyState, heard2.join(',')];
+        }, 400);
+    })();
+    document.title = 'P115';
+    window.__T && window.__T("probe115", true, window.__REPORT);
+})();
+</script>
+<div>probe115</div></body></html>

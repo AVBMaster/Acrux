@@ -353,9 +353,22 @@ public class DocumentHost : IDomPrototypeHost
         return write(text + "\n");
     }
 
-    public ElementHost? elementFromPoint(double x, double y) => null;
+    /// <summary>CSSOM Views §3.5: the document answers the point test from the layout tree, and the
+    /// answer is the element the page shows at that point — the host of a shadow tree, not a node
+    /// inside it.</summary>
+    public ElementHost? elementFromPoint(double x, double y)
+    {
+        var hit = _document.ElementFromPoint(x, y);
+        return hit != null ? WrapElement(hit) : null;
+    }
 
-    public object[] elementsFromPoint(double x, double y) => Array.Empty<object>();
+    public object[] elementsFromPoint(double x, double y)
+    {
+        var hits = _document.ElementsFromPoint(x, y);
+        var made = new object[hits.Count];
+        for (var i = 0; i < hits.Count; i++) made[i] = WrapElement(hits[i])!;
+        return made;
+    }
 
     /// <summary>DOM §4.4 (ParentNode): the document builds trees the same way an element does, so the
     /// mixin's three methods are here rather than only on an element — a page that calls

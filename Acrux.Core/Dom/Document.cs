@@ -162,8 +162,55 @@ public class Document : Node
     public HtmlCollection Forms => new(GetElementsByTagName("form").Cast<Element>().ToList());
     public HtmlCollection Scripts => new(GetElementsByTagName("script").Cast<Element>().ToList());
 
-    public Element? ElementFromPoint(double x, double y) => null;
-    public List<Element> ElementsFromPoint(double x, double y) => new();
+    /// <summary>CSSOM Views §3.5: the point test walks the laid-out tree in paint order — a later
+    /// sibling lies above an earlier one and a child above its parent — so the first box that holds
+    /// the point is the element a click reaches, and the answer is that element followed by the
+    /// ancestors it is drawn through. An element the page tells the pointer to pass through
+    /// ('pointer-events: none', 'visibility: hidden') is not reached, but its children still are,
+    /// and an element the engine gave no box holds no point of its own while the boxes below it may.
+    /// A shadow tree is not walked from here: the host is the element the document shows at the
+    /// point, which is what the reference answers too.</summary>
+    public Element? ElementFromPoint(double x, double y)
+    {
+        var chain = ElementsFromPoint(x, y);
+        return chain.Count > 0 ? chain[0] : null;
+    }
+
+    public List<Element> ElementsFromPoint(double x, double y)
+    {
+        var chain = new List<Element>();
+        Element? top = null;
+        void Walk(Element element)
+        {
+            if (top != null) return;
+            var reached = Reachable(element) && HoldsPoint(element, x, y);
+            var children = element.Children;
+            for (var i = children.Count - 1; i >= 0 && top == null; i--)
+                if (children[i] is Element child) Walk(child);
+            if (top == null && reached) top = element;
+        }
+        if (DocumentElement != null) Walk(DocumentElement);
+        for (var e = top; e != null; e = e.ParentElement) chain.Add(e);
+        return chain;
+    }
+
+    private static bool HoldsPoint(Element element, double x, double y)
+    {
+        var box = element.LayoutBox;
+        if (box == null) return false;
+        var rect = box.BorderBox;
+        return x >= rect.Left && x <= rect.Right && y >= rect.Top && y <= rect.Bottom;
+    }
+
+    private static bool Reachable(Element element)
+    {
+        var style = element.ComputedStyle;
+        if (style == null) return true;
+        if (style.Visibility != VisibilityType.Visible) return false;
+        // 'pointer-events: none' is the value that says the pointer passes through; the SVG values
+        // describe which painted part of a shape is reached, and the shape is reached.
+        return style.PointerEvents == null || style.PointerEvents != "none";
+    }
     public Selection? GetSelection() => null;
 
     public TouchList CreateTouchList(params Touch[] touches) => new(touches);

@@ -87,49 +87,22 @@
         'WebSocket': ['CLOSED','CLOSING','CONNECTING','OPEN','binaryType','bufferedAmount','close','extensions','onclose','onerror','onmessage','onopen','protocol','readyState','send','url'],
         'XMLHttpRequest': ['DONE','HEADERS_RECEIVED','LOADING','OPENED','UNSENT','abort','getAllResponseHeaders','getResponseHeader','onreadystatechange','open','overrideMimeType','readyState','response','responseText','responseType','responseURL','responseXML','send','setAttributionReporting','setPrivateToken','setRequestHeader','status','statusText','timeout','upload','withCredentials']
     };
-    // The names the reference puts on an interface this engine has no object for yet. They are
+    // The names the reference puts on an interface this engine has no member for yet. They are
     // written down rather than wished away: closing one means deleting the name from here, and a
     // new missing name shows up as a failure of the row below.
-    //  WebSocket and the Navigator ad/media surfaces — no transport, no media, no permissions back end.
-    //  HTMLMediaElement / HTMLTrackElement / HTMLVideoElement — no decoder, so no TimeRanges,
-    //  TextTrack or playback-rate object to hand back.
-    //  EventSource — no server-sent-events reader.
-    //  ProcessingInstruction's attribute reads — DOM §4.3.5 gives a PI an attribute list, and the
-    //  parser the engine uses never fills one.
-    //  ShadowRoot.elementFromPoint / getHTML / setHTMLUnsafe — the paint side has no hit test for a
-    //  shadow tree, and the fragment-serialising algorithm is not written.
-    //  Document.browsingTopics / hasPrivateToken / hasRedemptionRecord, XHR's two ad methods,
-    //  iframe/element featurePolicy — the feature policy the engine does not evaluate.
-    //  HTML*Element.blocking — a DOMTokenList over a content attribute the engine never reads.
-    //  WebSocket — the interface is not built at all: there is no transport behind it, so the engine
-    //  has no object to hand back and no frames to read. It is the first name on the next round.
+    // Round 19 served nearly everything this record held open — the socket and the event stream, the
+    // media element's state with the levels it hands out, the navigator's ad, badge, posture and
+    // handler surface, the processing instruction's attributes, the shadow tree's own point test and
+    // fragment reads, the token-list attributes and the two ad-carrying calls of a request. One name
+    // is left: the interest target a button declares, for which the engine reports no interest.
+    // A name on the level is not the same thing as an object behind it. The socket the engine opens
+    // never reaches CONNECTING because there is no transport, a media element has no decoder so its
+    // timelines stay empty, and a shadow tree is not laid out — so the point inside one that the
+    // reference answers with the paragraph the tree holds, this engine answers with the host whose
+    // box is the deepest one it can see. Those answers are measured and recorded in
+    // DOMTest/out/notes, not hidden here.
     var GAP = {
-        'Document': ['browsingTopics', 'hasPrivateToken', 'hasRedemptionRecord'],
-        'EventSource': ['close', 'readyState', 'url', 'withCredentials'],
-        'HTMLButtonElement': ['interestForElement'],
-        'HTMLIFrameElement': ['featurePolicy'],
-        'HTMLLinkElement': ['blocking'],
-        'HTMLMediaElement': ['addTextTrack', 'buffered', 'captureStream', 'controlsList', 'currentSrc',
-            'defaultPlaybackRate', 'error', 'loading', 'mediaKeys', 'networkState', 'playbackRate',
-            'played', 'readyState', 'remote', 'seekable', 'seeking', 'setMediaKeys', 'setSinkId',
-            'sinkId', 'srcObject', 'textTracks', 'webkitAudioDecodedByteCount',
-            'webkitVideoDecodedByteCount'],
-        'HTMLScriptElement': ['blocking'],
-        'HTMLStyleElement': ['blocking'],
-        'HTMLTrackElement': ['track'],
-        'HTMLVideoElement': ['cancelVideoFrameCallback', 'getVideoPlaybackQuality',
-            'requestPictureInPicture', 'requestVideoFrameCallback'],
-        'Navigator': ['adAuctionComponents', 'canLoadAdAuctionFencedFrame', 'clearAppBadge',
-            'clearOriginJoinedAdInterestGroups', 'createAuctionNonce', 'deprecatedReplaceInURN',
-            'deprecatedRunAdAuctionEnforcesKAnonymity', 'deprecatedURNToURL', 'devicePosture',
-            'getInterestGroupAdAuctionData', 'getUserMedia', 'protectedAudience',
-            'registerProtocolHandler', 'requestMIDIAccess', 'runAdAuction', 'setAppBadge',
-            'unregisterProtocolHandler', 'webkitGetUserMedia'],
-        'ProcessingInstruction': ['getAttribute', 'getAttributeNames', 'hasAttribute', 'hasAttributes',
-            'removeAttribute', 'setAttribute', 'sheet', 'target', 'toggleAttribute'],
-        'ShadowRoot': ['elementFromPoint', 'elementsFromPoint', 'getHTML', 'setHTML', 'setHTMLUnsafe'],
-        'WebSocket': SURFACE.WebSocket.slice(0),
-        'XMLHttpRequest': ['setAttributionReporting', 'setPrivateToken']
+        'HTMLButtonElement': ['interestForElement']
     };
     var problems = [];
     var reported = [];

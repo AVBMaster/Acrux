@@ -2501,10 +2501,19 @@ public partial class ElementHost : IDomPrototypeHost
     }
 
     // ===== HTMLMediaElement specific =====
+    // The four reads the engine can answer without a decoder stay here; the methods do not, because
+    // the interface's own level carries them now — 'play' as the promise the reference hands back,
+    // 'canPlayType' as the three-word answer it gives, and the frame callbacks with the handles they
+    // return. A stub on the host hid those and answered 'undefined' for all of them.
     public bool paused => true;
     public bool ended => false;
     public double currentTime { get; set; }
-    public double duration => 0;
+
+    /// <summary>HTML §4.8.11.1: with no media loaded the duration is not a number at all — the
+    /// reference answers NaN, which a page that compares it reads as false (measured:
+    /// 'video.duration' on an element with nothing loaded is NaN).</summary>
+    public double duration => double.NaN;
+
     public double volume { get; set; } = 1.0;
     public bool muted { get; set; }
     public string? mediaSrc
@@ -2512,11 +2521,6 @@ public partial class ElementHost : IDomPrototypeHost
         get => _element.GetAttribute("src");
         set => _element.SetAttribute("src", value);
     }
-
-    public void play() { }
-    public void pause() { }
-    public void load() { }
-    public string? canPlayType(string type) => "";
 
     // Generic attribute-backed src (works for script, img, iframe, media, etc.)
     public string? src
