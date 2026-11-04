@@ -1,0 +1,208 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>canParse, encodeInto, the signals and the legacy event reads (URL §2.2, §4.1, Encoding §2.3, §3.4, DOM §4.6, §2.9.6, §2.9.11)</title></head>
+<body><div id="root"></div>
+<script>
+// Round 25, frozen from DOMTest/probes/probe126.html (the same 20 rows as a measurement). Four
+// already-named interfaces asked what they ANSWER rather than whether they are there: URL.canParse
+// (URL §2.2) is the constructor's own question, so an empty run with an absolute base is that base
+// (§4.1) and the static declares the one required argument it has; TextEncoder.encodeInto (Encoding
+// §3.4) writes UTF-8 BYTES as code units and counts the code units it READ, which is a different number,
+// and an unpaired surrogate becomes U+FFFD in encode() as well; the AbortSignal family (DOM §4.6) keeps
+// the reason the page gave and the reason that came first; and the two legacy reads on an event
+// (§2.9.6, §2.9.11) are the other face of the state the interface already keeps. Three rows were wrong
+// on the reading side first: a live signal's reason is the missing value (two rows from earlier rounds
+// say so and the engine agreed), 'throwIfAborted' throws a value rather than an Error, and 'read' is not
+// the byte count.
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function name(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, want) {
+        var g = String(got), w = String(want);
+        window.__T(label, g === w, 'got=[' + g + '] want=[' + w + ']');
+    }
+    function parseable(s, base) {
+        try { base === undefined ? new URL(s) : new URL(s, base); return 'true'; }
+        catch (e) { return 'false'; }
+    }
+
+    // ── A. URL.canParse (URL §2.2) ─────────────────────────────────────────────
+    eq('A1 canParse answers whether the same address the constructor reads can be read', safe(function () {
+        var cases = ['https://example.org/p?q#h', 'nope', '/p', 'http://', 'mailto:a@b.test',
+            'urn:uuid:00000000-0000-0000-0000-000000000000'];
+        var made = cases.map(function (s) { return String(URL.canParse(s)) + ':' + parseable(s); });
+        return made.join(',');
+    }), 'ok:true:true,false:false,false:false,false:false,true:true,true:true');
+
+    eq('A2 a base that is not absolute is the refusal, not a guess', safe(function () {
+        return [URL.canParse('/p', 'https://x.test'), URL.canParse('/p', 'x.test'),
+            URL.canParse('q', 'https://x.test/p'), URL.canParse('a', undefined),
+            URL.canParse('https://x.test', 'https://other.test')].join(',');
+    }), 'ok:true,false,true,false,true');
+
+    eq('A3 the static takes one required argument and lives on the interface', safe(function () {
+        return [URL.canParse.length, typeof URL.canParse,
+            Object.prototype.hasOwnProperty.call(URL, 'canParse')].join(',');
+    }), 'ok:1,function,true');
+
+    eq('A4 the empty address and the address made of nothing are both refused', safe(function () {
+        return [URL.canParse(''), URL.canParse('', ''), URL.canParse('', 'https://x.test'),
+            URL.canParse('about:blank'), URL.canParse('data:'), URL.canParse('blob:https://x.test/1')]
+            .join(',');
+    }), 'ok:false,false,true,true,true,true');
+
+    eq('A5 an empty address with an absolute base is the base it was given', safe(function () {
+        var made = new URL('', 'https://x.test/a?q#h');
+        return [URL.canParse('', 'https://x.test'), String(made.href), String(made.pathname),
+            String(URL.canParse('', 'nope'))].join(',');
+    }), 'ok:true,https://x.test/a?q#h,/a,false');
+
+    // ── B. TextEncoder.encodeInto (Encoding §3.4) ──────────────────────────────
+    eq('B1 the run writes the UTF-8 bytes as code units and counts both sides', safe(function () {
+        var enc = new TextEncoder();
+        var view = new Uint16Array(8);
+        var r = enc.encodeInto('abc', view);
+        return [r.read, r.written, view[0], view[1], view[2]].join(',');
+    }), 'ok:3,3,97,98,99');
+
+    eq('B2 a multi-byte code point writes one code unit per byte it takes', safe(function () {
+        var enc = new TextEncoder();
+        var view = new Uint16Array(8);
+        var r = enc.encodeInto('é', view);
+        var pair = new Uint16Array(8);
+        var r2 = enc.encodeInto('😀', pair);
+        return [r.read, r.written, view[0], view[1],
+            r2.read, r2.written, pair[0], pair[3]].join(',');
+    }), 'ok:1,2,195,169,2,4,240,128');
+
+    eq('B3 a lone surrogate becomes the replacement character it is written as', safe(function () {
+        var enc = new TextEncoder();
+        var view = new Uint16Array(8);
+        var r = enc.encodeInto(String.fromCharCode(0xD800) + 'a', view);
+        return [r.read, r.written, view[0], view[1], view[2], view[3]].join(',');
+    }), 'ok:2,4,239,191,189,97');
+
+    eq('B4 a destination too short for the next code point ends the run', safe(function () {
+        var enc = new TextEncoder();
+        var view = new Uint16Array(2);
+        var r = enc.encodeInto('abc', view);
+        var wide = new Uint16Array(3);
+        var r2 = enc.encodeInto('a😀b', wide);
+        return [r.read, r.written, String(r.read === r.written), r2.read, r2.written].join(',');
+    }), 'ok:2,2,true,1,1');
+
+    eq('B5 the destination may be a plain Uint8 view of the same shape', safe(function () {
+        var enc = new TextEncoder();
+        var made = new Uint16Array(0);
+        return [enc.encodeInto('', made).read, enc.encodeInto('', made).written,
+            enc.encodeInto('a', new Uint16Array(1)).written].join(',');
+    }), 'ok:0,0,1');
+
+    // ── C. the signal family (DOM §3.7) ────────────────────────────────────────
+    eq('C1 an aborted signal carries the reason the interface names', safe(function () {
+        var s = AbortSignal.abort();
+        return [s.aborted, String(s.reason && s.reason.name),
+            name(function () { return s.throwIfAborted(); }),
+            String(s.reason === s.reason)].join(',');
+    }), 'ok:true,AbortError,AbortError,true');
+
+    eq('C2 a reason the page gave travels as the object it is', safe(function () {
+        var why = { why: 'gone' };
+        var s = AbortSignal.abort(why);
+        var c = new AbortController();
+        c.abort(why);
+        return [s.reason === why, c.signal.reason === why, c.signal.aborted,
+            String(c.signal.reason)].join(',');
+    }), 'ok:true,true,true,[object Object]');
+
+    eq('C3 the second abort leaves the first reason where it is', safe(function () {
+        var c = new AbortController();
+        c.abort('one');
+        c.abort('two');
+        return [String(c.signal.reason), c.signal.aborted].join(',');
+    }), 'ok:one,true');
+
+    eq('C4 a listener on the signal hears the abort and the node it belongs to', safe(function () {
+        var c = new AbortController();
+        var heard = [];
+        c.signal.addEventListener('abort', function (e) {
+            heard.push([e.target === c.signal, e.currentTarget === c.signal, e.type].join(','));
+        });
+        c.abort();
+        return [heard.join('|'), c.signal.aborted].join(' / ');
+    }), 'ok:true,true,abort / true');
+
+    eq('C5 any() merges the signals it was given and carries the reason that came first', safe(function () {
+        var a = new AbortController(), b = new AbortController();
+        var merged = AbortSignal.any([a.signal, b.signal]);
+        var heard = 0;
+        merged.addEventListener('abort', function () { heard++; });
+        var before = merged.aborted;
+        b.abort('because');
+        var after = [merged.aborted, String(merged.reason), before];
+        a.abort('other');
+        after.push(String(merged.reason), String(heard));
+        return after.join(',');
+    }), 'ok:true,because,false,because,1');
+
+    eq('C6 any of nothing is a signal that never aborts', safe(function () {
+        // §4.6.5: the merged signal of no signals at all is a live one, and a live signal has no reason
+        // to give back yet — the same missing value a fresh controller's signal answers.
+        var s = AbortSignal.any([]);
+        return [s.aborted, String(s.reason === undefined), String(s.reason)].join(',');
+    }), 'ok:false,true,undefined');
+
+    eq('C7 throwIfAborted answers with the reason and nothing while the signal is live', safe(function () {
+        // The reason is thrown as the value it is: 'name()' would only describe an Error, and a reason
+        // the page wrote itself is not one (DOM §4.6.4).
+        function thrown(fn) { try { fn(); return 'no-throw'; } catch (e) { return String(e); } }
+        var live = new AbortController().signal;
+        return [thrown(function () { return live.throwIfAborted(); }),
+            thrown(function () { return AbortSignal.abort('x').throwIfAborted(); }),
+            String(live.reason), String(live.aborted)].join(',');
+    }), 'ok:no-throw,x,undefined,false');
+
+    // ── D. the two legacy reads on an event (DOM §2.9.6, §2.9.11) ──────────────
+    eq('D1 returnValue false is the cancellation the interface already means', safe(function () {
+        var el = document.createElement('div');
+        document.getElementById('root').appendChild(el);
+        var seen = [];
+        var evt = new Event('legacy', { bubbles: false, cancelable: true });
+        el.addEventListener('legacy', function (e) { seen.push(String(e.returnValue)); e.returnValue = false; });
+        var ret = el.dispatchEvent(evt);
+        seen.push(String(evt.returnValue), String(evt.defaultPrevented), String(ret));
+        el.remove();
+        return seen.join(',');
+    }), 'ok:true,false,true,false');
+
+    eq('D2 preventDefault turns returnValue over with it', safe(function () {
+        var el = document.createElement('div');
+        document.getElementById('root').appendChild(el);
+        var seen = null;
+        el.addEventListener('legacy2', function (e) { e.preventDefault(); seen = String(e.returnValue); });
+        var evt = new Event('legacy2', { cancelable: true });
+        var ret = el.dispatchEvent(evt);
+        el.remove();
+        return [seen, String(evt.returnValue), String(ret)].join(',');
+    }), 'ok:false,false,false');
+
+    eq('D3 srcElement is the target read by its oldest name, while the walk runs', safe(function () {
+        var el = document.createElement('div');
+        document.getElementById('root').appendChild(el);
+        var inner = document.createElement('b');
+        el.appendChild(inner);
+        var seen = 'none';
+        var onOuter = function (e) { seen = [e.srcElement === inner, e.target === inner].join(','); };
+        el.addEventListener('legacy3', onOuter);
+        inner.dispatchEvent(new Event('legacy3', { bubbles: true, composed: true }));
+        el.removeEventListener('legacy3', onOuter);
+        el.remove();
+        return seen;
+    }), 'ok:true,true');
+})();
+</script>
+<div>canParse, encodeInto and the signals</div></body></html>

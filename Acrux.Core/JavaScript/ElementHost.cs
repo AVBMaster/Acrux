@@ -660,7 +660,7 @@ public partial class ElementHost : IDomPrototypeHost
     /// <summary>Reads one boolean flag off a JS options object handed to a host method. The
     /// object carries no CLR members, so it is bound to a temporary global and the property is
     /// evaluated through the engine (DOM 4 §2.7 — the capture/once/passive dictionary).</summary>
-    private static bool ReadEngineOption(JavaScriptEngine? engine, object? options, string name)
+    internal static bool ReadEngineOption(JavaScriptEngine? engine, object? options, string name)
     {
         if (engine == null || options == null) return false;
         var adapter = engine.Adapter;
@@ -1174,80 +1174,114 @@ public partial class ElementHost : IDomPrototypeHost
     {
         if (string.IsNullOrEmpty(evt.type)) return true;
 
-        var engine = JavaScriptEngine.Current ?? Engine;
+        // DOM §2.12: an event that is already on its way is refused before the walk begins — a listener
+        // that sends the very event it is hearing would otherwise nest one walk inside the next.
+        if (evt.Dispatching)
+            throw new DOMException("Failed to execute 'dispatchEvent' on 'EventTarget': The event has "
+                + "already been dispatched.", "InvalidStateError");
 
-        // DOM §2.12: the walk crosses a shadow boundary at the host — the host's own listeners are
-        // heard, and from there up the event reports the HOST as its target, because a page outside
-        // the tree is not shown what is inside it. An event that is not composed stops there: the
-        // host is the last node it reaches.
-        var path = new List<ElementHost> { this };
-        var boundary = -1;
+        var engine = JavaScriptEngine.Current ?? Engine;
+        evt.BeginDispatch();
+
+        // DOM §2.12: the walk is one list of nodes, innermost first, and it is the list the event
+        // carries as its path (§2.9.9) — the same answer for every listener of one dispatch. A shadow
+        // root stands in it between its own children and the host that hides them, and it is an
+        // EventTarget in its own right, so its listeners are heard on both legs (§3.4). An event that
+        // is not composed ends at that root: the host and everything beyond it are outside the tree the
+        // event was sent in, which is what the flag is for. From a host up, the event reports the HOST
+        // as its target, because a page outside the tree is not shown what is inside it.
+        var walk = new List<object> { this };
+        var reported = new List<object?> { null };
         var walked = _element;
+        object? outerTarget = null;
+        var reachesDocument = false;
         while (true)
         {
             var parent = walked.ParentElement;
             if (parent is not null)
             {
-                path.Add(WrapWithCache(parent) ?? new ElementHost(parent));
+                walk.Add(WrapWithCache(parent) ?? new ElementHost(parent));
+                reported.Add(outerTarget);
                 walked = parent;
                 continue;
             }
-            if (walked.Parent is Core.Dom.ShadowRoot shadow
-                && shadow.Host is { } shadowHost)
+            if (walked.Parent is Core.Dom.ShadowRoot shadow && shadow.Host is { } shadowHost)
             {
-                boundary = path.Count;
-                path.Add(WrapWithCache(shadowHost) ?? new ElementHost(shadowHost));
-                walked = shadowHost;
+                // The root is still inside the tree, so it sees the node the walk was sent to.
+                walk.Add(JsIntegrationService.WrapAny(shadow) ?? new ShadowRootHost(shadow));
+                reported.Add(null);
                 if (!evt.composed) break;
+                var host = WrapWithCache(shadowHost) ?? new ElementHost(shadowHost);
+                walk.Add(host);
+                outerTarget = host;
+                reported.Add(outerTarget);
+                walked = shadowHost;
                 continue;
             }
+            reachesDocument = walked.Parent is Core.Dom.Document;
             break;
         }
-        var lastEntry = boundary >= 0 && !evt.composed ? boundary : path.Count - 1;
 
         evt.target = this;
-        // The document — and the window, which shares its bag — comes first on the capture leg and
-        // last on the way back out, before and after the element ancestors it holds (DOM §2.5).
-        var reachesDocument = lastEntry >= 0
-            && path[lastEntry]._element.Parent is Core.Dom.Document;
+        // The document closes the element list. Its own listeners — and the window's, which share the
+        // document's bag — are run by the two document legs below rather than by the two loops, because
+        // asking them twice would hear them twice (§2.5).
+        var asked = walk.Count;
         var documentHost = engine?.DocumentHost;
+        if (reachesDocument && documentHost != null)
+        {
+            walk.Add(documentHost);
+            reported.Add(outerTarget);
+        }
+        // The path goes over before the first listener runs, and the window is put on it by the script
+        // side, which is the only place that object lives (§2.9.9, §2.12).
+        evt.CarryPath(engine, walk, reachesDocument);
+
         if (reachesDocument && documentHost != null)
         {
             try
             {
+                evt.target = outerTarget ?? this;
                 evt.eventPhase = 1;
                 evt.currentTarget = documentHost;
                 documentHost.DispatchCapturePhase(evt);
             }
             catch { }
         }
-        var captureFirst = boundary >= 0 && !evt.composed ? lastEntry : path.Count - 1;
-        for (var i = captureFirst; i >= 1; i--)
+
+        for (var i = asked - 1; i >= 1; i--)
         {
             if (evt.PropagationStopped || evt.ImmediateStopped) break;
-            evt.target = i >= boundary && boundary >= 0 ? path[boundary] : this;
-            path[i].InvokeListeners(evt, 1, engine);
+            evt.target = reported[i] ?? this;
+            evt.currentTarget = walk[i];
+            // The leg the walk is on is what 'eventPhase' reports for every node it asks, whether or not
+            // that node has a listener of its own to run (§2.3.5).
+            evt.eventPhase = 1;
+            if (walk[i] is ElementHost ancestor) ancestor.InvokeListeners(evt, 1, engine);
+            else if (walk[i] is DocumentFragmentHost root) root.InvokeNodeListeners(evt, 1);
         }
         evt.target = this;
+        evt.currentTarget = this;
+        evt.eventPhase = 2;
         if (!evt.PropagationStopped && !evt.ImmediateStopped) InvokeListeners(evt, 2, engine);
 
         if (evt.bubbles && !evt.PropagationStopped && !evt.ImmediateStopped)
         {
-            var bubbleLast = boundary >= 0 && !evt.composed ? lastEntry : path.Count - 1;
-            for (var i = 1; i <= bubbleLast; i++)
+            for (var i = 1; i < asked; i++)
             {
                 if (evt.PropagationStopped || evt.ImmediateStopped) break;
-                evt.target = i >= boundary && boundary >= 0 ? path[boundary] : this;
-                path[i].InvokeListeners(evt, 3, engine);
+                evt.target = reported[i] ?? this;
+                evt.currentTarget = walk[i];
+                evt.eventPhase = 3;
+                if (walk[i] is ElementHost ancestor) ancestor.InvokeListeners(evt, 3, engine);
+                else if (walk[i] is DocumentFragmentHost root) root.InvokeNodeListeners(evt, 3);
             }
-            evt.target = this;
-            // The document is the last node on the path, and its listeners live in the bridge's bag
-            // rather than in a list kept per element (DOM §2.5).
             if (!evt.PropagationStopped && !evt.ImmediateStopped && reachesDocument
                 && documentHost != null)
             {
                 try
                 {
+                    evt.target = outerTarget ?? this;
                     evt.eventPhase = 3;
                     evt.currentTarget = documentHost;
                     documentHost.DispatchDocumentTail(evt);
@@ -1256,11 +1290,9 @@ public partial class ElementHost : IDomPrototypeHost
             }
         }
 
-        // Measured: once the dispatch has returned, the event reports no phase, no target and no current
-        // target any more — the walk it described is over.
-        evt.eventPhase = 0;
-        evt.target = null;
-        evt.currentTarget = null;
+        // The walk is over: the event keeps no path, no target and no phase for whoever reads it next.
+        evt.CarryPath(engine, null);
+        evt.EndDispatch();
 
         return !evt.defaultPrevented;
     }
@@ -3400,35 +3432,60 @@ public class ScriptEvent : IDomPrototypeHost, IDomEnumerableHost
     internal bool PropagationStopped;
     internal bool ImmediateStopped;
 
-    /// <summary>DOM 4 §2.5: the event's path — the target and every ancestor up to the document,
-    /// innermost first. A listener reads this to know the chain a capture/bubble walk will follow.</summary>
-    public object[] composedPath()
+    /// <summary>DOM §2.12: the dispatch flag — an event that is already on its way cannot be sent again
+    /// until that walk has finished, and it is what the path the event carries belongs to.</summary>
+    internal bool Dispatching;
+
+    /// <summary>DOM §2.12: a walk starts from no stop and no cancellation, so an event a page dispatches
+    /// a second time answers for the second walk alone.</summary>
+    internal void BeginDispatch()
     {
-        var engine = JavaScriptEngine.Current;
-        var start = target ?? currentTarget;
-        var path = new List<object>();
-        if (start == null) return path.ToArray();
-        if (start is not ElementHost startHost)
-        {
-            // The document is the only other node a dispatch can be pointed at, and the path from it
-            // is just itself (DOM §2.5).
-            path.Add(start);
-            return path.ToArray();
-        }
-        var el = startHost.NativeElement;
-        if (el == null) { path.Add(start); return path.ToArray(); }
-        for (var n = (Node)el; n != null; n = n.Parent)
-        {
-            if (n is Acrux.Core.Dom.Document doc)
-                path.Add((object?)engine?.DocumentHost ?? new DocumentHost(doc));
-            else if (n is Element e)
-                path.Add((object?)engine?.IntegrationService?.WrapDomNode(e) ?? new ElementHost(e));
-        }
-        return path.ToArray();
+        PropagationStopped = false;
+        ImmediateStopped = false;
+        defaultPrevented = false;
+        Dispatching = true;
     }
 
-    public void stopPropagation() { PropagationStopped = true; bubbles = false; }
-    public void stopImmediatePropagation() { PropagationStopped = true; ImmediateStopped = true; bubbles = false; }
+    /// <summary>Measured: once the dispatch has returned the event reports no phase, no target and no
+    /// current target any more — the walk it described is over.</summary>
+    internal void EndDispatch()
+    {
+        Dispatching = false;
+        eventPhase = 0;
+        target = null;
+        currentTarget = null;
+    }
+
+    // A walk that a script-side target runs — a plain 'EventTarget', a node the engine books in the
+    // page's own bag — is the same algorithm with a different owner, so it asks the event for the rules
+    // the engine's own walk keeps: the clean start, the flag a re-entrant send is refused by, and the
+    // difference between the two stops (§2.9, §2.10, §2.12). They are members on the event rather than
+    // a second copy of the state, and they are not what the interface shows a page.
+    public void __acruxBeginDispatch() => BeginDispatch();
+    public void __acruxEndDispatch() => EndDispatch();
+    public bool __acruxImmediateStopped => ImmediateStopped;
+
+    /// <summary>DOM §2.9.9: the path the walk computed belongs to the event for as long as the walk
+    /// lasts, and it is handed to the script side to keep — the last node on it is the window, which the
+    /// engine has no host for (§2.12). Reading it off the walk rather than rebuilding it from wherever a
+    /// listener happens to stand is what makes every listener of one dispatch answer the same list.</summary>
+    internal void CarryPath(JavaScriptEngine? engine, List<object>? walk, bool withWindow = false)
+    {
+        if (engine == null) return;
+        engine.IntegrationService?.CallGlobal("__acruxSetEventPath", this,
+            walk == null ? null : walk.ToArray(), withWindow);
+    }
+
+    /// <summary>DOM §2.10: the two stops set flags on the event; the flag the event was built with is
+    /// what 'bubbles' keeps answering afterwards, so neither method may write it. A walk that stops the
+    /// event asks the stop flags, which is what the dispatch already does.</summary>
+    public void stopPropagation() => PropagationStopped = true;
+
+    public void stopImmediatePropagation()
+    {
+        PropagationStopped = true;
+        ImmediateStopped = true;
+    }
     public void initEvent(string type, bool bubbles = true, bool cancelable = true)
     {
         this.type = type;

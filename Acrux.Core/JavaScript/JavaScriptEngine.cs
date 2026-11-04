@@ -1474,6 +1474,9 @@ public class JavaScriptEngine : IDisposable
                 aborted: { configurable: true, enumerable: true,
                     get: function () { return signalState(this).aborted; } },
                 reason: { configurable: true, enumerable: true,
+                    // The read is the value the signal was aborted with, and before the abort there is
+                    // none of that to give back (DOM §4.6.2; 'abort_signal' B1 and the round-20 rows pin
+                    // the missing value rather than null).
                     get: function () { return signalState(this).reason; } },
                 onabort: { configurable: true, enumerable: true,
                     get: function () { var held = signalState(this);
@@ -1602,6 +1605,32 @@ public class JavaScriptEngine : IDisposable
             // astral character becomes its four bytes, exactly as the standard's algorithm does.
             // Same reason as the decoder: the level declares 'encoding', so the encoder's own value
             // is written as a property rather than assigned through that declaration.
+            // Encoding §2.3: the byte run is the standard's own — a code point of one to four bytes,
+            // with an unpaired surrogate replaced by U+FFFD rather than written as the three bytes its
+            // own value would give (that run is not valid UTF-8, and the standard's formatter has only
+            // the one replacement for it).
+            function utf8Of(cp) {
+                if (cp < 0x80) return [cp];
+                if (cp < 0x800) return [0xC0 | (cp >> 6), 0x80 | (cp & 0x3F)];
+                if (cp < 0x10000) return [0xE0 | (cp >> 12), 0x80 | ((cp >> 6) & 0x3F),
+                    0x80 | (cp & 0x3F)];
+                return [0xF0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3F), 0x80 | ((cp >> 6) & 0x3F),
+                    0x80 | (cp & 0x3F)];
+            }
+            // The one walk over a string that asks the pair question: a high surrogate with the low it
+            // belongs to is one code point read as two code units, and either half alone is one code
+            // unit read as U+FFFD (§2.3).
+            function codePointAt(str, at) {
+                var c = str.charCodeAt(at);
+                if (c >= 0xD800 && c <= 0xDBFF) {
+                    var low = at + 1 < str.length ? str.charCodeAt(at + 1) : -1;
+                    if (low >= 0xDC00 && low <= 0xDFFF)
+                        return { cp: 0x10000 + ((c - 0xD800) << 10) + (low - 0xDC00), size: 2 };
+                    return { cp: 0xFFFD, size: 1 };
+                }
+                if (c >= 0xDC00 && c <= 0xDFFF) return { cp: 0xFFFD, size: 1 };
+                return { cp: c, size: 1 };
+            }
             function TextEncoder() {
                 Object.defineProperty(this, 'encoding', { value: 'utf-8', writable: true,
                     enumerable: true, configurable: true });
@@ -1609,23 +1638,34 @@ public class JavaScriptEngine : IDisposable
             TextEncoder.prototype.encode = function (input) {
                 var str = (input === undefined || input === null) ? '' : String(input);
                 var out = [];
-                for (var i = 0; i < str.length; i++) {
-                    var c = str.charCodeAt(i);
-                    if (c >= 0xD800 && c <= 0xDBFF && i + 1 < str.length) {
-                        var low = str.charCodeAt(i + 1);
-                        if (low >= 0xDC00 && low <= 0xDFFF) { c = 0x10000 + ((c - 0xD800) << 10) + (low - 0xDC00); i++; }
-                    }
-                    if (c < 0x80) out.push(c);
-                    else if (c < 0x800) out.push(0xC0 | (c >> 6), 0x80 | (c & 0x3F));
-                    else if (c < 0x10000) out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F));
-                    else out.push(0xF0 | (c >> 18), 0x80 | ((c >> 12) & 0x3F), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F));
+                for (var i = 0; i < str.length;) {
+                    var one = codePointAt(str, i);
+                    var bytes = utf8Of(one.cp);
+                    for (var b = 0; b < bytes.length; b++) out.push(bytes[b]);
+                    i += one.size;
                 }
                 return new Uint8Array(out);
             };
+            // Encoding §3.4: 'encodeInto' writes the bytes of the run into the view it is given, one
+            // code unit per byte, and answers how much of the SOURCE it read and how much of the view it
+            // wrote — the two counts are different numbers, because one code point is one or two code
+            // units and two to four bytes. A view that has no room for the next code point ends the run
+            // before that code point is read, so 'read' stops where the last whole one ended.
             TextEncoder.prototype.encodeInto = function (str, buf) {
-                var b = this.encode(str);
-                for (var i = 0; i < b.length && i < buf.length; i++) buf[i] = b[i];
-                return { read: b.length, written: Math.min(b.length, buf.length) };
+                var source = (str === undefined || str === null) ? '' : String(str);
+                var view = buf;
+                var written = 0, read = 0;
+                if (!view || view.length === undefined) return { read: 0, written: 0 };
+                for (var i = 0; i < source.length;) {
+                    var one = codePointAt(source, i);
+                    var bytes = utf8Of(one.cp);
+                    if (written + bytes.length > view.length) break;
+                    for (var b = 0; b < bytes.length; b++) view[written + b] = bytes[b];
+                    written += bytes.length;
+                    i += one.size;
+                    read = i;
+                }
+                return { read: read, written: written };
             };
 
             // Encoding Standard §2.4, §3.2: the labels that name the windows-1252 index, each written
@@ -2954,21 +2994,20 @@ public class JavaScriptEngine : IDisposable
 
             // ── URL.canParse, reportError, AbortSignal.any (URL §2.5, HTML §8.8, DOM §4.6) ──
             // 'canParse' is the question the constructor answers without building anything, so it is a
-            // static of the URL interface rather than a method of an instance.
-            URL.canParse = function (url, base) {
+            // static of the URL interface rather than a method of an instance — and it is asked of the
+            // parser itself rather than of a shape test written next to it, because the parser is the
+            // only place that knows the answers. §4.1 is the case a shape test gets wrong: an empty run
+            // with an absolute base IS the base, so it parses. The base is optional, which is why the
+            // declaration names one argument and reads the second from the call.
+            URL.canParse = function (url) {
                 if (arguments.length < 1) {
                     throw new TypeError('Failed to execute \'canParse\' on \'URL\': 1 argument'
                         + ' required, but only 0 present.');
                 }
-                var text = String(url === undefined ? '' : url);
-                if (!text) return false;
-                // A url that is not absolute is only parseable against a base that is, and the host
-                // constructor is lenient about what it makes — so the shape is asked here.
-                var scheme = /^[a-zA-Z][a-zA-Z0-9+.\-]*:/;
-                var root = (base === undefined || base === null) ? '' : String(base);
-                if (!scheme.test(text) && !scheme.test(root)) return false;
+                var base = arguments.length > 1 ? arguments[1] : undefined;
                 try {
-                    var made = new URL(text, root);
+                    var made = new URL(String(url === undefined ? '' : url),
+                        base === undefined || base === null ? undefined : String(base));
                     return !!made && typeof made.href === 'string' && made.href.length > 0;
                 } catch (e) { return false; }
             };
@@ -2976,16 +3015,17 @@ public class JavaScriptEngine : IDisposable
             // URL §2.4.1: 'parse' is the constructor asked as a question — the same parse, but a url the
             // base cannot resolve answers null instead of throwing (measured: 'URL.parse('not a url%')'
             // is null while 'URL.parse('https://example.com/a', base)' reads its pathname).
-            URL.parse = function (url, base) {
+            URL.parse = function (url) {
                 if (arguments.length < 1) {
                     throw new TypeError('Failed to execute \'parse\' on \'URL\': 1 argument'
                         + ' required, but only 0 present.');
                 }
-                // The host constructor is lenient about what it makes, so a run that is not absolute and
-                // has no absolute base to lean on is refused here the way the constructor refuses it.
+                var base = arguments.length > 1 ? arguments[1] : undefined;
+                // The one question is asked once, by the interface that owns the parser (§2.5).
                 if (!URL.canParse(url, base)) return null;
                 try {
-                    var made = new URL(String(url), (base === undefined || base === null) ? '' : String(base));
+                    var made = new URL(String(url),
+                        base === undefined || base === null ? undefined : String(base));
                     return made && typeof made.href === 'string' && made.href.length > 0 ? made : null;
                 } catch (e) { return null; }
             };
@@ -6108,9 +6148,27 @@ public class JavaScriptEngine : IDisposable
                         });
                     })(sharedMethods[sm]);
                 }
+                // DOM §2.9.9, §2.12: an event's path belongs to the walk, not to the listener reading
+                // it, so the engine hands the whole list over when the walk begins and takes it away when
+                // it ends. The list is kept here rather than in the engine because the last node on it is
+                // the window, and the window is a script value the engine has no host for.
+                var EVENT_PATHS = window.__acruxEventPaths;
+                if (!EVENT_PATHS) EVENT_PATHS = window.__acruxEventPaths = new WeakMap();
+                window.__acruxSetEventPath = function (evt, items, withWindow) {
+                    if (!evt) return;
+                    if (!items) { EVENT_PATHS.delete(evt); return; }
+                    var made = [];
+                    for (var pi = 0; pi < items.length; pi++) made.push(items[pi]);
+                    // The document closes the list and the window closes the document (§2.12).
+                    if (withWindow) made.push(window);
+                    EVENT_PATHS.set(evt, made);
+                };
                 if (!eventLevel.composedPath) {
                     Object.defineProperty(eventLevel, 'composedPath', {
-                        value: function () { return []; }, writable: true, configurable: true });
+                        value: function () {
+                            var held = EVENT_PATHS.get(this);
+                            return held ? held : [];
+                        }, writable: true, configurable: true });
                 }
                 var aligned = ['Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'UIEvent'];
                 for (var al = 0; al < aligned.length; al++) {
@@ -6592,7 +6650,11 @@ public class JavaScriptEngine : IDisposable
                     return { capture: !!record.capture, once: !!record.once, passive: !!record.passive,
                         signal: record.signal || null };
                 }
-                var LISTENER_BAGS = new WeakMap();
+                // The bags live on the window rather than in this run's closure: the bootstrap is walked
+                // twice over a document, and the listeners a page put down have to be found by whichever
+                // half of it asks (DOM §2.9).
+                var LISTENER_BAGS = window.__acruxListenerBags;
+                if (!LISTENER_BAGS) LISTENER_BAGS = window.__acruxListenerBags = new WeakMap();
                 function listenerBag(self) {
                     // The bookkeeping sits beside the object rather than on it: a page that walks the
                     // event target it built sees the interface, not a name the engine added (measured:
@@ -6661,10 +6723,25 @@ public class JavaScriptEngine : IDisposable
                             + 'parameter 1 is not of type \'Event\'.');
                     }
                     var type = String(event.type === undefined ? '' : event.type);
+                    // DOM §2.12: an event that is already on a walk is refused before this one begins,
+                    // and a walk starts from no stop and no cancellation. The path the event carries is
+                    // what says a walk is running, because that is the one state both sides keep.
+                    var PATHS = window.__acruxEventPaths;
+                    if (PATHS && PATHS.has(event)) {
+                        throw new DOMException('Failed to execute \'dispatchEvent\' on '
+                            + '\'EventTarget\': The event has already been dispatched.',
+                            'InvalidStateError');
+                    }
+                    if (typeof event.__acruxBeginDispatch === 'function') event.__acruxBeginDispatch();
                     var list = (listenerBag(this)[type] || []).slice();
+                    if (window.__acruxSetEventPath) window.__acruxSetEventPath(event, [this], false);
                     try { event.target = this; } catch (e) { }
                     try { event.currentTarget = this; } catch (e) { }
+                    try { event.eventPhase = 2; } catch (e) { }
                     for (var i = 0; i < list.length; i++) {
+                        // §2.9: only the immediate stop ends the leg it was asked in; the plain stop
+                        // leaves the listeners the same node still holds to hear the event.
+                        if (event.__acruxImmediateStopped === true) break;
                         var entry = list[i];
                         // A listener registered with 'once' is taken out before it runs, so a dispatch
                         // it raises from inside cannot hear it again.
@@ -6680,8 +6757,18 @@ public class JavaScriptEngine : IDisposable
                     }
                     var on = 'on' + type;
                     if (typeof this[on] === 'function') { try { this[on](event); } catch (e) { } }
+                    if (window.__acruxSetEventPath) window.__acruxSetEventPath(event, null, false);
+                    if (typeof event.__acruxEndDispatch === 'function') event.__acruxEndDispatch();
+                    else {
+                        // An object the page wrote like an event keeps no state of its own to take back,
+                        // so the three reads the walk set are put back by hand (§2.3.5).
+                        try { event.target = null; } catch (e) { }
+                        try { event.currentTarget = null; } catch (e) { }
+                        try { event.eventPhase = 0; } catch (e) { }
+                    }
                     return event.defaultPrevented !== true;
                 });
+
 
                 // ── 'DOMTokenList' read as a collection (DOM §3.3.6) ─────────────
                 // The tokens live in the host, so the walk reads them back through the two members that

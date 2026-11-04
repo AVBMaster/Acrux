@@ -1,0 +1,347 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>the path an event carries and the nodes it asks (DOM §2.9, §2.9.9, §2.10, §2.12, §3.4)</title></head>
+<body><div id="root"></div>
+<script>
+// Round 25, frozen from DOMTest/probes/probe125.html (the same 16 rows as a measurement). The event
+// carries the path its walk computed (§2.9.9) — the same list for every listener of one dispatch, the
+// shadow root named between its children and its host, the document and the window closing it, and
+// nothing at all once the walk is over. A shadow root is a node of that chain and an EventTarget of its
+// own, so the walk asks its listeners on both legs and a send to the root runs the target leg there. The
+// two stops set flags on the event and leave the flag the event was built with alone (§2.10), a walk
+// starts from no stop and no cancellation (§2.12), and sending an event that is already on its way is
+// refused by name. Three of these rows were wrong on the reading side first: 'target' and
+// 'currentTarget' belong to the walk, so they are read while a listener runs, and a list built by two
+// dispatches keeps both walks.
+(function () {
+    var root = document.getElementById('root');
+    function fresh(markup) {
+        var holder = document.createElement('div');
+        holder.innerHTML = markup || '';
+        root.appendChild(holder);
+        return holder;
+    }
+    function drop(holder) { try { root.removeChild(holder); } catch (e) { } }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function name(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, want) {
+        var g = String(got), w = String(want);
+        window.__T(label, g === w, 'got=[' + g + '] want=[' + w + ']');
+    }
+    function kinds(list) {
+        return list.map(function (n) { return n === window ? 'win' : String(n.nodeType); }).join(',');
+    }
+
+    // ── A. the path is the event's own (DOM §2.12, §2.9.9) ─────────────────────
+    eq('A1 the target reads the whole chain, innermost first and ending at the window', safe(function () {
+        var holder = fresh('<div id="a1d"><span id="a1s"></span></div>');
+        var d = holder.querySelector('#a1d'), s = holder.querySelector('#a1s');
+        var p = null;
+        s.addEventListener('path-a', function (e) { p = e.composedPath(); });
+        s.dispatchEvent(new Event('path-a', { bubbles: true }));
+        var made = [kinds(p), p[0] === s, p[1] === d, p[p.length - 1] === window,
+            p[p.length - 2] === document];
+        drop(holder);
+        return made.join('|');
+    }), 'ok:1,1,1,1,1,1,9,win|true|true|true|true');
+
+    eq('A2 an ancestor in the capture leg reads the same list, not the chain from where it stands',
+        safe(function () {
+            var holder = fresh('<div id="a2d"><span id="a2s"></span></div>');
+            var d = holder.querySelector('#a2d'), s = holder.querySelector('#a2s');
+            var fromTarget = null, fromCapture = null;
+            var cap = function (e) { fromCapture = e.composedPath().slice(); };
+            var at = function (e) { fromTarget = e.composedPath().slice(); };
+            d.addEventListener('path-b', cap, true);
+            s.addEventListener('path-b', at);
+            s.dispatchEvent(new Event('path-b', { bubbles: true }));
+            d.removeEventListener('path-b', cap, true);
+            var made = [fromCapture.length === fromTarget.length,
+                fromCapture.every(function (n, i) { return n === fromTarget[i]; }),
+                fromCapture[0] === s];
+            drop(holder);
+            return made.join('|');
+        }), 'ok:true|true|true');
+
+    eq('A3 outside the dispatch the event carries no path at all', safe(function () {
+        var holder = fresh('<div id="a3x"><b id="a3b"></b></div>');
+        var b = holder.querySelector('#a3b');
+        var evt = new Event('path-c', { bubbles: true });
+        var before = evt.composedPath().length;
+        var during = null;
+        b.addEventListener('path-c', function (e) { during = e.composedPath().length; });
+        b.dispatchEvent(evt);
+        var made = [before, during, evt.composedPath().length];
+        drop(holder);
+        return made.join('|');
+    }), 'ok:0|8|0');
+
+    eq('A4 a composed event names the shadow root between its children and its host', safe(function () {
+        var holder = fresh('<div id="a4h"></div>');
+        var host = holder.querySelector('#a4h');
+        var shadow = host.attachShadow({ mode: 'open' });
+        var inner = document.createElement('div');
+        var leaf = document.createElement('span');
+        inner.appendChild(leaf);
+        shadow.appendChild(inner);
+        var p = null;
+        leaf.addEventListener('path-d', function (e) { p = e.composedPath(); });
+        leaf.dispatchEvent(new Event('path-d', { bubbles: true, composed: true }));
+        var at = function (wanted) {
+            for (var i = 0; i < p.length; i++) if (p[i] === wanted) return i;
+            return -1;
+        };
+        var made = [at(leaf) === 0, at(shadow) >= 0, at(host) > at(shadow),
+            at(inner) > at(leaf) && at(inner) < at(shadow), at(document) < at(window)];
+        drop(holder);
+        return made.join('|');
+    }), 'ok:true|true|true|true|true');
+
+    // ── B. the shadow root is asked like the node it is (DOM §3.4, §2.9) ───────
+    eq('B1 the root hears the walk on both legs, after its host coming in and before it going out',
+        safe(function () {
+            var holder = fresh('<div id="b1h"></div>');
+            var host = holder.querySelector('#b1h');
+            var shadow = host.attachShadow({ mode: 'open' });
+            var leaf = document.createElement('span');
+            shadow.appendChild(leaf);
+            var hits = [];
+            shadow.addEventListener('go', function () { hits.push('root-cap'); }, true);
+            shadow.addEventListener('go', function () { hits.push('root'); });
+            host.addEventListener('go', function () { hits.push('host-cap'); }, true);
+            host.addEventListener('go', function () { hits.push('host'); });
+            leaf.addEventListener('go', function () { hits.push('s'); });
+            leaf.dispatchEvent(new Event('go', { bubbles: true, composed: true }));
+            var made = hits.join(',');
+            drop(holder);
+            return made;
+        }), 'ok:host-cap,root-cap,s,root,host');
+
+    eq('B2 a listener on the root reads the node the walk was sent to and the root as its own',
+        safe(function () {
+            var holder = fresh('<div id="b2h"></div>');
+            var host = holder.querySelector('#b2h');
+            var shadow = host.attachShadow({ mode: 'open' });
+            var leaf = document.createElement('span');
+            shadow.appendChild(leaf);
+            var seen = null;
+            // 'target' and 'currentTarget' belong to the walk, and the walk takes them away when it is
+            // done, so the reading has to happen while the listener runs (§2.3.5, §2.12).
+            shadow.addEventListener('who', function (e) {
+                seen = [e.target === leaf, e.currentTarget === shadow, e.eventPhase].join(',');
+            });
+            leaf.dispatchEvent(new Event('who', { bubbles: true, composed: true }));
+            var made = [seen];
+            drop(holder);
+            return made.join('|');
+        }), 'ok:true,true,3');
+
+    eq('B3 a once listener on the root is taken out before it runs', safe(function () {
+        var holder = fresh('<div id="b3h"></div>');
+        var host = holder.querySelector('#b3h');
+        var shadow = host.attachShadow({ mode: 'open' });
+        var leaf = document.createElement('span');
+        shadow.appendChild(leaf);
+        var hits = 0;
+        shadow.addEventListener('once-on-root', function () { hits++; }, { once: true });
+        leaf.dispatchEvent(new Event('once-on-root', { bubbles: true, composed: true }));
+        leaf.dispatchEvent(new Event('once-on-root', { bubbles: true, composed: true }));
+        var made = hits;
+        drop(holder);
+        return made;
+    }), 'ok:1');
+
+    eq('B4 an event that is not composed still reaches the root and stops at the host', safe(function () {
+        var holder = fresh('<div id="b4h"></div>');
+        var host = holder.querySelector('#b4h');
+        var shadow = host.attachShadow({ mode: 'open' });
+        var leaf = document.createElement('span');
+        shadow.appendChild(leaf);
+        var hits = [];
+        shadow.addEventListener('quiet', function () { hits.push('root'); });
+        host.addEventListener('quiet', function () { hits.push('host'); });
+        leaf.addEventListener('quiet', function () { hits.push('s'); });
+        leaf.dispatchEvent(new Event('quiet', { bubbles: true }));
+        var made = [hits.join(','), document.contains(leaf), leaf.getRootNode().nodeType,
+            leaf.getRootNode({ composed: true }) === host.getRootNode()].join('|');
+        drop(holder);
+        return made;
+    }), 'ok:s,root|false|11|true');
+
+    // ── C. the two stops set flags, they do not rewrite the event (DOM §2.10, §2.12) ──
+    eq('C1 stopPropagation leaves the bubbles the event was built with', safe(function () {
+        var holder = fresh('<div id="c1d"><span id="c1s"></span></div>');
+        var d = holder.querySelector('#c1d'), s = holder.querySelector('#c1s');
+        var read = null, hits = [];
+        var onD = function () { hits.push('d'); };
+        var onStop = function (e) { e.stopPropagation(); read = e.bubbles; };
+        d.addEventListener('halt-b', onD);
+        s.addEventListener('halt-b', onStop);
+        var evt = new Event('halt-b', { bubbles: true });
+        var built = evt.bubbles;
+        s.dispatchEvent(evt);
+        d.removeEventListener('halt-b', onD);
+        s.removeEventListener('halt-b', onStop);
+        var made = [built, read, hits.join(','), evt.bubbles];
+        drop(holder);
+        return made.join('|');
+    }), 'ok:true|true||true');
+
+    eq('C2 stopImmediatePropagation leaves the bubbles too', safe(function () {
+        var holder = fresh('<div id="c2d"><span id="c2s"></span></div>');
+        var d = holder.querySelector('#c2d'), s = holder.querySelector('#c2s');
+        var read = null;
+        var onD = function () { };
+        var onStop = function (e) { e.stopImmediatePropagation(); read = e.bubbles; };
+        d.addEventListener('halt-i', onD);
+        s.addEventListener('halt-i', onStop);
+        var evt = new Event('halt-i', { bubbles: true });
+        s.dispatchEvent(evt);
+        d.removeEventListener('halt-i', onD);
+        s.removeEventListener('halt-i', onStop);
+        var made = [read, evt.bubbles];
+        drop(holder);
+        return made.join('|');
+    }), 'ok:true|true');
+
+    eq('C3 an event sent a second time answers for the second walk alone', safe(function () {
+        var holder = fresh('<div id="c3d"><span id="c3s"></span></div>');
+        var d = holder.querySelector('#c3d'), s = holder.querySelector('#c3s');
+        var hits = [];
+        var onD = function () { hits.push('d'); };
+        var onS = function () { hits.push('s'); };
+        d.addEventListener('again', onD);
+        s.addEventListener('again', onS);
+        var evt = new Event('again', { bubbles: true });
+        var first = s.dispatchEvent(evt);
+        var second = s.dispatchEvent(evt);
+        var stop = function (e) { e.preventDefault(); e.stopPropagation(); };
+        var cancelled = new Event('again-stop', { bubbles: true, cancelable: true });
+        s.addEventListener('again-stop', stop);
+        var r1 = s.dispatchEvent(cancelled);
+        s.removeEventListener('again-stop', stop);
+        var r2 = s.dispatchEvent(cancelled);
+        // A stop the first walk was given does not stop the second one: the walk starts clean, so the
+        // ancestor hears the event the page sent again (§2.12).
+        var stops = [];
+        var stopOnce = function (e) { stops.push('s'); if (stops.length === 1) e.stopPropagation(); };
+        var onD = function () { stops.push('d'); };
+        s.addEventListener('twice', stopOnce);
+        d.addEventListener('twice', onD);
+        var again = new Event('twice', { bubbles: true });
+        s.dispatchEvent(again);
+        s.dispatchEvent(again);
+        var made = [hits.join(','), first, second, r1, r2, cancelled.defaultPrevented,
+            stops.join(',')];
+        d.removeEventListener('again', onD);
+        s.removeEventListener('again', onS);
+        s.removeEventListener('again-stop', stop);
+        drop(holder);
+        return made.join('|');
+    }), 'ok:s,d,s,d|true|true|false|true|false|s,s,d');
+
+    eq('C4 sending the event the listener is hearing is refused by name', safe(function () {
+        var holder = fresh('<div id="c4x"></div>');
+        var x = holder.querySelector('#c4x');
+        var seen = 'none';
+        var evt = new Event('nest', { bubbles: true });
+        x.addEventListener('nest', function () {
+            try { x.dispatchEvent(evt); }
+            catch (e) { seen = String(e.name); }
+        });
+        var outer = x.dispatchEvent(evt);
+        var made = [seen, outer];
+        drop(holder);
+        return made.join('|');
+    }), 'ok:InvalidStateError|true');
+    // ── D. a walk the script side runs (DOM §2.9, §2.10, §2.12) ───────────────
+    eq('D1 a plain target runs the same rules: the leg, the path, the two stops', safe(function () {
+        var et = new EventTarget();
+        var seen = null;
+        var hits = [];
+        var first = function (e) { hits.push('one'); e.stopPropagation(); };
+        var second = function (e) { hits.push('two'); };
+        et.addEventListener('d1', first);
+        et.addEventListener('d1', second);
+        var evt = new Event('d1');
+        var ret = et.dispatchEvent(evt);
+        seen = null;
+        et.addEventListener('d1p', function (e) {
+            seen = [e.composedPath().length, e.composedPath()[0] === et, e.eventPhase].join(',');
+        });
+        et.dispatchEvent(new Event('d1p'));
+        var after = [String(evt.target), String(evt.currentTarget), evt.eventPhase,
+            evt.composedPath().length].join(',');
+        var stops = [];
+        var a = function (e) { stops.push('a'); e.stopImmediatePropagation(); };
+        var b = function () { stops.push('b'); };
+        et.addEventListener('d1s', a);
+        et.addEventListener('d1s', b);
+        et.dispatchEvent(new Event('d1s'));
+        var made = [hits.join(','), ret, seen, after, stops.join(',')].join('|');
+        et.removeEventListener('d1', first);
+        et.removeEventListener('d1', second);
+        return made;
+    }), 'ok:one,two|true|1,true,2|null,null,0,0|a');
+
+    eq('D2 sending the same event twice into the same target is refused by name', safe(function () {
+        var et = new EventTarget();
+        var seen = 'none';
+        var evt = new Event('d2');
+        et.addEventListener('d2', function () {
+            try { et.dispatchEvent(evt); } catch (e) { seen = String(e.name); }
+        });
+        var outer = et.dispatchEvent(evt);
+        return [seen, outer].join('|');
+    }), 'ok:InvalidStateError|true');
+
+    eq('D3 a shadow root sent its own event hears both kinds of listener once', safe(function () {
+        var holder = fresh('<div id="d3h"></div>');
+        var host = holder.querySelector('#d3h');
+        var shadow = host.attachShadow({ mode: 'open' });
+        var hits = [];
+        var cap = function () { hits.push('cap'); };
+        var plain = function () { hits.push('plain'); };
+        shadow.addEventListener('d3', cap, true);
+        shadow.addEventListener('d3', plain);
+        var evt = new Event('d3', { bubbles: true, cancelable: true });
+        var read = '';
+        shadow.addEventListener('d3r', function (e) {
+            read = [e.target === shadow, e.currentTarget === shadow, e.eventPhase].join(',');
+        });
+        var ret = shadow.dispatchEvent(evt);
+        shadow.dispatchEvent(new Event('d3r', { bubbles: true }));
+        shadow.removeEventListener('d3', cap, true);
+        shadow.dispatchEvent(new Event('d3', { bubbles: true }));
+        var made = [hits.slice(0, 2).join(','), ret, read, hits.join(',')].join('|');
+        drop(holder);
+        return made;
+    }), 'ok:cap,plain|true|true,true,2|cap,plain,plain');
+
+    eq('D4 a removal takes the one listener the root was given, not the type', safe(function () {
+        var holder = fresh('<div id="d4h"></div>');
+        var shadow = holder.querySelector('#d4h').attachShadow({ mode: 'open' });
+        var hits = [];
+        var cap = function () { hits.push('cap'); };
+        var plain = function () { hits.push('plain'); };
+        shadow.addEventListener('d4', cap, true);
+        shadow.addEventListener('d4', plain);
+        // §2.7.4: the capture flag is part of what identifies the listener, so a removal that leaves it
+        // out takes nothing away — the listener written for the capture is still there.
+        shadow.removeEventListener('d4', cap);
+        shadow.dispatchEvent(new Event('d4'));
+        var afterWrongFlag = hits.join(',');
+        shadow.removeEventListener('d4', cap, true);
+        hits.length = 0;
+        shadow.dispatchEvent(new Event('d4'));
+        var made = [afterWrongFlag, hits.join(',')].join('|');
+        drop(holder);
+        return made;
+    }), 'ok:cap,plain|plain');
+})();
+</script>
+<div>the path an event carries</div></body></html>

@@ -5,12 +5,15 @@
 // old parent keeps, what a fragment leaves behind, what a clone and an adopt take with them, which
 // bits compareDocumentPosition answers with, the bounds a CharacterData cut refuses, the listeners a
 // removal takes out (one, not every listener of that name), the order both kinds of listener run in at
-// the node an event was sent to, and how a walk crosses a shadow boundary — the host hears it, the
-// target it reports from there is the host, and an event that is not composed stops at that host.
+// the node an event was sent to, and how a walk crosses a shadow boundary — only an event that carries
+// the 'composed' flag gets across it, the target the walk reports from the host up is the host, and a
+// shadow root is a node of the chain the walk asks.
 // Nine of these rows were the engine's behaviour before the round; the row for F2 records an ORDER the
 // engine builds its own way (an inner element is constructed before its outer one) as a gap rather than
-// rewriting it as a rule, and composedPath's unfiltered list is named in the comments as the other gap
-// this round left open. DOMTest/probes/probe124.html is the same 41 rows as a measurement. The last
+// rewriting it as a rule. Round 25 took the other gap this round left: an event now carries the path the
+// walk computed (§2.9.9) and the shadow root's own listeners are heard, and three rows here were turned
+// round with it because the 'composed' flag decides the boundary. DOMTest/probes/probe124.html is the
+// same 41 rows as a measurement. The last
 // eleven (§G and §H) are the walk normalize() runs over the children it is asked of, the tree rules a
 // document answers through every door at once, and the order the list a page prepends keeps.
 
@@ -183,22 +186,33 @@
         }), 'ok:42|2|null|4');
 
     // ── C. the walk an event makes (DOM §2.9, §2.12) ──────────────────────────
-    eq('C1 the walk reaches the outside of a shadow tree before the inside', safe(function () {
+    // §2.3.4 says what the 'composed' flag is for: an event that does not carry it is not propagated
+    // across the shadow boundary, so the host never hears it and the tree above does either. Round 24
+    // read the boundary the other way round (the host hearing anyway, the walk stopping there) and these
+    // rows carried that reading; the flag's own definition is the reason they are turned round now, and
+    // task #38 carries them for the reference to settle.
+    eq('C1 the boundary is crossed only by an event that says it may', safe(function () {
         var holder = fresh('<div id="c1h"><template id="c1t"><p id="c1p">t</p></template></div>');
         var host = holder.querySelector('#c1h');
         var inner = host.attachShadow({ mode: 'open' });
         inner.appendChild(holder.querySelector('#c1t').content.cloneNode(true));
         var p = inner.querySelector('#c1p');
         var heard = [];
-        host.addEventListener('c1', function () { heard.push('host'); });
-        p.addEventListener('c1', function () { heard.push('target'); });
-        p.dispatchEvent(new Event('c1', { bubbles: true }));
+        var onHost = function () { heard.push('host'); };
+        var onTarget = function () { heard.push('target'); };
+        host.addEventListener('c1', onHost);
+        p.addEventListener('c1', onTarget);
+        p.dispatchEvent(new Event('c1', { bubbles: true, composed: true }));
+        host.removeEventListener('c1', onHost);
+        p.removeEventListener('c1', onTarget);
+        var quiet = [];
+        host.addEventListener('c1q', function () { quiet.push('host'); });
+        p.addEventListener('c1q', function () { quiet.push('target'); });
+        p.dispatchEvent(new Event('c1q', { bubbles: true }));
+        var made = heard.join(',') + '/' + quiet.join(',');
         drop(holder);
-        return heard.join(',');
-    }), 'ok:target,host');
-    // §2.12: the host's own leg reports the host as the target and phase 3; the inner listener still
-    // sees the node the event was sent to. (The unfiltered composedPath this round did NOT chase — the
-    // engine answers the ancestors of the node it is walking, without the shadow root in it.)
+        return made;
+    }), 'ok:target,host/target');
     eq('C2 outside the tree the event targets the host', safe(function () {
             var holder = fresh('<div id="c2h"></div>');
             var host = holder.querySelector('#c2h');
@@ -209,12 +223,12 @@
             host.addEventListener('c2', function (e) {
                 seen.push([e.target === host, e.currentTarget === host, e.eventPhase].join(':'));
             });
-            p.dispatchEvent(new Event('c2', { bubbles: true }));
+            p.dispatchEvent(new Event('c2', { bubbles: true, composed: true }));
             var inShadow = '';
             p.addEventListener('c2b', function (e) {
                 inShadow = String(e.composedPath()[0] === p);
             });
-            p.dispatchEvent(new Event('c2b', { bubbles: true }));
+            p.dispatchEvent(new Event('c2b', { bubbles: true, composed: true }));
             drop(holder);
             return [seen.join('|'), inShadow].join(' / ');
         }), 'ok:true:true:3 / true');
@@ -228,7 +242,7 @@
             var heard = [];
             host.addEventListener('c3', function () { heard.push('bubble'); });
             host.addEventListener('c3', function () { heard.push('capture'); }, true);
-            p.dispatchEvent(new Event('c3'));
+            p.dispatchEvent(new Event('c3', { composed: true }));
             var made = new Event('c3b');
             p.dispatchEvent(made);
             drop(holder);

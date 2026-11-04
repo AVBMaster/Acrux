@@ -1830,6 +1830,71 @@ public class DocumentFragmentHost : IDomPrototypeHost
     public void remove() => _fragment.Remove();
     public void normalize() => _fragment.Normalize();
 
+    // DOM §2.7: a fragment — and the shadow root built from one — is an EventTarget like any other node,
+    // and the engine's walk now reaches a shadow root of its own. Its listeners are booked here, in the
+    // bag the node holds, so the rules the element and the document already keep (the leg a listener
+    // belongs to, 'once' taking it out after it ran, an aborted controller taking it out before) are the
+    // same bridge for every node rather than a list kept per side (§2.9, §3.4).
+    private JsEventListenerBridge? _nodeBridge;
+
+    private JsEventListenerBridge? NodeBridge(JavaScriptEngine? engine)
+    {
+        if (engine == null) return null;
+        return _nodeBridge ??= new JsEventListenerBridge(engine.IntegrationService?.Facade!);
+    }
+
+    public void addEventListenerFlags(string type, object callback, bool useCapture, bool once,
+        int signalToken)
+    {
+        var engine = JavaScriptEngine.Current;
+        NodeBridge(engine)?.AddListener(type, callback, useCapture, once,
+            passive: false, signal: null, signalToken: signalToken);
+    }
+
+    public void removeEventListener(string type, object callback)
+        => removeEventListener(type, callback, null);
+
+    public void removeEventListener(string type, object callback, object? options)
+    {
+        var engine = JavaScriptEngine.Current;
+        var bridge = NodeBridge(engine);
+        if (bridge == null || callback == null) return;
+        var capture = options switch
+        {
+            bool b => b,
+            _ => ElementHost.ReadEngineOption(engine, options, "capture"),
+        };
+        bridge.RemoveListener(type, callback, capture);
+    }
+
+    public object dispatchEvent(object evt)
+    {
+        var engine = JavaScriptEngine.Current;
+        if (evt is not ScriptEvent scriptEvt)
+            throw new DOMException("Failed to execute 'dispatchEvent' on 'EventTarget': parameter 1 "
+                                   + "is not of type 'Event'.", "TypeError");
+        // The node is its own target: there is no tree above a fragment to walk, so the one leg runs
+        // every listener it was given, in the order they were put down (§2.9, §2.12).
+        scriptEvt.BeginDispatch();
+        scriptEvt.target = this;
+        scriptEvt.currentTarget = this;
+        scriptEvt.eventPhase = 2;
+        NodeBridge(engine)?.DispatchEvent(scriptEvt.type, scriptEvt);
+        scriptEvt.EndDispatch();
+        return !scriptEvt.defaultPrevented;
+    }
+
+    /// <summary>One leg of a walk that started below this node (DOM §2.9): leg 1 is the way in, leg 2
+    /// the node the event was sent to and leg 3 the way back out.</summary>
+    internal void InvokeNodeListeners(ScriptEvent evt, int phase)
+    {
+        var bridge = NodeBridge(JavaScriptEngine.Current);
+        if (bridge == null) return;
+        if (phase == 1) bridge.InvokeCapturePhase(evt.type, evt);
+        else if (phase == 3) bridge.InvokeBubblePhase(evt.type, evt);
+        else bridge.DispatchEvent(evt.type, evt);
+    }
+
     public object cloneNode(bool deep = false)
         => JsIntegrationService.WrapAny(_fragment.CloneNode(deep)) ?? this;
 

@@ -268,10 +268,15 @@
         return [String(URL.parse('not a url')), URL.parse('/x', 'http://e.com/a').href,
             String(URL.parse('http://e.com') !== null), String(URL.parse(''))].join('|');
     }), 'ok:null|http://e.com/x|true|null');
-    eq('F4 canParse refuses the empty input and takes a base', safe(function () {
+    // §4.1 is the case a shape test next to the parser gets wrong: an empty run with an absolute base IS
+    // that base, so the answer to the question is true — which the constructor itself has always said.
+    // 'canParse' now asks the parser rather than a second writer of its rules (round 22 pinned the older
+    // middle field from the heuristic this round removed, not from the interface's own answer).
+    eq('F4 canParse refuses an empty run with no base and takes one with a base', safe(function () {
         return [URL.canParse(''), URL.canParse('', 'http://e.com'),
-            URL.canParse('/deep/x', 'http://e.com')].join('|');
-    }), 'ok:false|false|true');
+            URL.canParse('/deep/x', 'http://e.com'),
+            new URL('', 'http://e.com').href === 'http://e.com/'].join('|');
+    }), 'ok:false|true|true|true');
     eqp('F5 the base64 face strips its whitespace and counts its characters', safe(function () {
         return [atob('  QQ  '), safe(function () { return atob('A'); })].join('|');
     }), 'ok:A|ERR:InvalidCharacterError:');

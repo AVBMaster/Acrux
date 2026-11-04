@@ -125,6 +125,46 @@ public class JsEventListenerBridge
         }
     }
 
+    /// <summary>DOM §2.7.4: the listener a removal takes out is the one whose function AND capture flag
+    /// the page handed over, so a second listener written for the other leg of the walk is left where it
+    /// is. The callback is freed only once no listener of this bag still holds it.</summary>
+    public void RemoveListener(string type, object jsCallback, bool capture)
+    {
+        int? callbackId = null;
+        try
+        {
+            var result = _facade.CallFunction("__g_store", jsCallback);
+            if (result is int id) callbackId = id;
+            else if (result is double d) callbackId = (int)d;
+            else if (result is long l) callbackId = (int)l;
+        }
+        catch { }
+
+        var freed = new List<int>();
+        lock (_lock)
+        {
+            if (!_listeners.TryGetValue(type, out var list)) return;
+            var doomed = list.Where(l => capture
+                    ? l.UseCapture && (callbackId.HasValue ? l.CallbackId == callbackId.Value
+                                                           : ReferenceEquals(l.JsCallback, jsCallback))
+                    : !l.UseCapture && (callbackId.HasValue ? l.CallbackId == callbackId.Value
+                                                             : ReferenceEquals(l.JsCallback, jsCallback)))
+                .ToList();
+            foreach (var entry in doomed)
+            {
+                list.Remove(entry);
+                freed.Add(entry.CallbackId);
+            }
+            if (list.Count == 0) _listeners.TryRemove(type, out _);
+            // A callback still held by another listener of this bag is not the one to give back.
+            var stillHeld = new HashSet<int>();
+            foreach (var group in _listeners.Values)
+                foreach (var left in group) stillHeld.Add(left.CallbackId);
+            freed.RemoveAll(stillHeld.Contains);
+        }
+        foreach (var id in freed) _facade.RemoveJsFunction(id);
+    }
+
     public List<JsEventListenerEntry> GetListeners(string type, bool capture = false)
     {
         lock (_lock)
@@ -168,6 +208,9 @@ public class JsEventListenerBridge
         var drop = new List<int>();
         foreach (var listener in listeners)
         {
+            // DOM §2.9: a listener that stopped the walk immediately ends the leg it stands in, and the
+            // listeners that were put down after it are not run for this event.
+            if (eventObject is ScriptEvent walked && walked.ImmediateStopped) break;
             if (listener.Signal?.Aborted == true
                 || (listener.SignalToken != 0 && engine != null
                     && ElementHost.SignalAborted(engine, listener.SignalToken)))
