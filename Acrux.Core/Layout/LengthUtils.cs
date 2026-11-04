@@ -120,6 +120,24 @@ public static class LengthUtils
         if (length == null) return IndefiniteSize;
         if (length is AutoLength && autoLength != null) length = autoLength;
 
+        // CSS Sizing 3 §6.2: 'stretch' names the space the containing block has left for this box.
+        // Measured in a 300x100 block: the keyword alone gives a 100px border box, 'margin: 10px'
+        // takes the margins off it (80px), 'padding: 5px' does not (its border box is still 100 and
+        // its content 90), and 'max-height: 40px' cuts it like any other height. An indefinite
+        // space has nothing to fill, and the box then lays out as 'auto' does (measured: the same
+        // child in an auto-height parent is 0px).
+        if (length is SizingKeywordLength sizing && sizing.Keyword == "stretch"
+            && lengthType == LengthTypeInternal.Main)
+        {
+            // The space to fill is the containing block's definite block size — the same base a
+            // percentage height is priced against, and indefinite in exactly the same cases
+            // (measured: the child of a 100px block fills 100px, the child of an auto-height one
+            // stays at its content height).
+            float baseBlock = overridePercentageResolutionSize ?? space.PercentageResolutionBlockSize;
+            if (IsIndefinite(baseBlock) || float.IsInfinity(baseBlock)) return IndefiniteSize;
+            return Math.Max(0f, baseBlock - ComputeMargins(space, style).VerticalSum);
+        }
+
         blockSizeFunc ??= _ => IndefiniteSize;
         var percentageBase = overridePercentageResolutionSize ?? space.PercentageResolutionBlockSize;
 

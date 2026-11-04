@@ -719,7 +719,7 @@ public static class CssPropertyApplier
             case "gap": ParseGap(value, style); break;
             case "row-gap": SetGap(style, value, row: true); break;
             case "column-gap": SetGap(style, value, row: false); break;
-            case "column-count": if (int.TryParse(value, out var cc)) style.ColumnCount = cc; break;
+            case "column-count": style.ColumnCount = ParseColumnCount(value); break;
             case "column-fill": { var cf = value.Trim().ToLowerInvariant(); if (cf == "auto" || cf == "balance") style.ColumnFill = cf; break; }
             case "column-span":
                 style.ColumnSpanAll = value.Trim().Equals("all", StringComparison.OrdinalIgnoreCase);
@@ -4963,6 +4963,22 @@ public static class CssPropertyApplier
 
     /// <summary>Writes one gap side, keeping the 'normal' spelling next to the zero it lays out
     /// as so that the computed value can report the keyword back.</summary>
+    /// <summary>The count a column layout is asked for: an &lt;integer&gt; of one or more, with a
+    /// value written past the range the engine keeps stored at the top of it (CSS Syntax 3 §4.3.12,
+    /// measured: 'column-count: 2147483648' is kept as 2147483647 and computes 65535, while '0',
+    /// '-1' and '1.5' leave the count where it was).</summary>
+    private static int ParseColumnCount(string value)
+    {
+        var token = value.Trim();
+        if (token.Length == 0) return 0;
+        foreach (var c in token)
+            if (!char.IsAsciiDigit(c) && c != '+' && c != '-') return 0;
+        if (!double.TryParse(token, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var n)
+            || double.IsNaN(n) || double.IsInfinity(n) || n < 1) return 0;
+        return n >= int.MaxValue ? int.MaxValue : (int)n;
+    }
+
     private static void SetGap(ComputedStyle style, string token, bool row)
     {
         if (IsNormalGapKeyword(token))

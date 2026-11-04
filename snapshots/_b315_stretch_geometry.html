@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b315 edges3</title>
+<style>
+  body { margin: 0; font: 12px monospace; }
+  /* A definite 300x100 host for the nine stretch rows, and an auto-height one for the row that
+     asks what stretch is worth when the space is not definite. */
+  #host { position: absolute; left: 0; top: 0; width: 300px; height: 100px; }
+  #auto { position: absolute; left: 0; top: 120px; width: 300px; }
+</style></head>
+<body>
+<div id="host"><div id="s1" style="height: stretch; background:#ff8080"></div><div id="s2" style="height: stretch; margin: 10px; background:#ff8080"></div><div id="s3" style="height: stretch; padding: 5px; background:#ff8080"></div><div id="s4" style="height: stretch; box-sizing: border-box; border: 4px solid black; background:#ff8080"></div><div id="s5" style="height: -webkit-fill-available; background:#ff8080"></div><div id="s6" style="block-size: stretch; background:#ff8080"></div><div id="s7" style="height: stretch; min-height: 20px; background:#ff8080"></div><div id="s8" style="height: stretch; max-height: 40px; background:#ff8080"></div><div id="s9" style="height: stretch; margin-top: 30px; margin-bottom: 20px; background:#ff8080"></div><div id="w1" style="width: stretch; background:#ff8080"></div><div id="w2" style="width: stretch; margin: 10px; background:#ff8080"></div><div id="w3" style="width: stretch; box-sizing: border-box; padding: 8px; background:#ff8080"></div><div id="b1" style="width: 100px; box-sizing: border-box; padding: 8px; background:#ff8080"></div><div id="b2" style="height: 60px; box-sizing: border-box; padding: 5px; border: 5px solid black; background:#ff8080"></div><div id="b3" style="width: 50%; box-sizing: border-box; padding: 8px; background:#ff8080"></div><div id="b4" style="box-sizing: border-box; padding: 8px; background:#ff8080"></div></div>
+<div id="i1" style="height: stretch; background:#80ff80"></div>
+<script>
+// edges3
+function build() {
+const rows = [];
+const ids = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "i1", "w1", "w2", "w3", "b1", "b2", "b3", "b4"];
+for (let i = 0; i < ids.length; i++) {
+  const el = document.getElementById(ids[i]);
+  const r = el.getBoundingClientRect();
+  rows.push(ids[i] + '|rect=' + Math.round(r.x) + ',' + Math.round(r.y) + ' '
+      + Math.round(r.width * 100) / 100 + 'x' + Math.round(r.height * 100) / 100
+      + '|comp=' + getComputedStyle(el).getPropertyValue('height')
+      + '|w=' + getComputedStyle(el).getPropertyValue('width'));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="position:absolute;left:10px;top:220px;font:10px/1.35 monospace;white-space:pre-wrap"></pre>');
+// textContent, not HTML: a value carrying '<' is read as a start tag and vanishes.
+document.getElementById('record').textContent = rows.join('\n');
+console.log(rows.join('\n'));
+}
+build();
+</script></body></html>

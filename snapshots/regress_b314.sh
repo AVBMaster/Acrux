@@ -2,7 +2,7 @@
 # Re-measure the recent probe pages against their captured reference rows.
 cd /home/master/Acrux || exit 1
 export DOTNET_ROOT=$(dirname $(readlink -f $(which dotnet)))
-for ref in /home/master/harness/b31{0,1,2,3}_*_ref.txt; do
+for ref in /home/master/harness/b31{0,1,2,3,4}_*_ref.txt; do
   base=$(basename "$ref" _ref.txt)
   # b312_pctgroup_ref -> _probe_b312_pctgroup.html, falling back to the _b3NN_ record pages
   for cand in "snapshots/_${base}.html" "snapshots/_probe_${base}.html"; do

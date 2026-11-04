@@ -670,7 +670,11 @@ public static class ComputedValueSerializer
             case "opacity": return CssValueTokenizer.Num(style.Opacity);
             case "flex-grow": return CssValueTokenizer.Num(style.FlexGrow);
             case "flex-shrink": return CssValueTokenizer.Num(style.FlexShrink);
-            case "column-count": return style.ColumnCount > 0 ? style.ColumnCount.ToString(CultureInfo.InvariantCulture) : "auto";
+            // CSS Multi-column 1 §7.1: a count above 65535 is used as 65535, and the computed
+            // surface says the number the layout can act on (measured: 'column-count: 2147483647'
+            // computes '65535' while the specified value keeps the digits the page wrote).
+            case "column-count": return style.ColumnCount > 0
+                ? Math.Min(style.ColumnCount, 65535).ToString(CultureInfo.InvariantCulture) : "auto";
             // 'normal' is the initial value of both gaps and is a keyword of its own, not a
             // zero (CSS Box Alignment 3 §3.1, measured). The legacy 'grid-' spellings are the same
             // property and answer the same way (measured: 'grid-column-gap: calc(1px + 1fr)' is
@@ -1053,9 +1057,30 @@ public static class ComputedValueSerializer
         // The shorthand prints its PHYSICAL pair, not its logical one: measured under
         // 'writing-mode: vertical-rl', a box whose 'contain-intrinsic-inline-size' is 55px says
         // 'none 55px' — the width first, the height second, whichever axis they are to the page.
-        var inlineText = ContainIntrinsicPhysicalText(style, width: true);
-        var blockText = ContainIntrinsicPhysicalText(style, width: false);
-        return inlineText == blockText ? inlineText : $"{inlineText} {blockText}";
+        var inlineAxis = ContainIntrinsicParts(style, width: true);
+        var blockAxis = ContainIntrinsicParts(style, width: false);
+        // The 'auto' a page writes in front of the pair says BOTH axes, and the computed surface
+        // says it once for the pair rather than once per axis: 'contain-intrinsic-size: auto 100px
+        // 200px' computes 'auto 100px 200px' (measured), while the two axes that agree still
+        // collapse to the one thing they say ('auto 100px', 'none', 'auto none').
+        if (inlineAxis.HasAuto && blockAxis.HasAuto)
+            return inlineAxis.Size == blockAxis.Size
+                ? "auto " + inlineAxis.Size
+                : "auto " + inlineAxis.Size + " " + blockAxis.Size;
+        var inlineText = SayAxis(inlineAxis);
+        var blockText = SayAxis(blockAxis);
+        return inlineText == blockText ? inlineText : inlineText + " " + blockText;
+    }
+
+    private static string SayAxis((bool HasAuto, string Size) axis) =>
+        axis.HasAuto ? "auto " + axis.Size : axis.Size;
+
+    private static (bool HasAuto, string Size) ContainIntrinsicParts(ComputedStyle style, bool width)
+    {
+        var size = width ? style.ContainIntrinsicWidth : style.ContainIntrinsicHeight;
+        var hasAuto = (width ? style.ContainIntrinsicWidthIsAuto : style.ContainIntrinsicHeightIsAuto)
+            || style.ContentVisibility == ContentVisibilityType.Auto;
+        return (hasAuto, size == null ? "none" : style.ComputedLengthCss(size));
     }
 
     /// <summary>One axis of the 'contain-intrinsic' pair, named by the page's own writing mode.

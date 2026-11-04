@@ -2625,18 +2625,23 @@ public static class ShorthandExpander
         {
             var p = part.Trim();
             if (p.Length == 0 || p.Equals("auto", StringComparison.OrdinalIgnoreCase)) continue;
-            if (int.TryParse(p, out int count))
+            // The two readings are decided by the same test the grammar uses, so the expander
+            // cannot call a count a width: 'columns: 1.5' is no value at all, while 'columns: 0'
+            // is the zero length the width reads and 'columns: 2147483648' is a count the engine
+            // keeps at the top of its range (all measured).
+            if (Acrux.Core.Css.CssValueGrammar.IsColumnCountToken(p))
             {
-                if (hasCount || count <= 0) { result.Clear(); return; }
+                if (hasCount) { result.Clear(); return; }
                 hasCount = true;
                 result["column-count"] = p;
             }
-            else
+            else if (Acrux.Core.Css.CssValueGrammar.IsLengthPercentageOrMath(p))
             {
                 if (hasWidth) { result.Clear(); return; }
                 hasWidth = true;
                 result["column-width"] = p;
             }
+            else { result.Clear(); return; }
         }
     }
 

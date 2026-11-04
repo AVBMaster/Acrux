@@ -109,12 +109,15 @@ public static class CssValueText
         // Whether a bare 0 in this value is a length. Known by the property, not by the text:
         // 'columns: 0' is a width and prints '0px', 'scale: 0' is a factor and prints '0'.
         bool lengths = property != null && Resolver.CssPropertyTraits.TakesLength(property);
-        // The counter properties hold <integer>s, and an integer keeps the digits it was written
+        // The properties whose whole value is an &lt;integer&gt; keep the digits it was written
         // with: the six-significant-digit spelling below is a float's rule, and applied to
         // 'counter-reset: x 2147483648' it left '2.14748e+09' — a number whose own clamp could no
         // longer recover what the page meant (measured: the reference engine reads back
-        // 'x 2147483647', the largest integer the property can hold).
-        bool counters = property is "counter-reset" or "counter-increment" or "counter-set";
+        // 'x 2147483647', the largest integer the property can hold, and 'column-count: 2147483647'
+        // the same digits rather than '2.14748e+09').
+        bool integers = property is "counter-reset" or "counter-increment" or "counter-set"
+            or "column-count" or "columns" or "order" or "z-index"
+            or "orphans" or "widows" or "line-clamp" or "-webkit-line-clamp";
         // The box's own numbers are cut at seven decimals before the six-significant-digit print,
         // and only for that family: 'margin-left: 0.000123456789px' echoes as '0.0001234px' while
         // 'line-height: 0.000123456789px' echoes as '0.000123457px' (measured, both).
@@ -278,9 +281,11 @@ public static class CssValueText
                 while (i < value.Length && (IsIdentPart(value[i]) || value[i] == '%')) i++;
                 var token = value.Substring(start, i - start);
                 if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
-                if (counters && IsIntegerDigits(token))
-                {
-                    sb.Append(token);
+                if (depth == 0 && !afterSlash && lengths && token == "0") token = "0px";
+                // An integer keeps its digits — but only after the zero above has been read as the
+                // length it is in a property that takes both, because 'columns: 0' is a width.
+                if (integers && IsIntegerDigits(token))                {
+                    sb.Append(ClampedInteger(token));
                     afterSlash = false;
                     afterOperator = false;
                     continue;
@@ -298,7 +303,6 @@ public static class CssValueText
                     afterOperator = false;
                     continue;
                 }
-                if (depth == 0 && !afterSlash && lengths && token == "0") token = "0px";
                 // A unit is a keyword and CSS keywords are ASCII case-insensitive, so a reference
                 // engine prints the one spelling of it: 'border-top: 1PX solid red' and
                 // 'margin: 10Px auto' both read back with a lower-case unit (measured).
@@ -651,16 +655,20 @@ public static class CssValueText
         };
     }
 
-    /// <summary>Collapse a four-value box shorthand to the shortest form that says the same thing,
-    /// the way the reference engine prints the sides it repeats (measured: 'padding: 0px 0px' reads
-    /// '0px'; the same rule gives '1px 2px' for a value with two distinct pairs and '1px 2px 3px'
-    /// when only the left repeats the top). Two-value logical shorthands have nothing to repeat, so
-    /// they are left alone.</summary>
+    /// <summary>Collapse a box shorthand to the shortest form that says the same thing, the way the
+    /// reference engine prints the sides it repeats (measured: 'padding: 0px 0px' reads '0px'; the
+    /// same rule gives '1px 2px' for a value with two distinct pairs and '1px 2px 3px' when only the
+    /// left repeats the top). The two-edge logical pairs repeat the same way — 'inset-block: 10px
+    /// 10px', 'margin-inline: auto auto' and 'padding-inline: 0 0' each read one value (measured),
+    /// while a pair whose two sides differ keeps both.</summary>
     private static string CollapseBoxShorthandParts(string text, string property)
     {
         var name = property.ToLowerInvariant();
         if (name is not ("margin" or "padding" or "inset" or "border-width" or "border-style"
-            or "border-color" or "scroll-margin" or "scroll-padding"))
+            or "border-color" or "scroll-margin" or "scroll-padding"
+            or "margin-block" or "margin-inline" or "padding-block" or "padding-inline"
+            or "inset-block" or "inset-inline" or "scroll-margin-block" or "scroll-margin-inline"
+            or "scroll-padding-block" or "scroll-padding-inline"))
             return text;
         var w = SplitTopLevelWords(text);
         bool Same(string x, string y) => x.Equals(y, StringComparison.OrdinalIgnoreCase);
@@ -1105,18 +1113,21 @@ public static class CssValueText
         var p = property.ToLowerInvariant();
         switch (p)
         {
-            // CSS Masking 1 §9.2: 'mask-repeat' prints the two-word legacy pair as the one word it
-            // means, and a pair of equal words as the single word (measured: 'repeat no-repeat'
-            // reads 'repeat-x', 'no-repeat repeat' reads 'repeat-y', 'repeat repeat' and
-            // 'no-repeat no-repeat' each read one word, while 'repeat space' — no legacy spelling
-            // of anything — keeps both).
+            // CSS Masking 1 §9.2 with CSS Backgrounds 3 §4.1.3: 'mask-repeat' and
+            // 'background-repeat' print the two-word legacy pair as the one word it means, and a
+            // pair of equal words as the single word (measured on both families: 'repeat no-repeat'
+            // reads 'repeat-x', 'no-repeat repeat' reads 'repeat-y', 'repeat repeat',
+            // 'no-repeat no-repeat' and 'round round' each read one word, while 'repeat space' — no
+            // legacy spelling of anything — keeps both).
             case "mask-repeat":
+            case "background-repeat":
                 return MaskRepeatPair(text);
 
-            // CSS Masking 1 §9.1: a mask size of two terms keeps the second only when it says
-            // something the first did not (measured: '1px auto' reads '1px' and 'auto auto' reads
-            // 'auto'), which is the same rule the background size prints by.
+            // CSS Masking 1 §9.1 with CSS Backgrounds 3 §4.1.4: a size of two terms keeps the second
+            // only when it says something the first did not (measured on both families: '1px auto'
+            // reads '1px' and 'auto auto' reads 'auto', while 'auto 1px' and '1px 1px' keep both).
             case "mask-size":
+            case "background-size":
                 return MaskSizePair(text);
 
             // CSS Overflow 3 §3.1 with CSS Box Alignment 3 §6: the two axes of 'overflow' and of a
@@ -2057,6 +2068,20 @@ public static class CssValueText
         for (; i < token.Length; i++)
             if (!char.IsAsciiDigit(token[i])) return false;
         return true;
+    }
+
+    /// <summary>An &lt;integer&gt; written past the range the engine keeps is said back as the end
+    /// of that range, which is what was stored (CSS Syntax 3 §4.3.12; measured: 'column-count:
+    /// 2147483648' reads '2147483647'). Anything inside the range keeps its own digits.</summary>
+    private static string ClampedInteger(string token)
+    {
+        if (long.TryParse(token, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture,
+                out var value))
+        {
+            if (value > int.MaxValue) return int.MaxValue.ToString(CultureInfo.InvariantCulture);
+            if (value < int.MinValue) return int.MinValue.ToString(CultureInfo.InvariantCulture);
+        }
+        return token;
     }
 
     private static string FoldNumberAndUnit(string token, bool cut = false)

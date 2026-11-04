@@ -349,7 +349,8 @@ public static class CssValueGrammar
     /// function in one of them has to come out a number (measured for 'opacity' and 'flex-grow',
     /// whose <c>calc(0.5 + 1px)</c> and <c>calc(1 + 1px)</c> both fall).</summary>
     private static readonly string[] MathNumberProperties =
-    { "opacity", "flex-grow", "flex-shrink", "order", "z-index", "aspect-ratio" };
+    { "opacity", "flex-grow", "flex-shrink", "order", "z-index", "aspect-ratio",
+      "shape-image-threshold" };
 
     /// <summary>The properties that take a count, a length or a share of one, so a math function of
     /// any of the three types is a value of theirs (measured: <c>line-height</c> takes
@@ -987,6 +988,7 @@ public static class CssValueGrammar
         CssPropertyId.UserSelect => static text => IsSingleKeywordWord(text,
             new[] { "auto", "text", "none", "all" }),
         CssPropertyId.OverscrollBehaviorX or CssPropertyId.OverscrollBehaviorY
+            or CssPropertyId.OverscrollBehaviorBlock or CssPropertyId.OverscrollBehaviorInline
             => static text => IsSingleKeywordWord(text, new[] { "auto", "contain", "none" }),
         CssPropertyId.WordBreak => static text => IsSingleKeywordWord(text,
             new[] { "normal", "break-all", "keep-all", "break-word", "auto-phrase" }),
@@ -1305,7 +1307,6 @@ public static class CssValueGrammar
             // declaration at all (measured on 'margin:1px 1px 1px 1px 1px').
             => static text => IsLengthListUpTo(text, 4, "auto"),
         CssPropertyId.MarginBlock or CssPropertyId.MarginInline
-            or CssPropertyId.PaddingBlock or CssPropertyId.PaddingInline
             or CssPropertyId.InsetBlock or CssPropertyId.InsetInline
             => static text => IsLengthListUpTo(text, 2, "auto"),
         // An edge takes one value and not two: 'margin-left: 1px 2px' is no declaration, the same
@@ -1325,6 +1326,19 @@ public static class CssValueGrammar
             or CssPropertyId.PaddingBlockStart or CssPropertyId.PaddingBlockEnd
             or CssPropertyId.PaddingInlineStart or CssPropertyId.PaddingInlineEnd
             => static text => IsNonNegativeSingleLength(text),
+        // CSS Padding 3 §4 with CSS Logical 1 §4.2: the pair says two paddings and nothing else,
+        // because 'auto' is the word a margin takes and a padding has no such thing. Measured on
+        // all four shapes: 'padding-inline: auto', 'auto 10px', '10px auto' and 'auto auto' each
+        // leave no declaration, while the same four written on 'margin-inline' all stand.
+        CssPropertyId.PaddingBlock or CssPropertyId.PaddingInline
+            => static text =>
+            {
+                var parts = SplitComponents(text);
+                if (parts.Count is < 1 or > 2) return false;
+                foreach (var part in parts)
+                    if (!IsNonNegativeSingleLength(part)) return false;
+                return true;
+            },
         // CSS 2.1 §17.3: a border side's width is <line-width> — a non-negative length or one of
         // the three words — and ONE of them per side. 'auto' is the word of 'border-image-width'
         // and of no border side (measured: 'border-top-width: auto' is dropped), a percentage is
@@ -1639,11 +1653,11 @@ public static class CssValueGrammar
         CssPropertyId.LineClamp or CssPropertyId.WebkitLineClamp
             => static text => text.Equals("none", StringComparison.OrdinalIgnoreCase)
                 || (int.TryParse(text.Trim(), out var lines) && lines >= 1),
+        // CSS Values 4 §1.2: one word, the engine's initial 'numeric-only' or 'allow-keywords'.
+        // Saying both is no value (measured: 'allow-keywords numeric-only' is dropped), which an
+        // earlier reading of the draft's '||' combinator got wrong here.
         CssPropertyId.InterpolateSize
-            => static text => IsOneOf(text, "numeric-only")
-                || IsOneOf(text, "allow-keywords")
-                || (text.Equals("numeric-only allow-keywords", StringComparison.OrdinalIgnoreCase)
-                    || text.Equals("allow-keywords numeric-only", StringComparison.OrdinalIgnoreCase)),
+            => static text => IsOneWordOnly(text, "numeric-only", "allow-keywords"),
         // CSS Fonts 4 §9.3: the shorthand is 'none' or a set of the three synthesis kinds, each at
         // most once. 'auto' and 'position' are later drafts this reference engine does not take, so
         // they must be refused here — the CSSOM echo drops the declaration, not just the layout.
@@ -5706,7 +5720,21 @@ public static class CssValueGrammar
         var parts = SplitComponents(text);
         if (parts.Count != 1) return false;
         if (IsOneOf(parts[0], "auto")) return true;
-        return int.TryParse(parts[0], out var n) && n >= 1;
+        return IsColumnCountToken(parts[0]);
+    }
+
+    /// <summary>A column count as the engine reads it: the digits of an &lt;integer&gt; with the one
+    /// sign a page may write, and a value of one or more. A count written past the range the engine
+    /// keeps is still a count — it clamps to the largest integer rather than falling (measured:
+    /// 'column-count: 2147483648' and 'columns: 2147483648' both stand and read '2147483647', while
+    /// '-1', '0', '1.5' and '2.0' are no count at all).</summary>
+    internal static bool IsColumnCountToken(string token)
+    {
+        if (token.Length == 0) return false;
+        foreach (var c in token)
+            if (!char.IsAsciiDigit(c) && c != '+' && c != '-') return false;
+        return double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out var n)
+            && n >= 1;
     }
 
     /// <summary>'columns: &lt;column-width&gt; || &lt;column-count&gt;'. A length or percentage (and a
@@ -5722,13 +5750,13 @@ public static class CssValueGrammar
             // Count first: a bare positive integer is the count, and only a value that is not one is
             // a width. A lone '0' is not a count (a count starts at one) so it falls through to the
             // width, where it is a zero length; '0 0' is then a second width and is refused.
-            if (int.TryParse(token, out var n) && n >= 1)
+            if (IsColumnCountToken(token))
             {
                 if (hasCount) return false;
                 hasCount = true;
                 continue;
             }
-            if (IsLengthOrPercentage(token) || IsMathFunctionCall(token, IsLengthOrPercentage))
+            if (IsColumnWidthToken(token) || IsMathFunctionCall(token, IsLengthOrPercentage))
             {
                 if (hasWidth) return false;
                 hasWidth = true;
@@ -5737,6 +5765,27 @@ public static class CssValueGrammar
             return false;
         }
         return true;
+    }
+
+    /// <summary>One token in the position a column width takes. The generic length reader lets any
+    /// bare number through, because a zero may drop its unit — but in 'columns' that tolerance is
+    /// only ever a count that is not one: 'columns: -1', '1.5' and '2.0' are each dropped while
+    /// 'columns: 0' is the zero length the width reads (all measured), so a unitless token counts
+    /// here only when it says zero.</summary>
+    private static bool IsColumnWidthToken(string token)
+    {
+        if (token.EndsWith("%", StringComparison.Ordinal)) return IsLengthOrPercentage(token);
+        int i = 0;
+        if (i < token.Length && (token[i] == '+' || token[i] == '-')) i++;
+        int digits = i;
+        while (i < token.Length && (char.IsAsciiDigit(token[i])
+                || (token[i] == '.' && i + 1 < token.Length && char.IsAsciiDigit(token[i + 1])))) i++;
+        if (i == digits) return IsLengthOrPercentage(token);
+        if (i < token.Length && char.IsLetter(token[i])) return true;   // '10px' and friends
+        if (i == token.Length)
+            return double.TryParse(token, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var zero) && zero == 0;
+        return false;
     }
 
     /// <summary>The colour grammar of the properties that take &lt;color&gt;#: a token the colour
@@ -5818,6 +5867,16 @@ public static class CssValueGrammar
     /// 'offset-position: calc(1px)' both keep a calc the plain length reader would refuse).</summary>
     public static bool IsLengthPercentageOrMath(string token) =>
         IsMathFunctionCall(token, IsLengthOrPercentage) || IsLengthOrPercentage(token);
+
+    /// <summary>Whether the token is one math function whose answer is a count or a share of one —
+    /// the operand type a threshold takes, where a length measures nothing to blend by (measured:
+    /// 'shape-image-threshold: calc(2%)' and 'min(0.5, 1)' stand while 'calc(1px)' falls).</summary>
+    public static bool IsNumberMathValue(string token)
+    {
+        var trimmed = token.Trim();
+        if (!IsMathFunctionCall(trimmed, IsLengthOrPercentage)) return false;
+        return CssMathValue.TypeOf(trimmed) is "number" or "percentage";
+    }
 
     internal static bool IsLengthOrPercentage(string token)
     {

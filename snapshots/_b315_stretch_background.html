@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b315 stretch and background</title>
+<style>
+  body { margin: 0; background: #ffffff; font: 12px monospace; }
+  /* A definite host, so 'stretch' has a space to fill and the two engines can be compared on
+     numbers that do not depend on a viewport. */
+  #host { position: absolute; left: 0; top: 0; width: 300px; height: 100px; }
+  #s1 { height: stretch; background: #ff8080; }
+  #s2 { height: stretch; margin: 10px; background: #80ff80; }
+  #s3 { height: stretch; padding: 5px; box-sizing: content-box; background: #8080ff; }
+  /* The legacy pair folded to one word, and the word painted: a 30x30 tile that repeats along the
+     x axis only leaves the lower half of the box unpainted. */
+  #rx { position: absolute; left: 320px; top: 0; width: 60px; height: 60px;
+        background-image: linear-gradient(#000000, #000000);
+        background-size: 30px 30px; background-repeat: repeat no-repeat; }
+  #rr { position: absolute; left: 390px; top: 0; width: 60px; height: 60px;
+        background-image: linear-gradient(#000000, #000000);
+        background-size: 30px 30px; background-repeat: repeat }
+  /* A padding that cannot be 'auto', and a column count that cannot be negative: both
+     declarations are dropped, so the box keeps its initial padding and its single column. */
+  #pad { position: absolute; left: 0; top: 120px; width: 200px; background: #ffff80;
+         padding-inline: auto; }
+  #col { position: absolute; left: 0; top: 160px; width: 200px; columns: -1;
+         font: 10px/12px monospace; }
+  #col2 { position: absolute; left: 220px; top: 160px; width: 200px; columns: 2 100px;
+          font: 10px/12px monospace; }
+</style></head>
+<body>
+<div id="host">
+  <div id="s1"></div>
+  <div id="s2"></div>
+  <div id="s3"></div>
+</div>
+<div id="rx"></div>
+<div id="rr"></div>
+<div id="pad">abcdefghijkl</div>
+<div id="col">aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa</div>
+<div id="col2">bbbb bbbb bbbb bbbb bbbb bbbb bbbb bbbb</div>
+<script>
+// b315_stretch_background
+function build() {
+const rows = [];
+const ids = ['s1', 's2', 's3', 'rx', 'rr', 'pad', 'col', 'col2'];
+for (let i = 0; i < ids.length; i++) {
+  const el = document.getElementById(ids[i]);
+  const r = el.getBoundingClientRect();
+  const cs = getComputedStyle(el);
+  rows.push(ids[i] + '|rect=' + Math.round(r.x) + ',' + Math.round(r.y) + ' '
+      + Math.round(r.width * 100) / 100 + 'x' + Math.round(r.height * 100) / 100
+      + '|h=' + cs.height + '|w=' + cs.width
+      + '|rep=' + cs.backgroundRepeat + '|size=' + cs.backgroundSize
+      + '|pad=' + cs.paddingInlineStart + ',' + cs.paddingInlineEnd
+      + '|cols=' + cs.columnCount);
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="position:absolute;left:0;top:260px;font:10px/1.3 monospace;white-space:pre-wrap"></pre>');
+// textContent, not HTML: a value carrying '<' is otherwise read as a tag and re-indexes the rows.
+document.getElementById('record').textContent = rows.join('\n');
+console.log(rows.join('\n'));
+}
+build();
+</script></body></html>

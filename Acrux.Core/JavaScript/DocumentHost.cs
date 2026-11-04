@@ -1229,8 +1229,13 @@ public class ComputedStyleHost
             // The logical pair reports the used value of the physical side it selects, exactly as
             // its twin does (CSS Logical 1 §4.2; measured: 'inline-size: 50%' and 'width: 50%'
             // answer the same number, where the name alone decided whether the layout was asked).
-            case "width": case "inline-size": return SizeUsed(text, box.ContentBox.Width);
-            case "height": case "block-size": return SizeUsed(text, box.ContentBox.Height);
+            // Which box the surface reports follows 'box-sizing': a page that asked for its sizes
+            // in border boxes gets border boxes back (CSS Sizing 3 §4.1; measured in a 300px block —
+            // 'box-sizing: border-box; padding: 8px' reads width '300px' and height '16px' where the
+            // same box without the keyword reads its content '284px' and '0px', and a 'width: 50%'
+            // border box reads '150px', the box it asked for, not the 134px left for its content).
+            case "width": case "inline-size": return SizeUsed(text, UsedInline(box));
+            case "height": case "block-size": return SizeUsed(text, UsedBlock(box));
             case "margin-top": case "margin-right": case "margin-bottom": case "margin-left":
             case "padding-top": case "padding-right": case "padding-bottom": case "padding-left":
             case "margin-block-start": case "margin-block-end":
@@ -1238,6 +1243,20 @@ public class ComputedStyleHost
             case "padding-block-start": case "padding-block-end":
             case "padding-inline-start": case "padding-inline-end":
                 return SideUsed(name, text, box);
+            // The logical pair shorthand says the two edges its longhands say, so each side is
+            // priced the way that longhand is and the pair is then said in the shortest form that
+            // means both (measured: 'margin-inline: 5%' of a 300px containing block answers '15px',
+            // 'margin-block: 10%' answers '30px', and a pair whose two edges differ keeps both).
+            case "margin-block": case "margin-inline":
+            case "padding-block": case "padding-inline":
+            {
+                var sides = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                if (sides.Length == 0) return null;
+                var start = SideUsed(name + "-start", sides[0], box) ?? sides[0];
+                var end = sides.Length >= 2
+                    ? SideUsed(name + "-end", sides[1], box) ?? sides[1] : start;
+                return start == end ? start : start + " " + end;
+            }
             // A positioned box's inset reports the offset layout will apply, so its percentage is
             // priced against the containing block (CSS 2.1 §10.5/§10.6: the vertical pair against
             // its height, the horizontal pair against its width). A static box moves nothing, so its
@@ -1273,12 +1292,25 @@ public class ComputedStyleHost
         }
     }
 
+    /// <summary>The inline size the surface reports for this box: its content box, or its border
+    /// box when the page asked for its sizes that way (see the 'width' case above).</summary>
+    private float UsedInline(Acrux.Core.Dom.LayoutBox box) =>
+        _style != null && _style.BoxSizing == Acrux.Core.Dom.BoxSizingType.BorderBox
+            ? box.BorderBox.Width : box.ContentBox.Width;
+
+    private float UsedBlock(Acrux.Core.Dom.LayoutBox box) =>
+        _style != null && _style.BoxSizing == Acrux.Core.Dom.BoxSizingType.BorderBox
+            ? box.BorderBox.Height : box.ContentBox.Height;
+
     /// <summary>One box size on the computed surface: the used value where the authored value was
-    /// 'auto' or carried a percentage, the authored pixel value snapped to a layout unit
-    /// otherwise.</summary>
+    /// 'auto', a sizing keyword or carried a percentage, the authored pixel value snapped to a
+    /// layout unit otherwise. A keyword says which box the layout was told to fill, so it is worth
+    /// whatever that produced (measured: 'width: stretch' in a 300px block answers '300px' and
+    /// 'height: stretch' answers the block's 100px, exactly as 'auto' answers the box it made).</summary>
     private static string? SizeUsed(string text, float used)
     {
-        if (text == "auto") return Px(LayoutUnit(used));
+        if (text == "auto" || Acrux.Core.Dom.SizingKeywordLength.For(text) != null)
+            return Px(LayoutUnit(used));
         if (text.EndsWith("px") && TryNumber(text.Substring(0, text.Length - 2), out var px))
             return Px(LayoutUnit((float)px));
         // A box size is reported as the number the layout produced whatever the page wrote, so a

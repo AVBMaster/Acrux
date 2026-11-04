@@ -475,7 +475,7 @@ public static class EchoedProperties
             // ===== Containment 3 §3.4 and the interpolation control of Values 4 §1.2. A container
             // name list is space-separated — a comma is no value (measured).
             new() { Name = "container-type", Initial = "normal",
-                Normalize = Single("normal", "size", "inline-size") },
+                Normalize = NormalizeContainerType },
             new() { Name = "container-name", Initial = "none", Normalize = NormalizeContainerName },
             // The 'container' shorthand is the same word list read the same way: the reference
             // engine does not sort its parts, does not lower them, and does not even decide which
@@ -485,7 +485,7 @@ public static class EchoedProperties
             new() { Name = "container", Initial = "none",
                 Normalize = NormalizeContainerShorthand },
             new() { Name = "interpolate-size", Initial = "numeric-only", Inherited = true,
-                Normalize = Single("numeric-only") },
+                Normalize = Single("numeric-only", "allow-keywords") },
         };
 
         var map = new Dictionary<string, Entry>(StringComparer.Ordinal);
@@ -1198,15 +1198,36 @@ public static class EchoedProperties
     /// surface says the number the page wrote — '2' reads '2' and computes '1' (measured, both), so
     /// the clamp belongs to the computed printer and not here: a printer that clamps repairs a value
     /// the property never said.</summary>
-    /// <summary>The number as the page wrote it, clamped into 0..1 for the computed surface.</summary>
+    /// <summary>The number as the page wrote it, clamped into 0..1 for the computed surface. A math
+    /// function arrives already folded by <see cref="CssMathValue"/> to one term, and that term is
+    /// what gets clamped (measured: 'calc(-1)' computes '0' and 'calc(100%)' computes '1').</summary>
     private static string ClampToUnitInterval(string text)
-        => double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.StartsWith("calc(", StringComparison.OrdinalIgnoreCase)
+            && trimmed.EndsWith(")", StringComparison.Ordinal))
+            trimmed = trimmed[5..^1].Trim();
+        return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
             ? Acrux.Core.Dom.Animations.CssValueTokenizer.Num(Math.Clamp(value, 0d, 1d)) : text;
+    }
 
+    /// <summary>'shape-image-threshold' is a number, and a percentage is the fraction it stands for
+    /// (measured: '25%' reads '0.25' on the specified surface as on the computed one). The specified
+    /// surface says the number the page wrote — '2' reads '2' and computes '1' (measured, both), so
+    /// the clamp belongs to the computed printer and not here: a printer that clamps repairs a value
+    /// the property never said. A math function is the same value said by an expression, so it is
+    /// folded and kept folded ('calc(0.2 + 0.3)' reads 'calc(0.5)', 'min(0.5, 1)' reads 'calc(0.5)'
+    /// and 'calc(2%)' reads 'calc(2%)' — all measured), while a function that answers a length is
+    /// no threshold at all ('calc(1px)' falls).</summary>
     private static string? NormalizeShapeImageThreshold(string value)
     {
         var text = value.Trim();
         if (text.Length == 0) return null;
+        if (text.Contains('('))
+        {
+            if (!Acrux.Core.Css.CssValueGrammar.IsNumberMathValue(text)) return null;
+            return CssMathValue.Fold(text);
+        }
         double number;
         if (text.EndsWith("%", StringComparison.Ordinal))
         {
@@ -2291,6 +2312,40 @@ public static class EchoedProperties
         return IsDashedIdent(w) ? w : null;
     }
 
+    /// <summary>The <c>container-type</c> list (CSS Containment 3 §3.4, Container Queries State 1
+    /// §3): one size word — 'size' or 'inline-size' — and the query-type keyword 'scroll-state'
+    /// beside it, or 'normal' alone. Measured: 'scroll-state' stands and 'SCROLL-STATE' folds,
+    /// 'scroll-state size' is said back with the size first, while 'normal' shares nothing
+    /// ('normal size' falls), two of one kind are no list ('size size'), the two size words
+    /// contradict each other ('size inline-size'), and 'none' is not a type.</summary>
+    private static string? NormalizeContainerType(string text)
+    {
+        var words = Words(text);
+        if (words.Length == 0) return null;
+        if (words.Length == 1)
+        {
+            var one = words[0].ToLowerInvariant();
+            return one is "normal" or "size" or "inline-size" or "scroll-state" ? one : null;
+        }
+        string? size = null;
+        bool state = false;
+        foreach (var w in words)
+        {
+            var word = w.ToLowerInvariant();
+            if (word is "size" or "inline-size")
+            {
+                if (size != null) return null;
+                size = word;
+                continue;
+            }
+            if (word != "scroll-state") return null;
+            if (state) return null;
+            state = true;
+        }
+        if (size == null || !state) return null;
+        return size + " scroll-state";
+    }
+
     private static string? NormalizeContainerName(string text)
     {
         var words = Words(text);
@@ -2332,12 +2387,12 @@ public static class EchoedProperties
     }
 
     /// <summary>One word of a container name list: ident characters, not beginning with a digit,
-    /// not a lone dash (which is no name in any spelling — but a one-letter name like 'x' is) and
-    /// not a dashed ident, which the reference engine refuses as a container name (measured:
-    /// '-cards' is kept, '--cards' is not).</summary>
+    /// not a lone dash (which is no name in any spelling — but a one-letter name like 'x' is). A
+    /// dashed ident IS a name here: the reference engine keeps '--cards' exactly as written and
+    /// reads a list that mixes the two spellings (measured: '--c cards' and '--1c' both stand,
+    /// while '-' and a word starting with a digit fall).</summary>
     private static bool IsContainerNameWord(string w) =>
-        w.Length > 0 && w != "-" && !char.IsAsciiDigit(w[0])
-        && !w.StartsWith("--", StringComparison.Ordinal) && IsIdentChars(w);
+        w.Length > 0 && w != "-" && !char.IsAsciiDigit(w[0]) && IsIdentChars(w);
 
     /// <summary>CSS Fill and Stroke 3 §2: a <c>&lt;paint&gt;</c> is <c>none</c>, <c>currentColor</c>
     /// or a colour. A colour written as a name keeps it, and any other spelling becomes the rgb()
